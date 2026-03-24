@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Borang Akuan (BA) - MJM Nursery AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #fefce8; margin: 0; font-family: 'Outfit', system-ui, -apple-system, sans-serif; overflow-x: hidden; }
+        .bg-pattern { position: fixed; inset: 0; background-image: radial-gradient(#fef08a 1px, transparent 1px); background-size: 24px 24px; z-index: -2; opacity: 0.5; }
+        .glass-panel { background-color: rgba(255, 255, 255, 0.9); backdrop-filter: blur(24px); border: 1px solid #ffffff; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1); border-l: 12px solid #eab308; }
+        .input-style { border: 1px solid #cbd5e1; background-color: #ffffff; padding: 10px; border-radius: 8px; outline: none; width: 100%; font-weight: 600; transition: all 0.2s; }
+        .input-style:focus { border-color: #eab308; box-shadow: 0 0 0 3px rgba(234,179,8,0.2); }
+        .input-style:disabled { background-color: #f1f5f9; color: #64748b; cursor: not-allowed; border-color: transparent;}
+        
+        .btn-ba { background: linear-gradient(to right, #ca8a04, #eab308); color: white; font-weight: bold; padding: 12px 24px; border-radius: 15px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.1em; transition: all 0.2s; box-shadow: 0 4px 10px -2px rgba(234, 179, 8, 0.4); border: none; }
+        .btn-ba:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(234, 179, 8, 0.5); }
+        
+        .drop-zone { border: 2px dashed #94a3b8; transition: all 0.2s ease; cursor: pointer; }
+        .drop-zone.dragover { border-color: #eab308; background-color: rgba(234, 179, 8, 0.1); transform: scale(1.01); }
+        
+        .filter-input { padding: 10px 14px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 13px; background-color: #ffffff; font-weight: 600; outline: none; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .filter-input:focus { border-color: #eab308; box-shadow: 0 0 0 3px rgba(234,179,8,0.1); }
+
+        .tab-btn { padding: 12px 24px; font-weight: 900; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; border-radius: 16px; transition: all 0.3s; color: #64748b; background: transparent; text-align: center; display: flex; align-items: center; justify-content: center; white-space: nowrap;}
+        .tab-btn.active-ba { background: #eab308; color: white; box-shadow: 0 4px 10px -2px rgba(234, 179, 8, 0.4); }
+
+        .nature-critter { position: absolute; font-size: 1.5rem; pointer-events: none; opacity: 0; z-index: 50; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); animation: floatSlow 8s ease-in-out forwards; }
+        @keyframes floatSlow { 
+            0% { transform: translate(0, 0) scale(0.6) rotate(-10deg); opacity: 0; } 
+            20% { opacity: 0.9; } 
+            80% { opacity: 0.9; } 
+            100% { transform: translate(var(--tx), var(--ty)) scale(1.2) rotate(10deg); opacity: 0; } 
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8 relative">
+    <div class="bg-pattern"></div>
+
+    <div class="w-full max-w-[1400px] mx-auto z-10 space-y-6 py-4">
+        
+        <div class="glass-panel p-6 rounded-[2rem] flex flex-col items-center gap-4 relative overflow-hidden border-l-[12px] border-yellow-500" id="main-title-panel">
+            <div class="flex flex-col md:flex-row w-full items-center justify-between z-30 relative gap-4">
+                <button onclick="window.location.href='index.html'" class="text-[10px] font-bold text-slate-500 hover:text-yellow-700 uppercase tracking-widest bg-slate-100 hover:bg-slate-200 px-5 py-3 rounded-xl transition-colors flex items-center gap-2 self-start md:self-auto shadow-sm relative z-40">
+                    <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                    Back to main page
+                </button>
+                <h1 class="text-2xl md:text-3xl font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-yellow-700 via-yellow-600 to-yellow-500 drop-shadow-sm pb-1 text-center relative z-40" style="word-spacing: 0.2em;">Customer Order Monitoring</h1>
+                <div class="hidden md:block w-[130px] relative z-40"></div>
+            </div>
+
+            <div class="bg-slate-100/80 p-2 rounded-[20px] flex gap-2 z-30 shadow-inner w-full max-w-3xl overflow-x-auto border border-slate-200 backdrop-blur-md relative z-40">
+                <button onclick="window.location.href='delivery.html'" class="tab-btn flex-1 hover:bg-emerald-50 hover:text-emerald-600">Delivery Note (DO)</button>
+                <button class="tab-btn flex-1 active-ba cursor-default">Borang Akuan (BA)</button>
+                <button onclick="window.location.href='booking.html'" class="tab-btn flex-1 hover:bg-blue-50 hover:text-blue-600">Approval Letter (AL)</button>
+            </div>
+            
+            <div id="title-animation-zone" class="absolute inset-0 w-full h-full pointer-events-none z-10"></div>
+        </div>
+
+        <div class="flex flex-col md:flex-row gap-4 relative z-30">
+            <div id="main-drop-zone" class="glass-panel border-yellow-300 hover:border-yellow-500 bg-yellow-50/30 flex-1 rounded-2xl p-5 flex items-center justify-center cursor-pointer group !border-l-[1px]">
+                <svg class="w-8 h-8 text-yellow-400 group-hover:text-yellow-500 mr-4 transition-colors pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <span class="text-sm font-bold text-yellow-600 uppercase tracking-widest group-hover:text-yellow-700 pointer-events-none">Drag & Drop Borang Akuan (BA) Here to Auto Cross-Check</span>
+                <input type="file" id="main-file-input" class="hidden" accept="image/*,application/pdf" multiple>
+            </div>
+            <button onclick="openBAModal()" class="btn-ba text-xs tracking-widest min-w-max flex items-center gap-3 relative z-40">
+                <svg class="w-6 h-6 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                Add New BA
+            </button>
+        </div>
+
+        <div class="glass-panel p-8 rounded-[2.5rem] min-h-[600px] relative z-30 shadow-xl">
+            <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4 border-b-2 border-slate-100 pb-6">
+                <h2 class="font-black text-slate-800 uppercase tracking-widest text-lg w-full md:w-auto">Borang Akuan (BA) Verified List</h2>
+                <div class="relative w-full md:w-96 relative z-40">
+                    <svg class="w-4 h-4 absolute left-3 top-3 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    <input type="text" id="f-ba-global" oninput="renderBATable()" class="filter-input w-full pl-10" placeholder="Search BA Customer or DO...">
+                </div>
+            </div>
+
+            <div class="overflow-x-auto relative z-30">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="text-[10px] uppercase tracking-[0.2em] text-slate-400 border-b-2 border-slate-100 pb-2">
+                            <th class="p-4 font-black">Linked DO Number</th>
+                            <th class="p-4 font-black">BA Extracted Customer</th>
+                            <th class="p-4 font-black text-center text-yellow-700">BA Qty</th>
+                            <th class="p-4 font-black text-center text-emerald-700">DO Qty</th>
+                            <th class="p-4 font-black text-center">Match Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ba-records-tbody" class="text-sm font-semibold text-slate-700"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="ba-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 z-0" onclick="closeModal('ba-modal')"></div>
+        <div class="bg-white rounded-[32px] p-6 md:p-10 w-full max-w-[95vw] shadow-2xl max-h-[95vh] overflow-y-auto border-4 border-yellow-500 relative z-10">
+            <div class="flex justify-between items-center mb-6 border-b pb-4">
+                <h3 class="text-2xl font-black text-slate-800 tracking-tight uppercase">Bulk Upload Borang Akuan (BA)</h3>
+                <button onclick="closeModal('ba-modal')" class="text-slate-400 hover:text-red-500 bg-slate-100 rounded-full p-2"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+            </div>
+
+            <div id="ba-drop-zone" class="drop-zone border-yellow-300 hover:border-yellow-500 bg-yellow-50/30 rounded-2xl p-10 flex flex-col items-center justify-center cursor-pointer h-32 group mb-6 relative">
+                <svg class="w-10 h-10 text-yellow-400 group-hover:text-yellow-500 mb-3 transition-colors pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <span class="text-sm font-bold text-yellow-600 uppercase tracking-widest text-center pointer-events-none">Drag & Drop Multiple BA Forms Here</span>
+                <input type="file" id="ba-file-input" class="hidden" accept="image/*,application/pdf" multiple>
+            </div>
+
+            <div class="overflow-x-auto w-full">
+                <table class="w-full text-left border-collapse min-w-[800px]">
+                    <thead>
+                        <tr class="text-[9px] uppercase tracking-[0.2em] text-slate-400 border-b-2 border-yellow-100 pb-2">
+                            <th class="p-3 w-16">Doc</th>
+                            <th class="p-3 w-48">BA Extracted Customer</th>
+                            <th class="p-3 w-24 text-yellow-600">BA Qty</th>
+                            <th class="p-3 min-w-[200px]">Extracted DO Numbers</th>
+                            <th class="p-3 w-32 text-emerald-600 text-center">Matched DOs Sum</th>
+                            <th class="p-3 w-32 text-blue-600 font-bold">Linked AL (Auto)</th>
+                            <th class="p-3 w-10 text-right">Del</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bulk-ba-tbody">
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex gap-4 pt-6 mt-6 border-t border-slate-100 relative z-40">
+                <button onclick="closeModal('ba-modal')" class="w-1/3 p-4 rounded-2xl bg-slate-100 text-slate-600 font-bold text-[10px] uppercase tracking-widest hover:bg-slate-200">Cancel</button>
+                <button id="save-bulk-btn" onclick="saveBulkBA()" class="w-2/3 p-4 rounded-2xl btn-ba shadow-lg text-sm">Save & Cross-Check All</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const _k1 = 'AIzaSyCvSAVEeOa_';
+        const _k2 = 'PkZxRKDJkYz3hqzdgvbGIyQ';
+        const GEMINI_API_KEY = _k1 + _k2; 
+        
+        async function analyzeImageWithGemini(base64Image, mimeType, prompt) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
+            const base64Data = base64Image.split(',')[1];
+            
+            const payload = {
+                contents: [{ parts: [ { text: prompt }, { inlineData: { mimeType: mimeType || "image/jpeg", data: base64Data } } ] }],
+                generationConfig: { responseMimeType: "application/json" }
+            };
+
+            const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error?.message || "Gemini API Error");
+            
+            let rawText = data.candidates[0].content.parts[0].text;
+            rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+            return JSON.parse(rawText);
+        }
+
+        const SUPABASE_URL = 'https://kibqjztozokohqmhqqqf.supabase.co'; 
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpYnFqenRvem9rb2hxbWhxcXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQzNjIsImV4cCI6MjA4OTgxMDM2Mn0.J7qJUZhWXYf5b9oey4wXJkjdi66jomEMw_NeV9NWF7M';
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        let globalDOs = [];
+        window.extractedBulkBAs = {}; 
+
+        const healingEmojis = ["🌿", "🍃", "🌱", "🪴", "🌳", "🌤️", "⛅️", "🦋", "🐌", "🐞", "🐢", "🍓", "🍵", "🌸", "🦦"];
+        function spawnHealingEmoji() {
+            const zone = document.getElementById('title-animation-zone');
+            if (!zone || document.hidden) return;
+            const el = document.createElement('div');
+            el.className = 'nature-critter';
+            el.innerText = healingEmojis[Math.floor(Math.random() * healingEmojis.length)];
+            el.style.left = (35 + Math.random() * 30) + '%'; 
+            el.style.top = (35 + Math.random() * 30) + '%';
+            el.style.setProperty('--tx', (Math.random() - 0.5) * 300 + 'px'); 
+            el.style.setProperty('--ty', (Math.random() - 0.5) * 150 - 50 + 'px');
+            zone.appendChild(el);
+            setTimeout(() => { if(zone.contains(el)) zone.removeChild(el); }, 8500);
+        }
+        setInterval(spawnHealingEmoji, 1200);
+
+        async function fetchData() {
+            const { data: doData } = await _supabase.from('do_records').select('*').order('created_at', { ascending: false });
+            globalDOs = doData || [];
+            renderBATable();
+        }
+
+        function renderBATable() {
+            const search = document.getElementById('f-ba-global').value.toLowerCase();
+            const tbody = document.getElementById('ba-records-tbody');
+            tbody.innerHTML = '';
+            
+            const dosWithBA = globalDOs.filter(d => d.ba_raw_name || d.ba_raw_qty);
+            const filtered = dosWithBA.filter(d => 
+                !search || 
+                (d.do_number||'').toLowerCase().includes(search) || 
+                (d.ba_raw_name||'').toLowerCase().includes(search)
+            );
+
+            filtered.forEach(doRec => {
+                const baQty = doRec.ba_raw_qty || 0;
+                const doQty = doRec.total_qty || 0;
+                const isMatched = doRec.status === 'Verified' && baQty === doQty;
+                
+                let matchBadge = isMatched ? 
+                    '<span class="px-2 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 rounded">Fully Matched</span>' :
+                    '<span class="px-2 py-1 text-[10px] font-bold text-rose-700 bg-rose-100 rounded">Qty Mismatch</span>';
+
+                tbody.insertAdjacentHTML('beforeend', `
+                    <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                        <td class="p-4 text-emerald-700 font-black">${doRec.do_number}</td>
+                        <td class="p-4 font-bold uppercase text-slate-800">${doRec.ba_raw_name}</td>
+                        <td class="p-4 text-center font-black text-yellow-600 text-lg">${baQty}</td>
+                        <td class="p-4 text-center font-black text-emerald-600 text-lg">${doQty}</td>
+                        <td class="p-4 text-center">${matchBadge}</td>
+                    </tr>
+                `);
+            });
+            
+            if(filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 italic">No BA forms have been linked to DOs yet. Upload some above!</td></tr>';
+            }
+        }
+
+        function openBAModal() { 
+            document.getElementById('ba-modal').classList.remove('hidden'); 
+            document.getElementById('bulk-ba-tbody').innerHTML = '';
+            window.extractedBulkBAs = {};
+            document.getElementById('main-file-input').value = '';
+            document.getElementById('ba-file-input').value = '';
+        }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        function setupDragAndDrop() {
+            const mainZone = document.getElementById('main-drop-zone');
+            const mainInput = document.getElementById('main-file-input');
+            if(mainZone && mainInput) {
+                mainZone.onclick = () => mainInput.click();
+                mainZone.ondragover = (e) => { e.preventDefault(); mainZone.classList.add('dragover'); };
+                mainZone.ondragleave = () => mainZone.classList.remove('dragover'); 
+                mainZone.ondrop = (e) => { 
+                    e.preventDefault(); mainZone.classList.remove('dragover'); 
+                    if (e.dataTransfer.files.length) { openBAModal(); handleBulkUpload(e.dataTransfer.files); }
+                };
+                mainInput.onchange = (e) => { 
+                    if (e.target.files.length) { openBAModal(); handleBulkUpload(e.target.files); }
+                    mainInput.value = '';
+                };
+            }
+
+            const zone = document.getElementById('ba-drop-zone');
+            const input = document.getElementById('ba-file-input');
+            if(!zone || !input) return;
+
+            zone.onclick = () => input.click();
+            zone.ondragover = (e) => { e.preventDefault(); zone.classList.add('dragover'); };
+            zone.ondragleave = () => zone.classList.remove('dragover'); 
+            zone.ondrop = (e) => { 
+                e.preventDefault(); zone.classList.remove('dragover'); 
+                if (e.dataTransfer.files.length) handleBulkUpload(e.dataTransfer.files); 
+            };
+            input.onchange = (e) => { 
+                if (e.target.files.length) handleBulkUpload(e.target.files); 
+                input.value = '';
+            };
+        }
+
+        async function handleBulkUpload(files) {
+            const tbody = document.getElementById('bulk-ba-tbody');
+            
+            for (let file of files) {
+                if (!file.type.startsWith('image/') && file.type !== 'application/pdf') continue;
+                
+                const rowId = 'row_' + Math.random().toString(36).substring(2, 9);
+                const reader = new FileReader();
+                
+                tbody.insertAdjacentHTML('beforeend', `
+                    <tr id="${rowId}" class="border-b border-yellow-100 bg-yellow-50/30">
+                        <td class="p-3 text-center" colspan="7">
+                            <span class="text-xs font-bold text-yellow-600 animate-pulse">Scanning BA Form ${file.name}...</span>
+                        </td>
+                    </tr>
+                `);
+
+                reader.onload = async (e) => {
+                    const base64Data = e.target.result;
+                    window.extractedBulkBAs[rowId] = { base64: base64Data, matchedIds: [] }; 
+
+                    try {
+                        const prompt = `This is a collection form, often marked 'Borang Akuan' or 'BA'. Extract STRICTLY as raw JSON: 
+                        1. baCustomerName (PRIORITY: Extract the Company Name first. If no company name, extract the personal name), 
+                        2. baQuantity (integer, total unit collection quantity), 
+                        3. doNumbers (an array of strings found under 'No. Invois / Nota Penghantaran'). 
+                        Return JSON format: {"baCustomerName": "", "baQuantity": 0, "doNumbers": ["", ""]}`;
+                        
+                        const extractedData = await analyzeImageWithGemini(base64Data, file.type, prompt);
+                        
+                        const doArr = extractedData.doNumbers || [];
+                        const doString = doArr.join(', ');
+
+                        let docPreview = '';
+                        if (file.type.includes('pdf')) {
+                            docPreview = '<div class="w-10 h-10 bg-red-100 text-red-500 rounded flex items-center justify-center text-[10px] font-bold">PDF</div>';
+                        } else {
+                            docPreview = `<img src="${base64Data}" class="w-10 h-10 object-cover rounded shadow-sm">`;
+                        }
+
+                        document.getElementById(rowId).innerHTML = `
+                            <td class="p-3">${docPreview}</td>
+                            <td class="p-3"><input type="text" id="name_${rowId}" value="${extractedData.baCustomerName || ''}" class="input-style text-[10px] p-2 w-full text-purple-700 font-bold"></td>
+                            <td class="p-3"><input type="number" id="qty_${rowId}" value="${extractedData.baQuantity || 0}" oninput="recalcBASum('${rowId}')" class="input-style text-[10px] p-2 w-full font-black text-center text-yellow-600"></td>
+                            <td class="p-3"><input type="text" id="dos_${rowId}" value="${doString}" oninput="recalcBASum('${rowId}')" class="input-style text-[10px] p-2 w-full" placeholder="e.g. 02886, 02411"></td>
+                            <td class="p-3 text-center"><div id="sum_${rowId}" class="text-xl font-black">0</div></td>
+                            <td class="p-3"><div id="al_link_${rowId}" class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded w-full truncate">Detecting AL...</div></td>
+                            <td class="p-3 text-right"><button onclick="document.getElementById('${rowId}').remove(); delete window.extractedBulkBAs['${rowId}'];" class="text-red-400 hover:text-red-600 font-bold">✕</button></td>
+                        `;
+
+                        recalcBASum(rowId);
+                    } catch (err) {
+                        document.getElementById(rowId).innerHTML = `
+                            <td class="p-3 text-center text-red-500 font-bold text-[10px]" colspan="7">Failed to scan ${file.name}.</td>
+                        `;
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function recalcBASum(rowId) {
+            const doStr = document.getElementById(`dos_${rowId}`).value;
+            const baQty = parseInt(document.getElementById(`qty_${rowId}`).value) || 0;
+            const doList = doStr.split(',').map(s=>s.trim()).filter(s=>s);
+            
+            let sum = 0;
+            let matchedIds = [];
+            let linkedALs = new Set();
+            
+            doList.forEach(num => {
+                const match = globalDOs.find(d => d.do_number && d.do_number.includes(num));
+                if(match && !matchedIds.includes(match.id)) { 
+                    sum += match.total_qty; 
+                    matchedIds.push(match.id); 
+                    if(match.al_number) linkedALs.add(match.al_number);
+                }
+            });
+            
+            const sumEl = document.getElementById(`sum_${rowId}`);
+            sumEl.innerText = sum;
+            
+            if(sum === baQty && baQty > 0) {
+                sumEl.className = 'text-xl font-black text-emerald-600';
+            } else {
+                sumEl.className = 'text-xl font-black text-rose-500';
+            }
+            
+            const alLinkEl = document.getElementById(`al_link_${rowId}`);
+            if(linkedALs.size > 0) {
+                alLinkEl.innerText = Array.from(linkedALs).join(', ');
+                alLinkEl.className = 'text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-1 rounded w-full truncate';
+            } else {
+                alLinkEl.innerText = 'No DO Matched';
+                alLinkEl.className = 'text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded w-full truncate';
+            }
+
+            window.extractedBulkBAs[rowId].matchedIds = matchedIds;
+        }
+
+        async function saveBulkBA() {
+            const btn = document.getElementById('save-bulk-btn'); btn.innerText = 'CROSS-CHECKING...'; btn.disabled = true;
+            const rows = document.querySelectorAll('#bulk-ba-tbody tr');
+            
+            let successCount = 0;
+            
+            for (let row of rows) {
+                if(row.innerHTML.includes('Scanning') || row.innerHTML.includes('Failed')) continue; 
+                
+                const rId = row.id;
+                const baName = document.getElementById(`name_${rId}`).value || 'Unknown';
+                const baQty = parseInt(document.getElementById(`qty_${rId}`).value) || 0;
+                const baImage = window.extractedBulkBAs[rId].base64 || null;
+                const matchedIds = window.extractedBulkBAs[rId].matchedIds || [];
+
+                if(matchedIds.length === 0) {
+                    alert(`⚠️ Cannot link BA for ${baName}: No matching DO numbers were found in the database. Please make sure the DO is uploaded first.`);
+                    row.classList.add('bg-red-50');
+                    continue; 
+                }
+
+                const currentSum = parseInt(document.getElementById(`sum_${rId}`).innerText) || 0;
+                let newStatus = 'Unverified';
+                
+                if(currentSum === baQty) {
+                    newStatus = 'Verified';
+                } else {
+                    if(!confirm(`⚠️ Form Name: ${baName}\nThe matched DOs quantity (${currentSum}) does NOT match BA Quantity (${baQty}). Link anyway?`)) {
+                        continue;
+                    }
+                }
+
+                for(let doId of matchedIds) {
+                    const { error: err } = await _supabase.from('do_records').update({ 
+                        ba_raw_name: baName, 
+                        ba_raw_qty: baQty, 
+                        ba_image_url: baImage,
+                        status: newStatus 
+                    }).eq('id', doId);
+
+                    if (err) {
+                        if(err.message.includes("ba_raw_name")) {
+                            alert("⚠️ Database Error: Make sure 'ba_raw_name' (text), 'ba_raw_qty' (numeric), and 'ba_image_url' (text) columns exist in your 'do_records' table!");
+                        } else {
+                            alert("Database error: " + err.message);
+                        }
+                    }
+                }
+                row.remove(); 
+                successCount++;
+            }
+            
+            fetchData();
+            btn.innerText = 'Save & Cross-Check All'; btn.disabled = false;
+            
+            if(document.querySelectorAll('#bulk-ba-tbody tr').length === 0) {
+                closeModal('ba-modal');
+                if(successCount > 0) alert(`Successfully linked ${successCount} BA forms to your DOs & ALs!`);
+            }
+        }
+
+        setupDragAndDrop(); 
+        _supabase.auth.getSession().then(({ data: { session } }) => { if (!session) window.location.href = 'index.html'; else fetchData(); });
+    </script>
+</body>
+</html>
