@@ -98,7 +98,7 @@
             </div>
 
             <div class="overflow-x-auto relative z-30">
-                <table class="w-full text-left border-collapse">
+                <table class="w-full text-left border-collapse min-w-[1200px]">
                     <thead>
                         <tr class="text-[10px] uppercase tracking-[0.2em] text-slate-400 border-b-2 border-slate-100 pb-2">
                             <th class="p-4 font-black">Date</th>
@@ -162,7 +162,7 @@
 
     <div id="manage-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 z-0" onclick="closeModal('manage-modal')"></div>
-        <div class="bg-white rounded-[32px] p-8 w-full max-w-5xl shadow-2xl max-h-[95vh] overflow-y-auto border-4 border-blue-500 relative z-10">
+        <div class="bg-white rounded-[32px] p-8 w-full max-w-6xl shadow-2xl max-h-[95vh] overflow-y-auto border-4 border-blue-500 relative z-10">
             <div class="flex justify-between items-center mb-6 border-b pb-4">
                 <div>
                     <h3 class="text-2xl font-black text-slate-800 tracking-tight uppercase">Review AL Details</h3>
@@ -198,17 +198,17 @@
             </div>
 
             <div class="mt-8 pt-6 border-t-2 border-slate-100 relative z-30">
-                <h4 class="text-sm font-black text-blue-800 tracking-widest uppercase mb-4">Delivery History (DO)</h4>
-                <div class="bg-blue-50/50 rounded-xl border border-blue-200 p-4 overflow-x-auto relative z-30">
-                    <table class="w-full text-left min-w-[600px]">
+                <h4 class="text-sm font-black text-blue-800 tracking-widest uppercase mb-4">Complete Documentation History (DO & BA Records)</h4>
+                <div class="bg-blue-50/50 rounded-xl border border-blue-200 p-4 overflow-x-auto relative z-30 shadow-inner">
+                    <table class="w-full text-left min-w-[1000px]">
                         <thead>
                             <tr class="text-[10px] uppercase tracking-wider text-slate-500 border-b border-blue-200 pb-2">
                                 <th class="pb-2 pl-2">DO Number</th>
                                 <th class="pb-2">Date</th>
-                                <th class="pb-2">Source (Plot/Breed)</th>
+                                <th class="pb-2">Source Plot/Breed</th>
                                 <th class="pb-2 text-center text-emerald-600">DO Qty</th>
-                                <th class="pb-2 text-center text-indigo-600">Cumul.</th>
-                                <th class="pb-2 text-center text-rose-500">Balance</th>
+                                <th class="pb-2 text-center text-rose-500">AL Balance</th>
+                                <th class="pb-2 text-yellow-700 font-bold">Associated BA Form</th>
                                 <th class="pb-2">Remark</th>
                             </tr>
                         </thead>
@@ -227,10 +227,10 @@
     </div>
 
     <div id="lightbox-modal" class="hidden fixed inset-0 bg-slate-900/95 z-[100] flex items-center justify-center p-4 backdrop-blur-md">
-        <button onclick="closeLightbox()" class="absolute top-6 right-6 text-white hover:text-red-400 bg-white/10 rounded-full p-3 transition-colors">
+        <button onclick="closeLightbox()" class="absolute top-6 right-6 text-white hover:text-red-400 bg-white/10 rounded-full p-3 transition-colors relative z-[110]">
             <svg class="w-8 h-8 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
-        <div id="lightbox-content" class="w-full h-full max-w-4xl max-h-[90vh] flex justify-center items-center"></div>
+        <div id="lightbox-content" class="w-full h-full max-w-4xl max-h-[90vh] flex justify-center items-center rounded-xl overflow-hidden shadow-2xl"></div>
     </div>
 
     <script>
@@ -241,16 +241,10 @@
         async function analyzeImageWithGemini(base64Image, mimeType, prompt) {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
             const base64Data = base64Image.split(',')[1];
-            
-            const payload = {
-                contents: [{ parts: [ { text: prompt }, { inlineData: { mimeType: mimeType || "image/jpeg", data: base64Data } } ] }],
-                generationConfig: { responseMimeType: "application/json" }
-            };
-
+            const payload = { contents: [{ parts: [ { text: prompt }, { inlineData: { mimeType: mimeType || "image/jpeg", data: base64Data } } ] }], generationConfig: { responseMimeType: "application/json" } };
             const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error?.message || "Gemini API Error");
-            
             let rawText = data.candidates[0].content.parts[0].text;
             rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
             return JSON.parse(rawText);
@@ -298,6 +292,8 @@
                 const cumul = cumulMap[al.al_number] || 0;
                 return { ...al, _cumul: cumul, _calc_balance: al.quantity_ordered - cumul };
             });
+            
+            checkUrlParamsForModal(); // Handle interlocking inbound links
             renderTable();
         }
 
@@ -337,23 +333,11 @@
                         <td class="p-4 text-center font-black ${isCancelled ? 'text-red-400' : (order._calc_balance > 0 ? 'text-rose-500' : 'text-emerald-500')}">${order._calc_balance}</td>
                         <td class="p-4 text-center"><span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${statColor}">${isCancelled ? 'Cancelled' : stat}</span></td>
                         <td class="p-4 text-right">
-                            <button onclick="openManageModal('${order.id}')" class="text-blue-700 uppercase text-[10px] font-bold px-4 py-2 bg-blue-100 rounded-lg hover:bg-blue-200 transition-colors relative z-40">Manage</button>
+                            <button onclick="openManageModal('${order.id}')" class="text-blue-700 uppercase text-[10px] font-bold px-4 py-2 bg-blue-100 rounded-lg hover:bg-blue-200 transition-colors relative z-40">Manage / View</button>
                         </td>
                     </tr>
                 `);
             });
-        }
-
-        function openALModal() { 
-            document.getElementById('al-modal').classList.remove('hidden'); 
-            document.getElementById('bulk-al-tbody').innerHTML = '';
-            window.extractedBulkALs = {};
-            document.getElementById('main-file-input').value = '';
-            document.getElementById('al-file-input').value = '';
-        }
-
-        function closeModal(id) { 
-            document.getElementById(id).classList.add('hidden'); 
         }
 
         function openManageModal(id) {
@@ -396,6 +380,7 @@
             const historyBody = document.getElementById('al-do-history-tbody');
             historyBody.innerHTML = '';
             
+            // COMPLETE DOCUMENTATION HISTORTY: DO List + cumm/balance + associated BA attached record
             let linkedDOs = globalDOs.filter(d => d.al_number === order.al_number).sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
             
             if(linkedDOs.length === 0) {
@@ -417,14 +402,28 @@
                     const bal = order.quantity_ordered - d._modalCumul;
                     const rowColor = dCancelled ? 'bg-red-50/50 opacity-70 border-b border-red-200' : 'border-b border-emerald-100 hover:bg-emerald-100/50';
 
+                    // INTERLOCKING: BA Column Logic
+                    let baHtml = '<span class="text-slate-400 italic">Not Linked</span>';
+                    const hasBa = d.ba_raw_name || d.ba_number;
+
+                    if (hasBa) {
+                        const baKey = d.ba_number || d.ba_raw_name;
+                        const isBaMatched = (d.status === 'Verified') || (d.remark && d.remark.includes('[BA MATCHED]'));
+                        
+                        baHtml = `<a href="ba.html?manageBA=${encodeURIComponent(baKey)}" class="group font-black uppercase text-[11px] flex items-center gap-1.5 ${isBaMatched ? 'text-emerald-700' : 'text-amber-800'}" title="Click to View BA Documentation">
+                                    <svg class="w-3.5 h-3.5 ${isBaMatched ? 'text-emerald-500' : 'text-amber-500'}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                    <span class="group-hover:underline">${baKey}</span>
+                                 </a>`;
+                    }
+
                     historyBody.insertAdjacentHTML('beforeend', `
                         <tr class="${rowColor}">
-                            <td class="py-3 pl-2 font-bold ${dCancelled ? 'text-red-600 line-through' : 'text-blue-600'}">${d.do_number}</td>
+                            <td class="py-3 pl-2 font-black ${dCancelled ? 'text-red-600 line-through' : 'text-blue-600'}">${d.do_number}</td>
                             <td class="py-3 text-slate-500">${date}</td>
                             <td class="py-3 font-bold text-amber-700 text-xs">${sourceText}</td>
                             <td class="py-3 text-center font-bold ${dCancelled ? 'text-red-500 line-through' : 'text-emerald-700'}">${d.total_qty || 0}</td>
-                            <td class="py-3 text-center font-bold text-indigo-600">${d._modalCumul}</td>
                             <td class="py-3 text-center font-black ${bal > 0 ? 'text-rose-500' : 'text-emerald-500'}">${bal}</td>
+                            <td class="py-3">${baHtml}</td>
                             <td class="py-3 text-slate-500 truncate max-w-[150px]">${d.remark || '-'}</td>
                         </tr>
                     `);
@@ -433,22 +432,34 @@
             document.getElementById('manage-modal').classList.remove('hidden');
         }
 
+        // --- NEW: INTERLOCKING PARAMETER CHECK ---
+        function checkUrlParamsForModal() {
+            const params = new URLSearchParams(window.location.search);
+            const manageAlNumber = params.get('manageAL');
+            
+            if (manageAlNumber && globalALs.length > 0) {
+                const order = globalALs.find(o => o.al_number === manageAlNumber);
+                if (order) {
+                    // Ensure data is loaded before opening modal
+                    setTimeout(() => openManageModal(order.id), 300);
+                }
+            }
+        }
+
         function viewAttachedDocumentAL() {
             if(!currentViewImageAL) return;
             const content = document.getElementById('lightbox-content');
             if(currentViewTypeAL === 'pdf') {
-                content.innerHTML = `<embed src="${currentViewImageAL}" type="application/pdf" class="w-full h-full rounded-lg shadow-2xl bg-white">`;
+                content.innerHTML = `<embed src="${currentViewImageAL}" type="application/pdf" class="w-full h-full bg-white">`;
             } else {
-                content.innerHTML = `<img src="${currentViewImageAL}" class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl border border-white/10">`;
+                content.innerHTML = `<img src="${currentViewImageAL}" class="max-w-full max-h-[90vh] object-contain">`;
             }
             document.getElementById('lightbox-modal').classList.remove('hidden');
         }
 
-        function closeLightbox() {
-            document.getElementById('lightbox-modal').classList.add('hidden');
-            document.getElementById('lightbox-content').innerHTML = ''; 
-        }
-
+        function openALModal() { document.getElementById('al-modal').classList.remove('hidden'); document.getElementById('bulk-al-tbody').innerHTML = ''; window.extractedBulkALs = {}; document.getElementById('main-file-input').value = ''; document.getElementById('al-file-input').value = ''; }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+        function closeLightbox() { document.getElementById('lightbox-modal').classList.add('hidden'); document.getElementById('lightbox-content').innerHTML = '';  }
         function enableEditMode() { document.querySelectorAll('.edit-field').forEach(el => el.disabled = false); document.getElementById('save-edit-btn').classList.remove('hidden'); }
 
         async function verifyAL() {
@@ -461,7 +472,6 @@
             const reason = prompt("State the reason for cancelling this Approval Letter:");
             if (!reason) return;
             if (prompt("Type 'CANCEL' in all caps to confirm deletion:") !== 'CANCEL') return alert("Cancellation aborted.");
-
             const { error } = await _supabase.from('al_orders').update({ status: 'Cancelled', remark: '[CANCELLED] ' + reason }).eq('id', document.getElementById('edit-id').value);
             if(error) alert(error.message); else { alert("AL Cancelled successfully!"); closeModal('manage-modal'); fetchData(); }
         }
@@ -472,19 +482,9 @@
             const order = globalALs.find(o => String(o.id) === String(orderId));
             const cumul = order._cumul || 0; 
             const newBalance = newQty - cumul;
-
             let editPo = document.getElementById('edit-order').value || '';
             if (editPo && !editPo.startsWith('#')) editPo = '#' + editPo;
-
-            const { error } = await _supabase.from('al_orders').update({
-                order_date: document.getElementById('edit-date').value, 
-                customer_name: document.getElementById('edit-name').value,
-                order_number: editPo, 
-                quantity_ordered: newQty, 
-                balance_quantity: newBalance,
-                remark: document.getElementById('edit-remark').value
-            }).eq('id', orderId);
-            
+            const { error } = await _supabase.from('al_orders').update({ order_date: document.getElementById('edit-date').value, customer_name: document.getElementById('edit-name').value, order_number: editPo, quantity_ordered: newQty, balance_quantity: newBalance, remark: document.getElementById('edit-remark').value }).eq('id', orderId);
             if(error) alert(error.message); else { closeModal('manage-modal'); fetchData(); }
         }
 
@@ -492,82 +492,33 @@
             const mainZone = document.getElementById('main-drop-zone');
             const mainInput = document.getElementById('main-file-input');
             if(mainZone && mainInput) {
-                mainZone.onclick = () => mainInput.click();
-                mainZone.ondragover = (e) => { e.preventDefault(); mainZone.classList.add('dragover'); };
-                mainZone.ondragleave = () => mainZone.classList.remove('dragover'); 
-                mainZone.ondrop = (e) => { 
-                    e.preventDefault(); mainZone.classList.remove('dragover'); 
-                    if (e.dataTransfer.files.length) { openALModal(); handleBulkUpload(e.dataTransfer.files); }
-                };
-                mainInput.onchange = (e) => { 
-                    if (e.target.files.length) { openALModal(); handleBulkUpload(e.target.files); }
-                    mainInput.value = '';
-                };
+                mainZone.onclick = () => mainInput.click(); mainZone.ondragover = (e) => { e.preventDefault(); mainZone.classList.add('dragover'); }; mainZone.ondragleave = () => mainZone.classList.remove('dragover'); 
+                mainZone.ondrop = (e) => { e.preventDefault(); mainZone.classList.remove('dragover'); if (e.dataTransfer.files.length) { openALModal(); handleBulkUpload(e.dataTransfer.files); } };
+                mainInput.onchange = (e) => { if (e.target.files.length) { openALModal(); handleBulkUpload(e.target.files); } mainInput.value = ''; };
             }
-
             const zone = document.getElementById('al-drop-zone');
             const input = document.getElementById('al-file-input');
             if(!zone || !input) return;
-
-            zone.onclick = () => input.click();
-            zone.ondragover = (e) => { e.preventDefault(); zone.classList.add('dragover'); };
-            zone.ondragleave = () => zone.classList.remove('dragover'); 
-            zone.ondrop = (e) => { 
-                e.preventDefault(); zone.classList.remove('dragover'); 
-                if (e.dataTransfer.files.length) handleBulkUpload(e.dataTransfer.files); 
-            };
-            input.onchange = (e) => { 
-                if (e.target.files.length) handleBulkUpload(e.target.files); 
-                input.value = '';
-            };
+            zone.onclick = () => input.click(); zone.ondragover = (e) => { e.preventDefault(); zone.classList.add('dragover'); }; zone.ondragleave = () => zone.classList.remove('dragover'); 
+            zone.ondrop = (e) => { e.preventDefault(); zone.classList.remove('dragover'); if (e.dataTransfer.files.length) handleBulkUpload(e.dataTransfer.files); };
+            input.onchange = (e) => { if (e.target.files.length) handleBulkUpload(e.target.files); input.value = ''; };
         }
 
         async function handleBulkUpload(files) {
             const tbody = document.getElementById('bulk-al-tbody');
-            
             for (let file of files) {
                 if (!file.type.startsWith('image/') && file.type !== 'application/pdf') continue;
-                
-                const rowId = 'row_' + Math.random().toString(36).substring(2, 9);
-                const reader = new FileReader();
-                
-                tbody.insertAdjacentHTML('beforeend', `
-                    <tr id="${rowId}" class="border-b border-blue-100 bg-blue-50/30">
-                        <td class="p-3 text-center" colspan="10">
-                            <span class="text-xs font-bold text-blue-600 animate-pulse">Scanning AL ${file.name}...</span>
-                        </td>
-                    </tr>
-                `);
-
+                const rowId = 'row_' + Math.random().toString(36).substring(2, 9); const reader = new FileReader();
+                tbody.insertAdjacentHTML('beforeend', `<tr id="${rowId}" class="border-b border-blue-100 bg-blue-50/30"><td class="p-3 text-center" colspan="10"><span class="text-xs font-bold text-blue-600 animate-pulse">Scanning AL ${file.name}...</span></td></tr>`);
                 reader.onload = async (e) => {
-                    const base64Data = e.target.result;
-                    window.extractedBulkALs[rowId] = base64Data;
-
+                    const base64Data = e.target.result; window.extractedBulkALs[rowId] = base64Data;
                     try {
-                        const prompt = `Extract the following details from this Approval Letter or Receipt document: 
-                        1. customerName (PRIORITY: Extract the Company Name first. If there is no Company Name, extract the personal name), 
-                        2. orderNumber (PO or invoice number), 
-                        3. orderDate (in DD/MM/YYYY or YYYY-MM-DD format), 
-                        4. productName (item description), 
-                        5. quantity (as an integer), 
-                        6. price (IMPORTANT: Extract the explicit UNIT SELLING PRICE listed on the document. DO NOT calculate or divide the total amount. Look for a unit price listed next to the item). 
-                        Return the result STRICTLY as a raw JSON object with no markdown wrapping, using these exact keys: {"customerName": "", "orderNumber": "", "orderDate": "", "productName": "", "quantity": 0, "price": 0.0}`;
-                        
+                        const prompt = `Extract details STRICTLY as raw JSON (no markdown): {"customerName": "", "orderNumber": "", "orderDate": "", "productName": "", "quantity": 0, "price": 0.0}`;
                         const extractedData = await analyzeImageWithGemini(base64Data, file.type, prompt);
-                        
-                        let oDate = extractedData.orderDate || '';
-                        if (oDate.match(/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/)) {
-                            const parts = oDate.split(/[\/\-]/);
-                            oDate = `${parts[2]}-${parts[1]}-${parts[0]}`; 
-                        }
-                        
-                        let extractedPo = extractedData.orderNumber || '';
-                        if (extractedPo && !extractedPo.startsWith('#')) extractedPo = '#' + extractedPo;
-
+                        let oDate = extractedData.orderDate || ''; if (oDate.match(/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/)) { const parts = oDate.split(/[\/\-]/); oDate = `${parts[2]}-${parts[1]}-${parts[0]}`; }
+                        let extractedPo = extractedData.orderNumber || ''; if (extractedPo && !extractedPo.startsWith('#')) extractedPo = '#' + extractedPo;
                         document.getElementById(rowId).innerHTML = `
-                            <td class="p-3">
-                                ${file.type.includes('pdf') ? '<div class="w-8 h-8 bg-red-100 text-red-500 rounded flex items-center justify-center text-[8px] font-bold">PDF</div>' : `<img src="${base64Data}" class="w-8 h-8 object-cover rounded shadow-sm">`}
-                            </td>
+                            <td class="p-3">${file.type.includes('pdf') ? '<div class="w-8 h-8 bg-red-100 text-red-500 rounded flex items-center justify-center text-[8px] font-bold">PDF</div>' : `<img src="${base64Data}" class="w-8 h-8 object-cover rounded shadow-sm">`}</td>
                             <td class="p-3"><span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">Auto on Save</span></td>
                             <td class="p-3"><input type="date" id="date_${rowId}" value="${oDate}" class="input-style text-[10px] p-2 w-full"></td>
                             <td class="p-3"><input type="text" id="cust_${rowId}" value="${extractedData.customerName || ''}" class="input-style text-[10px] p-2 w-full font-bold text-blue-800"></td>
@@ -578,103 +529,32 @@
                             <td class="p-3"><input type="text" id="remark_${rowId}" value="Scanned via AI" class="input-style text-[10px] p-2 w-full"></td>
                             <td class="p-3 text-right"><button onclick="document.getElementById('${rowId}').remove(); delete window.extractedBulkALs['${rowId}'];" class="text-red-400 hover:text-red-600 font-bold">✕</button></td>
                         `;
-                    } catch (err) {
-                        document.getElementById(rowId).innerHTML = `
-                            <td class="p-3 text-center text-red-500 font-bold text-[10px]" colspan="10">Failed to scan ${file.name}.</td>
-                        `;
-                    }
-                };
-                reader.readAsDataURL(file);
+                    } catch (err) { document.getElementById(rowId).innerHTML = `<td class="p-3 text-center text-red-500 font-bold text-[10px]" colspan="10">Failed to scan ${file.name}.</td>`; }
+                }; reader.readAsDataURL(file);
             }
         }
 
         async function saveBulkAL() {
-            const btn = document.getElementById('save-bulk-al-btn'); btn.innerText = 'SAVING ALL...'; btn.disabled = true;
-            const rows = document.querySelectorAll('#bulk-al-tbody tr');
-            
-            let successCount = 0;
-            let currentPrefix = '';
-            let nextSeq = 1;
-            
+            const btn = document.getElementById('save-bulk-al-btn'); btn.innerText = 'SAVING ALL...'; btn.disabled = true; const rows = document.querySelectorAll('#bulk-al-tbody tr'); let successCount = 0; let currentPrefix = ''; let nextSeq = 1;
             for (let row of rows) {
                 if(row.innerHTML.includes('Scanning') || row.innerHTML.includes('Failed')) continue; 
-                
-                const rId = row.id;
-                let poOrder = document.getElementById(`po_${rId}`).value || ''; 
-                if (poOrder && !poOrder.startsWith('#')) poOrder = '#' + poOrder;
-
+                const rId = row.id; let poOrder = document.getElementById(`po_${rId}`).value || ''; if (poOrder && !poOrder.startsWith('#')) poOrder = '#' + poOrder;
                 const orderDate = document.getElementById(`date_${rId}`).value || new Date().toISOString().split('T')[0];
-                const custName = document.getElementById(`cust_${rId}`).value || 'Unknown';
-                const qty = parseInt(document.getElementById(`qty_${rId}`).value) || 0;
-                const price = parseFloat(document.getElementById(`price_${rId}`).value) || 0;
-                const prodName = document.getElementById(`prod_${rId}`).value || '';
-                const remark = document.getElementById(`remark_${rId}`).value || '';
-                const base64Image = window.extractedBulkALs[rId] || null;
-
+                const custName = document.getElementById(`cust_${rId}`).value || 'Unknown'; const qty = parseInt(document.getElementById(`qty_${rId}`).value) || 0;
+                const price = parseFloat(document.getElementById(`price_${rId}`).value) || 0; const prodName = document.getElementById(`prod_${rId}`).value || '';
+                const remark = document.getElementById(`remark_${rId}`).value || ''; const base64Image = window.extractedBulkALs[rId] || null;
                 if(qty <= 0) continue; 
-
-                if(poOrder) {
-                    const existing = globalALs.find(a => a.order_number === poOrder && a.status !== 'Cancelled');
-                    if(existing) {
-                        alert(`Order Number ${poOrder} already exists! Skipping.`);
-                        row.classList.replace('bg-blue-50/30', 'bg-red-50');
-                        continue;
-                    }
-                }
-
-                const d = new Date(orderDate);
-                const prefix = `AL-${String(d.getFullYear()).slice(-2)}${String(d.getMonth() + 1).padStart(2, '0')}-`;
-                
-                if (prefix !== currentPrefix) {
-                    currentPrefix = prefix;
-                    const monthOrders = globalALs.filter(o => o.al_number && o.al_number.startsWith(prefix));
-                    nextSeq = monthOrders.length > 0 ? Math.max(...monthOrders.map(o => parseInt(o.al_number.split('-')[2]) || 0)) + 1 : 1;
-                }
-
-                const genALNumber = `${prefix}${String(nextSeq).padStart(4, '0')}`;
-                nextSeq++;
-
-                let payload = {
-                    al_number: genALNumber,
-                    order_date: new Date(orderDate).toISOString(),
-                    customer_name: custName,
-                    order_number: poOrder,
-                    product_name: prodName,
-                    quantity_ordered: qty,
-                    balance_quantity: qty,
-                    price_per_unit: price,
-                    status: 'Unverified',
-                    remark: remark,
-                    image_url: base64Image
-                };
-
+                if(poOrder) { const existing = globalALs.find(a => a.order_number === poOrder && a.status !== 'Cancelled'); if(existing) { alert(`Order Number ${poOrder} already exists! Skipping.`); row.classList.replace('bg-blue-50/30', 'bg-red-50'); continue; } }
+                const d = new Date(orderDate); const prefix = `AL-${String(d.getFullYear()).slice(-2)}${String(d.getMonth() + 1).padStart(2, '0')}-`;
+                if (prefix !== currentPrefix) { currentPrefix = prefix; const monthOrders = globalALs.filter(o => o.al_number && o.al_number.startsWith(prefix)); nextSeq = monthOrders.length > 0 ? Math.max(...monthOrders.map(o => parseInt(o.al_number.split('-')[2]) || 0)) + 1 : 1; }
+                const genALNumber = `${prefix}${String(nextSeq).padStart(4, '0')}`; nextSeq++;
+                let payload = { al_number: genALNumber, order_date: new Date(orderDate).toISOString(), customer_name: custName, order_number: poOrder, product_name: prodName, quantity_ordered: qty, balance_quantity: qty, price_per_unit: price, status: 'Unverified', remark: remark, image_url: base64Image };
                 const { error: err } = await _supabase.from('al_orders').insert([payload]);
-                if (!err) {
-                    globalALs.push({...payload, id: Math.random()}); 
-                    row.remove(); 
-                    successCount++;
-                } else {
-                    if(err.message.includes('image_url')) {
-                        alert("⚠️ Please add an 'image_url' (text) column to your 'al_orders' Supabase table to save images.");
-                    } else {
-                        alert("Database Error: " + err.message);
-                    }
-                }
-            }
-            
-            fetchData();
-            btn.innerText = 'Save All ALs'; btn.disabled = false;
-            
-            if(document.querySelectorAll('#bulk-al-tbody tr').length === 0) {
-                closeModal('al-modal');
-                alert(`Successfully saved ${successCount} Approval Letters!`);
-            } else {
-                alert("Saved some records. The remaining rows had issues or duplicate PO numbers.");
-            }
+                if (!err) { globalALs.push({...payload, id: Math.random()}); row.remove(); successCount++; } else { if(err.message.includes('image_url')) { alert("⚠️ Please add 'image_url' (text) column to Supabase table."); } else { alert("Database Error: " + err.message); } }
+            } fetchData(); btn.innerText = 'Save All ALs'; btn.disabled = false;
+            if(document.querySelectorAll('#bulk-al-tbody tr').length === 0) { closeModal('al-modal'); alert(`Successfully saved ${successCount} Approval Letters!`); } else { alert("Saved some records. Review remaining rows in red."); }
         }
-
-        setupDragAndDrop();
-        _supabase.auth.getSession().then(({ data: { session } }) => { if (!session) window.location.href = 'index.html'; else fetchData(); });
+        setupDragAndDrop(); _supabase.auth.getSession().then(({ data: { session } }) => { if (!session) window.location.href = 'index.html'; else fetchData(); });
     </script>
 </body>
 </html>
