@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MJM Nursery AI - Main Page</title>
+    <title>MJM Nursery AI - Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
@@ -116,8 +116,9 @@
                 </div>
                 <h1 class="text-xl font-black text-emerald-900 uppercase tracking-widest hidden md:block">System Overview</h1>
             </div>
-            <div class="flex items-center gap-4 relative z-20">
-                <span id="welcome-text" class="text-xs font-bold text-slate-500 hidden md:block">Welcome, User</span>
+            
+            <div class="flex items-center gap-3 relative z-20">
+                <span id="welcome-text" class="text-xs font-bold text-slate-500 hidden md:block mr-2">Welcome, User</span>
                 <button id="logout-btn" class="text-[10px] font-bold text-slate-500 hover:text-red-500 uppercase tracking-widest bg-white/50 px-5 py-3 rounded-full border border-slate-200 cursor-pointer transition-colors">Sign Out</button>
             </div>
             <div id="title-animation-zone" class="absolute inset-0 pointer-events-none z-50 overflow-visible"></div>
@@ -167,25 +168,29 @@
         <div>
             <h2 class="text-sm font-black text-slate-400 uppercase tracking-[0.2em] mb-4 ml-2">System Modules</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="glass-card p-8 rounded-[2rem] opacity-60 cursor-not-allowed relative overflow-hidden group">
-                    <div class="absolute top-4 right-4 text-[9px] font-bold bg-slate-200 text-slate-500 px-2 py-1 rounded uppercase tracking-wider">Coming Soon</div>
-                    <div class="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 mb-6"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg></div>
-                    <h3 class="font-black text-xl text-slate-700 uppercase tracking-widest mb-2">Operation</h3>
-                    <p class="text-xs text-slate-500 font-semibold leading-relaxed">Nursery tasks, watering schedules, and daily field operations.</p>
-                </div>
-                <div class="glass-card p-8 rounded-[2rem] opacity-60 cursor-not-allowed relative overflow-hidden group">
-                    <div class="absolute top-4 right-4 text-[9px] font-bold bg-slate-200 text-slate-500 px-2 py-1 rounded uppercase tracking-wider">Coming Soon</div>
-                    <div class="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 mb-6"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg></div>
-                    <h3 class="font-black text-xl text-slate-700 uppercase tracking-widest mb-2">Sales & Stock</h3>
-                    <p class="text-xs text-slate-500 font-semibold leading-relaxed">Inventory management, variety tracking, and sales analytics.</p>
-                </div>
-
                 <button onclick="window.location.href='delivery.html'" class="w-full text-left glass-panel p-8 rounded-[2rem] relative overflow-hidden group cursor-pointer hover:border-emerald-400 hover:shadow-emerald-500/20 hover:shadow-xl transition-all duration-300">
                     <div class="absolute top-0 right-0 w-32 h-32 bg-emerald-400/10 rounded-full blur-2xl group-hover:scale-110 transition-transform"></div>
                     <div class="w-14 h-14 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 mb-6 group-hover:scale-110 group-hover:bg-emerald-500 group-hover:text-white transition-all shadow-sm"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div>
                     <h3 class="font-black text-xl text-emerald-900 uppercase tracking-widest mb-2">Booking &<br>Collection</h3>
-                    <p class="text-xs text-slate-500 font-semibold leading-relaxed">Manage customer reservations, AL generation, and pickups.</p>
+                    <p class="text-xs text-slate-500 font-semibold leading-relaxed">Manage customer reservations, AL generation, and DO pickups.</p>
                     <div class="mt-6 flex items-center text-[10px] font-bold text-emerald-600 uppercase tracking-widest group-hover:translate-x-2 transition-transform">
+                        Enter Module <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+                    </div>
+                </button>
+
+                <div class="glass-card p-8 rounded-[2rem] opacity-60 cursor-not-allowed relative overflow-hidden group">
+                    <div class="absolute top-4 right-4 text-[9px] font-bold bg-slate-200 text-slate-500 px-2 py-1 rounded uppercase tracking-wider">Coming Soon</div>
+                    <div class="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 mb-6"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg></div>
+                    <h3 class="font-black text-xl text-slate-700 uppercase tracking-widest mb-2">Operation &<br>Stock Inventory</h3>
+                    <p class="text-xs text-slate-500 font-semibold leading-relaxed">Nursery tasks, watering schedules, and active batch inventory.</p>
+                </div>
+
+                <button onclick="window.location.href='settings.html'" class="w-full text-left glass-panel border-purple-400 p-8 rounded-[2rem] relative overflow-hidden group cursor-pointer hover:border-purple-500 hover:shadow-purple-500/20 hover:shadow-xl transition-all duration-300">
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-purple-400/10 rounded-full blur-2xl group-hover:scale-110 transition-transform"></div>
+                    <div class="w-14 h-14 bg-purple-100 rounded-2xl flex items-center justify-center text-purple-600 mb-6 group-hover:scale-110 group-hover:bg-purple-500 group-hover:text-white transition-all shadow-sm"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg></div>
+                    <h3 class="font-black text-xl text-purple-900 uppercase tracking-widest mb-2">System<br>Settings</h3>
+                    <p class="text-xs text-slate-500 font-semibold leading-relaxed">Configure nurseries, plots, breeds, and inventory master data.</p>
+                    <div class="mt-6 flex items-center text-[10px] font-bold text-purple-600 uppercase tracking-widest group-hover:translate-x-2 transition-transform">
                         Enter Module <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
                     </div>
                 </button>
@@ -214,10 +219,9 @@
 
         let isRecoveringPassword = window.location.hash.includes('type=recovery');
 
-        // Slow Healing Emoji Logic
+        // Slow Healing Emoji Logic - ONLY WHEN LOGGED IN
         const healingEmojis = ["🌿", "🍃", "🌱", "🪴", "🌳", "🌤️", "⛅️", "🦋", "🐌", "🐞", "🐢", "🍓", "🍵", "🌸", "🦦"];
         function spawnHealingEmoji() {
-            // ONLY SPAWN EMOJIS IF DASHBOARD IS VISIBLE (USER LOGGED IN)
             if(dashboardScreen.classList.contains('hidden')) return;
 
             const zone = document.getElementById('title-animation-zone');
