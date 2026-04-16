@@ -299,9 +299,9 @@
         }
 
         async function fetchData() { 
-            const [{ data: alData }, { data: doData }] = await Promise.all([ 
-                _supabase.from('al_orders').select('*').order('created_at', { ascending: false }), 
-                _supabase.from('do_records').select('*') 
+            const [{ data: alData }, { data: doData }] = await Promise.all([
+                _supabase.from('al_orders').select('id,al_number,order_number,order_date,customer_name,product_name,quantity_ordered,balance_quantity,price_per_unit,status,remark,created_at').order('created_at', { ascending: false }),
+                _supabase.from('do_records').select('id,do_number,al_number,total_qty,status,remark,created_at')
             ]); 
             
             globalDOs = doData || []; 
