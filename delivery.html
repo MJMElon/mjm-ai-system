@@ -68,8 +68,8 @@
                 <h2 class="font-black text-slate-800 uppercase tracking-widest text-lg w-full md:w-auto">Delivery Order (DO) List</h2>
                 
                 <div class="flex gap-3 w-full md:w-auto relative z-40 items-center">
-                    <button onclick="openCreateBAModal()" class="bg-yellow-400 hover:bg-yellow-500 text-yellow-900 text-xs font-bold px-4 py-3 rounded-xl uppercase tracking-widest shadow-sm transition-colors whitespace-nowrap flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> Create BA Form
+                    <button id="btn-create-ba" onclick="openCreateBAModal()" class="bg-yellow-400 hover:bg-yellow-500 text-yellow-900 text-xs font-bold px-4 py-3 rounded-xl uppercase tracking-widest shadow-sm transition-colors whitespace-nowrap items-center gap-2 hidden">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> Create BA Form (<span id="btn-ba-count">0</span> DO selected)
                     </button>
                     <div class="relative w-full md:w-72">
                         <svg class="w-4 h-4 absolute left-3 top-3 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -138,6 +138,7 @@
 
                 <div id="mng-do-collection-edit" class="hidden mb-4 p-4 border border-slate-200 rounded-xl bg-slate-50">
                     <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Edit Plot/Breed/Batch Details (Max 5 items)</label>
+                    <div class="flex gap-1 items-center mb-0" style="pointer-events:none;"><span class="text-[8px] font-black uppercase tracking-wider text-purple-500 w-32 px-1">Nursery/Plot</span><span class="text-[8px] font-black uppercase tracking-wider text-amber-600 w-24 px-1">Breed</span><span class="text-[8px] font-black uppercase tracking-wider text-slate-500 w-20 px-1">Batch</span><span class="text-[8px] font-black uppercase tracking-wider text-emerald-600 w-12 px-1 text-center">Qty</span></div>
                     <div id="items_container_mng" class="flex flex-col gap-2" data-count="0"></div>
                     <button id="mng-add-item-btn" onclick="addMiniItemRow('mng')" class="text-[10px] font-bold text-emerald-600 mt-2 hover:underline hidden">+ Add Item Row</button>
                 </div>
@@ -313,12 +314,12 @@
         async function fetchData() {
             try {
                 const [resPlots, resBreeds, resNurs, resBatches, alDataRes, doDataRes] = await Promise.all([
-                    _supabase.from('plots').select('*'),
-                    _supabase.from('breeds').select('*'),
-                    _supabase.from('nurseries').select('*'),
-                    _supabase.from('batches').select('*'),
-                    _supabase.from('al_orders').select('*').order('created_at', { ascending: false }),
-                    _supabase.from('do_records').select('*').order('created_at', { ascending: false })
+                    _supabase.from('plots').select('plot_name,nursery_name'),
+                    _supabase.from('breeds').select('name'),
+                    _supabase.from('nurseries').select('name,license'),
+                    _supabase.from('batches').select('name'),
+                    _supabase.from('al_orders').select('id,al_number,order_number,order_date,customer_name,product_name,quantity_ordered,balance_quantity,price_per_unit,status,remark,created_at').order('created_at', { ascending: false }),
+                    _supabase.from('do_records').select('id,do_number,al_number,delivery_date,total_qty,remark,status,plot_1,breed_1,batch_1,qty_1,plot_2,breed_2,batch_2,qty_2,plot_3,breed_3,batch_3,qty_3,plot_4,breed_4,batch_4,qty_4,plot_5,breed_5,batch_5,qty_5,ba_number,ba_raw_name,ba_raw_qty,created_at').order('created_at', { ascending: false })
                 ]);
                 
                 if(resPlots.data) globalPlots = resPlots.data;
@@ -391,6 +392,25 @@
                 `;
             });
             tbody.innerHTML = htmlStr;
+            // Re-attach checkbox listeners for Create BA button visibility
+            updateCreateBAButton();
+            tbody.querySelectorAll('.do-select-cb').forEach(cb => {
+                cb.addEventListener('change', updateCreateBAButton);
+            });
+        }
+
+        function updateCreateBAButton() {
+            const checked = document.querySelectorAll('.do-select-cb:checked').length;
+            const btn = document.getElementById('btn-create-ba');
+            const countEl = document.getElementById('btn-ba-count');
+            if (checked > 0) {
+                btn.classList.remove('hidden');
+                btn.classList.add('flex');
+                countEl.textContent = checked;
+            } else {
+                btn.classList.add('hidden');
+                btn.classList.remove('flex');
+            }
         }
 
         // AL CROSS-MODULE POPUP FROM DO PAGE
@@ -471,16 +491,17 @@
 
             let custOptions = ''; if(custNames.size === 0) custOptions = `<option value="">Unknown</option>`; else custNames.forEach(name => custOptions += `<option value="${name}">${name}</option>`);
 
-            let html = `
-                <div class="bg-yellow-50 p-4 rounded-xl border border-yellow-200 mb-6 space-y-4 shadow-sm">
-                    <div><label class="text-[10px] font-bold text-yellow-800 uppercase ml-1">BA Customer Name</label><select id="new-ba-name" class="input-style mt-1 border-yellow-300 focus:border-yellow-500 w-full font-black uppercase text-yellow-900 text-sm">${custOptions}</select></div>
-                    <div><label class="text-[10px] font-bold text-yellow-800 uppercase ml-1">Assign BA Number</label><input type="text" id="new-ba-num" class="input-style mt-1 border-yellow-300 focus:border-yellow-500 w-full font-bold text-yellow-900 text-sm" placeholder="Enter BA Number..."></div>
-                </div>
-                <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 border-b pb-1">DO Summary</h4><div class="space-y-2 mb-6 max-h-[150px] overflow-y-auto pr-2">
-            `;
+            // Store for cross-check later
+            window._baCustNames = [...custNames];
+            window._baTotalQty = totalQty;
+
+            // ── Section 1: DO Summary ──
+            let html = `<h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 border-b pb-1">1. DO Summary (${selectedDOsList.length} selected)</h4>
+            <div class="space-y-2 mb-6 max-h-[180px] overflow-y-auto pr-2">`;
             selectedDOsList.forEach(doItem => { html += `<div class="bg-slate-50 p-3 rounded-lg border border-slate-100"><div class="font-black text-emerald-700 text-xs mb-1">${doItem.do_number}</div>${doItem.details.join('')}</div>`; });
-            
-            html += `</div><div class="flex justify-between items-end mt-4 mb-2 border-b pb-1"><h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">BA Details Breakdown</h4><span class="text-[10px] font-bold text-slate-500 uppercase">Total Qty: <span class="font-black text-lg text-emerald-600">${totalQty}</span></span></div><div class="space-y-2 max-h-[200px] overflow-y-auto pr-2">`;
+
+            // ── Section 2: BA Details Breakdown ──
+            html += `</div><div class="flex justify-between items-end mt-4 mb-2 border-b pb-1"><h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">2. BA Details Breakdown</h4><span class="text-[10px] font-bold text-slate-500 uppercase">Total Qty: <span class="font-black text-lg text-emerald-600">${totalQty}</span></span></div><div class="space-y-2 mb-6 max-h-[200px] overflow-y-auto pr-2">`;
             let hasNurseryData = false;
             for(let nurs in nurserySummary) {
                 if(Object.keys(nurserySummary[nurs]).length > 0) {
@@ -490,10 +511,122 @@
                     html += `</ul></div>`;
                 }
             }
-            if(!hasNurseryData) html += `<div class="text-xs text-slate-400 italic">No plot/breed data found in selected DOs.</div>`; html += `</div>`;
+            if(!hasNurseryData) html += `<div class="text-xs text-slate-400 italic">No plot/breed data found in selected DOs.</div>`;
+            html += `</div>`;
+
+            // ── Section 3: BA Customer Name ──
+            html += `<h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 mt-4 border-b pb-1">3. BA Customer Name</h4>
+            <div class="mb-6">
+                <select id="new-ba-name" class="input-style border-yellow-300 focus:border-yellow-500 w-full font-black uppercase text-yellow-900 text-sm">${custOptions}</select>
+            </div>`;
+
+            // ── Section 4: Camera Scan BA Form ──
+            html += `<h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 mt-4 border-b pb-1">4. Scan BA Form — Photo & AI Number Extract</h4>
+            <div class="bg-yellow-50 p-4 rounded-xl border border-yellow-200 mb-4 space-y-3">
+                <div class="flex gap-3 items-start">
+                    <div class="flex-1">
+                        <input type="file" id="ba-photo-input" accept="image/*" capture="environment" class="hidden" onchange="scanBAPhoto(this)">
+                        <button onclick="document.getElementById('ba-photo-input').click()" class="w-full p-3 rounded-xl bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-colors">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                            Take Photo of BA Form
+                        </button>
+                        <div id="ba-photo-preview" class="hidden mt-2"><img id="ba-photo-img" class="w-full rounded-lg border border-yellow-300" style="max-height:200px;object-fit:contain;"></div>
+                    </div>
+                </div>
+                <div id="ba-scan-status" class="hidden text-xs font-bold p-2 rounded-lg"></div>
+                <div>
+                    <label class="text-[10px] font-bold text-yellow-800 uppercase ml-1">BA Number (auto-filled by AI or manual)</label>
+                    <input type="text" id="new-ba-num" class="input-style mt-1 border-yellow-300 focus:border-yellow-500 w-full font-bold text-yellow-900 text-sm" placeholder="Take photo above to auto-scan, or type manually...">
+                </div>
+                <div id="ba-cross-check" class="hidden"></div>
+            </div>`;
 
             document.getElementById('ba-summary-content').innerHTML = html;
             document.getElementById('create-ba-modal').classList.remove('hidden');
+        }
+
+        async function scanBAPhoto(input) {
+            if (!input.files || !input.files[0]) return;
+            const file = input.files[0];
+            const statusEl = document.getElementById('ba-scan-status');
+            const previewEl = document.getElementById('ba-photo-preview');
+            const imgEl = document.getElementById('ba-photo-img');
+            const crossCheckEl = document.getElementById('ba-cross-check');
+
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                imgEl.src = e.target.result;
+                previewEl.classList.remove('hidden');
+                statusEl.className = 'text-xs font-bold p-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200';
+                statusEl.textContent = '🤖 AI scanning BA form...';
+                statusEl.classList.remove('hidden');
+
+                // Call Gemini to extract BA number and customer name
+                const _k1 = 'AIzaSyCvSAVEeOa_'; const _k2 = 'PkZxRKDJkYz3hqzdgvbGIyQ';
+                const base64 = e.target.result.split(',')[1];
+                const mimeType = file.type || 'image/jpeg';
+
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${_k1+_k2}`;
+                    const resp = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [
+                                { text: 'Extract from this Borang Akuan (BA) form image. Return JSON only: {"ba_number": "the BA reference number", "customer_name": "the customer/buyer name on the form", "total_qty": number or null}. If you cannot find a field, use null.' },
+                                { inlineData: { mimeType: mimeType, data: base64 } }
+                            ]}],
+                            generationConfig: { responseMimeType: 'application/json' }
+                        })
+                    });
+                    const result = await resp.json();
+                    const text = result?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+                    const parsed = JSON.parse(text);
+
+                    // Auto-fill BA number
+                    if (parsed.ba_number) {
+                        document.getElementById('new-ba-num').value = parsed.ba_number;
+                        statusEl.className = 'text-xs font-bold p-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200';
+                        statusEl.textContent = '✅ BA Number detected: ' + parsed.ba_number;
+                    } else {
+                        statusEl.className = 'text-xs font-bold p-2 rounded-lg bg-amber-50 text-amber-700 border border-amber-200';
+                        statusEl.textContent = '⚠️ Could not detect BA number. Please enter manually.';
+                    }
+
+                    // Cross-check customer name and qty
+                    let warnings = [];
+                    const systemNames = window._baCustNames || [];
+                    if (parsed.customer_name && systemNames.length) {
+                        const scannedName = parsed.customer_name.toUpperCase().trim();
+                        const hasMatch = systemNames.some(n => scannedName.includes(n.toUpperCase().substring(0, 5)) || n.toUpperCase().includes(scannedName.substring(0, 5)));
+                        if (!hasMatch) {
+                            warnings.push('⚠️ <strong>Customer name mismatch:</strong> BA form says "<strong>' + parsed.customer_name + '</strong>" but system has "<strong>' + systemNames.join(', ') + '</strong>"');
+                        } else {
+                            warnings.push('✅ Customer name matches: ' + parsed.customer_name);
+                        }
+                    }
+                    if (parsed.total_qty && window._baTotalQty) {
+                        if (parsed.total_qty !== window._baTotalQty) {
+                            warnings.push('⚠️ <strong>Qty mismatch:</strong> BA form shows <strong>' + parsed.total_qty + '</strong> but DO total is <strong>' + window._baTotalQty + '</strong>');
+                        } else {
+                            warnings.push('✅ Total qty matches: ' + parsed.total_qty);
+                        }
+                    }
+
+                    if (warnings.length) {
+                        crossCheckEl.innerHTML = '<div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Cross-Check Result</div>' +
+                            warnings.map(w => '<div class="text-xs font-bold p-2 rounded-lg mb-1 ' + (w.includes('⚠️') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200') + '">' + w + '</div>').join('');
+                        crossCheckEl.classList.remove('hidden');
+                    }
+
+                } catch(err) {
+                    console.error('BA scan error:', err);
+                    statusEl.className = 'text-xs font-bold p-2 rounded-lg bg-red-50 text-red-700 border border-red-200';
+                    statusEl.textContent = '❌ Scan failed: ' + err.message + '. Please enter BA number manually.';
+                }
+            };
+            reader.readAsDataURL(file);
         }
 
         async function confirmCreateBA() {
@@ -501,9 +634,15 @@
             const baNum = baNumEl ? baNumEl.value.trim() : ''; const baName = baNameEl ? baNameEl.value.trim() : '';
 
             if(!baName || baName === 'Unknown') return alert("Please select or enter a valid BA Customer Name.");
+
+            // Check for cross-check warnings
+            const crossCheckEl = document.getElementById('ba-cross-check');
+            if (crossCheckEl && !crossCheckEl.classList.contains('hidden') && crossCheckEl.innerHTML.includes('⚠️')) {
+                if (!confirm('⚠️ There are mismatches between the BA form and system data.\n\nAre you sure you want to proceed?')) return;
+            }
+
             const checkboxes = document.querySelectorAll('.do-select-cb:checked'); let matchedIds = [];
-            
-            // FIX: DO NOT SET BA QTY TO DO TOTAL QTY YET. DEFAULT TO 0.
+
             checkboxes.forEach(cb => { const doRec = globalDOs.find(d => String(d.id) === cb.value); if(doRec) { matchedIds.push(doRec.id); }});
             if(matchedIds.length === 0) return closeModal('create-ba-modal');
             const btn = event.target; btn.innerText = 'SAVING BA...'; btn.disabled = true;
@@ -792,9 +931,9 @@
 
                             let cleanDoNum = (deliv.doNumber || '').replace(/[^0-9]/g, '');
 
-                            let sumQty = 0; let itemHtml = ''; let itemCount = 0; 
-                            (deliv.items || []).forEach((i, idx) => { sumQty += (parseInt(i.quantity)||0); itemHtml += generateMiniItemHtml(rowId, idx, i.plot, i.breed, i.batch, i.quantity); itemCount++; }); 
-                            if(itemCount === 0) itemHtml = generateMiniItemHtml(rowId, 0, '', '', '', ''); 
+                            let sumQty = 0; let itemHtml = generateMiniItemHeader(rowId); let itemCount = 0;
+                            (deliv.items || []).forEach((i, idx) => { sumQty += (parseInt(i.quantity)||0); itemHtml += generateMiniItemHtml(rowId, idx, i.plot, i.breed, i.batch, i.quantity); itemCount++; });
+                            if(itemCount === 0) itemHtml += generateMiniItemHtml(rowId, 0, '', '', '', ''); 
 
                             let alOptions = '<option value="">-- Link AL --</option>'; let hasMatch = false; globalALs.filter(al => al._calc_balance > 0 && al.status !== 'Cancelled').forEach(al => { const custNameStr = al.customer_name || ''; const isMatch = deliv.customerName && custNameStr.toLowerCase().includes(deliv.customerName.toLowerCase().substring(0, 5)); if(isMatch) hasMatch = true; alOptions += `<option value="${al.al_number}" ${isMatch ? 'selected' : ''}>${al.al_number} (${custNameStr.substring(0,10)}.. Bal:${al._calc_balance})</option>`; }); 
                             
@@ -810,14 +949,18 @@
             } 
         }
         
-        function generateMiniItemHtml(rowId, idx, defaultPlot='', defaultBreed='', defaultBatch='', qty='') { 
+        function generateMiniItemHeader(rowId) {
+            return `<div class="flex gap-1 items-center mb-0 mini-item-header" style="pointer-events:none;"><span class="text-[8px] font-black uppercase tracking-wider text-purple-500 w-32 px-1">Nursery/Plot</span><span class="text-[8px] font-black uppercase tracking-wider text-amber-600 w-24 px-1">Breed</span><span class="text-[8px] font-black uppercase tracking-wider text-slate-500 w-20 px-1">Batch</span><span class="text-[8px] font-black uppercase tracking-wider text-emerald-600 w-12 px-1 text-center">Qty</span><span class="w-3"></span></div>`;
+        }
+
+        function generateMiniItemHtml(rowId, idx, defaultPlot='', defaultBreed='', defaultBatch='', qty='') {
             let plotOpts = '<option value="">Plot</option>'; globalPlots.forEach(p => { let sel = (defaultPlot && p.plot_name.toLowerCase() === defaultPlot.toLowerCase()) ? 'selected' : ''; plotOpts += `<option value="${p.plot_name}" ${sel}>${p.nursery_name} - ${p.plot_name}</option>`; });
             let breedOpts = '<option value="">Breed</option>'; globalBreeds.forEach(b => { let sel = (defaultBreed && b.name.toLowerCase() === defaultBreed.toLowerCase()) ? 'selected' : ''; breedOpts += `<option value="${b.name}" ${sel}>${b.name}</option>`; });
 
             if(globalPlots.length === 0) {
                 return `<div class="flex gap-1 items-center item-row" id="item_${rowId}_${idx}"><input type="text" class="mini-input w-32 item-plot" value="${defaultPlot}" placeholder="Plot"><input type="text" class="mini-input w-24 item-breed" value="${defaultBreed}" placeholder="Breed"><input type="text" list="batch-suggestions" class="mini-input w-20 item-batch" value="${defaultBatch}" placeholder="Batch"><input type="number" class="mini-input w-12 item-qty" value="${qty}" placeholder="Qty" oninput="recalcBulkTotal('${rowId}')"><button onclick="document.getElementById('item_${rowId}_${idx}').remove(); recalcBulkTotal('${rowId}')" class="text-[8px] text-red-400 ml-1">✕</button></div>`;
             }
-            return `<div class="flex gap-1 items-center item-row" id="item_${rowId}_${idx}"><select class="mini-input w-32 item-plot">${plotOpts}</select><select class="mini-input w-24 item-breed" id="breed_${rowId}_${idx}">${breedOpts}</select><input type="text" list="batch-suggestions" class="mini-input w-20 item-batch" value="${defaultBatch}" placeholder="Batch"><input type="number" class="mini-input w-12 item-qty" value="${qty}" placeholder="Qty" oninput="recalcBulkTotal('${rowId}')"><button onclick="document.getElementById('item_${rowId}_${idx}').remove(); recalcBulkTotal('${rowId}')" class="text-[8px] text-red-400 ml-1">✕</button></div>`; 
+            return `<div class="flex gap-1 items-center item-row" id="item_${rowId}_${idx}"><select class="mini-input w-32 item-plot">${plotOpts}</select><select class="mini-input w-24 item-breed" id="breed_${rowId}_${idx}">${breedOpts}</select><input type="text" list="batch-suggestions" class="mini-input w-20 item-batch" value="${defaultBatch}" placeholder="Batch"><input type="number" class="mini-input w-12 item-qty" value="${qty}" placeholder="Qty" oninput="recalcBulkTotal('${rowId}')"><button onclick="document.getElementById('item_${rowId}_${idx}').remove(); recalcBulkTotal('${rowId}')" class="text-[8px] text-red-400 ml-1">✕</button></div>`;
         }
 
         function addMiniItemRow(rowId) { const container = document.getElementById(`items_container_${rowId}`); let count = parseInt(container.getAttribute('data-count')) || 0; container.insertAdjacentHTML('beforeend', generateMiniItemHtml(rowId, count)); container.setAttribute('data-count', count + 1); }
