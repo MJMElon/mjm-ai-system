@@ -358,10 +358,10 @@
         async function fetchData() { 
             try { 
                 const [resPlots, resNurs, alDataRes, doDataRes] = await Promise.all([
-                    _supabase.from('plots').select('*'),
-                    _supabase.from('nurseries').select('*'),
-                    _supabase.from('al_orders').select('*').order('created_at', { ascending: false }),
-                    _supabase.from('do_records').select('*').order('created_at', { ascending: false })
+                    _supabase.from('plots').select('plot_name,nursery_name'),
+                    _supabase.from('nurseries').select('name,license'),
+                    _supabase.from('al_orders').select('id,al_number,order_number,order_date,customer_name,product_name,quantity_ordered,balance_quantity,price_per_unit,status,remark,created_at').order('created_at', { ascending: false }),
+                    _supabase.from('do_records').select('id,do_number,al_number,delivery_date,total_qty,remark,status,plot_1,breed_1,batch_1,qty_1,plot_2,breed_2,batch_2,qty_2,plot_3,breed_3,batch_3,qty_3,plot_4,breed_4,batch_4,qty_4,plot_5,breed_5,batch_5,qty_5,ba_number,ba_raw_name,ba_raw_qty,ba_image_url,created_at').order('created_at', { ascending: false })
                 ]);
                 
                 if(resPlots.data) globalPlots = resPlots.data; 
