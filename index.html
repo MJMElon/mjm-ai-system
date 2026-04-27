@@ -435,12 +435,22 @@
             alert('Error: ' + error.message);
             updatePwBtn.innerText = 'Save Password';
         } else {
-            alert('Password updated! Please log in.');
+            alert('Password updated! Please log in with your new password.');
             isRecovering = false;
             window.location.hash = '';
             recoveryFields.classList.add('hidden');
             standardFields.classList.remove('hidden');
+            // Sign out the recovery session so the new password is actually
+            // exercised on next login
+            isLoggingOut = true;
+            try { await _supabase.auth.signOut({ scope: 'local' }); } catch(e) { /* ignore */ }
+            Object.keys(localStorage).forEach(k => {
+                if (k.startsWith('sb-')) localStorage.removeItem(k);
+            });
+            isLoggingOut = false;
             showAuth();
+            resetAuthForm();
+            updatePwBtn.innerText = 'Save Password';
         }
     });
 
@@ -462,11 +472,18 @@
             return;
         }
 
-        if (session) {
-            showDash();
-            welcomeText.innerText = `Welcome, ${session.user.user_metadata?.full_name || session.user.email}`;
-            await loadDashboard();
+        // Recovery link landed before PASSWORD_RECOVERY event fired —
+        // force the recovery UI instead of dashboard
+        if (isRecovering) {
+            showAuth();
+            standardFields.classList.add('hidden');
+            recoveryFields.classList.remove('hidden');
+            return;
         }
+
+        showDash();
+        welcomeText.innerText = `Welcome, ${session.user.user_metadata?.full_name || session.user.email}`;
+        await loadDashboard();
     });
 
     // ── Dashboard data ────────────────────────────────────────────────────────
