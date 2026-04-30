@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MJM Nursery — Collection Booking</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  *{font-family:'Outfit',system-ui,sans-serif;}body{background:#f1f5f9;margin:0;min-height:100vh;}
+  .fade-enter{animation:fadeIn .35s ease-out;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  /* ── METALLIC TITLE + FLOATING LEAVES + FIRECRACKER ── */
+  .mjm-title{font-size:2rem;font-weight:900;letter-spacing:.15em;text-transform:uppercase;
+    background:linear-gradient(135deg,#64748b 0%,#cbd5e1 25%,#475569 50%,#e2e8f0 75%,#64748b 100%);
+    background-size:300% 100%;
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+    animation:metalShine 30s ease-in-out infinite;position:relative;display:inline-block;z-index:2;}
+  @keyframes metalShine{0%{background-position:300% 0}100%{background-position:-300% 0}}
+
+  .leaf-trail{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:hidden;z-index:1;}
+  .floating-leaf{position:absolute;font-size:14px;opacity:0;animation:leafFloat 30s ease-in-out infinite;}
+  @keyframes leafFloat{
+    0%{left:-8%;top:60%;opacity:0;transform:rotate(0deg) scale(.7);}
+    5%{opacity:.5;transform:rotate(10deg) scale(.8);}
+    20%{top:25%;transform:rotate(-8deg) scale(.85);}
+    40%{top:55%;transform:rotate(12deg) scale(.8);}
+    60%{top:30%;transform:rotate(-5deg) scale(.85);}
+    80%{top:50%;opacity:.4;transform:rotate(8deg) scale(.7);}
+    95%{left:108%;opacity:.2;transform:rotate(15deg) scale(.6);}
+    100%{left:112%;opacity:0;transform:rotate(18deg) scale(.5);}
+  }
+  .floating-leaf:nth-child(1){animation-duration:35s;font-size:11px;}
+  .floating-leaf:nth-child(2){animation-duration:45s;animation-delay:12s;font-size:9px;}
+  .floating-leaf:nth-child(3){animation-duration:40s;animation-delay:25s;font-size:12px;}
+
+  /* Firecracker — very rare burst */
+  .firecracker{position:absolute;pointer-events:none;z-index:3;opacity:0;}
+  .firecracker .spark{position:absolute;width:3px;height:3px;border-radius:50%;animation:sparkFly 1s ease-out forwards;}
+  @keyframes sparkFly{
+    0%{opacity:1;transform:translate(0,0) scale(1);}
+    60%{opacity:.8;}
+    100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(0);}
+  }
+  @keyframes popIn{from{opacity:0;transform:scale(.95) translateY(12px)}to{opacity:1;transform:scale(1) translateY(0)}}
+  .search-input{background:white;border:2px solid #e2e8f0;color:#1e293b;border-radius:14px;padding:12px 18px;font-size:14px;font-weight:600;outline:none;transition:all .2s;font-family:'Outfit',sans-serif;width:100%;box-sizing:border-box;}
+  .search-input:focus{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.1);}
+  .search-input::placeholder{color:#94a3b8;}
+  .dash-card{background:white;border-radius:20px;border:1px solid #e2e8f0;box-shadow:0 4px 16px rgba(0,0,0,.06);}
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;align-items:center;justify-content:center;padding:16px;}
+  .modal-overlay.open{display:flex;}
+  .modal-box{background:white;border-radius:24px;width:100%;max-width:520px;max-height:93vh;overflow-y:auto;box-shadow:0 32px 80px rgba(0,0,0,.35);animation:popIn .25s ease both;}
+  .qty-btn{padding:10px 18px;border-radius:14px;border:2px solid #e2e8f0;background:white;font-weight:900;font-size:14px;cursor:pointer;transition:all .2s;font-family:'Outfit',sans-serif;color:#334155;}
+  .qty-btn:hover{border-color:#10b981;background:#ecfdf5;color:#065f46;}
+  .qty-btn.active{border-color:#10b981;background:#10b981;color:white;box-shadow:0 4px 12px rgba(16,185,129,.3);}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#064e3b,#10b981);color:white;padding:14px 22px;border-radius:14px;font-size:13px;font-weight:700;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 8px 24px rgba(16,185,129,.4);text-align:center;max-width:90vw;}
+  .toast.show{opacity:1;}
+  .month-grid{display:grid;grid-template-columns:repeat(7,1fr);border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;background:white;}
+  .month-header{background:#f8fafc;padding:8px;text-align:center;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#64748b;border-bottom:2px solid #e2e8f0;border-right:1px solid #e2e8f0;}
+  .month-header:last-child{border-right:none;}
+  .month-cell{min-height:70px;border-bottom:1px solid #f1f5f9;border-right:1px solid #f1f5f9;padding:4px 6px;cursor:pointer;transition:background .15s;}
+  .month-cell:nth-child(7n){border-right:none;}
+  .month-cell:hover{background:#f0fdf4;}
+  .month-cell.other-month{background:#fafafa;opacity:.35;cursor:default;}.month-cell.other-month:hover{background:#fafafa;}
+  .month-cell.today{background:#ecfdf5;}
+  .month-cell.past{opacity:.4;cursor:default;}.month-cell.past:hover{background:transparent;}
+  .month-cell.closed{background:#f8f8f8;cursor:default;}.month-cell.closed:hover{background:#f8f8f8;}
+  .month-cell.holiday{background:#fef2f2;cursor:default;}.month-cell.holiday:hover{background:#fef2f2;}
+  .month-day-num{font-size:12px;font-weight:900;color:#334155;margin-bottom:2px;}
+  .month-cell.today .month-day-num{color:white;background:#10b981;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:12px;}
+  .month-holiday-tag{display:block;font-size:8px;font-weight:700;color:#dc2626;line-height:1.2;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .booked-tag{display:inline-block;background:#fef3c7;color:#92400e;font-size:8px;font-weight:900;padding:1px 6px;border-radius:6px;text-transform:uppercase;letter-spacing:.03em;margin-top:1px;}
+  .slot-full{background:#fee2e2;color:#991b1b;font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;display:inline-block;}
+  .slot-busy{background:#ecfdf5;color:#065f46;font-size:10px;font-weight:600;padding:2px 8px;border-radius:8px;display:inline-block;line-height:1.4;}
+  .slot-available{color:#10b981;font-size:11px;font-weight:700;}
+  .time-slot-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 16px;border-bottom:1px solid #f1f5f9;cursor:pointer;transition:background .15s;}
+  .time-slot-row:hover{background:#f0fdf4;}
+  .time-slot-row:last-child{border-bottom:none;}
+  .time-slot-row.full-slot{background:#fef2f2;cursor:default;opacity:.5;}.time-slot-row.full-slot:hover{background:#fef2f2;}
+  .my-bk-table{width:100%;border-collapse:collapse;font-size:13px;}
+  .my-bk-table th{background:#f8fafc;padding:8px 12px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.06em;font-weight:900;color:#64748b;border-bottom:2px solid #e2e8f0;}
+  .my-bk-table td{padding:10px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;}
+  .status-pending{background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:900;text-transform:uppercase;}
+  .status-booked{background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:900;text-transform:uppercase;}
+  .status-cancelled{background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:900;text-transform:uppercase;text-decoration:line-through;}
+  .est-box{background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:14px;padding:12px 16px;margin-top:8px;}
+
+  /* ── WEATHER STRIP ── */
+  .weather-strip{display:flex;gap:6px;overflow-x:auto;padding:2px 0;scrollbar-width:none;}
+  .weather-strip::-webkit-scrollbar{display:none;}
+  .weather-day{flex:0 0 auto;min-width:62px;background:white;border:1.5px solid #e2e8f0;border-radius:12px;padding:6px 5px;text-align:center;transition:all .2s;}
+  .weather-day.today{border-color:#10b981;background:#ecfdf5;}
+  .weather-day-name{font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;}
+  .weather-day.today .weather-day-name{color:#065f46;}
+  .weather-day-icon{font-size:1.2rem;margin:2px 0 1px;line-height:1;}
+  .weather-day-temp{font-size:10px;font-weight:900;color:#1e293b;}
+  .weather-day-rain{font-size:8px;font-weight:700;color:#3b82f6;margin-top:1px;}
+  .weather-day-rain.high{color:#ef4444;}
+  .weather-day-desc{font-size:7px;font-weight:700;color:#94a3b8;margin-top:1px;line-height:1.2;}
+</style>
+</head>
+<body class="fade-enter">
+
+<div class="bg-white border-b border-slate-200 px-4 sm:px-6 py-6 text-center shadow-sm overflow-hidden" style="position:relative;">
+  <div class="mjm-title" id="mjm-title">MJM NURSERY</div>
+  <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Collection Time Slot Booking</div>
+  <div class="leaf-trail" id="leaf-trail"></div>
+</div>
+
+<div class="max-w-[800px] mx-auto px-4 sm:px-6 py-6 space-y-4">
+
+  <!-- Weather Forecast -->
+  <div class="dash-card p-4" id="weather-card" style="display:none;">
+    <div class="flex items-center gap-2 mb-2">
+      <svg class="w-4 h-4 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 0 0 4 4h9a5 5 0 1 0-.1-9.999 5.002 5.002 0 1 0-9.78 2.096A4.001 4.001 0 0 0 3 15z"/></svg>
+      <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Miri Weather Forecast</span>
+    </div>
+    <div class="weather-strip" id="weather-strip"></div>
+  </div>
+
+  <div class="dash-card p-4">
+    <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">&#128269; Check My Booked Time Slot</div>
+    <div class="flex gap-3">
+      <input id="search-input" type="text" class="search-input flex-1" placeholder="Enter your Order Number or Name...">
+      <button onclick="searchMyBookings()" class="shrink-0 px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest rounded-xl border-none cursor-pointer transition-colors">Search</button>
+    </div>
+  </div>
+  <div class="dash-card p-4 flex items-center justify-between">
+    <button onclick="changeMonth(-1)" class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-emerald-100 flex items-center justify-center text-slate-500 hover:text-emerald-700 font-black text-lg cursor-pointer transition-colors border-none">&lsaquo;</button>
+    <div class="text-sm font-black text-slate-800 uppercase tracking-wide" id="month-label">&mdash;</div>
+    <button onclick="changeMonth(1)" class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-emerald-100 flex items-center justify-center text-slate-500 hover:text-emerald-700 font-black text-lg cursor-pointer transition-colors border-none">&rsaquo;</button>
+  </div>
+  <div class="dash-card p-0 overflow-x-auto"><div id="month-grid"></div></div>
+  <div class="text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mon&ndash;Fri 8AM&ndash;5PM &bull; Sat 8AM&ndash;12PM &bull; Sun &amp; Holidays Closed</div>
+</div>
+
+<!-- MY BOOKINGS MODAL -->
+<div class="modal-overlay" id="my-bookings-modal">
+  <div class="modal-box" style="max-width:500px;">
+    <div style="background:linear-gradient(135deg,#1e3a8a,#1d4ed8);" class="p-6 rounded-t-[24px] flex justify-between items-start">
+      <div><div class="text-[10px] font-black text-blue-300 uppercase tracking-widest mb-1">&#128197; My Bookings</div><div class="text-lg font-black text-white" id="my-bk-title">&mdash;</div></div>
+      <button onclick="closeMyBookings()" class="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white font-black text-lg flex items-center justify-center transition-colors shrink-0 ml-4">&times;</button>
+    </div>
+    <div class="p-5 sm:p-6">
+      <div id="my-bk-content"></div>
+      <div class="text-[10px] font-bold text-slate-400 mt-4 text-center leading-relaxed">If you need to change your booked time, please contact our MJM Nursery person in charge.</div>
+    </div>
+    <div class="px-5 sm:px-6 pb-6 flex justify-end border-t border-slate-100 pt-4"><button onclick="closeMyBookings()" class="text-[10px] font-black text-slate-500 hover:text-slate-800 uppercase tracking-widest bg-slate-50 px-6 py-3 rounded-full border border-slate-200 cursor-pointer transition-colors">Close</button></div>
+  </div>
+</div>
+
+<!-- TIME SLOT MODAL (Step 1: pick time) -->
+<div class="modal-overlay" id="time-modal">
+  <div class="modal-box">
+    <div style="background:linear-gradient(135deg,#064e3b,#065f46);" class="p-6 rounded-t-[24px] flex justify-between items-start">
+      <div><div class="text-[10px] font-black text-emerald-300 uppercase tracking-widest mb-1">&#9201; Select Collection Time</div><div class="text-lg font-black text-white" id="tm-date-label">&mdash;</div></div>
+      <button onclick="closeTimeModal()" class="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white font-black text-lg flex items-center justify-center transition-colors shrink-0 ml-4">&times;</button>
+    </div>
+    <div class="p-5 sm:p-6">
+      <div class="dash-card overflow-hidden border border-slate-200" id="time-slots-list"></div>
+    </div>
+    <div class="px-5 sm:px-6 pb-6 flex justify-end border-t border-slate-100 pt-4"><button onclick="closeTimeModal()" class="text-[10px] font-black text-slate-500 hover:text-slate-800 uppercase tracking-widest bg-slate-50 px-6 py-3 rounded-full border border-slate-200 cursor-pointer transition-colors">Cancel</button></div>
+  </div>
+</div>
+
+<!-- BOOKING FORM MODAL (Step 2: fill details) -->
+<div class="modal-overlay" id="booking-modal" style="z-index:220;">
+  <div class="modal-box">
+    <div style="background:linear-gradient(135deg,#064e3b,#065f46);" class="px-6 pt-4 pb-6 rounded-t-[24px]">
+      <div class="flex justify-between items-center mb-3">
+        <button onclick="backToTimeSlots()" class="text-[9px] font-black text-emerald-800 hover:text-emerald-900 uppercase tracking-widest cursor-pointer border-none bg-white hover:bg-emerald-50 px-4 py-2 rounded-lg transition-colors shadow-sm">&larr; Change Time</button>
+        <button onclick="closeBookingModal()" class="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white font-black text-lg flex items-center justify-center transition-colors shrink-0">&times;</button>
+      </div>
+      <div class="text-[10px] font-black text-emerald-300 uppercase tracking-widest mb-1">&#128197; Book Collection Slot</div>
+      <div class="text-sm font-bold text-emerald-300 mt-1" id="bk-slot-label">&mdash;</div>
+      <div class="text-[10px] font-bold text-emerald-200 mt-1" id="bk-capacity-label"></div>
+    </div>
+    <div class="p-5 sm:p-6 space-y-4">
+      <div>
+        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Order Number or Company Name *</label>
+        <input id="bk-identity" type="text" class="search-input text-sm" style="padding:10px 14px;" placeholder="Your order number or company name" oninput="validateIdentity()">
+        <div id="identity-status" class="hidden text-[10px] font-bold mt-2"></div>
+      </div>
+      <div>
+        <div class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Collection Quantity (Seedlings) *</div>
+        <div class="flex flex-wrap gap-2 mb-3">
+          <button class="qty-btn cq-btn" onclick="pickQty(50)">+50</button>
+          <button class="qty-btn cq-btn" onclick="pickQty(100)">+100</button>
+          <button class="qty-btn cq-btn" onclick="pickQty(500)">+500</button>
+          <button class="qty-btn cq-btn" onclick="pickQty(1000)">+1,000</button>
+          <input id="bk-custom-qty" type="number" min="1" class="search-input text-sm" style="padding:10px 14px;width:160px;" placeholder="Other quantity" oninput="pickCustomQty()">
+        </div>
+        <div id="qty-label" class="text-sm font-black text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 hidden">Quantity: <span id="qty-value">0</span> seedlings</div>
+        <div id="duration-info" class="hidden"></div>
+        <div id="overflow-warn" class="hidden text-[10px] font-bold text-red-500 mt-2"></div>
+      </div>
+      <div>
+        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Remark (Optional)</label>
+        <input id="bk-remark" type="text" class="search-input text-sm" style="padding:10px 14px;" placeholder="Any special request or notes">
+      </div>
+    </div>
+    <div class="px-5 sm:px-6 pb-6 flex justify-end border-t border-slate-100 pt-5">
+      <button id="bk-submit" onclick="submitBooking()" disabled class="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-[11px] uppercase tracking-widest rounded-xl border-none cursor-pointer transition-colors">&#128197; Confirm Booking</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUCCESS MODAL -->
+<div class="modal-overlay" id="success-modal" style="z-index:260;">
+  <div class="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl text-center" onclick="event.stopPropagation()">
+    <div class="text-5xl mb-4">&#9989;</div>
+    <div class="font-black text-slate-800 text-lg uppercase tracking-wide mb-2">Booking Confirmed!</div>
+    <div class="text-sm font-bold text-slate-500 mb-1" id="success-detail">&mdash;</div>
+    <div class="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 mb-6 mt-4 text-left leading-relaxed">
+      Thank you for booking with MJM Nursery. &#127793;<br>
+      We look forward to seeing you!<br>
+      Please arrive on time for a smooth collection.
+    </div>
+    <button onclick="closeSuccessModal()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] uppercase tracking-widest rounded-xl border-none cursor-pointer transition-colors">OK</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var SUPABASE_URL='https://kibqjztozokohqmhqqqf.supabase.co';
+var SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpYnFqenRvem9rb2hxbWhxcXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQzNjIsImV4cCI6MjA4OTgxMDM2Mn0.J7qJUZhWXYf5b9oey4wXJkjdi66jomEMw_NeV9NWF7M';
+var _supabase=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+var RATE=350;var MAX_LOAD=600;
+var currentMonth=new Date().getMonth();var currentYear=new Date().getFullYear();
+var monthBookings=[];var selectedDate=null;var selectedTime=null;var selectedQty=0;
+
+var MNAMES=['January','February','March','April','May','June','July','August','September','October','November','December'];
+var HRS_WD=[8,9,10,11,12,13,14,15,16];var HRS_SAT=[8,9,10,11];
+var HOLIDAYS={'2026-01-01':'New Year','2026-01-14':'Nuzul Al-Quran','2026-01-29':'Thaipusam','2026-02-01':'FT Day','2026-02-17':'CNY','2026-02-18':'CNY','2026-03-28':'Hari Raya Aidilfitri','2026-03-29':'Hari Raya Aidilfitri','2026-05-01':'Labour Day','2026-05-11':'Vesak Day','2026-06-01':'Agong Birthday','2026-06-04':'Hari Raya Haji','2026-06-05':'Hari Raya Haji','2026-06-25':'Awal Muharram','2026-08-31':'Merdeka Day','2026-09-03':'Maulidur Rasul','2026-09-16':'Malaysia Day','2026-10-20':'Deepavali','2026-12-25':'Christmas'};
+
+function fmtDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function isToday(d){var t=new Date();return d.getFullYear()===t.getFullYear()&&d.getMonth()===t.getMonth()&&d.getDate()===t.getDate();}
+function isPast(d){var t=new Date();t.setHours(0,0,0,0);var c=new Date(d);c.setHours(0,0,0,0);return c<t;}
+function fmtHr(h){if(h<12)return h+' AM';if(h===12)return '12 PM';return(h-12)+' PM';}
+function slotLbl(h){return fmtHr(h)+' \u2013 '+fmtHr(h+1);}
+function hrsNeeded(q){return Math.ceil(q/RATE);}
+function hrLoad(q){return q/hrsNeeded(q);}
+function closing(ds){return new Date(ds+'T00:00:00').getDay()===6?12:17;}
+function isHoliday(ds){return !!HOLIDAYS[ds];}
+
+function getHourLoad(ds,h){
+  var total=0;
+  monthBookings.forEach(function(b){
+    if((b.booking_date||'').substring(0,10)!==ds||b.status==='cancelled')return;
+    var s=parseInt((b.start_time||'00').split(':')[0]),e=parseInt((b.end_time||'00').split(':')[0]);
+    if(e<=s)e=s+1;
+    if(h>=s&&h<e)total+=hrLoad(b.collection_qty||0);
+  });
+  return total;
+}
+function remaining(ds,h){return Math.max(0,MAX_LOAD-getHourLoad(ds,h));}
+
+// Calculate the max qty bookable starting at startH
+function maxBookableQty(ds,startH){
+  var cl=closing(ds);
+  // Try increasing qty until canFit fails
+  var best=0;
+  for(var tryQty=50;tryQty<=5000;tryQty+=50){
+    var hrs=hrsNeeded(tryQty),endH=startH+hrs;
+    if(endH>cl)break;
+    var ld=hrLoad(tryQty),ok=true;
+    for(var h=startH;h<endH;h++){if(getHourLoad(ds,h)+ld>MAX_LOAD){ok=false;break;}}
+    if(ok)best=tryQty;else break;
+  }
+  return best;
+}
+
+function canFit(ds,startH,qty){
+  var hrs=hrsNeeded(qty),endH=startH+hrs,cl=closing(ds);
+  if(endH>cl)return false;
+  var ld=hrLoad(qty);
+  for(var h=startH;h<endH;h++){if(getHourLoad(ds,h)+ld>MAX_LOAD)return false;}
+  return true;
+}
+function dayBusyHrs(ds){
+  var hours=new Date(ds+'T00:00:00').getDay()===6?HRS_SAT:HRS_WD;
+  var c=0;hours.forEach(function(h){if(getHourLoad(ds,h)>0)c++;});return c;
+}
+function isDayFullyBooked(ds){
+  var d=new Date(ds+'T00:00:00'),dow=d.getDay();
+  var hours=dow===6?HRS_SAT:HRS_WD;
+  for(var i=0;i<hours.length;i++){if(maxBookableQty(ds,hours[i])>0)return false;}
+  return true;
+}
+function dayHasBookings(ds){
+  return monthBookings.some(function(b){return(b.booking_date||'').substring(0,10)===ds&&b.status!=='cancelled';});
+}
+
+// ═══════════════ LOAD ═══════════════
+async function loadMonth(){
+  var f=new Date(currentYear,currentMonth,1),l=new Date(currentYear,currentMonth+1,0);
+  var {data}=await _supabase.from('shared_collection_bookings').select('booking_date,start_time,end_time,status,collection_qty').gte('booking_date',fmtDate(f)).lte('booking_date',fmtDate(l)).neq('status','cancelled');
+  monthBookings=data||[];
+}
+window.addEventListener('DOMContentLoaded',function(){loadMonth().then(function(){renderMonth();loadWeather();});});
+
+// ═══════════════ SEARCH ═══════════════
+async function searchMyBookings(){
+  var q=document.getElementById('search-input').value.trim();
+  if(q.length<2){showToast('Please enter at least 2 characters');return;}
+  var todayStr=fmtDate(new Date());
+  var {data}=await _supabase.from('shared_collection_bookings').select('booking_date,start_time,end_time,customer_name,order_number,collection_qty,status').or('order_number.ilike.%'+q+'%,customer_name.ilike.%'+q+'%').gte('booking_date',todayStr).order('booking_date',{ascending:true}).order('start_time',{ascending:true}).limit(20);
+  var el=document.getElementById('my-bk-content');
+  if(!data||!data.length){
+    el.innerHTML='<div class="text-center py-8"><div class="text-3xl mb-2">\ud83d\udccb</div><div class="text-[11px] font-black text-slate-300 uppercase tracking-widest">No bookings found</div></div>';
+  } else {
+    document.getElementById('my-bk-title').textContent=data[0].customer_name||q;
+    var html='<div class="rounded-2xl border border-slate-200 overflow-hidden overflow-x-auto"><table class="my-bk-table"><thead><tr><th>Date</th><th>Time</th><th>Quantity</th><th>Duration</th><th>Status</th></tr></thead><tbody>';
+    data.forEach(function(b){
+      var dt=b.booking_date?new Date(b.booking_date+'T00:00:00').toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric',weekday:'short'}):'\u2014';
+      var sH=parseInt((b.start_time||'08').split(':')[0]),eH=parseInt((b.end_time||'09').split(':')[0]);
+      html+='<tr><td>'+dt+'</td><td>'+fmtHr(sH)+' \u2013 '+fmtHr(eH)+'</td><td class="font-black text-emerald-700">'+(b.collection_qty||0).toLocaleString()+'</td><td>'+(eH-sH)+' hr</td><td><span class="'+(b.status==='cancelled'?'status-cancelled':b.status==='pending'?'status-pending':'status-booked')+'">'+(b.status==='cancelled'?'Cancelled':b.status==='pending'?'Pending':'Confirmed Appointment')+'</span></td></tr>';
+    });
+    html+='</tbody></table></div>';el.innerHTML=html;
+  }
+  document.getElementById('my-bookings-modal').classList.add('open');
+}
+function closeMyBookings(){document.getElementById('my-bookings-modal').classList.remove('open');}
+document.getElementById('search-input').addEventListener('keydown',function(e){if(e.key==='Enter')searchMyBookings();});
+
+// ═══════════════ MONTH ═══════════════
+function changeMonth(dir){currentMonth+=dir;if(currentMonth>11){currentMonth=0;currentYear++;}if(currentMonth<0){currentMonth=11;currentYear--;}loadMonth().then(function(){renderMonth();loadWeather();});}
+
+function renderMonth(){
+  document.getElementById('month-label').textContent=MNAMES[currentMonth]+' '+currentYear;
+  var el=document.getElementById('month-grid'),firstDay=new Date(currentYear,currentMonth,1);
+  var startDow=firstDay.getDay();if(startDow===0)startDow=7;
+  var html='<div class="month-grid">';
+  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(function(d){html+='<div class="month-header">'+d+'</div>';});
+  var cd=new Date(firstDay);cd.setDate(cd.getDate()-(startDow-1));
+  for(var r=0;r<6;r++){
+    var has=false;
+    for(var c=0;c<7;c++){
+      var isTM=cd.getMonth()===currentMonth,ds=fmtDate(cd),dow=cd.getDay();
+      var isSun=dow===0,hol=HOLIDAYS[ds],closed=isSun||!!hol;
+      if(isTM)has=true;
+      var cls='month-cell'+(isToday(cd)?' today':'')+(isPast(cd)?' past':'')+(!isTM?' other-month':'')+(closed?' closed':'')+(hol?' holiday':'');
+      var inner='<div class="month-day-num">'+cd.getDate()+'</div>';
+      if(hol)inner+='<div class="month-holiday-tag">\ud83c\uddf2\ud83c\uddfe '+hol+'</div>';
+      if(isTM&&!closed&&!isPast(cd)){
+        if(isDayFullyBooked(ds)){inner+='<div class="booked-tag">Fully Booked</div>';}
+        else{inner+='<div style="display:inline-block;background:#d1fae5;color:#065f46;font-size:8px;font-weight:900;padding:1px 6px;border-radius:6px;text-transform:uppercase;letter-spacing:.03em;margin-top:1px;">Open</div>';}
+      }
+      var click='';
+      if(isTM&&!closed&&!isPast(cd))click=' onclick="openTimeModal(\''+ds+'\')"';
+      html+='<div class="'+cls+'"'+click+'>'+inner+'</div>';
+      cd.setDate(cd.getDate()+1);
+    }
+    if(!has&&r>4)break;
+  }
+  html+='</div>';el.innerHTML=html;
+}
+
+// ═══════════════ TIME MODAL ═══════════════
+function openTimeModal(ds){
+  selectedDate=ds;selectedTime=null;selectedQty=0;
+  var d=new Date(ds+'T00:00:00');
+  var dn=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  document.getElementById('tm-date-label').textContent=dn[d.getDay()]+', '+d.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'});
+  var dow=d.getDay(),hours=dow===6?HRS_SAT:HRS_WD;
+
+  var html='';
+  hours.forEach(function(h){
+    var load=getHourLoad(ds,h),rem=Math.round(remaining(ds,h));
+    var ts=String(h).padStart(2,'0')+':00';
+    var maxQty=maxBookableQty(ds,h);
+    if(load>=MAX_LOAD||maxQty<=0){
+      html+='<div class="time-slot-row full-slot"><div class="text-sm font-black text-slate-700">'+slotLbl(h)+'</div><span class="slot-full">Fully Booked</span></div>';
+    } else if(load>0){
+      var bkCount=monthBookings.filter(function(b){var s=parseInt((b.start_time||'00').split(':')[0]),e=parseInt((b.end_time||'00').split(':')[0]);if(e<=s)e=s+1;return(b.booking_date||'').substring(0,10)===ds&&h>=s&&h<e&&b.status!=='cancelled';}).length;
+      html+='<div class="time-slot-row" onclick="pickTime(\''+ts+'\','+maxQty+')"><div class="text-sm font-black text-slate-700">'+slotLbl(h)+'</div><span class="slot-busy">'+bkCount+' booked \u2022 Available</span></div>';
+    } else {
+      html+='<div class="time-slot-row" onclick="pickTime(\''+ts+'\','+maxQty+')"><div class="text-sm font-black text-slate-700">'+slotLbl(h)+'</div><span class="slot-available">\u2705 Available</span></div>';
+    }
+  });
+  document.getElementById('time-slots-list').innerHTML=html;
+  document.getElementById('time-modal').classList.add('open');
+}
+function closeTimeModal(){document.getElementById('time-modal').classList.remove('open');}
+
+// ═══════════════ BOOKING FORM ═══════════════
+var slotCapacity=0;
+
+function pickTime(ts,cap){
+  selectedTime=ts;selectedQty=0;slotCapacity=cap||MAX_LOAD;
+  closeTimeModal();
+  var startH=parseInt(ts.split(':')[0]);
+  var d=new Date(selectedDate+'T00:00:00');
+  var dn=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  document.getElementById('bk-slot-label').textContent=dn[d.getDay()]+', '+d.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'})+' at '+fmtHr(startH);
+  document.getElementById('bk-capacity-label').textContent='\ud83c\udf31 Max collection at selected time: '+Math.round(slotCapacity).toLocaleString()+' seedlings';
+
+  document.getElementById('bk-identity').value='';
+  document.getElementById('identity-status').classList.add('hidden');
+  identityValid=false;
+  document.getElementById('bk-custom-qty').value='';
+  document.getElementById('bk-remark').value='';
+  document.getElementById('qty-label').classList.add('hidden');
+  document.getElementById('duration-info').classList.add('hidden');
+  document.getElementById('overflow-warn').classList.add('hidden');
+  document.getElementById('bk-submit').disabled=true;
+  document.querySelectorAll('.cq-btn').forEach(function(b){b.classList.remove('active');});
+
+  document.getElementById('booking-modal').classList.add('open');
+  setTimeout(function(){document.getElementById('bk-identity').focus();},200);
+}
+function closeBookingModal(){document.getElementById('booking-modal').classList.remove('open');}
+function backToTimeSlots(){closeBookingModal();openTimeModal(selectedDate);}
+
+// ═══════════════ QTY ═══════════════
+function pickQty(q){
+  selectedQty=q;document.getElementById('bk-custom-qty').value='';
+  document.querySelectorAll('.cq-btn').forEach(function(b){var v=parseInt(b.textContent.replace(/[^0-9]/g,''));b.classList.toggle('active',v===q);});
+  document.getElementById('qty-value').textContent=q.toLocaleString();
+  document.getElementById('qty-label').classList.remove('hidden');
+  updateEst();checkReady();
+}
+function pickCustomQty(){
+  var v=parseInt(document.getElementById('bk-custom-qty').value)||0;
+  document.querySelectorAll('.cq-btn').forEach(function(b){b.classList.remove('active');});
+  if(v>0){selectedQty=v;document.getElementById('qty-value').textContent=v.toLocaleString();document.getElementById('qty-label').classList.remove('hidden');}
+  else{selectedQty=0;document.getElementById('qty-label').classList.add('hidden');}
+  updateEst();checkReady();
+}
+
+function updateEst(){
+  var info=document.getElementById('duration-info'),warn=document.getElementById('overflow-warn');
+  if(selectedQty<=0||!selectedTime){info.classList.add('hidden');warn.classList.add('hidden');return;}
+  var hrs=hrsNeeded(selectedQty),startH=parseInt(selectedTime.split(':')[0]),endH=startH+hrs,cl=closing(selectedDate);
+
+  info.classList.remove('hidden');
+  info.innerHTML='<div class="est-box"><div class="text-[9px] font-black text-blue-700 uppercase tracking-widest mb-1">&#128337; Estimated Collection Time</div>'+
+    '<div class="text-base font-black text-blue-900">'+hrs+' hour'+(hrs>1?'s':'')+'</div>'+
+    '<div class="text-xs font-bold text-blue-600 mt-1">'+fmtHr(startH)+' to '+fmtHr(endH)+'</div>'+
+    '<div class="text-[10px] font-bold text-slate-400 mt-1">Your selected quantity of '+selectedQty.toLocaleString()+' seedlings will take approximately '+hrs+' hour'+(hrs>1?'s':'')+' to prepare and load.</div></div>';
+
+  if(endH>cl){warn.classList.remove('hidden');warn.textContent='\u26a0\ufe0f Exceeds closing time ('+fmtHr(cl)+'). Reduce quantity or pick an earlier slot.';return;}
+  if(!canFit(selectedDate,startH,selectedQty)){
+    warn.classList.remove('hidden');
+    warn.textContent='\u26a0\ufe0f Choose quantity '+slotCapacity.toLocaleString()+' or below, or select another time slot.';
+  } else{warn.classList.add('hidden');}
+}
+
+var identityValid=false;
+var identityTimer=null;
+var identityChecking=false;
+
+function validateIdentity(){
+  var val=document.getElementById('bk-identity').value.trim();
+  var status=document.getElementById('identity-status');
+  identityValid=false;
+  identityChecking=false;
+  clearTimeout(identityTimer);
+
+  if(val.length<2){status.classList.add('hidden');checkReady();return;}
+
+  // Check if it looks like an order number (contains dash, slash, or starts with letters+digits)
+  var looksLikeOrder=/[-\/]/.test(val)||/^[A-Z]{1,4}[\-\s]?\d/i.test(val)||/\d{3,}/.test(val);
+
+  if(looksLikeOrder){
+    // Must validate against database — block booking if invalid
+    status.classList.remove('hidden');
+    status.className='text-[10px] font-bold mt-2 text-slate-400';
+    status.textContent='Verifying order number\u2026';
+    identityChecking=true;
+    checkReady();
+
+    identityTimer=setTimeout(async function(){
+      var {data}=await _supabase.from('shared_al_orders')
+        .select('al_number,customer_name,order_number')
+        .or('order_number.ilike.%'+val+'%,al_number.ilike.%'+val+'%')
+        .limit(1);
+
+      identityChecking=false;
+      if(data&&data.length>0){
+        status.className='text-[10px] font-bold mt-2 text-emerald-700';
+        status.textContent='\u2705 Order number verified';
+        identityValid=true;
+      } else {
+        status.className='text-[10px] font-bold mt-2 text-red-500';
+        status.textContent='\u274c Invalid order number. Please check and enter the correct order number or use your company name instead.';
+        identityValid=false;
+      }
+      checkReady();
+    },600);
+  } else {
+    // Looks like a plain name (no dashes/numbers) — accept
+    if(val.length>=3){
+      status.classList.remove('hidden');
+      status.className='text-[10px] font-bold mt-2 text-emerald-600';
+      status.textContent='\u2705 Booking under: '+val;
+      identityValid=true;
+    } else {
+      status.classList.add('hidden');
+      identityValid=false;
+    }
+    checkReady();
+  }
+}
+
+function checkReady(){
+  var fits=selectedDate&&selectedTime&&selectedQty>0&&identityValid&&!identityChecking&&canFit(selectedDate,parseInt((selectedTime||'08').split(':')[0]),selectedQty);
+  document.getElementById('bk-submit').disabled=!fits;
+}
+
+// ═══════════════ SUBMIT ═══════════════
+async function submitBooking(){
+  var btn=document.getElementById('bk-submit');btn.disabled=true;btn.textContent='Submitting\u2026';
+  var identity=document.getElementById('bk-identity').value.trim();
+  var remark=document.getElementById('bk-remark').value.trim();
+  var startH=parseInt(selectedTime.split(':')[0]),hrs=hrsNeeded(selectedQty),endH=startH+hrs;
+  var payload={booking_date:selectedDate,start_time:selectedTime,end_time:String(endH).padStart(2,'0')+':00',al_number:'PENDING',customer_name:identity,order_number:identity,collection_qty:selectedQty,status:'pending',notes:remark||'Customer self-booking ('+hrs+' hr)'};
+  var {error}=await _supabase.from('shared_collection_bookings').insert([payload]);
+  if(error){showToast('\u274c '+error.message);btn.disabled=false;btn.textContent='\ud83d\udcc5 Confirm Booking';return;}
+  btn.textContent='\ud83d\udcc5 Confirm Booking';closeBookingModal();
+  var d=new Date(selectedDate+'T00:00:00');
+  document.getElementById('success-detail').textContent=d.toLocaleDateString('en-MY',{weekday:'long',day:'2-digit',month:'short',year:'numeric'})+' \u2014 '+fmtHr(startH)+' to '+fmtHr(endH)+' ('+hrs+' hr) \u2014 '+selectedQty.toLocaleString()+' seedlings';
+  document.getElementById('success-modal').classList.add('open');
+  await loadMonth();renderMonth();
+}
+function closeSuccessModal(){document.getElementById('success-modal').classList.remove('open');}
+function showToast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},3000);}
+
+// Floating leaves
+(function(){
+  var trail=document.getElementById('leaf-trail');
+  if(!trail)return;
+  var leaves=['\ud83c\udf3f','\ud83c\udf31','\ud83c\udf43'];
+  for(var i=0;i<3;i++){var l=document.createElement('div');l.className='floating-leaf';l.textContent=leaves[i];trail.appendChild(l);}
+})();
+
+// Rare firecracker burst (every 45-90 seconds)
+function firecracker(){
+  var header=document.querySelector('.mjm-title');
+  if(!header)return;
+  var rect=header.getBoundingClientRect();
+  var parent=header.parentElement;
+  var fc=document.createElement('div');
+  fc.className='firecracker';
+  fc.style.left=(rect.width/2)+'px';
+  fc.style.top=(rect.height/2)+'px';
+  var colors=['#f59e0b','#ef4444','#10b981','#3b82f6','#a855f7','#ec4899'];
+  for(var i=0;i<15;i++){
+    var s=document.createElement('div');s.className='spark';
+    var angle=(i/15)*Math.PI*2;
+    var dist=30+Math.random()*25;
+    s.style.setProperty('--dx',Math.cos(angle)*dist+'px');
+    s.style.setProperty('--dy',Math.sin(angle)*dist+'px');
+    s.style.background=colors[Math.floor(Math.random()*colors.length)];
+    s.style.boxShadow='0 0 4px '+s.style.background;
+    fc.appendChild(s);
+  }
+  parent.style.position='relative';
+  parent.appendChild(fc);
+  fc.style.opacity='1';
+  setTimeout(function(){fc.remove();},1200);
+}
+function scheduleFirecracker(){
+  var delay=45000+Math.random()*45000;
+  setTimeout(function(){firecracker();scheduleFirecracker();},delay);
+}
+scheduleFirecracker();
+
+// ════════════════════════════════════════════════════════
+//  WEATHER FORECAST (Open-Meteo — Miri, syncs with month)
+// ════════════════════════════════════════════════════════
+var _wCache={};
+var _wCodes={0:'Clear',1:'Mainly Clear',2:'Partly Cloudy',3:'Overcast',45:'Foggy',48:'Fog',51:'Lt Drizzle',53:'Drizzle',55:'Hvy Drizzle',61:'Lt Rain',63:'Rain',65:'Hvy Rain',80:'Lt Showers',81:'Showers',82:'Hvy Showers',95:'T-Storm',96:'T-Storm+Hail',99:'Hvy T-Storm'};
+var _wIcons={0:'\u2600\uFE0F',1:'\uD83C\uDF24\uFE0F',2:'\u26C5',3:'\u2601\uFE0F',45:'\uD83C\uDF2B\uFE0F',48:'\uD83C\uDF2B\uFE0F',51:'\uD83C\uDF26\uFE0F',53:'\uD83C\uDF27\uFE0F',55:'\uD83C\uDF27\uFE0F',61:'\uD83C\uDF26\uFE0F',63:'\uD83C\uDF27\uFE0F',65:'\uD83C\uDF27\uFE0F',80:'\uD83C\uDF26\uFE0F',81:'\uD83C\uDF27\uFE0F',82:'\u26C8\uFE0F',95:'\u26A1',96:'\u26A1',99:'\u26A1'};
+
+async function loadWeather(){
+  var start=new Date(currentYear,currentMonth,1);
+  var end=new Date(currentYear,currentMonth+1,0);
+  var today=new Date();today.setHours(0,0,0,0);
+  var maxF=new Date(today);maxF.setDate(maxF.getDate()+16);
+  if(start>maxF){document.getElementById('weather-card').style.display='none';return;}
+  var fStart=start<today?today:start;
+  var fEnd=end>maxF?maxF:end;
+  var fs=fmtDate(fStart),fe=fmtDate(fEnd);
+  var ck=fs+'_'+fe;
+  var wd;
+  if(_wCache[ck]){wd=_wCache[ck];}
+  else{
+    try{
+      var r=await fetch('https://api.open-meteo.com/v1/forecast?latitude=4.3995&longitude=114.0148&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia/Kuching&start_date='+fs+'&end_date='+fe);
+      if(!r.ok)throw 0;var j=await r.json();if(!j.daily||!j.daily.time)throw 0;
+      wd=j.daily;_wCache[ck]=wd;
+    }catch(e){document.getElementById('weather-card').style.display='none';return;}
+  }
+  var wm={};wd.time.forEach(function(ds,i){wm[ds]={code:wd.weather_code[i],hi:Math.round(wd.temperature_2m_max[i]),lo:Math.round(wd.temperature_2m_min[i]),rain:wd.precipitation_probability_max[i]||0};});
+  var todayStr=fmtDate(new Date()),dn=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var html='',cursor=new Date(start);
+  while(cursor<=end){
+    var ds=fmtDate(cursor),w=wm[ds];
+    var dl=ds===todayStr?'Today':dn[cursor.getDay()];
+    var dd=String(cursor.getDate()).padStart(2,'0')+'/'+String(cursor.getMonth()+1).padStart(2,'0');
+    if(w){
+      var ic=_wIcons[w.code]||'\u2601\uFE0F',dc=_wCodes[w.code]||'Cloudy',rc=w.rain>=60?' high':'';
+      html+='<div class="weather-day'+(ds===todayStr?' today':'')+'"><div class="weather-day-name">'+dl+'</div><div style="font-size:7px;color:#cbd5e1;font-weight:700;">'+dd+'</div><div class="weather-day-icon">'+ic+'</div><div class="weather-day-temp">'+w.hi+'\u00b0/'+w.lo+'\u00b0</div><div class="weather-day-rain'+rc+'">\uD83D\uDCA7'+w.rain+'%</div><div class="weather-day-desc">'+dc+'</div></div>';
+    }else{
+      html+='<div class="weather-day" style="opacity:.35;"><div class="weather-day-name">'+dl+'</div><div style="font-size:7px;color:#cbd5e1;font-weight:700;">'+dd+'</div><div class="weather-day-icon">\u2014</div><div class="weather-day-temp" style="color:#cbd5e1;">\u2014</div></div>';
+    }
+    cursor.setDate(cursor.getDate()+1);
+  }
+  document.getElementById('weather-strip').innerHTML=html;
+  document.getElementById('weather-card').style.display='';
+}
+</script>
+</body>
+</html>
