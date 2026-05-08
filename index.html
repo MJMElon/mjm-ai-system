@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>MJM AI System</title>
-<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="dist/tailwind.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
@@ -71,6 +71,12 @@
   .user-chip{display:inline-flex;align-items:center;gap:8px;background:rgba(16,185,129,.1);border:1px solid rgba(52,211,153,.25);border-radius:999px;padding:7px 16px;font-size:11px;font-weight:700;color:#6ee7b7;letter-spacing:.04em;}
   .user-dot{width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 6px #10b981;animation:pulseGlow 2s infinite;flex-shrink:0;}
 
+  /* Inline auth message banner (replaces alert() popups) */
+  .auth-msg{display:none;margin-top:14px;padding:10px 14px;border-radius:10px;font-size:12px;font-weight:600;letter-spacing:.02em;line-height:1.4;border:1px solid transparent;animation:fadeIn .15s ease-out;}
+  .auth-msg.show{display:block;}
+  .auth-msg.error{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.35);color:#fecaca;}
+  .auth-msg.success{background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.35);color:#a7f3d0;}
+  .auth-msg.info{background:rgba(59,130,246,.08);border-color:rgba(59,130,246,.35);color:#bfdbfe;}
 </style>
 </head>
 <body>
@@ -104,6 +110,7 @@
       <input type="email" id="email" placeholder="Email Address" class="auth-input">
       <input type="password" id="password" placeholder="Password" class="auth-input">
       <button id="main-auth-btn" class="auth-btn mt-2">Login</button>
+      <div id="auth-msg" class="auth-msg" role="status" aria-live="polite"></div>
       <div class="flex justify-between items-center pt-2">
         <button id="forgot-password-btn" class="text-[10px] font-bold text-emerald-600/70 hover:text-emerald-400 uppercase tracking-widest bg-transparent border-none cursor-pointer transition-colors">Forgot Password?</button>
         <button id="toggle-auth-btn" class="text-[10px] font-bold text-slate-400 hover:text-emerald-400 uppercase tracking-widest bg-transparent border-none cursor-pointer transition-colors">Create Account</button>
@@ -113,6 +120,7 @@
       <div class="text-center text-[10px] font-bold text-emerald-500 uppercase tracking-widest mb-4">Create New Password</div>
       <input type="password" id="new-password" placeholder="Enter New Password" class="auth-input">
       <button id="update-password-btn" class="auth-btn mt-2">Save Password</button>
+      <div id="recovery-msg" class="auth-msg" role="status" aria-live="polite"></div>
     </div>
   </div>
 </div>
@@ -227,6 +235,21 @@
   const welcomeText    = document.getElementById('welcome-text');
   const standardFields = document.getElementById('standard-auth-fields');
   const recoveryFields = document.getElementById('recovery-auth-fields');
+  const authMsg        = document.getElementById('auth-msg');
+  const recoveryMsg    = document.getElementById('recovery-msg');
+
+  // Inline message helpers — replace alert() popups.
+  function showMsg(el, text, kind /* 'error' | 'success' | 'info' */) {
+    if (!el) return;
+    el.textContent = text;
+    el.classList.remove('error', 'success', 'info');
+    el.classList.add(kind || 'info', 'show');
+  }
+  function clearMsg(el) {
+    if (!el) return;
+    el.textContent = '';
+    el.classList.remove('show', 'error', 'success', 'info');
+  }
 
   document.getElementById('yr').textContent = new Date().getFullYear();
 
@@ -245,7 +268,6 @@
     try { await _supabase.auth.signOut({ scope: 'local' }); } catch(e) {}
     showAuth();
     resetAuthForm();
-    resetAuthForm();
     isLoggingOut = false;
   };
 
@@ -258,10 +280,12 @@
     document.getElementById('email').value = '';
     document.getElementById('password').value = '';
     if (document.getElementById('user-name')) document.getElementById('user-name').value = '';
+    clearMsg(authMsg);
   }
 
   toggleBtn.addEventListener('click', () => {
     isSignUpMode = !isSignUpMode;
+    clearMsg(authMsg);
     if (isSignUpMode) {
       signupFields.classList.remove('hidden'); mainBtn.innerText = 'Sign Up';
       toggleBtn.innerText = 'Back to Login'; forgotBtn.style.display = 'none';
@@ -274,48 +298,55 @@
   mainBtn.addEventListener('click', async () => {
     const email = document.getElementById('email').value.trim();
     const pw    = document.getElementById('password').value;
-    if (!email || !pw) return alert('Please enter email and password.');
+    clearMsg(authMsg);
+    if (!email || !pw) return showMsg(authMsg, 'Please enter email and password.', 'error');
+    const idleLabel = isSignUpMode ? 'Sign Up' : 'Login';
     mainBtn.innerText = 'Processing…'; mainBtn.disabled = true;
     if (isSignUpMode) {
       const name = document.getElementById('user-name').value.trim();
       const { error } = await _supabase.auth.signUp({ email, password: pw, options: { data: { full_name: name } } });
-      if (error) { alert('Signup Error: ' + error.message); mainBtn.innerText = 'Sign Up'; }
+      if (error) { showMsg(authMsg, error.message, 'error'); mainBtn.innerText = idleLabel; }
       else {
-        alert('Account created! You can now log in.');
+        showMsg(authMsg, 'Account created! You can now log in.', 'success');
         isSignUpMode = false; signupFields.classList.add('hidden');
         mainBtn.innerText = 'Login'; toggleBtn.innerText = 'Create Account';
         forgotBtn.style.display = 'inline-block';
       }
     } else {
       const { error } = await _supabase.auth.signInWithPassword({ email, password: pw });
-      if (error) { alert('Login Error: ' + error.message); mainBtn.innerText = 'Login'; }
+      if (error) { showMsg(authMsg, error.message, 'error'); mainBtn.innerText = idleLabel; }
     }
     mainBtn.disabled = false;
   });
 
   forgotBtn.addEventListener('click', async () => {
     const email = document.getElementById('email').value.trim();
-    if (!email) return alert('Enter your email first.');
+    clearMsg(authMsg);
+    if (!email) return showMsg(authMsg, 'Enter your email first.', 'error');
     forgotBtn.innerText = 'Sending…';
     const { error } = await _supabase.auth.resetPasswordForEmail(email, {
       redirectTo: window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/') + 'index.html'
     });
-    if (error) alert('Error: ' + error.message);
-    else alert('Reset link sent! Check your inbox.');
+    if (error) showMsg(authMsg, error.message, 'error');
+    else showMsg(authMsg, 'Reset link sent! Check your inbox.', 'success');
     forgotBtn.innerText = 'Forgot Password?';
   });
 
   updatePwBtn.addEventListener('click', async () => {
     const pw = document.getElementById('new-password').value;
-    if (!pw || pw.length < 6) return alert('Password must be at least 6 characters.');
-    updatePwBtn.innerText = 'Updating…';
+    clearMsg(recoveryMsg);
+    if (!pw || pw.length < 6) return showMsg(recoveryMsg, 'Password must be at least 6 characters.', 'error');
+    updatePwBtn.innerText = 'Updating…'; updatePwBtn.disabled = true;
     const { error } = await _supabase.auth.updateUser({ password: pw });
-    if (error) { alert('Error: ' + error.message); updatePwBtn.innerText = 'Save Password'; }
+    if (error) { showMsg(recoveryMsg, error.message, 'error'); updatePwBtn.innerText = 'Save Password'; updatePwBtn.disabled = false; }
     else {
-      alert('Password updated! Please log in.');
+      showMsg(authMsg, 'Password updated! Please log in.', 'success');
       isRecovering = false; window.location.hash = '';
+      document.getElementById('new-password').value = '';
+      clearMsg(recoveryMsg);
       recoveryFields.classList.add('hidden');
       standardFields.classList.remove('hidden');
+      updatePwBtn.innerText = 'Save Password'; updatePwBtn.disabled = false;
       showAuth();
     }
   });
@@ -333,13 +364,15 @@
   });
 
   // ── If recovery link, show password form immediately on page load ──
+  // Note: we do NOT set mjm_session_active here. That flag must only be set
+  // after Supabase verifies the recovery token (PASSWORD_RECOVERY event)
+  // or after a real login — otherwise anyone visiting /index.html#type=recovery
+  // would acquire the session-active flag without authenticating.
   if (_isRecoveryLink) {
-    // Show auth screen with recovery form right away, don't wait for onAuthStateChange
     document.getElementById('auth-screen').style.display = 'flex';
     document.getElementById('hub-screen').style.display = 'none';
     document.getElementById('standard-auth-fields').classList.add('hidden');
     document.getElementById('recovery-auth-fields').classList.remove('hidden');
-    sessionStorage.setItem('mjm_session_active', '1');
   }
 
   _supabase.auth.onAuthStateChange(async (event, session) => {
@@ -355,15 +388,34 @@
     if (isRecovering) return;
     if (event === 'SIGNED_OUT' || !session) { showAuth(); return; }
     if (session) {
-      welcomeText.innerText = session.user.user_metadata?.full_name || session.user.email;
+      // Fetch real profile (full_name, role, phone) from shared_profiles
+      // — same pattern as audit/audit_login.html. Falls back gracefully if the
+      // row is missing or the network is unavailable.
+      let profile = null;
+      try {
+        const { data } = await _supabase
+          .from('shared_profiles')
+          .select('full_name, role, email, phone')
+          .eq('id', session.user.id)
+          .single();
+        profile = data;
+      } catch (e) { /* offline or RLS denied — fall through to fallbacks */ }
+
+      const fallbackName = session.user.user_metadata?.full_name || session.user.email;
+      const name = profile?.full_name || fallbackName;
+      const role = profile?.role || 'Staff';
+
+      welcomeText.innerText = name;
       // Mark session active for this window (clears on window close)
       sessionStorage.setItem('mjm_session_active', '1');
       // Set mjm_user so audit_home and other modules can read it
       localStorage.setItem('mjm_user', JSON.stringify({
+        id: session.user.id,
         email: session.user.email,
-        full_name: session.user.user_metadata?.full_name || session.user.email,
-        name: session.user.user_metadata?.full_name || session.user.email,
-        role: 'staff'
+        full_name: name,
+        name,
+        role,
+        phone: profile?.phone || ''
       }));
       showHub();
     }

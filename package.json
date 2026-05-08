@@ -1,0 +1,13 @@
+{
+  "name": "mjm-ai-system",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Static portal for the MJM AI System modules.",
+  "scripts": {
+    "build:css": "tailwindcss -i ./src/tailwind.css -o ./dist/tailwind.css --minify",
+    "watch:css": "tailwindcss -i ./src/tailwind.css -o ./dist/tailwind.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.13"
+  }
+}
