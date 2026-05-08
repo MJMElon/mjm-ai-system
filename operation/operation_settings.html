@@ -7,6 +7,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+    <!-- Leaflet for the GPS pin editor (free, no API key). -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <style>
         body { background-color: #faf5ff; margin: 0; font-family: 'Outfit', system-ui, -apple-system, sans-serif; overflow-x: hidden; }
         .bg-pattern { position: fixed; inset: 0; background-image: radial-gradient(#e9d5ff 1px, transparent 1px); background-size: 24px 24px; z-index: -2; opacity: 0.5; }
@@ -225,6 +228,8 @@
                 <button onclick="closeEditPlotModal()" class="text-slate-400 hover:text-red-500 bg-slate-100 rounded-full p-2 w-8 h-8 flex items-center justify-center">✕</button>
             </div>
             <input type="hidden" id="edit-plot-id">
+            <input type="hidden" id="edit-plot-gps-lat">
+            <input type="hidden" id="edit-plot-gps-lng">
             <div class="space-y-4">
                 <div>
                     <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Nursery</label>
@@ -234,10 +239,106 @@
                     <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Plot Name</label>
                     <input type="text" id="edit-plot-name" class="input-style text-xs uppercase">
                 </div>
+                <div class="bg-emerald-50/60 border border-emerald-100 rounded-2xl p-4" data-loc-editor data-prefix="plot">
+                    <div class="flex items-center justify-between mb-2 gap-2">
+                        <label class="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">📍 GPS Pin (for auditor auto-detect)</label>
+                        <span data-loc-status class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Not set</span>
+                    </div>
+                    <div class="text-[11px] text-slate-600 font-semibold mb-3 leading-snug">Type lat/lng (or paste <span class="font-mono bg-white px-1 rounded">lat, lng</span> from Google Maps), click on the map, or drag the pin. Auditors will see this plot first when standing nearby.</div>
+
+                    <div class="grid grid-cols-2 gap-2 mb-3">
+                        <div>
+                            <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Latitude</label>
+                            <input type="text" data-loc-lat-input class="input-style text-xs font-mono" placeholder="e.g. 1.5552960" oninput="onLocInputChange('plot')" onpaste="onLocInputPaste(event,'plot')">
+                        </div>
+                        <div>
+                            <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Longitude</label>
+                            <input type="text" data-loc-lng-input class="input-style text-xs font-mono" placeholder="e.g. 110.3592110" oninput="onLocInputChange('plot')" onpaste="onLocInputPaste(event,'plot')">
+                        </div>
+                    </div>
+
+                    <div data-loc-map class="rounded-xl border-2 border-emerald-200 overflow-hidden mb-3 bg-slate-100" style="height: 280px;"></div>
+                    <div class="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">
+                        <span>Layer:</span>
+                        <div class="flex gap-1 bg-white rounded-lg p-1 border border-slate-200">
+                            <button type="button" data-loc-layer="street" onclick="setLocLayer('plot','street')" class="px-3 py-1 rounded-md font-black text-emerald-700 bg-emerald-100">Street</button>
+                            <button type="button" data-loc-layer="sat" onclick="setLocLayer('plot','sat')" class="px-3 py-1 rounded-md font-black text-slate-500">Satellite</button>
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="edit-plot-gps-lat">
+                    <input type="hidden" id="edit-plot-gps-lng">
+                    <button type="button" onclick="captureLocFromDevice('plot')" data-loc-capture-btn class="w-full p-2.5 rounded-xl bg-emerald-500 text-white font-black text-[11px] uppercase tracking-widest hover:bg-emerald-600 shadow-md transition-colors flex items-center justify-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        Use My Current Device Location
+                    </button>
+                    <button type="button" onclick="clearLoc('plot')" data-loc-clear-btn class="w-full mt-2 p-2 rounded-xl bg-white border border-slate-200 text-slate-500 font-bold text-[10px] uppercase tracking-widest hover:bg-slate-50 hover:text-red-500 transition-colors hidden">Remove pin</button>
+                </div>
             </div>
             <div class="flex gap-4 pt-8 mt-6 border-t border-slate-100">
                 <button onclick="closeEditPlotModal()" class="flex-1 p-3 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs uppercase tracking-widest hover:bg-slate-200">Cancel</button>
                 <button onclick="saveEditPlot()" id="save-plot-btn" class="flex-1 p-3 rounded-xl btn-purple !bg-indigo-500 text-xs tracking-widest">Update Plot</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Tray Modal -->
+    <div id="edit-tray-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 z-0" onclick="closeEditTrayModal()"></div>
+        <div class="glass-panel p-8 rounded-[2rem] w-full max-w-xl shadow-2xl relative z-10 border-amber-500 border-l-[12px] max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6 border-b-2 border-slate-100 pb-4">
+                <h3 class="text-xl font-black text-slate-800 uppercase tracking-widest">Edit Tray Details</h3>
+                <button onclick="closeEditTrayModal()" class="text-slate-400 hover:text-red-500 bg-slate-100 rounded-full p-2 w-8 h-8 flex items-center justify-center">✕</button>
+            </div>
+            <input type="hidden" id="edit-tray-id">
+            <div class="space-y-4">
+                <div>
+                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Nursery</label>
+                    <select id="edit-tray-nursery" class="input-style text-xs font-bold text-slate-700"></select>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Tray Name</label>
+                    <input type="text" id="edit-tray-name" class="input-style text-xs uppercase">
+                </div>
+                <div class="bg-amber-50/60 border border-amber-100 rounded-2xl p-4" data-loc-editor data-prefix="tray">
+                    <div class="flex items-center justify-between mb-2 gap-2">
+                        <label class="text-[10px] font-bold text-amber-700 uppercase tracking-widest">📍 GPS Pin (for pre-nursery audit auto-detect)</label>
+                        <span data-loc-status class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Not set</span>
+                    </div>
+                    <div class="text-[11px] text-slate-600 font-semibold mb-3 leading-snug">Type lat/lng (or paste <span class="font-mono bg-white px-1 rounded">lat, lng</span> from Google Maps), click on the map, or drag the pin. Pre-nursery auditors will see this tray first when standing nearby.</div>
+
+                    <div class="grid grid-cols-2 gap-2 mb-3">
+                        <div>
+                            <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Latitude</label>
+                            <input type="text" data-loc-lat-input class="input-style text-xs font-mono" placeholder="e.g. 1.5552960" oninput="onLocInputChange('tray')" onpaste="onLocInputPaste(event,'tray')">
+                        </div>
+                        <div>
+                            <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Longitude</label>
+                            <input type="text" data-loc-lng-input class="input-style text-xs font-mono" placeholder="e.g. 110.3592110" oninput="onLocInputChange('tray')" onpaste="onLocInputPaste(event,'tray')">
+                        </div>
+                    </div>
+
+                    <div data-loc-map class="rounded-xl border-2 border-amber-200 overflow-hidden mb-3 bg-slate-100" style="height: 280px;"></div>
+                    <div class="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">
+                        <span>Layer:</span>
+                        <div class="flex gap-1 bg-white rounded-lg p-1 border border-slate-200">
+                            <button type="button" data-loc-layer="street" onclick="setLocLayer('tray','street')" class="px-3 py-1 rounded-md font-black text-amber-700 bg-amber-100">Street</button>
+                            <button type="button" data-loc-layer="sat" onclick="setLocLayer('tray','sat')" class="px-3 py-1 rounded-md font-black text-slate-500">Satellite</button>
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="edit-tray-gps-lat">
+                    <input type="hidden" id="edit-tray-gps-lng">
+                    <button type="button" onclick="captureLocFromDevice('tray')" data-loc-capture-btn class="w-full p-2.5 rounded-xl bg-amber-500 text-white font-black text-[11px] uppercase tracking-widest hover:bg-amber-600 shadow-md transition-colors flex items-center justify-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        Use My Current Device Location
+                    </button>
+                    <button type="button" onclick="clearLoc('tray')" data-loc-clear-btn class="w-full mt-2 p-2 rounded-xl bg-white border border-slate-200 text-slate-500 font-bold text-[10px] uppercase tracking-widest hover:bg-slate-50 hover:text-red-500 transition-colors hidden">Remove pin</button>
+                </div>
+            </div>
+            <div class="flex gap-4 pt-8 mt-6 border-t border-slate-100">
+                <button onclick="closeEditTrayModal()" class="flex-1 p-3 rounded-xl bg-slate-100 text-slate-600 font-bold text-xs uppercase tracking-widest hover:bg-slate-200">Cancel</button>
+                <button onclick="saveEditTray()" id="save-tray-btn" class="flex-1 p-3 rounded-xl btn-purple !bg-amber-500 text-xs tracking-widest">Update Tray</button>
             </div>
         </div>
     </div>
@@ -513,31 +614,264 @@
             } catch(e) { alert("Database Save Error: " + e.message); } finally { btn.innerText = '💾 Save Shape'; btn.disabled = false; }
         }
 
+        // ════════════════════════════════════════════════════════════════════════════
+        // GENERIC LOCATION EDITOR (Leaflet) — used by both Plot and Tray modals.
+        // Each modal has its own [data-loc-editor data-prefix="plot|tray"] block.
+        // We index everything by prefix so the two modals stay independent.
+        // ════════════════════════════════════════════════════════════════════════════
+        const locState = { plot: null, tray: null };
+        const DEFAULT_CENTER = [3.139, 101.6869]; // KL fallback when nothing is set
+        const DEFAULT_ZOOM   = 6;
+        const STREET_TILES = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+        const STREET_ATTR  = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+        const SAT_TILES    = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+        const SAT_ATTR     = 'Tiles &copy; Esri';
+
+        function locEditorEl(prefix) { return document.querySelector(`[data-loc-editor][data-prefix="${prefix}"]`); }
+
+        function ensureLocMap(prefix) {
+            const root = locEditorEl(prefix); if (!root) return null;
+            if (locState[prefix] && locState[prefix].map) return locState[prefix];
+
+            const mapEl = root.querySelector('[data-loc-map]');
+            const map = L.map(mapEl, { zoomControl: true, scrollWheelZoom: true });
+            const street = L.tileLayer(STREET_TILES, { attribution: STREET_ATTR, maxZoom: 19 });
+            const sat    = L.tileLayer(SAT_TILES,    { attribution: SAT_ATTR,    maxZoom: 19 });
+            street.addTo(map);
+
+            // Tap-anywhere-to-set-pin
+            map.on('click', e => {
+                setLocCoords(prefix, e.latlng.lat, e.latlng.lng, /*panTo*/false);
+            });
+
+            locState[prefix] = { map, street, sat, marker: null, currentLayer: 'street' };
+            return locState[prefix];
+        }
+
+        function ensureLocMarker(prefix, lat, lng) {
+            const s = locState[prefix]; if (!s) return;
+            if (s.marker) {
+                s.marker.setLatLng([lat, lng]);
+                return;
+            }
+            s.marker = L.marker([lat, lng], { draggable: true }).addTo(s.map);
+            s.marker.on('dragend', () => {
+                const ll = s.marker.getLatLng();
+                setLocCoords(prefix, ll.lat, ll.lng, /*panTo*/false);
+            });
+        }
+
+        function setLocCoords(prefix, lat, lng, panTo = true) {
+            const root = locEditorEl(prefix); if (!root) return;
+            root.querySelector('[data-loc-lat-input]').value = (+lat).toFixed(7);
+            root.querySelector('[data-loc-lng-input]').value = (+lng).toFixed(7);
+            document.getElementById(`edit-${prefix}-gps-lat`).value = lat;
+            document.getElementById(`edit-${prefix}-gps-lng`).value = lng;
+            renderLocStatus(prefix, lat, lng);
+
+            const s = ensureLocMap(prefix);
+            ensureLocMarker(prefix, lat, lng);
+            if (panTo) s.map.setView([lat, lng], Math.max(s.map.getZoom(), 17));
+        }
+
+        function clearLoc(prefix) {
+            const root = locEditorEl(prefix); if (!root) return;
+            root.querySelector('[data-loc-lat-input]').value = '';
+            root.querySelector('[data-loc-lng-input]').value = '';
+            document.getElementById(`edit-${prefix}-gps-lat`).value = '';
+            document.getElementById(`edit-${prefix}-gps-lng`).value = '';
+            const s = locState[prefix];
+            if (s && s.marker) { s.map.removeLayer(s.marker); s.marker = null; }
+            renderLocStatus(prefix, null, null);
+        }
+
+        function renderLocStatus(prefix, lat, lng) {
+            const root = locEditorEl(prefix); if (!root) return;
+            const status   = root.querySelector('[data-loc-status]');
+            const clearBtn = root.querySelector('[data-loc-clear-btn]');
+            const isSet = lat !== null && lat !== undefined && lat !== '' && !isNaN(+lat) &&
+                          lng !== null && lng !== undefined && lng !== '' && !isNaN(+lng);
+            if (isSet) {
+                status.innerText = '✓ Pin set';
+                status.className = 'text-[9px] font-black text-emerald-600 uppercase tracking-widest';
+                clearBtn.classList.remove('hidden');
+            } else {
+                status.innerText = 'Not set';
+                status.className = 'text-[9px] font-black text-slate-400 uppercase tracking-widest';
+                clearBtn.classList.add('hidden');
+            }
+        }
+
+        function onLocInputChange(prefix) {
+            const root = locEditorEl(prefix);
+            const latRaw = root.querySelector('[data-loc-lat-input]').value.trim();
+            const lngRaw = root.querySelector('[data-loc-lng-input]').value.trim();
+            const lat = parseFloat(latRaw), lng = parseFloat(lngRaw);
+            if (latRaw === '' && lngRaw === '') {
+                clearLoc(prefix); return;
+            }
+            if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                document.getElementById(`edit-${prefix}-gps-lat`).value = lat;
+                document.getElementById(`edit-${prefix}-gps-lng`).value = lng;
+                renderLocStatus(prefix, lat, lng);
+                const s = ensureLocMap(prefix);
+                ensureLocMarker(prefix, lat, lng);
+                s.map.setView([lat, lng], Math.max(s.map.getZoom(), 17));
+            }
+        }
+
+        // Smart paste: handles "lat, lng" or "lat,lng" combined strings.
+        function onLocInputPaste(event, prefix) {
+            const txt = (event.clipboardData || window.clipboardData).getData('text');
+            const m = String(txt).match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+            if (m) {
+                event.preventDefault();
+                setLocCoords(prefix, parseFloat(m[1]), parseFloat(m[2]));
+            }
+            // Otherwise, let normal paste happen and onLocInputChange will pick it up.
+        }
+
+        function setLocLayer(prefix, kind) {
+            const s = ensureLocMap(prefix); if (!s) return;
+            if (s.currentLayer === kind) return;
+            if (kind === 'sat')    { s.map.removeLayer(s.street); s.sat.addTo(s.map); }
+            else                   { s.map.removeLayer(s.sat);    s.street.addTo(s.map); }
+            s.currentLayer = kind;
+
+            const root = locEditorEl(prefix);
+            const accent = prefix === 'plot' ? 'emerald' : 'amber';
+            root.querySelectorAll('[data-loc-layer]').forEach(btn => {
+                const active = btn.dataset.locLayer === kind;
+                btn.className = `px-3 py-1 rounded-md font-black ${active ? `text-${accent}-700 bg-${accent}-100` : 'text-slate-500'}`;
+            });
+        }
+
+        function captureLocFromDevice(prefix) {
+            if (!navigator.geolocation) { alert('Geolocation is not supported by this browser.'); return; }
+            const root = locEditorEl(prefix);
+            const btn = root.querySelector('[data-loc-capture-btn]');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="animate-pulse">📡 Locating device…</span>';
+            navigator.geolocation.getCurrentPosition(
+                pos => {
+                    setLocCoords(prefix, pos.coords.latitude, pos.coords.longitude);
+                    btn.disabled = false; btn.innerHTML = originalText;
+                },
+                err => {
+                    alert('Could not get location: ' + err.message + '\n\nMake sure location permission is granted and you have a clear sky view.');
+                    btn.disabled = false; btn.innerHTML = originalText;
+                },
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+            );
+        }
+
+        // Open the location editor with prefilled coords. Must run AFTER the modal
+        // becomes visible — Leaflet needs the container to have real dimensions.
+        function openLocEditor(prefix, lat, lng) {
+            const root = locEditorEl(prefix); if (!root) return;
+            root.querySelector('[data-loc-lat-input]').value = lat != null ? (+lat).toFixed(7) : '';
+            root.querySelector('[data-loc-lng-input]').value = lng != null ? (+lng).toFixed(7) : '';
+            document.getElementById(`edit-${prefix}-gps-lat`).value = lat ?? '';
+            document.getElementById(`edit-${prefix}-gps-lng`).value = lng ?? '';
+            renderLocStatus(prefix, lat, lng);
+
+            // Defer map init slightly so the modal is laid out and #data-loc-map has size.
+            setTimeout(() => {
+                const s = ensureLocMap(prefix);
+                if (lat != null && lng != null && !isNaN(+lat) && !isNaN(+lng)) {
+                    s.map.setView([+lat, +lng], 18);
+                    ensureLocMarker(prefix, +lat, +lng);
+                } else {
+                    // Center on first pinned plot in same nursery as a hint, else default.
+                    const nursery = document.getElementById(`edit-${prefix}-nursery`)?.value;
+                    const sibling = (globalPlots || []).find(p => p.nursery_name === nursery && p.gps_lat != null && p.gps_lng != null);
+                    if (sibling) s.map.setView([+sibling.gps_lat, +sibling.gps_lng], 16);
+                    else         s.map.setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+                    if (s.marker) { s.map.removeLayer(s.marker); s.marker = null; }
+                }
+                s.map.invalidateSize();
+            }, 60);
+        }
+
+        // ── Plot modal ──────────────────────────────────────────────────────────────
         function openEditPlotModal(id) {
             const plot = globalPlots.find(p => String(p.id) === String(id));
             if(!plot) return;
             document.getElementById('edit-plot-id').value = plot.id;
             document.getElementById('edit-plot-name').value = plot.plot_name;
-            
+
             const select = document.getElementById('edit-plot-nursery'); select.innerHTML = '';
             globalNurseries.forEach(n => {
                 const opt = document.createElement('option'); opt.value = n.name; opt.innerText = n.name;
                 if(n.name === plot.nursery_name) opt.selected = true; select.appendChild(opt);
             });
             document.getElementById('edit-plot-modal').classList.remove('hidden');
+            openLocEditor('plot', plot.gps_lat, plot.gps_lng);
         }
         function closeEditPlotModal() { document.getElementById('edit-plot-modal').classList.add('hidden'); }
-        
+
         async function saveEditPlot() {
             const id = document.getElementById('edit-plot-id').value;
             const name = document.getElementById('edit-plot-name').value.trim().toUpperCase();
             const nursery = document.getElementById('edit-plot-nursery').value;
+            const latRaw = document.getElementById('edit-plot-gps-lat').value;
+            const lngRaw = document.getElementById('edit-plot-gps-lng').value;
             if(!name) return alert("Plot Name required.");
             const btn = document.getElementById('save-plot-btn'); btn.innerText = 'UPDATING...'; btn.disabled = true;
 
-            const { error } = await _supabase.from('shared_plots').update({ plot_name: name, nursery_name: nursery }).eq('id', id);
+            const update = { plot_name: name, nursery_name: nursery };
+            if (latRaw === '' || lngRaw === '') {
+                update.gps_lat = null; update.gps_lng = null; update.gps_set_at = null;
+            } else {
+                update.gps_lat = parseFloat(latRaw);
+                update.gps_lng = parseFloat(lngRaw);
+                update.gps_set_at = new Date().toISOString();
+            }
+
+            const { error } = await _supabase.from('shared_plots').update(update).eq('id', id);
             if(error) alert(error.message); else { closeEditPlotModal(); fetchData(); }
             btn.innerText = 'Update Plot'; btn.disabled = false;
+        }
+
+        // ── Tray modal ──────────────────────────────────────────────────────────────
+        function openEditTrayModal(id) {
+            const tray = globalTrays.find(t => String(t.id) === String(id));
+            if(!tray) return;
+            document.getElementById('edit-tray-id').value = tray.id;
+            document.getElementById('edit-tray-name').value = tray.tray_name;
+
+            const select = document.getElementById('edit-tray-nursery'); select.innerHTML = '';
+            globalNurseries.forEach(n => {
+                const opt = document.createElement('option'); opt.value = n.name; opt.innerText = n.name;
+                if(n.name === tray.nursery_name) opt.selected = true; select.appendChild(opt);
+            });
+            document.getElementById('edit-tray-modal').classList.remove('hidden');
+            openLocEditor('tray', tray.gps_lat, tray.gps_lng);
+        }
+        function closeEditTrayModal() { document.getElementById('edit-tray-modal').classList.add('hidden'); }
+
+        async function saveEditTray() {
+            const id = document.getElementById('edit-tray-id').value;
+            const name = document.getElementById('edit-tray-name').value.trim();
+            const nursery = document.getElementById('edit-tray-nursery').value;
+            const latRaw = document.getElementById('edit-tray-gps-lat').value;
+            const lngRaw = document.getElementById('edit-tray-gps-lng').value;
+            if(!name) return alert("Tray Name required.");
+            const btn = document.getElementById('save-tray-btn'); btn.innerText = 'UPDATING...'; btn.disabled = true;
+
+            const update = { tray_name: name, nursery_name: nursery };
+            if (latRaw === '' || lngRaw === '') {
+                update.gps_lat = null; update.gps_lng = null; update.gps_set_at = null;
+            } else {
+                update.gps_lat = parseFloat(latRaw);
+                update.gps_lng = parseFloat(lngRaw);
+                update.gps_set_at = new Date().toISOString();
+            }
+
+            const { error } = await _supabase.from('operation_trays').update(update).eq('id', id);
+            if(error) alert(error.message); else { closeEditTrayModal(); fetchData(); }
+            btn.innerText = 'Update Tray'; btn.disabled = false;
         }
 
         // --- CORE UI RENDERING ---
@@ -597,6 +931,7 @@
             
             filtered.forEach(item => {
                 let mappedStatus = (item.map_top && item.map_top.startsWith('[')) ? `<span class="text-[8px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded shadow-sm font-bold ml-2">📍 Mapped</span>` : '';
+                let gpsStatus = (item.gps_lat != null && item.gps_lng != null) ? `<span class="text-[8px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded shadow-sm font-bold ml-2">📍 GPS Pinned</span>` : '';
                 list.insertAdjacentHTML('beforeend', `
                     <li class="bg-white p-4 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm transition-all hover:border-indigo-300 hover:shadow-md">
                         <div class="flex flex-col gap-1">
@@ -604,7 +939,7 @@
                                 <span class="text-[9px] text-indigo-600 font-black uppercase tracking-widest bg-indigo-100 px-2 py-1 rounded shadow-inner">${item.nursery_name}</span>
                                 <span class="text-base font-black text-slate-800">${item.plot_name}</span>
                             </div>
-                            <div class="flex items-center">${mappedStatus}</div>
+                            <div class="flex items-center">${mappedStatus}${gpsStatus}</div>
                         </div>
                         <div class="flex gap-2">
                             <button onclick="openEditPlotModal('${item.id}')" class="text-blue-500 hover:bg-blue-50 w-8 h-8 rounded-full flex items-center justify-center transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>
@@ -620,15 +955,18 @@
             let filtered = filterVal ? globalTrays.filter(t => t.nursery_name === filterVal) : globalTrays;
             
             filtered.forEach(item => {
+                const hasGps = item.gps_lat != null && item.gps_lng != null;
                 list.insertAdjacentHTML('beforeend', `
                     <li class="bg-white p-4 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm transition-all hover:border-amber-300 hover:shadow-md">
                         <div class="flex flex-col gap-1">
                             <div class="flex items-center gap-2">
                                 <span class="text-[9px] text-amber-600 font-black uppercase tracking-widest bg-amber-100 px-2 py-1 rounded shadow-inner">${item.nursery_name || 'Global'}</span>
+                                ${hasGps ? '<span class="text-[9px] text-emerald-700 font-black uppercase tracking-widest bg-emerald-100 px-2 py-1 rounded shadow-inner">📍 Pinned</span>' : ''}
                             </div>
                             <span class="text-base font-black text-slate-800">${item.tray_name}</span>
                         </div>
                         <div class="flex gap-2">
+                            <button onclick="openEditTrayModal('${item.id}')" class="text-slate-400 hover:text-amber-500 hover:bg-amber-50 w-8 h-8 rounded-full flex items-center justify-center transition-colors" title="Edit tray (set GPS, rename)"><svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>
                             <button onclick="deleteItem('operation_trays', '${item.id}')" class="text-red-400 hover:bg-red-50 w-8 h-8 rounded-full flex items-center justify-center transition-colors">✕</button>
                         </div>
                     </li>

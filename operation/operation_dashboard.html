@@ -71,6 +71,17 @@
         .month-pill.future{background:#f8fafc;border:1px solid #e2e8f0;color:#64748b;}
         .month-pill.past{background:#f1f5f9;border:1px solid #e2e8f0;color:#94a3b8;}
 
+        /* Combined Nursery Status block — segmented switch (full-width blocks) */
+        .combo-switch{display:grid;grid-template-columns:1fr 1fr;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:18px;padding:6px;gap:6px;}
+        .combo-switch-btn{padding:18px 16px;border-radius:14px;border:none;background:transparent;color:#64748b;cursor:pointer;text-align:center;transition:all .25s ease;display:flex;flex-direction:column;align-items:center;gap:4px;}
+        .combo-switch-btn .csw-title{font-weight:900;font-size:13px;text-transform:uppercase;letter-spacing:.12em;}
+        .combo-switch-btn .csw-sub{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;}
+        .combo-switch-btn:hover:not(.active){background:rgba(255,255,255,.6);color:#1e293b;}
+        .combo-switch-btn.active{background:#ffffff;color:#065f46;box-shadow:0 6px 14px -4px rgba(16,185,129,.35),0 1px 0 rgba(255,255,255,.6) inset;}
+        .combo-switch-btn.active .csw-sub{color:#10b981;}
+        .combo-switch-btn.active.verified{color:#92400e;box-shadow:0 6px 14px -4px rgba(245,158,11,.35),0 1px 0 rgba(255,255,255,.6) inset;}
+        .combo-switch-btn.active.verified .csw-sub{color:#d97706;}
+
         .fade-enter{animation:fadeIn .4s ease-out;}
         @keyframes fadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
         .nature-critter{position:absolute;font-size:1.5rem;pointer-events:none;opacity:0;z-index:50;animation:floatSlow 8s ease-in-out forwards;}
@@ -146,112 +157,139 @@
         <div>
             <h2 class="text-[11px] font-black text-slate-400 uppercase tracking-[0.25em] mb-5">📊 Nursery Dashboard</h2>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
 
-                <!-- Matured seedlings -->
-                <div class="metric-card border-l-4 border-emerald-500 relative overflow-hidden">
+                <!-- Nursery Status Dashboard (2-col span) -->
+                <div class="metric-card !p-0 lg:col-span-2 border-l-4 border-emerald-500 relative overflow-hidden" id="nsd-card">
                     <div class="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full blur-2xl"></div>
-                    <div class="flex items-center gap-2 mb-3 relative z-10">
-                        <div class="w-8 h-8 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        </div>
-                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Matured Seedlings</span>
-                    </div>
-                    <div class="text-5xl font-black text-emerald-600 mb-1 relative z-10" id="stat-matured">—</div>
-                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest relative z-10">Seedlings ≥ 12 months old</div>
-                    <div class="mt-3 flex items-center gap-2 relative z-10">
-                        <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                        <span class="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Ready for sale consideration</span>
-                    </div>
-                </div>
 
-                <!-- Orders -->
-                <div class="metric-card border-l-4 border-blue-500 relative overflow-hidden">
-                    <div class="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-full blur-2xl"></div>
-                    <div class="flex items-center gap-2 mb-3 relative z-10">
-                        <div class="w-8 h-8 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 shrink-0">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-                        </div>
-                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Orders</span>
-                        <span class="text-[9px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full uppercase shrink-0" id="current-month-label">This Month</span>
-                    </div>
-                    <div class="text-5xl font-black text-blue-600 mb-1 relative z-10" id="stat-orders-current">—</div>
-                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest relative z-10">Confirmed orders this month</div>
-                    <div class="mt-3 flex items-center gap-2 relative z-10">
-                        <svg class="w-3 h-3 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
-                        <span class="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Future months: <span id="stat-orders-future" class="font-black">—</span> qty</span>
-                    </div>
-                </div>
-
-                <!-- Available stock -->
-                <div class="metric-card border-l-4 border-purple-500 relative overflow-hidden">
-                    <div class="absolute top-0 right-0 w-24 h-24 bg-purple-50 rounded-full blur-2xl"></div>
-                    <div class="flex items-center gap-2 mb-3 relative z-10">
-                        <div class="w-8 h-8 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600 shrink-0">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
-                        </div>
-                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Available for Sales</span>
-                    </div>
-                    <div class="text-5xl font-black text-purple-600 mb-1 relative z-10" id="stat-available">—</div>
-                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest relative z-10">At <span id="gearing-display" class="text-purple-600 font-black">1.0×</span> gearing</div>
-                    <div class="mt-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest relative z-10">Base stock: <span id="stat-base-stock" class="text-slate-600 font-black">—</span></div>
-                </div>
-
-            </div>
-
-            <!-- Gearing control -->
-            <div class="dash-card p-6 mb-5">
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+                    <!-- Header -->
+                    <div class="px-6 pt-6 pb-5 border-b border-slate-100 relative z-10">
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                                </div>
+                                <span class="text-sm md:text-base font-black text-slate-800 uppercase tracking-widest">Nursery Status Dashboard</span>
                             </div>
-                            <div>
-                                <h3 class="font-black text-slate-800 uppercase tracking-widest text-sm">⚙️ Gearing Power</h3>
-                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sellable qty = Stock × Gearing. 1.0 = exact, 1.5 = sell 50% more, 2.0 = sell double</p>
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">As of</span>
+                                <span class="text-2xl md:text-3xl font-black text-emerald-600 tracking-tight leading-none" id="current-month-label">This Month</span>
                             </div>
                         </div>
-                        <div class="flex items-center gap-4">
-                            <span class="text-[10px] font-black text-emerald-600 uppercase tracking-widest whitespace-nowrap">1.0×</span>
-                            <input type="range" id="gearing-slider" class="gear-slider flex-1" min="10" max="20" step="1" value="10">
-                            <span class="text-[10px] font-black text-red-500 uppercase tracking-widest whitespace-nowrap">2.0×</span>
-                        </div>
-                        <div class="flex justify-between text-[9px] font-bold text-slate-300 uppercase tracking-widest mt-1">
-                            <span>Conservative</span><span>Moderate</span><span>Aggressive</span>
-                        </div>
-                    </div>
-                    <div class="flex items-stretch gap-4 shrink-0">
-                        <div class="bg-slate-50 rounded-2xl p-5 text-center border border-slate-200 min-w-[110px]">
-                            <div class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Gearing</div>
-                            <div class="text-3xl font-black text-slate-800" id="gearing-value">1.0×</div>
-                            <div id="gearing-badge" class="mt-1 text-[9px] font-black text-emerald-600 bg-emerald-50 rounded-full px-2 py-0.5 uppercase tracking-wider">Stable</div>
-                        </div>
-                        <div class="bg-purple-50 rounded-2xl p-5 text-center border border-purple-100 min-w-[140px]">
-                            <div class="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-1">Sellable Qty</div>
-                            <div class="text-3xl font-black text-purple-700" id="gearing-sellable">—</div>
-                            <div class="text-[9px] font-bold text-purple-400 uppercase tracking-widest mt-1">vs orders: <span id="gearing-vs-orders" class="text-slate-600 font-black">—</span></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            <!-- Order timeline -->
-            <div class="dash-card p-6">
-                <div class="flex items-center gap-3 mb-5">
-                    <div class="w-8 h-8 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                        <!-- Segmented tab switch (full-block) -->
+                        <div class="combo-switch">
+                            <button class="combo-switch-btn active" id="combo-tab-basic" onclick="switchComboTab('basic')">
+                                <span class="csw-title">Stock To-Date</span>
+                                <span class="csw-sub">9-month maturity only</span>
+                            </button>
+                            <button class="combo-switch-btn verified" id="combo-tab-verified" onclick="switchComboTab('verified')">
+                                <span class="csw-title">Verified Stock</span>
+                                <span class="csw-sub">9-month + audit ≥ 1.5m</span>
+                            </button>
+                        </div>
                     </div>
-                    <div>
-                        <h3 class="font-black text-slate-800 uppercase tracking-widest text-sm">Order Timeline</h3>
-                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Current & upcoming months — ordered qty per month</p>
+
+                    <!-- KPI body -->
+                    <div class="px-6 pt-6 pb-5 relative z-10">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="rounded-2xl bg-emerald-50/60 border border-emerald-100 p-5">
+                                <div class="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-1" id="matured-tile-label">Total Matured (To-Date)</div>
+                                <div class="text-5xl font-black text-emerald-700 leading-none mb-2" id="stat-matured">—</div>
+                                <div class="text-[10px] font-bold text-slate-500 leading-snug" id="matured-tile-sub">9 months in main nursery</div>
+                            </div>
+                            <div class="rounded-2xl bg-blue-50/60 border border-blue-100 p-5">
+                                <div class="text-[10px] font-black text-blue-700 uppercase tracking-widest mb-1">Paid Orders — Pending Collection</div>
+                                <div class="text-5xl font-black text-blue-700 leading-none mb-2" id="stat-orders-current">—</div>
+                                <div class="text-[10px] font-bold text-slate-500 leading-snug">Cumulative paid orders not yet collected, up to current month</div>
+                            </div>
+                        </div>
+
+                        <!-- Remarks -->
+                        <div class="mt-5 space-y-1.5 text-[10px] text-slate-500 leading-snug bg-slate-50 border border-slate-100 rounded-xl p-3" id="nsd-remark-block">
+                            <div class="flex gap-2"><span class="font-black text-emerald-600 shrink-0">①</span><span><span class="font-black text-emerald-700 uppercase tracking-wider">9-Month Rule</span> — Transplant date + 9 months in main nursery → matured.</span></div>
+                            <div class="flex gap-2" id="nsd-remark-audit"><span class="font-black text-amber-600 shrink-0">②</span><span><span class="font-black text-amber-700 uppercase tracking-wider">Field Audit</span> — Any sample height ≥ 150 cm (1.5 m) → that batch in the plot is also matured.</span></div>
+                        </div>
                     </div>
                 </div>
-                <div id="order-timeline" class="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
-                    <div class="text-[11px] text-slate-400 font-bold m-auto py-4">Loading order data...</div>
+
+                <!-- Available for Sales — same emerald theme as Nursery Status -->
+                <div class="metric-card !p-0 border-l-4 border-emerald-500 relative overflow-hidden flex flex-col">
+                    <div class="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full blur-2xl"></div>
+
+                    <!-- Header -->
+                    <div class="px-6 pt-6 pb-4 border-b border-slate-100 relative z-10">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2">
+                                <div class="w-9 h-9 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                </div>
+                                <span class="text-sm font-black text-slate-800 uppercase tracking-widest">Available for Sales</span>
+                            </div>
+                            <span id="avail-status-badge" class="text-[9px] font-black bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full uppercase tracking-widest">OK</span>
+                        </div>
+                        <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2" id="avail-tab-label">From <span class="text-emerald-700 font-black">Stock To-Date</span></div>
+                    </div>
+
+                    <!-- Big number -->
+                    <div class="px-6 pt-5 pb-3 relative z-10">
+                        <div class="text-5xl font-black text-emerald-600 leading-none mb-1" id="stat-available">—</div>
+                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Seedlings safe to sell</div>
+                    </div>
+
+                    <!-- Simple breakdown: matured − pending = available -->
+                    <div class="px-6 pb-3 relative z-10">
+                        <div class="bg-slate-50 border border-slate-100 rounded-xl p-3 text-[11px] space-y-1.5">
+                            <div class="flex justify-between"><span class="text-slate-500 font-bold">Total matured</span><span class="font-black text-slate-700" id="calc-matured">—</span></div>
+                            <div class="flex justify-between"><span class="text-slate-500 font-bold">− Pending collection</span><span class="font-black text-slate-700" id="calc-orders">—</span></div>
+                            <div class="flex justify-between border-t border-slate-200 pt-1.5"><span class="text-emerald-700 font-black uppercase tracking-wider">= Available</span><span class="font-black text-emerald-700" id="calc-available">—</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Gearing tool (inline) — adjust slider to recompute Available -->
+                    <div class="px-6 pb-3 relative z-10">
+                        <div class="bg-emerald-50/60 border border-emerald-100 rounded-xl p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+                                    <span class="text-[11px] font-black text-slate-700 uppercase tracking-widest">Gearing Power</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-base font-black text-emerald-700" id="gearing-display">1.0×</span>
+                                    <span id="gearing-badge" class="text-[9px] font-black text-emerald-600 bg-white border border-emerald-200 rounded-full px-2 py-0.5 uppercase tracking-wider">Conservative</span>
+                                </div>
+                            </div>
+                            <p class="text-[10px] font-semibold text-slate-500 leading-snug mb-3">Willingness to oversell. 1.0× = sell only what's matured. 2.0× = sell up to double. 3.0× = sell up to triple.</p>
+                            <div class="flex items-center gap-3">
+                                <span class="text-[9px] font-black text-emerald-600 uppercase tracking-widest whitespace-nowrap">1.0×</span>
+                                <input type="range" id="gearing-slider" class="gear-slider flex-1" min="10" max="30" step="1" value="10">
+                                <span class="text-[9px] font-black text-red-500 uppercase tracking-widest whitespace-nowrap">3.0×</span>
+                            </div>
+                            <div class="flex justify-between text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1.5 px-7">
+                                <span>Conservative</span><span>Moderate</span><span>Aggressive</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Oversold warning (hidden unless triggered) -->
+                    <div class="px-6 pb-3 relative z-10 hidden" id="oversold-warning">
+                        <div class="bg-red-50 border-l-4 border-red-500 rounded-xl p-3 text-[11px] text-red-700 space-y-1">
+                            <div class="font-black uppercase tracking-widest text-red-600">⚠ Oversold</div>
+                            <div>Orders exceed matured by <span id="oversold-qty" class="font-black">—</span> seedlings (<span id="oversold-factor" class="font-black">—×</span>).</div>
+                            <div>Current gearing is <span id="oversold-current-gearing" class="font-black">—×</span> — needs at least <span id="oversold-needed-gearing" class="font-black">—×</span> to cover orders at current matured stock.</div>
+                        </div>
+                    </div>
+
+                    <!-- Single remark -->
+                    <div class="px-6 pb-5 mt-auto relative z-10">
+                        <div class="text-[10px] text-slate-500 leading-snug bg-emerald-50/60 border border-emerald-100 rounded-xl p-3">
+                            <span class="font-black text-emerald-700 uppercase tracking-wider">Note</span> — Available qty already includes a <span class="font-black text-emerald-700">10% culling rate</span> deduction and reflects the current gearing setting. Slide gearing higher to allow overselling beyond the matured stock.
+                        </div>
+                    </div>
                 </div>
+
             </div>
-        </div>
 
         <!-- System Modules -->
         <div>
@@ -273,12 +311,12 @@
                     <p class="text-xs text-slate-500 font-semibold leading-relaxed">Orders, Approval Letters, Delivery Orders, L3 Forms.</p>
                     <div class="mt-5 flex items-center text-[10px] font-bold text-emerald-600 uppercase tracking-widest group-hover:translate-x-2 transition-transform">Enter Module <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></div>
                 </a>
-                <a href="operation_inventory_map.html" class="block dash-card p-7 group hover:border-blue-400 hover:shadow-xl hover:shadow-blue-100 transition-all duration-300 decoration-transparent border border-transparent">
+                <a href="operation_stock_sales.html" class="block dash-card p-7 group hover:border-blue-400 hover:shadow-xl hover:shadow-blue-100 transition-all duration-300 decoration-transparent border border-transparent">
                     <div class="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600 mb-5 group-hover:bg-blue-500 group-hover:text-white transition-all">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
                     </div>
-                    <h3 class="font-black text-lg text-blue-900 uppercase tracking-widest mb-2">Stock Sales<br>Analysis</h3>
-                    <p class="text-xs text-slate-500 font-semibold leading-relaxed">Nursery map, stock levels and sales performance analytics.</p>
+                    <h3 class="font-black text-lg text-blue-900 uppercase tracking-widest mb-2">Seedling Stock<br>Sales Management</h3>
+                    <p class="text-xs text-slate-500 font-semibold leading-relaxed">Stock dashboard, payment to-do list, nursery maps and sales analytics.</p>
                     <div class="mt-5 flex items-center text-[10px] font-bold text-blue-600 uppercase tracking-widest group-hover:translate-x-2 transition-transform">Enter Module <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></div>
                 </a>
                 <a href="operation_settings.html" class="block dash-card p-7 group hover:border-purple-400 hover:shadow-xl hover:shadow-purple-100 transition-all duration-300 decoration-transparent border border-transparent">
@@ -470,84 +508,214 @@
         }
     });
 
+    // ── Dashboard state ────────────────────────────────────────────────────────
+    let comboTab = 'basic';        // 'basic' = Stock To-Date (9-mth only); 'verified' = + audit
+    let nsdAggregates = null;       // { qtyByAge, qtyByAgeOrAudit, pendingOrdersQty }
+
     // ── Dashboard data ────────────────────────────────────────────────────────
     async function loadDashboard() {
         const now = new Date();
         const cm = now.getMonth();
         const cy = now.getFullYear();
-        document.getElementById('current-month-label').innerText = now.toLocaleString('en-MY', { month: 'long', year: 'numeric' });
+        const startOfNextMonthISO = new Date(cy, cm + 1, 1).toISOString();
+        const endOfMonth          = new Date(cy, cm + 1, 0, 23, 59, 59);
+        const endOfMonthISO       = endOfMonth.toISOString();
+        const endOfMonthDateOnly  = endOfMonthISO.slice(0, 10);
+
+        const monthLabel = now.toLocaleString('en-MY', { month: 'long', year: 'numeric' });
+        document.getElementById('current-month-label').innerText = monthLabel;
 
         try {
-            const cutoff = new Date(now);
-            cutoff.setMonth(cutoff.getMonth() - 12);
-            const { data: recLogs } = await _supabase.from('shared_inventory_logs')
-                .select('quantity_change,created_at')
-                .eq('transaction_type','Seeds_Received')
-                .lte('created_at', cutoff.toISOString());
+            // ── Pull transplant logs + height audits + collections up to current-month-end ──
+            const [transRes, auditRes, collRes, ordCollFallbackRes] = await Promise.all([
+                _supabase.from('shared_inventory_logs')
+                    .select('batch_name,plot_name,quantity_change,created_at')
+                    .in('transaction_type', ['Transplanted','Transplanted_Premium','Transplanted_DoubleTone'])
+                    .lte('created_at', endOfMonthISO),
+                _supabase.from('audit_height_records')
+                    .select('plot,batch,sample_1,sample_2,sample_3,avg_height,date')
+                    .lte('date', endOfMonthDateOnly),
+                _supabase.from('salesweb_order_collections')
+                    .select('collected_qty,collected_at')
+                    .lte('collected_at', endOfMonthISO)
+                    .then(r => r, e => ({ data: null })),
+                _supabase.from('salesweb_customer_orders')
+                    .select('collected_qty,collected_at')
+                    .not('collected_qty', 'is', null)
+                    .lte('collected_at', endOfMonthISO)
+                    .then(r => r, e => ({ data: null }))
+            ]);
 
-            baseStock = (recLogs || []).reduce((s, l) => s + (l.quantity_change || 0), 0);
-            document.getElementById('stat-matured').innerText = baseStock.toLocaleString();
+            const transLogs = transRes.data || [];
+            const audits    = auditRes.data || [];
 
-            let ordersData = [];
-            // Read confirmed orders from shared_al_orders (status not Cancelled)
-            const { data: alOrders } = await _supabase.from('shared_al_orders')
-                .select('quantity_ordered,order_date')
-                .not('status', 'in', '("Cancelled")')
-                .order('order_date', { ascending: true });
-            if (alOrders && alOrders.length > 0) {
-                ordersData = alOrders.map(a => ({ qty: a.quantity_ordered || 0, date: new Date(a.order_date) }));
+            // Group transplant logs by (batch, plot) — earliest transplant + total qty per group.
+            const groupKey = (b, p) => `${b||''}||${p||''}`;
+            const groups = {};
+            transLogs.forEach(l => {
+                const k = groupKey(l.batch_name, l.plot_name);
+                if (!groups[k]) groups[k] = { qty: 0, firstDate: l.created_at };
+                groups[k].qty += (l.quantity_change || 0);
+                if (l.created_at < groups[k].firstDate) groups[k].firstDate = l.created_at;
+            });
+
+            // Earliest ≥150cm audit per group → its "verified matured" date.
+            const TALL_CM = 150;
+            const auditFirstByGroup = {};
+            audits.forEach(a => {
+                const max = Math.max(a.sample_1 || 0, a.sample_2 || 0, a.sample_3 || 0, a.avg_height || 0);
+                if (max < TALL_CM) return;
+                const k = groupKey(a.batch, a.plot);
+                if (!auditFirstByGroup[k] || a.date < auditFirstByGroup[k]) auditFirstByGroup[k] = a.date;
+            });
+
+            // Cumulative matured TO-DATE (after 10% culling).
+            // A group counts as matured the moment its earliest maturity date (9-month or audit ≥ 1.5m) has passed.
+            const today = new Date();
+
+            let rawByAge = 0, rawByAgeOrAudit = 0;
+            Object.entries(groups).forEach(([k, g]) => {
+                const transplantDate = new Date(g.firstDate);
+                const ageMatureDate  = new Date(transplantDate); ageMatureDate.setMonth(ageMatureDate.getMonth() + 9);
+                const auditMatureDate = auditFirstByGroup[k] ? new Date(auditFirstByGroup[k]) : null;
+
+                if (ageMatureDate <= today) rawByAge += g.qty;
+
+                let earliest = ageMatureDate;
+                if (auditMatureDate && auditMatureDate < earliest) earliest = auditMatureDate;
+                if (earliest <= today) rawByAgeOrAudit += g.qty;
+            });
+
+            // After 10% culling
+            let qtyByAge        = Math.round(rawByAge        * 0.9);
+            let qtyByAgeOrAudit = Math.round(rawByAgeOrAudit * 0.9);
+
+            // Subtract all collections to-date so "matured" reflects what's still in nursery.
+            let collectedQty = 0;
+            if (collRes?.data && collRes.data.length) {
+                collectedQty = collRes.data.reduce((s, c) => s + (c.collected_qty || 0), 0);
+            } else if (ordCollFallbackRes?.data) {
+                collectedQty = ordCollFallbackRes.data.reduce((s, o) => s + (o.collected_qty || 0), 0);
+            }
+            qtyByAge        = Math.max(0, qtyByAge        - collectedQty);
+            qtyByAgeOrAudit = Math.max(0, qtyByAgeOrAudit - collectedQty);
+
+            // ── Paid orders pending collection (cumulative through end-of-current-month) ──
+            // status NOT IN { Pending Payment, Cancelled, Order Completed, Completed }
+            const { data: pendingOrders } = await _supabase
+                .from('salesweb_customer_orders')
+                .select('id,status,created_at')
+                .not('status', 'in', '("Pending Payment","Cancelled","Order Completed","Completed")')
+                .lt('created_at', startOfNextMonthISO);
+
+            const pendingIds = (pendingOrders || []).map(o => o.id);
+            let pendingOrdersQty = 0;
+            if (pendingIds.length) {
+                const { data: items } = await _supabase
+                    .from('salesweb_order_items')
+                    .select('order_id,quantity')
+                    .in('order_id', pendingIds);
+                pendingOrdersQty = (items || []).reduce((s, it) => s + (it.quantity || 0), 0);
             }
 
-            currentOrdersQty = ordersData.filter(o => o.date.getMonth() === cm && o.date.getFullYear() === cy).reduce((s, o) => s + o.qty, 0);
-            document.getElementById('stat-orders-current').innerText = currentOrdersQty.toLocaleString();
-
-            const endOfCurrentMonth = new Date(cy, cm + 1, 0);
-            const futureQty = ordersData.filter(o => o.date > endOfCurrentMonth).reduce((s, o) => s + o.qty, 0);
-            document.getElementById('stat-orders-future').innerText = futureQty.toLocaleString();
-
-            buildTimeline(ordersData, cm, cy);
+            nsdAggregates = { qtyByAge, qtyByAgeOrAudit, pendingOrdersQty };
+            currentOrdersQty = pendingOrdersQty;
+            renderNsdTab();
         } catch(e) {
             console.warn('Dashboard load error:', e);
-            ['stat-matured','stat-orders-current','stat-orders-future'].forEach(id => {
-                document.getElementById(id).innerText = '—';
+            ['stat-matured','stat-orders-current'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerText = '—';
             });
+            baseStock = 0;
+            currentOrdersQty = 0;
+            updateGearing();
         }
+    }
+
+    function switchComboTab(tab) {
+        comboTab = tab;
+        document.getElementById('combo-tab-basic').classList.toggle('active',    tab === 'basic');
+        document.getElementById('combo-tab-verified').classList.toggle('active', tab === 'verified');
+        renderNsdTab();
+    }
+
+    function renderNsdTab() {
+        const verified = comboTab === 'verified';
+
+        // ── Labels always update on tab change, even before data loads ──────────
+        document.getElementById('matured-tile-label').innerText = verified
+            ? 'Verified Matured (To-Date)'
+            : 'Total Matured (To-Date)';
+        document.getElementById('matured-tile-sub').innerText = verified
+            ? '9-month + audit ≥ 1.5m, after 10% culling, less collections to-date'
+            : '9-month rule, after 10% culling, less collections to-date';
+        document.getElementById('nsd-remark-audit').style.display = verified ? '' : 'none';
+
+        const availLabel = document.getElementById('avail-tab-label');
+        if (availLabel) {
+            availLabel.innerHTML = verified
+                ? 'From <span class="text-emerald-700 font-black">Verified Stock</span>'
+                : 'From <span class="text-emerald-700 font-black">Stock To-Date</span>';
+        }
+
+        // ── Numbers (only once data is loaded) ──────────────────────────────────
+        if (!nsdAggregates) return;
+        const matured = verified ? nsdAggregates.qtyByAgeOrAudit : nsdAggregates.qtyByAge;
+        document.getElementById('stat-matured').innerText        = matured.toLocaleString();
+        document.getElementById('stat-orders-current').innerText = nsdAggregates.pendingOrdersQty.toLocaleString();
+
+        baseStock = matured;
         updateGearing();
     }
 
-    function buildTimeline(ordersData, cm, cy) {
-        const container = document.getElementById('order-timeline');
-        container.innerHTML = '';
-        for (let offset = -1; offset <= 5; offset++) {
-            const d = new Date(cy, cm + offset, 1);
-            const qty = ordersData.filter(o => o.date.getMonth() === d.getMonth() && o.date.getFullYear() === d.getFullYear()).reduce((s, o) => s + o.qty, 0);
-            const type = offset < 0 ? 'past' : offset === 0 ? 'current' : 'future';
-            const qtyColor = type === 'current' ? '#065f46' : type === 'future' ? '#2563eb' : '#94a3b8';
-            const pill = document.createElement('div');
-            pill.className = `month-pill ${type} shrink-0`;
-            pill.innerHTML = `
-                <span style="font-size:9px;letter-spacing:.08em;font-weight:700">${d.toLocaleString('en-MY',{month:'short'})} ${d.getFullYear()}</span>
-                <span style="font-size:20px;font-weight:900;margin:5px 0;color:${qtyColor}">${qty > 0 ? qty.toLocaleString() : '—'}</span>
-                <span style="font-size:8px;letter-spacing:.06em;font-weight:700">${type === 'current' ? '● NOW' : type === 'future' ? '↑ UPCOMING' : 'PAST'}</span>
-            `;
-            container.appendChild(pill);
-        }
-    }
-
+    /**
+     * Available for Sales (matured is already post-10%-culling from NSD):
+     *   gearedMatured = matured × gearing       (gearing inflates the sellable matured pool)
+     *   available     = max(0, gearedMatured − orders)
+     *   oversold      = orders > matured        (raw matured — flags real shortage)
+     */
     function updateGearing() {
+        const matured = baseStock;
+        const orders  = currentOrdersQty;
         const g = parseInt(document.getElementById('gearing-slider').value) / 10;
-        const sellable = Math.round(baseStock * g);
-        const diff = currentOrdersQty > 0 ? (sellable >= currentOrdersQty ? '+' + (sellable - currentOrdersQty).toLocaleString() : '-' + (currentOrdersQty - sellable).toLocaleString()) : '—';
-        document.getElementById('gearing-display').innerText   = g.toFixed(1) + '×';
-        document.getElementById('gearing-value').innerText     = g.toFixed(1) + '×';
-        document.getElementById('gearing-sellable').innerText  = sellable.toLocaleString();
-        document.getElementById('gearing-vs-orders').innerText = diff;
-        document.getElementById('stat-available').innerText    = sellable.toLocaleString();
-        document.getElementById('stat-base-stock').innerText   = baseStock.toLocaleString();
+
+        const gearedMatured = Math.round(matured * g);
+        const available     = Math.max(0, gearedMatured - orders);
+
+        const isOversold     = orders > matured;
+        const oversoldQty    = Math.max(0, orders - matured);
+        const oversoldFactor = matured > 0 ? (orders / matured) : 0;
+        const neededGearing  = matured > 0 ? Math.min(3.0, orders / matured) : 1.0;
+
+        // ── Available card ──
+        document.getElementById('stat-available').innerText  = available.toLocaleString();
+        // The breakdown shows the conceptual matured & orders; Available reflects the post-gearing/post-culling result.
+        document.getElementById('calc-matured').innerText    = matured.toLocaleString();
+        document.getElementById('calc-orders').innerText     = orders.toLocaleString();
+        document.getElementById('calc-available').innerText  = available.toLocaleString();
+        document.getElementById('gearing-display').innerText = g.toFixed(1) + '×';
+
+        const statusBadge = document.getElementById('avail-status-badge');
+        const oversoldBox = document.getElementById('oversold-warning');
+        if (isOversold) {
+            statusBadge.innerText = 'Oversold';
+            statusBadge.className = 'text-[9px] font-black bg-red-100 text-red-700 px-2.5 py-1 rounded-full uppercase tracking-widest';
+            oversoldBox.classList.remove('hidden');
+            document.getElementById('oversold-qty').innerText             = oversoldQty.toLocaleString();
+            document.getElementById('oversold-factor').innerText          = oversoldFactor.toFixed(2) + '× of matured';
+            document.getElementById('oversold-current-gearing').innerText = g.toFixed(1) + '×';
+            document.getElementById('oversold-needed-gearing').innerText  = neededGearing.toFixed(2) + '×';
+        } else {
+            statusBadge.innerText = 'OK';
+            statusBadge.className = 'text-[9px] font-black bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full uppercase tracking-widest';
+            oversoldBox.classList.add('hidden');
+        }
+
         const badge = document.getElementById('gearing-badge');
-        if (g <= 1.2)      { badge.innerText = 'Conservative'; badge.className = 'mt-1 text-[9px] font-black text-emerald-600 bg-emerald-50 rounded-full px-2 py-0.5 uppercase tracking-wider'; }
-        else if (g <= 1.6) { badge.innerText = 'Moderate';     badge.className = 'mt-1 text-[9px] font-black text-amber-600 bg-amber-50 rounded-full px-2 py-0.5 uppercase tracking-wider'; }
-        else               { badge.innerText = 'Aggressive';   badge.className = 'mt-1 text-[9px] font-black text-red-600 bg-red-50 rounded-full px-2 py-0.5 uppercase tracking-wider'; }
+        if (g <= 1.5)      { badge.innerText = 'Conservative'; badge.className = 'text-[9px] font-black text-emerald-600 bg-white border border-emerald-200 rounded-full px-2 py-0.5 uppercase tracking-wider'; }
+        else if (g <= 2.2) { badge.innerText = 'Moderate';     badge.className = 'text-[9px] font-black text-amber-600 bg-white border border-amber-200 rounded-full px-2 py-0.5 uppercase tracking-wider'; }
+        else               { badge.innerText = 'Aggressive';   badge.className = 'text-[9px] font-black text-red-600 bg-white border border-red-200 rounded-full px-2 py-0.5 uppercase tracking-wider'; }
     }
 
     document.getElementById('gearing-slider').addEventListener('input', updateGearing);

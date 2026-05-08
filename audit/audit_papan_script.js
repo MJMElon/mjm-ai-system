@@ -134,7 +134,7 @@ async function loadAll(){
       id:            r.batch_id||String(r.id),
       nursery:       r.nursery||'',
       plot:          r.plot||'',
-      batch:         r.batch_no||'',
+      batch:         r.name||'',
       breed:         r.breed||'',
       qtyTransplant: r.qty_transplant?.toString()||'',
       datePlanted:   r.date_planted||'',

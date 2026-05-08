@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seedling Stock Sales Management - MJM Nursery AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Outfit', system-ui, sans-serif; }
+        body { background-color: #f1f5f9; margin: 0; min-height: 100vh; }
+
+        .dash-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+        .metric-card { border-radius: 16px; border: 1px solid #e2e8f0; background: white; transition: all .2s; }
+
+        /* Compact segmented switch */
+        .combo-switch{display:grid;grid-template-columns:1fr 1fr;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:12px;padding:4px;gap:4px;}
+        .combo-switch-btn{padding:10px 12px;border-radius:9px;border:none;background:transparent;color:#64748b;cursor:pointer;text-align:center;transition:all .25s ease;display:flex;flex-direction:column;align-items:center;gap:2px;}
+        .combo-switch-btn .csw-title{font-weight:900;font-size:11px;text-transform:uppercase;letter-spacing:.1em;}
+        .combo-switch-btn .csw-sub{font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;}
+        .combo-switch-btn:hover:not(.active){background:rgba(255,255,255,.6);color:#1e293b;}
+        .combo-switch-btn.active{background:#ffffff;color:#065f46;box-shadow:0 4px 10px -3px rgba(16,185,129,.35),0 1px 0 rgba(255,255,255,.6) inset;}
+        .combo-switch-btn.active .csw-sub{color:#10b981;}
+        .combo-switch-btn.active.verified{color:#92400e;box-shadow:0 4px 10px -3px rgba(245,158,11,.35),0 1px 0 rgba(255,255,255,.6) inset;}
+        .combo-switch-btn.active.verified .csw-sub{color:#d97706;}
+
+        /* Gearing slider */
+        .gear-slider{-webkit-appearance:none;width:100%;height:5px;border-radius:3px;background:linear-gradient(90deg,#10b981 0%,#f59e0b 50%,#ef4444 100%);outline:none;cursor:pointer;}
+        .gear-slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:white;border:2px solid #1e293b;box-shadow:0 2px 6px rgba(0,0,0,.2);cursor:grab;}
+
+        /* To-do tabs (compact) */
+        .todo-tab{padding:8px 14px;font-weight:900;font-size:10px;text-transform:uppercase;letter-spacing:.08em;border-radius:10px;transition:all .15s;color:#64748b;background:transparent;border:1.5px solid transparent;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;}
+        .todo-tab:hover:not(.active){background:#f8fafc;color:#1e293b;}
+        .todo-tab.active.unpaid{background:#fef2f2;color:#b91c1c;border-color:#fca5a5;}
+        .todo-tab.active.credit{background:#eff6ff;color:#1d4ed8;border-color:#93c5fd;}
+        .todo-tab .tab-count{background:white;border:1px solid currentColor;border-radius:999px;padding:1px 6px;font-size:10px;font-weight:900;}
+
+        /* Notebook-style to-do list */
+        .notebook{background:repeating-linear-gradient(180deg,#fffbeb 0 28px,#fef3c7 28px 29px);border:1px solid #fde68a;border-radius:10px;box-shadow:inset 3px 0 0 #f59e0b,0 1px 4px rgba(0,0,0,.04);}
+        .notebook-row{display:flex;flex-direction:column;gap:2px;padding:6px 10px 6px 14px;border-bottom:1px dashed #fde68a;font-size:11px;}
+        .notebook-row:last-child{border-bottom:none;}
+        .notebook-row:hover{background:rgba(255,255,255,.5);}
+        .notebook-row .nb-line1{display:flex;justify-content:space-between;align-items:center;gap:6px;}
+        .notebook-row .nb-line2{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:10px;color:#a16207;}
+        .notebook-row .note-id{font-family:'Courier New',monospace;font-weight:900;color:#92400e;}
+        .notebook-row .note-name{font-weight:900;color:#451a03;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .notebook-row .note-amt{font-weight:900;color:#b91c1c;font-variant-numeric:tabular-nums;white-space:nowrap;}
+        .notebook-row.credit .note-amt{color:#1d4ed8;}
+
+        /* Maturity month tabs */
+        .month-tab{padding:8px 14px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1.5px solid transparent;background:transparent;color:#64748b;cursor:pointer;white-space:nowrap;transition:all .15s;}
+        .month-tab:hover:not(.active){background:#f1f5f9;}
+        .month-tab.active{background:#ecfdf5;color:#065f46;border-color:#10b981;}
+        .month-tab.is-current{font-weight:900;}
+
+        /* Maturity table */
+        .mat-table{width:100%;border-collapse:separate;border-spacing:0;font-size:11px;}
+        .mat-table thead th{background:#f8fafc;color:#475569;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;padding:9px 8px;text-align:left;border-bottom:2px solid #e2e8f0;position:sticky;top:0;}
+        .mat-table tbody td{padding:8px;border-bottom:1px solid #f1f5f9;color:#1e293b;font-weight:600;}
+        .mat-table tbody tr:hover{background:#fafbff;}
+        .mat-table .num{text-align:right;font-variant-numeric:tabular-nums;font-weight:900;}
+        .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1px solid;}
+        .pill-open{background:#dcfce7;color:#15803d;border-color:#86efac;}
+        .pill-sisa{background:#fef3c7;color:#a16207;border-color:#fcd34d;}
+        .pill-finished{background:#fee2e2;color:#b91c1c;border-color:#fca5a5;}
+        .premium-toggle{appearance:none;width:34px;height:18px;border-radius:999px;background:#cbd5e1;position:relative;cursor:pointer;transition:all .2s;outline:none;border:none;}
+        .premium-toggle::before{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:white;transition:all .2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+        .premium-toggle:checked{background:#a855f7;}
+        .premium-toggle:checked::before{left:18px;}
+
+        .scroll-x-fade{overflow-x:auto;scrollbar-width:thin;}
+        .scroll-x-fade::-webkit-scrollbar{height:6px;}
+        .scroll-x-fade::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
+
+        /* Customer order grid */
+        .cust-table{width:100%;border-collapse:separate;border-spacing:0;font-size:11px;}
+        .cust-table thead th{background:#f8fafc;color:#475569;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;padding:8px 6px;text-align:center;border-bottom:2px solid #e2e8f0;white-space:nowrap;}
+        .cust-table thead th.h-cust{text-align:left;background:#eff6ff;color:#1e3a8a;}
+        .cust-table thead th.h-mo{background:#f1f5f9;}
+        .cust-table thead th.h-mo.is-now{background:#ecfdf5;color:#065f46;}
+        .cust-table thead th.h-tot{background:#fef9c3;color:#854d0e;}
+        .cust-table tbody td{padding:7px 6px;border-bottom:1px solid #f1f5f9;color:#1e293b;font-weight:600;text-align:center;font-variant-numeric:tabular-nums;}
+        .cust-table tbody td.t-cust{text-align:left;font-weight:900;color:#1e3a8a;}
+        .cust-table tbody td.t-cust .t-sub{font-weight:600;color:#64748b;font-size:10px;font-family:'Courier New',monospace;}
+        .cust-table tbody td.t-mo.has-qty{background:#dbeafe;color:#1d4ed8;font-weight:900;}
+        .cust-table tbody td.t-mo.is-now{background:#ecfdf5;color:#065f46;}
+        .cust-table tbody td.t-tot{background:#fefce8;color:#854d0e;font-weight:900;}
+        .cust-table tbody tr:hover{background:#fafbff;}
+        .cust-table tbody tr:hover td.t-mo.has-qty{background:#bfdbfe;}
+        .pill-status{display:inline-block;padding:2px 7px;border-radius:999px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1px solid;white-space:nowrap;}
+        .pill-paid     { background:#dcfce7;color:#15803d;border-color:#86efac;}
+        .pill-partial  { background:#fef3c7;color:#a16207;border-color:#fcd34d;}
+        .pill-pending  { background:#fee2e2;color:#b91c1c;border-color:#fca5a5;}
+        .pill-completed{ background:#e0e7ff;color:#3730a3;border-color:#a5b4fc;}
+        .pill-cancelled{ background:#f1f5f9;color:#64748b;border-color:#cbd5e1;}
+    </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="bg-white border-b border-slate-200 px-5 py-3 flex justify-between items-center sticky top-0 z-30 shadow-sm">
+    <div class="flex items-center gap-3">
+        <button onclick="window.location.href='operation_dashboard.html'" class="text-[10px] font-bold text-slate-500 hover:text-blue-700 uppercase tracking-widest bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-sm">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Dashboard
+        </button>
+        <span class="font-black text-slate-800 uppercase tracking-widest text-xs">Seedling Stock Sales Management</span>
+    </div>
+    <div class="flex items-center gap-2">
+        <a href="operation_inventory_map.html" class="text-[10px] font-bold text-slate-500 hover:text-blue-700 uppercase tracking-widest bg-slate-50 hover:bg-blue-50 px-3 py-1.5 rounded-full border border-slate-200 transition-colors no-underline" style="text-decoration:none;">Inventory Map</a>
+        <a href="operation_inventory_all.html" class="text-[10px] font-bold text-slate-500 hover:text-indigo-700 uppercase tracking-widest bg-slate-50 hover:bg-indigo-50 px-3 py-1.5 rounded-full border border-slate-200 transition-colors no-underline" style="text-decoration:none;">Map Layers</a>
+    </div>
+</div>
+
+<div class="max-w-[1500px] mx-auto px-5 py-5 space-y-5">
+
+    <!-- ── Row 1: NSD + Available for Sales + To-Do (3 columns, compact) ───── -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        <!-- Nursery Status Dashboard -->
+        <div class="metric-card border-l-4 border-emerald-500 relative overflow-hidden" id="nsd-card">
+            <div class="absolute top-0 right-0 w-20 h-20 bg-emerald-50 rounded-full blur-2xl"></div>
+            <div class="px-4 pt-4 pb-3 border-b border-slate-100 relative z-10">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                        </div>
+                        <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Nursery Status Dashboard</span>
+                    </div>
+                    <div class="flex items-baseline gap-1">
+                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">As of</span>
+                        <span class="text-base font-black text-emerald-600 leading-none" id="current-month-label">—</span>
+                    </div>
+                </div>
+                <div class="combo-switch">
+                    <button class="combo-switch-btn active" id="combo-tab-basic" onclick="switchComboTab('basic')">
+                        <span class="csw-title">Stock To-Date</span>
+                        <span class="csw-sub">9-month only</span>
+                    </button>
+                    <button class="combo-switch-btn verified" id="combo-tab-verified" onclick="switchComboTab('verified')">
+                        <span class="csw-title">Verified Stock</span>
+                        <span class="csw-sub">+ Audit ≥ 1.5m</span>
+                    </button>
+                </div>
+            </div>
+            <div class="px-4 pt-3 pb-4 relative z-10 flex flex-col gap-3">
+                <div class="rounded-xl bg-emerald-50/60 border border-emerald-100 p-3">
+                    <div class="text-[9px] font-black text-emerald-700 uppercase tracking-widest mb-0.5" id="matured-tile-label">Total Matured (To-Date)</div>
+                    <div class="text-3xl font-black text-emerald-700 leading-none mb-1" id="stat-matured">—</div>
+                    <div class="text-[9px] font-bold text-slate-500 leading-tight" id="matured-tile-sub">9 months in main nursery</div>
+                </div>
+                <div class="rounded-xl bg-blue-50/60 border border-blue-100 p-3">
+                    <div class="text-[9px] font-black text-blue-700 uppercase tracking-widest mb-0.5">Pending Collection</div>
+                    <div class="text-3xl font-black text-blue-700 leading-none mb-1" id="stat-orders-current">—</div>
+                    <div class="text-[9px] font-bold text-slate-500 leading-tight">Cumulative paid not yet collected</div>
+                </div>
+                <div class="space-y-1 text-[9px] text-slate-500 leading-snug bg-slate-50 border border-slate-100 rounded-lg p-2.5" id="nsd-remark-block">
+                    <div class="flex gap-1.5"><span class="font-black text-emerald-600 shrink-0">①</span><span><span class="font-black text-emerald-700 uppercase tracking-wider">9-Month</span> — Transplant + 9 months → matured.</span></div>
+                    <div class="flex gap-1.5" id="nsd-remark-audit"><span class="font-black text-amber-600 shrink-0">②</span><span><span class="font-black text-amber-700 uppercase tracking-wider">Audit</span> — Sample ≥ 150 cm → matured.</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Available for Sales -->
+        <div class="metric-card border-l-4 border-emerald-500 relative overflow-hidden flex flex-col">
+            <div class="absolute top-0 right-0 w-20 h-20 bg-emerald-50 rounded-full blur-2xl"></div>
+
+            <div class="px-4 pt-4 pb-3 border-b border-slate-100 relative z-10">
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        </div>
+                        <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Available for Sales</span>
+                    </div>
+                    <span id="avail-status-badge" class="text-[9px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full uppercase tracking-widest">OK</span>
+                </div>
+                <div class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1" id="avail-tab-label">From <span class="text-emerald-700 font-black">Stock To-Date</span></div>
+            </div>
+
+            <div class="px-4 pt-3 pb-3 relative z-10">
+                <div class="flex items-baseline gap-3 mb-3">
+                    <div class="text-4xl font-black text-emerald-600 leading-none" id="stat-available">—</div>
+                    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-tight">Seedlings<br>safe to sell</div>
+                </div>
+
+                <!-- Compact formula -->
+                <div class="bg-slate-50 border border-slate-100 rounded-lg p-2.5 text-[10px] space-y-1 mb-3">
+                    <div class="flex justify-between"><span class="text-slate-500 font-bold">Matured (after culling)</span><span class="font-black text-slate-700" id="calc-matured">—</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500 font-bold">− Pending collection</span><span class="font-black text-slate-700" id="calc-orders">—</span></div>
+                    <div class="flex justify-between border-t border-slate-200 pt-1"><span class="text-emerald-700 font-black uppercase tracking-wider">= Available</span><span class="font-black text-emerald-700" id="calc-available">—</span></div>
+                </div>
+
+                <!-- Gearing tool -->
+                <div class="bg-emerald-50/60 border border-emerald-100 rounded-lg p-2.5 mb-2">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-[9px] font-black text-slate-700 uppercase tracking-widest">⚙ Gearing Power</span>
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-sm font-black text-emerald-700" id="gearing-display">1.0×</span>
+                            <span id="gearing-badge" class="text-[8px] font-black text-emerald-600 bg-white border border-emerald-200 rounded-full px-1.5 py-0.5 uppercase tracking-wider">Conservative</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[8px] font-black text-emerald-600 uppercase tracking-widest">1.0×</span>
+                        <input type="range" id="gearing-slider" class="gear-slider flex-1" min="10" max="30" step="1" value="10">
+                        <span class="text-[8px] font-black text-red-500 uppercase tracking-widest">3.0×</span>
+                    </div>
+                </div>
+
+                <div class="hidden bg-red-50 border-l-2 border-red-500 rounded-lg p-2.5 text-[10px] text-red-700 space-y-0.5" id="oversold-warning">
+                    <div class="font-black uppercase tracking-widest text-red-600">⚠ Oversold</div>
+                    <div>Orders exceed by <span id="oversold-qty" class="font-black">—</span> (<span id="oversold-factor" class="font-black">—×</span>).</div>
+                    <div>Need <span id="oversold-needed-gearing" class="font-black">—×</span> gearing to cover.</div>
+                </div>
+
+                <div class="text-[9px] text-slate-500 leading-snug bg-emerald-50/60 border border-emerald-100 rounded-lg p-2 mt-2">
+                    <span class="font-black text-emerald-700 uppercase tracking-wider">Note</span> — "Matured" is this month's freshly matured seedlings, already with 10% culling deducted. Available = matured × gearing − pending collection.
+                </div>
+            </div>
+        </div>
+
+        <!-- To-Do List (notebook) — column 3 -->
+        <div class="metric-card !border-amber-300 border-l-4 relative overflow-hidden flex flex-col">
+            <div class="px-4 pt-4 pb-3 border-b border-slate-100">
+                <div class="flex items-center gap-2 mb-3">
+                    <div class="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center text-amber-600">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                    </div>
+                    <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">To-Do List</span>
+                </div>
+                <div class="grid grid-cols-2 gap-1.5">
+                    <button class="todo-tab active unpaid" id="todo-tab-unpaid" onclick="switchTodoTab('unpaid')">
+                        <span>💰</span><span>Unpaid</span>
+                        <span class="tab-count" id="todo-count-unpaid">0</span>
+                    </button>
+                    <button class="todo-tab credit" id="todo-tab-credit" onclick="switchTodoTab('credit')">
+                        <span>🧾</span><span>Credit</span>
+                        <span class="tab-count" id="todo-count-credit">0</span>
+                    </button>
+                </div>
+            </div>
+            <div class="px-3 pt-3 pb-2 flex-1 min-h-0">
+                <div class="notebook max-h-[330px] overflow-y-auto" id="todo-body">
+                    <div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading…</div>
+                </div>
+                <div class="text-[9px] font-bold text-slate-400 mt-2 px-1 text-right" id="todo-section-meta"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Row 2: Monthly Maturity Allocation ────────────────────────────────── -->
+    <div>
+        <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">🌱 Monthly Maturity Allocation</h2>
+            <div class="flex items-center gap-2 relative">
+                <div id="month-tabs" class="flex gap-1 bg-white rounded-xl border border-slate-200 p-1 shadow-sm scroll-x-fade flex-wrap"></div>
+                <div class="relative">
+                    <button id="history-btn" onclick="toggleHistoryMenu()" class="text-[10px] font-black text-slate-600 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 transition-colors flex items-center gap-1.5 shadow-sm uppercase tracking-widest" title="Show past maturity months">
+                        <span>🕘</span><span>History</span>
+                        <span id="history-count" class="text-[9px] bg-slate-200 text-slate-700 rounded-full px-1.5 py-0.5">0</span>
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+                    <div id="history-menu" class="hidden absolute right-0 mt-1 w-56 max-h-[300px] overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-xl z-40 p-1.5"></div>
+                </div>
+            </div>
+        </div>
+        <div id="active-month-banner" class="hidden text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 mb-2"></div>
+
+        <div class="dash-card scroll-x-fade">
+            <table class="mat-table min-w-[1200px]">
+                <thead>
+                    <tr>
+                        <th>Maturity Date</th>
+                        <th>Location</th>
+                        <th>Plot</th>
+                        <th>Batch</th>
+                        <th>Breed</th>
+                        <th class="text-right">Qty Transplanted</th>
+                        <th class="text-right">After 10% Culling</th>
+                        <th>Reservation</th>
+                        <th class="text-right">Reserved Qty</th>
+                        <th class="text-right">Balance</th>
+                        <th>Plot Status</th>
+                        <th>Move to Premium</th>
+                    </tr>
+                </thead>
+                <tbody id="maturity-rows">
+                    <tr><td colspan="12" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading maturity data…</td></tr>
+                </tbody>
+                <tfoot id="maturity-foot"></tfoot>
+            </table>
+        </div>
+
+        <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
+            <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Maturity date = transplant date + 9 months. After 10% culling = qty × 0.9. Reservations & plot status are placeholders until the <span class="font-mono">shared_plot_allocations</span> SQL is run.
+        </div>
+    </div>
+
+    <!-- ── Row 3: Customer Order Management (collection grid) ──────────────── -->
+    <div>
+        <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">📋 Customer Order Management</h2>
+            <div class="flex items-center gap-2">
+                <input id="cust-search" type="text" placeholder="Search customer / order #" oninput="renderCustomerGrid()"
+                    class="text-[11px] font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-500 w-56">
+                <select id="cust-filter" onchange="renderCustomerGrid()"
+                    class="text-[10px] font-black uppercase tracking-widest text-slate-700 bg-white border border-slate-200 rounded-lg px-2 py-1.5">
+                    <option value="active">Active orders only</option>
+                    <option value="outstanding">Outstanding balance</option>
+                    <option value="completed">Completed</option>
+                    <option value="all">All (incl. cancelled)</option>
+                </select>
+                <button onclick="shiftCustomerMonths(-1)" class="text-[10px] font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg px-2.5 py-1.5 transition-colors" title="Earlier months">◀</button>
+                <button onclick="shiftCustomerMonths(1)" class="text-[10px] font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg px-2.5 py-1.5 transition-colors" title="Later months">▶</button>
+            </div>
+        </div>
+
+        <div class="dash-card scroll-x-fade">
+            <table class="cust-table min-w-[1400px]">
+                <thead id="cust-thead"></thead>
+                <tbody id="cust-tbody">
+                    <tr><td colspan="20" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading customer orders…</td></tr>
+                </tbody>
+                <tfoot id="cust-tfoot"></tfoot>
+            </table>
+        </div>
+
+        <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
+            <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Per-month columns show qty collected from <span class="font-mono">salesweb_order_collections</span> (multi-pickup log). Falls back to single <span class="font-mono">collected_qty/collected_at</span> on the order if the table isn't created yet.
+        </div>
+    </div>
+</div>
+
+<script>
+    const SUPABASE_URL = 'https://kibqjztozokohqmhqqqf.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpYnFqenRvem9rb2hxbWhxcXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQzNjIsImV4cCI6MjA4OTgxMDM2Mn0.J7qJUZhWXYf5b9oey4wXJkjdi66jomEMw_NeV9NWF7M';
+    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // ── Nursery Status state ──────────────────────────────────────────────────
+    let comboTab = 'basic';
+    let nsdAggregates = null;
+    let baseStock = 0;
+    let currentOrdersQty = 0;
+
+    async function loadNsd() {
+        const now = new Date();
+        const cm = now.getMonth();
+        const cy = now.getFullYear();
+        const startOfNextMonthISO = new Date(cy, cm + 1, 1).toISOString();
+        const endOfMonth          = new Date(cy, cm + 1, 0, 23, 59, 59);
+        const endOfMonthISO       = endOfMonth.toISOString();
+        const endOfMonthDateOnly  = endOfMonthISO.slice(0, 10);
+
+        const monthLabel = now.toLocaleString('en-MY', { month: 'short', year: 'numeric' });
+        document.getElementById('current-month-label').innerText = monthLabel;
+
+        try {
+            const [transRes, auditRes, collRes, ordCollFallbackRes] = await Promise.all([
+                _supabase.from('shared_inventory_logs')
+                    .select('batch_name,plot_name,quantity_change,created_at')
+                    .in('transaction_type', ['Transplanted','Transplanted_Premium','Transplanted_DoubleTone'])
+                    .lte('created_at', endOfMonthISO),
+                _supabase.from('audit_height_records')
+                    .select('plot,batch,sample_1,sample_2,sample_3,avg_height,date')
+                    .lte('date', endOfMonthDateOnly),
+                // Multi-pickup table — falls back gracefully if it doesn't exist yet.
+                _supabase.from('salesweb_order_collections')
+                    .select('collected_qty,collected_at')
+                    .lte('collected_at', endOfMonthISO)
+                    .then(r => r, e => ({ data: null })),
+                // Single-collection fallback on the order itself.
+                _supabase.from('salesweb_customer_orders')
+                    .select('collected_qty,collected_at')
+                    .not('collected_qty', 'is', null)
+                    .lte('collected_at', endOfMonthISO)
+                    .then(r => r, e => ({ data: null }))
+            ]);
+            const transLogs = transRes.data || [];
+            const audits    = auditRes.data || [];
+
+            const groupKey = (b, p) => `${b||''}||${p||''}`;
+            const groups = {};
+            transLogs.forEach(l => {
+                const k = groupKey(l.batch_name, l.plot_name);
+                if (!groups[k]) groups[k] = { qty: 0, firstDate: l.created_at };
+                groups[k].qty += (l.quantity_change || 0);
+                if (l.created_at < groups[k].firstDate) groups[k].firstDate = l.created_at;
+            });
+
+            // Earliest ≥150cm audit per group → its "verified matured" date.
+            const TALL_CM = 150;
+            const auditFirstByGroup = {};
+            audits.forEach(a => {
+                const max = Math.max(a.sample_1 || 0, a.sample_2 || 0, a.sample_3 || 0, a.avg_height || 0);
+                if (max < TALL_CM) return;
+                const k = groupKey(a.batch, a.plot);
+                if (!auditFirstByGroup[k] || a.date < auditFirstByGroup[k]) auditFirstByGroup[k] = a.date;
+            });
+
+            // Cumulative matured TO-DATE (after 10% culling).
+            // - Stock To-Date  → groups whose 9-month maturity has passed
+            // - Verified Stock → groups whose earliest of (9-month, audit ≥150cm) has passed
+            const today = new Date();
+
+            let rawByAge = 0, rawByAgeOrAudit = 0;
+            Object.entries(groups).forEach(([k, g]) => {
+                const transplantDate = new Date(g.firstDate);
+                const ageMatureDate  = new Date(transplantDate); ageMatureDate.setMonth(ageMatureDate.getMonth() + 9);
+                const auditMatureDate = auditFirstByGroup[k] ? new Date(auditFirstByGroup[k]) : null;
+
+                if (ageMatureDate <= today) rawByAge += g.qty;
+
+                let earliest = ageMatureDate;
+                if (auditMatureDate && auditMatureDate < earliest) earliest = auditMatureDate;
+                if (earliest <= today) rawByAgeOrAudit += g.qty;
+            });
+
+            // After 10% culling
+            let qtyByAge        = Math.round(rawByAge        * 0.9);
+            let qtyByAgeOrAudit = Math.round(rawByAgeOrAudit * 0.9);
+
+            // Subtract all collections to-date so "matured" reflects seedlings still on hand.
+            let collectedQty = 0;
+            if (collRes?.data && collRes.data.length) {
+                collectedQty = collRes.data.reduce((s, c) => s + (c.collected_qty || 0), 0);
+            } else if (ordCollFallbackRes?.data) {
+                collectedQty = ordCollFallbackRes.data.reduce((s, o) => s + (o.collected_qty || 0), 0);
+            }
+            qtyByAge        = Math.max(0, qtyByAge        - collectedQty);
+            qtyByAgeOrAudit = Math.max(0, qtyByAgeOrAudit - collectedQty);
+
+            const { data: pendingOrders } = await _supabase
+                .from('salesweb_customer_orders')
+                .select('id,status,created_at')
+                .not('status', 'in', '("Pending Payment","Cancelled","Order Completed","Completed")')
+                .lt('created_at', startOfNextMonthISO);
+
+            const pendingIds = (pendingOrders || []).map(o => o.id);
+            let pendingOrdersQty = 0;
+            if (pendingIds.length) {
+                const { data: items } = await _supabase
+                    .from('salesweb_order_items')
+                    .select('order_id,quantity')
+                    .in('order_id', pendingIds);
+                pendingOrdersQty = (items || []).reduce((s, it) => s + (it.quantity || 0), 0);
+            }
+
+            nsdAggregates = { qtyByAge, qtyByAgeOrAudit, pendingOrdersQty, collectedQty };
+            renderNsdTab();
+        } catch(e) {
+            console.warn('NSD load error:', e);
+            ['stat-matured','stat-orders-current'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerText = '—';
+            });
+        }
+    }
+
+    function switchComboTab(tab) {
+        comboTab = tab;
+        document.getElementById('combo-tab-basic').classList.toggle('active',    tab === 'basic');
+        document.getElementById('combo-tab-verified').classList.toggle('active', tab === 'verified');
+        renderNsdTab();
+    }
+
+    function renderNsdTab() {
+        const verified = comboTab === 'verified';
+
+        document.getElementById('matured-tile-label').innerText = verified
+            ? 'Verified Matured (To-Date)'
+            : 'Total Matured (To-Date)';
+        document.getElementById('matured-tile-sub').innerText = verified
+            ? '9-month + audit ≥ 1.5m, after 10% culling, less collections to-date'
+            : '9-month rule, after 10% culling, less collections to-date';
+        document.getElementById('nsd-remark-audit').style.display = verified ? '' : 'none';
+
+        const availLabel = document.getElementById('avail-tab-label');
+        if (availLabel) {
+            availLabel.innerHTML = verified
+                ? 'From <span class="text-emerald-700 font-black">Verified Stock</span>'
+                : 'From <span class="text-emerald-700 font-black">Stock To-Date</span>';
+        }
+
+        if (!nsdAggregates) return;
+        const matured = verified ? nsdAggregates.qtyByAgeOrAudit : nsdAggregates.qtyByAge;
+        document.getElementById('stat-matured').innerText        = matured.toLocaleString();
+        document.getElementById('stat-orders-current').innerText = nsdAggregates.pendingOrdersQty.toLocaleString();
+
+        baseStock = matured;
+        currentOrdersQty = nsdAggregates.pendingOrdersQty;
+        updateGearing();
+    }
+
+    function updateGearing() {
+        // baseStock is already post-10%-culling (set in renderNsdTab from nsdAggregates).
+        // So the available formula does NOT re-apply ×0.9 — that would double-discount.
+        const matured = baseStock;
+        const orders  = currentOrdersQty;
+        const g = parseInt(document.getElementById('gearing-slider').value) / 10;
+
+        const gearedMatured = Math.round(matured * g);
+        const available     = Math.max(0, gearedMatured - orders);
+
+        const isOversold     = orders > matured;
+        const oversoldQty    = Math.max(0, orders - matured);
+        const oversoldFactor = matured > 0 ? (orders / matured) : 0;
+        const neededGearing  = matured > 0 ? Math.min(3.0, orders / matured) : 1.0;
+
+        document.getElementById('stat-available').innerText  = available.toLocaleString();
+        document.getElementById('calc-matured').innerText    = matured.toLocaleString();
+        document.getElementById('calc-orders').innerText     = orders.toLocaleString();
+        document.getElementById('calc-available').innerText  = available.toLocaleString();
+        document.getElementById('gearing-display').innerText = g.toFixed(1) + '×';
+
+        const statusBadge = document.getElementById('avail-status-badge');
+        const oversoldBox = document.getElementById('oversold-warning');
+        if (isOversold) {
+            statusBadge.innerText = 'Oversold';
+            statusBadge.className = 'text-[9px] font-black bg-red-100 text-red-700 px-2 py-0.5 rounded-full uppercase tracking-widest';
+            oversoldBox.classList.remove('hidden');
+            document.getElementById('oversold-qty').innerText            = oversoldQty.toLocaleString();
+            document.getElementById('oversold-factor').innerText         = oversoldFactor.toFixed(2) + '×';
+            document.getElementById('oversold-needed-gearing').innerText = neededGearing.toFixed(2) + '×';
+        } else {
+            statusBadge.innerText = 'OK';
+            statusBadge.className = 'text-[9px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full uppercase tracking-widest';
+            oversoldBox.classList.add('hidden');
+        }
+
+        const badge = document.getElementById('gearing-badge');
+        if (g <= 1.5)      { badge.innerText = 'Conservative'; badge.className = 'text-[8px] font-black text-emerald-600 bg-white border border-emerald-200 rounded-full px-1.5 py-0.5 uppercase tracking-wider'; }
+        else if (g <= 2.2) { badge.innerText = 'Moderate';     badge.className = 'text-[8px] font-black text-amber-600 bg-white border border-amber-200 rounded-full px-1.5 py-0.5 uppercase tracking-wider'; }
+        else               { badge.innerText = 'Aggressive';   badge.className = 'text-[8px] font-black text-red-600 bg-white border border-red-200 rounded-full px-1.5 py-0.5 uppercase tracking-wider'; }
+    }
+
+    // ── To-Do list ────────────────────────────────────────────────────────────
+    let todoTab = 'unpaid';
+    let todoData = { unpaid: [], credit: [] };
+
+    async function loadTodoList() {
+        await Promise.all([loadUnpaidScenario(), loadCreditScenario()]);
+        document.getElementById('todo-count-unpaid').innerText = todoData.unpaid.length;
+        document.getElementById('todo-count-credit').innerText = todoData.credit.length;
+        renderTodoTab();
+    }
+
+    async function loadUnpaidScenario() {
+        try {
+            const { data: unpaidOrders, error } = await _supabase
+                .from('salesweb_customer_orders')
+                .select('id,order_number,customer_name,total,created_at,status')
+                .eq('status', 'Pending Payment')
+                .order('created_at', { ascending: false });
+            if (error) throw error;
+
+            const unpaidIds = (unpaidOrders || []).map(o => o.id);
+            const itemsByOrder = {};
+            if (unpaidIds.length) {
+                const { data: items } = await _supabase
+                    .from('salesweb_order_items')
+                    .select('order_id,product_name,quantity,unit_price,subtotal')
+                    .in('order_id', unpaidIds);
+                (items || []).forEach(it => {
+                    if (!itemsByOrder[it.order_id]) itemsByOrder[it.order_id] = [];
+                    itemsByOrder[it.order_id].push(it);
+                });
+            }
+
+            todoData.unpaid = (unpaidOrders || []).map(o => {
+                const items = itemsByOrder[o.id] || [];
+                return {
+                    id: o.id,
+                    orderNumber: o.order_number,
+                    customerName: o.customer_name,
+                    totalQty: items.reduce((s, it) => s + (it.quantity || 0), 0),
+                    totalAmount: o.total || 0,
+                    items
+                };
+            });
+        } catch(e) {
+            console.warn('[Unpaid] load failed:', e);
+            todoData.unpaid = [];
+        }
+    }
+
+    async function loadCreditScenario() {
+        try {
+            const { data: creditOrders, error } = await _supabase
+                .from('salesweb_customer_orders')
+                .select('id,order_number,customer_name,total,created_at,status,payment_method,billed_at,collected_qty,collected_at')
+                .eq('payment_method', 'credit')
+                .is('billed_at', null)
+                .order('collected_at', { ascending: false, nullsFirst: false })
+                .order('created_at',   { ascending: false });
+            if (error) throw error;
+
+            const creditIds = (creditOrders || []).map(o => o.id);
+            const itemsByOrder = {};
+            if (creditIds.length) {
+                const { data: items } = await _supabase
+                    .from('salesweb_order_items')
+                    .select('order_id,product_name,quantity,unit_price,subtotal')
+                    .in('order_id', creditIds);
+                (items || []).forEach(it => {
+                    if (!itemsByOrder[it.order_id]) itemsByOrder[it.order_id] = [];
+                    itemsByOrder[it.order_id].push(it);
+                });
+            }
+
+            todoData.credit = (creditOrders || []).map(o => {
+                const items = itemsByOrder[o.id] || [];
+                const orderedTotalQty = items.reduce((s, it) => s + (it.quantity || 0), 0);
+                const orderedTotalAmt = items.reduce((s, it) => s + (it.subtotal || 0), 0);
+                const unitPrice = orderedTotalQty > 0 ? (orderedTotalAmt / orderedTotalQty) : (items[0]?.unit_price || 0);
+                const collectedQty = o.collected_qty != null ? o.collected_qty : orderedTotalQty;
+                const billAmount   = unitPrice * collectedQty;
+                const billingDate  = o.collected_at ? new Date(o.collected_at) : new Date(o.created_at);
+                return {
+                    id: o.id,
+                    orderNumber: o.order_number,
+                    customerName: o.customer_name,
+                    collectedQty,
+                    unitPrice,
+                    billAmount,
+                    billingMonth: billingDate.toLocaleString('en-MY', { month: 'short', year: 'numeric' })
+                };
+            });
+        } catch(e) {
+            console.warn('[Credit] unavailable:', e?.message || e);
+            todoData.credit = [];
+        }
+    }
+
+    function switchTodoTab(tab) {
+        todoTab = tab;
+        document.getElementById('todo-tab-unpaid').classList.toggle('active', tab === 'unpaid');
+        document.getElementById('todo-tab-credit').classList.toggle('active', tab === 'credit');
+        renderTodoTab();
+    }
+
+    function renderTodoTab() {
+        const body = document.getElementById('todo-body');
+        const meta = document.getElementById('todo-section-meta');
+        const fmtRM = n => 'RM ' + (Number(n) || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        if (todoTab === 'unpaid') {
+            const total = todoData.unpaid.reduce((s, r) => s + (r.totalAmount || 0), 0);
+            meta.innerHTML = todoData.unpaid.length
+                ? `<span class="text-red-600 font-black">${todoData.unpaid.length}</span> orders · Total <span class="text-red-600 font-black">${fmtRM(total)}</span>`
+                : '';
+
+            if (!todoData.unpaid.length) {
+                body.innerHTML = '<div class="text-center py-8 text-slate-500"><span class="text-2xl">✓</span><div class="text-[10px] font-bold uppercase tracking-widest mt-1">No pending payments</div></div>';
+                return;
+            }
+
+            body.innerHTML = todoData.unpaid.map(r => `
+                <div class="notebook-row">
+                    <div class="nb-line1">
+                        <span class="note-name" title="${escapeHtml(r.customerName || '')}">${escapeHtml(r.customerName || '—')}</span>
+                        <span class="note-amt">${fmtRM(r.totalAmount)}</span>
+                    </div>
+                    <div class="nb-line2">
+                        <span><span class="text-[8px] font-black px-1 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-300 uppercase tracking-widest mr-1">Unpaid</span><span class="note-id">${escapeHtml(r.orderNumber || '—')}</span></span>
+                        <span>${r.totalQty.toLocaleString()} qty</span>
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            const now = new Date();
+            const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const billLabel = lastMonth.toLocaleString('en-MY', { month: 'short', year: 'numeric' });
+            const total = todoData.credit.reduce((s, r) => s + (r.billAmount || 0), 0);
+            meta.innerHTML = todoData.credit.length
+                ? `Bill for ${billLabel} · <span class="text-blue-600 font-black">${todoData.credit.length}</span> orders · Total <span class="text-blue-600 font-black">${fmtRM(total)}</span>`
+                : '';
+
+            if (!todoData.credit.length) {
+                body.innerHTML = '<div class="text-center py-8 text-slate-500"><span class="text-2xl">✓</span><div class="text-[10px] font-bold uppercase tracking-widest mt-1">No credit billing pending</div><div class="text-[9px] mt-1">Tag orders with <span class="font-mono">payment_method=\'credit\'</span> to see them here.</div></div>';
+                return;
+            }
+
+            body.innerHTML = todoData.credit.map(r => `
+                <div class="notebook-row credit">
+                    <div class="nb-line1">
+                        <span class="note-name" title="${escapeHtml(r.customerName || '')}">${escapeHtml(r.customerName || '—')}</span>
+                        <span class="note-amt">${fmtRM(r.billAmount)}</span>
+                    </div>
+                    <div class="nb-line2">
+                        <span><span class="text-[8px] font-black px-1 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-300 uppercase tracking-widest mr-1">${escapeHtml(r.billingMonth)}</span><span class="note-id">${escapeHtml(r.orderNumber || '—')}</span></span>
+                        <span>${r.collectedQty.toLocaleString()} × ${fmtRM(r.unitPrice)}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+    }
+
+    // ── Monthly Maturity Allocation ──────────────────────────────────────────
+    let allMatGroups = [];     // [{batch, plot, breed, location, qty, transplantDate, matureDate}]
+    let plotAllocations = {};  // { 'batch||plot': { plot_status, reserved_for, reserved_qty, premium } }
+    let activeMonthKey = null;
+    let activeMonthKeys = [];  // months with maturity records, current month onwards
+    let historyMonthKeys = []; // past months with maturity records
+
+    function monthKey(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); }
+    function monthLabel(k) {
+        const [y, m] = k.split('-').map(Number);
+        return new Date(y, m-1, 1).toLocaleString('en-MY', { month: 'short', year: 'numeric' });
+    }
+
+    async function loadMaturity() {
+        try {
+            const [transRes, plotsRes, allocRes] = await Promise.all([
+                _supabase.from('shared_inventory_logs')
+                    .select('batch_name,plot_name,breed_name,quantity_change,created_at')
+                    .in('transaction_type', ['Transplanted','Transplanted_Premium','Transplanted_DoubleTone']),
+                _supabase.from('shared_plots').select('plot_name,nursery_name'),
+                // shared_plot_allocations may not exist yet — caught + ignored.
+                _supabase.from('shared_plot_allocations').select('*').then(r => r, e => ({ data: [], error: e }))
+            ]);
+
+            const trans = transRes.data || [];
+            const plots = plotsRes.data || [];
+
+            // Build two maps from shared_plots:
+            //   plotNurseryMap   — exact plot_name → nursery_name (the canonical answer)
+            //   prefixNurseryMap — letter prefix (e.g. "U") → nursery_name (fallback when a row
+            //                       is missing or has bad data; one good row per nursery seeds it)
+            const plotNurseryMap = {};
+            const prefixNurseryMap = {};
+            const looksLikePlotCode = s => typeof s === 'string' && /^[A-Za-z]+\d+$/.test(s.trim());
+            plots.forEach(p => {
+                if (!p.plot_name || !p.nursery_name) return;
+                // Skip rows where nursery_name itself looks like a plot code — that's bad data.
+                if (looksLikePlotCode(p.nursery_name)) return;
+                plotNurseryMap[p.plot_name] = p.nursery_name;
+                const prefix = (p.plot_name.match(/^[A-Za-z]+/) || [])[0];
+                if (prefix) prefixNurseryMap[prefix] = p.nursery_name;
+            });
+            const resolveLocation = plot => {
+                if (!plot) return '—';
+                if (plotNurseryMap[plot]) return plotNurseryMap[plot];
+                const prefix = (plot.match(/^[A-Za-z]+/) || [])[0];
+                return prefix && prefixNurseryMap[prefix] ? prefixNurseryMap[prefix] : '—';
+            };
+
+            // Group by (batch, plot) — sum qty, earliest transplant date, take a representative breed.
+            const groups = {};
+            trans.forEach(l => {
+                const k = (l.batch_name||'') + '||' + (l.plot_name||'');
+                if (!groups[k]) groups[k] = {
+                    batch: l.batch_name, plot: l.plot_name, breed: l.breed_name,
+                    qty: 0, firstDate: l.created_at
+                };
+                groups[k].qty += (l.quantity_change || 0);
+                if (l.created_at < groups[k].firstDate) groups[k].firstDate = l.created_at;
+                if (!groups[k].breed && l.breed_name) groups[k].breed = l.breed_name;
+            });
+
+            allMatGroups = Object.entries(groups).map(([k, g]) => {
+                const t = new Date(g.firstDate);
+                const matureDate = new Date(t); matureDate.setMonth(matureDate.getMonth() + 9);
+                return {
+                    key: k,
+                    batch: g.batch,
+                    plot: g.plot,
+                    breed: g.breed || '—',
+                    location: resolveLocation(g.plot),
+                    qty: g.qty,
+                    afterCulling: Math.round(g.qty * 0.9),
+                    transplantDate: t,
+                    matureDate
+                };
+            });
+
+            // Plot allocation lookup
+            plotAllocations = {};
+            (allocRes?.data || []).forEach(a => {
+                const k = (a.batch_name||'') + '||' + (a.plot_name||'');
+                plotAllocations[k] = {
+                    plot_status: a.plot_status || 'open',
+                    reserved_for: a.reserved_for || '',
+                    reserved_qty: a.reserved_qty || 0,
+                    premium: !!a.premium
+                };
+            });
+
+            // Split unique maturity months into ACTIVE (current month onwards, has data)
+            // and HISTORY (past months with data only).
+            const now = new Date();
+            const curKey = monthKey(now);
+            const monthsWithData = new Set(allMatGroups.map(g => monthKey(g.matureDate)));
+
+            activeMonthKeys = [...monthsWithData].filter(k => k >= curKey).sort();
+            historyMonthKeys = [...monthsWithData].filter(k => k < curKey).sort().reverse();
+
+            // Always include current month as a tab even if no data → user has a "today" anchor.
+            if (!activeMonthKeys.includes(curKey)) activeMonthKeys.unshift(curKey);
+
+            // Default selection = current month if it has data, else the earliest active month.
+            activeMonthKey = monthsWithData.has(curKey) ? curKey : (activeMonthKeys[0] || curKey);
+
+            renderMonthTabs();
+            renderMaturityTable();
+        } catch(e) {
+            console.warn('Maturity load error:', e);
+            document.getElementById('maturity-rows').innerHTML = `<tr><td colspan="12" class="text-center py-8 text-[10px] text-red-500 font-bold uppercase tracking-widest">Failed to load maturity data</td></tr>`;
+        }
+    }
+
+    function renderMonthTabs() {
+        const now = new Date();
+        const curKey = monthKey(now);
+        const tabsEl = document.getElementById('month-tabs');
+        tabsEl.innerHTML = '';
+        activeMonthKeys.forEach(k => {
+            const isCurrent = k === curKey;
+            const btn = document.createElement('button');
+            btn.className = 'month-tab' + (k === activeMonthKey ? ' active' : '') + (isCurrent ? ' is-current' : '');
+            btn.innerText = monthLabel(k) + (isCurrent ? ' · now' : '');
+            btn.onclick = () => { activeMonthKey = k; closeHistoryMenu(); renderMonthTabs(); renderMaturityTable(); renderActiveBanner(); };
+            tabsEl.appendChild(btn);
+        });
+
+        // History dropdown content
+        const menu = document.getElementById('history-menu');
+        document.getElementById('history-count').innerText = historyMonthKeys.length;
+        if (!historyMonthKeys.length) {
+            menu.innerHTML = '<div class="text-[10px] text-slate-400 font-bold uppercase tracking-widest text-center py-3">No past records</div>';
+        } else {
+            menu.innerHTML = historyMonthKeys.map(k => `
+                <button onclick="selectHistoryMonth('${k}')" class="w-full text-left text-[11px] font-bold text-slate-700 hover:bg-slate-50 rounded-lg px-3 py-2 flex justify-between items-center ${k === activeMonthKey ? 'bg-amber-50 text-amber-800' : ''}">
+                    <span>${monthLabel(k)}</span>
+                    <span class="text-[9px] text-slate-400 uppercase tracking-widest">history</span>
+                </button>
+            `).join('');
+        }
+
+        renderActiveBanner();
+    }
+
+    function renderActiveBanner() {
+        const banner = document.getElementById('active-month-banner');
+        if (historyMonthKeys.includes(activeMonthKey)) {
+            banner.classList.remove('hidden');
+            banner.innerHTML = `🕘 Viewing <span class="font-black uppercase tracking-widest">history</span> — ${monthLabel(activeMonthKey)} (already matured & past)`;
+        } else {
+            banner.classList.add('hidden');
+        }
+    }
+
+    function selectHistoryMonth(k) {
+        activeMonthKey = k;
+        closeHistoryMenu();
+        renderMonthTabs();
+        renderMaturityTable();
+    }
+
+    function toggleHistoryMenu() {
+        const menu = document.getElementById('history-menu');
+        menu.classList.toggle('hidden');
+        if (!menu.classList.contains('hidden')) {
+            // Close on outside click
+            setTimeout(() => {
+                document.addEventListener('click', closeHistoryOnOutside, { once: true });
+            }, 0);
+        }
+    }
+    function closeHistoryMenu() {
+        document.getElementById('history-menu').classList.add('hidden');
+    }
+    function closeHistoryOnOutside(e) {
+        const menu = document.getElementById('history-menu');
+        const btn  = document.getElementById('history-btn');
+        if (!menu.contains(e.target) && !btn.contains(e.target)) closeHistoryMenu();
+        else document.addEventListener('click', closeHistoryOnOutside, { once: true });
+    }
+
+    function renderMaturityTable() {
+        const tbody = document.getElementById('maturity-rows');
+        const tfoot = document.getElementById('maturity-foot');
+
+        const rows = allMatGroups
+            .filter(g => monthKey(g.matureDate) === activeMonthKey)
+            .sort((a, b) => a.matureDate - b.matureDate);
+
+        if (!rows.length) {
+            tbody.innerHTML = `<tr><td colspan="12" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">No maturity allocations for this month</div></td></tr>`;
+            tfoot.innerHTML = '';
+            return;
+        }
+
+        let totQty = 0, totCull = 0, totReserved = 0;
+        tbody.innerHTML = rows.map(r => {
+            const alloc = plotAllocations[r.key] || { plot_status: 'open', reserved_for: '', reserved_qty: 0, premium: false };
+            const balance = r.afterCulling - (alloc.reserved_qty || 0);
+            totQty       += r.qty;
+            totCull      += r.afterCulling;
+            totReserved  += alloc.reserved_qty || 0;
+            const statusClass = 'pill-' + alloc.plot_status;
+            return `
+                <tr>
+                    <td>${r.matureDate.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'})}</td>
+                    <td>${escapeHtml(r.location)}</td>
+                    <td><span class="font-black text-slate-900">${escapeHtml(r.plot || '—')}</span></td>
+                    <td class="font-mono">${escapeHtml(r.batch || '—')}</td>
+                    <td>${escapeHtml(r.breed || '—')}</td>
+                    <td class="num">${r.qty.toLocaleString()}</td>
+                    <td class="num text-emerald-700">${r.afterCulling.toLocaleString()}</td>
+                    <td>
+                        <input type="text" value="${escapeHtml(alloc.reserved_for || '')}" placeholder="—"
+                            data-allockey="${r.key}" data-allocfield="reserved_for"
+                            onchange="updateAllocation(this)"
+                            class="w-full text-[11px] font-bold bg-transparent border-b border-dashed border-slate-200 focus:border-emerald-500 outline-none px-1 py-0.5"/>
+                    </td>
+                    <td class="num">
+                        <input type="number" value="${alloc.reserved_qty || 0}" min="0"
+                            data-allockey="${r.key}" data-allocfield="reserved_qty"
+                            onchange="updateAllocation(this)"
+                            class="w-20 text-right text-[11px] font-black bg-transparent border-b border-dashed border-slate-200 focus:border-emerald-500 outline-none px-1 py-0.5"/>
+                    </td>
+                    <td class="num ${balance < 0 ? 'text-red-600' : balance === 0 ? 'text-slate-400' : 'text-slate-700'}">${balance.toLocaleString()}</td>
+                    <td>
+                        <select data-allockey="${r.key}" data-allocfield="plot_status" onchange="updateAllocation(this)"
+                            class="text-[10px] font-black uppercase tracking-wider rounded-md border border-slate-200 px-1.5 py-0.5 bg-white">
+                            <option value="open"     ${alloc.plot_status === 'open'     ? 'selected' : ''}>Open</option>
+                            <option value="sisa"     ${alloc.plot_status === 'sisa'     ? 'selected' : ''}>Sisa</option>
+                            <option value="finished" ${alloc.plot_status === 'finished' ? 'selected' : ''}>Finished</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="checkbox" class="premium-toggle" ${alloc.premium ? 'checked' : ''}
+                            data-allockey="${r.key}" data-allocfield="premium"
+                            onchange="updateAllocation(this)" title="Move to Premium plot">
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        tfoot.innerHTML = `
+            <tr class="bg-slate-50 font-black">
+                <td colspan="5" class="text-right text-[10px] uppercase tracking-widest text-slate-500 py-2 px-2">Totals (${rows.length} rows)</td>
+                <td class="num text-slate-900">${totQty.toLocaleString()}</td>
+                <td class="num text-emerald-700">${totCull.toLocaleString()}</td>
+                <td></td>
+                <td class="num text-slate-900">${totReserved.toLocaleString()}</td>
+                <td class="num ${(totCull - totReserved) < 0 ? 'text-red-600' : 'text-slate-700'}">${(totCull - totReserved).toLocaleString()}</td>
+                <td colspan="2"></td>
+            </tr>`;
+    }
+
+    async function updateAllocation(el) {
+        const key = el.dataset.allockey;
+        const field = el.dataset.allocfield;
+        let value = el.type === 'checkbox' ? el.checked : el.value;
+        if (field === 'reserved_qty') value = parseInt(value) || 0;
+
+        const [batch, plot] = key.split('||');
+        if (!plotAllocations[key]) plotAllocations[key] = { plot_status: 'open', reserved_for: '', reserved_qty: 0, premium: false };
+        plotAllocations[key][field] = value;
+
+        try {
+            const payload = {
+                batch_name: batch,
+                plot_name: plot,
+                plot_status: plotAllocations[key].plot_status,
+                reserved_for: plotAllocations[key].reserved_for,
+                reserved_qty: plotAllocations[key].reserved_qty,
+                premium: plotAllocations[key].premium,
+                updated_at: new Date().toISOString()
+            };
+            const { error } = await _supabase.from('shared_plot_allocations').upsert(payload, { onConflict: 'batch_name,plot_name' });
+            if (error) throw error;
+            renderMaturityTable();
+        } catch(e) {
+            console.warn('[Allocation] save failed (table may not exist yet):', e?.message || e);
+            // Still re-render locally so user sees their input.
+            renderMaturityTable();
+        }
+    }
+
+    function escapeHtml(s) {
+        return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    // ── Customer Order Management (collection grid) ──────────────────────────
+    let allCustomerOrders = [];   // [{id, order#, customer, orderDate, totalQty, totalAmount, status, paymentMethod, collectionsByMonth, totalCollected}]
+    let customerMonthsBackOffset = 0;  // 0 = window ends at current month
+    const CUST_WINDOW_MONTHS = 7;
+
+    async function loadCustomerOrders() {
+        try {
+            // Pull all relevant orders + items + collections in parallel.
+            // Collections table is optional — falls back to single collected_qty/collected_at.
+            const [ordRes, _itemsRes, _collRes] = await Promise.all([
+                _supabase.from('salesweb_customer_orders')
+                    .select('id,order_number,customer_name,total,status,created_at,payment_method,collected_qty,collected_at')
+                    .order('created_at', { ascending: false }),
+                _supabase.from('salesweb_order_items').select('order_id,quantity,unit_price,subtotal'),
+                _supabase.from('salesweb_order_collections').select('order_id,collected_qty,collected_at')
+                    .then(r => r, e => ({ data: null, error: e }))
+            ]);
+
+            const orders = ordRes.data || [];
+            const items  = _itemsRes.data || [];
+            const collections = _collRes?.data; // null if table missing
+
+            // Aggregate items per order (total qty + total amount).
+            const itemsByOrder = {};
+            items.forEach(it => {
+                if (!itemsByOrder[it.order_id]) itemsByOrder[it.order_id] = { qty: 0, amt: 0 };
+                itemsByOrder[it.order_id].qty += (it.quantity || 0);
+                itemsByOrder[it.order_id].amt += (it.subtotal || 0);
+            });
+
+            // Aggregate collections per order, bucketed by YYYY-MM.
+            const collByOrder = {};
+            if (collections && collections.length) {
+                collections.forEach(c => {
+                    if (!c.collected_at) return;
+                    const k = monthKey(new Date(c.collected_at));
+                    if (!collByOrder[c.order_id]) collByOrder[c.order_id] = {};
+                    collByOrder[c.order_id][k] = (collByOrder[c.order_id][k] || 0) + (c.collected_qty || 0);
+                });
+            }
+            // Fallback: use the single collected_qty + collected_at on each order if no collections table.
+            if (!collections || !collections.length) {
+                orders.forEach(o => {
+                    if (o.collected_qty && o.collected_at) {
+                        const k = monthKey(new Date(o.collected_at));
+                        collByOrder[o.id] = { [k]: o.collected_qty };
+                    }
+                });
+            }
+
+            allCustomerOrders = orders.map(o => {
+                const it = itemsByOrder[o.id] || { qty: 0, amt: 0 };
+                const colByMonth = collByOrder[o.id] || {};
+                const totalCollected = Object.values(colByMonth).reduce((s, v) => s + v, 0);
+                const balance = it.qty - totalCollected;
+                let derivedStatus = o.status;
+                if (o.status !== 'Cancelled' && o.status !== 'Pending Payment') {
+                    if      (totalCollected === 0)         derivedStatus = 'Paid · Pending Pickup';
+                    else if (totalCollected >= it.qty)     derivedStatus = 'Completed';
+                    else                                   derivedStatus = 'Partial · ' + Math.round((totalCollected/it.qty)*100) + '%';
+                }
+                return {
+                    id: o.id,
+                    orderNumber: o.order_number,
+                    customer: o.customer_name,
+                    orderDate: o.created_at ? new Date(o.created_at) : null,
+                    totalQty: it.qty,
+                    totalAmount: o.total ?? it.amt,
+                    rawStatus: o.status,
+                    derivedStatus,
+                    paymentMethod: o.payment_method || 'standard',
+                    collectionsByMonth: colByMonth,
+                    totalCollected,
+                    balance
+                };
+            });
+
+            renderCustomerGrid();
+        } catch(e) {
+            console.warn('[Cust] load failed:', e);
+            document.getElementById('cust-tbody').innerHTML = `<tr><td colspan="20" class="text-center py-8 text-[10px] text-red-500 font-bold uppercase tracking-widest">Failed to load customer orders</td></tr>`;
+        }
+    }
+
+    function customerMonthWindow() {
+        // Latest column = current month + customerMonthsBackOffset (negative shifts back, positive forward)
+        const now = new Date();
+        const end = new Date(now.getFullYear(), now.getMonth() + customerMonthsBackOffset, 1);
+        const months = [];
+        for (let i = CUST_WINDOW_MONTHS - 1; i >= 0; i--) {
+            const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
+            months.push({ key: monthKey(d), label: d.toLocaleString('en-MY', { month: 'short', year: 'numeric' }), date: d });
+        }
+        return months;
+    }
+
+    function shiftCustomerMonths(delta) {
+        customerMonthsBackOffset += delta;
+        renderCustomerGrid();
+    }
+
+    function pillFor(derived) {
+        if (!derived) return ['pill-pending', '—'];
+        if (derived === 'Cancelled')               return ['pill-cancelled', 'Cancelled'];
+        if (derived === 'Pending Payment')         return ['pill-pending',   'Unpaid'];
+        if (derived === 'Completed')               return ['pill-completed', 'Completed'];
+        if (derived === 'Paid · Pending Pickup')   return ['pill-paid',      'Paid'];
+        if (derived.startsWith('Partial'))         return ['pill-partial',   derived];
+        return ['pill-paid', derived];
+    }
+
+    function renderCustomerGrid() {
+        const thead  = document.getElementById('cust-thead');
+        const tbody  = document.getElementById('cust-tbody');
+        const tfoot  = document.getElementById('cust-tfoot');
+        const search = (document.getElementById('cust-search')?.value || '').toLowerCase().trim();
+        const filter = document.getElementById('cust-filter')?.value || 'active';
+
+        const months = customerMonthWindow();
+        const nowKey = monthKey(new Date());
+        const fmtRM  = n => 'RM ' + (Number(n) || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        // Header
+        thead.innerHTML = `
+            <tr>
+                <th class="h-cust" style="width:38px;">#</th>
+                <th class="h-cust" style="min-width:200px;">Customer</th>
+                <th>Order Month</th>
+                <th>Status</th>
+                <th>Ordered Qty</th>
+                ${months.map(m => `<th class="h-mo${m.key===nowKey?' is-now':''}">${m.label.replace(' ','<br>')}</th>`).join('')}
+                <th class="h-tot">Total<br>Collected</th>
+                <th class="h-tot">Balance</th>
+                <th class="h-tot">Order Total</th>
+            </tr>`;
+
+        // Filter rows
+        let rows = allCustomerOrders.filter(r => {
+            if (search && !(r.orderNumber || '').toLowerCase().includes(search) && !(r.customer || '').toLowerCase().includes(search)) return false;
+            if (filter === 'all') return true;
+            if (filter === 'active')      return r.rawStatus !== 'Cancelled';
+            if (filter === 'outstanding') return r.rawStatus !== 'Cancelled' && r.balance > 0;
+            if (filter === 'completed')   return r.rawStatus !== 'Cancelled' && r.totalCollected >= r.totalQty && r.totalQty > 0;
+            return true;
+        });
+
+        if (!rows.length) {
+            tbody.innerHTML = `<tr><td colspan="${5 + months.length + 3}" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">📋</div><div class="text-[10px] font-bold uppercase tracking-widest">No customer orders match the filter</div></td></tr>`;
+            tfoot.innerHTML = '';
+            return;
+        }
+
+        // Body
+        let totQty = 0, totColl = 0, totBalance = 0, totAmt = 0;
+        const colMonthTotals = months.map(() => 0);
+
+        tbody.innerHTML = rows.map((r, idx) => {
+            totQty += r.totalQty; totColl += r.totalCollected; totBalance += r.balance; totAmt += (r.totalAmount || 0);
+            const orderMonth = r.orderDate ? r.orderDate.toLocaleString('en-MY',{month:'short',year:'numeric'}) : '—';
+            const [pillCls, pillTxt] = pillFor(r.derivedStatus);
+            const cellsHtml = months.map((m, i) => {
+                const v = r.collectionsByMonth[m.key] || 0;
+                if (v) colMonthTotals[i] += v;
+                const cls = `t-mo${v ? ' has-qty' : ''}${m.key === nowKey ? ' is-now' : ''}`;
+                return `<td class="${cls}">${v ? v.toLocaleString() : ''}</td>`;
+            }).join('');
+            return `
+                <tr>
+                    <td class="t-cust">${idx + 1}</td>
+                    <td class="t-cust">${escapeHtml(r.customer || '—')}<div class="t-sub">${escapeHtml(r.orderNumber || '')}</div></td>
+                    <td>${orderMonth}</td>
+                    <td><span class="pill-status ${pillCls}">${escapeHtml(pillTxt)}</span></td>
+                    <td class="font-black">${r.totalQty.toLocaleString()}</td>
+                    ${cellsHtml}
+                    <td class="t-tot">${r.totalCollected.toLocaleString()}</td>
+                    <td class="t-tot${r.balance < 0 ? ' text-red-600' : r.balance === 0 ? ' text-emerald-700' : ''}">${r.balance.toLocaleString()}</td>
+                    <td class="t-tot">${fmtRM(r.totalAmount)}</td>
+                </tr>`;
+        }).join('');
+
+        // Footer totals
+        tfoot.innerHTML = `
+            <tr class="bg-slate-50 font-black">
+                <td colspan="4" class="text-right text-[10px] uppercase tracking-widest text-slate-500" style="padding:8px;">Totals (${rows.length} orders)</td>
+                <td class="t-tot">${totQty.toLocaleString()}</td>
+                ${colMonthTotals.map(v => `<td class="t-tot">${v ? v.toLocaleString() : '—'}</td>`).join('')}
+                <td class="t-tot">${totColl.toLocaleString()}</td>
+                <td class="t-tot">${totBalance.toLocaleString()}</td>
+                <td class="t-tot">${fmtRM(totAmt)}</td>
+            </tr>`;
+    }
+
+    // ── Boot ────────────────────────────────────────────────────────────────
+    document.getElementById('gearing-slider').addEventListener('input', updateGearing);
+    _supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session) { window.location.href = 'operation_dashboard.html'; return; }
+        loadNsd();
+        loadTodoList();
+        loadMaturity();
+        loadCustomerOrders();
+    });
+</script>
+</body>
+</html>

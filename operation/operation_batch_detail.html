@@ -261,6 +261,10 @@
                             <div class="completion-pie-container"><div id="t6-pie-tab" class="completion-pie completion-pie-fill" style="--percentage: 0"></div><div class="completion-pie-cover"></div></div>
                             3rd Culling
                         </button>
+                        <button id="tab-btn-7" class="stage-tab-btn stage-tab-inactive" onclick="switchTab(7)" title="Field-audit records linked to this batch">
+                            <div class="completion-pie-container"><div id="t7-pie-tab" class="completion-pie completion-pie-fill" style="--percentage: 0"></div><div class="completion-pie-cover"></div></div>
+                            Audit Trail
+                        </button>
                         </div>
                     </div>
 
@@ -268,6 +272,10 @@
                         
                         <div id="tab-1" class="tab-content active">
 
+                            <div class="text-[9px] font-bold text-[#8a7a68] mb-3 flex items-center gap-1.5">
+                                <span class="uppercase tracking-widest">📝 Last Edit:</span>
+                                <span id="t1-edit-meta" class="normal-case font-semibold text-[#3d2610]">—</span>
+                            </div>
                             <!-- HEADER -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-amber-100 pb-5">
                                 <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Seeds In Report</h3>
@@ -327,7 +335,7 @@
                                     </div>
                                     <div>
                                         <label class="label-style !text-[#c07820]">Seeds Receive in D/O *</label>
-                                        <input type="number" id="f-do-qty" class="input-style font-black text-[#1a150d]" min="1" required oninput="calculateTotalSeeds(); updateT1Completion()">
+                                        <input type="text" inputmode="numeric" id="f-do-qty" class="input-style font-black text-[#1a150d]" required oninput="formatNumericInput(this); calculateTotalSeeds(); updateT1Completion()">
                                     </div>
                                     <div>
                                         <label class="label-style !text-[#c07820]">FOC Percent (%)</label>
@@ -351,6 +359,10 @@
 
                         <div id="tab-2" class="tab-content">
 
+                            <div class="text-[9px] font-bold text-[#8a7a68] mb-3 flex items-center gap-1.5">
+                                <span class="uppercase tracking-widest">📝 Last Edit:</span>
+                                <span id="t2-edit-meta" class="normal-case font-semibold text-[#3d2610]">—</span>
+                            </div>
                             <!-- TAB 2 HEADER: title + completion status -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-amber-200 pb-5">
                                 <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Seeds Planting & Damage Report</h3>
@@ -381,7 +393,7 @@
                                         <div><label class="label-style">Planted Date *</label><input type="date" id="t2-date" class="input-style" required oninput="updatePlantingCompletion()"></div>
                                         <div>
                                             <label class="label-style !text-[#a83020]">Damaged Seeds Qty *</label>
-                                            <input type="number" id="t2-damaged" class="input-style !text-[#a83020] font-black" min="0" required oninput="calcPlanting()" placeholder="0">
+                                            <input type="text" inputmode="numeric" id="t2-damaged" class="input-style !text-[#a83020] font-black" required oninput="formatNumericInput(this); calcPlanting()" placeholder="0">
                                             <p class="text-[9px] font-bold text-[#a39584] uppercase tracking-widest mt-1.5 ml-1">Physical count of seeds that arrived damaged / unusable.</p>
                                         </div>
                                     </div>
@@ -531,6 +543,23 @@
                                                 <span></span>
                                             </div>
                                         </div>
+                                        <!-- Tray totals footer -->
+                                        <div id="tray-totals-row" class="grid grid-cols-1 xl:grid-cols-[2fr_1fr_1fr_1fr_40px] gap-3 bg-[#f3efe6] border-2 border-[#e8dcc8] rounded-xl px-4 py-3 mt-3 items-center shadow-sm">
+                                            <div class="text-[10px] font-black text-[#3d2610] uppercase tracking-widest">Σ Totals (<span id="t2-tray-count">0</span> Trays)</div>
+                                            <div>
+                                                <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest xl:hidden mb-0.5">Total Planted</div>
+                                                <div class="text-base font-black text-[#3d2610]" id="t2-tot-planted">0</div>
+                                            </div>
+                                            <div>
+                                                <div class="text-[9px] font-black text-[#a83020] uppercase tracking-widest xl:hidden mb-0.5">Empty Holes</div>
+                                                <div class="text-base font-black text-[#a83020]" id="t2-tot-empty">0</div>
+                                            </div>
+                                            <div>
+                                                <div class="text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest xl:hidden mb-0.5">Actual Planted</div>
+                                                <div class="text-base font-black text-[#4a7a2e]" id="t2-tot-actual">0</div>
+                                            </div>
+                                            <div class="hidden xl:block"></div>
+                                        </div>
                                     </div>
 
                                     <!-- Workers -->
@@ -608,6 +637,10 @@
 
                         <div id="tab-3" class="tab-content">
 
+                            <div class="text-[9px] font-bold text-[#8a7a68] mb-3 flex items-center gap-1.5">
+                                <span class="uppercase tracking-widest">📝 Last Edit:</span>
+                                <span id="t3-edit-meta" class="normal-case font-semibold text-[#3d2610]">—</span>
+                            </div>
                             <!-- ── HEADER ── -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-5 gap-4 border-b-2 border-[#3a7ab4] pb-4">
                                 <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Transplanting Report</h3>
@@ -787,6 +820,10 @@
 
                         <div id="tab-4" class="tab-content">
 
+                            <div class="text-[9px] font-bold text-[#8a7a68] mb-3 flex items-center gap-1.5">
+                                <span class="uppercase tracking-widest">📝 Last Edit:</span>
+                                <span id="t4-edit-meta" class="normal-case font-semibold text-[#3d2610]">—</span>
+                            </div>
                             <!-- HEADER -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-5 gap-4 border-b-2 border-rose-200 pb-4">
                                 <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">1st Culling Report</h3>
@@ -918,6 +955,10 @@
                         </div>
                         <div id="tab-5" class="tab-content">
 
+                            <div class="text-[9px] font-bold text-[#8a7a68] mb-3 flex items-center gap-1.5">
+                                <span class="uppercase tracking-widest">📝 Last Edit:</span>
+                                <span id="t5-edit-meta" class="normal-case font-semibold text-[#3d2610]">—</span>
+                            </div>
                             <!-- HEADER -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-orange-200 pb-5">
                                 <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">2nd Culling Report</h3>
@@ -1030,6 +1071,10 @@
                         </div>
                         <div id="tab-6" class="tab-content">
 
+                            <div class="text-[9px] font-bold text-[#8a7a68] mb-3 flex items-center gap-1.5">
+                                <span class="uppercase tracking-widest">📝 Last Edit:</span>
+                                <span id="t6-edit-meta" class="normal-case font-semibold text-[#3d2610]">—</span>
+                            </div>
                             <!-- HEADER -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-purple-200 pb-5">
                                 <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">3rd Culling Report</h3>
@@ -1131,6 +1176,67 @@
                             </div>
 
                         </div>
+
+                        <!-- ══ TAB 7: Audit Trail (read-only) ══ -->
+                        <div id="tab-7" class="tab-content">
+                            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-amber-100 pb-5">
+                                <div>
+                                    <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Audit Trail — Field Verification</h3>
+                                    <p class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1">Every height audit recorded for this batch (from the Field Audit module)</p>
+                                </div>
+                                <div class="p-3.5 px-6 rounded-2xl bg-white flex items-center gap-4 shadow-sm border border-[#e8dcc8] shrink-0">
+                                    <div>
+                                        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest leading-none">Last Audit</div>
+                                        <div class="text-base font-black uppercase text-[#3d2610] mt-1" id="t7-last-audit">—</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- KPI strip -->
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                                <div class="rounded-xl bg-white border border-[#e8dcc8] p-4 shadow-sm">
+                                    <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Total Audits</div>
+                                    <div class="text-2xl font-black text-[#3d2610]" id="t7-stat-count">0</div>
+                                </div>
+                                <div class="rounded-xl bg-white border border-[#e8dcc8] p-4 shadow-sm">
+                                    <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Plots Audited</div>
+                                    <div class="text-2xl font-black text-[#3d2610]" id="t7-stat-plots">0</div>
+                                </div>
+                                <div class="rounded-xl bg-white border border-[#e8dcc8] p-4 shadow-sm">
+                                    <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Tallest Sample</div>
+                                    <div class="text-2xl font-black text-[#3a7ab4]" id="t7-stat-max">— cm</div>
+                                </div>
+                                <div class="rounded-xl bg-emerald-50 border border-emerald-200 p-4 shadow-sm">
+                                    <div class="text-[9px] font-black text-emerald-700 uppercase tracking-widest">Plots ≥ 150 cm</div>
+                                    <div class="text-2xl font-black text-emerald-700" id="t7-stat-passed">0 / 0</div>
+                                </div>
+                            </div>
+
+                            <!-- Timeline list -->
+                            <div class="bg-white rounded-2xl border border-[#e8dcc8] shadow-sm overflow-hidden">
+                                <div class="hidden md:grid grid-cols-12 gap-3 px-5 py-3 bg-[#f8f4ec] border-b border-[#e8dcc8] text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">
+                                    <div class="col-span-2">Date</div>
+                                    <div class="col-span-2">Plot</div>
+                                    <div class="col-span-1 text-center">S1</div>
+                                    <div class="col-span-1 text-center">S2</div>
+                                    <div class="col-span-1 text-center">S3</div>
+                                    <div class="col-span-1 text-center">Avg</div>
+                                    <div class="col-span-2 text-center">Status</div>
+                                    <div class="col-span-2">Auditor / ID</div>
+                                </div>
+                                <div id="t7-rows-container">
+                                    <div class="text-center p-10 text-[#8a7a68]">
+                                        <div class="text-3xl mb-2">📐</div>
+                                        <div class="text-xs font-black uppercase tracking-widest">Loading audit records…</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Footer note -->
+                            <div class="mt-5 bg-[#fdfaf4] border border-[#e8dcc8] rounded-2xl p-4 text-[11px] text-[#8a7a68] leading-relaxed">
+                                <strong class="text-[#3d2610]">How this works:</strong> The Field Audit module enforces that auditors pick a batch from the master list — so every record here is reliably tied to this batch. Once any sample reaches <strong>≥ 150 cm (1.5 m)</strong>, that plot is counted as <strong>Verified Matured</strong> on the operations dashboard.
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -1156,7 +1262,7 @@
         let trayUsageMap = {}; // { tray_name: 'MJN-2024-001' } — which batch is using each tray
 
         function switchTab(tabIndex) {
-            for(let i = 1; i <= 6; i++) {
+            for(let i = 1; i <= 7; i++) {
                 const content = document.getElementById('tab-' + i); if(!content) continue;
                 content.classList.remove('active');
                 const btn = document.getElementById('tab-btn-' + i); if(!btn) continue;
@@ -1170,6 +1276,110 @@
             if(tabIndex === 4) syncTab4();
             if(tabIndex === 5) syncTab5();
             if(tabIndex === 6) syncTab6();
+            if(tabIndex === 7) syncTab7();
+        }
+
+        // ── TAB 7: Audit Trail (read-only) ──────────────────────────────
+        async function syncTab7() {
+            const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
+            const container = document.getElementById('t7-rows-container');
+            const setStat = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
+
+            if (!batchId) {
+                container.innerHTML = '<div class="text-center p-10 text-[#8a7a68]"><div class="text-3xl mb-2">⏳</div><div class="text-xs font-black uppercase tracking-widest">Save Tab 1 first to assign a batch number — audit records will appear here once auditors record heights.</div></div>';
+                setStat('t7-stat-count', '0'); setStat('t7-stat-plots', '0'); setStat('t7-stat-max', '— cm'); setStat('t7-stat-passed', '0 / 0'); setStat('t7-last-audit', '—');
+                document.getElementById('t7-pie-tab').style.setProperty('--percentage', 0);
+                return;
+            }
+
+            container.innerHTML = '<div class="text-center p-10 text-[#8a7a68] animate-pulse"><div class="text-xs font-black uppercase tracking-widest">Loading audit records…</div></div>';
+
+            try {
+                const { data, error } = await _supabase
+                    .from('audit_height_records')
+                    .select('record_id,nursery,plot,batch,sample_1,sample_2,sample_3,avg_height,date,auditor_name,photo_1_url,photo_2_url,photo_3_url')
+                    .eq('batch', batchId)
+                    .order('date', { ascending: false });
+                if (error) throw error;
+
+                const rows = data || [];
+
+                // Aggregates
+                const TALL = 150;
+                const plotSet = new Set();
+                const passedPlots = new Set();
+                let maxSample = 0;
+                rows.forEach(r => {
+                    if (r.plot) {
+                        plotSet.add(r.plot);
+                        const m = Math.max(r.sample_1 || 0, r.sample_2 || 0, r.sample_3 || 0, r.avg_height || 0);
+                        if (m > maxSample) maxSample = m;
+                        if (m >= TALL) passedPlots.add(r.plot);
+                    }
+                });
+
+                setStat('t7-stat-count',  rows.length.toLocaleString());
+                setStat('t7-stat-plots',  plotSet.size);
+                setStat('t7-stat-max',    maxSample > 0 ? `${maxSample.toFixed(1)} cm` : '— cm');
+                setStat('t7-stat-passed', `${passedPlots.size} / ${plotSet.size || 0}`);
+                setStat('t7-last-audit',  rows[0]?.date ? formatAuditDate(rows[0].date) : '—');
+
+                // Tab pie reflects "% of audited plots that have hit 1.5m"
+                const pct = plotSet.size > 0 ? Math.round((passedPlots.size / plotSet.size) * 100) : 0;
+                document.getElementById('t7-pie-tab').style.setProperty('--percentage', pct);
+
+                if (!rows.length) {
+                    container.innerHTML = '<div class="text-center p-10 text-[#8a7a68]"><div class="text-3xl mb-2">📭</div><div class="text-xs font-black uppercase tracking-widest">No audits recorded yet for this batch.</div><div class="text-[10px] font-bold mt-2">Auditors record heights via the Field Audit module — records auto-link to this batch.</div></div>';
+                    return;
+                }
+
+                container.innerHTML = rows.map(r => {
+                    const m = Math.max(r.sample_1 || 0, r.sample_2 || 0, r.sample_3 || 0, r.avg_height || 0);
+                    const passed = m >= TALL;
+                    const sCell = (v) => v != null ? `<span class="font-black text-[#3d2610]">${(+v).toFixed(1)}</span>` : '<span class="text-[#a39584]">—</span>';
+                    const photos = [r.photo_1_url, r.photo_2_url, r.photo_3_url].filter(Boolean);
+                    const photoHtml = photos.length
+                        ? `<div class="flex gap-1 mt-1">${photos.map(u => `<a href="${u}" target="_blank" class="block w-8 h-8 rounded-lg bg-cover bg-center border border-[#e8dcc8] hover:scale-110 transition-transform" style="background-image:url('${u}')" title="View photo"></a>`).join('')}</div>`
+                        : '';
+                    return `
+                        <div class="grid grid-cols-2 md:grid-cols-12 gap-3 px-5 py-4 border-b border-[#f3efe6] hover:bg-[#fdfaf4] transition-colors items-center">
+                            <div class="col-span-1 md:col-span-2">
+                                <div class="text-[11px] font-black text-[#3d2610]">${formatAuditDate(r.date)}</div>
+                                <div class="text-[9px] font-bold text-[#8a7a68] uppercase tracking-wider">${r.nursery || '—'}</div>
+                            </div>
+                            <div class="col-span-1 md:col-span-2">
+                                <span class="inline-block px-3 py-1 rounded-lg bg-[#f3efe6] border border-[#e8dcc8] text-[11px] font-black text-[#3d2610]">${r.plot || '—'}</span>
+                            </div>
+                            <div class="col-span-1 md:col-span-1 text-center">${sCell(r.sample_1)}</div>
+                            <div class="hidden md:block col-span-1 text-center">${sCell(r.sample_2)}</div>
+                            <div class="hidden md:block col-span-1 text-center">${sCell(r.sample_3)}</div>
+                            <div class="col-span-1 md:col-span-1 text-center">
+                                <span class="font-black text-[#3a7ab4]">${r.avg_height != null ? (+r.avg_height).toFixed(1) : '—'}</span>
+                            </div>
+                            <div class="col-span-2 md:col-span-2 text-center">
+                                ${passed
+                                    ? '<span class="inline-block px-2 py-1 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 text-[9px] font-black uppercase tracking-widest">✓ ≥ 1.5m</span>'
+                                    : '<span class="inline-block px-2 py-1 rounded-full bg-amber-100 border border-amber-300 text-amber-800 text-[9px] font-black uppercase tracking-widest">Growing</span>'}
+                            </div>
+                            <div class="col-span-2 md:col-span-2">
+                                <div class="text-[10px] font-bold text-[#3d2610] truncate">${r.auditor_name || '—'}</div>
+                                <div class="text-[9px] font-mono text-[#8a7a68]">${r.record_id || ''}</div>
+                                ${photoHtml}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch(e) {
+                console.error('[Audit Trail] load failed:', e);
+                container.innerHTML = `<div class="text-center p-10 text-red-500"><div class="text-xs font-black uppercase tracking-widest">Failed to load audit records.</div><div class="text-[10px] mt-1">${(e.message || e).toString().slice(0,200)}</div></div>`;
+            }
+        }
+
+        function formatAuditDate(iso) {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            if (isNaN(d)) return iso;
+            return d.toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' });
         }
 
         // ── Toast helper ──────────────────────────────────────────
@@ -1235,24 +1445,32 @@
                     if (data) {
                         batchData = data;
                         document.getElementById('f-original-create').value = data.created_at; 
-                        document.getElementById('f-datereceived').value = new Date(data.created_at).toISOString().split('T')[0];
+                        document.getElementById('f-datereceived').value = data.transaction_date || new Date(data.created_at).toISOString().split('T')[0];
                         document.getElementById('f-batchno').value = data.batch_name;
                         document.getElementById('f-brand').value = data.breed_name;
+                        // The `workers` column lives on the Seeds_Received row → restore Tab 2 worker count from here.
+                        if (data.workers != null && data.workers !== '') {
+                            const w = parseInt(data.workers);
+                            if (!isNaN(w) && w >= 0) {
+                                currentWorkers = 0;
+                                for (let i = 0; i < w; i++) updateWorkers(1);
+                            }
+                        }
                         if(data.remark) {
                             const supMatch = data.remark.match(/Supplier:\s*([^.]+)/); if(supMatch) document.getElementById('f-supplier').value = supMatch[1].trim();
                             const doMatch = data.remark.match(/D\/O:\s*([^.]+)/); if(doMatch) document.getElementById('f-dono').value = doMatch[1].trim();
                             const focMatch = data.remark.match(/Incl\.\s*([\d.]+)%\s*FOC/); if(focMatch) document.getElementById('f-foc-percent').value = focMatch[1].trim();
                             const doQtyMatch = data.remark.match(/DO_Qty:\s*(\d+)/);
-                            if(doQtyMatch) { document.getElementById('f-do-qty').value = doQtyMatch[1]; }
-                            else { 
+                            if(doQtyMatch) { setNumericInput('f-do-qty', doQtyMatch[1]); }
+                            else {
                                 // Legacy: no DO_Qty stored — back-calculate from total and FOC%
                                 const foc = focMatch ? parseFloat(focMatch[1]) : 0;
                                 const total = data.quantity_change;
                                 const doQtyCalc = foc > 0 ? Math.round(total / (1 + foc/100)) : total;
-                                document.getElementById('f-do-qty').value = doQtyCalc;
+                                setNumericInput('f-do-qty', doQtyCalc);
                             }
                         } else {
-                            document.getElementById('f-do-qty').value = data.quantity_change;
+                            setNumericInput('f-do-qty', data.quantity_change);
                         }
                         calculateTotalSeeds();
                         updateT1Completion();
@@ -1261,6 +1479,10 @@
 
                         await loadSavedPlantingData(batchIdParam);
                         addTransplantRow();
+                        // Pre-warm Audit Trail summary so its tab pie reflects audit progress immediately.
+                        syncTab7();
+                        // Populate "Last Edit" remark on every editable tab.
+                        loadAllEditMeta(batchIdParam);
 
                         // Check if transplant data exists → advance lifecycle to Main Nursery
                         const { data: transplantLogs } = await _supabase.from('shared_inventory_logs')
@@ -1287,17 +1509,16 @@
                 document.getElementById('tray-rows-container').innerHTML = '';
                 trayRowCount = 0;
                 let hasTrays = false;
+                let plantedDateFromLog = null;
 
                 logData.forEach(log => {
+                    // Capture the saved planting date from the first Planted log (fallback to Damaged_Seeds).
+                    if (!plantedDateFromLog) {
+                        const src = log.transaction_date || log.created_at;
+                        if (src) plantedDateFromLog = String(src).split('T')[0];
+                    }
                     if (log.transaction_type === 'Damaged_Seeds') {
-                        document.getElementById('t2-damaged').value = log.quantity_change;
-                        // Restore workers count from remark
-                        const workersMatch = log.remark ? log.remark.match(/Workers:(\d+)/) : null;
-                        if (workersMatch) {
-                            const w = parseInt(workersMatch[1]);
-                            currentWorkers = 0; // reset before setting
-                            for (let i = 0; i < w; i++) updateWorkers(1);
-                        }
+                        setNumericInput('t2-damaged', log.quantity_change);
                     } else if (log.transaction_type === 'Planted') {
                         hasTrays = true;
                         addTrayRow();
@@ -1310,16 +1531,21 @@
                         const emptyHolesMatch   = log.remark ? log.remark.match(/EmptyHoles:(\d+)/)   : null;
 
                         if (totalPlantedMatch && emptyHolesMatch) {
-                            lastRow.querySelector('.t-planted').value = totalPlantedMatch[1];
-                            lastRow.querySelector('.t-empty').value   = emptyHolesMatch[1];
+                            setNumericInput(lastRow.querySelector('.t-planted'), totalPlantedMatch[1]);
+                            setNumericInput(lastRow.querySelector('.t-empty'),   emptyHolesMatch[1]);
                         } else {
                             // Legacy: no breakdown stored — populate total planted with actual qty
-                            lastRow.querySelector('.t-planted').value = log.quantity_change;
+                            setNumericInput(lastRow.querySelector('.t-planted'), log.quantity_change);
                         }
                         lastRow.querySelector('.t-actual').dataset.raw = log.quantity_change;
                         lastRow.querySelector('.t-actual').innerText = log.quantity_change.toLocaleString();
                     }
                 });
+                // Override the today-default with the saved transaction date (fallback to created_at).
+                if (plantedDateFromLog) {
+                    document.getElementById('t2-date').value = plantedDateFromLog;
+                }
+                // Note: worker count is restored from the Seeds_Received row in initDetail (the column lives there).
                 if(!hasTrays) addTrayRow();
                 calcPlanting();
                 await loadPhotosFromStorage(batchId);
@@ -1352,19 +1578,17 @@
             if (preNurseryTrayData.length === 0 && batch && batch !== '—') {
                 try {
                     const { data: plantedLogs } = await _supabase.from('shared_inventory_logs')
-                        .select('plot_name, quantity_change, remark')
+                        .select('plot_name, quantity_change, remark, transaction_date, created_at')
                         .eq('batch_name', batch).eq('transaction_type', 'Planted');
                     if (plantedLogs && plantedLogs.length > 0) {
                         plantedLogs.forEach(l => {
                             totalPlantedRaw += l.quantity_change;
                             preNurseryTrayData.push({ name: l.plot_name, initialQty: l.quantity_change });
                         });
-                        // Also restore t2-date for maturity calc
-                        const { data: dmg } = await _supabase.from('shared_inventory_logs')
-                            .select('created_at').eq('batch_name', batch).eq('transaction_type', 'Damaged_Seeds').maybeSingle();
-                        // Try to get planted date from Planted log created_at if t2-date is empty
-                        if (!document.getElementById('t2-date').value && plantedLogs[0].created_at) {
-                            document.getElementById('t2-date').value = plantedLogs[0].created_at.split('T')[0];
+                        // Restore t2-date for maturity calc — prefer transaction_date, fall back to created_at.
+                        const src = plantedLogs[0].transaction_date || plantedLogs[0].created_at;
+                        if (src) {
+                            document.getElementById('t2-date').value = String(src).split('T')[0];
                         }
                     }
                 } catch(e) { console.warn('Could not load planted data from DB:', e.message); }
@@ -1517,7 +1741,10 @@
                                 const ef = document.getElementById(editId);
                                 if (!ef) return;
                                 const srcSel = ef.querySelector('.t3e-source-tray');
-                                if (srcSel) { srcSel.innerHTML = getTab3TrayOptionsHTML({}); srcSel.value = trayStr; }
+                                if (srcSel) {
+                                    srcSel.innerHTML = getTab3TrayOptionsHTML({});
+                                    setSelectValuePreserve(srcSel, trayStr);
+                                }
                                 const typeSel = ef.querySelector('.t3e-dest-type');
                                 if (typeSel) { typeSel.value = destType; toggleT3EditPlot(editId); }
                                 const plotSel = ef.querySelector('.t3e-dest-plot');
@@ -1538,7 +1765,7 @@
                             const dateMatch = log.remark ? log.remark.match(/Date:\s*(\d{4}-\d{2}-\d{2})/) : null;
                             lastRow.querySelector('.t3-date').value = dateMatch ? dateMatch[1] : '';
                             const trayMatch = log.remark ? log.remark.match(/tray \[([^\]]+)\]/) : null;
-                            if (trayMatch) lastRow.querySelector('.t3-source-tray').value = trayMatch[1];
+                            if (trayMatch) setSelectValuePreserve(lastRow.querySelector('.t3-source-tray'), trayMatch[1]);
                             const destType = log.transaction_type === 'Transplanted_Premium' ? 'premium'
                                            : log.transaction_type === 'Transplanted_DoubleTone' ? 'doubletone' : 'main';
                             lastRow.querySelector('.t3-dest-type').value = destType;
@@ -1556,7 +1783,7 @@
                 const traySel = row.querySelector('.t3-source-tray');
                 const prevTray = traySel.value;
                 traySel.innerHTML = getTab3TrayOptionsHTML({});
-                traySel.value = prevTray;
+                setSelectValuePreserve(traySel, prevTray);
             });
 
             calcTransplanting();
@@ -1634,9 +1861,10 @@
                 if (!all) { alert('Could not fetch records.'); return; }
                 all[idx] = { ...all[idx], transaction_type: txType, plot_name: destPlot, quantity_change: qty, breed_name: breed, remark };
                 await _supabase.from('shared_inventory_logs').delete().eq('batch_name', batchId).in('transaction_type', ['Transplanted','Transplanted_Premium','Transplanted_DoubleTone']);
-                const toInsert = all.map(l => ({ transaction_type: l.transaction_type, batch_name: batchId, breed_name: breed, plot_name: l.plot_name, quantity_change: l.quantity_change, remark: l.remark }));
-                const { error } = await _supabase.from('shared_inventory_logs').insert(toInsert);
+                const toInsert = all.map(l => withEditMeta({ transaction_type: l.transaction_type, batch_name: batchId, breed_name: breed, plot_name: l.plot_name, quantity_change: l.quantity_change, remark: l.remark }));
+                const { error } = await safeInsertLogs(toInsert);
                 if (error) throw error;
+                setEditMetaUI(3, new Date().toISOString(), window.currentUserEmail);
                 alert('✅ Record updated!');
                 toggleT3EditRow(idx);
                 await syncTab3();
@@ -1664,6 +1892,21 @@
             container.insertAdjacentHTML('beforeend', html);
         }
 
+        // Set a <select>'s value, injecting a one-off <option> if the value isn't already in the list.
+        // This keeps saved source-tray values visible even after the tray's balance hits 0
+        // (or if the tray was removed from preNurseryTrayData for any reason).
+        function setSelectValuePreserve(selectEl, value, label) {
+            if (!selectEl || !value) return;
+            const exists = Array.from(selectEl.options).some(o => o.value === value);
+            if (!exists) {
+                const opt = document.createElement('option');
+                opt.value = value;
+                opt.text  = label || `${value} (transplanted)`;
+                selectEl.appendChild(opt);
+            }
+            selectEl.value = value;
+        }
+
         function getTab3TrayOptionsHTML(liveBalances) {
             liveBalances = liveBalances || {};
             let html = '<option value="">Select Tray...</option>';
@@ -1677,8 +1920,14 @@
             html += `<option value="DOUBLE-TONE">🎯 DOUBLE-TONE${dtoneQty !== null ? '  [' + dtoneQty.toLocaleString() + ' seeds]' : ''}</option>`;
             html += `</optgroup>`;
 
-            // Batch PN trays — show LIVE remaining balance
-            const batchTrays = preNurseryTrayData.filter(t => !['PREMIUM CARE','DOUBLE-TONE'].includes(t.name));
+            // Batch PN trays — show LIVE remaining balance. Hide trays with 0 remaining
+            // (they've been fully transplanted out, so they're not selectable for new rows).
+            const batchTrays = preNurseryTrayData
+                .filter(t => !['PREMIUM CARE','DOUBLE-TONE'].includes(t.name))
+                .filter(t => {
+                    const remaining = liveBalances.hasOwnProperty(t.name) ? liveBalances[t.name] : t.initialQty;
+                    return remaining !== 0;
+                });
             if(batchTrays.length > 0) {
                 const batchId = document.getElementById('f-batchno').value || '—';
                 html += `<optgroup label="Pre-Nursery Trays  [Batch: ${batchId}]">`;
@@ -1804,6 +2053,7 @@
                     const previewContainer = document.getElementById(`map-preview-container-${rowId}`);
                     previewContainer.classList.remove('hidden');
                     previewContainer.classList.add('flex');
+                    calcTransplanting();
                 }
                 reader.readAsDataURL(file);
             }
@@ -1816,6 +2066,7 @@
             previewContainer.classList.add('hidden');
             previewContainer.classList.remove('flex');
             document.getElementById(`map-zone-${rowId}`).classList.remove('hidden');
+            calcTransplanting();
         }
 
         function viewMap(rowId) {
@@ -1870,7 +2121,7 @@
 
         function removeTransplantRow(rowId) {
             const row = document.getElementById(rowId);
-            if(row) { row.remove(); calcTransplanting(); }
+            if(row) { delete rowMaps[rowId]; row.remove(); calcTransplanting(); }
         }
 
         function togglePlotInput(rowId) {
@@ -1948,7 +2199,7 @@
                 const sel = row.querySelector('.t3-source-tray');
                 const prev = sel.value;
                 sel.innerHTML = getTab3TrayOptionsHTML(activeTrayBalances);
-                sel.value = prev;
+                setSelectValuePreserve(sel, prev);
             });
 
             // Update panel sub-totals — show NET balance (inflow minus used-as-source)
@@ -2059,14 +2310,18 @@
             const cullByTray = window._t3CullByTray || {};
             let html = '';
             
-            if(Object.keys(balances).length === 0) {
+            // Filter out trays whose balance is exhausted (fully transplanted/culled).
+            // The user expects emptied trays to disappear from the Pre-Nursery Source Trays panel.
+            const visibleEntries = Object.entries(balances).filter(([_, bal]) => bal !== 0);
+            if (Object.keys(balances).length === 0) {
                 html = '<div class="text-[10px] text-[#8a7a68] italic text-center p-3 border border-dashed border-[#e8dcc8] rounded-xl">Complete Tab 2 first.</div>';
+            } else if (visibleEntries.length === 0) {
+                html = '<div class="text-[10px] text-[#4a7a2e] italic text-center p-3 border border-dashed border-[#c3e6cb] bg-[#f0f8ec] rounded-xl">All PN trays transplanted ✅</div>';
             } else {
-                for (const [tray, bal] of Object.entries(balances)) {
-                    const isNeg = bal < 0; const isZero = bal === 0;
+                for (const [tray, bal] of visibleEntries) {
+                    const isNeg = bal < 0;
                     let bg = "bg-[#fdfaf4] border-[#e8dcc8]"; let txt = "text-[#3d2610]";
                     let statusTxt = "Active"; let statusCls = "text-[#c07820]";
-                    if (isZero)  { bg = "bg-[#f0f8ec] border-[#4a7a2e]"; txt = "text-[#4a7a2e] opacity-60"; statusTxt = "Empty ✅"; statusCls = "text-[#4a7a2e]"; }
                     if (isNeg)   { bg = "bg-[#fff5f5] border-[#f8d7da]"; txt = "text-[#a83020]"; statusTxt = "Over ⚠️"; statusCls = "text-[#a83020] animate-pulse"; }
 
                     // Cull info — only show if this tray is in this batch
@@ -2103,22 +2358,34 @@
 
         function updateTransplantCompletion(total, accounted, untransplanted) {
             // accounted = main + premium + doubletone + culling (from tab 4)
-            // Tab 3 cannot show 100% unless untransplanted === 0 (meaning culling fills the gap too)
+            // Tab 3 cannot show 100% unless untransplanted === 0 AND every transplant row with qty > 0 has its drone map attached.
+            const rowsNeedingMap = Array.from(document.querySelectorAll('.transplant-row')).filter(r => {
+                const q = parseInt(r.querySelector('.t3-qty')?.value) || 0;
+                return q > 0;
+            });
+            const missingMaps = rowsNeedingMap.filter(r => !rowMaps[r.id]).length;
+            const allMapsAttached = rowsNeedingMap.length > 0 && missingMaps === 0;
+
             let percentage = 0;
             if (total > 0) {
-                // Cap at 99% until fully balanced (untransplanted === 0)
-                percentage = Math.min(untransplanted === 0 ? 100 : 99, Math.round((accounted / total) * 100));
+                const balancePct = Math.round((accounted / total) * 100);
+                // Only allow 100% when fully balanced AND every required drone map is attached.
+                percentage = (untransplanted === 0 && allMapsAttached)
+                    ? 100
+                    : Math.min(99, balancePct);
             }
-            
+
             document.getElementById('t3-pie-tab').style.setProperty('--percentage', percentage);
             document.getElementById('t3-pie-analysis').style.setProperty('--percentage', percentage);
             document.getElementById('t3-percent-text').innerText = percentage + '%';
-            
+
             const desc = document.getElementById('t3-status-desc');
             const saveBtn = document.getElementById('save-transplant-btn');
-            
+
             saveBtn.innerText = `Save Transplant Report (${percentage}% Allocated)`;
-            if (untransplanted === 0 && total > 0) {
+            if (untransplanted === 0 && total > 0 && !allMapsAttached) {
+                desc.innerText = `Attach ${missingMaps} Drone Map${missingMaps>1?'s':''}`; desc.className = "text-base font-black uppercase text-[#c07820] mt-1";
+            } else if (untransplanted === 0 && total > 0) {
                 desc.innerText = "100% Allocated"; desc.className = "text-base font-black uppercase text-[#4a7a2e] mt-1";
             } else if (untransplanted < 0) {
                 desc.innerText = "Over Allocated"; desc.className = "text-base font-black uppercase text-[#a83020] mt-1";
@@ -2153,36 +2420,33 @@
                     if (!sourceTray || !destPlot || qty <= 0) return;
 
                     if (destType === 'main') {
-                        // Save to inventory_logs as Transplanted → Main Plot
-                        logsToInsert.push({
+                        logsToInsert.push(withEditMeta({
                             transaction_type: 'Transplanted',
                             batch_name: batchId,
                             breed_name: breed,
                             plot_name: destPlot,
                             quantity_change: qty,
                             remark: `Transplanted from tray [${sourceTray}] to Main Plot [${destPlot}]. Date: ${dateVal}`
-                        });
+                        }));
                     } else if (destType === 'premium') {
-                        // Save to inventory_logs + update qty in trays table for PREMIUM CARE
-                        logsToInsert.push({
+                        logsToInsert.push(withEditMeta({
                             transaction_type: 'Transplanted_Premium',
                             batch_name: batchId,
                             breed_name: breed,
                             plot_name: 'PREMIUM CARE',
                             quantity_change: qty,
                             remark: `Moved from tray [${sourceTray}] to PREMIUM CARE tray. Date: ${dateVal}`
-                        });
+                        }));
                         trayUpdates.push({ tray_name: 'PREMIUM CARE', qty });
                     } else if (destType === 'doubletone') {
-                        // Save to inventory_logs + update qty in trays table for DOUBLE-TONE
-                        logsToInsert.push({
+                        logsToInsert.push(withEditMeta({
                             transaction_type: 'Transplanted_DoubleTone',
                             batch_name: batchId,
                             breed_name: breed,
                             plot_name: 'DOUBLE-TONE',
                             quantity_change: qty,
                             remark: `Moved from tray [${sourceTray}] to DOUBLE-TONE tray. Date: ${dateVal}`
-                        });
+                        }));
                         trayUpdates.push({ tray_name: 'DOUBLE-TONE', qty });
                     }
                 });
@@ -2215,8 +2479,9 @@
                     .in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']);
 
                 // 2. Insert new transplant logs
-                const { error: logError } = await _supabase.from('shared_inventory_logs').insert(logsToInsert);
+                const { error: logError } = await safeInsertLogs(logsToInsert);
                 if (logError) throw logError;
+                setEditMetaUI(3, new Date().toISOString(), window.currentUserEmail);
 
                 // 3. Update PREMIUM CARE and DOUBLE-TONE tray quantities in the trays table
                 // Group by tray_name and sum qty
@@ -2321,11 +2586,11 @@
                     </div>
                     <div>
                         <label class="label-style">Total Planted</label>
-                        <input type="number" class="input-style t-planted" min="0" oninput="calcTrayRow('${rowId}')">
+                        <input type="text" inputmode="numeric" class="input-style t-planted" oninput="formatNumericInput(this); calcTrayRow('${rowId}')">
                     </div>
                     <div>
                         <label class="label-style !text-[#a83020]">Empty Holes</label>
-                        <input type="number" class="input-style t-empty !text-[#a83020]" min="0" oninput="calcTrayRow('${rowId}')">
+                        <input type="text" inputmode="numeric" class="input-style t-empty !text-[#a83020]" oninput="formatNumericInput(this); calcTrayRow('${rowId}')">
                     </div>
                     <div>
                         <label class="label-style !text-[#4a7a2e]">Actual Planted</label>
@@ -2383,8 +2648,8 @@
 
         function calcTrayRow(rowId) {
             const row = document.getElementById(rowId);
-            const planted = parseInt(row.querySelector('.t-planted').value) || 0;
-            const empty = parseInt(row.querySelector('.t-empty').value) || 0;
+            const planted = readNumericInput(row.querySelector('.t-planted'));
+            const empty = readNumericInput(row.querySelector('.t-empty'));
             const actual = Math.max(0, planted - empty); 
             
             const actualDiv = row.querySelector('.t-actual');
@@ -2398,37 +2663,54 @@
             const focRaw = parseInt(document.getElementById('display-foc-qty').dataset.raw || 0);
             const doRaw = expectedRaw - focRaw;
             const focPercent = doRaw > 0 ? ((focRaw / doRaw) * 100).toFixed(1) : 0;
-            const damaged = parseInt(document.getElementById('t2-damaged').value) || 0;
-            
+            const damaged = readNumericInput('t2-damaged');
+
             let totalActualPlanted = 0;
-            document.querySelectorAll('.t-actual').forEach(div => {
-                totalActualPlanted += parseInt(div.dataset.raw || 0);
+            let totalPlannedSum = 0;
+            let totalEmptySum = 0;
+            let activeTrayRows = 0;
+            document.querySelectorAll('.tray-row').forEach(row => {
+                activeTrayRows++;
+                totalPlannedSum    += readNumericInput(row.querySelector('.t-planted'));
+                totalEmptySum      += readNumericInput(row.querySelector('.t-empty'));
+                totalActualPlanted += parseInt(row.querySelector('.t-actual')?.dataset.raw || 0);
             });
+
+            // Update tray totals footer row
+            const setTrayTot = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
+            setTrayTot('t2-tray-count',  activeTrayRows);
+            setTrayTot('t2-tot-planted', totalPlannedSum.toLocaleString());
+            setTrayTot('t2-tot-empty',   totalEmptySum.toLocaleString());
+            setTrayTot('t2-tot-actual',  totalActualPlanted.toLocaleString());
 
             const accountedTotal = totalActualPlanted + damaged;
 
             // ── Chart 1: Seeds Accounted — horizontal bar, vertical dashed target line ──
-            const acctPct = expectedRaw > 0 ? Math.round((accountedTotal / expectedRaw) * 100) : 0;
-            const targetPctLabel = '100%'; // target line is always the 100% mark
+            // Target = 100% (D/O) + FOC% → e.g. 107% or 105%. Actual is computed as % of D/O qty.
+            const focPctNum = parseFloat(focPercent) || 0;
+            const targetPct = doRaw > 0 ? 100 + focPctNum : 0;
+            // Truncate (not round) so 106.80% displays as 106%.
+            const acctPct   = doRaw > 0 ? Math.floor((accountedTotal / doRaw) * 100) : 0;
 
             document.getElementById('t2-chart-target-text').innerText = expectedRaw.toLocaleString();
             document.getElementById('t2-chart-actual-text').innerText = accountedTotal.toLocaleString();
             document.getElementById('t2-foc-pct-note').innerText = focPercent + '%';
-            document.getElementById('t2-target-pct-label').innerText = '100%';
+            document.getElementById('t2-target-pct-label').innerText = targetPct > 0 ? targetPct.toFixed(focPctNum % 1 === 0 ? 0 : 1) + '%' : '—';
 
-            // Bar fills as % of max(actual, expected)*1.1, target line sits at expected/max
-            const chart1Max = Math.max(expectedRaw, accountedTotal) * 1.1 || 1;
-            const barW1 = Math.min(100, (accountedTotal / chart1Max) * 100).toFixed(1);
-            const targetLineLeft1 = Math.min(95, (expectedRaw / chart1Max) * 100).toFixed(1);
+            // Bar width and target line are positioned on a shared % scale (with headroom).
+            const chart1MaxPct = Math.max(targetPct, acctPct, 100) * 1.1 || 1;
+            const barW1 = Math.min(100, (acctPct / chart1MaxPct) * 100).toFixed(1);
+            const targetLineLeft1 = Math.min(95, (targetPct / chart1MaxPct) * 100).toFixed(1);
 
             document.getElementById('t2-acct-bar').style.width = barW1 + '%';
-            document.getElementById('t2-acct-bar').className = `absolute left-0 top-0 h-full rounded-lg transition-all duration-700 ${acctPct > 105 ? 'bg-[#4a7a2e]' : acctPct >= 90 ? 'bg-[#3a7ab4]' : 'bg-[#c07820]'}`;
+            // Green when target met (actual ≥ D/O + FOC), blue when D/O met but FOC short, orange otherwise.
+            document.getElementById('t2-acct-bar').className = `absolute left-0 top-0 h-full rounded-lg transition-all duration-700 ${acctPct >= targetPct && targetPct > 0 ? 'bg-[#4a7a2e]' : acctPct >= 100 ? 'bg-[#3a7ab4]' : 'bg-[#c07820]'}`;
             document.getElementById('t2-target-line').style.left = targetLineLeft1 + '%';
 
             // Show % inside bar when bar is wide enough
             const pctInline1 = document.getElementById('t2-acct-pct-inline');
             if (parseFloat(barW1) > 20 && acctPct > 0) { pctInline1.style.display = 'block'; pctInline1.innerText = acctPct + '%'; } else { pctInline1.style.display = 'none'; }
-            document.getElementById('t2-acct-pct').innerText = expectedRaw > 0 ? acctPct + '%' : '—';
+            document.getElementById('t2-acct-pct').innerText = doRaw > 0 ? acctPct + '%' : '—';
 
             const matchBox = document.getElementById('t2-match-box');
             const matchIcon = document.getElementById('t2-match-icon');
@@ -2457,9 +2739,9 @@
                 matchDesc.innerText = `+${over.toLocaleString()}`; matchDesc.className = "text-[9px] font-bold text-[#4a7a2e] uppercase tracking-widest mt-1 leading-tight";
             } else {
                 matchBox.className = "w-24 shrink-0 rounded-xl border border-[#c3e6cb] bg-[#f0f8ec] flex flex-col justify-center items-center text-center transition-colors p-3";
-                matchIcon.innerText = "✅"; 
+                matchIcon.innerText = "✅";
                 matchTitle.innerText = "Match"; matchTitle.className = "text-[10px] font-black uppercase tracking-wider text-[#4a7a2e] leading-tight";
-                matchDesc.innerText = "100%"; matchDesc.className = "text-[9px] font-bold text-[#4a7a2e] uppercase tracking-widest mt-1 leading-tight";
+                matchDesc.innerText = (targetPct > 0 ? targetPct.toFixed(focPctNum % 1 === 0 ? 0 : 1) : '100') + '%'; matchDesc.className = "text-[9px] font-bold text-[#4a7a2e] uppercase tracking-widest mt-1 leading-tight";
             }
 
             // ── Chart 2: Damage Control — horizontal bar, vertical dashed FOC% line ──
@@ -2556,10 +2838,17 @@
         function updateWorkers(delta) {
             currentWorkers += delta;
             if (currentWorkers < 0) currentWorkers = 0; if (currentWorkers > 10) currentWorkers = 10;
-            document.getElementById('worker-count').innerText = currentWorkers;
+            const countEl = document.getElementById('worker-count');
+            if (countEl) countEl.innerText = currentWorkers;
+            // Auto-create the worker icon row if it hasn't been generated yet (defensive against ordering bugs).
+            const iconsContainer = document.getElementById('worker-icons');
+            if (iconsContainer && !document.getElementById('w-icon-1')) {
+                generateWorkerIcons();
+            }
             for(let i=1; i<=10; i++) {
                 const icon = document.getElementById('w-icon-' + i);
-                if(i <= currentWorkers) { icon.classList.remove('inactive'); icon.classList.add('active'); } 
+                if (!icon) continue;
+                if(i <= currentWorkers) { icon.classList.remove('inactive'); icon.classList.add('active'); }
                 else { icon.classList.remove('active'); icon.classList.add('inactive'); }
             }
             updatePlantingCompletion();
@@ -2654,54 +2943,66 @@
             try {
                 const batchId = document.getElementById('f-batchno').value.trim();
                 const breed = document.getElementById('f-brand').value;
-                const damaged = parseInt(document.getElementById('t2-damaged').value) || 0;
-                
+                const damaged = readNumericInput('t2-damaged');
+                const plantedDate = document.getElementById('t2-date').value || null;
+
                 // Collect Tray Data to send to DB
                 let logsToInsert = [];
-                
+
                 document.querySelectorAll('.tray-row').forEach(row => {
                     const traySelect = row.querySelector('.t-select').value;
-                    const totalPlanted = parseInt(row.querySelector('.t-planted').value) || 0;
-                    const emptyHoles  = parseInt(row.querySelector('.t-empty').value)   || 0;
+                    const totalPlanted = readNumericInput(row.querySelector('.t-planted'));
+                    const emptyHoles  = readNumericInput(row.querySelector('.t-empty'));
                     const qty = parseInt(row.querySelector('.t-actual').dataset.raw || 0);
-                    
+
                     if (traySelect && qty > 0) {
-                        logsToInsert.push({
+                        logsToInsert.push(withEditMeta({
                             transaction_type: 'Planted',
                             batch_name: batchId,
                             breed_name: breed,
-                            plot_name: traySelect, 
+                            plot_name: traySelect,
                             quantity_change: qty,
+                            transaction_date: plantedDate,
                             remark: `Planted in Pre-Nursery tray ${traySelect}. TotalPlanted:${totalPlanted}. EmptyHoles:${emptyHoles}.`
-                        });
+                        }));
                     }
                 });
 
                 if (damaged > 0) {
-                    logsToInsert.push({
+                    logsToInsert.push(withEditMeta({
                         transaction_type: 'Damaged_Seeds',
                         batch_name: batchId,
                         breed_name: breed,
                         quantity_change: damaged,
-                        remark: `Damaged seeds recorded during initial planting. Workers:${currentWorkers}.`
-                    });
+                        transaction_date: plantedDate,
+                        remark: `Damaged seeds recorded during initial planting.`
+                    }));
                 } else {
-                    // Save workers even when damaged = 0, as a standalone workers log
-                    logsToInsert.push({
+                    logsToInsert.push(withEditMeta({
                         transaction_type: 'Damaged_Seeds',
                         batch_name: batchId,
                         breed_name: breed,
                         quantity_change: 0,
-                        remark: `No damaged seeds. Workers:${currentWorkers}.`
-                    });
+                        transaction_date: plantedDate,
+                        remark: `No damaged seeds.`
+                    }));
                 }
 
                 if (logsToInsert.length > 0) {
                     // Prevent duplicate logs on re-saving
                     await _supabase.from('shared_inventory_logs').delete().eq('batch_name', batchId).in('transaction_type', ['Planted', 'Damaged_Seeds']);
-                    
-                    const { error } = await _supabase.from('shared_inventory_logs').insert(logsToInsert);
+
+                    const { error } = await safeInsertLogs(logsToInsert);
                     if (error) throw error;
+                }
+
+                // Persist worker count to the `workers` column on the Seeds_Received row (single source of truth).
+                {
+                    const { error: workersErr } = await _supabase.from('shared_inventory_logs')
+                        .update({ workers: currentWorkers })
+                        .eq('batch_name', batchId)
+                        .eq('transaction_type', 'Seeds_Received');
+                    if (workersErr) console.warn('Could not update workers on Seeds_Received row:', workersErr.message);
                 }
 
                 // Check Follow up
@@ -2715,6 +3016,7 @@
                 }
 
                 await savePhotosToStorage(batchId);
+                setEditMetaUI(2, new Date().toISOString(), window.currentUserEmail);
                 showToast(`Planting report saved.${needsFollowUp ? ' ⚠️ Follow-up case generated.' : ''}`, 'success');
                 btn.innerText = originalText;
                 btn.disabled = false;
@@ -2741,8 +3043,128 @@
             } else { document.getElementById('latest-batch-id').innerText = "None"; const nextId = `MJN-${currentYear}-001`; document.getElementById('f-batchno').value = nextId; }
         }
 
+        // ── Numeric input helpers (thousand separators) ──────────────────────────
+        function formatNumericInput(input) {
+            if (!input) return;
+            const cursorPos = input.selectionStart;
+            const oldVal = input.value || '';
+            const digits = oldVal.replace(/[^\d]/g, '');
+            if (digits === '') { input.value = ''; return; }
+            const formatted = parseInt(digits, 10).toLocaleString();
+            input.value = formatted;
+            // Cursor restoration: keep position relative to digit count, not raw chars.
+            if (cursorPos != null) {
+                let digitsBeforeCursor = 0;
+                for (let i = 0; i < cursorPos && i < oldVal.length; i++) {
+                    if (/\d/.test(oldVal[i])) digitsBeforeCursor++;
+                }
+                let newPos = 0, count = 0;
+                while (newPos < formatted.length && count < digitsBeforeCursor) {
+                    if (/\d/.test(formatted[newPos])) count++;
+                    newPos++;
+                }
+                try { input.setSelectionRange(newPos, newPos); } catch(_) {}
+            }
+        }
+        function readNumericInput(idOrEl) {
+            const el = typeof idOrEl === 'string' ? document.getElementById(idOrEl) : idOrEl;
+            if (!el) return 0;
+            return parseInt(String(el.value || '').replace(/,/g, ''), 10) || 0;
+        }
+        function setNumericInput(idOrEl, value) {
+            const el = typeof idOrEl === 'string' ? document.getElementById(idOrEl) : idOrEl;
+            if (!el) return;
+            const n = parseInt(value, 10);
+            el.value = isNaN(n) ? '' : n.toLocaleString();
+        }
+
+        // ── Last-edit metadata (per tab) ────────────────────────────────────────
+        // Maps tab index → list of transaction_type values that "belong" to that tab.
+        const TAB_TXN_TYPES = {
+            1: ['Seeds_Received'],
+            2: ['Planted', 'Damaged_Seeds'],
+            3: ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone'],
+            4: ['1st_Culling'],
+            5: ['2nd_Culling'],
+            6: ['3rd_Culling']
+        };
+        function withEditMeta(payload) {
+            // Stamp the user + timestamp so each saved row carries who/when it was last edited.
+            return Object.assign({}, payload, {
+                last_edited_by: window.currentUserEmail || null,
+                last_edited_at: new Date().toISOString()
+            });
+        }
+        // If the DB rejects an insert because last_edited_* columns aren't present yet, retry without them.
+        function isEditMetaColumnError(err) {
+            const msg = (err && err.message) || '';
+            return /last_edited_(by|at)/i.test(msg) && /column|schema/i.test(msg);
+        }
+        function stripEditMeta(rows) {
+            return rows.map(r => { const { last_edited_by, last_edited_at, ...rest } = r; return rest; });
+        }
+        function formatEditMeta(dateLike, email) {
+            if (!dateLike && !email) return '—';
+            let when = '';
+            if (dateLike) {
+                const d = new Date(dateLike);
+                if (!isNaN(d.getTime())) {
+                    when = d.toLocaleString('en-MY', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                }
+            }
+            const who = email ? ` by ${email}` : '';
+            return when ? when + who : (email || '—');
+        }
+        function setEditMetaUI(tabIdx, dateLike, email) {
+            const el = document.getElementById(`t${tabIdx}-edit-meta`);
+            if (el) el.innerText = formatEditMeta(dateLike, email);
+        }
+        // Insert into shared_inventory_logs, gracefully dropping `workers` / `last_edited_*` if the DB schema lacks them.
+        async function safeInsertLogs(payloadArr) {
+            let payload = payloadArr;
+            let { error } = await _supabase.from('shared_inventory_logs').insert(payload);
+            if (error && /workers/i.test(error.message || '') && /column|schema/i.test(error.message || '')) {
+                console.warn('`workers` column missing — retrying without it.');
+                payload = payload.map(({ workers, ...rest }) => rest);
+                ({ error } = await _supabase.from('shared_inventory_logs').insert(payload));
+            }
+            if (error && isEditMetaColumnError(error)) {
+                console.warn('`last_edited_*` columns missing — retrying without them.');
+                payload = stripEditMeta(payload);
+                ({ error } = await _supabase.from('shared_inventory_logs').insert(payload));
+            }
+            return { error };
+        }
+        async function loadAllEditMeta(batchId) {
+            if (!batchId) return;
+            // Try the rich select first; if columns are absent, retry with just created_at.
+            let { data, error } = await _supabase.from('shared_inventory_logs')
+                .select('transaction_type, created_at, last_edited_at, last_edited_by')
+                .eq('batch_name', batchId);
+            if (error && isEditMetaColumnError(error)) {
+                ({ data, error } = await _supabase.from('shared_inventory_logs')
+                    .select('transaction_type, created_at')
+                    .eq('batch_name', batchId));
+            }
+            if (error || !data) return;
+            // Pick the latest row per tab, preferring last_edited_at over created_at.
+            const latest = {}; // tabIdx → { ts, when, email }
+            data.forEach(row => {
+                for (const [idx, types] of Object.entries(TAB_TXN_TYPES)) {
+                    if (!types.includes(row.transaction_type)) continue;
+                    const tsRaw = row.last_edited_at || row.created_at;
+                    if (!tsRaw) continue;
+                    const ts = new Date(tsRaw).getTime();
+                    if (!latest[idx] || ts > latest[idx].ts) {
+                        latest[idx] = { ts, when: tsRaw, email: row.last_edited_by || '' };
+                    }
+                }
+            });
+            Object.entries(latest).forEach(([idx, v]) => setEditMetaUI(idx, v.when, v.email));
+        }
+
         function calculateTotalSeeds() {
-            const doQty = parseInt(document.getElementById('f-do-qty').value) || 0;
+            const doQty = readNumericInput('f-do-qty');
             const focPercent = parseFloat(document.getElementById('f-foc-percent').value) || 0;
             if (doQty > 0) {
                 const focQty = Math.round(doQty * (focPercent / 100));
@@ -2771,7 +3193,7 @@
             setTimeout(() => {
                 document.getElementById('f-supplier').value = "FELDA Seeds Sdn Bhd";
                 document.getElementById('f-dono').value = "DO-99201-B";
-                document.getElementById('f-do-qty').value = "100000";
+                setNumericInput('f-do-qty', 100000);
                 document.getElementById('f-foc-percent').value = "5";
                 calculateTotalSeeds();
                 dropContent.innerHTML = `<span class="text-4xl">✅</span><div><p class="text-sm font-black text-[#4a7a2e] uppercase tracking-widest">Data Extracted Successfully</p></div>`;
@@ -2798,8 +3220,8 @@
             const date    = document.getElementById('f-datereceived').value;
             const batch   = document.getElementById('f-batchno').value.trim();
             const breed   = document.getElementById('f-brand').value;
-            const doQty   = document.getElementById('f-do-qty').value;
-            const filled  = [date, batch, breed, doQty].filter(v => v && v !== '').length;
+            const doQty   = readNumericInput('f-do-qty');
+            const filled  = [date, batch, breed, doQty].filter(v => v && v !== '' && v !== 0).length;
             const pct     = Math.round((filled / 4) * 100);
             const pie     = document.getElementById('t1-pie-analysis');
             const pctTxt  = document.getElementById('t1-percent-text');
@@ -2815,20 +3237,34 @@
 
         document.getElementById('reception-form').addEventListener('submit', async function(e) {
             e.preventDefault(); const saveBtn = document.getElementById('save-btn'); saveBtn.innerText = 'SAVING...'; saveBtn.disabled = true;
-            const dateReceived = document.getElementById('f-datereceived').value; const batch = document.getElementById('f-batchno').value.trim(); const breed = document.getElementById('f-brand').value; const supplier = document.getElementById('f-supplier').value; const dono = document.getElementById('f-dono').value; const focPercent = parseFloat(document.getElementById('f-foc-percent').value) || 0; const totalQtyRaw = document.getElementById('display-total-qty').dataset.raw || 0; const doQty = parseInt(document.getElementById('f-do-qty').value) || 0;
+            const dateReceived = document.getElementById('f-datereceived').value; const batch = document.getElementById('f-batchno').value.trim(); const breed = document.getElementById('f-brand').value; const supplier = document.getElementById('f-supplier').value; const dono = document.getElementById('f-dono').value; const focPercent = parseFloat(document.getElementById('f-foc-percent').value) || 0; const totalQtyRaw = document.getElementById('display-total-qty').dataset.raw || 0; const doQty = readNumericInput('f-do-qty');
             let remarkStr = `Seeds received.`; if (supplier) remarkStr += ` Supplier: ${supplier}.`; if (dono) remarkStr += ` D/O: ${dono}.`; remarkStr += ` DO_Qty: ${doQty}.`; if (focPercent > 0) remarkStr += ` Incl. ${focPercent}% FOC.`;
-            const ledgerPayload = { transaction_type: 'Seeds_Received', batch_name: batch, breed_name: breed, quantity_change: parseInt(totalQtyRaw), plot_name: 'Pre-Nursery', remark: remarkStr };
+            const ledgerPayload = withEditMeta({ transaction_type: 'Seeds_Received', batch_name: batch, breed_name: breed, quantity_change: parseInt(totalQtyRaw), plot_name: 'Pre-Nursery', remark: remarkStr });
             try {
                 if(!isEditing) {
                     const batchExists = masterBatchesList.some(b => b.name === batch);
                     if (!batchExists) { const { error: batchErr } = await _supabase.from('operation_batches').insert([{ name: batch }]); if(batchErr) console.warn("Could not save to master batches list (Check RLS policy):", batchErr); }
                 }
                 let logError;
-                if(isEditing && batchData) { const { error } = await _supabase.from('shared_inventory_logs').update(ledgerPayload).eq('created_at', batchData.created_at); logError = error; } 
-                else { ledgerPayload.created_at = new Date(dateReceived).toISOString(); const { error } = await _supabase.from('shared_inventory_logs').insert([ledgerPayload]); logError = error; }
+                if(isEditing && batchData) {
+                    let { error } = await _supabase.from('shared_inventory_logs').update(ledgerPayload).eq('created_at', batchData.created_at);
+                    if (error && isEditMetaColumnError(error)) {
+                        const fb = stripEditMeta([ledgerPayload])[0];
+                        ({ error } = await _supabase.from('shared_inventory_logs').update(fb).eq('created_at', batchData.created_at));
+                    }
+                    logError = error;
+                } else {
+                    ledgerPayload.created_at = new Date(dateReceived).toISOString();
+                    let { error } = await _supabase.from('shared_inventory_logs').insert([ledgerPayload]);
+                    if (error && isEditMetaColumnError(error)) {
+                        ({ error } = await _supabase.from('shared_inventory_logs').insert(stripEditMeta([ledgerPayload])));
+                    }
+                    logError = error;
+                }
                 if(logError) { showToast('Database blocked save: ' + logError.message, 'error'); throw logError; }
                 updateTracker(1); document.getElementById('time-received').innerText = 'Rec: ' + new Date(dateReceived).toLocaleDateString('en-MY', {day: '2-digit', month: 'short', year: 'numeric'}); setTimeout(updateT1Completion, 100);
                 updateT1Completion(); document.getElementById('t1-pie-analysis').style.setProperty('--percentage', 100); document.getElementById('t1-percent-text').innerText = '100%'; document.getElementById('t1-status-desc').innerText = 'Complete'; document.getElementById('t1-status-desc').className = 'text-base font-black uppercase text-[#4a7a2e] mt-1';
+                setEditMetaUI(1, ledgerPayload.last_edited_at || new Date().toISOString(), ledgerPayload.last_edited_by || window.currentUserEmail);
                 showToast('Seeds In record saved successfully.', 'success');
                 saveBtn.innerText = 'Save'; saveBtn.disabled = false;
                 setTimeout(() => switchTab(2), 600);
@@ -3162,14 +3598,14 @@
                     const qty = parseInt(row.querySelector('.cull-qty').value) || 0;
                     const rate = row.querySelector('.cull-rate').innerText;
                     if (!tray || tray === '—' || qty <= 0) return;
-                    logsToInsert.push({
+                    logsToInsert.push(withEditMeta({
                         transaction_type: '1st_Culling',
                         batch_name: batchId,
                         breed_name: breed,
                         plot_name: tray,
                         quantity_change: qty,
                         remark: `1st Culling on tray [${tray}]. Cull rate: ${rate}. Date: ${dateVal}`
-                    });
+                    }));
                 });
 
                 if (logsToInsert.length === 0) throw new Error('No valid rows to save.');
@@ -3177,8 +3613,9 @@
                 await _supabase.from('shared_inventory_logs').delete()
                     .eq('batch_name', batchId).eq('transaction_type', '1st_Culling');
 
-                const { error } = await _supabase.from('shared_inventory_logs').insert(logsToInsert);
+                const { error } = await safeInsertLogs(logsToInsert);
                 if (error) throw error;
+                setEditMetaUI(4, new Date().toISOString(), window.currentUserEmail);
 
                 showToast(`1st Culling report saved — ${logsToInsert.length} tray record(s) logged.`, 'success');
                 btn.innerText = originalText; btn.disabled = false;
@@ -3420,6 +3857,7 @@
         function calcT5() {
             let totTransplanted = 0, totAlive = 0, totDead = 0;
             let filledRows = 0, totalRows = 0;
+            let mapsAttachedForExistingRows = 0;
 
             document.querySelectorAll('.t5-plot-row').forEach(row => {
                 totalRows++;
@@ -3431,6 +3869,7 @@
                 totDead           += dead;
                 totAlive          += alive;
                 if (deadInput.value !== '') filledRows++;
+                if (t5_plotMaps[row.id]) mapsAttachedForExistingRows++;
             });
 
             // Dashboard
@@ -3455,10 +3894,10 @@
             setEl('t5-tot-alive-m',        totAlive.toLocaleString());
             setEl('t5-tot-cull-rate', cullRateTxt);
 
-            // Completion %: dead filled + map attached per row
-            const mapsAttached = Object.keys(t5_plotMaps).length;
+            // Completion %: dead filled + map attached per row.
+            // Only count maps belonging to currently-rendered rows so 100% requires every row to have BOTH dead value and map.
             const required = totalRows * 2;
-            const filled   = filledRows + mapsAttached;
+            const filled   = filledRows + mapsAttachedForExistingRows;
             const pct = required > 0 ? Math.min(100, Math.round((filled / required) * 100)) : 0;
 
             document.getElementById('t5-pie-tab').style.setProperty('--percentage', pct);
@@ -3531,20 +3970,21 @@
                     const cullDate     = cullDateInput ? cullDateInput.value : '';
                     if (deadInput.value === '') return; // skip unfilled rows
                     const cullPct = transplanted > 0 ? ((dead / transplanted) * 100).toFixed(1) : '0';
-                    logsToInsert.push({
+                    logsToInsert.push(withEditMeta({
                         transaction_type: '2nd_Culling',
                         batch_name:       batchId,
                         breed_name:       breed,
                         plot_name:        plotName,
                         quantity_change:  dead,
                         remark: `2nd Culling. Alive: ${alive}, Dead: ${dead}, Cull: ${cullPct}%. Transplanted: ${transplanted}. CullDate: ${cullDate}`
-                    });
+                    }));
                 });
 
                 if (logsToInsert.length === 0) throw new Error('No filled rows to save.');
                 await _supabase.from('shared_inventory_logs').delete().eq('batch_name', batchId).eq('transaction_type', '2nd_Culling');
-                const { error } = await _supabase.from('shared_inventory_logs').insert(logsToInsert);
+                const { error } = await safeInsertLogs(logsToInsert);
                 if (error) throw error;
+                setEditMetaUI(5, new Date().toISOString(), window.currentUserEmail);
 
                 showToast(`2nd Culling report saved — ${logsToInsert.length} plot record(s) logged.`, 'success');
                 btn.innerText = originalText; btn.disabled = false;
@@ -3799,8 +4239,10 @@
 
             // Progress: 100% only when ALL rows done (culled qty + doc)
             const culledFilled = Array.from(document.querySelectorAll('.t6-culled-input')).filter(el => el.value !== '').length;
+            // Only count docs belonging to currently-rendered rows (avoid stale keys inflating progress).
+            const docsForExistingRows = Array.from(document.querySelectorAll('.t6-plot-row')).filter((_, i) => !!t6_plotDocs[`t6-row-${i}`]).length;
             const totalPts = totalRows * 2;
-            const donePts  = culledFilled + Object.keys(t6_plotDocs).length;
+            const donePts  = culledFilled + docsForExistingRows;
             let pct = 0;
             if (totalPts > 0) {
                 pct = (rowsDone === totalRows && totalRows > 0)
@@ -3883,20 +4325,21 @@
                     const culled       = parseInt(cullVal) || 0;
                     if (isNaN(balance) || balVal === '') return;
                     const cullPct = transplanted > 0 ? ((culled / transplanted) * 100).toFixed(1) : '0';
-                    logsToInsert.push({
+                    logsToInsert.push(withEditMeta({
                         transaction_type: '3rd_Culling',
                         batch_name:       batchId,
                         breed_name:       breed,
                         plot_name:        plotName,
                         quantity_change:  culled,
                         remark: `3rd Culling. Transplanted: ${transplanted}, Remaining Balance: ${balance}, Culled: ${culled}, Cull Rate: ${cullPct}%`
-                    });
+                    }));
                 });
 
                 if (logsToInsert.length === 0) throw new Error('No rows with balance filled to save.');
                 await _supabase.from('shared_inventory_logs').delete().eq('batch_name', batchId).eq('transaction_type', '3rd_Culling');
-                const { error } = await _supabase.from('shared_inventory_logs').insert(logsToInsert);
+                const { error } = await safeInsertLogs(logsToInsert);
                 if (error) throw error;
+                setEditMetaUI(6, new Date().toISOString(), window.currentUserEmail);
                 showToast(`3rd Culling report saved — ${logsToInsert.length} plot record(s) logged.`, 'success');
                 btn.innerText = originalText; btn.disabled = false;
             } catch(e) {
@@ -3928,7 +4371,11 @@
         window.addEventListener('load', () => setTimeout(updateTabScrollArrows, 100));
         window.addEventListener('resize', updateTabScrollArrows);
 
-        _supabase.auth.getSession().then(({ data: { session } }) => { if (!session) window.location.href = 'operation_dashboard.html'; else initDetail(); });
+        _supabase.auth.getSession().then(({ data: { session } }) => {
+            if (!session) { window.location.href = 'operation_dashboard.html'; return; }
+            window.currentUserEmail = session.user?.email || '';
+            initDetail();
+        });
     </script>
 </body>
 </html>

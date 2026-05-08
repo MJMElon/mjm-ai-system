@@ -16,6 +16,7 @@ let records=[], activeTab='PN', activeView='list';
 let editMode=false, editId=null, detailId=null, deleteTarget=null;
 let formState={nursery:'PN',s1:'',s2:'',s3:'',p1:null,p2:null,p3:null};
 let toastTimer=null;
+let batchOptions=[]; // master list from operation_batches; auditors must pick one
 
 function isAdmin(){try{const u=JSON.parse(localStorage.getItem('mjm_user')||'{}');const role=(u.role||'').toLowerCase();return role==='admin'||role==='administrator';}catch(e){return false;}}
 
@@ -78,6 +79,53 @@ async function loadRecords(){
     renderList();
   }catch(e){showToast(t('err_load'));console.error(e);}
   setLoading(false);
+}
+
+/* --- LOAD BATCH LIST (master) --- */
+async function loadBatchOptions(){
+  try{
+    // operation_batches: master list maintained by the operations team.
+    const rows=await sbFetch('operation_batches?select=name&order=name.desc');
+    batchOptions=(rows||[]).map(r=>r.name).filter(Boolean);
+  }catch(e){console.warn('[Batch list] load failed:',e);batchOptions=[];}
+}
+
+/* --- LOAD PLOT GPS PINS (for nearest-first dropdown sort) --- */
+let plotGpsByName = {}; // { plotName: { lat, lng, nursery } }
+async function loadPlotGps(){
+  try{
+    const rows=await sbFetch('shared_plots?select=plot_name,nursery_name,gps_lat,gps_lng');
+    plotGpsByName={};
+    (rows||[]).forEach(p=>{
+      if(p.plot_name) plotGpsByName[p.plot_name]={lat:p.gps_lat,lng:p.gps_lng,nursery:p.nursery_name};
+    });
+  }catch(e){console.warn('[Plot GPS] load failed:',e);plotGpsByName={};}
+}
+
+/* --- One-time GPS read used to sort plot dropdown when form opens --- */
+let lastFormGps=null; // {lat,lng,ts} or null if denied/unsupported
+function readDeviceGpsOnce(){
+  return new Promise(resolve=>{
+    if(!navigator.geolocation){resolve(null);return;}
+    let done=false;
+    const finish=v=>{if(done)return;done=true;resolve(v);};
+    // Hard timeout — never let the form wait forever for a slow GPS lock.
+    setTimeout(()=>finish(null),4000);
+    navigator.geolocation.getCurrentPosition(
+      pos=>finish({lat:pos.coords.latitude,lng:pos.coords.longitude,ts:Date.now()}),
+      ()=>finish(null),
+      {enableHighAccuracy:true,timeout:3500,maximumAge:30000}
+    );
+  });
+}
+
+/* Haversine distance in metres */
+function gpsDistanceMeters(lat1,lng1,lat2,lng2){
+  const R=6371000;
+  const toRad=d=>d*Math.PI/180;
+  const dLat=toRad(lat2-lat1), dLng=toRad(lng2-lng1);
+  const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+  return 2*R*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
 /* --- RENDER LIST --- */
@@ -143,16 +191,20 @@ function renderList(){
 }
 
 /* --- FORM --- */
-function openAddForm(){
+async function openAddForm(){
   editMode=false;editId=null;
   formState={nursery:activeTab,s1:'',s2:'',s3:'',p1:null,p2:null,p3:null};
+  // Read GPS once when the form opens — used only to sort the plot dropdown by distance.
+  // After the auditor picks a plot, no further changes happen even if they walk away.
+  lastFormGps = await readDeviceGpsOnce();
   populateForm();setView('form');
   document.getElementById('form-view-title').textContent='New Record — '+NURSERY_LABELS[activeTab];
 }
-function openEdit(uid){
+async function openEdit(uid){
   const r=records.find(x=>x.uid===uid);if(!r)return;
   editMode=true;editId=uid;
   formState={nursery:r.nursery,s1:r.s1,s2:r.s2,s3:r.s3,p1:r.p1,p2:r.p2,p3:r.p3};
+  lastFormGps = await readDeviceGpsOnce();
   populateForm(r);setView('form');
   document.getElementById('form-view-title').textContent=t('edit_lbl')+' — '+r.id;
 }
@@ -163,11 +215,49 @@ function populateForm(r){
   document.getElementById('form-view-id').textContent=id;
   const ps=document.getElementById('f-plot');
   ps.innerHTML='<option value="">'+t('select_plot')+'</option>';
-  NURSERY_PLOTS[formState.nursery].forEach(p=>{
-    const o=document.createElement('option');o.value=p;o.textContent=p;
-    if(r&&r.plot===p)o.selected=true;ps.appendChild(o);
+
+  // Build plot list, optionally sorted nearest-first using device GPS.
+  // Sorting only ranks the dropdown; the auditor still picks manually.
+  const plotsForNursery = NURSERY_PLOTS[formState.nursery].slice();
+  let sorted = plotsForNursery.map(p => ({ name: p, distance: null }));
+  if (lastFormGps) {
+    sorted = sorted.map(o => {
+      const pin = plotGpsByName[o.name];
+      const d = (pin && pin.lat != null && pin.lng != null)
+        ? gpsDistanceMeters(lastFormGps.lat, lastFormGps.lng, +pin.lat, +pin.lng)
+        : null;
+      return { ...o, distance: d };
+    }).sort((a, b) => {
+      // Plots with a known distance come first, sorted by distance asc; the rest keep their order.
+      if (a.distance == null && b.distance == null) return 0;
+      if (a.distance == null) return 1;
+      if (b.distance == null) return -1;
+      return a.distance - b.distance;
+    });
+  }
+  sorted.forEach((o, idx) => {
+    const opt=document.createElement('option');opt.value=o.name;
+    let label=o.name;
+    if (o.distance != null) {
+      const dStr = o.distance < 1000 ? `${Math.round(o.distance)} m` : `${(o.distance/1000).toFixed(1)} km`;
+      label += ` — ${dStr}${idx === 0 ? ' · nearest' : ''}`;
+    }
+    opt.textContent=label;
+    if(r&&r.plot===o.name)opt.selected=true;
+    ps.appendChild(opt);
   });
-  document.getElementById('f-batch').value=r?r.batch||'':'';
+  // Populate batch dropdown from the operations master list. Falls back to a free-text option
+  // if a record references a batch that's no longer in the master (legacy data).
+  const bs=document.getElementById('f-batch');
+  bs.innerHTML='<option value="">— Select Batch —</option>';
+  const opts=[...batchOptions];
+  const existing=r&&r.batch?r.batch:'';
+  if(existing&&!opts.includes(existing)) opts.unshift(existing);
+  opts.forEach(name=>{
+    const o=document.createElement('option');o.value=name;o.textContent=name;
+    if(existing===name)o.selected=true;
+    bs.appendChild(o);
+  });
   document.getElementById('f-s1').value=formState.s1||'';
   document.getElementById('f-s2').value=formState.s2||'';
   document.getElementById('f-s3').value=formState.s3||'';
@@ -250,6 +340,7 @@ async function saveRecord(){
   const plot=document.getElementById('f-plot').value;
   const batch=document.getElementById('f-batch').value.trim();
   if(!plot){showToast(t('err_select_plot'));return;}
+  if(!batch){showToast('⚠ Please select a batch from the list');return;}
   if(!formState.s1&&!formState.s2&&!formState.s3){showToast(t('err_height'));return;}
   if(!formState.p1||!formState.p2||!formState.p3){
     const note=document.getElementById('photo-req-note');
@@ -347,6 +438,8 @@ function init(){
     if(e.target===document.getElementById('lightbox'))closeLightbox();
   });
   selectTab('PN');
+  loadBatchOptions();
+  loadPlotGps();
   loadRecords();
 }
 document.addEventListener('DOMContentLoaded',init);

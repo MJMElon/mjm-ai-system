@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Batch Info - MJM Nursery AI</title>
+    <title>Life of Seedlings - MJM Nursery AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
@@ -38,7 +38,7 @@
             <button onclick="window.location.href='operation_dashboard.html'" class="text-[10px] font-bold text-[#8a7a68] hover:text-[#3d2610] uppercase tracking-widest bg-[#f8f4ec] hover:bg-[#e8dcc8] px-5 py-3 rounded-xl transition-colors flex items-center gap-2 shadow-sm">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Back to main page
             </button>
-            <h1 class="text-2xl md:text-3xl font-black uppercase tracking-widest text-[#3d2610] drop-shadow-sm pb-1 text-center" style="word-spacing: 0.2em;">Batch Info</h1>
+            <h1 class="text-2xl md:text-3xl font-black uppercase tracking-widest text-[#3d2610] drop-shadow-sm pb-1 text-center" style="word-spacing: 0.2em;">Life of Seedlings</h1>
             <div class="hidden md:block w-[130px]"></div>
         </div>
 
@@ -81,23 +81,42 @@
 
         <div class="glass-panel p-8 rounded-[3rem] shadow-lg border-[#e8dcc8]">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-[#e8dcc8] pb-5 gap-4">
-                <h3 class="text-xl font-black text-[#3d2610] uppercase tracking-widest">Life of Seedling</h3>
+                <h3 class="text-xl font-black text-[#3d2610] uppercase tracking-widest">Batch Info</h3>
                 
                 <div class="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
                     <div class="relative w-full md:w-64">
                         <svg class="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-[#8a7a68]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                        <input type="text" id="search-input" onkeyup="filterLedger()" placeholder="Search Batch ID..." class="w-full pl-12 pr-4 py-3 border border-[#e8dcc8] rounded-xl font-semibold text-sm outline-none focus:border-[#6aa83c] focus:ring-1 focus:ring-[#6aa83c] bg-white shadow-inner text-[#1a150d]">
+                        <input type="text" id="search-input" onkeyup="filterLedger()" placeholder="Search Batch" class="w-full pl-12 pr-4 py-3 border border-[#e8dcc8] rounded-xl font-semibold text-sm outline-none focus:border-[#6aa83c] focus:ring-1 focus:ring-[#6aa83c] bg-white shadow-inner text-[#1a150d]">
                     </div>
-                    
-                    <button onclick="window.location.href='batch_detail.html?type=new'" class="w-full md:w-auto px-6 py-3 rounded-xl bg-[#6aa83c] text-white font-black text-[11px] uppercase tracking-widest shadow-md transition-transform hover:scale-[1.03] hover:bg-[#4a7a2e] flex items-center justify-center gap-2 whitespace-nowrap border border-[#4a7a2e]">
+
+                    <button onclick="window.location.href='operation_batch_detail.html?type=new'" class="w-full md:w-auto px-6 py-3 rounded-xl bg-[#6aa83c] text-white font-black text-[11px] uppercase tracking-widest shadow-md transition-transform hover:scale-[1.03] hover:bg-[#4a7a2e] flex items-center justify-center gap-2 whitespace-nowrap border border-[#4a7a2e]">
                         <span class="text-lg leading-none">+</span> Add New Batch Record
                     </button>
                 </div>
             </div>
 
+            <!-- Top pagination bar (mirror of the bottom one, plus a "jump to page" input) -->
+            <div id="ledger-pagination-top" class="hidden items-center justify-between gap-3 mb-4 flex-wrap">
+                <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest" id="ledger-page-summary-top">—</div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="changeLedgerPage(-1)" id="ledger-prev-top"
+                        class="w-9 h-9 rounded-xl border border-[#e8dcc8] bg-white text-[#3d2610] font-black text-sm flex items-center justify-center hover:bg-[#e8dcc8] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                        title="Previous page">‹</button>
+                    <span id="ledger-page-indicator-top" class="text-[10px] font-black text-[#3d2610] uppercase tracking-widest min-w-[80px] text-center">Page 1 of 1</span>
+                    <button type="button" onclick="changeLedgerPage(1)" id="ledger-next-top"
+                        class="w-9 h-9 rounded-xl border border-[#e8dcc8] bg-white text-[#3d2610] font-black text-sm flex items-center justify-center hover:bg-[#e8dcc8] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                        title="Next page">›</button>
+                    <span class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest ml-2">Go to</span>
+                    <input type="number" id="ledger-page-input" min="1" placeholder="#"
+                        onkeydown="if(event.key==='Enter'){ jumpToLedgerPage(this.value); this.value=''; }"
+                        onblur="if(this.value){ jumpToLedgerPage(this.value); this.value=''; }"
+                        class="w-16 h-9 rounded-xl border border-[#e8dcc8] bg-white px-2 text-center text-sm font-black text-[#3d2610] outline-none focus:border-[#6aa83c] focus:ring-1 focus:ring-[#6aa83c] shadow-inner">
+                </div>
+            </div>
+
             <div class="flex items-center gap-2 bg-white p-2 rounded-2xl border border-[#e8dcc8] shadow-inner mb-6 w-fit overflow-x-auto">
-                <button id="tab-active" class="list-tab-btn list-tab-active" onclick="switchListTab('active')">🟢 Active List</button>
-                <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')">✅ Completed Batches</button>
+                <button id="tab-active" class="list-tab-btn list-tab-active" onclick="switchListTab('active')">🟢 Active</button>
+                <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="Batch is moved here automatically once Tab 6 (3rd Culling) is saved">✅ Completed / In-Active</button>
             </div>
             
             <div class="bg-white rounded-2xl border border-[#e8dcc8] overflow-hidden shadow-inner">
@@ -122,6 +141,19 @@
                         </tbody>
                     </table>
                 </div>
+                <!-- Pagination footer -->
+                <div id="ledger-pagination" class="hidden items-center justify-between gap-3 px-4 py-3 border-t border-[#e8dcc8] bg-[#fdfaf4]">
+                    <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest" id="ledger-page-summary">—</div>
+                    <div class="flex items-center gap-2">
+                        <button id="ledger-prev" type="button" onclick="changeLedgerPage(-1)"
+                            class="w-9 h-9 rounded-xl border border-[#e8dcc8] bg-white text-[#3d2610] font-black text-sm flex items-center justify-center hover:bg-[#e8dcc8] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                            title="Previous page">‹</button>
+                        <span id="ledger-page-indicator" class="text-[10px] font-black text-[#3d2610] uppercase tracking-widest min-w-[80px] text-center">Page 1 of 1</span>
+                        <button id="ledger-next" type="button" onclick="changeLedgerPage(1)"
+                            class="w-9 h-9 rounded-xl border border-[#e8dcc8] bg-white text-[#3d2610] font-black text-sm flex items-center justify-center hover:bg-[#e8dcc8] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                            title="Next page">›</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -134,21 +166,61 @@
 
         let masterBatches = [];
         let currentListTab = 'active';
+        let currentPage = 1;
+        const PAGE_SIZE = 15;
 
         async function initLedger() {
             try {
-                // Fetch reception logs to build the summary list
-                const { data: recLogs, error } = await _supabase
-                    .from('shared_inventory_logs')
-                    .select('*')
-                    .eq('transaction_type', 'Seeds_Received')
-                    .order('created_at', { ascending: false });
-                
-                if (error) throw error;
+                // Fetch reception logs + every culling-related log type + transplant logs in parallel.
+                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes] = await Promise.all([
+                    _supabase.from('shared_inventory_logs')
+                        .select('*')
+                        .eq('transaction_type', 'Seeds_Received')
+                        .order('created_at', { ascending: false }),
+                    _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', 'Planted'),
+                    _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', 'Damaged_Seeds'),
+                    _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '1st_Culling'),
+                    _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '2nd_Culling'),
+                    _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '3rd_Culling'),
+                    _supabase.from('shared_inventory_logs').select('batch_name').in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone'])
+                ]);
+                if (recRes.error) throw recRes.error;
 
-                // Process logic & simulate stages
-                masterBatches = (recLogs || []).map(b => processBatchLogic(b));
-                
+                // Aggregate quantity_change per batch for each transaction type.
+                const sumByBatch = (res) => {
+                    const m = {};
+                    (res.data || []).forEach(r => { m[r.batch_name] = (m[r.batch_name] || 0) + (r.quantity_change || 0); });
+                    return m;
+                };
+                const plantedMap = sumByBatch(plantedRes);
+                const damagedMap = sumByBatch(damagedRes);
+                const cull1Map   = sumByBatch(cull1Res);
+                const cull2Map   = sumByBatch(cull2Res);
+                const cull3Map   = sumByBatch(cull3Res);
+
+                // A batch is completed once Tab 6 (3rd Culling) has been saved.
+                const completedBatchNames = new Set(Object.keys(cull3Map));
+                // A batch is in Main Nursery once any transplant log has been written.
+                const transplantedBatchNames = new Set((transplantRes.data || []).map(r => r.batch_name));
+
+                // Process logic & simulate stages.
+                masterBatches = (recRes.data || []).map(b => {
+                    const actualPlanted = plantedMap[b.batch_name] || 0;
+                    const damaged = damagedMap[b.batch_name] || 0;
+                    const cull1   = cull1Map[b.batch_name] || 0;
+                    const cull2   = cull2Map[b.batch_name] || 0;
+                    const cull3   = cull3Map[b.batch_name] || 0;
+                    // Denominator = actual planted qty if available; fall back to D/O+FOC for batches that haven't planted yet.
+                    const denom = actualPlanted || (b.quantity_change || 0);
+                    const cullRate = denom > 0
+                        ? Math.round(((damaged + cull1 + cull2 + cull3) / denom) * 1000) / 10  // → 1 decimal
+                        : 0;
+                    b.actualPlanted = actualPlanted;
+                    b.cullRate = cullRate;
+                    b.hasTransplant = transplantedBatchNames.has(b.batch_name);
+                    return processBatchLogic(b, completedBatchNames);
+                });
+
                 // Get Current Year
                 const currentYear = new Date().getFullYear();
                 document.getElementById('current-year-label').innerText = currentYear;
@@ -159,17 +231,17 @@
 
                 masterBatches.forEach(b => {
                     if (!b.isCompleted) totalActive++;
-                    
+
                     const batchYear = new Date(b.created_at).getFullYear();
                     if (batchYear === currentYear && b.isCompleted) {
                         currentYearBatches.push(b);
                     }
                 });
 
-                // Calculate Average Culling Rate (Based on completed batches)
+                // Average Culling Rate over completed batches in the current year.
                 let avgCulling = 0;
                 if (currentYearBatches.length > 0) {
-                    const sumCulling = currentYearBatches.reduce((sum, b) => sum + b.mockCullRate, 0);
+                    const sumCulling = currentYearBatches.reduce((sum, b) => sum + b.cullRate, 0);
                     avgCulling = (sumCulling / currentYearBatches.length).toFixed(1);
                 }
 
@@ -179,66 +251,41 @@
                 renderCullingChart(currentYearBatches);
                 switchListTab('active'); // Initial render
 
-            } catch(e) { 
+            } catch(e) {
                 console.error("Data load error:", e);
                 document.getElementById('ledger-body').innerHTML = `<tr><td colspan="8" class="text-center p-10 text-red-600 font-bold">Error connecting to database. Verify Supabase policies.</td></tr>`;
             }
         }
 
-        // --- CORE LOGIC ENGINE (Simulated until DB tables are built) ---
-        function processBatchLogic(b) {
-            const ageDays = Math.floor((new Date() - new Date(b.created_at)) / (1000 * 60 * 60 * 24));
+        // --- LIFECYCLE STAGE — mirrors the tracker on the batch detail page ---
+        // Detail page rules: stage = 1 (Pre-Nursery) by default once Seeds_Received exists,
+        // → 2 (Main Nursery) once any Transplanted log exists, → 3 (Completed) once 3rd Culling is logged.
+        function processBatchLogic(b, completedBatchNames) {
+            const ageDays = Math.max(0, Math.floor((new Date() - new Date(b.created_at)) / (1000 * 60 * 60 * 24)));
             const ageMonths = ageDays / 30.44;
-            const plantedQty = b.quantity_change || 0;
-            
-            b.mockCullRate = parseFloat((Math.random() * 8 + 2).toFixed(1)); // Base culling memory
-            b.isCompleted = false;
 
-            // 1. Pre-Nursery Maturing (0 to 3 months)
-            if (ageMonths <= 3) {
+            const finalTabSaved = completedBatchNames && completedBatchNames.has(b.batch_name);
+            b.isCompleted = !!finalTabSaved;
+
+            if (b.isCompleted) {
+                b.stageName = 'Completed';
+                b.stageColor = 'bg-[#4a7a2e]'; // Deep green
+                b.progressPct = 100;
+                b.progressText = 'All record tabs done';
+            } else if (b.hasTransplant) {
+                // Main Nursery: 9-month period (months 4–13). Use age within that window for visual progress.
+                b.stageName = 'Main Nursery';
+                b.stageColor = 'bg-[#3a7ab4]'; // Sky blue
+                const mnPct = Math.min(100, Math.max(0, Math.round(((ageMonths - 3) / 9) * 100)));
+                b.progressPct = mnPct;
+                b.progressText = mnPct >= 100 ? 'Mature — Ready for Sale check' : `Maturing Progress: ${mnPct}%`;
+            } else {
+                // Pre-Nursery: 3-month maturation window before transplant.
                 b.stageName = 'Pre-Nursery';
                 b.stageColor = 'bg-[#c07820]'; // Amber
-                b.progressPct = Math.min(100, Math.round((ageMonths / 3) * 100));
-                b.progressText = `Maturing Progress: ${b.progressPct}%`;
-            } 
-            // 2. Matured to be transplanted (Gap before transplanting starts)
-            else if (ageMonths > 3 && ageMonths <= 3.2) {
-                b.stageName = 'Pre-Nursery';
-                b.stageColor = 'bg-[#c07820]';
-                b.progressPct = 100;
-                b.progressText = `Matured to be transplant`;
-            }
-            // 3. Transplanting Process
-            else if (ageMonths > 3.2 && ageMonths <= 4) {
-                b.stageName = 'Transplanting';
-                b.stageColor = 'bg-[#8a7a68]'; // Earthy Gray
-                // Simulate transplanted/total planted seeds
-                let transplanted = Math.round(plantedQty * ((ageMonths - 3.2) / 0.8));
-                b.progressPct = Math.min(100, Math.round((transplanted / plantedQty) * 100));
-                b.progressText = `Transplanting Progress: ${b.progressPct}%`;
-            }
-            // 4. Main Nursery Maturing (4 to 12 months = 9 months duration)
-            else if (ageMonths > 4 && ageMonths <= 13) {
-                b.stageName = 'Main Nursery';
-                b.stageColor = 'bg-[#3a7ab4]'; // Sky Blue
-                b.progressPct = Math.min(100, Math.round(((ageMonths - 4) / 9) * 100));
-                b.progressText = `Maturing Progress: ${b.progressPct}%`;
-            }
-            // 5. Ready to Sales (Simulating Sold / Transplanted Qty)
-            else if (ageMonths > 13 && ageMonths <= 16) {
-                b.stageName = 'Ready for Sale';
-                b.stageColor = 'bg-[#6aa83c]'; // Sprout Green
-                let sold = Math.round(plantedQty * ((ageMonths - 13) / 3));
-                b.progressPct = Math.min(100, Math.round((sold / plantedQty) * 100));
-                b.progressText = `Sales Progress: ${b.progressPct}%`;
-            }
-            // 6. Completed
-            else {
-                b.stageName = 'Completed';
-                b.stageColor = 'bg-[#4a7a2e]'; // Dark Green
-                b.progressPct = 100;
-                b.progressText = `100% Sold & Completed`;
-                b.isCompleted = true;
+                const pnPct = Math.min(100, Math.max(0, Math.round((ageMonths / 3) * 100)));
+                b.progressPct = pnPct;
+                b.progressText = ageMonths > 3 ? 'Matured — ready to transplant' : `Maturing Progress: ${pnPct}%`;
             }
 
             return b;
@@ -246,7 +293,8 @@
 
         function switchListTab(tabName) {
             currentListTab = tabName;
-            
+            currentPage = 1;
+
             // Update Button Styles
             if(tabName === 'active') {
                 document.getElementById('tab-active').className = 'list-tab-btn list-tab-active';
@@ -263,23 +311,44 @@
             const body = document.getElementById('ledger-body');
             body.innerHTML = '';
 
-            // Filter batches based on active tab
-            let displayBatches = masterBatches.filter(b => 
+            // Filter by tab, then by search query, then paginate.
+            const query = (document.getElementById('search-input')?.value || '').trim().toLowerCase();
+            const tabFiltered = masterBatches.filter(b =>
                 currentListTab === 'active' ? !b.isCompleted : b.isCompleted
             );
+            const searchFiltered = query
+                ? tabFiltered.filter(b =>
+                    (b.batch_name || '').toLowerCase().includes(query) ||
+                    (b.breed_name || '').toLowerCase().includes(query))
+                : tabFiltered;
 
-            if(displayBatches.length === 0) {
-                const emptyMsg = currentListTab === 'active' ? "No active batches in the nursery." : "No completed batches yet.";
+            const totalPages = Math.max(1, Math.ceil(searchFiltered.length / PAGE_SIZE));
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+
+            updatePagination(searchFiltered.length, totalPages);
+
+            if(searchFiltered.length === 0) {
+                const emptyMsg = query
+                    ? `No batches matching "${query}".`
+                    : (currentListTab === 'active' ? "No active batches in the nursery." : "No completed batches yet.");
                 body.innerHTML = `<tr><td colspan="8" class="text-center p-16 text-[#8a7a68] font-bold">${emptyMsg}</td></tr>`;
                 return;
             }
 
-            displayBatches.forEach(b => {
+            const start = (currentPage - 1) * PAGE_SIZE;
+            const pageBatches = searchFiltered.slice(start, start + PAGE_SIZE);
+
+            pageBatches.forEach(b => {
                 const datePlanted = new Date(b.created_at).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' });
-                const plantedQty = b.quantity_change ? b.quantity_change.toLocaleString() : '0';
-                
-                const survRate = (100 - b.mockCullRate).toFixed(1) + '%';
-                const survColor = (100 - b.mockCullRate) > 90 ? 'text-[#6aa83c]' : 'text-[#c07820]';
+                // Planted Qty = actual planted (totalPlanted − empty holes), summed across the batch's Planted log rows.
+                const plantedQtyNum = b.actualPlanted || 0;
+                const plantedQty = plantedQtyNum > 0 ? plantedQtyNum.toLocaleString() : '—';
+
+                const survPct = Math.max(0, 100 - b.cullRate);
+                const survRate = survPct.toFixed(1) + '%';
+                const survColor = survPct > 90 ? 'text-[#6aa83c]' : 'text-[#c07820]';
+                const cullDisplay = b.cullRate.toFixed(1);
 
                 body.insertAdjacentHTML('beforeend', `
                     <tr class="hover:bg-[#f8f4ec] transition-colors batch-row">
@@ -297,34 +366,66 @@
                             </div>
                         </td>
                         <td class="${survColor} font-black text-sm">${survRate}</td>
-                        <td class="text-[#c07820] font-black text-sm">${b.mockCullRate}%</td>
+                        <td class="text-[#c07820] font-black text-sm">${cullDisplay}%</td>
                         <td>
-                            <button onclick="window.location.href='batch_detail.html?id=${b.batch_name}'" class="px-4 py-2 rounded-xl bg-white border border-[#e8dcc8] text-[#4a7a2e] font-bold text-[10px] uppercase tracking-widest hover:bg-[#6aa83c] hover:text-white hover:border-[#6aa83c] transition-colors shadow-sm flex items-center gap-2">
+                            <button onclick="window.location.href='operation_batch_detail.html?id=${encodeURIComponent(b.batch_name)}'" class="px-4 py-2 rounded-xl bg-white border border-[#e8dcc8] text-[#4a7a2e] font-bold text-[10px] uppercase tracking-widest hover:bg-[#6aa83c] hover:text-white hover:border-[#6aa83c] transition-colors shadow-sm flex items-center gap-2">
                                 👁️ View
                             </button>
                         </td>
                     </tr>
                 `);
             });
-            
-            // Re-apply search filter if there's text
-            filterLedger();
         }
 
+        // Search now drives a re-render (so the filtered results paginate correctly).
         function filterLedger() {
-            const query = document.getElementById('search-input').value.toLowerCase();
-            const rows = document.querySelectorAll('.batch-row');
-            
-            rows.forEach(row => {
-                const id = row.querySelector('.batch-id-cell').innerText.toLowerCase();
-                const breed = row.querySelector('.breed-cell').innerText.toLowerCase();
-                
-                if (id.includes(query) || breed.includes(query)) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
+            currentPage = 1;
+            renderLedgerTable();
+        }
+
+        function changeLedgerPage(delta) {
+            currentPage += delta;
+            renderLedgerTable();
+            // Scroll the table back into view so the user sees the new page from the top.
+            document.getElementById('ledger-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function jumpToLedgerPage(value) {
+            const n = parseInt(value, 10);
+            if (!isFinite(n) || n < 1) return;
+            currentPage = n; // renderLedgerTable will clamp it to [1, totalPages]
+            renderLedgerTable();
+            document.getElementById('ledger-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function updatePagination(totalRows, totalPages) {
+            const wrap    = document.getElementById('ledger-pagination');
+            const wrapTop = document.getElementById('ledger-pagination-top');
+            // Hide both pagination bars when everything fits on one page.
+            const hide = totalRows <= PAGE_SIZE;
+            [wrap, wrapTop].forEach(el => {
+                if (!el) return;
+                if (hide) { el.classList.add('hidden'); el.classList.remove('flex'); }
+                else      { el.classList.remove('hidden'); el.classList.add('flex'); }
             });
+            if (hide) return;
+
+            const start = (currentPage - 1) * PAGE_SIZE + 1;
+            const end   = Math.min(totalRows, currentPage * PAGE_SIZE);
+            const summaryText   = `Showing ${start}–${end} of ${totalRows}`;
+            const indicatorText = `Page ${currentPage} of ${totalPages}`;
+            const prevDisabled  = currentPage <= 1;
+            const nextDisabled  = currentPage >= totalPages;
+
+            const setEl = (id, txt) => { const el = document.getElementById(id); if (el) el.innerText = txt; };
+            setEl('ledger-page-summary',     summaryText);
+            setEl('ledger-page-summary-top', summaryText);
+            setEl('ledger-page-indicator',     indicatorText);
+            setEl('ledger-page-indicator-top', indicatorText);
+            ['ledger-prev', 'ledger-prev-top'].forEach(id => { const el = document.getElementById(id); if (el) el.disabled = prevDisabled; });
+            ['ledger-next', 'ledger-next-top'].forEach(id => { const el = document.getElementById(id); if (el) el.disabled = nextDisabled; });
+            const inp = document.getElementById('ledger-page-input');
+            if (inp) inp.max = totalPages;
         }
 
         function renderCullingChart(batchesThisYear) {
@@ -343,7 +444,7 @@
             let labelsHtml = '';
 
             chartData.forEach((b) => {
-                const val = b.mockCullRate;
+                const val = b.cullRate;
                 const heightPct = (val / maxVal) * 100;
                 
                 let colorClass = 'bg-[#6aa83c]'; 
