@@ -94,6 +94,115 @@
         .pill-pending  { background:#fee2e2;color:#b91c1c;border-color:#fca5a5;}
         .pill-completed{ background:#e0e7ff;color:#3730a3;border-color:#a5b4fc;}
         .pill-cancelled{ background:#f1f5f9;color:#64748b;border-color:#cbd5e1;}
+
+        /* ── Sales-module tab switcher ── */
+        .ssm-tabs{display:flex;gap:6px;background:white;border:1px solid #e2e8f0;border-radius:14px;padding:6px;box-shadow:0 2px 8px rgba(0,0,0,.04);}
+        .ssm-tab{flex:0 0 auto;padding:10px 18px;border:none;background:transparent;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:8px;font-family:'Outfit',sans-serif;}
+        .ssm-tab:hover:not(.active){background:#f8fafc;color:#1e293b;}
+        .ssm-tab.active.customer{background:#eff6ff;color:#1d4ed8;box-shadow:0 4px 12px rgba(37,99,235,.18);}
+        .ssm-tab.active.stock{background:#ecfdf5;color:#065f46;box-shadow:0 4px 12px rgba(16,185,129,.18);}
+        .ssm-tab .ssm-tab-emoji{font-size:14px;line-height:1;}
+        .ssm-tab .ssm-tab-sub{font-size:9px;font-weight:700;color:#94a3b8;letter-spacing:.04em;text-transform:none;}
+        .ssm-tab.active .ssm-tab-sub{color:currentColor;opacity:.7;}
+
+        /* ── Aging report ── */
+        .aging-table{width:100%;border-collapse:separate;border-spacing:0;font-size:11px;}
+        .aging-table thead th{background:#fef2f2;color:#991b1b;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;padding:9px 10px;text-align:left;border-bottom:2px solid #fecaca;position:sticky;top:0;}
+        .aging-table tbody td{padding:8px 10px;border-bottom:1px solid #f1f5f9;color:#1e293b;font-weight:600;}
+        .aging-table tbody tr:hover{background:#fffbfb;}
+        .aging-table .num{text-align:right;font-variant-numeric:tabular-nums;font-weight:900;}
+        .aging-pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:9px;font-weight:900;border:1px solid;}
+        .aging-pill.warn{background:#fef3c7;color:#a16207;border-color:#fcd34d;}
+        .aging-pill.bad{background:#fee2e2;color:#b91c1c;border-color:#fca5a5;}
+        .aging-pill.severe{background:#7f1d1d;color:white;border-color:#7f1d1d;}
+
+        /* ── Capacity heatmap ── */
+        .heat-grid{display:grid;gap:6px;font-variant-numeric:tabular-nums;}
+        .heat-cell{padding:10px 12px;border-radius:10px;font-size:11px;font-weight:900;color:#0f172a;text-align:center;border:1px solid transparent;transition:transform .15s;}
+        .heat-cell:hover{transform:translateY(-1px);}
+        .heat-cell.h-label{background:#f8fafc;color:#475569;font-size:10px;text-align:left;border-color:#e2e8f0;font-weight:900;text-transform:uppercase;letter-spacing:.06em;}
+        .heat-cell.h-month-label{background:#f1f5f9;color:#475569;text-align:center;border-color:#e2e8f0;font-size:10px;text-transform:uppercase;letter-spacing:.06em;}
+        .heat-cell .h-pct{font-size:14px;display:block;line-height:1.1;}
+        .heat-cell .h-meta{font-size:8px;font-weight:700;opacity:.7;display:block;line-height:1.2;}
+        .heat-0{background:#dcfce7;color:#15803d;border-color:#bbf7d0;}
+        .heat-1{background:#d1fae5;color:#065f46;border-color:#a7f3d0;}
+        .heat-2{background:#fef9c3;color:#854d0e;border-color:#fde68a;}
+        .heat-3{background:#fed7aa;color:#9a3412;border-color:#fdba74;}
+        .heat-4{background:#fecaca;color:#991b1b;border-color:#fca5a5;}
+        .heat-5{background:#7f1d1d;color:white;border-color:#7f1d1d;}
+        .heat-na{background:#f8fafc;color:#cbd5e1;border-color:#e2e8f0;font-weight:600;}
+
+        /* ── Customer pickup history modal ── */
+        .pickup-modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:200;align-items:center;justify-content:center;padding:20px;}
+        .pickup-modal-overlay.open{display:flex;}
+        .pickup-modal-box{background:white;border-radius:20px;width:100%;max-width:760px;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.35);}
+        .pickup-modal-head{padding:18px 22px;border-bottom:1px solid #e2e8f0;background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:white;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+        .pickup-modal-body{padding:18px 22px;overflow-y:auto;}
+        .ph-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;}
+        .ph-table thead th{background:#f8fafc;color:#475569;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0;}
+        .ph-table tbody td{padding:8px 10px;border-bottom:1px solid #f1f5f9;color:#1e293b;font-weight:600;}
+        .ph-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
+        .ph-summary-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;}
+        .ph-summary-card .ph-label{font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;}
+        .ph-summary-card .ph-num{font-size:18px;font-weight:900;color:#1e293b;font-variant-numeric:tabular-nums;}
+        .cust-link{color:#1d4ed8;cursor:pointer;text-decoration:underline dotted;}
+        .cust-link:hover{color:#1e40af;}
+
+        /* ── Allocation drawer (drag customer orders onto batch rows) ── */
+        .alloc-fab{position:fixed;right:20px;bottom:24px;z-index:90;display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:999px;background:linear-gradient(135deg,#1d4ed8,#1e40af);color:white;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;border:none;cursor:pointer;box-shadow:0 16px 40px rgba(30,64,175,.45);transition:transform .15s,box-shadow .15s;font-family:'Outfit',sans-serif;}
+        .alloc-fab:hover{transform:translateY(-2px);box-shadow:0 20px 50px rgba(30,64,175,.55);}
+        .alloc-fab .alloc-fab-emoji{font-size:18px;line-height:1;}
+        .alloc-fab .alloc-fab-badge{background:#fbbf24;color:#78350f;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:900;min-width:20px;text-align:center;}
+        .alloc-fab.hidden-fab{display:none;}
+
+        .alloc-drawer{position:fixed;top:0;right:0;height:100vh;width:380px;max-width:92vw;background:white;border-left:1px solid #e2e8f0;box-shadow:-12px 0 36px rgba(15,23,42,.16);z-index:95;transform:translateX(100%);transition:transform .25s ease;display:flex;flex-direction:column;}
+        .alloc-drawer.open{transform:translateX(0);}
+        .alloc-drawer-head{padding:14px 16px;border-bottom:1px solid #e2e8f0;background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:white;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+        .alloc-drawer-head h3{font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;margin:0;}
+        .alloc-drawer-head p{font-size:10px;color:#bfdbfe;margin:2px 0 0;font-weight:600;}
+        .alloc-drawer-tabs{display:flex;gap:4px;background:#f1f5f9;padding:4px;border-bottom:1px solid #e2e8f0;}
+        .alloc-drawer-tab{flex:1;padding:8px 10px;border:none;background:transparent;border-radius:8px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#64748b;cursor:pointer;transition:all .15s;font-family:'Outfit',sans-serif;}
+        .alloc-drawer-tab.active{background:white;color:#1d4ed8;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+        .alloc-drawer-tab .alloc-tab-count{display:inline-block;margin-left:4px;background:#e2e8f0;color:#475569;border-radius:999px;padding:1px 7px;font-size:9px;}
+        .alloc-drawer-tab.active .alloc-tab-count{background:#dbeafe;color:#1d4ed8;}
+        .alloc-drawer-body{flex:1;overflow-y:auto;padding:12px;background:#f8fafc;}
+        .alloc-drawer-empty{text-align:center;padding:32px 12px;color:#94a3b8;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
+
+        .order-card{background:white;border:1px solid #e2e8f0;border-radius:14px;padding:11px 13px;margin-bottom:10px;cursor:grab;transition:all .15s;position:relative;user-select:none;}
+        .order-card:hover{border-color:#3b82f6;box-shadow:0 6px 16px rgba(59,130,246,.18);transform:translateY(-1px);}
+        .order-card:active{cursor:grabbing;}
+        .order-card.dragging{opacity:.5;cursor:grabbing;}
+        .order-card.fully-allocated{opacity:.6;border-color:#10b981;background:#f0fdf4;cursor:default;}
+        .order-card.fully-allocated:hover{transform:none;}
+        .order-card-name{font-size:12px;font-weight:900;color:#0f172a;line-height:1.2;}
+        .order-card-meta{font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-top:2px;font-family:'Outfit',sans-serif;}
+        .order-card-qty-row{display:flex;align-items:baseline;gap:6px;margin-top:8px;}
+        .order-card-qty-big{font-size:22px;font-weight:900;color:#1d4ed8;line-height:1;font-variant-numeric:tabular-nums;}
+        .order-card-qty-sub{font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;}
+        .order-card-progress{height:5px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:6px;}
+        .order-card-progress-bar{height:100%;background:linear-gradient(90deg,#3b82f6,#1d4ed8);transition:width .25s;}
+        .order-card-progress-bar.full{background:linear-gradient(90deg,#10b981,#059669);}
+        .order-card-remark{margin-top:6px;font-size:10px;color:#475569;line-height:1.35;background:#f8fafc;border:1px dashed #e2e8f0;border-radius:6px;padding:5px 7px;}
+        .order-card-grip{position:absolute;top:10px;right:10px;color:#cbd5e1;font-size:14px;line-height:1;}
+
+        .order-card.past-due{cursor:default;border-left:3px solid #f59e0b;}
+        .order-card.past-due:hover{border-color:#fbbf24;transform:none;box-shadow:0 4px 10px rgba(245,158,11,.15);}
+        .order-card.past-due .order-card-qty-big{color:#b45309;}
+
+        /* Drop targets — maturity rows */
+        .mat-table tbody tr{transition:background .12s,outline .12s;}
+        .mat-table tbody tr.drop-target{outline:2px dashed #93c5fd;outline-offset:-2px;background:#eff6ff !important;}
+        .mat-table tbody tr.drop-hover{outline:2px solid #1d4ed8;outline-offset:-2px;background:#dbeafe !important;}
+        .mat-table tbody tr.drop-disabled{opacity:.4;}
+
+        /* Reservation cell — multi-allocation chips */
+        .reserv-stack{display:flex;flex-direction:column;gap:3px;min-width:160px;}
+        .reserv-chip{display:flex;align-items:center;gap:5px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:3px 5px 3px 7px;font-size:10px;font-weight:700;color:#1e293b;}
+        .reserv-chip-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .reserv-chip-qty{font-variant-numeric:tabular-nums;color:#1d4ed8;font-weight:900;}
+        .reserv-chip-x{border:none;background:#fee2e2;color:#b91c1c;border-radius:6px;width:18px;height:18px;font-weight:900;font-size:11px;line-height:1;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:0;}
+        .reserv-chip-x:hover{background:#fca5a5;color:white;}
+        .reserv-empty{font-size:10px;color:#cbd5e1;font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-style:italic;}
     </style>
 </head>
 <body>
@@ -115,8 +224,23 @@
 
 <div class="max-w-[1500px] mx-auto px-5 py-5 space-y-5">
 
-    <!-- ── Row 1: NSD + Available for Sales + To-Do (3 columns, compact) ───── -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <!-- ── Tab switcher ── -->
+    <div class="ssm-tabs w-fit">
+        <button class="ssm-tab active customer" id="ssm-tab-customer" onclick="switchSsmTab('customer')">
+            <span class="ssm-tab-emoji">👥</span>
+            <span><div>Customer Collection</div><div class="ssm-tab-sub">Admin pickups &amp; follow-ups</div></span>
+        </button>
+        <button class="ssm-tab stock" id="ssm-tab-stock" onclick="switchSsmTab('stock')">
+            <span class="ssm-tab-emoji">🌱</span>
+            <span><div>Stock Allocation</div><div class="ssm-tab-sub">Matured, plots, gearing</div></span>
+        </button>
+    </div>
+
+    <!-- ══════════════ STOCK PANE (hidden by default) ══════════════ -->
+    <div id="ssm-pane-stock" class="hidden space-y-5">
+
+    <!-- ── NSD + Available for Sales (2 columns) ── -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         <!-- Nursery Status Dashboard -->
         <div class="metric-card border-l-4 border-emerald-500 relative overflow-hidden" id="nsd-card">
@@ -221,60 +345,10 @@
             </div>
         </div>
 
-        <!-- To-Do List (notebook) — column 3 -->
-        <div class="metric-card !border-amber-300 border-l-4 relative overflow-hidden flex flex-col">
-            <div class="px-4 pt-4 pb-3 border-b border-slate-100">
-                <div class="flex items-center gap-2 mb-3">
-                    <div class="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center text-amber-600">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
-                    </div>
-                    <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">To-Do List</span>
-                </div>
-                <div class="grid grid-cols-2 gap-1.5">
-                    <button class="todo-tab active unpaid" id="todo-tab-unpaid" onclick="switchTodoTab('unpaid')">
-                        <span>💰</span><span>Unpaid</span>
-                        <span class="tab-count" id="todo-count-unpaid">0</span>
-                    </button>
-                    <button class="todo-tab credit" id="todo-tab-credit" onclick="switchTodoTab('credit')">
-                        <span>🧾</span><span>Credit</span>
-                        <span class="tab-count" id="todo-count-credit">0</span>
-                    </button>
-                </div>
-            </div>
-            <div class="px-3 pt-3 pb-2 flex-1 min-h-0">
-                <div class="notebook max-h-[330px] overflow-y-auto" id="todo-body">
-                    <div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading…</div>
-                </div>
-                <div class="text-[9px] font-bold text-slate-400 mt-2 px-1 text-right" id="todo-section-meta"></div>
-            </div>
-        </div>
     </div>
+    <!-- /NSD + Available 2-col grid -->
 
-    <!-- ── Row 1.5: This Week's Scheduled Collection (full width) ───────────── -->
-    <div class="metric-card border-l-4 border-blue-500 relative overflow-hidden">
-        <div class="px-4 pt-4 pb-3 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
-            <div class="flex items-center gap-2">
-                <div class="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                </div>
-                <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">This Week's Scheduled Collection</span>
-                <span id="sched-week-label" class="text-[10px] font-bold text-slate-400 ml-1">—</span>
-            </div>
-            <div class="flex items-center gap-1.5">
-                <button onclick="changeSchedWeek(-1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-100 flex items-center justify-center text-slate-500 hover:text-blue-700 font-black text-base cursor-pointer transition-colors border-none">‹</button>
-                <button onclick="goSchedToday()" class="text-[9px] font-black text-emerald-700 uppercase tracking-widest bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 cursor-pointer transition-colors">Today</button>
-                <button onclick="changeSchedWeek(1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-100 flex items-center justify-center text-slate-500 hover:text-blue-700 font-black text-base cursor-pointer transition-colors border-none">›</button>
-                <a href="operation_collection_booking.html" class="text-[9px] font-black text-blue-700 uppercase tracking-widest bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors no-underline ml-1" style="text-decoration:none;">Manage →</a>
-            </div>
-        </div>
-        <div class="p-3">
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5" id="sched-week-grid">
-                <div class="text-center py-4 text-[10px] text-slate-400 font-bold uppercase tracking-widest col-span-full animate-pulse">Loading…</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ── Row 2: Monthly Maturity Allocation ────────────────────────────────── -->
+    <!-- ── Monthly Maturity Allocation ── -->
     <div>
         <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
             <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">🌱 Monthly Maturity Allocation</h2>
@@ -322,37 +396,199 @@
         </div>
     </div>
 
-    <!-- ── Row 3: Customer Order Management (collection grid) ──────────────── -->
+    <!-- ── Capacity Heatmap (matured vs reserved by nursery × month) ── -->
     <div>
         <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
-            <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">📋 Customer Order Management</h2>
-            <div class="flex items-center gap-2">
-                <input id="cust-search" type="text" placeholder="Search customer / order #" oninput="renderCustomerGrid()"
-                    class="text-[11px] font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-500 w-56">
-                <select id="cust-filter" onchange="renderCustomerGrid()"
-                    class="text-[10px] font-black uppercase tracking-widest text-slate-700 bg-white border border-slate-200 rounded-lg px-2 py-1.5">
-                    <option value="active">Active orders only</option>
-                    <option value="outstanding">Outstanding balance</option>
-                    <option value="completed">Completed</option>
-                    <option value="all">All (incl. cancelled)</option>
-                </select>
-                <button onclick="shiftCustomerMonths(-1)" class="text-[10px] font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg px-2.5 py-1.5 transition-colors" title="Earlier months">◀</button>
-                <button onclick="shiftCustomerMonths(1)" class="text-[10px] font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg px-2.5 py-1.5 transition-colors" title="Later months">▶</button>
+            <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">🔥 Capacity Heatmap</h2>
+            <span class="text-[9px] font-bold text-slate-400">Matured-stock utilisation by nursery and month</span>
+        </div>
+        <div class="dash-card p-3 scroll-x-fade">
+            <div id="heatmap-area" class="min-w-[700px]">
+                <div class="text-center py-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading heatmap…</div>
+            </div>
+            <div class="flex items-center gap-2 mt-3 text-[9px] font-bold text-slate-500 flex-wrap">
+                <span class="uppercase tracking-widest">Legend:</span>
+                <span class="heat-cell heat-0" style="padding:2px 8px;">0–20%</span>
+                <span class="heat-cell heat-1" style="padding:2px 8px;">20–40%</span>
+                <span class="heat-cell heat-2" style="padding:2px 8px;">40–60%</span>
+                <span class="heat-cell heat-3" style="padding:2px 8px;">60–80%</span>
+                <span class="heat-cell heat-4" style="padding:2px 8px;">80–100%</span>
+                <span class="heat-cell heat-5" style="padding:2px 8px;">Oversold</span>
+            </div>
+        </div>
+        <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
+            <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — % = pending-collection qty ÷ matured qty (after 10% culling) for that nursery × month. Higher % = less spare capacity.
+        </div>
+    </div>
+
+    </div>
+    <!-- /STOCK PANE -->
+
+    <!-- ══════════════ CUSTOMER PANE (default) ══════════════ -->
+    <div id="ssm-pane-customer" class="space-y-5">
+
+        <!-- To-Do List -->
+        <div class="metric-card !border-amber-300 border-l-4 relative overflow-hidden flex flex-col">
+            <div class="px-4 pt-4 pb-3 border-b border-slate-100">
+                <div class="flex items-center gap-2 mb-3">
+                    <div class="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center text-amber-600">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                    </div>
+                    <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">To-Do List</span>
+                </div>
+                <div class="flex gap-1.5">
+                    <button class="todo-tab active unpaid" id="todo-tab-unpaid" onclick="switchTodoTab('unpaid')">
+                        <span>💰</span><span>Unpaid</span>
+                        <span class="tab-count" id="todo-count-unpaid">0</span>
+                    </button>
+                    <button class="todo-tab credit" id="todo-tab-credit" onclick="switchTodoTab('credit')">
+                        <span>🧾</span><span>Credit</span>
+                        <span class="tab-count" id="todo-count-credit">0</span>
+                    </button>
+                </div>
+            </div>
+            <div class="px-3 pt-3 pb-2 flex-1 min-h-0">
+                <div class="notebook max-h-[330px] overflow-y-auto" id="todo-body">
+                    <div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading…</div>
+                </div>
+                <div class="text-[9px] font-bold text-slate-400 mt-2 px-1 text-right" id="todo-section-meta"></div>
             </div>
         </div>
 
-        <div class="dash-card scroll-x-fade">
-            <table class="cust-table min-w-[1400px]">
-                <thead id="cust-thead"></thead>
-                <tbody id="cust-tbody">
-                    <tr><td colspan="20" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading customer orders…</td></tr>
-                </tbody>
-                <tfoot id="cust-tfoot"></tfoot>
-            </table>
+        <!-- This Week's Scheduled Collection -->
+        <div class="metric-card border-l-4 border-blue-500 relative overflow-hidden">
+            <div class="px-4 pt-4 pb-3 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    </div>
+                    <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">This Week's Scheduled Collection</span>
+                    <span id="sched-week-label" class="text-[10px] font-bold text-slate-400 ml-1">—</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button onclick="changeSchedWeek(-1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-100 flex items-center justify-center text-slate-500 hover:text-blue-700 font-black text-base cursor-pointer transition-colors border-none">‹</button>
+                    <button onclick="goSchedToday()" class="text-[9px] font-black text-emerald-700 uppercase tracking-widest bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 cursor-pointer transition-colors">Today</button>
+                    <button onclick="changeSchedWeek(1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-100 flex items-center justify-center text-slate-500 hover:text-blue-700 font-black text-base cursor-pointer transition-colors border-none">›</button>
+                    <a href="operation_collection_booking.html" class="text-[9px] font-black text-blue-700 uppercase tracking-widest bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors no-underline ml-1" style="text-decoration:none;">Manage →</a>
+                </div>
+            </div>
+            <div class="p-3">
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5" id="sched-week-grid">
+                    <div class="text-center py-4 text-[10px] text-slate-400 font-bold uppercase tracking-widest col-span-full animate-pulse">Loading…</div>
+                </div>
+            </div>
         </div>
 
-        <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
-            <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Per-month columns show qty collected from <span class="font-mono">salesweb_order_collections</span> (multi-pickup log). Falls back to single <span class="font-mono">collected_qty/collected_at</span> on the order if the table isn't created yet.
+        <!-- ── Aging Report (overdue collections) ── -->
+        <div>
+            <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">⏰ Aging Report — Overdue Collections</h2>
+                <span id="aging-meta" class="text-[9px] font-bold text-slate-400">—</span>
+            </div>
+            <div class="dash-card scroll-x-fade">
+                <table class="aging-table min-w-[900px]">
+                    <thead>
+                        <tr>
+                            <th>Customer</th>
+                            <th>Order #</th>
+                            <th>Booked Date</th>
+                            <th class="num">Days Overdue</th>
+                            <th class="num">Pending Qty</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="aging-rows">
+                        <tr><td colspan="7" class="text-center py-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading overdue list…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
+                <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Lists active orders whose booked-collection date is past today and not yet marked completed. 0–7 days = warn (yellow), 8–14 = overdue (red), 15+ = severe.
+            </div>
+        </div>
+
+        <!-- Customer Order Management -->
+        <div>
+            <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">📋 Customer Order Management</h2>
+                <div class="flex items-center gap-2">
+                    <input id="cust-search" type="text" placeholder="Search customer / order #" oninput="renderCustomerGrid()"
+                        class="text-[11px] font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-500 w-56">
+                    <select id="cust-filter" onchange="renderCustomerGrid()"
+                        class="text-[10px] font-black uppercase tracking-widest text-slate-700 bg-white border border-slate-200 rounded-lg px-2 py-1.5">
+                        <option value="active">Active orders only</option>
+                        <option value="outstanding">Outstanding balance</option>
+                        <option value="completed">Completed</option>
+                        <option value="all">All (incl. cancelled)</option>
+                    </select>
+                    <button onclick="shiftCustomerMonths(-1)" class="text-[10px] font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg px-2.5 py-1.5 transition-colors" title="Earlier months">◀</button>
+                    <button onclick="shiftCustomerMonths(1)" class="text-[10px] font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg px-2.5 py-1.5 transition-colors" title="Later months">▶</button>
+                </div>
+            </div>
+
+            <div class="dash-card scroll-x-fade">
+                <table class="cust-table min-w-[1400px]">
+                    <thead id="cust-thead"></thead>
+                    <tbody id="cust-tbody">
+                        <tr><td colspan="20" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading customer orders…</td></tr>
+                    </tbody>
+                    <tfoot id="cust-tfoot"></tfoot>
+                </table>
+            </div>
+
+            <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
+                <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Per-month columns show qty collected from <span class="font-mono">salesweb_order_collections</span>. Click a customer name to see their full pickup history.
+            </div>
+        </div>
+
+    </div>
+    <!-- /CUSTOMER PANE -->
+
+</div>
+
+<!-- ══════════════ Allocation drawer (Stock tab only) ══════════════ -->
+<button class="alloc-fab hidden-fab" id="alloc-fab" onclick="toggleAllocDrawer()" title="Customer orders to allocate">
+    <span class="alloc-fab-emoji">🛒</span>
+    <span>Allocate Orders</span>
+    <span class="alloc-fab-badge" id="alloc-fab-badge">0</span>
+</button>
+
+<div class="alloc-drawer" id="alloc-drawer">
+    <div class="alloc-drawer-head">
+        <div>
+            <h3>🛒 Customer Orders</h3>
+            <p>Drag a card onto a matured-stock row</p>
+        </div>
+        <button onclick="toggleAllocDrawer()" class="w-8 h-8 rounded-lg bg-white/15 hover:bg-white/25 text-white font-black text-base flex items-center justify-center transition-colors shrink-0 border-none cursor-pointer">×</button>
+    </div>
+    <div class="alloc-drawer-tabs">
+        <button class="alloc-drawer-tab active" id="alloc-tab-active" onclick="switchAllocTab('active')">
+            Active <span class="alloc-tab-count" id="alloc-count-active">0</span>
+        </button>
+        <button class="alloc-drawer-tab" id="alloc-tab-past" onclick="switchAllocTab('past')">
+            Past Due <span class="alloc-tab-count" id="alloc-count-past">0</span>
+        </button>
+    </div>
+    <div class="alloc-drawer-body" id="alloc-drawer-body">
+        <div class="alloc-drawer-empty">Loading orders…</div>
+    </div>
+</div>
+
+<!-- ══════════════ Customer Pickup History modal ══════════════ -->
+<div class="pickup-modal-overlay" id="pickup-modal">
+    <div class="pickup-modal-box">
+        <div class="pickup-modal-head">
+            <div>
+                <div class="text-[10px] font-black text-blue-200 uppercase tracking-widest mb-1">📜 Pickup history</div>
+                <div class="text-base font-black" id="pickup-modal-title">—</div>
+                <div class="text-[10px] text-blue-100 mt-1" id="pickup-modal-sub"></div>
+            </div>
+            <button onclick="closePickupHistory()" class="w-8 h-8 rounded-lg bg-white/15 hover:bg-white/25 text-white font-black text-base flex items-center justify-center transition-colors shrink-0">×</button>
+        </div>
+        <div class="pickup-modal-body">
+            <div class="ph-summary" id="pickup-summary"></div>
+            <div id="pickup-table-wrap"></div>
         </div>
     </div>
 </div>
@@ -919,13 +1155,24 @@
         let totQty = 0, totCull = 0, totReserved = 0;
         tbody.innerHTML = rows.map(r => {
             const alloc = plotAllocations[r.key] || { plot_status: 'open', reserved_for: '', reserved_qty: 0, premium: false };
-            const balance = r.afterCulling - (alloc.reserved_qty || 0);
+            const rowAllocs = allocsForBatch(r.key);
+            const allocSum = rowAllocs.reduce((s, a) => s + (a.allocated_qty || 0), 0);
+            const balance = r.afterCulling - allocSum;
             totQty       += r.qty;
             totCull      += r.afterCulling;
-            totReserved  += alloc.reserved_qty || 0;
-            const statusClass = 'pill-' + alloc.plot_status;
+            totReserved  += allocSum;
+
+            const reservHtml = rowAllocs.length
+                ? `<div class="reserv-stack">${rowAllocs.map(a => `
+                    <div class="reserv-chip" title="${escapeHtml(a.order_number || '')}">
+                        <span class="reserv-chip-name">${escapeHtml(a.customer_name || '—')}</span>
+                        <span class="reserv-chip-qty">${(a.allocated_qty || 0).toLocaleString()}</span>
+                        <button class="reserv-chip-x" onclick="removeAllocation('${escapeHtml(a.id)}')" title="Remove allocation">×</button>
+                    </div>`).join('')}</div>`
+                : `<div class="reserv-empty">— drop a customer card here —</div>`;
+
             return `
-                <tr>
+                <tr data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${balance}">
                     <td>${r.matureDate.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'})}</td>
                     <td>${escapeHtml(r.location)}</td>
                     <td><span class="font-black text-slate-900">${escapeHtml(r.plot || '—')}</span></td>
@@ -933,18 +1180,8 @@
                     <td>${escapeHtml(r.breed || '—')}</td>
                     <td class="num">${r.qty.toLocaleString()}</td>
                     <td class="num text-emerald-700">${r.afterCulling.toLocaleString()}</td>
-                    <td>
-                        <input type="text" value="${escapeHtml(alloc.reserved_for || '')}" placeholder="—"
-                            data-allockey="${r.key}" data-allocfield="reserved_for"
-                            onchange="updateAllocation(this)"
-                            class="w-full text-[11px] font-bold bg-transparent border-b border-dashed border-slate-200 focus:border-emerald-500 outline-none px-1 py-0.5"/>
-                    </td>
-                    <td class="num">
-                        <input type="number" value="${alloc.reserved_qty || 0}" min="0"
-                            data-allockey="${r.key}" data-allocfield="reserved_qty"
-                            onchange="updateAllocation(this)"
-                            class="w-20 text-right text-[11px] font-black bg-transparent border-b border-dashed border-slate-200 focus:border-emerald-500 outline-none px-1 py-0.5"/>
-                    </td>
+                    <td>${reservHtml}</td>
+                    <td class="num font-black text-slate-700">${allocSum.toLocaleString()}</td>
                     <td class="num ${balance < 0 ? 'text-red-600' : balance === 0 ? 'text-slate-400' : 'text-slate-700'}">${balance.toLocaleString()}</td>
                     <td>
                         <select data-allockey="${r.key}" data-allocfield="plot_status" onchange="updateAllocation(this)"
@@ -962,6 +1199,13 @@
                 </tr>
             `;
         }).join('');
+
+        // wire drop handlers on each row
+        tbody.querySelectorAll('tr[data-batch-key]').forEach(tr => {
+            tr.addEventListener('dragover',  onRowDragOver);
+            tr.addEventListener('dragleave', onRowDragLeave);
+            tr.addEventListener('drop',      onRowDrop);
+        });
 
         tfoot.innerHTML = `
             <tr class="bg-slate-50 font-black">
@@ -1178,7 +1422,7 @@
             return `
                 <tr>
                     <td class="t-cust">${idx + 1}</td>
-                    <td class="t-cust">${escapeHtml(r.customer || '—')}<div class="t-sub">${escapeHtml(r.orderNumber || '')}</div></td>
+                    <td class="t-cust"><span class="cust-link" data-pickup data-cust="${escapeHtml(r.customer || '')}" data-order="${escapeHtml(r.orderNumber || '')}">${escapeHtml(r.customer || '—')}</span><div class="t-sub">${escapeHtml(r.orderNumber || '')}</div></td>
                     <td>${orderMonth}</td>
                     <td><span class="pill-status ${pillCls}">${escapeHtml(pillTxt)}</span></td>
                     <td class="font-black">${r.totalQty.toLocaleString()}</td>
@@ -1314,6 +1558,613 @@
         grid.innerHTML = html;
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    //  Sales-module tab switcher (Customer Collection ↔ Stock Allocation)
+    // ════════════════════════════════════════════════════════════════════════
+    let _ssmStockLoaded = false;
+
+    function switchSsmTab(tab) {
+        const customerPane = document.getElementById('ssm-pane-customer');
+        const stockPane    = document.getElementById('ssm-pane-stock');
+        const customerBtn  = document.getElementById('ssm-tab-customer');
+        const stockBtn     = document.getElementById('ssm-tab-stock');
+        const fab          = document.getElementById('alloc-fab');
+        const drawer       = document.getElementById('alloc-drawer');
+
+        if (tab === 'stock') {
+            customerPane.classList.add('hidden');
+            stockPane.classList.remove('hidden');
+            customerBtn.classList.remove('active');
+            stockBtn.classList.add('active');
+            if (fab) fab.classList.remove('hidden-fab');
+            // Lazy-load capacity heatmap the first time the user opens this tab
+            if (!_ssmStockLoaded) {
+                _ssmStockLoaded = true;
+                loadCapacityHeatmap();
+            }
+        } else {
+            stockPane.classList.add('hidden');
+            customerPane.classList.remove('hidden');
+            stockBtn.classList.remove('active');
+            customerBtn.classList.add('active');
+            if (fab)    fab.classList.add('hidden-fab');
+            if (drawer) drawer.classList.remove('open');
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    //  Aging report — overdue collections (uses booking_date past today,
+    //  status not Completed / Cancelled)
+    // ════════════════════════════════════════════════════════════════════════
+    async function loadAgingReport() {
+        const tbody = document.getElementById('aging-rows');
+        const meta  = document.getElementById('aging-meta');
+        try {
+            const todayStr = new Date().toISOString().slice(0,10);
+            const { data, error } = await _supabase
+                .from('shared_collection_bookings')
+                .select('id,customer_name,order_number,al_number,booking_date,start_time,collection_qty,status,nursery_name,plot_name')
+                .lt('booking_date', todayStr)
+                .not('status', 'in', '("completed","cancelled")')
+                .order('booking_date', { ascending: true });
+            if (error) throw error;
+            renderAgingReport(data || []);
+        } catch (e) {
+            console.warn('Aging report load error:', e);
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest">Unable to load aging report</td></tr>`;
+            meta.textContent = '';
+        }
+    }
+
+    function renderAgingReport(rows) {
+        const tbody = document.getElementById('aging-rows');
+        const meta  = document.getElementById('aging-meta');
+        if (!rows.length) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-emerald-700"><div class="text-2xl mb-1">✅</div><div class="text-[10px] font-black uppercase tracking-widest">No overdue collections — well done!</div></td></tr>`;
+            meta.textContent = '0 overdue';
+            return;
+        }
+        const today = new Date(); today.setHours(0,0,0,0);
+        let totalOverdue = 0, totalQty = 0;
+
+        tbody.innerHTML = rows.map(r => {
+            const bd = r.booking_date ? new Date(r.booking_date + 'T00:00:00') : null;
+            const days = bd ? Math.max(0, Math.floor((today - bd) / 86400000)) : 0;
+            totalOverdue += 1; totalQty += (r.collection_qty || 0);
+            const pillCls = days <= 7 ? 'warn' : days <= 14 ? 'bad' : 'severe';
+            const dateLabel = bd
+                ? bd.toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' }) + (r.start_time ? ' · ' + (r.start_time||'').substring(0,5) : '')
+                : '—';
+            const statusLabel = (r.status || 'booked').replace(/_/g,' ');
+            return `
+                <tr>
+                    <td><span class="cust-link" data-pickup data-cust="${escapeHtml(r.customer_name || '')}" data-order="${escapeHtml(r.order_number || '')}">${escapeHtml(r.customer_name || '—')}</span></td>
+                    <td class="font-mono text-[10px]">${escapeHtml(r.order_number || r.al_number || '—')}</td>
+                    <td>${dateLabel}</td>
+                    <td class="num"><span class="aging-pill ${pillCls}">${days}d</span></td>
+                    <td class="num">${(r.collection_qty || 0).toLocaleString()}</td>
+                    <td><span class="pill-status pill-pending">${escapeHtml(statusLabel)}</span></td>
+                    <td><a href="operation_collection_booking.html" class="text-[10px] font-black text-blue-700 uppercase tracking-widest hover:underline" style="text-decoration:none;">Open booking →</a></td>
+                </tr>`;
+        }).join('');
+
+        meta.textContent = totalOverdue + ' overdue · ' + totalQty.toLocaleString() + ' seedlings pending';
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    //  Customer pickup history modal
+    // ════════════════════════════════════════════════════════════════════════
+    async function openPickupHistory(customerName, orderNumber) {
+        const modal = document.getElementById('pickup-modal');
+        const title = document.getElementById('pickup-modal-title');
+        const sub   = document.getElementById('pickup-modal-sub');
+        const summ  = document.getElementById('pickup-summary');
+        const wrap  = document.getElementById('pickup-table-wrap');
+
+        title.textContent = customerName || '—';
+        sub.textContent   = orderNumber ? 'Order: ' + orderNumber : '';
+        summ.innerHTML    = '';
+        wrap.innerHTML    = `<div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading history…</div>`;
+        modal.classList.add('open');
+
+        try {
+            // Pull all collections + bookings for this customer
+            const filters = [];
+            if (customerName) filters.push('customer_name.eq.' + customerName);
+            if (orderNumber)  filters.push('order_number.eq.'  + orderNumber);
+            const orFilter = filters.join(',');
+
+            const [bookingsRes, ordersRes] = await Promise.all([
+                _supabase.from('shared_collection_bookings').select('*').or(orFilter).order('booking_date', { ascending: false }),
+                _supabase.from('salesweb_customer_orders').select('id,order_number,customer_name,total_amount,balance_amount,status,created_at,collected_qty,collected_at').or(orFilter).order('created_at', { ascending: false })
+            ]);
+
+            const bookings = bookingsRes.data || [];
+            const orders   = ordersRes.data   || [];
+
+            // Pull per-pickup log if available
+            let collections = [];
+            try {
+                const orderIds = orders.map(o => o.id).filter(Boolean);
+                if (orderIds.length) {
+                    const { data } = await _supabase
+                        .from('salesweb_order_collections')
+                        .select('order_id,collected_qty,collected_at,al_number')
+                        .in('order_id', orderIds);
+                    collections = data || [];
+                }
+            } catch(e) { collections = []; }
+
+            // Summary
+            const totalOrdered    = orders.reduce((s,o)=> s + (o.total_amount || 0), 0);
+            const totalCollected  = (collections.length
+                ? collections.reduce((s,c)=> s + (c.collected_qty || 0), 0)
+                : orders.reduce((s,o)=> s + (o.collected_qty || 0), 0));
+            const totalBookings   = bookings.length;
+            const fmtRM = n => 'RM ' + (Number(n)||0).toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+            summ.innerHTML = `
+                <div class="ph-summary-card"><div class="ph-label">Total bookings</div><div class="ph-num">${totalBookings}</div></div>
+                <div class="ph-summary-card"><div class="ph-label">Seedlings collected</div><div class="ph-num">${totalCollected.toLocaleString()}</div></div>
+                <div class="ph-summary-card"><div class="ph-label">Order value (sum)</div><div class="ph-num">${fmtRM(totalOrdered)}</div></div>
+            `;
+
+            // History table — combine bookings + collections, newest first
+            const events = [];
+            bookings.forEach(b => events.push({
+                kind: 'booking',
+                date: b.booking_date,
+                detail: 'Booked ' + (b.start_time||'').substring(0,5) + ' · ' + (b.collection_qty || 0) + ' pcs',
+                ref:   b.al_number || b.order_number || '',
+                place: [b.nursery_name, b.plot_name].filter(Boolean).join(' / ') || '—',
+                status: b.status || 'booked',
+            }));
+            collections.forEach(c => events.push({
+                kind: 'collection',
+                date: (c.collected_at || '').slice(0,10),
+                detail: 'Collected ' + (c.collected_qty || 0) + ' pcs',
+                ref:   c.al_number || '',
+                place: '—',
+                status: 'collected',
+            }));
+            events.sort((a,b)=> (b.date || '').localeCompare(a.date || ''));
+
+            if (!events.length) {
+                wrap.innerHTML = `<div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest">No history found for this customer</div>`;
+                return;
+            }
+
+            wrap.innerHTML = `
+                <table class="ph-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th><th>Type</th><th>Detail</th><th>Ref</th><th>Nursery / Plot</th><th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${events.map(e => `
+                            <tr>
+                                <td>${e.date || '—'}</td>
+                                <td><span class="pill-status ${e.kind==='collection'?'pill-completed':'pill-paid'}">${e.kind}</span></td>
+                                <td>${escapeHtml(e.detail)}</td>
+                                <td class="font-mono text-[11px]">${escapeHtml(e.ref || '')}</td>
+                                <td>${escapeHtml(e.place || '—')}</td>
+                                <td><span class="pill-status pill-paid">${escapeHtml((e.status||'').replace(/_/g,' '))}</span></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>`;
+        } catch (e) {
+            console.warn('Pickup history error:', e);
+            wrap.innerHTML = `<div class="text-center py-8 text-[10px] text-red-500 font-bold uppercase tracking-widest">Unable to load history</div>`;
+        }
+    }
+
+    function closePickupHistory() {
+        document.getElementById('pickup-modal').classList.remove('open');
+    }
+
+    // close modal on backdrop click
+    document.getElementById('pickup-modal').addEventListener('click', e => {
+        if (e.target.id === 'pickup-modal') closePickupHistory();
+    });
+
+    // delegated click for any cust-link[data-pickup] (works for rows rendered later)
+    document.addEventListener('click', e => {
+        const el = e.target.closest('[data-pickup]');
+        if (!el) return;
+        openPickupHistory(el.dataset.cust || '', el.dataset.order || '');
+    });
+
+    // ════════════════════════════════════════════════════════════════════════
+    //  Capacity heatmap — matured stock vs pending collection per nursery × month
+    // ════════════════════════════════════════════════════════════════════════
+    async function loadCapacityHeatmap() {
+        const area = document.getElementById('heatmap-area');
+        try {
+            // Look forward 6 months
+            const months = [];
+            const start = new Date(); start.setDate(1); start.setHours(0,0,0,0);
+            for (let i = 0; i < 6; i++) {
+                const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
+                const next = new Date(start.getFullYear(), start.getMonth() + i + 1, 1);
+                months.push({
+                    key:   d.toISOString().slice(0,7),
+                    label: d.toLocaleString('en-MY', { month:'short', year:'2-digit' }),
+                    start: d.toISOString(),
+                    end:   next.toISOString(),
+                    endDate: next.toISOString().slice(0,10),
+                });
+            }
+
+            const earliestStart = months[0].start;
+            const latestEnd     = months[months.length-1].end;
+
+            const [transRes, plotsRes, bookingsRes] = await Promise.all([
+                _supabase.from('shared_inventory_logs')
+                    .select('batch_name,plot_name,quantity_change,created_at')
+                    .in('transaction_type', ['Transplanted','Transplanted_Premium','Transplanted_DoubleTone']),
+                _supabase.from('shared_plots').select('plot_name,nursery_name'),
+                _supabase.from('shared_collection_bookings')
+                    .select('booking_date,collection_qty,nursery_name,status')
+                    .gte('booking_date', earliestStart.slice(0,10))
+                    .lt('booking_date',  latestEnd.slice(0,10))
+                    .neq('status', 'cancelled'),
+            ]);
+
+            const transLogs = transRes.data    || [];
+            const plots     = plotsRes.data    || [];
+            const bookings  = bookingsRes.data || [];
+
+            const plotToNursery = {};
+            plots.forEach(p => { if (p.plot_name) plotToNursery[p.plot_name] = p.nursery_name || 'Unassigned'; });
+
+            // Nurseries (sorted, capped at 6)
+            const nurserySet = new Set(plots.map(p => p.nursery_name).filter(Boolean));
+            bookings.forEach(b => { if (b.nursery_name) nurserySet.add(b.nursery_name); });
+            const nurseries = Array.from(nurserySet).sort().slice(0, 6);
+            if (!nurseries.length) {
+                area.innerHTML = `<div class="text-center py-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest">No nursery data yet</div>`;
+                return;
+            }
+
+            // Group transplant logs by (batch, plot) → take earliest date as transplant date.
+            const groupKey = (b, p) => (b||'') + '||' + (p||'');
+            const groups = {};
+            transLogs.forEach(l => {
+                const k = groupKey(l.batch_name, l.plot_name);
+                if (!groups[k]) groups[k] = { qty: 0, firstDate: l.created_at, plot: l.plot_name };
+                groups[k].qty += (l.quantity_change || 0);
+                if (l.created_at < groups[k].firstDate) groups[k].firstDate = l.created_at;
+            });
+
+            // Matured-by-month-by-nursery: matured = transplant + 9 months. Count once when it crosses into a month.
+            const matured = {}; // key: `${month}|${nursery}` → qty (after 10% culling)
+            Object.values(groups).forEach(g => {
+                const tDate = new Date(g.firstDate);
+                const matureDate = new Date(tDate); matureDate.setMonth(matureDate.getMonth() + 9);
+                const monthKey = matureDate.toISOString().slice(0,7);
+                const nursery  = plotToNursery[g.plot] || 'Unassigned';
+                if (!nurseries.includes(nursery)) return;
+                const k = monthKey + '|' + nursery;
+                matured[k] = (matured[k] || 0) + Math.round(g.qty * 0.9);
+            });
+
+            // Pending collections by month × nursery
+            const pending = {};
+            bookings.forEach(b => {
+                if (!b.booking_date) return;
+                const monthKey = b.booking_date.slice(0,7);
+                const nursery  = b.nursery_name || 'Unassigned';
+                if (!nurseries.includes(nursery)) return;
+                const k = monthKey + '|' + nursery;
+                pending[k] = (pending[k] || 0) + (b.collection_qty || 0);
+            });
+
+            // Build grid: header row (label, month1..month6) + nursery rows
+            const cols = '120px ' + months.map(()=> 'minmax(80px,1fr)').join(' ');
+            let html = `<div class="heat-grid" style="grid-template-columns:${cols};">`;
+            html += `<div class="heat-cell h-label">Nursery</div>`;
+            months.forEach(m => { html += `<div class="heat-cell h-month-label">${m.label}</div>`; });
+
+            nurseries.forEach(n => {
+                html += `<div class="heat-cell h-label">${escapeHtml(n)}</div>`;
+                months.forEach(m => {
+                    const k = m.key + '|' + n;
+                    const mat = matured[k] || 0;
+                    const pen = pending[k] || 0;
+                    if (!mat && !pen) {
+                        html += `<div class="heat-cell heat-na" title="No matured stock or bookings"><span class="h-pct">—</span><span class="h-meta">no data</span></div>`;
+                        return;
+                    }
+                    const pct = mat > 0 ? Math.round((pen / mat) * 100) : (pen > 0 ? 999 : 0);
+                    let bucket = 'heat-0';
+                    if (pct > 100)      bucket = 'heat-5';
+                    else if (pct >= 80) bucket = 'heat-4';
+                    else if (pct >= 60) bucket = 'heat-3';
+                    else if (pct >= 40) bucket = 'heat-2';
+                    else if (pct >= 20) bucket = 'heat-1';
+                    const pctLabel = pct > 100 ? 'OVER' : pct + '%';
+                    html += `<div class="heat-cell ${bucket}" title="Matured ${mat.toLocaleString()} · Pending ${pen.toLocaleString()}"><span class="h-pct">${pctLabel}</span><span class="h-meta">${pen.toLocaleString()} / ${mat.toLocaleString()}</span></div>`;
+                });
+            });
+            html += `</div>`;
+            area.innerHTML = html;
+        } catch (e) {
+            console.warn('Heatmap error:', e);
+            area.innerHTML = `<div class="text-center py-6 text-[10px] text-red-500 font-bold uppercase tracking-widest">Unable to load capacity heatmap</div>`;
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    //  Allocation drawer — drag customer orders onto matured-batch rows
+    // ════════════════════════════════════════════════════════════════════════
+    let batchAllocations = [];        // [{id, batch_name, plot_name, order_id, order_number, customer_name, allocated_qty, remark}]
+    let _allocTab = 'active';         // 'active' | 'past'
+    let _allocBcaTableExists = true;  // toggled false if SELECT errors with 42P01
+    let _draggingOrder = null;        // { orderId, customer, orderNumber, remaining, remark }
+
+    async function loadBatchAllocations() {
+        try {
+            const { data, error } = await _supabase
+                .from('shared_batch_customer_allocations')
+                .select('*');
+            if (error) throw error;
+            batchAllocations = data || [];
+            _allocBcaTableExists = true;
+        } catch (e) {
+            console.warn('[BCA] table missing or read failed — drag-drop will not persist:', e?.message || e);
+            batchAllocations = [];
+            _allocBcaTableExists = false;
+        }
+    }
+
+    function allocsForBatch(batchKey) {
+        const [b, p] = batchKey.split('||');
+        return batchAllocations.filter(a => a.batch_name === b && a.plot_name === p);
+    }
+
+    function allocsForOrder(orderId) {
+        if (!orderId) return [];
+        return batchAllocations.filter(a => a.order_id === orderId);
+    }
+
+    function orderUnallocatedQty(o) {
+        const allocated = allocsForOrder(o.id).reduce((s, a) => s + (a.allocated_qty || 0), 0);
+        return Math.max(0, (o.totalQty || 0) - (o.totalCollected || 0) - allocated);
+    }
+
+    function isPastMonthOrder(o) {
+        if (!o.orderDate) return false;
+        const now = new Date();
+        const firstOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        return o.orderDate < firstOfThisMonth;
+    }
+
+    function isAllocatableStatus(o) {
+        return o.rawStatus !== 'Cancelled' && o.rawStatus !== 'Pending Payment';
+    }
+
+    function toggleAllocDrawer() {
+        const drawer = document.getElementById('alloc-drawer');
+        drawer.classList.toggle('open');
+        if (drawer.classList.contains('open')) renderAllocDrawer();
+    }
+
+    function switchAllocTab(tab) {
+        _allocTab = tab;
+        document.getElementById('alloc-tab-active').classList.toggle('active', tab === 'active');
+        document.getElementById('alloc-tab-past').classList.toggle('active', tab === 'past');
+        renderAllocDrawer();
+    }
+
+    function renderAllocDrawer() {
+        const body = document.getElementById('alloc-drawer-body');
+        if (!allCustomerOrders.length) {
+            body.innerHTML = `<div class="alloc-drawer-empty">No customer orders yet</div>`;
+            updateAllocCounts(0, 0);
+            return;
+        }
+
+        const eligible = allCustomerOrders.filter(isAllocatableStatus);
+        const active = eligible.filter(o => !isPastMonthOrder(o) && orderUnallocatedQty(o) > 0);
+        const past   = eligible.filter(o =>  isPastMonthOrder(o) && o.balance > 0);
+
+        updateAllocCounts(active.length, past.length);
+
+        const showList = _allocTab === 'active' ? active : past;
+        if (!showList.length) {
+            const msg = _allocTab === 'active'
+                ? '✅ All current orders are fully allocated'
+                : '✅ No past-month uncollected orders';
+            body.innerHTML = `<div class="alloc-drawer-empty">${msg}</div>`;
+            return;
+        }
+
+        body.innerHTML = showList.map(o => orderCardHtml(o, _allocTab)).join('');
+
+        // wire drag handlers on draggable cards (active tab only)
+        if (_allocTab === 'active') {
+            body.querySelectorAll('.order-card[draggable="true"]').forEach(el => {
+                el.addEventListener('dragstart', onCardDragStart);
+                el.addEventListener('dragend',   onCardDragEnd);
+            });
+        }
+    }
+
+    function updateAllocCounts(active, past) {
+        document.getElementById('alloc-count-active').textContent = active;
+        document.getElementById('alloc-count-past').textContent   = past;
+        const fab   = document.getElementById('alloc-fab');
+        const badge = document.getElementById('alloc-fab-badge');
+        badge.textContent = active;
+    }
+
+    function orderCardHtml(o, tab) {
+        const remaining   = orderUnallocatedQty(o);
+        const allocated   = allocsForOrder(o.id).reduce((s, a) => s + (a.allocated_qty || 0), 0);
+        const total       = o.totalQty || 0;
+        const collected   = o.totalCollected || 0;
+        const pctAlloc    = total ? Math.min(100, ((allocated + collected) / total) * 100) : 0;
+        const fullyAlloc  = remaining === 0 && tab === 'active';
+        const dateLabel   = o.orderDate ? o.orderDate.toLocaleDateString('en-MY', { day:'2-digit', month:'short' }) : '—';
+        const dragAttrs   = (tab === 'active' && remaining > 0)
+            ? `draggable="true" data-order-id="${escapeHtml(o.id || '')}"`
+            : '';
+        const cls = (tab === 'past') ? 'order-card past-due' : (fullyAlloc ? 'order-card fully-allocated' : 'order-card');
+        const grip = (tab === 'active' && remaining > 0) ? '<span class="order-card-grip">⋮⋮</span>' : '';
+
+        let qtyDisplay, qtySubLabel;
+        if (tab === 'past') {
+            qtyDisplay = (o.balance || 0).toLocaleString();
+            qtySubLabel = 'pcs uncollected · ordered ' + dateLabel;
+        } else if (fullyAlloc) {
+            qtyDisplay = '✓';
+            qtySubLabel = 'fully allocated · ' + total.toLocaleString() + ' pcs';
+        } else {
+            qtyDisplay = remaining.toLocaleString();
+            qtySubLabel = 'pcs to allocate · of ' + total.toLocaleString();
+        }
+
+        const remarkHtml = (tab === 'past')
+            ? `<div class="order-card-remark">⏳ Customer not yet collected — follow up reminder only</div>`
+            : '';
+
+        return `
+            <div class="${cls}" ${dragAttrs}>
+                ${grip}
+                <div class="order-card-name">${escapeHtml(o.customer || '—')}</div>
+                <div class="order-card-meta">${escapeHtml(o.orderNumber || '')} · ${dateLabel}</div>
+                <div class="order-card-qty-row">
+                    <span class="order-card-qty-big">${qtyDisplay}</span>
+                    <span class="order-card-qty-sub">${qtySubLabel}</span>
+                </div>
+                <div class="order-card-progress"><div class="order-card-progress-bar${pctAlloc >= 100 ? ' full' : ''}" style="width:${pctAlloc}%;"></div></div>
+                ${remarkHtml}
+            </div>`;
+    }
+
+    // ── Drag handlers ──────────────────────────────────────────────────────
+    function onCardDragStart(e) {
+        const orderId = e.currentTarget.dataset.orderId;
+        const order = allCustomerOrders.find(o => o.id === orderId);
+        if (!order) return;
+        _draggingOrder = {
+            orderId,
+            customer:    order.customer || '',
+            orderNumber: order.orderNumber || '',
+            remaining:   orderUnallocatedQty(order),
+        };
+        e.currentTarget.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'copy';
+        try { e.dataTransfer.setData('text/plain', orderId); } catch(_) {}
+
+        // Highlight rows in current month's maturity table that have balance > 0
+        document.querySelectorAll('#maturity-rows tr[data-batch-key]').forEach(tr => {
+            const balance = parseInt(tr.dataset.batchBalance || '0', 10);
+            if (balance > 0) tr.classList.add('drop-target');
+            else             tr.classList.add('drop-disabled');
+        });
+    }
+
+    function onCardDragEnd(e) {
+        e.currentTarget.classList.remove('dragging');
+        _draggingOrder = null;
+        document.querySelectorAll('#maturity-rows tr').forEach(tr => {
+            tr.classList.remove('drop-target', 'drop-hover', 'drop-disabled');
+        });
+    }
+
+    function onRowDragOver(e) {
+        if (!_draggingOrder) return;
+        const tr = e.currentTarget;
+        const balance = parseInt(tr.dataset.batchBalance || '0', 10);
+        if (balance <= 0) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        tr.classList.add('drop-hover');
+    }
+    function onRowDragLeave(e) { e.currentTarget.classList.remove('drop-hover'); }
+
+    async function onRowDrop(e) {
+        if (!_draggingOrder) return;
+        e.preventDefault();
+        const tr = e.currentTarget;
+        tr.classList.remove('drop-hover');
+        const balance   = parseInt(tr.dataset.batchBalance || '0', 10);
+        const batchName = tr.dataset.batchName || '';
+        const plotName  = tr.dataset.plotName  || '';
+        if (balance <= 0) return;
+
+        const { orderId, customer, orderNumber, remaining } = _draggingOrder;
+        const allocQty = Math.min(balance, remaining);
+        if (allocQty <= 0) return;
+
+        await allocateOrderToBatch({
+            orderId, customer, orderNumber,
+            batchName, plotName, qty: allocQty,
+        });
+    }
+
+    async function allocateOrderToBatch({ orderId, customer, orderNumber, batchName, plotName, qty }) {
+        const payload = {
+            batch_name:    batchName,
+            plot_name:     plotName,
+            order_id:      orderId || null,
+            order_number:  orderNumber || null,
+            customer_name: customer || '—',
+            allocated_qty: qty,
+            updated_at:    new Date().toISOString(),
+        };
+
+        let saved = null;
+        if (_allocBcaTableExists) {
+            try {
+                const { data, error } = await _supabase
+                    .from('shared_batch_customer_allocations')
+                    .insert(payload)
+                    .select()
+                    .single();
+                if (error) throw error;
+                saved = data;
+            } catch (e) {
+                console.warn('[BCA] insert failed (table may not exist):', e?.message || e);
+                _allocBcaTableExists = false;
+            }
+        }
+        // Optimistic local update so the UI reacts even without persistence
+        if (!saved) saved = { id: 'local-' + Date.now() + '-' + Math.random().toString(16).slice(2), ...payload };
+        batchAllocations.push(saved);
+
+        renderMaturityTable();
+        renderAllocDrawer();
+    }
+
+    async function removeAllocation(allocId) {
+        const idx = batchAllocations.findIndex(a => a.id === allocId);
+        if (idx === -1) return;
+        const removed = batchAllocations[idx];
+        batchAllocations.splice(idx, 1);
+
+        if (_allocBcaTableExists && !String(allocId).startsWith('local-')) {
+            try {
+                const { error } = await _supabase
+                    .from('shared_batch_customer_allocations')
+                    .delete()
+                    .eq('id', allocId);
+                if (error) throw error;
+            } catch (e) {
+                console.warn('[BCA] delete failed — restoring local state:', e?.message || e);
+                batchAllocations.splice(idx, 0, removed);
+            }
+        }
+        renderMaturityTable();
+        renderAllocDrawer();
+    }
+
+    // expose for inline onclick handlers
+    window.removeAllocation = removeAllocation;
+
     // ── Boot ────────────────────────────────────────────────────────────────
     document.getElementById('gearing-slider').addEventListener('input', updateGearing);
     _supabase.auth.getSession().then(({ data: { session } }) => {
@@ -1321,8 +2172,10 @@
         loadNsd();
         loadTodoList();
         loadMaturity();
-        loadCustomerOrders();
+        loadCustomerOrders().then(() => renderAllocDrawer());
         loadScheduledCollection();
+        loadAgingReport();
+        loadBatchAllocations().then(() => { renderMaturityTable(); renderAllocDrawer(); });
     });
 </script>
 </body>
