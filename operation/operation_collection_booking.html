@@ -115,6 +115,19 @@
   .al-dropdown-item:hover { background:#ecfdf5; }
   .al-dropdown-item .al-num { font-weight:900; color:#065f46; }
   .al-dropdown-item .al-cust { color:#64748b; font-size:12px; }
+
+  /* WEATHER STRIP (7-Day Forecast) */
+  .weather-strip { display:flex; gap:6px; overflow-x:auto; padding:2px 0; scrollbar-width:none; }
+  .weather-strip::-webkit-scrollbar { display:none; }
+  .weather-day { flex:1 1 0; min-width:74px; background:white; border:1.5px solid #e2e8f0; border-radius:12px; padding:8px 6px; text-align:center; transition:all .2s; }
+  .weather-day.today { border-color:#10b981; background:#ecfdf5; }
+  .weather-day-name { font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:.05em; color:#94a3b8; }
+  .weather-day.today .weather-day-name { color:#065f46; }
+  .weather-day-icon { font-size:1.4rem; margin:3px 0 1px; line-height:1; }
+  .weather-day-temp { font-size:11px; font-weight:900; color:#1e293b; }
+  .weather-day-rain { font-size:9px; font-weight:700; color:#3b82f6; margin-top:1px; }
+  .weather-day-rain.high { color:#ef4444; }
+  .weather-day-desc { font-size:8px; font-weight:700; color:#94a3b8; margin-top:1px; line-height:1.2; }
 </style>
 </head>
 <body class="fade-enter">
@@ -135,6 +148,15 @@
 
 <!-- MAIN CONTENT -->
 <div class="max-w-[1200px] mx-auto px-4 sm:px-6 py-6 space-y-4">
+
+  <!-- Weather Forecast (7-Day, Miri) -->
+  <div class="dash-card p-4" id="weather-card" style="display:none;">
+    <div class="flex items-center gap-2 mb-2">
+      <svg class="w-4 h-4 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 0 0 4 4h9a5 5 0 1 0-.1-9.999 5.002 5.002 0 1 0-9.78 2.096A4.001 4.001 0 0 0 3 15z"/></svg>
+      <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Miri 7-Day Weather Forecast</span>
+    </div>
+    <div class="weather-strip" id="weather-strip"></div>
+  </div>
 
   <!-- Nav bar -->
   <div class="dash-card p-4 flex flex-wrap items-center justify-between gap-3">
@@ -553,7 +575,7 @@ async function loadAll() {
   }
 }
 
-window.addEventListener('DOMContentLoaded', function() { loadAll(); });
+window.addEventListener('DOMContentLoaded', function() { loadAll(); loadWeather(); });
 
 // VIEW SWITCHING (month-only)
 function switchView(view) {
@@ -1551,6 +1573,56 @@ function showToast(msg) {
   document.getElementById('toast-msg').textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ════════════════════════════════════════════════════════
+//  7-DAY WEATHER FORECAST (Open-Meteo — Miri, Sarawak)
+// ════════════════════════════════════════════════════════
+var _wCache = {};
+var _wCodes = {0:'Clear',1:'Mainly Clear',2:'Partly Cloudy',3:'Overcast',45:'Foggy',48:'Fog',51:'Lt Drizzle',53:'Drizzle',55:'Hvy Drizzle',61:'Lt Rain',63:'Rain',65:'Hvy Rain',80:'Lt Showers',81:'Showers',82:'Hvy Showers',95:'T-Storm',96:'T-Storm+Hail',99:'Hvy T-Storm'};
+var _wIcons = {0:'☀️',1:'🌤️',2:'⛅',3:'☁️',45:'🌫️',48:'🌫️',51:'🌦️',53:'🌧️',55:'🌧️',61:'🌦️',63:'🌧️',65:'🌧️',80:'🌦️',81:'🌧️',82:'⛈️',95:'⚡',96:'⚡',99:'⚡'};
+
+async function loadWeather() {
+  var card = document.getElementById('weather-card');
+  if (!card) return;
+  var fmt = function(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+  var today = new Date(); today.setHours(0,0,0,0);
+  var end = new Date(today); end.setDate(end.getDate() + 6);
+  var fs = fmt(today), fe = fmt(end), ck = fs + '_' + fe;
+  var wd;
+  if (_wCache[ck]) { wd = _wCache[ck]; }
+  else {
+    try {
+      var r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=4.3995&longitude=114.0148&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia/Kuching&start_date=' + fs + '&end_date=' + fe);
+      if (!r.ok) throw 0;
+      var j = await r.json();
+      if (!j.daily || !j.daily.time) throw 0;
+      wd = j.daily; _wCache[ck] = wd;
+    } catch(e) { card.style.display = 'none'; return; }
+  }
+  var dn = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], html = '';
+  for (var i = 0; i < wd.time.length; i++) {
+    var ds = wd.time[i], dt = new Date(ds + 'T00:00:00');
+    var dl = ds === fs ? 'Today' : dn[dt.getDay()];
+    var dd = String(dt.getDate()).padStart(2,'0') + '/' + String(dt.getMonth()+1).padStart(2,'0');
+    var code = wd.weather_code[i];
+    var hi = Math.round(wd.temperature_2m_max[i]);
+    var lo = Math.round(wd.temperature_2m_min[i]);
+    var rain = wd.precipitation_probability_max[i] || 0;
+    var ic = _wIcons[code] || '☁️';
+    var dc = _wCodes[code] || 'Cloudy';
+    var rc = rain >= 60 ? ' high' : '';
+    html += '<div class="weather-day' + (ds === fs ? ' today' : '') + '">' +
+      '<div class="weather-day-name">' + dl + '</div>' +
+      '<div style="font-size:8px;color:#cbd5e1;font-weight:700;">' + dd + '</div>' +
+      '<div class="weather-day-icon">' + ic + '</div>' +
+      '<div class="weather-day-temp">' + hi + '°/' + lo + '°</div>' +
+      '<div class="weather-day-rain' + rc + '">💧 ' + rain + '%</div>' +
+      '<div class="weather-day-desc">' + dc + '</div>' +
+      '</div>';
+  }
+  document.getElementById('weather-strip').innerHTML = html;
+  card.style.display = '';
 }
 </script>
 
