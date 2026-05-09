@@ -14,40 +14,46 @@
   body { background:#f1f5f9; margin:0; }
 
   .card { background:white; border:1px solid #e2e8f0; border-radius:20px; box-shadow:0 4px 16px rgba(0,0,0,.06); }
-  .lvl-select { appearance:none; -webkit-appearance:none; padding:8px 30px 8px 12px; border-radius:10px; font-weight:800; font-size:11px; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; border:1px solid transparent; outline:none; min-width:120px; transition:all .15s; background-position:right 10px center; background-repeat:no-repeat; background-size:10px; }
-  .lvl-admin  { background-color:#10b981; color:white;  border-color:#059669; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='white' d='M5 6L0 0h10z'/></svg>"); }
-  .lvl-normal { background-color:#3b82f6; color:white;  border-color:#2563eb; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='white' d='M5 6L0 0h10z'/></svg>"); }
-  .lvl-none   { background-color:#f1f5f9; color:#64748b; border-color:#cbd5e1; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='%2364748b' d='M5 6L0 0h10z'/></svg>"); }
-  .lvl-select:hover  { transform:translateY(-1px); box-shadow:0 4px 8px rgba(0,0,0,.08); }
-  .lvl-select:focus  { box-shadow:0 0 0 3px rgba(59,130,246,.25); }
 
-  /* iOS-style toggle */
-  .tog { position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0; }
+  /* Access summary chip on the list */
+  .chip { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+  .chip-admin  { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+  .chip-normal { background:#eff6ff; color:#1e3a8a; border:1px solid #bfdbfe; }
+  .chip-none   { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
+  .chip-manage { background:#fff1f2; color:#9f1239; border:1px solid #fecdd3; }
+
+  .edit-btn { display:inline-flex; align-items:center; gap:6px; padding:10px 16px; border-radius:12px; font-size:11px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; background:linear-gradient(135deg,#10b981,#059669); color:white; border:none; cursor:pointer; box-shadow:0 6px 14px -4px rgba(16,185,129,.4); transition:all .15s; }
+  .edit-btn:hover { transform:translateY(-1px); box-shadow:0 10px 18px -4px rgba(16,185,129,.5); }
+
+  /* Drawer */
+  .drawer-backdrop { position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:60; opacity:0; pointer-events:none; transition:opacity .25s; backdrop-filter:blur(4px); }
+  .drawer-backdrop.open { opacity:1; pointer-events:auto; }
+  .drawer { position:fixed; top:0; right:0; bottom:0; width:100%; max-width:480px; background:white; z-index:70; transform:translateX(100%); transition:transform .3s cubic-bezier(.4,0,.2,1); display:flex; flex-direction:column; box-shadow:-20px 0 60px rgba(0,0,0,.2); }
+  .drawer.open { transform:translateX(0); }
+
+  .lvl-select { appearance:none; -webkit-appearance:none; padding:10px 36px 10px 14px; border-radius:12px; font-weight:900; font-size:12px; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; border:1.5px solid transparent; outline:none; min-width:140px; transition:all .15s; background-position:right 12px center; background-repeat:no-repeat; background-size:10px; }
+  .lvl-admin  { background-color:#10b981; color:white;   border-color:#059669; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='white' d='M5 6L0 0h10z'/></svg>"); }
+  .lvl-normal { background-color:#3b82f6; color:white;   border-color:#2563eb; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='white' d='M5 6L0 0h10z'/></svg>"); }
+  .lvl-none   { background-color:#f8fafc; color:#475569; border-color:#cbd5e1; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='%23475569' d='M5 6L0 0h10z'/></svg>"); }
+  .lvl-select:focus { box-shadow:0 0 0 3px rgba(59,130,246,.25); }
+
+  /* Toggle */
+  .tog { position:relative; display:inline-block; width:48px; height:26px; flex-shrink:0; }
   .tog input { opacity:0; width:0; height:0; }
   .tog-slider { position:absolute; cursor:pointer; inset:0; background:#cbd5e1; border-radius:999px; transition:.25s; }
-  .tog-slider::before { position:absolute; content:''; left:3px; top:3px; width:18px; height:18px; background:white; border-radius:50%; transition:.25s; box-shadow:0 1px 3px rgba(0,0,0,.25); }
+  .tog-slider::before { position:absolute; content:''; left:3px; top:3px; width:20px; height:20px; background:white; border-radius:50%; transition:.25s; box-shadow:0 1px 3px rgba(0,0,0,.25); }
   .tog input:checked + .tog-slider { background:#f43f5e; }
-  .tog input:checked + .tog-slider::before { transform:translateX(20px); }
+  .tog input:checked + .tog-slider::before { transform:translateX(22px); }
 
-  .preset-btn { padding:6px 12px; font-size:10px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; border-radius:999px; border:1px solid #e2e8f0; background:white; color:#475569; cursor:pointer; transition:all .15s; }
-  .preset-btn:hover { background:#f1f5f9; color:#0f172a; border-color:#cbd5e1; }
+  .preset-btn { padding:8px 14px; font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; border-radius:10px; border:1.5px solid #e2e8f0; background:white; color:#334155; cursor:pointer; transition:all .15s; }
+  .preset-btn:hover { background:#f1f5f9; border-color:#cbd5e1; }
+  .preset-admin:hover  { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
+  .preset-normal:hover { background:#eff6ff; border-color:#bfdbfe; color:#1e3a8a; }
+  .preset-none:hover   { background:#f1f5f9; border-color:#cbd5e1; color:#475569; }
 
-  .row-saving::after  { content:'Saving…';  color:#64748b; font-size:10px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
-  .row-saved::after   { content:'✓ Saved';  color:#059669; font-size:10px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; }
-  .row-error::after   { content:'✗ Error';  color:#dc2626; font-size:10px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; }
-
-  table { border-collapse:separate; border-spacing:0; width:100%; }
-  th, td { vertical-align:middle; }
-  th { white-space:nowrap; }
-
-  /* Mobile-friendly stacked card layout below 900px */
-  @media (max-width: 900px) {
-    .table-wrap { display:none; }
-    .mobile-cards { display:grid; }
-  }
-  @media (min-width: 901px) {
-    .mobile-cards { display:none; }
-  }
+  .user-row { padding:18px 22px; display:flex; align-items:center; gap:16px; border-bottom:1px solid #f1f5f9; transition:background .15s; }
+  .user-row:hover { background:#f8fafc; }
+  .user-row:last-child { border-bottom:none; }
 </style>
 </head>
 <body>
@@ -61,10 +67,9 @@
   <a href="operation_dashboard.html" class="text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 px-4 py-2 rounded-full border border-slate-200 no-underline">&#8592; Dashboard</a>
 </div>
 
-<!-- Loading / forbidden states -->
-<div id="loading"   class="max-w-[1200px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading user list…</div>
+<div id="loading" class="max-w-[900px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading user list…</div>
 
-<div id="forbidden" class="max-w-[1200px] mx-auto px-6 py-16 hidden">
+<div id="forbidden" class="max-w-[900px] mx-auto px-6 py-16 hidden">
   <div class="card p-10 text-center">
     <div class="text-4xl mb-3">🔒</div>
     <h2 class="text-lg font-black text-slate-800 uppercase tracking-widest">Access Denied</h2>
@@ -73,103 +78,129 @@
   </div>
 </div>
 
-<!-- Main -->
-<div id="main" class="max-w-[1200px] mx-auto px-6 py-8 space-y-6 hidden">
+<div id="main" class="max-w-[900px] mx-auto px-6 py-8 space-y-6 hidden">
 
-  <!-- Legend -->
+  <!-- Intro -->
   <div class="card p-6">
-    <h1 class="text-base font-black text-slate-800 uppercase tracking-widest mb-4">👥 User Access Control</h1>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-[12px]">
-      <div class="flex items-start gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200">
-        <span class="px-2 py-1 rounded-md bg-emerald-500 text-white font-black text-[10px] uppercase tracking-widest mt-0.5">Admin</span>
-        <span class="text-slate-700">Full edit. In the Operation module, can also <strong>review and lock tabs</strong>.</span>
-      </div>
-      <div class="flex items-start gap-2 p-3 rounded-xl bg-blue-50 border border-blue-200">
-        <span class="px-2 py-1 rounded-md bg-blue-500 text-white font-black text-[10px] uppercase tracking-widest mt-0.5">Normal</span>
-        <span class="text-slate-700">Can view and edit, but cannot review/unlock. Reviewed tabs become read-only.</span>
-      </div>
-      <div class="flex items-start gap-2 p-3 rounded-xl bg-slate-100 border border-slate-200">
-        <span class="px-2 py-1 rounded-md bg-slate-500 text-white font-black text-[10px] uppercase tracking-widest mt-0.5">None</span>
-        <span class="text-slate-600">Cannot open the module. They won't even see the tile on the dashboard.</span>
-      </div>
-    </div>
-    <div class="mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-[12px] text-slate-700">
-      <strong class="text-rose-700">Manage Users</strong> — a separate switch from module access.
-      Users with this turned ON can open <em>this</em> page and change other people's permissions.
-      Keep it on for owners and IT only.
-    </div>
+    <h1 class="text-base font-black text-slate-800 uppercase tracking-widest mb-3">👥 User Access Control</h1>
+    <p class="text-[12px] text-slate-600 leading-relaxed">
+      Click <strong>Edit Access</strong> on a row to open the access panel for that user. Inside, you'll set each module to <span class="chip chip-admin">Admin</span> <span class="chip chip-normal">Normal</span> or <span class="chip chip-none">None</span> and choose whether they can manage other users.
+    </p>
   </div>
 
-  <!-- Search + presets -->
-  <div class="card p-5 flex flex-col gap-4">
-    <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
-      <input id="search" type="text" placeholder="🔎 Search by email or name…" class="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
-      <button id="reload-btn" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl border border-slate-200">Reload</button>
-    </div>
-    <div class="flex flex-wrap gap-2 items-center">
-      <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">Quick presets — click on a row first, then a preset:</span>
-      <button class="preset-btn" data-preset="full">Full Admin</button>
-      <button class="preset-btn" data-preset="op_lead">Operation Lead</button>
-      <button class="preset-btn" data-preset="op_staff">Operation Staff</button>
-      <button class="preset-btn" data-preset="sales">Sales Only</button>
-      <button class="preset-btn" data-preset="audit">Audit Only</button>
-      <button class="preset-btn" data-preset="view">View Only</button>
-      <button class="preset-btn" data-preset="none">No Access</button>
-    </div>
-    <div id="preset-hint" class="text-[11px] text-slate-500">No row selected. Click a row in the table to highlight it, then click a preset to apply.</div>
+  <!-- Search -->
+  <div class="flex flex-col md:flex-row gap-3 items-stretch">
+    <input id="search" type="text" placeholder="🔎 Search by email or name…" class="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
+    <button id="reload-btn" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl border border-slate-200">Reload</button>
   </div>
 
-  <!-- Desktop table -->
-  <div class="card overflow-hidden table-wrap">
-    <div class="overflow-x-auto">
-      <table>
-        <thead class="bg-slate-50 border-b border-slate-200">
-          <tr class="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-            <th class="text-left px-5 py-3">User</th>
-            <th class="text-center px-3 py-3">Operation</th>
-            <th class="text-center px-3 py-3">Salesweb</th>
-            <th class="text-center px-3 py-3">Audit</th>
-            <th class="text-center px-3 py-3">Mobile</th>
-            <th class="text-center px-3 py-3">Manage<br>Users</th>
-            <th class="text-right px-5 py-3">Status</th>
-          </tr>
-        </thead>
-        <tbody id="users-tbody" class="divide-y divide-slate-100"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- Mobile cards -->
-  <div id="users-mobile" class="mobile-cards gap-3"></div>
+  <!-- User list -->
+  <div id="users-list" class="card overflow-hidden"></div>
 
 </div>
 
+<!-- Drawer -->
+<div id="drawer-backdrop" class="drawer-backdrop"></div>
+<aside id="drawer" class="drawer" aria-hidden="true">
+  <header class="px-6 py-5 border-b border-slate-200 flex items-start justify-between gap-4">
+    <div class="flex items-center gap-3 min-w-0">
+      <div id="d-avatar" class="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-black text-sm shrink-0">??</div>
+      <div class="min-w-0">
+        <div id="d-name"  class="font-black text-slate-800 truncate">—</div>
+        <div id="d-email" class="text-[12px] text-slate-500 font-semibold truncate">—</div>
+      </div>
+    </div>
+    <button id="d-close" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center text-xl leading-none">×</button>
+  </header>
+
+  <div class="flex-1 overflow-y-auto">
+    <!-- Module access -->
+    <section class="px-6 py-5">
+      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Module Access</div>
+      <div class="space-y-3">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <div class="font-black text-slate-800 text-sm">Operation</div>
+            <div class="text-[11px] text-slate-500">Batch records, deliveries, stock, reports</div>
+          </div>
+          <select id="d-mod-operation" class="lvl-select"></select>
+        </div>
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <div class="font-black text-slate-800 text-sm">Salesweb</div>
+            <div class="text-[11px] text-slate-500">Customer-facing orders &amp; pricing</div>
+          </div>
+          <select id="d-mod-salesweb" class="lvl-select"></select>
+        </div>
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <div class="font-black text-slate-800 text-sm">Audit</div>
+            <div class="text-[11px] text-slate-500">Field height audits</div>
+          </div>
+          <select id="d-mod-audit" class="lvl-select"></select>
+        </div>
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <div class="font-black text-slate-800 text-sm">Mobile</div>
+            <div class="text-[11px] text-slate-500">Booking app for customers/drivers</div>
+          </div>
+          <select id="d-mod-mobile" class="lvl-select"></select>
+        </div>
+      </div>
+
+      <!-- Quick set-all presets — same words as the dropdown -->
+      <div class="mt-5 pt-4 border-t border-dashed border-slate-200">
+        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Quick Set — applies to all 4 modules</div>
+        <div class="flex flex-wrap gap-2">
+          <button class="preset-btn preset-admin"  data-preset="admin">Set All to Admin</button>
+          <button class="preset-btn preset-normal" data-preset="normal">Set All to Normal</button>
+          <button class="preset-btn preset-none"   data-preset="none">Set All to None</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Manage Users -->
+    <section class="px-6 py-5 border-t border-slate-200 bg-rose-50/40">
+      <div class="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-2">Manage Users</div>
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <div class="font-black text-slate-800 text-sm">Can edit other people's access</div>
+          <p class="text-[11px] text-slate-600 mt-1 leading-relaxed">
+            Lets this user open <em>this</em> page and change permissions for everyone.
+            <strong class="text-rose-700">Keep ON for owners and IT only.</strong>
+          </p>
+        </div>
+        <label class="tog mt-1">
+          <input id="d-manage-users" type="checkbox">
+          <span class="tog-slider"></span>
+        </label>
+      </div>
+    </section>
+  </div>
+
+  <footer class="px-6 py-4 border-t border-slate-200 flex justify-end gap-3 bg-slate-50">
+    <button id="d-cancel" class="px-5 py-3 rounded-xl text-slate-600 font-black text-[11px] uppercase tracking-widest hover:bg-slate-100">Cancel</button>
+    <button id="d-save"   class="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] uppercase tracking-widest shadow">Save Changes</button>
+  </footer>
+</aside>
+
 <!-- Toast -->
-<div id="toast" class="fixed bottom-6 right-6 hidden z-50 px-5 py-3 rounded-xl font-bold text-sm shadow-lg"></div>
+<div id="toast" class="fixed bottom-6 right-6 hidden z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg"></div>
 
 <script>
 const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
 const MODULES = ['operation', 'salesweb', 'audit', 'mobile'];
 const LEVELS  = ['admin', 'normal', 'none'];
+const LEVEL_LABEL = { admin:'Admin', normal:'Normal', none:'None' };
 
-const PRESETS = {
-  full:     { modules: { operation:'admin',  salesweb:'admin',  audit:'admin',  mobile:'admin'  }, manage_users: true,  label: 'Full Admin' },
-  op_lead:  { modules: { operation:'admin',  salesweb:'normal', audit:'normal', mobile:'normal' }, manage_users: false, label: 'Operation Lead' },
-  op_staff: { modules: { operation:'normal', salesweb:'none',   audit:'none',   mobile:'normal' }, manage_users: false, label: 'Operation Staff' },
-  sales:    { modules: { operation:'none',   salesweb:'admin',  audit:'none',   mobile:'normal' }, manage_users: false, label: 'Sales Only' },
-  audit:    { modules: { operation:'none',   salesweb:'none',   audit:'admin',  mobile:'normal' }, manage_users: false, label: 'Audit Only' },
-  view:     { modules: { operation:'normal', salesweb:'normal', audit:'normal', mobile:'normal' }, manage_users: false, label: 'View Only (all modules, normal)' },
-  none:     { modules: { operation:'none',   salesweb:'none',   audit:'none',   mobile:'none'   }, manage_users: false, label: 'No Access' }
-};
-
-let allProfiles  = [];
-let selectedUid  = null;
-const saveTimers = {};   // uid → debounce timer
+let allProfiles = [];
+let editingUid  = null;
+let pending     = null; // working copy of permissions while drawer is open
 
 function showToast(msg, kind) {
   const t = document.getElementById('toast');
   t.textContent = msg;
-  t.className = 'fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl font-bold text-sm shadow-lg ' +
+  t.className = 'fixed bottom-6 right-6 z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg ' +
     (kind === 'err'
       ? 'bg-red-50 text-red-700 border border-red-200'
       : 'bg-emerald-50 text-emerald-700 border border-emerald-200');
@@ -178,92 +209,47 @@ function showToast(msg, kind) {
 }
 
 function defaultPerms() {
-  return {
-    modules: { operation:'none', salesweb:'none', audit:'none', mobile:'none' },
-    manage_users: false
-  };
+  return { modules: { operation:'none', salesweb:'none', audit:'none', mobile:'none' }, manage_users:false };
 }
 
 function normPerms(p) {
   const out = defaultPerms();
   if (!p || typeof p !== 'object') return out;
   if (p.modules) {
-    for (const k of MODULES) {
-      const v = p.modules[k];
-      if (LEVELS.includes(v)) out.modules[k] = v;
-    }
+    for (const k of MODULES) if (LEVELS.includes(p.modules[k])) out.modules[k] = p.modules[k];
   }
   out.manage_users = !!p.manage_users;
   return out;
 }
 
-function lvlClass(level) {
-  return 'lvl-select lvl-' + level;
+function initials(p) {
+  const src = (p.full_name || p.email || '?').trim();
+  return src.split(/\s+/).map(s => s[0]).slice(0,2).join('').toUpperCase() || '?';
 }
 
-function selectHtml(uid, mod, current) {
-  return `
-    <select class="${lvlClass(current)}" data-uid="${uid}" data-mod="${mod}">
-      ${LEVELS.map(l => `<option value="${l}" ${l === current ? 'selected' : ''}>${l[0].toUpperCase()+l.slice(1)}</option>`).join('')}
-    </select>`;
+function summaryHtml(perms) {
+  const chips = MODULES
+    .filter(m => perms.modules[m] !== 'none')
+    .map(m => `<span class="chip chip-${perms.modules[m]}">${m} · ${LEVEL_LABEL[perms.modules[m]]}</span>`)
+    .join(' ');
+  const noneChip = !chips ? '<span class="chip chip-none">No module access</span>' : '';
+  const manageChip = perms.manage_users ? '<span class="chip chip-manage">Manage Users</span>' : '';
+  return `<div class="flex flex-wrap gap-1.5">${chips}${noneChip}${manageChip}</div>`;
 }
 
 function rowHtml(p) {
-  const perms = p.permissions;
-  const initials = (p.full_name || p.email || '?').split(/\s+/).map(s => s[0]).slice(0,2).join('').toUpperCase();
   return `
-    <tr id="row-${p.id}" data-uid="${p.id}" class="${selectedUid === p.id ? 'bg-amber-50' : ''}">
-      <td class="px-5 py-3">
-        <div class="flex items-center gap-3 min-w-[220px]">
-          <div class="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-black text-xs">${initials}</div>
-          <div>
-            <div class="font-black text-slate-800 text-sm leading-tight">${p.full_name || '<span class="text-slate-400">(no name)</span>'}</div>
-            <div class="text-[11px] text-slate-500 font-semibold">${p.email || '—'}</div>
-          </div>
-        </div>
-      </td>
-      <td class="px-3 py-3 text-center">${selectHtml(p.id, 'operation', perms.modules.operation)}</td>
-      <td class="px-3 py-3 text-center">${selectHtml(p.id, 'salesweb',  perms.modules.salesweb )}</td>
-      <td class="px-3 py-3 text-center">${selectHtml(p.id, 'audit',     perms.modules.audit    )}</td>
-      <td class="px-3 py-3 text-center">${selectHtml(p.id, 'mobile',    perms.modules.mobile   )}</td>
-      <td class="px-3 py-3 text-center">
-        <label class="tog inline-block align-middle">
-          <input type="checkbox" data-uid="${p.id}" data-toggle="manage_users" ${perms.manage_users ? 'checked' : ''}>
-          <span class="tog-slider"></span>
-        </label>
-      </td>
-      <td class="px-5 py-3 text-right">
-        <span id="status-${p.id}" class="row-status text-[10px] font-bold text-slate-300 uppercase tracking-widest">—</span>
-      </td>
-    </tr>`;
-}
-
-function mobileCardHtml(p) {
-  const perms = p.permissions;
-  const moduleRow = (mod) => `
-    <div class="flex items-center justify-between py-2 border-t border-slate-100 first:border-t-0">
-      <span class="text-[11px] font-black text-slate-500 uppercase tracking-widest">${mod}</span>
-      ${selectHtml(p.id, mod, perms.modules[mod])}
-    </div>`;
-  return `
-    <div id="row-${p.id}" data-uid="${p.id}" class="card p-4 ${selectedUid === p.id ? 'ring-2 ring-amber-400' : ''}">
-      <div class="flex items-center justify-between mb-3">
-        <div>
-          <div class="font-black text-slate-800 text-sm">${p.full_name || '(no name)'}</div>
-          <div class="text-[11px] text-slate-500 font-semibold">${p.email || '—'}</div>
-        </div>
-        <span id="status-${p.id}" class="row-status text-[10px] font-bold text-slate-300 uppercase tracking-widest">—</span>
+    <div class="user-row" data-uid="${p.id}">
+      <div class="w-11 h-11 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-black text-sm shrink-0">${initials(p)}</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-black text-slate-800 text-sm leading-tight truncate">${p.full_name || '<span class="text-slate-400">(no name)</span>'}</div>
+        <div class="text-[12px] text-slate-500 font-semibold truncate">${p.email || '—'}</div>
+        <div class="mt-2">${summaryHtml(p.permissions)}</div>
       </div>
-      <div>
-        ${MODULES.map(moduleRow).join('')}
-      </div>
-      <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
-        <span class="text-[11px] font-black text-rose-600 uppercase tracking-widest">Manage Users</span>
-        <label class="tog">
-          <input type="checkbox" data-uid="${p.id}" data-toggle="manage_users" ${perms.manage_users ? 'checked' : ''}>
-          <span class="tog-slider"></span>
-        </label>
-      </div>
+      <button class="edit-btn shrink-0" data-action="edit" data-uid="${p.id}">
+        Edit Access
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg>
+      </button>
     </div>`;
 }
 
@@ -273,140 +259,115 @@ function render() {
     : allProfiles.filter(p =>
         (p.email || '').toLowerCase().includes(q) ||
         (p.full_name || '').toLowerCase().includes(q));
-
-  const tbody = document.getElementById('users-tbody');
-  const cards = document.getElementById('users-mobile');
-
-  if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="text-center px-6 py-10 text-slate-400 text-sm">No users match.</td></tr>`;
-    cards.innerHTML = `<div class="text-center text-slate-400 text-sm py-8">No users match.</div>`;
-  } else {
-    tbody.innerHTML = filtered.map(rowHtml).join('');
-    cards.innerHTML = filtered.map(mobileCardHtml).join('');
-  }
-  updateSelectedHint();
+  const list = document.getElementById('users-list');
+  list.innerHTML = filtered.length
+    ? filtered.map(rowHtml).join('')
+    : `<div class="text-center text-slate-400 text-sm py-12">No users match.</div>`;
 }
 
-function updateSelectedHint() {
-  const hint = document.getElementById('preset-hint');
-  if (!selectedUid) {
-    hint.textContent = 'No row selected. Click a row in the table to highlight it, then click a preset to apply.';
-    hint.className = 'text-[11px] text-slate-500';
-    return;
-  }
-  const p = allProfiles.find(x => x.id === selectedUid);
-  hint.innerHTML = p
-    ? `Selected: <strong class="text-slate-800">${p.full_name || p.email}</strong>. Click a preset to apply, or change individual modules above.`
-    : '';
-  hint.className = 'text-[11px] text-amber-700';
+// ── Drawer ─────────────────────────────────────────────────────
+function rebuildDropdown(id, current) {
+  const sel = document.getElementById(id);
+  sel.innerHTML = LEVELS.map(l => `<option value="${l}">${LEVEL_LABEL[l]}</option>`).join('');
+  sel.value = current;
+  sel.className = 'lvl-select lvl-' + current;
 }
 
-function setStatus(uid, status) {
-  const el = document.getElementById('status-' + uid);
-  if (!el) return;
-  el.classList.remove('row-saving', 'row-saved', 'row-error');
-  if (status) el.classList.add('row-' + status);
-  if (!status) el.textContent = '—';
-  else         el.textContent = '';
+function syncDropdownColor(sel) {
+  sel.className = 'lvl-select lvl-' + sel.value;
 }
 
-async function persist(uid) {
+function openDrawer(uid) {
   const p = allProfiles.find(x => x.id === uid);
   if (!p) return;
-  setStatus(uid, 'saving');
+  editingUid = uid;
+  pending = JSON.parse(JSON.stringify(p.permissions));
+  document.getElementById('d-avatar').textContent = initials(p);
+  document.getElementById('d-name').textContent  = p.full_name || '(no name)';
+  document.getElementById('d-email').textContent = p.email || '—';
+  MODULES.forEach(m => rebuildDropdown('d-mod-' + m, pending.modules[m]));
+  document.getElementById('d-manage-users').checked = !!pending.manage_users;
+
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawer-backdrop').classList.add('open');
+  document.getElementById('drawer').setAttribute('aria-hidden', 'false');
+}
+
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawer-backdrop').classList.remove('open');
+  document.getElementById('drawer').setAttribute('aria-hidden', 'true');
+  editingUid = null;
+  pending    = null;
+}
+
+function applyPresetToPending(level) {
+  if (!pending) return;
+  if (!LEVELS.includes(level)) return;
+  MODULES.forEach(m => {
+    pending.modules[m] = level;
+    const sel = document.getElementById('d-mod-' + m);
+    sel.value = level;
+    syncDropdownColor(sel);
+  });
+}
+
+async function saveDrawer() {
+  if (!editingUid || !pending) return;
+  const p = allProfiles.find(x => x.id === editingUid);
+  if (!p) return;
+
+  // Read latest values from the form (in case of last-second changes).
+  MODULES.forEach(m => { pending.modules[m] = document.getElementById('d-mod-' + m).value; });
+  pending.manage_users = document.getElementById('d-manage-users').checked;
+
+  const saveBtn = document.getElementById('d-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+
   const { error } = await _supabase
     .from('shared_profiles')
-    .update({ permissions: p.permissions })
-    .eq('id', uid);
+    .update({ permissions: pending })
+    .eq('id', editingUid);
+
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Save Changes';
+
   if (error) {
     console.error(error);
-    setStatus(uid, 'error');
     showToast('Save failed: ' + error.message, 'err');
     return;
   }
-  setStatus(uid, 'saved');
-  setTimeout(() => setStatus(uid, ''), 1600);
-}
 
-function scheduleSave(uid) {
-  clearTimeout(saveTimers[uid]);
-  setStatus(uid, 'saving');
-  saveTimers[uid] = setTimeout(() => persist(uid), 350);
-}
-
-function setLevel(uid, mod, level) {
-  const p = allProfiles.find(x => x.id === uid);
-  if (!p || !LEVELS.includes(level)) return;
-  if (p.permissions.modules[mod] === level) return;
-  p.permissions.modules[mod] = level;
-  // Update the select's class without re-rendering everything (avoids dropdown close jank).
-  document.querySelectorAll(`select[data-uid="${uid}"][data-mod="${mod}"]`).forEach(s => {
-    s.className = lvlClass(level);
-    s.value = level;
-  });
-  scheduleSave(uid);
-}
-
-function setManageUsers(uid, value) {
-  const p = allProfiles.find(x => x.id === uid);
-  if (!p) return;
-  if (!!p.permissions.manage_users === !!value) return;
-  p.permissions.manage_users = !!value;
-  // Sync any other rendered toggle for the same user (desktop+mobile).
-  document.querySelectorAll(`input[data-uid="${uid}"][data-toggle="manage_users"]`).forEach(i => {
-    if (i.checked !== !!value) i.checked = !!value;
-  });
-  scheduleSave(uid);
-}
-
-function applyPreset(presetKey) {
-  if (!selectedUid) { showToast('Click a row first to select a user.', 'err'); return; }
-  const preset = PRESETS[presetKey];
-  if (!preset) return;
-  const p = allProfiles.find(x => x.id === selectedUid);
-  if (!p) return;
-  p.permissions.modules = { ...preset.modules };
-  p.permissions.manage_users = !!preset.manage_users;
+  p.permissions = JSON.parse(JSON.stringify(pending));
+  showToast('Saved. Changes apply on the user’s next refresh.');
   render();
-  scheduleSave(selectedUid);
-  showToast(`Applied "${preset.label}" to ${p.full_name || p.email}.`);
+  closeDrawer();
 }
 
-function selectRow(uid) {
-  if (selectedUid === uid) { selectedUid = null; }
-  else                     { selectedUid = uid; }
-  render();
-}
-
-// ── Event delegation ─────────────────────────────────────────────
-document.addEventListener('change', (e) => {
-  const t = e.target;
-  if (!t || !t.dataset) return;
-  if (t.matches('select[data-uid][data-mod]')) {
-    setLevel(t.dataset.uid, t.dataset.mod, t.value);
-    return;
-  }
-  if (t.dataset.toggle === 'manage_users') {
-    setManageUsers(t.dataset.uid, t.checked);
-  }
-});
-
+// ── Events ─────────────────────────────────────────────────────
 document.addEventListener('click', (e) => {
-  // Preset buttons
-  const pb = e.target.closest('[data-preset]');
-  if (pb) { applyPreset(pb.dataset.preset); return; }
+  const editBtn = e.target.closest('[data-action="edit"]');
+  if (editBtn) { openDrawer(editBtn.dataset.uid); return; }
 
-  // Row select — ignore clicks on inputs/selects/labels inside the row
-  const interactive = e.target.closest('select, input, label, button');
-  if (interactive) return;
-  const row = e.target.closest('[data-uid]');
-  if (row) selectRow(row.dataset.uid);
+  const preset = e.target.closest('[data-preset]');
+  if (preset) { applyPresetToPending(preset.dataset.preset); return; }
 });
+
+document.addEventListener('change', (e) => {
+  if (e.target.matches('select[id^="d-mod-"]')) syncDropdownColor(e.target);
+});
+
+document.getElementById('d-close' ).addEventListener('click', closeDrawer);
+document.getElementById('d-cancel').addEventListener('click', closeDrawer);
+document.getElementById('d-save'  ).addEventListener('click', saveDrawer);
+document.getElementById('drawer-backdrop').addEventListener('click', closeDrawer);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
 
 document.getElementById('search').addEventListener('input', render);
 document.getElementById('reload-btn').addEventListener('click', () => bootstrap());
 
-// ── Bootstrap ────────────────────────────────────────────────────
+// ── Bootstrap ─────────────────────────────────────────────────
 async function bootstrap() {
   document.getElementById('loading').classList.remove('hidden');
   document.getElementById('main').classList.add('hidden');
