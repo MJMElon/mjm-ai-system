@@ -147,6 +147,62 @@
         .ph-summary-card .ph-num{font-size:18px;font-weight:900;color:#1e293b;font-variant-numeric:tabular-nums;}
         .cust-link{color:#1d4ed8;cursor:pointer;text-decoration:underline dotted;}
         .cust-link:hover{color:#1e40af;}
+
+        /* ── Allocation drawer (drag customer orders onto batch rows) ── */
+        .alloc-fab{position:fixed;right:20px;bottom:24px;z-index:90;display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:999px;background:linear-gradient(135deg,#1d4ed8,#1e40af);color:white;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;border:none;cursor:pointer;box-shadow:0 16px 40px rgba(30,64,175,.45);transition:transform .15s,box-shadow .15s;font-family:'Outfit',sans-serif;}
+        .alloc-fab:hover{transform:translateY(-2px);box-shadow:0 20px 50px rgba(30,64,175,.55);}
+        .alloc-fab .alloc-fab-emoji{font-size:18px;line-height:1;}
+        .alloc-fab .alloc-fab-badge{background:#fbbf24;color:#78350f;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:900;min-width:20px;text-align:center;}
+        .alloc-fab.hidden-fab{display:none;}
+
+        .alloc-drawer{position:fixed;top:0;right:0;height:100vh;width:380px;max-width:92vw;background:white;border-left:1px solid #e2e8f0;box-shadow:-12px 0 36px rgba(15,23,42,.16);z-index:95;transform:translateX(100%);transition:transform .25s ease;display:flex;flex-direction:column;}
+        .alloc-drawer.open{transform:translateX(0);}
+        .alloc-drawer-head{padding:14px 16px;border-bottom:1px solid #e2e8f0;background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:white;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+        .alloc-drawer-head h3{font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;margin:0;}
+        .alloc-drawer-head p{font-size:10px;color:#bfdbfe;margin:2px 0 0;font-weight:600;}
+        .alloc-drawer-tabs{display:flex;gap:4px;background:#f1f5f9;padding:4px;border-bottom:1px solid #e2e8f0;}
+        .alloc-drawer-tab{flex:1;padding:8px 10px;border:none;background:transparent;border-radius:8px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#64748b;cursor:pointer;transition:all .15s;font-family:'Outfit',sans-serif;}
+        .alloc-drawer-tab.active{background:white;color:#1d4ed8;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+        .alloc-drawer-tab .alloc-tab-count{display:inline-block;margin-left:4px;background:#e2e8f0;color:#475569;border-radius:999px;padding:1px 7px;font-size:9px;}
+        .alloc-drawer-tab.active .alloc-tab-count{background:#dbeafe;color:#1d4ed8;}
+        .alloc-drawer-body{flex:1;overflow-y:auto;padding:12px;background:#f8fafc;}
+        .alloc-drawer-empty{text-align:center;padding:32px 12px;color:#94a3b8;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
+
+        .order-card{background:white;border:1px solid #e2e8f0;border-radius:14px;padding:11px 13px;margin-bottom:10px;cursor:grab;transition:all .15s;position:relative;user-select:none;}
+        .order-card:hover{border-color:#3b82f6;box-shadow:0 6px 16px rgba(59,130,246,.18);transform:translateY(-1px);}
+        .order-card:active{cursor:grabbing;}
+        .order-card.dragging{opacity:.5;cursor:grabbing;}
+        .order-card.fully-allocated{opacity:.6;border-color:#10b981;background:#f0fdf4;cursor:default;}
+        .order-card.fully-allocated:hover{transform:none;}
+        .order-card-name{font-size:12px;font-weight:900;color:#0f172a;line-height:1.2;}
+        .order-card-meta{font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-top:2px;font-family:'Outfit',sans-serif;}
+        .order-card-qty-row{display:flex;align-items:baseline;gap:6px;margin-top:8px;}
+        .order-card-qty-big{font-size:22px;font-weight:900;color:#1d4ed8;line-height:1;font-variant-numeric:tabular-nums;}
+        .order-card-qty-sub{font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;}
+        .order-card-progress{height:5px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:6px;}
+        .order-card-progress-bar{height:100%;background:linear-gradient(90deg,#3b82f6,#1d4ed8);transition:width .25s;}
+        .order-card-progress-bar.full{background:linear-gradient(90deg,#10b981,#059669);}
+        .order-card-remark{margin-top:6px;font-size:10px;color:#475569;line-height:1.35;background:#f8fafc;border:1px dashed #e2e8f0;border-radius:6px;padding:5px 7px;}
+        .order-card-grip{position:absolute;top:10px;right:10px;color:#cbd5e1;font-size:14px;line-height:1;}
+
+        .order-card.past-due{cursor:default;border-left:3px solid #f59e0b;}
+        .order-card.past-due:hover{border-color:#fbbf24;transform:none;box-shadow:0 4px 10px rgba(245,158,11,.15);}
+        .order-card.past-due .order-card-qty-big{color:#b45309;}
+
+        /* Drop targets — maturity rows */
+        .mat-table tbody tr{transition:background .12s,outline .12s;}
+        .mat-table tbody tr.drop-target{outline:2px dashed #93c5fd;outline-offset:-2px;background:#eff6ff !important;}
+        .mat-table tbody tr.drop-hover{outline:2px solid #1d4ed8;outline-offset:-2px;background:#dbeafe !important;}
+        .mat-table tbody tr.drop-disabled{opacity:.4;}
+
+        /* Reservation cell — multi-allocation chips */
+        .reserv-stack{display:flex;flex-direction:column;gap:3px;min-width:160px;}
+        .reserv-chip{display:flex;align-items:center;gap:5px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:3px 5px 3px 7px;font-size:10px;font-weight:700;color:#1e293b;}
+        .reserv-chip-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .reserv-chip-qty{font-variant-numeric:tabular-nums;color:#1d4ed8;font-weight:900;}
+        .reserv-chip-x{border:none;background:#fee2e2;color:#b91c1c;border-radius:6px;width:18px;height:18px;font-weight:900;font-size:11px;line-height:1;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:0;}
+        .reserv-chip-x:hover{background:#fca5a5;color:white;}
+        .reserv-empty{font-size:10px;color:#cbd5e1;font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-style:italic;}
     </style>
 </head>
 <body>
@@ -489,6 +545,34 @@
     </div>
     <!-- /CUSTOMER PANE -->
 
+</div>
+
+<!-- ══════════════ Allocation drawer (Stock tab only) ══════════════ -->
+<button class="alloc-fab hidden-fab" id="alloc-fab" onclick="toggleAllocDrawer()" title="Customer orders to allocate">
+    <span class="alloc-fab-emoji">🛒</span>
+    <span>Allocate Orders</span>
+    <span class="alloc-fab-badge" id="alloc-fab-badge">0</span>
+</button>
+
+<div class="alloc-drawer" id="alloc-drawer">
+    <div class="alloc-drawer-head">
+        <div>
+            <h3>🛒 Customer Orders</h3>
+            <p>Drag a card onto a matured-stock row</p>
+        </div>
+        <button onclick="toggleAllocDrawer()" class="w-8 h-8 rounded-lg bg-white/15 hover:bg-white/25 text-white font-black text-base flex items-center justify-center transition-colors shrink-0 border-none cursor-pointer">×</button>
+    </div>
+    <div class="alloc-drawer-tabs">
+        <button class="alloc-drawer-tab active" id="alloc-tab-active" onclick="switchAllocTab('active')">
+            Active <span class="alloc-tab-count" id="alloc-count-active">0</span>
+        </button>
+        <button class="alloc-drawer-tab" id="alloc-tab-past" onclick="switchAllocTab('past')">
+            Past Due <span class="alloc-tab-count" id="alloc-count-past">0</span>
+        </button>
+    </div>
+    <div class="alloc-drawer-body" id="alloc-drawer-body">
+        <div class="alloc-drawer-empty">Loading orders…</div>
+    </div>
 </div>
 
 <!-- ══════════════ Customer Pickup History modal ══════════════ -->
@@ -1071,13 +1155,24 @@
         let totQty = 0, totCull = 0, totReserved = 0;
         tbody.innerHTML = rows.map(r => {
             const alloc = plotAllocations[r.key] || { plot_status: 'open', reserved_for: '', reserved_qty: 0, premium: false };
-            const balance = r.afterCulling - (alloc.reserved_qty || 0);
+            const rowAllocs = allocsForBatch(r.key);
+            const allocSum = rowAllocs.reduce((s, a) => s + (a.allocated_qty || 0), 0);
+            const balance = r.afterCulling - allocSum;
             totQty       += r.qty;
             totCull      += r.afterCulling;
-            totReserved  += alloc.reserved_qty || 0;
-            const statusClass = 'pill-' + alloc.plot_status;
+            totReserved  += allocSum;
+
+            const reservHtml = rowAllocs.length
+                ? `<div class="reserv-stack">${rowAllocs.map(a => `
+                    <div class="reserv-chip" title="${escapeHtml(a.order_number || '')}">
+                        <span class="reserv-chip-name">${escapeHtml(a.customer_name || '—')}</span>
+                        <span class="reserv-chip-qty">${(a.allocated_qty || 0).toLocaleString()}</span>
+                        <button class="reserv-chip-x" onclick="removeAllocation('${escapeHtml(a.id)}')" title="Remove allocation">×</button>
+                    </div>`).join('')}</div>`
+                : `<div class="reserv-empty">— drop a customer card here —</div>`;
+
             return `
-                <tr>
+                <tr data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${balance}">
                     <td>${r.matureDate.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'})}</td>
                     <td>${escapeHtml(r.location)}</td>
                     <td><span class="font-black text-slate-900">${escapeHtml(r.plot || '—')}</span></td>
@@ -1085,18 +1180,8 @@
                     <td>${escapeHtml(r.breed || '—')}</td>
                     <td class="num">${r.qty.toLocaleString()}</td>
                     <td class="num text-emerald-700">${r.afterCulling.toLocaleString()}</td>
-                    <td>
-                        <input type="text" value="${escapeHtml(alloc.reserved_for || '')}" placeholder="—"
-                            data-allockey="${r.key}" data-allocfield="reserved_for"
-                            onchange="updateAllocation(this)"
-                            class="w-full text-[11px] font-bold bg-transparent border-b border-dashed border-slate-200 focus:border-emerald-500 outline-none px-1 py-0.5"/>
-                    </td>
-                    <td class="num">
-                        <input type="number" value="${alloc.reserved_qty || 0}" min="0"
-                            data-allockey="${r.key}" data-allocfield="reserved_qty"
-                            onchange="updateAllocation(this)"
-                            class="w-20 text-right text-[11px] font-black bg-transparent border-b border-dashed border-slate-200 focus:border-emerald-500 outline-none px-1 py-0.5"/>
-                    </td>
+                    <td>${reservHtml}</td>
+                    <td class="num font-black text-slate-700">${allocSum.toLocaleString()}</td>
                     <td class="num ${balance < 0 ? 'text-red-600' : balance === 0 ? 'text-slate-400' : 'text-slate-700'}">${balance.toLocaleString()}</td>
                     <td>
                         <select data-allockey="${r.key}" data-allocfield="plot_status" onchange="updateAllocation(this)"
@@ -1114,6 +1199,13 @@
                 </tr>
             `;
         }).join('');
+
+        // wire drop handlers on each row
+        tbody.querySelectorAll('tr[data-batch-key]').forEach(tr => {
+            tr.addEventListener('dragover',  onRowDragOver);
+            tr.addEventListener('dragleave', onRowDragLeave);
+            tr.addEventListener('drop',      onRowDrop);
+        });
 
         tfoot.innerHTML = `
             <tr class="bg-slate-50 font-black">
@@ -1476,12 +1568,15 @@
         const stockPane    = document.getElementById('ssm-pane-stock');
         const customerBtn  = document.getElementById('ssm-tab-customer');
         const stockBtn     = document.getElementById('ssm-tab-stock');
+        const fab          = document.getElementById('alloc-fab');
+        const drawer       = document.getElementById('alloc-drawer');
 
         if (tab === 'stock') {
             customerPane.classList.add('hidden');
             stockPane.classList.remove('hidden');
             customerBtn.classList.remove('active');
             stockBtn.classList.add('active');
+            if (fab) fab.classList.remove('hidden-fab');
             // Lazy-load capacity heatmap the first time the user opens this tab
             if (!_ssmStockLoaded) {
                 _ssmStockLoaded = true;
@@ -1492,6 +1587,8 @@
             customerPane.classList.remove('hidden');
             stockBtn.classList.remove('active');
             customerBtn.classList.add('active');
+            if (fab)    fab.classList.add('hidden-fab');
+            if (drawer) drawer.classList.remove('open');
         }
     }
 
@@ -1799,6 +1896,275 @@
         }
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    //  Allocation drawer — drag customer orders onto matured-batch rows
+    // ════════════════════════════════════════════════════════════════════════
+    let batchAllocations = [];        // [{id, batch_name, plot_name, order_id, order_number, customer_name, allocated_qty, remark}]
+    let _allocTab = 'active';         // 'active' | 'past'
+    let _allocBcaTableExists = true;  // toggled false if SELECT errors with 42P01
+    let _draggingOrder = null;        // { orderId, customer, orderNumber, remaining, remark }
+
+    async function loadBatchAllocations() {
+        try {
+            const { data, error } = await _supabase
+                .from('shared_batch_customer_allocations')
+                .select('*');
+            if (error) throw error;
+            batchAllocations = data || [];
+            _allocBcaTableExists = true;
+        } catch (e) {
+            console.warn('[BCA] table missing or read failed — drag-drop will not persist:', e?.message || e);
+            batchAllocations = [];
+            _allocBcaTableExists = false;
+        }
+    }
+
+    function allocsForBatch(batchKey) {
+        const [b, p] = batchKey.split('||');
+        return batchAllocations.filter(a => a.batch_name === b && a.plot_name === p);
+    }
+
+    function allocsForOrder(orderId) {
+        if (!orderId) return [];
+        return batchAllocations.filter(a => a.order_id === orderId);
+    }
+
+    function orderUnallocatedQty(o) {
+        const allocated = allocsForOrder(o.id).reduce((s, a) => s + (a.allocated_qty || 0), 0);
+        return Math.max(0, (o.totalQty || 0) - (o.totalCollected || 0) - allocated);
+    }
+
+    function isPastMonthOrder(o) {
+        if (!o.orderDate) return false;
+        const now = new Date();
+        const firstOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        return o.orderDate < firstOfThisMonth;
+    }
+
+    function isAllocatableStatus(o) {
+        return o.rawStatus !== 'Cancelled' && o.rawStatus !== 'Pending Payment';
+    }
+
+    function toggleAllocDrawer() {
+        const drawer = document.getElementById('alloc-drawer');
+        drawer.classList.toggle('open');
+        if (drawer.classList.contains('open')) renderAllocDrawer();
+    }
+
+    function switchAllocTab(tab) {
+        _allocTab = tab;
+        document.getElementById('alloc-tab-active').classList.toggle('active', tab === 'active');
+        document.getElementById('alloc-tab-past').classList.toggle('active', tab === 'past');
+        renderAllocDrawer();
+    }
+
+    function renderAllocDrawer() {
+        const body = document.getElementById('alloc-drawer-body');
+        if (!allCustomerOrders.length) {
+            body.innerHTML = `<div class="alloc-drawer-empty">No customer orders yet</div>`;
+            updateAllocCounts(0, 0);
+            return;
+        }
+
+        const eligible = allCustomerOrders.filter(isAllocatableStatus);
+        const active = eligible.filter(o => !isPastMonthOrder(o) && orderUnallocatedQty(o) > 0);
+        const past   = eligible.filter(o =>  isPastMonthOrder(o) && o.balance > 0);
+
+        updateAllocCounts(active.length, past.length);
+
+        const showList = _allocTab === 'active' ? active : past;
+        if (!showList.length) {
+            const msg = _allocTab === 'active'
+                ? '✅ All current orders are fully allocated'
+                : '✅ No past-month uncollected orders';
+            body.innerHTML = `<div class="alloc-drawer-empty">${msg}</div>`;
+            return;
+        }
+
+        body.innerHTML = showList.map(o => orderCardHtml(o, _allocTab)).join('');
+
+        // wire drag handlers on draggable cards (active tab only)
+        if (_allocTab === 'active') {
+            body.querySelectorAll('.order-card[draggable="true"]').forEach(el => {
+                el.addEventListener('dragstart', onCardDragStart);
+                el.addEventListener('dragend',   onCardDragEnd);
+            });
+        }
+    }
+
+    function updateAllocCounts(active, past) {
+        document.getElementById('alloc-count-active').textContent = active;
+        document.getElementById('alloc-count-past').textContent   = past;
+        const fab   = document.getElementById('alloc-fab');
+        const badge = document.getElementById('alloc-fab-badge');
+        badge.textContent = active;
+    }
+
+    function orderCardHtml(o, tab) {
+        const remaining   = orderUnallocatedQty(o);
+        const allocated   = allocsForOrder(o.id).reduce((s, a) => s + (a.allocated_qty || 0), 0);
+        const total       = o.totalQty || 0;
+        const collected   = o.totalCollected || 0;
+        const pctAlloc    = total ? Math.min(100, ((allocated + collected) / total) * 100) : 0;
+        const fullyAlloc  = remaining === 0 && tab === 'active';
+        const dateLabel   = o.orderDate ? o.orderDate.toLocaleDateString('en-MY', { day:'2-digit', month:'short' }) : '—';
+        const dragAttrs   = (tab === 'active' && remaining > 0)
+            ? `draggable="true" data-order-id="${escapeHtml(o.id || '')}"`
+            : '';
+        const cls = (tab === 'past') ? 'order-card past-due' : (fullyAlloc ? 'order-card fully-allocated' : 'order-card');
+        const grip = (tab === 'active' && remaining > 0) ? '<span class="order-card-grip">⋮⋮</span>' : '';
+
+        let qtyDisplay, qtySubLabel;
+        if (tab === 'past') {
+            qtyDisplay = (o.balance || 0).toLocaleString();
+            qtySubLabel = 'pcs uncollected · ordered ' + dateLabel;
+        } else if (fullyAlloc) {
+            qtyDisplay = '✓';
+            qtySubLabel = 'fully allocated · ' + total.toLocaleString() + ' pcs';
+        } else {
+            qtyDisplay = remaining.toLocaleString();
+            qtySubLabel = 'pcs to allocate · of ' + total.toLocaleString();
+        }
+
+        const remarkHtml = (tab === 'past')
+            ? `<div class="order-card-remark">⏳ Customer not yet collected — follow up reminder only</div>`
+            : '';
+
+        return `
+            <div class="${cls}" ${dragAttrs}>
+                ${grip}
+                <div class="order-card-name">${escapeHtml(o.customer || '—')}</div>
+                <div class="order-card-meta">${escapeHtml(o.orderNumber || '')} · ${dateLabel}</div>
+                <div class="order-card-qty-row">
+                    <span class="order-card-qty-big">${qtyDisplay}</span>
+                    <span class="order-card-qty-sub">${qtySubLabel}</span>
+                </div>
+                <div class="order-card-progress"><div class="order-card-progress-bar${pctAlloc >= 100 ? ' full' : ''}" style="width:${pctAlloc}%;"></div></div>
+                ${remarkHtml}
+            </div>`;
+    }
+
+    // ── Drag handlers ──────────────────────────────────────────────────────
+    function onCardDragStart(e) {
+        const orderId = e.currentTarget.dataset.orderId;
+        const order = allCustomerOrders.find(o => o.id === orderId);
+        if (!order) return;
+        _draggingOrder = {
+            orderId,
+            customer:    order.customer || '',
+            orderNumber: order.orderNumber || '',
+            remaining:   orderUnallocatedQty(order),
+        };
+        e.currentTarget.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'copy';
+        try { e.dataTransfer.setData('text/plain', orderId); } catch(_) {}
+
+        // Highlight rows in current month's maturity table that have balance > 0
+        document.querySelectorAll('#maturity-rows tr[data-batch-key]').forEach(tr => {
+            const balance = parseInt(tr.dataset.batchBalance || '0', 10);
+            if (balance > 0) tr.classList.add('drop-target');
+            else             tr.classList.add('drop-disabled');
+        });
+    }
+
+    function onCardDragEnd(e) {
+        e.currentTarget.classList.remove('dragging');
+        _draggingOrder = null;
+        document.querySelectorAll('#maturity-rows tr').forEach(tr => {
+            tr.classList.remove('drop-target', 'drop-hover', 'drop-disabled');
+        });
+    }
+
+    function onRowDragOver(e) {
+        if (!_draggingOrder) return;
+        const tr = e.currentTarget;
+        const balance = parseInt(tr.dataset.batchBalance || '0', 10);
+        if (balance <= 0) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        tr.classList.add('drop-hover');
+    }
+    function onRowDragLeave(e) { e.currentTarget.classList.remove('drop-hover'); }
+
+    async function onRowDrop(e) {
+        if (!_draggingOrder) return;
+        e.preventDefault();
+        const tr = e.currentTarget;
+        tr.classList.remove('drop-hover');
+        const balance   = parseInt(tr.dataset.batchBalance || '0', 10);
+        const batchName = tr.dataset.batchName || '';
+        const plotName  = tr.dataset.plotName  || '';
+        if (balance <= 0) return;
+
+        const { orderId, customer, orderNumber, remaining } = _draggingOrder;
+        const allocQty = Math.min(balance, remaining);
+        if (allocQty <= 0) return;
+
+        await allocateOrderToBatch({
+            orderId, customer, orderNumber,
+            batchName, plotName, qty: allocQty,
+        });
+    }
+
+    async function allocateOrderToBatch({ orderId, customer, orderNumber, batchName, plotName, qty }) {
+        const payload = {
+            batch_name:    batchName,
+            plot_name:     plotName,
+            order_id:      orderId || null,
+            order_number:  orderNumber || null,
+            customer_name: customer || '—',
+            allocated_qty: qty,
+            updated_at:    new Date().toISOString(),
+        };
+
+        let saved = null;
+        if (_allocBcaTableExists) {
+            try {
+                const { data, error } = await _supabase
+                    .from('shared_batch_customer_allocations')
+                    .insert(payload)
+                    .select()
+                    .single();
+                if (error) throw error;
+                saved = data;
+            } catch (e) {
+                console.warn('[BCA] insert failed (table may not exist):', e?.message || e);
+                _allocBcaTableExists = false;
+            }
+        }
+        // Optimistic local update so the UI reacts even without persistence
+        if (!saved) saved = { id: 'local-' + Date.now() + '-' + Math.random().toString(16).slice(2), ...payload };
+        batchAllocations.push(saved);
+
+        renderMaturityTable();
+        renderAllocDrawer();
+    }
+
+    async function removeAllocation(allocId) {
+        const idx = batchAllocations.findIndex(a => a.id === allocId);
+        if (idx === -1) return;
+        const removed = batchAllocations[idx];
+        batchAllocations.splice(idx, 1);
+
+        if (_allocBcaTableExists && !String(allocId).startsWith('local-')) {
+            try {
+                const { error } = await _supabase
+                    .from('shared_batch_customer_allocations')
+                    .delete()
+                    .eq('id', allocId);
+                if (error) throw error;
+            } catch (e) {
+                console.warn('[BCA] delete failed — restoring local state:', e?.message || e);
+                batchAllocations.splice(idx, 0, removed);
+            }
+        }
+        renderMaturityTable();
+        renderAllocDrawer();
+    }
+
+    // expose for inline onclick handlers
+    window.removeAllocation = removeAllocation;
+
     // ── Boot ────────────────────────────────────────────────────────────────
     document.getElementById('gearing-slider').addEventListener('input', updateGearing);
     _supabase.auth.getSession().then(({ data: { session } }) => {
@@ -1806,9 +2172,10 @@
         loadNsd();
         loadTodoList();
         loadMaturity();
-        loadCustomerOrders();
+        loadCustomerOrders().then(() => renderAllocDrawer());
         loadScheduledCollection();
         loadAgingReport();
+        loadBatchAllocations().then(() => { renderMaturityTable(); renderAllocDrawer(); });
     });
 </script>
 </body>
