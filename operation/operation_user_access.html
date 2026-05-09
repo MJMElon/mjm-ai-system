@@ -84,19 +84,42 @@
   <div class="card p-6">
     <h1 class="text-base font-black text-slate-800 uppercase tracking-widest mb-3">👥 User Access Control</h1>
     <p class="text-[12px] text-slate-600 leading-relaxed">
-      Click <strong>Edit Access</strong> on a row to open the access panel for that user. Inside, you'll set each module to <span class="chip chip-admin">Admin</span> <span class="chip chip-normal">Normal</span> or <span class="chip chip-none">None</span> and choose whether they can manage other users.
+      This list shows <strong>system users</strong> only — staff who signed up through the AI System. Customers who signed up via the Salesweb are kept separate. Click <strong>Edit Access</strong> to set each module to <span class="chip chip-admin">Admin</span> <span class="chip chip-normal">Normal</span> or <span class="chip chip-none">None</span>, or use <strong>+ Add User</strong> to promote a customer into the system list.
     </p>
   </div>
 
-  <!-- Search -->
+  <!-- Search + add -->
   <div class="flex flex-col md:flex-row gap-3 items-stretch">
-    <input id="search" type="text" placeholder="🔎 Search by email or name…" class="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
+    <input id="search" type="text" placeholder="🔎 Search system users by email or name…" class="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
+    <button id="add-user-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl shadow flex items-center justify-center gap-2 whitespace-nowrap">
+      <span class="text-lg leading-none">+</span> Add User
+    </button>
     <button id="reload-btn" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl border border-slate-200">Reload</button>
   </div>
 
   <!-- User list -->
   <div id="users-list" class="card overflow-hidden"></div>
 
+  <p class="text-[11px] text-slate-500 text-center">
+    Customers who signed up through the Salesweb don't appear here. Use <strong>+ Add User</strong> to promote one.
+  </p>
+
+</div>
+
+<!-- Add-User modal: search customer list and promote -->
+<div id="add-modal-backdrop" class="fixed inset-0 z-[55] bg-slate-900/60 backdrop-blur-sm hidden"></div>
+<div id="add-modal" class="fixed z-[56] inset-x-4 top-20 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[560px] max-h-[80vh] flex flex-col bg-white rounded-3xl shadow-2xl border border-slate-200 hidden overflow-hidden">
+  <header class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+    <div>
+      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Add System User</div>
+      <h2 class="text-base font-black text-slate-800">Promote a customer to system staff</h2>
+    </div>
+    <button id="add-close" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-800 text-xl leading-none">×</button>
+  </header>
+  <div class="px-6 py-4 border-b border-slate-100">
+    <input id="add-search" type="text" placeholder="🔎 Search customers by email or name…" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
+  </div>
+  <div id="add-list" class="flex-1 overflow-y-auto"></div>
 </div>
 
 <!-- Drawer -->
@@ -178,9 +201,12 @@
     </section>
   </div>
 
-  <footer class="px-6 py-4 border-t border-slate-200 flex justify-end gap-3 bg-slate-50">
-    <button id="d-cancel" class="px-5 py-3 rounded-xl text-slate-600 font-black text-[11px] uppercase tracking-widest hover:bg-slate-100">Cancel</button>
-    <button id="d-save"   class="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] uppercase tracking-widest shadow">Save Changes</button>
+  <footer class="px-6 py-4 border-t border-slate-200 flex justify-between items-center gap-3 bg-slate-50">
+    <button id="d-demote" class="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-rose-600 underline-offset-4 hover:underline">Move to customer</button>
+    <div class="flex gap-3">
+      <button id="d-cancel" class="px-5 py-3 rounded-xl text-slate-600 font-black text-[11px] uppercase tracking-widest hover:bg-slate-100">Cancel</button>
+      <button id="d-save"   class="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] uppercase tracking-widest shadow">Save Changes</button>
+    </div>
   </footer>
 </aside>
 
@@ -193,9 +219,12 @@ const MODULES = ['operation', 'salesweb', 'audit', 'mobile'];
 const LEVELS  = ['admin', 'normal', 'none'];
 const LEVEL_LABEL = { admin:'Admin', normal:'Normal', none:'None' };
 
-let allProfiles = [];
+let allProfiles = [];          // every profile, system + customer
 let editingUid  = null;
-let pending     = null; // working copy of permissions while drawer is open
+let pending     = null;        // working copy of permissions while drawer is open
+
+function systemProfiles()   { return allProfiles.filter(p => (p.user_type || 'system') === 'system'); }
+function customerProfiles() { return allProfiles.filter(p => (p.user_type || 'system') === 'customer'); }
 
 function showToast(msg, kind) {
   const t = document.getElementById('toast');
@@ -255,14 +284,15 @@ function rowHtml(p) {
 
 function render() {
   const q = (document.getElementById('search').value || '').toLowerCase().trim();
-  const filtered = !q ? allProfiles
-    : allProfiles.filter(p =>
+  const pool = systemProfiles();
+  const filtered = !q ? pool
+    : pool.filter(p =>
         (p.email || '').toLowerCase().includes(q) ||
         (p.full_name || '').toLowerCase().includes(q));
   const list = document.getElementById('users-list');
   list.innerHTML = filtered.length
     ? filtered.map(rowHtml).join('')
-    : `<div class="text-center text-slate-400 text-sm py-12">No users match.</div>`;
+    : `<div class="text-center text-slate-400 text-sm py-12">${pool.length ? 'No system users match your search.' : 'No system users yet — use “+ Add User” to promote a customer.'}</div>`;
 }
 
 // ── Drawer ─────────────────────────────────────────────────────
@@ -345,6 +375,99 @@ async function saveDrawer() {
   closeDrawer();
 }
 
+async function setUserType(uid, newType, opts) {
+  const p = allProfiles.find(x => x.id === uid);
+  if (!p) return false;
+  const { error } = await _supabase
+    .from('shared_profiles')
+    .update({ user_type: newType })
+    .eq('id', uid);
+  if (error) {
+    console.error(error);
+    showToast((opts?.errorPrefix || 'Update failed') + ': ' + error.message, 'err');
+    return false;
+  }
+  p.user_type = newType;
+  return true;
+}
+
+async function demoteCurrentToCustomer() {
+  if (!editingUid) return;
+  const p = allProfiles.find(x => x.id === editingUid);
+  if (!p) return;
+  if (!confirm(`Move "${p.full_name || p.email}" to customer?\nThey will be removed from the system list. Their module access will also be cleared.`)) return;
+  // Clear access first so nothing lingers if they're promoted again later.
+  const cleared = {
+    modules: { operation:'none', salesweb:'none', audit:'none', mobile:'none' },
+    manage_users: false
+  };
+  const { error: clearErr } = await _supabase
+    .from('shared_profiles')
+    .update({ permissions: cleared })
+    .eq('id', editingUid);
+  if (clearErr) { showToast('Clear permissions failed: ' + clearErr.message, 'err'); return; }
+  p.permissions = cleared;
+  const ok = await setUserType(editingUid, 'customer', { errorPrefix: 'Demote failed' });
+  if (!ok) return;
+  showToast('Moved to customer.');
+  render();
+  closeDrawer();
+}
+
+// ── Add-user modal ────────────────────────────────────────────
+function openAddModal() {
+  document.getElementById('add-modal-backdrop').classList.remove('hidden');
+  document.getElementById('add-modal').classList.remove('hidden');
+  document.getElementById('add-search').value = '';
+  renderCustomerList('');
+  setTimeout(() => document.getElementById('add-search').focus(), 50);
+}
+
+function closeAddModal() {
+  document.getElementById('add-modal-backdrop').classList.add('hidden');
+  document.getElementById('add-modal').classList.add('hidden');
+}
+
+function renderCustomerList(query) {
+  const q = (query || '').toLowerCase().trim();
+  const pool = customerProfiles();
+  const filtered = !q ? pool
+    : pool.filter(p =>
+        (p.email || '').toLowerCase().includes(q) ||
+        (p.full_name || '').toLowerCase().includes(q));
+  const el = document.getElementById('add-list');
+  if (!pool.length) {
+    el.innerHTML = `<div class="px-6 py-10 text-center text-slate-400 text-sm">No customers in the database yet.</div>`;
+    return;
+  }
+  if (!filtered.length) {
+    el.innerHTML = `<div class="px-6 py-10 text-center text-slate-400 text-sm">No customer matches "${q}".</div>`;
+    return;
+  }
+  el.innerHTML = filtered.map(p => `
+    <div class="px-5 py-3 border-b border-slate-100 flex items-center gap-3 hover:bg-slate-50 last:border-b-0">
+      <div class="w-9 h-9 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 text-white flex items-center justify-center font-black text-xs shrink-0">${initials(p)}</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-black text-slate-800 text-sm truncate">${p.full_name || '<span class="text-slate-400">(no name)</span>'}</div>
+        <div class="text-[12px] text-slate-500 font-semibold truncate">${p.email || '—'}</div>
+      </div>
+      <button data-action="promote" data-uid="${p.id}" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-lg shrink-0">Add</button>
+    </div>
+  `).join('');
+}
+
+async function promoteCustomer(uid) {
+  const p = allProfiles.find(x => x.id === uid);
+  if (!p) return;
+  const ok = await setUserType(uid, 'system', { errorPrefix: 'Promote failed' });
+  if (!ok) return;
+  showToast(`${p.full_name || p.email} added. Edit their access now.`);
+  closeAddModal();
+  render();
+  // Open the access drawer immediately so the admin can grant modules.
+  openDrawer(uid);
+}
+
 // ── Events ─────────────────────────────────────────────────────
 document.addEventListener('click', (e) => {
   const editBtn = e.target.closest('[data-action="edit"]');
@@ -352,6 +475,9 @@ document.addEventListener('click', (e) => {
 
   const preset = e.target.closest('[data-preset]');
   if (preset) { applyPresetToPending(preset.dataset.preset); return; }
+
+  const promote = e.target.closest('[data-action="promote"]');
+  if (promote) { promoteCustomer(promote.dataset.uid); return; }
 });
 
 document.addEventListener('change', (e) => {
@@ -361,11 +487,22 @@ document.addEventListener('change', (e) => {
 document.getElementById('d-close' ).addEventListener('click', closeDrawer);
 document.getElementById('d-cancel').addEventListener('click', closeDrawer);
 document.getElementById('d-save'  ).addEventListener('click', saveDrawer);
+document.getElementById('d-demote').addEventListener('click', demoteCurrentToCustomer);
 document.getElementById('drawer-backdrop').addEventListener('click', closeDrawer);
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (!document.getElementById('add-modal').classList.contains('hidden')) closeAddModal();
+    else closeDrawer();
+  }
+});
 
 document.getElementById('search').addEventListener('input', render);
 document.getElementById('reload-btn').addEventListener('click', () => bootstrap());
+
+document.getElementById('add-user-btn'      ).addEventListener('click', openAddModal);
+document.getElementById('add-close'         ).addEventListener('click', closeAddModal);
+document.getElementById('add-modal-backdrop').addEventListener('click', closeAddModal);
+document.getElementById('add-search'        ).addEventListener('input', (e) => renderCustomerList(e.target.value));
 
 // ── Bootstrap ─────────────────────────────────────────────────
 async function bootstrap() {
@@ -383,7 +520,7 @@ async function bootstrap() {
 
   const { data, error } = await _supabase
     .from('shared_profiles')
-    .select('id, email, full_name, permissions')
+    .select('id, email, full_name, permissions, user_type')
     .order('email', { ascending: true });
 
   if (error) {
@@ -396,7 +533,8 @@ async function bootstrap() {
     id: p.id,
     email: p.email,
     full_name: p.full_name,
-    permissions: normPerms(p.permissions)
+    permissions: normPerms(p.permissions),
+    user_type: (p.user_type === 'customer' ? 'customer' : 'system')
   }));
 
   document.getElementById('loading').classList.add('hidden');
