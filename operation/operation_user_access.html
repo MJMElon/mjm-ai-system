@@ -10,45 +10,61 @@
 <script src="../shared/shared_access.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
-  *  { font-family: 'Outfit', system-ui, sans-serif; }
+  * { font-family: 'Outfit', system-ui, sans-serif; }
   body { background:#f1f5f9; margin:0; }
+
   .card { background:white; border:1px solid #e2e8f0; border-radius:20px; box-shadow:0 4px 16px rgba(0,0,0,.06); }
-  .pill-btn { padding:6px 12px; border-radius:999px; font-size:10px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; border:1px solid transparent; cursor:pointer; transition:all .15s; }
-  .pill-admin     { background:#ecfdf5; color:#065f46; border-color:#a7f3d0; }
-  .pill-admin.on  { background:#10b981; color:white; border-color:#059669; }
-  .pill-normal    { background:#eff6ff; color:#1e3a8a; border-color:#bfdbfe; }
-  .pill-normal.on { background:#3b82f6; color:white; border-color:#2563eb; }
-  .pill-none      { background:#f8fafc; color:#64748b; border-color:#e2e8f0; }
-  .pill-none.on   { background:#475569; color:white; border-color:#334155; }
-  .pill-btn:hover:not(.on) { transform:translateY(-1px); }
-  .toggle { position:relative; display:inline-block; width:42px; height:22px; }
-  .toggle input { display:none; }
-  .toggle-slider { position:absolute; cursor:pointer; inset:0; background:#cbd5e1; border-radius:999px; transition:.25s; }
-  .toggle-slider::before { position:absolute; content:''; left:3px; top:3px; width:16px; height:16px; background:white; border-radius:50%; transition:.25s; box-shadow:0 1px 3px rgba(0,0,0,.2); }
-  .toggle input:checked + .toggle-slider { background:#10b981; }
-  .toggle input:checked + .toggle-slider::before { transform:translateX(20px); }
-  .row-changed { background:#fef9c3; }
-  table { border-collapse:separate; border-spacing:0; }
+  .lvl-select { appearance:none; -webkit-appearance:none; padding:8px 30px 8px 12px; border-radius:10px; font-weight:800; font-size:11px; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; border:1px solid transparent; outline:none; min-width:120px; transition:all .15s; background-position:right 10px center; background-repeat:no-repeat; background-size:10px; }
+  .lvl-admin  { background-color:#10b981; color:white;  border-color:#059669; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='white' d='M5 6L0 0h10z'/></svg>"); }
+  .lvl-normal { background-color:#3b82f6; color:white;  border-color:#2563eb; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='white' d='M5 6L0 0h10z'/></svg>"); }
+  .lvl-none   { background-color:#f1f5f9; color:#64748b; border-color:#cbd5e1; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='%2364748b' d='M5 6L0 0h10z'/></svg>"); }
+  .lvl-select:hover  { transform:translateY(-1px); box-shadow:0 4px 8px rgba(0,0,0,.08); }
+  .lvl-select:focus  { box-shadow:0 0 0 3px rgba(59,130,246,.25); }
+
+  /* iOS-style toggle */
+  .tog { position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0; }
+  .tog input { opacity:0; width:0; height:0; }
+  .tog-slider { position:absolute; cursor:pointer; inset:0; background:#cbd5e1; border-radius:999px; transition:.25s; }
+  .tog-slider::before { position:absolute; content:''; left:3px; top:3px; width:18px; height:18px; background:white; border-radius:50%; transition:.25s; box-shadow:0 1px 3px rgba(0,0,0,.25); }
+  .tog input:checked + .tog-slider { background:#f43f5e; }
+  .tog input:checked + .tog-slider::before { transform:translateX(20px); }
+
+  .preset-btn { padding:6px 12px; font-size:10px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; border-radius:999px; border:1px solid #e2e8f0; background:white; color:#475569; cursor:pointer; transition:all .15s; }
+  .preset-btn:hover { background:#f1f5f9; color:#0f172a; border-color:#cbd5e1; }
+
+  .row-saving::after  { content:'Saving…';  color:#64748b; font-size:10px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
+  .row-saved::after   { content:'✓ Saved';  color:#059669; font-size:10px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; }
+  .row-error::after   { content:'✗ Error';  color:#dc2626; font-size:10px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; }
+
+  table { border-collapse:separate; border-spacing:0; width:100%; }
   th, td { vertical-align:middle; }
+  th { white-space:nowrap; }
+
+  /* Mobile-friendly stacked card layout below 900px */
+  @media (max-width: 900px) {
+    .table-wrap { display:none; }
+    .mobile-cards { display:grid; }
+  }
+  @media (min-width: 901px) {
+    .mobile-cards { display:none; }
+  }
 </style>
 </head>
 <body>
 
+<!-- Header -->
 <div class="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center sticky top-0 z-30 shadow-sm">
   <div class="flex items-center gap-3">
     <div class="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-black text-xs">AI</div>
     <span class="font-black text-slate-800 uppercase tracking-widest text-sm">User Access</span>
   </div>
-  <div class="flex items-center gap-3">
-    <a href="operation_dashboard.html" class="text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 px-4 py-2 rounded-full border border-slate-200 cursor-pointer no-underline">&#8592; Dashboard</a>
-  </div>
+  <a href="operation_dashboard.html" class="text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 px-4 py-2 rounded-full border border-slate-200 no-underline">&#8592; Dashboard</a>
 </div>
 
-<div id="loading" class="max-w-[1400px] mx-auto px-6 py-16 text-center">
-  <div class="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading user list…</div>
-</div>
+<!-- Loading / forbidden states -->
+<div id="loading"   class="max-w-[1200px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading user list…</div>
 
-<div id="forbidden" class="max-w-[1400px] mx-auto px-6 py-16 hidden">
+<div id="forbidden" class="max-w-[1200px] mx-auto px-6 py-16 hidden">
   <div class="card p-10 text-center">
     <div class="text-4xl mb-3">🔒</div>
     <h2 class="text-lg font-black text-slate-800 uppercase tracking-widest">Access Denied</h2>
@@ -57,28 +73,56 @@
   </div>
 </div>
 
-<div id="main" class="max-w-[1400px] mx-auto px-6 py-8 hidden space-y-6">
+<!-- Main -->
+<div id="main" class="max-w-[1200px] mx-auto px-6 py-8 space-y-6 hidden">
 
-  <!-- Header / explainer -->
+  <!-- Legend -->
   <div class="card p-6">
-    <h1 class="text-base font-black text-slate-800 uppercase tracking-widest mb-2">👥 User Access Control</h1>
-    <p class="text-xs text-slate-500 leading-relaxed">
-      Set per-module access for each user. <strong class="text-emerald-700">Admin</strong> = full edit + can review/lock tabs.
-      <strong class="text-blue-700">Normal</strong> = view + edit unreviewed data only. <strong class="text-slate-700">None</strong> = cannot open the module.
-      The <strong>Manage Users</strong> toggle lets that user open this page.
-    </p>
+    <h1 class="text-base font-black text-slate-800 uppercase tracking-widest mb-4">👥 User Access Control</h1>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-[12px]">
+      <div class="flex items-start gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+        <span class="px-2 py-1 rounded-md bg-emerald-500 text-white font-black text-[10px] uppercase tracking-widest mt-0.5">Admin</span>
+        <span class="text-slate-700">Full edit. In the Operation module, can also <strong>review and lock tabs</strong>.</span>
+      </div>
+      <div class="flex items-start gap-2 p-3 rounded-xl bg-blue-50 border border-blue-200">
+        <span class="px-2 py-1 rounded-md bg-blue-500 text-white font-black text-[10px] uppercase tracking-widest mt-0.5">Normal</span>
+        <span class="text-slate-700">Can view and edit, but cannot review/unlock. Reviewed tabs become read-only.</span>
+      </div>
+      <div class="flex items-start gap-2 p-3 rounded-xl bg-slate-100 border border-slate-200">
+        <span class="px-2 py-1 rounded-md bg-slate-500 text-white font-black text-[10px] uppercase tracking-widest mt-0.5">None</span>
+        <span class="text-slate-600">Cannot open the module. They won't even see the tile on the dashboard.</span>
+      </div>
+    </div>
+    <div class="mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-[12px] text-slate-700">
+      <strong class="text-rose-700">Manage Users</strong> — a separate switch from module access.
+      Users with this turned ON can open <em>this</em> page and change other people's permissions.
+      Keep it on for owners and IT only.
+    </div>
   </div>
 
-  <!-- Search -->
-  <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
-    <input id="search" type="text" placeholder="Search by email or name…" class="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
-    <button id="reload-btn" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl border border-slate-200">Reload</button>
+  <!-- Search + presets -->
+  <div class="card p-5 flex flex-col gap-4">
+    <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+      <input id="search" type="text" placeholder="🔎 Search by email or name…" class="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
+      <button id="reload-btn" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl border border-slate-200">Reload</button>
+    </div>
+    <div class="flex flex-wrap gap-2 items-center">
+      <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">Quick presets — click on a row first, then a preset:</span>
+      <button class="preset-btn" data-preset="full">Full Admin</button>
+      <button class="preset-btn" data-preset="op_lead">Operation Lead</button>
+      <button class="preset-btn" data-preset="op_staff">Operation Staff</button>
+      <button class="preset-btn" data-preset="sales">Sales Only</button>
+      <button class="preset-btn" data-preset="audit">Audit Only</button>
+      <button class="preset-btn" data-preset="view">View Only</button>
+      <button class="preset-btn" data-preset="none">No Access</button>
+    </div>
+    <div id="preset-hint" class="text-[11px] text-slate-500">No row selected. Click a row in the table to highlight it, then click a preset to apply.</div>
   </div>
 
-  <!-- Users table -->
-  <div class="card overflow-hidden">
+  <!-- Desktop table -->
+  <div class="card overflow-hidden table-wrap">
     <div class="overflow-x-auto">
-      <table class="w-full text-sm">
+      <table>
         <thead class="bg-slate-50 border-b border-slate-200">
           <tr class="text-[10px] font-black text-slate-500 uppercase tracking-widest">
             <th class="text-left px-5 py-3">User</th>
@@ -86,14 +130,17 @@
             <th class="text-center px-3 py-3">Salesweb</th>
             <th class="text-center px-3 py-3">Audit</th>
             <th class="text-center px-3 py-3">Mobile</th>
-            <th class="text-center px-3 py-3">Manage&nbsp;Users</th>
-            <th class="text-right px-5 py-3">Action</th>
+            <th class="text-center px-3 py-3">Manage<br>Users</th>
+            <th class="text-right px-5 py-3">Status</th>
           </tr>
         </thead>
         <tbody id="users-tbody" class="divide-y divide-slate-100"></tbody>
       </table>
     </div>
   </div>
+
+  <!-- Mobile cards -->
+  <div id="users-mobile" class="mobile-cards gap-3"></div>
 
 </div>
 
@@ -103,8 +150,21 @@
 <script>
 const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
 const MODULES = ['operation', 'salesweb', 'audit', 'mobile'];
+const LEVELS  = ['admin', 'normal', 'none'];
 
-let allProfiles = []; // [{ id, email, full_name, permissions, _dirty }]
+const PRESETS = {
+  full:     { modules: { operation:'admin',  salesweb:'admin',  audit:'admin',  mobile:'admin'  }, manage_users: true,  label: 'Full Admin' },
+  op_lead:  { modules: { operation:'admin',  salesweb:'normal', audit:'normal', mobile:'normal' }, manage_users: false, label: 'Operation Lead' },
+  op_staff: { modules: { operation:'normal', salesweb:'none',   audit:'none',   mobile:'normal' }, manage_users: false, label: 'Operation Staff' },
+  sales:    { modules: { operation:'none',   salesweb:'admin',  audit:'none',   mobile:'normal' }, manage_users: false, label: 'Sales Only' },
+  audit:    { modules: { operation:'none',   salesweb:'none',   audit:'admin',  mobile:'normal' }, manage_users: false, label: 'Audit Only' },
+  view:     { modules: { operation:'normal', salesweb:'normal', audit:'normal', mobile:'normal' }, manage_users: false, label: 'View Only (all modules, normal)' },
+  none:     { modules: { operation:'none',   salesweb:'none',   audit:'none',   mobile:'none'   }, manage_users: false, label: 'No Access' }
+};
+
+let allProfiles  = [];
+let selectedUid  = null;
+const saveTimers = {};   // uid → debounce timer
 
 function showToast(msg, kind) {
   const t = document.getElementById('toast');
@@ -119,7 +179,7 @@ function showToast(msg, kind) {
 
 function defaultPerms() {
   return {
-    modules: { operation: 'none', salesweb: 'none', audit: 'none', mobile: 'none' },
+    modules: { operation:'none', salesweb:'none', audit:'none', mobile:'none' },
     manage_users: false
   };
 }
@@ -130,59 +190,81 @@ function normPerms(p) {
   if (p.modules) {
     for (const k of MODULES) {
       const v = p.modules[k];
-      if (v === 'admin' || v === 'normal' || v === 'none') out.modules[k] = v;
+      if (LEVELS.includes(v)) out.modules[k] = v;
     }
   }
   out.manage_users = !!p.manage_users;
   return out;
 }
 
-function levelClass(level) {
-  if (level === 'admin')  return 'pill-admin on';
-  if (level === 'normal') return 'pill-normal on';
-  return 'pill-none on';
+function lvlClass(level) {
+  return 'lvl-select lvl-' + level;
+}
+
+function selectHtml(uid, mod, current) {
+  return `
+    <select class="${lvlClass(current)}" data-uid="${uid}" data-mod="${mod}">
+      ${LEVELS.map(l => `<option value="${l}" ${l === current ? 'selected' : ''}>${l[0].toUpperCase()+l.slice(1)}</option>`).join('')}
+    </select>`;
 }
 
 function rowHtml(p) {
   const perms = p.permissions;
-  const id = `row-${p.id}`;
-  const cell = (mod) => {
-    const cur = perms.modules[mod];
-    return `
-      <td class="px-3 py-3 text-center">
-        <div class="inline-flex gap-1 bg-slate-50 rounded-full p-1 border border-slate-200">
-          ${['admin','normal','none'].map(level => `
-            <button class="pill-btn ${cur === level ? levelClass(level) : 'pill-' + level}"
-                    data-uid="${p.id}" data-mod="${mod}" data-level="${level}">
-              ${level === 'none' ? '—' : level}
-            </button>`).join('')}
-        </div>
-      </td>`;
-  };
-
+  const initials = (p.full_name || p.email || '?').split(/\s+/).map(s => s[0]).slice(0,2).join('').toUpperCase();
   return `
-    <tr id="${id}" data-uid="${p.id}" class="${p._dirty ? 'row-changed' : ''}">
-      <td class="px-5 py-4">
-        <div class="font-black text-slate-800 text-sm">${p.full_name || '<span class="text-slate-400">(no name)</span>'}</div>
-        <div class="text-[11px] text-slate-500 font-semibold">${p.email || '—'}</div>
+    <tr id="row-${p.id}" data-uid="${p.id}" class="${selectedUid === p.id ? 'bg-amber-50' : ''}">
+      <td class="px-5 py-3">
+        <div class="flex items-center gap-3 min-w-[220px]">
+          <div class="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-black text-xs">${initials}</div>
+          <div>
+            <div class="font-black text-slate-800 text-sm leading-tight">${p.full_name || '<span class="text-slate-400">(no name)</span>'}</div>
+            <div class="text-[11px] text-slate-500 font-semibold">${p.email || '—'}</div>
+          </div>
+        </div>
       </td>
-      ${cell('operation')}
-      ${cell('salesweb')}
-      ${cell('audit')}
-      ${cell('mobile')}
+      <td class="px-3 py-3 text-center">${selectHtml(p.id, 'operation', perms.modules.operation)}</td>
+      <td class="px-3 py-3 text-center">${selectHtml(p.id, 'salesweb',  perms.modules.salesweb )}</td>
+      <td class="px-3 py-3 text-center">${selectHtml(p.id, 'audit',     perms.modules.audit    )}</td>
+      <td class="px-3 py-3 text-center">${selectHtml(p.id, 'mobile',    perms.modules.mobile   )}</td>
       <td class="px-3 py-3 text-center">
-        <label class="toggle">
+        <label class="tog inline-block align-middle">
           <input type="checkbox" data-uid="${p.id}" data-toggle="manage_users" ${perms.manage_users ? 'checked' : ''}>
-          <span class="toggle-slider"></span>
+          <span class="tog-slider"></span>
         </label>
       </td>
       <td class="px-5 py-3 text-right">
-        <button data-uid="${p.id}" data-action="save"
-                class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest px-4 py-2 rounded-lg shadow ${p._dirty ? '' : 'opacity-40 pointer-events-none'}">
-          Save
-        </button>
+        <span id="status-${p.id}" class="row-status text-[10px] font-bold text-slate-300 uppercase tracking-widest">—</span>
       </td>
     </tr>`;
+}
+
+function mobileCardHtml(p) {
+  const perms = p.permissions;
+  const moduleRow = (mod) => `
+    <div class="flex items-center justify-between py-2 border-t border-slate-100 first:border-t-0">
+      <span class="text-[11px] font-black text-slate-500 uppercase tracking-widest">${mod}</span>
+      ${selectHtml(p.id, mod, perms.modules[mod])}
+    </div>`;
+  return `
+    <div id="row-${p.id}" data-uid="${p.id}" class="card p-4 ${selectedUid === p.id ? 'ring-2 ring-amber-400' : ''}">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <div class="font-black text-slate-800 text-sm">${p.full_name || '(no name)'}</div>
+          <div class="text-[11px] text-slate-500 font-semibold">${p.email || '—'}</div>
+        </div>
+        <span id="status-${p.id}" class="row-status text-[10px] font-bold text-slate-300 uppercase tracking-widest">—</span>
+      </div>
+      <div>
+        ${MODULES.map(moduleRow).join('')}
+      </div>
+      <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+        <span class="text-[11px] font-black text-rose-600 uppercase tracking-widest">Manage Users</span>
+        <label class="tog">
+          <input type="checkbox" data-uid="${p.id}" data-toggle="manage_users" ${perms.manage_users ? 'checked' : ''}>
+          <span class="tog-slider"></span>
+        </label>
+      </div>
+    </div>`;
 }
 
 function render() {
@@ -191,21 +273,78 @@ function render() {
     : allProfiles.filter(p =>
         (p.email || '').toLowerCase().includes(q) ||
         (p.full_name || '').toLowerCase().includes(q));
+
   const tbody = document.getElementById('users-tbody');
+  const cards = document.getElementById('users-mobile');
+
   if (!filtered.length) {
     tbody.innerHTML = `<tr><td colspan="7" class="text-center px-6 py-10 text-slate-400 text-sm">No users match.</td></tr>`;
+    cards.innerHTML = `<div class="text-center text-slate-400 text-sm py-8">No users match.</div>`;
+  } else {
+    tbody.innerHTML = filtered.map(rowHtml).join('');
+    cards.innerHTML = filtered.map(mobileCardHtml).join('');
+  }
+  updateSelectedHint();
+}
+
+function updateSelectedHint() {
+  const hint = document.getElementById('preset-hint');
+  if (!selectedUid) {
+    hint.textContent = 'No row selected. Click a row in the table to highlight it, then click a preset to apply.';
+    hint.className = 'text-[11px] text-slate-500';
     return;
   }
-  tbody.innerHTML = filtered.map(rowHtml).join('');
+  const p = allProfiles.find(x => x.id === selectedUid);
+  hint.innerHTML = p
+    ? `Selected: <strong class="text-slate-800">${p.full_name || p.email}</strong>. Click a preset to apply, or change individual modules above.`
+    : '';
+  hint.className = 'text-[11px] text-amber-700';
+}
+
+function setStatus(uid, status) {
+  const el = document.getElementById('status-' + uid);
+  if (!el) return;
+  el.classList.remove('row-saving', 'row-saved', 'row-error');
+  if (status) el.classList.add('row-' + status);
+  if (!status) el.textContent = '—';
+  else         el.textContent = '';
+}
+
+async function persist(uid) {
+  const p = allProfiles.find(x => x.id === uid);
+  if (!p) return;
+  setStatus(uid, 'saving');
+  const { error } = await _supabase
+    .from('shared_profiles')
+    .update({ permissions: p.permissions })
+    .eq('id', uid);
+  if (error) {
+    console.error(error);
+    setStatus(uid, 'error');
+    showToast('Save failed: ' + error.message, 'err');
+    return;
+  }
+  setStatus(uid, 'saved');
+  setTimeout(() => setStatus(uid, ''), 1600);
+}
+
+function scheduleSave(uid) {
+  clearTimeout(saveTimers[uid]);
+  setStatus(uid, 'saving');
+  saveTimers[uid] = setTimeout(() => persist(uid), 350);
 }
 
 function setLevel(uid, mod, level) {
   const p = allProfiles.find(x => x.id === uid);
-  if (!p) return;
+  if (!p || !LEVELS.includes(level)) return;
   if (p.permissions.modules[mod] === level) return;
   p.permissions.modules[mod] = level;
-  p._dirty = true;
-  render();
+  // Update the select's class without re-rendering everything (avoids dropdown close jank).
+  document.querySelectorAll(`select[data-uid="${uid}"][data-mod="${mod}"]`).forEach(s => {
+    s.className = lvlClass(level);
+    s.value = level;
+  });
+  scheduleSave(uid);
 }
 
 function setManageUsers(uid, value) {
@@ -213,54 +352,68 @@ function setManageUsers(uid, value) {
   if (!p) return;
   if (!!p.permissions.manage_users === !!value) return;
   p.permissions.manage_users = !!value;
-  p._dirty = true;
+  // Sync any other rendered toggle for the same user (desktop+mobile).
+  document.querySelectorAll(`input[data-uid="${uid}"][data-toggle="manage_users"]`).forEach(i => {
+    if (i.checked !== !!value) i.checked = !!value;
+  });
+  scheduleSave(uid);
+}
+
+function applyPreset(presetKey) {
+  if (!selectedUid) { showToast('Click a row first to select a user.', 'err'); return; }
+  const preset = PRESETS[presetKey];
+  if (!preset) return;
+  const p = allProfiles.find(x => x.id === selectedUid);
+  if (!p) return;
+  p.permissions.modules = { ...preset.modules };
+  p.permissions.manage_users = !!preset.manage_users;
+  render();
+  scheduleSave(selectedUid);
+  showToast(`Applied "${preset.label}" to ${p.full_name || p.email}.`);
+}
+
+function selectRow(uid) {
+  if (selectedUid === uid) { selectedUid = null; }
+  else                     { selectedUid = uid; }
   render();
 }
 
-async function saveRow(uid) {
-  const p = allProfiles.find(x => x.id === uid);
-  if (!p || !p._dirty) return;
-  const { error } = await _supabase
-    .from('shared_profiles')
-    .update({ permissions: p.permissions })
-    .eq('id', uid);
-  if (error) {
-    console.error(error);
-    showToast('Save failed: ' + error.message, 'err');
-    return;
-  }
-  p._dirty = false;
-  render();
-  showToast('Saved.');
-}
-
-document.addEventListener('click', (e) => {
-  const t = e.target.closest('button');
-  if (!t) return;
-  if (t.dataset.action === 'save') { saveRow(t.dataset.uid); return; }
-  if (t.dataset.mod && t.dataset.level) { setLevel(t.dataset.uid, t.dataset.mod, t.dataset.level); return; }
-});
-
+// ── Event delegation ─────────────────────────────────────────────
 document.addEventListener('change', (e) => {
   const t = e.target;
-  if (t.dataset && t.dataset.toggle === 'manage_users') {
+  if (!t || !t.dataset) return;
+  if (t.matches('select[data-uid][data-mod]')) {
+    setLevel(t.dataset.uid, t.dataset.mod, t.value);
+    return;
+  }
+  if (t.dataset.toggle === 'manage_users') {
     setManageUsers(t.dataset.uid, t.checked);
   }
+});
+
+document.addEventListener('click', (e) => {
+  // Preset buttons
+  const pb = e.target.closest('[data-preset]');
+  if (pb) { applyPreset(pb.dataset.preset); return; }
+
+  // Row select — ignore clicks on inputs/selects/labels inside the row
+  const interactive = e.target.closest('select, input, label, button');
+  if (interactive) return;
+  const row = e.target.closest('[data-uid]');
+  if (row) selectRow(row.dataset.uid);
 });
 
 document.getElementById('search').addEventListener('input', render);
 document.getElementById('reload-btn').addEventListener('click', () => bootstrap());
 
+// ── Bootstrap ────────────────────────────────────────────────────
 async function bootstrap() {
   document.getElementById('loading').classList.remove('hidden');
   document.getElementById('main').classList.add('hidden');
   document.getElementById('forbidden').classList.add('hidden');
 
   await MJMAccess.load(_supabase);
-  if (!MJMAccess.user()) {
-    window.location.href = 'operation_dashboard.html';
-    return;
-  }
+  if (!MJMAccess.user()) { window.location.href = 'operation_dashboard.html'; return; }
   if (!MJMAccess.canManageUsers()) {
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('forbidden').classList.remove('hidden');
@@ -282,8 +435,7 @@ async function bootstrap() {
     id: p.id,
     email: p.email,
     full_name: p.full_name,
-    permissions: normPerms(p.permissions),
-    _dirty: false
+    permissions: normPerms(p.permissions)
   }));
 
   document.getElementById('loading').classList.add('hidden');
