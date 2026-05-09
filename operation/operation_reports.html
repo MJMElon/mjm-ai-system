@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reports — MJM Nursery AI</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_access.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  body { background:#f8f4ec; margin:0; font-family:'Outfit', system-ui, sans-serif; color:#1a150d; }
+  .bg-pattern { position:fixed; inset:0; background-image:radial-gradient(#e8dcc8 1px, transparent 1px); background-size:24px 24px; z-index:-2; opacity:.5; }
+  .glass-panel { background-color:rgba(253, 250, 244, .95); backdrop-filter:blur(24px); border:1px solid #fff; box-shadow:0 25px 50px -12px rgba(61, 38, 16, .08); border-left:12px solid #6aa83c; }
+
+  .input-style { border:1.5px solid #e8dcc8; background:#fff; padding:10px 12px; border-radius:12px; outline:none; width:100%; font-weight:600; font-size:13px; color:#1a150d; }
+  .input-style:focus { border-color:#c07820; box-shadow:0 0 0 4px rgba(192, 120, 32, .15); }
+  .label-style { font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.15em; color:#8a7a68; margin-left:4px; margin-bottom:6px; display:block; }
+  .btn-earth { background:linear-gradient(135deg, #6aa83c, #4a7a2e); color:white; font-weight:900; padding:12px 24px; border-radius:12px; cursor:pointer; text-transform:uppercase; letter-spacing:.1em; box-shadow:0 8px 20px -4px rgba(74, 122, 46, .5); border:none; font-size:12px; }
+  .btn-earth:hover { transform:translateY(-2px); }
+
+  .stat-card { background:#fff; border:1px solid #e8dcc8; border-radius:1.5rem; padding:24px; }
+  .stat-num  { font-size:2.5rem; font-weight:900; color:#3d2610; line-height:1; }
+  .stat-label { font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.18em; color:#8a7a68; margin-bottom:8px; }
+
+  table.report-table { width:100%; border-collapse:separate; border-spacing:0; }
+  .report-table th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#8a7a68; padding:12px 14px; border-bottom:2px solid #e8dcc8; background:#fdfaf4; white-space:nowrap; }
+  .report-table td { font-size:13px; font-weight:600; color:#1a150d; padding:14px; border-bottom:1px solid #f3efe6; }
+  .report-table tr:hover td { background:#fdfaf4; }
+  .funnel-bar { height:14px; background:#f3efe6; border-radius:999px; overflow:hidden; display:flex; box-shadow:inset 0 1px 2px rgba(0,0,0,.05); }
+  .funnel-seg { height:100%; transition:width .5s ease-out; }
+  .seg-seeds   { background:#c07820; }
+  .seg-planted { background:#6aa83c; }
+  .seg-trans   { background:#3a7ab4; }
+  .seg-cull    { background:#a83020; }
+
+  @media print {
+    body { background:white; }
+    .no-print, .glass-panel, header { box-shadow:none !important; border:none !important; }
+    .no-print { display:none !important; }
+    .stat-card, table { box-shadow:none !important; }
+  }
+</style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+<div class="bg-pattern"></div>
+
+<div class="w-full max-w-[1600px] mx-auto z-10 space-y-6 py-4">
+
+  <!-- Header -->
+  <div class="glass-panel p-6 rounded-[2rem] flex flex-col md:flex-row items-center justify-between gap-4 !border-[#3d2610]">
+    <button onclick="window.location.href='operation_dashboard.html'" class="no-print text-[10px] font-bold text-[#8a7a68] hover:text-[#3d2610] uppercase tracking-widest bg-[#f8f4ec] hover:bg-[#e8dcc8] px-5 py-3 rounded-xl flex items-center gap-2 shadow-sm">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+      Back to Dashboard
+    </button>
+    <h1 class="text-2xl md:text-3xl font-black uppercase tracking-widest text-[#3d2610]">📊 Operation Reports</h1>
+    <button onclick="window.print()" class="no-print text-[10px] font-black text-white uppercase tracking-widest bg-[#3d2610] hover:bg-[#1a150d] px-5 py-3 rounded-xl shadow">Print / Export</button>
+  </div>
+
+  <!-- Forbidden state -->
+  <div id="forbidden" class="glass-panel p-10 rounded-[2rem] hidden text-center">
+    <div class="text-4xl mb-3">🔒</div>
+    <h2 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">No Access</h2>
+    <p class="text-xs text-[#8a7a68] mt-2">Ask an administrator to grant you access to the Operation module.</p>
+  </div>
+
+  <div id="report-area">
+
+    <!-- Report selector + filters -->
+    <div class="glass-panel p-6 rounded-[2rem] no-print">
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+        <div class="md:col-span-4">
+          <label class="label-style">Report</label>
+          <div class="select-wrapper">
+            <select id="f-report" class="input-style">
+              <option value="batch_production">Batch Production Summary</option>
+            </select>
+          </div>
+        </div>
+        <div class="md:col-span-2">
+          <label class="label-style">From</label>
+          <input id="f-from" type="date" class="input-style">
+        </div>
+        <div class="md:col-span-2">
+          <label class="label-style">To</label>
+          <input id="f-to" type="date" class="input-style">
+        </div>
+        <div class="md:col-span-2">
+          <label class="label-style">Breed</label>
+          <select id="f-breed" class="input-style">
+            <option value="">All breeds</option>
+          </select>
+        </div>
+        <div class="md:col-span-2 flex justify-end">
+          <button id="f-run" class="btn-earth w-full">Run Report</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading state -->
+    <div id="loading" class="text-center py-12 text-xs font-bold text-[#8a7a68] uppercase tracking-widest animate-pulse">Loading…</div>
+
+    <!-- Report container -->
+    <div id="report-output" class="hidden space-y-6"></div>
+
+  </div>
+
+</div>
+
+<script>
+const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+
+const STAGE_TYPES = {
+  seeds:   ['Seeds_Received'],
+  planted: ['Planted'],
+  trans:   ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone'],
+  cull1:   ['1st_Culling'],
+  cull2:   ['2nd_Culling'],
+  cull3:   ['3rd_Culling']
+};
+
+function fmtNum(n)   { return (n || 0).toLocaleString(); }
+function fmtPct(n)   { return (Math.max(0, Math.min(999, n || 0))).toFixed(1) + '%'; }
+function fmtDate(d)  { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? '—' : x.toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' }); }
+
+function defaultRange() {
+  const to = new Date();
+  const from = new Date(); from.setMonth(from.getMonth() - 12);
+  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+}
+
+async function loadBreeds() {
+  const { data } = await _supabase.from('shared_breeds').select('name').order('name');
+  const sel = document.getElementById('f-breed');
+  (data || []).forEach(b => {
+    const o = document.createElement('option');
+    o.value = b.name; o.textContent = b.name;
+    sel.appendChild(o);
+  });
+}
+
+/**
+ * Batch Production Summary
+ *
+ * Per batch, aggregate quantity_change by transaction_type group:
+ *   seeds_in          = SUM(Seeds_Received)
+ *   damaged           = ABS(SUM(Damaged_Seeds))   // not in funnel; shown for context
+ *   planted           = SUM(Planted)
+ *   transplanted      = SUM(Transplanted | _Premium | _DoubleTone)
+ *   cull_1/2/3        = ABS(SUM(1st/2nd/3rd_Culling))
+ *
+ * Final alive  = transplanted − cull_1 − cull_2 − cull_3   (post-transplant losses only)
+ * Survival %   = final alive / seeds_in × 100
+ */
+async function runBatchProduction() {
+  const out = document.getElementById('report-output');
+  const loading = document.getElementById('loading');
+  out.classList.add('hidden');
+  loading.classList.remove('hidden');
+
+  const from  = document.getElementById('f-from').value;
+  const to    = document.getElementById('f-to').value;
+  const breed = document.getElementById('f-breed').value;
+
+  // Fetch all batches in range — anchor date is Seeds_Received transaction_date.
+  let q = _supabase
+    .from('shared_inventory_logs')
+    .select('batch_name, transaction_type, quantity_change, transaction_date, created_at')
+    .order('transaction_date', { ascending: true });
+
+  const { data: logs, error: logErr } = await q;
+  if (logErr) {
+    loading.classList.add('hidden');
+    out.classList.remove('hidden');
+    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-red-700 text-sm">Failed to load logs: ${logErr.message}</div>`;
+    return;
+  }
+
+  // Pull batch metadata for breed/created_at filtering.
+  const { data: batches } = await _supabase
+    .from('operation_batches')
+    .select('name, breed_name, created_at');
+
+  const meta = {};
+  (batches || []).forEach(b => { meta[b.name] = b; });
+
+  // Group logs by batch.
+  const byBatch = {};
+  (logs || []).forEach(l => {
+    const b = l.batch_name; if (!b) return;
+    if (!byBatch[b]) byBatch[b] = {
+      batch_name: b,
+      seeds: 0, planted: 0, trans: 0, cull1: 0, cull2: 0, cull3: 0,
+      seeds_date: null
+    };
+    const row = byBatch[b];
+    const qty = Number(l.quantity_change || 0);
+    const t = l.transaction_type;
+    if (STAGE_TYPES.seeds.includes(t))   { row.seeds   += qty; row.seeds_date = row.seeds_date || l.transaction_date || l.created_at; }
+    else if (STAGE_TYPES.planted.includes(t)) row.planted += qty;
+    else if (STAGE_TYPES.trans.includes(t))   row.trans   += qty;
+    else if (STAGE_TYPES.cull1.includes(t))   row.cull1   += Math.abs(qty);
+    else if (STAGE_TYPES.cull2.includes(t))   row.cull2   += Math.abs(qty);
+    else if (STAGE_TYPES.cull3.includes(t))   row.cull3   += Math.abs(qty);
+  });
+
+  // Filter by date range (on Seeds_Received date) and breed.
+  const fromTs = from ? new Date(from).getTime() : -Infinity;
+  const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
+
+  let rows = Object.values(byBatch).map(r => {
+    const m = meta[r.batch_name] || {};
+    r.breed_name = m.breed_name || '—';
+    r.batch_created_at = m.created_at || r.seeds_date;
+    const finalAlive = Math.max(0, r.trans - r.cull1 - r.cull2 - r.cull3);
+    const survival   = r.seeds > 0 ? (finalAlive / r.seeds) * 100 : 0;
+    r.final_alive = finalAlive;
+    r.survival_pct = survival;
+    return r;
+  });
+
+  rows = rows.filter(r => {
+    if (breed && r.breed_name !== breed) return false;
+    const anchor = r.seeds_date ? new Date(r.seeds_date).getTime()
+                : (r.batch_created_at ? new Date(r.batch_created_at).getTime() : NaN);
+    if (isNaN(anchor)) return true; // keep batches with no anchor date so users see them
+    return anchor >= fromTs && anchor <= toTs;
+  });
+
+  rows.sort((a, b) => {
+    const da = a.seeds_date ? new Date(a.seeds_date).getTime() : 0;
+    const db = b.seeds_date ? new Date(b.seeds_date).getTime() : 0;
+    return db - da;
+  });
+
+  // ── Aggregate summary ──
+  const summary = rows.reduce((s, r) => ({
+    batches:    s.batches + 1,
+    seeds:      s.seeds   + r.seeds,
+    planted:    s.planted + r.planted,
+    trans:      s.trans   + r.trans,
+    cull:       s.cull    + r.cull1 + r.cull2 + r.cull3,
+    final:      s.final   + r.final_alive
+  }), { batches: 0, seeds: 0, planted: 0, trans: 0, cull: 0, final: 0 });
+
+  const overallSurvival = summary.seeds > 0 ? (summary.final / summary.seeds) * 100 : 0;
+
+  // ── Render ──
+  loading.classList.add('hidden');
+  out.classList.remove('hidden');
+
+  out.innerHTML = `
+    <!-- Summary cards -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div class="stat-card">
+        <div class="stat-label">Batches</div>
+        <div class="stat-num">${fmtNum(summary.batches)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Seeds Received</div>
+        <div class="stat-num text-[#c07820]">${fmtNum(summary.seeds)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Transplanted</div>
+        <div class="stat-num text-[#3a7ab4]">${fmtNum(summary.trans)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Culled (1+2+3)</div>
+        <div class="stat-num text-[#a83020]">${fmtNum(summary.cull)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Final Alive</div>
+        <div class="stat-num text-[#4a7a2e]">${fmtNum(summary.final)}</div>
+        <div class="text-[10px] font-black uppercase tracking-widest text-[#4a7a2e] mt-1">Survival ${fmtPct(overallSurvival)}</div>
+      </div>
+    </div>
+
+    <!-- Per-batch table -->
+    <div class="glass-panel p-6 rounded-[2rem]">
+      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
+        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Batch Production Summary</h3>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} batch${rows.length === 1 ? '' : 'es'}${from ? ' · from ' + fmtDate(from) : ''}${to ? ' · to ' + fmtDate(to) : ''}${breed ? ' · ' + breed : ''}</div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Batch</th>
+              <th>Breed</th>
+              <th>Seeds In</th>
+              <th class="text-right">Seeds</th>
+              <th class="text-right">Planted</th>
+              <th class="text-right">Transplanted</th>
+              <th class="text-right">Cull 1 / 2 / 3</th>
+              <th class="text-right">Final Alive</th>
+              <th class="text-right">Survival</th>
+              <th style="min-width:200px">Funnel</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.length ? rows.map(r => {
+              const segMax = Math.max(r.seeds, r.planted, r.trans, 1);
+              const segPct = (v) => Math.max(0, Math.min(100, (v / segMax) * 100));
+              return `
+                <tr>
+                  <td><div class="font-black text-[#3d2610]">${r.batch_name}</div></td>
+                  <td>${r.breed_name}</td>
+                  <td>${fmtDate(r.seeds_date)}</td>
+                  <td class="text-right text-[#c07820] font-black">${fmtNum(r.seeds)}</td>
+                  <td class="text-right">${fmtNum(r.planted)}</td>
+                  <td class="text-right text-[#3a7ab4] font-black">${fmtNum(r.trans)}</td>
+                  <td class="text-right text-[#a83020]">${fmtNum(r.cull1)} / ${fmtNum(r.cull2)} / ${fmtNum(r.cull3)}</td>
+                  <td class="text-right text-[#4a7a2e] font-black">${fmtNum(r.final_alive)}</td>
+                  <td class="text-right font-black ${r.survival_pct >= 80 ? 'text-[#4a7a2e]' : r.survival_pct >= 60 ? 'text-[#c07820]' : 'text-[#a83020]'}">${fmtPct(r.survival_pct)}</td>
+                  <td>
+                    <div class="funnel-bar" title="Seeds ${fmtNum(r.seeds)} → Planted ${fmtNum(r.planted)} → Transplanted ${fmtNum(r.trans)}">
+                      <div class="funnel-seg seg-seeds"   style="width:${segPct(r.seeds)}%"></div>
+                    </div>
+                    <div class="funnel-bar mt-1">
+                      <div class="funnel-seg seg-planted" style="width:${segPct(r.planted)}%"></div>
+                    </div>
+                    <div class="funnel-bar mt-1">
+                      <div class="funnel-seg seg-trans"   style="width:${segPct(r.trans)}%"></div>
+                    </div>
+                  </td>
+                </tr>`;
+            }).join('') : `<tr><td colspan="10" class="text-center py-10 text-[#8a7a68]">No batches match the selected filters.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="text-[10px] font-bold text-[#8a7a68] mt-4 leading-relaxed">
+        <strong class="text-[#3d2610]">Notes —</strong>
+        Survival % = Final&nbsp;Alive ÷ Seeds&nbsp;Received × 100. Final&nbsp;Alive subtracts cull cycles 1, 2, 3 from Transplanted. Damaged seeds at planting are tracked separately in the Planting tab and are not included in the cull totals here.
+      </div>
+    </div>
+  `;
+}
+
+async function runReport() {
+  const which = document.getElementById('f-report').value;
+  if (which === 'batch_production') return runBatchProduction();
+}
+
+document.getElementById('f-run').addEventListener('click', runReport);
+document.getElementById('f-report').addEventListener('change', runReport);
+
+async function bootstrap() {
+  await MJMAccess.load(_supabase);
+  if (!MJMAccess.user()) { window.location.href = 'operation_dashboard.html'; return; }
+  if (!MJMAccess.canAccess('operation')) {
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('report-area').classList.add('hidden');
+    document.getElementById('forbidden').classList.remove('hidden');
+    return;
+  }
+  const { from, to } = defaultRange();
+  document.getElementById('f-from').value = from;
+  document.getElementById('f-to').value   = to;
+  await loadBreeds();
+  runReport();
+}
+
+bootstrap();
+</script>
+</body>
+</html>
