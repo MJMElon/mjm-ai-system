@@ -61,6 +61,8 @@
     <title>Batch Detail - MJM Nursery AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../shared/shared_supabase.js"></script>
+    <script src="../shared/shared_access.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         /* Earthy Theme Colors */
@@ -157,6 +159,26 @@
         
         /* Stacked Bar Segment Transition */
         .stacked-segment { transition: width 0.5s ease-in-out; }
+
+        /* ── Review banner & per-tab lock (added for review/access feature) ── */
+        .mjm-review-banner { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 18px; border-radius:14px; margin-bottom:16px; font-size:12px; font-weight:700; }
+        .mjm-review-open    { background:#fff8eb; border:1.5px dashed #c07820; color:#7a4a10; }
+        .mjm-review-locked  { background:#ecfdf5; border:1.5px solid #a7f3d0; color:#065f46; }
+        .mjm-review-meta    { font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.12em; opacity:.85; }
+        .mjm-review-btn     { font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.15em; padding:8px 16px; border-radius:999px; cursor:pointer; border:none; transition:all .15s; }
+        .mjm-review-btn-mark   { background:#10b981; color:white; box-shadow:0 6px 14px -4px rgba(16,185,129,.4); }
+        .mjm-review-btn-mark:hover   { transform:translateY(-1px); }
+        .mjm-review-btn-unmark { background:white; color:#065f46; border:1.5px solid #a7f3d0; }
+        .mjm-review-btn-unmark:hover { background:#ecfdf5; }
+        .mjm-review-btn:disabled { opacity:.5; cursor:wait; }
+
+        .mjm-locked input, .mjm-locked select, .mjm-locked textarea,
+        .mjm-locked button:not(.mjm-review-allow) {
+          pointer-events: none !important;
+          opacity: .55;
+          filter: grayscale(.25);
+        }
+        .mjm-locked .drop-zone { pointer-events:none !important; opacity:.55; }
     </style>
 </head>
 <body>
@@ -4374,8 +4396,200 @@
         _supabase.auth.getSession().then(({ data: { session } }) => {
             if (!session) { window.location.href = 'operation_dashboard.html'; return; }
             window.currentUserEmail = session.user?.email || '';
-            initDetail();
+            initDetail().then(() => MJMReview.boot());
         });
+    </script>
+
+    <!-- ── Per-tab review locks (added for review/access feature) ──────── -->
+    <script>
+    (function () {
+      // Map tab index → stage key in operation_batch_reviews.
+      const STAGE_BY_TAB = { 1: 'seeds_in', 2: 'planting', 3: 'transplanting', 4: 'cull_1', 5: 'cull_2', 6: 'cull_3' };
+      const TAB_INDICES = [1, 2, 3, 4, 5, 6]; // tab 7 (Audit Trail) is read-only
+
+      const reviews = {}; // stage → { reviewed_by, reviewer_name, reviewer_email, reviewed_at }
+      let booted = false;
+      let isAdmin = false;
+
+      function fmtDate(iso) {
+        if (!iso) return '';
+        const d = new Date(iso);
+        if (isNaN(d)) return '';
+        return d.toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' });
+      }
+
+      function currentBatchId() {
+        return (document.getElementById('f-batchno')?.value || '').trim();
+      }
+
+      function ensureBanner(tabIdx) {
+        const tab = document.getElementById('tab-' + tabIdx);
+        if (!tab) return null;
+        let banner = tab.querySelector(':scope > .mjm-review-banner');
+        if (!banner) {
+          banner = document.createElement('div');
+          banner.className = 'mjm-review-banner mjm-review-open';
+          banner.dataset.stage = STAGE_BY_TAB[tabIdx];
+          tab.insertBefore(banner, tab.firstChild);
+        }
+        return banner;
+      }
+
+      function renderBanner(tabIdx) {
+        const banner = ensureBanner(tabIdx);
+        if (!banner) return;
+        const tab = document.getElementById('tab-' + tabIdx);
+        const stage = STAGE_BY_TAB[tabIdx];
+        const r = reviews[stage];
+        const batch = currentBatchId();
+
+        if (!batch) {
+          banner.className = 'mjm-review-banner mjm-review-open';
+          banner.innerHTML = `
+            <div>
+              <div class="mjm-review-meta">Review Status</div>
+              <div class="mt-1 text-[#7a4a10]">Save Tab 1 first — review can only be applied once a batch number is assigned.</div>
+            </div>`;
+          tab.classList.remove('mjm-locked');
+          return;
+        }
+
+        if (r) {
+          // Reviewed → locked for non-admins
+          const who = r.reviewer_name || r.reviewer_email || 'a reviewer';
+          banner.className = 'mjm-review-banner mjm-review-locked';
+          banner.innerHTML = `
+            <div>
+              <div class="mjm-review-meta">✓ Reviewed &amp; Locked</div>
+              <div class="mt-1">Reviewed by <strong>${who}</strong> on <strong>${fmtDate(r.reviewed_at)}</strong>.</div>
+            </div>
+            ${ isAdmin
+              ? `<button class="mjm-review-btn mjm-review-btn-unmark mjm-review-allow"
+                         onclick="MJMReview.unmark(${tabIdx})">Unreview</button>`
+              : `<span class="mjm-review-meta">Read-only for your role</span>` }
+          `;
+          if (!isAdmin) tab.classList.add('mjm-locked');
+          else          tab.classList.remove('mjm-locked');
+        } else {
+          banner.className = 'mjm-review-banner mjm-review-open';
+          banner.innerHTML = `
+            <div>
+              <div class="mjm-review-meta">Pending Review</div>
+              <div class="mt-1 text-[#7a4a10]">Once reviewed, this tab will be locked for non-admin users.</div>
+            </div>
+            ${ isAdmin
+              ? `<button class="mjm-review-btn mjm-review-btn-mark mjm-review-allow"
+                         onclick="MJMReview.mark(${tabIdx})">Mark as Reviewed</button>`
+              : `<span class="mjm-review-meta">Awaiting reviewer</span>` }
+          `;
+          tab.classList.remove('mjm-locked');
+        }
+      }
+
+      function renderAll() {
+        TAB_INDICES.forEach(renderBanner);
+      }
+
+      async function refresh() {
+        const batch = currentBatchId();
+        for (const k of Object.keys(reviews)) delete reviews[k];
+        if (batch) {
+          try {
+            const { data, error } = await _supabase
+              .from('operation_batch_reviews')
+              .select('stage, reviewer_name, reviewer_email, reviewed_at')
+              .eq('batch_name', batch);
+            if (error) throw error;
+            (data || []).forEach(r => { reviews[r.stage] = r; });
+          } catch (e) {
+            console.warn('[MJMReview] failed to load reviews:', e);
+          }
+        }
+        renderAll();
+      }
+
+      async function mark(tabIdx) {
+        if (!isAdmin) return;
+        const batch = currentBatchId();
+        if (!batch) { alert('Save Tab 1 first to assign a batch number.'); return; }
+        const stage = STAGE_BY_TAB[tabIdx];
+        const u = MJMAccess.user() || {};
+        const payload = {
+          batch_name:     batch,
+          stage,
+          reviewed_by:    u.id || null,
+          reviewer_email: u.email || null,
+          reviewer_name:  u.full_name || null,
+          reviewed_at:    new Date().toISOString()
+        };
+        const { error } = await _supabase
+          .from('operation_batch_reviews')
+          .upsert(payload, { onConflict: 'batch_name,stage' });
+        if (error) { alert('Failed to mark reviewed: ' + error.message); return; }
+        reviews[stage] = payload;
+        renderBanner(tabIdx);
+      }
+
+      async function unmark(tabIdx) {
+        if (!isAdmin) return;
+        const batch = currentBatchId();
+        if (!batch) return;
+        const stage = STAGE_BY_TAB[tabIdx];
+        if (!confirm('Unlock this tab for editing again? The review record will be removed.')) return;
+        const { error } = await _supabase
+          .from('operation_batch_reviews')
+          .delete()
+          .eq('batch_name', batch)
+          .eq('stage', stage);
+        if (error) { alert('Failed to unreview: ' + error.message); return; }
+        delete reviews[stage];
+        renderBanner(tabIdx);
+      }
+
+      async function boot() {
+        if (booted) { await refresh(); return; }
+        booted = true;
+        await MJMAccess.load(_supabase);
+        // Gate the operation module entirely.
+        if (!MJMAccess.canAccess('operation')) {
+          alert('You do not have access to the Operation module.');
+          window.location.href = 'operation_dashboard.html';
+          return;
+        }
+        isAdmin = MJMAccess.isAdminOf('operation');
+
+        // Re-apply lock when tab switches (other code may inject rows).
+        const _origSwitchTab = window.switchTab;
+        if (typeof _origSwitchTab === 'function') {
+          window.switchTab = function (idx) {
+            const r = _origSwitchTab.apply(this, arguments);
+            try { renderBanner(idx); } catch (e) { /* ignore */ }
+            return r;
+          };
+        }
+
+        // Re-render banners whenever the batch number changes.
+        const batchInput = document.getElementById('f-batchno');
+        if (batchInput) {
+          batchInput.addEventListener('change', () => refresh());
+          batchInput.addEventListener('blur',   () => refresh());
+        }
+
+        // MutationObserver: when tab content re-renders rows, re-apply lock class.
+        TAB_INDICES.forEach(idx => {
+          const tab = document.getElementById('tab-' + idx);
+          if (!tab) return;
+          new MutationObserver(() => {
+            const stage = STAGE_BY_TAB[idx];
+            if (reviews[stage] && !isAdmin) tab.classList.add('mjm-locked');
+          }).observe(tab, { childList: true, subtree: true });
+        });
+
+        await refresh();
+      }
+
+      window.MJMReview = { boot, refresh, mark, unmark };
+    })();
     </script>
 </body>
 </html>
