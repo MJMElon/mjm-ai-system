@@ -102,11 +102,12 @@
 <div class="bg-white border-b border-slate-200 px-5 py-3 flex justify-between items-center sticky top-0 z-30 shadow-sm">
     <div class="flex items-center gap-3">
         <button onclick="window.location.href='operation_dashboard.html'" class="text-[10px] font-bold text-slate-500 hover:text-blue-700 uppercase tracking-widest bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-sm">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Dashboard
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Back to main page
         </button>
         <span class="font-black text-slate-800 uppercase tracking-widest text-xs">Seedling Stock Sales Management</span>
     </div>
     <div class="flex items-center gap-2">
+        <a href="operation_collection_booking.html" class="text-[10px] font-bold text-slate-500 hover:text-emerald-700 uppercase tracking-widest bg-slate-50 hover:bg-emerald-50 px-3 py-1.5 rounded-full border border-slate-200 transition-colors no-underline" style="text-decoration:none;">Collection Bookings</a>
         <a href="operation_inventory_map.html" class="text-[10px] font-bold text-slate-500 hover:text-blue-700 uppercase tracking-widest bg-slate-50 hover:bg-blue-50 px-3 py-1.5 rounded-full border border-slate-200 transition-colors no-underline" style="text-decoration:none;">Inventory Map</a>
         <a href="operation_inventory_all.html" class="text-[10px] font-bold text-slate-500 hover:text-indigo-700 uppercase tracking-widest bg-slate-50 hover:bg-indigo-50 px-3 py-1.5 rounded-full border border-slate-200 transition-colors no-underline" style="text-decoration:none;">Map Layers</a>
     </div>
@@ -245,6 +246,30 @@
                     <div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading…</div>
                 </div>
                 <div class="text-[9px] font-bold text-slate-400 mt-2 px-1 text-right" id="todo-section-meta"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Row 1.5: This Week's Scheduled Collection (full width) ───────────── -->
+    <div class="metric-card border-l-4 border-blue-500 relative overflow-hidden">
+        <div class="px-4 pt-4 pb-3 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+            <div class="flex items-center gap-2">
+                <div class="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                </div>
+                <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">This Week's Scheduled Collection</span>
+                <span id="sched-week-label" class="text-[10px] font-bold text-slate-400 ml-1">—</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <button onclick="changeSchedWeek(-1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-100 flex items-center justify-center text-slate-500 hover:text-blue-700 font-black text-base cursor-pointer transition-colors border-none">‹</button>
+                <button onclick="goSchedToday()" class="text-[9px] font-black text-emerald-700 uppercase tracking-widest bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 cursor-pointer transition-colors">Today</button>
+                <button onclick="changeSchedWeek(1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-100 flex items-center justify-center text-slate-500 hover:text-blue-700 font-black text-base cursor-pointer transition-colors border-none">›</button>
+                <a href="operation_collection_booking.html" class="text-[9px] font-black text-blue-700 uppercase tracking-widest bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors no-underline ml-1" style="text-decoration:none;">Manage →</a>
+            </div>
+        </div>
+        <div class="p-3">
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5" id="sched-week-grid">
+                <div class="text-center py-4 text-[10px] text-slate-400 font-bold uppercase tracking-widest col-span-full animate-pulse">Loading…</div>
             </div>
         </div>
     </div>
@@ -1176,6 +1201,119 @@
             </tr>`;
     }
 
+    // ── This Week's Scheduled Collection ────────────────────────────────────
+    let schedWeekStart = getSchedMonday(new Date());
+
+    function getSchedMonday(d) {
+        const dt = new Date(d);
+        const dow = dt.getDay();
+        const diff = dt.getDate() - dow + (dow === 0 ? -6 : 1);
+        dt.setDate(diff); dt.setHours(0,0,0,0);
+        return dt;
+    }
+    function fmtSchedDate(d) {
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+    function isSchedToday(d) {
+        const t = new Date();
+        return d.getFullYear()===t.getFullYear() && d.getMonth()===t.getMonth() && d.getDate()===t.getDate();
+    }
+    function changeSchedWeek(dir) {
+        schedWeekStart.setDate(schedWeekStart.getDate() + dir * 7);
+        loadScheduledCollection();
+    }
+    function goSchedToday() {
+        schedWeekStart = getSchedMonday(new Date());
+        loadScheduledCollection();
+    }
+
+    async function loadScheduledCollection() {
+        const start = schedWeekStart;
+        const end = new Date(start); end.setDate(end.getDate() + 5); // Mon..Sat
+        const startStr = fmtSchedDate(start);
+        const endStr = fmtSchedDate(end);
+
+        const lbl = document.getElementById('sched-week-label');
+        const fmtShort = d => d.toLocaleDateString('en-MY', { day:'2-digit', month:'short' });
+        lbl.innerText = `${fmtShort(start)} — ${fmtShort(end)} ${start.getFullYear()}`;
+
+        const { data, error } = await _supabase
+            .from('shared_collection_bookings')
+            .select('booking_date,start_time,customer_name,collection_qty,nursery_name,status')
+            .gte('booking_date', startStr)
+            .lte('booking_date', endStr)
+            .neq('status', 'cancelled')
+            .order('booking_date', { ascending: true })
+            .order('start_time', { ascending: true });
+
+        if (error) {
+            console.warn('Scheduled collection load error:', error);
+            document.getElementById('sched-week-grid').innerHTML =
+                `<div class="text-center py-4 text-[10px] text-red-500 font-bold uppercase tracking-widest col-span-full">Load failed</div>`;
+            return;
+        }
+        renderScheduledCollection(data || []);
+    }
+
+    function renderScheduledCollection(rows) {
+        const grid = document.getElementById('sched-week-grid');
+        const days = ['Mon','Tue','Wed','Thu','Fri','Sat'];
+        let html = '';
+
+        for (let i = 0; i < 6; i++) {
+            const d = new Date(schedWeekStart);
+            d.setDate(d.getDate() + i);
+            const ds = fmtSchedDate(d);
+            const dayRows = rows.filter(r => (r.booking_date || '').slice(0,10) === ds);
+            const isTodayCls = isSchedToday(d);
+
+            const headerCls = isTodayCls
+                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                : 'bg-slate-100 text-slate-600 border-slate-200';
+            const cardBorderCls = isTodayCls ? 'border-emerald-300' : 'border-slate-200';
+
+            const dateLabel = d.toLocaleDateString('en-MY', { day:'2-digit', month:'short' });
+            const totalQty = dayRows.reduce((s,r) => s + (r.collection_qty || 0), 0);
+
+            html += `<div class="rounded-xl border ${cardBorderCls} bg-white overflow-hidden flex flex-col">`;
+            html += `<div class="px-2.5 py-2 border-b ${cardBorderCls} ${headerCls} flex items-center justify-between gap-1">
+                       <span class="text-[10px] font-black uppercase tracking-widest">${days[i]} ${dateLabel}</span>
+                       ${dayRows.length ? `<span class="text-[9px] font-black bg-white/70 rounded-full px-1.5 py-0.5">${dayRows.length}</span>` : ''}
+                     </div>`;
+            html += `<div class="flex-1 p-2 space-y-1.5 min-h-[60px]">`;
+
+            if (dayRows.length === 0) {
+                html += `<div class="text-[9px] text-slate-300 font-bold uppercase tracking-widest text-center py-3">— No booking —</div>`;
+            } else {
+                dayRows.forEach(r => {
+                    const time = (r.start_time || '').slice(0,5);
+                    const nursery = (r.nursery_name || 'PENDING').toUpperCase();
+                    const nurseryCls = nursery.startsWith('BNN')
+                        ? 'bg-blue-100 text-blue-700 border-blue-200'
+                        : nursery.startsWith('UNN')
+                        ? 'bg-indigo-100 text-indigo-700 border-indigo-200'
+                        : 'bg-amber-100 text-amber-700 border-amber-200';
+                    const cust = (r.customer_name || '—');
+                    const qty = (r.collection_qty || 0).toLocaleString();
+                    html += `<div class="rounded-md border border-slate-100 bg-slate-50/60 p-1.5 text-[10px] leading-tight">
+                                <div class="flex items-center justify-between gap-1 mb-0.5">
+                                    <span class="font-black text-blue-700">${time}</span>
+                                    <span class="text-[8px] font-black ${nurseryCls} border rounded px-1 py-0.5 uppercase tracking-widest">${nursery}</span>
+                                </div>
+                                <div class="font-bold text-slate-700 truncate" title="${cust}">${cust}</div>
+                                <div class="font-black text-emerald-700">${qty} <span class="text-[8px] font-bold text-slate-400 uppercase tracking-widest">pcs</span></div>
+                             </div>`;
+                });
+                if (totalQty > 0) {
+                    html += `<div class="text-[9px] font-black text-slate-500 uppercase tracking-widest text-right pt-1 border-t border-slate-100 mt-1">Total: <span class="text-emerald-700">${totalQty.toLocaleString()}</span></div>`;
+                }
+            }
+
+            html += `</div></div>`;
+        }
+        grid.innerHTML = html;
+    }
+
     // ── Boot ────────────────────────────────────────────────────────────────
     document.getElementById('gearing-slider').addEventListener('input', updateGearing);
     _supabase.auth.getSession().then(({ data: { session } }) => {
@@ -1184,6 +1322,7 @@
         loadTodoList();
         loadMaturity();
         loadCustomerOrders();
+        loadScheduledCollection();
     });
 </script>
 </body>

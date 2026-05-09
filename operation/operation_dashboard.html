@@ -157,62 +157,7 @@
         <div>
             <h2 class="text-[11px] font-black text-slate-400 uppercase tracking-[0.25em] mb-5">📊 Nursery Dashboard</h2>
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
-
-                <!-- Nursery Status Dashboard (2-col span) -->
-                <div class="metric-card !p-0 lg:col-span-2 border-l-4 border-emerald-500 relative overflow-hidden" id="nsd-card">
-                    <div class="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full blur-2xl"></div>
-
-                    <!-- Header -->
-                    <div class="px-6 pt-6 pb-5 border-b border-slate-100 relative z-10">
-                        <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
-                            <div class="flex items-center gap-3">
-                                <div class="w-9 h-9 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
-                                </div>
-                                <span class="text-sm md:text-base font-black text-slate-800 uppercase tracking-widest">Nursery Status Dashboard</span>
-                            </div>
-                            <div class="flex items-baseline gap-2">
-                                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">As of</span>
-                                <span class="text-2xl md:text-3xl font-black text-emerald-600 tracking-tight leading-none" id="current-month-label">This Month</span>
-                            </div>
-                        </div>
-
-                        <!-- Segmented tab switch (full-block) -->
-                        <div class="combo-switch">
-                            <button class="combo-switch-btn active" id="combo-tab-basic" onclick="switchComboTab('basic')">
-                                <span class="csw-title">Stock To-Date</span>
-                                <span class="csw-sub">9-month maturity only</span>
-                            </button>
-                            <button class="combo-switch-btn verified" id="combo-tab-verified" onclick="switchComboTab('verified')">
-                                <span class="csw-title">Verified Stock</span>
-                                <span class="csw-sub">9-month + audit ≥ 1.5m</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- KPI body -->
-                    <div class="px-6 pt-6 pb-5 relative z-10">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="rounded-2xl bg-emerald-50/60 border border-emerald-100 p-5">
-                                <div class="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-1" id="matured-tile-label">Total Matured (To-Date)</div>
-                                <div class="text-5xl font-black text-emerald-700 leading-none mb-2" id="stat-matured">—</div>
-                                <div class="text-[10px] font-bold text-slate-500 leading-snug" id="matured-tile-sub">9 months in main nursery</div>
-                            </div>
-                            <div class="rounded-2xl bg-blue-50/60 border border-blue-100 p-5">
-                                <div class="text-[10px] font-black text-blue-700 uppercase tracking-widest mb-1">Paid Orders — Pending Collection</div>
-                                <div class="text-5xl font-black text-blue-700 leading-none mb-2" id="stat-orders-current">—</div>
-                                <div class="text-[10px] font-bold text-slate-500 leading-snug">Cumulative paid orders not yet collected, up to current month</div>
-                            </div>
-                        </div>
-
-                        <!-- Remarks -->
-                        <div class="mt-5 space-y-1.5 text-[10px] text-slate-500 leading-snug bg-slate-50 border border-slate-100 rounded-xl p-3" id="nsd-remark-block">
-                            <div class="flex gap-2"><span class="font-black text-emerald-600 shrink-0">①</span><span><span class="font-black text-emerald-700 uppercase tracking-wider">9-Month Rule</span> — Transplant date + 9 months in main nursery → matured.</span></div>
-                            <div class="flex gap-2" id="nsd-remark-audit"><span class="font-black text-amber-600 shrink-0">②</span><span><span class="font-black text-amber-700 uppercase tracking-wider">Field Audit</span> — Any sample height ≥ 150 cm (1.5 m) → that batch in the plot is also matured.</span></div>
-                        </div>
-                    </div>
-                </div>
+            <div class="grid grid-cols-1 gap-5 mb-5">
 
                 <!-- Available for Sales — same emerald theme as Nursery Status -->
                 <div class="metric-card !p-0 border-l-4 border-emerald-500 relative overflow-hidden flex flex-col">
@@ -377,13 +322,17 @@
             if (k.startsWith('sb-')) localStorage.removeItem(k);
         });
 
-        try { await _supabase.auth.signOut({ scope: 'local' }); } catch(e) { /* ignore */ }
+        // Race signOut against a 1.5s timeout — Supabase's navigator-lock
+        // can stall behind in-flight dashboard queries and hang the UI.
+        try {
+            await Promise.race([
+                _supabase.auth.signOut({ scope: 'local' }),
+                new Promise(resolve => setTimeout(resolve, 1500))
+            ]);
+        } catch(e) { /* ignore */ }
 
-        // Always go back to login regardless of API result
-        showAuth();
-        resetAuthForm();
-        if (btn) { btn.innerText = 'Sign Out'; btn.disabled = false; }
-        isLoggingOut = false;
+        // Hard reload guarantees a clean state regardless of pending queries.
+        window.location.replace(window.location.pathname);
     };
 
     // ── Reset auth form to Login state ───────────────────────────────────────
@@ -504,6 +453,8 @@
         if (session) {
             showDash();
             welcomeText.innerText = `Welcome, ${session.user.user_metadata?.full_name || session.user.email}`;
+            if (dashboardLoaded) return;
+            dashboardLoaded = true;
             await loadDashboard();
         }
     });
@@ -523,7 +474,8 @@
         const endOfMonthDateOnly  = endOfMonthISO.slice(0, 10);
 
         const monthLabel = now.toLocaleString('en-MY', { month: 'long', year: 'numeric' });
-        document.getElementById('current-month-label').innerText = monthLabel;
+        const monthLabelEl = document.getElementById('current-month-label');
+        if (monthLabelEl) monthLabelEl.innerText = monthLabel;
 
         try {
             // ── Pull transplant logs + height audits + collections up to current-month-end ──
@@ -623,10 +575,6 @@
             renderNsdTab();
         } catch(e) {
             console.warn('Dashboard load error:', e);
-            ['stat-matured','stat-orders-current'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.innerText = '—';
-            });
             baseStock = 0;
             currentOrdersQty = 0;
             updateGearing();
@@ -643,15 +591,8 @@
     function renderNsdTab() {
         const verified = comboTab === 'verified';
 
-        // ── Labels always update on tab change, even before data loads ──────────
-        document.getElementById('matured-tile-label').innerText = verified
-            ? 'Verified Matured (To-Date)'
-            : 'Total Matured (To-Date)';
-        document.getElementById('matured-tile-sub').innerText = verified
-            ? '9-month + audit ≥ 1.5m, after 10% culling, less collections to-date'
-            : '9-month rule, after 10% culling, less collections to-date';
-        document.getElementById('nsd-remark-audit').style.display = verified ? '' : 'none';
-
+        // NSD card has been removed from this page — its labels/stats are gone.
+        // Available-for-Sales label is the only remaining tied UI element.
         const availLabel = document.getElementById('avail-tab-label');
         if (availLabel) {
             availLabel.innerHTML = verified
@@ -659,12 +600,8 @@
                 : 'From <span class="text-emerald-700 font-black">Stock To-Date</span>';
         }
 
-        // ── Numbers (only once data is loaded) ──────────────────────────────────
         if (!nsdAggregates) return;
         const matured = verified ? nsdAggregates.qtyByAgeOrAudit : nsdAggregates.qtyByAge;
-        document.getElementById('stat-matured').innerText        = matured.toLocaleString();
-        document.getElementById('stat-orders-current').innerText = nsdAggregates.pendingOrdersQty.toLocaleString();
-
         baseStock = matured;
         updateGearing();
     }
@@ -719,6 +656,19 @@
     }
 
     document.getElementById('gearing-slider').addEventListener('input', updateGearing);
+
+    // Initial-session bootstrap — ensures the dashboard renders on cold page loads
+    // even if INITIAL_SESSION from onAuthStateChange doesn't fire reliably.
+    let dashboardLoaded = false;
+    _supabase.auth.getSession().then(({ data: { session } }) => {
+        if (isRecovering) return; // recovery flow handles its own UI
+        if (!session) { showAuth(); return; }
+        if (dashboardLoaded) return;
+        dashboardLoaded = true;
+        showDash();
+        welcomeText.innerText = `Welcome, ${session.user.user_metadata?.full_name || session.user.email}`;
+        loadDashboard();
+    });
 </script>
 </body>
 </html>
