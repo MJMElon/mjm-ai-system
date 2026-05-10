@@ -427,32 +427,66 @@
     <!-- ══════════════ CUSTOMER PANE (default) ══════════════ -->
     <div id="ssm-pane-customer" class="space-y-5">
 
-        <!-- To-Do List -->
-        <div class="metric-card !border-amber-300 border-l-4 relative overflow-hidden flex flex-col">
-            <div class="px-4 pt-4 pb-3 border-b border-slate-100">
-                <div class="flex items-center gap-2 mb-3">
-                    <div class="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center text-amber-600">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+        <!-- ── To-Do List + Aging Report (side-by-side) ── -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+
+            <!-- To-Do List -->
+            <div class="metric-card !border-amber-300 border-l-4 relative overflow-hidden flex flex-col">
+                <div class="px-4 pt-4 pb-3 border-b border-slate-100">
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center text-amber-600">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                        </div>
+                        <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">To-Do List</span>
                     </div>
-                    <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">To-Do List</span>
+                    <div class="flex gap-1.5">
+                        <button class="todo-tab active unpaid" id="todo-tab-unpaid" onclick="switchTodoTab('unpaid')">
+                            <span>💰</span><span>Unpaid</span>
+                            <span class="tab-count" id="todo-count-unpaid">0</span>
+                        </button>
+                        <button class="todo-tab credit" id="todo-tab-credit" onclick="switchTodoTab('credit')">
+                            <span>🧾</span><span>Credit</span>
+                            <span class="tab-count" id="todo-count-credit">0</span>
+                        </button>
+                    </div>
                 </div>
-                <div class="flex gap-1.5">
-                    <button class="todo-tab active unpaid" id="todo-tab-unpaid" onclick="switchTodoTab('unpaid')">
-                        <span>💰</span><span>Unpaid</span>
-                        <span class="tab-count" id="todo-count-unpaid">0</span>
-                    </button>
-                    <button class="todo-tab credit" id="todo-tab-credit" onclick="switchTodoTab('credit')">
-                        <span>🧾</span><span>Credit</span>
-                        <span class="tab-count" id="todo-count-credit">0</span>
-                    </button>
+                <div class="px-3 pt-3 pb-2 flex-1 min-h-0">
+                    <div class="notebook max-h-[420px] overflow-y-auto" id="todo-body">
+                        <div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading…</div>
+                    </div>
+                    <div class="text-[9px] font-bold text-slate-400 mt-2 px-1 text-right" id="todo-section-meta"></div>
                 </div>
             </div>
-            <div class="px-3 pt-3 pb-2 flex-1 min-h-0">
-                <div class="notebook max-h-[330px] overflow-y-auto" id="todo-body">
-                    <div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading…</div>
+
+            <!-- Aging Report (overdue collections) -->
+            <div class="flex flex-col">
+                <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                    <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">⏰ Aging Report — Overdue Collections</h2>
+                    <span id="aging-meta" class="text-[9px] font-bold text-slate-400">—</span>
                 </div>
-                <div class="text-[9px] font-bold text-slate-400 mt-2 px-1 text-right" id="todo-section-meta"></div>
+                <div class="dash-card scroll-x-fade max-h-[470px] overflow-y-auto">
+                    <table class="aging-table min-w-[760px]">
+                        <thead>
+                            <tr>
+                                <th>Customer</th>
+                                <th>Order #</th>
+                                <th>Booked Date</th>
+                                <th class="num">Days Overdue</th>
+                                <th class="num">Pending Qty</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="aging-rows">
+                            <tr><td colspan="7" class="text-center py-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading overdue list…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
+                    <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Lists active orders whose booked-collection date is past today and not yet marked completed. 0–7 days = warn (yellow), 8–14 = overdue (red), 15+ = severe.
+                </div>
             </div>
+
         </div>
 
         <!-- This Week's Scheduled Collection -->
@@ -476,35 +510,6 @@
                 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5" id="sched-week-grid">
                     <div class="text-center py-4 text-[10px] text-slate-400 font-bold uppercase tracking-widest col-span-full animate-pulse">Loading…</div>
                 </div>
-            </div>
-        </div>
-
-        <!-- ── Aging Report (overdue collections) ── -->
-        <div>
-            <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
-                <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">⏰ Aging Report — Overdue Collections</h2>
-                <span id="aging-meta" class="text-[9px] font-bold text-slate-400">—</span>
-            </div>
-            <div class="dash-card scroll-x-fade">
-                <table class="aging-table min-w-[900px]">
-                    <thead>
-                        <tr>
-                            <th>Customer</th>
-                            <th>Order #</th>
-                            <th>Booked Date</th>
-                            <th class="num">Days Overdue</th>
-                            <th class="num">Pending Qty</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="aging-rows">
-                        <tr><td colspan="7" class="text-center py-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading overdue list…</td></tr>
-                    </tbody>
-                </table>
-            </div>
-            <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
-                <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Lists active orders whose booked-collection date is past today and not yet marked completed. 0–7 days = warn (yellow), 8–14 = overdue (red), 15+ = severe.
             </div>
         </div>
 
@@ -1265,7 +1270,7 @@
             const [ordRes, _itemsRes, _collRes] = await Promise.all([
                 _supabase.from('salesweb_customer_orders')
                     .select('id,order_number,customer_name,total,status,created_at,payment_method,collected_qty,collected_at')
-                    .order('created_at', { ascending: false }),
+                    .order('created_at', { ascending: true }),
                 _supabase.from('salesweb_order_items').select('order_id,quantity,unit_price,subtotal'),
                 _supabase.from('salesweb_order_collections').select('order_id,collected_qty,collected_at')
                     .then(r => r, e => ({ data: null, error: e }))
