@@ -60,6 +60,26 @@
         .mat-table tbody td{padding:8px;border-bottom:1px solid #f1f5f9;color:#1e293b;font-weight:600;}
         .mat-table tbody tr:hover{background:#fafbff;}
         .mat-table .num{text-align:right;font-variant-numeric:tabular-nums;font-weight:900;}
+
+        /* ── Column-group headers (3 logical sections) ───────────────────── */
+        .mat-table thead .mat-group-row th{padding:6px 10px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;text-align:center;border-bottom:1px solid #e2e8f0;}
+        .mat-group-prod{background:#eff6ff;color:#1d4ed8;border-right:2px solid #cbd5e1;}
+        .mat-group-plot{background:#fef9c3;color:#854d0e;border-right:2px solid #cbd5e1;}
+        .mat-group-alloc{background:#ecfdf5;color:#065f46;}
+        /* Visible vertical separators between the three sections */
+        .mat-table thead th.mat-sep-r,
+        .mat-table tbody td.mat-sep-r,
+        .mat-table tfoot td.mat-sep-r{border-right:2px solid #cbd5e1;}
+        /* Subtle column-group tints in the body to reinforce sections */
+        .mat-table tbody td.col-prod {background:rgba(239,246,255,.4);}
+        .mat-table tbody td.col-plot {background:rgba(254,249,195,.45);}
+        .mat-table tbody td.col-alloc{background:rgba(236,253,245,.45);}
+        .mat-table tbody tr:hover td.col-prod {background:rgba(219,234,254,.55);}
+        .mat-table tbody tr:hover td.col-plot {background:rgba(254,240,138,.55);}
+        .mat-table tbody tr:hover td.col-alloc{background:rgba(187,247,208,.55);}
+
+        /* "No Status" pill for plots that haven't been opened yet */
+        .plot-status-empty{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;background:#f1f5f9;color:#64748b;border:1px dashed #cbd5e1;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;}
         .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1px solid;}
         .pill-open{background:#dcfce7;color:#15803d;border-color:#86efac;}
         .pill-sisa{background:#fef3c7;color:#a16207;border-color:#fcd34d;}
@@ -155,12 +175,14 @@
         .alloc-fab .alloc-fab-badge{background:#fbbf24;color:#78350f;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:900;min-width:20px;text-align:center;}
         .alloc-fab.hidden-fab{display:none;}
 
-        /* Allocation drawer is now a draggable floating window — user can move it
-           anywhere on screen so it doesn't cover the right side of the table. */
-        .alloc-drawer{position:fixed;top:80px;right:24px;width:380px;max-width:92vw;max-height:calc(100vh - 100px);background:white;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.22);z-index:95;display:none;flex-direction:column;overflow:hidden;}
+        /* Allocation drawer is now a draggable + resizable floating window. */
+        .alloc-drawer{position:fixed;top:80px;right:24px;width:380px;height:520px;min-width:300px;min-height:280px;max-width:96vw;max-height:calc(100vh - 40px);background:white;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.22);z-index:95;display:none;flex-direction:column;overflow:hidden;}
         .alloc-drawer.open{display:flex;}
         .alloc-drawer-head{padding:14px 16px;border-bottom:1px solid #e2e8f0;background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:white;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;cursor:move;user-select:none;-webkit-user-select:none;touch-action:none;}
         .alloc-drawer-head::before{content:"⋮⋮";color:rgba(255,255,255,.55);font-weight:900;letter-spacing:-2px;margin-right:4px;font-size:18px;line-height:1;align-self:center;}
+        .alloc-resize-handle{position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:nwse-resize;user-select:none;touch-action:none;z-index:2;}
+        .alloc-resize-handle::after{content:"";position:absolute;right:3px;bottom:3px;width:10px;height:10px;border-right:2px solid #94a3b8;border-bottom:2px solid #94a3b8;opacity:.7;}
+        .alloc-resize-handle:hover::after{opacity:1;border-color:#1d4ed8;}
         .alloc-drawer-head h3{font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;margin:0;}
         .alloc-drawer-head p{font-size:10px;color:#bfdbfe;margin:2px 0 0;font-weight:600;}
         .alloc-drawer-tabs{display:flex;gap:4px;background:#f1f5f9;padding:4px;border-bottom:1px solid #e2e8f0;}
@@ -370,32 +392,44 @@
         <div id="active-month-banner" class="hidden text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 mb-2"></div>
 
         <div class="dash-card scroll-x-fade">
-            <table class="mat-table min-w-[1200px]">
+            <table class="mat-table min-w-[1400px]">
                 <thead>
+                    <tr class="mat-group-row">
+                        <th colspan="7" class="mat-group mat-group-prod">📦 Production</th>
+                        <th colspan="3" class="mat-group mat-group-plot">🪴 Plot Status</th>
+                        <th colspan="3" class="mat-group mat-group-alloc">🛒 Customer Allocation</th>
+                    </tr>
                     <tr>
+                        <!-- Production -->
                         <th>Maturity Date</th>
                         <th>Location</th>
                         <th>Plot</th>
                         <th>Batch</th>
                         <th>Breed</th>
                         <th class="text-right">Qty Transplanted</th>
-                        <th class="text-right">After 10% Culling</th>
-                        <th>Reservation</th>
+                        <th class="text-right mat-sep-r">After 10% Culling</th>
+                        <!-- Plot status -->
+                        <th>Status</th>
+                        <th class="text-right">Total Collected</th>
+                        <th class="text-right mat-sep-r">Plot Balance</th>
+                        <!-- Customer allocation -->
+                        <th>Customers (drag here)</th>
                         <th class="text-right">Reserved Qty</th>
-                        <th class="text-right">Balance</th>
-                        <th>Plot Status</th>
-                        <th>Move to Premium</th>
+                        <th class="text-right">After Deduct Reserve</th>
                     </tr>
                 </thead>
                 <tbody id="maturity-rows">
-                    <tr><td colspan="12" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading maturity data…</td></tr>
+                    <tr><td colspan="13" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading maturity data…</td></tr>
                 </tbody>
                 <tfoot id="maturity-foot"></tfoot>
             </table>
         </div>
 
         <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
-            <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Maturity date = transplant date + 9 months. After 10% culling = qty × 0.9. Reservations & plot status are placeholders until the <span class="font-mono">shared_plot_allocations</span> SQL is run.
+            <span class="font-black uppercase tracking-wider text-slate-700">Notes</span> —
+            <strong>Plot Balance</strong> = After 10% Culling − Total Collected (what's still in the plot).
+            <strong>After Deduct Reserve</strong> = Plot Balance − Reserved Qty (what's still free to allocate).
+            <strong>Plot Status</strong> defaults to <em>No Status</em>; an admin opens it for collection. Total Collected is computed from customer order collections proportionally to allocations.
         </div>
     </div>
 
@@ -587,6 +621,7 @@
     <div class="alloc-drawer-body" id="alloc-drawer-body">
         <div class="alloc-drawer-empty">Loading orders…</div>
     </div>
+    <div class="alloc-resize-handle" id="alloc-resize-handle" title="Drag to resize"></div>
 </div>
 
 <!-- ══════════════ Customer Pickup History modal ══════════════ -->
@@ -1054,7 +1089,7 @@
             (allocRes?.data || []).forEach(a => {
                 const k = (a.batch_name||'') + '||' + (a.plot_name||'');
                 plotAllocations[k] = {
-                    plot_status: a.plot_status || 'open',
+                    plot_status: a.plot_status || 'no_status',
                     reserved_for: a.reserved_for || '',
                     reserved_qty: a.reserved_qty || 0,
                     premium: !!a.premium
@@ -1152,7 +1187,47 @@
         else document.addEventListener('click', closeHistoryOnOutside, { once: true });
     }
 
+    // For each customer order we know totalQty and totalCollected. To estimate
+    // how much was collected for a specific plot's allocation, we apportion the
+    // order's collected qty across its plot allocations in proportion to the
+    // allocated_qty on each. Cached per-render to avoid re-computing per row.
+    let _orderCollectionRatio = {}; // order_id → collected/totalQty
+
+    function rebuildOrderCollectionRatioCache() {
+        _orderCollectionRatio = {};
+        (allCustomerOrders || []).forEach(o => {
+            if (o.totalQty > 0) {
+                _orderCollectionRatio[o.id] = (o.totalCollected || 0) / o.totalQty;
+            } else {
+                _orderCollectionRatio[o.id] = 0;
+            }
+        });
+    }
+
+    function collectedForAllocations(rowAllocs) {
+        if (!rowAllocs.length) return 0;
+        let sum = 0;
+        rowAllocs.forEach(a => {
+            const ratio = _orderCollectionRatio[a.order_id] || 0;
+            sum += Math.round((a.allocated_qty || 0) * ratio);
+        });
+        return sum;
+    }
+
+    function plotStatusPill(status) {
+        const map = {
+            no_status: { label: 'No Status', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
+            open:      { label: 'Open',      cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+            sisa:      { label: 'Sisa',      cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+            finished:  { label: 'Finished',  cls: 'bg-slate-200 text-slate-700 border-slate-300' }
+        };
+        const m = map[status] || map.no_status;
+        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${m.cls}">${m.label}</span>`;
+    }
+
     function renderMaturityTable() {
+        rebuildOrderCollectionRatioCache();
+
         const tbody = document.getElementById('maturity-rows');
         const tfoot = document.getElementById('maturity-foot');
 
@@ -1161,20 +1236,25 @@
             .sort((a, b) => a.matureDate - b.matureDate);
 
         if (!rows.length) {
-            tbody.innerHTML = `<tr><td colspan="12" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">No maturity allocations for this month</div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="13" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">No maturity allocations for this month</div></td></tr>`;
             tfoot.innerHTML = '';
             return;
         }
 
-        let totQty = 0, totCull = 0, totReserved = 0;
+        let totQty = 0, totCull = 0, totReserved = 0, totCollected = 0;
         tbody.innerHTML = rows.map(r => {
-            const alloc = plotAllocations[r.key] || { plot_status: 'open', reserved_for: '', reserved_qty: 0, premium: false };
+            // Plot status defaults to 'no_status' until an admin opens it for collection.
+            const alloc = plotAllocations[r.key] || { plot_status: 'no_status', reserved_for: '', reserved_qty: 0, premium: false };
             const rowAllocs = allocsForBatch(r.key);
-            const allocSum = rowAllocs.reduce((s, a) => s + (a.allocated_qty || 0), 0);
-            const balance = r.afterCulling - allocSum;
+            const allocSum  = rowAllocs.reduce((s, a) => s + (a.allocated_qty || 0), 0);
+            const collected = collectedForAllocations(rowAllocs);
+            const plotBalance       = r.afterCulling - collected;
+            const afterDeductReserve = plotBalance - allocSum;
+
             totQty       += r.qty;
             totCull      += r.afterCulling;
             totReserved  += allocSum;
+            totCollected += collected;
 
             const reservHtml = rowAllocs.length
                 ? `<div class="reserv-stack">${rowAllocs.map(a => `
@@ -1185,31 +1265,37 @@
                     </div>`).join('')}</div>`
                 : `<div class="reserv-empty">— drop a customer card here —</div>`;
 
+            const status = alloc.plot_status || 'no_status';
+
             return `
-                <tr data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${balance}">
-                    <td>${r.matureDate.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'})}</td>
-                    <td>${escapeHtml(r.location)}</td>
-                    <td><span class="font-black text-slate-900">${escapeHtml(r.plot || '—')}</span></td>
-                    <td class="font-mono">${escapeHtml(r.batch || '—')}</td>
-                    <td>${escapeHtml(r.breed || '—')}</td>
-                    <td class="num">${r.qty.toLocaleString()}</td>
-                    <td class="num text-emerald-700">${r.afterCulling.toLocaleString()}</td>
-                    <td>${reservHtml}</td>
-                    <td class="num font-black text-slate-700">${allocSum.toLocaleString()}</td>
-                    <td class="num ${balance < 0 ? 'text-red-600' : balance === 0 ? 'text-slate-400' : 'text-slate-700'}">${balance.toLocaleString()}</td>
-                    <td>
-                        <select data-allockey="${r.key}" data-allocfield="plot_status" onchange="updateAllocation(this)"
-                            class="text-[10px] font-black uppercase tracking-wider rounded-md border border-slate-200 px-1.5 py-0.5 bg-white">
-                            <option value="open"     ${alloc.plot_status === 'open'     ? 'selected' : ''}>Open</option>
-                            <option value="sisa"     ${alloc.plot_status === 'sisa'     ? 'selected' : ''}>Sisa</option>
-                            <option value="finished" ${alloc.plot_status === 'finished' ? 'selected' : ''}>Finished</option>
-                        </select>
+                <tr data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${afterDeductReserve}">
+                    <!-- Production -->
+                    <td class="col-prod">${r.matureDate.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'})}</td>
+                    <td class="col-prod">${escapeHtml(r.location)}</td>
+                    <td class="col-prod"><span class="font-black text-slate-900">${escapeHtml(r.plot || '—')}</span></td>
+                    <td class="col-prod font-mono">${escapeHtml(r.batch || '—')}</td>
+                    <td class="col-prod">${escapeHtml(r.breed || '—')}</td>
+                    <td class="col-prod num">${r.qty.toLocaleString()}</td>
+                    <td class="col-prod num text-emerald-700 mat-sep-r">${r.afterCulling.toLocaleString()}</td>
+                    <!-- Plot status -->
+                    <td class="col-plot">
+                        <div class="flex items-center gap-2">
+                            ${plotStatusPill(status)}
+                            <select data-allockey="${r.key}" data-allocfield="plot_status" onchange="updateAllocation(this)"
+                                class="text-[9px] font-black uppercase tracking-wider rounded-md border border-slate-200 px-1.5 py-0.5 bg-white">
+                                <option value="no_status" ${status === 'no_status' ? 'selected' : ''}>No Status</option>
+                                <option value="open"      ${status === 'open'      ? 'selected' : ''}>Open</option>
+                                <option value="sisa"      ${status === 'sisa'      ? 'selected' : ''}>Sisa</option>
+                                <option value="finished"  ${status === 'finished'  ? 'selected' : ''}>Finished</option>
+                            </select>
+                        </div>
                     </td>
-                    <td>
-                        <input type="checkbox" class="premium-toggle" ${alloc.premium ? 'checked' : ''}
-                            data-allockey="${r.key}" data-allocfield="premium"
-                            onchange="updateAllocation(this)" title="Move to Premium plot">
-                    </td>
+                    <td class="col-plot num text-blue-700">${collected.toLocaleString()}</td>
+                    <td class="col-plot num font-black mat-sep-r ${plotBalance < 0 ? 'text-red-600' : 'text-slate-800'}">${plotBalance.toLocaleString()}</td>
+                    <!-- Customer allocation -->
+                    <td class="col-alloc">${reservHtml}</td>
+                    <td class="col-alloc num font-black text-slate-700">${allocSum.toLocaleString()}</td>
+                    <td class="col-alloc num font-black ${afterDeductReserve < 0 ? 'text-red-600' : afterDeductReserve === 0 ? 'text-slate-400' : 'text-emerald-700'}">${afterDeductReserve.toLocaleString()}</td>
                 </tr>
             `;
         }).join('');
@@ -1221,15 +1307,18 @@
             tr.addEventListener('drop',      onRowDrop);
         });
 
+        const totAfterDeduct = totCull - totCollected - totReserved;
         tfoot.innerHTML = `
             <tr class="bg-slate-50 font-black">
                 <td colspan="5" class="text-right text-[10px] uppercase tracking-widest text-slate-500 py-2 px-2">Totals (${rows.length} rows)</td>
                 <td class="num text-slate-900">${totQty.toLocaleString()}</td>
-                <td class="num text-emerald-700">${totCull.toLocaleString()}</td>
+                <td class="num text-emerald-700 mat-sep-r">${totCull.toLocaleString()}</td>
+                <td></td>
+                <td class="num text-blue-700">${totCollected.toLocaleString()}</td>
+                <td class="num text-slate-800 mat-sep-r">${(totCull - totCollected).toLocaleString()}</td>
                 <td></td>
                 <td class="num text-slate-900">${totReserved.toLocaleString()}</td>
-                <td class="num ${(totCull - totReserved) < 0 ? 'text-red-600' : 'text-slate-700'}">${(totCull - totReserved).toLocaleString()}</td>
-                <td colspan="2"></td>
+                <td class="num ${totAfterDeduct < 0 ? 'text-red-600' : 'text-emerald-700'}">${totAfterDeduct.toLocaleString()}</td>
             </tr>`;
     }
 
@@ -1902,6 +1991,26 @@
                     html += `<div class="heat-cell ${bucket}" title="Matured ${mat.toLocaleString()} · Pending ${pen.toLocaleString()}"><span class="h-pct">${pctLabel}</span><span class="h-meta">${pen.toLocaleString()} / ${mat.toLocaleString()}</span></div>`;
                 });
             });
+
+            // ── Total row: month-wide matured (after 10% culling) summed across all nurseries.
+            html += `<div class="heat-cell h-label" style="background:#f1f5f9;font-weight:900;color:#0f172a;">📦 Total Matured</div>`;
+            months.forEach(m => {
+                let totMat = 0, totPen = 0;
+                nurseries.forEach(n => {
+                    const k = m.key + '|' + n;
+                    totMat += matured[k] || 0;
+                    totPen += pending[k] || 0;
+                });
+                if (!totMat && !totPen) {
+                    html += `<div class="heat-cell heat-na" style="background:#f8fafc;border-top:2px solid #cbd5e1;"><span class="h-pct">—</span><span class="h-meta">no data</span></div>`;
+                    return;
+                }
+                html += `<div class="heat-cell" style="background:#0f172a;color:white;border-top:2px solid #cbd5e1;justify-content:center;align-items:center;display:flex;flex-direction:column;" title="Month total matured ${totMat.toLocaleString()} · Pending ${totPen.toLocaleString()}">
+                    <span class="h-pct" style="color:#bae6fd;font-size:13px;">${totMat.toLocaleString()}</span>
+                    <span class="h-meta" style="color:#94a3b8;">matured · pending ${totPen.toLocaleString()}</span>
+                </div>`;
+            });
+
             html += `</div>`;
             area.innerHTML = html;
         } catch (e) {
@@ -2054,13 +2163,55 @@
         const handle = drawer.querySelector('.alloc-drawer-head');
         if (!handle) return;
 
-        // Restore saved position
+        // Restore saved position + size
         try {
             const saved = JSON.parse(localStorage.getItem('mjm_alloc_drawer_pos') || 'null');
-            if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
-                applyDrawerPos(saved.left, saved.top);
+            if (saved) {
+                if (Number.isFinite(saved.width) && Number.isFinite(saved.height)) {
+                    drawer.style.width  = saved.width  + 'px';
+                    drawer.style.height = saved.height + 'px';
+                }
+                if (Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+                    applyDrawerPos(saved.left, saved.top);
+                }
             }
         } catch (e) { /* ignore */ }
+
+        // ── Resize handle ───────────────────────────────────────────
+        const resizeHandle = drawer.querySelector('#alloc-resize-handle');
+        if (resizeHandle) {
+            let resizing = false, rsX = 0, rsY = 0, rsW = 0, rsH = 0, rsPid = null;
+            resizeHandle.addEventListener('pointerdown', (e) => {
+                resizing = true; rsPid = e.pointerId;
+                try { resizeHandle.setPointerCapture(rsPid); } catch (err) { /* ignore */ }
+                const rect = drawer.getBoundingClientRect();
+                rsX = e.clientX; rsY = e.clientY; rsW = rect.width; rsH = rect.height;
+                e.preventDefault(); e.stopPropagation();
+            });
+            resizeHandle.addEventListener('pointermove', (e) => {
+                if (!resizing) return;
+                const minW = 300, minH = 280;
+                const maxW = window.innerWidth  - drawer.getBoundingClientRect().left - 8;
+                const maxH = window.innerHeight - drawer.getBoundingClientRect().top  - 8;
+                const newW = Math.max(minW, Math.min(maxW, rsW + (e.clientX - rsX)));
+                const newH = Math.max(minH, Math.min(maxH, rsH + (e.clientY - rsY)));
+                drawer.style.width  = newW + 'px';
+                drawer.style.height = newH + 'px';
+            });
+            const endResize = () => {
+                if (!resizing) return;
+                resizing = false;
+                try { resizeHandle.releasePointerCapture(rsPid); } catch (err) { /* ignore */ }
+                const rect = drawer.getBoundingClientRect();
+                try {
+                    const prev = JSON.parse(localStorage.getItem('mjm_alloc_drawer_pos') || '{}');
+                    localStorage.setItem('mjm_alloc_drawer_pos',
+                        JSON.stringify({ ...prev, left: rect.left, top: rect.top, width: rect.width, height: rect.height }));
+                } catch (e) { /* ignore */ }
+            };
+            resizeHandle.addEventListener('pointerup',     endResize);
+            resizeHandle.addEventListener('pointercancel', endResize);
+        }
 
         function applyDrawerPos(left, top) {
             const rect = drawer.getBoundingClientRect();
@@ -2103,7 +2254,9 @@
             try { handle.releasePointerCapture(pid); } catch (err) { /* ignore */ }
             const rect = drawer.getBoundingClientRect();
             try {
-                localStorage.setItem('mjm_alloc_drawer_pos', JSON.stringify({ left: rect.left, top: rect.top }));
+                const prev = JSON.parse(localStorage.getItem('mjm_alloc_drawer_pos') || '{}');
+                localStorage.setItem('mjm_alloc_drawer_pos',
+                    JSON.stringify({ ...prev, left: rect.left, top: rect.top, width: rect.width, height: rect.height }));
             } catch (e) { /* ignore quota errors */ }
         }
         handle.addEventListener('pointerup',     endDrag);
