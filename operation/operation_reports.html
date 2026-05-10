@@ -350,7 +350,7 @@ document.getElementById('f-report').addEventListener('change', runReport);
 async function bootstrap() {
   await MJMAccess.load(_supabase);
   if (!MJMAccess.user()) { window.location.href = 'operation_dashboard.html'; return; }
-  if (!MJMAccess.canAccess('operation')) {
+  if (!MJMAccess.canAccess('reports')) {
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('report-area').classList.add('hidden');
     document.getElementById('forbidden').classList.remove('hidden');
