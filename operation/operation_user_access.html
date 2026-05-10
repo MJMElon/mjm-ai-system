@@ -10,106 +10,248 @@
 <script src="../shared/shared_access.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
-  *  { font-family: 'Outfit', system-ui, sans-serif; }
+  * { font-family: 'Outfit', system-ui, sans-serif; }
   body { background:#f1f5f9; margin:0; }
+
   .card { background:white; border:1px solid #e2e8f0; border-radius:20px; box-shadow:0 4px 16px rgba(0,0,0,.06); }
-  .pill-btn { padding:6px 12px; border-radius:999px; font-size:10px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; border:1px solid transparent; cursor:pointer; transition:all .15s; }
-  .pill-admin     { background:#ecfdf5; color:#065f46; border-color:#a7f3d0; }
-  .pill-admin.on  { background:#10b981; color:white; border-color:#059669; }
-  .pill-normal    { background:#eff6ff; color:#1e3a8a; border-color:#bfdbfe; }
-  .pill-normal.on { background:#3b82f6; color:white; border-color:#2563eb; }
-  .pill-none      { background:#f8fafc; color:#64748b; border-color:#e2e8f0; }
-  .pill-none.on   { background:#475569; color:white; border-color:#334155; }
-  .pill-btn:hover:not(.on) { transform:translateY(-1px); }
-  .toggle { position:relative; display:inline-block; width:42px; height:22px; }
-  .toggle input { display:none; }
-  .toggle-slider { position:absolute; cursor:pointer; inset:0; background:#cbd5e1; border-radius:999px; transition:.25s; }
-  .toggle-slider::before { position:absolute; content:''; left:3px; top:3px; width:16px; height:16px; background:white; border-radius:50%; transition:.25s; box-shadow:0 1px 3px rgba(0,0,0,.2); }
-  .toggle input:checked + .toggle-slider { background:#10b981; }
-  .toggle input:checked + .toggle-slider::before { transform:translateX(20px); }
-  .row-changed { background:#fef9c3; }
-  table { border-collapse:separate; border-spacing:0; }
-  th, td { vertical-align:middle; }
+
+  /* Access summary chip on the list */
+  .chip { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+  .chip-admin  { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+  .chip-normal { background:#eff6ff; color:#1e3a8a; border:1px solid #bfdbfe; }
+  .chip-none   { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
+  .chip-manage { background:#fff1f2; color:#9f1239; border:1px solid #fecdd3; }
+
+  .edit-btn { display:inline-flex; align-items:center; gap:6px; padding:10px 16px; border-radius:12px; font-size:11px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; background:linear-gradient(135deg,#10b981,#059669); color:white; border:none; cursor:pointer; box-shadow:0 6px 14px -4px rgba(16,185,129,.4); transition:all .15s; }
+  .edit-btn:hover { transform:translateY(-1px); box-shadow:0 10px 18px -4px rgba(16,185,129,.5); }
+
+  /* Drawer */
+  .drawer-backdrop { position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:60; opacity:0; pointer-events:none; transition:opacity .25s; backdrop-filter:blur(4px); }
+  .drawer-backdrop.open { opacity:1; pointer-events:auto; }
+  .drawer { position:fixed; top:0; right:0; bottom:0; width:100%; max-width:480px; background:white; z-index:70; transform:translateX(100%); transition:transform .3s cubic-bezier(.4,0,.2,1); display:flex; flex-direction:column; box-shadow:-20px 0 60px rgba(0,0,0,.2); }
+  .drawer.open { transform:translateX(0); }
+
+  .lvl-select { appearance:none; -webkit-appearance:none; padding:10px 36px 10px 14px; border-radius:12px; font-weight:900; font-size:12px; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; border:1.5px solid transparent; outline:none; min-width:140px; transition:all .15s; background-position:right 12px center; background-repeat:no-repeat; background-size:10px; }
+  .lvl-admin  { background-color:#10b981; color:white;   border-color:#059669; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='white' d='M5 6L0 0h10z'/></svg>"); }
+  .lvl-normal { background-color:#3b82f6; color:white;   border-color:#2563eb; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='white' d='M5 6L0 0h10z'/></svg>"); }
+  .lvl-none   { background-color:#f8fafc; color:#475569; border-color:#cbd5e1; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='%23475569' d='M5 6L0 0h10z'/></svg>"); }
+  .lvl-select:focus { box-shadow:0 0 0 3px rgba(59,130,246,.25); }
+
+  /* Toggle */
+  .tog { position:relative; display:inline-block; width:48px; height:26px; flex-shrink:0; }
+  .tog input { opacity:0; width:0; height:0; }
+  .tog-slider { position:absolute; cursor:pointer; inset:0; background:#cbd5e1; border-radius:999px; transition:.25s; }
+  .tog-slider::before { position:absolute; content:''; left:3px; top:3px; width:20px; height:20px; background:white; border-radius:50%; transition:.25s; box-shadow:0 1px 3px rgba(0,0,0,.25); }
+  .tog input:checked + .tog-slider { background:#f43f5e; }
+  .tog input:checked + .tog-slider::before { transform:translateX(22px); }
+
+  .preset-btn { padding:8px 14px; font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; border-radius:10px; border:1.5px solid #e2e8f0; background:white; color:#334155; cursor:pointer; transition:all .15s; }
+  .preset-btn:hover { background:#f1f5f9; border-color:#cbd5e1; }
+  .preset-admin:hover  { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
+  .preset-normal:hover { background:#eff6ff; border-color:#bfdbfe; color:#1e3a8a; }
+  .preset-none:hover   { background:#f1f5f9; border-color:#cbd5e1; color:#475569; }
+
+  .user-row { padding:18px 22px; display:flex; align-items:center; gap:16px; border-bottom:1px solid #f1f5f9; transition:background .15s; }
+  .user-row:hover { background:#f8fafc; }
+  .user-row:last-child { border-bottom:none; }
 </style>
 </head>
 <body>
 
-<div class="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center sticky top-0 z-30 shadow-sm">
-  <div class="flex items-center gap-3">
+<!-- Header — back-left, title-center, brand-right (matches other module pages) -->
+<div class="bg-white border-b border-slate-200 px-6 py-4 grid grid-cols-3 items-center sticky top-0 z-30 shadow-sm">
+  <a href="operation_dashboard.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Back to Main Page</a>
+  <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm">User Access Setting</span>
+  <div class="justify-self-end flex items-center gap-2">
     <div class="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-black text-xs">AI</div>
-    <span class="font-black text-slate-800 uppercase tracking-widest text-sm">User Access</span>
-  </div>
-  <div class="flex items-center gap-3">
-    <a href="operation_dashboard.html" class="text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 px-4 py-2 rounded-full border border-slate-200 cursor-pointer no-underline">&#8592; Dashboard</a>
   </div>
 </div>
 
-<div id="loading" class="max-w-[1400px] mx-auto px-6 py-16 text-center">
-  <div class="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading user list…</div>
-</div>
+<div id="loading" class="max-w-[900px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading user list…</div>
 
-<div id="forbidden" class="max-w-[1400px] mx-auto px-6 py-16 hidden">
+<div id="forbidden" class="max-w-[900px] mx-auto px-6 py-16 hidden">
   <div class="card p-10 text-center">
     <div class="text-4xl mb-3">🔒</div>
     <h2 class="text-lg font-black text-slate-800 uppercase tracking-widest">Access Denied</h2>
     <p class="text-xs text-slate-500 mt-2">Only users with <strong>Manage Users</strong> permission can open this page.</p>
-    <a href="operation_dashboard.html" class="inline-block mt-6 text-[10px] font-bold text-emerald-700 uppercase tracking-widest bg-emerald-50 border border-emerald-200 rounded-full px-4 py-2 no-underline">Back to Dashboard</a>
+    <a href="operation_dashboard.html" class="inline-block mt-6 text-[10px] font-bold text-emerald-700 uppercase tracking-widest bg-emerald-50 border border-emerald-200 rounded-full px-4 py-2 no-underline">Back to Main Page</a>
   </div>
 </div>
 
-<div id="main" class="max-w-[1400px] mx-auto px-6 py-8 hidden space-y-6">
+<div id="main" class="max-w-[900px] mx-auto px-6 py-8 space-y-6 hidden">
 
-  <!-- Header / explainer -->
-  <div class="card p-6">
-    <h1 class="text-base font-black text-slate-800 uppercase tracking-widest mb-2">👥 User Access Control</h1>
-    <p class="text-xs text-slate-500 leading-relaxed">
-      Set per-module access for each user. <strong class="text-emerald-700">Admin</strong> = full edit + can review/lock tabs.
-      <strong class="text-blue-700">Normal</strong> = view + edit unreviewed data only. <strong class="text-slate-700">None</strong> = cannot open the module.
-      The <strong>Manage Users</strong> toggle lets that user open this page.
+  <!-- Intro -->
+  <div class="card p-6 space-y-4">
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">👥</span>
+      <h1 class="text-base font-black text-slate-800 uppercase tracking-widest">User Access Setting</h1>
+    </div>
+    <p class="text-[13px] text-slate-600 leading-relaxed">
+      Manage who can open which module of the AI System. Only staff who signed up through the AI System appear below; Salesweb customers are kept out of this list to keep it clean.
     </p>
+    <ul class="text-[12px] text-slate-700 leading-relaxed space-y-1.5 pl-4 list-disc marker:text-slate-300">
+      <li><strong>Edit Access</strong> on a row — open a panel to set each module's level and toggle <em>Manage Users</em>.</li>
+      <li><strong>+ Add User</strong> — pull a customer in from the Salesweb list and promote them to a system user.</li>
+      <li>Inside the panel, <strong>Move to customer</strong> sends them back out (their access is cleared).</li>
+    </ul>
   </div>
 
-  <!-- Search -->
-  <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
-    <input id="search" type="text" placeholder="Search by email or name…" class="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
+  <!-- Search + add -->
+  <div class="flex flex-col md:flex-row gap-3 items-stretch">
+    <input id="search" type="text" placeholder="🔎 Search system users by email or name…" class="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
+    <button id="add-user-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl shadow flex items-center justify-center gap-2 whitespace-nowrap">
+      <span class="text-lg leading-none">+</span> Add User
+    </button>
     <button id="reload-btn" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl border border-slate-200">Reload</button>
   </div>
 
-  <!-- Users table -->
-  <div class="card overflow-hidden">
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="bg-slate-50 border-b border-slate-200">
-          <tr class="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-            <th class="text-left px-5 py-3">User</th>
-            <th class="text-center px-3 py-3">Operation</th>
-            <th class="text-center px-3 py-3">Salesweb</th>
-            <th class="text-center px-3 py-3">Audit</th>
-            <th class="text-center px-3 py-3">Mobile</th>
-            <th class="text-center px-3 py-3">Manage&nbsp;Users</th>
-            <th class="text-right px-5 py-3">Action</th>
-          </tr>
-        </thead>
-        <tbody id="users-tbody" class="divide-y divide-slate-100"></tbody>
-      </table>
-    </div>
-  </div>
+  <!-- User list -->
+  <div id="users-list" class="card overflow-hidden"></div>
+
+  <p class="text-[11px] text-slate-500 text-center">
+    Customers who signed up through the Salesweb don't appear here. Use <strong>+ Add User</strong> to promote one.
+  </p>
 
 </div>
 
+<!-- Add-User modal: search customer list and promote -->
+<div id="add-modal-backdrop" class="fixed inset-0 z-[55] bg-slate-900/60 backdrop-blur-sm hidden"></div>
+<div id="add-modal" class="fixed z-[56] inset-x-4 top-20 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[560px] max-h-[80vh] flex flex-col bg-white rounded-3xl shadow-2xl border border-slate-200 hidden overflow-hidden">
+  <header class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+    <div>
+      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Add System User</div>
+      <h2 class="text-base font-black text-slate-800">Promote a customer to system staff</h2>
+    </div>
+    <button id="add-close" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-800 text-xl leading-none">×</button>
+  </header>
+  <div class="px-6 py-4 border-b border-slate-100">
+    <input id="add-search" type="text" placeholder="🔎 Search customers by email or name…" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
+  </div>
+  <div id="add-list" class="flex-1 overflow-y-auto"></div>
+</div>
+
+<!-- Drawer -->
+<div id="drawer-backdrop" class="drawer-backdrop"></div>
+<aside id="drawer" class="drawer" aria-hidden="true">
+  <header class="px-6 py-5 border-b border-slate-200 flex items-start justify-between gap-4">
+    <div class="flex items-center gap-3 min-w-0">
+      <div id="d-avatar" class="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-black text-sm shrink-0">??</div>
+      <div class="min-w-0">
+        <div id="d-name"  class="font-black text-slate-800 truncate">—</div>
+        <div id="d-email" class="text-[12px] text-slate-500 font-semibold truncate">—</div>
+      </div>
+    </div>
+    <button id="d-close" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center text-xl leading-none">×</button>
+  </header>
+
+  <div class="flex-1 overflow-y-auto">
+    <!-- Module access -->
+    <section class="px-6 py-5">
+      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Module Access</div>
+      <div class="space-y-3">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <div class="font-black text-slate-800 text-sm">Operation</div>
+            <div class="text-[11px] text-slate-500">Batch records, deliveries, stock</div>
+          </div>
+          <select id="d-mod-operation" class="lvl-select"></select>
+        </div>
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <div class="font-black text-slate-800 text-sm">Reports</div>
+            <div class="text-[11px] text-slate-500">Batch production summary, analytics</div>
+          </div>
+          <select id="d-mod-reports" class="lvl-select"></select>
+        </div>
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <div class="font-black text-slate-800 text-sm">Audit Trail</div>
+            <div class="text-[11px] text-slate-500">Who edited what — admins can clear logs</div>
+          </div>
+          <select id="d-mod-audit_trail" class="lvl-select"></select>
+        </div>
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <div class="font-black text-slate-800 text-sm">Salesweb</div>
+            <div class="text-[11px] text-slate-500">Customer-facing orders &amp; pricing</div>
+          </div>
+          <select id="d-mod-salesweb" class="lvl-select"></select>
+        </div>
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <div class="font-black text-slate-800 text-sm">Audit</div>
+            <div class="text-[11px] text-slate-500">Field height audits</div>
+          </div>
+          <select id="d-mod-audit" class="lvl-select"></select>
+        </div>
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <div class="font-black text-slate-800 text-sm">Mobile</div>
+            <div class="text-[11px] text-slate-500">Booking app for customers/drivers</div>
+          </div>
+          <select id="d-mod-mobile" class="lvl-select"></select>
+        </div>
+      </div>
+
+      <!-- Quick set-all presets — same words as the dropdown -->
+      <div class="mt-5 pt-4 border-t border-dashed border-slate-200">
+        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Quick Set — applies to all 4 modules</div>
+        <div class="flex flex-wrap gap-2">
+          <button class="preset-btn preset-admin"  data-preset="admin">Set All to Admin</button>
+          <button class="preset-btn preset-normal" data-preset="normal">Set All to Normal</button>
+          <button class="preset-btn preset-none"   data-preset="none">Set All to None</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Manage Users -->
+    <section class="px-6 py-5 border-t border-slate-200 bg-rose-50/40">
+      <div class="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-2">Manage Users</div>
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <div class="font-black text-slate-800 text-sm">Can edit other people's access</div>
+          <p class="text-[11px] text-slate-600 mt-1 leading-relaxed">
+            Lets this user open <em>this</em> page and change permissions for everyone.
+            <strong class="text-rose-700">Keep ON for owners and IT only.</strong>
+          </p>
+        </div>
+        <label class="tog mt-1">
+          <input id="d-manage-users" type="checkbox">
+          <span class="tog-slider"></span>
+        </label>
+      </div>
+    </section>
+  </div>
+
+  <footer class="px-6 py-4 border-t border-slate-200 flex justify-between items-center gap-3 bg-slate-50">
+    <button id="d-demote" class="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-rose-600 underline-offset-4 hover:underline">Move to customer</button>
+    <div class="flex gap-3">
+      <button id="d-cancel" class="px-5 py-3 rounded-xl text-slate-600 font-black text-[11px] uppercase tracking-widest hover:bg-slate-100">Cancel</button>
+      <button id="d-save"   class="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] uppercase tracking-widest shadow">Save Changes</button>
+    </div>
+  </footer>
+</aside>
+
 <!-- Toast -->
-<div id="toast" class="fixed bottom-6 right-6 hidden z-50 px-5 py-3 rounded-xl font-bold text-sm shadow-lg"></div>
+<div id="toast" class="fixed bottom-6 right-6 hidden z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg"></div>
 
 <script>
 const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
-const MODULES = ['operation', 'salesweb', 'audit', 'mobile'];
+const MODULES = ['operation', 'reports', 'audit_trail', 'salesweb', 'audit', 'mobile'];
+const LEVELS  = ['admin', 'normal', 'none'];
+const LEVEL_LABEL = { admin:'Admin', normal:'Normal', none:'None' };
 
-let allProfiles = []; // [{ id, email, full_name, permissions, _dirty }]
+let allProfiles = [];          // every profile, system + customer
+let editingUid  = null;
+let pending     = null;        // working copy of permissions while drawer is open
+
+function systemProfiles()   { return allProfiles.filter(p => (p.user_type || 'system') === 'system'); }
+function customerProfiles() { return allProfiles.filter(p => (p.user_type || 'system') === 'customer'); }
 
 function showToast(msg, kind) {
   const t = document.getElementById('toast');
   t.textContent = msg;
-  t.className = 'fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl font-bold text-sm shadow-lg ' +
+  t.className = 'fixed bottom-6 right-6 z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg ' +
     (kind === 'err'
       ? 'bg-red-50 text-red-700 border border-red-200'
       : 'bg-emerald-50 text-emerald-700 border border-emerald-200');
@@ -118,149 +260,284 @@ function showToast(msg, kind) {
 }
 
 function defaultPerms() {
-  return {
-    modules: { operation: 'none', salesweb: 'none', audit: 'none', mobile: 'none' },
-    manage_users: false
-  };
+  return { modules: { operation:'none', reports:'none', audit_trail:'none', salesweb:'none', audit:'none', mobile:'none' }, manage_users:false };
 }
 
 function normPerms(p) {
   const out = defaultPerms();
   if (!p || typeof p !== 'object') return out;
   if (p.modules) {
-    for (const k of MODULES) {
-      const v = p.modules[k];
-      if (v === 'admin' || v === 'normal' || v === 'none') out.modules[k] = v;
-    }
+    for (const k of MODULES) if (LEVELS.includes(p.modules[k])) out.modules[k] = p.modules[k];
   }
   out.manage_users = !!p.manage_users;
   return out;
 }
 
-function levelClass(level) {
-  if (level === 'admin')  return 'pill-admin on';
-  if (level === 'normal') return 'pill-normal on';
-  return 'pill-none on';
+function initials(p) {
+  const src = (p.full_name || p.email || '?').trim();
+  return src.split(/\s+/).map(s => s[0]).slice(0,2).join('').toUpperCase() || '?';
+}
+
+const MODULE_LABEL = {
+  operation: 'operation', reports: 'reports', audit_trail: 'audit trail',
+  salesweb: 'salesweb', audit: 'audit', mobile: 'mobile'
+};
+function summaryHtml(perms) {
+  const chips = MODULES
+    .filter(m => perms.modules[m] !== 'none')
+    .map(m => `<span class="chip chip-${perms.modules[m]}">${MODULE_LABEL[m] || m} · ${LEVEL_LABEL[perms.modules[m]]}</span>`)
+    .join(' ');
+  const noneChip = !chips ? '<span class="chip chip-none">No module access</span>' : '';
+  const manageChip = perms.manage_users ? '<span class="chip chip-manage">Manage Users</span>' : '';
+  return `<div class="flex flex-wrap gap-1.5">${chips}${noneChip}${manageChip}</div>`;
 }
 
 function rowHtml(p) {
-  const perms = p.permissions;
-  const id = `row-${p.id}`;
-  const cell = (mod) => {
-    const cur = perms.modules[mod];
-    return `
-      <td class="px-3 py-3 text-center">
-        <div class="inline-flex gap-1 bg-slate-50 rounded-full p-1 border border-slate-200">
-          ${['admin','normal','none'].map(level => `
-            <button class="pill-btn ${cur === level ? levelClass(level) : 'pill-' + level}"
-                    data-uid="${p.id}" data-mod="${mod}" data-level="${level}">
-              ${level === 'none' ? '—' : level}
-            </button>`).join('')}
-        </div>
-      </td>`;
-  };
-
   return `
-    <tr id="${id}" data-uid="${p.id}" class="${p._dirty ? 'row-changed' : ''}">
-      <td class="px-5 py-4">
-        <div class="font-black text-slate-800 text-sm">${p.full_name || '<span class="text-slate-400">(no name)</span>'}</div>
-        <div class="text-[11px] text-slate-500 font-semibold">${p.email || '—'}</div>
-      </td>
-      ${cell('operation')}
-      ${cell('salesweb')}
-      ${cell('audit')}
-      ${cell('mobile')}
-      <td class="px-3 py-3 text-center">
-        <label class="toggle">
-          <input type="checkbox" data-uid="${p.id}" data-toggle="manage_users" ${perms.manage_users ? 'checked' : ''}>
-          <span class="toggle-slider"></span>
-        </label>
-      </td>
-      <td class="px-5 py-3 text-right">
-        <button data-uid="${p.id}" data-action="save"
-                class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest px-4 py-2 rounded-lg shadow ${p._dirty ? '' : 'opacity-40 pointer-events-none'}">
-          Save
-        </button>
-      </td>
-    </tr>`;
+    <div class="user-row" data-uid="${p.id}">
+      <div class="w-11 h-11 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-black text-sm shrink-0">${initials(p)}</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-black text-slate-800 text-sm leading-tight truncate">${p.full_name || '<span class="text-slate-400">(no name)</span>'}</div>
+        <div class="text-[12px] text-slate-500 font-semibold truncate">${p.email || '—'}</div>
+        <div class="mt-2">${summaryHtml(p.permissions)}</div>
+      </div>
+      <button class="edit-btn shrink-0" data-action="edit" data-uid="${p.id}">
+        Edit Access
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>`;
 }
 
 function render() {
   const q = (document.getElementById('search').value || '').toLowerCase().trim();
-  const filtered = !q ? allProfiles
-    : allProfiles.filter(p =>
+  const pool = systemProfiles();
+  const filtered = !q ? pool
+    : pool.filter(p =>
         (p.email || '').toLowerCase().includes(q) ||
         (p.full_name || '').toLowerCase().includes(q));
-  const tbody = document.getElementById('users-tbody');
-  if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="text-center px-6 py-10 text-slate-400 text-sm">No users match.</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = filtered.map(rowHtml).join('');
+  const list = document.getElementById('users-list');
+  list.innerHTML = filtered.length
+    ? filtered.map(rowHtml).join('')
+    : `<div class="text-center text-slate-400 text-sm py-12">${pool.length ? 'No system users match your search.' : 'No system users yet — use “+ Add User” to promote a customer.'}</div>`;
 }
 
-function setLevel(uid, mod, level) {
+// ── Drawer ─────────────────────────────────────────────────────
+function rebuildDropdown(id, current) {
+  const sel = document.getElementById(id);
+  sel.innerHTML = LEVELS.map(l => `<option value="${l}">${LEVEL_LABEL[l]}</option>`).join('');
+  sel.value = current;
+  sel.className = 'lvl-select lvl-' + current;
+}
+
+function syncDropdownColor(sel) {
+  sel.className = 'lvl-select lvl-' + sel.value;
+}
+
+function openDrawer(uid) {
   const p = allProfiles.find(x => x.id === uid);
   if (!p) return;
-  if (p.permissions.modules[mod] === level) return;
-  p.permissions.modules[mod] = level;
-  p._dirty = true;
-  render();
+  editingUid = uid;
+  pending = JSON.parse(JSON.stringify(p.permissions));
+  document.getElementById('d-avatar').textContent = initials(p);
+  document.getElementById('d-name').textContent  = p.full_name || '(no name)';
+  document.getElementById('d-email').textContent = p.email || '—';
+  MODULES.forEach(m => rebuildDropdown('d-mod-' + m, pending.modules[m]));
+  document.getElementById('d-manage-users').checked = !!pending.manage_users;
+
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawer-backdrop').classList.add('open');
+  document.getElementById('drawer').setAttribute('aria-hidden', 'false');
 }
 
-function setManageUsers(uid, value) {
-  const p = allProfiles.find(x => x.id === uid);
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawer-backdrop').classList.remove('open');
+  document.getElementById('drawer').setAttribute('aria-hidden', 'true');
+  editingUid = null;
+  pending    = null;
+}
+
+function applyPresetToPending(level) {
+  if (!pending) return;
+  if (!LEVELS.includes(level)) return;
+  MODULES.forEach(m => {
+    pending.modules[m] = level;
+    const sel = document.getElementById('d-mod-' + m);
+    sel.value = level;
+    syncDropdownColor(sel);
+  });
+}
+
+async function saveDrawer() {
+  if (!editingUid || !pending) return;
+  const p = allProfiles.find(x => x.id === editingUid);
   if (!p) return;
-  if (!!p.permissions.manage_users === !!value) return;
-  p.permissions.manage_users = !!value;
-  p._dirty = true;
-  render();
-}
 
-async function saveRow(uid) {
-  const p = allProfiles.find(x => x.id === uid);
-  if (!p || !p._dirty) return;
+  // Read latest values from the form (in case of last-second changes).
+  MODULES.forEach(m => { pending.modules[m] = document.getElementById('d-mod-' + m).value; });
+  pending.manage_users = document.getElementById('d-manage-users').checked;
+
+  const saveBtn = document.getElementById('d-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+
   const { error } = await _supabase
     .from('shared_profiles')
-    .update({ permissions: p.permissions })
-    .eq('id', uid);
+    .update({ permissions: pending })
+    .eq('id', editingUid);
+
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Save Changes';
+
   if (error) {
     console.error(error);
     showToast('Save failed: ' + error.message, 'err');
     return;
   }
-  p._dirty = false;
+
+  p.permissions = JSON.parse(JSON.stringify(pending));
+  showToast('Saved. Changes apply on the user’s next refresh.');
   render();
-  showToast('Saved.');
+  closeDrawer();
 }
 
+async function setUserType(uid, newType, opts) {
+  const p = allProfiles.find(x => x.id === uid);
+  if (!p) return false;
+  const { error } = await _supabase
+    .from('shared_profiles')
+    .update({ user_type: newType })
+    .eq('id', uid);
+  if (error) {
+    console.error(error);
+    showToast((opts?.errorPrefix || 'Update failed') + ': ' + error.message, 'err');
+    return false;
+  }
+  p.user_type = newType;
+  return true;
+}
+
+async function demoteCurrentToCustomer() {
+  if (!editingUid) return;
+  const p = allProfiles.find(x => x.id === editingUid);
+  if (!p) return;
+  if (!confirm(`Move "${p.full_name || p.email}" to customer?\nThey will be removed from the system list. Their module access will also be cleared.`)) return;
+  // Clear access first so nothing lingers if they're promoted again later.
+  const cleared = {
+    modules: { operation:'none', reports:'none', audit_trail:'none', salesweb:'none', audit:'none', mobile:'none' },
+    manage_users: false
+  };
+  const { error: clearErr } = await _supabase
+    .from('shared_profiles')
+    .update({ permissions: cleared })
+    .eq('id', editingUid);
+  if (clearErr) { showToast('Clear permissions failed: ' + clearErr.message, 'err'); return; }
+  p.permissions = cleared;
+  const ok = await setUserType(editingUid, 'customer', { errorPrefix: 'Demote failed' });
+  if (!ok) return;
+  showToast('Moved to customer.');
+  render();
+  closeDrawer();
+}
+
+// ── Add-user modal ────────────────────────────────────────────
+function openAddModal() {
+  document.getElementById('add-modal-backdrop').classList.remove('hidden');
+  document.getElementById('add-modal').classList.remove('hidden');
+  document.getElementById('add-search').value = '';
+  renderCustomerList('');
+  setTimeout(() => document.getElementById('add-search').focus(), 50);
+}
+
+function closeAddModal() {
+  document.getElementById('add-modal-backdrop').classList.add('hidden');
+  document.getElementById('add-modal').classList.add('hidden');
+}
+
+function renderCustomerList(query) {
+  const q = (query || '').toLowerCase().trim();
+  const pool = customerProfiles();
+  const filtered = !q ? pool
+    : pool.filter(p =>
+        (p.email || '').toLowerCase().includes(q) ||
+        (p.full_name || '').toLowerCase().includes(q));
+  const el = document.getElementById('add-list');
+  if (!pool.length) {
+    el.innerHTML = `<div class="px-6 py-10 text-center text-slate-400 text-sm">No customers in the database yet.</div>`;
+    return;
+  }
+  if (!filtered.length) {
+    el.innerHTML = `<div class="px-6 py-10 text-center text-slate-400 text-sm">No customer matches "${q}".</div>`;
+    return;
+  }
+  el.innerHTML = filtered.map(p => `
+    <div class="px-5 py-3 border-b border-slate-100 flex items-center gap-3 hover:bg-slate-50 last:border-b-0">
+      <div class="w-9 h-9 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 text-white flex items-center justify-center font-black text-xs shrink-0">${initials(p)}</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-black text-slate-800 text-sm truncate">${p.full_name || '<span class="text-slate-400">(no name)</span>'}</div>
+        <div class="text-[12px] text-slate-500 font-semibold truncate">${p.email || '—'}</div>
+      </div>
+      <button data-action="promote" data-uid="${p.id}" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-lg shrink-0">Add</button>
+    </div>
+  `).join('');
+}
+
+async function promoteCustomer(uid) {
+  const p = allProfiles.find(x => x.id === uid);
+  if (!p) return;
+  const ok = await setUserType(uid, 'system', { errorPrefix: 'Promote failed' });
+  if (!ok) return;
+  showToast(`${p.full_name || p.email} added. Edit their access now.`);
+  closeAddModal();
+  render();
+  // Open the access drawer immediately so the admin can grant modules.
+  openDrawer(uid);
+}
+
+// ── Events ─────────────────────────────────────────────────────
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('button');
-  if (!t) return;
-  if (t.dataset.action === 'save') { saveRow(t.dataset.uid); return; }
-  if (t.dataset.mod && t.dataset.level) { setLevel(t.dataset.uid, t.dataset.mod, t.dataset.level); return; }
+  const editBtn = e.target.closest('[data-action="edit"]');
+  if (editBtn) { openDrawer(editBtn.dataset.uid); return; }
+
+  const preset = e.target.closest('[data-preset]');
+  if (preset) { applyPresetToPending(preset.dataset.preset); return; }
+
+  const promote = e.target.closest('[data-action="promote"]');
+  if (promote) { promoteCustomer(promote.dataset.uid); return; }
 });
 
 document.addEventListener('change', (e) => {
-  const t = e.target;
-  if (t.dataset && t.dataset.toggle === 'manage_users') {
-    setManageUsers(t.dataset.uid, t.checked);
+  if (e.target.matches('select[id^="d-mod-"]')) syncDropdownColor(e.target);
+});
+
+document.getElementById('d-close' ).addEventListener('click', closeDrawer);
+document.getElementById('d-cancel').addEventListener('click', closeDrawer);
+document.getElementById('d-save'  ).addEventListener('click', saveDrawer);
+document.getElementById('d-demote').addEventListener('click', demoteCurrentToCustomer);
+document.getElementById('drawer-backdrop').addEventListener('click', closeDrawer);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (!document.getElementById('add-modal').classList.contains('hidden')) closeAddModal();
+    else closeDrawer();
   }
 });
 
 document.getElementById('search').addEventListener('input', render);
 document.getElementById('reload-btn').addEventListener('click', () => bootstrap());
 
+document.getElementById('add-user-btn'      ).addEventListener('click', openAddModal);
+document.getElementById('add-close'         ).addEventListener('click', closeAddModal);
+document.getElementById('add-modal-backdrop').addEventListener('click', closeAddModal);
+document.getElementById('add-search'        ).addEventListener('input', (e) => renderCustomerList(e.target.value));
+
+// ── Bootstrap ─────────────────────────────────────────────────
 async function bootstrap() {
   document.getElementById('loading').classList.remove('hidden');
   document.getElementById('main').classList.add('hidden');
   document.getElementById('forbidden').classList.add('hidden');
 
   await MJMAccess.load(_supabase);
-  if (!MJMAccess.user()) {
-    window.location.href = 'operation_dashboard.html';
-    return;
-  }
+  if (!MJMAccess.user()) { window.location.href = 'operation_dashboard.html'; return; }
   if (!MJMAccess.canManageUsers()) {
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('forbidden').classList.remove('hidden');
@@ -269,7 +546,7 @@ async function bootstrap() {
 
   const { data, error } = await _supabase
     .from('shared_profiles')
-    .select('id, email, full_name, permissions')
+    .select('id, email, full_name, permissions, user_type')
     .order('email', { ascending: true });
 
   if (error) {
@@ -283,7 +560,7 @@ async function bootstrap() {
     email: p.email,
     full_name: p.full_name,
     permissions: normPerms(p.permissions),
-    _dirty: false
+    user_type: (p.user_type === 'customer' ? 'customer' : 'system')
   }));
 
   document.getElementById('loading').classList.add('hidden');

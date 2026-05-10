@@ -29,10 +29,16 @@
      }
    ================================================================ */
 (function (global) {
+  // Default skeleton — used when nothing is loaded yet. The full set of
+  // active modules is sourced from the data itself in normalize() so
+  // adding a new module (e.g. reports, audit_trail) doesn't require a
+  // helper redeploy.
   const DEFAULT_PERMS = {
-    modules: { operation: 'none', salesweb: 'none', audit: 'none', mobile: 'none' },
+    modules: { operation: 'none', reports: 'none', audit_trail: 'none', salesweb: 'none', audit: 'none', mobile: 'none' },
     manage_users: false
   };
+
+  const VALID_LEVELS = new Set(['admin', 'normal', 'none']);
 
   const state = {
     user: null,        // { id, email, full_name }
@@ -40,12 +46,13 @@
   };
 
   function normalize(perms) {
-    if (!perms || typeof perms !== 'object') return JSON.parse(JSON.stringify(DEFAULT_PERMS));
     const out = JSON.parse(JSON.stringify(DEFAULT_PERMS));
+    if (!perms || typeof perms !== 'object') return out;
     if (perms.modules && typeof perms.modules === 'object') {
-      for (const k of Object.keys(out.modules)) {
-        const v = perms.modules[k];
-        if (v === 'admin' || v === 'normal' || v === 'none') out.modules[k] = v;
+      // Copy ANY module key from the data — not just the defaults — so
+      // newly-added modules immediately work without updating this file.
+      for (const [k, v] of Object.entries(perms.modules)) {
+        if (VALID_LEVELS.has(v)) out.modules[k] = v;
       }
     }
     out.manage_users = !!perms.manage_users;

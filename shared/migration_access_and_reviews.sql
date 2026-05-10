@@ -46,8 +46,25 @@ UPDATE shared_profiles
  WHERE permissions IS NULL;
 
 -- Allow each user to read their own permissions (RLS-friendly).
--- Admin-managed updates go through the User Access page using the
--- service role or via a policy that checks manage_users on the actor.
+-- Admin-managed updates go through the User Access page; the
+-- manage_users check is wrapped in a SECURITY DEFINER helper so the
+-- policy USING clause doesn't recurse against shared_profiles itself.
+CREATE OR REPLACE FUNCTION public.current_user_can_manage_users()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT COALESCE((permissions->>'manage_users')::boolean, false)
+    FROM public.shared_profiles
+   WHERE id = auth.uid()
+$$;
+
+GRANT EXECUTE ON FUNCTION public.current_user_can_manage_users() TO authenticated;
+
+ALTER TABLE public.shared_profiles ENABLE ROW LEVEL SECURITY;
+
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -69,13 +86,7 @@ BEGIN
   ) THEN
     CREATE POLICY "Manage users can read all profiles" ON shared_profiles
       FOR SELECT TO authenticated
-      USING (
-        EXISTS (
-          SELECT 1 FROM shared_profiles me
-           WHERE me.id = auth.uid()
-             AND COALESCE((me.permissions->>'manage_users')::boolean, false) = true
-        )
-      );
+      USING (public.current_user_can_manage_users());
   END IF;
 
   IF NOT EXISTS (
@@ -86,13 +97,8 @@ BEGIN
   ) THEN
     CREATE POLICY "Manage users can update permissions" ON shared_profiles
       FOR UPDATE TO authenticated
-      USING (
-        EXISTS (
-          SELECT 1 FROM shared_profiles me
-           WHERE me.id = auth.uid()
-             AND COALESCE((me.permissions->>'manage_users')::boolean, false) = true
-        )
-      );
+      USING (public.current_user_can_manage_users())
+      WITH CHECK (public.current_user_can_manage_users());
   END IF;
 END $$;
 
