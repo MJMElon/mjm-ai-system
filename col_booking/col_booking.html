@@ -304,21 +304,30 @@ async function loadMonth(){
 window.addEventListener('DOMContentLoaded',function(){loadMonth().then(function(){renderMonth();});loadWeather();});
 
 // ═══════════════ SEARCH ═══════════════
+// Order-number-exact lookup via SECURITY DEFINER RPC. Wildcard search was
+// removed — it leaked customer PII enumeration + PostgREST filter injection.
+function _bkEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 async function searchMyBookings(){
-  var q=document.getElementById('search-input').value.trim();
-  if(q.length<2){showToast('Please enter at least 2 characters');return;}
+  var raw=document.getElementById('search-input').value;
+  var q=String(raw||'').replace(/[%,*'"\\<>]/g,'').trim();
+  if(q.length<4){showToast('Please enter your full order number (at least 4 characters)');return;}
+
+  var rpc=await _supabase.rpc('find_my_bookings',{_order_number:q,_customer_name:null});
+  if(rpc.error){showToast('Lookup failed: '+rpc.error.message);return;}
+  var data=rpc.data||[];
   var todayStr=fmtDate(new Date());
-  var {data}=await _supabase.from('shared_collection_bookings').select('booking_date,start_time,end_time,customer_name,order_number,collection_qty,status').or('order_number.ilike.%'+q+'%,customer_name.ilike.%'+q+'%').gte('booking_date',todayStr).order('booking_date',{ascending:true}).order('start_time',{ascending:true}).limit(20);
+  data=data.filter(function(b){return(b.booking_date||'')>=todayStr;});
+
   var el=document.getElementById('my-bk-content');
-  if(!data||!data.length){
-    el.innerHTML='<div class="text-center py-8"><div class="text-3xl mb-2">📋</div><div class="text-[11px] font-black text-slate-300 uppercase tracking-widest">No bookings found</div></div>';
+  if(!data.length){
+    el.innerHTML='<div class="text-center py-8"><div class="text-3xl mb-2">📋</div><div class="text-[11px] font-black text-slate-300 uppercase tracking-widest">No bookings found for that order number</div></div>';
   } else {
     document.getElementById('my-bk-title').textContent=data[0].customer_name||q;
     var html='<div class="rounded-2xl border border-slate-200 overflow-hidden overflow-x-auto"><table class="my-bk-table"><thead><tr><th>Date</th><th>Time</th><th>Quantity</th><th>Duration</th><th>Status</th></tr></thead><tbody>';
     data.forEach(function(b){
       var dt=b.booking_date?new Date(b.booking_date+'T00:00:00').toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric',weekday:'short'}):'—';
       var sH=parseInt((b.start_time||'08').split(':')[0]),eH=parseInt((b.end_time||'09').split(':')[0]);
-      html+='<tr><td>'+dt+'</td><td>'+fmtHr(sH)+' – '+fmtHr(eH)+'</td><td class="font-black text-emerald-700">'+(b.collection_qty||0).toLocaleString()+'</td><td>'+(eH-sH)+' hr</td><td><span class="'+(b.status==='cancelled'?'status-cancelled':b.status==='pending'?'status-pending':'status-booked')+'">'+(b.status==='cancelled'?'Cancelled':b.status==='pending'?'Pending':'Confirmed Appointment')+'</span></td></tr>';
+      html+='<tr><td>'+_bkEsc(dt)+'</td><td>'+_bkEsc(fmtHr(sH))+' – '+_bkEsc(fmtHr(eH))+'</td><td class="font-black text-emerald-700">'+(parseInt(b.collection_qty)||0).toLocaleString()+'</td><td>'+(eH-sH)+' hr</td><td><span class="'+(b.status==='cancelled'?'status-cancelled':b.status==='pending'?'status-pending':'status-booked')+'">'+(b.status==='cancelled'?'Cancelled':b.status==='pending'?'Pending':'Confirmed Appointment')+'</span></td></tr>';
     });
     html+='</tbody></table></div>';el.innerHTML=html;
   }
@@ -475,9 +484,12 @@ function validateIdentity(){
     checkReady();
 
     identityTimer=setTimeout(async function(){
+      // Sanitise — PostgREST .or() interpolates raw, so a `,` would let the
+      // user inject extra filter clauses against other columns.
+      var safeVal=String(val||'').replace(/[%,*'"\\<>]/g,'');
       var {data}=await _supabase.from('shared_al_orders')
         .select('al_number,customer_name,order_number')
-        .or('order_number.ilike.%'+val+'%,al_number.ilike.%'+val+'%')
+        .or('order_number.ilike.%'+safeVal+'%,al_number.ilike.%'+safeVal+'%')
         .limit(1);
 
       identityChecking=false;

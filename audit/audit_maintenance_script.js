@@ -13,7 +13,23 @@ let formTaskId=null;
 let formState={result:null,remarks:'',photo:null};
 let toastTimer=null;
 
-function isAdmin(){try{const u=JSON.parse(localStorage.getItem('mjm_user')||'{}');const role=(u.role||'').toLowerCase();return role==='admin'||role==='administrator';}catch(e){return false;}}
+/* SECURITY (2026-05): the audit module uses an anon publishable key, so
+   Supabase RLS cannot identify the current user. The localStorage role
+   check below is therefore TRIVIALLY BYPASSABLE in DevTools. The real
+   long-term fix is to migrate this module to authenticated supabase-js +
+   MJMAccess. Until then we (a) prefer MJMAccess if it has been loaded
+   into the page, and (b) fall back to the legacy localStorage flag.
+   The DB-side RLS policies on audit_* tables are the only server-side
+   line of defence and now require an authenticated audit-module user, so
+   DELETE through the publishable key is blocked at the database. */
+function isAdmin(){
+  try{
+    if (typeof MJMAccess !== 'undefined' && MJMAccess.isAdminOf) return MJMAccess.isAdminOf('audit');
+    const u = JSON.parse(localStorage.getItem('mjm_user') || '{}');
+    const role = (u.role || '').toLowerCase();
+    return role === 'admin' || role === 'administrator';
+  }catch(e){return false;}
+}
 
 /* --- HELPERS --- */
 function pad(n){return String(n).padStart(3,'0');}
