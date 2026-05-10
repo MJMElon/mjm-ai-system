@@ -33,13 +33,13 @@
 </head>
 <body>
 
-<!-- Header -->
-<div class="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center sticky top-0 z-30 shadow-sm">
-  <div class="flex items-center gap-3">
+<!-- Header — back-left, title-center, brand-right (matches other module pages) -->
+<div class="bg-white border-b border-slate-200 px-6 py-4 grid grid-cols-3 items-center sticky top-0 z-30 shadow-sm">
+  <a href="operation_dashboard.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Back to Main Page</a>
+  <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm">Audit Trail</span>
+  <div class="justify-self-end flex items-center gap-2">
     <div class="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-black text-xs">AI</div>
-    <span class="font-black text-slate-800 uppercase tracking-widest text-sm">Audit Trail</span>
   </div>
-  <a href="operation_dashboard.html" class="text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 px-4 py-2 rounded-full border border-slate-200 no-underline">&#8592; Back to Main Page</a>
 </div>
 
 <div id="loading"   class="max-w-[1200px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading audit trail…</div>
