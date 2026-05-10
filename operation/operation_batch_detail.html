@@ -1271,6 +1271,10 @@
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpYnFqenRvem9rb2hxbWhxcXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQzNjIsImV4cCI6MjA4OTgxMDM2Mn0.J7qJUZhWXYf5b9oey4wXJkjdi66jomEMw_NeV9NWF7M';
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+        // XSS-safe escape — apply to every DB-sourced URL or string before
+        // splicing into HTML attributes that we hand to document.write etc.
+        function _escAttr(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+
         const params = new URLSearchParams(window.location.search);
         const isNewBatch = (params.get('type') === 'new');
         const batchIdParam = params.get('id');
@@ -2094,7 +2098,7 @@
         function viewMap(rowId) {
             if(rowMaps[rowId]) {
                 const win = window.open();
-                win.document.write(`<img src="${rowMaps[rowId]}" style="max-width:100%;height:auto;display:block;margin:auto;">`);
+                win.document.write(`<img src="${_escAttr(rowMaps[rowId])}" style="max-width:100%;height:auto;display:block;margin:auto;">`);
             }
         }
 
@@ -2137,7 +2141,7 @@
         function viewT3EditMap(idx) {
             if (t3EditMaps[idx]) {
                 const win = window.open();
-                win.document.write(`<img src="${t3EditMaps[idx]}" style="max-width:100%;height:auto;display:block;margin:auto;">`);
+                win.document.write(`<img src="${_escAttr(t3EditMaps[idx])}" style="max-width:100%;height:auto;display:block;margin:auto;">`);
             }
         }
 
@@ -2905,7 +2909,7 @@
 
         function viewAuditPhoto(type) {
             const url = (type === 'ops') ? opsPhotoBase64 : auditPhotoBase64;
-            if(url) { const win = window.open(); win.document.write(`<img src="${url}" style="max-width:100%;height:auto;">`); }
+            if(url) { const win = window.open(); win.document.write(`<img src="${_escAttr(url)}" style="max-width:100%;height:auto;">`); }
         }
 
         // ── Photo persistence helpers ──
@@ -3968,7 +3972,7 @@
         function viewT5Map(rowId) {
             if (t5_plotMaps[rowId]) {
                 const win = window.open();
-                win.document.write(`<img src="${t5_plotMaps[rowId]}" style="max-width:100%;height:auto;display:block;margin:auto;">`);
+                win.document.write(`<img src="${_escAttr(t5_plotMaps[rowId])}" style="max-width:100%;height:auto;display:block;margin:auto;">`);
             }
         }
 
@@ -4322,9 +4326,9 @@
             if (!doc) return;
             const win = window.open();
             if (doc.isImg) {
-                win.document.write(`<img src="${doc.base64}" style="max-width:100%;height:auto;display:block;margin:auto;">`);
+                win.document.write(`<img src="${_escAttr(doc.base64)}" style="max-width:100%;height:auto;display:block;margin:auto;">`);
             } else {
-                win.document.write(`<iframe src="${doc.base64}" style="width:100%;height:100vh;border:none;"></iframe>`);
+                win.document.write(`<iframe src="${_escAttr(doc.base64)}" style="width:100%;height:100vh;border:none;"></iframe>`);
             }
         }
 

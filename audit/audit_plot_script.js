@@ -19,7 +19,16 @@ let editMode=false, editId=null, detailId=null, deleteTarget=null;
 let formState={nursery:'PN',ulat:null,tikus:null,bintik:null,warna:null,photo1:null,photo2:null};
 let toastTimer=null;
 
-function isAdmin(){try{const u=JSON.parse(localStorage.getItem('mjm_user')||'{}');const role=(u.role||'').toLowerCase();return role==='admin'||role==='administrator';}catch(e){return false;}}
+/* SECURITY (2026-05): see audit_maintenance_script.js — the localStorage
+   check is bypassable. Server-side RLS on audit_plot_audits is the real gate. */
+function isAdmin(){
+  try{
+    if (typeof MJMAccess !== 'undefined' && MJMAccess.isAdminOf) return MJMAccess.isAdminOf('audit');
+    const u = JSON.parse(localStorage.getItem('mjm_user') || '{}');
+    const role = (u.role || '').toLowerCase();
+    return role === 'admin' || role === 'administrator';
+  }catch(e){return false;}
+}
 
 function pad(n){return String(n).padStart(3,'0');}
 function todayISO(){return new Date().toISOString().split('T')[0];}

@@ -18,7 +18,16 @@ let formState={nursery:'PN',s1:'',s2:'',s3:'',p1:null,p2:null,p3:null};
 let toastTimer=null;
 let batchOptions=[]; // master list from operation_batches; auditors must pick one
 
-function isAdmin(){try{const u=JSON.parse(localStorage.getItem('mjm_user')||'{}');const role=(u.role||'').toLowerCase();return role==='admin'||role==='administrator';}catch(e){return false;}}
+/* SECURITY (2026-05): see audit_maintenance_script.js — the localStorage
+   check is bypassable. Server-side RLS on audit_height_records is the real gate. */
+function isAdmin(){
+  try{
+    if (typeof MJMAccess !== 'undefined' && MJMAccess.isAdminOf) return MJMAccess.isAdminOf('audit');
+    const u = JSON.parse(localStorage.getItem('mjm_user') || '{}');
+    const role = (u.role || '').toLowerCase();
+    return role === 'admin' || role === 'administrator';
+  }catch(e){return false;}
+}
 
 /* --- HELPERS --- */
 function pad(n){return String(n).padStart(3,'0');}

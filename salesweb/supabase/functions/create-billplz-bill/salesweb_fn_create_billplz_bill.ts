@@ -27,7 +27,7 @@ serve(async (req) => {
     if (!BILLPLZ_API_KEY || !BILLPLZ_COLLECTION_ID) {
       return new Response(
         JSON.stringify({ error: 'Billplz not configured. API_KEY=' + (BILLPLZ_API_KEY ? 'set' : 'missing') + ', COLLECTION=' + (BILLPLZ_COLLECTION_ID ? 'set' : 'missing') }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
@@ -36,7 +36,7 @@ serve(async (req) => {
     if (!order_id || !amount || !email || !name) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields: order_id=' + !!order_id + ', amount=' + !!amount + ', email=' + !!email + ', name=' + !!name }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
@@ -89,7 +89,7 @@ serve(async (req) => {
       console.error('Billplz API error:', JSON.stringify(billData))
       return new Response(
         JSON.stringify({ error: billData.error?.message || billData.error || JSON.stringify(billData) }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
@@ -117,7 +117,7 @@ serve(async (req) => {
     console.error('Edge function error:', err)
     return new Response(
       JSON.stringify({ error: err.message }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })

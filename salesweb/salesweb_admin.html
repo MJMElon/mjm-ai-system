@@ -550,16 +550,16 @@ var SB_URL='https://kibqjztozokohqmhqqqf.supabase.co';
 var SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpYnFqenRvem9rb2hxbWhxcXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQzNjIsImV4cCI6MjA4OTgxMDM2Mn0.J7qJUZhWXYf5b9oey4wXJkjdi66jomEMw_NeV9NWF7M';
 var sb=supabase.createClient(SB_URL,SB_KEY);
 
-// Auth
+// Auth — admin role MUST be checked against the DB on every load.
+// The previous code allowed sessionStorage.mjm_portal_entry to skip the
+// check, which any visitor could set in DevTools to enter the admin page
+// (the admin UI then ran with whatever the session's RLS allowed).
 async function checkAdmin(){
   var{data:{session}}=await sb.auth.getSession();
   if(!session){window.location.href='salesweb_auth.html';return;}
-  // If coming from main portal, trust the session and skip role redirect
-  const fromPortal = sessionStorage.getItem('mjm_portal_entry');
-  if(!fromPortal){
-    var{data:profile}=await sb.from('shared_profiles').select('role').eq('id',session.user.id).single();
-    if(!profile||profile.role!=='admin'){window.location.href='salesweb_storefront.html';return;}
-  }
+  var{data:profile}=await sb.from('shared_profiles').select('role').eq('id',session.user.id).single();
+  if(!profile||profile.role!=='admin'){window.location.href='salesweb_storefront.html';return;}
+  // Drop any leftover portal-entry flag — it's no longer trusted.
   sessionStorage.removeItem('mjm_portal_entry');
   document.getElementById('auth-loading').style.display='none';
   document.getElementById('app').classList.add('show');
