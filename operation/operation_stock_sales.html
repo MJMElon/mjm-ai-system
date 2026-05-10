@@ -13,9 +13,253 @@
 
         .dash-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
         .metric-card { border-radius: 16px; border: 1px solid #e2e8f0; background: white; transition: all .2s; }
+
+        /* Compact segmented switch */
+        .combo-switch{display:grid;grid-template-columns:1fr 1fr;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:12px;padding:4px;gap:4px;}
+        .combo-switch-btn{padding:10px 12px;border-radius:9px;border:none;background:transparent;color:#64748b;cursor:pointer;text-align:center;transition:all .25s ease;display:flex;flex-direction:column;align-items:center;gap:2px;}
+        .combo-switch-btn .csw-title{font-weight:900;font-size:11px;text-transform:uppercase;letter-spacing:.1em;}
+        .combo-switch-btn .csw-sub{font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;}
+        .combo-switch-btn:hover:not(.active){background:rgba(255,255,255,.6);color:#1e293b;}
+        .combo-switch-btn.active{background:#ffffff;color:#065f46;box-shadow:0 4px 10px -3px rgba(16,185,129,.35),0 1px 0 rgba(255,255,255,.6) inset;}
+        .combo-switch-btn.active .csw-sub{color:#10b981;}
+        .combo-switch-btn.active.verified{color:#92400e;box-shadow:0 4px 10px -3px rgba(245,158,11,.35),0 1px 0 rgba(255,255,255,.6) inset;}
+        .combo-switch-btn.active.verified .csw-sub{color:#d97706;}
+
+        /* Gearing slider */
+        .gear-slider{-webkit-appearance:none;width:100%;height:5px;border-radius:3px;background:linear-gradient(90deg,#10b981 0%,#f59e0b 50%,#ef4444 100%);outline:none;cursor:pointer;}
+        .gear-slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:white;border:2px solid #1e293b;box-shadow:0 2px 6px rgba(0,0,0,.2);cursor:grab;}
+
+        /* To-do tabs (compact) */
+        .todo-tab{padding:8px 14px;font-weight:900;font-size:10px;text-transform:uppercase;letter-spacing:.08em;border-radius:10px;transition:all .15s;color:#64748b;background:transparent;border:1.5px solid transparent;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;}
+        .todo-tab:hover:not(.active){background:#f8fafc;color:#1e293b;}
+        .todo-tab.active.unpaid{background:#fef2f2;color:#b91c1c;border-color:#fca5a5;}
+        .todo-tab.active.credit{background:#eff6ff;color:#1d4ed8;border-color:#93c5fd;}
+        .todo-tab .tab-count{background:white;border:1px solid currentColor;border-radius:999px;padding:1px 6px;font-size:10px;font-weight:900;}
+
+        /* Notebook-style to-do list */
+        .notebook{background:repeating-linear-gradient(180deg,#fffbeb 0 28px,#fef3c7 28px 29px);border:1px solid #fde68a;border-radius:10px;box-shadow:inset 3px 0 0 #f59e0b,0 1px 4px rgba(0,0,0,.04);}
+        .notebook-row{display:flex;flex-direction:column;gap:2px;padding:6px 10px 6px 14px;border-bottom:1px dashed #fde68a;font-size:11px;}
+        .notebook-row:last-child{border-bottom:none;}
+        .notebook-row:hover{background:rgba(255,255,255,.5);}
+        .notebook-row .nb-line1{display:flex;justify-content:space-between;align-items:center;gap:6px;}
+        .notebook-row .nb-line2{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:10px;color:#a16207;}
+        .notebook-row .note-id{font-family:'Courier New',monospace;font-weight:900;color:#92400e;}
+        .notebook-row .note-name{font-weight:900;color:#451a03;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .notebook-row .note-amt{font-weight:900;color:#b91c1c;font-variant-numeric:tabular-nums;white-space:nowrap;}
+        .notebook-row.credit .note-amt{color:#1d4ed8;}
+
+        /* Maturity month tabs */
+        .month-tab{padding:8px 14px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1.5px solid transparent;background:transparent;color:#64748b;cursor:pointer;white-space:nowrap;transition:all .15s;}
+        .month-tab:hover:not(.active){background:#f1f5f9;}
+        .month-tab.active{background:#ecfdf5;color:#065f46;border-color:#10b981;}
+        .month-tab.is-current{font-weight:900;}
+
+        /* Maturity table */
+        .mat-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;}
+        .mat-table thead th{background:#f1f5f9;color:#334155;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;padding:11px 10px;text-align:left;border-bottom:2px solid #cbd5e1;position:sticky;top:0;z-index:1;}
+        .mat-table tbody td{padding:11px 10px;border-bottom:1px solid #eef2f6;color:#1e293b;font-weight:600;vertical-align:middle;}
+        .mat-table tbody tr{transition:background .12s;}
+        .mat-table tbody tr:nth-child(even){background:#fbfcfe;}
+        .mat-table tbody tr:hover{background:#eff6ff;}
+        .mat-table .num{text-align:right;font-variant-numeric:tabular-nums;font-weight:900;}
+        .mat-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid #e2e8f0;background:linear-gradient(180deg,#f8fafc,#ffffff);border-top-left-radius:16px;border-top-right-radius:16px;flex-wrap:wrap;}
+        .mat-card-title{display:flex;align-items:center;gap:10px;}
+        .mat-card-title-icon{width:30px;height:30px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:white;display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 4px 12px rgba(16,185,129,.30);}
+        .mat-card-title-text{font-size:12px;font-weight:900;color:#0f172a;text-transform:uppercase;letter-spacing:.12em;}
+        .mat-card-title-sub{font-size:9px;font-weight:700;color:#64748b;letter-spacing:.06em;margin-top:1px;}
+
+        /* ── Column-group headers (3 logical sections) ───────────────────── */
+        .mat-table thead .mat-group-row th{padding:6px 10px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;text-align:center;border-bottom:1px solid #e2e8f0;}
+        .mat-group-prod{background:#eff6ff;color:#1d4ed8;border-right:2px solid #cbd5e1;}
+        .mat-group-plot{background:#fef9c3;color:#854d0e;border-right:2px solid #cbd5e1;}
+        .mat-group-alloc{background:#ecfdf5;color:#065f46;}
+        /* Visible vertical separators between the three sections */
+        .mat-table thead th.mat-sep-r,
+        .mat-table tbody td.mat-sep-r,
+        .mat-table tfoot td.mat-sep-r{border-right:2px solid #cbd5e1;}
+        /* Subtle column-group tints in the body to reinforce sections */
+        .mat-table tbody td.col-prod {background:rgba(239,246,255,.4);}
+        .mat-table tbody td.col-plot {background:rgba(254,249,195,.45);}
+        .mat-table tbody td.col-alloc{background:rgba(236,253,245,.45);}
+        .mat-table tbody tr:hover td.col-prod {background:rgba(219,234,254,.55);}
+        .mat-table tbody tr:hover td.col-plot {background:rgba(254,240,138,.55);}
+        .mat-table tbody tr:hover td.col-alloc{background:rgba(187,247,208,.55);}
+
+        /* "No Status" pill for plots that haven't been opened yet */
+        .plot-status-empty{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;background:#f1f5f9;color:#64748b;border:1px dashed #cbd5e1;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;}
+        .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1px solid;}
+        .pill-open{background:#dcfce7;color:#15803d;border-color:#86efac;}
+        .pill-sisa{background:#fef3c7;color:#a16207;border-color:#fcd34d;}
+        .pill-finished{background:#fee2e2;color:#b91c1c;border-color:#fca5a5;}
+        .premium-toggle{appearance:none;width:34px;height:18px;border-radius:999px;background:#cbd5e1;position:relative;cursor:pointer;transition:all .2s;outline:none;border:none;}
+        .premium-toggle::before{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:white;transition:all .2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+        .premium-toggle:checked{background:#a855f7;}
+        .premium-toggle:checked::before{left:18px;}
+
+        .scroll-x-fade{overflow-x:auto;scrollbar-width:thin;}
+        .scroll-x-fade::-webkit-scrollbar{height:6px;}
+        .scroll-x-fade::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
+
+        /* Customer order grid */
+        .cust-table{width:100%;border-collapse:separate;border-spacing:0;font-size:11px;}
+        .cust-table thead th{background:#f8fafc;color:#475569;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;padding:8px 6px;text-align:center;border-bottom:2px solid #e2e8f0;white-space:nowrap;}
+        .cust-table thead th.h-cust{text-align:left;background:#eff6ff;color:#1e3a8a;}
+        .cust-table thead th.h-mo{background:#f1f5f9;}
+        .cust-table thead th.h-mo.is-now{background:#ecfdf5;color:#065f46;}
+        .cust-table thead th.h-tot{background:#fef9c3;color:#854d0e;}
+        .cust-table tbody td{padding:7px 6px;border-bottom:1px solid #f1f5f9;color:#1e293b;font-weight:600;text-align:center;font-variant-numeric:tabular-nums;}
+        .cust-table tbody td.t-cust{text-align:left;font-weight:900;color:#1e3a8a;}
+        .cust-table tbody td.t-cust .t-sub{font-weight:600;color:#64748b;font-size:10px;font-family:'Courier New',monospace;}
+        .cust-table tbody td.t-mo.has-qty{background:#dbeafe;color:#1d4ed8;font-weight:900;}
+        .cust-table tbody td.t-mo.is-now{background:#ecfdf5;color:#065f46;}
+        .cust-table tbody td.t-mo.has-booked{background:#fef3c7;color:#a16207;font-weight:900;border:1px dashed #fcd34d;}
+        .cust-table tbody td.t-mo .booked-tag{display:block;font-size:8px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:#a16207;margin-top:1px;}
+        .cust-table tbody td.t-tot{background:#fefce8;color:#854d0e;font-weight:900;}
+        .cust-table tbody tr:hover{background:#fafbff;}
+        .cust-table tbody tr:hover td.t-mo.has-qty{background:#bfdbfe;}
+        .cust-table tbody tr:hover td.t-mo.has-booked{background:#fde68a;}
+        .pill-status{display:inline-block;padding:2px 7px;border-radius:999px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1px solid;white-space:nowrap;}
+        .pill-paid     { background:#dcfce7;color:#15803d;border-color:#86efac;}
+        .pill-partial  { background:#fef3c7;color:#a16207;border-color:#fcd34d;}
+        .pill-pending  { background:#fee2e2;color:#b91c1c;border-color:#fca5a5;}
+        .pill-completed{ background:#e0e7ff;color:#3730a3;border-color:#a5b4fc;}
+        .pill-cancelled{ background:#f1f5f9;color:#64748b;border-color:#cbd5e1;}
+
+        /* ── Sales-module tab switcher ── */
+        .ssm-tabs{display:flex;gap:6px;background:white;border:1px solid #e2e8f0;border-radius:14px;padding:6px;box-shadow:0 2px 8px rgba(0,0,0,.04);width:100%;}
+        .ssm-tab{flex:1 1 0;padding:14px 22px;border:none;background:transparent;border-radius:10px;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:10px;font-family:'Outfit',sans-serif;}
+        .ssm-tab:hover:not(.active){background:#f8fafc;color:#1e293b;}
+        .ssm-tab.active.customer{background:#eff6ff;color:#1d4ed8;box-shadow:0 4px 12px rgba(37,99,235,.18);}
+        .ssm-tab.active.stock{background:#ecfdf5;color:#065f46;box-shadow:0 4px 12px rgba(16,185,129,.18);}
+        .ssm-tab .ssm-tab-emoji{font-size:14px;line-height:1;}
+        .ssm-tab .ssm-tab-sub{font-size:9px;font-weight:700;color:#94a3b8;letter-spacing:.04em;text-transform:none;}
+        .ssm-tab.active .ssm-tab-sub{color:currentColor;opacity:.7;}
+
+        /* ── Aging report ── */
+        .aging-table{width:100%;border-collapse:separate;border-spacing:0;font-size:11px;}
+        .aging-table thead th{background:#fef2f2;color:#991b1b;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;padding:9px 10px;text-align:left;border-bottom:2px solid #fecaca;position:sticky;top:0;}
+        .aging-table tbody td{padding:8px 10px;border-bottom:1px solid #f1f5f9;color:#1e293b;font-weight:600;}
+        .aging-table tbody tr:hover{background:#fffbfb;}
+        .aging-table .num{text-align:right;font-variant-numeric:tabular-nums;font-weight:900;}
+        .aging-pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:9px;font-weight:900;border:1px solid;}
+        .aging-pill.warn{background:#fef3c7;color:#a16207;border-color:#fcd34d;}
+        .aging-pill.bad{background:#fee2e2;color:#b91c1c;border-color:#fca5a5;}
+        .aging-pill.severe{background:#7f1d1d;color:white;border-color:#7f1d1d;}
+
+        /* ── Capacity heatmap ── */
+        .heat-grid{display:grid;gap:6px;font-variant-numeric:tabular-nums;}
+        .heat-cell{padding:10px 12px;border-radius:10px;font-size:11px;font-weight:900;color:#0f172a;text-align:center;border:1px solid transparent;transition:transform .15s;}
+        .heat-cell:hover{transform:translateY(-1px);}
+        .heat-cell.h-label{background:#f8fafc;color:#475569;font-size:10px;text-align:left;border-color:#e2e8f0;font-weight:900;text-transform:uppercase;letter-spacing:.06em;}
+        .heat-cell.h-month-label{background:#f1f5f9;color:#475569;text-align:center;border-color:#e2e8f0;font-size:10px;text-transform:uppercase;letter-spacing:.06em;}
+        .heat-cell .h-pct{font-size:14px;display:block;line-height:1.1;}
+        .heat-cell .h-meta{font-size:8px;font-weight:700;opacity:.7;display:block;line-height:1.2;}
+        .heat-0{background:#dcfce7;color:#15803d;border-color:#bbf7d0;}
+        .heat-1{background:#d1fae5;color:#065f46;border-color:#a7f3d0;}
+        .heat-2{background:#fef9c3;color:#854d0e;border-color:#fde68a;}
+        .heat-3{background:#fed7aa;color:#9a3412;border-color:#fdba74;}
+        .heat-4{background:#fecaca;color:#991b1b;border-color:#fca5a5;}
+        .heat-5{background:#7f1d1d;color:white;border-color:#7f1d1d;}
+        .heat-na{background:#f8fafc;color:#cbd5e1;border-color:#e2e8f0;font-weight:600;}
+
+        /* ── Customer pickup history modal ── */
+        .pickup-modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:200;align-items:center;justify-content:center;padding:20px;}
+        .pickup-modal-overlay.open{display:flex;}
+        .pickup-modal-box{background:white;border-radius:20px;width:100%;max-width:760px;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.35);}
+        .pickup-modal-head{padding:18px 22px;border-bottom:1px solid #e2e8f0;background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:white;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+        .pickup-modal-body{padding:18px 22px;overflow-y:auto;}
+        .ph-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;}
+        .ph-table thead th{background:#f8fafc;color:#475569;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0;}
+        .ph-table tbody td{padding:8px 10px;border-bottom:1px solid #f1f5f9;color:#1e293b;font-weight:600;}
+        .ph-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
+        .ph-summary-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;}
+        .ph-summary-card .ph-label{font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;}
+        .ph-summary-card .ph-num{font-size:18px;font-weight:900;color:#1e293b;font-variant-numeric:tabular-nums;}
+        .cust-link{color:#1d4ed8;cursor:pointer;text-decoration:underline dotted;}
+        .cust-link:hover{color:#1e40af;}
+
+        /* ── Allocation drawer (drag customer orders onto batch rows) ── */
+        .alloc-fab{position:fixed;right:20px;bottom:24px;z-index:90;display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:999px;background:linear-gradient(135deg,#1d4ed8,#1e40af);color:white;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;border:none;cursor:pointer;box-shadow:0 16px 40px rgba(30,64,175,.45);transition:transform .15s,box-shadow .15s;font-family:'Outfit',sans-serif;}
+        .alloc-fab:hover{transform:translateY(-2px);box-shadow:0 20px 50px rgba(30,64,175,.55);}
+        .alloc-fab .alloc-fab-emoji{font-size:18px;line-height:1;}
+        .alloc-fab .alloc-fab-badge{background:#fbbf24;color:#78350f;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:900;min-width:20px;text-align:center;}
+        .alloc-fab.hidden-fab{display:none;}
+
+        /* Allocation drawer is now a draggable + resizable floating window. */
+        .alloc-drawer{position:fixed;top:80px;right:24px;width:380px;height:520px;min-width:300px;min-height:280px;max-width:96vw;max-height:calc(100vh - 40px);background:white;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.22);z-index:95;display:none;flex-direction:column;overflow:hidden;}
+        .alloc-drawer.open{display:flex;}
+        .alloc-drawer-head{padding:14px 16px;border-bottom:1px solid #e2e8f0;background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:white;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;cursor:move;user-select:none;-webkit-user-select:none;touch-action:none;}
+        .alloc-drawer-head::before{content:"⋮⋮";color:rgba(255,255,255,.55);font-weight:900;letter-spacing:-2px;margin-right:4px;font-size:18px;line-height:1;align-self:center;}
+        .alloc-resize-handle{position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:nwse-resize;user-select:none;touch-action:none;z-index:2;}
+        .alloc-resize-handle::after{content:"";position:absolute;right:3px;bottom:3px;width:10px;height:10px;border-right:2px solid #94a3b8;border-bottom:2px solid #94a3b8;opacity:.7;}
+        .alloc-resize-handle:hover::after{opacity:1;border-color:#1d4ed8;}
+        .alloc-drawer-head h3{font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;margin:0;}
+        .alloc-drawer-head p{font-size:10px;color:#bfdbfe;margin:2px 0 0;font-weight:600;}
+        .alloc-drawer-tabs{display:flex;gap:4px;background:#f1f5f9;padding:4px;border-bottom:1px solid #e2e8f0;}
+        .alloc-drawer-tab{flex:1;padding:8px 10px;border:none;background:transparent;border-radius:8px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#64748b;cursor:pointer;transition:all .15s;font-family:'Outfit',sans-serif;}
+        .alloc-drawer-tab.active{background:white;color:#1d4ed8;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+        .alloc-drawer-tab .alloc-tab-count{display:inline-block;margin-left:4px;background:#e2e8f0;color:#475569;border-radius:999px;padding:1px 7px;font-size:9px;}
+        .alloc-drawer-tab.active .alloc-tab-count{background:#dbeafe;color:#1d4ed8;}
+        .alloc-drawer-body{flex:1;overflow-y:auto;padding:12px;background:#f8fafc;}
+        .alloc-drawer-empty{text-align:center;padding:32px 12px;color:#94a3b8;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
+
+        .order-card{background:white;border:1px solid #e2e8f0;border-radius:14px;padding:11px 13px;margin-bottom:10px;cursor:grab;transition:all .15s;position:relative;user-select:none;}
+        .order-card:hover{border-color:#3b82f6;box-shadow:0 6px 16px rgba(59,130,246,.18);transform:translateY(-1px);}
+        .order-card:active{cursor:grabbing;}
+        .order-card.dragging{opacity:.5;cursor:grabbing;}
+        .order-card.fully-allocated{opacity:.6;border-color:#10b981;background:#f0fdf4;cursor:default;}
+        .order-card.fully-allocated:hover{transform:none;}
+        .order-card-name{font-size:12px;font-weight:900;color:#0f172a;line-height:1.2;}
+        .order-card-meta{font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-top:2px;font-family:'Outfit',sans-serif;}
+        .order-card-qty-row{display:flex;align-items:baseline;gap:6px;margin-top:8px;}
+        .order-card-qty-big{font-size:22px;font-weight:900;color:#1d4ed8;line-height:1;font-variant-numeric:tabular-nums;}
+        .order-card-qty-sub{font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;}
+        .order-card-progress{height:5px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:6px;}
+        .order-card-progress-bar{height:100%;background:linear-gradient(90deg,#3b82f6,#1d4ed8);transition:width .25s;}
+        .order-card-progress-bar.full{background:linear-gradient(90deg,#10b981,#059669);}
+        .order-card-remark{margin-top:6px;font-size:10px;color:#475569;line-height:1.35;background:#f8fafc;border:1px dashed #e2e8f0;border-radius:6px;padding:5px 7px;}
+        .order-card-grip{position:absolute;top:10px;right:10px;color:#cbd5e1;font-size:14px;line-height:1;}
+
+        .order-card.past-due{cursor:default;border-left:3px solid #f59e0b;}
+        .order-card.past-due:hover{border-color:#fbbf24;transform:none;box-shadow:0 4px 10px rgba(245,158,11,.15);}
+        .order-card.past-due .order-card-qty-big{color:#b45309;}
+
+        /* Drop targets — maturity rows */
+        .mat-table tbody tr{transition:background .12s,outline .12s;}
+        .mat-table tbody tr.drop-target{outline:2px dashed #93c5fd;outline-offset:-2px;background:#eff6ff !important;}
+        .mat-table tbody tr.drop-hover{outline:2px solid #1d4ed8;outline-offset:-2px;background:#dbeafe !important;}
+        .mat-table tbody tr.drop-disabled{opacity:.4;}
+
+        /* Reservation cell — multi-allocation chips */
+        .reserv-stack{display:flex;flex-direction:column;gap:4px;min-width:180px;}
+        .reserv-chip{display:flex;align-items:center;gap:6px;background:linear-gradient(180deg,#ffffff,#f1f5f9);border:1px solid #cbd5e1;border-radius:9px;padding:5px 6px 5px 7px;font-size:11px;font-weight:700;color:#1e293b;cursor:grab;transition:transform .12s,box-shadow .12s,border-color .12s;user-select:none;}
+        .reserv-chip:hover{border-color:#3b82f6;box-shadow:0 4px 12px rgba(59,130,246,.18);transform:translateY(-1px);}
+        .reserv-chip:active{cursor:grabbing;}
+        .reserv-chip.dragging{opacity:.45;cursor:grabbing;border-color:#1d4ed8;}
+        .reserv-chip-grip{color:#94a3b8;font-size:11px;line-height:1;flex-shrink:0;font-weight:900;letter-spacing:-1px;}
+        .reserv-chip-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .reservv-chip-qty{font-variant-numeric:tabular-nums;color:#1d4ed8;font-weight:900;background:#dbeafe;border-radius:6px;padding:1px 6px;font-size:10px;}
+        .reserv-chip-x{border:none;background:#fee2e2;color:#b91c1c;border-radius:6px;width:18px;height:18px;font-weight:900;font-size:11px;line-height:1;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:0;}
+        .reserv-chip-x:hover{background:#fca5a5;color:white;}
+        .reserv-empty{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;border:1.5px dashed #cbd5e1;border-radius:9px;background:#fafbfc;font-size:9px;color:#94a3b8;font-weight:900;text-transform:uppercase;letter-spacing:.08em;}
+        .reserv-empty-emoji{font-size:11px;line-height:1;}
     </style>
 </head>
 <body>
-PLACEHOLDER - real push coming
-</body>
-</html>
+
+<!-- Header -->
+<div class="bg-white border-b border-slate-200 px-5 py-3 flex justify-between items-center sticky top-0 z-30 shadow-sm">
+    <div class="flex items-center gap-3">
+        <button onclick="window.location.href='operation_dashboard.html'" class="text-[10px] font-bold text-slate-500 hover:text-blue-700 uppercase tracking-widest bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-sm">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Back to main page
+        </button>
+        <span class="font-black text-slate-800 uppercase tracking-widest text-xs">Seedling Stock Sales Management</span>
+    </div>
+    <div class="flex items-center gap-2">
+        <a href="operation_inventory_map.html" class="text-[10px] font-bold text-slate-500 hover:text-blue-700 uppercase tracking-widest bg-slate-50 hover:bg-blue-50 px-3 py-1.5 rounded-full border border-slate-200 transition-colors no-underline" style="text-decoration:none;">Inventory Map</a>
+        <a href="operation_inventory_all.html" class="text-[10px] font-bold text-slate-500 hover:text-indigo-700 uppercase tracking-widest bg-slate-50 hover:bg-indigo-50 px-3 py-1.5 rounded-full border border-slate-200 transition-colors no-underline" style="text-decoration:none;">Map Layers</a>
+        <a href="operation_sales_analysis.html" class="text-[10px] font-bold text-pink-600 hover:text-pink-800 uppercase tracking-widest bg-pink-50 hover:bg-pink-100 px-3 py-1.5 rounded-full border border-pink-200 transition-colors no-underline" style="text-decoration:none;">📊 Sales Analysis</a>
+    </div>
+</div>
+
+PLACEHOLDER_BODY_TRUNCATED_FOR_SPACE
