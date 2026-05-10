@@ -165,6 +165,13 @@
         </div>
         <div class="flex items-center justify-between gap-4">
           <div>
+            <div class="font-black text-slate-800 text-sm">Audit Trail</div>
+            <div class="text-[11px] text-slate-500">Who edited what — admins can clear logs</div>
+          </div>
+          <select id="d-mod-audit_trail" class="lvl-select"></select>
+        </div>
+        <div class="flex items-center justify-between gap-4">
+          <div>
             <div class="font-black text-slate-800 text-sm">Salesweb</div>
             <div class="text-[11px] text-slate-500">Customer-facing orders &amp; pricing</div>
           </div>
@@ -230,7 +237,7 @@
 
 <script>
 const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
-const MODULES = ['operation', 'reports', 'salesweb', 'audit', 'mobile'];
+const MODULES = ['operation', 'reports', 'audit_trail', 'salesweb', 'audit', 'mobile'];
 const LEVELS  = ['admin', 'normal', 'none'];
 const LEVEL_LABEL = { admin:'Admin', normal:'Normal', none:'None' };
 
@@ -253,7 +260,7 @@ function showToast(msg, kind) {
 }
 
 function defaultPerms() {
-  return { modules: { operation:'none', reports:'none', salesweb:'none', audit:'none', mobile:'none' }, manage_users:false };
+  return { modules: { operation:'none', reports:'none', audit_trail:'none', salesweb:'none', audit:'none', mobile:'none' }, manage_users:false };
 }
 
 function normPerms(p) {
@@ -271,10 +278,14 @@ function initials(p) {
   return src.split(/\s+/).map(s => s[0]).slice(0,2).join('').toUpperCase() || '?';
 }
 
+const MODULE_LABEL = {
+  operation: 'operation', reports: 'reports', audit_trail: 'audit trail',
+  salesweb: 'salesweb', audit: 'audit', mobile: 'mobile'
+};
 function summaryHtml(perms) {
   const chips = MODULES
     .filter(m => perms.modules[m] !== 'none')
-    .map(m => `<span class="chip chip-${perms.modules[m]}">${m} · ${LEVEL_LABEL[perms.modules[m]]}</span>`)
+    .map(m => `<span class="chip chip-${perms.modules[m]}">${MODULE_LABEL[m] || m} · ${LEVEL_LABEL[perms.modules[m]]}</span>`)
     .join(' ');
   const noneChip = !chips ? '<span class="chip chip-none">No module access</span>' : '';
   const manageChip = perms.manage_users ? '<span class="chip chip-manage">Manage Users</span>' : '';
@@ -413,7 +424,7 @@ async function demoteCurrentToCustomer() {
   if (!confirm(`Move "${p.full_name || p.email}" to customer?\nThey will be removed from the system list. Their module access will also be cleared.`)) return;
   // Clear access first so nothing lingers if they're promoted again later.
   const cleared = {
-    modules: { operation:'none', reports:'none', salesweb:'none', audit:'none', mobile:'none' },
+    modules: { operation:'none', reports:'none', audit_trail:'none', salesweb:'none', audit:'none', mobile:'none' },
     manage_users: false
   };
   const { error: clearErr } = await _supabase

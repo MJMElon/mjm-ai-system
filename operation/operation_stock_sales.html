@@ -155,9 +155,12 @@
         .alloc-fab .alloc-fab-badge{background:#fbbf24;color:#78350f;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:900;min-width:20px;text-align:center;}
         .alloc-fab.hidden-fab{display:none;}
 
-        .alloc-drawer{position:fixed;top:0;right:0;height:100vh;width:380px;max-width:92vw;background:white;border-left:1px solid #e2e8f0;box-shadow:-12px 0 36px rgba(15,23,42,.16);z-index:95;transform:translateX(100%);transition:transform .25s ease;display:flex;flex-direction:column;}
-        .alloc-drawer.open{transform:translateX(0);}
-        .alloc-drawer-head{padding:14px 16px;border-bottom:1px solid #e2e8f0;background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:white;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+        /* Allocation drawer is now a draggable floating window — user can move it
+           anywhere on screen so it doesn't cover the right side of the table. */
+        .alloc-drawer{position:fixed;top:80px;right:24px;width:380px;max-width:92vw;max-height:calc(100vh - 100px);background:white;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.22);z-index:95;display:none;flex-direction:column;overflow:hidden;}
+        .alloc-drawer.open{display:flex;}
+        .alloc-drawer-head{padding:14px 16px;border-bottom:1px solid #e2e8f0;background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:white;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;cursor:move;user-select:none;-webkit-user-select:none;touch-action:none;}
+        .alloc-drawer-head::before{content:"⋮⋮";color:rgba(255,255,255,.55);font-weight:900;letter-spacing:-2px;margin-right:4px;font-size:18px;line-height:1;align-self:center;}
         .alloc-drawer-head h3{font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;margin:0;}
         .alloc-drawer-head p{font-size:10px;color:#bfdbfe;margin:2px 0 0;font-weight:600;}
         .alloc-drawer-tabs{display:flex;gap:4px;background:#f1f5f9;padding:4px;border-bottom:1px solid #e2e8f0;}
@@ -2040,7 +2043,79 @@
         const clear = document.getElementById('alloc-search-clear');
         if (input) input.addEventListener('input', (e) => setAllocSearch(e.target.value));
         if (clear) clear.addEventListener('click', clearAllocSearch);
+        setupAllocDrawerDrag();
     });
+
+    // ── Make the allocation drawer freely draggable ───────────────────────
+    // Position is persisted to localStorage so it stays where the user left it.
+    function setupAllocDrawerDrag() {
+        const drawer = document.getElementById('alloc-drawer');
+        if (!drawer) return;
+        const handle = drawer.querySelector('.alloc-drawer-head');
+        if (!handle) return;
+
+        // Restore saved position
+        try {
+            const saved = JSON.parse(localStorage.getItem('mjm_alloc_drawer_pos') || 'null');
+            if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+                applyDrawerPos(saved.left, saved.top);
+            }
+        } catch (e) { /* ignore */ }
+
+        function applyDrawerPos(left, top) {
+            const rect = drawer.getBoundingClientRect();
+            const w = rect.width  || 380;
+            const h = rect.height || 400;
+            const maxLeft = Math.max(0, window.innerWidth  - w - 4);
+            const maxTop  = Math.max(0, window.innerHeight - h - 4);
+            const clampedLeft = Math.min(Math.max(0, left), maxLeft);
+            const clampedTop  = Math.min(Math.max(0, top),  maxTop);
+            drawer.style.left  = clampedLeft + 'px';
+            drawer.style.top   = clampedTop  + 'px';
+            drawer.style.right = 'auto';
+        }
+
+        let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0, pid = null;
+
+        handle.addEventListener('pointerdown', (e) => {
+            // Skip drag when clicking interactive children (× close button, etc.)
+            if (e.target.closest('button, input, select, textarea, a')) return;
+            dragging = true;
+            pid = e.pointerId;
+            try { handle.setPointerCapture(pid); } catch (err) { /* ignore */ }
+            const rect = drawer.getBoundingClientRect();
+            startX = e.clientX; startY = e.clientY;
+            origLeft = rect.left; origTop = rect.top;
+            drawer.style.left  = origLeft + 'px';
+            drawer.style.top   = origTop  + 'px';
+            drawer.style.right = 'auto';
+            e.preventDefault();
+        });
+
+        handle.addEventListener('pointermove', (e) => {
+            if (!dragging) return;
+            applyDrawerPos(origLeft + (e.clientX - startX), origTop + (e.clientY - startY));
+        });
+
+        function endDrag() {
+            if (!dragging) return;
+            dragging = false;
+            try { handle.releasePointerCapture(pid); } catch (err) { /* ignore */ }
+            const rect = drawer.getBoundingClientRect();
+            try {
+                localStorage.setItem('mjm_alloc_drawer_pos', JSON.stringify({ left: rect.left, top: rect.top }));
+            } catch (e) { /* ignore quota errors */ }
+        }
+        handle.addEventListener('pointerup',     endDrag);
+        handle.addEventListener('pointercancel', endDrag);
+
+        // Keep drawer on-screen if window resizes.
+        window.addEventListener('resize', () => {
+            if (!drawer.classList.contains('open')) return;
+            const rect = drawer.getBoundingClientRect();
+            applyDrawerPos(rect.left, rect.top);
+        });
+    }
 
     function updateAllocCounts(active, past) {
         document.getElementById('alloc-count-active').textContent = active;
