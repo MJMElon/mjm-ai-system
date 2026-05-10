@@ -166,7 +166,72 @@ input,select,textarea,button{font-family:inherit;}
   .sb-item{justify-content:center;padding:.7rem;}
   .main{margin-left:60px;padding:1rem;}
   .form-row{grid-template-columns:1fr;}
+  .promo-ws-grid{grid-template-columns:1fr !important;}
 }
+
+/* ── Promotion Designer workspace ──────────────────────────────────── */
+.promo-ws{padding:1rem;}
+.promo-ws-grid{display:grid;grid-template-columns:1fr 1.1fr 1fr;gap:1rem;}
+.promo-pane{display:flex;flex-direction:column;background:var(--green-light);border:1px solid var(--border);border-radius:14px;padding:1rem;min-height:520px;}
+.promo-pane-head{font-size:.78rem;font-weight:800;color:var(--ink);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.75rem;display:flex;flex-direction:column;gap:.15rem;}
+.promo-pane-head .promo-pane-sub{font-size:.7rem;font-weight:600;color:var(--ink3);text-transform:none;letter-spacing:0;}
+
+/* Chat */
+.promo-chat-log{flex:1;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:10px;padding:.75rem;display:flex;flex-direction:column;gap:.5rem;min-height:240px;font-size:.82rem;}
+.promo-chat-msg{padding:.5rem .75rem;border-radius:10px;max-width:85%;line-height:1.4;}
+.promo-chat-msg.user{align-self:flex-end;background:var(--green);color:#fff;border-bottom-right-radius:4px;}
+.promo-chat-msg.bot{align-self:flex-start;background:#f3eeff;color:var(--ink);border-bottom-left-radius:4px;}
+.promo-chat-msg .chat-time{font-size:.65rem;opacity:.65;margin-top:.2rem;display:block;}
+.promo-chat-msg .chat-tags{display:flex;gap:.25rem;flex-wrap:wrap;margin-top:.35rem;}
+.promo-chat-tag{background:rgba(255,255,255,.55);color:var(--ink2);font-size:.65rem;font-weight:700;padding:1px 7px;border-radius:999px;}
+.promo-chat-msg.user .promo-chat-tag{background:rgba(255,255,255,.25);color:#fff;}
+.promo-chat-form{display:flex;gap:.5rem;margin-top:.5rem;}
+.promo-chat-form textarea{flex:1;border:1px solid var(--border);border-radius:10px;padding:.6rem;font-size:.82rem;background:#fff;color:var(--ink);resize:vertical;}
+.promo-chat-form textarea:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(124,92,191,.15);}
+.promo-chat-form .btn{align-self:stretch;}
+.promo-chat-hint{font-size:.7rem;color:var(--ink3);margin-top:.4rem;line-height:1.35;}
+
+/* Storefront preview screen */
+.promo-screen-frame{background:#0f1424;border-radius:18px;padding:.5rem;flex:1;display:flex;flex-direction:column;}
+.promo-screen-bar{display:flex;gap:6px;padding:0 .5rem .35rem;}
+.promo-screen-bar span{width:9px;height:9px;border-radius:50%;background:#3a3556;}
+.promo-screen-bar span:first-child{background:#ef6363;}
+.promo-screen-bar span:nth-child(2){background:#f0c245;}
+.promo-screen-bar span:nth-child(3){background:#56cc6c;}
+.promo-screen-body{background:#faf8ff;border-radius:12px;padding:.85rem;flex:1;overflow-y:auto;}
+.promo-banner{background:linear-gradient(135deg,var(--green),#9d7be3);color:#fff;border-radius:14px;padding:1rem 1.1rem;display:flex;justify-content:space-between;align-items:center;gap:1rem;box-shadow:0 8px 20px rgba(124,92,191,.25);margin-bottom:.85rem;}
+.promo-banner-eyebrow{font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.12em;opacity:.85;}
+.promo-banner-title{margin:.2rem 0;font-size:1.05rem;font-weight:900;line-height:1.15;}
+.promo-banner-desc{margin:0;font-size:.78rem;opacity:.95;line-height:1.35;}
+.promo-banner-meta{font-size:.66rem;font-weight:700;opacity:.85;margin-top:.4rem;text-transform:uppercase;letter-spacing:.08em;}
+.promo-banner-badge{background:#fff;color:var(--green-dark);font-weight:900;font-size:1rem;padding:.55rem .85rem;border-radius:999px;box-shadow:0 4px 12px rgba(0,0,0,.15);white-space:nowrap;}
+
+.promo-preview-card{background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;}
+.promo-preview-img{background:linear-gradient(135deg,#f3eeff,#fff);height:90px;display:flex;align-items:center;justify-content:center;color:var(--green-dark);font-weight:800;font-size:.85rem;}
+.promo-preview-info{padding:.6rem .8rem .8rem;}
+.promo-preview-name{font-weight:800;color:var(--ink);}
+.promo-preview-month{font-size:.7rem;color:var(--ink3);margin-bottom:.4rem;}
+.promo-preview-prices{display:flex;align-items:baseline;gap:.5rem;}
+.promo-preview-original{font-size:.8rem;color:var(--ink3);text-decoration:line-through;}
+.promo-preview-new{font-size:1.05rem;font-weight:900;color:var(--green-dark);}
+.promo-preview-savings{font-size:.7rem;font-weight:700;color:var(--red);margin-top:.2rem;}
+
+/* Calculator */
+.promo-calc{margin-top:1rem;padding:.85rem;background:#fff;border:1px solid var(--border);border-radius:12px;}
+.promo-calc-head{font-size:.78rem;font-weight:800;color:var(--ink);margin-bottom:.5rem;}
+.promo-calc-rows{display:flex;flex-direction:column;gap:.3rem;font-size:.82rem;}
+.promo-calc-rows>div{display:flex;justify-content:space-between;align-items:baseline;padding:.2rem 0;border-bottom:1px dashed var(--border);}
+.promo-calc-rows>div:last-child{border-bottom:none;}
+.promo-calc-rows strong{font-variant-numeric:tabular-nums;color:var(--ink);}
+.promo-calc-rows .promo-save-rm{color:var(--red);}
+.promo-calc-rows .promo-save-pct{color:var(--green-dark);}
+
+/* Scope/status badges */
+.promo-status-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;}
+.promo-st-active{background:#dcfce7;color:#166534;}
+.promo-st-scheduled{background:#dbeafe;color:#1e40af;}
+.promo-st-expired{background:#fee2e2;color:#991b1b;}
+.promo-st-draft{background:#f1f5f9;color:#475569;}
 </style>
 </head>
 <body>
@@ -338,10 +403,164 @@ input,select,textarea,button{font-family:inherit;}
       </div>
     </div>
 
-    <!-- PROMOTIONS -->
+    <!-- PROMOTIONS — Designer workspace -->
     <div class="tab-content" id="tab-promos">
-      <div class="main-header"><div class="main-title">Manage Promotions</div><button class="btn btn-primary" onclick="openPromoForm()">+ New Promotion</button></div>
-      <div class="card"><div id="promos-table"><div class="loading">Loading promotions...</div></div></div>
+      <div class="main-header">
+        <div class="main-title">🎁 Promotion Designer</div>
+        <div style="display:flex;gap:.5rem;align-items:center;">
+          <button class="btn btn-outline" onclick="newPromoDraft()">+ New Draft</button>
+          <button class="btn btn-outline" onclick="savePromoDraft()">💾 Save Draft</button>
+          <label class="form-toggle" style="margin:0;padding:.45rem .8rem;border:1px solid var(--border);border-radius:8px;background:var(--surface);">
+            <input type="checkbox" id="promo-publish-toggle" onchange="togglePublish(this.checked)"><span style="font-weight:700;">Publish on Web</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Workspace grid: chat | preview | form+calculator -->
+      <div class="card promo-ws">
+        <div class="promo-ws-grid">
+
+          <!-- CHAT -->
+          <section class="promo-pane">
+            <header class="promo-pane-head">💬 Design Chat
+              <span class="promo-pane-sub">Type how the promotion should work</span>
+            </header>
+            <div id="promo-chat-log" class="promo-chat-log"></div>
+            <form id="promo-chat-form" class="promo-chat-form" onsubmit="event.preventDefault();sendChatMessage();">
+              <textarea id="promo-chat-input" rows="2" placeholder='e.g. "20% off all Musang King from 25 Dec to 31 Dec, applies to whole cart, max 100 redemptions"'></textarea>
+              <button type="submit" class="btn btn-primary">Send</button>
+            </form>
+            <div class="promo-chat-hint">Tip: describe % or RM, target name, dates, min order, redemption cap, scope (line vs whole cart). The form on the right updates as you type.</div>
+          </section>
+
+          <!-- PREVIEW SCREEN -->
+          <section class="promo-pane">
+            <header class="promo-pane-head">📺 Storefront Preview
+              <span class="promo-pane-sub">Live mock of how it shows on the salesweb</span>
+            </header>
+            <div class="promo-screen-frame">
+              <div class="promo-screen-bar"><span></span><span></span><span></span></div>
+              <div class="promo-screen-body">
+                <div id="promo-banner" class="promo-banner">
+                  <div class="promo-banner-left">
+                    <div class="promo-banner-eyebrow" id="pv-target">All Products</div>
+                    <h3 class="promo-banner-title" id="pv-title">New Promotion</h3>
+                    <p class="promo-banner-desc" id="pv-desc">Describe your promotion in chat — the banner updates live.</p>
+                    <div class="promo-banner-meta" id="pv-meta">No dates set</div>
+                  </div>
+                  <div class="promo-banner-right">
+                    <div id="pv-badge" class="promo-banner-badge">— OFF</div>
+                  </div>
+                </div>
+
+                <div class="promo-preview-card">
+                  <div class="promo-preview-img">🌳 Sample product</div>
+                  <div class="promo-preview-info">
+                    <div class="promo-preview-name">Musang King · D197</div>
+                    <div class="promo-preview-month">Mature in Mar 2027</div>
+                    <div class="promo-preview-prices">
+                      <span class="promo-preview-original" id="pv-orig">RM 250</span>
+                      <span class="promo-preview-new"      id="pv-new">RM 250</span>
+                    </div>
+                    <div class="promo-preview-savings" id="pv-save">— savings</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- FORM + CALCULATOR -->
+          <section class="promo-pane">
+            <header class="promo-pane-head">⚙️ Settings &amp; Calculator</header>
+
+            <input type="hidden" id="mpr-id">
+            <div class="form-group"><label class="form-label">Title</label><input class="form-input" id="mpr-name" oninput="syncFormToPreview()"></div>
+            <div class="form-group"><label class="form-label">Description</label><textarea class="form-input" id="mpr-desc" rows="2" oninput="syncFormToPreview()"></textarea></div>
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">Discount Type</label>
+                <select class="form-input" id="mpr-dtype" onchange="syncFormToPreview()">
+                  <option value="percentage">Percentage (%)</option>
+                  <option value="fixed">Fixed Amount (RM)</option>
+                </select>
+              </div>
+              <div class="form-group"><label class="form-label">Discount Value</label>
+                <input class="form-input" id="mpr-dval" type="number" step="0.01" oninput="syncFormToPreview()">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">Scope</label>
+                <select class="form-input" id="mpr-scope" onchange="syncFormToPreview()">
+                  <option value="cart">Whole Cart</option>
+                  <option value="line">Per Matching Item</option>
+                </select>
+              </div>
+              <div class="form-group"><label class="form-label">Target</label>
+                <select class="form-input" id="mpr-target" onchange="syncFormToPreview()">
+                  <option value="all">All Products</option>
+                  <option value="category">Category</option>
+                  <option value="specific">Specific Product</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group"><label class="form-label">Target Detail (name)</label>
+              <input class="form-input" id="mpr-tdetail" oninput="syncFormToPreview()" placeholder="e.g. Musang King">
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">Min Order (RM)</label>
+                <input class="form-input" id="mpr-min-rm" type="number" step="0.01" min="0" oninput="syncFormToPreview()">
+              </div>
+              <div class="form-group"><label class="form-label">Min Qty</label>
+                <input class="form-input" id="mpr-min-qty" type="number" min="0" oninput="syncFormToPreview()">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">Start Date</label><input class="form-input" id="mpr-start" type="date" oninput="syncFormToPreview()"></div>
+              <div class="form-group"><label class="form-label">End Date</label><input class="form-input" id="mpr-end" type="date" oninput="syncFormToPreview()"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">Max Redemptions</label>
+                <input class="form-input" id="mpr-max-uses" type="number" min="0" placeholder="Leave blank = unlimited" oninput="syncFormToPreview()">
+              </div>
+              <div class="form-group"><label class="form-label">Used So Far</label>
+                <input class="form-input" id="mpr-uses-count" type="number" disabled value="0">
+              </div>
+            </div>
+
+            <!-- Calculator -->
+            <div class="promo-calc">
+              <div class="promo-calc-head">🧮 Discount Calculator</div>
+              <div class="form-group">
+                <label class="form-label">Sample Original Price (RM)</label>
+                <input class="form-input" id="calc-orig" type="number" min="0" step="0.01" value="250" oninput="syncFormToPreview()">
+              </div>
+              <div class="promo-calc-rows">
+                <div><span>After Discount</span><strong id="calc-new">RM 250.00</strong></div>
+                <div><span>You Save</span><strong id="calc-save-rm" class="promo-save-rm">RM 0.00</strong></div>
+                <div><span>Savings %</span><strong id="calc-save-pct" class="promo-save-pct">0%</strong></div>
+              </div>
+            </div>
+          </section>
+
+        </div>
+      </div>
+
+      <!-- HISTORY -->
+      <div class="card" style="margin-top:1rem;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;gap:.5rem;flex-wrap:wrap;">
+          <div style="font-weight:700;color:var(--ink);">📜 Promotion History</div>
+          <div class="filter-bar" style="margin:0;">
+            <input class="filter-input" id="promo-history-search" placeholder="Search title or target…" oninput="loadPromoHistory()">
+            <select class="filter-input" id="promo-history-status" onchange="loadPromoHistory()">
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="scheduled">Scheduled</option>
+              <option value="expired">Expired</option>
+              <option value="draft">Draft</option>
+            </select>
+          </div>
+        </div>
+        <div id="promos-table"><div class="loading">Loading promotions…</div></div>
+      </div>
     </div>
 
     <!-- COUPONS -->
@@ -517,16 +736,19 @@ input,select,textarea,button{font-family:inherit;}
   <div class="modal-foot"><button class="btn btn-outline" onclick="closeModal('modal-product')">Cancel</button><button class="btn btn-primary" id="mp-save-btn" onclick="saveProduct()">Save Product</button></div>
 </div></div>
 
-<!-- PROMO FORM MODAL -->
-<div class="modal-overlay" id="modal-promo"><div class="modal"><div class="modal-head"><h2 id="mpr-title">New Promotion</h2><button class="modal-close" onclick="closeModal('modal-promo')">✕</button></div><div class="modal-body">
-  <input type="hidden" id="mpr-id">
-  <div class="form-group"><label class="form-label">Title</label><input class="form-input" id="mpr-name"></div>
-  <div class="form-group"><label class="form-label">Description</label><textarea class="form-input" id="mpr-desc" rows="2"></textarea></div>
-  <div class="form-row"><div class="form-group"><label class="form-label">Discount Type</label><select class="form-input" id="mpr-dtype"><option value="percentage">Percentage (%)</option><option value="fixed">Fixed Amount (RM)</option></select></div><div class="form-group"><label class="form-label">Discount Value</label><input class="form-input" id="mpr-dval" type="number" step="0.01"></div></div>
-  <div class="form-row"><div class="form-group"><label class="form-label">Target</label><select class="form-input" id="mpr-target"><option value="all">All Products</option><option value="category">Category</option><option value="specific">Specific Product</option></select></div><div class="form-group"><label class="form-label">Target Detail</label><input class="form-input" id="mpr-tdetail"></div></div>
-  <div class="form-row"><div class="form-group"><label class="form-label">Start Date</label><input class="form-input" id="mpr-start" type="date"></div><div class="form-group"><label class="form-label">End Date</label><input class="form-input" id="mpr-end" type="date"></div></div>
-  <label class="form-toggle"><input type="checkbox" id="mpr-active" checked><span>Active</span></label>
-</div><div class="modal-foot"><button class="btn btn-outline" onclick="closeModal('modal-promo')">Cancel</button><button class="btn btn-primary" onclick="savePromo()">Save Promotion</button></div></div></div>
+<!-- PROMO FORM MODAL — removed; the Promotion Designer workspace lives inline in tab-promos. -->
+<div class="modal-overlay" id="modal-promo" style="display:none;"><div class="modal"><div class="modal-body">
+  <p>The legacy promotion modal has been replaced by the inline Promotion Designer workspace.</p>
+</div></div></div>
+<div style="display:none;"><!-- legacy modal body removed
+  <input type="hidden" id="mpr-id-legacy">
+  <div class="form-group"><label class="form-label">Title</label><input class="form-input" id="mpr-name-legacy"></div>
+  <div class="form-group"><label class="form-label">Description</label><textarea class="form-input" id="mpr-desc-legacy" rows="2"></textarea></div>
+  <div class="form-row"><div class="form-group"><label class="form-label">Discount Type</label><select class="form-input" id="mpr-dtype-legacy"><option value="percentage">Percentage (%)</option><option value="fixed">Fixed Amount (RM)</option></select></div><div class="form-group"><label class="form-label">Discount Value</label><input class="form-input" id="mpr-dval-legacy" type="number" step="0.01"></div></div>
+  <div class="form-row"><div class="form-group"><label class="form-label">Target</label><select class="form-input" id="mpr-target-legacy"><option value="all">All Products</option><option value="category">Category</option><option value="specific">Specific Product</option></select></div><div class="form-group"><label class="form-label">Target Detail</label><input class="form-input" id="mpr-tdetail-legacy"></div></div>
+  <div class="form-row"><div class="form-group"><label class="form-label">Start Date</label><input class="form-input" id="mpr-start-legacy" type="date"></div><div class="form-group"><label class="form-label">End Date</label><input class="form-input" id="mpr-end-legacy" type="date"></div></div>
+  <label class="form-toggle"><input type="checkbox" id="mpr-active-legacy" checked><span>Active</span></label>
+--></div>
 
 <!-- COUPON FORM MODAL -->
 <div class="modal-overlay" id="modal-coupon"><div class="modal"><div class="modal-head"><h2 id="mc-title">New Coupon</h2><button class="modal-close" onclick="closeModal('modal-coupon')">✕</button></div><div class="modal-body">
@@ -578,7 +800,7 @@ function switchTab(tab,el){
   if(tab==='orders')loadOrders();
   if(tab==='customers')loadCustomers();
   if(tab==='salesweb_products')loadProducts();
-  if(tab==='promos')loadPromos();
+  if(tab==='promos')initPromoWorkspace();
   if(tab==='salesweb_coupons')loadCoupons();
   if(tab==='webdesign')loadWebDesign();
   if(tab==='settings')loadSettings();
