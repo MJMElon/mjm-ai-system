@@ -55,11 +55,18 @@
         .month-tab.is-current{font-weight:900;}
 
         /* Maturity table */
-        .mat-table{width:100%;border-collapse:separate;border-spacing:0;font-size:11px;}
-        .mat-table thead th{background:#f8fafc;color:#475569;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;padding:9px 8px;text-align:left;border-bottom:2px solid #e2e8f0;position:sticky;top:0;}
-        .mat-table tbody td{padding:8px;border-bottom:1px solid #f1f5f9;color:#1e293b;font-weight:600;}
-        .mat-table tbody tr:hover{background:#fafbff;}
+        .mat-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;}
+        .mat-table thead th{background:#f1f5f9;color:#334155;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;padding:11px 10px;text-align:left;border-bottom:2px solid #cbd5e1;position:sticky;top:0;z-index:1;}
+        .mat-table tbody td{padding:11px 10px;border-bottom:1px solid #eef2f6;color:#1e293b;font-weight:600;vertical-align:middle;}
+        .mat-table tbody tr{transition:background .12s;}
+        .mat-table tbody tr:nth-child(even){background:#fbfcfe;}
+        .mat-table tbody tr:hover{background:#eff6ff;}
         .mat-table .num{text-align:right;font-variant-numeric:tabular-nums;font-weight:900;}
+        .mat-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid #e2e8f0;background:linear-gradient(180deg,#f8fafc,#ffffff);border-top-left-radius:16px;border-top-right-radius:16px;flex-wrap:wrap;}
+        .mat-card-title{display:flex;align-items:center;gap:10px;}
+        .mat-card-title-icon{width:30px;height:30px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:white;display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 4px 12px rgba(16,185,129,.30);}
+        .mat-card-title-text{font-size:12px;font-weight:900;color:#0f172a;text-transform:uppercase;letter-spacing:.12em;}
+        .mat-card-title-sub{font-size:9px;font-weight:700;color:#64748b;letter-spacing:.06em;margin-top:1px;}
         .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1px solid;}
         .pill-open{background:#dcfce7;color:#15803d;border-color:#86efac;}
         .pill-sisa{background:#fef3c7;color:#a16207;border-color:#fcd34d;}
@@ -196,13 +203,18 @@
         .mat-table tbody tr.drop-disabled{opacity:.4;}
 
         /* Reservation cell — multi-allocation chips */
-        .reserv-stack{display:flex;flex-direction:column;gap:3px;min-width:160px;}
-        .reserv-chip{display:flex;align-items:center;gap:5px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:3px 5px 3px 7px;font-size:10px;font-weight:700;color:#1e293b;}
+        .reserv-stack{display:flex;flex-direction:column;gap:4px;min-width:180px;}
+        .reserv-chip{display:flex;align-items:center;gap:6px;background:linear-gradient(180deg,#ffffff,#f1f5f9);border:1px solid #cbd5e1;border-radius:9px;padding:5px 6px 5px 7px;font-size:11px;font-weight:700;color:#1e293b;cursor:grab;transition:transform .12s,box-shadow .12s,border-color .12s;user-select:none;}
+        .reserv-chip:hover{border-color:#3b82f6;box-shadow:0 4px 12px rgba(59,130,246,.18);transform:translateY(-1px);}
+        .reserv-chip:active{cursor:grabbing;}
+        .reserv-chip.dragging{opacity:.45;cursor:grabbing;border-color:#1d4ed8;}
+        .reserv-chip-grip{color:#94a3b8;font-size:11px;line-height:1;flex-shrink:0;font-weight:900;letter-spacing:-1px;}
         .reserv-chip-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-        .reserv-chip-qty{font-variant-numeric:tabular-nums;color:#1d4ed8;font-weight:900;}
+        .reserv-chip-qty{font-variant-numeric:tabular-nums;color:#1d4ed8;font-weight:900;background:#dbeafe;border-radius:6px;padding:1px 6px;font-size:10px;}
         .reserv-chip-x{border:none;background:#fee2e2;color:#b91c1c;border-radius:6px;width:18px;height:18px;font-weight:900;font-size:11px;line-height:1;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:0;}
         .reserv-chip-x:hover{background:#fca5a5;color:white;}
-        .reserv-empty{font-size:10px;color:#cbd5e1;font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-style:italic;}
+        .reserv-empty{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;border:1.5px dashed #cbd5e1;border-radius:9px;background:#fafbfc;font-size:9px;color:#94a3b8;font-weight:900;text-transform:uppercase;letter-spacing:.08em;}
+        .reserv-empty-emoji{font-size:11px;line-height:1;}
     </style>
 </head>
 <body>
@@ -348,59 +360,12 @@
     </div>
     <!-- /NSD + Available 2-col grid -->
 
-    <!-- ── Monthly Maturity Allocation ── -->
-    <div>
-        <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
-            <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">🌱 Monthly Maturity Allocation</h2>
-            <div class="flex items-center gap-2 relative">
-                <div id="month-tabs" class="flex gap-1 bg-white rounded-xl border border-slate-200 p-1 shadow-sm scroll-x-fade flex-wrap"></div>
-                <div class="relative">
-                    <button id="history-btn" onclick="toggleHistoryMenu()" class="text-[10px] font-black text-slate-600 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 transition-colors flex items-center gap-1.5 shadow-sm uppercase tracking-widest" title="Show past maturity months">
-                        <span>🕘</span><span>History</span>
-                        <span id="history-count" class="text-[9px] bg-slate-200 text-slate-700 rounded-full px-1.5 py-0.5">0</span>
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"/></svg>
-                    </button>
-                    <div id="history-menu" class="hidden absolute right-0 mt-1 w-56 max-h-[300px] overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-xl z-40 p-1.5"></div>
-                </div>
-            </div>
-        </div>
-        <div id="active-month-banner" class="hidden text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 mb-2"></div>
-
-        <div class="dash-card scroll-x-fade">
-            <table class="mat-table min-w-[1200px]">
-                <thead>
-                    <tr>
-                        <th>Maturity Date</th>
-                        <th>Location</th>
-                        <th>Plot</th>
-                        <th>Batch</th>
-                        <th>Breed</th>
-                        <th class="text-right">Qty Transplanted</th>
-                        <th class="text-right">After 10% Culling</th>
-                        <th>Reservation</th>
-                        <th class="text-right">Reserved Qty</th>
-                        <th class="text-right">Balance</th>
-                        <th>Plot Status</th>
-                        <th>Move to Premium</th>
-                    </tr>
-                </thead>
-                <tbody id="maturity-rows">
-                    <tr><td colspan="12" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading maturity data…</td></tr>
-                </tbody>
-                <tfoot id="maturity-foot"></tfoot>
-            </table>
-        </div>
-
-        <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
-            <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Maturity date = transplant date + 9 months. After 10% culling = qty × 0.9. Reservations & plot status are placeholders until the <span class="font-mono">shared_plot_allocations</span> SQL is run.
-        </div>
-    </div>
-
     <!-- ── Capacity Heatmap (matured vs reserved by nursery × month) ── -->
+    <!-- Sits ABOVE the maturity allocation so admins watch live utilisation while dragging cards. -->
     <div>
         <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
             <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">🔥 Capacity Heatmap</h2>
-            <span class="text-[9px] font-bold text-slate-400">Matured-stock utilisation by nursery and month</span>
+            <span class="text-[9px] font-bold text-slate-400">Live: matured-stock utilisation by nursery × month</span>
         </div>
         <div class="dash-card p-3 scroll-x-fade">
             <div id="heatmap-area" class="min-w-[700px]">
@@ -418,6 +383,62 @@
         </div>
         <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
             <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — % = pending-collection qty ÷ matured qty (after 10% culling) for that nursery × month. Higher % = less spare capacity.
+        </div>
+    </div>
+
+    <!-- ── Monthly Maturity Allocation ── -->
+    <div>
+        <div id="active-month-banner" class="hidden text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 mb-2"></div>
+
+        <div class="dash-card overflow-hidden">
+            <div class="mat-card-head">
+                <div class="mat-card-title">
+                    <div class="mat-card-title-icon">🌱</div>
+                    <div>
+                        <div class="mat-card-title-text">Monthly Maturity Allocation</div>
+                        <div class="mat-card-title-sub">Drag customer cards onto a row · drag a chip to move it to another row</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 relative flex-wrap">
+                    <div id="month-tabs" class="flex gap-1 bg-slate-50 rounded-xl border border-slate-200 p-1 shadow-sm scroll-x-fade flex-wrap"></div>
+                    <div class="relative">
+                        <button id="history-btn" onclick="toggleHistoryMenu()" class="text-[10px] font-black text-slate-600 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 transition-colors flex items-center gap-1.5 shadow-sm uppercase tracking-widest" title="Show past maturity months">
+                            <span>🕘</span><span>History</span>
+                            <span id="history-count" class="text-[9px] bg-slate-200 text-slate-700 rounded-full px-1.5 py-0.5">0</span>
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"/></svg>
+                        </button>
+                        <div id="history-menu" class="hidden absolute right-0 mt-1 w-56 max-h-[300px] overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-xl z-40 p-1.5"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="scroll-x-fade">
+                <table class="mat-table min-w-[1200px]">
+                    <thead>
+                        <tr>
+                            <th>Maturity Date</th>
+                            <th>Location</th>
+                            <th>Plot</th>
+                            <th>Batch</th>
+                            <th>Breed</th>
+                            <th class="text-right">Qty Transplanted</th>
+                            <th class="text-right">After 10% Culling</th>
+                            <th>Reservation</th>
+                            <th class="text-right">Reserved Qty</th>
+                            <th class="text-right">Balance</th>
+                            <th>Plot Status</th>
+                            <th>Move to Premium</th>
+                        </tr>
+                    </thead>
+                    <tbody id="maturity-rows">
+                        <tr><td colspan="12" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading maturity data…</td></tr>
+                    </tbody>
+                    <tfoot id="maturity-foot"></tfoot>
+                </table>
+            </div>
+        </div>
+
+        <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
+            <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Maturity date = transplant date + 9 months. After 10% culling = qty × 0.9. Reservations & plot status are placeholders until the <span class="font-mono">shared_plot_allocations</span> SQL is run.
         </div>
     </div>
 
@@ -1169,12 +1190,13 @@
 
             const reservHtml = rowAllocs.length
                 ? `<div class="reserv-stack">${rowAllocs.map(a => `
-                    <div class="reserv-chip" title="${escapeHtml(a.order_number || '')}">
+                    <div class="reserv-chip" draggable="true" data-alloc-id="${escapeHtml(a.id)}" title="${escapeHtml(a.order_number || '')} — drag chip to move to another row">
+                        <span class="reserv-chip-grip">⋮⋮</span>
                         <span class="reserv-chip-name">${escapeHtml(a.customer_name || '—')}</span>
                         <span class="reserv-chip-qty">${(a.allocated_qty || 0).toLocaleString()}</span>
-                        <button class="reserv-chip-x" onclick="removeAllocation('${escapeHtml(a.id)}')" title="Remove allocation">×</button>
+                        <button class="reserv-chip-x" onclick="event.stopPropagation();removeAllocation('${escapeHtml(a.id)}')" onmousedown="event.stopPropagation()" draggable="false" title="Remove allocation">×</button>
                     </div>`).join('')}</div>`
-                : `<div class="reserv-empty">— drop a customer card here —</div>`;
+                : `<div class="reserv-empty"><span class="reserv-empty-emoji">🎯</span><span>Drop card here</span></div>`;
 
             return `
                 <tr data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${balance}">
@@ -1210,6 +1232,11 @@
             tr.addEventListener('dragover',  onRowDragOver);
             tr.addEventListener('dragleave', onRowDragLeave);
             tr.addEventListener('drop',      onRowDrop);
+        });
+        // wire drag handlers on existing chips so admins can move allocations between rows
+        tbody.querySelectorAll('.reserv-chip[draggable="true"]').forEach(el => {
+            el.addEventListener('dragstart', onChipDragStart);
+            el.addEventListener('dragend',   onChipDragEnd);
         });
 
         tfoot.innerHTML = `
@@ -2050,6 +2077,8 @@
     }
 
     // ── Drag handlers ──────────────────────────────────────────────────────
+    let _draggingAlloc = null;       // set when an existing chip is being dragged to another row
+
     function onCardDragStart(e) {
         const orderId = e.currentTarget.dataset.orderId;
         const order = allCustomerOrders.find(o => o.id === orderId);
@@ -2080,19 +2109,65 @@
         });
     }
 
+    // Chip drag — move an existing allocation to a different maturity row.
+    function onChipDragStart(e) {
+        // Don't start a drag if the user mouse-downed on the X button
+        if (e.target && e.target.closest && e.target.closest('.reserv-chip-x')) {
+            e.preventDefault();
+            return;
+        }
+        const allocId = e.currentTarget.dataset.allocId;
+        const alloc = batchAllocations.find(a => a.id === allocId);
+        if (!alloc) return;
+        _draggingAlloc = {
+            id: allocId,
+            qty: alloc.allocated_qty || 0,
+            sourceBatch: alloc.batch_name || '',
+            sourcePlot:  alloc.plot_name  || '',
+            customer:    alloc.customer_name || '',
+        };
+        e.currentTarget.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', 'alloc:' + allocId); } catch(_) {}
+
+        // Highlight valid target rows (balance > 0, not the source row).
+        document.querySelectorAll('#maturity-rows tr[data-batch-key]').forEach(tr => {
+            const isSource = tr.dataset.batchName === _draggingAlloc.sourceBatch
+                          && tr.dataset.plotName  === _draggingAlloc.sourcePlot;
+            if (isSource) return;
+            const balance = parseInt(tr.dataset.batchBalance || '0', 10);
+            if (balance > 0) tr.classList.add('drop-target');
+            else             tr.classList.add('drop-disabled');
+        });
+    }
+
+    function onChipDragEnd(e) {
+        e.currentTarget.classList.remove('dragging');
+        _draggingAlloc = null;
+        document.querySelectorAll('#maturity-rows tr').forEach(tr => {
+            tr.classList.remove('drop-target', 'drop-hover', 'drop-disabled');
+        });
+    }
+
     function onRowDragOver(e) {
-        if (!_draggingOrder) return;
+        if (!_draggingOrder && !_draggingAlloc) return;
         const tr = e.currentTarget;
+        // Disallow drop onto the source row when moving a chip
+        if (_draggingAlloc) {
+            const isSource = tr.dataset.batchName === _draggingAlloc.sourceBatch
+                          && tr.dataset.plotName  === _draggingAlloc.sourcePlot;
+            if (isSource) return;
+        }
         const balance = parseInt(tr.dataset.batchBalance || '0', 10);
         if (balance <= 0) return;
         e.preventDefault();
-        e.dataTransfer.dropEffect = 'copy';
+        e.dataTransfer.dropEffect = _draggingAlloc ? 'move' : 'copy';
         tr.classList.add('drop-hover');
     }
     function onRowDragLeave(e) { e.currentTarget.classList.remove('drop-hover'); }
 
     async function onRowDrop(e) {
-        if (!_draggingOrder) return;
+        if (!_draggingOrder && !_draggingAlloc) return;
         e.preventDefault();
         const tr = e.currentTarget;
         tr.classList.remove('drop-hover');
@@ -2100,6 +2175,16 @@
         const batchName = tr.dataset.batchName || '';
         const plotName  = tr.dataset.plotName  || '';
         if (balance <= 0) return;
+
+        // Chip move takes priority over a new card drop
+        if (_draggingAlloc) {
+            const isSource = batchName === _draggingAlloc.sourceBatch && plotName === _draggingAlloc.sourcePlot;
+            if (isSource) return;
+            const newQty = Math.min(balance, _draggingAlloc.qty);
+            if (newQty <= 0) return;
+            await moveAllocationToBatch(_draggingAlloc.id, batchName, plotName, newQty);
+            return;
+        }
 
         const { orderId, customer, orderNumber, remaining } = _draggingOrder;
         const allocQty = Math.min(balance, remaining);
@@ -2109,6 +2194,29 @@
             orderId, customer, orderNumber,
             batchName, plotName, qty: allocQty,
         });
+    }
+
+    async function moveAllocationToBatch(allocId, batchName, plotName, qty) {
+        const idx = batchAllocations.findIndex(a => a.id === allocId);
+        if (idx === -1) return;
+        const orig = batchAllocations[idx];
+        const updated = { ...orig, batch_name: batchName, plot_name: plotName, allocated_qty: qty, updated_at: new Date().toISOString() };
+        batchAllocations[idx] = updated;
+
+        if (_allocBcaTableExists && !String(allocId).startsWith('local-')) {
+            try {
+                const { error } = await _supabase
+                    .from('shared_batch_customer_allocations')
+                    .update({ batch_name: batchName, plot_name: plotName, allocated_qty: qty, updated_at: updated.updated_at })
+                    .eq('id', allocId);
+                if (error) throw error;
+            } catch (err) {
+                console.warn('[BCA] move failed — restoring local state:', err?.message || err);
+                batchAllocations[idx] = orig;
+            }
+        }
+        renderMaturityTable();
+        renderAllocDrawer();
     }
 
     async function allocateOrderToBatch({ orderId, customer, orderNumber, batchName, plotName, qty }) {
