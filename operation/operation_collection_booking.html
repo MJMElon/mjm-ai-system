@@ -96,6 +96,23 @@
   .month-cell.holiday { background:#fef2f2; }
   .month-holiday-tag { display:block; font-size:10px; font-weight:700; color:#dc2626; line-height:1.2; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
+  /* DATE OVERRIDE (operator can manually open/close any day) */
+  .override-banner { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 16px; border-radius:14px; margin-bottom:14px; color:white; font-weight:700; flex-wrap:wrap; }
+  .override-banner.open { background:linear-gradient(135deg,#059669,#10b981); }
+  .override-banner.closed { background:linear-gradient(135deg,#dc2626,#ef4444); }
+  .override-banner.default-closed { background:linear-gradient(135deg,#f59e0b,#fbbf24); color:#1e293b; }
+  .override-banner-text { font-size:13px; line-height:1.4; flex:1; min-width:200px; }
+  .override-banner-actions { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .override-banner select { background:white; color:#1e293b; font-weight:700; font-size:11px; padding:7px 10px; border-radius:8px; border:none; font-family:'Outfit',sans-serif; cursor:pointer; }
+  .override-btn { background:white; color:#1e293b; font-weight:900; font-size:10px; text-transform:uppercase; letter-spacing:.06em; padding:8px 14px; border-radius:999px; border:none; cursor:pointer; transition:transform .15s,box-shadow .15s; font-family:'Outfit',sans-serif; }
+  .override-btn:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.15); }
+  .override-btn.danger { background:#1e293b; color:white; }
+  .override-badge { position:absolute; top:3px; right:3px; font-size:7px; font-weight:900; padding:2px 5px; border-radius:5px; letter-spacing:.04em; text-transform:uppercase; line-height:1; z-index:2; }
+  .override-badge.open { background:#10b981; color:white; }
+  .override-badge.closed { background:#ef4444; color:white; }
+  .month-cell.override-open { background:#ecfdf5 !important; }
+  .month-cell.override-closed { background:#fef2f2 !important; }
+
   .day-count { display:inline-flex; align-items:center; justify-content:center; background:#10b981; color:white; font-size:11px; font-weight:900; min-width:22px; height:22px; border-radius:11px; padding:0 6px; margin-left:5px; }
 
   /* MOBILE DAY VIEW */
@@ -492,6 +509,135 @@ function getHoliday(dateStr) {
   return MY_HOLIDAYS[dateStr] || null;
 }
 
+// ─── DATE OVERRIDES (operator can open/close any day) ───
+let dateOverrides = {};
+
+async function loadDateOverrides() {
+  try {
+    var { data } = await _supabase.from('shared_date_overrides').select('*');
+    dateOverrides = {};
+    (data || []).forEach(function(o) { dateOverrides[o.date_str] = o; });
+  } catch(e) { console.error('loadDateOverrides:', e); }
+}
+
+function getDefaultClosedReason(ds) {
+  var d = new Date(ds + 'T00:00:00');
+  if (d.getDay() === 0) return 'Sunday';
+  if (MY_HOLIDAYS[ds]) return MY_HOLIDAYS[ds];
+  return null;
+}
+
+function isEffectivelyClosed(ds) {
+  var ovr = dateOverrides[ds];
+  if (ovr) return !ovr.is_open;
+  return !!getDefaultClosedReason(ds);
+}
+
+function getEffectiveHours(ds) {
+  var ovr = dateOverrides[ds];
+  if (ovr) {
+    if (!ovr.is_open) return [];
+    var arr = [];
+    for (var h = ovr.open_hour; h < ovr.close_hour; h++) arr.push(h);
+    return arr;
+  }
+  var d = new Date(ds + 'T00:00:00'), dow = d.getDay();
+  if (dow === 0 || MY_HOLIDAYS[ds]) return [];
+  return dow === 6 ? HOURS_SAT : HOURS_WEEKDAY;
+}
+
+async function applyDateOverride(isOpen, openHour, closeHour) {
+  if (!dayModalDate) return;
+  var ds = dayModalDate;
+  var record = { date_str: ds, is_open: isOpen };
+  if (isOpen) {
+    record.open_hour = openHour;
+    record.close_hour = closeHour;
+    record.note = 'Override open: ' + formatHour(openHour) + '-' + formatHour(closeHour);
+  } else {
+    record.open_hour = null;
+    record.close_hour = null;
+    record.note = 'Manual closure';
+  }
+  var { error } = await _supabase.from('shared_date_overrides').upsert(record);
+  if (error) { showToast('❌ ' + error.message); return; }
+  dateOverrides[ds] = record;
+  showToast(isOpen ? '✅ Opened ' + formatHour(openHour) + ' – ' + formatHour(closeHour) : '🚫 Closed for collection');
+  renderCalendar();
+  renderBoard();
+}
+
+async function resetDateOverride() {
+  if (!dayModalDate) return;
+  var ds = dayModalDate;
+  var { error } = await _supabase.from('shared_date_overrides').delete().eq('date_str', ds);
+  if (error) { showToast('❌ ' + error.message); return; }
+  delete dateOverrides[ds];
+  showToast('↩ Reverted to default');
+  renderCalendar();
+  renderBoard();
+}
+
+function saveOverrideOpen() {
+  var oh = parseInt(document.getElementById('ovr-open-h').value);
+  var ch = parseInt(document.getElementById('ovr-close-h').value);
+  if (ch <= oh) { showToast('❌ Close time must be after open time'); return; }
+  applyDateOverride(true, oh, ch);
+}
+
+function buildHourOptions(selected) {
+  var opts = '';
+  for (var h = 6; h <= 20; h++) {
+    opts += '<option value="' + h + '"' + (h === selected ? ' selected' : '') + '>' + formatHour(h) + '</option>';
+  }
+  return opts;
+}
+
+function buildOverrideBanner(ds) {
+  if (!ds) return '';
+  var defaultReason = getDefaultClosedReason(ds);
+  var override = dateOverrides[ds];
+  var statusCls, statusText, controls;
+
+  if (override && override.is_open) {
+    statusCls = 'open';
+    statusText = '✅ <b>Override:</b> Open ' + formatHour(override.open_hour) + ' – ' + formatHour(override.close_hour) +
+      (defaultReason ? ' <span style="opacity:.85;">(default: ' + defaultReason + ')</span>' : '');
+    controls = '<select id="ovr-open-h">' + buildHourOptions(override.open_hour) + '</select>' +
+               '<span style="color:white;font-weight:900;">→</span>' +
+               '<select id="ovr-close-h">' + buildHourOptions(override.close_hour) + '</select>' +
+               '<button class="override-btn" onclick="saveOverrideOpen()">Update Hours</button>' +
+               '<button class="override-btn danger" onclick="applyDateOverride(false)">🚫 Close</button>' +
+               '<button class="override-btn" onclick="resetDateOverride()">↩ Reset</button>';
+  } else if (override && !override.is_open) {
+    statusCls = 'closed';
+    statusText = '🚫 <b>Override:</b> Manually Closed' + (defaultReason ? '' : ' (was open by default)');
+    controls = '<select id="ovr-open-h">' + buildHourOptions(8) + '</select>' +
+               '<span style="color:white;font-weight:900;">→</span>' +
+               '<select id="ovr-close-h">' + buildHourOptions(17) + '</select>' +
+               '<button class="override-btn" onclick="saveOverrideOpen()">✅ Open</button>' +
+               '<button class="override-btn" onclick="resetDateOverride()">↩ Reset</button>';
+  } else if (defaultReason) {
+    statusCls = 'default-closed';
+    statusText = '🚫 <b>Closed:</b> ' + defaultReason + ' (default)';
+    controls = '<select id="ovr-open-h">' + buildHourOptions(8) + '</select>' +
+               '<span style="font-weight:900;">→</span>' +
+               '<select id="ovr-close-h">' + buildHourOptions(17) + '</select>' +
+               '<button class="override-btn" onclick="saveOverrideOpen()">✅ Open this Day</button>';
+  } else {
+    statusCls = 'open';
+    var d = new Date(ds + 'T00:00:00');
+    var defHrs = d.getDay() === 6 ? '8 AM – 12 PM' : '8 AM – 5 PM';
+    statusText = '✅ <b>Open</b> (default ' + defHrs + ')';
+    controls = '<button class="override-btn danger" onclick="applyDateOverride(false)">🚫 Close this Day</button>';
+  }
+
+  return '<div class="override-banner ' + statusCls + '">' +
+           '<div class="override-banner-text">' + statusText + '</div>' +
+           '<div class="override-banner-actions">' + controls + '</div>' +
+         '</div>';
+}
+
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat'];
 const DAY_FULL = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const HOURS_WEEKDAY = [8,9,10,11,12,13,14,15,16];
@@ -584,7 +730,7 @@ async function loadMonthBookings() {
 
 async function loadAll() {
   try {
-    await Promise.all([loadALData(), calView === 'month' ? loadMonthBookings() : loadBookings()]);
+    await Promise.all([loadALData(), loadDateOverrides(), calView === 'month' ? loadMonthBookings() : loadBookings()]);
     renderCalendar();
   } catch(err) {
     console.error('loadAll error:', err);
@@ -773,21 +919,29 @@ function renderMonth() {
       var isTodayCls = isToday(cellDate) ? ' today' : '';
       var pastCls = isPast(cellDate) ? ' past' : '';
       var otherCls = !isThisMonth ? ' other-month' : '';
-      var dow = cellDate.getDay();
-      var isSunday = dow === 0;
-      var closedCls = isSunday ? ' closed' : '';
 
       if (isThisMonth) hasContent = true;
 
       var ds = formatDate(cellDate);
       var bks = isThisMonth ? getMonthBookingsFor(ds) : [];
       var dayNum = cellDate.getDate();
-      var holiday = getHoliday(ds);
-      var holidayCls = holiday ? ' holiday' : '';
+      var defaultReason = getDefaultClosedReason(ds);
+      var override = dateOverrides[ds];
+      var effectivelyClosed = override ? !override.is_open : !!defaultReason;
+      var closedCls = effectivelyClosed ? ' closed' : '';
+      var holidayCls = (defaultReason && defaultReason !== 'Sunday') ? ' holiday' : '';
+      var overrideCls = '';
+      if (override) overrideCls = override.is_open ? ' override-open' : ' override-closed';
+
+      var overrideBadgeHtml = '';
+      if (override) {
+        overrideBadgeHtml = '<span class="override-badge ' + (override.is_open ? 'open' : 'closed') + '">' +
+          (override.is_open ? '✓ OPEN' : '✗ CLOSED') + '</span>';
+      }
 
       var pillsHtml = '';
-      if (holiday) {
-        pillsHtml += '<div class="month-holiday-tag">' + holiday + '</div>';
+      if (defaultReason && defaultReason !== 'Sunday') {
+        pillsHtml += '<div class="month-holiday-tag">' + defaultReason + '</div>';
       }
       bks.slice(0, 2).forEach(function(b) {
         var cls = b.status === 'completed' ? 'completed' : b.status === 'pending' ? 'pending' : 'booked';
@@ -799,11 +953,12 @@ function renderMonth() {
       }
 
       var clickAction = '';
-      if (isThisMonth && !isSunday && !isPast(cellDate)) {
+      if (isThisMonth && !isPast(cellDate)) {
         clickAction = ' onclick="openDayModal(\'' + ds + '\')"';
       }
 
-      html += '<div class="month-cell' + isTodayCls + pastCls + otherCls + closedCls + holidayCls + '"' + clickAction + '>' +
+      html += '<div class="month-cell' + isTodayCls + pastCls + otherCls + closedCls + holidayCls + overrideCls + '"' + clickAction + '>' +
+        overrideBadgeHtml +
         '<div class="month-day-num">' + dayNum + '</div>' +
         pillsHtml +
       '</div>';
@@ -1504,7 +1659,8 @@ function renderBoard() {
     columns.push({ id: 'nursery-' + n.replace(/[^a-zA-Z0-9]/g, '_'), label: '🌱 ' + n, type: 'nursery', nurseryName: n });
   });
 
-  var html = '<div class="alloc-board">';
+  var html = buildOverrideBanner(dayModalDate);
+  html += '<div class="alloc-board">';
   columns.forEach(function(col) {
     var colBookings = dayBookings.filter(function(b) {
       if (col.type === 'pending') return !b.nursery_name || b.nursery_name === '' || b.nursery_name === 'PENDING';
