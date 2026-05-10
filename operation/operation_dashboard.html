@@ -169,7 +169,7 @@
                     <p class="text-xs text-slate-500 font-semibold leading-relaxed">Configure nurseries, plots, breeds, and inventory master data.</p>
                     <div class="mt-5 flex items-center text-[10px] font-bold text-purple-600 uppercase tracking-widest group-hover:translate-x-2 transition-transform">Enter Module <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></div>
                 </a>
-                <a href="operation_reports.html" class="block dash-card p-7 group hover:border-amber-400 hover:shadow-xl hover:shadow-amber-100 transition-all duration-300 decoration-transparent border border-transparent">
+                <a id="reports-card" href="operation_reports.html" class="hidden block dash-card p-7 group hover:border-amber-400 hover:shadow-xl hover:shadow-amber-100 transition-all duration-300 decoration-transparent border border-transparent">
                     <div class="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600 mb-5 group-hover:bg-amber-500 group-hover:text-white transition-all">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                     </div>
@@ -373,9 +373,11 @@
     async function applyAccessForCurrentUser() {
         try {
             await MJMAccess.load(_supabase);
-            const card = document.getElementById('user-access-card');
-            if (card && MJMAccess.canManageUsers()) card.classList.remove('hidden');
-        } catch (e) { /* ignore — card stays hidden */ }
+            const userCard    = document.getElementById('user-access-card');
+            const reportsCard = document.getElementById('reports-card');
+            if (userCard    && MJMAccess.canManageUsers())  userCard.classList.remove('hidden');
+            if (reportsCard && MJMAccess.canAccess('reports')) reportsCard.classList.remove('hidden');
+        } catch (e) { /* ignore — cards stay hidden */ }
     }
 
     _supabase.auth.getSession().then(({ data: { session } }) => {
