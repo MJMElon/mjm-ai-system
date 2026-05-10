@@ -112,9 +112,12 @@
         .cust-table tbody td.t-cust .t-sub{font-weight:600;color:#64748b;font-size:10px;font-family:'Courier New',monospace;}
         .cust-table tbody td.t-mo.has-qty{background:#dbeafe;color:#1d4ed8;font-weight:900;}
         .cust-table tbody td.t-mo.is-now{background:#ecfdf5;color:#065f46;}
+        .cust-table tbody td.t-mo.has-booked{background:#fef3c7;color:#a16207;font-weight:900;border:1px dashed #fcd34d;}
+        .cust-table tbody td.t-mo .booked-tag{display:block;font-size:8px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:#a16207;margin-top:1px;}
         .cust-table tbody td.t-tot{background:#fefce8;color:#854d0e;font-weight:900;}
         .cust-table tbody tr:hover{background:#fafbff;}
         .cust-table tbody tr:hover td.t-mo.has-qty{background:#bfdbfe;}
+        .cust-table tbody tr:hover td.t-mo.has-booked{background:#fde68a;}
         .pill-status{display:inline-block;padding:2px 7px;border-radius:999px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1px solid;white-space:nowrap;}
         .pill-paid     { background:#dcfce7;color:#15803d;border-color:#86efac;}
         .pill-partial  { background:#fef3c7;color:#a16207;border-color:#fcd34d;}
@@ -253,7 +256,6 @@
         <span class="font-black text-slate-800 uppercase tracking-widest text-xs">Seedling Stock Sales Management</span>
     </div>
     <div class="flex items-center gap-2">
-        <a href="operation_collection_booking.html" class="text-[10px] font-bold text-slate-500 hover:text-emerald-700 uppercase tracking-widest bg-slate-50 hover:bg-emerald-50 px-3 py-1.5 rounded-full border border-slate-200 transition-colors no-underline" style="text-decoration:none;">Collection Bookings</a>
         <a href="operation_inventory_map.html" class="text-[10px] font-bold text-slate-500 hover:text-blue-700 uppercase tracking-widest bg-slate-50 hover:bg-blue-50 px-3 py-1.5 rounded-full border border-slate-200 transition-colors no-underline" style="text-decoration:none;">Inventory Map</a>
         <a href="operation_inventory_all.html" class="text-[10px] font-bold text-slate-500 hover:text-indigo-700 uppercase tracking-widest bg-slate-50 hover:bg-indigo-50 px-3 py-1.5 rounded-full border border-slate-200 transition-colors no-underline" style="text-decoration:none;">Map Layers</a>
     </div>
@@ -265,7 +267,7 @@
     <div class="ssm-tabs">
         <button class="ssm-tab active customer" id="ssm-tab-customer" onclick="switchSsmTab('customer')">
             <span class="ssm-tab-emoji">👥</span>
-            <span><div>Customer Collection</div><div class="ssm-tab-sub">Admin pickups &amp; follow-ups</div></span>
+            <span><div>Customer Order Monitoring</div><div class="ssm-tab-sub">Admin pickups &amp; follow-ups</div></span>
         </button>
         <button class="ssm-tab stock" id="ssm-tab-stock" onclick="switchSsmTab('stock')">
             <span class="ssm-tab-emoji">🌱</span>
@@ -485,17 +487,16 @@
     <!-- ══════════════ CUSTOMER PANE (default) ══════════════ -->
     <div id="ssm-pane-customer" class="space-y-5">
 
-        <!-- ── To-Do List + Aging Report (side-by-side) ── -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-
-            <!-- To-Do List -->
-            <div class="metric-card !border-amber-300 border-l-4 relative overflow-hidden flex flex-col">
-                <div class="px-4 pt-4 pb-3 border-b border-slate-100">
-                    <div class="flex items-center gap-2 mb-3">
+        <!-- ── To-Do List (full-width) ── -->
+        <div class="metric-card !border-amber-300 border-l-4 relative overflow-hidden flex flex-col">
+            <div class="px-4 pt-4 pb-3 border-b border-slate-100">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                    <div class="flex items-center gap-2">
                         <div class="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center text-amber-600">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
                         </div>
-                        <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Customer Payment Status To-Do List</span>
+                        <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">To-Do List</span>
+                        <span id="todo-section-meta" class="text-[9px] font-bold text-slate-400 ml-1"></span>
                     </div>
                     <div class="flex gap-1.5">
                         <button class="todo-tab active unpaid" id="todo-tab-unpaid" onclick="switchTodoTab('unpaid')">
@@ -508,40 +509,87 @@
                         </button>
                     </div>
                 </div>
-                <div class="px-3 pt-3 pb-2 flex-1 min-h-0">
-                    <div class="notebook max-h-[420px] overflow-y-auto" id="todo-body">
-                        <div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading…</div>
+            </div>
+            <div class="px-3 pt-3 pb-3 flex-1 min-h-0">
+                <div class="notebook max-h-[360px] overflow-y-auto" id="todo-body">
+                    <div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading…</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Customer Payment Status + Aging Report (side-by-side, matched theme) ── -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+
+            <!-- Customer Payment Status summary -->
+            <div class="metric-card !border-emerald-300 border-l-4 relative overflow-hidden flex flex-col">
+                <div class="px-4 pt-4 pb-3 border-b border-slate-100">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8v1m0 6v1m0 4v1M4 6h16M4 18h16"/></svg>
+                            </div>
+                            <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Customer Payment Status</span>
+                        </div>
+                        <span id="pay-status-meta" class="text-[9px] font-bold text-slate-400">—</span>
                     </div>
-                    <div class="text-[9px] font-bold text-slate-400 mt-2 px-1 text-right" id="todo-section-meta"></div>
+                </div>
+                <div class="p-4 grid grid-cols-3 gap-3 flex-1">
+                    <div class="rounded-xl bg-red-50/70 border border-red-100 p-3 flex flex-col">
+                        <div class="text-[9px] font-black text-red-700 uppercase tracking-widest mb-1">Unpaid</div>
+                        <div class="text-2xl font-black text-red-700 leading-none mb-1" id="pay-unpaid-count">—</div>
+                        <div class="text-[10px] font-bold text-red-700/80 leading-tight mt-auto" id="pay-unpaid-amt">—</div>
+                    </div>
+                    <div class="rounded-xl bg-blue-50/70 border border-blue-100 p-3 flex flex-col">
+                        <div class="text-[9px] font-black text-blue-700 uppercase tracking-widest mb-1">Credit</div>
+                        <div class="text-2xl font-black text-blue-700 leading-none mb-1" id="pay-credit-count">—</div>
+                        <div class="text-[10px] font-bold text-blue-700/80 leading-tight mt-auto" id="pay-credit-amt">—</div>
+                    </div>
+                    <div class="rounded-xl bg-emerald-50/70 border border-emerald-100 p-3 flex flex-col">
+                        <div class="text-[9px] font-black text-emerald-700 uppercase tracking-widest mb-1">Paid · Pending Pickup</div>
+                        <div class="text-2xl font-black text-emerald-700 leading-none mb-1" id="pay-paid-count">—</div>
+                        <div class="text-[10px] font-bold text-emerald-700/80 leading-tight mt-auto" id="pay-paid-amt">—</div>
+                    </div>
+                </div>
+                <div class="px-4 pb-3 text-[9px] text-slate-500 leading-snug">
+                    <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Unpaid = orders awaiting payment. Credit = collected stock pending invoicing. Paid · Pending Pickup = paid orders not yet collected.
                 </div>
             </div>
 
             <!-- Aging Report (overdue collections) -->
-            <div class="flex flex-col">
-                <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
-                    <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">⏰ Aging Report — Overdue Collections</h2>
-                    <span id="aging-meta" class="text-[9px] font-bold text-slate-400">—</span>
+            <div class="metric-card !border-rose-300 border-l-4 relative overflow-hidden flex flex-col">
+                <div class="px-4 pt-4 pb-3 border-b border-slate-100">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 bg-rose-100 rounded-lg flex items-center justify-center text-rose-600">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            </div>
+                            <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Aging Report — Overdue Collections</span>
+                        </div>
+                        <span id="aging-meta" class="text-[9px] font-bold text-slate-400">—</span>
+                    </div>
                 </div>
-                <div class="dash-card scroll-x-fade max-h-[470px] overflow-y-auto">
-                    <table class="aging-table min-w-[760px]">
-                        <thead>
-                            <tr>
-                                <th>Customer</th>
-                                <th>Order #</th>
-                                <th>Booked Date</th>
-                                <th class="num">Days Overdue</th>
-                                <th class="num">Pending Qty</th>
-                                <th>Status</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="aging-rows">
-                            <tr><td colspan="7" class="text-center py-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading overdue list…</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
-                    <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Lists active orders whose booked-collection date is past today and not yet marked completed. 0–7 days = warn (yellow), 8–14 = overdue (red), 15+ = severe.
+                <div class="p-3 flex-1 min-h-0 flex flex-col">
+                    <div class="scroll-x-fade max-h-[360px] overflow-y-auto rounded-lg border border-slate-100">
+                        <table class="aging-table min-w-[760px]">
+                            <thead>
+                                <tr>
+                                    <th>Customer</th>
+                                    <th>Order #</th>
+                                    <th>Booked Date</th>
+                                    <th class="num">Days Overdue</th>
+                                    <th class="num">Pending Qty</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="aging-rows">
+                                <tr><td colspan="7" class="text-center py-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading overdue list…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
+                        <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Lists active orders whose booked-collection date is past today and not yet marked completed. 0–7 days = warn (yellow), 8–14 = overdue (red), 15+ = severe.
+                    </div>
                 </div>
             </div>
 
@@ -561,7 +609,7 @@
                     <button onclick="changeSchedWeek(-1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-100 flex items-center justify-center text-slate-500 hover:text-blue-700 font-black text-base cursor-pointer transition-colors border-none">‹</button>
                     <button onclick="goSchedToday()" class="text-[9px] font-black text-emerald-700 uppercase tracking-widest bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 cursor-pointer transition-colors">Today</button>
                     <button onclick="changeSchedWeek(1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-100 flex items-center justify-center text-slate-500 hover:text-blue-700 font-black text-base cursor-pointer transition-colors border-none">›</button>
-                    <a href="operation_collection_booking.html" class="text-[9px] font-black text-blue-700 uppercase tracking-widest bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors no-underline ml-1" style="text-decoration:none;">Manage →</a>
+                    <a href="operation_collection_booking.html" class="text-[9px] font-black text-blue-700 uppercase tracking-widest bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors no-underline ml-1" style="text-decoration:none;">Collection Bookings →</a>
                 </div>
             </div>
             <div class="p-3">
@@ -585,8 +633,6 @@
                         <option value="completed">Completed</option>
                         <option value="all">All (incl. cancelled)</option>
                     </select>
-                    <button onclick="shiftCustomerMonths(-1)" class="text-[10px] font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg px-2.5 py-1.5 transition-colors" title="Earlier months">◀</button>
-                    <button onclick="shiftCustomerMonths(1)" class="text-[10px] font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg px-2.5 py-1.5 transition-colors" title="Later months">▶</button>
                 </div>
             </div>
 
@@ -601,7 +647,7 @@
             </div>
 
             <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
-                <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Per-month columns show qty collected from <span class="font-mono">salesweb_order_collections</span>. Click a customer name to see their full pickup history.
+                <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Months start from the current month. Future months only appear when a customer has a booking that month. <span class="inline-block px-1 rounded" style="background:#dbeafe;color:#1d4ed8;font-weight:900;">blue</span> = qty collected (<span class="font-mono">salesweb_order_collections</span>) · <span class="inline-block px-1 rounded" style="background:#fef3c7;color:#a16207;font-weight:900;border:1px dashed #fcd34d;">amber</span> = qty booked for collection (<span class="font-mono">shared_collection_bookings</span>). Click a customer name for the full pickup history.
             </div>
         </div>
 
@@ -879,6 +925,31 @@
         document.getElementById('todo-count-unpaid').innerText = todoData.unpaid.length;
         document.getElementById('todo-count-credit').innerText = todoData.credit.length;
         renderTodoTab();
+        renderPaymentStatusSummary();
+    }
+
+    function renderPaymentStatusSummary() {
+        const fmtRM = n => 'RM ' + (Number(n) || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        const unpaidCount  = todoData.unpaid.length;
+        const unpaidAmt    = todoData.unpaid.reduce((s, r) => s + (r.totalAmount || 0), 0);
+        const creditCount  = todoData.credit.length;
+        const creditAmt    = todoData.credit.reduce((s, r) => s + (r.billAmount || 0), 0);
+
+        const paidPending  = (allCustomerOrders || []).filter(r => r.derivedStatus === 'Paid · Pending Pickup');
+        const paidCount    = paidPending.length;
+        const paidQty      = paidPending.reduce((s, r) => s + (r.balance || 0), 0);
+
+        const setText = (id, txt) => { const el = document.getElementById(id); if (el) el.innerText = txt; };
+        setText('pay-unpaid-count', unpaidCount.toLocaleString());
+        setText('pay-unpaid-amt',   unpaidCount ? fmtRM(unpaidAmt) : '—');
+        setText('pay-credit-count', creditCount.toLocaleString());
+        setText('pay-credit-amt',   creditCount ? fmtRM(creditAmt) : '—');
+        setText('pay-paid-count',   paidCount.toLocaleString());
+        setText('pay-paid-amt',     paidCount ? `${paidQty.toLocaleString()} qty awaiting` : '—');
+
+        const meta = document.getElementById('pay-status-meta');
+        if (meta) meta.innerText = `${unpaidCount + creditCount + paidCount} action items`;
     }
 
     async function loadUnpaidScenario() {
@@ -1389,26 +1460,38 @@
     }
 
     // ── Customer Order Management (collection grid) ──────────────────────────
-    let allCustomerOrders = [];   // [{id, order#, customer, orderDate, totalQty, totalAmount, status, paymentMethod, collectionsByMonth, totalCollected}]
-    let customerMonthsBackOffset = 0;  // 0 = window ends at current month
-    const CUST_WINDOW_MONTHS = 7;
+    // Each row: { id, orderNumber, customer, orderDate, totalQty, totalAmount, status,
+    //            paymentMethod, collectionsByMonth, bookingsByMonth, totalCollected, balance }
+    let allCustomerOrders = [];
 
     async function loadCustomerOrders() {
         try {
-            // Pull all relevant orders + items + collections in parallel.
-            // Collections table is optional — falls back to single collected_qty/collected_at.
-            const [ordRes, _itemsRes, _collRes] = await Promise.all([
+            // Start of current month — used to filter forward-looking bookings.
+            const monthStartStr = (() => {
+                const d = new Date(); d.setDate(1);
+                return d.toISOString().slice(0,10);
+            })();
+
+            // Pull orders + items + collections + future bookings in parallel.
+            // Collections + bookings tables are optional — both gracefully degrade.
+            const [ordRes, _itemsRes, _collRes, _bookRes] = await Promise.all([
                 _supabase.from('salesweb_customer_orders')
                     .select('id,order_number,customer_name,total,status,created_at,payment_method,collected_qty,collected_at')
                     .order('created_at', { ascending: true }),
                 _supabase.from('salesweb_order_items').select('order_id,quantity,unit_price,subtotal'),
                 _supabase.from('salesweb_order_collections').select('order_id,collected_qty,collected_at')
+                    .then(r => r, e => ({ data: null, error: e })),
+                _supabase.from('shared_collection_bookings')
+                    .select('order_number,booking_date,collection_qty,status')
+                    .gte('booking_date', monthStartStr)
+                    .not('status', 'in', '("cancelled")')
                     .then(r => r, e => ({ data: null, error: e }))
             ]);
 
             const orders = ordRes.data || [];
             const items  = _itemsRes.data || [];
             const collections = _collRes?.data; // null if table missing
+            const bookings    = _bookRes?.data || [];
 
             // Aggregate items per order (total qty + total amount).
             const itemsByOrder = {};
@@ -1438,9 +1521,19 @@
                 });
             }
 
+            // Aggregate forward bookings per order_number, bucketed by booking_date YYYY-MM.
+            const bookByOrderNumber = {};
+            bookings.forEach(b => {
+                if (!b.order_number || !b.booking_date) return;
+                const k = b.booking_date.slice(0,7); // YYYY-MM
+                if (!bookByOrderNumber[b.order_number]) bookByOrderNumber[b.order_number] = {};
+                bookByOrderNumber[b.order_number][k] = (bookByOrderNumber[b.order_number][k] || 0) + (b.collection_qty || 0);
+            });
+
             allCustomerOrders = orders.map(o => {
                 const it = itemsByOrder[o.id] || { qty: 0, amt: 0 };
                 const colByMonth = collByOrder[o.id] || {};
+                const bookByMonth = bookByOrderNumber[o.order_number] || {};
                 const totalCollected = Object.values(colByMonth).reduce((s, v) => s + v, 0);
                 const balance = it.qty - totalCollected;
                 let derivedStatus = o.status;
@@ -1460,33 +1553,43 @@
                     derivedStatus,
                     paymentMethod: o.payment_method || 'standard',
                     collectionsByMonth: colByMonth,
+                    bookingsByMonth: bookByMonth,
                     totalCollected,
                     balance
                 };
             });
 
             renderCustomerGrid();
+            renderPaymentStatusSummary();
         } catch(e) {
             console.warn('[Cust] load failed:', e);
             document.getElementById('cust-tbody').innerHTML = `<tr><td colspan="20" class="text-center py-8 text-[10px] text-red-500 font-bold uppercase tracking-widest">Failed to load customer orders</td></tr>`;
         }
     }
 
-    function customerMonthWindow() {
-        // Latest column = current month + customerMonthsBackOffset (negative shifts back, positive forward)
+    function customerActiveMonths() {
+        // Always start at the current month, then add future months that have at least
+        // one customer with a booking. Past months are intentionally hidden so the grid
+        // always opens on "today" and shows what's coming next.
         const now = new Date();
-        const end = new Date(now.getFullYear(), now.getMonth() + customerMonthsBackOffset, 1);
-        const months = [];
-        for (let i = CUST_WINDOW_MONTHS - 1; i >= 0; i--) {
-            const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
-            months.push({ key: monthKey(d), label: d.toLocaleString('en-MY', { month: 'short', year: 'numeric' }), date: d });
-        }
-        return months;
-    }
+        const startKey = monthKey(now);
+        const present = new Set([startKey]);
 
-    function shiftCustomerMonths(delta) {
-        customerMonthsBackOffset += delta;
-        renderCustomerGrid();
+        (allCustomerOrders || []).forEach(r => {
+            Object.entries(r.bookingsByMonth || {}).forEach(([k, v]) => {
+                if (v && k >= startKey) present.add(k);
+            });
+            // Also keep current-month collected so a stray edge case still renders (paranoia).
+            Object.entries(r.collectionsByMonth || {}).forEach(([k, v]) => {
+                if (v && k >= startKey) present.add(k);
+            });
+        });
+
+        return Array.from(present).sort().map(k => {
+            const [y, m] = k.split('-').map(Number);
+            const d = new Date(y, m - 1, 1);
+            return { key: k, label: d.toLocaleString('en-MY', { month: 'short', year: 'numeric' }), date: d };
+        });
     }
 
     function pillFor(derived) {
@@ -1506,7 +1609,7 @@
         const search = (document.getElementById('cust-search')?.value || '').toLowerCase().trim();
         const filter = document.getElementById('cust-filter')?.value || 'active';
 
-        const months = customerMonthWindow();
+        const months = customerActiveMonths();
         const nowKey = monthKey(new Date());
         const fmtRM  = n => 'RM ' + (Number(n) || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -1540,19 +1643,36 @@
             return;
         }
 
-        // Body
+        // Body — each month cell shows: collected qty (blue, primary) and / or booked qty (amber tag).
+        // Past months are already filtered out by customerActiveMonths(), so any non-current
+        // month here is "future". Both numbers can co-exist if a partial pickup happened plus
+        // a future booking.
         let totQty = 0, totColl = 0, totBalance = 0, totAmt = 0;
-        const colMonthTotals = months.map(() => 0);
+        const colCollTotals = months.map(() => 0);
+        const colBookTotals = months.map(() => 0);
 
         tbody.innerHTML = rows.map((r, idx) => {
             totQty += r.totalQty; totColl += r.totalCollected; totBalance += r.balance; totAmt += (r.totalAmount || 0);
             const orderMonth = r.orderDate ? r.orderDate.toLocaleString('en-MY',{month:'short',year:'numeric'}) : '—';
             const [pillCls, pillTxt] = pillFor(r.derivedStatus);
             const cellsHtml = months.map((m, i) => {
-                const v = r.collectionsByMonth[m.key] || 0;
-                if (v) colMonthTotals[i] += v;
-                const cls = `t-mo${v ? ' has-qty' : ''}${m.key === nowKey ? ' is-now' : ''}`;
-                return `<td class="${cls}">${v ? v.toLocaleString() : ''}</td>`;
+                const collected = r.collectionsByMonth[m.key] || 0;
+                const booked    = r.bookingsByMonth[m.key]    || 0;
+                if (collected) colCollTotals[i] += collected;
+                if (booked)    colBookTotals[i] += booked;
+
+                const cls = [
+                    't-mo',
+                    collected ? 'has-qty' : '',
+                    !collected && booked ? 'has-booked' : '',
+                    m.key === nowKey ? 'is-now' : ''
+                ].filter(Boolean).join(' ');
+
+                let inner = '';
+                if (collected && booked)      inner = `${collected.toLocaleString()}<span class="booked-tag">+${booked.toLocaleString()} booked</span>`;
+                else if (collected)           inner = collected.toLocaleString();
+                else if (booked)              inner = `${booked.toLocaleString()}<span class="booked-tag">booked</span>`;
+                return `<td class="${cls}">${inner}</td>`;
             }).join('');
             return `
                 <tr>
@@ -1568,12 +1688,20 @@
                 </tr>`;
         }).join('');
 
-        // Footer totals
+        // Footer totals — each month column shows collected total + (booked total) if any.
+        const monthFootCells = months.map((m, i) => {
+            const c = colCollTotals[i], b = colBookTotals[i];
+            if (c && b) return `<td class="t-tot">${c.toLocaleString()}<span class="booked-tag">+${b.toLocaleString()} booked</span></td>`;
+            if (c)      return `<td class="t-tot">${c.toLocaleString()}</td>`;
+            if (b)      return `<td class="t-tot">${b.toLocaleString()}<span class="booked-tag">booked</span></td>`;
+            return       `<td class="t-tot">—</td>`;
+        }).join('');
+
         tfoot.innerHTML = `
             <tr class="bg-slate-50 font-black">
                 <td colspan="4" class="text-right text-[10px] uppercase tracking-widest text-slate-500" style="padding:8px;">Totals (${rows.length} orders)</td>
                 <td class="t-tot">${totQty.toLocaleString()}</td>
-                ${colMonthTotals.map(v => `<td class="t-tot">${v ? v.toLocaleString() : '—'}</td>`).join('')}
+                ${monthFootCells}
                 <td class="t-tot">${totColl.toLocaleString()}</td>
                 <td class="t-tot">${totBalance.toLocaleString()}</td>
                 <td class="t-tot">${fmtRM(totAmt)}</td>
