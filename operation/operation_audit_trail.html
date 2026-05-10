@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audit Trail — MJM Nursery AI</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_access.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Outfit', system-ui, sans-serif; }
+  body { background:#f1f5f9; margin:0; }
+  .card { background:white; border:1px solid #e2e8f0; border-radius:20px; box-shadow:0 4px 16px rgba(0,0,0,.06); }
+  .input { border:1.5px solid #e2e8f0; background:white; padding:9px 12px; border-radius:10px; outline:none; width:100%; font-weight:600; font-size:13px; color:#0f172a; }
+  .input:focus { border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.15); }
+  .label { font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.12em; color:#64748b; margin-bottom:6px; display:block; }
+
+  .op-pill { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; font-size:10px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; }
+  .op-INSERT { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+  .op-UPDATE { background:#eff6ff; color:#1e3a8a; border:1px solid #bfdbfe; }
+  .op-DELETE { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
+
+  .row-card { padding:14px 18px; border-bottom:1px solid #f1f5f9; display:flex; align-items:center; gap:14px; cursor:pointer; transition:background .15s; }
+  .row-card:hover { background:#f8fafc; }
+
+  .modal-back { position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:50; backdrop-filter:blur(4px); }
+  .modal { position:fixed; left:50%; top:5%; transform:translateX(-50%); width:min(960px, 95vw); max-height:90vh; z-index:51; background:white; border-radius:24px; box-shadow:0 30px 80px rgba(0,0,0,.3); display:flex; flex-direction:column; overflow:hidden; }
+  .json-block { font-family:'JetBrains Mono', monospace; font-size:12px; background:#0f172a; color:#e2e8f0; padding:14px; border-radius:12px; overflow:auto; max-height:50vh; }
+  .changed-key { background:rgba(250,204,21,.25); padding:0 4px; border-radius:3px; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center sticky top-0 z-30 shadow-sm">
+  <div class="flex items-center gap-3">
+    <div class="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-black text-xs">AI</div>
+    <span class="font-black text-slate-800 uppercase tracking-widest text-sm">Audit Trail</span>
+  </div>
+  <a href="operation_dashboard.html" class="text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 px-4 py-2 rounded-full border border-slate-200 no-underline">&#8592; Back to Main Page</a>
+</div>
+
+<div id="loading"   class="max-w-[1200px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading audit trail…</div>
+<div id="forbidden" class="max-w-[1200px] mx-auto px-6 py-16 hidden">
+  <div class="card p-10 text-center">
+    <div class="text-4xl mb-3">🔒</div>
+    <h2 class="text-lg font-black text-slate-800 uppercase tracking-widest">Access Denied</h2>
+    <p class="text-xs text-slate-500 mt-2">Audit Trail access is required.</p>
+    <a href="operation_dashboard.html" class="inline-block mt-6 text-[10px] font-bold text-emerald-700 uppercase tracking-widest bg-emerald-50 border border-emerald-200 rounded-full px-4 py-2 no-underline">Back to Main Page</a>
+  </div>
+</div>
+
+<div id="main" class="max-w-[1200px] mx-auto px-6 py-8 space-y-6 hidden">
+
+  <!-- Intro -->
+  <div class="card p-6 space-y-3">
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">📜</span>
+      <h1 class="text-base font-black text-slate-800 uppercase tracking-widest">Audit Trail</h1>
+    </div>
+    <p class="text-[13px] text-slate-600 leading-relaxed">
+      Every insert, update and delete on tracked tables is logged here so you can spot accidental deletions or unexpected edits. Logs are stored in a separate <code class="bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">audit</code> schema, so admins can clear them without touching real data.
+    </p>
+  </div>
+
+  <!-- Filters -->
+  <div class="card p-5">
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+      <div class="md:col-span-2"><label class="label">From</label><input id="f-from" type="date" class="input"></div>
+      <div class="md:col-span-2"><label class="label">To</label><input id="f-to" type="date" class="input"></div>
+      <div class="md:col-span-2">
+        <label class="label">Operation</label>
+        <select id="f-op" class="input">
+          <option value="">All</option>
+          <option value="INSERT">Insert</option>
+          <option value="UPDATE">Update</option>
+          <option value="DELETE">Delete</option>
+        </select>
+      </div>
+      <div class="md:col-span-3">
+        <label class="label">Table</label>
+        <select id="f-table" class="input"><option value="">All tables</option></select>
+      </div>
+      <div class="md:col-span-3">
+        <label class="label">User</label>
+        <select id="f-user" class="input"><option value="">All users</option></select>
+      </div>
+      <div class="md:col-span-12">
+        <label class="label">Search row id, value, or field</label>
+        <input id="f-search" type="text" placeholder="e.g. MJN-2024-001 · order #5031 · customer name…" class="input">
+      </div>
+      <div class="md:col-span-12 flex flex-wrap gap-3 items-center justify-between pt-2">
+        <div class="flex gap-3">
+          <button id="f-run"   class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl">Apply Filters</button>
+          <button id="f-clear" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl border border-slate-200">Clear</button>
+        </div>
+        <button id="f-purge" class="hidden bg-rose-50 hover:bg-rose-100 text-rose-700 font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl border border-rose-200">Clear logs older than 30 days</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div id="stats" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+
+  <!-- Results -->
+  <div class="card overflow-hidden">
+    <div id="results" class="divide-y divide-slate-100"></div>
+    <div id="results-foot" class="px-6 py-3 bg-slate-50 border-t border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-widest text-right"></div>
+  </div>
+
+</div>
+
+<!-- Detail modal -->
+<div id="modal-back" class="modal-back hidden"></div>
+<div id="modal" class="modal hidden">
+  <header class="px-6 py-4 border-b border-slate-200 flex items-start justify-between gap-3 bg-slate-50">
+    <div class="min-w-0">
+      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Change Detail</div>
+      <h2 id="m-title" class="text-base font-black text-slate-800 truncate">—</h2>
+      <div id="m-meta" class="text-[12px] text-slate-500 font-semibold mt-1">—</div>
+    </div>
+    <button id="m-close" class="w-9 h-9 rounded-full hover:bg-slate-200 text-slate-500 hover:text-slate-800 text-xl leading-none">×</button>
+  </header>
+  <div class="flex-1 overflow-auto p-6 space-y-4">
+    <div id="m-changed-fields" class="text-[12px] text-slate-700"></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <div class="label">Old data</div>
+        <pre id="m-old" class="json-block">—</pre>
+      </div>
+      <div>
+        <div class="label">New data</div>
+        <pre id="m-new" class="json-block">—</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-6 right-6 hidden z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg"></div>
+
+<script>
+const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY, {
+  db: { schema: 'audit' }
+});
+// Separate client for public-schema lookups (users, table list helpers).
+const _pub = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+
+let isAdmin = false;
+let allRows = [];
+
+function showToast(msg, kind) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'fixed bottom-6 right-6 z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg ' +
+    (kind === 'err'
+      ? 'bg-red-50 text-red-700 border border-red-200'
+      : 'bg-emerald-50 text-emerald-700 border border-emerald-200');
+  setTimeout(() => t.classList.add('hidden'), 2400);
+  t.classList.remove('hidden');
+}
+
+function fmtTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString('en-MY', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function defaultRange() {
+  const to = new Date();
+  const from = new Date(); from.setDate(from.getDate() - 7);
+  return { from: from.toISOString().slice(0,10), to: to.toISOString().slice(0,10) };
+}
+
+async function loadFilters() {
+  // populate user filter from shared_profiles
+  const { data: users } = await _pub
+    .from('shared_profiles')
+    .select('id, email, full_name')
+    .order('email');
+  const sel = document.getElementById('f-user');
+  (users || []).forEach(u => {
+    const o = document.createElement('option');
+    o.value = u.id;
+    o.textContent = u.full_name ? `${u.full_name} (${u.email})` : (u.email || u.id);
+    sel.appendChild(o);
+  });
+}
+
+async function fetchChanges() {
+  const from   = document.getElementById('f-from').value;
+  const to     = document.getElementById('f-to').value;
+  const op     = document.getElementById('f-op').value;
+  const tbl    = document.getElementById('f-table').value;
+  const user   = document.getElementById('f-user').value;
+  const search = (document.getElementById('f-search').value || '').toLowerCase().trim();
+
+  let q = _supabase.from('changes').select('*').order('occurred_at', { ascending: false }).limit(500);
+  if (from) q = q.gte('occurred_at', new Date(from).toISOString());
+  if (to)   q = q.lte('occurred_at', new Date(new Date(to).getTime() + 86400000 - 1).toISOString());
+  if (op)   q = q.eq('operation', op);
+  if (tbl)  q = q.eq('table_name', tbl);
+  if (user) q = q.eq('user_id', user);
+
+  const { data, error } = await q;
+  if (error) { showToast('Load failed: ' + error.message, 'err'); return []; }
+  let rows = data || [];
+  if (search) {
+    rows = rows.filter(r => {
+      const blob = JSON.stringify({ id: r.row_id, old: r.old_data, new: r.new_data, fields: r.changed_fields }).toLowerCase();
+      return blob.includes(search);
+    });
+  }
+  return rows;
+}
+
+async function loadTableNames() {
+  // Best-effort: pull distinct table names from existing logs.
+  const { data } = await _supabase
+    .from('changes')
+    .select('table_name')
+    .order('table_name');
+  const names = Array.from(new Set((data || []).map(r => r.table_name))).sort();
+  const sel = document.getElementById('f-table');
+  names.forEach(n => {
+    const o = document.createElement('option');
+    o.value = n; o.textContent = n;
+    sel.appendChild(o);
+  });
+}
+
+function renderStats(rows) {
+  const counts = { INSERT:0, UPDATE:0, DELETE:0 };
+  const userSet = new Set();
+  rows.forEach(r => { counts[r.operation] = (counts[r.operation] || 0) + 1; if (r.user_id) userSet.add(r.user_id); });
+  const cards = [
+    { label: 'Total changes', value: rows.length.toLocaleString(),  klass: 'text-slate-800' },
+    { label: 'Inserts',       value: counts.INSERT.toLocaleString(), klass: 'text-emerald-600' },
+    { label: 'Updates',       value: counts.UPDATE.toLocaleString(), klass: 'text-blue-600' },
+    { label: 'Deletes',       value: counts.DELETE.toLocaleString(), klass: 'text-rose-600' }
+  ];
+  document.getElementById('stats').innerHTML = cards.map(c => `
+    <div class="card p-4">
+      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">${c.label}</div>
+      <div class="text-3xl font-black ${c.klass}">${c.value}</div>
+    </div>
+  `).join('');
+}
+
+function rowHtml(r) {
+  const who = r.user_email || (r.user_id ? r.user_id.slice(0, 8) + '…' : '<span class="text-slate-400">system</span>');
+  const fields = (r.changed_fields && r.changed_fields.length)
+    ? `<span class="text-[11px] text-slate-500">· ${r.changed_fields.length} field${r.changed_fields.length === 1 ? '' : 's'} changed</span>`
+    : '';
+  const rowId = r.row_id ? `<code class="text-[11px] bg-slate-100 px-1.5 py-0.5 rounded">${escapeHtml(r.row_id)}</code>` : '';
+  return `
+    <div class="row-card" data-id="${r.id}">
+      <div class="shrink-0 w-[110px]"><span class="op-pill op-${r.operation}">${r.operation.toLowerCase()}</span></div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-1 flex-wrap">
+          <span class="font-black text-slate-800 text-sm">${escapeHtml(r.table_name)}</span>
+          ${rowId}
+          ${fields}
+        </div>
+        <div class="text-[11px] text-slate-500">
+          <span class="font-semibold">${escapeHtml(who)}</span> · ${fmtTime(r.occurred_at)}
+        </div>
+      </div>
+      <svg class="w-4 h-4 text-slate-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg>
+    </div>
+  `;
+}
+
+function render(rows) {
+  allRows = rows;
+  renderStats(rows);
+  const list = document.getElementById('results');
+  list.innerHTML = rows.length
+    ? rows.map(rowHtml).join('')
+    : `<div class="px-6 py-12 text-center text-slate-400 text-sm">No changes match your filters.</div>`;
+  document.getElementById('results-foot').textContent = `${rows.length} record${rows.length === 1 ? '' : 's'} (capped at 500)`;
+}
+
+function highlight(jsonStr, changedFields) {
+  if (!changedFields || !changedFields.length) return escapeHtml(jsonStr);
+  let out = escapeHtml(jsonStr);
+  changedFields.forEach(f => {
+    const re = new RegExp(`(&quot;${f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}&quot;)`, 'g');
+    out = out.replace(re, `<span class="changed-key">$1</span>`);
+  });
+  return out;
+}
+
+function openDetail(rowId) {
+  const r = allRows.find(x => x.id === rowId);
+  if (!r) return;
+  document.getElementById('m-title').textContent = r.table_name + (r.row_id ? ` · ${r.row_id}` : '');
+  document.getElementById('m-meta').innerHTML =
+    `<span class="op-pill op-${r.operation}">${r.operation.toLowerCase()}</span>` +
+    ` · ${escapeHtml(r.user_email || 'system')} · ${fmtTime(r.occurred_at)}`;
+  const fields = r.changed_fields || [];
+  document.getElementById('m-changed-fields').innerHTML = fields.length
+    ? `<strong>Changed fields:</strong> ${fields.map(f => `<code class="bg-yellow-100 text-yellow-900 px-1.5 py-0.5 rounded text-[11px]">${escapeHtml(f)}</code>`).join(' ')}`
+    : '';
+  const oldStr = r.old_data ? JSON.stringify(r.old_data, null, 2) : '—';
+  const newStr = r.new_data ? JSON.stringify(r.new_data, null, 2) : '—';
+  document.getElementById('m-old').innerHTML = highlight(oldStr, fields);
+  document.getElementById('m-new').innerHTML = highlight(newStr, fields);
+  document.getElementById('modal').classList.remove('hidden');
+  document.getElementById('modal-back').classList.remove('hidden');
+}
+function closeDetail() {
+  document.getElementById('modal').classList.add('hidden');
+  document.getElementById('modal-back').classList.add('hidden');
+}
+
+async function purgeOldLogs() {
+  if (!isAdmin) return;
+  if (!confirm('Delete every audit log older than 30 days? This cannot be undone.')) return;
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 30);
+  const { error } = await _supabase
+    .from('changes')
+    .delete()
+    .lt('occurred_at', cutoff.toISOString());
+  if (error) { showToast('Purge failed: ' + error.message, 'err'); return; }
+  showToast('Old logs cleared.');
+  runFilters();
+}
+
+async function runFilters() {
+  document.getElementById('results').innerHTML = `<div class="px-6 py-12 text-center text-slate-400 text-xs font-bold uppercase tracking-widest animate-pulse">Loading…</div>`;
+  document.getElementById('stats').innerHTML = '';
+  const rows = await fetchChanges();
+  render(rows);
+}
+
+// Events
+document.getElementById('f-run'  ).addEventListener('click', runFilters);
+document.getElementById('f-clear').addEventListener('click', () => {
+  ['f-from','f-to','f-op','f-table','f-user','f-search'].forEach(id => document.getElementById(id).value = '');
+  const { from, to } = defaultRange();
+  document.getElementById('f-from').value = from;
+  document.getElementById('f-to').value   = to;
+  runFilters();
+});
+document.getElementById('f-purge').addEventListener('click', purgeOldLogs);
+document.getElementById('m-close').addEventListener('click', closeDetail);
+document.getElementById('modal-back').addEventListener('click', closeDetail);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDetail(); });
+document.getElementById('results').addEventListener('click', (e) => {
+  const r = e.target.closest('[data-id]');
+  if (r) openDetail(Number(r.dataset.id));
+});
+
+async function bootstrap() {
+  await MJMAccess.load(_pub);
+  if (!MJMAccess.user()) { window.location.href = 'operation_dashboard.html'; return; }
+  if (!MJMAccess.canAccess('audit_trail')) {
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('forbidden').classList.remove('hidden');
+    return;
+  }
+  isAdmin = MJMAccess.isAdminOf('audit_trail');
+  if (isAdmin) document.getElementById('f-purge').classList.remove('hidden');
+
+  const { from, to } = defaultRange();
+  document.getElementById('f-from').value = from;
+  document.getElementById('f-to').value   = to;
+
+  await Promise.all([loadFilters(), loadTableNames()]);
+  document.getElementById('loading').classList.add('hidden');
+  document.getElementById('main').classList.remove('hidden');
+  await runFilters();
+}
+
+bootstrap();
+</script>
+</body>
+</html>
