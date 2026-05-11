@@ -199,6 +199,24 @@
                 </div>
             </div>
 
+            <div class="mt-8 pt-6 border-t-2 border-slate-100 relative z-30">
+                <h4 class="text-sm font-black text-emerald-800 tracking-widest uppercase mb-4">&#9989; Signed Consent Records</h4>
+                <div class="bg-emerald-50/50 rounded-xl border border-emerald-200 p-4 overflow-x-auto relative z-30 shadow-inner">
+                    <table class="w-full text-left min-w-[700px]">
+                        <thead>
+                            <tr class="text-[10px] uppercase tracking-wider text-slate-500 border-b border-emerald-200 pb-2">
+                                <th class="pb-2 pl-2">Date Signed</th>
+                                <th class="pb-2 text-center text-emerald-600">Consent Qty</th>
+                                <th class="pb-2 text-center">AI Sticker Count</th>
+                                <th class="pb-2 text-center">Signature</th>
+                                <th class="pb-2 text-center">Photo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="al-consent-tbody" class="text-xs font-semibold text-slate-700"></tbody>
+                    </table>
+                </div>
+            </div>
+
             <div class="flex flex-wrap gap-4 pt-8 mt-6 border-t border-slate-100 relative z-40">
                 <button onclick="closeModal('manage-modal')" class="flex-1 p-4 rounded-2xl bg-slate-100 text-slate-600 font-bold text-xs uppercase tracking-widest hover:bg-slate-200 relative z-40">Close</button>
                 <button onclick="enableEditMode()" class="flex-1 p-4 rounded-2xl bg-amber-100 text-amber-700 font-bold text-xs uppercase tracking-widest hover:bg-amber-200 shadow-sm relative z-40">Unlock & Edit Details</button>
@@ -462,7 +480,34 @@
                     historyBody.insertAdjacentHTML('beforeend', `<tr class="${rowColor}"><td class="py-3 pl-2">${doNumHtml}</td><td class="py-3 text-slate-500">${displayDate}</td><td class="py-3 font-bold text-amber-700 text-xs">${sourceText}</td><td class="py-3 text-center font-bold ${dCancelled ? 'text-red-500 line-through' : 'text-emerald-700'}">${d.total_qty || 0}</td><td class="py-3 text-center font-black ${bal > 0 ? 'text-rose-500' : 'text-emerald-500'}">${bal}</td><td class="py-3">${baHtml}</td><td class="py-3 text-slate-500 truncate max-w-[150px]">${d.remark || '-'}</td></tr>`); 
                 }); 
             }
+            loadConsentForAL(order.al_number);
             document.getElementById('manage-modal').classList.remove('hidden');
+        }
+
+        async function loadConsentForAL(alNumber) {
+            const tbody = document.getElementById('al-consent-tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-400 italic">Loading consent records&hellip;</td></tr>';
+            const { data, error } = await _supabase
+                .from('mobile_consent_records')
+                .select('id, consent_qty, signature_data, photo_url, ai_sticker_count, created_at')
+                .eq('al_number', alNumber)
+                .order('created_at', { ascending: false });
+            if (error) {
+                tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-rose-500 italic">Failed to load consent records.</td></tr>';
+                return;
+            }
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-400 italic">No consent records signed yet for this AL.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.map(c => {
+                const dt = c.created_at ? new Date(c.created_at).toLocaleString('en-MY', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '-';
+                const sig = c.signature_data ? `<img src="${c.signature_data}" alt="signature" class="inline-block max-h-12 max-w-[120px] bg-white border border-emerald-200 rounded cursor-pointer hover:opacity-80" onclick="openStandaloneDoc('${c.signature_data}')">` : '<span class="text-slate-400 italic">—</span>';
+                const ph = c.photo_url ? `<img src="${c.photo_url}" alt="photo" class="inline-block w-12 h-12 object-cover border border-emerald-200 rounded cursor-pointer hover:opacity-80" onclick="openStandaloneDoc('${c.photo_url}')">` : '<span class="text-slate-400 italic">—</span>';
+                const aiCount = (c.ai_sticker_count !== null && c.ai_sticker_count !== undefined) ? c.ai_sticker_count : '-';
+                return `<tr class="border-b border-emerald-100 hover:bg-emerald-100/50"><td class="py-3 pl-2 text-slate-600">${dt}</td><td class="py-3 text-center font-black text-emerald-700">${c.consent_qty || 0}</td><td class="py-3 text-center font-bold text-slate-600">${aiCount}</td><td class="py-3 text-center">${sig}</td><td class="py-3 text-center">${ph}</td></tr>`;
+            }).join('');
         }
 
         // BA CROSS-MODULE POPUP FROM AL PAGE
