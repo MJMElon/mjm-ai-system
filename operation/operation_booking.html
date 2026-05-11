@@ -6,6 +6,7 @@
     <title>AL Management - MJM Nursery AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../shared/shared_access.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         body { background-color: #f8fafc; margin: 0; font-family: 'Outfit', system-ui, -apple-system, sans-serif; overflow-x: hidden; }
@@ -219,7 +220,8 @@
 
             <div class="flex flex-wrap gap-4 pt-8 mt-6 border-t border-slate-100 relative z-40">
                 <button onclick="closeModal('manage-modal')" class="flex-1 p-4 rounded-2xl bg-slate-100 text-slate-600 font-bold text-xs uppercase tracking-widest hover:bg-slate-200 relative z-40">Close</button>
-                <button onclick="enableEditMode()" class="flex-1 p-4 rounded-2xl bg-amber-100 text-amber-700 font-bold text-xs uppercase tracking-widest hover:bg-amber-200 shadow-sm relative z-40">Unlock & Edit Details</button>
+                <button id="edit-btn" onclick="enableEditMode()" class="flex-1 p-4 rounded-2xl bg-amber-100 text-amber-700 font-bold text-xs uppercase tracking-widest hover:bg-amber-200 shadow-sm relative z-40">Edit Details</button>
+                <button id="lock-btn" onclick="toggleLockAL()" class="hidden flex-1 p-4 rounded-2xl bg-purple-100 text-purple-700 font-bold text-xs uppercase tracking-widest hover:bg-purple-200 shadow-sm border border-purple-300 relative z-40">&#128274; Lock Record</button>
                 <button onclick="cancelAL()" id="cancel-btn" class="flex-1 p-4 rounded-2xl bg-red-100 text-red-700 font-bold text-xs uppercase tracking-widest hover:bg-red-200 shadow-sm border border-red-300 relative z-40">Cancel AL</button>
                 <button onclick="verifyAL()" id="verify-btn" class="flex-1 p-4 rounded-2xl bg-indigo-100 text-indigo-700 font-bold text-xs uppercase tracking-widest hover:bg-indigo-200 shadow-sm relative z-40">Admin Verify AL</button>
                 <button onclick="saveEditAL()" id="save-edit-btn" class="hidden w-full p-4 rounded-2xl btn-al text-xs tracking-widest mt-2 relative z-40">Save Changes Securely</button>
@@ -365,7 +367,7 @@
                 tbody.insertAdjacentHTML('beforeend', `
                     <tr class="${rowClass}">
                         <td class="p-4 ${isCancelled ? 'text-red-500 font-bold' : 'text-slate-500'}">${displayDate}</td>
-                        <td class="p-4 ${isCancelled ? 'text-red-700' : 'text-blue-700'} font-bold">${order.al_number}</td>
+                        <td class="p-4 ${isCancelled ? 'text-red-700' : 'text-blue-700'} font-bold">${isAlLocked(order.remark) ? '<span title="Locked — only admins can edit" class="mr-1">&#128274;</span>' : ''}${order.al_number}</td>
                         <td class="p-4 ${isCancelled ? 'text-red-500 line-through' : ''}">${order.order_number || '-'}</td>
                         <td class="p-4 uppercase font-bold ${isCancelled ? 'text-red-800' : 'text-slate-800'}">${order.customer_name || 'Unknown'} ${isCancelled ? `<br><span class="text-[10px] text-red-500 font-black tracking-widest">${order.remark || ''}</span>` : ''}</td>
                         <td class="p-4 text-center font-bold ${isCancelled ? 'text-red-500' : 'text-slate-600'}">${order.quantity_ordered}</td>
@@ -481,6 +483,7 @@
                 }); 
             }
             loadConsentForAL(order.al_number);
+            applyLockUIToManageModal(order);
             document.getElementById('manage-modal').classList.remove('hidden');
         }
 
@@ -592,11 +595,83 @@
         function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
         function closeLightbox() { document.getElementById('lightbox-modal').classList.add('hidden'); document.getElementById('lightbox-content').innerHTML = '';  }
         
-        function enableEditMode() { 
-            const pin = prompt("Enter Master PIN to unlock editing:");
-            if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN.");
-            document.querySelectorAll('.edit-field').forEach(el => el.disabled = false); 
-            document.getElementById('save-edit-btn').classList.remove('hidden'); 
+        // ─────────────────────────────────────────────
+        // Record lock helpers
+        //   Lock state is stored as "[LOCKED by <email> on <date>]" tag inside
+        //   shared_al_orders.remark — same pattern as [VERIFIED]/[CANCELLED].
+        //   Only operation admins can toggle it.
+        // ─────────────────────────────────────────────
+        let currentManageAL = null;
+        function isAlLocked(remark) { return !!(remark && /\[LOCKED by [^\]]+\]/.test(remark)); }
+        function stripLockTag(remark) { return (remark || '').replace(/\s*\[LOCKED by [^\]]+\]\s*/, ' ').trim(); }
+        function isOpAdmin() { try { return typeof MJMAccess !== 'undefined' && MJMAccess.isAdminOf && MJMAccess.isAdminOf('operation'); } catch(e) { return false; } }
+
+        function applyLockUIToManageModal(order) {
+            currentManageAL = order;
+            const locked = isAlLocked(order && order.remark);
+            const admin = isOpAdmin();
+            const editBtn = document.getElementById('edit-btn');
+            const lockBtn = document.getElementById('lock-btn');
+            const saveBtn = document.getElementById('save-edit-btn');
+            // Always start with fields disabled and save hidden when (re)opening
+            document.querySelectorAll('.edit-field').forEach(el => el.disabled = true);
+            if (saveBtn) saveBtn.classList.add('hidden');
+            // Edit button: hidden when locked AND user is not admin
+            if (editBtn) {
+                if (locked && !admin) editBtn.classList.add('hidden'); else editBtn.classList.remove('hidden');
+            }
+            // Lock toggle: admin-only
+            if (lockBtn) {
+                if (admin) {
+                    lockBtn.classList.remove('hidden');
+                    lockBtn.innerHTML = locked ? '&#128275; Unlock Record' : '&#128274; Lock Record';
+                    lockBtn.classList.toggle('bg-emerald-100', locked);
+                    lockBtn.classList.toggle('text-emerald-700', locked);
+                    lockBtn.classList.toggle('hover:bg-emerald-200', locked);
+                    lockBtn.classList.toggle('border-emerald-300', locked);
+                    lockBtn.classList.toggle('bg-purple-100', !locked);
+                    lockBtn.classList.toggle('text-purple-700', !locked);
+                    lockBtn.classList.toggle('hover:bg-purple-200', !locked);
+                    lockBtn.classList.toggle('border-purple-300', !locked);
+                } else {
+                    lockBtn.classList.add('hidden');
+                }
+            }
+        }
+
+        function enableEditMode() {
+            const locked = currentManageAL && isAlLocked(currentManageAL.remark);
+            if (locked && !isOpAdmin()) return alert('This record is locked. Ask an admin to unlock it before editing.');
+            document.querySelectorAll('.edit-field').forEach(el => el.disabled = false);
+            document.getElementById('save-edit-btn').classList.remove('hidden');
+        }
+
+        async function toggleLockAL() {
+            if (!isOpAdmin()) return alert('Access Denied: only operation admins can lock or unlock records.');
+            if (!currentManageAL) return;
+            const locked = isAlLocked(currentManageAL.remark);
+            const orderId = currentManageAL.id;
+            const { data: { session } } = await _supabase.auth.getSession();
+            const email = session?.user?.email || 'Admin';
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('en-GB') + ' ' + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            let newRemark;
+            if (locked) {
+                if (!confirm('Unlock this AL? Non-admin users will be able to edit it again.')) return;
+                newRemark = stripLockTag(currentManageAL.remark);
+            } else {
+                if (!confirm('Lock this AL? Non-admin users will no longer be able to edit it.')) return;
+                const base = stripLockTag(currentManageAL.remark);
+                newRemark = `${base} [LOCKED by ${email} on ${dateStr}]`.trim();
+            }
+            const { error } = await _supabase.from('shared_al_orders').update({ remark: newRemark }).eq('id', orderId);
+            if (error) return alert('Database Error: ' + error.message);
+            currentManageAL.remark = newRemark;
+            const remarkInput = document.getElementById('edit-remark');
+            if (remarkInput) remarkInput.value = newRemark;
+            applyLockUIToManageModal(currentManageAL);
+            alert(locked ? 'AL unlocked.' : 'AL locked. Non-admins can no longer edit it.');
+            fetchData();
         }
 
         async function verifyAL() { 
@@ -637,21 +712,29 @@
             }
         }
         
-        async function saveEditAL() { 
-            const newQty = parseInt(document.getElementById('edit-qty').value) || 0; 
-            const orderId = document.getElementById('edit-id').value; 
-            const order = globalALs.find(o => String(o.id) === String(orderId)); 
-            const cumul = order._cumul || 0; 
-            const newBalance = newQty - cumul; 
-            let editPo = document.getElementById('edit-order').value || ''; 
-            if (editPo && !editPo.startsWith('#')) editPo = '#' + editPo; 
-            
+        async function saveEditAL() {
+            if (currentManageAL && isAlLocked(currentManageAL.remark) && !isOpAdmin()) {
+                return alert('This AL is locked. Ask an admin to unlock it before saving changes.');
+            }
+            const newQty = parseInt(document.getElementById('edit-qty').value) || 0;
+            const orderId = document.getElementById('edit-id').value;
+            const order = globalALs.find(o => String(o.id) === String(orderId));
+            const cumul = order._cumul || 0;
+            const newBalance = newQty - cumul;
+            let editPo = document.getElementById('edit-order').value || '';
+            if (editPo && !editPo.startsWith('#')) editPo = '#' + editPo;
+
             let finalRemark = document.getElementById('edit-remark').value.trim();
             if (order.status === 'Verified' && order.remark && order.remark.includes('[VERIFIED by')) {
                 const vMatch = order.remark.match(/\[VERIFIED by .*? on .*?\]/);
                 if (vMatch) finalRemark = `${vMatch[0]} ${finalRemark}`.trim();
             } else if (order.status === 'Cancelled' && order.remark && order.remark.includes('[CANCELLED]')) {
                 finalRemark = `[CANCELLED] ${finalRemark}`.trim();
+            }
+            // Preserve any [LOCKED by ...] tag across edits so admins don't accidentally drop it
+            const lockMatch = (order.remark || '').match(/\[LOCKED by [^\]]+\]/);
+            if (lockMatch && !finalRemark.includes(lockMatch[0])) {
+                finalRemark = `${finalRemark} ${lockMatch[0]}`.trim();
             }
             
             const { error } = await _supabase.from('shared_al_orders').update({ 
@@ -787,7 +870,7 @@
             if(document.querySelectorAll('#bulk-al-tbody tr').length === 0) { closeModal('al-modal'); alert(`Successfully saved ${successCount} Approval Letters!`); } else { alert("Saved some records. Review remaining rows in red."); }
         }
         
-        setupDragAndDrop(); _supabase.auth.getSession().then(({ data: { session } }) => { if (!session) window.location.href = 'operation_dashboard.html'; else fetchData(); });
+        setupDragAndDrop(); _supabase.auth.getSession().then(async ({ data: { session } }) => { if (!session) { window.location.href = 'operation_dashboard.html'; return; } try { await MJMAccess.load(_supabase); } catch(e) { console.warn('[AL] MJMAccess.load failed', e); } fetchData(); });
     </script>
 </body>
 </html>
