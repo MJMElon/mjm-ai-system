@@ -24,6 +24,8 @@
 
 var ORDER_STATUSES = ['Pending Payment','Paid','Ready for Collection','Completed','Cancelled','Refunded'];
 
+function fmtMoney(n){return (Number(n)||0).toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
 // ═══════════════════════════════════════
 //  LOAD ORDERS — DASHBOARD
 // ═══════════════════════════════════════
@@ -60,7 +62,7 @@ async function loadOrders(){
       '<td>'+esc(o.customer_name||'—')+'<div style="font-size:11px;color:var(--ink4);">'+esc(o.customer_email||'')+'</div></td>'+
       '<td style="font-size:12px;">'+fmtDate(o.created_at)+'</td>'+
       '<td style="text-align:center;">—</td>'+
-      '<td style="font-weight:600;">RM '+(o.total||0).toFixed(2)+'</td>'+
+      '<td style="font-weight:600;">RM '+fmtMoney(o.total)+'</td>'+
       '<td><span class="badge '+statusCls+'">'+o.status+'</span></td>'+
       '<td><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();viewOrder(\''+o.id+'\')">View</button></td>'+
     '</tr>';
@@ -94,6 +96,13 @@ async function viewOrder(id){
   ORDER_STATUSES.forEach(function(s){html+='<option'+(s===order.status?' selected':'')+'>'+s+'</option>';});
   html+='</select><button class="btn btn-primary btn-sm" onclick="updateOrderStatus(\''+id+'\')">Update</button></div></div>';
 
+  // ── Customer Remark (right under status so it's not missed) ──
+  if(order.customer_remark){
+    html+='<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:.8rem 1rem;margin-bottom:1rem;">';
+    html+='<div style="font-size:11px;font-weight:600;color:#92400e;margin-bottom:.3rem;">Customer Remark</div>';
+    html+='<div style="font-size:13px;color:var(--ink2);">'+esc(order.customer_remark)+'</div></div>';
+  }
+
   // ── Customer info ──
   html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">';
   html+='<div style="background:var(--bg);border-radius:10px;padding:1rem;"><div style="font-size:13px;font-weight:600;margin-bottom:.5rem;">Customer</div>';
@@ -111,7 +120,7 @@ async function viewOrder(id){
   html+='<div style="margin-bottom:1rem;"><div style="font-size:13px;font-weight:600;margin-bottom:.5rem;">Order Items</div>';
   if(items.length){
     html+='<table class="data-table"><thead><tr><th>Product</th><th style="text-align:right;">Price</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Subtotal</th></tr></thead><tbody>';
-    items.forEach(function(it){html+='<tr><td>'+esc(it.product_name||'—')+'</td><td style="text-align:right;">RM '+(it.unit_price||0).toFixed(2)+'</td><td style="text-align:right;">'+it.quantity+'</td><td style="text-align:right;font-weight:600;">RM '+(it.subtotal||0).toFixed(2)+'</td></tr>';});
+    items.forEach(function(it){html+='<tr><td>'+esc(it.product_name||'—')+'</td><td style="text-align:right;">RM '+fmtMoney(it.unit_price)+'</td><td style="text-align:right;">'+it.quantity+'</td><td style="text-align:right;font-weight:600;">RM '+fmtMoney(it.subtotal)+'</td></tr>';});
     html+='</tbody></table>';
   } else html+='<div style="font-size:12px;color:var(--ink4);padding:.5rem 0;">No items</div>';
   html+='</div>';
@@ -120,10 +129,10 @@ async function viewOrder(id){
   var subtotal=items.reduce(function(s,it){return s+(it.subtotal||0);},0);
   html+='<div style="background:var(--bg);border-radius:10px;padding:1rem;margin-bottom:1rem;">';
   html+='<div style="font-size:13px;font-weight:600;margin-bottom:.5rem;">Financial Summary</div>';
-  html+='<div style="display:flex;justify-content:space-between;padding:.2rem 0;font-size:13px;"><span>Subtotal</span><span>RM '+subtotal.toFixed(2)+'</span></div>';
-  if(order.discount_amount>0)html+='<div style="display:flex;justify-content:space-between;padding:.2rem 0;font-size:13px;color:var(--red);"><span>Discount</span><span>-RM '+order.discount_amount.toFixed(2)+'</span></div>';
-  if(order.coupon_code)html+='<div style="display:flex;justify-content:space-between;padding:.2rem 0;font-size:13px;color:var(--red);"><span>Coupon ('+esc(order.coupon_code)+')</span><span>-RM '+(order.coupon_discount||0).toFixed(2)+'</span></div>';
-  html+='<div style="display:flex;justify-content:space-between;padding:.4rem 0;border-top:1.5px solid var(--border);margin-top:.3rem;font-size:15px;font-weight:700;"><span>Total</span><span>RM '+(order.total||0).toFixed(2)+'</span></div>';
+  html+='<div style="display:flex;justify-content:space-between;padding:.2rem 0;font-size:13px;"><span>Subtotal</span><span>RM '+fmtMoney(subtotal)+'</span></div>';
+  if(order.discount_amount>0)html+='<div style="display:flex;justify-content:space-between;padding:.2rem 0;font-size:13px;color:var(--red);"><span>Discount</span><span>-RM '+fmtMoney(order.discount_amount)+'</span></div>';
+  if(order.coupon_code)html+='<div style="display:flex;justify-content:space-between;padding:.2rem 0;font-size:13px;color:var(--red);"><span>Coupon ('+esc(order.coupon_code)+')</span><span>-RM '+fmtMoney(order.coupon_discount)+'</span></div>';
+  html+='<div style="display:flex;justify-content:space-between;padding:.4rem 0;border-top:1.5px solid var(--border);margin-top:.3rem;font-size:15px;font-weight:700;"><span>Total</span><span>RM '+fmtMoney(order.total)+'</span></div>';
 
   // Discount + Coupon controls (collapsible)
   html+='<div style="margin-top:.8rem;padding-top:.8rem;border-top:1px solid var(--border);display:flex;gap:.5rem;flex-wrap:wrap;">';
@@ -137,13 +146,6 @@ async function viewOrder(id){
   html+='<input class="form-input" id="mo-coupon" type="text" value="'+(order.coupon_code||'')+'" style="width:120px;font-size:12px;padding:6px 10px;text-transform:uppercase;" placeholder="Coupon code"><button class="btn btn-primary btn-sm" onclick="applyCoupon(\''+id+'\')">Apply Coupon</button>';
   html+='</div>';
   html+='</div>';
-
-  // ── Customer Remark ──
-  if(order.customer_remark){
-    html+='<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:.8rem 1rem;margin-bottom:1rem;">';
-    html+='<div style="font-size:11px;font-weight:600;color:#92400e;margin-bottom:.3rem;">Customer Remark</div>';
-    html+='<div style="font-size:13px;color:var(--ink2);">'+esc(order.customer_remark)+'</div></div>';
-  }
 
   // ── Seller Note ──
   html+='<div style="margin-bottom:1rem;"><div style="font-size:13px;font-weight:600;margin-bottom:.4rem;">Seller Note <span style="font-size:10px;color:var(--ink4);font-weight:400;">(visible to customer)</span></div>';
@@ -256,12 +258,20 @@ async function showCancelStockRestore(orderId,oldStatus){
 
   document.getElementById('cancel-stock-body').innerHTML=html;
   document.getElementById('cancel-stock-foot').innerHTML=
-    '<button class="btn btn-outline" onclick="closeModal(\'modal-cancel-stock\')">Go Back</button>'+
+    '<button class="btn btn-outline" onclick="cancelCancelFlow()">Go Back</button>'+
     '<button class="btn btn-primary" style="background:#dc2626;border-color:#dc2626;" onclick="confirmCancelWithRestore(\''+orderId+'\',\''+oldStatus+'\','+items.length+')">Confirm Cancel & Restore</button>';
 
-  // Store items data for the confirm function
+  // Store context so we can restore order detail if user backs out
   window._cancelItems=items;
+  window._cancelOrderId=orderId;
+  // Close order detail so cancel confirmation isn't hidden behind it
+  closeModal('modal-order');
   openModal('modal-cancel-stock');
+}
+
+function cancelCancelFlow(){
+  closeModal('modal-cancel-stock');
+  if(window._cancelOrderId){viewOrder(window._cancelOrderId);}
 }
 
 function toggleRestoreRow(idx){
@@ -320,7 +330,7 @@ async function addDiscount(orderId){
   var subtotal=(items||[]).reduce(function(s,i){return s+(i.subtotal||0);},0);
   var total=Math.max(0,subtotal-amt-(order?.coupon_discount||0));
   await sb.from('salesweb_customer_orders').update({total:total}).eq('id',orderId);
-  toast('Discount applied: RM '+amt.toFixed(2));
+  toast('Discount applied: RM '+fmtMoney(amt));
   viewOrder(orderId);
 }
 
@@ -344,7 +354,7 @@ async function applyCoupon(orderId){
   var total=Math.max(0,subtotal-(order?.discount_amount||0)-discount);
   await sb.from('salesweb_customer_orders').update({coupon_code:code,coupon_discount:discount,total:total,updated_at:new Date().toISOString()}).eq('id',orderId);
   await sb.from('salesweb_coupons').update({usage_count:(coupon.usage_count||0)+1}).eq('id',coupon.id);
-  toast('Coupon applied: -RM '+discount.toFixed(2));
+  toast('Coupon applied: -RM '+fmtMoney(discount));
   viewOrder(orderId);
 }
 
