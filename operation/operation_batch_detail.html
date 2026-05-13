@@ -163,14 +163,21 @@
         /* ── Review banner & per-tab lock (added for review/access feature) ── */
         .mjm-review-banner { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 18px; border-radius:14px; margin-bottom:16px; font-size:12px; font-weight:700; }
         .mjm-review-open    { background:#fff8eb; border:1.5px dashed #c07820; color:#7a4a10; }
+        .mjm-review-verified{ background:#eff6ff; border:1.5px solid #bfdbfe; color:#1e3a8a; }
         .mjm-review-locked  { background:#ecfdf5; border:1.5px solid #a7f3d0; color:#065f46; }
         .mjm-review-meta    { font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.12em; opacity:.85; }
         .mjm-review-btn     { font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.15em; padding:8px 16px; border-radius:999px; cursor:pointer; border:none; transition:all .15s; }
         .mjm-review-btn-mark   { background:#10b981; color:white; box-shadow:0 6px 14px -4px rgba(16,185,129,.4); }
         .mjm-review-btn-mark:hover   { transform:translateY(-1px); }
+        .mjm-review-btn-mark:disabled { background:#cbd5e1; box-shadow:none; cursor:not-allowed; opacity:.7; transform:none; }
+        .mjm-review-btn-verify { background:#2563eb; color:white; box-shadow:0 6px 14px -4px rgba(37,99,235,.4); }
+        .mjm-review-btn-verify:hover { transform:translateY(-1px); }
+        .mjm-review-btn-unverify { background:white; color:#1e3a8a; border:1.5px solid #bfdbfe; }
+        .mjm-review-btn-unverify:hover { background:#eff6ff; }
         .mjm-review-btn-unmark { background:white; color:#065f46; border:1.5px solid #a7f3d0; }
         .mjm-review-btn-unmark:hover { background:#ecfdf5; }
         .mjm-review-btn:disabled { opacity:.5; cursor:wait; }
+        .mjm-review-btn-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
 
         .mjm-locked input, .mjm-locked select, .mjm-locked textarea,
         .mjm-locked button:not(.mjm-review-allow) {
@@ -337,19 +344,31 @@
                                             <label class="label-style !mb-0 !ml-0">New Batch Number *</label>
                                             <span class="text-[9px] font-bold text-[#8a7a68] uppercase tracking-widest">Latest: <span id="latest-batch-id" class="text-[#c07820]">Loading...</span></span>
                                         </div>
-                                        <input type="text" id="f-batchno" class="input-style font-black !text-[#c07820]" required oninput="updateT1Completion()">
+                                        <input type="text" id="f-batchno" class="input-style font-black !text-[#c07820]" required readonly title="Auto-generated batch number — cannot be edited">
                                     </div>
                                     <div>
                                         <label class="label-style">Breed Variety *</label>
                                         <div class="select-wrapper">
-                                            <select id="f-brand" class="input-style !text-[#4a7a2e]" required onchange="updateT1Completion()">
+                                            <select id="f-brand" class="input-style !text-[#4a7a2e]" required onchange="updateT1Completion(); syncSupplierOptions();">
                                                 <option value="">Loading breeds...</option>
                                             </select>
                                         </div>
                                     </div>
-                                    <div class="md:col-span-2">
-                                        <label class="label-style">Seed Supplier / Source</label>
-                                        <input type="text" id="f-supplier" class="input-style">
+                                    <div>
+                                        <label class="label-style">Seed Supplier</label>
+                                        <div class="select-wrapper">
+                                            <select id="f-supplier" class="input-style" onchange="syncMpobOptions(); updateT1Completion();">
+                                                <option value="">Select supplier...</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="label-style">Supplier MPOB License</label>
+                                        <div class="select-wrapper">
+                                            <select id="f-mpob" class="input-style" onchange="updateT1Completion();">
+                                                <option value="">Select MPOB license...</option>
+                                            </select>
+                                        </div>
                                     </div>
                                     <div>
                                         <label class="label-style">Supplier D/O No.</label>
@@ -557,16 +576,17 @@
                                         </div>
                                         <div id="tray-rows-container" class="space-y-2">
                                             <!-- Column headers -->
-                                            <div class="hidden xl:grid grid-cols-[2fr_1fr_1fr_1fr_40px] gap-3 px-4 pb-1 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">
+                                            <div class="hidden xl:grid grid-cols-[2fr_1fr_1fr_1fr_1fr_40px] gap-3 px-4 pb-1 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">
                                                 <span>Preset Tray</span>
                                                 <span>Total Planted</span>
                                                 <span class="text-[#a83020]">Empty Holes</span>
                                                 <span class="text-[#4a7a2e]">Actual Planted</span>
+                                                <span title="Each tray fits 2,560 holes. Vacant = 2,560 − seeds currently in tray.">Vacant Holes</span>
                                                 <span></span>
                                             </div>
                                         </div>
                                         <!-- Tray totals footer -->
-                                        <div id="tray-totals-row" class="grid grid-cols-1 xl:grid-cols-[2fr_1fr_1fr_1fr_40px] gap-3 bg-[#f3efe6] border-2 border-[#e8dcc8] rounded-xl px-4 py-3 mt-3 items-center shadow-sm">
+                                        <div id="tray-totals-row" class="grid grid-cols-1 xl:grid-cols-[2fr_1fr_1fr_1fr_1fr_40px] gap-3 bg-[#f3efe6] border-2 border-[#e8dcc8] rounded-xl px-4 py-3 mt-3 items-center shadow-sm">
                                             <div class="text-[10px] font-black text-[#3d2610] uppercase tracking-widest">Σ Totals (<span id="t2-tray-count">0</span> Trays)</div>
                                             <div>
                                                 <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest xl:hidden mb-0.5">Total Planted</div>
@@ -579,6 +599,10 @@
                                             <div>
                                                 <div class="text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest xl:hidden mb-0.5">Actual Planted</div>
                                                 <div class="text-base font-black text-[#4a7a2e]" id="t2-tot-actual">0</div>
+                                            </div>
+                                            <div>
+                                                <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest xl:hidden mb-0.5">Vacant Holes</div>
+                                                <div class="text-base font-black text-[#4a7a2e]" id="t2-tot-vacant">0</div>
                                             </div>
                                             <div class="hidden xl:block"></div>
                                         </div>
@@ -1479,6 +1503,7 @@
                 });
                 
                 populateDropdown('f-brand', breedRes.data, "Select breed variety...");
+                syncSupplierOptions();
 
                 if (isNewBatch) {
                     updateTracker(0); 
@@ -1507,7 +1532,15 @@
                             }
                         }
                         if(data.remark) {
-                            const supMatch = data.remark.match(/Supplier:\s*([^.]+)/); if(supMatch) document.getElementById('f-supplier').value = supMatch[1].trim();
+                            const supMatch = data.remark.match(/Supplier:\s*([^.]+)/);
+                            const mpobMatch = data.remark.match(/MPOB:\s*([0-9\-]+)/);
+                            if (supMatch) {
+                                // Refresh cascading dropdowns based on the just-loaded breed,
+                                // then pin the supplier + MPOB values from the stored remark.
+                                syncSupplierOptions(supMatch[1].trim());
+                                document.getElementById('f-supplier').value = supMatch[1].trim();
+                                syncMpobOptions(mpobMatch ? mpobMatch[1].trim() : '');
+                            }
                             const doMatch = data.remark.match(/D\/O:\s*([^.]+)/); if(doMatch) document.getElementById('f-dono').value = doMatch[1].trim();
                             const focMatch = data.remark.match(/Incl\.\s*([\d.]+)%\s*FOC/); if(focMatch) document.getElementById('f-foc-percent').value = focMatch[1].trim();
                             const doQtyMatch = data.remark.match(/DO_Qty:\s*(\d+)/);
@@ -2266,6 +2299,12 @@
             const accounted = totalMain + mockCullingTab4 + netPremium + netDtone;
             const untransplanted = pendingTotal;
 
+            // Publish live balances so Tab 2's per-tray Vacant cell can react to
+            // transplants (holes freed once seedlings move to main plot).
+            window._activeTrayBalances = activeTrayBalances;
+            document.querySelectorAll('.tray-row').forEach(r => updateTrayVacant(r));
+            calcPlanting();
+
             renderTrayBalances(activeTrayBalances, netPremium, netDtone, pendingTotal);
 
             const pctMain        = totalPlantedRaw > 0 ? (totalMain / totalPlantedRaw) * 100 : 0;
@@ -2628,10 +2667,10 @@
             const options = getTrayOptionsHTML(); 
             
             const html = `
-                <div id="${rowId}" class="tray-row grid grid-cols-1 xl:grid-cols-[2fr_1fr_1fr_1fr_40px] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end relative">
+                <div id="${rowId}" class="tray-row grid grid-cols-1 xl:grid-cols-[2fr_1fr_1fr_1fr_1fr_40px] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end relative">
                     <div>
                         <label class="label-style">Preset Tray *</label>
-                        <div class="select-wrapper"><select class="input-style !text-[#3d2610] t-select" required onchange="updatePlantingCompletion(); checkTrayInUse('${rowId}')">${options}</select></div>
+                        <div class="select-wrapper"><select class="input-style !text-[#3d2610] t-select" required onchange="updatePlantingCompletion(); checkTrayInUse('${rowId}'); calcTrayRow('${rowId}')">${options}</select></div>
                         <div id="${rowId}-warn" class="hidden mt-1 text-[9px] font-black text-[#a83020] flex items-center gap-1">⚠️ <span></span></div>
                     </div>
                     <div>
@@ -2646,10 +2685,15 @@
                         <label class="label-style !text-[#4a7a2e]">Actual Planted</label>
                         <div class="input-style bg-white font-black text-[#4a7a2e] t-actual h-[45px] flex items-center" data-raw="0">0</div>
                     </div>
+                    <div>
+                        <label class="label-style">Vacant Holes</label>
+                        <div class="input-style bg-white font-black t-vacant h-[45px] flex items-center !text-[#4a7a2e]" data-raw="${TRAY_CAPACITY}" title="2,560 − seeds currently in this tray. Goes red at 0, turns green once transplanting frees holes.">${TRAY_CAPACITY.toLocaleString()}</div>
+                    </div>
                     ${trayRowCount > 1 ? `<button type="button" class="w-10 h-[45px] rounded-lg border border-[#f8d7da] text-[#a83020] bg-white flex items-center justify-center hover:bg-[#f8d7da] shrink-0 transition-colors shadow-sm self-end" onclick="removeTrayRow('${rowId}')" title="Remove Tray">✕</button>` : `<div class="hidden xl:block"></div>`}
                 </div>
             `;
             container.insertAdjacentHTML('beforeend', html);
+            updateTrayVacant(rowId);
             updatePlantingCompletion();
         }
 
@@ -2696,16 +2740,43 @@
             }
         }
 
+        // Each pre-nursery tray fits 2,560 holes; vacant = capacity − seeds currently in the tray.
+        const TRAY_CAPACITY = 2560;
+
+        function updateTrayVacant(rowId) {
+            const row = typeof rowId === 'string' ? document.getElementById(rowId) : rowId;
+            if (!row) return;
+            const vacEl = row.querySelector('.t-vacant');
+            if (!vacEl) return;
+            const actual = parseInt(row.querySelector('.t-actual')?.dataset.raw || 0);
+            const trayName = row.querySelector('.t-select')?.value || '';
+            // Once Tab 3 has run, _activeTrayBalances reflects post-transplant qty per tray.
+            const live = (trayName && window._activeTrayBalances && window._activeTrayBalances[trayName] != null)
+                ? window._activeTrayBalances[trayName]
+                : actual;
+            const inUse = Math.max(0, Math.min(TRAY_CAPACITY, live));
+            const vacant = Math.max(0, TRAY_CAPACITY - inUse);
+            vacEl.innerText = vacant.toLocaleString();
+            vacEl.dataset.raw = vacant;
+            vacEl.classList.remove('!text-[#a83020]', '!text-[#4a7a2e]', 'animate-pulse', '!bg-[#fff5f5]');
+            if (vacant === 0) {
+                vacEl.classList.add('!text-[#a83020]', '!bg-[#fff5f5]', 'animate-pulse');
+            } else {
+                vacEl.classList.add('!text-[#4a7a2e]');
+            }
+        }
+
         function calcTrayRow(rowId) {
             const row = document.getElementById(rowId);
             const planted = readNumericInput(row.querySelector('.t-planted'));
             const empty = readNumericInput(row.querySelector('.t-empty'));
-            const actual = Math.max(0, planted - empty); 
-            
+            const actual = Math.max(0, planted - empty);
+
             const actualDiv = row.querySelector('.t-actual');
             actualDiv.innerText = actual.toLocaleString();
             actualDiv.dataset.raw = actual;
-            calcPlanting(); 
+            updateTrayVacant(rowId);
+            calcPlanting();
         }
 
         function calcPlanting() {
@@ -2719,11 +2790,13 @@
             let totalPlannedSum = 0;
             let totalEmptySum = 0;
             let activeTrayRows = 0;
+            let totalVacant = 0;
             document.querySelectorAll('.tray-row').forEach(row => {
                 activeTrayRows++;
                 totalPlannedSum    += readNumericInput(row.querySelector('.t-planted'));
                 totalEmptySum      += readNumericInput(row.querySelector('.t-empty'));
                 totalActualPlanted += parseInt(row.querySelector('.t-actual')?.dataset.raw || 0);
+                totalVacant        += parseInt(row.querySelector('.t-vacant')?.dataset.raw || 0);
             });
 
             // Update tray totals footer row
@@ -2732,6 +2805,12 @@
             setTrayTot('t2-tot-planted', totalPlannedSum.toLocaleString());
             setTrayTot('t2-tot-empty',   totalEmptySum.toLocaleString());
             setTrayTot('t2-tot-actual',  totalActualPlanted.toLocaleString());
+            setTrayTot('t2-tot-vacant',  totalVacant.toLocaleString());
+            const totVacEl = document.getElementById('t2-tot-vacant');
+            if (totVacEl) {
+                totVacEl.classList.remove('text-[#4a7a2e]', 'text-[#a83020]');
+                totVacEl.classList.add(totalVacant === 0 && activeTrayRows > 0 ? 'text-[#a83020]' : 'text-[#4a7a2e]');
+            }
 
             const accountedTotal = totalActualPlanted + damaged;
 
@@ -3079,18 +3158,30 @@
         }
 
         // --- TAB 1 (MASTER) LOGIC ---
+        // Batch numbering rules:
+        //   • Always MJM-<currentYear>-<NNN>, read-only.
+        //   • Counter is continuous across years (so we don't restart at 001 when
+        //     the year rolls over) and floored at 263 — the agreed starting point
+        //     for the new naming convention.
+        const BATCH_NUMBER_FLOOR = 263;
+        const BATCH_NUMBER_PREFIX = 'MJM';
         function handleNewBatchSetup() {
             const currentYear = new Date().getFullYear();
             const latestBatch = masterBatchesList[0] ? masterBatchesList[0].name : null;
-            if(latestBatch) {
+            let nextNum = BATCH_NUMBER_FLOOR;
+            if (latestBatch) {
                 document.getElementById('latest-batch-id').innerText = latestBatch;
                 const parts = latestBatch.split('-');
-                if(parts.length === 3 && parseInt(parts[1]) === currentYear) {
-                    let nextNum = parseInt(parts[2]) + 1;
-                    const nextId = `${parts[0]}-${currentYear}-${String(nextNum).padStart(3, '0')}`;
-                    document.getElementById('f-batchno').value = nextId;
-                } else { const nextId = `${parts[0] || 'MJN'}-${currentYear}-001`; document.getElementById('f-batchno').value = nextId; }
-            } else { document.getElementById('latest-batch-id').innerText = "None"; const nextId = `MJN-${currentYear}-001`; document.getElementById('f-batchno').value = nextId; }
+                if (parts.length === 3) {
+                    const parsed = parseInt(parts[2], 10);
+                    if (!isNaN(parsed)) nextNum = Math.max(BATCH_NUMBER_FLOOR, parsed + 1);
+                }
+            } else {
+                document.getElementById('latest-batch-id').innerText = 'None';
+            }
+            const nextId = `${BATCH_NUMBER_PREFIX}-${currentYear}-${String(nextNum).padStart(3, '0')}`;
+            document.getElementById('f-batchno').value = nextId;
+            updateT1Completion();
         }
 
         // ── Numeric input helpers (thousand separators) ──────────────────────────
@@ -3266,6 +3357,100 @@
             if(data) data.forEach(item => { const opt = document.createElement('option'); opt.value = item.name; opt.innerText = item.name; sel.appendChild(opt); });
         }
 
+        // ────────────────────────────────────────────────────────────────
+        // Breed → Supplier → MPOB License catalogue (MPOB-licensed seeds).
+        // When breed changes, supplier dropdown filters to that breed's
+        // approved suppliers. When supplier changes, MPOB license dropdown
+        // filters to that supplier's license number(s).
+        // ────────────────────────────────────────────────────────────────
+        const BREED_SUPPLIERS = {
+            'SD Calix 600': [
+                { supplier: 'Sime Darby Plantation Seeds & Agricultural Services Sdn Bhd', mpob: ['544519-021000'] }
+            ],
+            'IOI DXP Hybrid': [
+                { supplier: 'IOI Plantation Sdn Bhd',     mpob: ['622810-021000'] },
+                { supplier: 'Pamol Plantations Sdn Bhd',  mpob: ['506471-921000'] }
+            ],
+            'AA Hybrida IS': [
+                { supplier: 'Inai Utama Sdn Bhd',                      mpob: ['513256-119000'] },
+                { supplier: 'Applied Agricultural Resources Sdn. Bhd.', mpob: ['621940-121000', '549080-021000'] }
+            ],
+            'Felda Yangambi DXP': [
+                { supplier: 'Tunas Services Enterprise', mpob: ['508134-619000'] }
+            ],
+            'UPB Premier': [
+                { supplier: 'Tunas Services Enterprise',   mpob: ['508134-619000'] },
+                { supplier: 'United Plantations Berhad',   mpob: ['508134-619000'] }
+            ],
+            'Surea DXP': [
+                { supplier: 'Sarawak Plantation Agriculture Dev. Sdn. Bhd.', mpob: ['523581-021000'] }
+            ],
+            'Sawit Kinabalu': [
+                { supplier: 'Sawit Kinabalu Seeds Sdn Bhd', mpob: ['608759-021000'] },
+                { supplier: 'Ta Global Services',           mpob: ['521458-019000'] }
+            ]
+        };
+
+        function syncSupplierOptions(keep) {
+            const sel = document.getElementById('f-supplier');
+            if (!sel) return;
+            const breed = document.getElementById('f-brand').value;
+            const list  = BREED_SUPPLIERS[breed] || [];
+            const prev  = keep != null ? keep : sel.value;
+            sel.innerHTML = '<option value="">Select supplier...</option>';
+            if (!breed) {
+                // No breed yet — show every supplier across all breeds.
+                Object.entries(BREED_SUPPLIERS).forEach(([breedName, suppliers]) => {
+                    const og = document.createElement('optgroup');
+                    og.label = breedName;
+                    suppliers.forEach(s => {
+                        const opt = document.createElement('option');
+                        opt.value = s.supplier; opt.innerText = s.supplier;
+                        og.appendChild(opt);
+                    });
+                    sel.appendChild(og);
+                });
+            } else {
+                list.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.supplier; opt.innerText = s.supplier;
+                    sel.appendChild(opt);
+                });
+            }
+            if (prev && Array.from(sel.options).some(o => o.value === prev)) {
+                sel.value = prev;
+            } else {
+                sel.value = '';
+            }
+            syncMpobOptions();
+        }
+
+        function syncMpobOptions(keep) {
+            const sel = document.getElementById('f-mpob');
+            if (!sel) return;
+            const breed    = document.getElementById('f-brand').value;
+            const supplier = document.getElementById('f-supplier').value;
+            const prev     = keep != null ? keep : sel.value;
+            sel.innerHTML = '<option value="">Select MPOB license...</option>';
+            // Find supplier entry. If breed missing, search across all breeds for that supplier name.
+            let entries = [];
+            if (breed && BREED_SUPPLIERS[breed]) {
+                entries = BREED_SUPPLIERS[breed].filter(s => s.supplier === supplier);
+            } else if (supplier) {
+                Object.values(BREED_SUPPLIERS).forEach(list => {
+                    list.forEach(s => { if (s.supplier === supplier) entries.push(s); });
+                });
+            }
+            const licenses = Array.from(new Set(entries.flatMap(e => e.mpob)));
+            licenses.forEach(lic => {
+                const opt = document.createElement('option');
+                opt.value = lic; opt.innerText = lic;
+                sel.appendChild(opt);
+            });
+            if (prev && licenses.includes(prev)) sel.value = prev;
+            else sel.value = '';
+        }
+
         function updateT1Completion() {
             const date    = document.getElementById('f-datereceived').value;
             const batch   = document.getElementById('f-batchno').value.trim();
@@ -3287,8 +3472,8 @@
 
         document.getElementById('reception-form').addEventListener('submit', async function(e) {
             e.preventDefault(); const saveBtn = document.getElementById('save-btn'); saveBtn.innerText = 'SAVING...'; saveBtn.disabled = true;
-            const dateReceived = document.getElementById('f-datereceived').value; const batch = document.getElementById('f-batchno').value.trim(); const breed = document.getElementById('f-brand').value; const supplier = document.getElementById('f-supplier').value; const dono = document.getElementById('f-dono').value; const focPercent = parseFloat(document.getElementById('f-foc-percent').value) || 0; const totalQtyRaw = document.getElementById('display-total-qty').dataset.raw || 0; const doQty = readNumericInput('f-do-qty');
-            let remarkStr = `Seeds received.`; if (supplier) remarkStr += ` Supplier: ${supplier}.`; if (dono) remarkStr += ` D/O: ${dono}.`; remarkStr += ` DO_Qty: ${doQty}.`; if (focPercent > 0) remarkStr += ` Incl. ${focPercent}% FOC.`;
+            const dateReceived = document.getElementById('f-datereceived').value; const batch = document.getElementById('f-batchno').value.trim(); const breed = document.getElementById('f-brand').value; const supplier = document.getElementById('f-supplier').value; const mpob = document.getElementById('f-mpob').value; const dono = document.getElementById('f-dono').value; const focPercent = parseFloat(document.getElementById('f-foc-percent').value) || 0; const totalQtyRaw = document.getElementById('display-total-qty').dataset.raw || 0; const doQty = readNumericInput('f-do-qty');
+            let remarkStr = `Seeds received.`; if (supplier) remarkStr += ` Supplier: ${supplier}.`; if (mpob) remarkStr += ` MPOB: ${mpob}.`; if (dono) remarkStr += ` D/O: ${dono}.`; remarkStr += ` DO_Qty: ${doQty}.`; if (focPercent > 0) remarkStr += ` Incl. ${focPercent}% FOC.`;
             const ledgerPayload = withEditMeta({ transaction_type: 'Seeds_Received', batch_name: batch, breed_name: breed, quantity_change: parseInt(totalQtyRaw), plot_name: 'Pre-Nursery', remark: remarkStr });
             try {
                 if(!isEditing) {
@@ -4435,9 +4620,11 @@
       const STAGE_BY_TAB = { 1: 'seeds_in', 2: 'planting', 3: 'transplanting', 4: 'cull_1', 5: 'cull_2', 6: 'cull_3' };
       const TAB_INDICES = [1, 2, 3, 4, 5, 6]; // tab 7 (Audit Trail) is read-only
 
-      const reviews = {}; // stage → { reviewed_by, reviewer_name, reviewer_email, reviewed_at }
-      let booted = false;
-      let isAdmin = false;
+      const reviews       = {}; // stage → { reviewed_by, reviewer_name, reviewer_email, reviewed_at }
+      const verifications = {}; // stage → { verified_by, verifier_name, verifier_email, verified_at }
+      let booted     = false;
+      let isAdmin    = false;
+      let isVerifier = false;
 
       function fmtDate(iso) {
         if (!iso) return '';
@@ -4469,6 +4656,7 @@
         const tab = document.getElementById('tab-' + tabIdx);
         const stage = STAGE_BY_TAB[tabIdx];
         const r = reviews[stage];
+        const v = verifications[stage];
         const batch = currentBatchId();
 
         if (!batch) {
@@ -4476,20 +4664,23 @@
           banner.innerHTML = `
             <div>
               <div class="mjm-review-meta">Review Status</div>
-              <div class="mt-1 text-[#7a4a10]">Save Tab 1 first — review can only be applied once a batch number is assigned.</div>
+              <div class="mt-1 text-[#7a4a10]">Save Tab 1 first — verify &amp; review can only be applied once a batch number is assigned.</div>
             </div>`;
           tab.classList.remove('mjm-locked');
           return;
         }
 
         if (r) {
-          // Reviewed → locked for non-admins
-          const who = r.reviewer_name || r.reviewer_email || 'a reviewer';
+          // Reviewed → locked for non-admins (verifier record stays in DB for audit but is implied).
+          const whoR = r.reviewer_name || r.reviewer_email || 'a reviewer';
+          const whoV = v ? (v.verifier_name || v.verifier_email || 'a verifier') : null;
           banner.className = 'mjm-review-banner mjm-review-locked';
           banner.innerHTML = `
             <div>
               <div class="mjm-review-meta">✓ Reviewed &amp; Locked</div>
-              <div class="mt-1">Reviewed by <strong>${who}</strong> on <strong>${fmtDate(r.reviewed_at)}</strong>.</div>
+              <div class="mt-1">Reviewed by <strong>${whoR}</strong> on <strong>${fmtDate(r.reviewed_at)}</strong>.${
+                whoV ? ` Verified by <strong>${whoV}</strong> on <strong>${fmtDate(v.verified_at)}</strong>.` : ''
+              }</div>
             </div>
             ${ isAdmin
               ? `<button class="mjm-review-btn mjm-review-btn-unmark mjm-review-allow"
@@ -4498,20 +4689,56 @@
           `;
           if (!isAdmin) tab.classList.add('mjm-locked');
           else          tab.classList.remove('mjm-locked');
-        } else {
-          banner.className = 'mjm-review-banner mjm-review-open';
+          return;
+        }
+
+        if (v) {
+          // Verified, awaiting admin review.
+          const whoV = v.verifier_name || v.verifier_email || 'a verifier';
+          banner.className = 'mjm-review-banner mjm-review-verified';
+          const adminBtn = isAdmin
+            ? `<button class="mjm-review-btn mjm-review-btn-mark mjm-review-allow"
+                       onclick="MJMReview.mark(${tabIdx})">Mark as Reviewed</button>`
+            : '';
+          const unverifyBtn = (isVerifier || isAdmin)
+            ? `<button class="mjm-review-btn mjm-review-btn-unverify mjm-review-allow"
+                       onclick="MJMReview.unverify(${tabIdx})">Unverify</button>`
+            : '';
           banner.innerHTML = `
             <div>
-              <div class="mjm-review-meta">Pending Review</div>
-              <div class="mt-1 text-[#7a4a10]">Once reviewed, this tab will be locked for non-admin users.</div>
+              <div class="mjm-review-meta">✓ Verified — Awaiting Review</div>
+              <div class="mt-1">Verified by <strong>${whoV}</strong> on <strong>${fmtDate(v.verified_at)}</strong>.</div>
             </div>
-            ${ isAdmin
-              ? `<button class="mjm-review-btn mjm-review-btn-mark mjm-review-allow"
-                         onclick="MJMReview.mark(${tabIdx})">Mark as Reviewed</button>`
-              : `<span class="mjm-review-meta">Awaiting reviewer</span>` }
+            <div class="mjm-review-btn-row">${adminBtn}${unverifyBtn}${
+              !isAdmin && !isVerifier ? '<span class="mjm-review-meta">Awaiting admin review</span>' : ''
+            }</div>
           `;
           tab.classList.remove('mjm-locked');
+          return;
         }
+
+        // Not yet verified → admin's Mark-as-Reviewed is disabled until a verifier signs off.
+        banner.className = 'mjm-review-banner mjm-review-open';
+        const verifyBtn = (isVerifier || isAdmin)
+          ? `<button class="mjm-review-btn mjm-review-btn-verify mjm-review-allow"
+                     onclick="MJMReview.verify(${tabIdx})">Verify</button>`
+          : '';
+        const reviewBtn = isAdmin
+          ? `<button class="mjm-review-btn mjm-review-btn-mark mjm-review-allow"
+                     disabled
+                     title="A verifier must sign off this tab before it can be reviewed"
+                     onclick="event.preventDefault();">Mark as Reviewed</button>`
+          : '';
+        banner.innerHTML = `
+          <div>
+            <div class="mjm-review-meta">Pending Verification</div>
+            <div class="mt-1 text-[#7a4a10]">A verifier must sign off this tab before an admin can mark it as reviewed.</div>
+          </div>
+          <div class="mjm-review-btn-row">${verifyBtn}${reviewBtn}${
+            !isVerifier && !isAdmin ? '<span class="mjm-review-meta">Awaiting verifier</span>' : ''
+          }</div>
+        `;
+        tab.classList.remove('mjm-locked');
       }
 
       function renderAll() {
@@ -4520,15 +4747,28 @@
 
       async function refresh() {
         const batch = currentBatchId();
-        for (const k of Object.keys(reviews)) delete reviews[k];
+        for (const k of Object.keys(reviews))       delete reviews[k];
+        for (const k of Object.keys(verifications)) delete verifications[k];
         if (batch) {
           try {
-            const { data, error } = await _supabase
-              .from('operation_batch_reviews')
-              .select('stage, reviewer_name, reviewer_email, reviewed_at')
-              .eq('batch_name', batch);
-            if (error) throw error;
-            (data || []).forEach(r => { reviews[r.stage] = r; });
+            const [revRes, verRes] = await Promise.all([
+              _supabase
+                .from('operation_batch_reviews')
+                .select('stage, reviewer_name, reviewer_email, reviewed_at')
+                .eq('batch_name', batch),
+              _supabase
+                .from('operation_batch_verifications')
+                .select('stage, verifier_name, verifier_email, verified_at')
+                .eq('batch_name', batch)
+            ]);
+            if (revRes.error) throw revRes.error;
+            (revRes.data || []).forEach(r => { reviews[r.stage] = r; });
+            // verifications table may not exist yet on older DBs — degrade gracefully.
+            if (!verRes.error) {
+              (verRes.data || []).forEach(v => { verifications[v.stage] = v; });
+            } else {
+              console.warn('[MJMReview] verifications unavailable:', verRes.error.message);
+            }
           } catch (e) {
             console.warn('[MJMReview] failed to load reviews:', e);
           }
@@ -4541,6 +4781,10 @@
         const batch = currentBatchId();
         if (!batch) { alert('Save Tab 1 first to assign a batch number.'); return; }
         const stage = STAGE_BY_TAB[tabIdx];
+        if (!verifications[stage]) {
+          alert('A verifier must sign off this tab before it can be marked as reviewed.');
+          return;
+        }
         const u = MJMAccess.user() || {};
         const payload = {
           batch_name:     batch,
@@ -4555,6 +4799,45 @@
           .upsert(payload, { onConflict: 'batch_name,stage' });
         if (error) { alert('Failed to mark reviewed: ' + error.message); return; }
         reviews[stage] = payload;
+        renderBanner(tabIdx);
+      }
+
+      async function verify(tabIdx) {
+        if (!isVerifier && !isAdmin) return;
+        const batch = currentBatchId();
+        if (!batch) { alert('Save Tab 1 first to assign a batch number.'); return; }
+        const stage = STAGE_BY_TAB[tabIdx];
+        const u = MJMAccess.user() || {};
+        const payload = {
+          batch_name:     batch,
+          stage,
+          verified_by:    u.id || null,
+          verifier_email: u.email || null,
+          verifier_name:  u.full_name || null,
+          verified_at:    new Date().toISOString()
+        };
+        const { error } = await _supabase
+          .from('operation_batch_verifications')
+          .upsert(payload, { onConflict: 'batch_name,stage' });
+        if (error) { alert('Failed to verify: ' + error.message); return; }
+        verifications[stage] = payload;
+        renderBanner(tabIdx);
+      }
+
+      async function unverify(tabIdx) {
+        if (!isVerifier && !isAdmin) return;
+        const batch = currentBatchId();
+        if (!batch) return;
+        const stage = STAGE_BY_TAB[tabIdx];
+        if (reviews[stage]) { alert('Unreview this tab first before removing the verification.'); return; }
+        if (!confirm('Remove the verification on this tab?')) return;
+        const { error } = await _supabase
+          .from('operation_batch_verifications')
+          .delete()
+          .eq('batch_name', batch)
+          .eq('stage', stage);
+        if (error) { alert('Failed to unverify: ' + error.message); return; }
+        delete verifications[stage];
         renderBanner(tabIdx);
       }
 
@@ -4584,7 +4867,8 @@
           window.location.href = 'operation_dashboard.html';
           return;
         }
-        isAdmin = MJMAccess.isAdminOf('operation');
+        isAdmin    = MJMAccess.isAdminOf('operation');
+        isVerifier = typeof MJMAccess.canVerifyOperation === 'function' && MJMAccess.canVerifyOperation();
 
         // Re-apply lock when tab switches (other code may inject rows).
         const _origSwitchTab = window.switchTab;
@@ -4616,7 +4900,7 @@
         await refresh();
       }
 
-      window.MJMReview = { boot, refresh, mark, unmark };
+      window.MJMReview = { boot, refresh, mark, unmark, verify, unverify };
     })();
     </script>
 </body>
