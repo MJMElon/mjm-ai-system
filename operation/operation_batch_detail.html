@@ -1428,20 +1428,44 @@
                 document.getElementById('t2-date').valueAsDate = new Date();
                 generateWorkerIcons();
 
-                const [breedRes, batchRes, trayRes, plotRes, usedTrayRes] = await Promise.all([
+                const [breedRes, batchRes, trayRes, plotRes, usedTrayRes, transplantedRes, cull1Res] = await Promise.all([
                     _supabase.from('shared_breeds').select('name').order('name'),
                     _supabase.from('operation_batches').select('name').order('name', { ascending: false }),
                     _supabase.from('operation_trays').select('*'),
                     _supabase.from('shared_plots').select('*'),
-                    _supabase.from('shared_inventory_logs').select('plot_name, batch_name').eq('transaction_type', 'Planted')
+                    _supabase.from('shared_inventory_logs').select('plot_name, batch_name, quantity_change').eq('transaction_type', 'Planted'),
+                    _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']),
+                    _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '1st_Culling')
                 ]);
 
                 masterBatchesList = batchRes.data || [];
                 globalTrays = trayRes.data || [];
 
+                // Build per-batch totals so we can tell which batches have fully emptied their
+                // pre-nursery trays (planted − transplanted − 1st_culling ≤ 0). Trays from
+                // emptied batches are considered free for the next batch to reuse.
+                const plantedByBatch = {}, transplantedByBatch = {}, cull1ByBatch = {};
+                (usedTrayRes.data || []).forEach(l => {
+                    plantedByBatch[l.batch_name] = (plantedByBatch[l.batch_name] || 0) + (l.quantity_change || 0);
+                });
+                (transplantedRes.data || []).forEach(l => {
+                    transplantedByBatch[l.batch_name] = (transplantedByBatch[l.batch_name] || 0) + Math.abs(l.quantity_change || 0);
+                });
+                (cull1Res.data || []).forEach(l => {
+                    cull1ByBatch[l.batch_name] = (cull1ByBatch[l.batch_name] || 0) + Math.abs(l.quantity_change || 0);
+                });
+                const batchPnEmptied = (b) => {
+                    const planted = plantedByBatch[b] || 0;
+                    if (planted <= 0) return false; // never planted, leave behavior unchanged
+                    const remaining = planted - (transplantedByBatch[b] || 0) - (cull1ByBatch[b] || 0);
+                    return remaining <= 0;
+                };
+
                 // Build tray-usage map: which batch is each tray planted in?
+                // Skip trays whose batch's pre-nursery is already emptied so the tray frees up.
                 trayUsageMap = {};
                 (usedTrayRes.data || []).forEach(log => {
+                    if (batchPnEmptied(log.batch_name)) return;
                     trayUsageMap[log.plot_name] = log.batch_name;
                 });
                 
