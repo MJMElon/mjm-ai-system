@@ -48,6 +48,39 @@
         .notebook-row .note-amt{font-weight:900;color:#b91c1c;font-variant-numeric:tabular-nums;white-space:nowrap;}
         .notebook-row.credit .note-amt{color:#1d4ed8;}
 
+        /* Credit-invoice row buttons */
+        .ci-btn{font-size:9px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;border-radius:6px;padding:3px 8px;border:1px solid;cursor:pointer;white-space:nowrap;transition:all .15s;}
+        .ci-btn-upload{background:#dbeafe;color:#1d4ed8;border-color:#93c5fd;}
+        .ci-btn-upload:hover{background:#1d4ed8;color:#fff;}
+        .ci-btn-paid{background:#dcfce7;color:#166534;border-color:#86efac;}
+        .ci-btn-paid:hover{background:#166534;color:#fff;}
+        .ci-link{text-decoration:none;font-size:13px;line-height:1;padding:1px 4px;border-radius:5px;}
+        .ci-link:hover{background:#f1f5f9;}
+
+        /* Credit-invoice modal */
+        .ci-modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:1000;align-items:center;justify-content:center;padding:1rem;}
+        .ci-modal.open{display:flex;}
+        .ci-modal-card{background:#fff;border-radius:16px;width:100%;max-width:520px;box-shadow:0 30px 80px -10px rgba(0,0,0,.4);overflow:hidden;display:flex;flex-direction:column;max-height:92vh;}
+        .ci-modal-head{padding:14px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:12px;background:linear-gradient(180deg,#f8fafc,#fff);}
+        .ci-modal-title{font-size:13px;font-weight:900;color:#0f172a;text-transform:uppercase;letter-spacing:.08em;}
+        .ci-modal-close{background:transparent;border:none;font-size:20px;color:#64748b;cursor:pointer;line-height:1;}
+        .ci-modal-close:hover{color:#0f172a;}
+        .ci-modal-body{padding:18px 20px;overflow-y:auto;flex:1;}
+        .ci-field{margin-bottom:.85rem;}
+        .ci-field-label{font-size:10px;font-weight:900;color:#475569;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;display:block;}
+        .ci-input,.ci-textarea{width:100%;border:1.5px solid #cbd5e1;border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;color:#0f172a;background:#fff;}
+        .ci-input:focus,.ci-textarea:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.18);}
+        .ci-textarea{resize:vertical;min-height:60px;}
+        .ci-readonly-row{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;font-size:12px;color:#334155;margin-bottom:.4rem;}
+        .ci-readonly-row strong{color:#0f172a;font-weight:900;}
+        .ci-modal-error{color:#b91c1c;font-size:11px;font-weight:700;min-height:16px;margin-top:.4rem;}
+        .ci-modal-foot{padding:12px 20px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:.5rem;background:#f8fafc;}
+        .ci-btn-primary{background:#1d4ed8;color:#fff;border:1px solid #1d4ed8;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;}
+        .ci-btn-primary:hover{background:#1e40af;}
+        .ci-btn-primary:disabled{opacity:.6;cursor:wait;}
+        .ci-btn-ghost{background:#fff;color:#475569;border:1px solid #cbd5e1;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;}
+        .ci-btn-ghost:hover{background:#f1f5f9;color:#0f172a;}
+
         /* Maturity month tabs */
         .month-tab{padding:8px 14px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1.5px solid transparent;background:transparent;color:#64748b;cursor:pointer;white-space:nowrap;transition:all .15s;}
         .month-tab:hover:not(.active){background:#f1f5f9;}
@@ -716,5 +749,65 @@
 </div>
 
 <script src="operation_stock_sales.js"></script>
+<!-- ══════════════ CREDIT-INVOICE MODALS ══════════════ -->
+<div class="ci-modal" id="ci-upload-modal">
+    <div class="ci-modal-card">
+        <div class="ci-modal-head">
+            <div class="ci-modal-title">📤 Upload Invoice</div>
+            <button class="ci-modal-close" onclick="closeInvoiceUploadModal()">×</button>
+        </div>
+        <div class="ci-modal-body">
+            <input type="hidden" id="ci-up-key">
+            <div class="ci-readonly-row">Customer: <strong id="ci-up-customer">—</strong></div>
+            <div class="ci-readonly-row">Billing period: <strong id="ci-up-period">—</strong></div>
+            <div class="ci-readonly-row" id="ci-up-summary" style="margin-bottom:1rem;">—</div>
+
+            <div class="ci-field">
+                <label class="ci-field-label" for="ci-up-invoice-no">Invoice Number *</label>
+                <input type="text" id="ci-up-invoice-no" class="ci-input" placeholder="e.g. INV-2026-05-014" autocomplete="off">
+            </div>
+            <div class="ci-field">
+                <label class="ci-field-label" for="ci-up-file">Invoice PDF / Image *</label>
+                <input type="file" id="ci-up-file" class="ci-input" accept="application/pdf,image/*">
+            </div>
+            <div class="ci-field">
+                <label class="ci-field-label" for="ci-up-due">Due Date (optional)</label>
+                <input type="date" id="ci-up-due" class="ci-input">
+            </div>
+            <div class="ci-field">
+                <label class="ci-field-label" for="ci-up-notes">Notes (optional)</label>
+                <textarea id="ci-up-notes" class="ci-textarea" placeholder="Internal notes for this invoice"></textarea>
+            </div>
+            <div class="ci-modal-error" id="ci-up-error"></div>
+        </div>
+        <div class="ci-modal-foot">
+            <button class="ci-btn-ghost" onclick="closeInvoiceUploadModal()">Cancel</button>
+            <button class="ci-btn-primary" id="ci-up-submit" onclick="submitInvoiceUpload()">Upload &amp; Issue Invoice</button>
+        </div>
+    </div>
+</div>
+
+<div class="ci-modal" id="ci-paid-modal">
+    <div class="ci-modal-card">
+        <div class="ci-modal-head">
+            <div class="ci-modal-title">✓ Mark Invoice Paid</div>
+            <button class="ci-modal-close" onclick="closeMarkPaidModal()">×</button>
+        </div>
+        <div class="ci-modal-body">
+            <input type="hidden" id="ci-paid-id">
+            <div class="ci-readonly-row" id="ci-paid-summary" style="margin-bottom:1rem;">—</div>
+            <div class="ci-field">
+                <label class="ci-field-label" for="ci-paid-file">Payment Proof (optional)</label>
+                <input type="file" id="ci-paid-file" class="ci-input" accept="application/pdf,image/*">
+            </div>
+            <div class="ci-modal-error" id="ci-paid-error"></div>
+        </div>
+        <div class="ci-modal-foot">
+            <button class="ci-btn-ghost" onclick="closeMarkPaidModal()">Cancel</button>
+            <button class="ci-btn-primary" id="ci-paid-submit" onclick="submitMarkPaid()">Mark as Paid</button>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>

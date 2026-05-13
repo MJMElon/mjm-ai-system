@@ -215,7 +215,7 @@
         const unpaidCount  = todoData.unpaid.length;
         const unpaidAmt    = todoData.unpaid.reduce((s, r) => s + (r.totalAmount || 0), 0);
         const creditCount  = todoData.credit.length;
-        const creditAmt    = todoData.credit.reduce((s, r) => s + (r.billAmount || 0), 0);
+        const creditAmt    = todoData.credit.reduce((s, r) => s + (r.totalAmount || 0), 0);
 
         const paidPending  = (allCustomerOrders || []).filter(r => r.derivedStatus === 'Paid · Pending Pickup');
         const paidCount    = paidPending.length;
@@ -234,53 +234,59 @@
     }
 
     async function loadUnpaidScenario() {
+        // "Unpaid" now means: credit invoices we've already ISSUED but the
+        // customer hasn't paid yet. (Previously this tab tracked cash orders
+        // in status='Pending Payment'; that semantic was replaced by the
+        // monthly-invoice workflow per spec.)
         try {
-            const { data: unpaidOrders, error } = await _supabase
-                .from('salesweb_customer_orders')
-                .select('id,order_number,customer_name,total,created_at,status')
-                .eq('status', 'Pending Payment')
-                .order('created_at', { ascending: false });
+            const { data: invoices, error } = await _supabase
+                .from('salesweb_credit_invoices')
+                .select('id,customer_id,invoice_number,billing_period,total_qty,total_amount,issued_at,due_date,status,paid_at,invoice_file_url')
+                .eq('status', 'issued')
+                .is('paid_at', null)
+                .order('issued_at', { ascending: false });
             if (error) throw error;
 
-            const unpaidIds = (unpaidOrders || []).map(o => o.id);
-            const itemsByOrder = {};
-            if (unpaidIds.length) {
-                const { data: items } = await _supabase
-                    .from('salesweb_order_items')
-                    .select('order_id,product_name,quantity,unit_price,subtotal')
-                    .in('order_id', unpaidIds);
-                (items || []).forEach(it => {
-                    if (!itemsByOrder[it.order_id]) itemsByOrder[it.order_id] = [];
-                    itemsByOrder[it.order_id].push(it);
-                });
+            const customerIds = [...new Set((invoices || []).map(i => i.customer_id).filter(Boolean))];
+            const customerNameById = {};
+            if (customerIds.length) {
+                const { data: profs } = await _supabase
+                    .from('shared_profiles')
+                    .select('id,full_name,email')
+                    .in('id', customerIds);
+                (profs || []).forEach(p => { customerNameById[p.id] = p.full_name || p.email || '—'; });
             }
 
-            todoData.unpaid = (unpaidOrders || []).map(o => {
-                const items = itemsByOrder[o.id] || [];
-                return {
-                    id: o.id,
-                    orderNumber: o.order_number,
-                    customerName: o.customer_name,
-                    totalQty: items.reduce((s, it) => s + (it.quantity || 0), 0),
-                    totalAmount: o.total || 0,
-                    items
-                };
-            });
+            todoData.unpaid = (invoices || []).map(inv => ({
+                id: inv.id,
+                invoiceNumber: inv.invoice_number,
+                customerName: customerNameById[inv.customer_id] || '—',
+                billingPeriod: inv.billing_period,
+                totalQty: inv.total_qty || 0,
+                totalAmount: inv.total_amount || 0,
+                issuedAt: inv.issued_at,
+                dueDate: inv.due_date,
+                invoiceFileUrl: inv.invoice_file_url
+            }));
         } catch(e) {
-            console.warn('[Unpaid] load failed:', e);
+            console.warn('[Unpaid Invoices] load failed:', e);
             todoData.unpaid = [];
         }
     }
 
     async function loadCreditScenario() {
+        // "Credit" tab shows credit-term orders that have been COLLECTED but
+        // are not yet attached to an invoice. Grouped by (customer, collection
+        // month) so the 1st-of-month invoicing flow lists one row per
+        // customer-per-month with a single Upload Invoice button.
         try {
             const { data: creditOrders, error } = await _supabase
                 .from('salesweb_customer_orders')
-                .select('id,order_number,customer_name,total,created_at,status,payment_terms,credit_billed_at,collected_qty,collected_at')
+                .select('id,order_number,customer_id,customer_name,total,created_at,status,payment_terms,credit_billed_at,credit_invoice_id,collected_qty,collected_at')
                 .eq('payment_terms', 'credit')
-                .is('credit_billed_at', null)
-                .order('collected_at', { ascending: false, nullsFirst: false })
-                .order('created_at',   { ascending: false });
+                .is('credit_invoice_id', null)
+                .not('collected_at', 'is', null)
+                .order('collected_at', { ascending: false });
             if (error) throw error;
 
             const creditIds = (creditOrders || []).map(o => o.id);
@@ -296,24 +302,43 @@
                 });
             }
 
-            todoData.credit = (creditOrders || []).map(o => {
+            // Group by customer_id + billing period (YYYY-MM derived from collected_at)
+            const groups = {};
+            (creditOrders || []).forEach(o => {
+                const period = (o.collected_at || '').slice(0, 7); // 'YYYY-MM'
+                if (!period || !o.customer_id) return;
+                const key = o.customer_id + '__' + period;
                 const items = itemsByOrder[o.id] || [];
                 const orderedTotalQty = items.reduce((s, it) => s + (it.quantity || 0), 0);
                 const orderedTotalAmt = items.reduce((s, it) => s + (it.subtotal || 0), 0);
                 const unitPrice = orderedTotalQty > 0 ? (orderedTotalAmt / orderedTotalQty) : (items[0]?.unit_price || 0);
                 const collectedQty = o.collected_qty != null ? o.collected_qty : orderedTotalQty;
-                const billAmount   = unitPrice * collectedQty;
-                const billingDate  = o.collected_at ? new Date(o.collected_at) : new Date(o.created_at);
-                return {
-                    id: o.id,
-                    orderNumber: o.order_number,
-                    customerName: o.customer_name,
-                    collectedQty,
-                    unitPrice,
-                    billAmount,
-                    billingMonth: billingDate.toLocaleString('en-MY', { month: 'short', year: 'numeric' })
-                };
+                const billAmount = unitPrice * collectedQty;
+
+                if (!groups[key]) {
+                    const [y, m] = period.split('-').map(Number);
+                    groups[key] = {
+                        key,
+                        customerId: o.customer_id,
+                        customerName: o.customer_name || '—',
+                        billingPeriod: period,
+                        billingLabel: new Date(y, m - 1, 1).toLocaleString('en-MY', { month: 'short', year: 'numeric' }),
+                        orderIds: [],
+                        orderNumbers: [],
+                        orderCount: 0,
+                        totalQty: 0,
+                        totalAmount: 0
+                    };
+                }
+                groups[key].orderIds.push(o.id);
+                groups[key].orderNumbers.push(o.order_number);
+                groups[key].orderCount += 1;
+                groups[key].totalQty += collectedQty;
+                groups[key].totalAmount += billAmount;
             });
+
+            todoData.credit = Object.values(groups)
+                .sort((a, b) => b.billingPeriod.localeCompare(a.billingPeriod) || a.customerName.localeCompare(b.customerName));
         } catch(e) {
             console.warn('[Credit] unavailable:', e?.message || e);
             todoData.credit = [];
@@ -335,54 +360,228 @@
         if (todoTab === 'unpaid') {
             const total = todoData.unpaid.reduce((s, r) => s + (r.totalAmount || 0), 0);
             meta.innerHTML = todoData.unpaid.length
-                ? `<span class="text-red-600 font-black">${todoData.unpaid.length}</span> orders · Total <span class="text-red-600 font-black">${fmtRM(total)}</span>`
+                ? `<span class="text-red-600 font-black">${todoData.unpaid.length}</span> invoices · Total <span class="text-red-600 font-black">${fmtRM(total)}</span>`
                 : '';
 
             if (!todoData.unpaid.length) {
-                body.innerHTML = '<div class="text-center py-8 text-slate-500"><span class="text-2xl">✓</span><div class="text-[10px] font-bold uppercase tracking-widest mt-1">No pending payments</div></div>';
+                body.innerHTML = '<div class="text-center py-8 text-slate-500"><span class="text-2xl">✓</span><div class="text-[10px] font-bold uppercase tracking-widest mt-1">No unpaid invoices</div></div>';
                 return;
             }
 
-            body.innerHTML = todoData.unpaid.map(r => `
-                <div class="notebook-row">
+            body.innerHTML = todoData.unpaid.map(r => {
+                const daysOverdue = r.dueDate ? Math.floor((Date.now() - new Date(r.dueDate).getTime()) / 86400000) : null;
+                const overdueBadge = daysOverdue !== null && daysOverdue > 0
+                    ? `<span class="text-[8px] font-black px-1 py-0.5 rounded-full bg-red-200 text-red-800 border border-red-400 uppercase tracking-widest ml-1">${daysOverdue}d overdue</span>` : '';
+                const viewLink = r.invoiceFileUrl
+                    ? `<a href="${escapeHtml(r.invoiceFileUrl)}" target="_blank" rel="noopener" class="ci-link" title="View invoice PDF">📄</a>` : '';
+                return `
+                <div class="notebook-row" data-invoice-id="${escapeHtml(r.id)}">
                     <div class="nb-line1">
                         <span class="note-name" title="${escapeHtml(r.customerName || '')}">${escapeHtml(r.customerName || '—')}</span>
                         <span class="note-amt">${fmtRM(r.totalAmount)}</span>
                     </div>
                     <div class="nb-line2">
-                        <span><span class="text-[8px] font-black px-1 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-300 uppercase tracking-widest mr-1">Unpaid</span><span class="note-id">${escapeHtml(r.orderNumber || '—')}</span></span>
-                        <span>${r.totalQty.toLocaleString()} qty</span>
+                        <span><span class="text-[8px] font-black px-1 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-300 uppercase tracking-widest mr-1">${escapeHtml(r.billingPeriod || '')}</span><span class="note-id">${escapeHtml(r.invoiceNumber || '—')}</span>${overdueBadge}</span>
+                        <span class="flex items-center gap-1.5">${viewLink}<button class="ci-btn ci-btn-paid" onclick="openMarkPaidModal('${escapeHtml(r.id)}')">Mark Paid</button></span>
                     </div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
         } else {
-            const now = new Date();
-            const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-            const billLabel = lastMonth.toLocaleString('en-MY', { month: 'short', year: 'numeric' });
-            const total = todoData.credit.reduce((s, r) => s + (r.billAmount || 0), 0);
+            const total = todoData.credit.reduce((s, r) => s + (r.totalAmount || 0), 0);
             meta.innerHTML = todoData.credit.length
-                ? `Bill for ${billLabel} · <span class="text-blue-600 font-black">${todoData.credit.length}</span> orders · Total <span class="text-blue-600 font-black">${fmtRM(total)}</span>`
+                ? `<span class="text-blue-600 font-black">${todoData.credit.length}</span> customers · Total <span class="text-blue-600 font-black">${fmtRM(total)}</span> to invoice`
                 : '';
 
             if (!todoData.credit.length) {
-                body.innerHTML = '<div class="text-center py-8 text-slate-500"><span class="text-2xl">✓</span><div class="text-[10px] font-bold uppercase tracking-widest mt-1">No credit billing pending</div><div class="text-[9px] mt-1">Tag orders with <span class="font-mono">payment_terms=\'credit\'</span> to see them here.</div></div>';
+                body.innerHTML = '<div class="text-center py-8 text-slate-500"><span class="text-2xl">✓</span><div class="text-[10px] font-bold uppercase tracking-widest mt-1">No credit invoices pending</div><div class="text-[9px] mt-1">Credit orders appear here once collected. Use the order modal to set <span class="font-mono">collected_at</span>.</div></div>';
                 return;
             }
 
             body.innerHTML = todoData.credit.map(r => `
-                <div class="notebook-row credit">
+                <div class="notebook-row credit" data-group-key="${escapeHtml(r.key)}">
                     <div class="nb-line1">
                         <span class="note-name" title="${escapeHtml(r.customerName || '')}">${escapeHtml(r.customerName || '—')}</span>
-                        <span class="note-amt">${fmtRM(r.billAmount)}</span>
+                        <span class="note-amt">${fmtRM(r.totalAmount)}</span>
                     </div>
                     <div class="nb-line2">
-                        <span><span class="text-[8px] font-black px-1 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-300 uppercase tracking-widest mr-1">${escapeHtml(r.billingMonth)}</span><span class="note-id">${escapeHtml(r.orderNumber || '—')}</span></span>
-                        <span>${r.collectedQty.toLocaleString()} × ${fmtRM(r.unitPrice)}</span>
+                        <span><span class="text-[8px] font-black px-1 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-300 uppercase tracking-widest mr-1">${escapeHtml(r.billingLabel)}</span><span class="note-id">${r.orderCount} order${r.orderCount===1?'':'s'} · ${r.totalQty.toLocaleString()} qty</span></span>
+                        <button class="ci-btn ci-btn-upload" onclick="openInvoiceUploadModal('${escapeHtml(r.key)}')">📤 Upload Invoice</button>
                     </div>
                 </div>
             `).join('');
         }
     }
+
+    // ── Credit invoice modal helpers ──────────────────────────────────────────
+    function findCreditGroup(key) { return todoData.credit.find(g => g.key === key); }
+    function findUnpaidInvoice(id) { return todoData.unpaid.find(i => i.id === id); }
+
+    function openInvoiceUploadModal(groupKey) {
+        const g = findCreditGroup(groupKey);
+        if (!g) { console.warn('Credit group not found:', groupKey); return; }
+        const modal = document.getElementById('ci-upload-modal');
+        document.getElementById('ci-up-customer').innerText = g.customerName;
+        document.getElementById('ci-up-period').innerText = g.billingLabel + ' (' + g.billingPeriod + ')';
+        document.getElementById('ci-up-summary').innerText = g.orderCount + ' order' + (g.orderCount === 1 ? '' : 's') + ' · ' + g.totalQty.toLocaleString() + ' qty · RM ' + Number(g.totalAmount).toFixed(2);
+        document.getElementById('ci-up-key').value = groupKey;
+        document.getElementById('ci-up-invoice-no').value = '';
+        document.getElementById('ci-up-file').value = '';
+        document.getElementById('ci-up-due').value = '';
+        document.getElementById('ci-up-notes').value = '';
+        document.getElementById('ci-up-error').innerText = '';
+        modal.classList.add('open');
+    }
+
+    function closeInvoiceUploadModal() { document.getElementById('ci-upload-modal').classList.remove('open'); }
+
+    async function submitInvoiceUpload() {
+        const groupKey = document.getElementById('ci-up-key').value;
+        const g = findCreditGroup(groupKey);
+        const errEl = document.getElementById('ci-up-error');
+        errEl.innerText = '';
+        if (!g) { errEl.innerText = 'Group not found — refresh the page.'; return; }
+
+        const invNo = document.getElementById('ci-up-invoice-no').value.trim();
+        const fileInput = document.getElementById('ci-up-file');
+        const dueDate = document.getElementById('ci-up-due').value || null;
+        const notes = document.getElementById('ci-up-notes').value.trim() || null;
+
+        if (!invNo) { errEl.innerText = 'Invoice number is required.'; return; }
+        if (!fileInput.files || !fileInput.files[0]) { errEl.innerText = 'Pick a PDF/image to upload.'; return; }
+        const file = fileInput.files[0];
+
+        const btn = document.getElementById('ci-up-submit');
+        btn.disabled = true; btn.innerText = 'Uploading…';
+
+        try {
+            // 1. Upload file to storage
+            const safeInv = invNo.replace(/[^A-Za-z0-9_-]/g, '_');
+            const ext = (file.name.split('.').pop() || 'pdf').toLowerCase();
+            const path = 'invoices/' + g.customerId.substring(0, 8) + '_' + g.billingPeriod + '_' + safeInv + '_' + Date.now() + '.' + ext;
+            const { error: upErr } = await _supabase.storage.from('order-attachments').upload(path, file, { contentType: file.type, upsert: true });
+            if (upErr) throw upErr;
+            const { data: urlData } = _supabase.storage.from('order-attachments').getPublicUrl(path);
+            const fileUrl = urlData?.publicUrl || '';
+
+            // 2. Current user (for issued_by + audit)
+            const { data: { session } } = await _supabase.auth.getSession();
+            const uid = session?.user?.id || null;
+            const uemail = session?.user?.email || 'operation';
+
+            // 3. Insert invoice row
+            const { data: inv, error: invErr } = await _supabase
+                .from('salesweb_credit_invoices')
+                .insert([{
+                    customer_id: g.customerId,
+                    billing_period: g.billingPeriod,
+                    invoice_number: invNo,
+                    total_qty: g.totalQty,
+                    total_amount: Number(g.totalAmount.toFixed(2)),
+                    status: 'issued',
+                    invoice_file_url: fileUrl,
+                    due_date: dueDate,
+                    issued_by: uid,
+                    notes: notes
+                }])
+                .select()
+                .single();
+            if (invErr) throw invErr;
+
+            // 4. Attach the invoice to every order in this group
+            const nowIso = new Date().toISOString();
+            const { error: updErr } = await _supabase
+                .from('salesweb_customer_orders')
+                .update({
+                    credit_invoice_id: inv.id,
+                    credit_billed_at: nowIso,
+                    credit_billing_period: g.billingPeriod,
+                    updated_at: nowIso
+                })
+                .in('id', g.orderIds);
+            if (updErr) throw updErr;
+
+            // 5. Fan-out: insert one attachment row per order so the customer
+            //    portal renders the invoice file under each affected order.
+            const attRows = g.orderIds.map(oid => ({
+                order_id: oid,
+                file_name: 'Invoice ' + invNo + '.' + ext,
+                file_url: fileUrl,
+                file_type: file.type || 'application/pdf',
+                uploaded_by: uemail
+            }));
+            await _supabase.from('salesweb_order_attachments').insert(attRows);
+
+            // 6. Timeline entry per order
+            const tlRows = g.orderIds.map(oid => ({
+                order_id: oid,
+                status: 'Invoiced',
+                note: 'Invoice ' + invNo + ' issued for ' + g.billingLabel,
+                changed_by: uemail
+            }));
+            await _supabase.from('salesweb_order_timeline').insert(tlRows);
+
+            closeInvoiceUploadModal();
+            await loadTodoList();
+            switchTodoTab('unpaid');
+        } catch (e) {
+            console.error('[Invoice upload] failed:', e);
+            errEl.innerText = (e?.message || 'Upload failed') + '';
+        } finally {
+            btn.disabled = false; btn.innerText = 'Upload & Issue Invoice';
+        }
+    }
+
+    function openMarkPaidModal(invoiceId) {
+        const inv = findUnpaidInvoice(invoiceId);
+        if (!inv) return;
+        document.getElementById('ci-paid-id').value = invoiceId;
+        document.getElementById('ci-paid-summary').innerText =
+            inv.invoiceNumber + ' · ' + inv.customerName + ' · RM ' + Number(inv.totalAmount).toFixed(2);
+        document.getElementById('ci-paid-file').value = '';
+        document.getElementById('ci-paid-error').innerText = '';
+        document.getElementById('ci-paid-modal').classList.add('open');
+    }
+    function closeMarkPaidModal() { document.getElementById('ci-paid-modal').classList.remove('open'); }
+
+    async function submitMarkPaid() {
+        const id = document.getElementById('ci-paid-id').value;
+        const errEl = document.getElementById('ci-paid-error');
+        errEl.innerText = '';
+        const btn = document.getElementById('ci-paid-submit');
+        btn.disabled = true; btn.innerText = 'Saving…';
+        try {
+            let proofUrl = null;
+            const fInput = document.getElementById('ci-paid-file');
+            if (fInput.files && fInput.files[0]) {
+                const f = fInput.files[0];
+                const ext = (f.name.split('.').pop() || 'pdf').toLowerCase();
+                const path = 'invoice-proofs/' + id.substring(0, 8) + '_' + Date.now() + '.' + ext;
+                const { error: upErr } = await _supabase.storage.from('order-attachments').upload(path, f, { contentType: f.type, upsert: true });
+                if (upErr) throw upErr;
+                const { data: urlData } = _supabase.storage.from('order-attachments').getPublicUrl(path);
+                proofUrl = urlData?.publicUrl || null;
+            }
+            const update = { status: 'paid', paid_at: new Date().toISOString() };
+            if (proofUrl) update.payment_proof_url = proofUrl;
+            const { error } = await _supabase.from('salesweb_credit_invoices').update(update).eq('id', id);
+            if (error) throw error;
+            closeMarkPaidModal();
+            await loadTodoList();
+        } catch (e) {
+            console.error('[Mark Paid] failed:', e);
+            errEl.innerText = (e?.message || 'Failed to mark paid') + '';
+        } finally {
+            btn.disabled = false; btn.innerText = 'Mark as Paid';
+        }
+    }
+
+    // Expose to inline onclicks
+    window.openInvoiceUploadModal = openInvoiceUploadModal;
+    window.closeInvoiceUploadModal = closeInvoiceUploadModal;
+    window.submitInvoiceUpload = submitInvoiceUpload;
+    window.openMarkPaidModal = openMarkPaidModal;
+    window.closeMarkPaidModal = closeMarkPaidModal;
+    window.submitMarkPaid = submitMarkPaid;
 
     // ── Monthly Maturity Allocation ──────────────────────────────────────────
     let allMatGroups = [];
