@@ -35,7 +35,8 @@
   // helper redeploy.
   const DEFAULT_PERMS = {
     modules: { operation: 'none', reports: 'none', audit_trail: 'none', salesweb: 'none', audit: 'none', mobile: 'none' },
-    manage_users: false
+    manage_users: false,
+    can_verify_operation: false
   };
 
   const VALID_LEVELS = new Set(['admin', 'normal', 'none']);
@@ -56,6 +57,7 @@
       }
     }
     out.manage_users = !!perms.manage_users;
+    out.can_verify_operation = !!perms.can_verify_operation;
     return out;
   }
 
@@ -108,6 +110,12 @@
   // Convenience for batch-detail tab review gating.
   function canReviewOperation() { return isAdminOf('operation'); }
 
+  // Two-person batch verification: Verifier flag (or operation admin) may verify
+  // a tab; only operation admins may then mark it as reviewed.
+  function canVerifyOperation() {
+    return !!permissions().can_verify_operation || isAdminOf('operation');
+  }
+
   /**
    * Redirect away from a module page if the user lacks access.
    * Call after MJMAccess.load(supa).
@@ -130,6 +138,7 @@
     isAdminOf,
     canManageUsers,
     canReviewOperation,
+    canVerifyOperation,
     guard
   };
 })(window);
