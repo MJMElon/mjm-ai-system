@@ -1005,7 +1005,7 @@
             });
 
             renderCustomerGrid();
-            renderPaymentStatusSummary();
+            // renderPaymentStatusSummary removed — Customer Payment Status block deleted from UI.
         } catch(e) {
             console.warn('[Cust] load failed:', e);
             document.getElementById('cust-tbody').innerHTML = `<tr><td colspan="20" class="text-center py-8 text-[10px] text-red-500 font-bold uppercase tracking-widest">Failed to load customer orders</td></tr>`;
@@ -1068,6 +1068,14 @@
             </tr>`;
 
         let rows = allCustomerOrders.filter(r => {
+            // Visibility rule (per product spec):
+            //   • Cash payment + Unpaid → HIDE (customer hasn't paid yet)
+            //   • Cash payment + Paid (any collection state) → SHOW
+            //   • Credit payment (any state) → SHOW (treated like an invoice flow)
+            const isCash    = (r.paymentMethod || 'cash') === 'cash';
+            const isUnpaid  = r.rawStatus === 'Pending Payment' || r.derivedStatus === 'Pending Payment';
+            if (isCash && isUnpaid) return false;
+
             if (search && !(r.orderNumber || '').toLowerCase().includes(search) && !(r.customer || '').toLowerCase().includes(search)) return false;
             if (filter === 'all') return true;
             if (filter === 'active')      return r.rawStatus !== 'Cancelled';
@@ -2077,17 +2085,23 @@
     window.removeAllocation = removeAllocation;
 
     // ── INVENTORY MAP TAB ────────────────────────────────────────────────────
-    // Renders the nursery map with per-plot batch breakdowns:
+    // Map shows collection % per plot (color-coded). Sidebar holds the full
+    // breakdown: By Batch (default) or By Breed (click a breed to filter map).
     //   Full qty       = Σ Transplanted-type quantity_change per (batch, plot)
     //   Collected qty  = Σ collection_qty from shared_collection_bookings where
     //                    status='completed', matched by plot_name + batch_name
     //                    (or just plot_name when the booking has no batch_name)
-    //   Balance        = Full − Collected (floored at 0)
-    let _invmap = {
+    //   Balance        = max(0, Full − Collected)
+    //   Collection %   = Collected / Full
+    const _invmap = {
         nurseries: [],
         plots: [],
-        plotBatches: {}, // plot_name -> [{batch, full, collected, balance}]
-        active: null
+        plotBatches: {},      // plot -> [{batch, breed, full, collected, balance}]
+        breedToPlots: {},     // breed -> Set of plot_names
+        breedTotals: {},      // breed -> {full, collected, balance, batches: Set, plots: Set}
+        active: 'all',        // 'all' or nursery name
+        sideTab: 'batch',     // 'batch' or 'breed'
+        selectedBreed: null
     };
 
     async function loadInventoryMap() {
@@ -2097,7 +2111,7 @@
                 _supabase.from('operation_nurseries').select('*').order('name'),
                 _supabase.from('shared_plots').select('*'),
                 _supabase.from('shared_inventory_logs')
-                    .select('batch_name,plot_name,quantity_change')
+                    .select('batch_name,plot_name,breed_name,quantity_change')
                     .in('transaction_type', ['Transplanted','Transplanted_Premium','Transplanted_DoubleTone']),
                 _supabase.from('shared_collection_bookings')
                     .select('plot_name,nursery_name,batch_name,collection_qty,status')
@@ -2107,106 +2121,171 @@
             _invmap.nurseries = nursRes.data || [];
             _invmap.plots     = plotsRes.data || [];
 
-            // Aggregate full qty per (plot, batch) from Transplanted logs.
+            // Aggregate full qty + breed per (plot, batch).
             const fullByPlotBatch = {};
+            const breedByPlotBatch = {};
             (transRes.data || []).forEach(l => {
                 if (!l.plot_name || !l.batch_name) return;
                 const key = l.plot_name + '|' + l.batch_name;
                 fullByPlotBatch[key] = (fullByPlotBatch[key] || 0) + (l.quantity_change || 0);
+                if (l.breed_name && !breedByPlotBatch[key]) breedByPlotBatch[key] = l.breed_name;
             });
 
-            // Collected qty from completed collection bookings. If the booking
-            // is plot-specific AND batch-specific, attribute to that pair;
-            // otherwise spread across the plot's batches proportionally.
             const collectedByPlotBatch = {};
             const collectedByPlot      = {};
             (bookRes.data || []).forEach(b => {
                 if (!b.plot_name) return;
                 const qty = Number(b.collection_qty) || 0;
                 if (b.batch_name) {
-                    const key = b.plot_name + '|' + b.batch_name;
-                    collectedByPlotBatch[key] = (collectedByPlotBatch[key] || 0) + qty;
+                    collectedByPlotBatch[b.plot_name + '|' + b.batch_name] = (collectedByPlotBatch[b.plot_name + '|' + b.batch_name] || 0) + qty;
                 } else {
                     collectedByPlot[b.plot_name] = (collectedByPlot[b.plot_name] || 0) + qty;
                 }
             });
 
-            // Build plot -> batches map.
             const plotBatches = {};
             Object.keys(fullByPlotBatch).forEach(key => {
                 const [plot, batch] = key.split('|');
-                const full = fullByPlotBatch[key] || 0;
                 if (!plotBatches[plot]) plotBatches[plot] = [];
-                plotBatches[plot].push({ batch, full, collected: collectedByPlotBatch[key] || 0, balance: 0 });
+                plotBatches[plot].push({
+                    batch,
+                    breed: breedByPlotBatch[key] || '—',
+                    full: fullByPlotBatch[key] || 0,
+                    collected: collectedByPlotBatch[key] || 0,
+                    balance: 0
+                });
             });
-            // Distribute plot-level (no-batch) collected qty proportionally across batches.
+            // Distribute plot-level (no-batch) collected proportionally.
             Object.entries(plotBatches).forEach(([plot, list]) => {
                 const remaining = collectedByPlot[plot] || 0;
                 if (remaining > 0 && list.length) {
-                    const totalFull = list.reduce((s, b) => s + Math.max(0, b.full - b.collected), 0);
-                    if (totalFull > 0) {
+                    const totalAvail = list.reduce((s, b) => s + Math.max(0, b.full - b.collected), 0);
+                    if (totalAvail > 0) {
                         list.forEach(b => {
                             const avail = Math.max(0, b.full - b.collected);
-                            const share = Math.round(remaining * (avail / totalFull));
-                            b.collected += share;
+                            b.collected += Math.round(remaining * (avail / totalAvail));
                         });
                     }
                 }
                 list.forEach(b => { b.balance = Math.max(0, b.full - b.collected); });
-                list.sort((a,b) => b.balance - a.balance);
+                list.sort((a, b) => b.balance - a.balance);
             });
             _invmap.plotBatches = plotBatches;
 
-            // Render nursery tabs.
+            // Build breed indexes for the By Breed sidebar.
+            const breedToPlots = {};
+            const breedTotals  = {};
+            Object.entries(plotBatches).forEach(([plot, list]) => {
+                list.forEach(b => {
+                    if (!breedToPlots[b.breed]) breedToPlots[b.breed] = new Set();
+                    breedToPlots[b.breed].add(plot);
+                    if (!breedTotals[b.breed]) breedTotals[b.breed] = { full:0, collected:0, balance:0, batches:new Set(), plots:new Set() };
+                    breedTotals[b.breed].full      += b.full;
+                    breedTotals[b.breed].collected += b.collected;
+                    breedTotals[b.breed].balance   += b.balance;
+                    breedTotals[b.breed].batches.add(b.batch);
+                    breedTotals[b.breed].plots.add(plot);
+                });
+            });
+            _invmap.breedToPlots = breedToPlots;
+            _invmap.breedTotals  = breedTotals;
+
+            // Render nursery sub-tabs (All Maps + per-nursery).
             tabBar.innerHTML = '';
             if (!_invmap.nurseries.length) {
                 tabBar.innerHTML = '<span class="text-[10px] font-bold text-slate-400 p-3">No nurseries configured</span>';
                 return;
             }
-            _invmap.nurseries.forEach(n => {
+            const mkTab = (key, label) => {
                 const btn = document.createElement('button');
                 btn.className = 'invmap-tab-btn';
-                btn.id = 'invmap-tab-' + n.name.replace(/\s+/g, '-');
-                btn.innerText = '🏠 ' + n.name;
-                btn.onclick = () => switchInvmapNursery(n.name);
+                btn.id = 'invmap-tab-' + key.replace(/\s+/g, '-');
+                btn.innerText = label;
+                btn.onclick = () => switchInvmapNursery(key);
                 tabBar.appendChild(btn);
-            });
-            switchInvmapNursery(_invmap.nurseries[0].name);
+            };
+            mkTab('all', '🗂️ All Maps (Stacked)');
+            _invmap.nurseries.forEach(n => mkTab(n.name, '🏠 ' + n.name));
+
+            switchInvmapNursery('all');
         } catch (e) {
             console.error('[InventoryMap] load failed:', e);
             tabBar.innerHTML = '<span class="text-[10px] font-bold text-rose-500 p-3">Failed to load: ' + (e.message || e) + '</span>';
         }
     }
 
-    function switchInvmapNursery(name) {
-        _invmap.active = name;
+    function switchInvmapNursery(key) {
+        _invmap.active = key;
         document.querySelectorAll('.invmap-tab-btn').forEach(b => b.classList.remove('active'));
-        const btn = document.getElementById('invmap-tab-' + name.replace(/\s+/g, '-'));
+        const btn = document.getElementById('invmap-tab-' + key.replace(/\s+/g, '-'));
         if (btn) btn.classList.add('active');
-
-        const nursery = _invmap.nurseries.find(n => n.name === name);
-        const canvas  = document.getElementById('invmap-canvas');
-        const empty   = document.getElementById('invmap-empty');
-        const img     = document.getElementById('invmap-image');
-
-        if (nursery && nursery.map_image_url) {
-            img.src = nursery.map_image_url;
-            canvas.classList.remove('hidden');
-            empty.classList.add('hidden');
-            renderInvmapPlots(name);
-        } else {
-            canvas.classList.add('hidden');
-            empty.classList.remove('hidden');
-        }
+        renderInvmapStack();
+        renderInvmapSidebar();
     }
 
-    function renderInvmapPlots(nurseryName) {
-        const svg    = document.getElementById('invmap-svg');
-        const labels = document.getElementById('invmap-labels');
+    function activeNurseryList() {
+        return _invmap.active === 'all'
+            ? _invmap.nurseries
+            : _invmap.nurseries.filter(n => n.name === _invmap.active);
+    }
+
+    function renderInvmapStack() {
+        const stack = document.getElementById('invmap-stack');
+        if (!stack) return;
+        const list = activeNurseryList();
+        if (!list.length) {
+            stack.innerHTML = '<div class="text-center py-12 text-slate-400 text-[10px] font-bold uppercase tracking-widest">No nursery selected.</div>';
+            return;
+        }
+        stack.innerHTML = list.map(n => {
+            const slug = n.name.replace(/\s+/g, '-');
+            const has = !!n.map_image_url;
+            const heightCss = _invmap.active === 'all' ? 'height:42vh; min-height:340px;' : 'height:65vh; min-height:520px;';
+            return `
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="flex items-center justify-between px-4 py-2 border-b border-slate-100 bg-slate-50">
+                    <div class="text-[11px] font-black text-slate-700 uppercase tracking-widest">🏠 ${n.name}</div>
+                    <div class="text-[9px] font-bold text-slate-400" id="invmap-stat-${slug}">—</div>
+                </div>
+                <div class="relative w-full bg-slate-100 flex items-center justify-center" style="${heightCss}">
+                    ${has ? `
+                        <div class="relative inline-block max-h-full max-w-full" id="invmap-canvas-${slug}">
+                            <img src="${n.map_image_url}" alt="Map for ${n.name}" style="max-height:calc(${_invmap.active === 'all' ? '42vh' : '65vh'} - 24px); width:auto; object-fit:contain; display:block;">
+                            <svg id="invmap-svg-${slug}" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%;"></svg>
+                            <div id="invmap-labels-${slug}" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;"></div>
+                        </div>
+                    ` : `
+                        <div class="flex flex-col items-center justify-center text-slate-400 gap-2 py-8">
+                            <span class="font-bold uppercase tracking-widest text-[10px]">No map uploaded for this nursery</span>
+                        </div>
+                    `}
+                </div>
+            </div>`;
+        }).join('');
+
+        // Draw plots for each rendered map.
+        list.forEach(n => {
+            if (!n.map_image_url) return;
+            renderInvmapPlotsForNursery(n.name);
+        });
+        updateInvmapTotals();
+    }
+
+    function plotMatchesBreed(plotName) {
+        if (!_invmap.selectedBreed) return true;
+        return (_invmap.breedToPlots[_invmap.selectedBreed] || new Set()).has(plotName);
+    }
+
+    function renderInvmapPlotsForNursery(nurseryName) {
+        const slug   = nurseryName.replace(/\s+/g, '-');
+        const svg    = document.getElementById('invmap-svg-' + slug);
+        const labels = document.getElementById('invmap-labels-' + slug);
+        const statEl = document.getElementById('invmap-stat-' + slug);
+        if (!svg || !labels) return;
         svg.innerHTML = '';
         labels.innerHTML = '';
 
-        const fmt = (n) => Number(n||0).toLocaleString();
+        let nurseryFull = 0, nurseryColl = 0;
         const plots = _invmap.plots.filter(p => p.nursery_name === nurseryName);
 
         plots.forEach(p => {
@@ -2215,15 +2294,33 @@
             try { pts = JSON.parse(p.map_top); } catch (e) { return; }
             const ptsStr = pts.map(pt => pt.x + ',' + pt.y).join(' ');
 
-            const batches = _invmap.plotBatches[p.plot_name] || [];
-            const totalBal = batches.reduce((s, b) => s + b.balance, 0);
-            const totalFull = batches.reduce((s, b) => s + b.full, 0);
-            const lowThreshold = totalFull > 0 ? totalFull * 0.2 : 0;
+            // Restrict to selected breed if active.
+            let batches = _invmap.plotBatches[p.plot_name] || [];
+            const matches = plotMatchesBreed(p.plot_name);
+            if (_invmap.selectedBreed) {
+                batches = batches.filter(b => b.breed === _invmap.selectedBreed);
+            }
 
-            // Plot colour by balance state.
+            const totalFull = batches.reduce((s, b) => s + b.full, 0);
+            const totalColl = batches.reduce((s, b) => s + b.collected, 0);
+            const totalBal  = batches.reduce((s, b) => s + b.balance, 0);
+            const pct = totalFull > 0 ? Math.round((totalColl / totalFull) * 100) : 0;
+            const remainingPct = 100 - pct;
+
+            nurseryFull += totalFull;
+            nurseryColl += totalColl;
+
+            // Color by remaining %. Dim if not matching breed filter.
             let fill = 'rgba(148, 163, 184, .25)', stroke = '#94a3b8';
-            if (totalBal > lowThreshold) { fill = 'rgba(74, 222, 128, .35)'; stroke = '#22c55e'; }
-            else if (totalBal > 0)       { fill = 'rgba(251, 191, 36, .35)'; stroke = '#f59e0b'; }
+            if (totalFull > 0) {
+                if      (remainingPct >= 80) { fill = 'rgba(74, 222, 128, .40)'; stroke = '#22c55e'; }
+                else if (remainingPct >= 20) { fill = 'rgba(251, 191, 36, .40)';  stroke = '#f59e0b'; }
+                else                         { fill = 'rgba(244, 114, 128, .40)'; stroke = '#ef4444'; }
+            }
+            if (_invmap.selectedBreed && !matches) {
+                fill   = 'rgba(203, 213, 225, .15)';
+                stroke = '#cbd5e1';
+            }
 
             const safePlot = p.plot_name.replace(/'/g, "\\'");
             svg.innerHTML += `<polygon points="${ptsStr}" fill="${fill}" stroke="${stroke}" stroke-width=".4" class="invmap-plot-shape" onclick="openInvmapModal('${safePlot}')"/>`;
@@ -2231,37 +2328,174 @@
             const cx = pts.reduce((s, pt) => s + pt.x, 0) / pts.length;
             const cy = pts.reduce((s, pt) => s + pt.y, 0) / pts.length;
 
-            // Label: plot name + up to 2 batches inline + "+N more" if needed.
-            const top = batches.slice(0, 2);
-            const more = batches.length - top.length;
-            let batchHtml = '';
-            if (top.length === 0) {
-                batchHtml = '<div class="invmap-batch-line empty">No batch</div>';
-            } else {
-                batchHtml = top.map(b =>
-                    `<div class="invmap-batch-line" title="Batch ${b.batch} — Full ${fmt(b.full)} · Collected ${fmt(b.collected)} · Balance ${fmt(b.balance)}">
-                        #${b.batch} · ${fmt(b.balance)}<span style="opacity:.55">/${fmt(b.full)}</span>
-                    </div>`).join('');
-                if (more > 0) batchHtml += `<div class="invmap-batch-line" style="opacity:.7">+${more} more</div>`;
-            }
-
+            // Label: plot name + collection percentage only.
+            const pctLabel = totalFull > 0
+                ? `<div class="invmap-batch-line" title="Full ${totalFull.toLocaleString()} · Collected ${totalColl.toLocaleString()} · Balance ${totalBal.toLocaleString()}">${pct}% collected</div>`
+                : `<div class="invmap-batch-line empty">No batch</div>`;
+            const dimStyle = _invmap.selectedBreed && !matches ? 'opacity:.35' : '';
             labels.innerHTML += `
-                <div class="invmap-label" style="left:${cx}%; top:${cy}%;">
+                <div class="invmap-label" style="left:${cx}%; top:${cy}%; ${dimStyle}">
                     <div class="invmap-plot-tag">${p.plot_name}</div>
-                    ${batchHtml}
+                    ${pctLabel}
                 </div>`;
         });
+        if (statEl) {
+            const pct = nurseryFull > 0 ? Math.round((nurseryColl / nurseryFull) * 100) : 0;
+            statEl.innerText = nurseryFull > 0 ? (nurseryColl.toLocaleString() + ' / ' + nurseryFull.toLocaleString() + '  (' + pct + '% collected)') : 'No batch data';
+        }
+    }
+
+    function visiblePlotBatchPairs() {
+        // Return [{plot, batch, breed, full, collected, balance}] for the active
+        // nursery scope, optionally filtered by selected breed.
+        const nurseryNames = _invmap.active === 'all'
+            ? new Set(_invmap.plots.map(p => p.nursery_name))
+            : new Set([_invmap.active]);
+        const plotToNursery = {};
+        _invmap.plots.forEach(p => { plotToNursery[p.plot_name] = p.nursery_name; });
+
+        const out = [];
+        Object.entries(_invmap.plotBatches).forEach(([plot, list]) => {
+            const nursery = plotToNursery[plot];
+            if (nursery && !nurseryNames.has(nursery)) return;
+            list.forEach(b => {
+                if (_invmap.selectedBreed && b.breed !== _invmap.selectedBreed) return;
+                out.push({ plot, nursery, ...b });
+            });
+        });
+        return out;
+    }
+
+    function updateInvmapTotals() {
+        const pairs = visiblePlotBatchPairs();
+        const tot = pairs.reduce((s, p) => ({ full:s.full+p.full, collected:s.collected+p.collected, balance:s.balance+p.balance }), { full:0, collected:0, balance:0 });
+        const fmt = n => Number(n||0).toLocaleString();
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
+        set('invmap-tot-full', fmt(tot.full));
+        set('invmap-tot-coll', fmt(tot.collected));
+        set('invmap-tot-bal',  fmt(tot.balance));
+    }
+
+    function switchInvmapSideTab(tab) {
+        _invmap.sideTab = tab;
+        document.getElementById('invmap-side-tab-batch').className = 'flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors ' + (tab === 'batch' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100');
+        document.getElementById('invmap-side-tab-breed').className = 'flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors ' + (tab === 'breed' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100');
+        renderInvmapSidebar();
+    }
+
+    function renderInvmapSidebar() {
+        const body = document.getElementById('invmap-side-body');
+        const filterChip = document.getElementById('invmap-active-breed');
+        const filterName = document.getElementById('invmap-active-breed-name');
+        if (!body) return;
+
+        if (_invmap.selectedBreed) {
+            filterChip.classList.remove('hidden');
+            filterName.innerText = _invmap.selectedBreed;
+        } else {
+            filterChip.classList.add('hidden');
+        }
+        updateInvmapTotals();
+
+        const fmt = n => Number(n||0).toLocaleString();
+
+        if (_invmap.sideTab === 'breed') {
+            // Sort breeds by balance descending.
+            const breeds = Object.entries(_invmap.breedTotals)
+                .map(([breed, t]) => ({ breed, ...t }))
+                .sort((a, b) => b.balance - a.balance);
+            if (!breeds.length) {
+                body.innerHTML = '<div class="text-center py-8 text-slate-400 text-[10px] font-bold uppercase tracking-widest">No breed data yet.</div>';
+                return;
+            }
+            body.innerHTML = breeds.map(b => {
+                const active = _invmap.selectedBreed === b.breed;
+                const cls = active ? 'bg-amber-100 border-amber-400 ring-2 ring-amber-400' : 'bg-white border-slate-200 hover:border-blue-300';
+                const safe = b.breed.replace(/'/g, "\\'");
+                return `
+                <button onclick="selectInvmapBreed('${safe}')" class="w-full text-left ${cls} border rounded-xl p-3 mb-2 cursor-pointer transition-all">
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                        <div class="font-black text-slate-800 text-[12px] uppercase tracking-wider">${b.breed}</div>
+                        <div class="text-[9px] font-bold text-slate-500">${b.plots.size} plot${b.plots.size===1?'':'s'} · ${b.batches.size} batch${b.batches.size===1?'':'es'}</div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1 text-center mt-2">
+                        <div class="text-[8px] text-slate-400 font-black uppercase">Full</div>
+                        <div class="text-[8px] text-blue-500 font-black uppercase">Coll.</div>
+                        <div class="text-[8px] text-emerald-600 font-black uppercase">Bal.</div>
+                        <div class="text-[12px] font-black text-slate-800 tabular-nums">${fmt(b.full)}</div>
+                        <div class="text-[12px] font-black text-blue-700 tabular-nums">${fmt(b.collected)}</div>
+                        <div class="text-[12px] font-black text-emerald-700 tabular-nums">${fmt(b.balance)}</div>
+                    </div>
+                </button>`;
+            }).join('');
+            return;
+        }
+
+        // Default: By Batch — flattened (plot, batch) rows for the active scope.
+        const pairs = visiblePlotBatchPairs();
+        if (!pairs.length) {
+            body.innerHTML = '<div class="text-center py-8 text-slate-400 text-[10px] font-bold uppercase tracking-widest">No batch data for this scope.</div>';
+            return;
+        }
+        // Group by plot for readability.
+        const byPlot = {};
+        pairs.forEach(r => { (byPlot[r.plot] = byPlot[r.plot] || []).push(r); });
+        body.innerHTML = Object.entries(byPlot).map(([plot, list]) => {
+            const totFull = list.reduce((s,b)=>s+b.full,0);
+            const totColl = list.reduce((s,b)=>s+b.collected,0);
+            const totBal  = list.reduce((s,b)=>s+b.balance,0);
+            const pct = totFull > 0 ? Math.round((totColl/totFull)*100) : 0;
+            const rowsHtml = list.map(b => `
+                <tr class="border-t border-slate-100">
+                    <td class="py-1.5 text-[11px] font-black text-slate-800">#${b.batch}</td>
+                    <td class="py-1.5 text-[10px] text-slate-500">${b.breed}</td>
+                    <td class="py-1.5 text-[11px] text-right tabular-nums text-slate-700">${fmt(b.full)}</td>
+                    <td class="py-1.5 text-[11px] text-right tabular-nums text-blue-700">${fmt(b.collected)}</td>
+                    <td class="py-1.5 text-[11px] text-right tabular-nums font-black ${b.balance>0?'text-emerald-700':'text-slate-400'}">${fmt(b.balance)}</td>
+                </tr>`).join('');
+            return `
+            <div class="bg-white border border-slate-200 rounded-xl p-3 mb-3">
+                <div class="flex items-center justify-between gap-2 mb-2">
+                    <div class="font-black text-slate-800 text-[12px] uppercase tracking-wider">${plot}</div>
+                    <div class="text-[9px] font-black text-slate-500"><span class="text-blue-700">${pct}%</span> collected · bal ${fmt(totBal)}/${fmt(totFull)}</div>
+                </div>
+                <table class="w-full">
+                    <thead><tr>
+                        <th class="text-left text-[8px] font-black text-slate-400 uppercase tracking-widest">Batch</th>
+                        <th class="text-left text-[8px] font-black text-slate-400 uppercase tracking-widest">Breed</th>
+                        <th class="text-right text-[8px] font-black text-slate-400 uppercase tracking-widest">Full</th>
+                        <th class="text-right text-[8px] font-black text-blue-400 uppercase tracking-widest">Coll</th>
+                        <th class="text-right text-[8px] font-black text-emerald-500 uppercase tracking-widest">Bal</th>
+                    </tr></thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+            </div>`;
+        }).join('');
+    }
+
+    function selectInvmapBreed(breed) {
+        // Toggle off if clicking the same breed.
+        _invmap.selectedBreed = (_invmap.selectedBreed === breed) ? null : breed;
+        renderInvmapStack();
+        renderInvmapSidebar();
+    }
+
+    function clearInvmapBreed() {
+        _invmap.selectedBreed = null;
+        renderInvmapStack();
+        renderInvmapSidebar();
     }
 
     function openInvmapModal(plotName) {
         const modal = document.getElementById('invmap-modal');
         const titleEl = document.getElementById('invmap-modal-plot');
         const body = document.getElementById('invmap-modal-body');
-        const fmt = (n) => Number(n||0).toLocaleString();
+        const fmt = n => Number(n||0).toLocaleString();
         titleEl.innerText = plotName;
-        const batches = _invmap.plotBatches[plotName] || [];
+        let batches = _invmap.plotBatches[plotName] || [];
+        if (_invmap.selectedBreed) batches = batches.filter(b => b.breed === _invmap.selectedBreed);
         if (!batches.length) {
-            body.innerHTML = '<div class="text-center py-8 text-slate-400 text-xs font-bold uppercase tracking-widest">No batch records for this plot yet.</div>';
+            body.innerHTML = '<div class="text-center py-8 text-slate-400 text-xs font-bold uppercase tracking-widest">No batches in scope for this plot.</div>';
         } else {
             const totFull = batches.reduce((s,b)=>s+b.full,0);
             const totColl = batches.reduce((s,b)=>s+b.collected,0);
@@ -2275,6 +2509,7 @@
                 <table class="w-full text-left">
                     <thead><tr class="border-b border-slate-200">
                         <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Batch</th>
+                        <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Breed</th>
                         <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Full</th>
                         <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Collected</th>
                         <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Balance</th>
@@ -2282,6 +2517,7 @@
                     <tbody>${batches.map(b => `
                         <tr class="border-b border-slate-50">
                             <td class="py-2 text-sm font-black text-slate-800">#${b.batch}</td>
+                            <td class="py-2 text-[11px] text-slate-500">${b.breed}</td>
                             <td class="py-2 text-sm text-right tabular-nums">${fmt(b.full)}</td>
                             <td class="py-2 text-sm text-right tabular-nums text-blue-700">${fmt(b.collected)}</td>
                             <td class="py-2 text-sm text-right tabular-nums font-black ${b.balance > 0 ? 'text-emerald-700' : 'text-slate-400'}">${fmt(b.balance)}</td>
@@ -2300,6 +2536,9 @@
     }
 
     window.switchInvmapNursery = switchInvmapNursery;
+    window.switchInvmapSideTab = switchInvmapSideTab;
+    window.selectInvmapBreed   = selectInvmapBreed;
+    window.clearInvmapBreed    = clearInvmapBreed;
     window.openInvmapModal     = openInvmapModal;
     window.closeInvmapModal    = closeInvmapModal;
 
@@ -2311,6 +2550,6 @@
         loadMaturity();
         loadCustomerOrders().then(() => renderAllocDrawer());
         loadScheduledCollection();
-        loadAgingReport();
+        // loadAgingReport removed — Aging Report block deleted from UI.
         loadBatchAllocations().then(() => { renderMaturityTable(); renderAllocDrawer(); });
     });
