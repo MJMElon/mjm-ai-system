@@ -280,13 +280,26 @@
         /* Inventory map plot labels */
         .invmap-plot-shape{transition:all .2s ease-in-out;cursor:pointer;}
         .invmap-plot-shape:hover{fill:rgba(250,204,21,.55)!important;stroke-width:.6!important;}
-        .invmap-label{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;text-align:center;pointer-events:none;max-width:140px;}
+        .invmap-label{position:absolute;display:flex;flex-direction:column;align-items:center;text-align:center;pointer-events:none;max-width:140px;transform-origin:center center;transform:translate(-50%,-50%) scale(calc(1 / var(--inv-zoom, 1)));}
         .invmap-plot-tag{font-size:10px;font-weight:900;background:white;padding:2px 7px;border-radius:6px;color:#1e293b;margin-bottom:2px;box-shadow:0 2px 6px rgba(0,0,0,.18);text-transform:uppercase;border:1px solid #cbd5e1;letter-spacing:.04em;}
         .invmap-batch-line{font-size:9px;font-weight:800;line-height:1.15;color:#1e293b;background:rgba(255,255,255,.85);padding:1px 5px;border-radius:4px;margin-top:1px;white-space:nowrap;text-shadow:0 1px 1px rgba(255,255,255,.9);}
         .invmap-batch-line.empty{color:#94a3b8;font-weight:700;background:transparent;}
         .invmap-tab-btn{padding:8px 18px;font-weight:900;font-size:11px;text-transform:uppercase;letter-spacing:.08em;border-radius:12px;transition:all .2s;color:#64748b;background:white;border:1.5px solid transparent;white-space:nowrap;cursor:pointer;}
         .invmap-tab-btn:hover{background:#dbeafe;color:#1d4ed8;}
         .invmap-tab-btn.active{background:#3b82f6;color:white;border-color:#2563eb;box-shadow:0 4px 10px -2px rgba(59,130,246,.45);}
+
+        /* Map zoom + pan */
+        .invmap-viewport{position:relative;width:100%;height:100%;overflow:hidden;touch-action:none;}
+        .invmap-stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transform-origin:center center;transition:transform .12s ease-out;will-change:transform;cursor:grab;}
+        .invmap-stage.is-dragging{cursor:grabbing;transition:none;}
+        .invmap-zoom-controls{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:4px;z-index:5;background:white;border-radius:10px;box-shadow:0 4px 10px rgba(0,0,0,.12);padding:4px;border:1px solid #e2e8f0;}
+        .invmap-zoom-btn{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:none;background:white;color:#475569;font-weight:900;font-size:14px;cursor:pointer;border-radius:6px;transition:all .15s;}
+        .invmap-zoom-btn:hover{background:#dbeafe;color:#1d4ed8;}
+        .invmap-zoom-level{font-size:9px;font-weight:900;color:#64748b;text-align:center;padding:2px 0;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;}
+        .invmap-breed-chip{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;padding:5px 9px;border-radius:9px;border:1.5px solid #e2e8f0;background:white;color:#475569;cursor:pointer;transition:all .15s;}
+        .invmap-breed-chip:hover{border-color:#3b82f6;color:#1d4ed8;background:#eff6ff;}
+        .invmap-breed-chip.active{background:#f59e0b;color:white;border-color:#d97706;box-shadow:0 2px 6px -1px rgba(245,158,11,.4);}
+        .invmap-breed-chip-count{display:inline-block;margin-left:5px;font-size:9px;opacity:.8;}
     </style>
 </head>
 <body>
@@ -652,12 +665,6 @@
 
                     <!-- RIGHT: Info sidebar -->
                     <aside class="bg-slate-50 rounded-2xl border border-slate-200 p-4 flex flex-col gap-3 h-fit sticky top-4">
-                        <!-- Sidebar tab switcher -->
-                        <div class="flex gap-2 bg-white rounded-xl p-1 border border-slate-200">
-                            <button id="invmap-side-tab-batch" onclick="switchInvmapSideTab('batch')" class="flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors bg-blue-600 text-white">By Batch</button>
-                            <button id="invmap-side-tab-breed" onclick="switchInvmapSideTab('breed')" class="flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors text-slate-500 hover:bg-slate-100">By Breed</button>
-                        </div>
-
                         <!-- Totals chips -->
                         <div class="grid grid-cols-3 gap-2">
                             <div class="bg-white rounded-lg border border-slate-200 p-2 text-center">
@@ -674,14 +681,19 @@
                             </div>
                         </div>
 
-                        <!-- Active breed filter chip (shown when a breed is selected) -->
-                        <div id="invmap-active-breed" class="hidden text-[10px] font-bold text-slate-600">
-                            Filter: <span class="bg-amber-100 text-amber-800 px-2 py-1 rounded-md font-black uppercase tracking-wider" id="invmap-active-breed-name">—</span>
-                            <button onclick="clearInvmapBreed()" class="ml-1 text-rose-600 hover:underline font-black text-[10px]">clear ✕</button>
+                        <!-- Breed filter chip row -->
+                        <div>
+                            <div class="flex items-center justify-between mb-1.5">
+                                <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Filter by Breed</div>
+                                <button id="invmap-breed-clear" onclick="clearInvmapBreed()" class="hidden text-[10px] font-black text-rose-600 hover:underline">clear ✕</button>
+                            </div>
+                            <div id="invmap-breed-chips" class="flex flex-wrap gap-1.5">
+                                <span class="text-[10px] text-slate-400 animate-pulse">Loading breeds…</span>
+                            </div>
                         </div>
 
-                        <!-- List body -->
-                        <div id="invmap-side-body" class="overflow-y-auto pr-1 -mr-1" style="max-height:62vh;">
+                        <!-- By-batch/by-plot list (always visible; filtered when a breed is selected) -->
+                        <div id="invmap-side-body" class="overflow-y-auto pr-1 -mr-1" style="max-height:55vh;">
                             <div class="text-center py-8 text-slate-400 text-[10px] font-bold uppercase tracking-widest animate-pulse">Loading…</div>
                         </div>
                     </aside>

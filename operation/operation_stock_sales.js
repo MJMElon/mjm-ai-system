@@ -2237,25 +2237,37 @@
             stack.innerHTML = '<div class="text-center py-12 text-slate-400 text-[10px] font-bold uppercase tracking-widest">No nursery selected.</div>';
             return;
         }
+        const isStacked = _invmap.active === 'all';
         stack.innerHTML = list.map(n => {
             const slug = n.name.replace(/\s+/g, '-');
             const has = !!n.map_image_url;
-            const heightCss = _invmap.active === 'all' ? 'height:42vh; min-height:340px;' : 'height:65vh; min-height:520px;';
+            const heightCss = isStacked ? 'height:42vh; min-height:340px;' : 'height:65vh; min-height:520px;';
+            const innerImgMax = isStacked ? 'calc(42vh - 24px)' : 'calc(65vh - 24px)';
             return `
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div class="flex items-center justify-between px-4 py-2 border-b border-slate-100 bg-slate-50">
                     <div class="text-[11px] font-black text-slate-700 uppercase tracking-widest">🏠 ${n.name}</div>
                     <div class="text-[9px] font-bold text-slate-400" id="invmap-stat-${slug}">—</div>
                 </div>
-                <div class="relative w-full bg-slate-100 flex items-center justify-center" style="${heightCss}">
+                <div class="relative w-full bg-slate-100" style="${heightCss}">
                     ${has ? `
-                        <div class="relative inline-block max-h-full max-w-full" id="invmap-canvas-${slug}">
-                            <img src="${n.map_image_url}" alt="Map for ${n.name}" style="max-height:calc(${_invmap.active === 'all' ? '42vh' : '65vh'} - 24px); width:auto; object-fit:contain; display:block;">
-                            <svg id="invmap-svg-${slug}" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%;"></svg>
-                            <div id="invmap-labels-${slug}" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;"></div>
+                        <div class="invmap-viewport" id="invmap-viewport-${slug}">
+                            <div class="invmap-stage" id="invmap-stage-${slug}">
+                                <div class="relative inline-block" id="invmap-canvas-${slug}">
+                                    <img src="${n.map_image_url}" alt="Map for ${n.name}" style="max-height:${innerImgMax}; width:auto; object-fit:contain; display:block; user-select:none; -webkit-user-drag:none;">
+                                    <svg id="invmap-svg-${slug}" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%;"></svg>
+                                    <div id="invmap-labels-${slug}" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;"></div>
+                                </div>
+                            </div>
+                            <div class="invmap-zoom-controls">
+                                <button class="invmap-zoom-btn" title="Zoom in" onclick="invmapZoom('${slug}', 0.25)">＋</button>
+                                <div class="invmap-zoom-level" id="invmap-zoom-lvl-${slug}">100%</div>
+                                <button class="invmap-zoom-btn" title="Zoom out" onclick="invmapZoom('${slug}', -0.25)">－</button>
+                                <button class="invmap-zoom-btn" title="Reset zoom" onclick="invmapResetZoom('${slug}')">↺</button>
+                            </div>
                         </div>
                     ` : `
-                        <div class="flex flex-col items-center justify-center text-slate-400 gap-2 py-8">
+                        <div class="flex flex-col items-center justify-center text-slate-400 gap-2 py-8 h-full">
                             <span class="font-bold uppercase tracking-widest text-[10px]">No map uploaded for this nursery</span>
                         </div>
                     `}
@@ -2263,12 +2275,97 @@
             </div>`;
         }).join('');
 
-        // Draw plots for each rendered map.
+        // Draw plots + wire up zoom/pan handlers for each rendered map.
         list.forEach(n => {
             if (!n.map_image_url) return;
             renderInvmapPlotsForNursery(n.name);
+            const slug = n.name.replace(/\s+/g, '-');
+            wireInvmapZoom(slug);
+            applyInvmapTransform(slug);
         });
         updateInvmapTotals();
+    }
+
+    // Per-nursery zoom state (slug -> {zoom, panX, panY}).
+    _invmap.zoomState = _invmap.zoomState || {};
+    function getZoomState(slug) {
+        if (!_invmap.zoomState[slug]) _invmap.zoomState[slug] = { zoom: 1, panX: 0, panY: 0 };
+        return _invmap.zoomState[slug];
+    }
+    function applyInvmapTransform(slug) {
+        const z = getZoomState(slug);
+        const stage = document.getElementById('invmap-stage-' + slug);
+        if (!stage) return;
+        stage.style.transform = `translate(${z.panX}px, ${z.panY}px) scale(${z.zoom})`;
+        // Inverse-scale all labels so their pixel size stays constant while
+        // the polygon centroids spread apart at higher zoom.
+        const labels = document.getElementById('invmap-labels-' + slug);
+        if (labels) labels.style.setProperty('--inv-zoom', z.zoom);
+        const lvl = document.getElementById('invmap-zoom-lvl-' + slug);
+        if (lvl) lvl.innerText = Math.round(z.zoom * 100) + '%';
+    }
+    function invmapZoom(slug, delta) {
+        const z = getZoomState(slug);
+        z.zoom = Math.max(0.5, Math.min(5, z.zoom + delta));
+        // Snap pan back to 0 when fully zoomed out.
+        if (z.zoom <= 1.01) { z.panX = 0; z.panY = 0; }
+        applyInvmapTransform(slug);
+    }
+    function invmapResetZoom(slug) {
+        _invmap.zoomState[slug] = { zoom: 1, panX: 0, panY: 0 };
+        applyInvmapTransform(slug);
+    }
+    function wireInvmapZoom(slug) {
+        const viewport = document.getElementById('invmap-viewport-' + slug);
+        const stage    = document.getElementById('invmap-stage-' + slug);
+        if (!viewport || !stage || viewport._wired) return;
+        viewport._wired = true;
+
+        // Mouse wheel zoom (centered on cursor).
+        viewport.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const z = getZoomState(slug);
+            const oldZoom = z.zoom;
+            const delta = e.deltaY < 0 ? 0.15 : -0.15;
+            z.zoom = Math.max(0.5, Math.min(5, z.zoom + delta));
+            // Adjust pan so the point under the cursor stays put.
+            const rect = viewport.getBoundingClientRect();
+            const cx = e.clientX - rect.left - rect.width / 2;
+            const cy = e.clientY - rect.top  - rect.height / 2;
+            const k = z.zoom / oldZoom;
+            z.panX = (z.panX - cx) * k + cx;
+            z.panY = (z.panY - cy) * k + cy;
+            if (z.zoom <= 1.01) { z.panX = 0; z.panY = 0; }
+            applyInvmapTransform(slug);
+        }, { passive: false });
+
+        // Drag to pan.
+        let dragging = false, lastX = 0, lastY = 0;
+        const onDown = (e) => {
+            if (e.target.closest('.invmap-zoom-controls')) return;
+            dragging = true;
+            stage.classList.add('is-dragging');
+            const pt = e.touches ? e.touches[0] : e;
+            lastX = pt.clientX; lastY = pt.clientY;
+            e.preventDefault();
+        };
+        const onMove = (e) => {
+            if (!dragging) return;
+            const pt = e.touches ? e.touches[0] : e;
+            const dx = pt.clientX - lastX, dy = pt.clientY - lastY;
+            lastX = pt.clientX; lastY = pt.clientY;
+            const z = getZoomState(slug);
+            z.panX += dx; z.panY += dy;
+            applyInvmapTransform(slug);
+        };
+        const onUp = () => { if (dragging) { dragging = false; stage.classList.remove('is-dragging'); } };
+
+        viewport.addEventListener('mousedown', onDown);
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup',   onUp);
+        viewport.addEventListener('touchstart', onDown, { passive: false });
+        window.addEventListener('touchmove',  onMove,  { passive: false });
+        window.addEventListener('touchend',   onUp);
     }
 
     function plotMatchesBreed(plotName) {
@@ -2376,68 +2473,38 @@
         set('invmap-tot-bal',  fmt(tot.balance));
     }
 
-    function switchInvmapSideTab(tab) {
-        _invmap.sideTab = tab;
-        document.getElementById('invmap-side-tab-batch').className = 'flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors ' + (tab === 'batch' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100');
-        document.getElementById('invmap-side-tab-breed').className = 'flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors ' + (tab === 'breed' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100');
-        renderInvmapSidebar();
-    }
-
     function renderInvmapSidebar() {
-        const body = document.getElementById('invmap-side-body');
-        const filterChip = document.getElementById('invmap-active-breed');
-        const filterName = document.getElementById('invmap-active-breed-name');
-        if (!body) return;
+        const body       = document.getElementById('invmap-side-body');
+        const chipsEl    = document.getElementById('invmap-breed-chips');
+        const clearBtn   = document.getElementById('invmap-breed-clear');
+        if (!body || !chipsEl) return;
 
-        if (_invmap.selectedBreed) {
-            filterChip.classList.remove('hidden');
-            filterName.innerText = _invmap.selectedBreed;
-        } else {
-            filterChip.classList.add('hidden');
-        }
+        // Toggle "clear" link visibility based on whether a breed is selected.
+        if (clearBtn) clearBtn.classList.toggle('hidden', !_invmap.selectedBreed);
+
         updateInvmapTotals();
-
         const fmt = n => Number(n||0).toLocaleString();
 
-        if (_invmap.sideTab === 'breed') {
-            // Sort breeds by balance descending.
-            const breeds = Object.entries(_invmap.breedTotals)
-                .map(([breed, t]) => ({ breed, ...t }))
-                .sort((a, b) => b.balance - a.balance);
-            if (!breeds.length) {
-                body.innerHTML = '<div class="text-center py-8 text-slate-400 text-[10px] font-bold uppercase tracking-widest">No breed data yet.</div>';
-                return;
-            }
-            body.innerHTML = breeds.map(b => {
+        // Render breed chips (sorted by balance desc).
+        const breeds = Object.entries(_invmap.breedTotals)
+            .map(([breed, t]) => ({ breed, ...t }))
+            .sort((a, b) => b.balance - a.balance);
+        if (!breeds.length) {
+            chipsEl.innerHTML = '<span class="text-[10px] text-slate-400">No breed data yet</span>';
+        } else {
+            chipsEl.innerHTML = breeds.map(b => {
                 const active = _invmap.selectedBreed === b.breed;
-                const cls = active ? 'bg-amber-100 border-amber-400 ring-2 ring-amber-400' : 'bg-white border-slate-200 hover:border-blue-300';
-                const safe = b.breed.replace(/'/g, "\\'");
-                return `
-                <button onclick="selectInvmapBreed('${safe}')" class="w-full text-left ${cls} border rounded-xl p-3 mb-2 cursor-pointer transition-all">
-                    <div class="flex items-center justify-between gap-2 mb-1">
-                        <div class="font-black text-slate-800 text-[12px] uppercase tracking-wider">${b.breed}</div>
-                        <div class="text-[9px] font-bold text-slate-500">${b.plots.size} plot${b.plots.size===1?'':'s'} · ${b.batches.size} batch${b.batches.size===1?'':'es'}</div>
-                    </div>
-                    <div class="grid grid-cols-3 gap-1 text-center mt-2">
-                        <div class="text-[8px] text-slate-400 font-black uppercase">Full</div>
-                        <div class="text-[8px] text-blue-500 font-black uppercase">Coll.</div>
-                        <div class="text-[8px] text-emerald-600 font-black uppercase">Bal.</div>
-                        <div class="text-[12px] font-black text-slate-800 tabular-nums">${fmt(b.full)}</div>
-                        <div class="text-[12px] font-black text-blue-700 tabular-nums">${fmt(b.collected)}</div>
-                        <div class="text-[12px] font-black text-emerald-700 tabular-nums">${fmt(b.balance)}</div>
-                    </div>
-                </button>`;
+                const safe   = b.breed.replace(/'/g, "\\'");
+                return `<button class="invmap-breed-chip ${active ? 'active' : ''}" onclick="selectInvmapBreed('${safe}')" title="Bal ${fmt(b.balance)} · Coll ${fmt(b.collected)} · Full ${fmt(b.full)} · ${b.plots.size} plot${b.plots.size===1?'':'s'}">${b.breed}<span class="invmap-breed-chip-count">${fmt(b.balance)}</span></button>`;
             }).join('');
-            return;
         }
 
-        // Default: By Batch — flattened (plot, batch) rows for the active scope.
+        // Render the by-plot batch breakdown (filtered when a breed is active).
         const pairs = visiblePlotBatchPairs();
         if (!pairs.length) {
             body.innerHTML = '<div class="text-center py-8 text-slate-400 text-[10px] font-bold uppercase tracking-widest">No batch data for this scope.</div>';
             return;
         }
-        // Group by plot for readability.
         const byPlot = {};
         pairs.forEach(r => { (byPlot[r.plot] = byPlot[r.plot] || []).push(r); });
         body.innerHTML = Object.entries(byPlot).map(([plot, list]) => {
@@ -2536,11 +2603,12 @@
     }
 
     window.switchInvmapNursery = switchInvmapNursery;
-    window.switchInvmapSideTab = switchInvmapSideTab;
     window.selectInvmapBreed   = selectInvmapBreed;
     window.clearInvmapBreed    = clearInvmapBreed;
     window.openInvmapModal     = openInvmapModal;
     window.closeInvmapModal    = closeInvmapModal;
+    window.invmapZoom          = invmapZoom;
+    window.invmapResetZoom     = invmapResetZoom;
 
     document.getElementById('gearing-slider').addEventListener('input', updateGearing);
     _supabase.auth.getSession().then(({ data: { session } }) => {
