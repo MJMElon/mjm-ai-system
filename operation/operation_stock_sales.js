@@ -923,7 +923,7 @@
                 return d.toISOString().slice(0,10);
             })();
 
-            const [ordRes, _itemsRes, _collRes, _bookRes] = await Promise.all([
+            const [ordRes, _itemsRes, _collRes, _bookRes, _alRes] = await Promise.all([
                 _supabase.from('salesweb_customer_orders')
                     .select('id,order_number,customer_name,total,status,created_at,payment_terms,collected_qty,collected_at')
                     .order('created_at', { ascending: true }),
@@ -934,6 +934,13 @@
                     .select('order_number,booking_date,collection_qty,status')
                     .gte('booking_date', monthStartStr)
                     .not('status', 'in', '("cancelled")')
+                    .then(r => r, e => ({ data: null, error: e })),
+                // ── AL (Allocation Letter) is the source of truth for ordered
+                //    qty and balance to collect. Customer Order Management
+                //    overrides its own numbers with the AL's values so that
+                //    any AL amendment flows through here automatically.
+                _supabase.from('shared_al_orders')
+                    .select('al_number,order_number,quantity_ordered,balance_quantity,status')
                     .then(r => r, e => ({ data: null, error: e }))
             ]);
 
@@ -941,6 +948,20 @@
             const items  = _itemsRes.data || [];
             const collections = _collRes?.data;
             const bookings    = _bookRes?.data || [];
+            const alRows      = _alRes?.data || [];
+
+            // Index ALs by the customer order number they're linked to.
+            // If a single order_number happens to map to multiple ALs (e.g.
+            // partial replacements), prefer the row with the highest
+            // balance_quantity so the totals stay consistent for the user.
+            const alByOrderNumber = {};
+            alRows.forEach(a => {
+                if (!a.order_number) return;
+                const cur = alByOrderNumber[a.order_number];
+                if (!cur || (Number(a.balance_quantity)||0) > (Number(cur.balance_quantity)||0)) {
+                    alByOrderNumber[a.order_number] = a;
+                }
+            });
 
             const itemsByOrder = {};
             items.forEach(it => {
@@ -979,20 +1000,42 @@
                 const it = itemsByOrder[o.id] || { qty: 0, amt: 0 };
                 const colByMonth = collByOrder[o.id] || {};
                 const bookByMonth = bookByOrderNumber[o.order_number] || {};
-                const totalCollected = Object.values(colByMonth).reduce((s, v) => s + v, 0);
-                const balance = it.qty - totalCollected;
+                const monthCollected = Object.values(colByMonth).reduce((s, v) => s + v, 0);
+
+                // ── AL override (source-of-truth reconciliation) ──
+                // When a matching AL row exists, prefer its quantity_ordered
+                // and balance_quantity over what the salesweb tables imply.
+                // This keeps Customer Order Management in lock-step with the
+                // AL Manager — any AL amendment is reflected on next reload.
+                const al = alByOrderNumber[o.order_number];
+                let totalQty       = it.qty;
+                let totalCollected = monthCollected;
+                let balance        = totalQty - totalCollected;
+                if (al) {
+                    const alQty = Number(al.quantity_ordered);
+                    const alBal = Number(al.balance_quantity);
+                    if (!isNaN(alQty)) totalQty = alQty;
+                    if (!isNaN(alBal)) {
+                        balance        = Math.max(0, alBal);
+                        totalCollected = Math.max(0, totalQty - balance);
+                    } else {
+                        balance = Math.max(0, totalQty - totalCollected);
+                    }
+                }
+
                 let derivedStatus = o.status;
                 if (o.status !== 'Cancelled' && o.status !== 'Pending Payment') {
                     if      (totalCollected === 0)         derivedStatus = 'Paid · Pending Pickup';
-                    else if (totalCollected >= it.qty)     derivedStatus = 'Completed';
-                    else                                   derivedStatus = 'Partial · ' + Math.round((totalCollected/it.qty)*100) + '%';
+                    else if (totalCollected >= totalQty)   derivedStatus = 'Completed';
+                    else                                   derivedStatus = 'Partial · ' + Math.round((totalCollected/totalQty)*100) + '%';
                 }
                 return {
                     id: o.id,
                     orderNumber: o.order_number,
+                    alNumber: al ? al.al_number : null,
                     customer: o.customer_name,
                     orderDate: o.created_at ? new Date(o.created_at) : null,
-                    totalQty: it.qty,
+                    totalQty,
                     totalAmount: o.total ?? it.amt,
                     rawStatus: o.status,
                     derivedStatus,
@@ -1131,7 +1174,7 @@
             return `
                 <tr>
                     <td class="t-cust">${idx + 1}</td>
-                    <td class="t-cust"><span class="cust-link" data-pickup data-cust="${escapeHtml(r.customer || '')}" data-order="${escapeHtml(r.orderNumber || '')}">${escapeHtml(r.customer || '—')}</span><div class="t-sub">${escapeHtml(r.orderNumber || '')}</div></td>
+                    <td class="t-cust"><span class="cust-link" data-pickup data-cust="${escapeHtml(r.customer || '')}" data-order="${escapeHtml(r.orderNumber || '')}">${escapeHtml(r.customer || '—')}</span><div class="t-sub">${escapeHtml(r.orderNumber || '')}${r.alNumber ? ' · <span style="color:#1d4ed8;font-weight:900;">AL ' + escapeHtml(r.alNumber) + '</span>' : ''}</div></td>
                     <td>${orderMonth}</td>
                     <td><span class="pill-status ${pillCls}">${escapeHtml(pillTxt)}</span></td>
                     <td class="font-black">${r.totalQty.toLocaleString()}</td>
