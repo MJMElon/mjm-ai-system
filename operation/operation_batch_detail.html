@@ -163,14 +163,21 @@
         /* ── Review banner & per-tab lock (added for review/access feature) ── */
         .mjm-review-banner { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 18px; border-radius:14px; margin-bottom:16px; font-size:12px; font-weight:700; }
         .mjm-review-open    { background:#fff8eb; border:1.5px dashed #c07820; color:#7a4a10; }
+        .mjm-review-verified{ background:#eff6ff; border:1.5px solid #bfdbfe; color:#1e3a8a; }
         .mjm-review-locked  { background:#ecfdf5; border:1.5px solid #a7f3d0; color:#065f46; }
         .mjm-review-meta    { font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.12em; opacity:.85; }
         .mjm-review-btn     { font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.15em; padding:8px 16px; border-radius:999px; cursor:pointer; border:none; transition:all .15s; }
         .mjm-review-btn-mark   { background:#10b981; color:white; box-shadow:0 6px 14px -4px rgba(16,185,129,.4); }
         .mjm-review-btn-mark:hover   { transform:translateY(-1px); }
+        .mjm-review-btn-mark:disabled { background:#cbd5e1; box-shadow:none; cursor:not-allowed; opacity:.7; transform:none; }
+        .mjm-review-btn-verify { background:#2563eb; color:white; box-shadow:0 6px 14px -4px rgba(37,99,235,.4); }
+        .mjm-review-btn-verify:hover { transform:translateY(-1px); }
+        .mjm-review-btn-unverify { background:white; color:#1e3a8a; border:1.5px solid #bfdbfe; }
+        .mjm-review-btn-unverify:hover { background:#eff6ff; }
         .mjm-review-btn-unmark { background:white; color:#065f46; border:1.5px solid #a7f3d0; }
         .mjm-review-btn-unmark:hover { background:#ecfdf5; }
         .mjm-review-btn:disabled { opacity:.5; cursor:wait; }
+        .mjm-review-btn-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
 
         .mjm-locked input, .mjm-locked select, .mjm-locked textarea,
         .mjm-locked button:not(.mjm-review-allow) {
@@ -283,9 +290,9 @@
                             <div class="completion-pie-container"><div id="t6-pie-tab" class="completion-pie completion-pie-fill" style="--percentage: 0"></div><div class="completion-pie-cover"></div></div>
                             3rd Culling
                         </button>
-                        <button id="tab-btn-7" class="stage-tab-btn stage-tab-inactive" onclick="switchTab(7)" title="Field-audit records linked to this batch">
+                        <button id="tab-btn-7" class="stage-tab-btn stage-tab-inactive" onclick="switchTab(7)" title="Stock calibration adjustments and field-audit records linked to this batch">
                             <div class="completion-pie-container"><div id="t7-pie-tab" class="completion-pie completion-pie-fill" style="--percentage: 0"></div><div class="completion-pie-cover"></div></div>
-                            Audit Trail
+                            Adjustments &amp; Audit
                         </button>
                         </div>
                     </div>
@@ -337,19 +344,31 @@
                                             <label class="label-style !mb-0 !ml-0">New Batch Number *</label>
                                             <span class="text-[9px] font-bold text-[#8a7a68] uppercase tracking-widest">Latest: <span id="latest-batch-id" class="text-[#c07820]">Loading...</span></span>
                                         </div>
-                                        <input type="text" id="f-batchno" class="input-style font-black !text-[#c07820]" required oninput="updateT1Completion()">
+                                        <input type="text" id="f-batchno" class="input-style font-black !text-[#c07820]" required readonly title="Auto-generated batch number — cannot be edited">
                                     </div>
                                     <div>
                                         <label class="label-style">Breed Variety *</label>
                                         <div class="select-wrapper">
-                                            <select id="f-brand" class="input-style !text-[#4a7a2e]" required onchange="updateT1Completion()">
+                                            <select id="f-brand" class="input-style !text-[#4a7a2e]" required onchange="updateT1Completion(); syncSupplierOptions();">
                                                 <option value="">Loading breeds...</option>
                                             </select>
                                         </div>
                                     </div>
-                                    <div class="md:col-span-2">
-                                        <label class="label-style">Seed Supplier / Source</label>
-                                        <input type="text" id="f-supplier" class="input-style">
+                                    <div>
+                                        <label class="label-style">Seed Supplier</label>
+                                        <div class="select-wrapper">
+                                            <select id="f-supplier" class="input-style" onchange="syncMpobOptions(); updateT1Completion();">
+                                                <option value="">Select supplier...</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="label-style">Supplier MPOB License</label>
+                                        <div class="select-wrapper">
+                                            <select id="f-mpob" class="input-style" onchange="updateT1Completion();">
+                                                <option value="">Select MPOB license...</option>
+                                            </select>
+                                        </div>
                                     </div>
                                     <div>
                                         <label class="label-style">Supplier D/O No.</label>
@@ -557,16 +576,17 @@
                                         </div>
                                         <div id="tray-rows-container" class="space-y-2">
                                             <!-- Column headers -->
-                                            <div class="hidden xl:grid grid-cols-[2fr_1fr_1fr_1fr_40px] gap-3 px-4 pb-1 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">
+                                            <div class="hidden xl:grid grid-cols-[2fr_1fr_1fr_1fr_1fr_40px] gap-3 px-4 pb-1 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">
                                                 <span>Preset Tray</span>
                                                 <span>Total Planted</span>
                                                 <span class="text-[#a83020]">Empty Holes</span>
                                                 <span class="text-[#4a7a2e]">Actual Planted</span>
+                                                <span title="Each tray fits 2,560 holes. Vacant = 2,560 − seeds currently in tray.">Vacant Holes</span>
                                                 <span></span>
                                             </div>
                                         </div>
                                         <!-- Tray totals footer -->
-                                        <div id="tray-totals-row" class="grid grid-cols-1 xl:grid-cols-[2fr_1fr_1fr_1fr_40px] gap-3 bg-[#f3efe6] border-2 border-[#e8dcc8] rounded-xl px-4 py-3 mt-3 items-center shadow-sm">
+                                        <div id="tray-totals-row" class="grid grid-cols-1 xl:grid-cols-[2fr_1fr_1fr_1fr_1fr_40px] gap-3 bg-[#f3efe6] border-2 border-[#e8dcc8] rounded-xl px-4 py-3 mt-3 items-center shadow-sm">
                                             <div class="text-[10px] font-black text-[#3d2610] uppercase tracking-widest">Σ Totals (<span id="t2-tray-count">0</span> Trays)</div>
                                             <div>
                                                 <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest xl:hidden mb-0.5">Total Planted</div>
@@ -579,6 +599,10 @@
                                             <div>
                                                 <div class="text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest xl:hidden mb-0.5">Actual Planted</div>
                                                 <div class="text-base font-black text-[#4a7a2e]" id="t2-tot-actual">0</div>
+                                            </div>
+                                            <div>
+                                                <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest xl:hidden mb-0.5">Vacant Holes</div>
+                                                <div class="text-base font-black text-[#4a7a2e]" id="t2-tot-vacant">0</div>
                                             </div>
                                             <div class="hidden xl:block"></div>
                                         </div>
@@ -1199,8 +1223,53 @@
 
                         </div>
 
-                        <!-- ══ TAB 7: Audit Trail (read-only) ══ -->
+                        <!-- ══ TAB 7: Adjustments & Audit ══ -->
                         <div id="tab-7" class="tab-content">
+
+                            <!-- ── Stock Calibration section ── -->
+                            <div class="mb-8 rounded-2xl bg-white border-2 border-[#e8dcc8] shadow-sm overflow-hidden">
+                                <div class="px-6 py-4 bg-gradient-to-r from-[#fdf6e8] to-[#fbeed1] border-b-2 border-amber-100">
+                                    <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Stock Calibration</h3>
+                                    <p class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1">Add or subtract stock without touching the lifecycle tabs. Use this to reconcile a manual count against the system total.</p>
+                                </div>
+                                <div class="p-6 space-y-4">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div class="rounded-xl bg-[#fdfaf4] border border-[#e8dcc8] p-3">
+                                            <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Net Calibration</div>
+                                            <div class="text-2xl font-black text-[#3d2610] mt-1" id="t7-cal-net">0</div>
+                                        </div>
+                                        <div class="rounded-xl bg-emerald-50 border border-emerald-200 p-3">
+                                            <div class="text-[9px] font-black text-emerald-700 uppercase tracking-widest">Total Added</div>
+                                            <div class="text-2xl font-black text-emerald-700 mt-1" id="t7-cal-added">0</div>
+                                        </div>
+                                        <div class="rounded-xl bg-rose-50 border border-rose-200 p-3">
+                                            <div class="text-[9px] font-black text-rose-700 uppercase tracking-widest">Total Removed</div>
+                                            <div class="text-2xl font-black text-rose-700 mt-1" id="t7-cal-removed">0</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 md:grid-cols-[180px_1fr_auto] gap-3 items-end pt-2">
+                                        <div>
+                                            <label class="label-style">Adjustment Qty (+/-)</label>
+                                            <input type="number" id="t7-cal-qty" class="input-style" placeholder="e.g. 50 or -20" step="1">
+                                        </div>
+                                        <div>
+                                            <label class="label-style">Reason (required)</label>
+                                            <input type="text" id="t7-cal-reason" class="input-style" placeholder="e.g. Manual count: 50 extra seedlings in plot A">
+                                        </div>
+                                        <button type="button" id="t7-cal-save-btn" onclick="saveCalibration()" class="px-6 py-3 rounded-xl bg-[#3d2610] text-white font-black uppercase tracking-widest text-xs hover:bg-[#5a3a1a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Save Adjustment</button>
+                                    </div>
+
+                                    <div class="pt-2">
+                                        <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">Adjustment History</div>
+                                        <div id="t7-cal-history" class="overflow-x-auto rounded-xl border border-[#e8dcc8]">
+                                            <div class="text-center p-6 text-[#8a7a68] text-xs">No calibration adjustments recorded for this batch yet.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ── Audit Trail section (existing) ── -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-amber-100 pb-5">
                                 <div>
                                     <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Audit Trail — Field Verification</h3>
@@ -1285,7 +1354,8 @@
         let globalTrays = [];
         let globalPlots = [];
         let rowMaps = {}; // Store uploaded map previews
-        let trayUsageMap = {}; // { tray_name: 'MJN-2024-001' } — which batch is using each tray
+        let trayUsageMap = {};  // { tray_name: 'MJN-2024-001' } — which batch is using each tray
+        let trayVacantMap = {}; // { tray_name: 1234 } — vacant holes (out of 2,560) for each tray
 
         function switchTab(tabIndex) {
             for(let i = 1; i <= 7; i++) {
@@ -1305,11 +1375,14 @@
             if(tabIndex === 7) syncTab7();
         }
 
-        // ── TAB 7: Audit Trail (read-only) ──────────────────────────────
+        // ── TAB 7: Adjustments & Audit ──────────────────────────────────
         async function syncTab7() {
             const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
             const container = document.getElementById('t7-rows-container');
             const setStat = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
+
+            // Calibration section loads regardless of audit-record state
+            renderCalibrationHistory(batchId);
 
             if (!batchId) {
                 container.innerHTML = '<div class="text-center p-10 text-[#8a7a68]"><div class="text-3xl mb-2">⏳</div><div class="text-xs font-black uppercase tracking-widest">Save Tab 1 first to assign a batch number — audit records will appear here once auditors record heights.</div></div>';
@@ -1408,6 +1481,92 @@
             return d.toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' });
         }
 
+        // ── TAB 7: Stock Calibration ─────────────────────────────────────
+        async function renderCalibrationHistory(batchId) {
+            const histEl = document.getElementById('t7-cal-history');
+            const setStat = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
+            if (!histEl) return;
+            if (!batchId) {
+                histEl.innerHTML = '<div class="text-center p-6 text-[#8a7a68] text-xs">Save Tab 1 first to assign a batch number, then calibration adjustments can be recorded here.</div>';
+                setStat('t7-cal-net', '0'); setStat('t7-cal-added', '0'); setStat('t7-cal-removed', '0');
+                return;
+            }
+            histEl.innerHTML = '<div class="text-center p-6 text-[#8a7a68] text-xs animate-pulse">Loading…</div>';
+            const { data: rows, error } = await _supabase
+                .from('shared_inventory_logs')
+                .select('id, quantity_change, remark, created_at, last_edited_by, transaction_type')
+                .eq('batch_name', batchId)
+                .eq('transaction_type', 'Stock_Calibration')
+                .order('created_at', { ascending: false });
+            if (error) {
+                histEl.innerHTML = `<div class="text-center p-6 text-rose-600 text-xs">Error loading calibrations: ${error.message}</div>`;
+                return;
+            }
+            const safe = rows || [];
+            let added = 0, removed = 0;
+            safe.forEach(r => { const q = Number(r.quantity_change) || 0; if (q > 0) added += q; else removed += Math.abs(q); });
+            const net = added - removed;
+            setStat('t7-cal-net', (net > 0 ? '+' : '') + net.toLocaleString());
+            setStat('t7-cal-added', '+' + added.toLocaleString());
+            setStat('t7-cal-removed', '-' + removed.toLocaleString());
+
+            if (!safe.length) {
+                histEl.innerHTML = '<div class="text-center p-6 text-[#8a7a68] text-xs">No calibration adjustments recorded for this batch yet.</div>';
+                return;
+            }
+            const rowsHtml = safe.map(r => {
+                const q = Number(r.quantity_change) || 0;
+                const sign = q > 0 ? '+' : '';
+                const cls = q > 0 ? 'text-emerald-700' : 'text-rose-700';
+                return `<tr class="border-t border-[#e8dcc8]">
+                    <td class="px-3 py-2 text-[11px] font-bold text-[#3d2610]">${formatAuditDate(r.created_at)}</td>
+                    <td class="px-3 py-2 text-sm font-black ${cls}">${sign}${q.toLocaleString()}</td>
+                    <td class="px-3 py-2 text-[11px] text-[#3d2610]">${(r.remark || '').replace(/</g,'&lt;')}</td>
+                    <td class="px-3 py-2 text-[10px] text-[#8a7a68]">${(r.last_edited_by || '—').replace(/</g,'&lt;')}</td>
+                </tr>`;
+            }).join('');
+            histEl.innerHTML = `<table class="w-full text-left">
+                <thead><tr class="bg-[#fdf6e8]">
+                    <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Date</th>
+                    <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Qty</th>
+                    <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Reason</th>
+                    <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">By</th>
+                </tr></thead>
+                <tbody>${rowsHtml}</tbody>
+            </table>`;
+        }
+
+        async function saveCalibration() {
+            const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
+            if (!batchId) { showToast('Save Tab 1 first to assign a batch number before recording a calibration.', 'error'); return; }
+            const qtyEl = document.getElementById('t7-cal-qty');
+            const reasonEl = document.getElementById('t7-cal-reason');
+            const btn = document.getElementById('t7-cal-save-btn');
+            const qty = parseInt(qtyEl.value, 10);
+            const reason = (reasonEl.value || '').trim();
+            if (isNaN(qty) || qty === 0) { showToast('Enter a non-zero adjustment quantity (use a negative value to subtract).', 'error'); qtyEl.focus(); return; }
+            if (!reason) { showToast('Reason is required for every calibration.', 'error'); reasonEl.focus(); return; }
+
+            btn.disabled = true; btn.innerText = 'Saving…';
+
+            const payload = withEditMeta({
+                batch_name: batchId,
+                transaction_type: 'Stock_Calibration',
+                quantity_change: qty,
+                remark: reason
+            });
+            let { error } = await _supabase.from('shared_inventory_logs').insert([payload]);
+            if (error && isEditMetaColumnError && isEditMetaColumnError(error)) {
+                ({ error } = await _supabase.from('shared_inventory_logs').insert(stripEditMeta([payload])));
+            }
+
+            btn.disabled = false; btn.innerText = 'Save Adjustment';
+            if (error) { showToast('Failed to save calibration: ' + error.message, 'error'); return; }
+            qtyEl.value = ''; reasonEl.value = '';
+            showToast(`Calibration recorded: ${qty > 0 ? '+' : ''}${qty}`, 'success');
+            renderCalibrationHistory(batchId);
+        }
+
         // ── Toast helper ──────────────────────────────────────────
         function showToast(message, type = 'success', durationMs = 4000) {
             const container = document.getElementById('toast-container');
@@ -1428,21 +1587,68 @@
                 document.getElementById('t2-date').valueAsDate = new Date();
                 generateWorkerIcons();
 
-                const [breedRes, batchRes, trayRes, plotRes, usedTrayRes] = await Promise.all([
+                const [breedRes, batchRes, trayRes, plotRes, usedTrayRes, transplantedRes, cull1Res] = await Promise.all([
                     _supabase.from('shared_breeds').select('name').order('name'),
                     _supabase.from('operation_batches').select('name').order('name', { ascending: false }),
                     _supabase.from('operation_trays').select('*'),
                     _supabase.from('shared_plots').select('*'),
-                    _supabase.from('shared_inventory_logs').select('plot_name, batch_name').eq('transaction_type', 'Planted')
+                    _supabase.from('shared_inventory_logs').select('plot_name, batch_name, quantity_change').eq('transaction_type', 'Planted'),
+                    _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']),
+                    _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '1st_Culling')
                 ]);
 
                 masterBatchesList = batchRes.data || [];
                 globalTrays = trayRes.data || [];
 
+                // Build per-batch totals so we can tell which batches have fully emptied their
+                // pre-nursery trays (planted − transplanted − 1st_culling ≤ 0). Trays from
+                // emptied batches are considered free for the next batch to reuse.
+                const plantedByBatch = {}, transplantedByBatch = {}, cull1ByBatch = {};
+                (usedTrayRes.data || []).forEach(l => {
+                    plantedByBatch[l.batch_name] = (plantedByBatch[l.batch_name] || 0) + (l.quantity_change || 0);
+                });
+                (transplantedRes.data || []).forEach(l => {
+                    transplantedByBatch[l.batch_name] = (transplantedByBatch[l.batch_name] || 0) + Math.abs(l.quantity_change || 0);
+                });
+                (cull1Res.data || []).forEach(l => {
+                    cull1ByBatch[l.batch_name] = (cull1ByBatch[l.batch_name] || 0) + Math.abs(l.quantity_change || 0);
+                });
+                const batchPnEmptied = (b) => {
+                    const planted = plantedByBatch[b] || 0;
+                    if (planted <= 0) return false; // never planted, leave behavior unchanged
+                    const remaining = planted - (transplantedByBatch[b] || 0) - (cull1ByBatch[b] || 0);
+                    return remaining <= 0;
+                };
+
                 // Build tray-usage map: which batch is each tray planted in?
+                // Skip trays whose batch's pre-nursery is already emptied so the tray frees up.
                 trayUsageMap = {};
+                const plantedByTrayBatch = {}; // { tray: { batch: qty } }
                 (usedTrayRes.data || []).forEach(log => {
+                    if (!plantedByTrayBatch[log.plot_name]) plantedByTrayBatch[log.plot_name] = {};
+                    plantedByTrayBatch[log.plot_name][log.batch_name] =
+                        (plantedByTrayBatch[log.plot_name][log.batch_name] || 0) + (log.quantity_change || 0);
+                    if (batchPnEmptied(log.batch_name)) return;
                     trayUsageMap[log.plot_name] = log.batch_name;
+                });
+
+                // Per-tray vacant balance (2,560 − seeds currently sitting in the tray).
+                // For each occupying batch, the seeds still left in PN are distributed across
+                // its trays in proportion to how many were originally planted there.
+                trayVacantMap = {};
+                const TRAY_CAP = 2560;
+                globalTrays.forEach(t => {
+                    const occupier = trayUsageMap[t.tray_name];
+                    if (!occupier) { trayVacantMap[t.tray_name] = TRAY_CAP; return; }
+                    const plantedInTray   = (plantedByTrayBatch[t.tray_name] || {})[occupier] || 0;
+                    const plantedForBatch = plantedByBatch[occupier] || 0;
+                    const outflowForBatch = (transplantedByBatch[occupier] || 0) + (cull1ByBatch[occupier] || 0);
+                    const remainingForBatch = Math.max(0, plantedForBatch - outflowForBatch);
+                    const remainingInTray = plantedForBatch > 0
+                        ? Math.round(remainingForBatch * (plantedInTray / plantedForBatch))
+                        : 0;
+                    const inUse = Math.min(TRAY_CAP, remainingInTray);
+                    trayVacantMap[t.tray_name] = Math.max(0, TRAY_CAP - inUse);
                 });
                 
                 // NATURAL ALPHANUMERIC SORTING FOR PLOTS (B2 comes before B10)
@@ -1455,6 +1661,7 @@
                 });
                 
                 populateDropdown('f-brand', breedRes.data, "Select breed variety...");
+                syncSupplierOptions();
 
                 if (isNewBatch) {
                     updateTracker(0); 
@@ -1483,7 +1690,15 @@
                             }
                         }
                         if(data.remark) {
-                            const supMatch = data.remark.match(/Supplier:\s*([^.]+)/); if(supMatch) document.getElementById('f-supplier').value = supMatch[1].trim();
+                            const supMatch = data.remark.match(/Supplier:\s*([^.]+)/);
+                            const mpobMatch = data.remark.match(/MPOB:\s*([0-9\-]+)/);
+                            if (supMatch) {
+                                // Refresh cascading dropdowns based on the just-loaded breed,
+                                // then pin the supplier + MPOB values from the stored remark.
+                                syncSupplierOptions(supMatch[1].trim());
+                                document.getElementById('f-supplier').value = supMatch[1].trim();
+                                syncMpobOptions(mpobMatch ? mpobMatch[1].trim() : '');
+                            }
                             const doMatch = data.remark.match(/D\/O:\s*([^.]+)/); if(doMatch) document.getElementById('f-dono').value = doMatch[1].trim();
                             const focMatch = data.remark.match(/Incl\.\s*([\d.]+)%\s*FOC/); if(focMatch) document.getElementById('f-foc-percent').value = focMatch[1].trim();
                             const doQtyMatch = data.remark.match(/DO_Qty:\s*(\d+)/);
@@ -2242,6 +2457,12 @@
             const accounted = totalMain + mockCullingTab4 + netPremium + netDtone;
             const untransplanted = pendingTotal;
 
+            // Publish live balances so Tab 2's per-tray Vacant cell can react to
+            // transplants (holes freed once seedlings move to main plot).
+            window._activeTrayBalances = activeTrayBalances;
+            document.querySelectorAll('.tray-row').forEach(r => updateTrayVacant(r));
+            calcPlanting();
+
             renderTrayBalances(activeTrayBalances, netPremium, netDtone, pendingTotal);
 
             const pctMain        = totalPlantedRaw > 0 ? (totalMain / totalPlantedRaw) * 100 : 0;
@@ -2579,17 +2800,16 @@
                 for (const nurs in grouped) {
                     html += `<optgroup label="${nurs}">`;
                     grouped[nurs].forEach(tray => {
+                        const vacant = trayVacantMap[tray.tray_name] != null ? trayVacantMap[tray.tray_name] : 2560;
                         const usedBy = trayUsageMap[tray.tray_name];
-                        let status, disabled = '';
-                        if (!usedBy) {
-                            status = '🟢 Vacant';
-                        } else if (usedBy === currentBatch) {
-                            status = '✅ This batch';
-                        } else {
-                            status = `🔴 In use: ${usedBy}`;
-                            disabled = 'disabled';
-                        }
-                        html += `<option value="${tray.tray_name}" ${disabled}>${tray.tray_name} — ${status}</option>`;
+                        // Disable: no vacant holes left, OR another batch is mid-cycle in this tray.
+                        const blockOther = usedBy && usedBy !== currentBatch;
+                        const disabled = (vacant === 0 || blockOther) ? 'disabled' : '';
+                        // Color: red at 0, green otherwise (transplants free holes → green).
+                        const colorHex = vacant === 0 ? '#a83020' : '#15803d';
+                        const dot      = vacant === 0 ? '🔴' : '🟢';
+                        const label    = `${dot} Vacant: ${vacant.toLocaleString()}`;
+                        html += `<option value="${tray.tray_name}" ${disabled} style="color:${colorHex};">${tray.tray_name} — ${label}</option>`;
                     });
                     html += `</optgroup>`;
                 }
@@ -2604,10 +2824,10 @@
             const options = getTrayOptionsHTML(); 
             
             const html = `
-                <div id="${rowId}" class="tray-row grid grid-cols-1 xl:grid-cols-[2fr_1fr_1fr_1fr_40px] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end relative">
+                <div id="${rowId}" class="tray-row grid grid-cols-1 xl:grid-cols-[2fr_1fr_1fr_1fr_1fr_40px] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end relative">
                     <div>
                         <label class="label-style">Preset Tray *</label>
-                        <div class="select-wrapper"><select class="input-style !text-[#3d2610] t-select" required onchange="updatePlantingCompletion(); checkTrayInUse('${rowId}')">${options}</select></div>
+                        <div class="select-wrapper"><select class="input-style !text-[#3d2610] t-select" required onchange="updatePlantingCompletion(); checkTrayInUse('${rowId}'); calcTrayRow('${rowId}')">${options}</select></div>
                         <div id="${rowId}-warn" class="hidden mt-1 text-[9px] font-black text-[#a83020] flex items-center gap-1">⚠️ <span></span></div>
                     </div>
                     <div>
@@ -2622,10 +2842,15 @@
                         <label class="label-style !text-[#4a7a2e]">Actual Planted</label>
                         <div class="input-style bg-white font-black text-[#4a7a2e] t-actual h-[45px] flex items-center" data-raw="0">0</div>
                     </div>
+                    <div>
+                        <label class="label-style">Vacant Holes</label>
+                        <div class="input-style bg-white font-black t-vacant h-[45px] flex items-center !text-[#4a7a2e]" data-raw="${TRAY_CAPACITY}" title="2,560 − seeds currently in this tray. Goes red at 0, turns green once transplanting frees holes.">${TRAY_CAPACITY.toLocaleString()}</div>
+                    </div>
                     ${trayRowCount > 1 ? `<button type="button" class="w-10 h-[45px] rounded-lg border border-[#f8d7da] text-[#a83020] bg-white flex items-center justify-center hover:bg-[#f8d7da] shrink-0 transition-colors shadow-sm self-end" onclick="removeTrayRow('${rowId}')" title="Remove Tray">✕</button>` : `<div class="hidden xl:block"></div>`}
                 </div>
             `;
             container.insertAdjacentHTML('beforeend', html);
+            updateTrayVacant(rowId);
             updatePlantingCompletion();
         }
 
@@ -2660,10 +2885,15 @@
                 return;
             }
 
-            // Use cached trayUsageMap (loaded at init, no extra DB call needed)
+            // Use cached trayUsageMap + trayVacantMap (no extra DB call needed)
             const usedBy = trayUsageMap[trayName];
-            if (usedBy && usedBy !== currentBatch) {
-                warnEl.querySelector('span').innerText = `In use by batch ${usedBy} — not vacant`;
+            const vacant = trayVacantMap[trayName] != null ? trayVacantMap[trayName] : 2560;
+            if (vacant === 0) {
+                warnEl.querySelector('span').innerText = 'No vacant holes — tray is full';
+                warnEl.classList.remove('hidden');
+                sel.classList.add('!border-[#a83020]');
+            } else if (usedBy && usedBy !== currentBatch) {
+                warnEl.querySelector('span').innerText = `Vacant: ${vacant.toLocaleString()} — partially used, finish the other batch first`;
                 warnEl.classList.remove('hidden');
                 sel.classList.add('!border-[#c07820]');
             } else {
@@ -2672,16 +2902,43 @@
             }
         }
 
+        // Each pre-nursery tray fits 2,560 holes; vacant = capacity − seeds currently in the tray.
+        const TRAY_CAPACITY = 2560;
+
+        function updateTrayVacant(rowId) {
+            const row = typeof rowId === 'string' ? document.getElementById(rowId) : rowId;
+            if (!row) return;
+            const vacEl = row.querySelector('.t-vacant');
+            if (!vacEl) return;
+            const actual = parseInt(row.querySelector('.t-actual')?.dataset.raw || 0);
+            const trayName = row.querySelector('.t-select')?.value || '';
+            // Once Tab 3 has run, _activeTrayBalances reflects post-transplant qty per tray.
+            const live = (trayName && window._activeTrayBalances && window._activeTrayBalances[trayName] != null)
+                ? window._activeTrayBalances[trayName]
+                : actual;
+            const inUse = Math.max(0, Math.min(TRAY_CAPACITY, live));
+            const vacant = Math.max(0, TRAY_CAPACITY - inUse);
+            vacEl.innerText = vacant.toLocaleString();
+            vacEl.dataset.raw = vacant;
+            vacEl.classList.remove('!text-[#a83020]', '!text-[#4a7a2e]', 'animate-pulse', '!bg-[#fff5f5]');
+            if (vacant === 0) {
+                vacEl.classList.add('!text-[#a83020]', '!bg-[#fff5f5]', 'animate-pulse');
+            } else {
+                vacEl.classList.add('!text-[#4a7a2e]');
+            }
+        }
+
         function calcTrayRow(rowId) {
             const row = document.getElementById(rowId);
             const planted = readNumericInput(row.querySelector('.t-planted'));
             const empty = readNumericInput(row.querySelector('.t-empty'));
-            const actual = Math.max(0, planted - empty); 
-            
+            const actual = Math.max(0, planted - empty);
+
             const actualDiv = row.querySelector('.t-actual');
             actualDiv.innerText = actual.toLocaleString();
             actualDiv.dataset.raw = actual;
-            calcPlanting(); 
+            updateTrayVacant(rowId);
+            calcPlanting();
         }
 
         function calcPlanting() {
@@ -2695,11 +2952,13 @@
             let totalPlannedSum = 0;
             let totalEmptySum = 0;
             let activeTrayRows = 0;
+            let totalVacant = 0;
             document.querySelectorAll('.tray-row').forEach(row => {
                 activeTrayRows++;
                 totalPlannedSum    += readNumericInput(row.querySelector('.t-planted'));
                 totalEmptySum      += readNumericInput(row.querySelector('.t-empty'));
                 totalActualPlanted += parseInt(row.querySelector('.t-actual')?.dataset.raw || 0);
+                totalVacant        += parseInt(row.querySelector('.t-vacant')?.dataset.raw || 0);
             });
 
             // Update tray totals footer row
@@ -2708,6 +2967,12 @@
             setTrayTot('t2-tot-planted', totalPlannedSum.toLocaleString());
             setTrayTot('t2-tot-empty',   totalEmptySum.toLocaleString());
             setTrayTot('t2-tot-actual',  totalActualPlanted.toLocaleString());
+            setTrayTot('t2-tot-vacant',  totalVacant.toLocaleString());
+            const totVacEl = document.getElementById('t2-tot-vacant');
+            if (totVacEl) {
+                totVacEl.classList.remove('text-[#4a7a2e]', 'text-[#a83020]');
+                totVacEl.classList.add(totalVacant === 0 && activeTrayRows > 0 ? 'text-[#a83020]' : 'text-[#4a7a2e]');
+            }
 
             const accountedTotal = totalActualPlanted + damaged;
 
@@ -3055,18 +3320,28 @@
         }
 
         // --- TAB 1 (MASTER) LOGIC ---
+        // Batch numbering rules:
+        //   • Plain sequential number (e.g. 264), read-only.
+        //   • Floored at 263 — the agreed starting point. Counter is continuous.
+        //   • Latest-batch parser handles both old "MJM-YYYY-NNN" and new plain
+        //     format by extracting the trailing digits.
+        const BATCH_NUMBER_FLOOR = 263;
         function handleNewBatchSetup() {
-            const currentYear = new Date().getFullYear();
             const latestBatch = masterBatchesList[0] ? masterBatchesList[0].name : null;
-            if(latestBatch) {
+            let nextNum = BATCH_NUMBER_FLOOR;
+            if (latestBatch) {
                 document.getElementById('latest-batch-id').innerText = latestBatch;
-                const parts = latestBatch.split('-');
-                if(parts.length === 3 && parseInt(parts[1]) === currentYear) {
-                    let nextNum = parseInt(parts[2]) + 1;
-                    const nextId = `${parts[0]}-${currentYear}-${String(nextNum).padStart(3, '0')}`;
-                    document.getElementById('f-batchno').value = nextId;
-                } else { const nextId = `${parts[0] || 'MJN'}-${currentYear}-001`; document.getElementById('f-batchno').value = nextId; }
-            } else { document.getElementById('latest-batch-id').innerText = "None"; const nextId = `MJN-${currentYear}-001`; document.getElementById('f-batchno').value = nextId; }
+                const m = String(latestBatch).match(/(\d+)\s*$/);
+                if (m) {
+                    const parsed = parseInt(m[1], 10);
+                    if (!isNaN(parsed)) nextNum = Math.max(BATCH_NUMBER_FLOOR, parsed + 1);
+                }
+            } else {
+                document.getElementById('latest-batch-id').innerText = 'None';
+            }
+            const nextId = String(nextNum);
+            document.getElementById('f-batchno').value = nextId;
+            updateT1Completion();
         }
 
         // ── Numeric input helpers (thousand separators) ──────────────────────────
@@ -3242,6 +3517,115 @@
             if(data) data.forEach(item => { const opt = document.createElement('option'); opt.value = item.name; opt.innerText = item.name; sel.appendChild(opt); });
         }
 
+        // ────────────────────────────────────────────────────────────────
+        // Breed → Supplier → MPOB License catalogue (MPOB-licensed seeds).
+        // When breed changes, supplier dropdown filters to that breed's
+        // approved suppliers. When supplier changes, MPOB license dropdown
+        // filters to that supplier's license number(s).
+        // ────────────────────────────────────────────────────────────────
+        const BREED_SUPPLIERS = {
+            'IOI DXP Hybrid': [
+                { supplier: 'IOI Plantation Sdn Bhd',     mpob: ['622810-021000'] },
+                { supplier: 'Pamol Plantations Sdn Bhd',  mpob: ['506471-921000'] }
+            ],
+            'AA Hybrida IS': [
+                { supplier: 'Inai Utama Sdn Bhd',                       mpob: ['513256-119000'] },
+                { supplier: 'Applied Agricultural Resources Sdn. Bhd.', mpob: ['621940-121000', '549080-021000'] }
+            ],
+            'AA Hybrida 1S': [
+                { supplier: 'Inai Utama Sdn Bhd',                       mpob: ['513256-119000'] },
+                { supplier: 'Applied Agricultural Resources Sdn. Bhd.', mpob: ['621940-121000', '549080-021000'] }
+            ],
+            'UPB Premier Hybrid': [
+                { supplier: 'Tunas Services Enterprise', mpob: ['508134-619000'] },
+                { supplier: 'United Plantations Berhad', mpob: ['508134-619000'] }
+            ]
+        };
+
+        // Breed names in shared_breeds may differ from catalogue keys in
+        // casing / spacing / punctuation / a trailing "Hybrid" word — make the
+        // lookup forgiving so the supplier dropdown still populates correctly.
+        function _normBreed(s) {
+            return (s || '').toLowerCase()
+                .replace(/[^a-z0-9 ]/g, ' ')   // strip punctuation
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+        const _BREED_SUPPLIER_INDEX = {};
+        Object.entries(BREED_SUPPLIERS).forEach(([k, v]) => { _BREED_SUPPLIER_INDEX[_normBreed(k)] = v; });
+
+        function suppliersForBreed(breed) {
+            const norm = _normBreed(breed);
+            if (!norm) return null;
+            if (_BREED_SUPPLIER_INDEX[norm]) return _BREED_SUPPLIER_INDEX[norm];
+            // Fallback: ignore optional trailing "hybrid" + try prefix match
+            const stripped = norm.replace(/\bhybrid\b/g, '').replace(/\s+/g, ' ').trim();
+            for (const key of Object.keys(_BREED_SUPPLIER_INDEX)) {
+                const k2 = key.replace(/\bhybrid\b/g, '').replace(/\s+/g, ' ').trim();
+                if (k2 && (k2 === stripped || k2.startsWith(stripped) || stripped.startsWith(k2))) {
+                    return _BREED_SUPPLIER_INDEX[key];
+                }
+            }
+            return null; // null = no catalogue entry for this breed
+        }
+
+        function syncSupplierOptions(keep) {
+            const sel = document.getElementById('f-supplier');
+            if (!sel) return;
+            const breed = document.getElementById('f-brand').value;
+            const prev  = keep != null ? keep : sel.value;
+            if (!breed) {
+                sel.innerHTML = '<option value="">Select breed first…</option>';
+                sel.value = '';
+                syncMpobOptions();
+                return;
+            }
+            const list = suppliersForBreed(breed);
+            if (!list) {
+                sel.innerHTML = `<option value="">No MPOB-licensed suppliers configured for "${breed}"</option>`;
+                sel.value = '';
+                console.warn('[BREED_SUPPLIERS] no entry for breed:', JSON.stringify(breed));
+                syncMpobOptions();
+                return;
+            }
+            sel.innerHTML = '<option value="">Select supplier...</option>';
+            list.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.supplier; opt.innerText = s.supplier;
+                sel.appendChild(opt);
+            });
+            if (prev && Array.from(sel.options).some(o => o.value === prev)) {
+                sel.value = prev;
+            } else {
+                sel.value = '';
+            }
+            syncMpobOptions();
+        }
+
+        function syncMpobOptions(keep) {
+            const sel = document.getElementById('f-mpob');
+            if (!sel) return;
+            const breed    = document.getElementById('f-brand').value;
+            const supplier = document.getElementById('f-supplier').value;
+            const prev     = keep != null ? keep : sel.value;
+            if (!supplier) {
+                sel.innerHTML = '<option value="">Select supplier first…</option>';
+                sel.value = '';
+                return;
+            }
+            sel.innerHTML = '<option value="">Select MPOB license...</option>';
+            const breedList = suppliersForBreed(breed) || [];
+            const matched   = breedList.filter(s => s.supplier === supplier);
+            const licenses  = Array.from(new Set(matched.flatMap(e => e.mpob)));
+            licenses.forEach(lic => {
+                const opt = document.createElement('option');
+                opt.value = lic; opt.innerText = lic;
+                sel.appendChild(opt);
+            });
+            if (prev && licenses.includes(prev)) sel.value = prev;
+            else sel.value = '';
+        }
+
         function updateT1Completion() {
             const date    = document.getElementById('f-datereceived').value;
             const batch   = document.getElementById('f-batchno').value.trim();
@@ -3263,8 +3647,8 @@
 
         document.getElementById('reception-form').addEventListener('submit', async function(e) {
             e.preventDefault(); const saveBtn = document.getElementById('save-btn'); saveBtn.innerText = 'SAVING...'; saveBtn.disabled = true;
-            const dateReceived = document.getElementById('f-datereceived').value; const batch = document.getElementById('f-batchno').value.trim(); const breed = document.getElementById('f-brand').value; const supplier = document.getElementById('f-supplier').value; const dono = document.getElementById('f-dono').value; const focPercent = parseFloat(document.getElementById('f-foc-percent').value) || 0; const totalQtyRaw = document.getElementById('display-total-qty').dataset.raw || 0; const doQty = readNumericInput('f-do-qty');
-            let remarkStr = `Seeds received.`; if (supplier) remarkStr += ` Supplier: ${supplier}.`; if (dono) remarkStr += ` D/O: ${dono}.`; remarkStr += ` DO_Qty: ${doQty}.`; if (focPercent > 0) remarkStr += ` Incl. ${focPercent}% FOC.`;
+            const dateReceived = document.getElementById('f-datereceived').value; const batch = document.getElementById('f-batchno').value.trim(); const breed = document.getElementById('f-brand').value; const supplier = document.getElementById('f-supplier').value; const mpob = document.getElementById('f-mpob').value; const dono = document.getElementById('f-dono').value; const focPercent = parseFloat(document.getElementById('f-foc-percent').value) || 0; const totalQtyRaw = document.getElementById('display-total-qty').dataset.raw || 0; const doQty = readNumericInput('f-do-qty');
+            let remarkStr = `Seeds received.`; if (supplier) remarkStr += ` Supplier: ${supplier}.`; if (mpob) remarkStr += ` MPOB: ${mpob}.`; if (dono) remarkStr += ` D/O: ${dono}.`; remarkStr += ` DO_Qty: ${doQty}.`; if (focPercent > 0) remarkStr += ` Incl. ${focPercent}% FOC.`;
             const ledgerPayload = withEditMeta({ transaction_type: 'Seeds_Received', batch_name: batch, breed_name: breed, quantity_change: parseInt(totalQtyRaw), plot_name: 'Pre-Nursery', remark: remarkStr });
             try {
                 if(!isEditing) {
@@ -4411,9 +4795,11 @@
       const STAGE_BY_TAB = { 1: 'seeds_in', 2: 'planting', 3: 'transplanting', 4: 'cull_1', 5: 'cull_2', 6: 'cull_3' };
       const TAB_INDICES = [1, 2, 3, 4, 5, 6]; // tab 7 (Audit Trail) is read-only
 
-      const reviews = {}; // stage → { reviewed_by, reviewer_name, reviewer_email, reviewed_at }
-      let booted = false;
-      let isAdmin = false;
+      const reviews       = {}; // stage → { reviewed_by, reviewer_name, reviewer_email, reviewed_at }
+      const verifications = {}; // stage → { verified_by, verifier_name, verifier_email, verified_at }
+      let booted     = false;
+      let isAdmin    = false;
+      let isVerifier = false;
 
       function fmtDate(iso) {
         if (!iso) return '';
@@ -4445,6 +4831,7 @@
         const tab = document.getElementById('tab-' + tabIdx);
         const stage = STAGE_BY_TAB[tabIdx];
         const r = reviews[stage];
+        const v = verifications[stage];
         const batch = currentBatchId();
 
         if (!batch) {
@@ -4452,20 +4839,23 @@
           banner.innerHTML = `
             <div>
               <div class="mjm-review-meta">Review Status</div>
-              <div class="mt-1 text-[#7a4a10]">Save Tab 1 first — review can only be applied once a batch number is assigned.</div>
+              <div class="mt-1 text-[#7a4a10]">Save Tab 1 first — verify &amp; review can only be applied once a batch number is assigned.</div>
             </div>`;
           tab.classList.remove('mjm-locked');
           return;
         }
 
         if (r) {
-          // Reviewed → locked for non-admins
-          const who = r.reviewer_name || r.reviewer_email || 'a reviewer';
+          // Reviewed → locked for non-admins (verifier record stays in DB for audit but is implied).
+          const whoR = r.reviewer_name || r.reviewer_email || 'a reviewer';
+          const whoV = v ? (v.verifier_name || v.verifier_email || 'a verifier') : null;
           banner.className = 'mjm-review-banner mjm-review-locked';
           banner.innerHTML = `
             <div>
               <div class="mjm-review-meta">✓ Reviewed &amp; Locked</div>
-              <div class="mt-1">Reviewed by <strong>${who}</strong> on <strong>${fmtDate(r.reviewed_at)}</strong>.</div>
+              <div class="mt-1">Reviewed by <strong>${whoR}</strong> on <strong>${fmtDate(r.reviewed_at)}</strong>.${
+                whoV ? ` Verified by <strong>${whoV}</strong> on <strong>${fmtDate(v.verified_at)}</strong>.` : ''
+              }</div>
             </div>
             ${ isAdmin
               ? `<button class="mjm-review-btn mjm-review-btn-unmark mjm-review-allow"
@@ -4474,20 +4864,56 @@
           `;
           if (!isAdmin) tab.classList.add('mjm-locked');
           else          tab.classList.remove('mjm-locked');
-        } else {
-          banner.className = 'mjm-review-banner mjm-review-open';
+          return;
+        }
+
+        if (v) {
+          // Verified, awaiting admin review.
+          const whoV = v.verifier_name || v.verifier_email || 'a verifier';
+          banner.className = 'mjm-review-banner mjm-review-verified';
+          const adminBtn = isAdmin
+            ? `<button class="mjm-review-btn mjm-review-btn-mark mjm-review-allow"
+                       onclick="MJMReview.mark(${tabIdx})">Mark as Reviewed</button>`
+            : '';
+          const unverifyBtn = (isVerifier || isAdmin)
+            ? `<button class="mjm-review-btn mjm-review-btn-unverify mjm-review-allow"
+                       onclick="MJMReview.unverify(${tabIdx})">Unverify</button>`
+            : '';
           banner.innerHTML = `
             <div>
-              <div class="mjm-review-meta">Pending Review</div>
-              <div class="mt-1 text-[#7a4a10]">Once reviewed, this tab will be locked for non-admin users.</div>
+              <div class="mjm-review-meta">✓ Verified — Awaiting Review</div>
+              <div class="mt-1">Verified by <strong>${whoV}</strong> on <strong>${fmtDate(v.verified_at)}</strong>.</div>
             </div>
-            ${ isAdmin
-              ? `<button class="mjm-review-btn mjm-review-btn-mark mjm-review-allow"
-                         onclick="MJMReview.mark(${tabIdx})">Mark as Reviewed</button>`
-              : `<span class="mjm-review-meta">Awaiting reviewer</span>` }
+            <div class="mjm-review-btn-row">${adminBtn}${unverifyBtn}${
+              !isAdmin && !isVerifier ? '<span class="mjm-review-meta">Awaiting admin review</span>' : ''
+            }</div>
           `;
           tab.classList.remove('mjm-locked');
+          return;
         }
+
+        // Not yet verified → admin's Mark-as-Reviewed is disabled until a verifier signs off.
+        banner.className = 'mjm-review-banner mjm-review-open';
+        const verifyBtn = (isVerifier || isAdmin)
+          ? `<button class="mjm-review-btn mjm-review-btn-verify mjm-review-allow"
+                     onclick="MJMReview.verify(${tabIdx})">Verify</button>`
+          : '';
+        const reviewBtn = isAdmin
+          ? `<button class="mjm-review-btn mjm-review-btn-mark mjm-review-allow"
+                     disabled
+                     title="A verifier must sign off this tab before it can be reviewed"
+                     onclick="event.preventDefault();">Mark as Reviewed</button>`
+          : '';
+        banner.innerHTML = `
+          <div>
+            <div class="mjm-review-meta">Pending Verification</div>
+            <div class="mt-1 text-[#7a4a10]">A verifier must sign off this tab before an admin can mark it as reviewed.</div>
+          </div>
+          <div class="mjm-review-btn-row">${verifyBtn}${reviewBtn}${
+            !isVerifier && !isAdmin ? '<span class="mjm-review-meta">Awaiting verifier</span>' : ''
+          }</div>
+        `;
+        tab.classList.remove('mjm-locked');
       }
 
       function renderAll() {
@@ -4496,15 +4922,28 @@
 
       async function refresh() {
         const batch = currentBatchId();
-        for (const k of Object.keys(reviews)) delete reviews[k];
+        for (const k of Object.keys(reviews))       delete reviews[k];
+        for (const k of Object.keys(verifications)) delete verifications[k];
         if (batch) {
           try {
-            const { data, error } = await _supabase
-              .from('operation_batch_reviews')
-              .select('stage, reviewer_name, reviewer_email, reviewed_at')
-              .eq('batch_name', batch);
-            if (error) throw error;
-            (data || []).forEach(r => { reviews[r.stage] = r; });
+            const [revRes, verRes] = await Promise.all([
+              _supabase
+                .from('operation_batch_reviews')
+                .select('stage, reviewer_name, reviewer_email, reviewed_at')
+                .eq('batch_name', batch),
+              _supabase
+                .from('operation_batch_verifications')
+                .select('stage, verifier_name, verifier_email, verified_at')
+                .eq('batch_name', batch)
+            ]);
+            if (revRes.error) throw revRes.error;
+            (revRes.data || []).forEach(r => { reviews[r.stage] = r; });
+            // verifications table may not exist yet on older DBs — degrade gracefully.
+            if (!verRes.error) {
+              (verRes.data || []).forEach(v => { verifications[v.stage] = v; });
+            } else {
+              console.warn('[MJMReview] verifications unavailable:', verRes.error.message);
+            }
           } catch (e) {
             console.warn('[MJMReview] failed to load reviews:', e);
           }
@@ -4517,6 +4956,10 @@
         const batch = currentBatchId();
         if (!batch) { alert('Save Tab 1 first to assign a batch number.'); return; }
         const stage = STAGE_BY_TAB[tabIdx];
+        if (!verifications[stage]) {
+          alert('A verifier must sign off this tab before it can be marked as reviewed.');
+          return;
+        }
         const u = MJMAccess.user() || {};
         const payload = {
           batch_name:     batch,
@@ -4531,6 +4974,45 @@
           .upsert(payload, { onConflict: 'batch_name,stage' });
         if (error) { alert('Failed to mark reviewed: ' + error.message); return; }
         reviews[stage] = payload;
+        renderBanner(tabIdx);
+      }
+
+      async function verify(tabIdx) {
+        if (!isVerifier && !isAdmin) return;
+        const batch = currentBatchId();
+        if (!batch) { alert('Save Tab 1 first to assign a batch number.'); return; }
+        const stage = STAGE_BY_TAB[tabIdx];
+        const u = MJMAccess.user() || {};
+        const payload = {
+          batch_name:     batch,
+          stage,
+          verified_by:    u.id || null,
+          verifier_email: u.email || null,
+          verifier_name:  u.full_name || null,
+          verified_at:    new Date().toISOString()
+        };
+        const { error } = await _supabase
+          .from('operation_batch_verifications')
+          .upsert(payload, { onConflict: 'batch_name,stage' });
+        if (error) { alert('Failed to verify: ' + error.message); return; }
+        verifications[stage] = payload;
+        renderBanner(tabIdx);
+      }
+
+      async function unverify(tabIdx) {
+        if (!isVerifier && !isAdmin) return;
+        const batch = currentBatchId();
+        if (!batch) return;
+        const stage = STAGE_BY_TAB[tabIdx];
+        if (reviews[stage]) { alert('Unreview this tab first before removing the verification.'); return; }
+        if (!confirm('Remove the verification on this tab?')) return;
+        const { error } = await _supabase
+          .from('operation_batch_verifications')
+          .delete()
+          .eq('batch_name', batch)
+          .eq('stage', stage);
+        if (error) { alert('Failed to unverify: ' + error.message); return; }
+        delete verifications[stage];
         renderBanner(tabIdx);
       }
 
@@ -4560,7 +5042,8 @@
           window.location.href = 'operation_dashboard.html';
           return;
         }
-        isAdmin = MJMAccess.isAdminOf('operation');
+        isAdmin    = MJMAccess.isAdminOf('operation');
+        isVerifier = typeof MJMAccess.canVerifyOperation === 'function' && MJMAccess.canVerifyOperation();
 
         // Re-apply lock when tab switches (other code may inject rows).
         const _origSwitchTab = window.switchTab;
@@ -4592,7 +5075,7 @@
         await refresh();
       }
 
-      window.MJMReview = { boot, refresh, mark, unmark };
+      window.MJMReview = { boot, refresh, mark, unmark, verify, unverify };
     })();
     </script>
 </body>
