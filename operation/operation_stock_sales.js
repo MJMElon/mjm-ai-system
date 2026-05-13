@@ -1033,9 +1033,20 @@
         });
     }
 
-    function pillFor(derived) {
+    function pillFor(derived, paymentMethod) {
         if (!derived) return ['pill-pending', '—'];
-        if (derived === 'Cancelled')               return ['pill-cancelled', 'Cancelled'];
+        if (derived === 'Cancelled') return ['pill-cancelled', 'Cancelled'];
+
+        // Credit-terms orders carry a "Credit" label regardless of pay status,
+        // with the collection stage appended when partial / completed.
+        if ((paymentMethod || 'cash') === 'credit') {
+            if (derived === 'Completed')             return ['pill-completed', 'Credit · Completed'];
+            if (derived === 'Pending Payment')       return ['pill-partial',   'Credit'];
+            if (derived === 'Paid · Pending Pickup') return ['pill-paid',      'Credit'];
+            if (derived.startsWith('Partial'))       return ['pill-partial',   'Credit · ' + derived.replace(/^Partial\s*·\s*/, '')];
+            return ['pill-paid', 'Credit'];
+        }
+
         if (derived === 'Pending Payment')         return ['pill-pending',   'Unpaid'];
         if (derived === 'Completed')               return ['pill-completed', 'Completed'];
         if (derived === 'Paid · Pending Pickup')   return ['pill-paid',      'Paid'];
@@ -1097,7 +1108,7 @@
         tbody.innerHTML = rows.map((r, idx) => {
             totQty += r.totalQty; totColl += r.totalCollected; totBalance += r.balance; totAmt += (r.totalAmount || 0);
             const orderMonth = r.orderDate ? r.orderDate.toLocaleString('en-MY',{month:'short',year:'numeric'}) : '—';
-            const [pillCls, pillTxt] = pillFor(r.derivedStatus);
+            const [pillCls, pillTxt] = pillFor(r.derivedStatus, r.paymentMethod);
             const cellsHtml = months.map((m, i) => {
                 const collected = r.collectionsByMonth[m.key] || 0;
                 const booked    = r.bookingsByMonth[m.key]    || 0;
@@ -2100,8 +2111,8 @@
         breedToPlots: {},     // breed -> Set of plot_names
         breedTotals: {},      // breed -> {full, collected, balance, batches: Set, plots: Set}
         active: 'all',        // 'all' or nursery name
-        sideTab: 'batch',     // 'batch' or 'breed'
-        selectedBreed: null
+        selectedBreed: null,
+        batchSearch: ''        // lowercase substring to match batch numbers
     };
 
     async function loadInventoryMap() {
@@ -2373,6 +2384,19 @@
         return (_invmap.breedToPlots[_invmap.selectedBreed] || new Set()).has(plotName);
     }
 
+    function plotMatchesBatchSearch(plotName) {
+        const q = (_invmap.batchSearch || '').trim().toLowerCase();
+        if (!q) return true;
+        const list = _invmap.plotBatches[plotName] || [];
+        return list.some(b => String(b.batch).toLowerCase().includes(q));
+    }
+
+    function batchMatchesSearch(batch) {
+        const q = (_invmap.batchSearch || '').trim().toLowerCase();
+        if (!q) return true;
+        return String(batch).toLowerCase().includes(q);
+    }
+
     function renderInvmapPlotsForNursery(nurseryName) {
         const slug   = nurseryName.replace(/\s+/g, '-');
         const svg    = document.getElementById('invmap-svg-' + slug);
@@ -2391,12 +2415,13 @@
             try { pts = JSON.parse(p.map_top); } catch (e) { return; }
             const ptsStr = pts.map(pt => pt.x + ',' + pt.y).join(' ');
 
-            // Restrict to selected breed if active.
+            // Restrict to selected breed + batch search if active.
             let batches = _invmap.plotBatches[p.plot_name] || [];
-            const matches = plotMatchesBreed(p.plot_name);
-            if (_invmap.selectedBreed) {
-                batches = batches.filter(b => b.breed === _invmap.selectedBreed);
-            }
+            const matchesBreed  = plotMatchesBreed(p.plot_name);
+            const matchesSearch = plotMatchesBatchSearch(p.plot_name);
+            const matches = matchesBreed && matchesSearch;
+            if (_invmap.selectedBreed) batches = batches.filter(b => b.breed === _invmap.selectedBreed);
+            if (_invmap.batchSearch)   batches = batches.filter(b => batchMatchesSearch(b.batch));
 
             const totalFull = batches.reduce((s, b) => s + b.full, 0);
             const totalColl = batches.reduce((s, b) => s + b.collected, 0);
@@ -2414,7 +2439,7 @@
                 else if (remainingPct >= 20) { fill = 'rgba(251, 191, 36, .40)';  stroke = '#f59e0b'; }
                 else                         { fill = 'rgba(244, 114, 128, .40)'; stroke = '#ef4444'; }
             }
-            if (_invmap.selectedBreed && !matches) {
+            if (!matches) {
                 fill   = 'rgba(203, 213, 225, .15)';
                 stroke = '#cbd5e1';
             }
@@ -2429,7 +2454,7 @@
             const pctLabel = totalFull > 0
                 ? `<div class="invmap-batch-line" title="Full ${totalFull.toLocaleString()} · Collected ${totalColl.toLocaleString()} · Balance ${totalBal.toLocaleString()}">${pct}% collected</div>`
                 : `<div class="invmap-batch-line empty">No batch</div>`;
-            const dimStyle = _invmap.selectedBreed && !matches ? 'opacity:.35' : '';
+            const dimStyle = !matches ? 'opacity:.35' : '';
             labels.innerHTML += `
                 <div class="invmap-label" style="left:${cx}%; top:${cy}%; ${dimStyle}">
                     <div class="invmap-plot-tag">${p.plot_name}</div>
@@ -2457,6 +2482,7 @@
             if (nursery && !nurseryNames.has(nursery)) return;
             list.forEach(b => {
                 if (_invmap.selectedBreed && b.breed !== _invmap.selectedBreed) return;
+                if (!batchMatchesSearch(b.batch)) return;
                 out.push({ plot, nursery, ...b });
             });
         });
@@ -2553,6 +2579,28 @@
         renderInvmapSidebar();
     }
 
+    // Debounced batch search — keeps typing responsive.
+    let _invmapSearchTimer = null;
+    function onInvmapBatchSearch(v) {
+        _invmap.batchSearch = (v || '').trim();
+        const clr = document.getElementById('invmap-batch-search-clear');
+        if (clr) clr.classList.toggle('hidden', !_invmap.batchSearch);
+        if (_invmapSearchTimer) clearTimeout(_invmapSearchTimer);
+        _invmapSearchTimer = setTimeout(() => {
+            renderInvmapStack();
+            renderInvmapSidebar();
+        }, 120);
+    }
+    function clearInvmapBatchSearch() {
+        const input = document.getElementById('invmap-batch-search');
+        if (input) input.value = '';
+        _invmap.batchSearch = '';
+        const clr = document.getElementById('invmap-batch-search-clear');
+        if (clr) clr.classList.add('hidden');
+        renderInvmapStack();
+        renderInvmapSidebar();
+    }
+
     function openInvmapModal(plotName) {
         const modal = document.getElementById('invmap-modal');
         const titleEl = document.getElementById('invmap-modal-plot');
@@ -2609,6 +2657,8 @@
     window.closeInvmapModal    = closeInvmapModal;
     window.invmapZoom          = invmapZoom;
     window.invmapResetZoom     = invmapResetZoom;
+    window.onInvmapBatchSearch = onInvmapBatchSearch;
+    window.clearInvmapBatchSearch = clearInvmapBatchSearch;
 
     document.getElementById('gearing-slider').addEventListener('input', updateGearing);
     _supabase.auth.getSession().then(({ data: { session } }) => {
