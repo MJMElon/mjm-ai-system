@@ -117,9 +117,26 @@ serve(async (req) => {
         changed_by: 'billplz',
       }])
 
-      // 2. Issue loyalty points (1 point per RM 100)
+      // 2. Issue loyalty points — formula is configurable from admin →
+      //    Points Settings (salesweb_app_settings.key='points_config'):
+      //      points = floor(total / earn_rm) * earn_pts
+      //    The number saved on the order is a snapshot; later changes to
+      //    the rate don't retroactively rewrite past orders.
       const total = Number(existing.total || 0)
-      const points = Math.floor(total / 100)
+      let earnRm = 1, earnPts = 1
+      try {
+        const { data: cfgRow } = await sb
+          .from('salesweb_app_settings')
+          .select('value').eq('key', 'points_config').maybeSingle()
+        if (cfgRow && cfgRow.value) {
+          const cfg = typeof cfgRow.value === 'string'
+            ? JSON.parse(cfgRow.value) : cfgRow.value
+          if (cfg && cfg.earn_rm)  earnRm  = Math.max(0.01, Number(cfg.earn_rm)  || 1)
+          if (cfg && cfg.earn_pts !== undefined) earnPts = Math.max(0, Number(cfg.earn_pts) || 0)
+        }
+      } catch (e) { console.warn('points config load failed, using defaults:', e) }
+
+      const points = Math.floor(total / earnRm) * earnPts
       if (points > 0 && !existing.points_issued) {
         await sb.from('salesweb_customer_orders')
           .update({ points_issued: points })
@@ -127,7 +144,7 @@ serve(async (req) => {
         await sb.from('salesweb_order_timeline').insert([{
           order_id: orderId,
           status: 'Points Issued',
-          note: `${points} loyalty points issued (RM ${total.toFixed(2)} @ 1pt/RM100)`,
+          note: `${points} loyalty points issued (RM ${total.toFixed(2)} @ ${earnPts} pt per RM ${earnRm})`,
           changed_by: 'billplz',
         }])
       }
