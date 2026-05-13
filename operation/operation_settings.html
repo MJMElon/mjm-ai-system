@@ -359,14 +359,15 @@
         // FETCH DATA
         async function fetchData() {
             try {
-                const [breedRes, plotRes, nursRes, batchRes, trayRes] = await Promise.all([
+                const [breedRes, plotRes, nursRes, batchRes, trayRes, silBatchRes] = await Promise.all([
                     _supabase.from('shared_breeds').select('*').order('name'),
                     _supabase.from('shared_plots').select('*'),
                     _supabase.from('operation_nurseries').select('*').order('name'),
                     _supabase.from('operation_batches').select('*'),
-                    _supabase.from('operation_trays').select('*').order('tray_name')
+                    _supabase.from('operation_trays').select('*').order('tray_name'),
+                    _supabase.from('shared_inventory_logs').select('batch_name').eq('transaction_type', 'Seeds_Received')
                 ]);
-                
+
                 if (breedRes.error) throw breedRes.error;
                 if (plotRes.error) throw plotRes.error;
                 if (nursRes.error) throw nursRes.error;
@@ -374,9 +375,21 @@
                 globalBreeds = breedRes.data || [];
                 globalPlots = plotRes.data || [];
                 globalNurseries = nursRes.data || [];
-                globalBatches = batchRes.data || [];
-                globalTrays = trayRes.data || []; 
-                
+
+                // Merge batches from operation_batches with batch_names already
+                // present in shared_inventory_logs (Seeds_Received). The batch
+                // record page reads from shared_inventory_logs, so any historical
+                // batches without a mirror row would otherwise be invisible here.
+                const opsBatches = batchRes.data || [];
+                const opsByName = new Map(opsBatches.map(b => [b.name, b]));
+                const silNames = new Set((silBatchRes.data || []).map(r => r.batch_name).filter(Boolean));
+                silNames.forEach(name => {
+                    if (!opsByName.has(name)) opsByName.set(name, { id: null, name, _silOnly: true });
+                });
+                globalBatches = Array.from(opsByName.values());
+
+                globalTrays = trayRes.data || [];
+
                 globalPlots.sort((a, b) => {
                     let nursCompare = a.nursery_name.localeCompare(b.nursery_name);
                     if (nursCompare !== 0) return nursCompare;
@@ -903,7 +916,42 @@
         }
         function renderBatches() {
             const list = document.getElementById('batches-list'); list.innerHTML = '';
-            globalBatches.forEach(item => list.insertAdjacentHTML('beforeend', `<li class="bg-white p-3 rounded-xl border border-slate-200 flex justify-between items-center text-sm font-bold text-slate-700 shadow-sm transition-all hover:border-emerald-300">${item.name}<button onclick="deleteItem('operation_batches', '${item.id}')" class="text-red-400 hover:bg-red-50 w-6 h-6 rounded-full flex items-center justify-center transition-colors">✕</button></li>`));
+            globalBatches.forEach(item => {
+                const safeName = String(item.name).replace(/'/g, "\\'");
+                list.insertAdjacentHTML('beforeend',
+                    `<li class="bg-white p-3 rounded-xl border border-slate-200 flex justify-between items-center text-sm font-bold text-slate-700 shadow-sm transition-all hover:border-emerald-300">
+                        <span>${item.name}</span>
+                        <button onclick="deleteBatchByName('${safeName}')" title="Remove this batch from Manage Batches AND its records from the Batch Record page" class="text-red-400 hover:bg-red-50 w-6 h-6 rounded-full flex items-center justify-center transition-colors">✕</button>
+                    </li>`);
+            });
+        }
+
+        // Delete a batch by name. Removes the row from operation_batches AND
+        // every shared_inventory_logs row tied to it, so Manage Batches stays
+        // in sync with the Batch Record list.
+        async function deleteBatchByName(name) {
+            const typed = prompt(
+                'Delete batch "' + name + '"?\n\n' +
+                'This permanently removes:\n' +
+                '  • The batch from operation_batches\n' +
+                '  • Every shared_inventory_logs row tied to it\n' +
+                '    (Seeds Received, Planted, Culling, Transplant, Calibration, etc.)\n\n' +
+                'This cannot be undone. Type the batch name to confirm.', '');
+            if (typed !== name) {
+                if (typed !== null) alert('Batch name did not match — delete cancelled.');
+                return;
+            }
+            try {
+                const { error: logErr } = await _supabase
+                    .from('shared_inventory_logs').delete().eq('batch_name', name);
+                if (logErr) throw logErr;
+                const { error: batchErr } = await _supabase
+                    .from('operation_batches').delete().eq('name', name);
+                if (batchErr && !/0 rows/i.test(batchErr.message || '')) throw batchErr;
+                fetchData();
+            } catch (e) {
+                alert('Delete failed: ' + (e.message || e));
+            }
         }
         function renderNurseries() {
             const list = document.getElementById('nurseries-list'); list.innerHTML = '';
@@ -1049,19 +1097,38 @@
             }
         }
         
-        async function addBatch(event) { 
-            const name = document.getElementById('new-batch-name').value.trim().toUpperCase(); 
-            if(!name) return; 
-            
+        async function addBatch(event) {
+            const name = document.getElementById('new-batch-name').value.trim().toUpperCase();
+            if(!name) return;
+
             const btn = event.target;
             const originalText = btn.innerText;
             btn.innerText = 'SAVING...';
             btn.disabled = true;
-            
+
             try {
-                const { error } = await _supabase.from('operation_batches').insert([{ name }]); 
-                if (error) throw error;
-                document.getElementById('new-batch-name').value = ''; 
+                // 1) Master batches table (used by dropdowns + this list).
+                const { error: opsErr } = await _supabase.from('operation_batches').insert([{ name }]);
+                if (opsErr && !/duplicate/i.test(opsErr.message || '')) throw opsErr;
+
+                // 2) Stub Seeds_Received row so the new batch shows up on
+                //    operation_batch_record.html (which reads from shared_inventory_logs).
+                //    The user fills in supplier / breed / qty / date in the batch detail page.
+                const { data: existing } = await _supabase
+                    .from('shared_inventory_logs').select('id')
+                    .eq('transaction_type', 'Seeds_Received').eq('batch_name', name).limit(1);
+                if (!existing || existing.length === 0) {
+                    const { error: silErr } = await _supabase.from('shared_inventory_logs').insert([{
+                        transaction_type: 'Seeds_Received',
+                        batch_name: name,
+                        plot_name: 'Pre-Nursery',
+                        quantity_change: 0,
+                        remark: 'Created via Manage Batches — open in Batch Record to fill in seed supplier, breed, and quantity.'
+                    }]);
+                    if (silErr) throw silErr;
+                }
+
+                document.getElementById('new-batch-name').value = '';
                 fetchData();
             } catch (err) {
                 alert("Database Error:\n" + err.message);
