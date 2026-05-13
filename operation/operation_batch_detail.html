@@ -1309,7 +1309,8 @@
         let globalTrays = [];
         let globalPlots = [];
         let rowMaps = {}; // Store uploaded map previews
-        let trayUsageMap = {}; // { tray_name: 'MJN-2024-001' } — which batch is using each tray
+        let trayUsageMap = {};  // { tray_name: 'MJN-2024-001' } — which batch is using each tray
+        let trayVacantMap = {}; // { tray_name: 1234 } — vacant holes (out of 2,560) for each tray
 
         function switchTab(tabIndex) {
             for(let i = 1; i <= 7; i++) {
@@ -1488,9 +1489,32 @@
                 // Build tray-usage map: which batch is each tray planted in?
                 // Skip trays whose batch's pre-nursery is already emptied so the tray frees up.
                 trayUsageMap = {};
+                const plantedByTrayBatch = {}; // { tray: { batch: qty } }
                 (usedTrayRes.data || []).forEach(log => {
+                    if (!plantedByTrayBatch[log.plot_name]) plantedByTrayBatch[log.plot_name] = {};
+                    plantedByTrayBatch[log.plot_name][log.batch_name] =
+                        (plantedByTrayBatch[log.plot_name][log.batch_name] || 0) + (log.quantity_change || 0);
                     if (batchPnEmptied(log.batch_name)) return;
                     trayUsageMap[log.plot_name] = log.batch_name;
+                });
+
+                // Per-tray vacant balance (2,560 − seeds currently sitting in the tray).
+                // For each occupying batch, the seeds still left in PN are distributed across
+                // its trays in proportion to how many were originally planted there.
+                trayVacantMap = {};
+                const TRAY_CAP = 2560;
+                globalTrays.forEach(t => {
+                    const occupier = trayUsageMap[t.tray_name];
+                    if (!occupier) { trayVacantMap[t.tray_name] = TRAY_CAP; return; }
+                    const plantedInTray   = (plantedByTrayBatch[t.tray_name] || {})[occupier] || 0;
+                    const plantedForBatch = plantedByBatch[occupier] || 0;
+                    const outflowForBatch = (transplantedByBatch[occupier] || 0) + (cull1ByBatch[occupier] || 0);
+                    const remainingForBatch = Math.max(0, plantedForBatch - outflowForBatch);
+                    const remainingInTray = plantedForBatch > 0
+                        ? Math.round(remainingForBatch * (plantedInTray / plantedForBatch))
+                        : 0;
+                    const inUse = Math.min(TRAY_CAP, remainingInTray);
+                    trayVacantMap[t.tray_name] = Math.max(0, TRAY_CAP - inUse);
                 });
                 
                 // NATURAL ALPHANUMERIC SORTING FOR PLOTS (B2 comes before B10)
@@ -2642,17 +2666,16 @@
                 for (const nurs in grouped) {
                     html += `<optgroup label="${nurs}">`;
                     grouped[nurs].forEach(tray => {
+                        const vacant = trayVacantMap[tray.tray_name] != null ? trayVacantMap[tray.tray_name] : 2560;
                         const usedBy = trayUsageMap[tray.tray_name];
-                        let status, disabled = '';
-                        if (!usedBy) {
-                            status = '🟢 Vacant';
-                        } else if (usedBy === currentBatch) {
-                            status = '✅ This batch';
-                        } else {
-                            status = `🔴 In use: ${usedBy}`;
-                            disabled = 'disabled';
-                        }
-                        html += `<option value="${tray.tray_name}" ${disabled}>${tray.tray_name} — ${status}</option>`;
+                        // Disable: no vacant holes left, OR another batch is mid-cycle in this tray.
+                        const blockOther = usedBy && usedBy !== currentBatch;
+                        const disabled = (vacant === 0 || blockOther) ? 'disabled' : '';
+                        // Color: red at 0, green otherwise (transplants free holes → green).
+                        const colorHex = vacant === 0 ? '#a83020' : '#15803d';
+                        const dot      = vacant === 0 ? '🔴' : '🟢';
+                        const label    = `${dot} Vacant: ${vacant.toLocaleString()}`;
+                        html += `<option value="${tray.tray_name}" ${disabled} style="color:${colorHex};">${tray.tray_name} — ${label}</option>`;
                     });
                     html += `</optgroup>`;
                 }
@@ -2728,10 +2751,15 @@
                 return;
             }
 
-            // Use cached trayUsageMap (loaded at init, no extra DB call needed)
+            // Use cached trayUsageMap + trayVacantMap (no extra DB call needed)
             const usedBy = trayUsageMap[trayName];
-            if (usedBy && usedBy !== currentBatch) {
-                warnEl.querySelector('span').innerText = `In use by batch ${usedBy} — not vacant`;
+            const vacant = trayVacantMap[trayName] != null ? trayVacantMap[trayName] : 2560;
+            if (vacant === 0) {
+                warnEl.querySelector('span').innerText = 'No vacant holes — tray is full';
+                warnEl.classList.remove('hidden');
+                sel.classList.add('!border-[#a83020]');
+            } else if (usedBy && usedBy !== currentBatch) {
+                warnEl.querySelector('span').innerText = `Vacant: ${vacant.toLocaleString()} — partially used, finish the other batch first`;
                 warnEl.classList.remove('hidden');
                 sel.classList.add('!border-[#c07820]');
             } else {
