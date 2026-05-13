@@ -1255,32 +1255,40 @@
     }
 
     let _ssmStockLoaded = false;
+    let _ssmMapLoaded   = false;
 
     function switchSsmTab(tab) {
         const customerPane = document.getElementById('ssm-pane-customer');
         const stockPane    = document.getElementById('ssm-pane-stock');
+        const mapPane      = document.getElementById('ssm-pane-map');
         const customerBtn  = document.getElementById('ssm-tab-customer');
         const stockBtn     = document.getElementById('ssm-tab-stock');
+        const mapBtn       = document.getElementById('ssm-tab-map');
         const fab          = document.getElementById('alloc-fab');
         const drawer       = document.getElementById('alloc-drawer');
 
+        // Hide all panes + clear tab actives, then activate selected.
+        customerPane.classList.add('hidden');
+        stockPane.classList.add('hidden');
+        if (mapPane) mapPane.classList.add('hidden');
+        customerBtn.classList.remove('active');
+        stockBtn.classList.remove('active');
+        if (mapBtn) mapBtn.classList.remove('active');
+        if (fab) fab.classList.add('hidden-fab');
+        if (drawer) drawer.classList.remove('open');
+
         if (tab === 'stock') {
-            customerPane.classList.add('hidden');
             stockPane.classList.remove('hidden');
-            customerBtn.classList.remove('active');
             stockBtn.classList.add('active');
             if (fab) fab.classList.remove('hidden-fab');
-            if (!_ssmStockLoaded) {
-                _ssmStockLoaded = true;
-                loadCapacityHeatmap();
-            }
+            if (!_ssmStockLoaded) { _ssmStockLoaded = true; loadCapacityHeatmap(); }
+        } else if (tab === 'map') {
+            if (mapPane) mapPane.classList.remove('hidden');
+            if (mapBtn) mapBtn.classList.add('active');
+            if (!_ssmMapLoaded) { _ssmMapLoaded = true; loadInventoryMap(); }
         } else {
-            stockPane.classList.add('hidden');
             customerPane.classList.remove('hidden');
-            stockBtn.classList.remove('active');
             customerBtn.classList.add('active');
-            if (fab)    fab.classList.add('hidden-fab');
-            if (drawer) drawer.classList.remove('open');
         }
     }
 
@@ -2067,6 +2075,233 @@
     }
 
     window.removeAllocation = removeAllocation;
+
+    // ── INVENTORY MAP TAB ────────────────────────────────────────────────────
+    // Renders the nursery map with per-plot batch breakdowns:
+    //   Full qty       = Σ Transplanted-type quantity_change per (batch, plot)
+    //   Collected qty  = Σ collection_qty from shared_collection_bookings where
+    //                    status='completed', matched by plot_name + batch_name
+    //                    (or just plot_name when the booking has no batch_name)
+    //   Balance        = Full − Collected (floored at 0)
+    let _invmap = {
+        nurseries: [],
+        plots: [],
+        plotBatches: {}, // plot_name -> [{batch, full, collected, balance}]
+        active: null
+    };
+
+    async function loadInventoryMap() {
+        const tabBar = document.getElementById('invmap-nursery-tabs');
+        try {
+            const [nursRes, plotsRes, transRes, bookRes] = await Promise.all([
+                _supabase.from('operation_nurseries').select('*').order('name'),
+                _supabase.from('shared_plots').select('*'),
+                _supabase.from('shared_inventory_logs')
+                    .select('batch_name,plot_name,quantity_change')
+                    .in('transaction_type', ['Transplanted','Transplanted_Premium','Transplanted_DoubleTone']),
+                _supabase.from('shared_collection_bookings')
+                    .select('plot_name,nursery_name,batch_name,collection_qty,status')
+                    .eq('status', 'completed')
+            ]);
+
+            _invmap.nurseries = nursRes.data || [];
+            _invmap.plots     = plotsRes.data || [];
+
+            // Aggregate full qty per (plot, batch) from Transplanted logs.
+            const fullByPlotBatch = {};
+            (transRes.data || []).forEach(l => {
+                if (!l.plot_name || !l.batch_name) return;
+                const key = l.plot_name + '|' + l.batch_name;
+                fullByPlotBatch[key] = (fullByPlotBatch[key] || 0) + (l.quantity_change || 0);
+            });
+
+            // Collected qty from completed collection bookings. If the booking
+            // is plot-specific AND batch-specific, attribute to that pair;
+            // otherwise spread across the plot's batches proportionally.
+            const collectedByPlotBatch = {};
+            const collectedByPlot      = {};
+            (bookRes.data || []).forEach(b => {
+                if (!b.plot_name) return;
+                const qty = Number(b.collection_qty) || 0;
+                if (b.batch_name) {
+                    const key = b.plot_name + '|' + b.batch_name;
+                    collectedByPlotBatch[key] = (collectedByPlotBatch[key] || 0) + qty;
+                } else {
+                    collectedByPlot[b.plot_name] = (collectedByPlot[b.plot_name] || 0) + qty;
+                }
+            });
+
+            // Build plot -> batches map.
+            const plotBatches = {};
+            Object.keys(fullByPlotBatch).forEach(key => {
+                const [plot, batch] = key.split('|');
+                const full = fullByPlotBatch[key] || 0;
+                if (!plotBatches[plot]) plotBatches[plot] = [];
+                plotBatches[plot].push({ batch, full, collected: collectedByPlotBatch[key] || 0, balance: 0 });
+            });
+            // Distribute plot-level (no-batch) collected qty proportionally across batches.
+            Object.entries(plotBatches).forEach(([plot, list]) => {
+                const remaining = collectedByPlot[plot] || 0;
+                if (remaining > 0 && list.length) {
+                    const totalFull = list.reduce((s, b) => s + Math.max(0, b.full - b.collected), 0);
+                    if (totalFull > 0) {
+                        list.forEach(b => {
+                            const avail = Math.max(0, b.full - b.collected);
+                            const share = Math.round(remaining * (avail / totalFull));
+                            b.collected += share;
+                        });
+                    }
+                }
+                list.forEach(b => { b.balance = Math.max(0, b.full - b.collected); });
+                list.sort((a,b) => b.balance - a.balance);
+            });
+            _invmap.plotBatches = plotBatches;
+
+            // Render nursery tabs.
+            tabBar.innerHTML = '';
+            if (!_invmap.nurseries.length) {
+                tabBar.innerHTML = '<span class="text-[10px] font-bold text-slate-400 p-3">No nurseries configured</span>';
+                return;
+            }
+            _invmap.nurseries.forEach(n => {
+                const btn = document.createElement('button');
+                btn.className = 'invmap-tab-btn';
+                btn.id = 'invmap-tab-' + n.name.replace(/\s+/g, '-');
+                btn.innerText = '🏠 ' + n.name;
+                btn.onclick = () => switchInvmapNursery(n.name);
+                tabBar.appendChild(btn);
+            });
+            switchInvmapNursery(_invmap.nurseries[0].name);
+        } catch (e) {
+            console.error('[InventoryMap] load failed:', e);
+            tabBar.innerHTML = '<span class="text-[10px] font-bold text-rose-500 p-3">Failed to load: ' + (e.message || e) + '</span>';
+        }
+    }
+
+    function switchInvmapNursery(name) {
+        _invmap.active = name;
+        document.querySelectorAll('.invmap-tab-btn').forEach(b => b.classList.remove('active'));
+        const btn = document.getElementById('invmap-tab-' + name.replace(/\s+/g, '-'));
+        if (btn) btn.classList.add('active');
+
+        const nursery = _invmap.nurseries.find(n => n.name === name);
+        const canvas  = document.getElementById('invmap-canvas');
+        const empty   = document.getElementById('invmap-empty');
+        const img     = document.getElementById('invmap-image');
+
+        if (nursery && nursery.map_image_url) {
+            img.src = nursery.map_image_url;
+            canvas.classList.remove('hidden');
+            empty.classList.add('hidden');
+            renderInvmapPlots(name);
+        } else {
+            canvas.classList.add('hidden');
+            empty.classList.remove('hidden');
+        }
+    }
+
+    function renderInvmapPlots(nurseryName) {
+        const svg    = document.getElementById('invmap-svg');
+        const labels = document.getElementById('invmap-labels');
+        svg.innerHTML = '';
+        labels.innerHTML = '';
+
+        const fmt = (n) => Number(n||0).toLocaleString();
+        const plots = _invmap.plots.filter(p => p.nursery_name === nurseryName);
+
+        plots.forEach(p => {
+            if (!p.map_top || !p.map_top.startsWith('[')) return;
+            let pts;
+            try { pts = JSON.parse(p.map_top); } catch (e) { return; }
+            const ptsStr = pts.map(pt => pt.x + ',' + pt.y).join(' ');
+
+            const batches = _invmap.plotBatches[p.plot_name] || [];
+            const totalBal = batches.reduce((s, b) => s + b.balance, 0);
+            const totalFull = batches.reduce((s, b) => s + b.full, 0);
+            const lowThreshold = totalFull > 0 ? totalFull * 0.2 : 0;
+
+            // Plot colour by balance state.
+            let fill = 'rgba(148, 163, 184, .25)', stroke = '#94a3b8';
+            if (totalBal > lowThreshold) { fill = 'rgba(74, 222, 128, .35)'; stroke = '#22c55e'; }
+            else if (totalBal > 0)       { fill = 'rgba(251, 191, 36, .35)'; stroke = '#f59e0b'; }
+
+            const safePlot = p.plot_name.replace(/'/g, "\\'");
+            svg.innerHTML += `<polygon points="${ptsStr}" fill="${fill}" stroke="${stroke}" stroke-width=".4" class="invmap-plot-shape" onclick="openInvmapModal('${safePlot}')"/>`;
+
+            const cx = pts.reduce((s, pt) => s + pt.x, 0) / pts.length;
+            const cy = pts.reduce((s, pt) => s + pt.y, 0) / pts.length;
+
+            // Label: plot name + up to 2 batches inline + "+N more" if needed.
+            const top = batches.slice(0, 2);
+            const more = batches.length - top.length;
+            let batchHtml = '';
+            if (top.length === 0) {
+                batchHtml = '<div class="invmap-batch-line empty">No batch</div>';
+            } else {
+                batchHtml = top.map(b =>
+                    `<div class="invmap-batch-line" title="Batch ${b.batch} — Full ${fmt(b.full)} · Collected ${fmt(b.collected)} · Balance ${fmt(b.balance)}">
+                        #${b.batch} · ${fmt(b.balance)}<span style="opacity:.55">/${fmt(b.full)}</span>
+                    </div>`).join('');
+                if (more > 0) batchHtml += `<div class="invmap-batch-line" style="opacity:.7">+${more} more</div>`;
+            }
+
+            labels.innerHTML += `
+                <div class="invmap-label" style="left:${cx}%; top:${cy}%;">
+                    <div class="invmap-plot-tag">${p.plot_name}</div>
+                    ${batchHtml}
+                </div>`;
+        });
+    }
+
+    function openInvmapModal(plotName) {
+        const modal = document.getElementById('invmap-modal');
+        const titleEl = document.getElementById('invmap-modal-plot');
+        const body = document.getElementById('invmap-modal-body');
+        const fmt = (n) => Number(n||0).toLocaleString();
+        titleEl.innerText = plotName;
+        const batches = _invmap.plotBatches[plotName] || [];
+        if (!batches.length) {
+            body.innerHTML = '<div class="text-center py-8 text-slate-400 text-xs font-bold uppercase tracking-widest">No batch records for this plot yet.</div>';
+        } else {
+            const totFull = batches.reduce((s,b)=>s+b.full,0);
+            const totColl = batches.reduce((s,b)=>s+b.collected,0);
+            const totBal  = batches.reduce((s,b)=>s+b.balance,0);
+            body.innerHTML = `
+                <div class="grid grid-cols-3 gap-2 mb-4">
+                    <div class="bg-slate-50 rounded-lg p-3 text-center"><div class="text-[9px] font-bold text-slate-400 uppercase">Full</div><div class="text-xl font-black text-slate-800">${fmt(totFull)}</div></div>
+                    <div class="bg-blue-50 rounded-lg p-3 text-center"><div class="text-[9px] font-bold text-blue-400 uppercase">Collected</div><div class="text-xl font-black text-blue-700">${fmt(totColl)}</div></div>
+                    <div class="bg-emerald-50 rounded-lg p-3 text-center"><div class="text-[9px] font-bold text-emerald-500 uppercase">Balance</div><div class="text-xl font-black text-emerald-700">${fmt(totBal)}</div></div>
+                </div>
+                <table class="w-full text-left">
+                    <thead><tr class="border-b border-slate-200">
+                        <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Batch</th>
+                        <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Full</th>
+                        <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Collected</th>
+                        <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Balance</th>
+                    </tr></thead>
+                    <tbody>${batches.map(b => `
+                        <tr class="border-b border-slate-50">
+                            <td class="py-2 text-sm font-black text-slate-800">#${b.batch}</td>
+                            <td class="py-2 text-sm text-right tabular-nums">${fmt(b.full)}</td>
+                            <td class="py-2 text-sm text-right tabular-nums text-blue-700">${fmt(b.collected)}</td>
+                            <td class="py-2 text-sm text-right tabular-nums font-black ${b.balance > 0 ? 'text-emerald-700' : 'text-slate-400'}">${fmt(b.balance)}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>`;
+        }
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeInvmapModal() {
+        const modal = document.getElementById('invmap-modal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+
+    window.switchInvmapNursery = switchInvmapNursery;
+    window.openInvmapModal     = openInvmapModal;
+    window.closeInvmapModal    = closeInvmapModal;
 
     document.getElementById('gearing-slider').addEventListener('input', updateGearing);
     _supabase.auth.getSession().then(({ data: { session } }) => {

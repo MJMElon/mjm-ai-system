@@ -276,6 +276,17 @@
         .reserv-chip-x:hover{background:#fca5a5;color:white;}
         .reserv-empty{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;border:1.5px dashed #cbd5e1;border-radius:9px;background:#fafbfc;font-size:9px;color:#94a3b8;font-weight:900;text-transform:uppercase;letter-spacing:.08em;}
         .reserv-empty-emoji{font-size:11px;line-height:1;}
+
+        /* Inventory map plot labels */
+        .invmap-plot-shape{transition:all .2s ease-in-out;cursor:pointer;}
+        .invmap-plot-shape:hover{fill:rgba(250,204,21,.55)!important;stroke-width:.6!important;}
+        .invmap-label{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;text-align:center;pointer-events:none;max-width:140px;}
+        .invmap-plot-tag{font-size:10px;font-weight:900;background:white;padding:2px 7px;border-radius:6px;color:#1e293b;margin-bottom:2px;box-shadow:0 2px 6px rgba(0,0,0,.18);text-transform:uppercase;border:1px solid #cbd5e1;letter-spacing:.04em;}
+        .invmap-batch-line{font-size:9px;font-weight:800;line-height:1.15;color:#1e293b;background:rgba(255,255,255,.85);padding:1px 5px;border-radius:4px;margin-top:1px;white-space:nowrap;text-shadow:0 1px 1px rgba(255,255,255,.9);}
+        .invmap-batch-line.empty{color:#94a3b8;font-weight:700;background:transparent;}
+        .invmap-tab-btn{padding:8px 18px;font-weight:900;font-size:11px;text-transform:uppercase;letter-spacing:.08em;border-radius:12px;transition:all .2s;color:#64748b;background:white;border:1.5px solid transparent;white-space:nowrap;cursor:pointer;}
+        .invmap-tab-btn:hover{background:#dbeafe;color:#1d4ed8;}
+        .invmap-tab-btn.active{background:#3b82f6;color:white;border-color:#2563eb;box-shadow:0 4px 10px -2px rgba(59,130,246,.45);}
     </style>
 </head>
 <body>
@@ -306,6 +317,10 @@
         <button class="ssm-tab stock" id="ssm-tab-stock" onclick="switchSsmTab('stock')">
             <span class="ssm-tab-emoji">🌱</span>
             <span><div>Stock Allocation</div><div class="ssm-tab-sub">Matured, plots, gearing</div></span>
+        </button>
+        <button class="ssm-tab map" id="ssm-tab-map" onclick="switchSsmTab('map')">
+            <span class="ssm-tab-emoji">🗺️</span>
+            <span><div>Inventory Map</div><div class="ssm-tab-sub">Plot batches, collected, balance</div></span>
         </button>
     </div>
 
@@ -688,6 +703,59 @@
     </div>
     <!-- /CUSTOMER PANE -->
 
+    <!-- ══════════════ INVENTORY MAP PANE ══════════════ -->
+    <div id="ssm-pane-map" class="hidden space-y-5">
+        <div class="metric-card border-l-4 border-blue-500 relative overflow-hidden">
+            <div class="px-4 pt-4 pb-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <div class="text-base font-black text-slate-700 uppercase tracking-widest">Inventory Map</div>
+                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Per-plot batches · full / collected / balance</div>
+                </div>
+                <span class="bg-blue-100 text-blue-700 font-bold text-[10px] px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5"><div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div> Live</span>
+            </div>
+
+            <div class="p-4">
+                <div id="invmap-nursery-tabs" class="bg-slate-100 p-2 rounded-2xl flex gap-2 mb-4 overflow-x-auto border border-slate-200">
+                    <span id="invmap-loading-tabs" class="text-[10px] font-bold text-slate-400 p-3 animate-pulse">Loading nurseries…</span>
+                </div>
+
+                <div id="invmap-container" class="relative w-full bg-slate-100 rounded-2xl overflow-hidden border-4 border-white shadow-inner flex items-center justify-center" style="min-height:520px; height:65vh;">
+                    <div id="invmap-canvas" class="hidden relative inline-block max-h-full max-w-full">
+                        <img id="invmap-image" alt="Nursery map" style="max-height:calc(65vh - 16px); width:auto; object-fit:contain; display:block;">
+                        <svg id="invmap-svg" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%;"></svg>
+                        <div id="invmap-labels" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;"></div>
+                    </div>
+                    <div id="invmap-empty" class="flex flex-col items-center justify-center text-slate-400 gap-3 py-12">
+                        <svg class="w-12 h-12 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+                        <span class="font-bold uppercase tracking-widest text-[10px]">No map uploaded for this nursery yet</span>
+                    </div>
+                </div>
+
+                <div class="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    <span class="text-slate-600">Legend:</span>
+                    <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded bg-emerald-400/30 border border-emerald-500"></span>Has balance</span>
+                    <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded bg-amber-400/30 border border-amber-500"></span>Low balance</span>
+                    <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded bg-slate-300/40 border border-slate-400"></span>Empty / no batch</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- /INVENTORY MAP PANE -->
+
+</div>
+
+<!-- ══════════════ Plot details modal (Inventory Map) ══════════════ -->
+<div id="invmap-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-4" onclick="if(event.target===this)closeInvmapModal()">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <div>
+                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Plot</div>
+                <div class="text-lg font-black text-slate-800" id="invmap-modal-plot">—</div>
+            </div>
+            <button onclick="closeInvmapModal()" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">×</button>
+        </div>
+        <div class="p-5" id="invmap-modal-body"></div>
+    </div>
 </div>
 
 <!-- ══════════════ Allocation drawer (Stock tab only) ══════════════ -->
