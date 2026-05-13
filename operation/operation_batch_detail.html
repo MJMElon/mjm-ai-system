@@ -3378,16 +3378,49 @@
             ]
         };
 
+        // Breed names in shared_breeds may differ from catalogue keys in
+        // casing / spacing / punctuation / a trailing "Hybrid" word — make the
+        // lookup forgiving so the supplier dropdown still populates correctly.
+        function _normBreed(s) {
+            return (s || '').toLowerCase()
+                .replace(/[^a-z0-9 ]/g, ' ')   // strip punctuation
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+        const _BREED_SUPPLIER_INDEX = {};
+        Object.entries(BREED_SUPPLIERS).forEach(([k, v]) => { _BREED_SUPPLIER_INDEX[_normBreed(k)] = v; });
+
+        function suppliersForBreed(breed) {
+            const norm = _normBreed(breed);
+            if (!norm) return null;
+            if (_BREED_SUPPLIER_INDEX[norm]) return _BREED_SUPPLIER_INDEX[norm];
+            // Fallback: ignore optional trailing "hybrid" + try prefix match
+            const stripped = norm.replace(/\bhybrid\b/g, '').replace(/\s+/g, ' ').trim();
+            for (const key of Object.keys(_BREED_SUPPLIER_INDEX)) {
+                const k2 = key.replace(/\bhybrid\b/g, '').replace(/\s+/g, ' ').trim();
+                if (k2 && (k2 === stripped || k2.startsWith(stripped) || stripped.startsWith(k2))) {
+                    return _BREED_SUPPLIER_INDEX[key];
+                }
+            }
+            return null; // null = no catalogue entry for this breed
+        }
+
         function syncSupplierOptions(keep) {
             const sel = document.getElementById('f-supplier');
             if (!sel) return;
             const breed = document.getElementById('f-brand').value;
-            const list  = BREED_SUPPLIERS[breed] || [];
             const prev  = keep != null ? keep : sel.value;
             if (!breed) {
-                // Strict cascade — no breed picked yet, no suppliers to show.
                 sel.innerHTML = '<option value="">Select breed first…</option>';
                 sel.value = '';
+                syncMpobOptions();
+                return;
+            }
+            const list = suppliersForBreed(breed);
+            if (!list) {
+                sel.innerHTML = `<option value="">No MPOB-licensed suppliers configured for "${breed}"</option>`;
+                sel.value = '';
+                console.warn('[BREED_SUPPLIERS] no entry for breed:', JSON.stringify(breed));
                 syncMpobOptions();
                 return;
             }
@@ -3412,14 +3445,14 @@
             const supplier = document.getElementById('f-supplier').value;
             const prev     = keep != null ? keep : sel.value;
             if (!supplier) {
-                // Strict cascade — no supplier picked yet, no MPOB licenses to show.
                 sel.innerHTML = '<option value="">Select supplier first…</option>';
                 sel.value = '';
                 return;
             }
             sel.innerHTML = '<option value="">Select MPOB license...</option>';
-            const list = (BREED_SUPPLIERS[breed] || []).filter(s => s.supplier === supplier);
-            const licenses = Array.from(new Set(list.flatMap(e => e.mpob)));
+            const breedList = suppliersForBreed(breed) || [];
+            const matched   = breedList.filter(s => s.supplier === supplier);
+            const licenses  = Array.from(new Set(matched.flatMap(e => e.mpob)));
             licenses.forEach(lic => {
                 const opt = document.createElement('option');
                 opt.value = lic; opt.innerText = lic;
