@@ -92,26 +92,113 @@ serve(async (req) => {
     const sb = createClient(supabaseUrl, supabaseKey)
 
     if (paid) {
-      // Idempotency: if already confirmed, skip duplicate timeline entries
+      // Idempotency: if already Paid, skip duplicate side effects
       const { data: existing } = await sb
         .from('salesweb_customer_orders')
-        .select('status')
+        .select('id, order_number, customer_name, customer_email, status, total, points_issued')
         .eq('id', orderId)
         .maybeSingle()
-      if (existing?.status === 'Order Confirmed') {
-        return new Response('OK (already confirmed)', { status: 200 })
+      if (!existing) {
+        return new Response('Order not found', { status: 404 })
+      }
+      if (existing.status === 'Paid') {
+        return new Response('OK (already paid)', { status: 200 })
       }
 
+      // 1. Flip order to Paid status
       await sb.from('salesweb_customer_orders')
-        .update({ status: 'Order Confirmed' })
+        .update({ status: 'Paid', updated_at: new Date().toISOString() })
         .eq('id', orderId)
 
       await sb.from('salesweb_order_timeline').insert([{
         order_id: orderId,
-        status: 'Payment Confirmed',
+        status: 'Paid',
         note: `Online payment confirmed via Billplz (Bill: ${billId}, Paid at: ${paidAt})`,
         changed_by: 'billplz',
       }])
+
+      // 2. Issue loyalty points — formula is configurable from admin →
+      //    Points Settings (salesweb_app_settings.key='points_config'):
+      //      points = floor(total / earn_rm) * earn_pts
+      //    The number saved on the order is a snapshot; later changes to
+      //    the rate don't retroactively rewrite past orders.
+      const total = Number(existing.total || 0)
+      let earnRm = 1, earnPts = 1
+      try {
+        const { data: cfgRow } = await sb
+          .from('salesweb_app_settings')
+          .select('value').eq('key', 'points_config').maybeSingle()
+        if (cfgRow && cfgRow.value) {
+          const cfg = typeof cfgRow.value === 'string'
+            ? JSON.parse(cfgRow.value) : cfgRow.value
+          if (cfg && cfg.earn_rm)  earnRm  = Math.max(0.01, Number(cfg.earn_rm)  || 1)
+          if (cfg && cfg.earn_pts !== undefined) earnPts = Math.max(0, Number(cfg.earn_pts) || 0)
+        }
+      } catch (e) { console.warn('points config load failed, using defaults:', e) }
+
+      const points = Math.floor(total / earnRm) * earnPts
+      if (points > 0 && !existing.points_issued) {
+        await sb.from('salesweb_customer_orders')
+          .update({ points_issued: points })
+          .eq('id', orderId)
+        await sb.from('salesweb_order_timeline').insert([{
+          order_id: orderId,
+          status: 'Points Issued',
+          note: `${points} loyalty points issued (RM ${total.toFixed(2)} @ ${earnPts} pt per RM ${earnRm})`,
+          changed_by: 'billplz',
+        }])
+      }
+
+      // 3. Auto-create AL (Acknowledgement Letter) in nursery system
+      const alNumber = existing.order_number
+      if (alNumber) {
+        const { data: existingAL } = await sb
+          .from('shared_al_orders')
+          .select('id')
+          .eq('al_number', alNumber)
+          .maybeSingle()
+
+        if (!existingAL) {
+          const { data: items } = await sb
+            .from('salesweb_order_items')
+            .select('product_name, quantity, unit_price')
+            .eq('order_id', orderId)
+          const lines = items || []
+          const totalQty = lines.reduce((s: number, it: any) => s + Number(it.quantity || 0), 0)
+          const productNames = lines.map((it: any) => it.product_name).join(', ')
+          const unitPrice = totalQty > 0 ? Math.round((total / totalQty) * 100) / 100 : 0
+
+          const { error: alErr } = await sb.from('shared_al_orders').insert([{
+            al_number: alNumber,
+            order_number: alNumber,
+            order_date: new Date().toISOString(),
+            customer_name: existing.customer_name || '',
+            product_name: productNames || 'Oil Palm Seedling',
+            quantity_ordered: totalQty,
+            balance_quantity: totalQty,
+            price_per_unit: unitPrice,
+            status: 'Verified',
+            remark: `Auto-generated from Sales Web Order #${alNumber} (Billplz ${billId})`,
+          }])
+
+          if (alErr) {
+            console.error('AL creation error:', alErr)
+            await sb.from('salesweb_order_timeline').insert([{
+              order_id: orderId,
+              status: 'AL Creation Failed',
+              note: `Could not auto-create AL: ${alErr.message}`,
+              changed_by: 'billplz',
+            }])
+          } else {
+            await sb.from('salesweb_order_timeline').insert([{
+              order_id: orderId,
+              status: 'AL Created',
+              note: `Acknowledgement Letter ${alNumber} auto-created in nursery system`,
+              changed_by: 'billplz',
+            }])
+          }
+        }
+      }
     } else {
       await sb.from('salesweb_order_timeline').insert([{
         order_id: orderId,
