@@ -290,9 +290,9 @@
                             <div class="completion-pie-container"><div id="t6-pie-tab" class="completion-pie completion-pie-fill" style="--percentage: 0"></div><div class="completion-pie-cover"></div></div>
                             3rd Culling
                         </button>
-                        <button id="tab-btn-7" class="stage-tab-btn stage-tab-inactive" onclick="switchTab(7)" title="Field-audit records linked to this batch">
+                        <button id="tab-btn-7" class="stage-tab-btn stage-tab-inactive" onclick="switchTab(7)" title="Stock calibration adjustments and field-audit records linked to this batch">
                             <div class="completion-pie-container"><div id="t7-pie-tab" class="completion-pie completion-pie-fill" style="--percentage: 0"></div><div class="completion-pie-cover"></div></div>
-                            Audit Trail
+                            Adjustments &amp; Audit
                         </button>
                         </div>
                     </div>
@@ -1223,8 +1223,53 @@
 
                         </div>
 
-                        <!-- ══ TAB 7: Audit Trail (read-only) ══ -->
+                        <!-- ══ TAB 7: Adjustments & Audit ══ -->
                         <div id="tab-7" class="tab-content">
+
+                            <!-- ── Stock Calibration section ── -->
+                            <div class="mb-8 rounded-2xl bg-white border-2 border-[#e8dcc8] shadow-sm overflow-hidden">
+                                <div class="px-6 py-4 bg-gradient-to-r from-[#fdf6e8] to-[#fbeed1] border-b-2 border-amber-100">
+                                    <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Stock Calibration</h3>
+                                    <p class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1">Add or subtract stock without touching the lifecycle tabs. Use this to reconcile a manual count against the system total.</p>
+                                </div>
+                                <div class="p-6 space-y-4">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div class="rounded-xl bg-[#fdfaf4] border border-[#e8dcc8] p-3">
+                                            <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Net Calibration</div>
+                                            <div class="text-2xl font-black text-[#3d2610] mt-1" id="t7-cal-net">0</div>
+                                        </div>
+                                        <div class="rounded-xl bg-emerald-50 border border-emerald-200 p-3">
+                                            <div class="text-[9px] font-black text-emerald-700 uppercase tracking-widest">Total Added</div>
+                                            <div class="text-2xl font-black text-emerald-700 mt-1" id="t7-cal-added">0</div>
+                                        </div>
+                                        <div class="rounded-xl bg-rose-50 border border-rose-200 p-3">
+                                            <div class="text-[9px] font-black text-rose-700 uppercase tracking-widest">Total Removed</div>
+                                            <div class="text-2xl font-black text-rose-700 mt-1" id="t7-cal-removed">0</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 md:grid-cols-[180px_1fr_auto] gap-3 items-end pt-2">
+                                        <div>
+                                            <label class="label-style">Adjustment Qty (+/-)</label>
+                                            <input type="number" id="t7-cal-qty" class="input-style" placeholder="e.g. 50 or -20" step="1">
+                                        </div>
+                                        <div>
+                                            <label class="label-style">Reason (required)</label>
+                                            <input type="text" id="t7-cal-reason" class="input-style" placeholder="e.g. Manual count: 50 extra seedlings in plot A">
+                                        </div>
+                                        <button type="button" id="t7-cal-save-btn" onclick="saveCalibration()" class="px-6 py-3 rounded-xl bg-[#3d2610] text-white font-black uppercase tracking-widest text-xs hover:bg-[#5a3a1a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Save Adjustment</button>
+                                    </div>
+
+                                    <div class="pt-2">
+                                        <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">Adjustment History</div>
+                                        <div id="t7-cal-history" class="overflow-x-auto rounded-xl border border-[#e8dcc8]">
+                                            <div class="text-center p-6 text-[#8a7a68] text-xs">No calibration adjustments recorded for this batch yet.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ── Audit Trail section (existing) ── -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-amber-100 pb-5">
                                 <div>
                                     <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Audit Trail — Field Verification</h3>
@@ -1330,11 +1375,14 @@
             if(tabIndex === 7) syncTab7();
         }
 
-        // ── TAB 7: Audit Trail (read-only) ──────────────────────────────
+        // ── TAB 7: Adjustments & Audit ──────────────────────────────────
         async function syncTab7() {
             const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
             const container = document.getElementById('t7-rows-container');
             const setStat = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
+
+            // Calibration section loads regardless of audit-record state
+            renderCalibrationHistory(batchId);
 
             if (!batchId) {
                 container.innerHTML = '<div class="text-center p-10 text-[#8a7a68]"><div class="text-3xl mb-2">⏳</div><div class="text-xs font-black uppercase tracking-widest">Save Tab 1 first to assign a batch number — audit records will appear here once auditors record heights.</div></div>';
@@ -1431,6 +1479,92 @@
             const d = new Date(iso);
             if (isNaN(d)) return iso;
             return d.toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+
+        // ── TAB 7: Stock Calibration ─────────────────────────────────────
+        async function renderCalibrationHistory(batchId) {
+            const histEl = document.getElementById('t7-cal-history');
+            const setStat = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
+            if (!histEl) return;
+            if (!batchId) {
+                histEl.innerHTML = '<div class="text-center p-6 text-[#8a7a68] text-xs">Save Tab 1 first to assign a batch number, then calibration adjustments can be recorded here.</div>';
+                setStat('t7-cal-net', '0'); setStat('t7-cal-added', '0'); setStat('t7-cal-removed', '0');
+                return;
+            }
+            histEl.innerHTML = '<div class="text-center p-6 text-[#8a7a68] text-xs animate-pulse">Loading…</div>';
+            const { data: rows, error } = await _supabase
+                .from('shared_inventory_logs')
+                .select('id, quantity_change, remark, created_at, last_edited_by, transaction_type')
+                .eq('batch_name', batchId)
+                .eq('transaction_type', 'Stock_Calibration')
+                .order('created_at', { ascending: false });
+            if (error) {
+                histEl.innerHTML = `<div class="text-center p-6 text-rose-600 text-xs">Error loading calibrations: ${error.message}</div>`;
+                return;
+            }
+            const safe = rows || [];
+            let added = 0, removed = 0;
+            safe.forEach(r => { const q = Number(r.quantity_change) || 0; if (q > 0) added += q; else removed += Math.abs(q); });
+            const net = added - removed;
+            setStat('t7-cal-net', (net > 0 ? '+' : '') + net.toLocaleString());
+            setStat('t7-cal-added', '+' + added.toLocaleString());
+            setStat('t7-cal-removed', '-' + removed.toLocaleString());
+
+            if (!safe.length) {
+                histEl.innerHTML = '<div class="text-center p-6 text-[#8a7a68] text-xs">No calibration adjustments recorded for this batch yet.</div>';
+                return;
+            }
+            const rowsHtml = safe.map(r => {
+                const q = Number(r.quantity_change) || 0;
+                const sign = q > 0 ? '+' : '';
+                const cls = q > 0 ? 'text-emerald-700' : 'text-rose-700';
+                return `<tr class="border-t border-[#e8dcc8]">
+                    <td class="px-3 py-2 text-[11px] font-bold text-[#3d2610]">${formatAuditDate(r.created_at)}</td>
+                    <td class="px-3 py-2 text-sm font-black ${cls}">${sign}${q.toLocaleString()}</td>
+                    <td class="px-3 py-2 text-[11px] text-[#3d2610]">${(r.remark || '').replace(/</g,'&lt;')}</td>
+                    <td class="px-3 py-2 text-[10px] text-[#8a7a68]">${(r.last_edited_by || '—').replace(/</g,'&lt;')}</td>
+                </tr>`;
+            }).join('');
+            histEl.innerHTML = `<table class="w-full text-left">
+                <thead><tr class="bg-[#fdf6e8]">
+                    <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Date</th>
+                    <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Qty</th>
+                    <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Reason</th>
+                    <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">By</th>
+                </tr></thead>
+                <tbody>${rowsHtml}</tbody>
+            </table>`;
+        }
+
+        async function saveCalibration() {
+            const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
+            if (!batchId) { showToast('Save Tab 1 first to assign a batch number before recording a calibration.', 'error'); return; }
+            const qtyEl = document.getElementById('t7-cal-qty');
+            const reasonEl = document.getElementById('t7-cal-reason');
+            const btn = document.getElementById('t7-cal-save-btn');
+            const qty = parseInt(qtyEl.value, 10);
+            const reason = (reasonEl.value || '').trim();
+            if (isNaN(qty) || qty === 0) { showToast('Enter a non-zero adjustment quantity (use a negative value to subtract).', 'error'); qtyEl.focus(); return; }
+            if (!reason) { showToast('Reason is required for every calibration.', 'error'); reasonEl.focus(); return; }
+
+            btn.disabled = true; btn.innerText = 'Saving…';
+
+            const payload = withEditMeta({
+                batch_name: batchId,
+                transaction_type: 'Stock_Calibration',
+                quantity_change: qty,
+                remark: reason
+            });
+            let { error } = await _supabase.from('shared_inventory_logs').insert([payload]);
+            if (error && isEditMetaColumnError && isEditMetaColumnError(error)) {
+                ({ error } = await _supabase.from('shared_inventory_logs').insert(stripEditMeta([payload])));
+            }
+
+            btn.disabled = false; btn.innerText = 'Save Adjustment';
+            if (error) { showToast('Failed to save calibration: ' + error.message, 'error'); return; }
+            qtyEl.value = ''; reasonEl.value = '';
+            showToast(`Calibration recorded: ${qty > 0 ? '+' : ''}${qty}`, 'success');
+            renderCalibrationHistory(batchId);
         }
 
         // ── Toast helper ──────────────────────────────────────────
@@ -3187,27 +3321,25 @@
 
         // --- TAB 1 (MASTER) LOGIC ---
         // Batch numbering rules:
-        //   • Always MJM-<currentYear>-<NNN>, read-only.
-        //   • Counter is continuous across years (so we don't restart at 001 when
-        //     the year rolls over) and floored at 263 — the agreed starting point
-        //     for the new naming convention.
+        //   • Plain sequential number (e.g. 264), read-only.
+        //   • Floored at 263 — the agreed starting point. Counter is continuous.
+        //   • Latest-batch parser handles both old "MJM-YYYY-NNN" and new plain
+        //     format by extracting the trailing digits.
         const BATCH_NUMBER_FLOOR = 263;
-        const BATCH_NUMBER_PREFIX = 'MJM';
         function handleNewBatchSetup() {
-            const currentYear = new Date().getFullYear();
             const latestBatch = masterBatchesList[0] ? masterBatchesList[0].name : null;
             let nextNum = BATCH_NUMBER_FLOOR;
             if (latestBatch) {
                 document.getElementById('latest-batch-id').innerText = latestBatch;
-                const parts = latestBatch.split('-');
-                if (parts.length === 3) {
-                    const parsed = parseInt(parts[2], 10);
+                const m = String(latestBatch).match(/(\d+)\s*$/);
+                if (m) {
+                    const parsed = parseInt(m[1], 10);
                     if (!isNaN(parsed)) nextNum = Math.max(BATCH_NUMBER_FLOOR, parsed + 1);
                 }
             } else {
                 document.getElementById('latest-batch-id').innerText = 'None';
             }
-            const nextId = `${BATCH_NUMBER_PREFIX}-${currentYear}-${String(nextNum).padStart(3, '0')}`;
+            const nextId = String(nextNum);
             document.getElementById('f-batchno').value = nextId;
             updateT1Completion();
         }
