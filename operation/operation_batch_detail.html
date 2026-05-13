@@ -3397,26 +3397,19 @@
             const breed = document.getElementById('f-brand').value;
             const list  = BREED_SUPPLIERS[breed] || [];
             const prev  = keep != null ? keep : sel.value;
-            sel.innerHTML = '<option value="">Select supplier...</option>';
             if (!breed) {
-                // No breed yet — show every supplier across all breeds.
-                Object.entries(BREED_SUPPLIERS).forEach(([breedName, suppliers]) => {
-                    const og = document.createElement('optgroup');
-                    og.label = breedName;
-                    suppliers.forEach(s => {
-                        const opt = document.createElement('option');
-                        opt.value = s.supplier; opt.innerText = s.supplier;
-                        og.appendChild(opt);
-                    });
-                    sel.appendChild(og);
-                });
-            } else {
-                list.forEach(s => {
-                    const opt = document.createElement('option');
-                    opt.value = s.supplier; opt.innerText = s.supplier;
-                    sel.appendChild(opt);
-                });
+                // Strict cascade — no breed picked yet, no suppliers to show.
+                sel.innerHTML = '<option value="">Select breed first…</option>';
+                sel.value = '';
+                syncMpobOptions();
+                return;
             }
+            sel.innerHTML = '<option value="">Select supplier...</option>';
+            list.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.supplier; opt.innerText = s.supplier;
+                sel.appendChild(opt);
+            });
             if (prev && Array.from(sel.options).some(o => o.value === prev)) {
                 sel.value = prev;
             } else {
@@ -3431,17 +3424,15 @@
             const breed    = document.getElementById('f-brand').value;
             const supplier = document.getElementById('f-supplier').value;
             const prev     = keep != null ? keep : sel.value;
-            sel.innerHTML = '<option value="">Select MPOB license...</option>';
-            // Find supplier entry. If breed missing, search across all breeds for that supplier name.
-            let entries = [];
-            if (breed && BREED_SUPPLIERS[breed]) {
-                entries = BREED_SUPPLIERS[breed].filter(s => s.supplier === supplier);
-            } else if (supplier) {
-                Object.values(BREED_SUPPLIERS).forEach(list => {
-                    list.forEach(s => { if (s.supplier === supplier) entries.push(s); });
-                });
+            if (!supplier) {
+                // Strict cascade — no supplier picked yet, no MPOB licenses to show.
+                sel.innerHTML = '<option value="">Select supplier first…</option>';
+                sel.value = '';
+                return;
             }
-            const licenses = Array.from(new Set(entries.flatMap(e => e.mpob)));
+            sel.innerHTML = '<option value="">Select MPOB license...</option>';
+            const list = (BREED_SUPPLIERS[breed] || []).filter(s => s.supplier === supplier);
+            const licenses = Array.from(new Set(list.flatMap(e => e.mpob)));
             licenses.forEach(lic => {
                 const opt = document.createElement('option');
                 opt.value = lic; opt.innerText = lic;
