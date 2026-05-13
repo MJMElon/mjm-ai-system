@@ -6,6 +6,7 @@
     <title>Life of Seedlings - MJM Nursery AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../shared/shared_access.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         /* Earthy Theme Colors */
@@ -168,6 +169,27 @@
         let currentListTab = 'active';
         let currentPage = 1;
         const PAGE_SIZE = 15;
+        let isAdmin = false;
+
+        // Access gate — runs before initLedger. "none" users are redirected.
+        async function gateAccess() {
+            try {
+                await MJMAccess.load(_supabase);
+                if (!MJMAccess.canAccess('operation')) {
+                    alert('You do not have access to the Operation module.');
+                    window.location.href = 'operation_dashboard.html';
+                    return false;
+                }
+                isAdmin = MJMAccess.isAdminOf('operation');
+            } catch (e) {
+                console.warn('Access load failed:', e);
+                // Fail safe: redirect on error
+                alert('Could not verify your access. Please log in again.');
+                window.location.href = '../auth.html';
+                return false;
+            }
+            return true;
+        }
 
         async function initLedger() {
             try {
@@ -368,9 +390,12 @@
                         <td class="${survColor} font-black text-sm">${survRate}</td>
                         <td class="text-[#c07820] font-black text-sm">${cullDisplay}%</td>
                         <td>
-                            <button onclick="window.location.href='operation_batch_detail.html?id=${encodeURIComponent(b.batch_name)}'" class="px-4 py-2 rounded-xl bg-white border border-[#e8dcc8] text-[#4a7a2e] font-bold text-[10px] uppercase tracking-widest hover:bg-[#6aa83c] hover:text-white hover:border-[#6aa83c] transition-colors shadow-sm flex items-center gap-2">
-                                👁️ View
-                            </button>
+                            <div class="flex items-center gap-2">
+                                <button onclick="window.location.href='operation_batch_detail.html?id=${encodeURIComponent(b.batch_name)}'" class="px-4 py-2 rounded-xl bg-white border border-[#e8dcc8] text-[#4a7a2e] font-bold text-[10px] uppercase tracking-widest hover:bg-[#6aa83c] hover:text-white hover:border-[#6aa83c] transition-colors shadow-sm flex items-center gap-2">
+                                    👁️ View
+                                </button>
+                                ${isAdmin ? `<button onclick="deleteBatchRecord('${b.batch_name.replace(/'/g,"\\'")}')" title="Admin only — permanently delete this batch" class="px-3 py-2 rounded-xl bg-white border border-rose-200 text-rose-700 font-bold text-[10px] uppercase tracking-widest hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-colors shadow-sm">🗑️</button>` : ''}
+                            </div>
                         </td>
                     </tr>
                 `);
@@ -472,10 +497,41 @@
             }, 100);
         }
 
-        // Auth check and load
-        _supabase.auth.getSession().then(({ data: { session } }) => { 
-            if (!session) window.location.href = 'operation_dashboard.html'; else initLedger(); 
+        // Auth + access check, then load
+        _supabase.auth.getSession().then(async ({ data: { session } }) => {
+            if (!session) { window.location.href = 'operation_dashboard.html'; return; }
+            if (!(await gateAccess())) return;
+            initLedger();
         });
+
+        // Admin-only: delete a batch and all its inventory-log rows.
+        async function deleteBatchRecord(batchName) {
+            if (!isAdmin) { alert('Only admins can delete batch records.'); return; }
+            const confirmMsg =
+                'Delete batch "' + batchName + '"?\n\n' +
+                'This permanently removes:\n' +
+                '  • The batch from operation_batches\n' +
+                '  • Every shared_inventory_logs row tied to it\n' +
+                '    (Seeds Received, Planted, Culling, Transplant, Calibration, etc.)\n\n' +
+                'This cannot be undone. Type the batch name to confirm.';
+            const typed = prompt(confirmMsg, '');
+            if (typed !== batchName) {
+                if (typed !== null) alert('Batch name did not match — delete cancelled.');
+                return;
+            }
+            try {
+                const { error: logErr } = await _supabase
+                    .from('shared_inventory_logs').delete().eq('batch_name', batchName);
+                if (logErr) throw logErr;
+                const { error: batchErr } = await _supabase
+                    .from('operation_batches').delete().eq('name', batchName);
+                if (batchErr && !/0 rows/i.test(batchErr.message || '')) throw batchErr;
+                alert('Batch "' + batchName + '" deleted.');
+                initLedger();
+            } catch (e) {
+                alert('Delete failed: ' + (e.message || e));
+            }
+        }
     </script>
 </body>
 </html>

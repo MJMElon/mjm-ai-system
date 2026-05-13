@@ -3324,23 +3324,36 @@
         //   • Plain sequential number (e.g. 264), read-only.
         //   • Floored at 263 — the agreed starting point. Counter is continuous.
         //   • Latest-batch parser handles both old "MJM-YYYY-NNN" and new plain
-        //     format by extracting the trailing digits.
+        //     format by extracting the trailing digits. We also look at
+        //     shared_inventory_logs (the historical source of truth) in case
+        //     a batch was never mirrored to operation_batches.
         const BATCH_NUMBER_FLOOR = 263;
-        function handleNewBatchSetup() {
-            const latestBatch = masterBatchesList[0] ? masterBatchesList[0].name : null;
-            let nextNum = BATCH_NUMBER_FLOOR;
-            if (latestBatch) {
-                document.getElementById('latest-batch-id').innerText = latestBatch;
-                const m = String(latestBatch).match(/(\d+)\s*$/);
-                if (m) {
-                    const parsed = parseInt(m[1], 10);
-                    if (!isNaN(parsed)) nextNum = Math.max(BATCH_NUMBER_FLOOR, parsed + 1);
-                }
-            } else {
-                document.getElementById('latest-batch-id').innerText = 'None';
-            }
-            const nextId = String(nextNum);
-            document.getElementById('f-batchno').value = nextId;
+        async function handleNewBatchSetup() {
+            let latestName = null;
+            let latestNum = 0;
+            const consider = (name) => {
+                if (!name) return;
+                const m = String(name).match(/(\d+)\s*$/);
+                if (!m) return;
+                const n = parseInt(m[1], 10);
+                if (!isNaN(n) && n > latestNum) { latestNum = n; latestName = name; }
+            };
+            // Check the in-memory master list first.
+            masterBatchesList.forEach(b => consider(b && b.name));
+            // Also consult Seeds_Received logs — this catches old batches that
+            // were never inserted into operation_batches.
+            try {
+                const { data } = await _supabase
+                    .from('shared_inventory_logs')
+                    .select('batch_name')
+                    .eq('transaction_type', 'Seeds_Received');
+                (data || []).forEach(r => consider(r && r.batch_name));
+            } catch (e) { console.warn('latest-batch fallback failed:', e); }
+
+            const nextNum = Math.max(BATCH_NUMBER_FLOOR, latestNum + 1);
+            const latestEl = document.getElementById('latest-batch-id');
+            if (latestEl) latestEl.innerText = latestName || 'None';
+            document.getElementById('f-batchno').value = String(nextNum);
             updateT1Completion();
         }
 
