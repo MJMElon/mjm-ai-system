@@ -276,9 +276,9 @@
         try {
             const { data: creditOrders, error } = await _supabase
                 .from('salesweb_customer_orders')
-                .select('id,order_number,customer_name,total,created_at,status,payment_method,billed_at,collected_qty,collected_at')
-                .eq('payment_method', 'credit')
-                .is('billed_at', null)
+                .select('id,order_number,customer_name,total,created_at,status,payment_terms,credit_billed_at,collected_qty,collected_at')
+                .eq('payment_terms', 'credit')
+                .is('credit_billed_at', null)
                 .order('collected_at', { ascending: false, nullsFirst: false })
                 .order('created_at',   { ascending: false });
             if (error) throw error;
@@ -365,7 +365,7 @@
                 : '';
 
             if (!todoData.credit.length) {
-                body.innerHTML = '<div class="text-center py-8 text-slate-500"><span class="text-2xl">✓</span><div class="text-[10px] font-bold uppercase tracking-widest mt-1">No credit billing pending</div><div class="text-[9px] mt-1">Tag orders with <span class="font-mono">payment_method=\'credit\'</span> to see them here.</div></div>';
+                body.innerHTML = '<div class="text-center py-8 text-slate-500"><span class="text-2xl">✓</span><div class="text-[10px] font-bold uppercase tracking-widest mt-1">No credit billing pending</div><div class="text-[9px] mt-1">Tag orders with <span class="font-mono">payment_terms=\'credit\'</span> to see them here.</div></div>';
                 return;
             }
 
@@ -726,7 +726,7 @@
 
             const [ordRes, _itemsRes, _collRes, _bookRes] = await Promise.all([
                 _supabase.from('salesweb_customer_orders')
-                    .select('id,order_number,customer_name,total,status,created_at,payment_method,collected_qty,collected_at')
+                    .select('id,order_number,customer_name,total,status,created_at,payment_terms,collected_qty,collected_at')
                     .order('created_at', { ascending: true }),
                 _supabase.from('salesweb_order_items').select('order_id,quantity,unit_price,subtotal'),
                 _supabase.from('salesweb_order_collections').select('order_id,collected_qty,collected_at')
@@ -797,7 +797,7 @@
                     totalAmount: o.total ?? it.amt,
                     rawStatus: o.status,
                     derivedStatus,
-                    paymentMethod: o.payment_method || 'standard',
+                    paymentMethod: o.payment_terms || 'cash',
                     collectionsByMonth: colByMonth,
                     bookingsByMonth: bookByMonth,
                     totalCollected,
