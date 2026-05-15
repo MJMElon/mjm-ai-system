@@ -254,9 +254,9 @@ input,select,textarea,button{font-family:inherit;}
         <div class="sb-sub-item active" onclick="switchTab('customers',document.getElementById('sb-customers-parent'));showCustSubTab('list')">Customer List</div>
         <div class="sb-sub-item" onclick="switchTab('customers',document.getElementById('sb-customers-parent'));showCustSubTab('points')">Points & Membership</div>
       </div>
-      <div class="sb-item" onclick="switchTab('salesweb_products',this)"><span class="sb-icon">🌱</span><span>Products</span></div>
+      <div class="sb-item" onclick="switchTab('products',this)"><span class="sb-icon">🌱</span><span>Products</span></div>
       <div class="sb-item" onclick="switchTab('promos',this)"><span class="sb-icon">🎁</span><span>Promotions</span></div>
-      <div class="sb-item" onclick="switchTab('salesweb_coupons',this)"><span class="sb-icon">🏷️</span><span>Coupons</span></div>
+      <div class="sb-item" onclick="switchTab('coupons',this)"><span class="sb-icon">🏷️</span><span>Coupons</span></div>
       <div class="sb-item" onclick="switchTab('webdesign',this)"><span class="sb-icon">🎨</span><span>Website Design</span></div>
       <div class="sb-item" onclick="switchTab('settings',this)"><span class="sb-icon">⚙️</span><span>Settings</span></div>
     </div>
@@ -799,9 +799,9 @@ function switchTab(tab,el){
   if(el)el.classList.add('active');
   if(tab==='orders')loadOrders();
   if(tab==='customers')loadCustomers();
-  if(tab==='salesweb_products')loadProducts();
+  if(tab==='products')loadProducts();
   if(tab==='promos')initPromoWorkspace();
-  if(tab==='salesweb_coupons')loadCoupons();
+  if(tab==='coupons')loadCoupons();
   if(tab==='webdesign')loadWebDesign();
   if(tab==='settings')loadSettings();
 }
