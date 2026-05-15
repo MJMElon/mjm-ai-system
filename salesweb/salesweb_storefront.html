@@ -263,8 +263,11 @@
   .nav-actions { display: flex; align-items: center; gap: 1.25rem; }
   .nav-actions a { color: rgba(255,255,255,.7); text-decoration: none; font-size: 13px; transition: color .2s; }
   .nav-actions a:hover { color: var(--white); }
-  .btn-cart { background: var(--gold); color: var(--green-dark); border: none; padding: .5rem 1.25rem; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; transition: background .2s; display: flex; align-items: center; gap: .4rem; }
-  .btn-cart:hover { background: var(--gold-light); }
+  .btn-cart { background: var(--gold); color: var(--green-dark); border: none; padding: .5rem .9rem; border-radius: 999px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; letter-spacing: .02em; cursor: pointer; transition: background .2s, transform .15s, box-shadow .2s; display: inline-flex; align-items: center; gap: .5rem; box-shadow: 0 2px 6px rgba(201,168,76,.25); white-space: nowrap; }
+  .btn-cart:hover { background: var(--gold-light); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(201,168,76,.35); }
+  .btn-cart-label { font-weight: 600; }
+  .btn-cart-count { background: var(--green-dark); color: var(--gold-light); border-radius: 999px; padding: 0 .45rem; min-width: 1.25rem; height: 1.25rem; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; line-height: 1; }
+  .mobile-auth-item { display: none; }
   .hamburger { display: none; background: none; border: none; cursor: pointer; padding: .25rem; }
   .hamburger span { display: block; width: 22px; height: 2px; background: var(--white); margin: 4px 0; transition: .3s; }
 
@@ -750,6 +753,10 @@
     .nav-links { display: none; }
     .nav-links.open { display: flex; flex-direction: column; position: fixed; top: 70px; left: 0; right: 0; background: var(--green-dark); padding: 1.5rem 2rem; gap: 1.5rem; z-index: 99; }
     .hamburger { display: block; }
+    .nav-actions #nav-login-link, .nav-actions #nav-myaccount, .nav-actions #nav-signout { display: none !important; }
+    .mobile-auth-item { display: block; }
+    .btn-cart { padding: .45rem .55rem .45rem .7rem; gap: .4rem; }
+    .btn-cart-label { display: none; }
     .features-strip { grid-template-columns: repeat(2, 1fr); padding: 2rem 1.5rem; gap: 1rem; }
     .info-policies-grid { grid-template-columns: 1fr; }
     .contact-page-grid { grid-template-columns: 1fr; gap: 2rem; padding: 3rem 1.5rem; }
@@ -929,15 +936,19 @@
         <a onclick="showPage('join')">Join Our Team</a>
       </div>
     </li>
+    <li class="mobile-auth-item"><a href="salesweb_auth.html" id="nav-login-link-mobile">Log In</a></li>
+    <li class="mobile-auth-item"><a onclick="showPage('portal')" id="nav-myaccount-mobile" style="display:none;cursor:pointer;">My Account</a></li>
+    <li class="mobile-auth-item"><a onclick="portalSignOut()" id="nav-signout-mobile" style="display:none;cursor:pointer;">Sign Out</a></li>
   </ul>
   <div class="nav-actions">
     <a href="salesweb_auth.html" id="nav-login-link">Log In</a>
     <a onclick="showPage('portal')" id="nav-myaccount" style="display:none;cursor:pointer;">My Account</a>
     <a onclick="portalSignOut()" id="nav-signout" style="display:none;cursor:pointer;font-size:11px;opacity:.6;">Sign Out</a>
     <div style="position:relative;">
-      <button class="btn-cart" id="cartBtn" onclick="toggleCartDropdown()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-        Cart (<span id="cartCount">0</span>)
+      <button class="btn-cart" id="cartBtn" onclick="toggleCartDropdown()" aria-label="Open cart">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+        <span class="btn-cart-label">Cart</span>
+        <span class="btn-cart-count" id="cartCount">0</span>
       </button>
       <div class="cart-dropdown" id="cartDropdown">
         <div class="cart-header"><span>Shopping Cart</span><button onclick="toggleCartDropdown()" style="background:none;border:none;font-size:16px;cursor:pointer;color:var(--text-mid);">✕</button></div>
@@ -1946,6 +1957,30 @@ document.getElementById('hamburger').addEventListener('click', () => {
   document.getElementById('navLinks').classList.toggle('open');
 });
 
+// Auth nav state (keeps desktop + drawer entries in sync)
+function setNavAuthState(signedIn, name){
+  var first = (name||'').split(' ')[0];
+  var setDisp = function(id, disp){ var el = document.getElementById(id); if(el) el.style.display = disp; };
+  var setText = function(id, txt){ var el = document.getElementById(id); if(el) el.textContent = txt; };
+  if(signedIn){
+    setDisp('nav-login-link','none');
+    setDisp('nav-login-link-mobile','none');
+    setDisp('nav-myaccount','inline');
+    setDisp('nav-myaccount-mobile','block');
+    setText('nav-myaccount','Hi, '+first);
+    setText('nav-myaccount-mobile','Hi, '+first);
+    setDisp('nav-signout','inline');
+    setDisp('nav-signout-mobile','block');
+  } else {
+    setDisp('nav-login-link','inline');
+    setDisp('nav-login-link-mobile','block');
+    setDisp('nav-myaccount','none');
+    setDisp('nav-myaccount-mobile','none');
+    setDisp('nav-signout','none');
+    setDisp('nav-signout-mobile','none');
+  }
+}
+
 // ── Logo fly-to-center on hover ──
 var logoFlying = false;
 var logoFlyWrap = document.getElementById('logoFlyWrap');
@@ -2635,10 +2670,7 @@ async function clPostLogin(session) {
   sessionStorage.setItem('mjm_user_name', session.user.user_metadata?.full_name || session.user.email || session.user.phone || '');
   // Update nav
   var name = session.user.user_metadata?.full_name || session.user.email || session.user.phone || '';
-  document.getElementById('nav-login-link').style.display = 'none';
-  document.getElementById('nav-myaccount').style.display = 'inline';
-  document.getElementById('nav-myaccount').textContent = 'Hi, ' + name.split(' ')[0];
-  document.getElementById('nav-signout').style.display = 'inline';
+  setNavAuthState(true, name);
   // Check role
   var { data: profile } = await _sb.from('shared_profiles').select('role').eq('id', session.user.id).single();
   var role = (profile && profile.role) || 'customer';
@@ -2743,9 +2775,7 @@ async function portalSignOut(){
   Object.keys(localStorage).forEach(function(k){if(k.startsWith('sb-'))localStorage.removeItem(k);});
   sessionStorage.clear();
   try{await _sb.auth.signOut({scope:'local'});}catch(e){}
-  document.getElementById('nav-login-link').style.display='inline';
-  document.getElementById('nav-myaccount').style.display='none';
-  document.getElementById('nav-signout').style.display='none';
+  setNavAuthState(false);
   showPage('home');
   showPortalToast('Signed out');
 }
@@ -2912,12 +2942,7 @@ function portalSignConsent(){document.getElementById('p-consent-modal').classLis
 // Check if user is logged in — show My Account link
 (function(){
   var name=sessionStorage.getItem('mjm_user_name');
-  if(name){
-    document.getElementById('nav-login-link').style.display='none';
-    document.getElementById('nav-myaccount').style.display='inline';
-    document.getElementById('nav-myaccount').textContent='Hi, '+name.split(' ')[0];
-    document.getElementById('nav-signout').style.display='inline';
-  }
+  if(name){ setNavAuthState(true, name); }
 })();
 
 // Modal overlay click to close
