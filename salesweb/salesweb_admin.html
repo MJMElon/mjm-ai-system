@@ -584,6 +584,36 @@ input,select,textarea,button{font-family:inherit;}
     <!-- SETTINGS -->
     <div class="tab-content" id="tab-settings">
       <div class="main-header"><div class="main-title">Settings</div></div>
+      <!-- Payment Settings -->
+      <div class="card">
+        <h3>Payment Settings</h3>
+        <p style="font-size:12px;color:var(--ink3);margin-bottom:1rem;">Bank account and DuitNow QR shown on the customer payment-proof page (cart checkout & customer portal).</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:.8rem;">
+          <div class="form-group" style="margin:0;"><label class="form-label">Bank</label><input class="form-input" id="pset-bank" placeholder="Hong Leong Bank"></div>
+          <div class="form-group" style="margin:0;"><label class="form-label">Account Name</label><input class="form-input" id="pset-name" placeholder="MEGA JUTAMAS SDN BHD"></div>
+          <div class="form-group" style="margin:0;"><label class="form-label">Account No.</label><input class="form-input" id="pset-acc" placeholder="027-00-11609-6"></div>
+          <div class="form-group" style="margin:0;"><label class="form-label">SWIFT</label><input class="form-input" id="pset-swift" placeholder="HLBBMYKL"></div>
+        </div>
+        <div style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap;margin-top:.8rem;padding-top:.8rem;border-top:1px solid var(--border);">
+          <div style="flex:0 0 160px;">
+            <label class="form-label">DuitNow QR Image</label>
+            <div style="width:160px;height:160px;border:1.5px dashed var(--border2);border-radius:10px;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden;">
+              <img id="pset-qr-img" src="" alt="" style="display:none;max-width:100%;max-height:100%;">
+              <div id="pset-qr-empty" style="font-size:11px;color:var(--ink3);text-align:center;padding:.5rem;">No QR uploaded yet</div>
+            </div>
+          </div>
+          <div style="flex:1;min-width:240px;">
+            <input type="file" id="pset-qr-file" accept="image/*" style="display:none;" onchange="uploadPaymentQR(this)">
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('pset-qr-file').click()">📷 Upload New QR</button>
+            <p id="pset-qr-status" style="font-size:11px;margin-top:.5rem;color:var(--ink3);min-height:1.2em;"></p>
+            <p style="font-size:11px;color:var(--ink3);margin-top:.5rem;">Public URL:</p>
+            <code id="pset-qr-url" style="display:block;font-size:10px;color:var(--ink2);background:var(--bg);padding:.4rem .6rem;border-radius:6px;word-break:break-all;">—</code>
+          </div>
+        </div>
+        <div style="margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--border);">
+          <button class="btn btn-primary btn-sm" id="pset-save" onclick="savePaymentSettings()">Save Bank Details</button>
+        </div>
+      </div>
       <!-- Product Types -->
       <div class="card">
         <h3>Product Types</h3>
@@ -832,7 +862,8 @@ function statusBadge(s){return{'Pending':'badge-amber','Confirmed':'badge-blue',
 var adminSettings={productTypes:['Seedling','Merchandise'],collections:['Normal Sales','Promotion'],tags:['Best Seller','New Arrival','Limited']};
 
 async function loadSettings(){
-  loadAdminEmails();
+  loadPaymentSettings();
+  try{loadAdminEmails();}catch(e){console.warn('[settings] admin emails load failed:',e);}
   // Load from localStorage (or DB in future)
   try{var s=localStorage.getItem('mjm_admin_settings');if(s)adminSettings=JSON.parse(s);}catch(e){}
   renderSettingsList('settings-product-types',adminSettings.productTypes,'ptype');
@@ -1086,6 +1117,64 @@ async function revokeAdmin(id,email){
   loadAdminEmails();
 }
 
+</script>
+<script>
+/* ── Payment Settings (bank details + DuitNow QR) ──────────────
+   Lives in its own script block so it loads regardless of any
+   issues with the admin-email block above. */
+async function loadPaymentSettings(){
+  var{data,error}=await sb.from('salesweb_settings').select('*').eq('id',1).maybeSingle();
+  if(error){console.warn('[settings] load failed:',error.message);return;}
+  if(!data)return;
+  document.getElementById('pset-bank').value=data.bank_name||'';
+  document.getElementById('pset-name').value=data.bank_account_name||'';
+  document.getElementById('pset-acc').value=data.bank_account_no||'';
+  document.getElementById('pset-swift').value=data.bank_swift||'';
+  if(data.qr_url){
+    var img=document.getElementById('pset-qr-img');
+    img.src=data.qr_url+'?t='+Date.now();
+    img.style.display='block';
+    document.getElementById('pset-qr-empty').style.display='none';
+    document.getElementById('pset-qr-url').textContent=data.qr_url;
+  }
+}
+
+async function savePaymentSettings(){
+  var btn=document.getElementById('pset-save');
+  btn.disabled=true;var orig=btn.textContent;btn.textContent='Saving…';
+  var payload={
+    bank_name:document.getElementById('pset-bank').value.trim(),
+    bank_account_name:document.getElementById('pset-name').value.trim(),
+    bank_account_no:document.getElementById('pset-acc').value.trim(),
+    bank_swift:document.getElementById('pset-swift').value.trim(),
+    updated_at:new Date().toISOString()
+  };
+  var{error}=await sb.from('salesweb_settings').update(payload).eq('id',1);
+  btn.disabled=false;btn.textContent=orig;
+  if(error){toast('Error: '+error.message,'error');return;}
+  toast('✓ Bank details saved');
+}
+
+async function uploadPaymentQR(input){
+  if(!input.files||!input.files[0])return;
+  var file=input.files[0];
+  var status=document.getElementById('pset-qr-status');
+  status.textContent='Uploading…';status.style.color='var(--ink3)';
+  var ext=(file.name.split('.').pop()||'png').toLowerCase();
+  var path='site/duitnow-qr.'+ext;
+  var{error}=await sb.storage.from('product-images').upload(path,file,{contentType:file.type,upsert:true});
+  if(error){status.textContent='✗ '+error.message;status.style.color='var(--red)';return;}
+  var{data:u}=sb.storage.from('product-images').getPublicUrl(path);
+  var url=u&&u.publicUrl||'';
+  var{error:upErr}=await sb.from('salesweb_settings').update({qr_url:url,updated_at:new Date().toISOString()}).eq('id',1);
+  if(upErr){status.textContent='✗ '+upErr.message;status.style.color='var(--red)';return;}
+  status.textContent='✓ QR updated';status.style.color='var(--green)';
+  var img=document.getElementById('pset-qr-img');
+  img.src=url+'?t='+Date.now();img.style.display='block';
+  document.getElementById('pset-qr-empty').style.display='none';
+  document.getElementById('pset-qr-url').textContent=url;
+  input.value='';
+}
 </script>
 
 </body>

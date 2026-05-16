@@ -1,11 +1,6 @@
 // ══════════════════════════════════════════════
 // DATA (demo — replace with Supabase in production)
 // ══════════════════════════════════════════════
-const MJM_BANK = {
-  bank: 'Hong Leong Bank', accountName: 'MEGA JUTAMAS SDN BHD',
-  accountNo: '027-00-11609-6', swift: 'HLBBMYKL'
-};
-const MJM_QR_URL = 'https://placehold.co/220x220/2D4A30/FFFFFF?text=DuitNow+QR';
 
 const ORDERS = [
   { id:'ORD-001', variety:'Oil Palm Seedling — Oct 2024', qty:2000, price:21.99, total:43980, orderDate:'2024-11-15', collDate:'2025-04-10', status:'Order Confirmed', notes:'Delivery to Miri — confirm route 1 week before.', billing:'Lot 234, Jalan Plantation, Taman Industri Miri, 98000 Miri, Sarawak', attachments:{ order_placed:[{name:'Invoice INV-2024-001',type:'PDF',size:'124 KB',icon:'📄'}], confirmed:[{name:'Order Confirmation',type:'PDF',size:'88 KB',icon:'✅'}], preparing:[], ready_to_collect:[], collecting:[], order_completed:[] } },
@@ -190,16 +185,20 @@ function viewDetail(id) {
 }
 
 // ══════════════════════════════════════════════
-// PAYMENT SECTION
+// PAYMENT SECTION — redirects to salesweb_payment_proof.html
+// (single page handles QR, bank details, file upload for both
+//  cart-checkout and customer-portal flows)
 // ══════════════════════════════════════════════
 function buildPaymentUploadSection(id,o) {
-  return '<div class="payment-section"><h4>💳 Complete Your Payment</h4><p>Scan the DuitNow QR or transfer to the bank account below, then upload your payment proof.</p><div class="duitnow-qr-box"><div class="duitnow-qr-title">📱 DuitNow QR</div><img class="duitnow-qr-img" src="'+MJM_QR_URL+'" alt="DuitNow QR Code"/><div class="duitnow-qr-note">Scan with any Malaysian banking app</div></div><div class="bank-details-box"><div class="bank-details-title">🏦 MJM Nursery Bank Account</div><div class="bank-row"><span class="bank-label">Bank</span><span class="bank-val">'+MJM_BANK.bank+'</span></div><div class="bank-row"><span class="bank-label">Account Name</span><span class="bank-val">'+MJM_BANK.accountName+'</span></div><div class="bank-row"><span class="bank-label">Account No.</span><span class="bank-val bank-acc">'+MJM_BANK.accountNo+' <button class="copy-acc-btn" onclick="copyBankAcc(event)">Copy</button></span></div><div class="bank-amount-row"><span>Amount Due</span><span class="bank-amount">RM '+o.total.toLocaleString('en-MY',{minimumFractionDigits:2})+'</span></div></div><div class="upload-box" id="upload-box-'+id+'"><div class="upload-icon">📎</div><div class="upload-label">Upload Payment Proof</div><div class="upload-hint">Click to select (JPG, PNG, PDF)</div><input type="file" id="payment-file-'+id+'" accept="image/*,.pdf" style="display:none" onchange="handlePaymentUpload(\''+id+'\',this)"/><button class="upload-btn" onclick="document.getElementById(\'payment-file-'+id+'\').click()">Select File</button></div><div id="upload-preview-'+id+'" style="display:none" class="upload-preview"><span class="upload-preview-icon">✅</span><span id="upload-preview-name-'+id+'" class="upload-preview-name"></span><button class="upload-remove-btn" onclick="removePaymentFile(\''+id+'\')">✕ Remove</button></div><button class="btn-primary" style="margin-top:1rem;width:100%" onclick="submitPaymentProof(\''+id+'\')">📤 Submit Payment Proof</button></div>';
+  return '<div class="payment-section"><h4>💳 Complete Your Payment</h4><p>Pay via DuitNow QR or bank transfer, then upload your payment proof on the next page.</p><div class="pay-amount-row"><span>Amount Due</span><span class="pay-amount">RM '+o.total.toLocaleString('en-MY',{minimumFractionDigits:2})+'</span></div><button class="btn-primary pay-cta" onclick="goToPaymentProof(\''+id+'\','+o.total+')">💳 Pay & Upload Proof →</button></div>';
 }
 
-function copyBankAcc(e){e.stopPropagation();navigator.clipboard?.writeText(MJM_BANK.accountNo.replace(/\s/g,''));showToast('📋 Account number copied!');}
-function handlePaymentUpload(id,input){if(!input.files||!input.files[0])return;document.getElementById('upload-box-'+id).style.display='none';document.getElementById('upload-preview-name-'+id).textContent=input.files[0].name;document.getElementById('upload-preview-'+id).style.display='flex';}
-function removePaymentFile(id){document.getElementById('payment-file-'+id).value='';document.getElementById('upload-box-'+id).style.display='flex';document.getElementById('upload-preview-'+id).style.display='none';}
-function submitPaymentProof(id){var input=document.getElementById('payment-file-'+id);if(!input||!input.files||!input.files[0]){showToast('⚠ Please select a file first.');return;}showToast('✅ Payment proof submitted!');}
+function goToPaymentProof(id,total){
+  sessionStorage.setItem('mjm_pay_order_id',id);
+  sessionStorage.setItem('mjm_pay_order_total',String(total));
+  sessionStorage.setItem('mjm_pay_order_number',id);
+  window.location.href='salesweb_payment_proof.html';
+}
 
 // ══════════════════════════════════════════════
 // BOOKING

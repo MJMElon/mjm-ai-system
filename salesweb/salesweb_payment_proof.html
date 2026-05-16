@@ -77,14 +77,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--text-d
   <div class="card">
     <div class="card-title">DuitNow QR Payment</div>
     <div class="qr-box">
-      <img src="https://placehold.co/220x220/2D4A30/FFFFFF?text=DuitNow+QR" alt="DuitNow QR Code">
+      <img id="pp-qr" src="https://placehold.co/220x220/2D4A30/FFFFFF?text=DuitNow+QR" alt="DuitNow QR Code">
       <div class="qr-note">Scan with your banking app to pay</div>
     </div>
     <div class="bank-details">
       <strong>Bank Transfer Details:</strong><br>
-      Bank: Hong Leong Bank<br>
-      Account: MEGA JUTAMAS SDN BHD<br>
-      Account No: 027-00-11609-6<br>
+      Bank: <span id="pp-bank">Hong Leong Bank</span><br>
+      Account: <span id="pp-acc-name">MEGA JUTAMAS SDN BHD</span><br>
+      Account No: <span id="pp-acc-no">027-00-11609-6</span><br>
       Reference: Order <span id="pp-ref">—</span>
     </div>
   </div>
@@ -151,6 +151,16 @@ var orderShort=sessionStorage.getItem('mjm_pay_order_number')||orderId.substring
 document.getElementById('pp-order-id').textContent='#'+orderShort;
 document.getElementById('pp-total').textContent=fmtRM(orderTotal);
 document.getElementById('pp-ref').textContent='#'+orderShort;
+
+// Load bank details + QR from admin-configured settings
+(async function(){
+  var{data,error}=await _sb.from('salesweb_settings').select('bank_name,bank_account_name,bank_account_no,qr_url').eq('id',1).maybeSingle();
+  if(error||!data)return;
+  if(data.bank_name)document.getElementById('pp-bank').textContent=data.bank_name;
+  if(data.bank_account_name)document.getElementById('pp-acc-name').textContent=data.bank_account_name;
+  if(data.bank_account_no)document.getElementById('pp-acc-no').textContent=data.bank_account_no;
+  if(data.qr_url)document.getElementById('pp-qr').src=data.qr_url+'?t='+Date.now();
+})();
 
 // File preview
 var proofFile=null;
