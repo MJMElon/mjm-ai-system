@@ -2,8 +2,8 @@
 // DATA (demo — replace with Supabase in production)
 // ══════════════════════════════════════════════
 const MJM_BANK = {
-  bank: 'Maybank Berhad', accountName: 'MJM Nursery Sdn Bhd',
-  accountNo: '5120 1234 5678', swift: 'MBBEMYKL'
+  bank: 'Hong Leong Bank', accountName: 'MEGA JUTAMAS SDN BHD',
+  accountNo: '027-00-11609-6', swift: 'HLBBMYKL'
 };
 
 const ORDERS = [
