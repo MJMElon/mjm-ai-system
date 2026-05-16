@@ -311,6 +311,10 @@ input,select,textarea,button{font-family:'DM Sans','Inter',system-ui,sans-serif;
 .payment-section{background:var(--blue-light);border:1.5px solid #bfdbfe;border-radius:var(--radius);padding:1.3rem 1.5rem;margin-top:1rem;}
 .payment-section h4{font-size:.82rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--blue);margin-bottom:.35rem;}
 .payment-section>p{font-size:.8rem;color:var(--ink2);margin-bottom:1.1rem;line-height:1.5;}
+.duitnow-qr-box{background:#fff;border:1.5px solid #bfdbfe;border-radius:12px;padding:1.1rem 1.3rem;margin-bottom:1.1rem;text-align:center;}
+.duitnow-qr-title{font-size:.72rem;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.8rem;padding-bottom:.55rem;border-bottom:1px solid #dbeafe;}
+.duitnow-qr-img{display:block;max-width:220px;width:100%;height:auto;margin:0 auto .6rem;border-radius:8px;}
+.duitnow-qr-note{font-size:.72rem;color:var(--ink3);}
 .bank-details-box{background:#fff;border:1.5px solid #bfdbfe;border-radius:12px;padding:1.1rem 1.3rem;margin-bottom:1.1rem;}
 .bank-details-title{font-size:.72rem;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.8rem;padding-bottom:.55rem;border-bottom:1px solid #dbeafe;}
 .bank-row{display:flex;justify-content:space-between;align-items:center;padding:.3rem 0;font-size:.83rem;border-bottom:1px solid #f1f5f9;}
