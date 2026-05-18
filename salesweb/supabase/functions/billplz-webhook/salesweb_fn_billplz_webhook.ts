@@ -95,7 +95,7 @@ serve(async (req) => {
       // Idempotency: if already Paid, skip duplicate side effects
       const { data: existing } = await sb
         .from('salesweb_customer_orders')
-        .select('id, order_number, customer_name, customer_email, status, total, points_issued')
+        .select('id, order_number, customer_id, customer_name, customer_email, status, total, points_issued, points_redeemed, points_discount_rm')
         .eq('id', orderId)
         .maybeSingle()
       if (!existing) {
@@ -137,16 +137,53 @@ serve(async (req) => {
       } catch (e) { console.warn('points config load failed, using defaults:', e) }
 
       const points = Math.floor(total / earnRm) * earnPts
-      if (points > 0 && !existing.points_issued) {
-        await sb.from('salesweb_customer_orders')
-          .update({ points_issued: points })
-          .eq('id', orderId)
-        await sb.from('salesweb_order_timeline').insert([{
-          order_id: orderId,
-          status: 'Points Issued',
-          note: `${points} loyalty points issued (RM ${total.toFixed(2)} @ ${earnPts} pt per RM ${earnRm})`,
-          changed_by: 'billplz',
-        }])
+      const redeemed = Number(existing.points_redeemed || 0)
+      if (!existing.points_issued) {
+        if (points > 0) {
+          await sb.from('salesweb_customer_orders')
+            .update({ points_issued: points })
+            .eq('id', orderId)
+          await sb.from('salesweb_order_timeline').insert([{
+            order_id: orderId,
+            status: 'Points Issued',
+            note: `${points} loyalty points issued (RM ${total.toFixed(2)} @ ${earnPts} pt per RM ${earnRm})`,
+            changed_by: 'billplz',
+          }])
+        }
+
+        // Ledger writes — the single source of truth for customer balance.
+        // Both rows are gated together by `!existing.points_issued`, so a
+        // duplicate webhook delivery never produces duplicate ledger entries.
+        if (existing.customer_id) {
+          const ledgerRows: any[] = []
+          if (points > 0) {
+            ledgerRows.push({
+              user_id: existing.customer_id,
+              change: points,
+              type: 'Earned',
+              order_id: orderId,
+              rm_value: total,
+              note: `Order ${existing.order_number || orderId}`,
+              created_by: 'billplz',
+            })
+          }
+          if (redeemed > 0) {
+            ledgerRows.push({
+              user_id: existing.customer_id,
+              change: -redeemed,
+              type: 'Redeemed',
+              order_id: orderId,
+              rm_value: Number(existing.points_discount_rm || 0),
+              note: `Redeemed on order ${existing.order_number || orderId}`,
+              created_by: 'billplz',
+            })
+          }
+          if (ledgerRows.length) {
+            const { error: ledgerErr } = await sb
+              .from('salesweb_points_ledger').insert(ledgerRows)
+            if (ledgerErr) console.error('points ledger insert failed:', ledgerErr)
+          }
+        }
       }
 
       // 3. Auto-create AL (Acknowledgement Letter) in nursery system
