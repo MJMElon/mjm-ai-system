@@ -576,17 +576,16 @@
                                         </div>
                                         <div id="tray-rows-container" class="space-y-2">
                                             <!-- Column headers -->
-                                            <div class="hidden xl:grid grid-cols-[2fr_1fr_1fr_1fr_1fr_40px] gap-3 px-4 pb-1 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">
+                                            <div class="hidden xl:grid grid-cols-[2fr_1fr_1fr_1fr_40px] gap-3 px-4 pb-1 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">
                                                 <span>Preset Tray</span>
                                                 <span>Total Planted</span>
                                                 <span class="text-[#a83020]">Empty Holes</span>
                                                 <span class="text-[#4a7a2e]">Actual Planted</span>
-                                                <span title="Each tray fits 2,560 holes. Vacant = 2,560 − seeds currently in tray.">Vacant Holes</span>
                                                 <span></span>
                                             </div>
                                         </div>
                                         <!-- Tray totals footer -->
-                                        <div id="tray-totals-row" class="grid grid-cols-1 xl:grid-cols-[2fr_1fr_1fr_1fr_1fr_40px] gap-3 bg-[#f3efe6] border-2 border-[#e8dcc8] rounded-xl px-4 py-3 mt-3 items-center shadow-sm">
+                                        <div id="tray-totals-row" class="grid grid-cols-1 xl:grid-cols-[2fr_1fr_1fr_1fr_40px] gap-3 bg-[#f3efe6] border-2 border-[#e8dcc8] rounded-xl px-4 py-3 mt-3 items-center shadow-sm">
                                             <div class="text-[10px] font-black text-[#3d2610] uppercase tracking-widest">Σ Totals (<span id="t2-tray-count">0</span> Trays)</div>
                                             <div>
                                                 <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest xl:hidden mb-0.5">Total Planted</div>
@@ -599,10 +598,6 @@
                                             <div>
                                                 <div class="text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest xl:hidden mb-0.5">Actual Planted</div>
                                                 <div class="text-base font-black text-[#4a7a2e]" id="t2-tot-actual">0</div>
-                                            </div>
-                                            <div>
-                                                <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest xl:hidden mb-0.5">Vacant Holes</div>
-                                                <div class="text-base font-black text-[#4a7a2e]" id="t2-tot-vacant">0</div>
                                             </div>
                                             <div class="hidden xl:block"></div>
                                         </div>
@@ -2457,12 +2452,6 @@
             const accounted = totalMain + mockCullingTab4 + netPremium + netDtone;
             const untransplanted = pendingTotal;
 
-            // Publish live balances so Tab 2's per-tray Vacant cell can react to
-            // transplants (holes freed once seedlings move to main plot).
-            window._activeTrayBalances = activeTrayBalances;
-            document.querySelectorAll('.tray-row').forEach(r => updateTrayVacant(r));
-            calcPlanting();
-
             renderTrayBalances(activeTrayBalances, netPremium, netDtone, pendingTotal);
 
             const pctMain        = totalPlantedRaw > 0 ? (totalMain / totalPlantedRaw) * 100 : 0;
@@ -2823,7 +2812,7 @@
             const options = getTrayOptionsHTML(); 
             
             const html = `
-                <div id="${rowId}" class="tray-row grid grid-cols-1 xl:grid-cols-[2fr_1fr_1fr_1fr_1fr_40px] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end relative">
+                <div id="${rowId}" class="tray-row grid grid-cols-1 xl:grid-cols-[2fr_1fr_1fr_1fr_40px] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end relative">
                     <div>
                         <label class="label-style">Preset Tray *</label>
                         <div class="select-wrapper"><select class="input-style !text-[#3d2610] t-select" required onchange="updatePlantingCompletion(); checkTrayInUse('${rowId}'); calcTrayRow('${rowId}')">${options}</select></div>
@@ -2841,15 +2830,10 @@
                         <label class="label-style !text-[#4a7a2e]">Actual Planted</label>
                         <div class="input-style bg-white font-black text-[#4a7a2e] t-actual h-[45px] flex items-center" data-raw="0">0</div>
                     </div>
-                    <div>
-                        <label class="label-style">Vacant Holes</label>
-                        <div class="input-style bg-white font-black t-vacant h-[45px] flex items-center !text-[#4a7a2e]" data-raw="${TRAY_CAPACITY}" title="2,560 − seeds currently in this tray. Goes red at 0, turns green once transplanting frees holes.">${TRAY_CAPACITY.toLocaleString()}</div>
-                    </div>
                     ${trayRowCount > 1 ? `<button type="button" class="w-10 h-[45px] rounded-lg border border-[#f8d7da] text-[#a83020] bg-white flex items-center justify-center hover:bg-[#f8d7da] shrink-0 transition-colors shadow-sm self-end" onclick="removeTrayRow('${rowId}')" title="Remove Tray">✕</button>` : `<div class="hidden xl:block"></div>`}
                 </div>
             `;
             container.insertAdjacentHTML('beforeend', html);
-            updateTrayVacant(rowId);
             updatePlantingCompletion();
         }
 
@@ -2897,30 +2881,9 @@
         }
 
         // Each pre-nursery tray fits 2,560 holes; vacant = capacity − seeds currently in the tray.
+        // Each pre-nursery tray fits 2,560 holes — used by the dropdown's
+        // per-tray Vacant balance (see trayVacantMap in initDetail).
         const TRAY_CAPACITY = 2560;
-
-        function updateTrayVacant(rowId) {
-            const row = typeof rowId === 'string' ? document.getElementById(rowId) : rowId;
-            if (!row) return;
-            const vacEl = row.querySelector('.t-vacant');
-            if (!vacEl) return;
-            const actual = parseInt(row.querySelector('.t-actual')?.dataset.raw || 0);
-            const trayName = row.querySelector('.t-select')?.value || '';
-            // Once Tab 3 has run, _activeTrayBalances reflects post-transplant qty per tray.
-            const live = (trayName && window._activeTrayBalances && window._activeTrayBalances[trayName] != null)
-                ? window._activeTrayBalances[trayName]
-                : actual;
-            const inUse = Math.max(0, Math.min(TRAY_CAPACITY, live));
-            const vacant = Math.max(0, TRAY_CAPACITY - inUse);
-            vacEl.innerText = vacant.toLocaleString();
-            vacEl.dataset.raw = vacant;
-            vacEl.classList.remove('!text-[#a83020]', '!text-[#4a7a2e]', 'animate-pulse', '!bg-[#fff5f5]');
-            if (vacant === 0) {
-                vacEl.classList.add('!text-[#a83020]', '!bg-[#fff5f5]', 'animate-pulse');
-            } else {
-                vacEl.classList.add('!text-[#4a7a2e]');
-            }
-        }
 
         function calcTrayRow(rowId) {
             const row = document.getElementById(rowId);
@@ -2931,7 +2894,6 @@
             const actualDiv = row.querySelector('.t-actual');
             actualDiv.innerText = actual.toLocaleString();
             actualDiv.dataset.raw = actual;
-            updateTrayVacant(rowId);
             calcPlanting();
         }
 
@@ -2946,13 +2908,11 @@
             let totalPlannedSum = 0;
             let totalEmptySum = 0;
             let activeTrayRows = 0;
-            let totalVacant = 0;
             document.querySelectorAll('.tray-row').forEach(row => {
                 activeTrayRows++;
                 totalPlannedSum    += readNumericInput(row.querySelector('.t-planted'));
                 totalEmptySum      += readNumericInput(row.querySelector('.t-empty'));
                 totalActualPlanted += parseInt(row.querySelector('.t-actual')?.dataset.raw || 0);
-                totalVacant        += parseInt(row.querySelector('.t-vacant')?.dataset.raw || 0);
             });
 
             // Update tray totals footer row
@@ -2961,12 +2921,6 @@
             setTrayTot('t2-tot-planted', totalPlannedSum.toLocaleString());
             setTrayTot('t2-tot-empty',   totalEmptySum.toLocaleString());
             setTrayTot('t2-tot-actual',  totalActualPlanted.toLocaleString());
-            setTrayTot('t2-tot-vacant',  totalVacant.toLocaleString());
-            const totVacEl = document.getElementById('t2-tot-vacant');
-            if (totVacEl) {
-                totVacEl.classList.remove('text-[#4a7a2e]', 'text-[#a83020]');
-                totVacEl.classList.add(totalVacant === 0 && activeTrayRows > 0 ? 'text-[#a83020]' : 'text-[#4a7a2e]');
-            }
 
             const accountedTotal = totalActualPlanted + damaged;
 
