@@ -2801,11 +2801,10 @@
                     html += `<optgroup label="${nurs}">`;
                     grouped[nurs].forEach(tray => {
                         const vacant = trayVacantMap[tray.tray_name] != null ? trayVacantMap[tray.tray_name] : 2560;
-                        const usedBy = trayUsageMap[tray.tray_name];
-                        // Disable: no vacant holes left, OR another batch is mid-cycle in this tray.
-                        const blockOther = usedBy && usedBy !== currentBatch;
-                        const disabled = (vacant === 0 || blockOther) ? 'disabled' : '';
-                        // Color: red at 0, green otherwise (transplants free holes → green).
+                        // Disable only when there are no vacant holes. Any tray with
+                        // remaining capacity is selectable — the vacant count already
+                        // subtracts another batch's tail-end seedlings.
+                        const disabled = vacant === 0 ? 'disabled' : '';
                         const colorHex = vacant === 0 ? '#a83020' : '#15803d';
                         const dot      = vacant === 0 ? '🔴' : '🟢';
                         const label    = `${dot} Vacant: ${vacant.toLocaleString()}`;
@@ -2885,17 +2884,12 @@
                 return;
             }
 
-            // Use cached trayUsageMap + trayVacantMap (no extra DB call needed)
-            const usedBy = trayUsageMap[trayName];
+            // Use cached trayVacantMap (loaded at init, no extra DB call needed).
             const vacant = trayVacantMap[trayName] != null ? trayVacantMap[trayName] : 2560;
             if (vacant === 0) {
                 warnEl.querySelector('span').innerText = 'No vacant holes — tray is full';
                 warnEl.classList.remove('hidden');
                 sel.classList.add('!border-[#a83020]');
-            } else if (usedBy && usedBy !== currentBatch) {
-                warnEl.querySelector('span').innerText = `Vacant: ${vacant.toLocaleString()} — partially used, finish the other batch first`;
-                warnEl.classList.remove('hidden');
-                sel.classList.add('!border-[#c07820]');
             } else {
                 warnEl.classList.add('hidden');
                 sel.classList.remove('!border-[#a83020]', '!border-[#c07820]');
