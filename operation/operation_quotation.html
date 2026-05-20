@@ -683,122 +683,106 @@ function generatePdf(q){
   var doc = new jsPDFNS.jsPDF({ unit:'pt', format:'a4' });
   var pageW = doc.internal.pageSize.getWidth();
   var pageH = doc.internal.pageSize.getHeight();
-  var margin = 40;
+  var margin = 36;
 
-  // Restrained palette: near-black body type, soft greys for support,
-  // emerald reserved for tiny accents only (top stripe, quote number,
-  // section heading rules). The previous design felt loud because every
-  // section had a colored band; this version is monochrome with one
-  // accent so attention follows the text hierarchy, not the colour.
-  var EMERALD   = [6, 95, 70];
-  var INK       = [15, 23, 42];   // body text
-  var INK_SOFT  = [71, 85, 105];  // secondary text
-  var INK_FAINT = [148, 163, 184];// captions
-  var RULE      = [148, 163, 184];// stroke lines
-  var RULE_SOFT = [203, 213, 225];
-  var ROW_ALT   = [250, 250, 248];// items table zebra (warm off-white)
+  // Palette — emerald reserved for the header band + a few tiny accents.
+  var EMERALD      = [6, 95, 70];
+  var EMERALD_DEEP = [4, 78, 57];
+  var EMERALD_TINT = [225, 245, 235];
+  var INK          = [15, 23, 42];
+  var INK_SOFT     = [71, 85, 105];
+  var INK_FAINT    = [148, 163, 184];
+  var RULE         = [148, 163, 184];
+  var RULE_SOFT    = [203, 213, 225];
+  var ROW_ALT      = [250, 250, 248];
 
   function setFill(c){ doc.setFillColor(c[0], c[1], c[2]); }
   function setText(c){ doc.setTextColor(c[0], c[1], c[2]); }
   function setStroke(c){ doc.setDrawColor(c[0], c[1], c[2]); }
-
-  // Body font helper — all non-title text uses this (Times New Roman 12pt
-  // per spec). Specific lines that need bold / italic call this helper
-  // with the right weight.
   function bodyFont(weight, size){
     doc.setFont('times', weight || 'normal');
-    doc.setFontSize(size || 12);
+    doc.setFontSize(size || 11);
   }
 
-  // ── 1) TOP ACCENT  ·  a single thin emerald rule (no big band)
-  setStroke(EMERALD); doc.setLineWidth(2.5);
-  doc.line(margin, 28, pageW - margin, 28);
-  doc.setLineWidth(0.5);
+  // ── 1) GREEN HEADER BAND  ·  white text
+  var bandH = 78;
+  setFill(EMERALD);      doc.rect(0, 0, pageW, bandH, 'F');
+  setFill(EMERALD_DEEP); doc.rect(0, bandH - 4, pageW, 4, 'F'); // subtle base stripe
 
-  // ── 2) HEADER  ·  left = brand + letterhead, right = quotation + meta
-  var headerTopY = 64;
+  // MJM NURSERY — helvetica bold, widened letter spacing for an elegant
+  // brand wordmark that stays readable on the emerald background.
+  doc.setFont('helvetica','bold'); doc.setFontSize(28); setText([255,255,255]);
+  if (doc.setCharSpace) doc.setCharSpace(2.5);
+  doc.text('MJM NURSERY', margin, 48);
+  if (doc.setCharSpace) doc.setCharSpace(0);
 
-  // LEFT: MJM NURSERY wordmark — times BoldItalic in emerald.
-  // BoldItalic gives the wordmark a more decorative, "nursery" feel that
-  // a plain helvetica wordmark can't, while staying inside jsPDF's
-  // built-in font set.
-  doc.setFont('times', 'bolditalic'); doc.setFontSize(34); setText(EMERALD);
-  doc.text('MJM NURSERY', margin, headerTopY);
+  // QUOTATION + quote number on the right of the band
+  doc.setFont('helvetica','bold'); doc.setFontSize(26); setText([255,255,255]);
+  doc.text('QUOTATION', pageW - margin, 44, { align:'right' });
+  doc.setFont('helvetica','normal'); doc.setFontSize(11); setText(EMERALD_TINT);
+  doc.text('No. ' + (q.quote_number || '—'), pageW - margin, 62, { align:'right' });
 
-  // Mega Jutamas letterhead — Times Roman 12pt body, immediately under
-  // the wordmark.
-  bodyFont('bold', 12); setText(INK);
-  doc.text(COMPANY.name + '  ' + COMPANY.reg, margin, headerTopY + 22);
+  // ── 2) BELOW BAND  ·  Letterhead (left) + Date/Term/Valid table (right)
+  var belowY = bandH + 18;
 
-  bodyFont('normal', 12); setText(INK_SOFT);
-  var addrY = headerTopY + 40;
-  COMPANY.addr.split('\n').forEach(function(ln){ doc.text(ln, margin, addrY); addrY += 15; });
+  // LEFT: Mega Jutamas letterhead — Times Roman, compact
+  bodyFont('bold', 11); setText(INK);
+  doc.text(COMPANY.name + '  ' + COMPANY.reg, margin, belowY);
+
+  bodyFont('normal', 10); setText(INK_SOFT);
+  var addrY = belowY + 14;
+  COMPANY.addr.split('\n').forEach(function(ln){ doc.text(ln, margin, addrY); addrY += 12; });
   doc.text('Tel : ' + COMPANY.tel + '     Fax : ' + COMPANY.fax, margin, addrY);
-  var leftHeaderBottom = addrY + 4;
+  var leftHeaderBottom = addrY + 2;
 
-  // RIGHT: QUOTATION title — Times Bold, plain dark — and No. + meta table
-  doc.setFont('times', 'bold'); doc.setFontSize(30); setText(INK);
-  doc.text('QUOTATION', pageW - margin, headerTopY, { align:'right' });
-
-  doc.setFont('times', 'bold'); doc.setFontSize(13); setText(EMERALD);
-  doc.text('No. ' + (q.quote_number || '—'), pageW - margin, headerTopY + 22, { align:'right' });
-
-  // Meta table — borderless theme, just hairline rules between rows.
-  // No background fill so it sits quietly next to the title.
-  var metaTableW = 230;
+  // RIGHT: Date / Term of Payment / Valid Until — small Times Roman
+  var metaTableW = 195;
   doc.autoTable({
-    startY: headerTopY + 34,
+    startY: belowY - 8,
     body: [
       ['Date',            fmtDateLong(q.quote_date)],
       ['Term of Payment', 'Cash Only'],
       ['Valid Until',     fmtDateLong(q.valid_until)],
     ],
-    theme: 'plain',
+    theme: 'grid',
     margin: { left: pageW - margin - metaTableW, right: margin },
     tableWidth: metaTableW,
-    styles: { font:'times', fontSize:12, cellPadding:5, lineColor:RULE_SOFT, lineWidth:0.5 },
+    styles: { font:'times', fontSize:10, cellPadding:4, lineColor:RULE_SOFT, lineWidth:0.5 },
     columnStyles: {
-      0: { textColor: INK_SOFT,         halign:'left',  cellWidth: 110 },
-      1: { textColor: INK, fontStyle:'bold', halign:'right', cellWidth: metaTableW - 110 },
-    },
-    didDrawCell: function(d){
-      if (d.section === 'body'){
-        // Draw a hairline only under each row (no left/right verticals)
-        setStroke(RULE_SOFT); doc.setLineWidth(0.5);
-        doc.line(d.cell.x, d.cell.y + d.cell.height, d.cell.x + d.cell.width, d.cell.y + d.cell.height);
-      }
+      0: { fillColor:[248,250,252], textColor:INK, fontStyle:'bold', halign:'left',  cellWidth: 95 },
+      1: { textColor:INK, fontStyle:'bold',                         halign:'right', cellWidth: 100 },
     },
   });
   var rightHeaderBottom = doc.lastAutoTable.finalY;
   var headerSectionBottom = Math.max(leftHeaderBottom, rightHeaderBottom);
 
-  // Divider beneath the header
-  setStroke(RULE); doc.setLineWidth(0.7);
-  doc.line(margin, headerSectionBottom + 12, pageW - margin, headerSectionBottom + 12);
+  // Divider beneath the header area
+  setStroke(RULE_SOFT); doc.setLineWidth(0.6);
+  doc.line(margin, headerSectionBottom + 10, pageW - margin, headerSectionBottom + 10);
 
-  // ── 3) ATTN TO  (full-width)
-  var attnY = headerSectionBottom + 32;
-  bodyFont('bold', 11); setText(INK_FAINT);
+  // ── 3) ATTN TO
+  var attnY = headerSectionBottom + 26;
+  bodyFont('bold', 9); setText(INK_FAINT);
   doc.text('ATTN TO', margin, attnY);
 
-  var custY = attnY + 18;
-  bodyFont('bold', 13); setText(INK);
+  var custY = attnY + 14;
+  bodyFont('bold', 12); setText(INK);
   doc.text((q.customer_company || q.customer_name || '—').toUpperCase(), margin, custY);
-  custY += 18;
+  custY += 14;
 
-  bodyFont('normal', 12); setText(INK_SOFT);
+  bodyFont('normal', 10); setText(INK_SOFT);
   if (q.customer_address){
     var aLines = doc.splitTextToSize(q.customer_address, pageW - margin*2);
-    doc.text(aLines, margin, custY); custY += aLines.length * 15;
+    doc.text(aLines, margin, custY); custY += aLines.length * 12;
   }
   custY += 2;
-  if (q.customer_contact) { doc.text('Tel : '       + q.customer_contact, margin, custY); custY += 15; }
-  if (q.customer_name)    { doc.text('Attention : ' + q.customer_name,    margin, custY); custY += 15; }
-  if (q.customer_email)   { doc.text('Email : '     + q.customer_email,   margin, custY); custY += 15; }
+  if (q.customer_contact) { doc.text('Tel : '       + q.customer_contact, margin, custY); custY += 12; }
+  if (q.customer_name)    { doc.text('Attention : ' + q.customer_name,    margin, custY); custY += 12; }
+  if (q.customer_email)   { doc.text('Email : '     + q.customer_email,   margin, custY); custY += 12; }
   var leftBottom = custY;
 
-  // ── 4) ITEMS TABLE  ·  black-on-white classical style, no colored fills
-  var tableTop = leftBottom + 20;
+  // ── 4) ITEMS TABLE  ·  black-on-white, tight rows
+  var tableTop = leftBottom + 18;
   var unitLabel = ((q.items||[])[0] && (q.items[0].unit||'Palm')) || 'Palm';
   var itemRows = (q.items||[]).map(function(it, idx){
     return [
@@ -809,15 +793,21 @@ function generatePdf(q){
       fmtMoneyPlain(it.line_total||0),
     ];
   });
-  var descColWidth = pageW - margin*2 - (32 + 70 + 82 + 96);
+  // Fixed widths chosen so column headers fit on one or two lines and the
+  // "No" column is wide enough for "No" not to wrap.
+  var COL_NO    = 42;
+  var COL_QTY   = 70;
+  var COL_PRICE = 80;
+  var COL_AMT   = 92;
+  var descColWidth = pageW - margin*2 - (COL_NO + COL_QTY + COL_PRICE + COL_AMT);
   function descCellHeight(name, details, cellWidth){
-    var contentW = cellWidth - 16;
-    doc.setFont('times', 'bold'); doc.setFontSize(12);
+    var contentW = cellWidth - 12;
+    doc.setFont('times', 'bold'); doc.setFontSize(11);
     var nameLines = doc.splitTextToSize(name || '', contentW).length || 1;
-    doc.setFont('times', 'italic'); doc.setFontSize(11);
+    doc.setFont('times', 'italic'); doc.setFontSize(10);
     var detailLines = details ? doc.splitTextToSize(details, contentW).length : 0;
-    var h = nameLines * 14 + (details ? (detailLines * 13 + 6) : 0) + 16;
-    return Math.max(h, 42);
+    var h = nameLines * 13 + (details ? (detailLines * 12 + 4) : 0) + 12;
+    return Math.max(h, 28);
   }
 
   doc.autoTable({
@@ -826,15 +816,15 @@ function generatePdf(q){
     body: itemRows,
     theme: 'plain',
     margin: { left: margin, right: margin },
-    styles: { font:'times', fontSize:12, cellPadding:8, lineColor:RULE_SOFT, lineWidth:0.5, valign:'top', textColor:INK },
-    headStyles: { fillColor:[255,255,255], textColor:INK, fontStyle:'bold', halign:'center', fontSize:11, cellPadding:10, lineColor:INK, lineWidth:0.8 },
+    styles: { font:'times', fontSize:11, cellPadding:6, lineColor:RULE_SOFT, lineWidth:0.5, valign:'top', textColor:INK },
+    headStyles: { fillColor:[255,255,255], textColor:INK, fontStyle:'bold', halign:'center', fontSize:10, cellPadding:8, lineColor:INK, lineWidth:0.8 },
     alternateRowStyles: { fillColor: ROW_ALT },
     columnStyles: {
-      0: { halign:'center', cellWidth:32 },
+      0: { halign:'center', cellWidth:COL_NO },
       1: { halign:'left',   cellWidth:'auto' },
-      2: { halign:'right',  cellWidth:70 },
-      3: { halign:'right',  cellWidth:82 },
-      4: { halign:'right',  cellWidth:96, fontStyle:'bold' },
+      2: { halign:'right',  cellWidth:COL_QTY },
+      3: { halign:'right',  cellWidth:COL_PRICE },
+      4: { halign:'right',  cellWidth:COL_AMT, fontStyle:'bold' },
     },
     didParseCell: function(d){
       if (d.section === 'body' && d.column.index === 1 && d.cell.raw && typeof d.cell.raw === 'object'){
@@ -844,16 +834,16 @@ function generatePdf(q){
     },
     didDrawCell: function(d){
       if (d.section === 'body' && d.column.index === 1 && d.cell.raw && typeof d.cell.raw === 'object'){
-        var x = d.cell.x + 8;
-        var y = d.cell.y + 8 + 12;
-        var contentW = d.cell.width - 16;
-        doc.setFont('times', 'bold'); doc.setFontSize(12); setText(INK);
+        var x = d.cell.x + 6;
+        var y = d.cell.y + 6 + 10;
+        var contentW = d.cell.width - 12;
+        doc.setFont('times', 'bold'); doc.setFontSize(11); setText(INK);
         var nameLines = doc.splitTextToSize(d.cell.raw.descName || '', contentW);
         doc.text(nameLines, x, y);
-        y += nameLines.length * 14;
+        y += nameLines.length * 13;
         if (d.cell.raw.descDetails){
-          y += 4;
-          doc.setFont('times', 'italic'); doc.setFontSize(11); setText(INK_SOFT);
+          y += 3;
+          doc.setFont('times', 'italic'); doc.setFontSize(10); setText(INK_SOFT);
           var detailLines = doc.splitTextToSize(d.cell.raw.descDetails, contentW);
           doc.text(detailLines, x, y);
         }
@@ -861,115 +851,114 @@ function generatePdf(q){
     },
   });
 
-  // ── 5) TOTALS  ·  classical right-aligned invoice style.
-  // No coloured band — just rules above/below the TOTAL line so the
-  // amount reads as the natural conclusion of the items table.
-  var afterTableY = doc.lastAutoTable.finalY + 18;
-  var totalsLabelX = pageW - margin - 220;  // left edge of label column
-  var totalsValueX = pageW - margin;        // right edge (numbers right-aligned)
+  // ── 5) TOTALS  ·  right-aligned, no colored band
+  var afterTableY = doc.lastAutoTable.finalY + 14;
+  var totalsLabelX = pageW - margin - 220;
+  var totalsValueX = pageW - margin;
 
-  bodyFont('normal', 12); setText(INK_SOFT);
+  bodyFont('normal', 11); setText(INK_SOFT);
   doc.text('Subtotal (RM)', totalsLabelX, afterTableY);
-  bodyFont('normal', 12); setText(INK);
+  bodyFont('normal', 11); setText(INK);
   doc.text(fmtMoneyPlain(q.subtotal||0), totalsValueX, afterTableY, { align:'right' });
-  afterTableY += 8;
+  afterTableY += 6;
 
-  setStroke(INK); doc.setLineWidth(0.7);
+  setStroke(INK); doc.setLineWidth(0.6);
   doc.line(totalsLabelX, afterTableY, totalsValueX, afterTableY);
 
-  afterTableY += 20;
-  doc.setFont('times', 'bold'); doc.setFontSize(13); setText(INK);
+  afterTableY += 16;
+  doc.setFont('times', 'bold'); doc.setFontSize(12); setText(INK);
   doc.text('TOTAL QUOTE (RM)', totalsLabelX, afterTableY);
   doc.text(fmtMoneyPlain(q.total||0), totalsValueX, afterTableY, { align:'right' });
 
-  afterTableY += 6;
-  setStroke(INK); doc.setLineWidth(1.4);
+  afterTableY += 5;
+  setStroke(INK); doc.setLineWidth(1.2);
   doc.line(totalsLabelX, afterTableY, totalsValueX, afterTableY);
-  afterTableY += 3;
+  afterTableY += 2.5;
   doc.setLineWidth(0.5);
   doc.line(totalsLabelX, afterTableY, totalsValueX, afterTableY);
   var totalsBottom = afterTableY + 4;
 
-  // Per-quote additional notes (only if filled in)
-  var contentBottom = totalsBottom + 16;
+  // Optional per-quote notes
+  var contentBottom = totalsBottom;
   if (q.notes && String(q.notes).trim()){
     var noteText = String(q.notes).trim();
-    var noteY = totalsBottom + 28;
-    bodyFont('bold', 11); setText(INK_FAINT);
-    doc.text('NOTES', margin, noteY); noteY += 16;
-    bodyFont('normal', 12); setText(INK_SOFT);
+    var noteY = totalsBottom + 22;
+    bodyFont('bold', 9); setText(INK_FAINT);
+    doc.text('NOTES', margin, noteY); noteY += 12;
+    bodyFont('normal', 10); setText(INK_SOFT);
     var noteLines = doc.splitTextToSize(noteText, pageW - margin*2);
     doc.text(noteLines, margin, noteY);
-    contentBottom = noteY + noteLines.length * 14 + 8;
+    contentBottom = noteY + noteLines.length * 12 + 4;
   }
 
-  // ── 6) TERMS & CONDITIONS  ·  anchored near the footer
-  var tcBlockH = 130;
-  var tcY = Math.max(contentBottom + 24, pageH - 60 - tcBlockH);
-  if (tcY + tcBlockH > pageH - 60){ doc.addPage(); tcY = 80; }
+  // ── 6) TERMS & CONDITIONS  ·  flow naturally after content
+  // (the previous version anchored T&C to the bottom which made the
+  // middle of the page feel hollow when items were few — flowing it
+  // immediately after totals gives a more standard invoice rhythm.)
+  var tcY = contentBottom + 30;
+  if (tcY > pageH - 160){ doc.addPage(); tcY = 60; }
 
-  bodyFont('bold', 11); setText(INK_FAINT);
+  bodyFont('bold', 10); setText(INK_FAINT);
   doc.text('TERMS & CONDITIONS', margin, tcY);
   tcY += 5;
   setStroke(EMERALD); doc.setLineWidth(1);
   doc.line(margin, tcY, margin + 100, tcY);
   doc.setLineWidth(0.5);
-  tcY += 18;
+  tcY += 14;
 
-  function tcNumber(n, y){
-    bodyFont('bold', 12); setText(INK);
+  function tcNum(n, y){
+    bodyFont('bold', 11); setText(INK);
     doc.text(String(n) + '.', margin + 4, y);
   }
 
-  // 1) Payment + bank details
-  tcNumber(1, tcY);
-  bodyFont('normal', 12); setText(INK_SOFT);
+  // 1) Payment + bank
+  tcNum(1, tcY);
+  bodyFont('normal', 11); setText(INK_SOFT);
   doc.text('All payment should be crossed and made payable to:', margin + 22, tcY);
-  tcY += 15;
-  bodyFont('bold', 12); setText(INK);
+  tcY += 13;
+  bodyFont('bold', 11); setText(INK);
   doc.text(BANK_DETAILS.payee, margin + 22, tcY);
-  tcY += 15;
-  bodyFont('normal', 12); setText(INK_SOFT);
+  tcY += 13;
+  bodyFont('normal', 11); setText(INK_SOFT);
   doc.text('A/C No : ' + BANK_DETAILS.ac_no + '   ·   ' + BANK_DETAILS.bank, margin + 22, tcY);
-  tcY += 18;
+  tcY += 16;
 
   // 2)
-  tcNumber(2, tcY);
-  bodyFont('normal', 12); setText(INK_SOFT);
+  tcNum(2, tcY);
+  bodyFont('normal', 11); setText(INK_SOFT);
   var t2Lines = doc.splitTextToSize(
     'All payment made towards the purchase of oil palm seedlings are non-refundable.',
     pageW - margin*2 - 26);
   doc.text(t2Lines, margin + 22, tcY);
-  tcY += t2Lines.length * 14 + 6;
+  tcY += t2Lines.length * 13 + 4;
 
   // 3)
-  tcNumber(3, tcY);
-  bodyFont('normal', 12); setText(INK_SOFT);
+  tcNum(3, tcY);
+  bodyFont('normal', 11); setText(INK_SOFT);
   var t3Lines = doc.splitTextToSize(
     'Collection must be made according to the scheduled collection date.',
     pageW - margin*2 - 26);
   doc.text(t3Lines, margin + 22, tcY);
-  tcY += t3Lines.length * 14 + 6;
+  tcY += t3Lines.length * 13 + 4;
 
   // ── 7) FOOTER (every page)
   var totalPages = doc.internal.getNumberOfPages();
   for (var pg = 1; pg <= totalPages; pg++){
     doc.setPage(pg);
-    var fy = pageH - 40;
+    var fy = pageH - 36;
     setStroke(RULE_SOFT); doc.setLineWidth(0.5);
     doc.line(margin, fy, pageW - margin, fy);
 
-    doc.setFont('times', 'bolditalic'); doc.setFontSize(9); setText(EMERALD);
-    doc.text('MJM NURSERY', margin, fy + 16);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); setText(EMERALD);
+    doc.text('MJM NURSERY', margin, fy + 14);
 
-    doc.setFont('times', 'italic'); doc.setFontSize(10); setText(INK_FAINT);
-    doc.text('"This is a computer-generated quotation and no signature is required."', pageW/2, fy + 16, { align:'center' });
+    doc.setFont('times', 'italic'); doc.setFontSize(9); setText(INK_FAINT);
+    doc.text('"This is a computer-generated quotation and no signature is required."', pageW/2, fy + 14, { align:'center' });
 
     doc.setFont('times', 'normal'); doc.setFontSize(9); setText(INK_FAINT);
-    doc.text((q.quote_number || '') + '   ·   Page ' + pg + ' of ' + totalPages, pageW - margin, fy + 16, { align:'right' });
+    doc.text((q.quote_number || '') + '   ·   Page ' + pg + ' of ' + totalPages, pageW - margin, fy + 14, { align:'right' });
   }
 
-  // Save
   var safeCust = ((q.customer_company || q.customer_name || 'customer')+'').replace(/[^a-zA-Z0-9_\-]/g,'_').slice(0,40);
   var safeNum  = (q.quote_number || 'quotation').replace(/[\/\\]/g,'-');
   doc.save('Quotation_' + safeNum + '_' + safeCust + '.pdf');
