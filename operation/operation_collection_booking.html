@@ -107,6 +107,10 @@
   .override-btn { background:white; color:#1e293b; font-weight:900; font-size:10px; text-transform:uppercase; letter-spacing:.06em; padding:8px 14px; border-radius:999px; border:none; cursor:pointer; transition:transform .15s,box-shadow .15s; font-family:'Outfit',sans-serif; }
   .override-btn:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.15); }
   .override-btn.danger { background:#1e293b; color:white; }
+  .override-notes { width:100%; display:grid; grid-template-columns:1fr 1fr auto; gap:8px; margin-top:6px; align-items:end; }
+  @media (max-width: 640px) { .override-notes { grid-template-columns:1fr; } }
+  .override-notes label { display:flex; flex-direction:column; gap:3px; font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:.06em; opacity:.9; }
+  .override-notes textarea { background:white; color:#1e293b; font-weight:600; font-size:12px; padding:8px 10px; border-radius:8px; border:none; font-family:'Outfit',sans-serif; resize:vertical; min-height:38px; max-height:120px; line-height:1.35; }
   .override-badge { position:absolute; top:3px; right:3px; font-size:7px; font-weight:900; padding:2px 5px; border-radius:5px; letter-spacing:.04em; text-transform:uppercase; line-height:1; z-index:2; }
   .override-badge.open { background:#10b981; color:white; }
   .override-badge.closed { background:#ef4444; color:white; }
@@ -549,20 +553,58 @@ function getEffectiveHours(ds) {
 async function applyDateOverride(isOpen, openHour, closeHour) {
   if (!dayModalDate) return;
   var ds = dayModalDate;
+  var existing = dateOverrides[ds] || {};
   var record = { date_str: ds, is_open: isOpen };
   if (isOpen) {
     record.open_hour = openHour;
     record.close_hour = closeHour;
     record.note = 'Override open: ' + formatHour(openHour) + '-' + formatHour(closeHour);
+    // Opening the day — close-day remarks no longer apply
+    record.external_note = null;
+    record.internal_note = null;
   } else {
     record.open_hour = null;
     record.close_hour = null;
     record.note = 'Manual closure';
+    // Preserve any remark already typed into the banner inputs;
+    // otherwise carry over what was previously saved.
+    var extEl = document.getElementById('ovr-ext-note');
+    var intEl = document.getElementById('ovr-int-note');
+    record.external_note = extEl ? (extEl.value.trim() || null) : (existing.external_note || null);
+    record.internal_note = intEl ? (intEl.value.trim() || null) : (existing.internal_note || null);
   }
   var { error } = await _supabase.from('shared_date_overrides').upsert(record);
   if (error) { showToast('❌ ' + error.message); return; }
   dateOverrides[ds] = record;
   showToast(isOpen ? '✅ Opened ' + formatHour(openHour) + ' – ' + formatHour(closeHour) : '🚫 Closed for collection');
+  renderCalendar();
+  renderBoard();
+}
+
+// Save just the external/internal remarks for a day that is (or becomes) closed.
+// Works for both override-closed and default-closed (Sunday/holiday) days — in
+// the latter case we materialise a closed override so the remark persists.
+async function saveCloseNotes() {
+  if (!dayModalDate) return;
+  var ds = dayModalDate;
+  var extEl = document.getElementById('ovr-ext-note');
+  var intEl = document.getElementById('ovr-int-note');
+  var ext = extEl ? (extEl.value.trim() || null) : null;
+  var intl = intEl ? (intEl.value.trim() || null) : null;
+  var existing = dateOverrides[ds];
+  var record = {
+    date_str: ds,
+    is_open: false,
+    open_hour: null,
+    close_hour: null,
+    note: (existing && existing.note) || 'Closure remark',
+    external_note: ext,
+    internal_note: intl,
+  };
+  var { error } = await _supabase.from('shared_date_overrides').upsert(record);
+  if (error) { showToast('❌ ' + error.message); return; }
+  dateOverrides[ds] = record;
+  showToast('💾 Closure remark saved');
   renderCalendar();
   renderBoard();
 }
@@ -593,11 +635,33 @@ function buildHourOptions(selected) {
   return opts;
 }
 
+function escAttr(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function buildCloseNotesHtml(ds) {
+  var ovr = dateOverrides[ds] || {};
+  var ext = escAttr(ovr.external_note || '');
+  var intl = escAttr(ovr.internal_note || '');
+  return '<div class="override-notes">' +
+           '<label>External remark (customers see this)' +
+             '<textarea id="ovr-ext-note" placeholder="e.g. Annual stock-take — collections resume Monday">' + ext + '</textarea>' +
+           '</label>' +
+           '<label>Internal remark (operations only)' +
+             '<textarea id="ovr-int-note" placeholder="e.g. Closed by Boss — Andy handling Mon reopen">' + intl + '</textarea>' +
+           '</label>' +
+           '<button class="override-btn" onclick="saveCloseNotes()">💾 Save Remark</button>' +
+         '</div>';
+}
+
 function buildOverrideBanner(ds) {
   if (!ds) return '';
   var defaultReason = getDefaultClosedReason(ds);
   var override = dateOverrides[ds];
   var statusCls, statusText, controls;
+  var showNotes = false;
 
   if (override && override.is_open) {
     statusCls = 'open';
@@ -617,6 +681,7 @@ function buildOverrideBanner(ds) {
                '<select id="ovr-close-h">' + buildHourOptions(17) + '</select>' +
                '<button class="override-btn" onclick="saveOverrideOpen()">✅ Open</button>' +
                '<button class="override-btn" onclick="resetDateOverride()">↩ Reset</button>';
+    showNotes = true;
   } else if (defaultReason) {
     statusCls = 'default-closed';
     statusText = '🚫 <b>Closed:</b> ' + defaultReason + ' (default)';
@@ -624,6 +689,7 @@ function buildOverrideBanner(ds) {
                '<span style="font-weight:900;">→</span>' +
                '<select id="ovr-close-h">' + buildHourOptions(17) + '</select>' +
                '<button class="override-btn" onclick="saveOverrideOpen()">✅ Open this Day</button>';
+    showNotes = true;
   } else {
     statusCls = 'open';
     var d = new Date(ds + 'T00:00:00');
@@ -635,6 +701,7 @@ function buildOverrideBanner(ds) {
   return '<div class="override-banner ' + statusCls + '">' +
            '<div class="override-banner-text">' + statusText + '</div>' +
            '<div class="override-banner-actions">' + controls + '</div>' +
+           (showNotes ? buildCloseNotesHtml(ds) : '') +
          '</div>';
 }
 
