@@ -821,7 +821,7 @@ async function placeOrder(){
     sessionStorage.setItem('mjm_pay_order_id',order.id);
     sessionStorage.setItem('mjm_pay_order_total',finalTotal);
     sessionStorage.setItem('mjm_pay_order_number',orderNum);
-    window.location.href='salesweb_payment_proof.html';
+    window.location.href='salesweb_payment_proof.html?v=20260520a';
   } else {
     // Online payment via Billplz
     btn.textContent='Redirecting to payment...';
