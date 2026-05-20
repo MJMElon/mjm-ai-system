@@ -589,8 +589,11 @@ async function saveCloseNotes() {
   var ds = dayModalDate;
   var extEl = document.getElementById('ovr-ext-note');
   var intEl = document.getElementById('ovr-int-note');
+  var btn = document.getElementById('ovr-notes-save-btn');
+  var statusEl = document.getElementById('ovr-notes-status');
   var ext = extEl ? (extEl.value.trim() || null) : null;
   var intl = intEl ? (intEl.value.trim() || null) : null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   var existing = dateOverrides[ds];
   var record = {
     date_str: ds,
@@ -602,11 +605,48 @@ async function saveCloseNotes() {
     internal_note: intl,
   };
   var { error } = await _supabase.from('shared_date_overrides').upsert(record);
-  if (error) { showToast('❌ ' + error.message); return; }
+  if (error) {
+    showToast('❌ ' + error.message);
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Save Remark'; }
+    return;
+  }
   dateOverrides[ds] = record;
   showToast('💾 Closure remark saved');
+  // Visible in-form confirmation: lock the inputs into a "saved" state so the
+  // operator can see the save took effect (toast alone was easy to miss).
+  if (extEl) { extEl.readOnly = true; extEl.style.background = '#f1f5f9'; extEl.style.color = '#475569'; }
+  if (intEl) { intEl.readOnly = true; intEl.style.background = '#f1f5f9'; intEl.style.color = '#475569'; }
+  if (btn) {
+    btn.textContent = '✏️ Edit Remark';
+    btn.style.background = '#065f46';
+    btn.style.color = 'white';
+    btn.disabled = false;
+    btn.onclick = function() { enableCloseNotesEdit(); };
+  }
+  if (statusEl) {
+    statusEl.textContent = '✓ Saved';
+    statusEl.style.display = 'block';
+  }
   renderCalendar();
   renderBoard();
+}
+
+// Re-enable the close-notes inputs so the operator can edit a saved remark.
+function enableCloseNotesEdit() {
+  var extEl = document.getElementById('ovr-ext-note');
+  var intEl = document.getElementById('ovr-int-note');
+  var btn = document.getElementById('ovr-notes-save-btn');
+  var statusEl = document.getElementById('ovr-notes-status');
+  if (extEl) { extEl.readOnly = false; extEl.style.background = 'white'; extEl.style.color = '#1e293b'; extEl.focus(); }
+  if (intEl) { intEl.readOnly = false; intEl.style.background = 'white'; intEl.style.color = '#1e293b'; }
+  if (btn) {
+    btn.textContent = '💾 Save Remark';
+    btn.style.background = '';
+    btn.style.color = '';
+    btn.disabled = false;
+    btn.onclick = function() { saveCloseNotes(); };
+  }
+  if (statusEl) { statusEl.style.display = 'none'; }
 }
 
 async function resetDateOverride() {
@@ -645,15 +685,26 @@ function buildCloseNotesHtml(ds) {
   var ovr = dateOverrides[ds] || {};
   var ext = escAttr(ovr.external_note || '');
   var intl = escAttr(ovr.internal_note || '');
+  // If a remark is already saved for this date, render the inputs in the
+  // "saved" state so the operator can see at a glance that it's stored, with
+  // an Edit affordance to re-open them.
+  var hasSaved = !!(ovr.external_note || ovr.internal_note);
+  var lockedAttrs = hasSaved ? ' readonly style="background:#f1f5f9;color:#475569;"' : '';
+  var btnLabel = hasSaved ? '✏️ Edit Remark' : '💾 Save Remark';
+  var btnStyle = hasSaved ? 'background:#065f46;color:white;' : '';
+  var btnOnclick = hasSaved ? 'enableCloseNotesEdit()' : 'saveCloseNotes()';
+  var statusStyle = 'font-size:10px;font-weight:700;opacity:.85;margin-top:4px;display:' + (hasSaved ? 'block' : 'none') + ';';
+  var statusText = hasSaved ? '✓ Saved' : '';
   return '<div class="override-notes">' +
            '<label>External remark (customers see this)' +
-             '<textarea id="ovr-ext-note" placeholder="e.g. Annual stock-take — collections resume Monday">' + ext + '</textarea>' +
+             '<textarea id="ovr-ext-note" placeholder="e.g. Annual stock-take — collections resume Monday"' + lockedAttrs + '>' + ext + '</textarea>' +
            '</label>' +
            '<label>Internal remark (operations only)' +
-             '<textarea id="ovr-int-note" placeholder="e.g. Closed by Boss — Andy handling Mon reopen">' + intl + '</textarea>' +
+             '<textarea id="ovr-int-note" placeholder="e.g. Closed by Boss — Andy handling Mon reopen"' + lockedAttrs + '>' + intl + '</textarea>' +
            '</label>' +
-           '<button class="override-btn" onclick="saveCloseNotes()">💾 Save Remark</button>' +
-         '</div>';
+           '<button id="ovr-notes-save-btn" class="override-btn" style="' + btnStyle + '" onclick="' + btnOnclick + '">' + btnLabel + '</button>' +
+         '</div>' +
+         '<div id="ovr-notes-status" style="' + statusStyle + '">' + statusText + '</div>';
 }
 
 function buildOverrideBanner(ds) {
