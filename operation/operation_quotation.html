@@ -267,19 +267,14 @@ const COMPANY = {
   tel:  '085-419907',
   fax:  '085-413264',
 };
-// Bank details — printed in a dedicated highlighted "Payment Instructions"
-// box on the PDF so customers can't miss them.
+// Bank details — printed inside the Terms & Conditions section so the
+// "made payable to" line, the payee name and the account number live
+// together with the other payment terms.
 const BANK_DETAILS = {
   payee:  'MEGA JUTAMAS SDN BHD',
   bank:   'Hong Leong Bank Berhad',
   ac_no:  'HLBB 027-00-11609-6',
 };
-// Standard T&C printed on every quotation. Per-quote "Additional notes"
-// are inserted as note #1 before this list on the PDF.
-const STANDARD_TERMS = [
-  'All payment / deposit made towards the purchase of oil palm seedlings are non-refundable. Deposit made will be automatically deducted from the total invoice amount during the final payment process.',
-  'Collection must be made according to the scheduled collection date. In the event of late collection, the price per seedling will be subject to adjustment based on the prevailing rate at the time of collection, and subject to stock availability.',
-];
 
 // ════════════════════════════════════════════════════════
 //  STATE
@@ -694,9 +689,6 @@ function generatePdf(q){
   var EMERALD       = [6, 95, 70];
   var EMERALD_DEEP  = [4, 78, 57];
   var EMERALD_LIGHT = [187, 247, 208];
-  var TEAL_ACCENT   = [15, 118, 110];
-  var AMBER         = [245, 158, 11];
-  var AMBER_TINT    = [254, 252, 232];
   var SLATE_900     = [15, 23, 42];
   var SLATE_700     = [51, 65, 85];
   var SLATE_500     = [100, 116, 139];
@@ -708,94 +700,79 @@ function generatePdf(q){
   function setText(c){ doc.setTextColor(c[0], c[1], c[2]); }
   function setStroke(c){ doc.setDrawColor(c[0], c[1], c[2]); }
 
-  // ── 1) HEADER BAND ─────────────────────────────────────────────
-  var bandH = 100;
-  setFill(EMERALD);     doc.rect(0, 0, pageW, bandH, 'F');
-  setFill(EMERALD_DEEP); doc.rect(0, bandH - 6, pageW, 6, 'F'); // subtle base stripe
+  // ── 1) HEADER ROW: brand+company on left  ·  QUOTATION+# on right
+  // Big "MJM NURSERY" wordmark in emerald, with Mega Jutamas details
+  // immediately below it. QUOTATION title on the same row at the right.
+  doc.setFont('helvetica','bold'); doc.setFontSize(28); setText(EMERALD);
+  doc.text('MJM NURSERY', margin, 56);
 
-  doc.setFont('helvetica','bold'); doc.setFontSize(34); setText([255,255,255]);
-  doc.text('MJM NURSERY', margin, 52);
-  doc.setFont('helvetica','normal'); doc.setFontSize(9); setText(EMERALD_LIGHT);
-  doc.text('Seedling Supplier · Miri, Sarawak', margin, 70);
-  doc.text(COMPANY.name + ' ' + COMPANY.reg, margin, 82);
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); setText(SLATE_900);
+  doc.text(COMPANY.name + '  ' + COMPANY.reg, margin, 76);
 
-  doc.setFont('helvetica','bold'); doc.setFontSize(26); setText([255,255,255]);
-  doc.text('QUOTATION', pageW - margin, 56, { align:'right' });
-  doc.setFont('helvetica','normal'); doc.setFontSize(11); setText(EMERALD_LIGHT);
-  doc.text('No. ' + (q.quote_number || '—'), pageW - margin, 78, { align:'right' });
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); setText(SLATE_700);
+  var addrY = 90;
+  COMPANY.addr.split('\n').forEach(function(ln){ doc.text(ln, margin, addrY); addrY += 11; });
+  doc.text('Tel : ' + COMPANY.tel + '     Fax : ' + COMPANY.fax, margin, addrY);
+  var headerBottom = addrY + 6;
 
-  // ── 2) META STRIP (Date · Quote No · Payment Term · Valid Until)
-  var stripY = bandH + 18;
-  var stripH = 46;
-  var stripW = pageW - margin*2;
-  setFill(SLATE_50); setStroke(SLATE_200); doc.setLineWidth(0.5);
-  doc.rect(margin, stripY, stripW, stripH, 'FD');
-  for (var i=1; i<4; i++){
-    var dx = margin + (stripW/4)*i;
-    setStroke(SLATE_200);
-    doc.line(dx, stripY + 8, dx, stripY + stripH - 8);
-  }
-  function metaCell(label, value, colIdx){
-    var cw = stripW/4;
-    var cx = margin + cw*colIdx;
-    doc.setFont('helvetica','bold'); doc.setFontSize(7); setText(SLATE_500);
-    doc.text(label.toUpperCase(), cx + 12, stripY + 15);
-    doc.setFont('helvetica','bold'); doc.setFontSize(11); setText(SLATE_900);
-    doc.text(value || '—', cx + 12, stripY + 34);
-  }
-  metaCell('Date',            fmtDateLong(q.quote_date),  0);
-  metaCell('Quote No.',       q.quote_number || '—',      1);
-  metaCell('Term of Payment', 'Cash Only',                2);
-  metaCell('Valid Until',     fmtDateLong(q.valid_until), 3);
+  // QUOTATION title (right)
+  doc.setFont('helvetica','bold'); doc.setFontSize(32); setText(SLATE_900);
+  doc.text('QUOTATION', pageW - margin, 58, { align:'right' });
+  doc.setFont('helvetica','bold'); doc.setFontSize(12); setText(EMERALD);
+  doc.text('No. ' + (q.quote_number || '—'), pageW - margin, 80, { align:'right' });
 
-  // ── 3) FROM + BILL TO BLOCKS ───────────────────────────────────
-  var blocksY = stripY + stripH + 22;
-  var blockGap = 16;
-  var blockW = (pageW - margin*2 - blockGap) / 2;
-  var blockH = 116;
+  // Divider under header
+  setStroke(SLATE_200); doc.setLineWidth(1);
+  doc.line(margin, headerBottom, pageW - margin, headerBottom);
 
-  function drawBlock(x, accentColor, label, lines){
-    setFill([255,255,255]); setStroke(SLATE_200); doc.setLineWidth(0.5);
-    doc.rect(x, blocksY, blockW, blockH, 'FD');
-    setFill(accentColor);
-    doc.rect(x, blocksY, 4, blockH, 'F');
-    doc.setFont('helvetica','bold'); doc.setFontSize(8); setText(accentColor);
-    doc.text(label, x + 14, blocksY + 17);
-    var ly = blocksY + 34;
-    lines.forEach(function(ln){
-      if (!ln) return;
-      doc.setFont(ln.bold ? 'helvetica':'helvetica', ln.bold ? 'bold' : 'normal');
-      doc.setFontSize(ln.size || 9);
-      setText(ln.color || SLATE_700);
-      doc.text(ln.text, x + 14, ly);
-      ly += (ln.gap || 12);
-    });
-  }
+  // ── 2) CUSTOMER (left)  ·  META TABLE (right) — same row
+  var secY = headerBottom + 22;
+  var metaTableW = 230;
+  var leftW = pageW - margin*2 - metaTableW - 24;
 
-  // FROM (our company)
-  drawBlock(margin, EMERALD, 'FROM', [
-    { text: COMPANY.name, bold:true, size:11, color: SLATE_900, gap: 13 },
-    { text: COMPANY.reg,                size:8,  color: SLATE_500, gap: 14 },
-  ].concat(COMPANY.addr.split('\n').map(function(ln){ return { text: ln, size:9, gap: 11 }; }))
-   .concat([{ text: 'Tel: ' + COMPANY.tel + '    ·    Fax: ' + COMPANY.fax, size:9, gap: 11 }]));
+  // Right column FIRST (Date · Term of Payment · Valid Until) — Quote No.
+  // is intentionally omitted here because it already sits beside the
+  // QUOTATION title at the top of the page.
+  doc.autoTable({
+    startY: secY - 4,
+    body: [
+      ['Date',            fmtDateLong(q.quote_date)],
+      ['Term of Payment', 'Cash Only'],
+      ['Valid Until',     fmtDateLong(q.valid_until)],
+    ],
+    theme: 'grid',
+    margin: { left: pageW - margin - metaTableW, right: margin },
+    tableWidth: metaTableW,
+    styles: { font:'helvetica', fontSize:10, cellPadding:7, lineColor:SLATE_200, lineWidth:0.5 },
+    columnStyles: {
+      0: { fillColor: SLATE_50, textColor: SLATE_900, fontStyle:'bold', halign:'left',   cellWidth: 110 },
+      1: { textColor: SLATE_900, fontStyle:'bold',                       halign:'center', cellWidth: metaTableW - 110 },
+    },
+  });
+  var metaBottom = doc.lastAutoTable.finalY;
 
-  // BILL TO (customer)
-  var toX = margin + blockW + blockGap;
-  var custLines = [
-    { text: (q.customer_company || q.customer_name || '—').toUpperCase(), bold:true, size:12, color: SLATE_900, gap: 14 },
-  ];
+  // Left column: ATTN TO block
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); setText(EMERALD);
+  doc.text('ATTN TO :', margin, secY);
+
+  var custY = secY + 20;
+  doc.setFont('helvetica','bold'); doc.setFontSize(12); setText(SLATE_900);
+  doc.text((q.customer_company || q.customer_name || '—').toUpperCase(), margin, custY);
+  custY += 16;
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); setText(SLATE_700);
   if (q.customer_address){
-    doc.splitTextToSize(q.customer_address, blockW - 24).forEach(function(ln){
-      custLines.push({ text: ln, size: 9, gap: 11 });
-    });
+    var aLines = doc.splitTextToSize(q.customer_address, leftW);
+    doc.text(aLines, margin, custY); custY += aLines.length * 12;
   }
-  if (q.customer_contact) custLines.push({ text: 'Tel: ' + q.customer_contact, size:9, gap: 11 });
-  if (q.customer_name)    custLines.push({ text: 'Attention: ' + q.customer_name, size:9, gap: 11 });
-  if (q.customer_email)   custLines.push({ text: 'Email: ' + q.customer_email, size:9, gap: 11 });
-  drawBlock(toX, TEAL_ACCENT, 'BILL TO', custLines);
+  custY += 4;
+  if (q.customer_contact) { doc.text('Tel : '       + q.customer_contact, margin, custY); custY += 12; }
+  if (q.customer_name)    { doc.text('Attention : ' + q.customer_name,    margin, custY); custY += 12; }
+  if (q.customer_email)   { doc.text('Email : '     + q.customer_email,   margin, custY); custY += 12; }
+  var leftBottom = custY;
 
-  // ── 4) ITEMS TABLE ─────────────────────────────────────────────
-  var tableTop = blocksY + blockH + 22;
+  // ── 3) ITEMS TABLE ─────────────────────────────────────────────
+  var tableTop = Math.max(leftBottom, metaBottom) + 22;
   var unitLabel = ((q.items||[])[0] && (q.items[0].unit||'Palm')) || 'Palm';
   var itemRows = (q.items||[]).map(function(it, idx){
     return [
@@ -858,7 +835,7 @@ function generatePdf(q){
     },
   });
 
-  // ── 5) TOTALS BOX (Subtotal light card + TOTAL emerald band) ───
+  // ── 4) TOTALS BOX (Subtotal light card + TOTAL emerald band) ───
   var afterTableY = doc.lastAutoTable.finalY + 14;
   var totalsW = 270;
   var totalsX = pageW - margin - totalsW;
@@ -876,57 +853,69 @@ function generatePdf(q){
   doc.text('TOTAL QUOTE', totalsX + 16, afterTableY + 56);
   doc.setFontSize(18); setText([255,255,255]);
   doc.text('RM ' + fmtMoneyPlain(q.total||0), totalsX + totalsW - 16, afterTableY + 58, { align:'right' });
+  var totalsBottom = afterTableY + 32 + 40;
 
-  // ── 6) PAYMENT INSTRUCTIONS BOX ────────────────────────────────
-  var payY = afterTableY + 32 + 40 + 24;
-  if (payY > pageH - 220){ doc.addPage(); payY = 50; }
+  // Per-quote Additional Notes (small notes section between totals and T&C)
+  var contentBottom = totalsBottom + 16;
+  if (q.notes && String(q.notes).trim()){
+    var noteText = String(q.notes).trim();
+    var noteLines = doc.splitTextToSize(noteText, pageW - margin*2);
+    var noteY = totalsBottom + 28;
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); setText(EMERALD);
+    doc.text('NOTES', margin, noteY); noteY += 14;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); setText(SLATE_700);
+    doc.text(noteLines, margin, noteY);
+    contentBottom = noteY + noteLines.length * 11 + 8;
+  }
 
-  var payBoxH = 80;
-  setFill(AMBER_TINT); setStroke(AMBER); doc.setLineWidth(1);
-  doc.rect(margin, payY, pageW - margin*2, payBoxH, 'FD');
-  doc.setLineWidth(0.5);
-  setFill(AMBER);
-  doc.rect(margin, payY, 5, payBoxH, 'F');
-
-  doc.setFont('helvetica','bold'); doc.setFontSize(9); setText([146, 64, 14]);
-  doc.text('PAYMENT INSTRUCTIONS', margin + 16, payY + 18);
-
-  doc.setFont('helvetica','normal'); doc.setFontSize(9); setText(SLATE_700);
-  doc.text('All payments to be crossed and made payable to:', margin + 16, payY + 34);
-
-  doc.setFont('helvetica','bold'); doc.setFontSize(12); setText(SLATE_900);
-  doc.text(BANK_DETAILS.payee, margin + 16, payY + 52);
-
-  doc.setFont('helvetica','normal'); doc.setFontSize(10); setText(SLATE_700);
-  doc.text('Bank Account: ' + BANK_DETAILS.ac_no + '   ·   ' + BANK_DETAILS.bank, margin + 16, payY + 68);
-
-  // ── 7) TERMS & CONDITIONS ──────────────────────────────────────
-  var tcY = payY + payBoxH + 22;
-  if (tcY > pageH - 120){ doc.addPage(); tcY = 50; }
+  // ── 5) TERMS & CONDITIONS — anchored near the bottom of the page
+  // (middle blank space between totals and T&C is intentional)
+  var tcBlockH = 150; // approximate height reserved
+  var tcY = Math.max(contentBottom + 24, pageH - 50 - tcBlockH);
+  if (tcY + tcBlockH > pageH - 50){ doc.addPage(); tcY = 80; }
 
   doc.setFont('helvetica','bold'); doc.setFontSize(9); setText(EMERALD);
   doc.text('TERMS & CONDITIONS', margin, tcY);
   tcY += 6;
   setStroke(EMERALD); doc.setLineWidth(1.2);
-  doc.line(margin, tcY, margin + 60, tcY);
+  doc.line(margin, tcY, margin + 80, tcY);
   doc.setLineWidth(0.5);
+  tcY += 16;
+
+  function tcNumber(n, y){
+    doc.setFont('helvetica','bold'); setText(EMERALD); doc.setFontSize(10);
+    doc.text(String(n) + '.', margin + 4, y);
+  }
+
+  // Note 1 — payment payable + bank details
+  tcNumber(1, tcY);
+  doc.setFont('helvetica','normal'); setText(SLATE_700); doc.setFontSize(10);
+  doc.text('All payment should be crossed and made payable to:', margin + 22, tcY);
   tcY += 14;
+  doc.setFont('helvetica','bold'); setText(SLATE_900); doc.setFontSize(11);
+  doc.text(BANK_DETAILS.payee, margin + 22, tcY);
+  tcY += 14;
+  doc.setFont('helvetica','normal'); setText(SLATE_700); doc.setFontSize(10);
+  doc.text('A/C No : ' + BANK_DETAILS.ac_no + '   ·   ' + BANK_DETAILS.bank, margin + 22, tcY);
+  tcY += 18;
 
-  var allTerms = [];
-  if (q.notes && String(q.notes).trim()) allTerms.push(String(q.notes).trim());
-  STANDARD_TERMS.forEach(function(t){ allTerms.push(t); });
+  // Note 2
+  tcNumber(2, tcY);
+  doc.setFont('helvetica','normal'); setText(SLATE_700); doc.setFontSize(10);
+  var t2Lines = doc.splitTextToSize(
+    'All payment made towards the purchase of oil palm seedlings are non-refundable.',
+    pageW - margin*2 - 26);
+  doc.text(t2Lines, margin + 22, tcY);
+  tcY += t2Lines.length * 12 + 6;
 
-  doc.setFont('helvetica','normal'); doc.setFontSize(9); setText(SLATE_700);
-  allTerms.forEach(function(text, i){
-    var n = i + 1;
-    var bodyLines = doc.splitTextToSize(text, pageW - margin*2 - 26);
-    if (tcY + bodyLines.length * 11 > pageH - 50){ doc.addPage(); tcY = 50; }
-    doc.setFont('helvetica','bold'); setText(EMERALD);
-    doc.text(String(n) + '.', margin + 4, tcY);
-    doc.setFont('helvetica','normal'); setText(SLATE_700);
-    doc.text(bodyLines, margin + 22, tcY);
-    tcY += bodyLines.length * 11 + 8;
-  });
+  // Note 3
+  tcNumber(3, tcY);
+  doc.setFont('helvetica','normal'); setText(SLATE_700); doc.setFontSize(10);
+  var t3Lines = doc.splitTextToSize(
+    'Collection must be made according to the scheduled collection date.',
+    pageW - margin*2 - 26);
+  doc.text(t3Lines, margin + 22, tcY);
+  tcY += t3Lines.length * 12 + 6;
 
   // ── 8) FOOTER ──────────────────────────────────────────────────
   var totalPages = doc.internal.getNumberOfPages();
