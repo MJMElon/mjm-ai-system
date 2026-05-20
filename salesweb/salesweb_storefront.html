@@ -2400,7 +2400,7 @@ function pOrderCard(o){
 function goPayOrder(orderId,total){
   sessionStorage.setItem('mjm_pay_order_id',orderId);
   sessionStorage.setItem('mjm_pay_order_total',total);
-  window.location.href='salesweb_payment_proof.html';
+  window.location.href='salesweb_payment_proof.html?v=20260520a';
 }
 
 function _odLabel(label,val){return'<div style="color:var(--text-light);font-size:11px;">'+label+'</div><div style="font-weight:600;font-size:12px;">'+esc(val||'—')+'</div>';}
