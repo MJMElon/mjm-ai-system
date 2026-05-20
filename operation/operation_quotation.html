@@ -165,23 +165,23 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label class="label">Name / Attention *</label>
-            <input id="f-cust-name" type="text" class="input" placeholder="e.g. Mr. Chan">
+            <input id="f-cust-name" type="text" class="input">
           </div>
           <div>
             <label class="label">Company</label>
-            <input id="f-cust-company" type="text" class="input" placeholder="e.g. BHB Sdn Bhd">
+            <input id="f-cust-company" type="text" class="input">
           </div>
           <div>
             <label class="label">Contact (phone)</label>
-            <input id="f-cust-contact" type="text" class="input" placeholder="e.g. 086-313339">
+            <input id="f-cust-contact" type="text" class="input">
           </div>
           <div>
             <label class="label">Email</label>
-            <input id="f-cust-email" type="email" class="input" placeholder="optional">
+            <input id="f-cust-email" type="email" class="input">
           </div>
           <div class="sm:col-span-2">
             <label class="label">Address</label>
-            <textarea id="f-cust-address" class="input" rows="2" placeholder="Delivery / billing address"></textarea>
+            <textarea id="f-cust-address" class="input" rows="2"></textarea>
           </div>
         </div>
       </div>
@@ -200,7 +200,7 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="label">Additional notes (optional, shown on PDF above the standard notes)</label>
-          <textarea id="f-notes" class="input" rows="3" placeholder="e.g. Collection schedule confirmed by phone on 14-May."></textarea>
+          <textarea id="f-notes" class="input" rows="3"></textarea>
         </div>
         <div class="dash-card p-4" style="background:#f8fafc;box-shadow:none;">
           <div class="totals-row"><span>Subtotal</span><span id="t-subtotal">RM 0.00</span></div>
@@ -267,10 +267,16 @@ const COMPANY = {
   tel:  '085-419907',
   fax:  '085-413264',
 };
+// Bank details — printed in a dedicated highlighted "Payment Instructions"
+// box on the PDF so customers can't miss them.
+const BANK_DETAILS = {
+  payee:  'MEGA JUTAMAS SDN BHD',
+  bank:   'Hong Leong Bank Berhad',
+  ac_no:  'HLBB 027-00-11609-6',
+};
 // Standard T&C printed on every quotation. Per-quote "Additional notes"
-// are inserted before this block on the PDF.
-const STANDARD_NOTES = [
-  'All payment should be crossed and made payable to\nMEGA JUTAMAS SDN BHD\nOUR BANKER A/C NO. HLBB 027-00-11609-6',
+// are inserted as note #1 before this list on the PDF.
+const STANDARD_TERMS = [
   'All payment / deposit made towards the purchase of oil palm seedlings are non-refundable. Deposit made will be automatically deducted from the total invoice amount during the final payment process.',
   'Collection must be made according to the scheduled collection date. In the event of late collection, the price per seedling will be subject to adjustment based on the prevailing rate at the time of collection, and subject to stock availability.',
 ];
@@ -340,7 +346,7 @@ async function nextQuoteNumber(){
     var m = /^QOPS(\d+)\//i.exec(r.quote_number||'');
     if (m){ var n = parseInt(m[1],10); if (n > maxN) maxN = n; }
   });
-  return 'QOPS' + (maxN + 1) + '/' + mm + '/' + yy;
+  return 'QOPS' + String(maxN + 1).padStart(3, '0') + '/' + mm + '/' + yy;
 }
 
 // ════════════════════════════════════════════════════════
@@ -557,7 +563,7 @@ function renderItems(){
 
     var descField = it.product_id
       ? '<input class="input" type="text" value="'+escapeHtml(it.description||'')+'" readonly style="background:#f8fafc;color:#475569;">'
-      : '<input class="input" type="text" value="'+escapeHtml(it.description||'')+'" placeholder="Item description" oninput="onItemChange('+idx+',\'description\',this.value)">';
+      : '<input class="input" type="text" value="'+escapeHtml(it.description||'')+'" oninput="onItemChange('+idx+',\'description\',this.value)">';
 
     return '<div class="item-card">' +
       '<div class="item-grid">' +
@@ -573,8 +579,8 @@ function renderItems(){
         '<div><div class="label" style="opacity:0;">.</div><button onclick="removeItemRow('+idx+')" class="btn btn-ghost" style="padding:8px 10px;font-size:14px;color:#dc2626;" title="Remove">&times;</button></div>' +
       '</div>' +
       '<div style="margin-top:8px;">' +
-        '<div class="label">Item details (printed on PDF — e.g. Seedling Source / Collecting Location / Date of Supply)</div>' +
-        '<textarea class="input" rows="2" placeholder="Seedling Source Supply: IOI DxP Hybrid and UPB Premier Hybrida&#10;Collecting Location: Ulu Niah / Batu Niah&#10;Date of Supply: June 2026" oninput="onItemChange('+idx+',\'details\',this.value)">'+escapeHtml(it.details||'')+'</textarea>' +
+        '<div class="label">Item details (printed on PDF)</div>' +
+        '<textarea class="input" rows="2" oninput="onItemChange('+idx+',\'details\',this.value)">'+escapeHtml(it.details||'')+'</textarea>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -682,65 +688,114 @@ function generatePdf(q){
   var doc = new jsPDFNS.jsPDF({ unit:'pt', format:'a4' });
   var pageW = doc.internal.pageSize.getWidth();
   var pageH = doc.internal.pageSize.getHeight();
-  var margin = 40;
+  var margin = 36;
 
-  // ── Company block (top-left)
-  doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(15,23,42);
-  doc.text(COMPANY.name, margin, 58);
-  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(71,85,105);
-  doc.text(COMPANY.reg, margin + doc.getTextWidth(COMPANY.name) + 6, 58);
-  doc.setFontSize(9);
-  var addrLines = COMPANY.addr.split('\n');
-  var ay = 74;
-  addrLines.forEach(function(ln){ doc.text(ln, margin, ay); ay += 11; });
-  doc.text('Tel : ' + COMPANY.tel + '       Fax : ' + COMPANY.fax, margin, ay + 2);
+  // Brand palette
+  var EMERALD       = [6, 95, 70];
+  var EMERALD_DEEP  = [4, 78, 57];
+  var EMERALD_LIGHT = [187, 247, 208];
+  var TEAL_ACCENT   = [15, 118, 110];
+  var AMBER         = [245, 158, 11];
+  var AMBER_TINT    = [254, 252, 232];
+  var SLATE_900     = [15, 23, 42];
+  var SLATE_700     = [51, 65, 85];
+  var SLATE_500     = [100, 116, 139];
+  var SLATE_300     = [203, 213, 225];
+  var SLATE_200     = [226, 232, 240];
+  var SLATE_50      = [248, 250, 252];
 
-  // ── QUOTATION header (top-right)
-  doc.setFont('helvetica','bold'); doc.setFontSize(28); doc.setTextColor(15,23,42);
-  doc.text('QUOTATION', pageW - margin, 60, { align:'right' });
+  function setFill(c){ doc.setFillColor(c[0], c[1], c[2]); }
+  function setText(c){ doc.setTextColor(c[0], c[1], c[2]); }
+  function setStroke(c){ doc.setDrawColor(c[0], c[1], c[2]); }
 
-  // ── Meta table (top-right, under QUOTATION)
-  var metaRows = [
-    ['Date',            fmtDateLong(q.quote_date)],
-    ['Quote #',         q.quote_number || '—'],
-    ['Term of Payment', 'Cash Only'],
-    ['Valid until',     fmtDateLong(q.valid_until)],
-  ];
-  doc.autoTable({
-    startY: 78,
-    body: metaRows,
-    theme: 'grid',
-    margin: { left: pageW - margin - 240, right: margin },
-    tableWidth: 240,
-    styles: { font:'helvetica', fontSize:9, cellPadding:4, lineColor:[148,163,184], lineWidth:0.5 },
-    columnStyles: {
-      0: { fillColor:[241,245,249], textColor:[30,41,59], fontStyle:'bold', halign:'right', cellWidth:100 },
-      1: { textColor:[30,41,59], halign:'center', cellWidth:140 },
-    },
-  });
+  // ── 1) HEADER BAND ─────────────────────────────────────────────
+  var bandH = 100;
+  setFill(EMERALD);     doc.rect(0, 0, pageW, bandH, 'F');
+  setFill(EMERALD_DEEP); doc.rect(0, bandH - 6, pageW, 6, 'F'); // subtle base stripe
 
-  // ── Customer block
-  var afterHeaderY = Math.max(140, doc.lastAutoTable.finalY + 10);
-  doc.setDrawColor(148,163,184); doc.setFillColor(241,245,249);
-  doc.rect(margin, afterHeaderY, 220, 18, 'FD');
-  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(30,41,59);
-  doc.text('Customer', margin + 8, afterHeaderY + 13);
+  doc.setFont('helvetica','bold'); doc.setFontSize(34); setText([255,255,255]);
+  doc.text('MJM NURSERY', margin, 52);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); setText(EMERALD_LIGHT);
+  doc.text('Seedling Supplier · Miri, Sarawak', margin, 70);
+  doc.text(COMPANY.name + ' ' + COMPANY.reg, margin, 82);
 
-  var custY = afterHeaderY + 34;
-  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(15,23,42);
-  doc.text((q.customer_company || q.customer_name || '—').toUpperCase(), margin, custY);
-  custY += 14;
-  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(71,85,105);
-  if (q.customer_address){
-    var aLines = doc.splitTextToSize(q.customer_address, 280);
-    doc.text(aLines, margin, custY); custY += aLines.length * 12;
+  doc.setFont('helvetica','bold'); doc.setFontSize(26); setText([255,255,255]);
+  doc.text('QUOTATION', pageW - margin, 56, { align:'right' });
+  doc.setFont('helvetica','normal'); doc.setFontSize(11); setText(EMERALD_LIGHT);
+  doc.text('No. ' + (q.quote_number || '—'), pageW - margin, 78, { align:'right' });
+
+  // ── 2) META STRIP (Date · Quote No · Payment Term · Valid Until)
+  var stripY = bandH + 18;
+  var stripH = 46;
+  var stripW = pageW - margin*2;
+  setFill(SLATE_50); setStroke(SLATE_200); doc.setLineWidth(0.5);
+  doc.rect(margin, stripY, stripW, stripH, 'FD');
+  for (var i=1; i<4; i++){
+    var dx = margin + (stripW/4)*i;
+    setStroke(SLATE_200);
+    doc.line(dx, stripY + 8, dx, stripY + stripH - 8);
   }
-  custY += 6;
-  if (q.customer_contact){ doc.text('Tel : ' + q.customer_contact, margin, custY); custY += 12; }
-  if (q.customer_name)   { doc.text('Attention : ' + q.customer_name, margin, custY); custY += 12; }
-  if (q.customer_email)  { doc.text('Email : ' + q.customer_email, margin, custY); custY += 12; }
+  function metaCell(label, value, colIdx){
+    var cw = stripW/4;
+    var cx = margin + cw*colIdx;
+    doc.setFont('helvetica','bold'); doc.setFontSize(7); setText(SLATE_500);
+    doc.text(label.toUpperCase(), cx + 12, stripY + 15);
+    doc.setFont('helvetica','bold'); doc.setFontSize(11); setText(SLATE_900);
+    doc.text(value || '—', cx + 12, stripY + 34);
+  }
+  metaCell('Date',            fmtDateLong(q.quote_date),  0);
+  metaCell('Quote No.',       q.quote_number || '—',      1);
+  metaCell('Term of Payment', 'Cash Only',                2);
+  metaCell('Valid Until',     fmtDateLong(q.valid_until), 3);
 
-  // ── Items table — bold product name + italic details rendered manually
+  // ── 3) FROM + BILL TO BLOCKS ───────────────────────────────────
+  var blocksY = stripY + stripH + 22;
+  var blockGap = 16;
+  var blockW = (pageW - margin*2 - blockGap) / 2;
+  var blockH = 116;
+
+  function drawBlock(x, accentColor, label, lines){
+    setFill([255,255,255]); setStroke(SLATE_200); doc.setLineWidth(0.5);
+    doc.rect(x, blocksY, blockW, blockH, 'FD');
+    setFill(accentColor);
+    doc.rect(x, blocksY, 4, blockH, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(8); setText(accentColor);
+    doc.text(label, x + 14, blocksY + 17);
+    var ly = blocksY + 34;
+    lines.forEach(function(ln){
+      if (!ln) return;
+      doc.setFont(ln.bold ? 'helvetica':'helvetica', ln.bold ? 'bold' : 'normal');
+      doc.setFontSize(ln.size || 9);
+      setText(ln.color || SLATE_700);
+      doc.text(ln.text, x + 14, ly);
+      ly += (ln.gap || 12);
+    });
+  }
+
+  // FROM (our company)
+  drawBlock(margin, EMERALD, 'FROM', [
+    { text: COMPANY.name, bold:true, size:11, color: SLATE_900, gap: 13 },
+    { text: COMPANY.reg,                size:8,  color: SLATE_500, gap: 14 },
+  ].concat(COMPANY.addr.split('\n').map(function(ln){ return { text: ln, size:9, gap: 11 }; }))
+   .concat([{ text: 'Tel: ' + COMPANY.tel + '    ·    Fax: ' + COMPANY.fax, size:9, gap: 11 }]));
+
+  // BILL TO (customer)
+  var toX = margin + blockW + blockGap;
+  var custLines = [
+    { text: (q.customer_company || q.customer_name || '—').toUpperCase(), bold:true, size:12, color: SLATE_900, gap: 14 },
+  ];
+  if (q.customer_address){
+    doc.splitTextToSize(q.customer_address, blockW - 24).forEach(function(ln){
+      custLines.push({ text: ln, size: 9, gap: 11 });
+    });
+  }
+  if (q.customer_contact) custLines.push({ text: 'Tel: ' + q.customer_contact, size:9, gap: 11 });
+  if (q.customer_name)    custLines.push({ text: 'Attention: ' + q.customer_name, size:9, gap: 11 });
+  if (q.customer_email)   custLines.push({ text: 'Email: ' + q.customer_email, size:9, gap: 11 });
+  drawBlock(toX, TEAL_ACCENT, 'BILL TO', custLines);
+
+  // ── 4) ITEMS TABLE ─────────────────────────────────────────────
+  var tableTop = blocksY + blockH + 22;
   var unitLabel = ((q.items||[])[0] && (q.items[0].unit||'Palm')) || 'Palm';
   var itemRows = (q.items||[]).map(function(it, idx){
     return [
@@ -751,37 +806,32 @@ function generatePdf(q){
       fmtMoneyPlain(it.line_total||0),
     ];
   });
-
-  // Pre-compute the height each description cell needs so autoTable reserves
-  // enough vertical space (didDrawCell only paints — it can't grow the row).
+  var descColWidth = pageW - margin*2 - (32 + 70 + 82 + 96);
   function descCellHeight(name, details, cellWidth){
-    var contentW = cellWidth - 12;
+    var contentW = cellWidth - 16;
     doc.setFont('helvetica','bold'); doc.setFontSize(10);
     var nameLines = doc.splitTextToSize(name || '', contentW).length || 1;
     doc.setFont('helvetica','italic'); doc.setFontSize(9);
     var detailLines = details ? doc.splitTextToSize(details, contentW).length : 0;
-    var h = nameLines * 12 + (details ? (detailLines * 11 + 6) : 0) + 12;
-    return Math.max(h, 30);
+    var h = nameLines * 12 + (details ? (detailLines * 11 + 6) : 0) + 16;
+    return Math.max(h, 38);
   }
-  // Description column width is whatever's left after fixed columns:
-  // pageW - margin*2 - (30 + 70 + 80 + 90) = pageW - 80 - 270
-  var descColWidth = pageW - margin*2 - (30 + 70 + 80 + 90);
 
-  var tableTop = Math.max(custY + 16, afterHeaderY + 100);
   doc.autoTable({
     startY: tableTop,
-    head: [['No', 'Description', 'Qty\n(' + unitLabel + ')', 'Unit Price\n(RM)', 'Amount\n(RM)']],
+    head: [['No', 'Description', 'Qty (' + unitLabel + ')', 'Unit Price (RM)', 'Amount (RM)']],
     body: itemRows,
-    theme: 'grid',
+    theme: 'plain',
     margin: { left: margin, right: margin },
-    styles: { font:'helvetica', fontSize:10, cellPadding:6, lineColor:[148,163,184], lineWidth:0.5, valign:'top' },
-    headStyles: { fillColor:[241,245,249], textColor:[30,41,59], fontStyle:'bold', halign:'center', lineColor:[148,163,184], lineWidth:0.5 },
+    styles: { font:'helvetica', fontSize:10, cellPadding:8, lineColor:SLATE_200, lineWidth:0.5, valign:'top', textColor:SLATE_900 },
+    headStyles: { fillColor:EMERALD, textColor:[255,255,255], fontStyle:'bold', halign:'center', fontSize:9, cellPadding:10 },
+    alternateRowStyles: { fillColor: SLATE_50 },
     columnStyles: {
-      0: { halign:'center', cellWidth:30 },
+      0: { halign:'center', cellWidth:32, fontStyle:'bold', textColor:EMERALD },
       1: { halign:'left',   cellWidth:'auto' },
       2: { halign:'right',  cellWidth:70 },
-      3: { halign:'right',  cellWidth:80 },
-      4: { halign:'right',  cellWidth:90 },
+      3: { halign:'right',  cellWidth:82 },
+      4: { halign:'right',  cellWidth:96, fontStyle:'bold' },
     },
     didParseCell: function(d){
       if (d.section === 'body' && d.column.index === 1 && d.cell.raw && typeof d.cell.raw === 'object'){
@@ -791,16 +841,16 @@ function generatePdf(q){
     },
     didDrawCell: function(d){
       if (d.section === 'body' && d.column.index === 1 && d.cell.raw && typeof d.cell.raw === 'object'){
-        var x = d.cell.x + 6;
-        var y = d.cell.y + 6 + 10;
-        var contentW = d.cell.width - 12;
-        doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(15,23,42);
+        var x = d.cell.x + 8;
+        var y = d.cell.y + 8 + 10;
+        var contentW = d.cell.width - 16;
+        doc.setFont('helvetica','bold'); doc.setFontSize(10); setText(SLATE_900);
         var nameLines = doc.splitTextToSize(d.cell.raw.descName || '', contentW);
         doc.text(nameLines, x, y);
         y += nameLines.length * 12;
         if (d.cell.raw.descDetails){
           y += 4;
-          doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(71,85,105);
+          doc.setFont('helvetica','italic'); doc.setFontSize(9); setText(SLATE_500);
           var detailLines = doc.splitTextToSize(d.cell.raw.descDetails, contentW);
           doc.text(detailLines, x, y);
         }
@@ -808,55 +858,95 @@ function generatePdf(q){
     },
   });
 
-  // ── Totals (Subtotal + TOTAL QUOTE) right-aligned
-  var afterTableY = doc.lastAutoTable.finalY + 6;
-  doc.autoTable({
-    startY: afterTableY,
-    body: [
-      ['Subtotal (RM)',    fmtMoneyPlain(q.subtotal||0)],
-      ['TOTAL QUOTE (RM)', fmtMoneyPlain(q.total||0)],
-    ],
-    theme: 'grid',
-    margin: { left: pageW - margin - 270, right: margin },
-    tableWidth: 270,
-    styles: { font:'helvetica', fontSize:10, cellPadding:6, lineColor:[148,163,184], lineWidth:0.5 },
-    columnStyles: {
-      0: { fillColor:[241,245,249], textColor:[30,41,59], fontStyle:'bold', halign:'right', cellWidth:180 },
-      1: { textColor:[30,41,59], fontStyle:'bold', halign:'right', cellWidth:90 },
-    },
-    didParseCell: function(d){
-      if (d.row.index === 1){ d.cell.styles.fontSize = 11; d.cell.styles.fillColor = [255,255,255]; }
-    },
-  });
+  // ── 5) TOTALS BOX (Subtotal light card + TOTAL emerald band) ───
+  var afterTableY = doc.lastAutoTable.finalY + 14;
+  var totalsW = 270;
+  var totalsX = pageW - margin - totalsW;
 
-  // ── Notes
-  var notesY = doc.lastAutoTable.finalY + 24;
-  if (notesY > pageH - 140){ doc.addPage(); notesY = 60; }
+  setFill(SLATE_50); setStroke(SLATE_200);
+  doc.rect(totalsX, afterTableY, totalsW, 32, 'FD');
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); setText(SLATE_700);
+  doc.text('Subtotal', totalsX + 16, afterTableY + 20);
+  doc.setFont('helvetica','bold'); setText(SLATE_900);
+  doc.text('RM ' + fmtMoneyPlain(q.subtotal||0), totalsX + totalsW - 16, afterTableY + 20, { align:'right' });
 
-  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(15,23,42);
-  doc.text('Notes :', margin, notesY);
-  notesY += 14;
+  setFill(EMERALD);
+  doc.rect(totalsX, afterTableY + 32, totalsW, 40, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); setText(EMERALD_LIGHT);
+  doc.text('TOTAL QUOTE', totalsX + 16, afterTableY + 56);
+  doc.setFontSize(18); setText([255,255,255]);
+  doc.text('RM ' + fmtMoneyPlain(q.total||0), totalsX + totalsW - 16, afterTableY + 58, { align:'right' });
 
-  var allNotes = [];
-  if (q.notes && String(q.notes).trim()){ allNotes.push(String(q.notes).trim()); }
-  STANDARD_NOTES.forEach(function(n){ allNotes.push(n); });
+  // ── 6) PAYMENT INSTRUCTIONS BOX ────────────────────────────────
+  var payY = afterTableY + 32 + 40 + 24;
+  if (payY > pageH - 220){ doc.addPage(); payY = 50; }
 
-  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(51,65,85);
-  allNotes.forEach(function(text, i){
+  var payBoxH = 80;
+  setFill(AMBER_TINT); setStroke(AMBER); doc.setLineWidth(1);
+  doc.rect(margin, payY, pageW - margin*2, payBoxH, 'FD');
+  doc.setLineWidth(0.5);
+  setFill(AMBER);
+  doc.rect(margin, payY, 5, payBoxH, 'F');
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); setText([146, 64, 14]);
+  doc.text('PAYMENT INSTRUCTIONS', margin + 16, payY + 18);
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); setText(SLATE_700);
+  doc.text('All payments to be crossed and made payable to:', margin + 16, payY + 34);
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(12); setText(SLATE_900);
+  doc.text(BANK_DETAILS.payee, margin + 16, payY + 52);
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); setText(SLATE_700);
+  doc.text('Bank Account: ' + BANK_DETAILS.ac_no + '   ·   ' + BANK_DETAILS.bank, margin + 16, payY + 68);
+
+  // ── 7) TERMS & CONDITIONS ──────────────────────────────────────
+  var tcY = payY + payBoxH + 22;
+  if (tcY > pageH - 120){ doc.addPage(); tcY = 50; }
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); setText(EMERALD);
+  doc.text('TERMS & CONDITIONS', margin, tcY);
+  tcY += 6;
+  setStroke(EMERALD); doc.setLineWidth(1.2);
+  doc.line(margin, tcY, margin + 60, tcY);
+  doc.setLineWidth(0.5);
+  tcY += 14;
+
+  var allTerms = [];
+  if (q.notes && String(q.notes).trim()) allTerms.push(String(q.notes).trim());
+  STANDARD_TERMS.forEach(function(t){ allTerms.push(t); });
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); setText(SLATE_700);
+  allTerms.forEach(function(text, i){
     var n = i + 1;
-    var bodyLines = doc.splitTextToSize(text, pageW - margin*2 - 22);
-    if (notesY + bodyLines.length * 11 > pageH - 60){ doc.addPage(); notesY = 60; }
-    doc.setFont('helvetica','bold');
-    doc.text(String(n), margin + 4, notesY);
-    doc.setFont('helvetica','normal');
-    doc.text(bodyLines, margin + 22, notesY);
-    notesY += bodyLines.length * 11 + 6;
+    var bodyLines = doc.splitTextToSize(text, pageW - margin*2 - 26);
+    if (tcY + bodyLines.length * 11 > pageH - 50){ doc.addPage(); tcY = 50; }
+    doc.setFont('helvetica','bold'); setText(EMERALD);
+    doc.text(String(n) + '.', margin + 4, tcY);
+    doc.setFont('helvetica','normal'); setText(SLATE_700);
+    doc.text(bodyLines, margin + 22, tcY);
+    tcY += bodyLines.length * 11 + 8;
   });
 
-  // ── Footer
-  doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(100,116,139);
-  doc.text('"This is a computer-generated quotation and no signature is required."', pageW/2, pageH - 30, { align:'center' });
+  // ── 8) FOOTER ──────────────────────────────────────────────────
+  var totalPages = doc.internal.getNumberOfPages();
+  for (var pg = 1; pg <= totalPages; pg++){
+    doc.setPage(pg);
+    var fy = pageH - 36;
+    setStroke(SLATE_200); doc.setLineWidth(0.5);
+    doc.line(margin, fy, pageW - margin, fy);
 
+    doc.setFont('helvetica','bold'); doc.setFontSize(7); setText(EMERALD);
+    doc.text('MJM NURSERY', margin, fy + 16);
+
+    doc.setFont('helvetica','italic'); doc.setFontSize(8); setText(SLATE_500);
+    doc.text('"This is a computer-generated quotation and no signature is required."', pageW/2, fy + 16, { align:'center' });
+
+    doc.setFont('helvetica','normal'); doc.setFontSize(7); setText(SLATE_500);
+    doc.text((q.quote_number || '') + '   ·   Page ' + pg + ' of ' + totalPages, pageW - margin, fy + 16, { align:'right' });
+  }
+
+  // Save
   var safeCust = ((q.customer_company || q.customer_name || 'customer')+'').replace(/[^a-zA-Z0-9_\-]/g,'_').slice(0,40);
   var safeNum  = (q.quote_number || 'quotation').replace(/[\/\\]/g,'-');
   doc.save('Quotation_' + safeNum + '_' + safeCust + '.pdf');
