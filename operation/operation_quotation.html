@@ -298,7 +298,7 @@ function fmtDateLong(d){
   if (!d) return '—';
   var dt = typeof d === 'string' ? new Date(d+'T00:00:00') : d;
   var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return String(dt.getDate()).padStart(2,'0') + '-' + months[dt.getMonth()] + '-' + dt.getFullYear();
+  return String(dt.getDate()).padStart(2,'0') + ' ' + months[dt.getMonth()] + ' ' + dt.getFullYear();
 }
 function fmtDateShort(d){
   if (!d) return '—';
@@ -685,16 +685,22 @@ function generatePdf(q){
   var pageH = doc.internal.pageSize.getHeight();
   var margin = 36;
 
-  // Palette — emerald reserved for the header band + a few tiny accents.
-  var EMERALD      = [6, 95, 70];
-  var EMERALD_DEEP = [4, 78, 57];
-  var EMERALD_TINT = [225, 245, 235];
-  var INK          = [15, 23, 42];
-  var INK_SOFT     = [71, 85, 105];
-  var INK_FAINT    = [148, 163, 184];
-  var RULE         = [148, 163, 184];
-  var RULE_SOFT    = [203, 213, 225];
-  var ROW_ALT      = [250, 250, 248];
+  // Palette — sage olive replaces emerald as the accent so labels +
+  // section headings warm up; body text in a slightly softer near-black
+  // for a printed-letterhead feel.
+  var OLIVE        = [122, 138, 87];   // sage olive — labels + accents
+  var OLIVE_SOFT   = [156, 167, 124];  // lighter olive for sub-labels
+  var INK          = [40, 40, 40];     // warm near-black
+  var INK_SOFT     = [85, 85, 85];     // warm grey body
+  var INK_FAINT    = [140, 140, 140];  // captions
+  var RULE         = [120, 120, 110];
+  var RULE_SOFT    = [220, 220, 215];
+  var ROW_ALT      = [251, 250, 246];  // cream table zebra
+  // Keep these aliases so any tiny accent references elsewhere still
+  // resolve to a sensible colour without needing edits.
+  var EMERALD      = OLIVE;
+  var EMERALD_TINT = OLIVE_SOFT;
+  var EMERALD_DEEP = OLIVE;
 
   function setFill(c){ doc.setFillColor(c[0], c[1], c[2]); }
   function setText(c){ doc.setTextColor(c[0], c[1], c[2]); }
@@ -704,92 +710,78 @@ function generatePdf(q){
     doc.setFontSize(size || 11);
   }
 
-  // ── 1) TOP ACCENT  ·  a thin emerald stripe along the top edge
-  setFill(EMERALD); doc.rect(0, 0, pageW, 3, 'F');
+  // ── 1) HEADER  ·  LEFT: MJM Nursery wordmark + Mega Jutamas letterhead
+  //                  RIGHT: Quotation label + No / Date / Valid Until (stacked)
+  var headerTopY = 56;
 
-  // ── 2) HEADER  ·  Mega Jutamas letterhead (top-left)  +
-  //                  MJM NURSERY wordmark stacked above QUOTATION (top-right)
-  // No big band: a balanced two-column header reads more like a standard
-  // printed letterhead and lets the two pieces of info breathe.
-  var headerTopY = 50;
+  // LEFT-TOP: MJM Nursery wordmark — uniform Times Bold in INK,
+  // mixed-case to match the supplied design (but not split across two
+  // colours or fonts the way the source mock-up does).
+  doc.setFont('times', 'bold'); doc.setFontSize(28); setText(INK);
+  doc.text('MJM Nursery', margin, headerTopY);
 
-  // LEFT: Mega Jutamas letterhead — Times Roman, compact
-  bodyFont('bold', 12); setText(INK);
-  doc.text(COMPANY.name + '  ' + COMPANY.reg, margin, headerTopY);
-
+  // LEFT-BELOW: Mega Jutamas letterhead in compact Times Roman 10pt
   bodyFont('normal', 10); setText(INK_SOFT);
-  var addrY = headerTopY + 16;
+  var addrY = headerTopY + 22;
+  doc.text(COMPANY.name + '  ' + COMPANY.reg, margin, addrY); addrY += 12;
   COMPANY.addr.split('\n').forEach(function(ln){ doc.text(ln, margin, addrY); addrY += 12; });
-  doc.text('Tel : ' + COMPANY.tel + '     Fax : ' + COMPANY.fax, margin, addrY);
+  doc.text('Tel: ' + COMPANY.tel + '  ·  Fax: ' + COMPANY.fax, margin, addrY);
   var leftHeaderBottom = addrY + 4;
 
-  // RIGHT: MJM NURSERY wordmark above QUOTATION title — both right-aligned
-  // The wordmark sits as a brand label over the document title, similar
-  // to how a logo would sit above the invoice heading.
-  doc.setFont('helvetica','bold'); doc.setFontSize(20); setText(EMERALD);
-  if (doc.setCharSpace) doc.setCharSpace(2.2);
-  doc.text('MJM NURSERY', pageW - margin, headerTopY, { align:'right' });
-  if (doc.setCharSpace) doc.setCharSpace(0);
+  // RIGHT: stacked meta lines (Quotation label → No → Date → Valid Until)
+  // No bordered table — looks lighter and matches the clean header in
+  // the supplied design.
+  var rx = pageW - margin;
+  doc.setFont('times', 'bold'); doc.setFontSize(13); setText(INK);
+  doc.text('Quotation', rx, headerTopY - 4, { align:'right' });
 
-  // Thin emerald accent rule under the wordmark
-  var wordmarkW = 168;
-  setStroke(EMERALD); doc.setLineWidth(1.2);
-  doc.line(pageW - margin - wordmarkW, headerTopY + 4, pageW - margin, headerTopY + 4);
-  doc.setLineWidth(0.5);
+  bodyFont('normal', 10); setText(INK_SOFT);
+  doc.text('No: '          + (q.quote_number || '—'),  rx, headerTopY + 14, { align:'right' });
+  doc.text('Date: '        + fmtDateLong(q.quote_date),  rx, headerTopY + 28, { align:'right' });
+  doc.text('Valid Until: ' + fmtDateLong(q.valid_until), rx, headerTopY + 42, { align:'right' });
+  var rightHeaderBottom = headerTopY + 46;
 
-  // QUOTATION title — larger, dark, beneath the wordmark
-  doc.setFont('helvetica','bold'); doc.setFontSize(26); setText(INK);
-  doc.text('QUOTATION', pageW - margin, headerTopY + 30, { align:'right' });
-
-  // Quote number under the title
-  doc.setFont('helvetica','bold'); doc.setFontSize(11); setText(EMERALD);
-  doc.text('No. ' + (q.quote_number || '—'), pageW - margin, headerTopY + 46, { align:'right' });
-
-  // Meta table (Date / Term of Payment / Valid Until) — beneath quote number
-  var metaTableW = 195;
-  doc.autoTable({
-    startY: headerTopY + 54,
-    body: [
-      ['Date',            fmtDateLong(q.quote_date)],
-      ['Term of Payment', 'Cash Only'],
-      ['Valid Until',     fmtDateLong(q.valid_until)],
-    ],
-    theme: 'grid',
-    margin: { left: pageW - margin - metaTableW, right: margin },
-    tableWidth: metaTableW,
-    styles: { font:'times', fontSize:10, cellPadding:4, lineColor:RULE_SOFT, lineWidth:0.5 },
-    columnStyles: {
-      0: { fillColor:[248,250,252], textColor:INK, fontStyle:'bold', halign:'left',  cellWidth: 95 },
-      1: { textColor:INK, fontStyle:'bold',                         halign:'right', cellWidth: 100 },
-    },
-  });
-  var rightHeaderBottom = doc.lastAutoTable.finalY;
   var headerSectionBottom = Math.max(leftHeaderBottom, rightHeaderBottom);
 
-  // Divider beneath the header area
+  // Divider beneath the header
   setStroke(RULE_SOFT); doc.setLineWidth(0.6);
   doc.line(margin, headerSectionBottom + 10, pageW - margin, headerSectionBottom + 10);
 
-  // ── 3) ATTN TO
-  var attnY = headerSectionBottom + 26;
-  bodyFont('bold', 9); setText(INK_FAINT);
-  doc.text('ATTN TO', margin, attnY);
+  // ── 2) TWO-COLUMN INFO STRIP  ·  Quotation For (left) · Payment Terms (right)
+  var infoY = headerSectionBottom + 28;
+  var halfW = (pageW - margin*2) / 2;
 
-  var custY = attnY + 14;
-  bodyFont('bold', 12); setText(INK);
-  doc.text((q.customer_company || q.customer_name || '—').toUpperCase(), margin, custY);
+  // Section labels in OLIVE caps
+  bodyFont('bold', 9); setText(OLIVE);
+  doc.text('QUOTATION FOR', margin, infoY);
+  doc.text('PAYMENT TERMS', margin + halfW, infoY);
+
+  // LEFT: customer details
+  var custY = infoY + 16;
+  bodyFont('bold', 11); setText(INK);
+  doc.text((q.customer_company || q.customer_name || '—'), margin, custY);
   custY += 14;
 
   bodyFont('normal', 10); setText(INK_SOFT);
+  if (q.customer_name)    { doc.text('Attn: '  + q.customer_name,    margin, custY); custY += 12; }
   if (q.customer_address){
-    var aLines = doc.splitTextToSize(q.customer_address, pageW - margin*2);
+    var aLines = doc.splitTextToSize(q.customer_address, halfW - 10);
     doc.text(aLines, margin, custY); custY += aLines.length * 12;
   }
-  custY += 2;
-  if (q.customer_contact) { doc.text('Tel : '       + q.customer_contact, margin, custY); custY += 12; }
-  if (q.customer_name)    { doc.text('Attention : ' + q.customer_name,    margin, custY); custY += 12; }
-  if (q.customer_email)   { doc.text('Email : '     + q.customer_email,   margin, custY); custY += 12; }
-  var leftBottom = custY;
+  if (q.customer_contact) { doc.text('Tel: '   + q.customer_contact, margin, custY); custY += 12; }
+  if (q.customer_email)   { doc.text('Email: ' + q.customer_email,   margin, custY); custY += 12; }
+  var leftInfoBottom = custY;
+
+  // RIGHT: payment terms
+  var ptY = infoY + 16;
+  bodyFont('bold', 11); setText(INK);
+  doc.text('Cash Only', margin + halfW, ptY);
+  ptY += 14;
+  bodyFont('normal', 10); setText(INK_SOFT);
+  doc.text('Quotation valid for 14 days from issue date.', margin + halfW, ptY);
+  ptY += 12;
+
+  var leftBottom = Math.max(leftInfoBottom, ptY);
 
   // ── 4) ITEMS TABLE  ·  black-on-white, tight rows
   var tableTop = leftBottom + 18;
