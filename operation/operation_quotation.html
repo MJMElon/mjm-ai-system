@@ -886,7 +886,7 @@ function generatePdf(q){
   // the footer — content above it can breathe into the white space.
   // Approximate rendered height of the four lines below (heading + rule
   // + 3 notes with the payment block taking ~3 lines).
-  var tcBlockH = 130;
+  var tcBlockH = 145;
   var tcY = Math.max(contentBottom + 30, pageH - 50 - tcBlockH);
   if (tcY + tcBlockH > pageH - 50){ doc.addPage(); tcY = 80; }
 
@@ -903,11 +903,16 @@ function generatePdf(q){
     doc.text(String(n) + '.', margin + 4, y);
   }
 
-  // 1) Payment term + payable-to + bank A/C (payment-term info now
-  //    lives inside this note rather than as a separate header field).
+  // 1) Payment term only
   tcNum(1, tcY);
   bodyFont('normal', 11); setText(INK_SOFT);
-  doc.text('Payment Term: Cash Only. All payment should be crossed and made payable to:', margin + 22, tcY);
+  doc.text('Payment Term: Cash Only.', margin + 22, tcY);
+  tcY += 17;
+
+  // 2) Payable-to + bank A/C
+  tcNum(2, tcY);
+  bodyFont('normal', 11); setText(INK_SOFT);
+  doc.text('All payment should be crossed and made payable to:', margin + 22, tcY);
   tcY += 13;
   bodyFont('bold', 11); setText(INK);
   doc.text(BANK_DETAILS.payee, margin + 22, tcY);
@@ -916,23 +921,23 @@ function generatePdf(q){
   doc.text('A/C No : ' + BANK_DETAILS.ac_no + '   ·   ' + BANK_DETAILS.bank, margin + 22, tcY);
   tcY += 16;
 
-  // 2)
-  tcNum(2, tcY);
-  bodyFont('normal', 11); setText(INK_SOFT);
-  var t2Lines = doc.splitTextToSize(
-    'All payment made towards the purchase of oil palm seedlings are non-refundable.',
-    pageW - margin*2 - 26);
-  doc.text(t2Lines, margin + 22, tcY);
-  tcY += t2Lines.length * 13 + 4;
-
-  // 3)
+  // 3) Non-refundable
   tcNum(3, tcY);
   bodyFont('normal', 11); setText(INK_SOFT);
   var t3Lines = doc.splitTextToSize(
-    'Collection must be made according to the scheduled collection date.',
+    'All payment made towards the purchase of oil palm seedlings are non-refundable.',
     pageW - margin*2 - 26);
   doc.text(t3Lines, margin + 22, tcY);
   tcY += t3Lines.length * 13 + 4;
+
+  // 4) Collection schedule
+  tcNum(4, tcY);
+  bodyFont('normal', 11); setText(INK_SOFT);
+  var t4Lines = doc.splitTextToSize(
+    'Collection must be made according to the scheduled collection date.',
+    pageW - margin*2 - 26);
+  doc.text(t4Lines, margin + 22, tcY);
+  tcY += t4Lines.length * 13 + 4;
 
   // ── 7) FOOTER (every page)
   var totalPages = doc.internal.getNumberOfPages();
