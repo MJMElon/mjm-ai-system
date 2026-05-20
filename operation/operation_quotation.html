@@ -6,7 +6,6 @@
 <title>MJM Nursery AI · Quotations</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<!-- jsPDF for client-side PDF generation -->
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
@@ -47,14 +46,11 @@
   @keyframes popIn{from{opacity:0;transform:scale(.97) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
   .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#064e3b,#10b981);color:white;padding:14px 22px;border-radius:14px;font-size:13px;font-weight:700;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 8px 24px rgba(16,185,129,.4);text-align:center;max-width:90vw;}
   .toast.show{opacity:1;}
-  .item-row{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.2fr) minmax(0,1.2fr) auto;gap:8px;align-items:start;padding:10px 0;border-bottom:1px dashed #e2e8f0;}
-  .item-row:last-child{border-bottom:none;}
-  .item-row .input{padding:8px 10px;font-size:12px;}
-  .item-row textarea.input{resize:vertical;min-height:38px;}
-  @media (max-width:760px){
-    .item-row{grid-template-columns:1fr 1fr;}
-    .item-row > *:first-child{grid-column:1 / -1;}
-  }
+  .item-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:12px;margin-bottom:10px;}
+  .item-grid{display:grid;grid-template-columns:minmax(0,2.4fr) minmax(0,0.9fr) minmax(0,0.9fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end;}
+  .item-card textarea.input{resize:vertical;min-height:38px;font-size:12px;}
+  .item-card .input{padding:8px 10px;font-size:12px;}
+  @media (max-width:780px){ .item-grid{grid-template-columns:1fr 1fr;} .item-grid > *:first-child{grid-column:1/-1;} }
   .totals-row{display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#334155;padding:6px 0;}
   .totals-row.grand{font-size:16px;font-weight:900;color:#065f46;border-top:2px solid #d1fae5;padding-top:10px;margin-top:6px;}
 </style>
@@ -78,7 +74,6 @@
 <!-- MAIN -->
 <div class="max-w-[1200px] mx-auto px-4 sm:px-6 py-6 space-y-4">
 
-  <!-- Header card -->
   <div class="dash-card p-5 flex flex-wrap items-center justify-between gap-3">
     <div>
       <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">📝 Quotation Management</div>
@@ -99,7 +94,6 @@
     </div>
   </div>
 
-  <!-- List -->
   <div class="dash-card p-0 overflow-x-auto">
     <table class="q-table">
       <thead>
@@ -141,10 +135,10 @@
         </div>
         <div>
           <label class="label">Quote date</label>
-          <input id="f-quote-date" type="date" class="input">
+          <input id="f-quote-date" type="date" class="input" onchange="onQuoteDateChange()">
         </div>
         <div>
-          <label class="label">Valid until</label>
+          <label class="label">Valid until <span class="text-slate-400 font-bold">(14 days)</span></label>
           <input id="f-valid-until" type="date" class="input">
         </div>
         <div>
@@ -159,25 +153,31 @@
         </div>
       </div>
 
+      <!-- Payment term notice (fixed) -->
+      <div class="dash-card p-3" style="background:#ecfdf5;border-color:#a7f3d0;box-shadow:none;">
+        <div class="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Term of Payment</div>
+        <div class="text-sm font-black text-emerald-900 mt-1">Cash Only</div>
+      </div>
+
       <!-- Customer -->
       <div>
         <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Customer</div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label class="label">Name *</label>
-            <input id="f-cust-name" type="text" class="input" placeholder="e.g. Ahmad Bin Ali">
+            <label class="label">Name / Attention *</label>
+            <input id="f-cust-name" type="text" class="input" placeholder="e.g. Mr. Chan">
           </div>
           <div>
             <label class="label">Company</label>
-            <input id="f-cust-company" type="text" class="input" placeholder="e.g. ABC Sdn Bhd">
+            <input id="f-cust-company" type="text" class="input" placeholder="e.g. BHB Sdn Bhd">
           </div>
           <div>
             <label class="label">Contact (phone)</label>
-            <input id="f-cust-contact" type="text" class="input" placeholder="e.g. 012-3456789">
+            <input id="f-cust-contact" type="text" class="input" placeholder="e.g. 086-313339">
           </div>
           <div>
             <label class="label">Email</label>
-            <input id="f-cust-email" type="email" class="input" placeholder="e.g. ahmad@abc.com">
+            <input id="f-cust-email" type="email" class="input" placeholder="optional">
           </div>
           <div class="sm:col-span-2">
             <label class="label">Address</label>
@@ -192,39 +192,19 @@
           <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Line items</div>
           <button onclick="addItemRow()" class="btn btn-secondary" style="padding:6px 12px;font-size:10px;">+ Add row</button>
         </div>
-        <div class="dash-card p-3" style="border:1px solid #f1f5f9;box-shadow:none;">
-          <div class="item-row hidden sm:grid" style="border-bottom:1px solid #e2e8f0;padding-bottom:6px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;">
-            <div>Description</div>
-            <div>Qty</div>
-            <div>Unit</div>
-            <div>Unit price (RM)</div>
-            <div>Line total (RM)</div>
-            <div></div>
-          </div>
-          <div id="items-container"></div>
-        </div>
+        <div id="items-container"></div>
+        <div id="products-status" class="text-[10px] font-bold text-slate-400 mt-1">Loading products from Sales Web…</div>
       </div>
 
-      <!-- Totals -->
+      <!-- Additional notes + totals -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label class="label">Notes (visible on PDF)</label>
-          <textarea id="f-notes" class="input" rows="3" placeholder="e.g. Delivery within Miri included. Plants quoted are subject to availability."></textarea>
-          <label class="label" style="margin-top:10px;">Terms &amp; conditions (visible on PDF)</label>
-          <textarea id="f-terms" class="input" rows="3" placeholder="e.g. 50% deposit on confirmation. Balance on delivery. Quote valid for 14 days."></textarea>
+          <label class="label">Additional notes (optional, shown on PDF above the standard notes)</label>
+          <textarea id="f-notes" class="input" rows="3" placeholder="e.g. Collection schedule confirmed by phone on 14-May."></textarea>
         </div>
         <div class="dash-card p-4" style="background:#f8fafc;box-shadow:none;">
           <div class="totals-row"><span>Subtotal</span><span id="t-subtotal">RM 0.00</span></div>
-          <div class="totals-row">
-            <span>Discount (RM)</span>
-            <input id="f-discount" type="number" min="0" step="0.01" class="input" style="width:120px;text-align:right;padding:6px 10px;font-size:12px;" value="0" oninput="recalcTotals()">
-          </div>
-          <div class="totals-row">
-            <span>Tax / SST (%)</span>
-            <input id="f-tax-rate" type="number" min="0" max="100" step="0.01" class="input" style="width:120px;text-align:right;padding:6px 10px;font-size:12px;" value="0" oninput="recalcTotals()">
-          </div>
-          <div class="totals-row"><span>Tax amount</span><span id="t-tax">RM 0.00</span></div>
-          <div class="totals-row grand"><span>TOTAL</span><span id="t-grand">RM 0.00</span></div>
+          <div class="totals-row grand"><span>TOTAL QUOTE</span><span id="t-grand">RM 0.00</span></div>
         </div>
       </div>
     </div>
@@ -234,7 +214,7 @@
       <div class="flex flex-wrap gap-2 ml-auto">
         <button onclick="closeEditor()" class="btn btn-ghost">Cancel</button>
         <button onclick="downloadPdf()" class="btn btn-secondary">⬇️ Download PDF</button>
-        <button id="btn-save" onclick="saveQuotation()" class="btn btn-primary">💾 Save Quotation</button>
+        <button id="btn-save" onclick="saveQuotation()" class="btn btn-primary">💾 Save &amp; Back to List</button>
       </div>
     </div>
   </div>
@@ -278,11 +258,30 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
 });
 
 // ════════════════════════════════════════════════════════
+//  COMPANY + STANDARD T&C  (matches the existing printed quotation)
+// ════════════════════════════════════════════════════════
+const COMPANY = {
+  name: 'MEGA JUTAMAS SDN BHD',
+  reg:  '(663951-U)',
+  addr: '2ND Floor (B), Lot 1180, Bangunan BEI, Lorong Dua, Krokop,\nP.O. Box 163, 98007 Miri, Sarawak.',
+  tel:  '085-419907',
+  fax:  '085-413264',
+};
+// Standard T&C printed on every quotation. Per-quote "Additional notes"
+// are inserted before this block on the PDF.
+const STANDARD_NOTES = [
+  'All payment should be crossed and made payable to\nMEGA JUTAMAS SDN BHD\nOUR BANKER A/C NO. HLBB 027-00-11609-6',
+  'All payment / deposit made towards the purchase of oil palm seedlings are non-refundable. Deposit made will be automatically deducted from the total invoice amount during the final payment process.',
+  'Collection must be made according to the scheduled collection date. In the event of late collection, the price per seedling will be subject to adjustment based on the prevailing rate at the time of collection, and subject to stock availability.',
+];
+
+// ════════════════════════════════════════════════════════
 //  STATE
 // ════════════════════════════════════════════════════════
 let quotations = [];
-let editing = null;     // null = creating new; otherwise the row being edited
-let items = [];         // working set of items for the editor
+let products   = [];   // published salesweb products
+let editing    = null;
+let items      = [];
 
 // ════════════════════════════════════════════════════════
 //  HELPERS
@@ -291,19 +290,27 @@ function fmtMoney(n){
   var v = Number(n)||0;
   return 'RM ' + v.toLocaleString('en-MY', { minimumFractionDigits:2, maximumFractionDigits:2 });
 }
-function fmtDate(d){
+function fmtMoneyPlain(n){
+  return Number(n||0).toLocaleString('en-MY', { minimumFractionDigits:2, maximumFractionDigits:2 });
+}
+function fmtDateLong(d){
+  if (!d) return '—';
+  var dt = typeof d === 'string' ? new Date(d+'T00:00:00') : d;
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return String(dt.getDate()).padStart(2,'0') + '-' + months[dt.getMonth()] + '-' + dt.getFullYear();
+}
+function fmtDateShort(d){
   if (!d) return '—';
   var dt = typeof d === 'string' ? new Date(d+'T00:00:00') : d;
   return dt.toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' });
 }
 function todayIso(){
-  var d = new Date(); var m = String(d.getMonth()+1).padStart(2,'0'); var dy = String(d.getDate()).padStart(2,'0');
-  return d.getFullYear()+'-'+m+'-'+dy;
+  var d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
 function addDaysIso(ds, days){
   var d = new Date(ds+'T00:00:00'); d.setDate(d.getDate()+days);
-  var m = String(d.getMonth()+1).padStart(2,'0'); var dy = String(d.getDate()).padStart(2,'0');
-  return d.getFullYear()+'-'+m+'-'+dy;
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
 function showToast(msg){
   var t = document.getElementById('toast');
@@ -317,22 +324,44 @@ function escapeHtml(s){
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-// Quote number: Q-YYYYMM-NNNN  (NNNN scoped to month; gap-safe by taking max+1)
+// Next quote number — format QOPS<n>/MM/YY where <n> is a globally running
+// counter (continues across months/years). We scan all existing rows and
+// take max(n)+1.
 async function nextQuoteNumber(){
   var d = new Date();
-  var ym = d.getFullYear() + String(d.getMonth()+1).padStart(2,'0');
-  var prefix = 'Q-' + ym + '-';
+  var mm = String(d.getMonth()+1).padStart(2,'0');
+  var yy = String(d.getFullYear()).slice(-2);
   var { data } = await _supabase.from('shared_quotations')
     .select('quote_number')
-    .ilike('quote_number', prefix+'%')
-    .order('quote_number', { ascending:false })
-    .limit(1);
-  var next = 1;
-  if (data && data.length){
-    var m = /-(\d+)$/.exec(data[0].quote_number);
-    if (m) next = parseInt(m[1],10) + 1;
+    .ilike('quote_number', 'QOPS%')
+    .limit(5000);
+  var maxN = 0;
+  (data||[]).forEach(function(r){
+    var m = /^QOPS(\d+)\//i.exec(r.quote_number||'');
+    if (m){ var n = parseInt(m[1],10); if (n > maxN) maxN = n; }
+  });
+  return 'QOPS' + (maxN + 1) + '/' + mm + '/' + yy;
+}
+
+// ════════════════════════════════════════════════════════
+//  LOAD PRODUCTS (salesweb published list)
+// ════════════════════════════════════════════════════════
+async function loadProducts(){
+  var statusEl = document.getElementById('products-status');
+  var { data, error } = await _supabase.from('salesweb_products')
+    .select('id,name,price,sell_month,sell_year,stock_qty')
+    .eq('is_published', true)
+    .order('name', { ascending:true });
+  if (error){
+    statusEl.textContent = '⚠️ Could not load products: ' + error.message;
+    return;
   }
-  return prefix + String(next).padStart(4,'0');
+  products = data || [];
+  if (!products.length){
+    statusEl.textContent = '⚠️ No published products on Sales Web — use the Custom option to enter a line manually.';
+  } else {
+    statusEl.textContent = products.length + ' published product' + (products.length===1?'':'s') + ' available from Sales Web · prices auto-fill on select.';
+  }
 }
 
 // ════════════════════════════════════════════════════════
@@ -378,7 +407,7 @@ function renderList(){
     var customer = escapeHtml(q.customer_name) + (q.customer_company ? ' <span class="text-slate-400 font-bold">· '+escapeHtml(q.customer_company)+'</span>' : '');
     return '<tr>' +
       '<td class="font-black text-slate-800">'+escapeHtml(q.quote_number)+'</td>' +
-      '<td>'+fmtDate(q.quote_date)+'</td>' +
+      '<td>'+fmtDateShort(q.quote_date)+'</td>' +
       '<td>'+customer+'</td>' +
       '<td class="font-black text-emerald-700">'+fmtMoney(q.total)+'</td>' +
       '<td><span class="status-pill status-'+escapeHtml(q.status||'draft')+'">'+escapeHtml(q.status||'draft')+'</span></td>' +
@@ -397,15 +426,20 @@ document.getElementById('q-status-filter').addEventListener('change', renderList
 // ════════════════════════════════════════════════════════
 //  EDITOR
 // ════════════════════════════════════════════════════════
+function onQuoteDateChange(){
+  // Keep "valid until" pinned to quote_date + 14 days
+  var qd = document.getElementById('f-quote-date').value;
+  if (qd) document.getElementById('f-valid-until').value = addDaysIso(qd, 14);
+}
+
 async function openNewQuotation(){
   editing = null;
   items = [];
   document.getElementById('editor-title').textContent = 'New Quotation';
   document.getElementById('editor-subtitle').textContent = '';
   document.getElementById('btn-delete').classList.add('hidden');
-  document.getElementById('btn-save').textContent = '💾 Save Quotation';
+  document.getElementById('btn-save').textContent = '💾 Save & Back to List';
 
-  // Pre-fill defaults
   var today = todayIso();
   document.getElementById('f-quote-date').value = today;
   document.getElementById('f-valid-until').value = addDaysIso(today, 14);
@@ -416,19 +450,14 @@ async function openNewQuotation(){
   document.getElementById('f-cust-email').value = '';
   document.getElementById('f-cust-address').value = '';
   document.getElementById('f-notes').value = '';
-  document.getElementById('f-terms').value = 'Quotation valid for 14 days from quote date. 50% deposit on confirmation, balance on delivery.';
-  document.getElementById('f-discount').value = '0';
-  document.getElementById('f-tax-rate').value = '0';
 
   document.getElementById('f-quote-number').value = 'Generating…';
   document.getElementById('editor-modal').classList.add('open');
 
-  // Add one starter row
   addItemRow();
   renderItems();
   recalcTotals();
 
-  // Generate the quote number in the background
   try {
     var qn = await nextQuoteNumber();
     document.getElementById('f-quote-number').value = qn;
@@ -445,13 +474,13 @@ function openEdit(id){
   if (!items.length) addItemRow();
 
   document.getElementById('editor-title').textContent = q.quote_number;
-  document.getElementById('editor-subtitle').textContent = 'Created ' + fmtDate(q.created_at) + (q.created_by_name ? ' by ' + q.created_by_name : '');
+  document.getElementById('editor-subtitle').textContent = 'Created ' + fmtDateShort(q.created_at) + (q.created_by_name ? ' by ' + q.created_by_name : '');
   document.getElementById('btn-delete').classList.remove('hidden');
-  document.getElementById('btn-save').textContent = '💾 Save Changes';
+  document.getElementById('btn-save').textContent = '💾 Save & Back to List';
 
   document.getElementById('f-quote-number').value = q.quote_number || '';
   document.getElementById('f-quote-date').value = q.quote_date || todayIso();
-  document.getElementById('f-valid-until').value = q.valid_until || '';
+  document.getElementById('f-valid-until').value = q.valid_until || addDaysIso(q.quote_date || todayIso(), 14);
   document.getElementById('f-status').value = q.status || 'draft';
   document.getElementById('f-cust-name').value = q.customer_name || '';
   document.getElementById('f-cust-company').value = q.customer_company || '';
@@ -459,9 +488,6 @@ function openEdit(id){
   document.getElementById('f-cust-email').value = q.customer_email || '';
   document.getElementById('f-cust-address').value = q.customer_address || '';
   document.getElementById('f-notes').value = q.notes || '';
-  document.getElementById('f-terms').value = q.terms || '';
-  document.getElementById('f-discount').value = q.discount || 0;
-  document.getElementById('f-tax-rate').value = q.tax_rate || 0;
 
   renderItems();
   recalcTotals();
@@ -477,7 +503,7 @@ function closeEditor(){
 
 // ── ITEMS ────────────────────────────────────────────────
 function addItemRow(){
-  items.push({ description:'', qty:1, unit:'pcs', unit_price:0, line_total:0 });
+  items.push({ product_id:'', description:'', details:'', qty:1, unit:'Palm', unit_price:0, line_total:0 });
   renderItems();
 }
 function removeItemRow(idx){
@@ -486,26 +512,70 @@ function removeItemRow(idx){
   renderItems();
   recalcTotals();
 }
+function onProductSelect(idx, value){
+  var it = items[idx];
+  if (value === '__custom__'){
+    it.product_id = '';
+    it.description = '';
+  } else if (value){
+    var p = products.find(function(x){ return x.id === value; });
+    if (p){
+      it.product_id = p.id;
+      it.description = p.name;
+      it.unit_price = Number(p.price) || 0;
+    }
+  } else {
+    it.product_id = '';
+    it.description = '';
+  }
+  it.line_total = (Number(it.qty)||0) * (Number(it.unit_price)||0);
+  renderItems();
+  recalcTotals();
+}
 function onItemChange(idx, field, value){
   var it = items[idx];
   if (field === 'qty' || field === 'unit_price') it[field] = Number(value) || 0;
   else it[field] = value;
   it.line_total = (Number(it.qty)||0) * (Number(it.unit_price)||0);
-  // Just update this row's total + grand totals, no full re-render (keeps caret in inputs)
   var lt = document.getElementById('item-total-'+idx);
   if (lt) lt.textContent = fmtMoney(it.line_total);
   recalcTotals();
 }
 function renderItems(){
   var container = document.getElementById('items-container');
+  if (!items.length){ container.innerHTML = ''; return; }
   container.innerHTML = items.map(function(it, idx){
-    return '<div class="item-row">' +
-      '<textarea class="input" placeholder="e.g. Mango — Harum Manis, 2 ft" oninput="onItemChange('+idx+',\'description\',this.value)">'+escapeHtml(it.description||'')+'</textarea>' +
-      '<input class="input" type="number" min="0" step="0.01" value="'+(it.qty||0)+'" oninput="onItemChange('+idx+',\'qty\',this.value)">' +
-      '<input class="input" type="text" value="'+escapeHtml(it.unit||'')+'" placeholder="pcs/poly/bag" oninput="onItemChange('+idx+',\'unit\',this.value)">' +
-      '<input class="input" type="number" min="0" step="0.01" value="'+(it.unit_price||0)+'" oninput="onItemChange('+idx+',\'unit_price\',this.value)">' +
-      '<div class="input" id="item-total-'+idx+'" style="background:#f8fafc;border-color:#e2e8f0;color:#065f46;font-weight:900;">'+fmtMoney(it.line_total||0)+'</div>' +
-      '<button onclick="removeItemRow('+idx+')" class="btn btn-ghost" style="padding:8px 10px;font-size:11px;color:#dc2626;" title="Remove">&times;</button>' +
+    var opts = '<option value="">— Select product —</option>';
+    products.forEach(function(p){
+      var sel = (it.product_id === p.id) ? ' selected' : '';
+      var stockHint = (p.stock_qty != null) ? ' · ' + p.stock_qty + ' avail' : '';
+      var priceHint = ' (RM ' + Number(p.price||0).toFixed(2) + stockHint + ')';
+      opts += '<option value="'+escapeHtml(p.id)+'"'+sel+'>'+escapeHtml(p.name)+priceHint+'</option>';
+    });
+    var isCustom = !it.product_id && (it.description||'').length > 0;
+    opts += '<option value="__custom__"'+(isCustom?' selected':'')+'>— Custom (free text) —</option>';
+
+    var descField = it.product_id
+      ? '<input class="input" type="text" value="'+escapeHtml(it.description||'')+'" readonly style="background:#f8fafc;color:#475569;">'
+      : '<input class="input" type="text" value="'+escapeHtml(it.description||'')+'" placeholder="Item description" oninput="onItemChange('+idx+',\'description\',this.value)">';
+
+    return '<div class="item-card">' +
+      '<div class="item-grid">' +
+        '<div>' +
+          '<div class="label">Product</div>' +
+          '<select class="input" onchange="onProductSelect('+idx+',this.value)">'+opts+'</select>' +
+          '<div style="margin-top:6px;">'+descField+'</div>' +
+        '</div>' +
+        '<div><div class="label">Qty</div><input class="input" type="number" min="0" step="1" value="'+(it.qty||0)+'" oninput="onItemChange('+idx+',\'qty\',this.value)"></div>' +
+        '<div><div class="label">Unit</div><input class="input" type="text" value="'+escapeHtml(it.unit||'Palm')+'" oninput="onItemChange('+idx+',\'unit\',this.value)"></div>' +
+        '<div><div class="label">Unit Price (RM)</div><input class="input" type="number" min="0" step="0.01" value="'+(it.unit_price||0)+'" oninput="onItemChange('+idx+',\'unit_price\',this.value)"></div>' +
+        '<div><div class="label">Amount (RM)</div><div class="input" id="item-total-'+idx+'" style="background:#f8fafc;border-color:#e2e8f0;color:#065f46;font-weight:900;">'+fmtMoney(it.line_total||0)+'</div></div>' +
+        '<div><div class="label" style="opacity:0;">.</div><button onclick="removeItemRow('+idx+')" class="btn btn-ghost" style="padding:8px 10px;font-size:14px;color:#dc2626;" title="Remove">&times;</button></div>' +
+      '</div>' +
+      '<div style="margin-top:8px;">' +
+        '<div class="label">Item details (printed on PDF — e.g. Seedling Source / Collecting Location / Date of Supply)</div>' +
+        '<textarea class="input" rows="2" placeholder="Seedling Source Supply: IOI DxP Hybrid and UPB Premier Hybrida&#10;Collecting Location: Ulu Niah / Batu Niah&#10;Date of Supply: June 2026" oninput="onItemChange('+idx+',\'details\',this.value)">'+escapeHtml(it.details||'')+'</textarea>' +
+      '</div>' +
     '</div>';
   }).join('');
 }
@@ -516,32 +586,21 @@ function recalcTotals(){
     it.line_total = lt;
     return s + lt;
   }, 0);
-  var discount = Number(document.getElementById('f-discount').value) || 0;
-  var taxRate = Number(document.getElementById('f-tax-rate').value) || 0;
-  var taxable = Math.max(0, subtotal - discount);
-  var taxAmount = taxable * (taxRate/100);
-  var grand = taxable + taxAmount;
   document.getElementById('t-subtotal').textContent = fmtMoney(subtotal);
-  document.getElementById('t-tax').textContent = fmtMoney(taxAmount);
-  document.getElementById('t-grand').textContent = fmtMoney(grand);
+  document.getElementById('t-grand').textContent = fmtMoney(subtotal);
 }
 
 // ── SAVE / DELETE ────────────────────────────────────────
 function gatherPayload(){
   var subtotal = items.reduce(function(s,it){ return s + (Number(it.qty)||0)*(Number(it.unit_price)||0); }, 0);
-  var discount = Number(document.getElementById('f-discount').value) || 0;
-  var taxRate = Number(document.getElementById('f-tax-rate').value) || 0;
-  var taxable = Math.max(0, subtotal - discount);
-  var taxAmount = taxable * (taxRate/100);
-  var total = taxable + taxAmount;
-
-  // Strip empty rows
   var cleanItems = items
     .filter(function(it){ return (it.description||'').trim() || Number(it.qty)>0 || Number(it.unit_price)>0; })
     .map(function(it){ return {
+      product_id: it.product_id||null,
       description: it.description||'',
+      details: it.details||'',
       qty: Number(it.qty)||0,
-      unit: it.unit||'',
+      unit: it.unit||'Palm',
       unit_price: Number(it.unit_price)||0,
       line_total: (Number(it.qty)||0) * (Number(it.unit_price)||0),
     }; });
@@ -557,12 +616,12 @@ function gatherPayload(){
     customer_address: (document.getElementById('f-cust-address').value || '').trim() || null,
     items: cleanItems,
     subtotal: subtotal,
-    discount: discount,
-    tax_rate: taxRate,
-    tax_amount: taxAmount,
-    total: total,
+    discount: 0,
+    tax_rate: 0,
+    tax_amount: 0,
+    total: subtotal,
     notes: (document.getElementById('f-notes').value || '').trim() || null,
-    terms: (document.getElementById('f-terms').value || '').trim() || null,
+    terms: 'Cash Only',
     status: document.getElementById('f-status').value || 'draft',
   };
 }
@@ -577,25 +636,20 @@ async function saveQuotation(){
   btn.disabled = true; var oldText = btn.textContent; btn.textContent = 'Saving…';
 
   if (editing){
-    var { data, error } = await _supabase.from('shared_quotations')
-      .update(p).eq('id', editing.id).select().single();
+    var { error } = await _supabase.from('shared_quotations')
+      .update(p).eq('id', editing.id);
     if (error){ showToast('❌ '+error.message); btn.disabled=false; btn.textContent=oldText; return; }
-    editing = data;
     showToast('✅ Quotation updated');
   } else {
     p.created_by = currentSession ? currentSession.user.id : null;
     p.created_by_name = currentSession ? (currentSession.user.user_metadata?.full_name || currentSession.user.email) : null;
-    var { data, error } = await _supabase.from('shared_quotations')
-      .insert(p).select().single();
+    var { error } = await _supabase.from('shared_quotations')
+      .insert(p);
     if (error){ showToast('❌ '+error.message); btn.disabled=false; btn.textContent=oldText; return; }
-    editing = data;
     showToast('✅ Quotation saved');
-    // Flip the editor into edit mode so subsequent saves update this row instead of creating a duplicate.
-    document.getElementById('editor-title').textContent = data.quote_number;
-    document.getElementById('editor-subtitle').textContent = 'Created ' + fmtDate(data.created_at) + (data.created_by_name ? ' by ' + data.created_by_name : '');
-    document.getElementById('btn-delete').classList.remove('hidden');
   }
-  btn.disabled = false; btn.textContent = '💾 Save Changes';
+  btn.disabled = false; btn.textContent = '💾 Save & Back to List';
+  closeEditor();
   await loadList();
 }
 
@@ -610,10 +664,9 @@ async function deleteCurrentQuotation(){
 }
 
 // ════════════════════════════════════════════════════════
-//  PDF
+//  PDF — matches the existing MJM quotation layout
 // ════════════════════════════════════════════════════════
 function downloadPdf(){
-  // PDF from current editor state — works for both saved + unsaved drafts.
   var p = gatherPayload();
   if (!p.quote_number || !p.customer_name){ showToast('❌ Need quote number + customer to make PDF'); return; }
   generatePdf(p);
@@ -631,115 +684,188 @@ function generatePdf(q){
   var pageH = doc.internal.pageSize.getHeight();
   var margin = 40;
 
-  // Header
-  doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(6,95,70);
-  doc.text('MJM NURSERY', margin, 60);
-  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(100,116,139);
-  doc.text('Seedling supplier · Miri, Sarawak', margin, 76);
-  doc.text('ai.mjmnursery.com', margin, 88);
-
-  // Quote block (top-right)
-  doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(30,41,59);
-  doc.text('QUOTATION', pageW - margin, 60, { align:'right' });
-  doc.setFontSize(10); doc.setTextColor(71,85,105);
-  doc.text('Quote #: '+(q.quote_number||'—'), pageW - margin, 78, { align:'right' });
-  doc.text('Date: '+fmtDate(q.quote_date), pageW - margin, 92, { align:'right' });
-  if (q.valid_until) doc.text('Valid until: '+fmtDate(q.valid_until), pageW - margin, 106, { align:'right' });
-
-  // Divider
-  doc.setDrawColor(226,232,240); doc.setLineWidth(1);
-  doc.line(margin, 120, pageW - margin, 120);
-
-  // Customer block
-  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(100,116,139);
-  doc.text('BILL TO', margin, 140);
-  doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(30,41,59);
-  doc.text(q.customer_name || '—', margin, 156);
-  var custY = 170;
+  // ── Company block (top-left)
+  doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(15,23,42);
+  doc.text(COMPANY.name, margin, 58);
   doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(71,85,105);
-  if (q.customer_company){ doc.text(q.customer_company, margin, custY); custY += 14; }
-  if (q.customer_address){
-    var lines = doc.splitTextToSize(q.customer_address, pageW/2 - margin);
-    doc.text(lines, margin, custY); custY += lines.length * 12;
-  }
-  if (q.customer_contact){ doc.text('Phone: '+q.customer_contact, margin, custY); custY += 12; }
-  if (q.customer_email){ doc.text('Email: '+q.customer_email, margin, custY); custY += 12; }
+  doc.text(COMPANY.reg, margin + doc.getTextWidth(COMPANY.name) + 6, 58);
+  doc.setFontSize(9);
+  var addrLines = COMPANY.addr.split('\n');
+  var ay = 74;
+  addrLines.forEach(function(ln){ doc.text(ln, margin, ay); ay += 11; });
+  doc.text('Tel : ' + COMPANY.tel + '       Fax : ' + COMPANY.fax, margin, ay + 2);
 
-  // Items table
-  var startY = Math.max(custY + 10, 220);
-  var rows = (q.items||[]).map(function(it){
-    return [
-      it.description || '',
-      String(it.qty || 0),
-      it.unit || '',
-      Number(it.unit_price||0).toLocaleString('en-MY',{ minimumFractionDigits:2, maximumFractionDigits:2 }),
-      Number(it.line_total||0).toLocaleString('en-MY',{ minimumFractionDigits:2, maximumFractionDigits:2 }),
-    ];
-  });
+  // ── QUOTATION header (top-right)
+  doc.setFont('helvetica','bold'); doc.setFontSize(28); doc.setTextColor(15,23,42);
+  doc.text('QUOTATION', pageW - margin, 60, { align:'right' });
+
+  // ── Meta table (top-right, under QUOTATION)
+  var metaRows = [
+    ['Date',            fmtDateLong(q.quote_date)],
+    ['Quote #',         q.quote_number || '—'],
+    ['Term of Payment', 'Cash Only'],
+    ['Valid until',     fmtDateLong(q.valid_until)],
+  ];
   doc.autoTable({
-    startY: startY,
-    head: [['Description','Qty','Unit','Unit Price (RM)','Line Total (RM)']],
-    body: rows,
-    theme: 'striped',
-    margin: { left: margin, right: margin },
-    styles: { font:'helvetica', fontSize:10, cellPadding:6, lineColor:[226,232,240] },
-    headStyles: { fillColor:[6,95,70], textColor:[255,255,255], fontStyle:'bold', halign:'left' },
+    startY: 78,
+    body: metaRows,
+    theme: 'grid',
+    margin: { left: pageW - margin - 240, right: margin },
+    tableWidth: 240,
+    styles: { font:'helvetica', fontSize:9, cellPadding:4, lineColor:[148,163,184], lineWidth:0.5 },
     columnStyles: {
-      0: { cellWidth:'auto' },
-      1: { halign:'right', cellWidth:50 },
-      2: { halign:'left',  cellWidth:60 },
-      3: { halign:'right', cellWidth:90 },
-      4: { halign:'right', cellWidth:100 },
+      0: { fillColor:[241,245,249], textColor:[30,41,59], fontStyle:'bold', halign:'right', cellWidth:100 },
+      1: { textColor:[30,41,59], halign:'center', cellWidth:140 },
     },
   });
 
-  var afterTableY = doc.lastAutoTable.finalY + 16;
+  // ── Customer block
+  var afterHeaderY = Math.max(140, doc.lastAutoTable.finalY + 10);
+  doc.setDrawColor(148,163,184); doc.setFillColor(241,245,249);
+  doc.rect(margin, afterHeaderY, 220, 18, 'FD');
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(30,41,59);
+  doc.text('Customer', margin + 8, afterHeaderY + 13);
 
-  // Totals (right-aligned)
-  var labelX = pageW - margin - 180;
-  var valueX = pageW - margin;
-  doc.setFontSize(10); doc.setTextColor(71,85,105);
-  function row(label, value, opts){
-    opts = opts || {};
-    if (opts.bold){ doc.setFont('helvetica','bold'); } else { doc.setFont('helvetica','normal'); }
-    if (opts.big){ doc.setFontSize(13); doc.setTextColor(6,95,70); }
-    else { doc.setFontSize(10); doc.setTextColor(71,85,105); }
-    doc.text(label, labelX, afterTableY);
-    doc.text(value, valueX, afterTableY, { align:'right' });
-    afterTableY += opts.big ? 22 : 16;
+  var custY = afterHeaderY + 34;
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(15,23,42);
+  doc.text((q.customer_company || q.customer_name || '—').toUpperCase(), margin, custY);
+  custY += 14;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(71,85,105);
+  if (q.customer_address){
+    var aLines = doc.splitTextToSize(q.customer_address, 280);
+    doc.text(aLines, margin, custY); custY += aLines.length * 12;
   }
-  row('Subtotal', 'RM '+Number(q.subtotal||0).toLocaleString('en-MY',{ minimumFractionDigits:2 }));
-  if (Number(q.discount||0) > 0) row('Discount', '- RM '+Number(q.discount).toLocaleString('en-MY',{ minimumFractionDigits:2 }));
-  if (Number(q.tax_rate||0) > 0) row('Tax ('+Number(q.tax_rate).toFixed(2)+'%)', 'RM '+Number(q.tax_amount||0).toLocaleString('en-MY',{ minimumFractionDigits:2 }));
-  row('TOTAL', 'RM '+Number(q.total||0).toLocaleString('en-MY',{ minimumFractionDigits:2 }), { bold:true, big:true });
+  custY += 6;
+  if (q.customer_contact){ doc.text('Tel : ' + q.customer_contact, margin, custY); custY += 12; }
+  if (q.customer_name)   { doc.text('Attention : ' + q.customer_name, margin, custY); custY += 12; }
+  if (q.customer_email)  { doc.text('Email : ' + q.customer_email, margin, custY); custY += 12; }
 
-  // Notes + terms
-  function bottomBlock(title, body){
-    if (!body) return;
-    if (afterTableY > pageH - 100){ doc.addPage(); afterTableY = 60; }
-    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(100,116,139);
-    doc.text(title.toUpperCase(), margin, afterTableY); afterTableY += 12;
-    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(71,85,105);
-    var lines = doc.splitTextToSize(body, pageW - margin*2);
-    doc.text(lines, margin, afterTableY); afterTableY += lines.length * 12 + 10;
+  // ── Items table — bold product name + italic details rendered manually
+  var unitLabel = ((q.items||[])[0] && (q.items[0].unit||'Palm')) || 'Palm';
+  var itemRows = (q.items||[]).map(function(it, idx){
+    return [
+      String(idx+1),
+      { descName: it.description || '', descDetails: it.details || '' },
+      Number(it.qty||0).toLocaleString('en-MY'),
+      fmtMoneyPlain(it.unit_price||0),
+      fmtMoneyPlain(it.line_total||0),
+    ];
+  });
+
+  // Pre-compute the height each description cell needs so autoTable reserves
+  // enough vertical space (didDrawCell only paints — it can't grow the row).
+  function descCellHeight(name, details, cellWidth){
+    var contentW = cellWidth - 12;
+    doc.setFont('helvetica','bold'); doc.setFontSize(10);
+    var nameLines = doc.splitTextToSize(name || '', contentW).length || 1;
+    doc.setFont('helvetica','italic'); doc.setFontSize(9);
+    var detailLines = details ? doc.splitTextToSize(details, contentW).length : 0;
+    var h = nameLines * 12 + (details ? (detailLines * 11 + 6) : 0) + 12;
+    return Math.max(h, 30);
   }
-  bottomBlock('Notes', q.notes);
-  bottomBlock('Terms & Conditions', q.terms);
+  // Description column width is whatever's left after fixed columns:
+  // pageW - margin*2 - (30 + 70 + 80 + 90) = pageW - 80 - 270
+  var descColWidth = pageW - margin*2 - (30 + 70 + 80 + 90);
 
-  // Footer
-  doc.setFontSize(8); doc.setTextColor(148,163,184);
-  doc.text('Thank you for your business — MJM Nursery', pageW/2, pageH - 24, { align:'center' });
-  doc.text(q.quote_number || '', pageW - margin, pageH - 24, { align:'right' });
+  var tableTop = Math.max(custY + 16, afterHeaderY + 100);
+  doc.autoTable({
+    startY: tableTop,
+    head: [['No', 'Description', 'Qty\n(' + unitLabel + ')', 'Unit Price\n(RM)', 'Amount\n(RM)']],
+    body: itemRows,
+    theme: 'grid',
+    margin: { left: margin, right: margin },
+    styles: { font:'helvetica', fontSize:10, cellPadding:6, lineColor:[148,163,184], lineWidth:0.5, valign:'top' },
+    headStyles: { fillColor:[241,245,249], textColor:[30,41,59], fontStyle:'bold', halign:'center', lineColor:[148,163,184], lineWidth:0.5 },
+    columnStyles: {
+      0: { halign:'center', cellWidth:30 },
+      1: { halign:'left',   cellWidth:'auto' },
+      2: { halign:'right',  cellWidth:70 },
+      3: { halign:'right',  cellWidth:80 },
+      4: { halign:'right',  cellWidth:90 },
+    },
+    didParseCell: function(d){
+      if (d.section === 'body' && d.column.index === 1 && d.cell.raw && typeof d.cell.raw === 'object'){
+        d.cell.text = [];
+        d.cell.styles.minCellHeight = descCellHeight(d.cell.raw.descName, d.cell.raw.descDetails, descColWidth);
+      }
+    },
+    didDrawCell: function(d){
+      if (d.section === 'body' && d.column.index === 1 && d.cell.raw && typeof d.cell.raw === 'object'){
+        var x = d.cell.x + 6;
+        var y = d.cell.y + 6 + 10;
+        var contentW = d.cell.width - 12;
+        doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(15,23,42);
+        var nameLines = doc.splitTextToSize(d.cell.raw.descName || '', contentW);
+        doc.text(nameLines, x, y);
+        y += nameLines.length * 12;
+        if (d.cell.raw.descDetails){
+          y += 4;
+          doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(71,85,105);
+          var detailLines = doc.splitTextToSize(d.cell.raw.descDetails, contentW);
+          doc.text(detailLines, x, y);
+        }
+      }
+    },
+  });
 
-  // Filename safe slug
-  var safeCust = (q.customer_name||'customer').replace(/[^a-zA-Z0-9_\-]/g,'_').slice(0,30);
-  doc.save((q.quote_number || 'quotation') + '_' + safeCust + '.pdf');
+  // ── Totals (Subtotal + TOTAL QUOTE) right-aligned
+  var afterTableY = doc.lastAutoTable.finalY + 6;
+  doc.autoTable({
+    startY: afterTableY,
+    body: [
+      ['Subtotal (RM)',    fmtMoneyPlain(q.subtotal||0)],
+      ['TOTAL QUOTE (RM)', fmtMoneyPlain(q.total||0)],
+    ],
+    theme: 'grid',
+    margin: { left: pageW - margin - 270, right: margin },
+    tableWidth: 270,
+    styles: { font:'helvetica', fontSize:10, cellPadding:6, lineColor:[148,163,184], lineWidth:0.5 },
+    columnStyles: {
+      0: { fillColor:[241,245,249], textColor:[30,41,59], fontStyle:'bold', halign:'right', cellWidth:180 },
+      1: { textColor:[30,41,59], fontStyle:'bold', halign:'right', cellWidth:90 },
+    },
+    didParseCell: function(d){
+      if (d.row.index === 1){ d.cell.styles.fontSize = 11; d.cell.styles.fillColor = [255,255,255]; }
+    },
+  });
+
+  // ── Notes
+  var notesY = doc.lastAutoTable.finalY + 24;
+  if (notesY > pageH - 140){ doc.addPage(); notesY = 60; }
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(15,23,42);
+  doc.text('Notes :', margin, notesY);
+  notesY += 14;
+
+  var allNotes = [];
+  if (q.notes && String(q.notes).trim()){ allNotes.push(String(q.notes).trim()); }
+  STANDARD_NOTES.forEach(function(n){ allNotes.push(n); });
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(51,65,85);
+  allNotes.forEach(function(text, i){
+    var n = i + 1;
+    var bodyLines = doc.splitTextToSize(text, pageW - margin*2 - 22);
+    if (notesY + bodyLines.length * 11 > pageH - 60){ doc.addPage(); notesY = 60; }
+    doc.setFont('helvetica','bold');
+    doc.text(String(n), margin + 4, notesY);
+    doc.setFont('helvetica','normal');
+    doc.text(bodyLines, margin + 22, notesY);
+    notesY += bodyLines.length * 11 + 6;
+  });
+
+  // ── Footer
+  doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(100,116,139);
+  doc.text('"This is a computer-generated quotation and no signature is required."', pageW/2, pageH - 30, { align:'center' });
+
+  var safeCust = ((q.customer_company || q.customer_name || 'customer')+'').replace(/[^a-zA-Z0-9_\-]/g,'_').slice(0,40);
+  var safeNum  = (q.quote_number || 'quotation').replace(/[\/\\]/g,'-');
+  doc.save('Quotation_' + safeNum + '_' + safeCust + '.pdf');
 }
 
 // ════════════════════════════════════════════════════════
 //  BOOT
 // ════════════════════════════════════════════════════════
-loadList();
+Promise.all([loadProducts(), loadList()]);
 </script>
 </body>
 </html>
