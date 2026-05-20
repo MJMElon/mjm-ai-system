@@ -700,51 +700,58 @@ function generatePdf(q){
   function setText(c){ doc.setTextColor(c[0], c[1], c[2]); }
   function setStroke(c){ doc.setDrawColor(c[0], c[1], c[2]); }
 
-  // ── 1) GREEN HEADER BAND  (MJM NURSERY  ·  QUOTATION + No.)
-  var bandH = 88;
-  setFill(EMERALD);      doc.rect(0, 0, pageW, bandH, 'F');
-  setFill(EMERALD_DEEP); doc.rect(0, bandH - 5, pageW, 5, 'F'); // base stripe for depth
-
-  // Brand wordmark — helvetica bold with widened letter spacing for a
-  // more refined look (jsPDF can't ship a custom display font, so we use
-  // tracking + a thin underline accent to lift the wordmark instead).
-  doc.setFont('helvetica','bold'); doc.setFontSize(34); setText([255,255,255]);
-  if (doc.setCharSpace) doc.setCharSpace(3);
-  doc.text('MJM NURSERY', margin, 50);
-  if (doc.setCharSpace) doc.setCharSpace(0);
-  // Thin white accent underline beneath the wordmark
-  setStroke([255,255,255]); doc.setLineWidth(1.5);
-  doc.line(margin, 58, margin + 110, 58);
+  // ── 1) TOP ACCENT — a clean double-stripe instead of a heavy band
+  // 4pt emerald bar at the very top edge + a thin hairline 4pt below it
+  // gives the page a refined letterhead frame without colouring the
+  // header area itself.
+  setFill(EMERALD); doc.rect(0, 0, pageW, 4, 'F');
+  setStroke(EMERALD); doc.setLineWidth(0.6);
+  doc.line(0, 8, pageW, 8);
   doc.setLineWidth(0.5);
-  // Tagline
-  doc.setFont('helvetica','normal'); doc.setFontSize(9); setText(EMERALD_LIGHT);
-  doc.text('Seedling Supplier · Miri, Sarawak', margin, 74);
 
-  // QUOTATION title + quote number (right side, in the band)
-  doc.setFont('helvetica','bold'); doc.setFontSize(26); setText([255,255,255]);
-  doc.text('QUOTATION', pageW - margin, 50, { align:'right' });
-  doc.setFont('helvetica','normal'); doc.setFontSize(11); setText(EMERALD_LIGHT);
-  doc.text('No. ' + (q.quote_number || '—'), pageW - margin, 70, { align:'right' });
+  // ── 2) HEADER  ·  Two columns, each stacked vertically.
+  //   LEFT  : MJM NURSERY wordmark   → Mega Jutamas letterhead beneath
+  //   RIGHT : QUOTATION + No.        → Date · Term · Valid table beneath
+  var headerTopY = 52;
 
-  // ── 2) BELOW BAND  ·  Letterhead (left)  +  Meta table (right)
-  var belowBandY = bandH + 18;
-  var metaTableW = 230;
+  // ── LEFT: Brand wordmark + small geometric mark + accent rule
+  // Small filled emerald square as a brand "mark" placed left of the
+  // wordmark — adds a graphic touch without needing a logo asset.
+  setFill(EMERALD);
+  doc.rect(margin, headerTopY - 16, 14, 14, 'F');
+  setFill(EMERALD_LIGHT);
+  doc.rect(margin + 16, headerTopY - 11, 6, 9, 'F');
 
-  // LEFT: Mega Jutamas letterhead
-  doc.setFont('helvetica','bold'); doc.setFontSize(11); setText(SLATE_900);
-  doc.text(COMPANY.name + '  ' + COMPANY.reg, margin, belowBandY + 4);
+  doc.setFont('helvetica','bold'); doc.setFontSize(30); setText(EMERALD);
+  if (doc.setCharSpace) doc.setCharSpace(2.5);
+  doc.text('MJM NURSERY', margin + 32, headerTopY);
+  if (doc.setCharSpace) doc.setCharSpace(0);
 
-  doc.setFont('helvetica','normal'); doc.setFontSize(9); setText(SLATE_700);
-  var addrY = belowBandY + 20;
+  // Thin accent rule underneath the wordmark
+  setStroke(EMERALD); doc.setLineWidth(1.4);
+  doc.line(margin, headerTopY + 8, margin + 200, headerTopY + 8);
+  doc.setLineWidth(0.5);
+
+  // Mega Jutamas letterhead directly beneath the wordmark
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); setText(SLATE_900);
+  doc.text(COMPANY.name + '  ' + COMPANY.reg, margin, headerTopY + 24);
+
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); setText(SLATE_500);
+  var addrY = headerTopY + 38;
   COMPANY.addr.split('\n').forEach(function(ln){ doc.text(ln, margin, addrY); addrY += 11; });
   doc.text('Tel : ' + COMPANY.tel + '     Fax : ' + COMPANY.fax, margin, addrY);
   var leftHeaderBottom = addrY + 4;
 
-  // RIGHT: Date · Term of Payment · Valid Until — sits directly under the
-  // quote number on the right column (was previously next to the customer
-  // block which felt visually disjointed).
+  // ── RIGHT: QUOTATION title + No. + Date/Term/Valid table stacked
+  doc.setFont('helvetica','bold'); doc.setFontSize(28); setText(SLATE_900);
+  doc.text('QUOTATION', pageW - margin, headerTopY, { align:'right' });
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(12); setText(EMERALD);
+  doc.text('No. ' + (q.quote_number || '—'), pageW - margin, headerTopY + 22, { align:'right' });
+
+  var metaTableW = 230;
   doc.autoTable({
-    startY: belowBandY - 4,
+    startY: headerTopY + 32,
     body: [
       ['Date',            fmtDateLong(q.quote_date)],
       ['Term of Payment', 'Cash Only'],
@@ -753,7 +760,7 @@ function generatePdf(q){
     theme: 'grid',
     margin: { left: pageW - margin - metaTableW, right: margin },
     tableWidth: metaTableW,
-    styles: { font:'helvetica', fontSize:10, cellPadding:7, lineColor:SLATE_200, lineWidth:0.5 },
+    styles: { font:'helvetica', fontSize:10, cellPadding:6, lineColor:SLATE_200, lineWidth:0.5 },
     columnStyles: {
       0: { fillColor: SLATE_50, textColor: SLATE_900, fontStyle:'bold', halign:'left',   cellWidth: 110 },
       1: { textColor: SLATE_900, fontStyle:'bold',                       halign:'center', cellWidth: metaTableW - 110 },
@@ -762,12 +769,11 @@ function generatePdf(q){
   var rightHeaderBottom = doc.lastAutoTable.finalY;
   var headerSectionBottom = Math.max(leftHeaderBottom, rightHeaderBottom);
 
-  // Divider under the header section
+  // Divider under the header
   setStroke(SLATE_200); doc.setLineWidth(1);
   doc.line(margin, headerSectionBottom + 8, pageW - margin, headerSectionBottom + 8);
 
-  // ── 3) ATTN TO  (customer block — full content width now that the
-  //     meta table has moved up next to the quote number)
+  // ── 3) ATTN TO  (customer block — full content width)
   var attnY = headerSectionBottom + 28;
   doc.setFont('helvetica','bold'); doc.setFontSize(9); setText(EMERALD);
   doc.text('ATTN TO :', margin, attnY);
