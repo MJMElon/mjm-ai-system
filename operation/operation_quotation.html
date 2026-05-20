@@ -700,41 +700,51 @@ function generatePdf(q){
   function setText(c){ doc.setTextColor(c[0], c[1], c[2]); }
   function setStroke(c){ doc.setDrawColor(c[0], c[1], c[2]); }
 
-  // ── 1) HEADER ROW: brand+company on left  ·  QUOTATION+# on right
-  // Big "MJM NURSERY" wordmark in emerald, with Mega Jutamas details
-  // immediately below it. QUOTATION title on the same row at the right.
-  doc.setFont('helvetica','bold'); doc.setFontSize(28); setText(EMERALD);
-  doc.text('MJM NURSERY', margin, 56);
+  // ── 1) GREEN HEADER BAND  (MJM NURSERY  ·  QUOTATION + No.)
+  var bandH = 88;
+  setFill(EMERALD);      doc.rect(0, 0, pageW, bandH, 'F');
+  setFill(EMERALD_DEEP); doc.rect(0, bandH - 5, pageW, 5, 'F'); // base stripe for depth
 
+  // Brand wordmark — helvetica bold with widened letter spacing for a
+  // more refined look (jsPDF can't ship a custom display font, so we use
+  // tracking + a thin underline accent to lift the wordmark instead).
+  doc.setFont('helvetica','bold'); doc.setFontSize(34); setText([255,255,255]);
+  if (doc.setCharSpace) doc.setCharSpace(3);
+  doc.text('MJM NURSERY', margin, 50);
+  if (doc.setCharSpace) doc.setCharSpace(0);
+  // Thin white accent underline beneath the wordmark
+  setStroke([255,255,255]); doc.setLineWidth(1.5);
+  doc.line(margin, 58, margin + 110, 58);
+  doc.setLineWidth(0.5);
+  // Tagline
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); setText(EMERALD_LIGHT);
+  doc.text('Seedling Supplier · Miri, Sarawak', margin, 74);
+
+  // QUOTATION title + quote number (right side, in the band)
+  doc.setFont('helvetica','bold'); doc.setFontSize(26); setText([255,255,255]);
+  doc.text('QUOTATION', pageW - margin, 50, { align:'right' });
+  doc.setFont('helvetica','normal'); doc.setFontSize(11); setText(EMERALD_LIGHT);
+  doc.text('No. ' + (q.quote_number || '—'), pageW - margin, 70, { align:'right' });
+
+  // ── 2) BELOW BAND  ·  Letterhead (left)  +  Meta table (right)
+  var belowBandY = bandH + 18;
+  var metaTableW = 230;
+
+  // LEFT: Mega Jutamas letterhead
   doc.setFont('helvetica','bold'); doc.setFontSize(11); setText(SLATE_900);
-  doc.text(COMPANY.name + '  ' + COMPANY.reg, margin, 76);
+  doc.text(COMPANY.name + '  ' + COMPANY.reg, margin, belowBandY + 4);
 
   doc.setFont('helvetica','normal'); doc.setFontSize(9); setText(SLATE_700);
-  var addrY = 90;
+  var addrY = belowBandY + 20;
   COMPANY.addr.split('\n').forEach(function(ln){ doc.text(ln, margin, addrY); addrY += 11; });
   doc.text('Tel : ' + COMPANY.tel + '     Fax : ' + COMPANY.fax, margin, addrY);
-  var headerBottom = addrY + 6;
+  var leftHeaderBottom = addrY + 4;
 
-  // QUOTATION title (right)
-  doc.setFont('helvetica','bold'); doc.setFontSize(32); setText(SLATE_900);
-  doc.text('QUOTATION', pageW - margin, 58, { align:'right' });
-  doc.setFont('helvetica','bold'); doc.setFontSize(12); setText(EMERALD);
-  doc.text('No. ' + (q.quote_number || '—'), pageW - margin, 80, { align:'right' });
-
-  // Divider under header
-  setStroke(SLATE_200); doc.setLineWidth(1);
-  doc.line(margin, headerBottom, pageW - margin, headerBottom);
-
-  // ── 2) CUSTOMER (left)  ·  META TABLE (right) — same row
-  var secY = headerBottom + 22;
-  var metaTableW = 230;
-  var leftW = pageW - margin*2 - metaTableW - 24;
-
-  // Right column FIRST (Date · Term of Payment · Valid Until) — Quote No.
-  // is intentionally omitted here because it already sits beside the
-  // QUOTATION title at the top of the page.
+  // RIGHT: Date · Term of Payment · Valid Until — sits directly under the
+  // quote number on the right column (was previously next to the customer
+  // block which felt visually disjointed).
   doc.autoTable({
-    startY: secY - 4,
+    startY: belowBandY - 4,
     body: [
       ['Date',            fmtDateLong(q.quote_date)],
       ['Term of Payment', 'Cash Only'],
@@ -749,20 +759,27 @@ function generatePdf(q){
       1: { textColor: SLATE_900, fontStyle:'bold',                       halign:'center', cellWidth: metaTableW - 110 },
     },
   });
-  var metaBottom = doc.lastAutoTable.finalY;
+  var rightHeaderBottom = doc.lastAutoTable.finalY;
+  var headerSectionBottom = Math.max(leftHeaderBottom, rightHeaderBottom);
 
-  // Left column: ATTN TO block
+  // Divider under the header section
+  setStroke(SLATE_200); doc.setLineWidth(1);
+  doc.line(margin, headerSectionBottom + 8, pageW - margin, headerSectionBottom + 8);
+
+  // ── 3) ATTN TO  (customer block — full content width now that the
+  //     meta table has moved up next to the quote number)
+  var attnY = headerSectionBottom + 28;
   doc.setFont('helvetica','bold'); doc.setFontSize(9); setText(EMERALD);
-  doc.text('ATTN TO :', margin, secY);
+  doc.text('ATTN TO :', margin, attnY);
 
-  var custY = secY + 20;
+  var custY = attnY + 20;
   doc.setFont('helvetica','bold'); doc.setFontSize(12); setText(SLATE_900);
   doc.text((q.customer_company || q.customer_name || '—').toUpperCase(), margin, custY);
   custY += 16;
 
   doc.setFont('helvetica','normal'); doc.setFontSize(10); setText(SLATE_700);
   if (q.customer_address){
-    var aLines = doc.splitTextToSize(q.customer_address, leftW);
+    var aLines = doc.splitTextToSize(q.customer_address, pageW - margin*2);
     doc.text(aLines, margin, custY); custY += aLines.length * 12;
   }
   custY += 4;
@@ -772,7 +789,7 @@ function generatePdf(q){
   var leftBottom = custY;
 
   // ── 3) ITEMS TABLE ─────────────────────────────────────────────
-  var tableTop = Math.max(leftBottom, metaBottom) + 22;
+  var tableTop = leftBottom + 22;
   var unitLabel = ((q.items||[])[0] && (q.items[0].unit||'Palm')) || 'Palm';
   var itemRows = (q.items||[]).map(function(it, idx){
     return [
@@ -796,7 +813,7 @@ function generatePdf(q){
 
   doc.autoTable({
     startY: tableTop,
-    head: [['No', 'Description', 'Qty (' + unitLabel + ')', 'Unit Price (RM)', 'Amount (RM)']],
+    head: [['No', 'Description', 'Qty\n(' + unitLabel + ')', 'Unit Price\n(RM)', 'Amount\n(RM)']],
     body: itemRows,
     theme: 'plain',
     margin: { left: margin, right: margin },
@@ -868,9 +885,12 @@ function generatePdf(q){
     contentBottom = noteY + noteLines.length * 11 + 8;
   }
 
-  // ── 5) TERMS & CONDITIONS — anchored near the bottom of the page
-  // (middle blank space between totals and T&C is intentional)
-  var tcBlockH = 150; // approximate height reserved
+  // ── 5) TERMS & CONDITIONS — anchored as close to the bottom as the
+  // T&C content allows (middle blank space between totals and T&C is
+  // intentional). tcBlockH is the actual rendered height of the three
+  // notes + heading; tuning it tighter pulls the section lower toward
+  // the footer.
+  var tcBlockH = 110;
   var tcY = Math.max(contentBottom + 24, pageH - 50 - tcBlockH);
   if (tcY + tcBlockH > pageH - 50){ doc.addPage(); tcY = 80; }
 
