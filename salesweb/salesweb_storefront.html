@@ -74,6 +74,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>MJM Nursery | MPOB Certified Oil Palm Seedlings</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Sans:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&display=swap" rel="stylesheet">
 <style>
@@ -2400,7 +2403,7 @@ function pOrderCard(o){
 function goPayOrder(orderId,total){
   sessionStorage.setItem('mjm_pay_order_id',orderId);
   sessionStorage.setItem('mjm_pay_order_total',total);
-  window.location.href='salesweb_payment_proof.html?v=20260520a';
+  window.location.href='salesweb_payment_offline.html';
 }
 
 function _odLabel(label,val){return'<div style="color:var(--text-light);font-size:11px;">'+label+'</div><div style="font-weight:600;font-size:12px;">'+esc(val||'—')+'</div>';}
