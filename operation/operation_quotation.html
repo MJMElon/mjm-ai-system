@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MJM Nursery AI · Quotations</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- jsPDF for client-side PDF generation -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  *{font-family:'Outfit',system-ui,sans-serif;}
+  body{background:#f1f5f9;margin:0;min-height:100vh;}
+  .fade-enter{animation:fadeIn .35s ease-out;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .dash-card{background:white;border-radius:18px;border:1px solid #e2e8f0;box-shadow:0 4px 14px rgba(0,0,0,.05);}
+  .input{background:white;border:1.5px solid #e2e8f0;border-radius:10px;padding:9px 12px;font-size:13px;font-weight:600;color:#1e293b;outline:none;transition:border-color .15s,box-shadow .15s;width:100%;box-sizing:border-box;font-family:'Outfit',sans-serif;}
+  .input:focus{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.1);}
+  .input::placeholder{color:#94a3b8;font-weight:500;}
+  .label{display:block;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:4px;}
+  .btn{font-weight:900;font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:10px 18px;border-radius:12px;border:none;cursor:pointer;transition:transform .12s,box-shadow .15s,opacity .15s;font-family:'Outfit',sans-serif;}
+  .btn:hover{transform:translateY(-1px);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+  .btn-primary{background:linear-gradient(135deg,#059669,#10b981);color:white;box-shadow:0 4px 12px rgba(16,185,129,.3);}
+  .btn-primary:hover{box-shadow:0 6px 16px rgba(16,185,129,.45);}
+  .btn-secondary{background:#f1f5f9;color:#334155;border:1.5px solid #e2e8f0;}
+  .btn-secondary:hover{background:#e2e8f0;}
+  .btn-danger{background:#fee2e2;color:#991b1b;border:1.5px solid #fecaca;}
+  .btn-danger:hover{background:#fecaca;}
+  .btn-ghost{background:transparent;color:#64748b;}
+  .btn-ghost:hover{background:#f1f5f9;color:#1e293b;}
+  .q-table{width:100%;border-collapse:collapse;font-size:13px;}
+  .q-table th{background:#f8fafc;padding:10px 12px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.06em;font-weight:900;color:#64748b;border-bottom:2px solid #e2e8f0;}
+  .q-table td{padding:10px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;color:#334155;vertical-align:middle;}
+  .q-table tr:hover td{background:#f8fafc;}
+  .status-pill{display:inline-block;padding:2px 9px;border-radius:9px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;}
+  .status-draft{background:#f1f5f9;color:#475569;}
+  .status-sent{background:#dbeafe;color:#1d4ed8;}
+  .status-accepted{background:#d1fae5;color:#065f46;}
+  .status-rejected{background:#fee2e2;color:#991b1b;}
+  .status-expired{background:#fef3c7;color:#92400e;}
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:flex-start;justify-content:center;padding:24px;overflow-y:auto;}
+  .modal-overlay.open{display:flex;}
+  .modal-box{background:white;border-radius:20px;width:100%;max-width:980px;box-shadow:0 32px 80px rgba(0,0,0,.35);animation:popIn .25s ease both;margin-bottom:32px;}
+  @keyframes popIn{from{opacity:0;transform:scale(.97) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#064e3b,#10b981);color:white;padding:14px 22px;border-radius:14px;font-size:13px;font-weight:700;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 8px 24px rgba(16,185,129,.4);text-align:center;max-width:90vw;}
+  .toast.show{opacity:1;}
+  .item-row{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.2fr) minmax(0,1.2fr) auto;gap:8px;align-items:start;padding:10px 0;border-bottom:1px dashed #e2e8f0;}
+  .item-row:last-child{border-bottom:none;}
+  .item-row .input{padding:8px 10px;font-size:12px;}
+  .item-row textarea.input{resize:vertical;min-height:38px;}
+  @media (max-width:760px){
+    .item-row{grid-template-columns:1fr 1fr;}
+    .item-row > *:first-child{grid-column:1 / -1;}
+  }
+  .totals-row{display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#334155;padding:6px 0;}
+  .totals-row.grand{font-size:16px;font-weight:900;color:#065f46;border-top:2px solid #d1fae5;padding-top:10px;margin-top:6px;}
+</style>
+</head>
+<body class="fade-enter">
+
+<!-- TOP NAV -->
+<div class="bg-white border-b border-slate-200 px-5 py-3 flex justify-between items-center sticky top-0 z-30 shadow-sm">
+  <div class="flex items-center gap-3">
+    <button onclick="window.location.href='operation_stock_sales.html'" class="text-[10px] font-bold text-slate-500 hover:text-blue-700 uppercase tracking-widest bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-sm border-none cursor-pointer">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Back to sales page
+    </button>
+    <span class="font-black text-slate-800 uppercase tracking-widest text-xs hidden sm:inline">Quotations</span>
+  </div>
+  <div class="flex items-center gap-3">
+    <span id="user-label" class="text-xs font-bold text-slate-400 hidden md:block"></span>
+    <button id="logout-btn" class="text-[10px] font-bold text-slate-500 hover:text-red-500 uppercase tracking-widest bg-slate-50 px-4 py-2 rounded-full border border-slate-200 cursor-pointer transition-colors">Sign Out</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="max-w-[1200px] mx-auto px-4 sm:px-6 py-6 space-y-4">
+
+  <!-- Header card -->
+  <div class="dash-card p-5 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">📝 Quotation Management</div>
+      <div class="text-lg font-black text-slate-800">All Quotations</div>
+      <div class="text-xs font-bold text-slate-400 mt-1" id="q-summary">—</div>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <input id="q-search" type="text" class="input" style="width:220px;" placeholder="Search number / customer…">
+      <select id="q-status-filter" class="input" style="width:140px;">
+        <option value="">All status</option>
+        <option value="draft">Draft</option>
+        <option value="sent">Sent</option>
+        <option value="accepted">Accepted</option>
+        <option value="rejected">Rejected</option>
+        <option value="expired">Expired</option>
+      </select>
+      <button onclick="openNewQuotation()" class="btn btn-primary">+ New Quotation</button>
+    </div>
+  </div>
+
+  <!-- List -->
+  <div class="dash-card p-0 overflow-x-auto">
+    <table class="q-table">
+      <thead>
+        <tr>
+          <th>Quote #</th>
+          <th>Date</th>
+          <th>Customer</th>
+          <th>Total (RM)</th>
+          <th>Status</th>
+          <th>Created by</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="q-list-body">
+        <tr><td colspan="7" class="text-center text-slate-400 py-8 text-xs font-bold uppercase tracking-widest">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════ EDITOR MODAL ════════════════════════ -->
+<div class="modal-overlay" id="editor-modal">
+  <div class="modal-box">
+    <div style="background:linear-gradient(135deg,#064e3b,#065f46);" class="px-6 pt-5 pb-5 rounded-t-[20px] flex justify-between items-start">
+      <div>
+        <div class="text-[10px] font-black text-emerald-300 uppercase tracking-widest mb-1">📝 Quotation</div>
+        <div class="text-lg font-black text-white" id="editor-title">New Quotation</div>
+        <div class="text-[11px] font-bold text-emerald-200 mt-1" id="editor-subtitle"></div>
+      </div>
+      <button onclick="closeEditor()" class="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white font-black text-lg flex items-center justify-center transition-colors shrink-0">&times;</button>
+    </div>
+
+    <div class="p-5 sm:p-6 space-y-5">
+      <!-- Meta -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div>
+          <label class="label">Quote #</label>
+          <input id="f-quote-number" type="text" class="input" placeholder="Auto-generated">
+        </div>
+        <div>
+          <label class="label">Quote date</label>
+          <input id="f-quote-date" type="date" class="input">
+        </div>
+        <div>
+          <label class="label">Valid until</label>
+          <input id="f-valid-until" type="date" class="input">
+        </div>
+        <div>
+          <label class="label">Status</label>
+          <select id="f-status" class="input">
+            <option value="draft">Draft</option>
+            <option value="sent">Sent</option>
+            <option value="accepted">Accepted</option>
+            <option value="rejected">Rejected</option>
+            <option value="expired">Expired</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Customer -->
+      <div>
+        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Customer</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="label">Name *</label>
+            <input id="f-cust-name" type="text" class="input" placeholder="e.g. Ahmad Bin Ali">
+          </div>
+          <div>
+            <label class="label">Company</label>
+            <input id="f-cust-company" type="text" class="input" placeholder="e.g. ABC Sdn Bhd">
+          </div>
+          <div>
+            <label class="label">Contact (phone)</label>
+            <input id="f-cust-contact" type="text" class="input" placeholder="e.g. 012-3456789">
+          </div>
+          <div>
+            <label class="label">Email</label>
+            <input id="f-cust-email" type="email" class="input" placeholder="e.g. ahmad@abc.com">
+          </div>
+          <div class="sm:col-span-2">
+            <label class="label">Address</label>
+            <textarea id="f-cust-address" class="input" rows="2" placeholder="Delivery / billing address"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Line items -->
+      <div>
+        <div class="flex justify-between items-center mb-2">
+          <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Line items</div>
+          <button onclick="addItemRow()" class="btn btn-secondary" style="padding:6px 12px;font-size:10px;">+ Add row</button>
+        </div>
+        <div class="dash-card p-3" style="border:1px solid #f1f5f9;box-shadow:none;">
+          <div class="item-row hidden sm:grid" style="border-bottom:1px solid #e2e8f0;padding-bottom:6px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;">
+            <div>Description</div>
+            <div>Qty</div>
+            <div>Unit</div>
+            <div>Unit price (RM)</div>
+            <div>Line total (RM)</div>
+            <div></div>
+          </div>
+          <div id="items-container"></div>
+        </div>
+      </div>
+
+      <!-- Totals -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="label">Notes (visible on PDF)</label>
+          <textarea id="f-notes" class="input" rows="3" placeholder="e.g. Delivery within Miri included. Plants quoted are subject to availability."></textarea>
+          <label class="label" style="margin-top:10px;">Terms &amp; conditions (visible on PDF)</label>
+          <textarea id="f-terms" class="input" rows="3" placeholder="e.g. 50% deposit on confirmation. Balance on delivery. Quote valid for 14 days."></textarea>
+        </div>
+        <div class="dash-card p-4" style="background:#f8fafc;box-shadow:none;">
+          <div class="totals-row"><span>Subtotal</span><span id="t-subtotal">RM 0.00</span></div>
+          <div class="totals-row">
+            <span>Discount (RM)</span>
+            <input id="f-discount" type="number" min="0" step="0.01" class="input" style="width:120px;text-align:right;padding:6px 10px;font-size:12px;" value="0" oninput="recalcTotals()">
+          </div>
+          <div class="totals-row">
+            <span>Tax / SST (%)</span>
+            <input id="f-tax-rate" type="number" min="0" max="100" step="0.01" class="input" style="width:120px;text-align:right;padding:6px 10px;font-size:12px;" value="0" oninput="recalcTotals()">
+          </div>
+          <div class="totals-row"><span>Tax amount</span><span id="t-tax">RM 0.00</span></div>
+          <div class="totals-row grand"><span>TOTAL</span><span id="t-grand">RM 0.00</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-5 sm:px-6 pb-5 flex flex-wrap justify-between gap-3 border-t border-slate-100 pt-4">
+      <button id="btn-delete" onclick="deleteCurrentQuotation()" class="btn btn-danger hidden">🗑 Delete</button>
+      <div class="flex flex-wrap gap-2 ml-auto">
+        <button onclick="closeEditor()" class="btn btn-ghost">Cancel</button>
+        <button onclick="downloadPdf()" class="btn btn-secondary">⬇️ Download PDF</button>
+        <button id="btn-save" onclick="saveQuotation()" class="btn btn-primary">💾 Save Quotation</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">&#10004; <span id="toast-msg"></span></div>
+
+<script>
+// ════════════════════════════════════════════════════════
+//  SUPABASE + SESSION
+// ════════════════════════════════════════════════════════
+const SUPABASE_URL = 'https://kibqjztozokohqmhqqqf.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpYnFqenRvem9rb2hxbWhxcXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQzNjIsImV4cCI6MjA4OTgxMDM2Mn0.J7qJUZhWXYf5b9oey4wXJkjdi66jomEMw_NeV9NWF7M';
+const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentSession = null;
+let isLoggingOut = false;
+_supabase.auth.getSession().then(({ data: { session } }) => {
+  if (!session) { window.location.href = 'operation_dashboard.html'; return; }
+  currentSession = session;
+  document.getElementById('user-label').innerText =
+    session.user.user_metadata?.full_name || session.user.email;
+});
+_supabase.auth.onAuthStateChange((event, session) => {
+  if (isLoggingOut) return;
+  if (event === 'SIGNED_OUT' || !session) window.location.href = 'operation_dashboard.html';
+});
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  isLoggingOut = true;
+  const btn = document.getElementById('logout-btn');
+  btn.innerText = 'Signing Out…'; btn.disabled = true;
+  Object.keys(localStorage).forEach(k => { if (k.startsWith('sb-')) localStorage.removeItem(k); });
+  sessionStorage.clear();
+  try {
+    await Promise.race([
+      _supabase.auth.signOut({ scope: 'local' }),
+      new Promise(resolve => setTimeout(resolve, 1500))
+    ]);
+  } catch(e) {}
+  window.location.replace('operation_dashboard.html');
+});
+
+// ════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════
+let quotations = [];
+let editing = null;     // null = creating new; otherwise the row being edited
+let items = [];         // working set of items for the editor
+
+// ════════════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════════════
+function fmtMoney(n){
+  var v = Number(n)||0;
+  return 'RM ' + v.toLocaleString('en-MY', { minimumFractionDigits:2, maximumFractionDigits:2 });
+}
+function fmtDate(d){
+  if (!d) return '—';
+  var dt = typeof d === 'string' ? new Date(d+'T00:00:00') : d;
+  return dt.toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' });
+}
+function todayIso(){
+  var d = new Date(); var m = String(d.getMonth()+1).padStart(2,'0'); var dy = String(d.getDate()).padStart(2,'0');
+  return d.getFullYear()+'-'+m+'-'+dy;
+}
+function addDaysIso(ds, days){
+  var d = new Date(ds+'T00:00:00'); d.setDate(d.getDate()+days);
+  var m = String(d.getMonth()+1).padStart(2,'0'); var dy = String(d.getDate()).padStart(2,'0');
+  return d.getFullYear()+'-'+m+'-'+dy;
+}
+function showToast(msg){
+  var t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 3000);
+}
+function escapeHtml(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Quote number: Q-YYYYMM-NNNN  (NNNN scoped to month; gap-safe by taking max+1)
+async function nextQuoteNumber(){
+  var d = new Date();
+  var ym = d.getFullYear() + String(d.getMonth()+1).padStart(2,'0');
+  var prefix = 'Q-' + ym + '-';
+  var { data } = await _supabase.from('shared_quotations')
+    .select('quote_number')
+    .ilike('quote_number', prefix+'%')
+    .order('quote_number', { ascending:false })
+    .limit(1);
+  var next = 1;
+  if (data && data.length){
+    var m = /-(\d+)$/.exec(data[0].quote_number);
+    if (m) next = parseInt(m[1],10) + 1;
+  }
+  return prefix + String(next).padStart(4,'0');
+}
+
+// ════════════════════════════════════════════════════════
+//  LIST
+// ════════════════════════════════════════════════════════
+async function loadList(){
+  var { data, error } = await _supabase.from('shared_quotations')
+    .select('*')
+    .order('quote_date', { ascending:false })
+    .order('created_at', { ascending:false })
+    .limit(500);
+  if (error){
+    document.getElementById('q-list-body').innerHTML =
+      '<tr><td colspan="7" class="text-center text-red-500 py-6 text-xs font-bold">'+escapeHtml(error.message)+'</td></tr>';
+    return;
+  }
+  quotations = data || [];
+  renderList();
+}
+
+function renderList(){
+  var search = (document.getElementById('q-search').value || '').trim().toLowerCase();
+  var statusFilter = document.getElementById('q-status-filter').value;
+  var rows = quotations.filter(function(q){
+    if (statusFilter && q.status !== statusFilter) return false;
+    if (search){
+      var hay = (q.quote_number+' '+q.customer_name+' '+(q.customer_company||'')).toLowerCase();
+      if (hay.indexOf(search) === -1) return false;
+    }
+    return true;
+  });
+
+  var totalAll = rows.reduce(function(s,q){ return s + (Number(q.total)||0); }, 0);
+  document.getElementById('q-summary').textContent =
+    rows.length + ' quotation' + (rows.length===1?'':'s') + ' · Total ' + fmtMoney(totalAll);
+
+  var body = document.getElementById('q-list-body');
+  if (!rows.length){
+    body.innerHTML = '<tr><td colspan="7" class="text-center text-slate-400 py-8 text-xs font-bold uppercase tracking-widest">No quotations yet</td></tr>';
+    return;
+  }
+  body.innerHTML = rows.map(function(q){
+    var customer = escapeHtml(q.customer_name) + (q.customer_company ? ' <span class="text-slate-400 font-bold">· '+escapeHtml(q.customer_company)+'</span>' : '');
+    return '<tr>' +
+      '<td class="font-black text-slate-800">'+escapeHtml(q.quote_number)+'</td>' +
+      '<td>'+fmtDate(q.quote_date)+'</td>' +
+      '<td>'+customer+'</td>' +
+      '<td class="font-black text-emerald-700">'+fmtMoney(q.total)+'</td>' +
+      '<td><span class="status-pill status-'+escapeHtml(q.status||'draft')+'">'+escapeHtml(q.status||'draft')+'</span></td>' +
+      '<td class="text-slate-400 text-[11px]">'+escapeHtml(q.created_by_name||'—')+'</td>' +
+      '<td class="text-right whitespace-nowrap">' +
+        '<button onclick="openEdit(\''+q.id+'\')" class="btn btn-secondary" style="padding:6px 12px;font-size:10px;">Edit</button> ' +
+        '<button onclick="downloadPdfFor(\''+q.id+'\')" class="btn btn-ghost" style="padding:6px 10px;font-size:10px;">⬇️ PDF</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+document.getElementById('q-search').addEventListener('input', renderList);
+document.getElementById('q-status-filter').addEventListener('change', renderList);
+
+// ════════════════════════════════════════════════════════
+//  EDITOR
+// ════════════════════════════════════════════════════════
+async function openNewQuotation(){
+  editing = null;
+  items = [];
+  document.getElementById('editor-title').textContent = 'New Quotation';
+  document.getElementById('editor-subtitle').textContent = '';
+  document.getElementById('btn-delete').classList.add('hidden');
+  document.getElementById('btn-save').textContent = '💾 Save Quotation';
+
+  // Pre-fill defaults
+  var today = todayIso();
+  document.getElementById('f-quote-date').value = today;
+  document.getElementById('f-valid-until').value = addDaysIso(today, 14);
+  document.getElementById('f-status').value = 'draft';
+  document.getElementById('f-cust-name').value = '';
+  document.getElementById('f-cust-company').value = '';
+  document.getElementById('f-cust-contact').value = '';
+  document.getElementById('f-cust-email').value = '';
+  document.getElementById('f-cust-address').value = '';
+  document.getElementById('f-notes').value = '';
+  document.getElementById('f-terms').value = 'Quotation valid for 14 days from quote date. 50% deposit on confirmation, balance on delivery.';
+  document.getElementById('f-discount').value = '0';
+  document.getElementById('f-tax-rate').value = '0';
+
+  document.getElementById('f-quote-number').value = 'Generating…';
+  document.getElementById('editor-modal').classList.add('open');
+
+  // Add one starter row
+  addItemRow();
+  renderItems();
+  recalcTotals();
+
+  // Generate the quote number in the background
+  try {
+    var qn = await nextQuoteNumber();
+    document.getElementById('f-quote-number').value = qn;
+  } catch(e){
+    document.getElementById('f-quote-number').value = '';
+  }
+}
+
+function openEdit(id){
+  var q = quotations.find(function(x){ return x.id === id; });
+  if (!q) return;
+  editing = q;
+  items = Array.isArray(q.items) ? q.items.map(function(x){ return Object.assign({}, x); }) : [];
+  if (!items.length) addItemRow();
+
+  document.getElementById('editor-title').textContent = q.quote_number;
+  document.getElementById('editor-subtitle').textContent = 'Created ' + fmtDate(q.created_at) + (q.created_by_name ? ' by ' + q.created_by_name : '');
+  document.getElementById('btn-delete').classList.remove('hidden');
+  document.getElementById('btn-save').textContent = '💾 Save Changes';
+
+  document.getElementById('f-quote-number').value = q.quote_number || '';
+  document.getElementById('f-quote-date').value = q.quote_date || todayIso();
+  document.getElementById('f-valid-until').value = q.valid_until || '';
+  document.getElementById('f-status').value = q.status || 'draft';
+  document.getElementById('f-cust-name').value = q.customer_name || '';
+  document.getElementById('f-cust-company').value = q.customer_company || '';
+  document.getElementById('f-cust-contact').value = q.customer_contact || '';
+  document.getElementById('f-cust-email').value = q.customer_email || '';
+  document.getElementById('f-cust-address').value = q.customer_address || '';
+  document.getElementById('f-notes').value = q.notes || '';
+  document.getElementById('f-terms').value = q.terms || '';
+  document.getElementById('f-discount').value = q.discount || 0;
+  document.getElementById('f-tax-rate').value = q.tax_rate || 0;
+
+  renderItems();
+  recalcTotals();
+
+  document.getElementById('editor-modal').classList.add('open');
+}
+
+function closeEditor(){
+  document.getElementById('editor-modal').classList.remove('open');
+  editing = null;
+  items = [];
+}
+
+// ── ITEMS ────────────────────────────────────────────────
+function addItemRow(){
+  items.push({ description:'', qty:1, unit:'pcs', unit_price:0, line_total:0 });
+  renderItems();
+}
+function removeItemRow(idx){
+  items.splice(idx, 1);
+  if (!items.length) addItemRow();
+  renderItems();
+  recalcTotals();
+}
+function onItemChange(idx, field, value){
+  var it = items[idx];
+  if (field === 'qty' || field === 'unit_price') it[field] = Number(value) || 0;
+  else it[field] = value;
+  it.line_total = (Number(it.qty)||0) * (Number(it.unit_price)||0);
+  // Just update this row's total + grand totals, no full re-render (keeps caret in inputs)
+  var lt = document.getElementById('item-total-'+idx);
+  if (lt) lt.textContent = fmtMoney(it.line_total);
+  recalcTotals();
+}
+function renderItems(){
+  var container = document.getElementById('items-container');
+  container.innerHTML = items.map(function(it, idx){
+    return '<div class="item-row">' +
+      '<textarea class="input" placeholder="e.g. Mango — Harum Manis, 2 ft" oninput="onItemChange('+idx+',\'description\',this.value)">'+escapeHtml(it.description||'')+'</textarea>' +
+      '<input class="input" type="number" min="0" step="0.01" value="'+(it.qty||0)+'" oninput="onItemChange('+idx+',\'qty\',this.value)">' +
+      '<input class="input" type="text" value="'+escapeHtml(it.unit||'')+'" placeholder="pcs/poly/bag" oninput="onItemChange('+idx+',\'unit\',this.value)">' +
+      '<input class="input" type="number" min="0" step="0.01" value="'+(it.unit_price||0)+'" oninput="onItemChange('+idx+',\'unit_price\',this.value)">' +
+      '<div class="input" id="item-total-'+idx+'" style="background:#f8fafc;border-color:#e2e8f0;color:#065f46;font-weight:900;">'+fmtMoney(it.line_total||0)+'</div>' +
+      '<button onclick="removeItemRow('+idx+')" class="btn btn-ghost" style="padding:8px 10px;font-size:11px;color:#dc2626;" title="Remove">&times;</button>' +
+    '</div>';
+  }).join('');
+}
+
+function recalcTotals(){
+  var subtotal = items.reduce(function(s,it){
+    var lt = (Number(it.qty)||0) * (Number(it.unit_price)||0);
+    it.line_total = lt;
+    return s + lt;
+  }, 0);
+  var discount = Number(document.getElementById('f-discount').value) || 0;
+  var taxRate = Number(document.getElementById('f-tax-rate').value) || 0;
+  var taxable = Math.max(0, subtotal - discount);
+  var taxAmount = taxable * (taxRate/100);
+  var grand = taxable + taxAmount;
+  document.getElementById('t-subtotal').textContent = fmtMoney(subtotal);
+  document.getElementById('t-tax').textContent = fmtMoney(taxAmount);
+  document.getElementById('t-grand').textContent = fmtMoney(grand);
+}
+
+// ── SAVE / DELETE ────────────────────────────────────────
+function gatherPayload(){
+  var subtotal = items.reduce(function(s,it){ return s + (Number(it.qty)||0)*(Number(it.unit_price)||0); }, 0);
+  var discount = Number(document.getElementById('f-discount').value) || 0;
+  var taxRate = Number(document.getElementById('f-tax-rate').value) || 0;
+  var taxable = Math.max(0, subtotal - discount);
+  var taxAmount = taxable * (taxRate/100);
+  var total = taxable + taxAmount;
+
+  // Strip empty rows
+  var cleanItems = items
+    .filter(function(it){ return (it.description||'').trim() || Number(it.qty)>0 || Number(it.unit_price)>0; })
+    .map(function(it){ return {
+      description: it.description||'',
+      qty: Number(it.qty)||0,
+      unit: it.unit||'',
+      unit_price: Number(it.unit_price)||0,
+      line_total: (Number(it.qty)||0) * (Number(it.unit_price)||0),
+    }; });
+
+  return {
+    quote_number: (document.getElementById('f-quote-number').value || '').trim(),
+    quote_date: document.getElementById('f-quote-date').value || todayIso(),
+    valid_until: document.getElementById('f-valid-until').value || null,
+    customer_name: (document.getElementById('f-cust-name').value || '').trim(),
+    customer_company: (document.getElementById('f-cust-company').value || '').trim() || null,
+    customer_contact: (document.getElementById('f-cust-contact').value || '').trim() || null,
+    customer_email: (document.getElementById('f-cust-email').value || '').trim() || null,
+    customer_address: (document.getElementById('f-cust-address').value || '').trim() || null,
+    items: cleanItems,
+    subtotal: subtotal,
+    discount: discount,
+    tax_rate: taxRate,
+    tax_amount: taxAmount,
+    total: total,
+    notes: (document.getElementById('f-notes').value || '').trim() || null,
+    terms: (document.getElementById('f-terms').value || '').trim() || null,
+    status: document.getElementById('f-status').value || 'draft',
+  };
+}
+
+async function saveQuotation(){
+  var p = gatherPayload();
+  if (!p.customer_name){ showToast('❌ Customer name is required'); return; }
+  if (!p.quote_number){ showToast('❌ Quote number is required'); return; }
+  if (!p.items.length){ showToast('❌ Add at least one line item'); return; }
+
+  var btn = document.getElementById('btn-save');
+  btn.disabled = true; var oldText = btn.textContent; btn.textContent = 'Saving…';
+
+  if (editing){
+    var { data, error } = await _supabase.from('shared_quotations')
+      .update(p).eq('id', editing.id).select().single();
+    if (error){ showToast('❌ '+error.message); btn.disabled=false; btn.textContent=oldText; return; }
+    editing = data;
+    showToast('✅ Quotation updated');
+  } else {
+    p.created_by = currentSession ? currentSession.user.id : null;
+    p.created_by_name = currentSession ? (currentSession.user.user_metadata?.full_name || currentSession.user.email) : null;
+    var { data, error } = await _supabase.from('shared_quotations')
+      .insert(p).select().single();
+    if (error){ showToast('❌ '+error.message); btn.disabled=false; btn.textContent=oldText; return; }
+    editing = data;
+    showToast('✅ Quotation saved');
+    // Flip the editor into edit mode so subsequent saves update this row instead of creating a duplicate.
+    document.getElementById('editor-title').textContent = data.quote_number;
+    document.getElementById('editor-subtitle').textContent = 'Created ' + fmtDate(data.created_at) + (data.created_by_name ? ' by ' + data.created_by_name : '');
+    document.getElementById('btn-delete').classList.remove('hidden');
+  }
+  btn.disabled = false; btn.textContent = '💾 Save Changes';
+  await loadList();
+}
+
+async function deleteCurrentQuotation(){
+  if (!editing) return;
+  if (!confirm('Delete quotation '+editing.quote_number+'? This cannot be undone.')) return;
+  var { error } = await _supabase.from('shared_quotations').delete().eq('id', editing.id);
+  if (error){ showToast('❌ '+error.message); return; }
+  showToast('🗑 Deleted');
+  closeEditor();
+  loadList();
+}
+
+// ════════════════════════════════════════════════════════
+//  PDF
+// ════════════════════════════════════════════════════════
+function downloadPdf(){
+  // PDF from current editor state — works for both saved + unsaved drafts.
+  var p = gatherPayload();
+  if (!p.quote_number || !p.customer_name){ showToast('❌ Need quote number + customer to make PDF'); return; }
+  generatePdf(p);
+}
+function downloadPdfFor(id){
+  var q = quotations.find(function(x){ return x.id === id; });
+  if (!q) return;
+  generatePdf(q);
+}
+
+function generatePdf(q){
+  var jsPDFNS = window.jspdf || window;
+  var doc = new jsPDFNS.jsPDF({ unit:'pt', format:'a4' });
+  var pageW = doc.internal.pageSize.getWidth();
+  var pageH = doc.internal.pageSize.getHeight();
+  var margin = 40;
+
+  // Header
+  doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(6,95,70);
+  doc.text('MJM NURSERY', margin, 60);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(100,116,139);
+  doc.text('Seedling supplier · Miri, Sarawak', margin, 76);
+  doc.text('ai.mjmnursery.com', margin, 88);
+
+  // Quote block (top-right)
+  doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(30,41,59);
+  doc.text('QUOTATION', pageW - margin, 60, { align:'right' });
+  doc.setFontSize(10); doc.setTextColor(71,85,105);
+  doc.text('Quote #: '+(q.quote_number||'—'), pageW - margin, 78, { align:'right' });
+  doc.text('Date: '+fmtDate(q.quote_date), pageW - margin, 92, { align:'right' });
+  if (q.valid_until) doc.text('Valid until: '+fmtDate(q.valid_until), pageW - margin, 106, { align:'right' });
+
+  // Divider
+  doc.setDrawColor(226,232,240); doc.setLineWidth(1);
+  doc.line(margin, 120, pageW - margin, 120);
+
+  // Customer block
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(100,116,139);
+  doc.text('BILL TO', margin, 140);
+  doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(30,41,59);
+  doc.text(q.customer_name || '—', margin, 156);
+  var custY = 170;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(71,85,105);
+  if (q.customer_company){ doc.text(q.customer_company, margin, custY); custY += 14; }
+  if (q.customer_address){
+    var lines = doc.splitTextToSize(q.customer_address, pageW/2 - margin);
+    doc.text(lines, margin, custY); custY += lines.length * 12;
+  }
+  if (q.customer_contact){ doc.text('Phone: '+q.customer_contact, margin, custY); custY += 12; }
+  if (q.customer_email){ doc.text('Email: '+q.customer_email, margin, custY); custY += 12; }
+
+  // Items table
+  var startY = Math.max(custY + 10, 220);
+  var rows = (q.items||[]).map(function(it){
+    return [
+      it.description || '',
+      String(it.qty || 0),
+      it.unit || '',
+      Number(it.unit_price||0).toLocaleString('en-MY',{ minimumFractionDigits:2, maximumFractionDigits:2 }),
+      Number(it.line_total||0).toLocaleString('en-MY',{ minimumFractionDigits:2, maximumFractionDigits:2 }),
+    ];
+  });
+  doc.autoTable({
+    startY: startY,
+    head: [['Description','Qty','Unit','Unit Price (RM)','Line Total (RM)']],
+    body: rows,
+    theme: 'striped',
+    margin: { left: margin, right: margin },
+    styles: { font:'helvetica', fontSize:10, cellPadding:6, lineColor:[226,232,240] },
+    headStyles: { fillColor:[6,95,70], textColor:[255,255,255], fontStyle:'bold', halign:'left' },
+    columnStyles: {
+      0: { cellWidth:'auto' },
+      1: { halign:'right', cellWidth:50 },
+      2: { halign:'left',  cellWidth:60 },
+      3: { halign:'right', cellWidth:90 },
+      4: { halign:'right', cellWidth:100 },
+    },
+  });
+
+  var afterTableY = doc.lastAutoTable.finalY + 16;
+
+  // Totals (right-aligned)
+  var labelX = pageW - margin - 180;
+  var valueX = pageW - margin;
+  doc.setFontSize(10); doc.setTextColor(71,85,105);
+  function row(label, value, opts){
+    opts = opts || {};
+    if (opts.bold){ doc.setFont('helvetica','bold'); } else { doc.setFont('helvetica','normal'); }
+    if (opts.big){ doc.setFontSize(13); doc.setTextColor(6,95,70); }
+    else { doc.setFontSize(10); doc.setTextColor(71,85,105); }
+    doc.text(label, labelX, afterTableY);
+    doc.text(value, valueX, afterTableY, { align:'right' });
+    afterTableY += opts.big ? 22 : 16;
+  }
+  row('Subtotal', 'RM '+Number(q.subtotal||0).toLocaleString('en-MY',{ minimumFractionDigits:2 }));
+  if (Number(q.discount||0) > 0) row('Discount', '- RM '+Number(q.discount).toLocaleString('en-MY',{ minimumFractionDigits:2 }));
+  if (Number(q.tax_rate||0) > 0) row('Tax ('+Number(q.tax_rate).toFixed(2)+'%)', 'RM '+Number(q.tax_amount||0).toLocaleString('en-MY',{ minimumFractionDigits:2 }));
+  row('TOTAL', 'RM '+Number(q.total||0).toLocaleString('en-MY',{ minimumFractionDigits:2 }), { bold:true, big:true });
+
+  // Notes + terms
+  function bottomBlock(title, body){
+    if (!body) return;
+    if (afterTableY > pageH - 100){ doc.addPage(); afterTableY = 60; }
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(100,116,139);
+    doc.text(title.toUpperCase(), margin, afterTableY); afterTableY += 12;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(71,85,105);
+    var lines = doc.splitTextToSize(body, pageW - margin*2);
+    doc.text(lines, margin, afterTableY); afterTableY += lines.length * 12 + 10;
+  }
+  bottomBlock('Notes', q.notes);
+  bottomBlock('Terms & Conditions', q.terms);
+
+  // Footer
+  doc.setFontSize(8); doc.setTextColor(148,163,184);
+  doc.text('Thank you for your business — MJM Nursery', pageW/2, pageH - 24, { align:'center' });
+  doc.text(q.quote_number || '', pageW - margin, pageH - 24, { align:'right' });
+
+  // Filename safe slug
+  var safeCust = (q.customer_name||'customer').replace(/[^a-zA-Z0-9_\-]/g,'_').slice(0,30);
+  doc.save((q.quote_number || 'quotation') + '_' + safeCust + '.pdf');
+}
+
+// ════════════════════════════════════════════════════════
+//  BOOT
+// ════════════════════════════════════════════════════════
+loadList();
+</script>
+</body>
+</html>
