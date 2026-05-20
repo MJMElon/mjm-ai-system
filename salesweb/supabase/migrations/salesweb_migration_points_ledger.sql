@@ -76,8 +76,8 @@ SELECT COALESCE(l.user_id, p.user_id)                                           
        (COALESCE(l.ledger_balance, 0) - COALESCE(p.pending_redeemed, 0))::INTEGER AS balance,
        COALESCE(l.lifetime_earned, 0)::INTEGER                                   AS lifetime_earned,
        COALESCE(l.lifetime_redeemed, 0)::INTEGER                                 AS lifetime_redeemed,
-       COALESCE(p.pending_redeemed, 0)::INTEGER                                  AS pending_redeemed,
-       l.last_activity                                                           AS last_activity
+       l.last_activity                                                           AS last_activity,
+       COALESCE(p.pending_redeemed, 0)::INTEGER                                  AS pending_redeemed
 FROM ledger_totals l
 FULL OUTER JOIN pending_holds p ON p.user_id = l.user_id;
 

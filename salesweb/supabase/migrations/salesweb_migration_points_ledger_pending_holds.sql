@@ -40,11 +40,14 @@ pending_holds AS (
     AND COALESCE(points_redeemed, 0) > 0
   GROUP BY customer_id
 )
+-- Column order matters: PostgreSQL's CREATE OR REPLACE VIEW only allows
+-- appending new columns to the end of an existing view, so pending_redeemed
+-- goes after last_activity to keep the prior column positions intact.
 SELECT COALESCE(l.user_id, p.user_id)                                            AS user_id,
        (COALESCE(l.ledger_balance, 0) - COALESCE(p.pending_redeemed, 0))::INTEGER AS balance,
        COALESCE(l.lifetime_earned, 0)::INTEGER                                   AS lifetime_earned,
        COALESCE(l.lifetime_redeemed, 0)::INTEGER                                 AS lifetime_redeemed,
-       COALESCE(p.pending_redeemed, 0)::INTEGER                                  AS pending_redeemed,
-       l.last_activity                                                           AS last_activity
+       l.last_activity                                                           AS last_activity,
+       COALESCE(p.pending_redeemed, 0)::INTEGER                                  AS pending_redeemed
 FROM ledger_totals l
 FULL OUTER JOIN pending_holds p ON p.user_id = l.user_id;
