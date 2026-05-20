@@ -704,41 +704,51 @@ function generatePdf(q){
     doc.setFontSize(size || 11);
   }
 
-  // ── 1) GREEN HEADER BAND  ·  white text
-  var bandH = 78;
-  setFill(EMERALD);      doc.rect(0, 0, pageW, bandH, 'F');
-  setFill(EMERALD_DEEP); doc.rect(0, bandH - 4, pageW, 4, 'F'); // subtle base stripe
+  // ── 1) TOP ACCENT  ·  a thin emerald stripe along the top edge
+  setFill(EMERALD); doc.rect(0, 0, pageW, 3, 'F');
 
-  // MJM NURSERY — helvetica bold, widened letter spacing for an elegant
-  // brand wordmark that stays readable on the emerald background.
-  doc.setFont('helvetica','bold'); doc.setFontSize(28); setText([255,255,255]);
-  if (doc.setCharSpace) doc.setCharSpace(2.5);
-  doc.text('MJM NURSERY', margin, 48);
-  if (doc.setCharSpace) doc.setCharSpace(0);
-
-  // QUOTATION + quote number on the right of the band
-  doc.setFont('helvetica','bold'); doc.setFontSize(26); setText([255,255,255]);
-  doc.text('QUOTATION', pageW - margin, 44, { align:'right' });
-  doc.setFont('helvetica','normal'); doc.setFontSize(11); setText(EMERALD_TINT);
-  doc.text('No. ' + (q.quote_number || '—'), pageW - margin, 62, { align:'right' });
-
-  // ── 2) BELOW BAND  ·  Letterhead (left) + Date/Term/Valid table (right)
-  var belowY = bandH + 18;
+  // ── 2) HEADER  ·  Mega Jutamas letterhead (top-left)  +
+  //                  MJM NURSERY wordmark stacked above QUOTATION (top-right)
+  // No big band: a balanced two-column header reads more like a standard
+  // printed letterhead and lets the two pieces of info breathe.
+  var headerTopY = 50;
 
   // LEFT: Mega Jutamas letterhead — Times Roman, compact
-  bodyFont('bold', 11); setText(INK);
-  doc.text(COMPANY.name + '  ' + COMPANY.reg, margin, belowY);
+  bodyFont('bold', 12); setText(INK);
+  doc.text(COMPANY.name + '  ' + COMPANY.reg, margin, headerTopY);
 
   bodyFont('normal', 10); setText(INK_SOFT);
-  var addrY = belowY + 14;
+  var addrY = headerTopY + 16;
   COMPANY.addr.split('\n').forEach(function(ln){ doc.text(ln, margin, addrY); addrY += 12; });
   doc.text('Tel : ' + COMPANY.tel + '     Fax : ' + COMPANY.fax, margin, addrY);
-  var leftHeaderBottom = addrY + 2;
+  var leftHeaderBottom = addrY + 4;
 
-  // RIGHT: Date / Term of Payment / Valid Until — small Times Roman
+  // RIGHT: MJM NURSERY wordmark above QUOTATION title — both right-aligned
+  // The wordmark sits as a brand label over the document title, similar
+  // to how a logo would sit above the invoice heading.
+  doc.setFont('helvetica','bold'); doc.setFontSize(20); setText(EMERALD);
+  if (doc.setCharSpace) doc.setCharSpace(2.2);
+  doc.text('MJM NURSERY', pageW - margin, headerTopY, { align:'right' });
+  if (doc.setCharSpace) doc.setCharSpace(0);
+
+  // Thin emerald accent rule under the wordmark
+  var wordmarkW = 168;
+  setStroke(EMERALD); doc.setLineWidth(1.2);
+  doc.line(pageW - margin - wordmarkW, headerTopY + 4, pageW - margin, headerTopY + 4);
+  doc.setLineWidth(0.5);
+
+  // QUOTATION title — larger, dark, beneath the wordmark
+  doc.setFont('helvetica','bold'); doc.setFontSize(26); setText(INK);
+  doc.text('QUOTATION', pageW - margin, headerTopY + 30, { align:'right' });
+
+  // Quote number under the title
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); setText(EMERALD);
+  doc.text('No. ' + (q.quote_number || '—'), pageW - margin, headerTopY + 46, { align:'right' });
+
+  // Meta table (Date / Term of Payment / Valid Until) — beneath quote number
   var metaTableW = 195;
   doc.autoTable({
-    startY: belowY - 8,
+    startY: headerTopY + 54,
     body: [
       ['Date',            fmtDateLong(q.quote_date)],
       ['Term of Payment', 'Cash Only'],
