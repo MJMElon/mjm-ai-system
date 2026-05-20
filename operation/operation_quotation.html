@@ -747,16 +747,15 @@ function generatePdf(q){
   setStroke(RULE_SOFT); doc.setLineWidth(0.6);
   doc.line(margin, headerSectionBottom + 10, pageW - margin, headerSectionBottom + 10);
 
-  // ── 2) TWO-COLUMN INFO STRIP  ·  Quotation For (left) · Payment Terms (right)
+  // ── 2) QUOTATION FOR  ·  customer details (full content width).
+  //     Payment-term info moved into the Terms & Conditions section.
   var infoY = headerSectionBottom + 28;
-  var halfW = (pageW - margin*2) / 2;
 
-  // Section labels in OLIVE caps
+  // Section label
   bodyFont('bold', 9); setText(OLIVE);
   doc.text('QUOTATION FOR', margin, infoY);
-  doc.text('PAYMENT TERMS', margin + halfW, infoY);
 
-  // LEFT: customer details
+  // Customer details
   var custY = infoY + 16;
   bodyFont('bold', 11); setText(INK);
   doc.text((q.customer_company || q.customer_name || '—'), margin, custY);
@@ -765,23 +764,12 @@ function generatePdf(q){
   bodyFont('normal', 10); setText(INK_SOFT);
   if (q.customer_name)    { doc.text('Attn: '  + q.customer_name,    margin, custY); custY += 12; }
   if (q.customer_address){
-    var aLines = doc.splitTextToSize(q.customer_address, halfW - 10);
+    var aLines = doc.splitTextToSize(q.customer_address, pageW - margin*2);
     doc.text(aLines, margin, custY); custY += aLines.length * 12;
   }
   if (q.customer_contact) { doc.text('Tel: '   + q.customer_contact, margin, custY); custY += 12; }
   if (q.customer_email)   { doc.text('Email: ' + q.customer_email,   margin, custY); custY += 12; }
-  var leftInfoBottom = custY;
-
-  // RIGHT: payment terms
-  var ptY = infoY + 16;
-  bodyFont('bold', 11); setText(INK);
-  doc.text('Cash Only', margin + halfW, ptY);
-  ptY += 14;
-  bodyFont('normal', 10); setText(INK_SOFT);
-  doc.text('Quotation valid for 14 days from issue date.', margin + halfW, ptY);
-  ptY += 12;
-
-  var leftBottom = Math.max(leftInfoBottom, ptY);
+  var leftBottom = custY;
 
   // ── 4) ITEMS TABLE  ·  black-on-white, tight rows
   var tableTop = leftBottom + 18;
@@ -819,7 +807,7 @@ function generatePdf(q){
     theme: 'plain',
     margin: { left: margin, right: margin },
     styles: { font:'times', fontSize:11, cellPadding:6, lineColor:RULE_SOFT, lineWidth:0.5, valign:'top', textColor:INK },
-    headStyles: { fillColor:[255,255,255], textColor:INK, fontStyle:'bold', halign:'center', fontSize:10, cellPadding:8, lineColor:INK, lineWidth:0.8 },
+    headStyles: { fillColor:[255,255,255], textColor:INK, fontStyle:'bold', halign:'center', fontSize:10, cellPadding:8, lineColor:RULE_SOFT, lineWidth:0.5 },
     alternateRowStyles: { fillColor: ROW_ALT },
     columnStyles: {
       0: { halign:'center', cellWidth:COL_NO },
@@ -893,12 +881,14 @@ function generatePdf(q){
     contentBottom = noteY + noteLines.length * 12 + 4;
   }
 
-  // ── 6) TERMS & CONDITIONS  ·  flow naturally after content
-  // (the previous version anchored T&C to the bottom which made the
-  // middle of the page feel hollow when items were few — flowing it
-  // immediately after totals gives a more standard invoice rhythm.)
-  var tcY = contentBottom + 30;
-  if (tcY > pageH - 160){ doc.addPage(); tcY = 60; }
+  // ── 6) TERMS & CONDITIONS  ·  anchored near the bottom of the page.
+  // The block sits as low as possible while still leaving room above
+  // the footer — content above it can breathe into the white space.
+  // Approximate rendered height of the four lines below (heading + rule
+  // + 3 notes with the payment block taking ~3 lines).
+  var tcBlockH = 130;
+  var tcY = Math.max(contentBottom + 30, pageH - 50 - tcBlockH);
+  if (tcY + tcBlockH > pageH - 50){ doc.addPage(); tcY = 80; }
 
   bodyFont('bold', 10); setText(INK_FAINT);
   doc.text('TERMS & CONDITIONS', margin, tcY);
@@ -913,10 +903,11 @@ function generatePdf(q){
     doc.text(String(n) + '.', margin + 4, y);
   }
 
-  // 1) Payment + bank
+  // 1) Payment term + payable-to + bank A/C (payment-term info now
+  //    lives inside this note rather than as a separate header field).
   tcNum(1, tcY);
   bodyFont('normal', 11); setText(INK_SOFT);
-  doc.text('All payment should be crossed and made payable to:', margin + 22, tcY);
+  doc.text('Payment Term: Cash Only. All payment should be crossed and made payable to:', margin + 22, tcY);
   tcY += 13;
   bodyFont('bold', 11); setText(INK);
   doc.text(BANK_DETAILS.payee, margin + 22, tcY);
