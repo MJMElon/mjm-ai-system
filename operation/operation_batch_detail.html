@@ -62,6 +62,8 @@
     <title>Batch Detail - MJM Nursery AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
     <script src="../shared/shared_supabase.js"></script>
     <script src="../shared/shared_access.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
@@ -605,8 +607,11 @@
                                 <div id="t8-action-status" class="hidden px-6 py-3 text-[11px] font-bold text-[#3a7ab4] bg-[#eef5fb] border-t border-[#cfe1f0]"></div>
                             </div>
 
-                            <!-- Save -->
-                            <div class="flex justify-end">
+                            <!-- Save + Download PDF -->
+                            <div class="flex flex-col sm:flex-row justify-end gap-3">
+                                <button type="button" id="download-t8-pdf-btn" class="px-8 py-3 bg-white border-2 border-[#3d2610] text-[#3d2610] text-[11px] font-black uppercase tracking-widest rounded-lg hover:bg-[#fdfaf4] shadow-sm flex items-center justify-center gap-2 whitespace-nowrap" onclick="downloadSeedAuditPdf()">
+                                    📄 Download PDF
+                                </button>
                                 <button type="button" id="save-t8-btn" class="btn-earth px-12" onclick="saveSeedAudit()">Save Seed Audit Report (0% Complete)</button>
                             </div>
                         </div>
@@ -4011,6 +4016,191 @@ Thank you.`;
                 btn.innerText = originalText;
                 btn.disabled = false;
             }
+        }
+
+        // ── Download Seed Audit Report as PDF ──────────────────────────────
+        function downloadSeedAuditPdf() {
+            const jsPDFNS = window.jspdf || window;
+            if (!jsPDFNS || !jsPDFNS.jsPDF) {
+                showToast('PDF library not loaded. Refresh and try again.', 'error');
+                return;
+            }
+            const doc = new jsPDFNS.jsPDF({ unit: 'pt', format: 'a4' });
+            const pageW = doc.internal.pageSize.getWidth();
+            const pageH = doc.internal.pageSize.getHeight();
+            const margin = 36;
+
+            // Palette (matches the quotation PDF for visual consistency)
+            const OLIVE = [122, 138, 87];
+            const INK = [40, 40, 40];
+            const INK_SOFT = [85, 85, 85];
+            const INK_FAINT = [140, 140, 140];
+            const RULE_SOFT = [220, 220, 215];
+            const RED = [168, 48, 32];
+            const GREEN = [74, 122, 46];
+
+            const setFill = c => doc.setFillColor(c[0], c[1], c[2]);
+            const setText = c => doc.setTextColor(c[0], c[1], c[2]);
+            const setStroke = c => doc.setDrawColor(c[0], c[1], c[2]);
+
+            // ── HEADER: MJM Nursery wordmark + Mega Jutamas letterhead (LEFT)
+            //           Seed Audit Report meta (RIGHT)
+            let y = 56;
+            doc.setFont('times', 'bold'); doc.setFontSize(28); setText(INK);
+            doc.text('MJM Nursery', margin, y);
+
+            doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK_SOFT);
+            let addrY = y + 22;
+            doc.text('MEGA JUTAMAS SDN BHD  (663951-U)', margin, addrY); addrY += 12;
+            doc.text('2ND Floor (B), Lot 1180, Bangunan BEI, Lorong Dua, Krokop,', margin, addrY); addrY += 12;
+            doc.text('P.O. Box 163, 98007 Miri, Sarawak.', margin, addrY); addrY += 12;
+            doc.text('Tel: 085-419907  ·  Fax: 085-413264', margin, addrY);
+            const leftBottom = addrY + 4;
+
+            // Right-side meta
+            const batchNo = document.getElementById('f-batchno').value.trim() || '—';
+            const supplier = document.getElementById('f-supplier').value || '—';
+            const breed = document.getElementById('f-brand').value || 'Unspecified';
+            const dono = document.getElementById('f-dono').value || '—';
+            const dateReceived = document.getElementById('f-datereceived').value || '';
+            const expectedRaw = parseInt(document.getElementById('display-total-qty').dataset.raw || 0);
+            const todayStr = new Date().toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' });
+            const receivedStr = dateReceived ? new Date(dateReceived).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+            const rx = pageW - margin;
+            doc.setFont('times', 'bold'); doc.setFontSize(13); setText(INK);
+            doc.text('Seed Audit Report', rx, y - 4, { align: 'right' });
+            doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK_SOFT);
+            doc.text('Batch: ' + batchNo, rx, y + 14, { align: 'right' });
+            doc.text('D/O No: ' + dono, rx, y + 28, { align: 'right' });
+            doc.text('Date Received: ' + receivedStr, rx, y + 42, { align: 'right' });
+            doc.text('Generated: ' + todayStr, rx, y + 56, { align: 'right' });
+            const rightBottom = y + 60;
+
+            const headerBottom = Math.max(leftBottom, rightBottom);
+            setStroke(RULE_SOFT); doc.setLineWidth(0.6);
+            doc.line(margin, headerBottom + 10, pageW - margin, headerBottom + 10);
+
+            // ── BATCH SUMMARY
+            y = headerBottom + 28;
+            doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
+            doc.text('AUDIT SUMMARY', margin, y);
+            y += 14;
+            doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
+            doc.text('Supplier:  ', margin, y); doc.setFont('times', 'bold'); doc.text(supplier, margin + 60, y);
+            doc.setFont('times', 'normal'); doc.text('Seed Breed Variety:  ', margin + 280, y); doc.setFont('times', 'bold'); doc.text(breed, margin + 380, y);
+            y += 14;
+            doc.setFont('times', 'normal'); doc.text('Total Seed Expected (D/O + FOC):  ', margin, y);
+            doc.setFont('times', 'bold'); doc.text(expectedRaw.toLocaleString() + ' seeds', margin + 200, y);
+            y += 8;
+
+            // ── BAG-BY-BAG TABLE
+            const bagRows = [];
+            let totalSupplier = 0, totalAudited = 0;
+            document.querySelectorAll('.t8-bag-row').forEach((row, idx) => {
+                const bagNo = row.querySelector('.t8-bag-no').value.trim() || '—';
+                const supQty = readNumericInput(row.querySelector('.t8-supplier-qty'));
+                const recQty = readNumericInput(row.querySelector('.t8-received-qty'));
+                const variance = recQty - supQty;
+                totalSupplier += supQty; totalAudited += recQty;
+                bagRows.push([
+                    String(idx + 1),
+                    bagNo,
+                    supQty.toLocaleString(),
+                    recQty.toLocaleString(),
+                    (variance >= 0 ? '+' : '') + variance.toLocaleString()
+                ]);
+            });
+            if (bagRows.length === 0) {
+                bagRows.push(['—', 'No bags entered.', '0', '0', '0']);
+            }
+
+            doc.autoTable({
+                startY: y + 8,
+                head: [['#', 'Bag No / Seal No', 'Seed per Bag (Supplier)', 'Seed Received (Audit)', 'Variance']],
+                body: bagRows,
+                margin: { left: margin, right: margin },
+                styles: { font: 'times', fontSize: 10, cellPadding: 6, textColor: INK },
+                headStyles: { fillColor: OLIVE, textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 30 },
+                    1: { cellWidth: 'auto' },
+                    2: { halign: 'right', cellWidth: 110 },
+                    3: { halign: 'right', cellWidth: 110 },
+                    4: { halign: 'right', cellWidth: 70 }
+                },
+                alternateRowStyles: { fillColor: [251, 250, 246] }
+            });
+
+            // ── TOTALS
+            y = doc.lastAutoTable.finalY + 14;
+            const totalVariance = totalAudited - totalSupplier;
+            const expectedVariance = totalAudited - expectedRaw;
+            setFill([253, 250, 244]); setStroke(RULE_SOFT); doc.setLineWidth(0.8);
+            doc.roundedRect(margin, y, pageW - margin * 2, 50, 6, 6, 'FD');
+            doc.setFont('times', 'bold'); doc.setFontSize(9); setText(INK_SOFT);
+            doc.text('TOTAL SUPPLIER QTY', margin + 12, y + 16);
+            doc.text('TOTAL AUDITED QTY', margin + 180, y + 16);
+            doc.text('VARIANCE VS EXPECTED', margin + 360, y + 16);
+            doc.setFont('times', 'bold'); doc.setFontSize(14); setText(INK);
+            doc.text(totalSupplier.toLocaleString(), margin + 12, y + 38);
+            setText(GREEN); doc.text(totalAudited.toLocaleString(), margin + 180, y + 38);
+            setText(expectedVariance < 0 ? RED : GREEN);
+            doc.text((expectedVariance >= 0 ? '+' : '') + expectedVariance.toLocaleString(), margin + 360, y + 38);
+            y += 64;
+
+            // ── ANALYSIS
+            const baseline = totalSupplier > 0 ? totalSupplier : expectedRaw;
+            const shortage = Math.max(0, baseline - totalAudited);
+            const shortagePct = baseline > 0 ? (shortage / baseline) * 100 : 0;
+            const auditPct = expectedRaw > 0 ? (totalAudited / expectedRaw) * 100 : 0;
+            doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
+            doc.text('RECEIVE (D/O + FOC) & AUDIT ANALYSIS', margin, y); y += 14;
+            doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
+            doc.text('Seeds Audited (vs Target):  ', margin, y);
+            doc.setFont('times', 'bold'); doc.text(auditPct.toFixed(1) + '%', margin + 160, y);
+            doc.setFont('times', 'normal'); doc.text('Shortage Seeds:  ', margin + 260, y);
+            doc.setFont('times', 'bold'); setText(shortage > 0 ? RED : GREEN);
+            doc.text(shortage.toLocaleString() + ' (' + shortagePct.toFixed(1) + '%)', margin + 350, y);
+            y += 18;
+
+            // ── REMARK
+            const remarkText = (document.getElementById('t8-batch-remark').value || '').trim();
+            if (remarkText) {
+                doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
+                doc.text('REMARK', margin, y); y += 14;
+                doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
+                const remarkLines = doc.splitTextToSize(remarkText, pageW - margin * 2);
+                doc.text(remarkLines, margin, y); y += remarkLines.length * 12 + 6;
+            }
+
+            // ── FOLLOW-UP STATUS
+            const emailBadge = document.getElementById('t8-email-status');
+            const actionBadge = document.getElementById('t8-action-status');
+            const emailTxt = (emailBadge && !emailBadge.classList.contains('hidden')) ? emailBadge.innerText.trim() : '';
+            const actionTxt = (actionBadge && !actionBadge.classList.contains('hidden')) ? actionBadge.innerText.trim() : '';
+            if (emailTxt || actionTxt) {
+                doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
+                doc.text('FOLLOW-UP', margin, y); y += 14;
+                doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
+                if (emailTxt) { doc.text(emailTxt, margin, y); y += 14; }
+                if (actionTxt) {
+                    const actLines = doc.splitTextToSize(actionTxt, pageW - margin * 2);
+                    doc.text(actLines, margin, y); y += actLines.length * 12;
+                }
+                y += 6;
+            }
+
+            // ── FOOTER
+            const footerY = pageH - 30;
+            setStroke(RULE_SOFT); doc.setLineWidth(0.5);
+            doc.line(margin, footerY - 10, pageW - margin, footerY - 10);
+            doc.setFont('times', 'normal'); doc.setFontSize(8); setText(INK_FAINT);
+            doc.text('MJM Nursery · MEGA JUTAMAS SDN BHD · Confidential', margin, footerY);
+            doc.text('Page 1 of 1', pageW - margin, footerY, { align: 'right' });
+
+            const filename = `Seed_Audit_${batchNo.replace(/[^a-zA-Z0-9_-]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+            doc.save(filename);
         }
 
         async function loadSeedAuditData(batchId) {
