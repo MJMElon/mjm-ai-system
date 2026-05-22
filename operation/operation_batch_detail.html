@@ -3969,6 +3969,18 @@
             const monthYear = dateReceived ? new Date(dateReceived).toLocaleDateString('en-MY', { month: 'long', year: 'numeric' }) : '—';
             const focLabel = focPercent ? `${focPercent}% FOC` : 'FOC';
 
+            // Generate + download the PDF report so the user can attach it to the draft
+            // (mailto: cannot programmatically attach files — this is a browser limitation).
+            let pdfFilename = '';
+            try {
+                pdfFilename = downloadSeedAuditPdf() || '';
+            } catch (e) {
+                console.warn('PDF generation failed before email draft:', e);
+            }
+            const attachmentLine = pdfFilename
+                ? `📎 PLEASE ATTACH: ${pdfFilename}  (auto-downloaded to your Downloads folder — drag it into this email before sending).`
+                : `📎 Please attach the Seed Audit PDF report (download it from the batch page) before sending.`;
+
             const subject = `Shortage of FOC Seeds — D/O ${dono || '—'} (${monthYear})`;
             const body =
 `Dear ${supplier},
@@ -3982,8 +3994,9 @@ No | AAR Invoice Number | AAR DO Number | DO Date  | Seed Purchased with ${focLa
 
 Upon inspection and counting, we found that the following bags are short of seeds:
 ${shortages.length ? shortages.join('\n') : '- (See variance summary above.)'}
-${batchRemark ? '\nAdditional remarks from our audit team:\n' + batchRemark + '\n' : ''}
-Please find the attached photos as evidence of the count and the bag labels for your verification.
+${batchRemark ? '\nAdditional remarks from our audit team:\n' + batchRemark + '\n' : ''}Please find the attached Seed Audit Report PDF and photos as evidence of the count and the bag labels for your verification.
+
+${attachmentLine}
 
 Thank you.`;
 
@@ -4285,23 +4298,6 @@ Thank you.`;
                 doc.text(remarkLines, margin, y); y += remarkLines.length * 12 + 6;
             }
 
-            // ── FOLLOW-UP STATUS
-            const emailBadge = document.getElementById('t8-email-status');
-            const actionBadge = document.getElementById('t8-action-status');
-            const emailTxt = (emailBadge && !emailBadge.classList.contains('hidden')) ? emailBadge.innerText.trim() : '';
-            const actionTxt = (actionBadge && !actionBadge.classList.contains('hidden')) ? actionBadge.innerText.trim() : '';
-            if (emailTxt || actionTxt) {
-                doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
-                doc.text('FOLLOW-UP', margin, y); y += 14;
-                doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
-                if (emailTxt) { doc.text(emailTxt, margin, y); y += 14; }
-                if (actionTxt) {
-                    const actLines = doc.splitTextToSize(actionTxt, pageW - margin * 2);
-                    doc.text(actLines, margin, y); y += actLines.length * 12;
-                }
-                y += 6;
-            }
-
             // ── FOOTER
             const footerY = pageH - 30;
             setStroke(RULE_SOFT); doc.setLineWidth(0.5);
@@ -4312,6 +4308,7 @@ Thank you.`;
 
             const filename = `Seed_Audit_${batchNo.replace(/[^a-zA-Z0-9_-]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
             doc.save(filename);
+            return filename;
         }
 
         async function loadSeedAuditData(batchId) {
