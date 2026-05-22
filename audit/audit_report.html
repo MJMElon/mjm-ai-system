@@ -122,9 +122,14 @@ select.input:focus{border-color:var(--g400);background:var(--white)}
 
     /* ── DESKTOP RESPONSIVE ── */
     @media (min-width: 768px) {
-      body { background: #0f2e10; }
-      #app { max-width: 720px; margin: 0 auto; box-shadow: 0 0 40px rgba(0,0,0,.4); }
+      #app {
+        max-width: 860px !important;
+        margin: 0 auto !important;
+        box-shadow: 0 2px 20px rgba(0,0,0,.08);
+        min-height: 100vh;
+      }
     }
+    
 </style>
 </head>
 <body>

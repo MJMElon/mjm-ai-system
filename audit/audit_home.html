@@ -477,6 +477,7 @@ function toggleAlert(card){card.classList.toggle('open');}
 
 async function loadAlerts(){
   const section = document.getElementById('alert-section');
+  if(!section) return; // section removed, skip
   try {
     // Fetch plot_audits and papan_audits in parallel
     const [plotRows, papanRows] = await Promise.all([
