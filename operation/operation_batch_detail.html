@@ -434,11 +434,11 @@
                                 <div><label class="label-style">Total Seed Expected (D/O + FOC)</label><div class="text-base font-black text-[#c07820]" id="t8-expected-qty">0</div></div>
                             </div>
 
-                            <!-- Receive (D/O + FOC) & Audit Analysis -->
+                            <!-- Bag-by-Bag Audit Entry -->
                             <div class="bg-white rounded-2xl border border-[#e8dcc8] shadow-sm mb-6 overflow-hidden">
                                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-6 py-4 border-b border-[#e8dcc8] bg-[#fdfaf4]">
                                     <div>
-                                        <h4 class="font-black text-[#3d2610] uppercase tracking-widest text-sm">Receive (D/O + FOC) &amp; Audit Analysis</h4>
+                                        <h4 class="font-black text-[#3d2610] uppercase tracking-widest text-sm">Bag-by-Bag Audit Entry</h4>
                                         <p class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1">Key-in each bag's supplier count and the audited count.</p>
                                     </div>
                                     <button type="button" class="px-4 py-2 bg-white border border-[#e8dcc8] text-[#4a7a2e] text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-[#e8dcc8] shadow-sm flex items-center gap-2 self-start sm:self-auto" onclick="addSeedAuditRow()">
@@ -447,18 +447,17 @@
                                 </div>
 
                                 <!-- Column headers -->
-                                <div class="hidden lg:grid gap-3 px-6 pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest" style="grid-template-columns: 1.1fr 1fr 1fr 1.5fr 40px;">
+                                <div class="hidden lg:grid gap-3 px-6 pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest" style="grid-template-columns: 1.1fr 1fr 1fr 40px;">
                                     <span>Bag No / Seal No</span>
                                     <span>Seed per Bag (Supplier)</span>
                                     <span class="text-[#4a7a2e]">Seed Received (Audit)</span>
-                                    <span>Remark</span>
                                     <span></span>
                                 </div>
 
                                 <div id="t8-bag-rows-container" class="px-6 pb-4 space-y-3"></div>
 
                                 <!-- Totals footer -->
-                                <div class="mx-6 mb-6 p-4 bg-[#fdfaf4] rounded-xl border-2 border-[#e8dcc8] flex flex-wrap gap-x-10 gap-y-2 items-center">
+                                <div class="mx-6 mb-4 p-4 bg-[#fdfaf4] rounded-xl border-2 border-[#e8dcc8] flex flex-wrap gap-x-10 gap-y-2 items-center">
                                     <div class="flex items-center gap-3">
                                         <span class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">Total Supplier Qty:</span>
                                         <span class="text-2xl font-black text-[#3d2610]" id="t8-total-supplier">0</span>
@@ -470,6 +469,101 @@
                                     <div class="flex items-center gap-3">
                                         <span class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">Variance vs Expected:</span>
                                         <span class="text-2xl font-black text-[#8a7a68]" id="t8-variance">—</span>
+                                    </div>
+                                </div>
+
+                                <!-- Batch-level remark -->
+                                <div class="mx-6 mb-6">
+                                    <label class="label-style">Remark</label>
+                                    <textarea id="t8-batch-remark" rows="3" class="input-style w-full" placeholder="Notes about this seed audit (visual checks, condition, anomalies, etc.)" oninput="updateSeedAuditCompletion()"></textarea>
+                                </div>
+                            </div>
+
+                            <!-- ════════════════════════════════════════════ -->
+                            <!-- Receive (D/O + FOC) & Audit Analysis Charts -->
+                            <!-- ════════════════════════════════════════════ -->
+                            <div class="bg-white rounded-2xl border border-[#e8dcc8] shadow-sm mb-6 overflow-hidden">
+                                <div class="flex items-center justify-between px-6 py-4 border-b border-[#e8dcc8] bg-[#fdfaf4]">
+                                    <div class="flex items-center gap-3">
+                                        <h4 class="font-black text-[#3d2610] uppercase tracking-widest text-sm">Receive (D/O + FOC) &amp; Audit Analysis</h4>
+                                    </div>
+                                    <div id="t8-followup-warning" class="hidden px-3 py-1 bg-[#fff5f5] border border-[#f8d7da] text-[#a83020] rounded-lg text-[9px] font-black uppercase tracking-widest animate-pulse">⚠️ Shortage: Email supplier</div>
+                                </div>
+                                <div class="p-6">
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                                        <!-- Chart 1: Seeds Audited -->
+                                        <div class="flex flex-col gap-3">
+                                            <h5 class="text-[10px] font-bold text-[#c07820] uppercase tracking-widest">1. Seeds Audited</h5>
+                                            <div class="flex gap-3">
+                                                <div class="flex-1 bg-[#fdfaf4] border border-[#e8dcc8] rounded-xl p-4 flex flex-col gap-3">
+                                                    <div class="relative w-full rounded-lg overflow-visible" style="height:56px; background:#e8dcc8;">
+                                                        <div id="t8-audit-bar" class="absolute left-0 top-0 h-full rounded-lg transition-all duration-700 bg-[#3a7ab4]" style="width:0%"></div>
+                                                        <div id="t8-audit-target-line" class="absolute top-0 h-full border-l-2 border-dashed border-[#a83020] z-20 transition-all duration-700" style="left:100%;">
+                                                            <div class="absolute -top-7 -left-14 whitespace-nowrap bg-[#fff5f5] border border-[#f8d7da] rounded px-1.5 py-0.5 text-[9px] font-black text-[#a83020] leading-tight">
+                                                                Target —<br>
+                                                                <span class="font-bold text-[8px]">(<span id="t8-chart-target-text">0</span> seeds)</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-center justify-between">
+                                                        <div>
+                                                            <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Audited (Total)</div>
+                                                            <div class="text-lg font-black text-[#3d2610]" id="t8-chart-actual-text">0</div>
+                                                        </div>
+                                                        <div class="text-right">
+                                                            <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">vs Target</div>
+                                                            <div class="text-2xl font-black text-[#3a7ab4]" id="t8-audit-pct">—</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="text-[9px] font-bold text-[#8a7a68] border-t border-[#e8dcc8] pt-2">
+                                                        Supplier packing list: <span class="text-[#c07820] font-black" id="t8-supplier-note">0</span> seeds
+                                                    </div>
+                                                </div>
+                                                <div id="t8-match-box" class="w-24 shrink-0 rounded-xl border border-[#e8dcc8] bg-[#fdfaf4] flex flex-col justify-center items-center text-center transition-colors p-3">
+                                                    <span class="text-2xl mb-1" id="t8-match-icon">⏳</span>
+                                                    <div class="text-[10px] font-black uppercase tracking-wider text-[#8a7a68] leading-tight" id="t8-match-title">Awaiting</div>
+                                                    <div class="text-[9px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1 leading-tight" id="t8-match-desc">Enter data</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Chart 2: Shortage Control -->
+                                        <div class="flex flex-col gap-3">
+                                            <h5 class="text-[10px] font-bold text-[#a83020] uppercase tracking-widest">2. Shortage Control</h5>
+                                            <div class="flex gap-3">
+                                                <div class="flex-1 bg-[#fdfaf4] border border-[#e8dcc8] rounded-xl p-4 flex flex-col gap-3">
+                                                    <div class="relative w-full rounded-lg overflow-visible" style="height:56px; background:#e8dcc8;">
+                                                        <div id="t8-shortage-bar" class="absolute left-0 top-0 h-full rounded-lg transition-all duration-700 bg-[#a83020]" style="width:0%"></div>
+                                                        <div id="t8-shortage-line" class="absolute top-0 h-full border-l-2 border-dashed border-[#a83020] z-20 transition-all duration-700" style="left:0%;">
+                                                            <div class="absolute -top-7 left-1 whitespace-nowrap bg-[#fff5f5] border border-[#f8d7da] rounded px-1.5 py-0.5 text-[9px] font-black text-[#a83020] leading-tight">
+                                                                Tolerance 0%<br>
+                                                                <span class="font-bold text-[8px]">(0 seeds)</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-center justify-between">
+                                                        <div>
+                                                            <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Shortage Seeds</div>
+                                                            <div class="text-lg font-black text-[#a83020]" id="t8-shortage-text">0</div>
+                                                        </div>
+                                                        <div class="text-right">
+                                                            <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Shortage Rate</div>
+                                                            <div class="text-2xl font-black text-[#c07820]" id="t8-shortage-pct">—</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="text-[9px] font-bold text-[#8a7a68] border-t border-[#e8dcc8] pt-2">
+                                                        Audited <span class="font-black" id="t8-audited-note">0</span> of <span class="font-black" id="t8-baseline-note">0</span> baseline
+                                                    </div>
+                                                </div>
+                                                <div id="t8-shortage-box" class="w-24 shrink-0 rounded-xl border border-[#e8dcc8] bg-[#fdfaf4] flex flex-col justify-center items-center text-center transition-colors p-3">
+                                                    <span class="text-2xl mb-1" id="t8-shortage-icon">⏳</span>
+                                                    <div class="text-[10px] font-black uppercase tracking-wider text-[#8a7a68] leading-tight" id="t8-shortage-title">Awaiting</div>
+                                                    <div class="text-[9px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1 leading-tight" id="t8-shortage-desc">Enter data</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                     </div>
                                 </div>
                             </div>
@@ -3539,17 +3633,16 @@
             calcSeedAudit();
         }
 
-        function addSeedAuditRow(bagNo, supplierQty, receivedQty, remark) {
+        function addSeedAuditRow(bagNo, supplierQty, receivedQty) {
             seedAuditRowCount++;
             const container = document.getElementById('t8-bag-rows-container');
             const rowId = `t8-bag-row-${seedAuditRowCount}`;
             const safeBag = _escAttr(bagNo || '');
-            const safeRem = _escAttr(remark || '');
             const supVal  = (supplierQty != null && supplierQty !== '') ? Number(supplierQty).toLocaleString() : '';
             const recVal  = (receivedQty != null && receivedQty !== '') ? Number(receivedQty).toLocaleString() : '';
 
             const html = `
-                <div id="${rowId}" class="t8-bag-row grid grid-cols-1 lg:grid-cols-[1.1fr_1fr_1fr_1.5fr_40px] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end">
+                <div id="${rowId}" class="t8-bag-row grid grid-cols-1 lg:grid-cols-[1.1fr_1fr_1fr_40px] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end">
                     <div>
                         <label class="label-style lg:hidden">Bag No / Seal No</label>
                         <input type="text" class="input-style t8-bag-no" placeholder="e.g. MJ24" value="${safeBag}" oninput="updateSeedAuditCompletion()">
@@ -3561,10 +3654,6 @@
                     <div>
                         <label class="label-style lg:hidden !text-[#4a7a2e]">Seed Received (Audit)</label>
                         <input type="text" inputmode="numeric" class="input-style font-black !text-[#4a7a2e] t8-received-qty" placeholder="0" value="${recVal}" oninput="formatNumericInput(this); calcSeedAudit()">
-                    </div>
-                    <div>
-                        <label class="label-style lg:hidden">Remark</label>
-                        <input type="text" class="input-style t8-remark" placeholder="Optional note" value="${safeRem}" oninput="updateSeedAuditCompletion()">
                     </div>
                     <button type="button" class="w-10 h-[45px] rounded-lg border border-[#f8d7da] text-[#a83020] bg-white flex items-center justify-center hover:bg-[#f8d7da] shadow-sm self-end" onclick="removeSeedAuditRow('${rowId}')" title="Remove bag">✕</button>
                 </div>
@@ -3599,15 +3688,88 @@
                 varianceEl.className = 'text-2xl font-black text-[#8a7a68]';
             }
 
-            // Show email card when audited total falls short of the supplier packing list (D/O + FOC)
+            // Show email card when audited total falls short of the supplier packing list.
+            // Prefer the user-keyed per-bag supplier total (this tab); fall back to D/O+FOC expected when no supplier qty was entered.
             const emailCard = document.getElementById('t8-email-card');
-            if (totalReceived > 0 && expectedRaw > 0 && totalReceived < expectedRaw) {
+            const compareAgainst = totalSupplier > 0 ? totalSupplier : expectedRaw;
+            if (totalReceived > 0 && compareAgainst > 0 && totalReceived < compareAgainst) {
                 emailCard.classList.remove('hidden');
             } else {
                 emailCard.classList.add('hidden');
             }
 
+            renderAuditAnalysis(totalSupplier, totalReceived, expectedRaw);
             updateSeedAuditCompletion();
+        }
+
+        function renderAuditAnalysis(totalSupplier, totalReceived, expectedRaw) {
+            const auditBar = document.getElementById('t8-audit-bar');
+            if (!auditBar) return; // chart card not on the page yet
+
+            const target = expectedRaw > 0 ? expectedRaw : totalSupplier;
+            const audited = totalReceived || 0;
+            const auditPct = target > 0 ? Math.min(100, (audited / target) * 100) : 0;
+            auditBar.style.width = auditPct + '%';
+            document.getElementById('t8-chart-actual-text').innerText = audited.toLocaleString();
+            document.getElementById('t8-chart-target-text').innerText = target.toLocaleString();
+            document.getElementById('t8-audit-pct').innerText = target > 0 && audited > 0 ? auditPct.toFixed(1) + '%' : '—';
+            document.getElementById('t8-supplier-note').innerText = totalSupplier.toLocaleString();
+
+            const matchIcon = document.getElementById('t8-match-icon');
+            const matchTitle = document.getElementById('t8-match-title');
+            const matchDesc = document.getElementById('t8-match-desc');
+            const matchBox = document.getElementById('t8-match-box');
+            const baseBoxCls = 'w-24 shrink-0 rounded-xl flex flex-col justify-center items-center text-center transition-colors p-3 ';
+            if (target === 0 || audited === 0) {
+                matchIcon.innerText = '⏳';
+                matchTitle.innerText = 'Awaiting';
+                matchDesc.innerText = 'Enter data';
+                matchBox.className = baseBoxCls + 'border border-[#e8dcc8] bg-[#fdfaf4]';
+            } else if (audited >= target) {
+                matchIcon.innerText = '✅';
+                matchTitle.innerText = 'On Target';
+                matchDesc.innerText = 'Counts match';
+                matchBox.className = baseBoxCls + 'border-2 border-[#4a7a2e] bg-[#f0f8ec]';
+            } else {
+                matchIcon.innerText = '⚠️';
+                matchTitle.innerText = 'Short';
+                matchDesc.innerText = (target - audited).toLocaleString() + ' missing';
+                matchBox.className = baseBoxCls + 'border-2 border-[#a83020] bg-[#fff5f5]';
+            }
+
+            const baseline = totalSupplier > 0 ? totalSupplier : target;
+            const shortage = Math.max(0, baseline - audited);
+            const shortagePct = baseline > 0 ? (shortage / baseline) * 100 : 0;
+            document.getElementById('t8-shortage-bar').style.width = Math.min(100, shortagePct) + '%';
+            document.getElementById('t8-shortage-text').innerText = shortage.toLocaleString();
+            document.getElementById('t8-shortage-pct').innerText = (audited > 0 && baseline > 0) ? shortagePct.toFixed(1) + '%' : '—';
+            document.getElementById('t8-audited-note').innerText = audited.toLocaleString();
+            document.getElementById('t8-baseline-note').innerText = baseline.toLocaleString();
+
+            const shortIcon = document.getElementById('t8-shortage-icon');
+            const shortTitle = document.getElementById('t8-shortage-title');
+            const shortDesc = document.getElementById('t8-shortage-desc');
+            const shortBox = document.getElementById('t8-shortage-box');
+            const followUp = document.getElementById('t8-followup-warning');
+            if (audited === 0 || baseline === 0) {
+                shortIcon.innerText = '⏳';
+                shortTitle.innerText = 'Awaiting';
+                shortDesc.innerText = 'Enter data';
+                shortBox.className = baseBoxCls + 'border border-[#e8dcc8] bg-[#fdfaf4]';
+                followUp.classList.add('hidden');
+            } else if (shortage === 0) {
+                shortIcon.innerText = '✅';
+                shortTitle.innerText = 'No Loss';
+                shortDesc.innerText = 'Full count';
+                shortBox.className = baseBoxCls + 'border-2 border-[#4a7a2e] bg-[#f0f8ec]';
+                followUp.classList.add('hidden');
+            } else {
+                shortIcon.innerText = '🚨';
+                shortTitle.innerText = 'Shortage';
+                shortDesc.innerText = 'Notify supplier';
+                shortBox.className = baseBoxCls + 'border-2 border-[#a83020] bg-[#fff5f5]';
+                followUp.classList.remove('hidden');
+            }
         }
 
         function updateSeedAuditCompletion() {
@@ -3663,11 +3825,11 @@
                 const bagNo = row.querySelector('.t8-bag-no').value.trim();
                 const supQty = readNumericInput(row.querySelector('.t8-supplier-qty'));
                 const recQty = readNumericInput(row.querySelector('.t8-received-qty'));
-                const rem    = row.querySelector('.t8-remark').value.trim();
                 if (bagNo && supQty > 0 && recQty < supQty) {
-                    shortages.push(`- Bag ${bagNo}: Shortage detected${rem ? ' (' + rem + ')' : ''}.`);
+                    shortages.push(`- Bag ${bagNo}: Short by ${(supQty - recQty).toLocaleString()} seed(s) (supplier ${supQty.toLocaleString()} vs audited ${recQty.toLocaleString()}).`);
                 }
             });
+            const batchRemark = (document.getElementById('t8-batch-remark').value || '').trim();
 
             const doDate = dateReceived ? new Date(dateReceived).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: '2-digit' }) : '—';
             const monthYear = dateReceived ? new Date(dateReceived).toLocaleDateString('en-MY', { month: 'long', year: 'numeric' }) : '—';
@@ -3686,7 +3848,7 @@ No | AAR Invoice Number | AAR DO Number | DO Date  | Seed Purchased with ${focLa
 
 Upon inspection and counting, we found that the following bags are short of seeds:
 ${shortages.length ? shortages.join('\n') : '- (See variance summary above.)'}
-
+${batchRemark ? '\nAdditional remarks from our audit team:\n' + batchRemark + '\n' : ''}
 Please find the attached photos as evidence of the count and the bag labels for your verification.
 
 Thank you.`;
@@ -3736,10 +3898,7 @@ Thank you.`;
                     const bagNo  = row.querySelector('.t8-bag-no').value.trim();
                     const supQty = readNumericInput(row.querySelector('.t8-supplier-qty'));
                     const recQty = readNumericInput(row.querySelector('.t8-received-qty'));
-                    const rem    = row.querySelector('.t8-remark').value.trim();
-                    if (!bagNo && supQty === 0 && recQty === 0 && !rem) return; // skip totally empty rows
-                    // Stash supplier qty + remark inside the log's remark field — plot_name carries the bag id.
-                    const cleanRem = rem.replace(/\|/g, '/');
+                    if (!bagNo && supQty === 0 && recQty === 0) return; // skip totally empty rows
                     logs.push(withEditMeta({
                         transaction_type: 'Seed_Audit',
                         batch_name: batchId,
@@ -3747,7 +3906,7 @@ Thank you.`;
                         plot_name: bagNo || `bag-${Math.random().toString(36).slice(2, 8)}`,
                         quantity_change: recQty,
                         transaction_date: dateReceived,
-                        remark: `Seed audit. SupplierQty:${supQty}. ReceivedQty:${recQty}.${cleanRem ? ' Note|' + cleanRem + '|' : ''}`
+                        remark: `Seed audit. SupplierQty:${supQty}. ReceivedQty:${recQty}.`
                     }));
                 });
 
@@ -3757,6 +3916,21 @@ Thank you.`;
                 if (logs.length > 0) {
                     const { error } = await safeInsertLogs(logs);
                     if (error) throw error;
+                }
+
+                // Persist batch-level remark as a separate single-row log.
+                const batchRemark = (document.getElementById('t8-batch-remark').value || '').trim();
+                await _supabase.from('shared_inventory_logs')
+                    .delete().eq('batch_name', batchId).eq('transaction_type', 'Seed_Audit_Note');
+                if (batchRemark) {
+                    await safeInsertLogs([withEditMeta({
+                        transaction_type: 'Seed_Audit_Note',
+                        batch_name: batchId,
+                        breed_name: breed,
+                        quantity_change: 0,
+                        transaction_date: dateReceived,
+                        remark: batchRemark
+                    })]);
                 }
 
                 setEditMetaUI(8, new Date().toISOString(), window.currentUserEmail);
@@ -3772,16 +3946,21 @@ Thank you.`;
 
         async function loadSeedAuditData(batchId) {
             document.getElementById('t8-bag-rows-container').innerHTML = '';
+            document.getElementById('t8-batch-remark').value = '';
             seedAuditRowCount = 0;
 
             try {
-                const [auditRes, emailRes] = await Promise.all([
+                const [auditRes, emailRes, noteRes] = await Promise.all([
                     _supabase.from('shared_inventory_logs')
                         .select('*').eq('batch_name', batchId).eq('transaction_type', 'Seed_Audit')
                         .order('created_at', { ascending: true }),
                     _supabase.from('shared_inventory_logs')
                         .select('created_at, transaction_date, last_edited_at')
                         .eq('batch_name', batchId).eq('transaction_type', 'Seed_Audit_Email')
+                        .maybeSingle(),
+                    _supabase.from('shared_inventory_logs')
+                        .select('remark')
+                        .eq('batch_name', batchId).eq('transaction_type', 'Seed_Audit_Note')
                         .maybeSingle()
                 ]);
 
@@ -3789,13 +3968,15 @@ Thank you.`;
                 if (auditLogs.length > 0) {
                     auditLogs.forEach(log => {
                         const supMatch = log.remark ? log.remark.match(/SupplierQty:(\d+)/) : null;
-                        const noteMatch = log.remark ? log.remark.match(/Note\|([^|]*)\|/) : null;
                         const supQty = supMatch ? parseInt(supMatch[1], 10) : 0;
-                        const remark = noteMatch ? noteMatch[1] : '';
-                        addSeedAuditRow(log.plot_name || '', supQty, log.quantity_change || 0, remark);
+                        addSeedAuditRow(log.plot_name || '', supQty, log.quantity_change || 0);
                     });
                 } else {
                     addSeedAuditRow();
+                }
+
+                if (noteRes && noteRes.data && noteRes.data.remark) {
+                    document.getElementById('t8-batch-remark').value = noteRes.data.remark;
                 }
 
                 if (emailRes && emailRes.data) {
@@ -3804,6 +3985,7 @@ Thank you.`;
                 } else {
                     _setEmailSentBadge(null);
                 }
+                calcSeedAudit();
             } catch (e) {
                 console.warn('Could not load seed audit data:', e.message);
                 if (document.querySelectorAll('.t8-bag-row').length === 0) addSeedAuditRow();
