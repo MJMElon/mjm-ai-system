@@ -537,6 +537,21 @@
                                     </button>
                                 </div>
 
+                                <!-- AI Scan dropzone -->
+                                <div class="mx-6 mt-4">
+                                    <div id="t8-dropzone" class="px-6 py-5 border-2 border-dashed border-[#4a7a2e] bg-[#f0f8ec] rounded-xl text-center cursor-pointer hover:bg-[#e8f5da] transition-colors">
+                                        <input type="file" id="t8-file-input" class="hidden" accept="image/*,application/pdf">
+                                        <div id="t8-dropzone-idle">
+                                            <p class="text-[12px] font-black text-[#4a7a2e] uppercase tracking-widest mb-1">📎 AI Scan — Drop Supplier Packing List Here</p>
+                                            <p class="text-[10px] text-[#8a7a68]">Drag an image or PDF, or click to choose. Bag rows will be auto-filled — you can still edit each row manually afterwards.</p>
+                                        </div>
+                                        <div id="t8-dropzone-busy" class="hidden">
+                                            <p class="text-[12px] font-black text-[#c07820] uppercase tracking-widest">⏳ Scanning packing list… <span id="t8-dropzone-file" class="normal-case text-[#8a7a68]"></span></p>
+                                            <p class="text-[10px] text-[#8a7a68] mt-1">Usually 10–20 seconds. Rows will be added when ready.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <!-- Column headers -->
                                 <div class="hidden lg:grid gap-3 px-6 pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest" style="grid-template-columns: 1.1fr 1fr 1fr 40px;">
                                     <span>Bag No / Seal No</span>
@@ -3693,6 +3708,97 @@
         function removeSeedAuditRow(rowId) {
             const row = document.getElementById(rowId);
             if (row) { row.remove(); calcSeedAudit(); }
+        }
+
+        // ── AI Scan of supplier packing list ──────────────────────────────
+        function _setSeedAuditDropzoneBusy(busy, filename) {
+            document.getElementById('t8-dropzone-idle').classList.toggle('hidden', busy);
+            document.getElementById('t8-dropzone-busy').classList.toggle('hidden', !busy);
+            const tag = document.getElementById('t8-dropzone-file');
+            if (tag) tag.innerText = filename ? `(${filename})` : '';
+            document.getElementById('t8-dropzone').style.pointerEvents = busy ? 'none' : '';
+        }
+
+        function _fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const r = reader.result || '';
+                    const comma = String(r).indexOf(',');
+                    resolve(comma >= 0 ? String(r).slice(comma + 1) : String(r));
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function scanPackingListFile(file) {
+            if (!file) return;
+            if (file.size > 20 * 1024 * 1024) {
+                showToast('File too large (max 20 MB).', 'error');
+                return;
+            }
+            _setSeedAuditDropzoneBusy(true, file.name);
+            try {
+                const base64 = await _fileToBase64(file);
+                const { data, error } = await _supabase.functions.invoke('scan-packing-list', {
+                    body: { file_base64: base64, mime_type: file.type || 'application/octet-stream', filename: file.name }
+                });
+                if (error) throw new Error(error.message || 'Edge function error.');
+                const bags = (data && Array.isArray(data.bags)) ? data.bags : null;
+                if (!bags || bags.length === 0) throw new Error('No bags detected in the file.');
+
+                // Drop empty starter rows before appending scanned bags
+                document.querySelectorAll('.t8-bag-row').forEach(row => {
+                    const bagNo  = row.querySelector('.t8-bag-no').value.trim();
+                    const supQty = readNumericInput(row.querySelector('.t8-supplier-qty'));
+                    const recQty = readNumericInput(row.querySelector('.t8-received-qty'));
+                    if (!bagNo && supQty === 0 && recQty === 0) row.remove();
+                });
+
+                bags.forEach(b => {
+                    const bagNo = (b.bag_no || b.bagNo || '').toString();
+                    const supQty = Number(b.supplier_qty || b.supplierQty || 0) || 0;
+                    addSeedAuditRow(bagNo, supQty);
+                });
+                showToast(`AI scan added ${bags.length} bag(s). Verify the rows and key in audited counts.`, 'success');
+            } catch (e) {
+                console.warn('Packing list scan failed:', e);
+                showToast('AI scan failed: ' + (e.message || e) + '. You can still add bag rows manually.', 'error');
+            } finally {
+                _setSeedAuditDropzoneBusy(false);
+                const input = document.getElementById('t8-file-input');
+                if (input) input.value = '';
+            }
+        }
+
+        function _wireSeedAuditDropzone() {
+            const zone = document.getElementById('t8-dropzone');
+            const input = document.getElementById('t8-file-input');
+            if (!zone || !input || zone.dataset.wired === '1') return;
+            zone.dataset.wired = '1';
+            zone.addEventListener('click', () => input.click());
+            input.addEventListener('change', () => {
+                if (input.files && input.files[0]) scanPackingListFile(input.files[0]);
+            });
+            ['dragenter', 'dragover'].forEach(ev => zone.addEventListener(ev, e => {
+                e.preventDefault(); e.stopPropagation();
+                zone.classList.add('ring-2', 'ring-[#4a7a2e]', 'bg-[#e8f5da]');
+            }));
+            ['dragleave', 'drop'].forEach(ev => zone.addEventListener(ev, e => {
+                e.preventDefault(); e.stopPropagation();
+                zone.classList.remove('ring-2', 'ring-[#4a7a2e]', 'bg-[#e8f5da]');
+            }));
+            zone.addEventListener('drop', e => {
+                if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    scanPackingListFile(e.dataTransfer.files[0]);
+                }
+            });
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', _wireSeedAuditDropzone);
+        } else {
+            _wireSeedAuditDropzone();
         }
 
         function calcSeedAudit() {
