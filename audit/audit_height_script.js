@@ -16,18 +16,6 @@ let records=[], activeTab='PN', activeView='list';
 let editMode=false, editId=null, detailId=null, deleteTarget=null;
 let formState={nursery:'PN',s1:'',s2:'',s3:'',p1:null,p2:null,p3:null};
 let toastTimer=null;
-let batchOptions=[]; // master list from operation_batches; auditors must pick one
-
-/* SECURITY (2026-05): see audit_maintenance_script.js — the localStorage
-   check is bypassable. Server-side RLS on audit_height_records is the real gate. */
-function isAdmin(){
-  try{
-    if (typeof MJMAccess !== 'undefined' && MJMAccess.isAdminOf) return MJMAccess.isAdminOf('audit');
-    const u = JSON.parse(localStorage.getItem('mjm_user') || '{}');
-    const role = (u.role || '').toLowerCase();
-    return role === 'admin' || role === 'administrator';
-  }catch(e){return false;}
-}
 
 /* --- HELPERS --- */
 function pad(n){return String(n).padStart(3,'0');}
@@ -48,7 +36,7 @@ function calcAvg(s1,s2,s3){
 function nextID(nursery){return 'HGT-'+nursery+'-'+pad(records.filter(r=>r.nursery===nursery).length+1);}
 
 /* --- UI --- */
-function showToast(msg){
+function showToast(msg){ window._pageShowToast=showToast;
   const t=document.getElementById('toast');
   t.textContent=msg;t.classList.add('show');
   clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2600);
@@ -88,53 +76,6 @@ async function loadRecords(){
     renderList();
   }catch(e){showToast(t('err_load'));console.error(e);}
   setLoading(false);
-}
-
-/* --- LOAD BATCH LIST (master) --- */
-async function loadBatchOptions(){
-  try{
-    // operation_batches: master list maintained by the operations team.
-    const rows=await sbFetch('operation_batches?select=name&order=name.desc');
-    batchOptions=(rows||[]).map(r=>r.name).filter(Boolean);
-  }catch(e){console.warn('[Batch list] load failed:',e);batchOptions=[];}
-}
-
-/* --- LOAD PLOT GPS PINS (for nearest-first dropdown sort) --- */
-let plotGpsByName = {}; // { plotName: { lat, lng, nursery } }
-async function loadPlotGps(){
-  try{
-    const rows=await sbFetch('shared_plots?select=plot_name,nursery_name,gps_lat,gps_lng');
-    plotGpsByName={};
-    (rows||[]).forEach(p=>{
-      if(p.plot_name) plotGpsByName[p.plot_name]={lat:p.gps_lat,lng:p.gps_lng,nursery:p.nursery_name};
-    });
-  }catch(e){console.warn('[Plot GPS] load failed:',e);plotGpsByName={};}
-}
-
-/* --- One-time GPS read used to sort plot dropdown when form opens --- */
-let lastFormGps=null; // {lat,lng,ts} or null if denied/unsupported
-function readDeviceGpsOnce(){
-  return new Promise(resolve=>{
-    if(!navigator.geolocation){resolve(null);return;}
-    let done=false;
-    const finish=v=>{if(done)return;done=true;resolve(v);};
-    // Hard timeout — never let the form wait forever for a slow GPS lock.
-    setTimeout(()=>finish(null),4000);
-    navigator.geolocation.getCurrentPosition(
-      pos=>finish({lat:pos.coords.latitude,lng:pos.coords.longitude,ts:Date.now()}),
-      ()=>finish(null),
-      {enableHighAccuracy:true,timeout:3500,maximumAge:30000}
-    );
-  });
-}
-
-/* Haversine distance in metres */
-function gpsDistanceMeters(lat1,lng1,lat2,lng2){
-  const R=6371000;
-  const toRad=d=>d*Math.PI/180;
-  const dLat=toRad(lat2-lat1), dLng=toRad(lng2-lng1);
-  const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
-  return 2*R*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
 /* --- RENDER LIST --- */
@@ -193,27 +134,23 @@ function renderList(){
       '</div>'+
       '<div class="record-actions" onclick="event.stopPropagation()">'+
         '<button class="icon-btn edit-btn" onclick="openEdit(\''+r.uid+'\')"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>'+
-        (isAdmin()?'<button class="icon-btn del-btn" onclick="confirmDelete(\''+r.uid+'\')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg></button>':'')+
+        '<button class="icon-btn del-btn" onclick="confirmDelete(\''+r.uid+'\')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg></button>'+
       '</div>'+
     '</div>';
   }).join('');
 }
 
 /* --- FORM --- */
-async function openAddForm(){
+function openAddForm(){
   editMode=false;editId=null;
   formState={nursery:activeTab,s1:'',s2:'',s3:'',p1:null,p2:null,p3:null};
-  // Read GPS once when the form opens — used only to sort the plot dropdown by distance.
-  // After the auditor picks a plot, no further changes happen even if they walk away.
-  lastFormGps = await readDeviceGpsOnce();
   populateForm();setView('form');
   document.getElementById('form-view-title').textContent='New Record — '+NURSERY_LABELS[activeTab];
 }
-async function openEdit(uid){
+function openEdit(uid){
   const r=records.find(x=>x.uid===uid);if(!r)return;
   editMode=true;editId=uid;
   formState={nursery:r.nursery,s1:r.s1,s2:r.s2,s3:r.s3,p1:r.p1,p2:r.p2,p3:r.p3};
-  lastFormGps = await readDeviceGpsOnce();
   populateForm(r);setView('form');
   document.getElementById('form-view-title').textContent=t('edit_lbl')+' — '+r.id;
 }
@@ -224,49 +161,11 @@ function populateForm(r){
   document.getElementById('form-view-id').textContent=id;
   const ps=document.getElementById('f-plot');
   ps.innerHTML='<option value="">'+t('select_plot')+'</option>';
-
-  // Build plot list, optionally sorted nearest-first using device GPS.
-  // Sorting only ranks the dropdown; the auditor still picks manually.
-  const plotsForNursery = NURSERY_PLOTS[formState.nursery].slice();
-  let sorted = plotsForNursery.map(p => ({ name: p, distance: null }));
-  if (lastFormGps) {
-    sorted = sorted.map(o => {
-      const pin = plotGpsByName[o.name];
-      const d = (pin && pin.lat != null && pin.lng != null)
-        ? gpsDistanceMeters(lastFormGps.lat, lastFormGps.lng, +pin.lat, +pin.lng)
-        : null;
-      return { ...o, distance: d };
-    }).sort((a, b) => {
-      // Plots with a known distance come first, sorted by distance asc; the rest keep their order.
-      if (a.distance == null && b.distance == null) return 0;
-      if (a.distance == null) return 1;
-      if (b.distance == null) return -1;
-      return a.distance - b.distance;
-    });
-  }
-  sorted.forEach((o, idx) => {
-    const opt=document.createElement('option');opt.value=o.name;
-    let label=o.name;
-    if (o.distance != null) {
-      const dStr = o.distance < 1000 ? `${Math.round(o.distance)} m` : `${(o.distance/1000).toFixed(1)} km`;
-      label += ` — ${dStr}${idx === 0 ? ' · nearest' : ''}`;
-    }
-    opt.textContent=label;
-    if(r&&r.plot===o.name)opt.selected=true;
-    ps.appendChild(opt);
+  NURSERY_PLOTS[formState.nursery].forEach(p=>{
+    const o=document.createElement('option');o.value=p;o.textContent=p;
+    if(r&&r.plot===p)o.selected=true;ps.appendChild(o);
   });
-  // Populate batch dropdown from the operations master list. Falls back to a free-text option
-  // if a record references a batch that's no longer in the master (legacy data).
-  const bs=document.getElementById('f-batch');
-  bs.innerHTML='<option value="">— Select Batch —</option>';
-  const opts=[...batchOptions];
-  const existing=r&&r.batch?r.batch:'';
-  if(existing&&!opts.includes(existing)) opts.unshift(existing);
-  opts.forEach(name=>{
-    const o=document.createElement('option');o.value=name;o.textContent=name;
-    if(existing===name)o.selected=true;
-    bs.appendChild(o);
-  });
+  document.getElementById('f-batch').value=r?r.batch||'':'';
   document.getElementById('f-s1').value=formState.s1||'';
   document.getElementById('f-s2').value=formState.s2||'';
   document.getElementById('f-s3').value=formState.s3||'';
@@ -313,7 +212,7 @@ function triggerPhoto(n){
   sheet.innerHTML=`<div style="background:#fff;border-radius:20px 20px 0 0;padding:20px 16px 36px;width:100%;max-width:480px">
     <div style="font-size:14px;font-weight:700;color:#182018;margin-bottom:16px;text-align:center">${t('sample')} ${n}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-      <button onclick="document.getElementById('photo-input-${n}').click();document.getElementById('photo-choice-sheet').remove()" style="height:64px;border-radius:12px;background:#1a4d1a;color:#fff;font-size:15px;font-weight:600;border:none;font-family:inherit;cursor:pointer">📷<br><span style="font-size:11px">${t('cam')}</span></button>
+      <button onclick="openCamera('photo-input-${n}');document.getElementById('photo-choice-sheet').remove()" style="height:64px;border-radius:12px;background:#1a4d1a;color:#fff;font-size:15px;font-weight:600;border:none;font-family:inherit;cursor:pointer">📷<br><span style="font-size:11px">${t('cam')}</span></button>
       <button onclick="document.getElementById('photo-gallery-${n}').click();document.getElementById('photo-choice-sheet').remove()" style="height:64px;border-radius:12px;background:#f4f6f4;color:#3d5c3d;font-size:15px;font-weight:600;border:1px solid #dde8dd;font-family:inherit;cursor:pointer">🖼<br><span style="font-size:11px">${t('gal')}</span></button>
     </div>
     <button onclick="document.getElementById('photo-choice-sheet').remove()" style="width:100%;height:44px;border-radius:12px;background:#f4f6f4;border:1px solid #dde8dd;color:#6b8a6b;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer">${t('cancel')}</button>
@@ -349,7 +248,6 @@ async function saveRecord(){
   const plot=document.getElementById('f-plot').value;
   const batch=document.getElementById('f-batch').value.trim();
   if(!plot){showToast(t('err_select_plot'));return;}
-  if(!batch){showToast('⚠ Please select a batch from the list');return;}
   if(!formState.s1&&!formState.s2&&!formState.s3){showToast(t('err_height'));return;}
   if(!formState.p1||!formState.p2||!formState.p3){
     const note=document.getElementById('photo-req-note');
@@ -375,11 +273,10 @@ async function saveRecord(){
     const result=await smartSave('audit_height_records',editMode?'update':'insert',
       editMode?payload:{...payload,record_id:nextID(formState.nursery)},
       editMode?editId:null);
-    setLoading(false);
     showToast(result?.offline?t('offline_saved'):editMode?t('record_updated'):t('record_saved'));
     if(!result?.offline){await loadRecords();}
     setView('list');
-  }catch(e){setLoading(false);console.error('[Save]',e);showToast('⚠ '+(e.message||'Save failed'));}
+  }catch(e){console.error('[Save]',e);showToast('⚠ '+(e.message||'Save failed'));setLoading(false);}
 }
 
 /* --- DETAIL --- */
@@ -422,10 +319,9 @@ function openLightbox(src){
 function closeLightbox(){document.getElementById('lightbox').classList.remove('open');}
 
 /* --- DELETE --- */
-function confirmDelete(uid){if(!isAdmin()){showToast('⚠ Only admin can delete');return;}deleteTarget=uid;document.getElementById('modal-overlay').classList.add('show');}
+function confirmDelete(uid){deleteTarget=uid;document.getElementById('modal-overlay').classList.add('show');}
 function cancelDelete(){deleteTarget=null;document.getElementById('modal-overlay').classList.remove('show');}
 async function doDelete(){
-  if(!isAdmin()){showToast('⚠ Only admin can delete');return;}
   if(!deleteTarget)return;
   document.getElementById('modal-overlay').classList.remove('show');
   setLoading(true);
@@ -447,8 +343,6 @@ function init(){
     if(e.target===document.getElementById('lightbox'))closeLightbox();
   });
   selectTab('PN');
-  loadBatchOptions();
-  loadPlotGps();
   loadRecords();
 }
 document.addEventListener('DOMContentLoaded',init);

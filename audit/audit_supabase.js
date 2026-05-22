@@ -3,7 +3,7 @@
    supabase.js
    ================================================================ */
 
-const SUPA_URL = 'https://kibqjztozokohqmhqqqf.supabase.co';
+const SUPA_URL = 'https://slvjkcramxipooahjrbs.supabase.co';
 const SUPA_KEY = 'sb_publishable_cyPuEmjV7D39aZyIGLHh5g_QATIBWHT';
 
 async function sbFetch(path, options = {}) {

@@ -2,11 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
 <meta name="theme-color" content="#1a4d1a"/>
 <link rel="manifest" href="audit_manifest.json"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<meta name="apple-touch-icon" href="icon-192.png"/>
+<meta name="apple-touch-icon" href="audit_icon-192.png"/>
 <title>Monthly Report — MJM Nursery</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet"/>
 <style>
@@ -88,23 +91,6 @@ select.input:focus{border-color:var(--g400);background:var(--white)}
 
 /* MODULE BADGE */
 .mod-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--g100);color:var(--g700);margin-right:4px;margin-bottom:2px}
-
-/* MODULE BREAKDOWN (per-nursery case counts) */
-.module-breakdown{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;padding:12px;background:var(--white);border-bottom:1px solid var(--border)}
-.mod-stat{display:flex;justify-content:space-between;align-items:center;background:var(--g50);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;color:var(--text2);min-width:0}
-.mod-stat-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mod-stat-count{font-weight:800;color:var(--g800);font-size:14px;flex-shrink:0;margin-left:8px}
-
-/* DETAIL RECORD CARDS */
-.detail-records-wrap{padding:8px 10px;background:var(--surface)}
-.detail-record{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px}
-.detail-record:last-child{margin-bottom:0}
-.detail-record-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
-.detail-record-date{font-size:11px;font-weight:700;color:var(--text2)}
-.detail-record-auditor{font-size:11px;font-weight:600;color:var(--g700);background:var(--g50);padding:2px 8px;border-radius:10px}
-.detail-record-loc{font-size:13px;font-weight:700;color:var(--text1);margin-bottom:6px}
-.detail-record-results{display:flex;flex-wrap:wrap;gap:4px}
-.detail-pill{font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--surface);border:1px solid var(--border);color:var(--text2)}
 
 /* EMPTY */
 .empty-report{text-align:center;padding:3rem 1rem;color:var(--text4)}
@@ -188,11 +174,17 @@ select.input:focus{border-color:var(--g400);background:var(--white)}
         </div>
       </div>
     </div>
-    <div class="filter-label" style="margin-bottom:8px">Nursery Group</div>
-    <div class="module-checks" id="scope-checks" style="margin-bottom:14px">
-      <label class="mod-check checked" data-scope="all" onclick="setScope('all')">Both</label>
-      <label class="mod-check" data-scope="pn" onclick="setScope('pn')">🌱 Pre Nursery</label>
-      <label class="mod-check" data-scope="mn" onclick="setScope('mn')">🌳 Main Nursery</label>
+    <div class="filter-row">
+      <div class="filter-field">
+        <div class="filter-label">Nursery</div>
+        <div class="select-wrap">
+          <select class="input" id="f-nursery">
+            <option value="both">Pre Nursery + Main Nursery (All)</option>
+            <option value="pn">Pre Nursery only</option>
+            <option value="mn">Main Nursery only</option>
+          </select>
+        </div>
+      </div>
     </div>
     <div class="filter-label" style="margin-bottom:8px">Modules to Include</div>
     <div class="module-checks">
@@ -230,9 +222,9 @@ select.input:focus{border-color:var(--g400);background:var(--white)}
 
 </div>
 
-<script src="audit_lang.js?v=8"></script>
-<script src="audit_supabase.js?v=8"></script>
-<script src="audit_dexie_offline.js?v=8"></script>
+<script src="audit_lang.js"></script>
+<script src="audit_supabase.js"></script>
+<script src="audit_dexie_offline.js"></script>
 <script>
 'use strict';
 
@@ -278,15 +270,6 @@ function toggleMod(el, mod){
   }
 }
 
-/* ── Nursery scope ── */
-let selectedScope = 'all';
-function setScope(s){
-  selectedScope = s;
-  document.querySelectorAll('#scope-checks .mod-check').forEach(el=>{
-    el.classList.toggle('checked', el.dataset.scope === s);
-  });
-}
-
 /* ── Date helpers ── */
 function monthRange(month, year){
   const start = `${year}-${String(month).padStart(2,'0')}-01`;
@@ -302,13 +285,13 @@ async function fetchData(month, year){
 
   const fetches = {};
   if(selectedMods.has('plot'))
-    fetches.plot = sb.select('audit_plot_audits', `select=nursery,plot,batch,auditor_name,pest,tikus,disease,warna_daun,date&${dateFilter}`).catch(()=>[]);
+    fetches.plot = sb.select('audit_plot_audits', `select=nursery,auditor_name,date&${dateFilter}`).catch(()=>[]);
   if(selectedMods.has('height'))
-    fetches.height = sb.select('audit_height_records', `select=nursery,plot,batch,auditor_name,sample_1,sample_2,sample_3,avg_height,date&${dateFilter}`).catch(()=>[]);
+    fetches.height = sb.select('audit_height_records', `select=nursery,auditor_name,date&${dateFilter}`).catch(()=>[]);
   if(selectedMods.has('papan'))
-    fetches.papan = sb.select('audit_papan_audits', `select=nursery,plot,batch_no,auditor_name,presence,info_correct,condition,date&${dateFilter}`).catch(()=>[]);
+    fetches.papan = sb.select('audit_papan_audits', `select=nursery,auditor_name,date&${dateFilter}`).catch(()=>[]);
   if(selectedMods.has('maint'))
-    fetches.maint = sb.select('audit_maintenance_audits', `select=nursery,plot,task_type,result,auditor_name,date&${dateFilter}`).catch(()=>[]);
+    fetches.maint = sb.select('audit_maintenance_audits', `select=nursery,auditor_name,date&${dateFilter}`).catch(()=>[]);
 
   const keys = Object.keys(fetches);
   const results = await Promise.all(Object.values(fetches));
@@ -379,98 +362,23 @@ function buildTable(counts){
   return html;
 }
 
-/* ── Per-nursery module case counts ── */
-function buildModuleBreakdown(data, nurseries){
-  const mods = [...selectedMods];
-  const labels = {plot:'📋 Plot Condition',height:'📏 Seedling Height',papan:'🪧 Papan Tanda',maint:'🔧 Maintenance'};
-  const cells = mods.map(m=>{
-    const n = (data[m]||[]).filter(r=>nurseries.includes(r.nursery)).length;
-    return `<div class="mod-stat"><span class="mod-stat-label">${labels[m]}</span><span class="mod-stat-count">${n}</span></div>`;
-  }).join('');
-  return `<div class="module-breakdown">${cells}</div>`;
-}
-
-/* ── Build detailed per-record sections ── */
-function buildDetailsHTML(data, nurseries, headerColor){
-  const mods = [...selectedMods];
-  const modLabels = {plot:'Plot Condition',height:'Seedling Height',papan:'Papan Tanda',maint:'Maintenance'};
-  const modIcons  = {plot:'📋',height:'📏',papan:'🪧',maint:'🔧'};
-
-  let html = '<div style="margin-top:14px">';
-  let any = false;
-
-  mods.forEach(mod=>{
-    const rows = (data[mod] || []).filter(r=>nurseries.includes(r.nursery));
-    if(!rows.length) return;
-    any = true;
-
-    html += `<div class="nursery-section">
-      <div class="nursery-section-head" style="background:${headerColor||'var(--g700)'}">
-        <div><div class="nursery-section-title">${modIcons[mod]} ${modLabels[mod]}</div></div>
-        <span class="nursery-section-count">${rows.length} record${rows.length>1?'s':''}</span>
-      </div>
-      <div class="detail-records-wrap">`;
-
-    const sorted = [...rows].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-
-    sorted.forEach(r=>{
-      const d = r.date ? r.date.split('T')[0] : '—';
-      const auditor = r.auditor_name || 'Unknown';
-      const batch = mod==='papan' ? r.batch_no : r.batch;
-      let pills = '';
-      if(mod==='plot'){
-        pills = `<span class="detail-pill">Pest: ${r.pest||'—'}</span>
-          <span class="detail-pill">Animal: ${r.tikus||'—'}</span>
-          <span class="detail-pill">Disease: ${r.disease||'—'}</span>
-          <span class="detail-pill">Leaf: ${r.warna_daun||'—'}</span>`;
-      } else if(mod==='height'){
-        pills = `<span class="detail-pill">S1: ${r.sample_1??'—'} cm</span>
-          <span class="detail-pill">S2: ${r.sample_2??'—'} cm</span>
-          <span class="detail-pill">S3: ${r.sample_3??'—'} cm</span>
-          <span class="detail-pill" style="background:var(--g100);color:var(--g700);border-color:var(--g200)">Avg: ${r.avg_height??'—'} cm</span>`;
-      } else if(mod==='papan'){
-        pills = `<span class="detail-pill">Presence: ${r.presence||'—'}</span>
-          <span class="detail-pill">Info: ${r.info_correct||'—'}</span>
-          <span class="detail-pill">Condition: ${r.condition||'—'}</span>`;
-      } else if(mod==='maint'){
-        pills = `<span class="detail-pill">Task: ${r.task_type||'—'}</span>
-          <span class="detail-pill" style="background:var(--g100);color:var(--g700);border-color:var(--g200)">${r.result||'—'}</span>`;
-      }
-
-      html += `<div class="detail-record">
-        <div class="detail-record-top">
-          <span class="detail-record-date">${d}</span>
-          <span class="detail-record-auditor">${auditor}</span>
-        </div>
-        <div class="detail-record-loc">${r.nursery} · ${r.plot}${batch?' · Batch '+batch:''}</div>
-        <div class="detail-record-results">${pills}</div>
-      </div>`;
-    });
-
-    html += `</div></div>`;
-  });
-
-  html += '</div>';
-  return any ? html : '';
-}
-
 /* ── GENERATE REPORT ── */
 async function generateReport(){
   const month = parseInt(document.getElementById('f-month').value);
   const year  = parseInt(document.getElementById('f-year').value);
+  const nurseryFilter = document.getElementById('f-nursery').value;
   const periodStr = `${MONTHS[month-1]} ${year}`;
 
   setLoading(true);
   try{
     const data = await fetchData(month, year);
 
-    const showPN = selectedScope === 'all' || selectedScope === 'pn';
-    const showMN = selectedScope === 'all' || selectedScope === 'mn';
+    const showPN = nurseryFilter === 'both' || nurseryFilter === 'pn';
+    const showMN = nurseryFilter === 'both' || nurseryFilter === 'mn';
 
-    const pnCounts = tally(data, PN_NURSERIES);
-    const mnCounts = tally(data, MN_NURSERIES);
+    const pnCounts = showPN ? tally(data, PN_NURSERIES) : {};
+    const mnCounts = showMN ? tally(data, MN_NURSERIES) : {};
 
-    // Count totals
     const countAll = (counts) => Object.values(counts).reduce((s,v)=>s+Object.values(v).reduce((a,b)=>a+b,0),0);
     const pnTotal = countAll(pnCounts);
     const mnTotal = countAll(mnCounts);
@@ -481,26 +389,19 @@ async function generateReport(){
     const modLabels = {plot:'Plot Condition',height:'Seedling Height',papan:'Papan Tanda',maint:'Maintenance'};
     const modBadges = mods.map(m=>`<span class="mod-badge">${modLabels[m]}</span>`).join('');
 
-    const html = `
-      <!-- Report Header -->
-      <div class="report-header">
-        <div class="report-logo">MJM <span>Nursery</span></div>
-        <div class="report-company">Mega Jutamas Sdn Bhd · Miri, Sarawak</div>
-        <div class="report-title">Monthly Audit Report</div>
-        <div class="report-period">${periodStr}</div>
-        <div style="margin-top:10px">${modBadges}</div>
-        <div class="report-generated">Generated: ${now.toLocaleString('en-MY',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
-      </div>
+    const nurseryLabel = nurseryFilter==='pn' ? 'Pre Nursery' 
+                       : nurseryFilter==='mn' ? 'Main Nursery' 
+                       : 'All Nurseries';
 
-      <!-- Summary -->
-      <div class="summary-row">
-        <div class="sum-card"><div class="sum-val">${grandTotal}</div><div class="sum-label">Total Audits</div></div>
-        <div class="sum-card"><div class="sum-val" style="color:var(--g700)">${pnTotal}</div><div class="sum-label">Pre Nursery</div></div>
-        <div class="sum-card"><div class="sum-val" style="color:#1565c0">${mnTotal}</div><div class="sum-label">Main Nursery</div></div>
-      </div>
+    // Build summary cards
+    let summaryCards = `<div class="sum-card"><div class="sum-val">${grandTotal}</div><div class="sum-label">Total Audits</div></div>`;
+    if(showPN) summaryCards += `<div class="sum-card"><div class="sum-val" style="color:var(--g700)">${pnTotal}</div><div class="sum-label">Pre Nursery</div></div>`;
+    if(showMN) summaryCards += `<div class="sum-card"><div class="sum-val" style="color:#1565c0">${mnTotal}</div><div class="sum-label">Main Nursery</div></div>`;
 
-      ${showPN?`
-      <!-- PN Section -->
+    // Build nursery sections
+    let nurserySections = '';
+    if(showPN){
+      nurserySections += `
       <div class="nursery-section">
         <div class="nursery-section-head">
           <div>
@@ -509,15 +410,12 @@ async function generateReport(){
           </div>
           <span class="nursery-section-count">${pnTotal} audits</span>
         </div>
-        ${buildModuleBreakdown(data, PN_NURSERIES)}
-        ${selectedScope==='all'?buildTable(pnCounts):''}
-      </div>
-      ${buildDetailsHTML(data, PN_NURSERIES, 'var(--g700)')}
-      `:''}
-
-      ${showMN?`
-      <!-- MN Section -->
-      <div class="nursery-section" style="margin-top:18px">
+        ${buildTable(pnCounts)}
+      </div>`;
+    }
+    if(showMN){
+      nurserySections += `
+      <div class="nursery-section">
         <div class="nursery-section-head" style="background:#1565c0">
           <div>
             <div class="nursery-section-title">Main Nursery (BNN + UNN1 + UNN2)</div>
@@ -525,11 +423,21 @@ async function generateReport(){
           </div>
           <span class="nursery-section-count">${mnTotal} audits</span>
         </div>
-        ${buildModuleBreakdown(data, MN_NURSERIES)}
-        ${selectedScope==='all'?buildTable(mnCounts):''}
+        ${buildTable(mnCounts)}
+      </div>`;
+    }
+
+    const html = `
+      <div class="report-header">
+        <div class="report-logo">MJM <span>Nursery</span></div>
+        <div class="report-company">Mega Jutamas Sdn Bhd · Miri, Sarawak</div>
+        <div class="report-title">Monthly Audit Report</div>
+        <div class="report-period">${periodStr} · ${nurseryLabel}</div>
+        <div style="margin-top:10px">${modBadges}</div>
+        <div class="report-generated">Generated: ${now.toLocaleString('en-MY',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
       </div>
-      ${buildDetailsHTML(data, MN_NURSERIES, '#1565c0')}
-      `:''}
+      <div class="summary-row">${summaryCards}</div>
+      ${nurserySections}
     `;
 
     document.getElementById('report-output').innerHTML = html;
@@ -537,7 +445,7 @@ async function generateReport(){
     showToast('✓ Report generated');
   }catch(e){
     console.error(e);
-    showToast('⚠ Failed to load: '+e.message);
+    showToast('⚠ Failed: '+e.message);
   }
   setLoading(false);
 }

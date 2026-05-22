@@ -13,24 +13,6 @@ let formTaskId=null;
 let formState={result:null,remarks:'',photo:null};
 let toastTimer=null;
 
-/* SECURITY (2026-05): the audit module uses an anon publishable key, so
-   Supabase RLS cannot identify the current user. The localStorage role
-   check below is therefore TRIVIALLY BYPASSABLE in DevTools. The real
-   long-term fix is to migrate this module to authenticated supabase-js +
-   MJMAccess. Until then we (a) prefer MJMAccess if it has been loaded
-   into the page, and (b) fall back to the legacy localStorage flag.
-   The DB-side RLS policies on audit_* tables are the only server-side
-   line of defence and now require an authenticated audit-module user, so
-   DELETE through the publishable key is blocked at the database. */
-function isAdmin(){
-  try{
-    if (typeof MJMAccess !== 'undefined' && MJMAccess.isAdminOf) return MJMAccess.isAdminOf('audit');
-    const u = JSON.parse(localStorage.getItem('mjm_user') || '{}');
-    const role = (u.role || '').toLowerCase();
-    return role === 'admin' || role === 'administrator';
-  }catch(e){return false;}
-}
-
 /* --- HELPERS --- */
 function pad(n){return String(n).padStart(3,'0');}
 function todayISO(){return new Date().toISOString().split('T')[0];}
@@ -65,7 +47,7 @@ function resultColor(r){
 function nextAuditID(){return'MTA-'+pad(audits.length+1);}
 
 /* --- UI --- */
-function showToast(msg){
+function showToast(msg){ window._pageShowToast=showToast;
   const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
   clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2600);
 }
@@ -302,11 +284,14 @@ async function saveAudit(){
   const user=JSON.parse(localStorage.getItem('mjm_user')||'{}');
   setLoading(true);
   try{
+    let photoUrl=formState.photo;
+    if(photoUrl&&photoUrl.startsWith('data:'))
+      photoUrl=await sb.uploadPhoto('audit-photos','maint_'+t.plot+'_'+Date.now(),photoUrl);
     const payload={
       task_id:parseInt(formTaskId),
       nursery:t.nursery,plot:t.plot,task_type:t.type,
       result:formState.result,remarks:remarks||null,
-      photo_url:formState.photo||null,
+      photo_url:photoUrl||null,
       auditor_name:user.name||'',
       date:todayISO()
     };
@@ -360,10 +345,9 @@ function openLightbox(src){document.getElementById('lightbox-img').src=src;docum
 function closeLightbox(){document.getElementById('lightbox').classList.remove('open');}
 
 /* --- DELETE --- */
-function confirmDelete(uid){if(!isAdmin()){showToast('⚠ Only admin can delete');return;}deleteTarget=uid;document.getElementById('modal-overlay').classList.add('show');}
+function confirmDelete(uid){deleteTarget=uid;document.getElementById('modal-overlay').classList.add('show');}
 function cancelDelete(){deleteTarget=null;document.getElementById('modal-overlay').classList.remove('show');}
 async function doDelete(){
-  if(!isAdmin()){showToast('⚠ Only admin can delete');return;}
   if(!deleteTarget)return;
   document.getElementById('modal-overlay').classList.remove('show');
   setLoading(true);

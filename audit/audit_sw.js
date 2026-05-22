@@ -1,121 +1,145 @@
 /* ================================================================
-   MJM NURSERY AUDIT — SERVICE WORKER v3
-   sw.js — Full PWA offline support
+   MJM NURSERY AUDIT — SERVICE WORKER v7
+   
+   Strategy:
+   - On install: cache ALL files immediately
+   - HTML pages: try network first (get latest), fallback to cache
+   - JS/CSS/images: cache first (fast load)
+   - Supabase API: network only (never cache)
+   - On activate: delete old caches, claim all clients
 ================================================================ */
-const CACHE = 'mjm-audit-v11';
+const VER = 'mjm-1777353727';
 
-const FILES = [
-  './',
-  './index.html',
-  './home.html',
-  './plot_audit.html',
-  './styles.css',
-  './script.js',
-  './height_index.html',
-  './height_styles.css',
-  './height_script.js',
-  './papan_index.html',
-  './papan_styles.css',
-  './papan_script.js',
-  './maintenance_index.html',
-  './maintenance_styles.css',
-  './maintenance_script.js',
-  './report.html',
-  './supabase.js',
-  './dexie_offline.js',
-  './lang.js',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png',
-  'https://unpkg.com/dexie@3.2.4/dist/dexie.min.js',
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
-  'https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap'
+const ALL_FILES = [
+  './audit_index.html',
+  './audit_home.html',
+  './audit_plot_audit.html',
+  './audit_styles.css',
+  './audit_script.js',
+  './audit_height_index.html',
+  './audit_height_styles.css',
+  './audit_height_script.js',
+  './audit_papan_index.html',
+  './audit_papan_styles.css',
+  './audit_papan_script.js',
+  './audit_maintenance_index.html',
+  './audit_maintenance_styles.css',
+  './audit_maintenance_script.js',
+  './audit_supabase.js',
+  './audit_dexie_offline.js',
+  './audit_dexie.min.js',
+  './audit_lang.js',
+  './audit_manifest.json',
+  './audit_icon-192.png',
+  './audit_icon-512.png',
 ];
 
-/* INSTALL */
+/* ── INSTALL: cache everything ── */
 self.addEventListener('install', e => {
-  console.log('[SW] Installing v3...');
+  console.log('[SW] Installing', VER);
+  self.skipWaiting(); // activate immediately
   e.waitUntil(
-    caches.open(CACHE).then(cache =>
-      Promise.allSettled(FILES.map(url =>
-        cache.add(url).catch(err => console.warn('[SW] Cache miss:', url, err.message))
-      ))
-    ).then(() => {
-      console.log('[SW] Installed');
-      return self.skipWaiting();
-    })
+    caches.open(VER).then(cache =>
+      Promise.allSettled(
+        ALL_FILES.map(url =>
+          cache.add(url).catch(err =>
+            console.warn('[SW] Failed to cache:', url, err.message)
+          )
+        )
+      )
+    )
   );
 });
 
-/* ACTIVATE */
+/* ── ACTIVATE: clear old caches ── */
 self.addEventListener('activate', e => {
+  console.log('[SW] Activating', VER);
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    ).then(() => {
-      console.log('[SW] Activated v3');
-      return self.clients.claim();
-    })
+      Promise.all(
+        keys.filter(k => k !== VER).map(k => {
+          console.log('[SW] Deleting old cache:', k);
+          return caches.delete(k);
+        })
+      )
+    ).then(() => self.clients.claim())
   );
 });
 
-/* FETCH */
+/* ── FETCH ── */
 self.addEventListener('fetch', e => {
-  if(e.request.method !== 'GET') return;
+  if (e.request.method !== 'GET') return;
   const url = e.request.url;
-  if(!url.startsWith('http')) return;
+  if (!url.startsWith('http')) return;
 
-  // Supabase storage (photos) — cache-first so they show offline
-  if(url.includes('supabase.co') && url.includes('/storage/')){
-    e.respondWith(
-      caches.match(e.request).then(cached => {
-        if(cached) return cached;
-        return fetch(e.request).then(res => {
-          if(res && res.status === 200){
-            const clone = res.clone();
-            caches.open(CACHE).then(c => c.put(e.request, clone));
-          }
-          return res;
-        });
-      })
-    );
-    return;
-  }
-
-  // Supabase REST API — network only, no cache
-  if(url.includes('supabase.co')){
+  /* Supabase — always network, never cache */
+  if (url.includes('supabase.co')) {
     e.respondWith(
       fetch(e.request).catch(() =>
-        new Response(JSON.stringify({error:'offline'}), {
-          headers: {'Content-Type':'application/json'}
+        new Response(JSON.stringify({ error: 'offline' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' }
         })
       )
     );
     return;
   }
 
-  // Everything else — cache first, then network
-  e.respondWith(
-    caches.match(e.request, {ignoreSearch: true}).then(cached => {
-      if(cached) return cached;
-      return fetch(e.request).then(res => {
-        if(res && res.status === 200 && res.type !== 'opaque'){
+  /* Google Fonts — cache first */
+  if (url.includes('fonts.googleapis.com') || url.includes('fonts.gstatic.com')) {
+    e.respondWith(
+      caches.match(e.request).then(cached => {
+        if (cached) return cached;
+        return fetch(e.request).then(res => {
           const clone = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
+          caches.open(VER).then(c => c.put(e.request, clone));
+          return res;
+        }).catch(() => new Response('', { status: 200 }));
+      })
+    );
+    return;
+  }
+
+  /* HTML pages — network first, fallback to cache */
+  if (url.endsWith('.html') || url.endsWith('/') || 
+      e.request.headers.get('accept')?.includes('text/html')) {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          /* Cache the fresh copy for offline use */
+          if (res && res.status === 200) {
+            const clone = res.clone();
+            caches.open(VER).then(c => c.put(e.request, clone));
+          }
+          return res;
+        })
+        .catch(() => {
+          /* Offline — serve from cache */
+          return caches.match(e.request)
+            .then(cached => cached || caches.match('./audit_index.html'));
+        })
+    );
+    return;
+  }
+
+  /* JS / CSS / images / fonts — cache first, update in background */
+  e.respondWith(
+    caches.match(e.request).then(cached => {
+      /* Return cache immediately */
+      const fetchPromise = fetch(e.request).then(res => {
+        if (res && res.status === 200) {
+          const clone = res.clone();
+          caches.open(VER).then(c => c.put(e.request, clone));
         }
         return res;
-      }).catch(() => {
-        // Offline fallback for HTML pages
-        if(e.request.headers.get('accept')?.includes('text/html')){
-          return caches.match('./index.html', {ignoreSearch: true});
-        }
-        return new Response('Offline', {status: 503});
-      });
+      }).catch(() => null);
+
+      return cached || fetchPromise;
     })
   );
 });
 
-/* MESSAGE */
+/* ── Force update ── */
 self.addEventListener('message', e => {
-  if(e.data === 'skipWaiting') self.skipWaiting();
+  if (e.data === 'skipWaiting') self.skipWaiting();
 });

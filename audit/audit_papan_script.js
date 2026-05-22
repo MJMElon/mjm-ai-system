@@ -66,7 +66,7 @@ function getTriClass(v){if(['Good','Correct'].includes(v))return'sel-ok';if(v===
 function nextAuditID(){return'PTA-'+pad(audits.length+1);}
 
 /* --- UI HELPERS --- */
-function showToast(msg){
+function showToast(msg){ window._pageShowToast=showToast;
   const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
   clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2600);
 }
@@ -124,7 +124,7 @@ async function loadAll(){
   setLoading(true);
   try{
     const [bRows,aRows]=await Promise.all([
-      sb.select('operation_batches','select=*'),
+      sb.select('audit_batches','select=*'),
       sb.select('audit_papan_audits','select=*')
     ]);
 
@@ -134,7 +134,7 @@ async function loadAll(){
       id:            r.batch_id||String(r.id),
       nursery:       r.nursery||'',
       plot:          r.plot||'',
-      batch:         r.name||'',
+      batch:         r.batch_no||'',
       breed:         r.breed||'',
       qtyTransplant: r.qty_transplant?.toString()||'',
       datePlanted:   r.date_planted||'',
@@ -323,7 +323,7 @@ function renderBatchTable(){
       </div>
       <div class="audit-item-actions">
         <button class="btn-view-audit" onclick="openEditBatch('${b.uid}')">Edit</button>
-        ${isAdmin()?`<button class="btn-audit-now" style="background:var(--danger-text)" onclick="confirmDeleteBatch('${b.uid}')">Delete</button>`:''}
+        <button class="btn-audit-now" style="background:var(--danger-text)" onclick="confirmDeleteBatch('${b.uid}')">Delete</button>
       </div>
     </div>`;
   }).join('');
@@ -408,10 +408,10 @@ async function saveBatch(){
       date_planted:dp||null,date_transplant:dt,date_mature:dm||null
     };
     if(batchEditId){
-      showToast('Batch editing is disabled. Manage batches in Nursery Operations.'); return;
+      await sb.update('audit_batches',batchEditId,payload);showToast(t('batch_updated'));
     } else {
       payload.batch_id='BTH-'+batchFormNursery+'-'+batch+'-'+plot;
-      showToast('Batch creation is disabled. Manage batches in Nursery Operations.'); return;
+      await sb.insert('audit_batches',payload);showToast(t('batch_saved'));
     }
     await loadAll();setView('list');selectTab('batch');
   }catch(e){showToast(t('err_save'));console.error(e);setLoading(false);}
@@ -470,7 +470,7 @@ function triggerPapanPhoto(){
   sheet.innerHTML=`<div style="background:#fff;border-radius:20px 20px 0 0;padding:20px 16px 36px;width:100%;max-width:480px">
     <div style="font-size:14px;font-weight:700;color:#182018;margin-bottom:16px;text-align:center">${t('add_photo')}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-      <button onclick="document.getElementById('papan-photo-input').click();this.closest('[style]').remove()" style="height:64px;border-radius:12px;background:#1a4d1a;color:#fff;font-size:15px;font-weight:600;border:none;font-family:inherit;cursor:pointer">📷<br><span style="font-size:11px">${t('cam')}</span></button>
+      <button onclick="openCamera('papan-photo-input');this.closest('[style]').remove()" style="height:64px;border-radius:12px;background:#1a4d1a;color:#fff;font-size:15px;font-weight:600;border:none;font-family:inherit;cursor:pointer">📷<br><span style="font-size:11px">${t('cam')}</span></button>
       <button onclick="document.getElementById('papan-photo-gallery').click();this.closest('[style]').remove()" style="height:64px;border-radius:12px;background:#f4f6f4;color:#3d5c3d;font-size:15px;font-weight:600;border:1px solid #dde8dd;font-family:inherit;cursor:pointer">🖼<br><span style="font-size:11px">${t('gal')}</span></button>
     </div>
     <button onclick="this.closest('[style]').remove()" style="width:100%;height:44px;border-radius:12px;background:#f4f6f4;border:1px solid #dde8dd;color:#6b8a6b;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer">${t('cancel')}</button>
@@ -572,11 +572,10 @@ function editFromDetail(){const audit=audits.find(a=>a.uid===detailId);if(audit)
 function deleteFromDetail(){if(detailId)confirmDelete(detailId);}
 
 /* --- DELETE --- */
-function confirmDelete(uid){if(!isAdmin()){showToast('⚠ Only admin can delete');return;}deleteTarget=uid;deleteType='audit';document.getElementById('modal-overlay').classList.add('show');}
-function confirmDeleteBatch(uid){ showToast('Batch deletion is disabled. Manage batches in Nursery Operations.'); }
+function confirmDelete(uid){deleteTarget=uid;deleteType='audit';document.getElementById('modal-overlay').classList.add('show');}
+function confirmDeleteBatch(uid){deleteTarget=uid;deleteType='batch';document.getElementById('modal-overlay').classList.add('show');}
 function cancelDelete(){deleteTarget=null;document.getElementById('modal-overlay').classList.remove('show');}
 async function doDelete(){
-  if(!isAdmin()){showToast('⚠ Only admin can delete');return;}
   if(!deleteTarget)return;
   document.getElementById('modal-overlay').classList.remove('show');
   setLoading(true);
@@ -585,7 +584,7 @@ async function doDelete(){
       // Also delete linked audit if exists
       const linked=audits.find(a=>a.batchUid===deleteTarget);
       if(linked)await sb.delete('audit_papan_audits',linked.uid);
-      await sb.delete('operation_batches',deleteTarget);
+      await sb.delete('audit_batches',deleteTarget);
       showToast(t('batch_deleted'));
     } else {
       await sb.delete('audit_papan_audits',deleteTarget);

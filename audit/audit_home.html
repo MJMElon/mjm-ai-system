@@ -2,12 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
   <link rel="manifest" href="audit_manifest.json"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="MJM Audit"/>
-<link rel="apple-touch-icon" href="icon-192.png"/>
+<link rel="apple-touch-icon" href="audit_icon-192.png"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="MJM Audit"/>
@@ -17,8 +20,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
 
-  <!-- Anti-flicker auth guard: accepts mjm_user from either audit login or main portal -->
-  <script>if(!localStorage.getItem('mjm_user')){window.location.replace('audit_login.html');}</script>
+  <!-- Anti-flicker auth guard -->
+  <script>if(!localStorage.getItem('mjm_user')){window.location.replace('audit_index.html');}</script>
   <style>body{opacity:0;transition:opacity 0.2s ease;}</style>
 
   <style>
@@ -176,7 +179,6 @@
   </style>
 </head>
 <body>
-<a href="../index.html" style="position:fixed;top:12px;left:12px;z-index:999;display:inline-flex;align-items:center;gap:6px;background:rgba(5,20,12,.85);border:1px solid rgba(52,211,153,.3);border-radius:10px;padding:7px 14px;font-size:11px;font-weight:700;color:#6ee7b7;text-decoration:none;letter-spacing:.06em;text-transform:uppercase;backdrop-filter:blur(8px);" onmouseover="this.style.borderColor='#10b981'" onmouseout="this.style.borderColor='rgba(52,211,153,.3)'">&#8592; Portal</a>
 <div id="app">
 
   <!-- HEADER -->
@@ -242,7 +244,7 @@
       </a>
 
       <!-- Module 2: Seedling Height -->
-      <a class="audit-card card-height fade-in" href="audit_height.html">
+      <a class="audit-card card-height fade-in" href="audit_height_index.html">
         <div class="audit-card-blob"></div>
         <div class="audit-card-body">
           <div class="card-icon-row">
@@ -259,7 +261,7 @@
       </a>
 
       <!-- Module 3: Papan Tanda -->
-      <a class="audit-card card-papan fade-in" href="audit_papan.html">
+      <a class="audit-card card-papan fade-in" href="audit_papan_index.html">
         <div class="audit-card-blob"></div>
         <div class="audit-card-body">
           <div class="card-icon-row">
@@ -278,7 +280,7 @@
       </a>
 
       <!-- Module 4: Maintenance Audit -->
-      <a class="audit-card fade-in" href="audit_maintenance.html" style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5986 100%);border-radius:var(--r-xl);overflow:hidden;box-shadow:var(--shadow-card);cursor:pointer;text-decoration:none;display:block;transition:transform .18s,box-shadow .18s;-webkit-tap-highlight-color:transparent;position:relative">
+      <a class="audit-card fade-in" href="audit_maintenance_index.html" style="background:linear-gradient(135deg,#1e3a5f 0%,#2d5986 100%);border-radius:var(--r-xl);overflow:hidden;box-shadow:var(--shadow-card);cursor:pointer;text-decoration:none;display:block;transition:transform .18s,box-shadow .18s;-webkit-tap-highlight-color:transparent;position:relative">
         <div class="audit-card-blob" style="background:#4a90d9"></div>
         <div class="audit-card-body">
           <div class="card-icon-row">
@@ -368,12 +370,12 @@
   </div>
 </div>
 
-<script src="audit_lang.js?v=8"></script>
-<script src="audit_supabase.js?v=8"></script>
+<script src="audit_lang.js"></script>
+<script src="audit_supabase.js"></script>
 <script>
 /* ── Auth ── */
 const userRaw = localStorage.getItem('mjm_user');
-if (!userRaw) { window.location.replace('audit_login.html'); }
+if (!userRaw) { window.location.replace('audit_index.html'); }
 else { document.body.style.opacity = '1'; }
 const user = userRaw ? JSON.parse(userRaw) : {name:'User',role:'',username:'u'};
 
@@ -402,7 +404,7 @@ async function doLogout(){
       const s=window._supaClient;if(s)await s.auth.signOut();
     }
   }catch(e){}
-  window.location.href='audit_login.html';
+  window.location.href='audit_index.html';
 }
 
 /* ── ALERT SYSTEM ── */
@@ -588,6 +590,6 @@ loadAlerts();
 requestNotifPermission();
 setInterval(loadAlerts, 5 * 60 * 1000);
 </script>
-<script src="audit_dexie_offline.js?v=8"></script>
+<script src="audit_dexie_offline.js"></script>
 </body>
 </html>

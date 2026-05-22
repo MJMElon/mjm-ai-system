@@ -1,281 +1,224 @@
 /* ================================================================
-   MJM NURSERY AUDIT — OFFLINE STORAGE v4
+   MJM NURSERY AUDIT — OFFLINE STORAGE v5
    dexie_offline.js
-   
-   BEHAVIOUR:
-   • Online  → save directly to Supabase (photos uploaded first)
-   • Offline → save to IndexedDB queue, NEVER lose data
-   • Auto-sync every 30s when online
-   • Sync immediately when connection detected
+
+   RULES:
+   1. Online  → save to Supabase directly. If fails → queue.
+   2. Offline → queue immediately. Never lose data.
+   3. Auto-sync every 30s when online.
+   4. smartSave NEVER throws — always returns {offline:true} or result.
 ================================================================ */
 
-/* ================================================================
-   LOAD DEXIE
-================================================================ */
+/* ── Load Dexie (local first, CDN fallback) ── */
 async function loadDexie(){
   if(window.Dexie) return;
-  // Try primary CDN
-  await new Promise((res,rej)=>{
-    const s=document.createElement('script');
-    s.src='https://unpkg.com/dexie@3.2.4/dist/dexie.min.js';
-    s.onload=res;
-    s.onerror=()=>{
-      // Fallback CDN
-      const s2=document.createElement('script');
-      s2.src='https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js';
-      s2.onload=res;s2.onerror=rej;
-      document.head.appendChild(s2);
+  await new Promise((res, rej) => {
+    const tryLoad = (src, next) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = res;
+      s.onerror = next || rej;
+      document.head.appendChild(s);
     };
-    document.head.appendChild(s);
+    tryLoad('./audit_dexie.min.js', () =>
+      tryLoad('https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js')
+    );
   });
 }
 
-/* ================================================================
-   DATABASE INIT
-================================================================ */
+/* ── DB ── */
 let _db = null;
-
 async function getDB(){
   if(_db && _db.isOpen()) return _db;
   await loadDexie();
-  _db = new Dexie('MJMAuditOffline');
-  _db.version(2).stores({
-    queue:  '++id, table_name, method, synced, created_at',
-    photos: '++id, queue_key, field, created_at'
+  _db = new Dexie('MJMAuditV5');
+  _db.version(1).stores({
+    queue:  '++id, synced, created_at',
+    photos: '++id, qkey, field'
   });
   await _db.open();
-  console.log('[DB] Ready');
   return _db;
 }
 
-/* ================================================================
-   PHOTO STORAGE
-================================================================ */
-async function storePhoto(queueKey, field, base64){
+/* ── Photo storage ── */
+async function storePhoto(qkey, field, data){
   const db = await getDB();
-  // Remove old entry for same key+field
-  await db.photos.where({queue_key:queueKey, field}).delete();
-  await db.photos.add({
-    queue_key: queueKey,
-    field,
-    data: base64,
-    created_at: Date.now()
-  });
+  await db.photos.where({qkey, field}).delete();
+  await db.photos.add({qkey, field, data, created_at: Date.now()});
+}
+async function loadPhoto(qkey, field){
+  const db = await getDB();
+  const r = await db.photos.where({qkey, field}).first();
+  return r ? r.data : null;
+}
+async function removePhotos(qkey){
+  const db = await getDB();
+  await db.photos.where({qkey}).delete();
 }
 
-async function loadPhoto(queueKey, field){
-  const db = await getDB();
-  const row = await db.photos.where({queue_key:queueKey, field}).first();
-  return row ? row.data : null;
-}
-
-async function removePhotos(queueKey){
-  const db = await getDB();
-  await db.photos.where({queue_key:queueKey}).delete();
-}
-
-/* ================================================================
-   QUEUE
-================================================================ */
-async function addToQueue(tableName, method, payload, editId){
+/* ── Queue ── */
+async function enqueue(table, method, payload, editId){
   const db = await getDB();
   const id = await db.queue.add({
-    table_name: tableName,
-    method,
+    table, method,
     payload: JSON.stringify(payload),
     edit_id: editId ? String(editId) : null,
-    synced: 0,
-    retries: 0,
+    synced: 0, retries: 0,
     created_at: Date.now()
   });
-  console.log('[Queue] Added:', tableName, 'id:', id);
   refreshBadge();
   return id;
 }
-
 async function getPending(){
   const db = await getDB();
-  return db.queue.where({synced:0}).toArray();
+  return db.queue.where({synced:0}).sortBy('created_at');
 }
-
 async function countPending(){
   const db = await getDB();
   return db.queue.where({synced:0}).count();
 }
-
-async function markDone(id){
+async function setDone(id){
   const db = await getDB();
   await db.queue.update(id, {synced:1});
 }
-
 async function clearDone(){
   const db = await getDB();
   await db.queue.where({synced:1}).delete();
 }
 
-/* ================================================================
-   SMART SAVE — core function
-   All modules call this. Never throws — always saves somewhere.
-================================================================ */
-async function smartSave(tableName, method, payload, editId=null){
+/* ── Photo upload helper ── */
+async function uploadPhoto(table, field, base64){
+  const name = `${table}_${field}_${Date.now()}`;
+  return await sb.uploadPhoto('audit-photos', name, base64);
+}
 
-  /* ── ONLINE: upload photos + save to Supabase ── */
+/* ── Timeout wrapper ── */
+function withTimeout(p, ms){
+  return Promise.race([p, new Promise((_,r)=>setTimeout(()=>r(new Error('timeout '+ms+'ms')),ms))]);
+}
+
+/* ================================================================
+   SMART SAVE
+================================================================ */
+async function smartSave(table, method, payload, editId=null){
+
+  /* Online path */
   if(navigator.onLine){
     try{
-      // Step 1: upload any base64 photos
-      const cleanPayload = await uploadPayloadPhotos(payload, tableName);
+      /* Upload photos first (15s total timeout) */
+      const clean = {...payload};
+      const photoUploads = [];
+      for(const f of Object.keys(clean)){
+        const v = clean[f];
+        if(v && typeof v==='string' && v.startsWith('data:')){
+          photoUploads.push(
+            uploadPhoto(table, f, v)
+              .then(url => { clean[f] = url; })
+              .catch(() => { clean[f] = null; }) // don't block save on photo fail
+          );
+        }
+      }
+      if(photoUploads.length) await withTimeout(Promise.all(photoUploads), 15000);
 
-      // Step 2: save record with 8s timeout
+      /* Save record (8s timeout) */
       const result = await withTimeout(
-        method === 'insert'
-          ? sb.insert(tableName, cleanPayload)
-          : sb.update(tableName, editId, cleanPayload),
+        method==='insert' ? sb.insert(table, clean) : sb.update(table, editId, clean),
         8000
       );
-      console.log('[Save] ✅ Online save OK:', tableName);
+      console.log('[SmartSave] ✅ Saved online:', table);
       return result;
 
-    }catch(err){
-      console.warn('[Save] Online failed:', err.message, '→ queuing offline');
-      // Fall through to offline queue
+    }catch(e){
+      console.warn('[SmartSave] Online failed:', e.message, '→ queuing');
+      /* Fall through to queue */
     }
   }
 
-  /* ── OFFLINE: store photos + queue record ── */
-  const queueKey = 'q' + Date.now() + Math.random().toString(36).slice(2,6);
-  const offlinePayload = {...payload};
-
-  for(const field of Object.keys(offlinePayload)){
-    const val = offlinePayload[field];
-    if(val && typeof val === 'string' && val.startsWith('data:')){
-      await storePhoto(queueKey, field, val);
-      offlinePayload[field] = `__IMG__:${queueKey}:${field}`;
-      console.log('[Queue] Photo stored:', field);
+  /* Offline path — store photos in IndexedDB */
+  try{
+    const qkey = 'q'+Date.now()+Math.random().toString(36).slice(2,6);
+    const stored = {...payload};
+    for(const f of Object.keys(stored)){
+      const v = stored[f];
+      if(v && typeof v==='string' && v.startsWith('data:')){
+        try{
+          await storePhoto(qkey, f, v);
+          stored[f] = `__IMG__:${qkey}:${f}`;
+        }catch(e){
+          stored[f] = null;
+        }
+      }
     }
+    stored.__qkey = qkey;
+    await enqueue(table, method, stored, editId);
+    console.log('[SmartSave] 📴 Queued:', table);
+    refreshBadge();
+    return {offline: true};
+  }catch(e){
+    console.error('[SmartSave] Queue failed:', e.message);
+    return {offline: true}; // never throw
   }
-  offlinePayload.__qkey = queueKey;
-
-  await addToQueue(tableName, method, offlinePayload, editId);
-  refreshBadge();
-  console.log('[Save] 📴 Queued offline:', tableName);
-  return { offline: true };
-}
-
-/* ── Upload base64 photos in payload ── */
-async function uploadPayloadPhotos(payload, tableName){
-  const out = {...payload};
-  const uploads = [];
-  const failures = [];
-
-  for(const field of Object.keys(out)){
-    const val = out[field];
-    if(val && typeof val === 'string' && val.startsWith('data:')){
-      uploads.push(
-        sb.uploadPhoto('audit-photos', `${tableName}_${field}_${Date.now()}`, val)
-          .then(url => {
-            if(!url) failures.push(field);
-            else out[field] = url;
-          })
-          .catch(e => {
-            console.warn('[Photo] Upload failed:', field, e.message);
-            failures.push(field);
-          })
-      );
-    }
-  }
-
-  if(uploads.length > 0){
-    await Promise.allSettled(uploads);
-  }
-  if(failures.length){
-    throw new Error('photo upload failed: ' + failures.join(','));
-  }
-  return out;
-}
-
-/* ── Promise with timeout ── */
-function withTimeout(promise, ms){
-  return Promise.race([
-    promise,
-    new Promise((_,rej) => setTimeout(() => rej(new Error('timeout')), ms))
-  ]);
 }
 
 /* ================================================================
-   SYNC ENGINE
+   SYNC
 ================================================================ */
 let _syncing = false;
 
 async function syncNow(){
-  if(_syncing) return;
-  if(!navigator.onLine){ console.log('[Sync] Offline, skip'); return; }
+  if(_syncing){ console.log('[Sync] Already running'); return; }
+  if(!navigator.onLine){ console.log('[Sync] No network'); return; }
 
   const pending = await getPending();
-  if(!pending.length){ console.log('[Sync] Nothing pending'); return; }
+  if(!pending.length){ return; }
 
   _syncing = true;
-  console.log('[Sync] Starting:', pending.length, 'records');
+  console.log('[Sync] Starting:', pending.length, 'pending');
   refreshBadge();
 
   let ok=0, fail=0;
 
   for(const item of pending){
     try{
-      let payload = JSON.parse(item.payload);
-      const queueKey = payload.__qkey;
-      delete payload.__qkey;
+      let p = JSON.parse(item.payload);
+      const qkey = p.__qkey;
+      delete p.__qkey;
 
-      // Restore photos from IndexedDB then upload
-      for(const field of Object.keys(payload)){
-        const val = payload[field];
-        if(typeof val !== 'string') continue;
-
-        if(val.startsWith('__IMG__:')){
-          const [,rKey,rField] = val.split(':');
-          const photoData = await loadPhoto(rKey, rField);
-          if(photoData){
+      /* Restore photos */
+      for(const f of Object.keys(p)){
+        const v = p[f];
+        if(typeof v!=='string') continue;
+        if(v.startsWith('__IMG__:')){
+          const [,rKey,rField] = v.split(':');
+          const data = await loadPhoto(rKey, rField);
+          if(data){
             try{
-              payload[field] = await sb.uploadPhoto(
-                'audit-photos',
-                `${item.table_name}_${rField}_${Date.now()}`,
-                photoData
-              );
-            }catch(e){
-              console.warn('[Sync] Photo upload fail:', e.message);
-              payload[field] = null;
-            }
-          } else {
-            payload[field] = null;
-          }
-        } else if(val.startsWith('data:')){
-          try{
-            payload[field] = await sb.uploadPhoto(
-              'audit-photos',
-              `${item.table_name}_${field}_${Date.now()}`,
-              val
-            );
-          }catch(e){ payload[field] = null; }
+              p[f] = await uploadPhoto(item.table, rField, data);
+              await removePhotos(rKey);
+            }catch(e){ p[f]=null; }
+          } else { p[f]=null; }
+        } else if(v.startsWith('data:')){
+          try{ p[f] = await uploadPhoto(item.table, f, v); }
+          catch(e){ p[f]=null; }
         }
       }
 
-      // Save to Supabase
-      if(item.method === 'insert') await sb.insert(item.table_name, payload);
-      if(item.method === 'update') await sb.update(item.table_name, item.edit_id, payload);
+      /* Save */
+      if(item.method==='insert') await sb.insert(item.table, p);
+      else await sb.update(item.table, item.edit_id, p);
 
-      if(queueKey) await removePhotos(queueKey);
-      await markDone(item.id);
+      await setDone(item.id);
       ok++;
-      console.log('[Sync] ✅', item.table_name, item.id);
+      console.log('[Sync] ✅ Done:', item.table, item.id);
 
     }catch(e){
       fail++;
-      const retries = (item.retries||0) + 1;
-      console.error('[Sync] ❌', item.id, e.message, 'retries:', retries);
+      const retries = (item.retries||0)+1;
+      console.error('[Sync] ❌', item.id, item.table, e.message, 'try:', retries);
       const db = await getDB();
-      if(retries >= 10){
-        // Give up after 10 retries — mark done to prevent blocking
-        await markDone(item.id);
-        console.warn('[Sync] Gave up on record', item.id);
+      if(retries >= 5){
+        await setDone(item.id); // give up
+        console.warn('[Sync] Gave up:', item.id);
       } else {
         await db.queue.update(item.id, {retries});
       }
@@ -286,150 +229,139 @@ async function syncNow(){
   _syncing = false;
   refreshBadge();
 
-  if(ok > 0){
-    toast('✓ Synced ' + ok + ' record' + (ok>1?'s':''));
-    setTimeout(()=>{ if(typeof loadRecords==='function') loadRecords(); }, 600);
-    setTimeout(()=>{ if(typeof loadAll==='function') loadAll(); }, 600);
+  if(ok>0){
+    showToast('✓ Synced '+ok+' record'+(ok>1?'s':''));
+    setTimeout(()=>{ if(typeof loadRecords==='function') loadRecords(); }, 500);
+    setTimeout(()=>{ if(typeof loadAll==='function') loadAll(); }, 500);
   }
-  if(fail > 0) toast('⚠ ' + fail + ' record' + (fail>1?'s':'')+' still pending');
+  if(fail>0) showToast('⚠ '+fail+' record'+(fail>1?'s':'')+' failed to sync');
 }
 
 /* ================================================================
-   OFFLINE BADGE
+   BADGE
 ================================================================ */
 async function refreshBadge(){
-  const n = await countPending();
-  let badge = document.getElementById('_offline_badge');
-
-  if(n > 0){
-    if(!badge){
-      badge = document.createElement('div');
-      badge.id = '_offline_badge';
-      badge.onclick = () => { if(navigator.onLine) syncNow(); };
-      badge.style.cssText = [
-        'position:fixed', 'top:0', 'left:0', 'right:0', 'margin:0 auto',
-        'max-width:480px', 'width:fit-content',
-        'padding:5px 18px', 'border-radius:0 0 12px 12px',
-        'font-size:11px', 'font-weight:700', 'letter-spacing:.3px',
-        'z-index:99999', 'cursor:pointer', 'text-align:center',
-        'box-shadow:0 2px 10px rgba(0,0,0,.25)', 'color:#fff'
-      ].join(';');
-      document.body.appendChild(badge);
-    }
-    if(navigator.onLine){
-      badge.style.background = '#2d7a2d';
-      badge.textContent = '🔄 ' + n + ' pending — tap to sync';
+  try{
+    const n = await countPending();
+    let b = document.getElementById('_offl_badge');
+    if(n>0){
+      if(!b){
+        b = document.createElement('div');
+        b.id = '_offl_badge';
+        b.onclick = ()=>{ if(navigator.onLine) syncNow(); };
+        b.style.cssText = 'position:fixed;top:0;left:0;right:0;margin:0 auto;width:fit-content;max-width:480px;padding:5px 18px;border-radius:0 0 12px 12px;font-size:11px;font-weight:700;z-index:99999;cursor:pointer;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.3);text-align:center';
+        document.body.appendChild(b);
+      }
+      b.style.background = navigator.onLine ? '#2d7a2d' : '#f59e0b';
+      b.textContent = navigator.onLine
+        ? '🔄 '+n+' pending — tap to sync now'
+        : '📴 Offline — '+n+' record'+(n>1?'s':'')+' saved locally';
     } else {
-      badge.style.background = '#f59e0b';
-      badge.textContent = '📴 Offline — ' + n + ' record'+(n>1?'s':'')+' saved';
+      if(b) b.remove();
     }
-  } else {
-    if(badge) badge.remove();
-  }
+  }catch(e){}
 }
-
 function showOfflineBadge(){ refreshBadge(); }
 
 /* ================================================================
-   TOAST HELPER
+   TOAST
 ================================================================ */
-function toast(msg){
-  if(typeof showToast === 'function') showToast(msg);
+function showToast(msg){
+  // Use page's showToast if available
+  if(window._pageShowToast) { window._pageShowToast(msg); return; }
+  const t = document.getElementById('toast');
+  if(t){ t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2800); }
+}
+
+/* ================================================================
+   CAMERA HELPER
+================================================================ */
+function openCamera(inputId){
+  const inp = document.getElementById(inputId);
+  if(!inp) return;
+  inp.setAttribute('capture','environment');
+  inp.accept='image/*';
+  inp.click();
+  setTimeout(()=>inp.removeAttribute('capture'), 500);
 }
 
 /* ================================================================
    PHOTO COMPRESSION
 ================================================================ */
 function compressPhoto(file, maxPx=1200, quality=0.72){
-  return new Promise(resolve => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const img = new Image();
-      img.onload = () => {
-        let w=img.width, h=img.height;
-        if(w > maxPx){ h = Math.round(h*maxPx/w); w=maxPx; }
-        const c = document.createElement('canvas');
-        c.width=w; c.height=h;
+  return new Promise(resolve=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        let w=img.width,h=img.height;
+        if(w>maxPx){h=Math.round(h*maxPx/w);w=maxPx;}
+        const c=document.createElement('canvas');
+        c.width=w;c.height=h;
         c.getContext('2d').drawImage(img,0,0,w,h);
-        const out = c.toDataURL('image/jpeg', quality);
-        console.log('[Photo] Compressed', img.width+'x'+img.height, '→', w+'x'+h,
-          Math.round(out.length*0.75/1024)+'KB');
-        resolve(out);
+        resolve(c.toDataURL('image/jpeg',quality));
       };
-      img.onerror = () => resolve(e.target.result);
-      img.src = e.target.result;
+      img.onerror=()=>resolve(e.target.result);
+      img.src=e.target.result;
     };
-    reader.onerror = () => resolve(null);
-    reader.readAsDataURL(file);
+    r.onerror=()=>resolve(null);
+    r.readAsDataURL(file);
   });
 }
 
 /* ================================================================
-   AUTO SYNC — every 30 seconds
+   AUTO SYNC — every 30s
 ================================================================ */
-let _syncTimer = null;
-
+let _timer=null;
 function startSync(){
-  stopSync();
-  syncNow(); // immediate
-  _syncTimer = setInterval(() => {
-    if(navigator.onLine) syncNow();
-  }, 30000); // every 30s
-  console.log('[AutoSync] Started (30s interval)');
+  if(_timer) clearInterval(_timer);
+  syncNow();
+  _timer=setInterval(()=>{ if(navigator.onLine) syncNow(); },30000);
+  console.log('[AutoSync] Started');
 }
-
 function stopSync(){
-  if(_syncTimer){ clearInterval(_syncTimer); _syncTimer=null; }
+  if(_timer){ clearInterval(_timer); _timer=null; }
 }
 
 /* ================================================================
    INIT
 ================================================================ */
 async function initOffline(){
-  // Init DB first
-  try { await getDB(); } catch(e){ console.error('[DB] Init failed:', e); }
+  try{ await getDB(); }catch(e){ console.error('[DB] Failed:', e); }
 
-  // Service Worker
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./sw.js')
-      .then(reg => {
-        console.log('[SW] Registered:', reg.scope);
+    navigator.serviceWorker.register('./audit_sw.js')
+      .then(reg=>{
+        reg.update();
         if(reg.waiting) reg.waiting.postMessage('skipWaiting');
-        reg.addEventListener('updatefound', () => {
-          const sw = reg.installing;
-          sw.addEventListener('statechange', () => {
-            if(sw.state === 'installed' && navigator.serviceWorker.controller)
+        reg.addEventListener('updatefound',()=>{
+          const sw=reg.installing;
+          sw.addEventListener('statechange',()=>{
+            if(sw.state==='installed'&&navigator.serviceWorker.controller)
               sw.postMessage('skipWaiting');
           });
         });
-      })
-      .catch(e => console.warn('[SW]', e));
+      }).catch(e=>console.warn('[SW]',e));
   }
 
-  // Initial badge
   refreshBadge();
 
-  // Network events
-  window.addEventListener('online', () => {
+  window.addEventListener('online',()=>{
     console.log('[Net] Online');
-    toast('🔄 Back online — syncing...');
+    showToast('🔄 Back online — syncing...');
     refreshBadge();
     startSync();
   });
-
-  window.addEventListener('offline', () => {
+  window.addEventListener('offline',()=>{
     console.log('[Net] Offline');
-    toast('📴 Offline — data saved to phone');
+    showToast('📴 Offline — records saved to phone');
     stopSync();
     refreshBadge();
   });
-
-  // Sync when tab becomes visible again
-  document.addEventListener('visibilitychange', () => {
+  document.addEventListener('visibilitychange',()=>{
     if(!document.hidden && navigator.onLine) syncNow();
   });
 
-  // Start auto sync if online
   if(navigator.onLine) startSync();
 }
 
