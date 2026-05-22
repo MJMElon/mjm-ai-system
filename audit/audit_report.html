@@ -3,8 +3,6 @@
 <head>
 <meta charset="UTF-8"/>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
-<meta http-equiv="Pragma" content="no-cache"/>
-<meta http-equiv="Expires" content="0"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
 <meta name="theme-color" content="#1a4d1a"/>
 <link rel="manifest" href="audit_manifest.json"/>
@@ -15,14 +13,14 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --g900:#0d2b0d;--g800:#1a4d1a;--g700:#236023;--g600:#2d7a2d;
-  --g400:#5aab5a;--g300:#81c784;--g200:#b5dfb5;--g100:#e0f2e0;--g50:#f2faf2;
+  --g900:#0d2b0d;--g800:#1a4d1a;--g700:#236023;--g600:#2d7a2d;--g400:#5aab5a;
+  --g200:#b5dfb5;--g100:#e0f2e0;--g50:#f2faf2;
   --white:#fff;--surface:#f4f6f4;--border:#dde8dd;--border2:#c4d8c4;
   --text1:#182018;--text2:#3d5c3d;--text3:#6b8a6b;--text4:#9db09d;
-  --r-sm:6px;--r-md:10px;--r-lg:16px;
+  --r-md:10px;--r-lg:16px;
 }
-html,body{height:100%;font-family:'DM Sans',sans-serif;font-size:16px;background:var(--surface);color:var(--text1);-webkit-font-smoothing:antialiased}
-#app{max-width:480px;margin:0 auto;min-height:100vh;background:var(--surface)}
+html,body{height:100%;font-family:'DM Sans',sans-serif;font-size:15px;background:var(--surface);color:var(--text1);-webkit-font-smoothing:antialiased}
+#app{max-width:520px;margin:0 auto;min-height:100vh;background:var(--surface)}
 
 /* TOP BAR */
 .top-bar{position:sticky;top:0;z-index:200;height:56px;background:var(--g800);display:flex;align-items:center;padding:0 14px;gap:10px;box-shadow:0 2px 10px rgba(0,0,0,.2)}
@@ -35,7 +33,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;font-size:16px;background
 .top-bar-btn{width:36px;height:36px;border-radius:8px;background:transparent;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .top-bar-btn svg{width:18px;height:18px;stroke:rgba(255,255,255,.85);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 
-/* FILTER CARD */
+/* FILTER */
 .filter-card{background:var(--white);border-bottom:1px solid var(--border);padding:16px}
 .filter-row{display:flex;gap:10px;margin-bottom:12px;align-items:flex-end}
 .filter-row:last-child{margin-bottom:0}
@@ -45,94 +43,81 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;font-size:16px;background
 .select-wrap::after{content:'';position:absolute;right:10px;top:50%;transform:translateY(-50%);border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid var(--text3);pointer-events:none}
 select.input{width:100%;height:40px;padding:0 30px 0 12px;font-size:13px;font-family:'DM Sans',sans-serif;border:1px solid var(--border2);border-radius:var(--r-md);background:var(--surface);color:var(--text1);outline:none;-webkit-appearance:none;appearance:none}
 select.input:focus{border-color:var(--g400);background:var(--white)}
-.module-checks{display:flex;flex-wrap:wrap;gap:8px}
-.mod-check{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;background:var(--surface);border:1px solid var(--border2);padding:6px 12px;border-radius:var(--r-full,20px);-webkit-tap-highlight-color:transparent}
-.mod-check input{display:none}
+.mod-checks{display:flex;flex-wrap:wrap;gap:8px}
+.mod-check{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;background:var(--surface);border:1px solid var(--border2);padding:6px 12px;border-radius:20px;-webkit-tap-highlight-color:transparent;user-select:none}
 .mod-check.checked{background:var(--g800);color:#fff;border-color:var(--g800)}
 .btn-generate{width:100%;height:44px;background:var(--g800);color:#fff;font-size:14px;font-weight:700;font-family:'DM Sans',sans-serif;border:none;border-radius:var(--r-md);cursor:pointer;margin-top:14px}
-.btn-generate:active{background:var(--g700)}
 
-/* REPORT OUTPUT */
-.report-wrap{padding:14px 12px 80px}
+/* REPORT */
+.report-wrap{padding:14px 12px 100px}
 
-/* PRINT HEADER */
+/* HEADER */
 .report-header{background:var(--white);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px;margin-bottom:12px;text-align:center}
-.report-logo{font-size:22px;font-weight:800;color:var(--g800);letter-spacing:-.5px}
+.report-logo{font-size:22px;font-weight:800;color:var(--g800)}
 .report-logo span{color:var(--g400)}
 .report-company{font-size:11px;color:var(--text3);margin-top:2px;text-transform:uppercase;letter-spacing:.6px}
-.report-title{font-size:16px;font-weight:700;color:var(--text1);margin-top:12px}
+.report-title{font-size:16px;font-weight:700;color:var(--text1);margin-top:10px}
 .report-period{font-size:13px;color:var(--text3);margin-top:4px}
 .report-generated{font-size:11px;color:var(--text4);margin-top:6px}
 
-/* SUMMARY CARDS */
-.summary-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
-.sum-card{background:var(--white);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 10px;text-align:center}
-.sum-val{font-size:22px;font-weight:700;color:var(--g800);line-height:1}
+/* SUMMARY */
+.summary-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.sum-card{background:var(--white);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;text-align:center;flex:1;min-width:80px}
+.sum-val{font-size:24px;font-weight:700;color:var(--g800);line-height:1}
 .sum-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-top:4px}
 
-/* NURSERY SECTION */
-.nursery-section{background:var(--white);border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:12px;overflow:hidden}
-.nursery-section-head{background:var(--g800);padding:12px 16px;display:flex;align-items:center;justify-content:space-between}
-.nursery-section-title{font-size:14px;font-weight:700;color:#fff}
-.nursery-section-sub{font-size:11px;color:rgba(255,255,255,.6)}
-.nursery-section-count{font-size:12px;font-weight:700;background:rgba(255,255,255,.15);color:#fff;padding:3px 10px;border-radius:20px}
+/* MODULE SECTION */
+.mod-section{background:var(--white);border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:12px;overflow:hidden}
+.mod-head{padding:12px 16px;display:flex;align-items:center;justify-content:space-between}
+.mod-head-pn{background:var(--g800)}
+.mod-head-mn{background:#1565c0}
+.mod-head-title{font-size:14px;font-weight:700;color:#fff}
+.mod-head-sub{font-size:11px;color:rgba(255,255,255,.65);margin-top:2px}
+.mod-head-badge{font-size:11px;font-weight:700;background:rgba(255,255,255,.2);color:#fff;padding:3px 10px;border-radius:20px;white-space:nowrap}
 
 /* TABLE */
-.report-table{width:100%;border-collapse:collapse}
-.report-table th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);padding:10px 14px;text-align:left;border-bottom:2px solid var(--border);background:var(--g50)}
-.report-table th:not(:first-child){text-align:center}
-.report-table td{font-size:12px;color:var(--text1);padding:10px 14px;border-bottom:1px solid var(--border)}
-.report-table td:not(:first-child){text-align:center;font-weight:600}
-.report-table tr:last-child td{border-bottom:none}
-.report-table tr:hover td{background:var(--g50)}
-.total-row td{background:var(--g50);font-weight:700;color:var(--g800);border-top:2px solid var(--border)}
-.zero{color:var(--text4)}
-.has-data{color:var(--g700)}
+.rec-table{width:100%;border-collapse:collapse;font-size:12px}
+.rec-table th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);padding:8px 12px;text-align:left;border-bottom:2px solid var(--border);background:var(--g50);white-space:nowrap}
+.rec-table td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text1);vertical-align:middle}
+.rec-table tr:last-child td{border-bottom:none}
+.rec-table tr:hover td{background:var(--g50)}
+.rec-table .total-row td{background:var(--g50);font-weight:700;color:var(--g800);border-top:2px solid var(--border2)}
+.badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+.badge-plot{background:#e0f2e0;color:#1a4d1a}
+.badge-height{background:#e3f2fd;color:#1565c0}
+.badge-papan{background:#fff3e0;color:#e65100}
+.badge-maint{background:#fce4ec;color:#880e4f}
+.no-data{text-align:center;padding:20px;color:var(--text4);font-size:13px}
 
-/* MODULE BADGE */
-.mod-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--g100);color:var(--g700);margin-right:4px;margin-bottom:2px}
-
-/* EMPTY */
-.empty-report{text-align:center;padding:3rem 1rem;color:var(--text4)}
-.empty-report svg{width:48px;height:48px;stroke:var(--g200);fill:none;stroke-width:1.2;margin:0 auto 12px;display:block}
-
-/* PRINT BUTTON */
-.print-bar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;padding:12px;background:var(--white);border-top:1px solid var(--border);display:flex;gap:8px;z-index:100}
-.btn-print{flex:1;height:44px;background:var(--g800);color:#fff;font-size:14px;font-weight:700;font-family:'DM Sans',sans-serif;border:none;border-radius:var(--r-md);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+/* PRINT BAR */
+.print-bar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;padding:12px;background:var(--white);border-top:1px solid var(--border);z-index:100}
+.btn-print{width:100%;height:44px;background:var(--g800);color:#fff;font-size:14px;font-weight:700;font-family:'DM Sans',sans-serif;border:none;border-radius:var(--r-md);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
 .btn-print svg{width:18px;height:18px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.btn-print-secondary{flex:0 0 44px;height:44px;background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);cursor:pointer;display:flex;align-items:center;justify-content:center}
-.btn-print-secondary svg{width:18px;height:18px;stroke:var(--text2);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.print-bar.hidden{display:none}
 
 /* TOAST */
 .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(8px);background:var(--g900);color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;white-space:nowrap;opacity:0;pointer-events:none;z-index:9999;transition:all .28s ease}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-
-/* LOADING */
 #loading-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9998;display:flex;align-items:center;justify-content:center}
-#loading-overlay.hidden{display:none !important}
+#loading-overlay.hidden{display:none!important}
 .loading-box{background:#fff;border-radius:16px;padding:24px 32px;display:flex;flex-direction:column;align-items:center;gap:12px}
 .loading-spinner{width:32px;height:32px;border:3px solid var(--g100);border-top-color:var(--g800);border-radius:50%;animation:spin .7s linear infinite}
 .loading-text{font-size:13px;font-weight:600;color:var(--text2)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .hidden{display:none!important}
+.empty-report{text-align:center;padding:3rem 1rem;color:var(--text4)}
+.empty-report svg{width:48px;height:48px;stroke:var(--g200);fill:none;stroke-width:1.2;margin:0 auto 12px;display:block}
 
-/* ── PRINT STYLES ── */
-@media print {
-  @page { margin: 15mm; size: A4; }
-  body { background: #fff; font-size: 11pt; }
-  #app { max-width: 100%; }
-  .top-bar, .filter-card, .print-bar, .toast, #loading-overlay { display: none !important; }
-  .report-wrap { padding: 0; }
-  .nursery-section { break-inside: avoid; page-break-inside: avoid; }
-  .report-header { border: 2px solid #1a4d1a; margin-bottom: 16pt; }
-  .report-logo { font-size: 20pt; }
-  .report-title { font-size: 14pt; }
-  .nursery-section-head { background: #1a4d1a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .report-table th { background: #f2faf2 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .total-row td { background: #f2faf2 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .summary-row { break-inside: avoid; }
-  a { text-decoration: none; color: inherit; }
+/* PRINT */
+@media print{
+  @page{margin:12mm;size:A4}
+  body{background:#fff;font-size:10pt}
+  #app{max-width:100%}
+  .top-bar,.filter-card,.print-bar,.toast,#loading-overlay{display:none!important}
+  .report-wrap{padding:0}
+  .mod-section{break-inside:avoid;page-break-inside:avoid;border:1px solid #ccc}
+  .mod-head-pn{background:#1a4d1a!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .mod-head-mn{background:#1565c0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .rec-table th{background:#f2faf2!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 </style>
 </head>
@@ -141,12 +126,12 @@ select.input:focus{border-color:var(--g400);background:var(--white)}
 
   <nav class="top-bar">
     <a href="audit_home.html" class="top-bar-back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></a>
-    <div class="top-bar-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></div>
+    <div class="top-bar-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
     <div style="flex:1">
       <div class="top-bar-title">Monthly Report</div>
       <div class="top-bar-sub" id="nav-today"></div>
     </div>
-    <button class="top-bar-btn" onclick="generateReport()" title="Refresh">
+    <button class="top-bar-btn" onclick="generateReport()">
       <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
     </button>
   </nav>
@@ -187,20 +172,20 @@ select.input:focus{border-color:var(--g400);background:var(--white)}
       </div>
     </div>
     <div class="filter-label" style="margin-bottom:8px">Modules to Include</div>
-    <div class="module-checks">
-      <label class="mod-check checked" id="mc-plot" onclick="toggleMod(this,'plot')"><input type="checkbox" checked/>📋 Plot Condition</label>
-      <label class="mod-check checked" id="mc-height" onclick="toggleMod(this,'height')"><input type="checkbox" checked/>📏 Seedling Height</label>
-      <label class="mod-check checked" id="mc-papan" onclick="toggleMod(this,'papan')"><input type="checkbox" checked/>🪧 Papan Tanda</label>
-      <label class="mod-check checked" id="mc-maint" onclick="toggleMod(this,'maint')"><input type="checkbox" checked/>🔧 Maintenance</label>
+    <div class="mod-checks">
+      <label class="mod-check checked" onclick="toggleMod(this,'plot')">📋 Plot Condition</label>
+      <label class="mod-check checked" onclick="toggleMod(this,'height')">📏 Seedling Height</label>
+      <label class="mod-check checked" onclick="toggleMod(this,'papan')">🪧 Papan Tanda</label>
+      <label class="mod-check checked" onclick="toggleMod(this,'maint')">🔧 Maintenance</label>
     </div>
     <button class="btn-generate" onclick="generateReport()">Generate Report</button>
   </div>
 
-  <!-- REPORT OUTPUT -->
+  <!-- OUTPUT -->
   <div class="report-wrap" id="report-output">
     <div class="empty-report">
       <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      <p>Select month, year and modules<br>then tap <strong>Generate Report</strong></p>
+      <p>Select filters and tap <strong>Generate Report</strong></p>
     </div>
   </div>
 
@@ -214,233 +199,165 @@ select.input:focus{border-color:var(--g400);background:var(--white)}
 
   <div class="toast" id="toast"></div>
   <div id="loading-overlay" class="hidden">
-    <div class="loading-box">
-      <div class="loading-spinner"></div>
-      <span class="loading-text">Generating report...</span>
-    </div>
+    <div class="loading-box"><div class="loading-spinner"></div><span class="loading-text">Generating report...</span></div>
   </div>
 
 </div>
-
 <script src="audit_lang.js"></script>
 <script src="audit_supabase.js"></script>
 <script src="audit_dexie_offline.js"></script>
 <script>
 'use strict';
 
-const MONTHS = ['January','February','March','April','May','June',
-                'July','August','September','October','November','December'];
-const PN_NURSERIES  = ['PN'];
-const MN_NURSERIES  = ['BNN','UNN1','UNN2'];
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const PN_NURSERIES=['PN'];
+const MN_NURSERIES=['BNN','UNN1','UNN2'];
 
-let toastTimer = null;
-function showToast(msg){
-  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
-  clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2800);
-}
-function setLoading(on){
-  document.getElementById('loading-overlay').classList.toggle('hidden',!on);
+let toastTimer=null;
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2800);}
+function setLoading(on){document.getElementById('loading-overlay').classList.toggle('hidden',!on);}
+
+const selectedMods=new Set(['plot','height','papan','maint']);
+function toggleMod(el,mod){
+  if(selectedMods.has(mod)){if(selectedMods.size===1){showToast('⚠ At least one module required');return;}selectedMods.delete(mod);el.classList.remove('checked');}
+  else{selectedMods.add(mod);el.classList.add('checked');}
 }
 
-/* ── Init month/year dropdowns ── */
 function initFilters(){
-  const now = new Date();
-  const mSel = document.getElementById('f-month');
-  const ySel = document.getElementById('f-year');
-  mSel.value = now.getMonth()+1;
-  const curYear = now.getFullYear();
-  for(let y=curYear; y>=curYear-3; y--){
-    const o=document.createElement('option');
-    o.value=y;o.textContent=y;
-    if(y===curYear) o.selected=true;
-    ySel.appendChild(o);
+  const now=new Date();
+  document.getElementById('f-month').value=now.getMonth()+1;
+  const ySel=document.getElementById('f-year');
+  const cy=now.getFullYear();
+  for(let y=cy;y>=cy-3;y--){const o=document.createElement('option');o.value=y;o.textContent=y;if(y===cy)o.selected=true;ySel.appendChild(o);}
+  document.getElementById('nav-today').textContent=now.toLocaleDateString('en-MY',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+}
+
+function fmtDate(iso){
+  if(!iso)return'—';
+  const s=iso.split('T')[0].split('-');
+  return s[2]+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+s[1]-1]+' '+s[0];
+}
+
+function monthRange(month,year){
+  const start=`${year}-${String(month).padStart(2,'0')}-01`;
+  const end=`${year}-${String(month).padStart(2,'0')}-${new Date(year,month,0).getDate()}`;
+  return{start,end};
+}
+
+async function fetchData(month,year){
+  const{start,end}=monthRange(month,year);
+  const df=`date=gte.${start}&date=lte.${end}`;
+  const out={};
+  const tasks=[];
+  if(selectedMods.has('plot'))   tasks.push(sb.select('audit_plot_audits',   `select=audit_id,nursery,plot,batch,pest,tikus,disease,warna_daun,auditor_name,date&${df}`).then(r=>out.plot=r).catch(()=>out.plot=[]));
+  if(selectedMods.has('height')) tasks.push(sb.select('audit_height_records', `select=record_id,nursery,plot,batch,sample_1,sample_2,sample_3,avg_height,auditor_name,date&${df}`).then(r=>out.height=r).catch(()=>out.height=[]));
+  if(selectedMods.has('papan'))  tasks.push(sb.select('audit_papan_audits',   `select=audit_id,nursery,plot,batch_no,presence,info_correct,condition,auditor_name,date&${df}`).then(r=>out.papan=r).catch(()=>out.papan=[]));
+  if(selectedMods.has('maint'))  tasks.push(sb.select('audit_maintenance_audits',`select=audit_id,nursery,plot,task_type,result,auditor_name,date&${df}`).then(r=>out.maint=r).catch(()=>out.maint=[]));
+  await Promise.all(tasks);
+  return out;
+}
+
+function filterByNursery(rows,nurseries){
+  return(rows||[]).filter(r=>nurseries.includes(r.nursery));
+}
+
+/* Build records table for a module */
+function buildModTable(mod, rows){
+  if(!rows||!rows.length) return '<div class="no-data">No records found.</div>';
+  let cols='',head='',body='';
+
+  if(mod==='plot'){
+    head=`<tr><th>#</th><th>Date</th><th>Plot</th><th>Batch</th><th>Pest</th><th>Animal</th><th>Disease</th><th>Leaf</th></tr>`;
+    rows.forEach((r,i)=>{body+=`<tr><td>${i+1}</td><td>${fmtDate(r.date)}</td><td><b>${r.plot}</b></td><td>${r.batch||'—'}</td><td>${r.pest||'—'}</td><td>${r.tikus||'—'}</td><td>${r.disease||'—'}</td><td>${r.warna_daun||'—'}</td></tr>`;});
+    body+=`<tr class="total-row"><td colspan="7">Total: ${rows.length} record${rows.length!==1?'s':''}</td></tr>`;
+  } else if(mod==='height'){
+    head=`<tr><th>#</th><th>Date</th><th>Plot</th><th>Batch</th><th>S1 (cm)</th><th>S2 (cm)</th><th>S3 (cm)</th><th>Avg (cm)</th></tr>`;
+    rows.forEach((r,i)=>{body+=`<tr><td>${i+1}</td><td>${fmtDate(r.date)}</td><td><b>${r.plot}</b></td><td>${r.batch||'—'}</td><td>${r.sample_1||'—'}</td><td>${r.sample_2||'—'}</td><td>${r.sample_3||'—'}</td><td><b>${r.avg_height||'—'}</b></td></tr>`;});
+    body+=`<tr class="total-row"><td colspan="7">Total: ${rows.length} record${rows.length!==1?'s':''}</td></tr>`;
+  } else if(mod==='papan'){
+    head=`<tr><th>#</th><th>Date</th><th>Plot</th><th>Batch</th><th>Presence</th><th>Info</th><th>Height</th></tr>`;
+    rows.forEach((r,i)=>{body+=`<tr><td>${i+1}</td><td>${fmtDate(r.date)}</td><td><b>${r.plot}</b></td><td>${r.batch_no||'—'}</td><td>${r.presence||'—'}</td><td>${r.info_correct||'—'}</td><td>${r.condition||'—'}</td></tr>`;});
+    body+=`<tr class="total-row"><td colspan="7">Total: ${rows.length} record${rows.length!==1?'s':''}</td></tr>`;
+  } else if(mod==='maint'){
+    head=`<tr><th>#</th><th>Date</th><th>Plot</th><th>Task</th><th>Result</th></tr>`;
+    rows.forEach((r,i)=>{body+=`<tr><td>${i+1}</td><td>${fmtDate(r.date)}</td><td><b>${r.plot}</b></td><td>${r.task_type||'—'}</td><td>${r.result||'—'}</td></tr>`;});
+    body+=`<tr class="total-row"><td colspan="5">Total: ${rows.length} record${rows.length!==1?'s':''}</td></tr>`;
   }
-  document.getElementById('nav-today').textContent =
-    now.toLocaleDateString('en-MY',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+  return`<div style="overflow-x:auto"><table class="rec-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
 }
 
-/* ── Module toggles ── */
-const selectedMods = new Set(['plot','height','papan','maint']);
-function toggleMod(el, mod){
-  if(selectedMods.has(mod)){
-    if(selectedMods.size===1){showToast('⚠ At least one module required');return;}
-    selectedMods.delete(mod);el.classList.remove('checked');
-  } else {
-    selectedMods.add(mod);el.classList.add('checked');
-  }
-}
-
-/* ── Date helpers ── */
-function monthRange(month, year){
-  const start = `${year}-${String(month).padStart(2,'0')}-01`;
-  const lastDay = new Date(year, month, 0).getDate();
-  const end = `${year}-${String(month).padStart(2,'0')}-${lastDay}`;
-  return {start, end};
-}
-
-/* ── Fetch data from Supabase ── */
-async function fetchData(month, year){
-  const {start, end} = monthRange(month, year);
-  const dateFilter = `date=gte.${start}&date=lte.${end}`;
-
-  const fetches = {};
-  if(selectedMods.has('plot'))
-    fetches.plot = sb.select('audit_plot_audits', `select=nursery,auditor_name,date&${dateFilter}`).catch(()=>[]);
-  if(selectedMods.has('height'))
-    fetches.height = sb.select('audit_height_records', `select=nursery,auditor_name,date&${dateFilter}`).catch(()=>[]);
-  if(selectedMods.has('papan'))
-    fetches.papan = sb.select('audit_papan_audits', `select=nursery,auditor_name,date&${dateFilter}`).catch(()=>[]);
-  if(selectedMods.has('maint'))
-    fetches.maint = sb.select('audit_maintenance_audits', `select=nursery,auditor_name,date&${dateFilter}`).catch(()=>[]);
-
-  const keys = Object.keys(fetches);
-  const results = await Promise.all(Object.values(fetches));
-  const data = {};
-  keys.forEach((k,i) => data[k] = results[i]);
-  return data;
-}
-
-/* ── Count records per auditor per module per nursery group ── */
-function tally(data, nurseries){
-  // auditor → module → count
-  const counts = {};
-
-  function add(mod, rows){
-    if(!rows) return;
-    rows.forEach(r=>{
-      if(!nurseries.includes(r.nursery)) return;
-      const name = r.auditor_name || r.created_by || 'Unknown';
-      if(!counts[name]) counts[name]={};
-      counts[name][mod] = (counts[name][mod]||0) + 1;
-    });
-  }
-
-  if(data.plot)   add('plot',   data.plot);
-  if(data.height) add('height', data.height);
-  if(data.papan)  add('papan',  data.papan);
-  if(data.maint)  add('maint',  data.maint);
-  return counts;
-}
-
-/* ── Build table HTML ── */
-function buildTable(counts){
-  const auditors = Object.keys(counts);
-  if(!auditors.length) return '<p style="padding:16px;color:var(--text4);font-size:13px;text-align:center">No records found for this period.</p>';
-
-  const mods = [...selectedMods];
-  const modLabels = {plot:'Plot',height:'Height',papan:'Papan',maint:'Maint'};
-
-  // Header
-  let html = `<table class="report-table">
-    <thead><tr>
-      <th>Auditor</th>
-      ${mods.map(m=>`<th>${modLabels[m]}</th>`).join('')}
-      <th>Total</th>
-    </tr></thead><tbody>`;
-
-  // Totals per module
-  const modTotals = {};
-  mods.forEach(m => modTotals[m]=0);
-  let grandTotal = 0;
-
-  auditors.sort().forEach(name=>{
-    let rowTotal=0;
-    const cells = mods.map(m=>{
-      const n = counts[name][m]||0;
-      modTotals[m]+=n;
-      rowTotal+=n;
-      return `<td class="${n?'has-data':'zero'}">${n||'—'}</td>`;
-    }).join('');
-    grandTotal+=rowTotal;
-    html+=`<tr><td style="font-weight:600">${name}</td>${cells}<td style="font-weight:700;color:var(--g800)">${rowTotal}</td></tr>`;
+function buildNurserySection(label, sub, headClass, data, nurseries){
+  const mods=[...selectedMods];
+  const modLabels={plot:'📋 Plot Condition',height:'📏 Seedling Height',papan:'🪧 Papan Tanda',maint:'🔧 Maintenance'};
+  const modBadge={plot:'badge-plot',height:'badge-height',papan:'badge-papan',maint:'badge-maint'};
+  let total=0;
+  let modSections='';
+  mods.forEach(mod=>{
+    const rows=filterByNursery(data[mod],nurseries);
+    total+=rows.length;
+    modSections+=`
+      <div style="border-top:1px solid var(--border)">
+        <div style="padding:10px 14px;background:var(--g50);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:12px;font-weight:700;color:var(--g800)">${modLabels[mod]}</span>
+          <span class="badge ${modBadge[mod]}">${rows.length} records</span>
+        </div>
+        ${buildModTable(mod,rows)}
+      </div>`;
   });
-
-  // Total row
-  const totalCells = mods.map(m=>`<td>${modTotals[m]||'—'}</td>`).join('');
-  html+=`<tr class="total-row"><td>TOTAL</td>${totalCells}<td>${grandTotal}</td></tr>`;
-  html+=`</tbody></table>`;
-  return html;
+  return`
+  <div class="mod-section">
+    <div class="mod-head ${headClass}">
+      <div><div class="mod-head-title">${label}</div><div class="mod-head-sub">${sub}</div></div>
+      <span class="mod-head-badge">${total} total</span>
+    </div>
+    ${modSections}
+  </div>`;
 }
 
-/* ── GENERATE REPORT ── */
 async function generateReport(){
-  const month = parseInt(document.getElementById('f-month').value);
-  const year  = parseInt(document.getElementById('f-year').value);
-  const nurseryFilter = document.getElementById('f-nursery').value;
-  const periodStr = `${MONTHS[month-1]} ${year}`;
-
+  const month=parseInt(document.getElementById('f-month').value);
+  const year=parseInt(document.getElementById('f-year').value);
+  const nurseryFilter=document.getElementById('f-nursery').value;
+  const periodStr=`${MONTHS[month-1]} ${year}`;
   setLoading(true);
   try{
-    const data = await fetchData(month, year);
+    const data=await fetchData(month,year);
+    const showPN=nurseryFilter==='both'||nurseryFilter==='pn';
+    const showMN=nurseryFilter==='both'||nurseryFilter==='mn';
+    const countAll=(d,n)=>[...selectedMods].reduce((s,m)=>s+(filterByNursery(d[m],n).length),0);
+    const pnTotal=showPN?countAll(data,PN_NURSERIES):0;
+    const mnTotal=showMN?countAll(data,MN_NURSERIES):0;
+    const grandTotal=pnTotal+mnTotal;
+    const now=new Date();
+    const nurseryLabel=nurseryFilter==='pn'?'Pre Nursery':nurseryFilter==='mn'?'Main Nursery':'All Nurseries';
 
-    const showPN = nurseryFilter === 'both' || nurseryFilter === 'pn';
-    const showMN = nurseryFilter === 'both' || nurseryFilter === 'mn';
+    // Count per module across selected nurseries
+    const selectedNurseries = [...(showPN?PN_NURSERIES:[]), ...(showMN?MN_NURSERIES:[])];
+    const plotTotal   = filterByNursery(data.plot||[],   selectedNurseries).length;
+    const heightTotal = filterByNursery(data.height||[], selectedNurseries).length;
+    const papanTotal  = filterByNursery(data.papan||[],  selectedNurseries).length;
+    const maintTotal  = filterByNursery(data.maint||[],  selectedNurseries).length;
 
-    const pnCounts = showPN ? tally(data, PN_NURSERIES) : {};
-    const mnCounts = showMN ? tally(data, MN_NURSERIES) : {};
+    let summaryCards=`<div class="sum-card"><div class="sum-val">${grandTotal}</div><div class="sum-label">Total Audits</div></div>`;
+    if(selectedMods.has('plot'))   summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:#1a4d1a">${plotTotal}</div><div class="sum-label">Plot Condition</div></div>`;
+    if(selectedMods.has('height')) summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:#1565c0">${heightTotal}</div><div class="sum-label">Seedling Height</div></div>`;
+    if(selectedMods.has('papan'))  summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:#e65100">${papanTotal}</div><div class="sum-label">Papan Tanda</div></div>`;
+    if(selectedMods.has('maint'))  summaryCards+=`<div class="sum-card"><div class="sum-val" style="color:#880e4f">${maintTotal}</div><div class="sum-label">Maintenance</div></div>`;
 
-    const countAll = (counts) => Object.values(counts).reduce((s,v)=>s+Object.values(v).reduce((a,b)=>a+b,0),0);
-    const pnTotal = countAll(pnCounts);
-    const mnTotal = countAll(mnCounts);
-    const grandTotal = pnTotal + mnTotal;
+    let sections='';
+    if(showPN) sections+=buildNurserySection('Pre Nursery (PN)','Plots P01 – P52','mod-head-pn',data,PN_NURSERIES);
+    if(showMN) sections+=buildNurserySection('Main Nursery (BNN + UNN1 + UNN2)','B01–B14 · U01–U18 · N01–N20','mod-head-mn',data,MN_NURSERIES);
 
-    const now = new Date();
-    const mods = [...selectedMods];
-    const modLabels = {plot:'Plot Condition',height:'Seedling Height',papan:'Papan Tanda',maint:'Maintenance'};
-    const modBadges = mods.map(m=>`<span class="mod-badge">${modLabels[m]}</span>`).join('');
-
-    const nurseryLabel = nurseryFilter==='pn' ? 'Pre Nursery' 
-                       : nurseryFilter==='mn' ? 'Main Nursery' 
-                       : 'All Nurseries';
-
-    // Build summary cards
-    let summaryCards = `<div class="sum-card"><div class="sum-val">${grandTotal}</div><div class="sum-label">Total Audits</div></div>`;
-    if(showPN) summaryCards += `<div class="sum-card"><div class="sum-val" style="color:var(--g700)">${pnTotal}</div><div class="sum-label">Pre Nursery</div></div>`;
-    if(showMN) summaryCards += `<div class="sum-card"><div class="sum-val" style="color:#1565c0">${mnTotal}</div><div class="sum-label">Main Nursery</div></div>`;
-
-    // Build nursery sections
-    let nurserySections = '';
-    if(showPN){
-      nurserySections += `
-      <div class="nursery-section">
-        <div class="nursery-section-head">
-          <div>
-            <div class="nursery-section-title">Pre Nursery (PN)</div>
-            <div class="nursery-section-sub">Plots P01 – P52</div>
-          </div>
-          <span class="nursery-section-count">${pnTotal} audits</span>
-        </div>
-        ${buildTable(pnCounts)}
-      </div>`;
-    }
-    if(showMN){
-      nurserySections += `
-      <div class="nursery-section">
-        <div class="nursery-section-head" style="background:#1565c0">
-          <div>
-            <div class="nursery-section-title">Main Nursery (BNN + UNN1 + UNN2)</div>
-            <div class="nursery-section-sub">B01–B14 · U01–U18 · N01–N20</div>
-          </div>
-          <span class="nursery-section-count">${mnTotal} audits</span>
-        </div>
-        ${buildTable(mnCounts)}
-      </div>`;
-    }
-
-    const html = `
+    document.getElementById('report-output').innerHTML=`
       <div class="report-header">
         <div class="report-logo">MJM <span>Nursery</span></div>
         <div class="report-company">Mega Jutamas Sdn Bhd · Miri, Sarawak</div>
         <div class="report-title">Monthly Audit Report</div>
         <div class="report-period">${periodStr} · ${nurseryLabel}</div>
-        <div style="margin-top:10px">${modBadges}</div>
         <div class="report-generated">Generated: ${now.toLocaleString('en-MY',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
       </div>
-      <div class="summary-row">${summaryCards}</div>
-      ${nurserySections}
-    `;
-
-    document.getElementById('report-output').innerHTML = html;
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">${summaryCards}</div>
+      ${sections}`;
     document.getElementById('print-bar').classList.remove('hidden');
     showToast('✓ Report generated');
   }catch(e){
@@ -450,10 +367,7 @@ async function generateReport(){
   setLoading(false);
 }
 
-/* ── Init ── */
-document.addEventListener('DOMContentLoaded', ()=>{
-  initFilters();
-});
+document.addEventListener('DOMContentLoaded',initFilters);
 </script>
 </body>
 </html>
