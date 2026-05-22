@@ -573,13 +573,36 @@
                                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-6 py-4 border-b border-[#f8d7da] bg-[#fff5f5]">
                                     <div>
                                         <h4 class="font-black text-[#a83020] uppercase tracking-widest text-sm">⚠️ Shortage Detected — Notify Supplier</h4>
-                                        <p class="text-[10px] font-bold text-[#a83020] uppercase tracking-widest mt-1">Audited quantity is below the supplier packing list (D/O + FOC). Draft an email with the variance details.</p>
+                                        <p class="text-[10px] font-bold text-[#a83020] uppercase tracking-widest mt-1">Audited quantity is below the supplier packing list (D/O + FOC). Draft an email — or log any other action you took (phone, WhatsApp, in-person, etc.).</p>
                                     </div>
-                                    <button type="button" id="t8-email-btn" onclick="draftSupplierEmail()" class="px-5 py-3 bg-[#a83020] text-white text-[11px] font-black uppercase tracking-widest rounded-lg hover:bg-[#7f1d1d] transition-colors shadow flex items-center gap-2 self-start md:self-auto whitespace-nowrap">
-                                        ✉️ Draft Email to Supplier
-                                    </button>
+                                    <div class="flex flex-col sm:flex-row gap-2 self-start md:self-auto">
+                                        <button type="button" id="t8-email-btn" onclick="draftSupplierEmail()" class="px-5 py-3 bg-[#a83020] text-white text-[11px] font-black uppercase tracking-widest rounded-lg hover:bg-[#7f1d1d] transition-colors shadow flex items-center gap-2 whitespace-nowrap">
+                                            ✉️ Draft Email to Supplier
+                                        </button>
+                                        <button type="button" id="t8-action-btn" onclick="openActionLog()" class="px-5 py-3 bg-white border-2 border-[#a83020] text-[#a83020] text-[11px] font-black uppercase tracking-widest rounded-lg hover:bg-[#fff5f5] transition-colors shadow-sm flex items-center gap-2 whitespace-nowrap">
+                                            📝 Log Other Action
+                                        </button>
+                                    </div>
                                 </div>
+
+                                <!-- Inline form to record an action other than email -->
+                                <div id="t8-action-form" class="hidden px-6 py-4 border-t border-[#f8d7da] bg-[#fffafa]">
+                                    <div class="grid grid-cols-1 md:grid-cols-[180px_1fr_auto_auto] gap-3 items-end">
+                                        <div>
+                                            <label class="label-style">Action Date</label>
+                                            <input type="date" id="t8-action-date" class="input-style">
+                                        </div>
+                                        <div>
+                                            <label class="label-style">What action was taken?</label>
+                                            <input type="text" id="t8-action-note" class="input-style" placeholder="e.g. Called supplier; WhatsApp follow-up; replacement bag delivered">
+                                        </div>
+                                        <button type="button" onclick="saveActionLog()" class="px-5 py-2 bg-[#4a7a2e] text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-[#3a6022] shadow-sm whitespace-nowrap">Save</button>
+                                        <button type="button" onclick="closeActionLog()" class="px-5 py-2 bg-white border border-[#e8dcc8] text-[#8a7a68] text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-[#fdfaf4] shadow-sm whitespace-nowrap">Cancel</button>
+                                    </div>
+                                </div>
+
                                 <div id="t8-email-status" class="hidden px-6 py-3 text-[11px] font-bold text-[#4a7a2e] bg-[#f0f8ec] border-t border-[#c3e6cb]"></div>
+                                <div id="t8-action-status" class="hidden px-6 py-3 text-[11px] font-bold text-[#3a7ab4] bg-[#eef5fb] border-t border-[#cfe1f0]"></div>
                             </div>
 
                             <!-- Save -->
@@ -3542,7 +3565,7 @@
             4: ['1st_Culling'],
             5: ['2nd_Culling'],
             6: ['3rd_Culling'],
-            8: ['Seed_Audit', 'Seed_Audit_Email']
+            8: ['Seed_Audit', 'Seed_Audit_Email', 'Seed_Audit_Note', 'Seed_Audit_Action']
         };
         function withEditMeta(payload) {
             // Stamp the user + timestamp so each saved row carries who/when it was last edited.
@@ -3882,6 +3905,52 @@ Thank you.`;
             }
         }
 
+        // ── Action-taken (non-email) follow-up ─────────────────────────────
+        function _setActionTakenBadge(dateIso, note) {
+            const el = document.getElementById('t8-action-status');
+            if (!dateIso) { el.classList.add('hidden'); el.innerText = ''; return; }
+            el.classList.remove('hidden');
+            const datePart = _formatAuditDate(dateIso);
+            el.innerText = note ? `📝 Action taken on ${datePart} — ${note}` : `📝 Action taken on ${datePart}`;
+        }
+
+        function openActionLog() {
+            document.getElementById('t8-action-form').classList.remove('hidden');
+            const dateInput = document.getElementById('t8-action-date');
+            if (!dateInput.value) dateInput.value = new Date().toISOString().split('T')[0];
+            document.getElementById('t8-action-note').focus();
+        }
+
+        function closeActionLog() {
+            document.getElementById('t8-action-form').classList.add('hidden');
+        }
+
+        async function saveActionLog() {
+            const dateVal = document.getElementById('t8-action-date').value;
+            const noteVal = (document.getElementById('t8-action-note').value || '').trim();
+            if (!dateVal) { showToast('Pick an action date.', 'error'); return; }
+            const batchId = document.getElementById('f-batchno').value.trim();
+            if (!batchId) { showToast('Save Tab 1 first to assign a batch number.', 'error'); return; }
+            const breed = document.getElementById('f-brand').value || null;
+            try {
+                await _supabase.from('shared_inventory_logs')
+                    .delete().eq('batch_name', batchId).eq('transaction_type', 'Seed_Audit_Action');
+                await safeInsertLogs([withEditMeta({
+                    transaction_type: 'Seed_Audit_Action',
+                    batch_name: batchId,
+                    breed_name: breed,
+                    quantity_change: 0,
+                    transaction_date: dateVal,
+                    remark: noteVal || 'Action taken (no note).'
+                })]);
+                _setActionTakenBadge(dateVal, noteVal);
+                closeActionLog();
+                showToast('Action logged.', 'success');
+            } catch (e) {
+                showToast('Could not save action: ' + e.message, 'error');
+            }
+        }
+
         async function saveSeedAudit() {
             const btn = document.getElementById('save-t8-btn');
             const originalText = btn.innerText;
@@ -3950,7 +4019,7 @@ Thank you.`;
             seedAuditRowCount = 0;
 
             try {
-                const [auditRes, emailRes, noteRes] = await Promise.all([
+                const [auditRes, emailRes, noteRes, actionRes] = await Promise.all([
                     _supabase.from('shared_inventory_logs')
                         .select('*').eq('batch_name', batchId).eq('transaction_type', 'Seed_Audit')
                         .order('created_at', { ascending: true }),
@@ -3961,6 +4030,10 @@ Thank you.`;
                     _supabase.from('shared_inventory_logs')
                         .select('remark')
                         .eq('batch_name', batchId).eq('transaction_type', 'Seed_Audit_Note')
+                        .maybeSingle(),
+                    _supabase.from('shared_inventory_logs')
+                        .select('transaction_date, remark')
+                        .eq('batch_name', batchId).eq('transaction_type', 'Seed_Audit_Action')
                         .maybeSingle()
                 ]);
 
@@ -3984,6 +4057,14 @@ Thank you.`;
                     _setEmailSentBadge(e.last_edited_at || e.created_at || e.transaction_date);
                 } else {
                     _setEmailSentBadge(null);
+                }
+
+                if (actionRes && actionRes.data) {
+                    const a = actionRes.data;
+                    const note = (a.remark && a.remark !== 'Action taken (no note).') ? a.remark : '';
+                    _setActionTakenBadge(a.transaction_date, note);
+                } else {
+                    _setActionTakenBadge(null);
                 }
                 calcSeedAudit();
             } catch (e) {
