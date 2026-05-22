@@ -4223,17 +4223,22 @@ Thank you.`;
 
             doc.autoTable({
                 startY: y + 8,
-                head: [['#', 'Bag No / Seal No', 'Seed per Bag (Supplier)', 'Seed Received (Audit)', 'Variance']],
+                head: [['#', 'Bag No / Seal No', 'Seed per Bag\n(Supplier)', 'Seed Received\n(Audit)', 'Variance']],
                 body: bagRows,
                 margin: { left: margin, right: margin },
                 styles: { font: 'times', fontSize: 10, cellPadding: 6, textColor: INK },
                 headStyles: { fillColor: OLIVE, textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
                     0: { halign: 'center', cellWidth: 30 },
-                    1: { cellWidth: 'auto' },
-                    2: { halign: 'right', cellWidth: 110 },
-                    3: { halign: 'right', cellWidth: 110 },
-                    4: { halign: 'right', cellWidth: 70 }
+                    1: { halign: 'left',   cellWidth: 'auto' },
+                    2: { halign: 'center', cellWidth: 95 },
+                    3: { halign: 'center', cellWidth: 95 },
+                    4: { halign: 'center', cellWidth: 95 }
+                },
+                didParseCell: function (data) {
+                    if (data.section === 'head' && data.column.index === 1) {
+                        data.cell.styles.halign = 'left';
+                    }
                 },
                 alternateRowStyles: { fillColor: [251, 250, 246] }
             });
