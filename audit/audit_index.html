@@ -412,7 +412,13 @@
       from { opacity: 0; transform: translateY(16px); }
       to   { opacity: 1; transform: translateY(0); }
     }
-  </style>
+  
+    /* ── DESKTOP RESPONSIVE ── */
+    @media (min-width: 768px) {
+      body { background: #0f2e10; }
+      #app { max-width: 720px; margin: 0 auto; box-shadow: 0 0 40px rgba(0,0,0,.4); }
+    }
+</style>
 </head>
 <body>
 
@@ -640,14 +646,15 @@
       // Fetch profile
       const { data: profile, error: profileError } = await _supa
         .from('profiles')
-        .select('full_name, role, email, phone')
+        .select('full_name, role, audit_role, email, phone')
         .eq('id', userId)
         .single();
 
       const name = profile?.full_name || email.split('@')[0];
       const role = profile?.role || 'Auditor';
 
-      const userObj = { id: userId, name, role, email, phone: profile?.phone || '' };
+      const auditRole = profile?.audit_role || null;
+      const userObj = { id: userId, name, role, audit_role: auditRole, email, phone: profile?.phone || '' };
 
       // Save session + cache credentials for offline login
       localStorage.setItem('mjm_user', JSON.stringify(userObj));

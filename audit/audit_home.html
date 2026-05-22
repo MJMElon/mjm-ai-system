@@ -46,7 +46,8 @@
     .header{background:var(--g900);position:relative;overflow:hidden;padding:0 18px;padding-bottom:40px}
     .header::before{content:'';position:absolute;top:-40px;right:-40px;width:200px;height:200px;border-radius:50%;background:rgba(45,122,45,.18)}
     .header::after{content:'';position:absolute;bottom:-20px;left:-30px;width:140px;height:140px;border-radius:50%;background:rgba(26,77,26,.2)}
-    .header-top{height:60px;display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1}
+    .header-top{height:60px;display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1;max-width:1100px;margin:0 auto;width:100%}
+    .header-welcome{max-width:1100px;margin:0 auto;width:100%}
     .header-logo{display:flex;align-items:center;gap:10px}
     .header-logo-icon{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0}
     .header-logo-icon svg{width:18px;height:18px;stroke:var(--g300);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -176,6 +177,65 @@
     .ios-step-num{width:22px;height:22px;border-radius:50%;background:#1a4d1a;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
     .ios-close-btn{width:100%;height:44px;border-radius:12px;background:#1a4d1a;border:none;color:#fff;font-size:14px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer}
 
+
+    /* ── DESKTOP RESPONSIVE ── */
+    /* Back to Portal — always visible */
+    .back-to-portal {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.2);
+      color: rgba(255,255,255,.85);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 20px;
+      text-decoration: none;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      transition: background .15s;
+      white-space: nowrap;
+      margin-right: 6px;
+    }
+    .back-to-portal:hover { background: rgba(255,255,255,.2); color: #fff; }
+    .back-to-portal svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; flex-shrink:0; }
+
+    @media (min-width: 768px) {
+      body { background: #0a1f0a !important; }
+      #app {
+        max-width: 100% !important;
+        margin: 0 !important;
+        min-height: 100vh;
+        background: var(--surface);
+      }
+      .header {
+        padding: 0 calc((100vw - 1100px)/2 + 32px) !important;
+        padding-right: calc((100vw - 1100px)/2 + 32px) !important;
+        padding-bottom: 40px !important;
+      }
+      .content {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 28px 32px !important;
+      }
+      .audit-cards {
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 16px !important;
+      }
+      .alert-section {
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 10px !important;
+      }
+      .section-head { max-width: 100%; }
+    }
+    @media (min-width: 768px) and (max-width: 1199px) {
+      .audit-cards { grid-template-columns: repeat(2, 1fr) !important; }
+      .alert-section { grid-template-columns: repeat(2, 1fr) !important; }
+      .header { padding: 0 32px !important; padding-bottom: 40px !important; }
+    }
   </style>
 </head>
 <body>
@@ -193,8 +253,14 @@
           <div class="header-logo-sub">Audit System</div>
         </div>
       </div>
-      <button class="lang-toggle-btn" onclick="toggleLang()" style="height:32px;padding:0 12px;border-radius:20px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:12px;font-weight:700;cursor:pointer;margin-right:6px">BM</button>
-      <div class="header-user-btn" onclick="showLogout()">
+      <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+        <a href="../index.html" class="back-to-portal" id="portal-btn">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+          <span data-t="back_portal">Back to Portal</span>
+        </a>
+        <button class="lang-toggle-btn" onclick="toggleLang()" style="height:32px;padding:0 12px;border-radius:20px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:12px;font-weight:700;cursor:pointer">BM</button>
+      </div>
+      <div class="header-user-btn" onclick="showLogout()" style="margin-left:8px">
         <div class="notif-dot" id="notif-dot"></div>
         <div class="user-avatar" id="user-avatar">A</div>
         <span class="user-name" id="user-name">Admin</span>
@@ -210,13 +276,10 @@
   <!-- MAIN CONTENT -->
   <div class="content">
 
-    <!-- ALERT SUMMARY -->
-    <div class="section-head fade-in"><span data-t="home_alert_title">⚠ Alert Summary</span></div>
-    <div class="alert-section fade-in" id="alert-section">
-      <div class="alert-loading">
-        <div class="alert-spinner"></div>
-        Loading latest audit data...
-      </div>
+    <!-- AUDIT TO-DO -->
+    <div class="section-head fade-in">📋 Audit To-Do</div>
+    <div class="todo-list fade-in" id="todo-section">
+      <!-- Populated by JS -->
     </div>
 
     <!-- AUDIT MODULES -->
@@ -589,6 +652,178 @@ setTimeout(()=>{if(!deferredPrompt&&!isIOS()&&!isInStandaloneMode())showInstallB
 loadAlerts();
 requestNotifPermission();
 setInterval(loadAlerts, 5 * 60 * 1000);
+
+/* ── AUDIT SCHEDULE TO-DO ── */
+function loadAuditTodo(){
+  const now   = new Date();
+  const day   = now.getDate();
+  const month = now.getMonth();
+  const year  = now.getFullYear();
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  // Get user role from localStorage
+  const user = JSON.parse(localStorage.getItem('mjm_user')||'{}');
+  const auditRole = (user.audit_role||'').toLowerCase();
+  const mainRole  = (user.role||'').toLowerCase();
+  // audit_role takes priority; fall back to main role
+  const role = auditRole || mainRole;
+  // Admin and Administrator see everything
+  const isAdmin = role.includes('admin') || mainRole.includes('admin');
+  const showPN = isAdmin || role.includes('pn');
+  const showMN = isAdmin || role.includes('mn') || (!role.includes('pn') && !isAdmin && role.includes('auditor'));
+
+  /* ── Date helpers ── */
+  function daysUntil(targetDay){
+    const today = new Date(year, month, day);
+    const thisM = new Date(year, month, targetDay);
+    if(thisM >= today) return Math.round((thisM-today)/(864e5));
+    return Math.round((new Date(year,month+1,targetDay)-today)/(864e5));
+  }
+  function inWindow(w){ return w.some(([s,e])=>day>=s&&day<=e); }
+  function nearWindow(w,a=3){ return w.some(([s])=>{const d=daysUntil(s);return d>=0&&d<=a;}); }
+  function nextLabel(w){
+    if(inWindow(w)) return '📌 Audit period now';
+    let best=null;
+    w.forEach(([s,e])=>{const d=daysUntil(s);if(!best||d<best.d)best={d,s,e};});
+    if(!best) return '';
+    const nm = best.d > (new Date(year,month+1,0).getDate()-day) ? MONTHS[month+1>11?0:month+1] : MONTHS[month];
+    if(best.d===0) return '📌 Starts today';
+    if(best.d===1) return '⏰ Starts tomorrow';
+    return `📅 Next: ${best.s}–${best.e} ${nm}`;
+  }
+  function status(w){
+    if(inWindow(w)) return 'today';
+    if(nearWindow(w,3)) return 'due';
+    return 'ok';
+  }
+
+  /* ── Schedules ── */
+  const MN_PLOT   = [[10,10],[20,20],[30,30]];
+  const MN_HEIGHT = [[1,5],[15,20]];
+  const MN_PAPAN  = [[15,20]];
+  const PN_PLOT   = [[20,25]];
+  const PN_HEIGHT = [[20,25]];
+
+  /* ── Badge ── */
+  const B = {
+    today:`<span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;background:#fee2e2;color:#991b1b;white-space:nowrap">🔴 Due Now</span>`,
+    due:  `<span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;background:#fef9c3;color:#854d0e;white-space:nowrap">🟡 Soon</span>`,
+    ok:   `<span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;background:#dcfce7;color:#166534;white-space:nowrap">✅ On Track</span>`,
+  };
+
+  /* ── Nursery pill ── */
+  function pill(label){
+    const style = label==='PN'
+      ? 'background:#dcfce7;color:#166534'
+      : 'background:#dbeafe;color:#1e40af';
+    return `<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;${style}">${label}</span>`;
+  }
+
+  /* ── Card builder ── */
+  const ICONS = {
+    plot:   '<path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12l2 2 4-4"/>',
+    height: '<line x1="12" y1="20" x2="12" y2="4"/><path d="M12 4C12 4 8 8 8 10"/><path d="M12 4C12 4 16 8 16 10"/><path d="M12 10C12 10 9 13 9 15"/><path d="M12 10C12 10 15 13 15 15"/>',
+    papan:  '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 12h6M9 15h4"/>',
+    maint:  '<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>',
+  };
+  const COLORS = {
+    plot:   {accent:'#1a4d1a',bg:'#e8f5e9',stroke:'#1a4d1a'},
+    height: {accent:'#1565c0',bg:'#e3f2fd',stroke:'#1565c0'},
+    papan:  {accent:'#e65100',bg:'#fff3e0',stroke:'#e65100'},
+    maint:  {accent:'#880e4f',bg:'#fce4ec',stroke:'#880e4f'},
+  };
+
+  function mkCard(mod, title, schedule, nextStr, badge, href, nurseryLabel, onDemand=false){
+    const c = COLORS[mod];
+    const pillHtml = nurseryLabel ? pill(nurseryLabel) : '';
+    const subline = onDemand ? schedule : `${schedule}${nextStr ? ' · '+nextStr : ''}`;
+    const isDue  = badge.includes('Due Now');
+    const isSoon = badge.includes('Soon');
+    const isOk   = !isDue && !isSoon;
+    const rightEl = isDue
+      ? `<div style="width:32px;height:32px;border-radius:50%;background:#fee2e2;display:flex;align-items:center;justify-content:center;font-size:16px">🔴</div>`
+      : isSoon
+      ? `<div style="width:32px;height:32px;border-radius:50%;background:#fef9c3;display:flex;align-items:center;justify-content:center;font-size:16px">🟡</div>`
+      : `<div style="width:32px;height:32px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;font-size:16px">✅</div>`;
+    return `
+    <a class="todo-card" href="${href}" style="text-decoration:none;border-radius:14px;padding:12px 14px;display:flex;flex-direction:row;align-items:center;gap:0">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <div style="width:36px;height:36px;border-radius:10px;background:${c.bg};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:${c.stroke};fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">${ICONS[mod]}</svg>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span style="font-size:13px;font-weight:700;color:var(--text1)">${title}</span>
+            ${pillHtml}
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);padding-left:44px;line-height:1.4">${subline}</div>
+      </div>
+      <div style="flex-shrink:0;margin-left:14px;align-self:center">${rightEl}</div>
+    </a>`;
+  }
+
+  const section = document.getElementById('todo-section');
+  section.className = 'todo-list fade-in';
+  let html = '';
+
+  /* ── MN cards ── */
+  if(showMN){
+    html += mkCard('plot',  'Plot Condition',   'Every 10th, 20th & 30th', nextLabel(MN_PLOT),   B[status(MN_PLOT)],   'audit_plot_audit.html',   'MN');
+    html += mkCard('height','Seedling Height',  '1st–5th & 15th–20th',     nextLabel(MN_HEIGHT), B[status(MN_HEIGHT)], 'audit_height_index.html', 'MN');
+    html += mkCard('papan', 'Papan Tanda',      '15th–20th each month',    nextLabel(MN_PAPAN),  B[status(MN_PAPAN)],  'audit_papan_index.html',  'MN');
+  }
+
+  /* ── PN cards ── */
+  if(showPN){
+    html += mkCard('plot',  'Plot Condition',   '20th–25th each month',  nextLabel(PN_PLOT),   B[status(PN_PLOT)],   'audit_plot_audit.html',   'PN');
+    html += mkCard('height','Seedling Height',  '20th–25th each month',  nextLabel(PN_HEIGHT), B[status(PN_HEIGHT)], 'audit_height_index.html', 'PN');
+    html += mkCard('papan', 'Papan Tanda',      'When case available',   '', `<span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;background:#f3f4f6;color:#6b7280;white-space:nowrap">On Demand</span>`, 'audit_papan_index.html', 'PN', true);
+  }
+
+  /* ── Maintenance ── */
+  html += `
+  <a class="todo-card" href="audit_maintenance_index.html" style="text-decoration:none;border-radius:14px;padding:12px 14px;display:flex;flex-direction:row;align-items:center;gap:0">
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <div style="width:36px;height:36px;border-radius:10px;background:#fce4ec;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:#880e4f;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">${ICONS.maint}</svg>
+        </div>
+        <span style="font-size:13px;font-weight:700;color:var(--text1)">Maintenance Audit</span>
+      </div>
+      <div style="font-size:11px;color:var(--text3);padding-left:44px">Audit when worker submits completed task</div>
+    </div>
+    <div style="flex-shrink:0;margin-left:14px;align-self:center" id="maint-pending-badge">
+      <div style="width:32px;height:32px;border-radius:50%;background:#e5e7eb;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#9ca3af">...</div>
+    </div>
+  </a>`;
+
+  section.innerHTML = html;
+
+  /* ── Maintenance count ── */
+  (async()=>{
+    const el = document.getElementById('maint-pending-badge');
+    if(!el) return;
+    try{
+      const [tasks, audits] = await Promise.all([
+        sb.select('audit_maintenance_tasks','select=id'),
+        sb.select('audit_maintenance_audits','select=task_id')
+      ]);
+      const done = new Set(audits.map(a=>String(a.task_id)));
+      const n = tasks.filter(t=>!done.has(String(t.id))).length;
+      el.innerHTML = n===0
+        ? `<div style="width:32px;height:32px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;font-size:16px">✅</div>`
+        : `<div style="min-width:32px;height:32px;border-radius:50%;background:#ef4444;color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 6px">${n}</div>`;
+    }catch(e){
+      el.innerHTML = `<div style="width:32px;height:32px;border-radius:50%;background:#e5e7eb;display:flex;align-items:center;justify-content:center;font-size:12px;color:#9ca3af">—</div>`;
+    }
+  })();
+}
+
+loadAuditTodo();
+
+
+
 </script>
 <script src="audit_dexie_offline.js"></script>
 </body>

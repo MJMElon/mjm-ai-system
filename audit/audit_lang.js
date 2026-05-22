@@ -360,6 +360,7 @@ const TRANSLATIONS = {
     err_date_transplant:'⚠ Date transplant is required',
 
 
+    back_portal:       'Back to Portal',
     forgot_password:    'Forgot Password?',
     sign_up:            'Sign Up',
     forgot_title:       'Reset Password',
@@ -669,6 +670,8 @@ const TRANSLATIONS = {
     err_date_transplant:'⚠ Tarikh pindah diperlukan',
 
 
+    back_portal:       'Back to Portal',
+    back_portal:       'Kembali ke Portal',
     forgot_password:    'Lupa Kata Laluan?',
     sign_up:            'Daftar',
     forgot_title:       'Set Semula Kata Laluan',
