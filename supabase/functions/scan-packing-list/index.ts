@@ -3,10 +3,11 @@
 // Receives a supplier packing list (image or PDF, base64-encoded) from the
 // Seed Audit tab and asks Claude vision to extract the bag rows.
 //
-// Deploy:
-//   supabase functions deploy scan-packing-list --no-verify-jwt
-// Set the secret:
+// Deploy (CLI):
+//   supabase functions deploy scan-packing-list
+// Set the secret (CLI):
 //   supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+// Or deploy/set both via the Supabase dashboard (Edge Functions + Secrets).
 //
 // Request JSON:
 //   {
@@ -19,7 +20,6 @@
 //   { "bags": [ { "bag_no": "MJ24-001", "supplier_qty": 1000 }, ... ] }
 
 // deno-lint-ignore-file no-explicit-any
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") || "";
 const CLAUDE_MODEL = Deno.env.get("CLAUDE_MODEL") || "claude-sonnet-4-6";
@@ -56,7 +56,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS });
   }
