@@ -25,6 +25,10 @@
         .tab-btn.active-al { background: #3b82f6; color: white; box-shadow: 0 4px 10px -2px rgba(59, 130, 246, 0.4); }
         .nature-critter { position: absolute; font-size: 1.5rem; pointer-events: none; opacity: 0; z-index: 50; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); animation: floatSlow 8s ease-in-out forwards; }
         @keyframes floatSlow { 0% { transform: translate(0, 0) scale(0.6) rotate(-10deg); opacity: 0; } 20% { opacity: 0.9; } 80% { opacity: 0.9; } 100% { transform: translate(var(--tx), var(--ty)) scale(1.2) rotate(10deg); opacity: 0; } }
+        /* Sort arrow sits beside the header label without shifting its alignment,
+           so each title stays centered/left exactly above its data column. */
+        [data-sort-key] { position: relative; display: inline-block; }
+        .sort-arrow { position: absolute; left: 100%; top: 0; margin-left: 4px; font-size: 11px; opacity: 0.5; white-space: nowrap; pointer-events: none; }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8 relative">
@@ -402,9 +406,15 @@
         function _alUpdateSortIndicators() {
             document.querySelectorAll('[data-sort-key]').forEach(el => {
                 const k = el.getAttribute('data-sort-key');
-                const base = el.textContent.replace(/[↑↓↕]\s*$/, '').trim();
-                if (k === _alSort.key) el.textContent = base + ' ' + (_alSort.dir === 'asc' ? '↑' : '↓');
-                else el.textContent = base + ' ↕';
+                let arrow = el.querySelector('.sort-arrow');
+                if (!arrow) {
+                    arrow = document.createElement('span');
+                    arrow.className = 'sort-arrow';
+                    el.appendChild(arrow);
+                }
+                arrow.textContent = (k === _alSort.key)
+                    ? (_alSort.dir === 'asc' ? '↑' : '↓')
+                    : '↕';
             });
         }
 
