@@ -553,10 +553,11 @@
                                 </div>
 
                                 <!-- Column headers -->
-                                <div class="hidden lg:grid gap-3 px-6 pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest" style="grid-template-columns: 1.1fr 1fr 1fr 40px;">
+                                <div class="hidden lg:grid gap-3 px-6 pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest" style="grid-template-columns: 1.1fr 1fr 1fr 1.4fr 40px;">
                                     <span>Bag No / Seal No</span>
                                     <span>Seed per Bag (Supplier)</span>
                                     <span class="text-[#4a7a2e]">Seed Received (Audit)</span>
+                                    <span>AI Seed Count</span>
                                     <span></span>
                                 </div>
 
@@ -3676,7 +3677,7 @@
             calcSeedAudit();
         }
 
-        function addSeedAuditRow(bagNo, supplierQty, receivedQty) {
+        function addSeedAuditRow(bagNo, supplierQty, receivedQty, aiCount, photoUrl) {
             seedAuditRowCount++;
             const container = document.getElementById('t8-bag-rows-container');
             const rowId = `t8-bag-row-${seedAuditRowCount}`;
@@ -3685,23 +3686,33 @@
             const recVal  = (receivedQty != null && receivedQty !== '') ? Number(receivedQty).toLocaleString() : '';
 
             const html = `
-                <div id="${rowId}" class="t8-bag-row grid grid-cols-1 lg:grid-cols-[1.1fr_1fr_1fr_40px] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end">
+                <div id="${rowId}" class="t8-bag-row grid grid-cols-1 lg:grid-cols-[1.1fr_1fr_1fr_1.4fr_40px] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end">
                     <div>
                         <label class="label-style lg:hidden">Bag No / Seal No</label>
                         <input type="text" class="input-style t8-bag-no" placeholder="e.g. MJ24" value="${safeBag}" oninput="updateSeedAuditCompletion()">
                     </div>
                     <div>
                         <label class="label-style lg:hidden">Seed per Bag (Supplier)</label>
-                        <input type="text" inputmode="numeric" class="input-style t8-supplier-qty" placeholder="0" value="${supVal}" oninput="formatNumericInput(this); calcSeedAudit()">
+                        <input type="text" inputmode="numeric" class="input-style t8-supplier-qty" placeholder="0" value="${supVal}" oninput="formatNumericInput(this); calcSeedAudit(); onSeedAuditQtyChange('${rowId}')">
                     </div>
                     <div>
                         <label class="label-style lg:hidden !text-[#4a7a2e]">Seed Received (Audit)</label>
-                        <input type="text" inputmode="numeric" class="input-style font-black !text-[#4a7a2e] t8-received-qty" placeholder="0" value="${recVal}" oninput="formatNumericInput(this); calcSeedAudit()">
+                        <input type="text" inputmode="numeric" class="input-style font-black !text-[#4a7a2e] t8-received-qty" placeholder="0" value="${recVal}" oninput="formatNumericInput(this); calcSeedAudit(); onSeedAuditQtyChange('${rowId}')">
+                    </div>
+                    <div>
+                        <label class="label-style lg:hidden">AI Seed Count</label>
+                        <input type="file" accept="image/*" capture="environment" class="hidden t8-photo-input" id="${rowId}-photo" onchange="handleBagPhoto(this,'${rowId}')">
+                        <button type="button" class="t8-photo-btn w-full h-[45px] rounded-lg border border-[#cdd9bd] bg-white text-[#4a7a2e] text-[10px] font-black uppercase tracking-widest hover:bg-[#e8f5da] shadow-sm flex items-center justify-center gap-1" onclick="document.getElementById('${rowId}-photo').click()">📷 Count Seeds</button>
+                        <div class="t8-verify-result hidden mt-1 text-[10px] font-black"></div>
                     </div>
                     <button type="button" class="w-10 h-[45px] rounded-lg border border-[#f8d7da] text-[#a83020] bg-white flex items-center justify-center hover:bg-[#f8d7da] shadow-sm self-end" onclick="removeSeedAuditRow('${rowId}')" title="Remove bag">✕</button>
                 </div>
             `;
             container.insertAdjacentHTML('beforeend', html);
+            if (aiCount != null && aiCount !== '' && !isNaN(Number(aiCount))) {
+                seedAuditPhotoState[rowId] = { aiCount: Number(aiCount), photoBase64: null, photoUrl: photoUrl || null };
+                renderBagVerify(rowId);
+            }
             calcSeedAudit();
         }
 
@@ -3730,6 +3741,127 @@
                 reader.onerror = reject;
                 reader.readAsDataURL(file);
             });
+        }
+
+        // ── Per-bag AI seed count (browser-side Gemini) ───────────────────
+        // Tally rule (per spec): AI count must equal BOTH the supplier qty and
+        // the audited qty exactly → row is "Checked" and the photo is NOT kept.
+        // Any mismatch → the photo is uploaded to storage for future reference.
+        const seedAuditPhotoState = {};
+        const _sgk1 = 'AIzaSyCvSAVEeOa_', _sgk2 = 'PkZxRKDJkYz3hqzdgvbGIyQ';
+        const SEED_GEMINI_KEY = _sgk1 + _sgk2;
+        const SEED_COUNT_PROMPT =
+            'You are an expert at counting seeds in a photo of a single opened seed bag laid out for audit. ' +
+            'Count the total number of individual seeds visible in this photo as accurately as possible. ' +
+            'Return ONLY JSON: { "seed_count": <number>, "confidence": "high"|"medium"|"low", "notes": "<short note>" }';
+
+        function _seedFileToDataUrl(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function _seedCompressImage(dataUrl, maxWidth = 1400, quality = 0.82) {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => {
+                    const scale = Math.min(1, maxWidth / img.width);
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.round(img.width * scale);
+                    canvas.height = Math.round(img.height * scale);
+                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+                img.onerror = () => resolve(dataUrl);
+                img.src = dataUrl;
+            });
+        }
+
+        async function _seedCallGemini(dataUrl, prompt) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${SEED_GEMINI_KEY}`;
+            const base64Data = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+            const payload = {
+                contents: [{ parts: [
+                    { text: prompt },
+                    { inlineData: { mimeType: 'image/jpeg', data: base64Data } }
+                ]}],
+                generationConfig: { responseMimeType: 'application/json' }
+            };
+            const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error?.message || 'Gemini API error');
+            const raw = data.candidates[0].content.parts[0].text;
+            return JSON.parse(String(raw).replace(/```json/gi, '').replace(/```/g, '').trim());
+        }
+
+        async function _uploadSeedAuditPhoto(batchId, bagNo, dataUrl) {
+            try {
+                const blob = await fetch(dataUrl).then(r => r.blob());
+                const safeBatch = String(batchId || 'batch').replace(/[^A-Za-z0-9_-]/g, '_');
+                const safeBag = String(bagNo || 'bag').replace(/[^A-Za-z0-9_-]/g, '_');
+                const path = `seed_audit_photos/${safeBatch}/${safeBag}-${Date.now()}.jpg`;
+                const { error } = await _supabase.storage.from('documents').upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+                if (error) throw error;
+                const { data } = _supabase.storage.from('documents').getPublicUrl(path);
+                return data?.publicUrl || null;
+            } catch (e) {
+                console.warn('Seed audit photo upload failed:', e);
+                return null;
+            }
+        }
+
+        function renderBagVerify(rowId) {
+            const row = document.getElementById(rowId);
+            if (!row) return;
+            const el = row.querySelector('.t8-verify-result');
+            const btn = row.querySelector('.t8-photo-btn');
+            const st = seedAuditPhotoState[rowId];
+            if (!el) return;
+            if (!st || st.aiCount == null) { el.className = 't8-verify-result hidden mt-1 text-[10px] font-black'; el.innerHTML = ''; return; }
+            const supQty = readNumericInput(row.querySelector('.t8-supplier-qty'));
+            const recQty = readNumericInput(row.querySelector('.t8-received-qty'));
+            const match = st.aiCount === supQty && st.aiCount === recQty;
+            st.match = match;
+            if (match) st.photoBase64 = null; // tally → no need to keep the photo
+            if (match) {
+                el.className = 't8-verify-result mt-1 text-[10px] font-black text-[#4a7a2e]';
+                el.innerHTML = `✓ Checked · AI counted ${st.aiCount.toLocaleString()}`;
+            } else {
+                el.className = 't8-verify-result mt-1 text-[10px] font-black text-[#a83020]';
+                const link = st.photoUrl ? ` · <a href="${st.photoUrl}" target="_blank" class="underline">view photo</a>` : ' · photo will be saved';
+                el.innerHTML = `⚠️ Mismatch · AI counted ${st.aiCount.toLocaleString()}${link}`;
+            }
+            if (btn) btn.innerHTML = '📷 Recount';
+        }
+
+        async function handleBagPhoto(input, rowId) {
+            const file = input && input.files && input.files[0];
+            if (!file) return;
+            const row = document.getElementById(rowId);
+            const el = row ? row.querySelector('.t8-verify-result') : null;
+            if (el) { el.className = 't8-verify-result mt-1 text-[10px] font-black text-[#c07820]'; el.innerHTML = '⏳ Counting seeds…'; }
+            try {
+                if (file.size > 20 * 1024 * 1024) throw new Error('Photo too large (max 20 MB).');
+                let dataUrl = await _seedFileToDataUrl(file);
+                dataUrl = await _seedCompressImage(dataUrl);
+                const result = await _seedCallGemini(dataUrl, SEED_COUNT_PROMPT);
+                const aiCount = Number(result.seed_count) || 0;
+                seedAuditPhotoState[rowId] = { aiCount, photoBase64: dataUrl, photoUrl: null };
+                renderBagVerify(rowId); // computes match + discards the photo when it tallies
+            } catch (e) {
+                console.warn('Seed count failed:', e);
+                if (el) { el.className = 't8-verify-result mt-1 text-[10px] font-black text-[#a83020]'; el.innerHTML = '⚠️ AI count failed: ' + (e.message || e); }
+            } finally {
+                if (input) input.value = '';
+            }
+        }
+
+        function onSeedAuditQtyChange(rowId) {
+            const st = seedAuditPhotoState[rowId];
+            if (st && st.aiCount != null) renderBagVerify(rowId);
         }
 
         async function scanPackingListFile(file) {
@@ -4087,11 +4219,30 @@ Thank you.`;
                 const dateReceived = document.getElementById('f-datereceived').value || null;
 
                 const logs = [];
-                document.querySelectorAll('.t8-bag-row').forEach(row => {
+                for (const row of Array.from(document.querySelectorAll('.t8-bag-row'))) {
                     const bagNo  = row.querySelector('.t8-bag-no').value.trim();
                     const supQty = readNumericInput(row.querySelector('.t8-supplier-qty'));
                     const recQty = readNumericInput(row.querySelector('.t8-received-qty'));
-                    if (!bagNo && supQty === 0 && recQty === 0) return; // skip totally empty rows
+                    if (!bagNo && supQty === 0 && recQty === 0) continue; // skip totally empty rows
+
+                    // Per-bag AI seed count: keep the count in the remark. When the
+                    // count does not tally with supplier + audited qty, upload the
+                    // photo to storage and keep its URL; a tally keeps no photo.
+                    let aiPart = '', photoPart = '';
+                    const st = seedAuditPhotoState[row.id];
+                    if (st && st.aiCount != null) {
+                        aiPart = ` AiCount:${st.aiCount}.`;
+                        const tally = st.aiCount === supQty && st.aiCount === recQty;
+                        if (!tally) {
+                            let photoUrl = st.photoUrl;
+                            if (!photoUrl && st.photoBase64) {
+                                photoUrl = await _uploadSeedAuditPhoto(batchId, bagNo, st.photoBase64);
+                                if (photoUrl) { st.photoUrl = photoUrl; st.photoBase64 = null; renderBagVerify(row.id); }
+                            }
+                            if (photoUrl) photoPart = ` PhotoUrl:${photoUrl}`;
+                        }
+                    }
+
                     logs.push(withEditMeta({
                         transaction_type: 'Seed_Audit',
                         batch_name: batchId,
@@ -4099,9 +4250,9 @@ Thank you.`;
                         plot_name: bagNo || `bag-${Math.random().toString(36).slice(2, 8)}`,
                         quantity_change: recQty,
                         transaction_date: dateReceived,
-                        remark: `Seed audit. SupplierQty:${supQty}. ReceivedQty:${recQty}.`
+                        remark: `Seed audit. SupplierQty:${supQty}. ReceivedQty:${recQty}.${aiPart}${photoPart}`
                     }));
-                });
+                }
 
                 // Clear previous Seed_Audit rows for this batch, then insert the current set.
                 await _supabase.from('shared_inventory_logs')
@@ -4338,9 +4489,14 @@ Thank you.`;
                 const auditLogs = auditRes.data || [];
                 if (auditLogs.length > 0) {
                     auditLogs.forEach(log => {
-                        const supMatch = log.remark ? log.remark.match(/SupplierQty:(\d+)/) : null;
+                        const rmk = log.remark || '';
+                        const supMatch = rmk.match(/SupplierQty:(\d+)/);
                         const supQty = supMatch ? parseInt(supMatch[1], 10) : 0;
-                        addSeedAuditRow(log.plot_name || '', supQty, log.quantity_change || 0);
+                        const aiMatch = rmk.match(/AiCount:(\d+)/);
+                        const aiCount = aiMatch ? parseInt(aiMatch[1], 10) : null;
+                        const photoMatch = rmk.match(/PhotoUrl:(\S+)/);
+                        const photoUrl = photoMatch ? photoMatch[1] : null;
+                        addSeedAuditRow(log.plot_name || '', supQty, log.quantity_change || 0, aiCount, photoUrl);
                     });
                 } else {
                     addSeedAuditRow();
