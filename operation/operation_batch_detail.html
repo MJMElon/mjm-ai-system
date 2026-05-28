@@ -3941,7 +3941,33 @@
             const st = seedAuditPhotoState[rowId];
             if (!st) return;
             const src = st.photoBase64 || st.photoUrl;
-            if (src) window.open(src, '_blank');
+            if (src) _openSeedPhotoLightbox(src);
+        }
+
+        let _seedLightboxEl = null;
+        function _openSeedPhotoLightbox(src) {
+            if (!_seedLightboxEl) {
+                const lb = document.createElement('div');
+                lb.id = 'seed-photo-lightbox';
+                lb.style.cssText = 'position:fixed;inset:0;background:rgba(15,12,8,.92);backdrop-filter:blur(8px);z-index:9999;display:none;align-items:center;justify-content:center;padding:24px;cursor:zoom-out;';
+                lb.innerHTML = ''
+                  + '<button type="button" aria-label="Close" style="position:absolute;top:16px;right:16px;width:44px;height:44px;border-radius:9999px;background:rgba(255,255,255,.15);color:#fff;border:none;cursor:pointer;font-size:20px;font-weight:900;display:flex;align-items:center;justify-content:center;">&times;</button>'
+                  + '<img alt="Bag seed photo (red dots = seeds AI counted)" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.5);cursor:default;">'
+                  + '<div style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.75);font-size:10px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;background:rgba(0,0,0,.45);padding:6px 14px;border-radius:9999px;white-space:nowrap;">Red dot = 1 seed counted by AI</div>';
+                document.body.appendChild(lb);
+                const closeBtn = lb.querySelector('button');
+                const img = lb.querySelector('img');
+                const hide = () => { lb.style.display = 'none'; img.removeAttribute('src'); };
+                closeBtn.addEventListener('click', e => { e.stopPropagation(); hide(); });
+                img.addEventListener('click', e => e.stopPropagation());
+                lb.addEventListener('click', hide);
+                document.addEventListener('keydown', e => {
+                    if (e.key === 'Escape' && lb.style.display === 'flex') hide();
+                });
+                _seedLightboxEl = lb;
+            }
+            _seedLightboxEl.querySelector('img').src = src;
+            _seedLightboxEl.style.display = 'flex';
         }
 
         function deleteBagPhoto(rowId) {
