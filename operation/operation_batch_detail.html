@@ -3753,6 +3753,13 @@
         // the audited qty exactly → row is "Checked" and the photo is NOT kept.
         // Any mismatch → the photo is uploaded to storage for future reference.
         const seedAuditPhotoState = {};
+        let _seedAuditDirty = false;
+        window.addEventListener('beforeunload', e => {
+            if (_seedAuditDirty) {
+                e.preventDefault();
+                e.returnValue = ''; // browser shows its own "Leave site?" prompt
+            }
+        });
         const _sgk1 = 'AIzaSyCvSAVEeOa_', _sgk2 = 'PkZxRKDJkYz3hqzdgvbGIyQ';
         const SEED_GEMINI_KEY = _sgk1 + _sgk2;
         const SEED_COUNT_PROMPT =
@@ -3925,7 +3932,11 @@
                 hidePhotoUi();
             } else {
                 el.className = 't8-verify-result mt-1 text-[10px] font-black text-[#a83020]';
-                const hint = st.photoUrl ? '' : ' · photo will be saved';
+                let hint = '';
+                if (st.uploadStatus === 'uploading')       hint = ' · ⏳ saving photo…';
+                else if (st.uploadStatus === 'failed')     hint = ' · ⚠ photo upload failed — will retry on Save';
+                else if (st.photoUrl)                      hint = ' · 📷 photo saved';
+                else                                       hint = ' · photo will be saved on Save';
                 el.innerHTML = `⚠️ Mismatch · AI counted ${st.aiCount.toLocaleString()}${hint}`;
                 if (thumb && src) { thumb.src = src; thumb.classList.remove('hidden'); }
                 else if (thumb)   { thumb.classList.add('hidden'); thumb.removeAttribute('src'); }
@@ -3999,9 +4010,31 @@
                     aiCount,
                     confidence: result.confidence || null,
                     photoBase64: annotated,
-                    photoUrl: null
+                    photoUrl: null,
+                    uploadStatus: 'idle'   // idle | uploading | saved | failed
                 };
+                _seedAuditDirty = true;
                 renderBagVerify(rowId); // computes match + discards the photo when it tallies
+
+                // Upload immediately on mismatch so the photo persists even if the
+                // user refreshes before clicking "Save Seed Audit Report". Save-time
+                // upload is still kept as a fallback (e.g. if this upload fails).
+                const supQty0 = readNumericInput(row.querySelector('.t8-supplier-qty'));
+                const recQty0 = readNumericInput(row.querySelector('.t8-received-qty'));
+                const willKeep = !(aiCount === supQty0 && aiCount === recQty0);
+                if (willKeep) {
+                    const st = seedAuditPhotoState[rowId];
+                    if (st && st.photoBase64) {
+                        st.uploadStatus = 'uploading';
+                        renderBagVerify(rowId);
+                        const bagNo  = (row.querySelector('.t8-bag-no').value || '').trim() || rowId;
+                        const batchId = (document.getElementById('f-batchno').value || '').trim() || `unsaved-${Date.now()}`;
+                        const url = await _uploadSeedAuditPhoto(batchId, bagNo, st.photoBase64);
+                        if (url) { st.photoUrl = url; st.uploadStatus = 'saved'; }
+                        else     { st.uploadStatus = 'failed'; }
+                        renderBagVerify(rowId);
+                    }
+                }
             } catch (e) {
                 console.warn('Seed count failed:', e);
                 if (el) { el.className = 't8-verify-result mt-1 text-[10px] font-black text-[#a83020]'; el.innerHTML = '⚠️ AI count failed: ' + (e.message || e); }
@@ -4429,6 +4462,7 @@ Thank you.`;
                 }
 
                 setEditMetaUI(8, new Date().toISOString(), window.currentUserEmail);
+                _seedAuditDirty = false;
                 showToast('Seed Audit report saved.', 'success');
                 btn.innerText = originalText;
                 btn.disabled = false;
@@ -4617,6 +4651,7 @@ Thank you.`;
             document.getElementById('t8-bag-rows-container').innerHTML = '';
             document.getElementById('t8-batch-remark').value = '';
             seedAuditRowCount = 0;
+            _seedAuditDirty = false;
 
             try {
                 const [auditRes, emailRes, noteRes, actionRes] = await Promise.all([
