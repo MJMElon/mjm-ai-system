@@ -3704,7 +3704,12 @@
                         <input type="file" accept="image/*" capture="environment" class="hidden t8-photo-input" id="${rowId}-photo" onchange="handleBagPhoto(this,'${rowId}')">
                         <button type="button" class="t8-photo-btn w-full h-[45px] rounded-lg border border-[#cdd9bd] bg-white text-[#4a7a2e] text-[10px] font-black uppercase tracking-widest hover:bg-[#e8f5da] shadow-sm flex items-center justify-center gap-1" onclick="document.getElementById('${rowId}-photo').click()">📷 Count Seeds</button>
                         <div class="t8-verify-result hidden mt-1 text-[10px] font-black"></div>
-                        <img class="t8-photo-thumb hidden mt-2 rounded-lg border border-[#e8dcc8] cursor-pointer w-full" style="max-height:120px;object-fit:cover;" onclick="if(this.src)window.open(this.src,'_blank')" title="Tap to view full photo" alt="bag seed photo">
+                        <div class="t8-verify-notes hidden mt-2 p-2 rounded-lg bg-[#fdfaf4] border border-[#e8dcc8] text-[10px] font-bold text-[#5d4a30] leading-snug"></div>
+                        <img class="t8-photo-thumb hidden mt-2 rounded-lg border border-[#e8dcc8] cursor-pointer w-full" style="max-height:120px;object-fit:cover;" onclick="viewBagPhoto('${rowId}')" title="Tap to view full photo" alt="bag seed photo">
+                        <div class="t8-photo-actions hidden mt-2 grid grid-cols-2 gap-2">
+                            <button type="button" class="text-[10px] font-black uppercase tracking-widest px-2 py-1.5 rounded-lg border border-[#cdd9bd] bg-white text-[#4a7a2e] hover:bg-[#e8f5da] shadow-sm flex items-center justify-center gap-1" onclick="viewBagPhoto('${rowId}')">🔍 View</button>
+                            <button type="button" class="text-[10px] font-black uppercase tracking-widest px-2 py-1.5 rounded-lg border border-[#f8d7da] bg-white text-[#a83020] hover:bg-[#f8d7da] shadow-sm flex items-center justify-center gap-1" onclick="deleteBagPhoto('${rowId}')">🗑 Delete</button>
+                        </div>
                     </div>
                     <button type="button" class="w-10 h-[45px] rounded-lg border border-[#f8d7da] text-[#a83020] bg-white flex items-center justify-center hover:bg-[#f8d7da] shadow-sm self-end" onclick="removeSeedAuditRow('${rowId}')" title="Remove bag">✕</button>
                 </div>
@@ -3820,32 +3825,84 @@
         function renderBagVerify(rowId) {
             const row = document.getElementById(rowId);
             if (!row) return;
-            const el = row.querySelector('.t8-verify-result');
-            const btn = row.querySelector('.t8-photo-btn');
-            const thumb = row.querySelector('.t8-photo-thumb');
+            const el      = row.querySelector('.t8-verify-result');
+            const btn     = row.querySelector('.t8-photo-btn');
+            const thumb   = row.querySelector('.t8-photo-thumb');
+            const actions = row.querySelector('.t8-photo-actions');
+            const notesEl = row.querySelector('.t8-verify-notes');
             const st = seedAuditPhotoState[rowId];
             if (!el) return;
-            const hideThumb = () => { if (thumb) { thumb.classList.add('hidden'); thumb.removeAttribute('src'); } };
-            if (!st || st.aiCount == null) { el.className = 't8-verify-result hidden mt-1 text-[10px] font-black'; el.innerHTML = ''; hideThumb(); return; }
+
+            const hidePhotoUi = () => {
+                if (thumb)   { thumb.classList.add('hidden'); thumb.removeAttribute('src'); }
+                if (actions) actions.classList.add('hidden');
+            };
+            const renderNotes = () => {
+                if (!notesEl) return;
+                if (!st) { notesEl.classList.add('hidden'); notesEl.innerHTML = ''; return; }
+                const lines = [];
+                if (st.confidence) {
+                    const c = String(st.confidence).toLowerCase();
+                    const color = c === 'high' ? '#4a7a2e' : (c === 'medium' ? '#c07820' : '#a83020');
+                    lines.push(`<div><span class="text-[#8a7a68]">Confidence:</span> <span style="color:${color}">${_escAttr(st.confidence)}</span></div>`);
+                }
+                if (st.notes) {
+                    lines.push(`<div class="mt-1"><span class="text-[#8a7a68]">How AI counted:</span> ${_escAttr(st.notes)}</div>`);
+                }
+                if (lines.length) { notesEl.innerHTML = lines.join(''); notesEl.classList.remove('hidden'); }
+                else { notesEl.classList.add('hidden'); notesEl.innerHTML = ''; }
+            };
+
+            if (!st || st.aiCount == null) {
+                el.className = 't8-verify-result hidden mt-1 text-[10px] font-black';
+                el.innerHTML = '';
+                hidePhotoUi();
+                if (notesEl) { notesEl.classList.add('hidden'); notesEl.innerHTML = ''; }
+                if (btn) btn.innerHTML = '📷 Count Seeds';
+                return;
+            }
+
             const supQty = readNumericInput(row.querySelector('.t8-supplier-qty'));
             const recQty = readNumericInput(row.querySelector('.t8-received-qty'));
             const match = st.aiCount === supQty && st.aiCount === recQty;
             st.match = match;
             if (match) st.photoBase64 = null; // tally → no need to keep the photo
+
+            renderNotes();
+
+            const src = st.photoBase64 || st.photoUrl;
             if (match) {
                 el.className = 't8-verify-result mt-1 text-[10px] font-black text-[#4a7a2e]';
                 el.innerHTML = `✓ Checked · AI counted ${st.aiCount.toLocaleString()}`;
-                hideThumb();
+                hidePhotoUi();
             } else {
                 el.className = 't8-verify-result mt-1 text-[10px] font-black text-[#a83020]';
                 const hint = st.photoUrl ? '' : ' · photo will be saved';
                 el.innerHTML = `⚠️ Mismatch · AI counted ${st.aiCount.toLocaleString()}${hint}`;
-                // Show the photo right here so it can be checked against the count.
-                const src = st.photoBase64 || st.photoUrl;
                 if (thumb && src) { thumb.src = src; thumb.classList.remove('hidden'); }
-                else hideThumb();
+                else if (thumb)   { thumb.classList.add('hidden'); thumb.removeAttribute('src'); }
+                if (actions) {
+                    if (src) actions.classList.remove('hidden');
+                    else     actions.classList.add('hidden');
+                }
             }
             if (btn) btn.innerHTML = '📷 Recount';
+        }
+
+        function viewBagPhoto(rowId) {
+            const st = seedAuditPhotoState[rowId];
+            if (!st) return;
+            const src = st.photoBase64 || st.photoUrl;
+            if (src) window.open(src, '_blank');
+        }
+
+        function deleteBagPhoto(rowId) {
+            const st = seedAuditPhotoState[rowId];
+            if (!st) return;
+            if (!confirm('Remove the AI seed count and photo for this bag?')) return;
+            delete seedAuditPhotoState[rowId];
+            renderBagVerify(rowId);
+            showToast('AI seed count cleared for this bag.', 'success');
         }
 
         async function handleBagPhoto(input, rowId) {
@@ -3860,7 +3917,13 @@
                 dataUrl = await _seedCompressImage(dataUrl);
                 const result = await _seedCallGemini(dataUrl, SEED_COUNT_PROMPT);
                 const aiCount = Number(result.seed_count) || 0;
-                seedAuditPhotoState[rowId] = { aiCount, photoBase64: dataUrl, photoUrl: null };
+                seedAuditPhotoState[rowId] = {
+                    aiCount,
+                    confidence: result.confidence || null,
+                    notes: result.notes || null,
+                    photoBase64: dataUrl,
+                    photoUrl: null
+                };
                 renderBagVerify(rowId); // computes match + discards the photo when it tallies
             } catch (e) {
                 console.warn('Seed count failed:', e);
