@@ -75,18 +75,24 @@
           <div class="select-wrapper">
             <select id="f-report" class="input-style">
               <option value="batch_production">Batch Production Summary</option>
+              <option value="nursery_summary">Nursery Summary Report</option>
+              <option value="seedling_sales">Seedling Sales Report (Yearly Grid)</option>
             </select>
           </div>
         </div>
-        <div class="md:col-span-2">
+        <div class="md:col-span-2 f-range">
           <label class="label-style">From</label>
           <input id="f-from" type="date" class="input-style">
         </div>
-        <div class="md:col-span-2">
+        <div class="md:col-span-2 f-range">
           <label class="label-style">To</label>
           <input id="f-to" type="date" class="input-style">
         </div>
-        <div class="md:col-span-2">
+        <div class="md:col-span-2 f-year hidden">
+          <label class="label-style">Year</label>
+          <input id="f-year" type="number" min="2015" max="2099" step="1" class="input-style">
+        </div>
+        <div class="md:col-span-2 f-breed">
           <label class="label-style">Breed</label>
           <select id="f-breed" class="input-style">
             <option value="">All breeds</option>
@@ -342,10 +348,364 @@ async function runBatchProduction() {
 async function runReport() {
   const which = document.getElementById('f-report').value;
   if (which === 'batch_production') return runBatchProduction();
+  if (which === 'nursery_summary')  return runNurserySummary();
+  if (which === 'seedling_sales')   return runSeedlingSales();
+}
+
+// ── Filter visibility by report type ─────────────────────────────────────────
+function syncFilterVisibility() {
+  const which = document.getElementById('f-report').value;
+  const showYear  = (which === 'nursery_summary');
+  const showRange = (which === 'batch_production');
+  const showBreed = (which === 'batch_production');
+  document.querySelectorAll('.f-year').forEach(el  => el.classList.toggle('hidden', !showYear));
+  document.querySelectorAll('.f-range').forEach(el => el.classList.toggle('hidden', !showRange));
+  document.querySelectorAll('.f-breed').forEach(el => el.classList.toggle('hidden', !showBreed));
 }
 
 document.getElementById('f-run').addEventListener('click', runReport);
-document.getElementById('f-report').addEventListener('change', runReport);
+document.getElementById('f-report').addEventListener('change', () => { syncFilterVisibility(); runReport(); });
+
+// ════════════════════════════════════════════════════════════════════════════
+// Seedling Sales Report (year × month grid)
+// ════════════════════════════════════════════════════════════════════════════
+// Aggregates `shared_do_records.total_qty` by year and month of delivery_date,
+// excluding cancelled DOs. Renders a year-by-year grid like the printed report,
+// with a variance row at the bottom comparing the latest year to the previous.
+
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+async function runSeedlingSales() {
+  const out = document.getElementById('report-output');
+  const loading = document.getElementById('loading');
+  out.classList.add('hidden');
+  loading.classList.remove('hidden');
+
+  const { data: dos, error } = await _supabase
+    .from('shared_do_records')
+    .select('delivery_date, total_qty, status, remark')
+    .order('delivery_date', { ascending: true });
+
+  if (error) {
+    loading.classList.add('hidden');
+    out.classList.remove('hidden');
+    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-red-700 text-sm">Failed to load deliveries: ${error.message}</div>`;
+    return;
+  }
+
+  // Group by year then month
+  const grid = {}; // { year: [12 months totals] }
+  (dos || []).forEach(d => {
+    const cancelled = d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'));
+    if (cancelled) return;
+    if (!d.delivery_date) return;
+    const dt = new Date(d.delivery_date);
+    if (isNaN(dt)) return;
+    const y = dt.getFullYear();
+    const m = dt.getMonth();
+    if (!grid[y]) grid[y] = new Array(12).fill(0);
+    grid[y][m] += Number(d.total_qty || 0);
+  });
+
+  const years = Object.keys(grid).map(Number).sort();
+  if (!years.length) {
+    loading.classList.add('hidden');
+    out.classList.remove('hidden');
+    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-[#8a7a68] text-sm">No delivery records found.</div>`;
+    return;
+  }
+
+  const latest = years[years.length - 1];
+  const prev   = years.length > 1 ? years[years.length - 2] : null;
+  const rowTotal = (arr) => arr.reduce((s, v) => s + v, 0);
+
+  // Variance = latest minus prev, per month + total
+  let varianceAbs = null, variancePct = null;
+  if (prev != null) {
+    varianceAbs = grid[latest].map((v, i) => v - grid[prev][i]);
+    variancePct = grid[latest].map((v, i) => {
+      const base = grid[prev][i];
+      if (base === 0) return null;
+      return ((v - base) / base) * 100;
+    });
+  }
+
+  const fmtVarPct = (n) => (n == null) ? '—' : (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
+  const cell = (n) => `<td class="text-right">${n === 0 ? '0' : fmtNum(n)}</td>`;
+  const varCell = (n) => {
+    const cls = n > 0 ? 'text-[#4a7a2e]' : (n < 0 ? 'text-[#a83020]' : 'text-[#8a7a68]');
+    return `<td class="text-right font-black ${cls}">${n > 0 ? '+' : ''}${fmtNum(n)}</td>`;
+  };
+  const varPctCell = (n) => {
+    if (n == null) return `<td class="text-right text-[#8a7a68]">—</td>`;
+    const cls = n > 0 ? 'text-[#4a7a2e]' : (n < 0 ? 'text-[#a83020]' : 'text-[#8a7a68]');
+    return `<td class="text-right font-black ${cls}">${fmtVarPct(n)}</td>`;
+  };
+
+  loading.classList.add('hidden');
+  out.classList.remove('hidden');
+  out.innerHTML = `
+    <div class="glass-panel p-6 rounded-[2rem]">
+      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
+        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Seedlings Sales Report</h3>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">Monthly seedling sales · ${years[0]} – ${latest}</div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Year</th>
+              ${MONTHS_SHORT.map(m => `<th class="text-right">${m}</th>`).join('')}
+              <th class="text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${years.map(y => `
+              <tr>
+                <td class="font-black text-[#3d2610]">${y}</td>
+                ${grid[y].map(v => cell(v)).join('')}
+                <td class="text-right font-black text-[#3d2610]">${fmtNum(rowTotal(grid[y]))}</td>
+              </tr>
+            `).join('')}
+            ${prev != null ? `
+              <tr style="background:#fdfaf4">
+                <td class="font-black text-[#3d2610]">Variance<br><span class="text-[10px] font-bold text-[#8a7a68]">(${latest} vs ${prev})</span></td>
+                ${varianceAbs.map(v => varCell(v)).join('')}
+                ${varCell(rowTotal(varianceAbs))}
+              </tr>
+              <tr style="background:#fdfaf4">
+                <td class="font-black text-[#3d2610]">%</td>
+                ${variancePct.map(p => varPctCell(p)).join('')}
+                ${varPctCell(rowTotal(varianceAbs) / (rowTotal(grid[prev]) || 1) * 100)}
+              </tr>
+            ` : ''}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="text-[10px] font-bold text-[#8a7a68] mt-4 leading-relaxed">
+        <strong class="text-[#3d2610]">Notes —</strong>
+        Issuance is the sum of <code>total_qty</code> on delivery (DO) records, bucketed by <code>delivery_date</code>.
+        Cancelled DOs are excluded. Each DO can cover multiple plots / batches; the total above counts the DO once.
+      </div>
+    </div>
+  `;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Nursery Summary Report (per-nursery monthly movement for a chosen year)
+// ════════════════════════════════════════════════════════════════════════════
+// Per nursery (mapped via shared_plots.nursery_name + Pre-Nursery aliases):
+//   Seeds In         = SUM(Seeds_Received)               — pre-nursery only
+//   Transplanted In  = SUM(Transplanted*) into this nursery's plots
+//   Transplanted Out = mirror of trans-in, credited to source nursery
+//                      (best-effort: source assumed Pre-Nursery for transplants
+//                      into Main; not perfectly resolvable from current schema)
+//   Damaged          = ABS(SUM(Damaged_Seeds))
+//   Culling          = ABS(SUM(1st/2nd/3rd_Culling))
+//   Sold             = SUM(qty_n) on DO records, by plot_n's nursery (cancelled excluded)
+//   Balance c/f      = Balance b/f + Seeds In + Trans In − Trans Out − Damaged − Culling − Sold
+
+const PRE_NURSERY_PLOTS = ['Pre-Nursery', 'DOUBLE-TONE', 'PREMIUM CARE'];
+const TRANSPLANT_TYPES  = ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone'];
+
+function ymKey(d) {
+  if (!d) return null;
+  const x = new Date(d);
+  if (isNaN(x)) return null;
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`;
+}
+
+async function runNurserySummary() {
+  const out = document.getElementById('report-output');
+  const loading = document.getElementById('loading');
+  out.classList.add('hidden');
+  loading.classList.remove('hidden');
+
+  const yearVal = parseInt(document.getElementById('f-year').value, 10);
+  const year = Number.isFinite(yearVal) ? yearVal : new Date().getFullYear();
+
+  const [logsRes, plotsRes, dosRes] = await Promise.all([
+    _supabase.from('shared_inventory_logs')
+      .select('transaction_type, transaction_date, plot_name, quantity_change')
+      .order('transaction_date', { ascending: true }),
+    _supabase.from('shared_plots').select('plot_name, nursery_name'),
+    _supabase.from('shared_do_records')
+      .select('delivery_date, status, remark, plot_1, qty_1, plot_2, qty_2, plot_3, qty_3, plot_4, qty_4, plot_5, qty_5')
+  ]);
+
+  if (logsRes.error || plotsRes.error || dosRes.error) {
+    loading.classList.add('hidden');
+    out.classList.remove('hidden');
+    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-red-700 text-sm">Failed to load data.</div>`;
+    return;
+  }
+
+  // Plot → nursery map (Pre-Nursery plots collapse to a single virtual nursery)
+  const plotToNursery = {};
+  (plotsRes.data || []).forEach(p => {
+    plotToNursery[p.plot_name] = p.nursery_name || 'Unassigned';
+  });
+  PRE_NURSERY_PLOTS.forEach(p => { plotToNursery[p] = 'Pre-Nursery'; });
+
+  const nurseryOf = (plot) => {
+    if (!plot) return 'Unassigned';
+    if (PRE_NURSERY_PLOTS.includes(plot)) return 'Pre-Nursery';
+    return plotToNursery[plot] || 'Unassigned';
+  };
+
+  // Accumulator: { nursery: { 'YYYY-MM': { seeds, trans_in, trans_out, damaged, culling, sold } } }
+  const buckets = {};
+  const ensureBucket = (n, ym) => {
+    if (!buckets[n]) buckets[n] = {};
+    if (!buckets[n][ym]) buckets[n][ym] = { seeds: 0, trans_in: 0, trans_out: 0, damaged: 0, culling: 0, sold: 0 };
+    return buckets[n][ym];
+  };
+
+  // Walk inventory logs (skip non-movement audit/photo/calibration types)
+  const SKIP_TYPES = new Set(['Seed_Audit', 'Seed_Audit_Email', 'Seed_Audit_Note', 'Seed_Audit_Action', 'Planting_Photo', 'Stock_Calibration', 'Planted']);
+  (logsRes.data || []).forEach(l => {
+    if (SKIP_TYPES.has(l.transaction_type)) return;
+    const ym = ymKey(l.transaction_date);
+    if (!ym) return;
+    const dest = nurseryOf(l.plot_name);
+    const qty  = Number(l.quantity_change || 0);
+    const t    = l.transaction_type;
+
+    if (t === 'Seeds_Received')      ensureBucket(dest, ym).seeds   += qty;
+    else if (t === 'Damaged_Seeds')  ensureBucket(dest, ym).damaged += Math.abs(qty);
+    else if (t === '1st_Culling' || t === '2nd_Culling' || t === '3rd_Culling') ensureBucket(dest, ym).culling += Math.abs(qty);
+    else if (TRANSPLANT_TYPES.includes(t)) {
+      ensureBucket(dest, ym).trans_in += qty;
+      // Source side: best-effort credit to Pre-Nursery for moves into Main nurseries.
+      if (dest !== 'Pre-Nursery') ensureBucket('Pre-Nursery', ym).trans_out += qty;
+    }
+  });
+
+  // Sales attribution from DO records
+  (dosRes.data || []).forEach(d => {
+    const cancelled = d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'));
+    if (cancelled) return;
+    const ym = ymKey(d.delivery_date);
+    if (!ym) return;
+    for (let i = 1; i <= 5; i++) {
+      const plot = d[`plot_${i}`];
+      const qty  = Number(d[`qty_${i}`] || 0);
+      if (qty > 0 && plot) ensureBucket(nurseryOf(plot), ym).sold += qty;
+    }
+  });
+
+  // Compute running balance per nursery: walk every YYYY-MM up to chosen year-12.
+  // The "Balance b/f" for the first month of the chosen year is the cumulative
+  // net of all earlier months for that nursery.
+  const allMonths = new Set();
+  Object.values(buckets).forEach(byMonth => Object.keys(byMonth).forEach(k => allMonths.add(k)));
+  const sortedMonths = [...allMonths].sort();
+
+  const netOf = (b) => b.seeds + b.trans_in - b.trans_out - b.damaged - b.culling - b.sold;
+
+  const nurseries = Object.keys(buckets).sort();
+  if (!nurseries.length) {
+    loading.classList.add('hidden');
+    out.classList.remove('hidden');
+    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-[#8a7a68] text-sm">No nursery movement data found.</div>`;
+    return;
+  }
+
+  // For each nursery, build year-row data (b/f + 12 months + closing).
+  const yearStart = `${year}-01`;
+  const yearEnd   = `${year}-12`;
+
+  function buildNurseryRows(n) {
+    let running = 0;
+    // Sum everything BEFORE yearStart for the opening balance
+    for (const ym of sortedMonths) {
+      if (ym >= yearStart) break;
+      if (buckets[n][ym]) running += netOf(buckets[n][ym]);
+    }
+    const opening = running;
+
+    const months = [];
+    for (let m = 1; m <= 12; m++) {
+      const ym = `${year}-${String(m).padStart(2, '0')}`;
+      const b = buckets[n][ym] || { seeds: 0, trans_in: 0, trans_out: 0, damaged: 0, culling: 0, sold: 0 };
+      running += netOf(b);
+      months.push({ ym, m, bf: running - netOf(b), ...b, cf: running });
+    }
+    return { opening, months, closing: running };
+  }
+
+  // Render
+  loading.classList.add('hidden');
+  out.classList.remove('hidden');
+
+  const headerCell = (txt) => `<th class="text-right" style="white-space:nowrap">${txt}</th>`;
+  const numCell    = (n)   => `<td class="text-right">${n ? fmtNum(n) : '0'}</td>`;
+
+  out.innerHTML = `
+    <div class="glass-panel p-6 rounded-[2rem]">
+      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
+        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Nursery Summary Report · ${year}</h3>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${nurseries.length} nurser${nurseries.length === 1 ? 'y' : 'ies'}</div>
+      </div>
+
+      ${nurseries.map(n => {
+        const { opening, months, closing } = buildNurseryRows(n);
+        return `
+          <div class="mb-8">
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="text-sm font-black uppercase tracking-widest text-[#3d2610]">${n}</h4>
+              <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">
+                Opening ${fmtNum(opening)} · Closing <span class="text-[#4a7a2e]">${fmtNum(closing)}</span>
+              </div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="report-table">
+                <thead>
+                  <tr>
+                    <th>Month</th>
+                    ${headerCell('Balance b/f')}
+                    ${headerCell('Seeds In')}
+                    ${headerCell('Transplanted In')}
+                    ${headerCell('Transplanted Out')}
+                    ${headerCell('Damaged')}
+                    ${headerCell('Culling')}
+                    ${headerCell('Sold')}
+                    ${headerCell('Balance c/f')}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${months.map(r => `
+                    <tr>
+                      <td class="font-black text-[#3d2610]">${MONTHS_SHORT[r.m - 1]} ${year}</td>
+                      ${numCell(r.bf)}
+                      <td class="text-right text-[#c07820] font-black">${r.seeds ? fmtNum(r.seeds) : '0'}</td>
+                      <td class="text-right text-[#3a7ab4]">${r.trans_in ? fmtNum(r.trans_in) : '0'}</td>
+                      <td class="text-right text-[#3a7ab4]">${r.trans_out ? fmtNum(r.trans_out) : '0'}</td>
+                      <td class="text-right text-[#a83020]">${r.damaged ? fmtNum(r.damaged) : '0'}</td>
+                      <td class="text-right text-[#a83020]">${r.culling ? fmtNum(r.culling) : '0'}</td>
+                      <td class="text-right text-[#a83020]">${r.sold ? fmtNum(r.sold) : '0'}</td>
+                      <td class="text-right text-[#4a7a2e] font-black">${fmtNum(r.cf)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }).join('')}
+
+      <div class="text-[10px] font-bold text-[#8a7a68] mt-4 leading-relaxed">
+        <strong class="text-[#3d2610]">Notes —</strong>
+        Balance b/f for January is the cumulative net of all earlier months on record.
+        Transplanted Out is credited to <em>Pre-Nursery</em> as a best-effort source whenever a transplant lands in a main nursery — the underlying log only stores the destination plot, so cross-nursery transplant routing (e.g. UN1 → UN2) cannot be reconstructed perfectly.
+        Sold is attributed per-line on each DO using <code>plot_n</code>, with cancelled DOs excluded.
+        Audit, photo, and stock-calibration logs are not counted as movements.
+      </div>
+    </div>
+  `;
+}
 
 async function bootstrap() {
   await MJMAccess.load(_supabase);
@@ -359,7 +719,9 @@ async function bootstrap() {
   const { from, to } = defaultRange();
   document.getElementById('f-from').value = from;
   document.getElementById('f-to').value   = to;
+  document.getElementById('f-year').value = new Date().getFullYear();
   await loadBreeds();
+  syncFilterVisibility();
   runReport();
 }
 
