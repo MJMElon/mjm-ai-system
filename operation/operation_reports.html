@@ -823,9 +823,11 @@ async function runSummaryMovement() {
   }
 
   // Sort: plot rows by (plot, batch); batch rows by batch; date rows by date asc
+  // Natural compare so B2 sorts before B10 (instead of after, alphabetically).
+  const _natCmp = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
   rows.sort((a, c) => {
-    if (groupBy === 'plot')  return (a.plot.localeCompare(c.plot)) || a.batch.localeCompare(c.batch);
-    if (groupBy === 'batch') return a.batch.localeCompare(c.batch);
+    if (groupBy === 'plot')  return _natCmp(a.plot, c.plot) || _natCmp(a.batch, c.batch);
+    if (groupBy === 'batch') return _natCmp(a.batch, c.batch);
     return a.date.localeCompare(c.date);
   });
 
@@ -861,22 +863,22 @@ async function runSummaryMovement() {
           ${fmtCell(r.closing, 'text-[#4a7a2e] font-black')}
         </tr>`).join('');
     }
-    // plot mode: group rows by plot, emit a subtotal per plot
+    // plot mode: group rows by plot. No subtotal row — the plot's running
+    // balance is shown next to its label on the first row of each group.
     const groups = {};
     rows.forEach(r => { (groups[r.plot] ||= []).push(r); });
-    const plotKeys = Object.keys(groups).sort();
+    const plotKeys = Object.keys(groups).sort(_natCmp);
     const html = [];
     for (const p of plotKeys) {
       const list = groups[p];
-      const sub = list.reduce((s, r) => {
-        Object.keys(_emptyMv()).forEach(k => s[k] = (s[k] || 0) + r[k]);
-        s.opening += r.opening; s.closing += r.closing;
-        return s;
-      }, { opening: 0, closing: 0, ..._emptyMv() });
+      const plotBalance = list.reduce((s, r) => s + r.closing, 0);
       list.forEach((r, i) => {
+        const plotCell = (i === 0)
+          ? `<td class="font-black text-[#3d2610]">${r.plot}<br><span class="text-[10px] font-bold text-[#4a7a2e] uppercase tracking-widest">Bal: ${fmtNum(plotBalance)}</span></td>`
+          : `<td></td>`;
         html.push(`
           <tr>
-            <td class="font-black text-[#3d2610]">${i === 0 ? r.plot : ''}</td>
+            ${plotCell}
             <td>${r.batch || '—'}</td>
             ${fmtCell(r.opening)}
             ${fmtCell(r.seeds,   'text-[#c07820] font-black')}
@@ -892,23 +894,6 @@ async function runSummaryMovement() {
             ${fmtCell(r.closing, 'text-[#4a7a2e] font-black')}
           </tr>`);
       });
-      html.push(`
-        <tr style="background:#fdfaf4">
-          <td class="font-black text-[#3d2610]">${p} Total</td>
-          <td></td>
-          ${fmtCell(sub.opening, 'font-black')}
-          ${fmtCell(sub.seeds,   'text-[#c07820] font-black')}
-          ${fmtCell(sub.planted, 'text-[#c07820] font-black')}
-          ${fmtCell(sub.trans,   'text-[#3a7ab4] font-black')}
-          ${fmtCell(sub.premium, 'text-[#3a7ab4] font-black')}
-          ${fmtCell(sub.dtone,   'text-[#3a7ab4] font-black')}
-          ${fmtCell(sub.damaged, 'text-[#a83020] font-black')}
-          ${fmtCell(sub.cull1,   'text-[#a83020] font-black')}
-          ${fmtCell(sub.cull2,   'text-[#a83020] font-black')}
-          ${fmtCell(sub.cull3,   'text-[#a83020] font-black')}
-          ${fmtCell(sub.sold,    'text-[#a83020] font-black')}
-          ${fmtCell(sub.closing, 'text-[#4a7a2e] font-black')}
-        </tr>`);
     }
     return html.join('');
   })();
