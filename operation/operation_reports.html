@@ -35,6 +35,11 @@
   .seg-trans   { background:#3a7ab4; }
   .seg-cull    { background:#a83020; }
 
+  /* Nursery multi-select chips */
+  .nursery-chip { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:10px; background:#fff; border:1.5px solid #e8dcc8; cursor:pointer; font-size:11px; font-weight:700; color:#3d2610; user-select:none; }
+  .nursery-chip:has(input:checked) { background:#e8f5da; border-color:#6aa83c; }
+  .nursery-chip input { accent-color:#4a7a2e; }
+
   @media print {
     body { background:white; }
     .no-print, .glass-panel, header { box-shadow:none !important; border:none !important; }
@@ -91,6 +96,16 @@
         <div class="md:col-span-2 f-year hidden">
           <label class="label-style">Year</label>
           <input id="f-year" type="number" min="2015" max="2099" step="1" class="input-style">
+        </div>
+        <div class="md:col-span-4 f-nursery-pick hidden">
+          <div class="flex items-center justify-between mb-1">
+            <span class="label-style !mb-0">Nurseries</span>
+            <div class="flex gap-3 text-[10px] font-black uppercase tracking-widest">
+              <button type="button" id="f-nurs-all" class="text-[#4a7a2e] hover:underline">All</button>
+              <button type="button" id="f-nurs-none" class="text-[#a83020] hover:underline">Clear</button>
+            </div>
+          </div>
+          <div id="f-nursery-chips" class="flex flex-wrap gap-2"></div>
         </div>
         <div class="md:col-span-2 f-breed">
           <label class="label-style">Breed</label>
@@ -355,12 +370,36 @@ async function runReport() {
 // ── Filter visibility by report type ─────────────────────────────────────────
 function syncFilterVisibility() {
   const which = document.getElementById('f-report').value;
-  const showYear  = (which === 'nursery_summary');
-  const showRange = (which === 'batch_production');
-  const showBreed = (which === 'batch_production');
-  document.querySelectorAll('.f-year').forEach(el  => el.classList.toggle('hidden', !showYear));
-  document.querySelectorAll('.f-range').forEach(el => el.classList.toggle('hidden', !showRange));
-  document.querySelectorAll('.f-breed').forEach(el => el.classList.toggle('hidden', !showBreed));
+  const showYear   = (which === 'nursery_summary');
+  const showNurs   = (which === 'nursery_summary');
+  const showRange  = (which === 'batch_production');
+  const showBreed  = (which === 'batch_production');
+  document.querySelectorAll('.f-year').forEach(el          => el.classList.toggle('hidden', !showYear));
+  document.querySelectorAll('.f-nursery-pick').forEach(el  => el.classList.toggle('hidden', !showNurs));
+  document.querySelectorAll('.f-range').forEach(el         => el.classList.toggle('hidden', !showRange));
+  document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !showBreed));
+}
+
+// ── Nursery multi-select ─────────────────────────────────────────────────────
+async function loadNurseryFilter() {
+  const { data } = await _supabase.from('shared_plots').select('nursery_name');
+  const names = new Set();
+  (data || []).forEach(p => { if (p.nursery_name) names.add(p.nursery_name); });
+  names.add('Pre-Nursery'); // virtual aggregate for pre-nursery plots
+  const wrap = document.getElementById('f-nursery-chips');
+  wrap.innerHTML = '';
+  [...names].sort().forEach(n => {
+    const safe = String(n).replace(/[<>"'&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]));
+    const lbl = document.createElement('label');
+    lbl.className = 'nursery-chip';
+    lbl.innerHTML = `<input type="checkbox" class="f-nurs-cb" value="${safe}" checked>${safe}`;
+    wrap.appendChild(lbl);
+  });
+  document.getElementById('f-nurs-all').onclick  = () => { document.querySelectorAll('.f-nurs-cb').forEach(cb => cb.checked = true); };
+  document.getElementById('f-nurs-none').onclick = () => { document.querySelectorAll('.f-nurs-cb').forEach(cb => cb.checked = false); };
+}
+function selectedNurseries() {
+  return [...document.querySelectorAll('.f-nurs-cb:checked')].map(cb => cb.value);
 }
 
 document.getElementById('f-run').addEventListener('click', runReport);
@@ -596,45 +635,51 @@ async function runNurserySummary() {
     }
   });
 
-  // Compute running balance per nursery: walk every YYYY-MM up to chosen year-12.
-  // The "Balance b/f" for the first month of the chosen year is the cumulative
-  // net of all earlier months for that nursery.
-  const allMonths = new Set();
-  Object.values(buckets).forEach(byMonth => Object.keys(byMonth).forEach(k => allMonths.add(k)));
-  const sortedMonths = [...allMonths].sort();
-
-  const netOf = (b) => b.seeds + b.trans_in - b.trans_out - b.damaged - b.culling - b.sold;
-
-  const nurseries = Object.keys(buckets).sort();
-  if (!nurseries.length) {
+  // Combine the currently-selected nurseries into a single byMonth map.
+  const selected = selectedNurseries();
+  if (selected.length === 0) {
     loading.classList.add('hidden');
     out.classList.remove('hidden');
-    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-[#8a7a68] text-sm">No nursery movement data found.</div>`;
+    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-[#8a7a68] text-sm">Select at least one nursery to see the report.</div>`;
     return;
   }
 
-  // For each nursery, build year-row data (b/f + 12 months + closing).
-  const yearStart = `${year}-01`;
-  const yearEnd   = `${year}-12`;
-
-  function buildNurseryRows(n) {
-    let running = 0;
-    // Sum everything BEFORE yearStart for the opening balance
-    for (const ym of sortedMonths) {
-      if (ym >= yearStart) break;
-      if (buckets[n][ym]) running += netOf(buckets[n][ym]);
+  const combined = {};
+  for (const n of selected) {
+    const byMonth = buckets[n];
+    if (!byMonth) continue;
+    for (const [ym, b] of Object.entries(byMonth)) {
+      if (!combined[ym]) combined[ym] = { seeds: 0, trans_in: 0, trans_out: 0, damaged: 0, culling: 0, sold: 0 };
+      const dst = combined[ym];
+      dst.seeds    += b.seeds;
+      dst.trans_in += b.trans_in;
+      dst.trans_out += b.trans_out;
+      dst.damaged  += b.damaged;
+      dst.culling  += b.culling;
+      dst.sold     += b.sold;
     }
-    const opening = running;
-
-    const months = [];
-    for (let m = 1; m <= 12; m++) {
-      const ym = `${year}-${String(m).padStart(2, '0')}`;
-      const b = buckets[n][ym] || { seeds: 0, trans_in: 0, trans_out: 0, damaged: 0, culling: 0, sold: 0 };
-      running += netOf(b);
-      months.push({ ym, m, bf: running - netOf(b), ...b, cf: running });
-    }
-    return { opening, months, closing: running };
   }
+
+  const sortedMonths = Object.keys(combined).sort();
+  const netOf = (b) => b.seeds + b.trans_in - b.trans_out - b.damaged - b.culling - b.sold;
+  const yearStart = `${year}-01`;
+
+  // Opening balance = cumulative net of every prior month for the selected combo.
+  let running = 0;
+  for (const ym of sortedMonths) {
+    if (ym >= yearStart) break;
+    running += netOf(combined[ym]);
+  }
+  const opening = running;
+
+  const months = [];
+  for (let m = 1; m <= 12; m++) {
+    const ym = `${year}-${String(m).padStart(2, '0')}`;
+    const b = combined[ym] || { seeds: 0, trans_in: 0, trans_out: 0, damaged: 0, culling: 0, sold: 0 };
+    running += netOf(b);
+    months.push({ ym, m, bf: running - netOf(b), ...b, cf: running });
+  }
+  const closing = running;
 
   // Render
   loading.classList.add('hidden');
@@ -642,64 +687,60 @@ async function runNurserySummary() {
 
   const headerCell = (txt) => `<th class="text-right" style="white-space:nowrap">${txt}</th>`;
   const numCell    = (n)   => `<td class="text-right">${n ? fmtNum(n) : '0'}</td>`;
+  const selectionLabel = selected.length === 1 ? selected[0] : selected.join(' + ');
 
   out.innerHTML = `
     <div class="glass-panel p-6 rounded-[2rem]">
       <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
         <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Nursery Summary Report · ${year}</h3>
-        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${nurseries.length} nurser${nurseries.length === 1 ? 'y' : 'ies'}</div>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${selected.length} nurser${selected.length === 1 ? 'y' : 'ies'}</div>
       </div>
 
-      ${nurseries.map(n => {
-        const { opening, months, closing } = buildNurseryRows(n);
-        return `
-          <div class="mb-8">
-            <div class="flex items-center justify-between mb-3">
-              <h4 class="text-sm font-black uppercase tracking-widest text-[#3d2610]">${n}</h4>
-              <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">
-                Opening ${fmtNum(opening)} · Closing <span class="text-[#4a7a2e]">${fmtNum(closing)}</span>
-              </div>
-            </div>
-            <div class="overflow-x-auto">
-              <table class="report-table">
-                <thead>
-                  <tr>
-                    <th>Month</th>
-                    ${headerCell('Balance b/f')}
-                    ${headerCell('Seeds In')}
-                    ${headerCell('Transplanted In')}
-                    ${headerCell('Transplanted Out')}
-                    ${headerCell('Damaged')}
-                    ${headerCell('Culling')}
-                    ${headerCell('Sold')}
-                    ${headerCell('Balance c/f')}
-                  </tr>
-                </thead>
-                <tbody>
-                  ${months.map(r => `
-                    <tr>
-                      <td class="font-black text-[#3d2610]">${MONTHS_SHORT[r.m - 1]} ${year}</td>
-                      ${numCell(r.bf)}
-                      <td class="text-right text-[#c07820] font-black">${r.seeds ? fmtNum(r.seeds) : '0'}</td>
-                      <td class="text-right text-[#3a7ab4]">${r.trans_in ? fmtNum(r.trans_in) : '0'}</td>
-                      <td class="text-right text-[#3a7ab4]">${r.trans_out ? fmtNum(r.trans_out) : '0'}</td>
-                      <td class="text-right text-[#a83020]">${r.damaged ? fmtNum(r.damaged) : '0'}</td>
-                      <td class="text-right text-[#a83020]">${r.culling ? fmtNum(r.culling) : '0'}</td>
-                      <td class="text-right text-[#a83020]">${r.sold ? fmtNum(r.sold) : '0'}</td>
-                      <td class="text-right text-[#4a7a2e] font-black">${fmtNum(r.cf)}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        `;
-      }).join('')}
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-3 gap-2">
+        <h4 class="text-sm font-black uppercase tracking-widest text-[#3d2610]">${selectionLabel}</h4>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">
+          Opening ${fmtNum(opening)} · Closing <span class="text-[#4a7a2e]">${fmtNum(closing)}</span>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Month</th>
+              ${headerCell('Balance b/f')}
+              ${headerCell('Seeds In')}
+              ${headerCell('Transplanted In')}
+              ${headerCell('Transplanted Out')}
+              ${headerCell('Damaged')}
+              ${headerCell('Culling')}
+              ${headerCell('Sold')}
+              ${headerCell('Balance c/f')}
+            </tr>
+          </thead>
+          <tbody>
+            ${months.map(r => `
+              <tr>
+                <td class="font-black text-[#3d2610]">${MONTHS_SHORT[r.m - 1]} ${year}</td>
+                ${numCell(r.bf)}
+                <td class="text-right text-[#c07820] font-black">${r.seeds ? fmtNum(r.seeds) : '0'}</td>
+                <td class="text-right text-[#3a7ab4]">${r.trans_in ? fmtNum(r.trans_in) : '0'}</td>
+                <td class="text-right text-[#3a7ab4]">${r.trans_out ? fmtNum(r.trans_out) : '0'}</td>
+                <td class="text-right text-[#a83020]">${r.damaged ? fmtNum(r.damaged) : '0'}</td>
+                <td class="text-right text-[#a83020]">${r.culling ? fmtNum(r.culling) : '0'}</td>
+                <td class="text-right text-[#a83020]">${r.sold ? fmtNum(r.sold) : '0'}</td>
+                <td class="text-right text-[#4a7a2e] font-black">${fmtNum(r.cf)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
 
       <div class="text-[10px] font-bold text-[#8a7a68] mt-4 leading-relaxed">
         <strong class="text-[#3d2610]">Notes —</strong>
-        Balance b/f for January is the cumulative net of all earlier months on record.
-        Transplanted Out is credited to <em>Pre-Nursery</em> as a best-effort source whenever a transplant lands in a main nursery — the underlying log only stores the destination plot, so cross-nursery transplant routing (e.g. UN1 → UN2) cannot be reconstructed perfectly.
+        Numbers above are the combined total of the selected nurseries (${selectionLabel}). Pick or clear chips to change the rollup.
+        Balance b/f for January is the cumulative net of all earlier months on record for the same selection.
+        Transplanted Out is credited to <em>Pre-Nursery</em> as a best-effort source whenever a transplant lands in a main nursery — the underlying log only stores the destination plot, so cross-nursery transplant routing cannot be reconstructed perfectly.
         Sold is attributed per-line on each DO using <code>plot_n</code>, with cancelled DOs excluded.
         Audit, photo, and stock-calibration logs are not counted as movements.
       </div>
@@ -720,7 +761,7 @@ async function bootstrap() {
   document.getElementById('f-from').value = from;
   document.getElementById('f-to').value   = to;
   document.getElementById('f-year').value = new Date().getFullYear();
-  await loadBreeds();
+  await Promise.all([loadBreeds(), loadNurseryFilter()]);
   syncFilterVisibility();
   runReport();
 }
