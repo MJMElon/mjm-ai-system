@@ -3704,6 +3704,7 @@
                         <input type="file" accept="image/*" capture="environment" class="hidden t8-photo-input" id="${rowId}-photo" onchange="handleBagPhoto(this,'${rowId}')">
                         <button type="button" class="t8-photo-btn w-full h-[45px] rounded-lg border border-[#cdd9bd] bg-white text-[#4a7a2e] text-[10px] font-black uppercase tracking-widest hover:bg-[#e8f5da] shadow-sm flex items-center justify-center gap-1" onclick="document.getElementById('${rowId}-photo').click()">📷 Count Seeds</button>
                         <div class="t8-verify-result hidden mt-1 text-[10px] font-black"></div>
+                        <img class="t8-photo-thumb hidden mt-2 rounded-lg border border-[#e8dcc8] cursor-pointer w-full" style="max-height:120px;object-fit:cover;" onclick="if(this.src)window.open(this.src,'_blank')" title="Tap to view full photo" alt="bag seed photo">
                     </div>
                     <button type="button" class="w-10 h-[45px] rounded-lg border border-[#f8d7da] text-[#a83020] bg-white flex items-center justify-center hover:bg-[#f8d7da] shadow-sm self-end" onclick="removeSeedAuditRow('${rowId}')" title="Remove bag">✕</button>
                 </div>
@@ -3751,9 +3752,11 @@
         const _sgk1 = 'AIzaSyCvSAVEeOa_', _sgk2 = 'PkZxRKDJkYz3hqzdgvbGIyQ';
         const SEED_GEMINI_KEY = _sgk1 + _sgk2;
         const SEED_COUNT_PROMPT =
-            'You are an expert at counting seeds in a photo of a single opened seed bag laid out for audit. ' +
-            'Count the total number of individual seeds visible in this photo as accurately as possible. ' +
-            'Return ONLY JSON: { "seed_count": <number>, "confidence": "high"|"medium"|"low", "notes": "<short note>" }';
+            'You are a meticulous seed-counting auditor. The photo shows the seeds from ONE seed bag arranged on a surface or tray for counting. ' +
+            'Count EVERY individual seed precisely. Work systematically: divide the image into rows/regions, count each region left-to-right and top-to-bottom, then sum. ' +
+            'Include partially visible seeds at the edges. Count seeds only — ignore the bag, labels, hands, tray lines, and shadows. ' +
+            'Do NOT estimate or round to a neat number; return the exact integer you counted. ' +
+            'Return ONLY JSON: { "seed_count": <integer>, "confidence": "high"|"medium"|"low", "notes": "<brief note on how you counted or any uncertainty>" }';
 
         function _seedFileToDataUrl(file) {
             return new Promise((resolve, reject) => {
@@ -3764,7 +3767,7 @@
             });
         }
 
-        function _seedCompressImage(dataUrl, maxWidth = 1400, quality = 0.82) {
+        function _seedCompressImage(dataUrl, maxWidth = 2000, quality = 0.92) {
             return new Promise(resolve => {
                 const img = new Image();
                 img.onload = () => {
@@ -3788,7 +3791,8 @@
                     { text: prompt },
                     { inlineData: { mimeType: 'image/jpeg', data: base64Data } }
                 ]}],
-                generationConfig: { responseMimeType: 'application/json' }
+                // temperature 0 → deterministic: the same photo yields the same count.
+                generationConfig: { temperature: 0, topP: 1, topK: 1, responseMimeType: 'application/json' }
             };
             const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             const data = await res.json();
@@ -3818,9 +3822,11 @@
             if (!row) return;
             const el = row.querySelector('.t8-verify-result');
             const btn = row.querySelector('.t8-photo-btn');
+            const thumb = row.querySelector('.t8-photo-thumb');
             const st = seedAuditPhotoState[rowId];
             if (!el) return;
-            if (!st || st.aiCount == null) { el.className = 't8-verify-result hidden mt-1 text-[10px] font-black'; el.innerHTML = ''; return; }
+            const hideThumb = () => { if (thumb) { thumb.classList.add('hidden'); thumb.removeAttribute('src'); } };
+            if (!st || st.aiCount == null) { el.className = 't8-verify-result hidden mt-1 text-[10px] font-black'; el.innerHTML = ''; hideThumb(); return; }
             const supQty = readNumericInput(row.querySelector('.t8-supplier-qty'));
             const recQty = readNumericInput(row.querySelector('.t8-received-qty'));
             const match = st.aiCount === supQty && st.aiCount === recQty;
@@ -3829,10 +3835,15 @@
             if (match) {
                 el.className = 't8-verify-result mt-1 text-[10px] font-black text-[#4a7a2e]';
                 el.innerHTML = `✓ Checked · AI counted ${st.aiCount.toLocaleString()}`;
+                hideThumb();
             } else {
                 el.className = 't8-verify-result mt-1 text-[10px] font-black text-[#a83020]';
-                const link = st.photoUrl ? ` · <a href="${st.photoUrl}" target="_blank" class="underline">view photo</a>` : ' · photo will be saved';
-                el.innerHTML = `⚠️ Mismatch · AI counted ${st.aiCount.toLocaleString()}${link}`;
+                const hint = st.photoUrl ? '' : ' · photo will be saved';
+                el.innerHTML = `⚠️ Mismatch · AI counted ${st.aiCount.toLocaleString()}${hint}`;
+                // Show the photo right here so it can be checked against the count.
+                const src = st.photoBase64 || st.photoUrl;
+                if (thumb && src) { thumb.src = src; thumb.classList.remove('hidden'); }
+                else hideThumb();
             }
             if (btn) btn.innerHTML = '📷 Recount';
         }
