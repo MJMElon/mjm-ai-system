@@ -151,6 +151,11 @@
         .cust-table tbody tr:hover{background:#fafbff;}
         .cust-table tbody tr:hover td.t-mo.has-qty{background:#bfdbfe;}
         .cust-table tbody tr:hover td.t-mo.has-booked{background:#fde68a;}
+        /* Totals row — center-align numbers to match the body cells above, with
+           the highlight colours from the header so totals read as a summary band. */
+        .cust-table tfoot td{padding:8px 6px;text-align:center;font-variant-numeric:tabular-nums;border-top:2px solid #e2e8f0;color:#1e293b;font-weight:900;font-size:11px;background:#f8fafc;}
+        .cust-table tfoot td.t-tot{background:#fef9c3;color:#854d0e;}
+        .cust-table tfoot td.text-right{text-align:right;}
         .pill-status{display:inline-block;padding:2px 7px;border-radius:999px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1px solid;white-space:nowrap;}
         .pill-paid     { background:#dcfce7;color:#15803d;border-color:#86efac;}
         .pill-partial  { background:#fef3c7;color:#a16207;border-color:#fcd34d;}
