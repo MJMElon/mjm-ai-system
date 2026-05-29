@@ -661,12 +661,38 @@
 
       const userId = data.user.id;
 
-      // Fetch profile
+      // Fetch profile — we need user_type and permissions to gate
+      // customer-only accounts out, and the basic display fields the
+      // audit home uses.
       const { data: profile, error: profileError } = await _supa
         .from('shared_profiles')
-        .select('full_name, role, email, phone')
+        .select('full_name, role, email, phone, user_type, permissions')
         .eq('id', userId)
         .single();
+
+      // Customer-portal accounts share this auth DB but have no
+      // business in the audit module. Sign them out and explain.
+      const STAFF_MODULE_VALUES = ['admin','normal','view','edit','manage','read','write','full','staff'];
+      function _isCustomerOnly(p) {
+        if (!p) return false;
+        const looksCustomer = (p.user_type === 'customer') || (p.role === 'customer');
+        if (!looksCustomer) return false;
+        const perms = p.permissions || {};
+        if (perms.manage_users || perms.can_verify_operation) return false;
+        if (perms.modules && typeof perms.modules === 'object') {
+          for (const k in perms.modules) {
+            if (STAFF_MODULE_VALUES.indexOf(String(perms.modules[k]).toLowerCase()) !== -1) return false;
+          }
+        }
+        return true;
+      }
+      if (_isCustomerOnly(profile)) {
+        await _supa.auth.signOut();
+        btn.classList.remove('loading');
+        errEl.textContent = 'This account is registered as a customer. Please use https://buy.mjmnursery.com';
+        errEl.style.display = 'block';
+        return;
+      }
 
       const name = profile?.full_name || email.split('@')[0];
       const role = profile?.role || 'Auditor';
