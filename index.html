@@ -1,8 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<!-- BUILD: 2026-05-29a · ops-gate + pending-access screen -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>MJM AI System</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -415,18 +419,22 @@
       // admin hasn't granted access to yet) goes to the Pending
       // Access screen — same screen for both cases, per spec.
       //
-      // Fail-open on a profile-read error so a transient Supabase
-      // hiccup doesn't lock the whole ops team out.
+      // Diagnostics: always log the gate decision and the raw profile
+      // / error pair so when "I'm getting in but shouldn't be" gets
+      // reported we can confirm the gate ran and see what it saw,
+      // without adding more debug code later.
       let canEnter = true;
       try {
-        const { data: profile } = await _supabase
+        const resp = await _supabase
           .from('shared_profiles')
           .select('user_type, role, permissions')
           .eq('id', session.user.id)
           .maybeSingle();
+        const profile = resp && resp.data;
         canEnter = hasOpsAccess(profile);
+        console.log('[ops-gate]', { email: session.user.email, canEnter, profile, error: resp && resp.error });
       } catch (e) {
-        console.warn('profile gate read failed (allowing through):', e);
+        console.warn('[ops-gate] profile read threw (failing open):', e);
       }
       if (!canEnter) {
         document.getElementById('pending-email').textContent = session.user.email || '—';
