@@ -217,6 +217,29 @@
   const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpYnFqenRvem9rb2hxbWhxcXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQzNjIsImV4cCI6MjA4OTgxMDM2Mn0.J7qJUZhWXYf5b9oey4wXJkjdi66jomEMw_NeV9NWF7M';
   const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+  // Customer accounts (signed up via buy.mjmnursery.com) share the
+  // Supabase auth database with the operations system but must NOT be
+  // admitted past the hub. shared_profiles.user_type='customer' is the
+  // primary marker the salesweb signup writes; legacy customer rows
+  // only have role='customer'. We treat either as customer-only UNLESS
+  // the profile carries an explicit staff-grade module permission, so
+  // an account that's both a customer AND an operator (rare, but
+  // possible after a User Access grant) is still let through.
+  const _STAFF_MODULE_VALUES = ['admin','normal','view','edit','manage','read','write','full','staff'];
+  function isCustomerOnly(profile) {
+    if (!profile) return false;
+    const looksCustomer = (profile.user_type === 'customer') || (profile.role === 'customer');
+    if (!looksCustomer) return false;
+    const p = profile.permissions || {};
+    if (p.manage_users || p.can_verify_operation) return false;
+    if (p.modules && typeof p.modules === 'object') {
+      for (const k in p.modules) {
+        if (_STAFF_MODULE_VALUES.indexOf(String(p.modules[k]).toLowerCase()) !== -1) return false;
+      }
+    }
+    return true;
+  }
+
   const authScreen     = document.getElementById('auth-screen');
   const hubScreen      = document.getElementById('hub-screen');
   const mainBtn        = document.getElementById('main-auth-btn');
@@ -355,6 +378,30 @@
     if (isRecovering) return;
     if (event === 'SIGNED_OUT' || !session) { showAuth(); return; }
     if (session) {
+      // Customer-portal accounts share this auth DB but must be turned
+      // back at the door. Fetch the profile, and if it's customer-only,
+      // sign out and explain where their portal lives. Default to
+      // allowing through on a failed profile read so a brief network
+      // hiccup doesn't lock out the whole team.
+      try {
+        const { data: profile } = await _supabase
+          .from('shared_profiles')
+          .select('user_type, role, permissions')
+          .eq('id', session.user.id)
+          .maybeSingle();
+        if (isCustomerOnly(profile)) {
+          isLoggingOut = true;
+          await _supabase.auth.signOut();
+          isLoggingOut = false;
+          sessionStorage.removeItem('mjm_session_active');
+          showAuth();
+          alert('This account is registered as a customer.\n\nPlease use https://buy.mjmnursery.com to access your orders. Operations access has to be granted by an admin.');
+          return;
+        }
+      } catch (e) {
+        console.warn('profile gate read failed (allowing through):', e);
+      }
+
       welcomeText.innerText = session.user.user_metadata?.full_name || session.user.email;
       // Mark session active for this window (clears on window close)
       sessionStorage.setItem('mjm_session_active', '1');
