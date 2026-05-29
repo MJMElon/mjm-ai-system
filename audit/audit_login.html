@@ -670,26 +670,25 @@
         .eq('id', userId)
         .single();
 
-      // Customer-portal accounts share this auth DB but have no
-      // business in the audit module. Sign them out and explain.
+      // Single ops-access gate. Either a sales-web customer crossing
+      // over or a fresh ops signup that the admin hasn't granted
+      // anything to yet — same outcome, same message.
       const STAFF_MODULE_VALUES = ['admin','normal','view','edit','manage','read','write','full','staff'];
-      function _isCustomerOnly(p) {
+      function _hasOpsAccess(p) {
         if (!p) return false;
-        const looksCustomer = (p.user_type === 'customer') || (p.role === 'customer');
-        if (!looksCustomer) return false;
         const perms = p.permissions || {};
-        if (perms.manage_users || perms.can_verify_operation) return false;
+        if (perms.manage_users || perms.can_verify_operation) return true;
         if (perms.modules && typeof perms.modules === 'object') {
           for (const k in perms.modules) {
-            if (STAFF_MODULE_VALUES.indexOf(String(perms.modules[k]).toLowerCase()) !== -1) return false;
+            if (STAFF_MODULE_VALUES.indexOf(String(perms.modules[k]).toLowerCase()) !== -1) return true;
           }
         }
-        return true;
+        return false;
       }
-      if (_isCustomerOnly(profile)) {
+      if (!_hasOpsAccess(profile)) {
         await _supa.auth.signOut();
         btn.classList.remove('loading');
-        errEl.textContent = 'This account is registered as a customer. Please use https://buy.mjmnursery.com';
+        errEl.textContent = 'Please contact an admin to grant access for this AI system.';
         errEl.style.display = 'block';
         return;
       }
