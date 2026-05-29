@@ -75,6 +75,7 @@
       email: u.email || '',
       full_name: (u.user_metadata && u.user_metadata.full_name) || ''
     };
+    let fetchOk = false;
     try {
       const { data, error } = await supa
         .from('shared_profiles')
@@ -88,6 +89,7 @@
       } else {
         state.permissions = normalize(null);
       }
+      fetchOk = true;
     } catch (e) {
       console.warn('[MJMAccess] failed to load permissions:', e);
       state.permissions = normalize(null);
@@ -100,13 +102,11 @@
     // the hub's index.html where the Pending Access screen explains
     // they're awaiting admin approval.
     //
-    // This belts-and-braces the hub's auth-state gate: even if a stale
-    // cached hub HTML happened to let the user through, or they typed
-    // a module URL directly, every module page that calls load() will
-    // bounce them back. Allow opt-out via window.__MJM_SKIP_ACCESS_GATE
-    // for pages (eg. the hub itself) that already handle their own
-    // gating.
-    if (!global.__MJM_SKIP_ACCESS_GATE) {
+    // Fails OPEN on a profile-read error so a transient Supabase
+    // hiccup doesn't lock real ops admins out. Same policy as the hub
+    // gate. Allow opt-out via window.__MJM_SKIP_ACCESS_GATE for pages
+    // that already handle their own gating.
+    if (fetchOk && !global.__MJM_SKIP_ACCESS_GATE) {
       const p = state.permissions || {};
       let anyAccess = !!(p.manage_users || p.can_verify_operation);
       if (!anyAccess && p.modules) {
