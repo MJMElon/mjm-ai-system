@@ -117,6 +117,30 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════════ PENDING SCREEN
+     Shown when a user authenticates successfully but has no module
+     permissions yet (fresh ops signup OR a customer-portal account who
+     tried to log in here). Same screen, same message: "ask the admin
+     to grant access". The user stays signed in so they can refresh
+     once access is granted without re-authenticating. -->
+<div id="pending-screen" style="display:none" class="hub-bg min-h-screen flex flex-col items-center justify-center px-6 py-12">
+  <div class="max-w-md w-full bg-slate-900/80 border border-amber-500/30 rounded-3xl shadow-2xl p-8 text-center" style="backdrop-filter:blur(8px);">
+    <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-2xl">⏳</div>
+    <div class="text-[10px] font-black text-amber-400 uppercase tracking-[.25em] mb-2">Access Pending</div>
+    <h2 class="text-lg font-black text-slate-100 mb-2">Awaiting admin approval</h2>
+    <p class="text-[13px] text-slate-300 leading-relaxed mb-1">Your account exists but no module access has been granted yet.</p>
+    <p class="text-[13px] text-slate-300 leading-relaxed mb-5">Please contact an admin to grant access for this AI system.</p>
+    <div class="bg-slate-800/60 border border-slate-700 rounded-xl px-4 py-3 mb-5">
+      <div class="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Your sign-in email</div>
+      <div id="pending-email" class="text-[13px] font-bold text-slate-200 break-all">—</div>
+    </div>
+    <div class="flex gap-3 justify-center">
+      <button onclick="location.reload()" class="text-[10px] font-bold text-emerald-300 hover:text-emerald-100 uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/40 px-4 py-2 rounded-full cursor-pointer transition-colors">↻ Refresh</button>
+      <button onclick="handleLogout()" class="text-[10px] font-bold text-slate-400 hover:text-red-400 uppercase tracking-widest bg-transparent border border-slate-700 px-4 py-2 rounded-full cursor-pointer transition-colors">Sign Out</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════════════════════════════════════════════════ HUB SCREEN -->
 <div id="hub-screen" style="display:none" class="hub-bg min-h-screen flex flex-col">
 
@@ -217,27 +241,23 @@
   const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpYnFqenRvem9rb2hxbWhxcXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQzNjIsImV4cCI6MjA4OTgxMDM2Mn0.J7qJUZhWXYf5b9oey4wXJkjdi66jomEMw_NeV9NWF7M';
   const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  // Customer accounts (signed up via buy.mjmnursery.com) share the
-  // Supabase auth database with the operations system but must NOT be
-  // admitted past the hub. shared_profiles.user_type='customer' is the
-  // primary marker the salesweb signup writes; legacy customer rows
-  // only have role='customer'. We treat either as customer-only UNLESS
-  // the profile carries an explicit staff-grade module permission, so
-  // an account that's both a customer AND an operator (rare, but
-  // possible after a User Access grant) is still let through.
+  // Single gate for entry into the ops system: does the signed-in user
+  // hold ANY staff-grade module permission? If not (whether they're a
+  // sales-web customer who shares this auth DB, or a fresh ops signup
+  // that the admin hasn't granted permissions to yet) → route them to
+  // the Pending Access screen instead of the module hub. Same screen
+  // and message for both cases, per spec.
   const _STAFF_MODULE_VALUES = ['admin','normal','view','edit','manage','read','write','full','staff'];
-  function isCustomerOnly(profile) {
+  function hasOpsAccess(profile) {
     if (!profile) return false;
-    const looksCustomer = (profile.user_type === 'customer') || (profile.role === 'customer');
-    if (!looksCustomer) return false;
     const p = profile.permissions || {};
-    if (p.manage_users || p.can_verify_operation) return false;
+    if (p.manage_users || p.can_verify_operation) return true;
     if (p.modules && typeof p.modules === 'object') {
       for (const k in p.modules) {
-        if (_STAFF_MODULE_VALUES.indexOf(String(p.modules[k]).toLowerCase()) !== -1) return false;
+        if (_STAFF_MODULE_VALUES.indexOf(String(p.modules[k]).toLowerCase()) !== -1) return true;
       }
     }
-    return true;
+    return false;
   }
 
   const authScreen     = document.getElementById('auth-screen');
@@ -253,8 +273,16 @@
 
   document.getElementById('yr').textContent = new Date().getFullYear();
 
-  function showAuth() { hubScreen.style.display='none'; authScreen.style.display='flex'; }
-  function showHub()  { authScreen.style.display='none'; hubScreen.style.display='block'; }
+  function showAuth() {
+    hubScreen.style.display='none';
+    document.getElementById('pending-screen').style.display='none';
+    authScreen.style.display='flex';
+  }
+  function showHub()  {
+    authScreen.style.display='none';
+    document.getElementById('pending-screen').style.display='none';
+    hubScreen.style.display='block';
+  }
 
   let isSignUpMode = false;
   let isRecovering = _isRecoveryLink;
@@ -304,7 +332,11 @@
       const { error } = await _supabase.auth.signUp({ email, password: pw, options: { data: { full_name: name } } });
       if (error) { alert('Signup Error: ' + error.message); mainBtn.innerText = 'Sign Up'; }
       else {
-        alert('Account created! You can now log in.');
+        // New ops accounts have zero module permissions until an admin
+        // grants them via User Access. Set expectations up front instead
+        // of letting them log in and find an empty "Pending Access"
+        // screen with no context.
+        alert('Account created.\n\nPlease contact an admin to grant access for this AI system. Once granted, you\'ll be able to log in and use the modules.');
         isSignUpMode = false; signupFields.classList.add('hidden');
         mainBtn.innerText = 'Login'; toggleBtn.innerText = 'Create Account';
         forgotBtn.style.display = 'inline-block';
@@ -378,28 +410,31 @@
     if (isRecovering) return;
     if (event === 'SIGNED_OUT' || !session) { showAuth(); return; }
     if (session) {
-      // Customer-portal accounts share this auth DB but must be turned
-      // back at the door. Fetch the profile, and if it's customer-only,
-      // sign out and explain where their portal lives. Default to
-      // allowing through on a failed profile read so a brief network
-      // hiccup doesn't lock out the whole team.
+      // Module-permission gate. Anyone without staff-grade access
+      // (sales-web customer crossing over, or a fresh ops signup the
+      // admin hasn't granted access to yet) goes to the Pending
+      // Access screen — same screen for both cases, per spec.
+      //
+      // Fail-open on a profile-read error so a transient Supabase
+      // hiccup doesn't lock the whole ops team out.
+      let canEnter = true;
       try {
         const { data: profile } = await _supabase
           .from('shared_profiles')
           .select('user_type, role, permissions')
           .eq('id', session.user.id)
           .maybeSingle();
-        if (isCustomerOnly(profile)) {
-          isLoggingOut = true;
-          await _supabase.auth.signOut();
-          isLoggingOut = false;
-          sessionStorage.removeItem('mjm_session_active');
-          showAuth();
-          alert('This account is registered as a customer.\n\nPlease use https://buy.mjmnursery.com to access your orders. Operations access has to be granted by an admin.');
-          return;
-        }
+        canEnter = hasOpsAccess(profile);
       } catch (e) {
         console.warn('profile gate read failed (allowing through):', e);
+      }
+      if (!canEnter) {
+        document.getElementById('pending-email').textContent = session.user.email || '—';
+        authScreen.style.display = 'none';
+        hubScreen.style.display = 'none';
+        document.getElementById('pending-screen').style.display = 'flex';
+        sessionStorage.setItem('mjm_session_active', '1');
+        return;
       }
 
       welcomeText.innerText = session.user.user_metadata?.full_name || session.user.email;
