@@ -282,7 +282,7 @@
         try {
             const { data: creditOrders, error } = await _supabase
                 .from('salesweb_customer_orders')
-                .select('id,order_number,customer_id,customer_name,total,created_at,status,payment_terms,credit_billed_at,credit_invoice_id,collected_qty,collected_at')
+                .select('id,order_number,customer_id,customer_name,billing_name,total,created_at,status,payment_terms,credit_billed_at,credit_invoice_id,collected_qty,collected_at')
                 .eq('payment_terms', 'credit')
                 .is('credit_invoice_id', null)
                 .not('collected_at', 'is', null)
@@ -320,7 +320,7 @@
                     groups[key] = {
                         key,
                         customerId: o.customer_id,
-                        customerName: o.customer_name || '—',
+                        customerName: o.billing_name || o.customer_name || '—',
                         billingPeriod: period,
                         billingLabel: new Date(y, m - 1, 1).toLocaleString('en-MY', { month: 'short', year: 'numeric' }),
                         orderIds: [],
@@ -929,7 +929,7 @@
 
             const [ordRes, _itemsRes, _collRes, _bookRes, _alRes] = await Promise.all([
                 _supabase.from('salesweb_customer_orders')
-                    .select('id,order_number,customer_name,total,status,created_at,payment_terms,collected_qty,collected_at')
+                    .select('id,order_number,customer_name,billing_name,total,status,created_at,payment_terms,collected_qty,collected_at')
                     .order('created_at', { ascending: true }),
                 _supabase.from('salesweb_order_items').select('order_id,quantity,unit_price,subtotal'),
                 _supabase.from('salesweb_order_collections').select('order_id,collected_qty,collected_at')
@@ -1041,7 +1041,7 @@
                     id: o.id,
                     orderNumber: o.order_number,
                     alNumber: al ? al.al_number : null,
-                    customer: o.customer_name,
+                    customer: o.billing_name || o.customer_name,
                     orderDate: o.created_at ? new Date(o.created_at) : null,
                     totalQty,
                     totalAmount: o.total ?? it.amt,
@@ -1565,7 +1565,7 @@
 
             const [bookingsRes, ordersRes] = await Promise.all([
                 _supabase.from('shared_collection_bookings').select('*').or(orFilter).order('booking_date', { ascending: false }),
-                _supabase.from('salesweb_customer_orders').select('id,order_number,customer_name,total_amount,balance_amount,status,created_at,collected_qty,collected_at').or(orFilter).order('created_at', { ascending: false })
+                _supabase.from('salesweb_customer_orders').select('id,order_number,customer_name,billing_name,total_amount,balance_amount,status,created_at,collected_qty,collected_at').or(orFilter).order('created_at', { ascending: false })
             ]);
 
             const bookings = bookingsRes.data || [];
