@@ -478,9 +478,9 @@
                         <td class="p-4 ${isCancelled ? 'text-red-700' : 'text-blue-700'} font-bold">${isAlLocked(order.remark) ? '<span title="Locked — only admins can edit" class="mr-1">&#128274;</span>' : ''}${order.al_number}</td>
                         <td class="p-4 ${isCancelled ? 'text-red-500 line-through' : ''}">${order.order_number || '-'}</td>
                         <td class="p-4 uppercase font-bold ${isCancelled ? 'text-red-800' : 'text-slate-800'}">${order.customer_name || 'Unknown'} ${isCancelled ? `<br><span class="text-[10px] text-red-500 font-black tracking-widest">${order.remark || ''}</span>` : ''}</td>
-                        <td class="p-4 text-center font-bold ${isCancelled ? 'text-red-500' : 'text-slate-600'}">${order.quantity_ordered}</td>
-                        <td class="p-4 text-center font-bold ${isCancelled ? 'text-red-400' : 'text-indigo-500'}">${order._cumul}</td>
-                        <td class="p-4 text-center font-black ${isCancelled ? 'text-red-400' : (order._calc_balance > 0 ? 'text-rose-500' : 'text-emerald-500')}">${order._calc_balance}</td>
+                        <td class="p-4 text-center font-bold ${isCancelled ? 'text-red-500' : 'text-slate-600'}">${(Number(order.quantity_ordered) || 0).toLocaleString()}</td>
+                        <td class="p-4 text-center font-bold ${isCancelled ? 'text-red-400' : 'text-indigo-500'}">${(Number(order._cumul) || 0).toLocaleString()}</td>
+                        <td class="p-4 text-center font-black ${isCancelled ? 'text-red-400' : (order._calc_balance > 0 ? 'text-rose-500' : 'text-emerald-500')}">${(Number(order._calc_balance) || 0).toLocaleString()}</td>
                         <td class="p-4 text-center"><span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${statColor}">${isCancelled ? 'Cancelled' : stat}</span></td>
                         <td class="p-4 text-right"><button onclick="openManageModal('${order.id}')" class="text-blue-700 uppercase text-[10px] font-bold px-4 py-2 bg-blue-100 rounded-lg hover:bg-blue-200 transition-colors relative z-40">Manage / View</button></td>
                     </tr>
@@ -561,8 +561,10 @@
             document.getElementById('edit-date').value = order.order_date ? order.order_date.split('T')[0] : ''; 
             document.getElementById('edit-name').value = order.customer_name || ''; 
             document.getElementById('edit-order').value = order.order_number || ''; 
-            document.getElementById('edit-qty').value = order.quantity_ordered || 0; 
-            document.getElementById('edit-bal').value = order._calc_balance || 0; 
+            // edit-qty is <input type="number"> and parseInt'd elsewhere on save,
+            // so keep the raw number; edit-bal is a disabled text display only.
+            document.getElementById('edit-qty').value = order.quantity_ordered || 0;
+            document.getElementById('edit-bal').value = (Number(order._calc_balance) || 0).toLocaleString();
             document.getElementById('edit-remark').value = rawRemark;
             
             const isCancelled = order.status === 'Cancelled' || (order.remark && order.remark.includes('[CANCELLED]')); 
@@ -645,7 +647,7 @@
                         baHtml = `<button onclick="openManageBAModal('${encodeURIComponent(baKey)}')" class="font-bold text-yellow-700 bg-yellow-50 border border-yellow-200 px-2 py-1 rounded text-[10px] uppercase tracking-wider hover:bg-yellow-100 transition-colors cursor-pointer" title="View BA Details">${baKey}</button>`; 
                     } 
                     
-                    historyBody.insertAdjacentHTML('beforeend', `<tr class="${rowColor}"><td class="py-3 pl-2">${doNumHtml}</td><td class="py-3 text-slate-500">${displayDate}</td><td class="py-3 font-bold text-amber-700 text-xs">${sourceText}</td><td class="py-3 text-center font-bold ${dCancelled ? 'text-red-500 line-through' : 'text-emerald-700'}">${d.total_qty || 0}</td><td class="py-3 text-center font-black ${bal > 0 ? 'text-rose-500' : 'text-emerald-500'}">${bal}</td><td class="py-3">${baHtml}</td><td class="py-3 text-slate-500 truncate max-w-[150px]">${d.remark || '-'}</td></tr>`); 
+                    historyBody.insertAdjacentHTML('beforeend', `<tr class="${rowColor}"><td class="py-3 pl-2">${doNumHtml}</td><td class="py-3 text-slate-500">${displayDate}</td><td class="py-3 font-bold text-amber-700 text-xs">${sourceText}</td><td class="py-3 text-center font-bold ${dCancelled ? 'text-red-500 line-through' : 'text-emerald-700'}">${(Number(d.total_qty) || 0).toLocaleString()}</td><td class="py-3 text-center font-black ${bal > 0 ? 'text-rose-500' : 'text-emerald-500'}">${(Number(bal) || 0).toLocaleString()}</td><td class="py-3">${baHtml}</td><td class="py-3 text-slate-500 truncate max-w-[150px]">${d.remark || '-'}</td></tr>`);
                 }); 
             }
             loadConsentForAL(order.al_number);
