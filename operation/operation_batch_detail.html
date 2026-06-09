@@ -5667,7 +5667,9 @@ Thank you.`;
             const batchId = document.getElementById('f-batchno').value.trim();
             t6_plotData = [];
 
-            // Load saved 3rd_Culling map for pre-filling balance & culled
+            // Load saved 3rd_Culling map for pre-filling balance & culled.
+            // Key by (plot_name + destType) so multiple destination tabs for the
+            // same plot (e.g. B10 MAIN + B10 D-TONE) don't collide on reload.
             let savedCull3Map = {};
             if (batchId) {
                 const { data: cull3Logs } = await _supabase
@@ -5677,8 +5679,9 @@ Thank you.`;
                     .eq('transaction_type', '3rd_Culling');
                 (cull3Logs || []).forEach(log => {
                     const balMatch    = log.remark ? log.remark.match(/Remaining Balance:\s*(\d+)/) : null;
-                    const culledMatch = log.remark ? log.remark.match(/Culled:\s*(\d+)/) : null;
-                    savedCull3Map[log.plot_name] = {
+                    const destMatch   = log.remark ? log.remark.match(/DestType:\s*(main|premium|doubletone)/) : null;
+                    const destType    = destMatch ? destMatch[1] : 'main'; // legacy rows default to main
+                    savedCull3Map[`${log.plot_name}|${destType}`] = {
                         culled:  log.quantity_change,
                         balance: balMatch   ? parseInt(balMatch[1])   : null,
                     };
@@ -5698,7 +5701,7 @@ Thank you.`;
                     logs.forEach(log => {
                         const destType = log.transaction_type === 'Transplanted_Premium'    ? 'premium'
                                        : log.transaction_type === 'Transplanted_DoubleTone' ? 'doubletone' : 'main';
-                        const saved = savedCull3Map[log.plot_name] || {};
+                        const saved = savedCull3Map[`${log.plot_name}|${destType}`] || {};
                         t6_plotData.push({
                             plot:         log.plot_name,
                             qty:          log.quantity_change,
@@ -5989,6 +5992,7 @@ Thank you.`;
                 let logsToInsert = [];
                 document.querySelectorAll('.t6-plot-row').forEach((row, i) => {
                     const plotName     = t6_plotData[i]?.plot || '?';
+                    const destType     = t6_plotData[i]?.destType || 'main';
                     const transplanted = parseInt(row.querySelector('.t6-balance').dataset.transplanted) || 0;
                     const balVal       = row.querySelector('.t6-balance').value;
                     const cullVal      = row.querySelector('.t6-culled-input').value;
@@ -6007,7 +6011,10 @@ Thank you.`;
                         breed_name:       breed,
                         plot_name:        plotName,
                         quantity_change:  culled,
-                        remark: `3rd Culling. Transplanted: ${transplanted}, Remaining Balance: ${balance}, Culled: ${culled}, Cull Rate: ${cullPct}%`
+                        // DestType is critical: the same plot (e.g. B10) can appear under
+                        // both MAIN and D-TONE; the load uses (plot_name, destType) to
+                        // distinguish them so values don't overwrite each other.
+                        remark: `3rd Culling. Transplanted: ${transplanted}, Remaining Balance: ${balance}, Culled: ${culled}, Cull Rate: ${cullPct}%, DestType: ${destType}`
                     }));
                 });
 
