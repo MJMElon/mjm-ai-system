@@ -5790,11 +5790,14 @@ Thank you.`;
 
                             <!-- Culled qty — manual input. Blank = not yet keyed in
                                  (a blank row keeps the batch < 100% complete and is NOT
-                                 written to shared_inventory_logs on save). -->
+                                 written to shared_inventory_logs on save). The transplanted
+                                 qty is exposed via data-transplanted so calcT6Row can warn
+                                 if the user overshoots — we keep the HTML max off so no
+                                 browser-level validation tooltip can interfere with typing. -->
                             <div>
                                 <label class="label-style lg:hidden !text-[#a83020]">Culled Qty *</label>
-                                <input type="number" class="input-style !text-[#a83020] font-black t6-culled-input"
-                                    min="0" max="${p.qty}" placeholder="—"
+                                <input type="number" inputmode="numeric" class="input-style !text-[#a83020] font-black t6-culled-input"
+                                    min="0" placeholder="—"
                                     data-transplanted="${p.qty}"
                                     value="${cullVal}"
                                     oninput="calcT6Row('${rowId}'); calcT6()">
