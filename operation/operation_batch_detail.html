@@ -5753,7 +5753,12 @@ Thank you.`;
                                 : p.destType === 'doubletone' ? 'bg-[#ecfeff] border-[#a5f3fc]'
                                 : 'bg-[#fdfaf4] border-[#e8dcc8]';
                 const balVal   = p.savedBalance !== null ? p.savedBalance : '';
-                const cullVal  = p.savedCulled  !== null ? p.savedCulled  : '';
+                // Blank input = "not yet keyed in". A saved 0 is also treated as
+                // blank so the row still reads as needing admin attention (the
+                // operation page's "X / N Done" counter only counts non-empty
+                // inputs). If the admin really means zero, they can type 0
+                // again — that explicit "0" persists on save.
+                const cullVal  = (p.savedCulled  !== null && p.savedCulled  > 0) ? p.savedCulled  : '';
 
                 container.insertAdjacentHTML('beforeend', `
                     <div id="${rowId}" class="t6-plot-row border ${rowBg} rounded-xl overflow-hidden">
