@@ -5780,11 +5780,13 @@ Thank you.`;
                                 <div class="text-[8px] font-bold text-[#8a7a68] mt-0.5 uppercase tracking-wide">— Sales pending</div>
                             </div>
 
-                            <!-- Culled qty — manual input -->
+                            <!-- Culled qty — manual input. Blank = not yet keyed in
+                                 (a blank row keeps the batch < 100% complete and is NOT
+                                 written to shared_inventory_logs on save). -->
                             <div>
                                 <label class="label-style lg:hidden !text-[#a83020]">Culled Qty *</label>
                                 <input type="number" class="input-style !text-[#a83020] font-black t6-culled-input"
-                                    min="0" max="${p.qty}" placeholder="0"
+                                    min="0" max="${p.qty}" placeholder="—"
                                     data-transplanted="${p.qty}"
                                     value="${cullVal}"
                                     oninput="calcT6Row('${rowId}'); calcT6()">
@@ -5985,8 +5987,13 @@ Thank you.`;
                     const transplanted = parseInt(row.querySelector('.t6-balance').dataset.transplanted) || 0;
                     const balVal       = row.querySelector('.t6-balance').value;
                     const cullVal      = row.querySelector('.t6-culled-input').value;
-                    const balance      = parseInt(balVal);
-                    const culled       = parseInt(cullVal) || 0;
+                    // Skip rows the admin hasn't keyed in. A blank Culled Qty means
+                    // "not entered yet" and must NOT be persisted as 0 — that would
+                    // make the batch look complete on reload when it isn't.
+                    if (cullVal === '' || cullVal === null || cullVal === undefined) return;
+                    const balance = parseInt(balVal);
+                    const culled  = parseInt(cullVal);
+                    if (isNaN(culled)) return;
                     if (isNaN(balance) || balVal === '') return;
                     const cullPct = transplanted > 0 ? ((culled / transplanted) * 100).toFixed(1) : '0';
                     logsToInsert.push(withEditMeta({
@@ -5999,7 +6006,7 @@ Thank you.`;
                     }));
                 });
 
-                if (logsToInsert.length === 0) throw new Error('No rows with balance filled to save.');
+                if (logsToInsert.length === 0) throw new Error('Enter at least one plot’s Culled Qty before saving.');
                 await _supabase.from('shared_inventory_logs').delete().eq('batch_name', batchId).eq('transaction_type', '3rd_Culling');
                 const { error } = await safeInsertLogs(logsToInsert);
                 if (error) throw error;
