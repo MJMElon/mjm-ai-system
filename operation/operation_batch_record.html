@@ -117,7 +117,7 @@
 
             <div class="flex items-center gap-2 bg-white p-2 rounded-2xl border border-[#e8dcc8] shadow-inner mb-6 w-fit overflow-x-auto">
                 <button id="tab-active" class="list-tab-btn list-tab-active" onclick="switchListTab('active')">🟢 Active</button>
-                <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="Batch is moved here automatically once Tab 6 (3rd Culling) is saved">✅ Completed / In-Active</button>
+                <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="Batch is moved here automatically only when every transplanted plot has a 3rd Culling entry saved (partial entries stay in Active)">✅ Completed / In-Active</button>
             </div>
             
             <div class="bg-white rounded-2xl border border-[#e8dcc8] overflow-hidden shadow-inner">
@@ -214,14 +214,33 @@
                     (res.data || []).forEach(r => { m[r.batch_name] = (m[r.batch_name] || 0) + (r.quantity_change || 0); });
                     return m;
                 };
+                // Count rows per batch (regardless of qty) so we know how many
+                // transplant plots a batch has vs how many 3rd Culling rows
+                // have been saved for it.
+                const countByBatch = (res) => {
+                    const m = {};
+                    (res.data || []).forEach(r => { m[r.batch_name] = (m[r.batch_name] || 0) + 1; });
+                    return m;
+                };
                 const plantedMap = sumByBatch(plantedRes);
                 const damagedMap = sumByBatch(damagedRes);
                 const cull1Map   = sumByBatch(cull1Res);
                 const cull2Map   = sumByBatch(cull2Res);
                 const cull3Map   = sumByBatch(cull3Res);
+                const transplantCountMap = countByBatch(transplantRes);
+                const cull3CountMap      = countByBatch(cull3Res);
 
-                // A batch is completed once Tab 6 (3rd Culling) has been saved.
-                const completedBatchNames = new Set(Object.keys(cull3Map));
+                // A batch is completed only when EVERY transplant plot for that
+                // batch has a corresponding 3rd_Culling row saved. Partial
+                // entries (some plots keyed in, some blank) keep the batch in
+                // the Active list — moving it to Completed would hide
+                // unfinished work.
+                const completedBatchNames = new Set();
+                Object.keys(transplantCountMap).forEach(batch => {
+                    const expected = transplantCountMap[batch];
+                    const actual   = cull3CountMap[batch] || 0;
+                    if (expected > 0 && actual >= expected) completedBatchNames.add(batch);
+                });
                 // A batch is in Main Nursery once any transplant log has been written.
                 const transplantedBatchNames = new Set((transplantRes.data || []).map(r => r.batch_name));
 
