@@ -915,6 +915,11 @@
     }
 
     let allCustomerOrders = [];
+    // All ALs from shared_al_orders. Held at module scope so the Allocate FAB
+    // can detect "orphan" ALs (ALs with balance > 0 that have no matching
+    // salesweb_customer_orders row, and therefore never appear in either
+    // Active or Past tabs).
+    let allAls = [];
     // Scheduled collection qty per booking_date (YYYY-MM-DD), summed across
     // every active order. Populated by loadCustomerOrders() so the Order
     // Monitoring dashboard can show week-level totals without re-querying.
@@ -953,6 +958,7 @@
             const collections = _collRes?.data;
             const bookings    = _bookRes?.data || [];
             const alRows      = _alRes?.data || [];
+            allAls = alRows;
 
             // Index ALs by the customer order number they're linked to.
             // If a single order_number happens to map to multiple ALs (e.g.
@@ -2033,7 +2039,32 @@
         document.getElementById('alloc-count-past').textContent   = past;
         const fab   = document.getElementById('alloc-fab');
         const badge = document.getElementById('alloc-fab-badge');
-        badge.textContent = active;
+
+        // Orphan ALs: ALs with balance > 0 whose order_number doesn't match
+        // any customer order. They never appear in Active or Past tabs because
+        // the drawer only lists rows that exist in salesweb_customer_orders.
+        const customerOrderNumbers = new Set(
+            (allCustomerOrders || [])
+                .filter(o => o.rawStatus !== 'Cancelled')
+                .map(o => (o.orderNumber || '').toString())
+        );
+        const orphan = (allAls || []).filter(a => {
+            if (!a) return false;
+            if (a.status === 'Cancelled') return false;
+            if ((Number(a.balance_quantity) || 0) <= 0) return false;
+            const num = (a.order_number || '').toString();
+            return !customerOrderNumbers.has(num);
+        }).length;
+
+        // Show the combined outstanding-work count so the FAB lines up with
+        // the AL list's "balance > 0" total. Tooltip exposes the split.
+        const total = active + past + orphan;
+        badge.textContent = total;
+        if (fab) {
+            const parts = [`${active} current`, `${past} past due`];
+            if (orphan) parts.push(`${orphan} AL${orphan === 1 ? '' : 's'} without a linked customer order`);
+            fab.title = `${total} order${total === 1 ? '' : 's'} need allocation work · ${parts.join(' · ')}`;
+        }
     }
 
     function orderCardHtml(o, tab) {
