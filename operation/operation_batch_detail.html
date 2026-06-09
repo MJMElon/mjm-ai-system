@@ -5109,8 +5109,6 @@ Thank you.`;
         function calcCulling() {
             let totalCulled = 0;
             let totalTrayQty = 0;
-            let validRateCount = 0;
-            let rateSum = 0;
 
             document.querySelectorAll('.cull-row').forEach(row => {
                 const trayQty = parseInt(row.querySelector('.cull-tray-qty').dataset.raw || 0);
@@ -5127,8 +5125,6 @@ Thank you.`;
                     if (parseFloat(rate) > 20) rateDiv.className = 'input-style bg-[#fff5f5] font-black text-[#a83020] cull-rate h-[45px] flex items-center';
                     else if (parseFloat(rate) > 10) rateDiv.className = 'input-style bg-[#fffaf0] font-black text-[#c07820] cull-rate h-[45px] flex items-center';
                     else rateDiv.className = 'input-style bg-[#f0f8ec] font-black text-[#4a7a2e] cull-rate h-[45px] flex items-center';
-                    rateSum += parseFloat(rate);
-                    validRateCount++;
                 } else {
                     rateDiv.innerText = '—';
                     rateDiv.className = 'input-style bg-[#fffaf0] font-black text-[#c07820] cull-rate h-[45px] flex items-center';
@@ -5136,7 +5132,9 @@ Thank you.`;
             });
 
             document.getElementById('t4-total-culled').innerText = totalCulled.toLocaleString();
-            const avgRate = validRateCount > 0 ? (rateSum / validRateCount).toFixed(1) + '%' : '0.0%';
+            // Qty-weighted cull rate (total culled / total tray qty) so it matches the
+            // dashboard percentage instead of being the arithmetic mean of per-tray rates.
+            const avgRate = totalTrayQty > 0 ? ((totalCulled / totalTrayQty) * 100).toFixed(1) + '%' : '0.0%';
             document.getElementById('t4-avg-cull-rate').innerText = avgRate;
 
             // Feed culling total back into Tab 3 engine for cross-tab sync
@@ -5856,7 +5854,6 @@ Thank you.`;
         function calcT6() {
             let totTransplanted = 0, totBalance = 0, totCulled = 0;
             let rowsDone = 0, totalRows = 0;
-            let cullRateSum = 0, cullRateCount = 0;
             let balanceFilled = 0;
 
             document.querySelectorAll('.t6-plot-row').forEach((row, i) => {
@@ -5870,17 +5867,20 @@ Thank you.`;
                 totTransplanted += transplanted;
                 totBalance      += transplanted; // balance = transplanted until sales module
                 if (hasCulled)  { totCulled += culled; }
-                if (hasCulled && transplanted > 0) {
-                    cullRateSum += (culled / transplanted) * 100;
-                    cullRateCount++;
-                }
                 if (hasCulled && hasDoc) rowsDone++;
             });
+
+            // Qty-weighted cull rate so the headline number matches the dashboard
+            // (total culled / total transplanted), not the arithmetic mean of
+            // per-plot rates which can mislead when plot sizes vary widely.
+            const avgStr = (totTransplanted > 0 && totCulled > 0)
+                ? ((totCulled / totTransplanted) * 100).toFixed(1) + '%'
+                : '—';
 
             // Dashboard
             document.getElementById('t6-total-transplanted').innerText = totTransplanted.toLocaleString();
             document.getElementById('t6-total-balance').innerText      = totBalance > 0 ? totBalance.toLocaleString() : '—';
-            document.getElementById('t6-avg-cull-rate').innerText      = cullRateCount > 0 ? (cullRateSum / cullRateCount).toFixed(1) + '%' : '—';
+            document.getElementById('t6-avg-cull-rate').innerText      = avgStr;
 
             // Totals footer
             const setT = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
@@ -5890,7 +5890,6 @@ Thank you.`;
             setT('t6-tot-balance-m',      totBalance > 0 ? totBalance.toLocaleString() : '—');
             setT('t6-tot-culled',         totCulled > 0 ? totCulled.toLocaleString() : '—');
             setT('t6-tot-culled-m',       totCulled > 0 ? totCulled.toLocaleString() : '—');
-            const avgStr = cullRateCount > 0 ? (cullRateSum / cullRateCount).toFixed(1) + '%' : '—';
             setT('t6-tot-cull-rate',   avgStr);
             setT('t6-tot-cull-rate-m', avgStr);
 
