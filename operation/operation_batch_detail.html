@@ -5668,23 +5668,39 @@ Thank you.`;
             t6_plotData = [];
 
             // Load saved 3rd_Culling map for pre-filling balance & culled.
-            // Key by (plot_name + destType) so multiple destination tabs for the
-            // same plot (e.g. B10 MAIN + B10 D-TONE) don't collide on reload.
-            let savedCull3Map = {};
+            //
+            // Logs persisted AFTER PR #102 include `DestType: main|premium|doubletone`
+            // in the remark — those get pinned at the composite key `plot|destType`
+            // so MAIN and D-TONE rows of the same plot stay independent.
+            //
+            // Older logs (no DestType in remark) are ambiguous — we don't know
+            // which destination they belonged to. Instead of guessing "main"
+            // and clobbering each other (the original bug), we queue them
+            // per-plot and consume them in render order so two legacy logs for
+            // B10 land on the two B10 rows (MAIN + D-TONE) one each, rather
+            // than collapsing into one entry.
+            let savedCull3Map     = {};
+            let legacyCull3Queue  = {};
             if (batchId) {
                 const { data: cull3Logs } = await _supabase
                     .from('shared_inventory_logs')
-                    .select('plot_name, quantity_change, remark')
+                    .select('plot_name, quantity_change, remark, created_at')
                     .eq('batch_name', batchId)
-                    .eq('transaction_type', '3rd_Culling');
+                    .eq('transaction_type', '3rd_Culling')
+                    .order('created_at', { ascending: true });
                 (cull3Logs || []).forEach(log => {
-                    const balMatch    = log.remark ? log.remark.match(/Remaining Balance:\s*(\d+)/) : null;
-                    const destMatch   = log.remark ? log.remark.match(/DestType:\s*(main|premium|doubletone)/) : null;
-                    const destType    = destMatch ? destMatch[1] : 'main'; // legacy rows default to main
-                    savedCull3Map[`${log.plot_name}|${destType}`] = {
+                    const balMatch  = log.remark ? log.remark.match(/Remaining Balance:\s*(\d+)/) : null;
+                    const destMatch = log.remark ? log.remark.match(/DestType:\s*(main|premium|doubletone)/) : null;
+                    const entry = {
                         culled:  log.quantity_change,
-                        balance: balMatch   ? parseInt(balMatch[1])   : null,
+                        balance: balMatch ? parseInt(balMatch[1]) : null,
                     };
+                    if (destMatch) {
+                        savedCull3Map[`${log.plot_name}|${destMatch[1]}`] = entry;
+                    } else {
+                        if (!legacyCull3Queue[log.plot_name]) legacyCull3Queue[log.plot_name] = [];
+                        legacyCull3Queue[log.plot_name].push(entry);
+                    }
                 });
             }
 
@@ -5701,7 +5717,14 @@ Thank you.`;
                     logs.forEach(log => {
                         const destType = log.transaction_type === 'Transplanted_Premium'    ? 'premium'
                                        : log.transaction_type === 'Transplanted_DoubleTone' ? 'doubletone' : 'main';
-                        const saved = savedCull3Map[`${log.plot_name}|${destType}`] || {};
+                        // Prefer the explicit composite-key entry. If nothing's there,
+                        // fall back to a legacy ambiguous log (one per consumption)
+                        // so each row gets at most one legacy value.
+                        let saved = savedCull3Map[`${log.plot_name}|${destType}`];
+                        if (!saved) {
+                            const queue = legacyCull3Queue[log.plot_name];
+                            saved = (queue && queue.length) ? queue.shift() : {};
+                        }
                         t6_plotData.push({
                             plot:         log.plot_name,
                             qty:          log.quantity_change,
