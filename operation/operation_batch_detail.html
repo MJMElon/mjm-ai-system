@@ -2951,6 +2951,35 @@
                     return;
                 }
 
+                // Safety net: never silently destroy data. Count how many
+                // transplant logs already exist for this batch in the DB. If
+                // the save would replace them with FEWER rows (e.g. because
+                // some hidden form rows failed to round-trip — typically when
+                // a saved log references a plot that no longer exists in
+                // Settings), ask the admin to confirm BEFORE the destructive
+                // delete-then-insert runs.
+                const { count: existingCount } = await _supabase
+                    .from('shared_inventory_logs')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('batch_name', batchId)
+                    .in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']);
+                const existing = Number.isFinite(existingCount) ? existingCount : 0;
+                if (existing > logsToInsert.length) {
+                    const lost = existing - logsToInsert.length;
+                    const ok = confirm(
+                        `⚠ This save will REPLACE ${existing} existing transplant record(s) for batch ${batchId} ` +
+                        `with the ${logsToInsert.length} row(s) currently on screen. ` +
+                        `${lost} existing record(s) would be LOST — usually because their plot name no longer ` +
+                        `appears in Settings → Plots, so the dropdown couldn't restore them.\n\n` +
+                        `Click OK only if you genuinely want to replace everything. ` +
+                        `Click Cancel and re-add the missing plot in Settings to recover the dropdown match.`
+                    );
+                    if (!ok) {
+                        btn.innerText = originalText; btn.disabled = false;
+                        return;
+                    }
+                }
+
                 // 1. Delete old transplant logs for this batch to avoid duplicates
                 await _supabase.from('shared_inventory_logs').delete()
                     .eq('batch_name', batchId)
