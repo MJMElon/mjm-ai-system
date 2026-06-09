@@ -75,6 +75,7 @@
       email: u.email || '',
       full_name: (u.user_metadata && u.user_metadata.full_name) || ''
     };
+    let fetchOk = false;
     try {
       const { data, error } = await supa
         .from('shared_profiles')
@@ -88,10 +89,45 @@
       } else {
         state.permissions = normalize(null);
       }
+      fetchOk = true;
     } catch (e) {
       console.warn('[MJMAccess] failed to load permissions:', e);
       state.permissions = normalize(null);
     }
+
+    // Whole-system gate. The signed-in user MUST have at least one
+    // staff-grade entry on their permissions row — manage_users,
+    // can_verify_operation, or a non-'none' module level. Without that
+    // they have no business loading any ops page, so kick them back to
+    // the hub's index.html where the Pending Access screen explains
+    // they're awaiting admin approval.
+    //
+    // Fails OPEN on a profile-read error so a transient Supabase
+    // hiccup doesn't lock real ops admins out. Same policy as the hub
+    // gate. Allow opt-out via window.__MJM_SKIP_ACCESS_GATE for pages
+    // that already handle their own gating.
+    if (fetchOk && !global.__MJM_SKIP_ACCESS_GATE) {
+      const p = state.permissions || {};
+      let anyAccess = !!(p.manage_users || p.can_verify_operation);
+      if (!anyAccess && p.modules) {
+        for (const k in p.modules) {
+          if (p.modules[k] && p.modules[k] !== 'none') { anyAccess = true; break; }
+        }
+      }
+      if (!anyAccess) {
+        console.warn('[MJMAccess] no ops access — redirecting to hub');
+        const here = (global.location && global.location.pathname) || '';
+        // From /operation/foo.html → ../index.html. From / or /index.html
+        // we're already on the hub; don't redirect-loop.
+        if (!/\/index\.html?$/.test(here) && here !== '/' && here !== '') {
+          global.location.href = '../index.html';
+          // Throw so the caller's awaited code does not continue executing
+          // pre-redirect (we're navigating away anyway).
+          throw new Error('NO_OPS_ACCESS');
+        }
+      }
+    }
+
     return state;
   }
 

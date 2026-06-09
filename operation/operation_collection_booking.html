@@ -101,6 +101,7 @@
   .override-banner.open { background:linear-gradient(135deg,#059669,#10b981); }
   .override-banner.closed { background:linear-gradient(135deg,#dc2626,#ef4444); }
   .override-banner.default-closed { background:linear-gradient(135deg,#f59e0b,#fbbf24); color:#1e293b; }
+  .override-banner.fully-booked { background:linear-gradient(135deg,#b45309,#f59e0b); }
   .override-banner-text { font-size:13px; line-height:1.4; flex:1; min-width:200px; }
   .override-banner-actions { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
   .override-banner select { background:white; color:#1e293b; font-weight:700; font-size:11px; padding:7px 10px; border-radius:8px; border:none; font-family:'Outfit',sans-serif; cursor:pointer; }
@@ -114,8 +115,11 @@
   .override-badge { position:absolute; top:3px; right:3px; font-size:7px; font-weight:900; padding:2px 5px; border-radius:5px; letter-spacing:.04em; text-transform:uppercase; line-height:1; z-index:2; }
   .override-badge.open { background:#10b981; color:white; }
   .override-badge.closed { background:#ef4444; color:white; }
+  .override-badge.full { background:#f59e0b; color:white; }
   .month-cell.override-open { background:#ecfdf5 !important; }
   .month-cell.override-closed { background:#fef2f2 !important; }
+  .month-cell.override-full { background:#fef3c7 !important; }
+  .month-cell .full-remark { font-size:8px; font-weight:700; color:#7c2d12; line-height:1.2; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
   .day-count { display:inline-flex; align-items:center; justify-content:center; background:#10b981; color:white; font-size:11px; font-weight:900; min-width:22px; height:22px; border-radius:11px; padding:0 6px; margin-left:5px; }
 
@@ -554,7 +558,10 @@ async function applyDateOverride(isOpen, openHour, closeHour) {
   if (!dayModalDate) return;
   var ds = dayModalDate;
   var existing = dateOverrides[ds] || {};
-  var record = { date_str: ds, is_open: isOpen };
+  // Switching open/closed always wipes the fully-booked flag — it only
+  // applies to the "open but blocked" state and re-flipping the day
+  // shouldn't surprise the next operator with a stale block.
+  var record = { date_str: ds, is_open: isOpen, is_fully_booked: false };
   if (isOpen) {
     record.open_hour = openHour;
     record.close_hour = closeHour;
@@ -577,6 +584,51 @@ async function applyDateOverride(isOpen, openHour, closeHour) {
   if (error) { showToast('❌ ' + error.message); return; }
   dateOverrides[ds] = record;
   showToast(isOpen ? '✅ Opened ' + formatHour(openHour) + ' – ' + formatHour(closeHour) : '🚫 Closed for collection');
+  renderCalendar();
+  renderBoard();
+}
+
+// Flip the "fully booked" admin flag for a day that is (or becomes) open.
+// The day stays in-hours so the operations team can still record any
+// late-arriving manual bookings; customers see the calendar as amber
+// "Fully Booked" with the external_note remark and can't open the time
+// modal. Hours default to the existing override or the calendar default
+// so we never end up with is_open=true and no hours set.
+async function applyFullyBookedFlag(flag) {
+  if (!dayModalDate) return;
+  var ds = dayModalDate;
+  var existing = dateOverrides[ds] || {};
+  var defaultReason = getDefaultClosedReason(ds);
+  if (flag && defaultReason && !existing.is_open) {
+    // A default-closed day (Sunday / holiday) can't be "fully booked"
+    // without first being explicitly opened. Surface a clear instruction
+    // rather than silently flipping to is_open=true with no hours.
+    showToast('⚠ Open this day first, then mark it Fully Booked');
+    return;
+  }
+  var d = new Date(ds + 'T00:00:00');
+  var defOpen = existing.open_hour || (d.getDay() === 6 ? 8 : 8);
+  var defClose = existing.close_hour || (d.getDay() === 6 ? 12 : 17);
+  // Preserve any remark currently in the banner inputs (the operator may
+  // have just typed one and clicked Mark Fully Booked without saving).
+  var extEl = document.getElementById('ovr-ext-note');
+  var intEl = document.getElementById('ovr-int-note');
+  var ext = extEl ? (extEl.value.trim() || null) : (existing.external_note || null);
+  var intl = intEl ? (intEl.value.trim() || null) : (existing.internal_note || null);
+  var record = {
+    date_str: ds,
+    is_open: true,
+    is_fully_booked: !!flag,
+    open_hour: defOpen,
+    close_hour: defClose,
+    note: flag ? 'Marked fully booked' : 'Cleared fully-booked flag',
+    external_note: flag ? ext : null,
+    internal_note: flag ? intl : null,
+  };
+  var { error } = await _supabase.from('shared_date_overrides').upsert(record);
+  if (error) { showToast('❌ ' + error.message); return; }
+  dateOverrides[ds] = record;
+  showToast(flag ? '🔒 Marked fully booked' : '✅ Cleared fully-booked flag');
   renderCalendar();
   renderBoard();
 }
@@ -632,7 +684,9 @@ async function saveCloseNotes() {
 }
 
 // Re-enable the close-notes inputs so the operator can edit a saved remark.
-function enableCloseNotesEdit() {
+// The same inputs are used for both "closed" and "fullybooked" remarks —
+// mode tells us which save function to bind to the button after editing.
+function enableCloseNotesEdit(mode) {
   var extEl = document.getElementById('ovr-ext-note');
   var intEl = document.getElementById('ovr-int-note');
   var btn = document.getElementById('ovr-notes-save-btn');
@@ -644,9 +698,56 @@ function enableCloseNotesEdit() {
     btn.style.background = '';
     btn.style.color = '';
     btn.disabled = false;
-    btn.onclick = function() { saveCloseNotes(); };
+    btn.onclick = function() { (mode === 'fullybooked') ? saveFullyBookedNotes() : saveCloseNotes(); };
   }
   if (statusEl) { statusEl.style.display = 'none'; }
+}
+
+// Save just the remarks for a day that is (or becomes) fully booked.
+// Sibling of saveCloseNotes — same flow, but the upsert keeps is_open=true
+// and sets is_fully_booked=true so the day remains in-hours but blocked.
+async function saveFullyBookedNotes() {
+  if (!dayModalDate) return;
+  var ds = dayModalDate;
+  var existing = dateOverrides[ds] || {};
+  var extEl = document.getElementById('ovr-ext-note');
+  var intEl = document.getElementById('ovr-int-note');
+  var btn = document.getElementById('ovr-notes-save-btn');
+  var statusEl = document.getElementById('ovr-notes-status');
+  var ext = extEl ? (extEl.value.trim() || null) : null;
+  var intl = intEl ? (intEl.value.trim() || null) : null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  var d = new Date(ds + 'T00:00:00');
+  var record = {
+    date_str: ds,
+    is_open: true,
+    is_fully_booked: true,
+    open_hour: existing.open_hour || (d.getDay() === 6 ? 8 : 8),
+    close_hour: existing.close_hour || (d.getDay() === 6 ? 12 : 17),
+    note: (existing && existing.note) || 'Fully booked remark',
+    external_note: ext,
+    internal_note: intl,
+  };
+  var { error } = await _supabase.from('shared_date_overrides').upsert(record);
+  if (error) {
+    showToast('❌ ' + error.message);
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Save Remark'; }
+    return;
+  }
+  dateOverrides[ds] = record;
+  showToast('💾 Fully-booked remark saved');
+  if (extEl) { extEl.readOnly = true; extEl.style.background = '#f1f5f9'; extEl.style.color = '#475569'; }
+  if (intEl) { intEl.readOnly = true; intEl.style.background = '#f1f5f9'; intEl.style.color = '#475569'; }
+  if (btn) {
+    btn.textContent = '✏️ Edit Remark';
+    btn.style.background = '#065f46';
+    btn.style.color = 'white';
+    btn.disabled = false;
+    btn.onclick = function() { enableCloseNotesEdit('fullybooked'); };
+  }
+  if (statusEl) { statusEl.textContent = '✓ Saved'; statusEl.style.display = 'block'; }
+  renderCalendar();
+  renderBoard();
 }
 
 async function resetDateOverride() {
@@ -681,26 +782,35 @@ function escAttr(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function buildCloseNotesHtml(ds) {
+function buildCloseNotesHtml(ds, mode) {
+  // mode: 'closed' (default) — saving writes is_open=false
+  //       'fullybooked'      — saving writes is_open=true + is_fully_booked=true
+  // The inputs and IDs are shared between modes so the existing edit/lock
+  // behaviour (enableCloseNotesEdit) works for both without duplicate code.
+  mode = mode || 'closed';
   var ovr = dateOverrides[ds] || {};
   var ext = escAttr(ovr.external_note || '');
   var intl = escAttr(ovr.internal_note || '');
-  // If a remark is already saved for this date, render the inputs in the
-  // "saved" state so the operator can see at a glance that it's stored, with
-  // an Edit affordance to re-open them.
   var hasSaved = !!(ovr.external_note || ovr.internal_note);
   var lockedAttrs = hasSaved ? ' readonly style="background:#f1f5f9;color:#475569;"' : '';
   var btnLabel = hasSaved ? '✏️ Edit Remark' : '💾 Save Remark';
   var btnStyle = hasSaved ? 'background:#065f46;color:white;' : '';
-  var btnOnclick = hasSaved ? 'enableCloseNotesEdit()' : 'saveCloseNotes()';
+  var saveCall = (mode === 'fullybooked') ? 'saveFullyBookedNotes()' : 'saveCloseNotes()';
+  var btnOnclick = hasSaved ? "enableCloseNotesEdit('" + mode + "')" : saveCall;
   var statusStyle = 'font-size:10px;font-weight:700;opacity:.85;margin-top:4px;display:' + (hasSaved ? 'block' : 'none') + ';';
   var statusText = hasSaved ? '✓ Saved' : '';
+  var extPlaceholder = (mode === 'fullybooked')
+    ? 'e.g. Fully booked — next available slot Wednesday'
+    : 'e.g. Annual stock-take — collections resume Monday';
+  var intPlaceholder = (mode === 'fullybooked')
+    ? 'e.g. All seedlings reserved for school programme'
+    : 'e.g. Closed by Boss — Andy handling Mon reopen';
   return '<div class="override-notes">' +
            '<label>External remark (customers see this)' +
-             '<textarea id="ovr-ext-note" placeholder="e.g. Annual stock-take — collections resume Monday"' + lockedAttrs + '>' + ext + '</textarea>' +
+             '<textarea id="ovr-ext-note" placeholder="' + extPlaceholder + '"' + lockedAttrs + '>' + ext + '</textarea>' +
            '</label>' +
            '<label>Internal remark (operations only)' +
-             '<textarea id="ovr-int-note" placeholder="e.g. Closed by Boss — Andy handling Mon reopen"' + lockedAttrs + '>' + intl + '</textarea>' +
+             '<textarea id="ovr-int-note" placeholder="' + intPlaceholder + '"' + lockedAttrs + '>' + intl + '</textarea>' +
            '</label>' +
            '<button id="ovr-notes-save-btn" class="override-btn" style="' + btnStyle + '" onclick="' + btnOnclick + '">' + btnLabel + '</button>' +
          '</div>' +
@@ -713,8 +823,20 @@ function buildOverrideBanner(ds) {
   var override = dateOverrides[ds];
   var statusCls, statusText, controls;
   var showNotes = false;
+  var notesMode = 'closed';
 
-  if (override && override.is_open) {
+  if (override && override.is_open && override.is_fully_booked) {
+    // Open hours stand, but every customer slot is administratively
+    // blocked. Operations can still record manual bookings; customers
+    // see "Fully Booked" amber + remark on the calendar.
+    statusCls = 'fully-booked';
+    statusText = '🔒 <b>Fully Booked</b> — open ' + formatHour(override.open_hour) + ' – ' + formatHour(override.close_hour) + ', customer slots blocked';
+    controls = '<button class="override-btn" onclick="applyFullyBookedFlag(false)">✅ Mark Available</button>' +
+               '<button class="override-btn danger" onclick="applyDateOverride(false)">🚫 Close this Day</button>' +
+               '<button class="override-btn" onclick="resetDateOverride()">↩ Reset</button>';
+    showNotes = true;
+    notesMode = 'fullybooked';
+  } else if (override && override.is_open) {
     statusCls = 'open';
     statusText = '✅ <b>Override:</b> Open ' + formatHour(override.open_hour) + ' – ' + formatHour(override.close_hour) +
       (defaultReason ? ' <span style="opacity:.85;">(default: ' + defaultReason + ')</span>' : '');
@@ -722,6 +844,7 @@ function buildOverrideBanner(ds) {
                '<span style="color:white;font-weight:900;">→</span>' +
                '<select id="ovr-close-h">' + buildHourOptions(override.close_hour) + '</select>' +
                '<button class="override-btn" onclick="saveOverrideOpen()">Update Hours</button>' +
+               '<button class="override-btn" onclick="applyFullyBookedFlag(true)">🔒 Mark Fully Booked</button>' +
                '<button class="override-btn danger" onclick="applyDateOverride(false)">🚫 Close</button>' +
                '<button class="override-btn" onclick="resetDateOverride()">↩ Reset</button>';
   } else if (override && !override.is_open) {
@@ -746,13 +869,14 @@ function buildOverrideBanner(ds) {
     var d = new Date(ds + 'T00:00:00');
     var defHrs = d.getDay() === 6 ? '8 AM – 12 PM' : '8 AM – 5 PM';
     statusText = '✅ <b>Open</b> (default ' + defHrs + ')';
-    controls = '<button class="override-btn danger" onclick="applyDateOverride(false)">🚫 Close this Day</button>';
+    controls = '<button class="override-btn" onclick="applyFullyBookedFlag(true)">🔒 Mark Fully Booked</button>' +
+               '<button class="override-btn danger" onclick="applyDateOverride(false)">🚫 Close this Day</button>';
   }
 
   return '<div class="override-banner ' + statusCls + '">' +
            '<div class="override-banner-text">' + statusText + '</div>' +
            '<div class="override-banner-actions">' + controls + '</div>' +
-           (showNotes ? buildCloseNotesHtml(ds) : '') +
+           (showNotes ? buildCloseNotesHtml(ds, notesMode) : '') +
          '</div>';
 }
 
@@ -1045,21 +1169,31 @@ function renderMonth() {
       var dayNum = cellDate.getDate();
       var defaultReason = getDefaultClosedReason(ds);
       var override = dateOverrides[ds];
+      var isFullyBooked = !!(override && override.is_open && override.is_fully_booked);
       var effectivelyClosed = override ? !override.is_open : !!defaultReason;
       var closedCls = effectivelyClosed ? ' closed' : '';
       var holidayCls = (defaultReason && defaultReason !== 'Sunday') ? ' holiday' : '';
       var overrideCls = '';
-      if (override) overrideCls = override.is_open ? ' override-open' : ' override-closed';
+      if (override) {
+        overrideCls = isFullyBooked ? ' override-full' : (override.is_open ? ' override-open' : ' override-closed');
+      }
 
       var overrideBadgeHtml = '';
       if (override) {
-        overrideBadgeHtml = '<span class="override-badge ' + (override.is_open ? 'open' : 'closed') + '">' +
-          (override.is_open ? '✓ OPEN' : '✗ CLOSED') + '</span>';
+        var badgeCls = isFullyBooked ? 'full' : (override.is_open ? 'open' : 'closed');
+        var badgeText = isFullyBooked ? '🔒 FULL' : (override.is_open ? '✓ OPEN' : '✗ CLOSED');
+        overrideBadgeHtml = '<span class="override-badge ' + badgeCls + '">' + badgeText + '</span>';
       }
 
       var pillsHtml = '';
       if (defaultReason && defaultReason !== 'Sunday') {
         pillsHtml += '<div class="month-holiday-tag">' + defaultReason + '</div>';
+      }
+      // External remark on a fully-booked day — surface it on the cell so
+      // operators don't have to open each day to see why a slot is blocked.
+      if (isFullyBooked && override.external_note) {
+        var safeNote = escAttr(String(override.external_note).trim());
+        pillsHtml += '<div class="full-remark" title="' + safeNote + '">' + safeNote + '</div>';
       }
       bks.slice(0, 2).forEach(function(b) {
         var cls = b.status === 'completed' ? 'completed' : b.status === 'pending' ? 'pending' : 'booked';

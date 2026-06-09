@@ -661,12 +661,43 @@
 
       const userId = data.user.id;
 
-      // Fetch profile
+      // Fetch profile — we need user_type and permissions to gate
+      // customer-only accounts out, and the basic display fields the
+      // audit home uses.
       const { data: profile, error: profileError } = await _supa
         .from('shared_profiles')
-        .select('full_name, role, email, phone')
+        .select('full_name, role, email, phone, user_type, permissions')
         .eq('id', userId)
         .single();
+
+      // Single ops-access gate. Either a sales-web customer crossing
+      // over or a fresh ops signup that the admin hasn't granted
+      // anything to yet — same outcome, same message.
+      const STAFF_MODULE_VALUES = ['admin','normal','view','edit','manage','read','write','full','staff'];
+      function _hasOpsAccess(p) {
+        if (!p) return false;
+        const perms = p.permissions || {};
+        if (perms.manage_users || perms.can_verify_operation) return true;
+        if (perms.modules && typeof perms.modules === 'object') {
+          for (const k in perms.modules) {
+            if (STAFF_MODULE_VALUES.indexOf(String(perms.modules[k]).toLowerCase()) !== -1) return true;
+          }
+        }
+        return false;
+      }
+      if (!_hasOpsAccess(profile)) {
+        // Keep the user signed in — same pattern as the hub. They can
+        // refresh the page once an admin grants access without having
+        // to log in again. (We still don't navigate to audit_home; the
+        // gate at the top of audit_home redirects them back here if
+        // mjm_user isn't populated.)
+        btn.classList.remove('loading');
+        errEl.innerHTML =
+          '<div style="font-weight:700;margin-bottom:4px;">⏳ Access Pending — awaiting admin approval</div>' +
+          '<div style="font-weight:400;opacity:.9;">Your account exists but no audit access has been granted yet. Please contact an admin to grant access for this AI system, then refresh this page.</div>';
+        errEl.style.display = 'block';
+        return;
+      }
 
       const name = profile?.full_name || email.split('@')[0];
       const role = profile?.role || 'Auditor';

@@ -282,7 +282,7 @@
         try {
             const { data: creditOrders, error } = await _supabase
                 .from('salesweb_customer_orders')
-                .select('id,order_number,customer_id,customer_name,total,created_at,status,payment_terms,credit_billed_at,credit_invoice_id,collected_qty,collected_at')
+                .select('id,order_number,customer_id,customer_name,billing_name,total,created_at,status,payment_terms,credit_billed_at,credit_invoice_id,collected_qty,collected_at')
                 .eq('payment_terms', 'credit')
                 .is('credit_invoice_id', null)
                 .not('collected_at', 'is', null)
@@ -320,7 +320,7 @@
                     groups[key] = {
                         key,
                         customerId: o.customer_id,
-                        customerName: o.customer_name || '—',
+                        customerName: o.billing_name || o.customer_name || '—',
                         billingPeriod: period,
                         billingLabel: new Date(y, m - 1, 1).toLocaleString('en-MY', { month: 'short', year: 'numeric' }),
                         orderIds: [],
@@ -920,6 +920,10 @@
     // salesweb_customer_orders row, and therefore never appear in either
     // Active or Past tabs).
     let allAls = [];
+    // Scheduled collection qty per booking_date (YYYY-MM-DD), summed across
+    // every active order. Populated by loadCustomerOrders() so the Order
+    // Monitoring dashboard can show week-level totals without re-querying.
+    let allBookingsByDate = {};
 
     async function loadCustomerOrders() {
         try {
@@ -930,7 +934,7 @@
 
             const [ordRes, _itemsRes, _collRes, _bookRes, _alRes] = await Promise.all([
                 _supabase.from('salesweb_customer_orders')
-                    .select('id,order_number,customer_name,total,status,created_at,payment_terms,collected_qty,collected_at')
+                    .select('id,order_number,customer_name,billing_name,total,status,created_at,payment_terms,collected_qty,collected_at')
                     .order('created_at', { ascending: true }),
                 _supabase.from('salesweb_order_items').select('order_id,quantity,unit_price,subtotal'),
                 _supabase.from('salesweb_order_collections').select('order_id,collected_qty,collected_at')
@@ -995,11 +999,15 @@
             }
 
             const bookByOrderNumber = {};
+            allBookingsByDate = {};
             bookings.forEach(b => {
                 if (!b.order_number || !b.booking_date) return;
-                const k = b.booking_date.slice(0,7);
+                const monthK = b.booking_date.slice(0, 7);
+                const dayK   = b.booking_date.slice(0, 10);
+                const qty    = Number(b.collection_qty || 0);
                 if (!bookByOrderNumber[b.order_number]) bookByOrderNumber[b.order_number] = {};
-                bookByOrderNumber[b.order_number][k] = (bookByOrderNumber[b.order_number][k] || 0) + (b.collection_qty || 0);
+                bookByOrderNumber[b.order_number][monthK] = (bookByOrderNumber[b.order_number][monthK] || 0) + qty;
+                allBookingsByDate[dayK] = (allBookingsByDate[dayK] || 0) + qty;
             });
 
             allCustomerOrders = orders.map(o => {
@@ -1039,7 +1047,7 @@
                     id: o.id,
                     orderNumber: o.order_number,
                     alNumber: al ? al.al_number : null,
-                    customer: o.customer_name,
+                    customer: o.billing_name || o.customer_name,
                     orderDate: o.created_at ? new Date(o.created_at) : null,
                     totalQty,
                     totalAmount: o.total ?? it.amt,
@@ -1054,10 +1062,137 @@
             });
 
             renderCustomerGrid();
+            renderMonitoringDashboard();
             // renderPaymentStatusSummary removed — Customer Payment Status block deleted from UI.
         } catch(e) {
             console.warn('[Cust] load failed:', e);
             document.getElementById('cust-tbody').innerHTML = `<tr><td colspan="20" class="text-center py-8 text-[10px] text-red-500 font-bold uppercase tracking-widest">Failed to load customer orders</td></tr>`;
+        }
+    }
+
+    // ── Order Monitoring Dashboard ───────────────────────────────────────────
+    // Six stat cards + a 6-week scheduled trend strip. Driven entirely by
+    // already-loaded data: allCustomerOrders (for month-level aggregates)
+    // and allBookingsByDate (for week-level slicing).
+    function _monStartOfWeek(d) {
+        // ISO week — Monday as the first day.
+        const x = new Date(d); x.setHours(0, 0, 0, 0);
+        const day = x.getDay();              // 0 = Sun .. 6 = Sat
+        const offset = (day === 0) ? -6 : (1 - day);
+        x.setDate(x.getDate() + offset);
+        return x;
+    }
+    function _monAddDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+    function _monDateKey(d)    { return d.toISOString().slice(0, 10); }
+    function _monFmt(n)        { return (Number(n) || 0).toLocaleString(); }
+
+    function renderMonitoringDashboard() {
+        const cardsEl = document.getElementById('mon-dash-cards');
+        if (!cardsEl) return;
+
+        const now = new Date();
+        const monthKeyNow = now.toISOString().slice(0, 7);
+
+        const asof = document.getElementById('mon-dash-asof');
+        if (asof) asof.textContent = now.toLocaleString('en-MY', { month: 'long', year: 'numeric' });
+
+        // Week boundaries — Mon..Sun (inclusive)
+        const weekStart    = _monStartOfWeek(now);
+        const weekEnd      = _monAddDays(weekStart, 6);
+        const weekStartKey = _monDateKey(weekStart);
+        const weekEndKey   = _monDateKey(weekEnd);
+
+        // Per-order aggregates
+        let monthSched = 0, monthCollected = 0;
+        let pendingCollection = 0;
+        let activeOrders = 0;
+        let unpaidCash = 0;
+
+        (allCustomerOrders || []).forEach(o => {
+            const isCash   = (o.paymentMethod || 'cash') === 'cash';
+            const isUnpaid = o.rawStatus === 'Pending Payment' || o.derivedStatus === 'Pending Payment';
+
+            if (isCash && isUnpaid) { unpaidCash++; return; }
+            if (o.rawStatus === 'Cancelled') return;
+
+            if ((Number(o.balance) || 0) > 0) {
+                activeOrders++;
+                pendingCollection += Number(o.balance) || 0;
+            }
+            monthSched     += Number(o.bookingsByMonth    && o.bookingsByMonth[monthKeyNow]    || 0);
+            monthCollected += Number(o.collectionsByMonth && o.collectionsByMonth[monthKeyNow] || 0);
+        });
+
+        // Week-level scheduled — slice the date-keyed map
+        let weekSched = 0;
+        Object.entries(allBookingsByDate || {}).forEach(([k, qty]) => {
+            if (k >= weekStartKey && k <= weekEndKey) weekSched += Number(qty || 0);
+        });
+
+        const monthAttainment = (monthSched + monthCollected) > 0
+            ? Math.round((monthCollected / (monthSched + monthCollected)) * 100)
+            : (monthCollected > 0 ? 100 : 0);
+
+        const dayMon = (d) => d.toLocaleDateString('en-MY', { day: '2-digit', month: 'short' });
+        const cards = [
+            { label: 'This Week Scheduled', value: weekSched,         accent: 'blue',    sub: `${dayMon(weekStart)} – ${dayMon(weekEnd)}` },
+            { label: 'This Month Scheduled',value: monthSched,        accent: 'indigo',  sub: 'Bookings pending pickup' },
+            { label: 'Collected This Month',value: monthCollected,    accent: 'emerald', sub: monthCollected ? `${monthAttainment}% of month activity` : 'No pickups recorded yet' },
+            { label: 'Pending Collection',  value: pendingCollection, accent: 'amber',   sub: 'Balance across active orders' },
+            { label: 'Active Orders',       value: activeOrders,      accent: 'slate',   sub: 'With outstanding balance' },
+            { label: 'Cash · Unpaid',       value: unpaidCash,        accent: 'rose',    sub: 'Awaiting customer payment' }
+        ];
+        const accents = {
+            blue:    { bg: 'bg-blue-50',    text: 'text-blue-700',    label: 'text-blue-500'    },
+            indigo:  { bg: 'bg-indigo-50',  text: 'text-indigo-700',  label: 'text-indigo-500'  },
+            emerald: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'text-emerald-600' },
+            amber:   { bg: 'bg-amber-50',   text: 'text-amber-700',   label: 'text-amber-600'   },
+            slate:   { bg: 'bg-slate-50',   text: 'text-slate-700',   label: 'text-slate-500'   },
+            rose:    { bg: 'bg-rose-50',    text: 'text-rose-700',    label: 'text-rose-500'    }
+        };
+        cardsEl.innerHTML = cards.map(c => {
+            const a = accents[c.accent];
+            return `
+              <div class="${a.bg} rounded-xl border border-slate-200 p-3">
+                <div class="text-[9px] font-black ${a.label} uppercase tracking-widest leading-tight">${c.label}</div>
+                <div class="text-2xl font-black ${a.text} leading-none mt-1">${_monFmt(c.value)}</div>
+                <div class="text-[9px] font-bold text-slate-400 mt-1 leading-tight">${c.sub}</div>
+              </div>`;
+        }).join('');
+
+        // 6-week scheduled trend
+        const bars     = document.getElementById('mon-dash-week-bars');
+        const totLabel = document.getElementById('mon-dash-week-total');
+        if (bars) {
+            const weeks = [];
+            const totals = [];
+            for (let i = 0; i < 6; i++) {
+                const ws = _monAddDays(weekStart, i * 7);
+                const we = _monAddDays(ws, 6);
+                const wsKey = _monDateKey(ws);
+                const weKey = _monDateKey(we);
+                let total = 0;
+                Object.entries(allBookingsByDate || {}).forEach(([k, qty]) => {
+                    if (k >= wsKey && k <= weKey) total += Number(qty || 0);
+                });
+                weeks.push({ ws, we, total });
+                totals.push(total);
+            }
+            const maxQ = Math.max(1, ...totals);
+            bars.innerHTML = weeks.map((w, i) => {
+                const h = Math.max(2, Math.round((w.total / maxQ) * 64));
+                const isCurrent = i === 0;
+                const barCls = isCurrent ? 'bg-blue-500' : 'bg-blue-200';
+                const lblCls = isCurrent ? 'text-blue-700' : 'text-slate-500';
+                const dateCls = isCurrent ? 'text-blue-600' : 'text-slate-400';
+                return `
+                  <div class="flex-1 flex flex-col items-center gap-1">
+                    <div class="text-[9px] font-black ${lblCls} leading-none">${w.total ? _monFmt(w.total) : '·'}</div>
+                    <div class="w-full rounded-md ${barCls}" style="height:${h}px" title="${dayMon(w.ws)} – ${dayMon(w.we)}: ${_monFmt(w.total)} qty"></div>
+                    <div class="text-[9px] font-bold ${dateCls} leading-tight">${w.ws.getDate()}/${w.ws.getMonth() + 1}</div>
+                  </div>`;
+            }).join('');
+            if (totLabel) totLabel.textContent = 'Next 6 wk total: ' + _monFmt(totals.reduce((s, n) => s + n, 0));
         }
     }
 
@@ -1436,7 +1571,7 @@
 
             const [bookingsRes, ordersRes] = await Promise.all([
                 _supabase.from('shared_collection_bookings').select('*').or(orFilter).order('booking_date', { ascending: false }),
-                _supabase.from('salesweb_customer_orders').select('id,order_number,customer_name,total_amount,balance_amount,status,created_at,collected_qty,collected_at').or(orFilter).order('created_at', { ascending: false })
+                _supabase.from('salesweb_customer_orders').select('id,order_number,customer_name,billing_name,total_amount,balance_amount,status,created_at,collected_qty,collected_at').or(orFilter).order('created_at', { ascending: false })
             ]);
 
             const bookings = bookingsRes.data || [];
