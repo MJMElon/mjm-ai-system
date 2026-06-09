@@ -2754,8 +2754,13 @@
             const matchTitle = document.getElementById('t3-match-title');
             const matchDesc = document.getElementById('t3-match-desc');
 
-            // Match box: done when main + culled + net premium + net d-tone = total planted
-            const fullyAccounted = totalMain + mockCullingTab4 + netPremium + netDtone;
+            // Match box: aligned with the dashboard pills (Main % + Culled % + Pending %).
+            // netPremium and netDtone are intermediate holding pools — those seeds are
+            // still in the pre-nursery, just in a different tray, so they belong on the
+            // "Pending" side, not the "accounted" side. Including them in fullyAccounted
+            // caused false Over-Allocated readings whenever the user redistributed seeds
+            // to D-Tone / Premium holding without yet moving them to main or culling.
+            const fullyAccounted = totalMain + mockCullingTab4;
             const rawPending = totalPlantedRaw - fullyAccounted;
 
             if (rawPending === 0 && totalPlantedRaw > 0) {
