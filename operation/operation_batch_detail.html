@@ -5890,6 +5890,28 @@ Thank you.`;
                 cullCell.innerText   = '—';
                 cullCell.className   = 'text-base font-black text-[#8a7a68] t6-cull-rate-cell';
             }
+
+            // Auto-fill the D-TONE row for the same plot with 0 the moment its
+            // sibling MAIN row gets a Culled Qty. Same-plot D-TONE entries are
+            // almost always zero in practice — making the admin tab through to
+            // type a 0 for every D-TONE row was the source of "batch never
+            // reaches 100% complete" friction. We only fill when the D-TONE
+            // input is genuinely blank, so any manual value the admin already
+            // typed there is never overwritten.
+            const idx = parseInt(String(rowId).replace('t6-row-', ''), 10);
+            const me  = (typeof t6_plotData !== 'undefined') ? t6_plotData[idx] : null;
+            if (me && me.destType === 'main' && cullVal !== '') {
+                t6_plotData.forEach((p, j) => {
+                    if (p.plot === me.plot && p.destType === 'doubletone') {
+                        const dtRow   = document.getElementById(`t6-row-${j}`);
+                        const dtInput = dtRow ? dtRow.querySelector('.t6-culled-input') : null;
+                        if (dtInput && dtInput.value === '') {
+                            dtInput.value = '0';
+                            calcT6Row(`t6-row-${j}`);
+                        }
+                    }
+                });
+            }
         }
 
         function calcT6() {
