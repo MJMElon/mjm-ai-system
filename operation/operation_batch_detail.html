@@ -5866,10 +5866,30 @@ Thank you.`;
                 `);
             });
 
-            // Recalculate per-row cull rates for any pre-filled saved values
+            // Recalculate per-row cull rates for any pre-filled saved values.
+            // Also fires the D-TONE auto-fill inside calcT6Row for any MAIN
+            // row whose value loaded from the DB — so reopening a batch
+            // where MAIN was already keyed pushes D-TONE to 0 automatically.
             t6_plotData.forEach((p, i) => {
                 if (p.savedCulled !== null) calcT6Row(`t6-row-${i}`);
             });
+
+            // Belt-and-braces auto-fill sweep: scan every visible MAIN input
+            // after the DOM has settled and run calcT6Row on any that already
+            // carry a value. Catches saved-but-zero MAIN states and races
+            // where t6_plotData was rebuilt mid-render.
+            setTimeout(() => {
+                document.querySelectorAll('.t6-plot-row').forEach((rowEl) => {
+                    const rowId = rowEl.id;
+                    if (!rowId) return;
+                    const idx   = parseInt(rowId.replace('t6-row-', ''), 10);
+                    const p     = t6_plotData[idx];
+                    const input = rowEl.querySelector('.t6-culled-input');
+                    if (p && p.destType === 'main' && input && input.value !== '') {
+                        calcT6Row(rowId);
+                    }
+                });
+            }, 0);
 
             calcT6();
         }
