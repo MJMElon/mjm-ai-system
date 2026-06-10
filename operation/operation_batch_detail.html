@@ -1020,15 +1020,20 @@
                                                     <span class="text-[#8a7a68]">⏳ Pending: <span id="t3-lbl-pending-pct">100%</span></span>
                                                 </div>
 
-                                                <!-- 3 stat cards -->
-                                                <div class="grid grid-cols-3 gap-2">
+                                                <!-- 4 stat cards: Main Plot / Main Plot (D-Tone) / Total 1st Culled / Pending -->
+                                                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
                                                     <div class="bg-[#eef5fc] border border-[#bee3f8] rounded-lg px-3 py-2">
                                                         <div class="text-[8px] font-black text-[#3a7ab4] uppercase tracking-wide leading-none">🌿 Main Plot</div>
                                                         <div class="text-lg font-black text-[#3a7ab4] mt-1" id="t3-val-main">0</div>
                                                         <div class="text-[9px] font-bold text-[#8a7a68]" id="t3-val-main-pct">—</div>
                                                     </div>
+                                                    <div class="bg-[#ecfeff] border border-[#a5f3fc] rounded-lg px-3 py-2">
+                                                        <div class="text-[8px] font-black text-[#0891b2] uppercase tracking-wide leading-none">🎯 Main Plot (D-Tone)</div>
+                                                        <div class="text-lg font-black text-[#0891b2] mt-1" id="t3-val-dtone-main">0</div>
+                                                        <div class="text-[9px] font-bold text-[#8a7a68]" id="t3-val-dtone-main-pct">—</div>
+                                                    </div>
                                                     <div class="bg-[#fff5f5] border border-[#f8d7da] rounded-lg px-3 py-2">
-                                                        <div class="text-[8px] font-black text-[#a83020] uppercase tracking-wide leading-none">✂️ 1st Culled</div>
+                                                        <div class="text-[8px] font-black text-[#a83020] uppercase tracking-wide leading-none">✂️ Total 1st Culled</div>
                                                         <div class="text-lg font-black text-[#a83020] mt-1" id="t3-val-cull">0</div>
                                                         <div class="text-[9px] font-bold text-[#8a7a68]" id="t3-val-cull-pct">—</div>
                                                     </div>
@@ -2681,9 +2686,25 @@
 
             const totalTransplanted = totalMain + totalPremium + totalDoubletone;
             const totalTrayBalance = Object.values(activeTrayBalances).reduce((s, v) => s + Math.max(0, v), 0);
-            
-            // FIX: Pending = Total Planted - Main Plot Transplanted - 1st Culled
-            const pendingTotal = Math.max(0, totalPlantedRaw - totalMain - mockCullingTab4);
+
+            // Pending formula per spec:
+            //   planted
+            //   + d-tone transplant qty
+            //   - total transplant (main + d-tone)
+            //   + 1st culled (d-tone)
+            //   - total 1st culled (normal + d-tone)
+            // Algebraically: planted - main_transplant - main_only_culling.
+            // Implemented as written so the engine's audit trail reads back
+            // exactly the way the spec describes it.
+            const cull1Dtone = (window._t3CullByTray && Number(window._t3CullByTray['DOUBLE-TONE'])) || 0;
+            const pendingTotal = Math.max(
+                0,
+                totalPlantedRaw
+                + totalDoubletone
+                - (totalMain + totalDoubletone)
+                + cull1Dtone
+                - mockCullingTab4
+            );
 
             // accounted uses net premium/d-tone (seeds truly "in holding" there)
             const accounted = totalMain + mockCullingTab4 + netPremium + netDtone;
@@ -2728,6 +2749,12 @@
             // Stat cards
             document.getElementById('t3-val-main').innerText = totalMain.toLocaleString();
             document.getElementById('t3-val-main-pct').innerText = totalPlantedRaw > 0 ? pctMain.toFixed(1) + '% of total' : '—';
+            // Main Plot (D-Tone) = qty transplanted to the D-Tone destination
+            const dtoneMainEl    = document.getElementById('t3-val-dtone-main');
+            const dtoneMainPctEl = document.getElementById('t3-val-dtone-main-pct');
+            if (dtoneMainEl)    dtoneMainEl.innerText    = totalDoubletone.toLocaleString();
+            if (dtoneMainPctEl) dtoneMainPctEl.innerText = totalPlantedRaw > 0 ? pctDoubletone.toFixed(1) + '% of total' : '—';
+            // Total 1st Culled (normal + D-Tone) — mockCullingTab4 already sums every 1st_Culling row
             document.getElementById('t3-val-cull').innerText = mockCullingTab4.toLocaleString();
             document.getElementById('t3-val-cull-pct').innerText = totalPlantedRaw > 0 ? pctCull.toFixed(1) + '% of total' : '—';
             document.getElementById('t3-val-untransplanted').innerText = pendingTotal.toLocaleString();
