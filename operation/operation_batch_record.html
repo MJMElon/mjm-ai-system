@@ -244,8 +244,26 @@
                 // A batch is in Main Nursery once any transplant log has been written.
                 const transplantedBatchNames = new Set((transplantRes.data || []).map(r => r.batch_name));
 
+                // De-dupe Seeds_Received rows: keep only the most-recent log
+                // per batch_name. Repeated saves on Tab 1 can leave multiple
+                // Seeds_Received rows in shared_inventory_logs for the same
+                // batch, which used to make the same batch show up 2-7 times
+                // in this list. The newest row wins so any edits to qty /
+                // breed / date are reflected.
+                const newestByBatch = {};
+                (recRes.data || []).forEach(r => {
+                    const name = r.batch_name;
+                    if (!name) return;
+                    const cur = newestByBatch[name];
+                    if (!cur) { newestByBatch[name] = r; return; }
+                    const curTs = new Date(cur.created_at || 0).getTime();
+                    const newTs = new Date(r.created_at   || 0).getTime();
+                    if (newTs > curTs) newestByBatch[name] = r;
+                });
+                const dedupedReception = Object.values(newestByBatch);
+
                 // Process logic & simulate stages.
-                masterBatches = (recRes.data || []).map(b => {
+                masterBatches = dedupedReception.map(b => {
                     const actualPlanted = plantedMap[b.batch_name] || 0;
                     const damaged = damagedMap[b.batch_name] || 0;
                     const cull1   = cull1Map[b.batch_name] || 0;
