@@ -1482,6 +1482,11 @@
                                         </div>
                                     </div>
 
+                                    <div id="t7-cal-edit-banner" class="hidden mb-2 px-3 py-2 rounded-lg bg-[#fff5f5] border border-[#f8d7da] text-[11px] font-bold text-[#a83020] flex items-center justify-between gap-3">
+                                        <span>✏️ Editing an existing adjustment. Saving will update the record in place.</span>
+                                        <button type="button" onclick="cancelEditCalibration()" class="px-3 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[10px] font-black uppercase tracking-widest rounded hover:bg-[#fff5f5]">Cancel</button>
+                                    </div>
+
                                     <div class="grid grid-cols-1 md:grid-cols-[180px_180px_1fr_1fr_auto] gap-3 items-end pt-2">
                                         <div>
                                             <label class="label-style">Adjustment Qty (+/-)</label>
@@ -1817,6 +1822,7 @@
                 return;
             }
             const esc = s => String(s || '').replace(/</g, '&lt;');
+            const adminActions = (typeof isAdmin !== 'undefined' && isAdmin);
             const rowsHtml = safe.map(r => {
                 const q = Number(r.quantity_change) || 0;
                 const sign = q > 0 ? '+' : '';
@@ -1827,11 +1833,19 @@
                 const reportMatch = r.remark ? r.remark.match(/Report:\s*([^.]+?)\s*\.\s*/i) : null;
                 const plotMatch   = r.remark ? r.remark.match(/Plot:\s*([^.]+?)\s*\.\s*/i)   : null;
                 const reportTxt   = reportMatch ? reportMatch[1].trim() : '';
-                const plotTxt     = plotMatch   ? plotMatch[1].trim()   : '';
+                const plotTxt     = plotMatch   ? plotMatch[1].trim()   : (r.plot_name || '');
                 let reasonTxt = r.remark || '';
                 if (reportMatch) reasonTxt = reasonTxt.replace(reportMatch[0], '');
                 if (plotMatch)   reasonTxt = reasonTxt.replace(plotMatch[0], '');
                 reasonTxt = reasonTxt.trim();
+                // Action buttons are visible to admins only — normal users can
+                // see history but never edit or delete a row once it's keyed in.
+                const actionsCell = adminActions
+                    ? `<td class="px-3 py-2 whitespace-nowrap">
+                            <button type="button" onclick="editCalibration('${esc(r.id)}', ${q}, '${esc(reportTxt)}', '${esc(plotTxt)}', '${esc(reasonTxt)}')" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[9px] font-black uppercase rounded hover:bg-[#f0f8ff] mr-1">Edit</button>
+                            <button type="button" onclick="deleteCalibration('${esc(r.id)}')" class="px-2 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[9px] font-black uppercase rounded hover:bg-[#fff5f5]">Del</button>
+                       </td>`
+                    : `<td class="px-3 py-2 text-[10px] text-[#8a7a68]">🔒</td>`;
                 return `<tr class="border-t border-[#e8dcc8]">
                     <td class="px-3 py-2 text-[11px] font-bold text-[#3d2610]">${formatAuditDate(r.created_at)}</td>
                     <td class="px-3 py-2 text-sm font-black ${cls}">${sign}${q.toLocaleString()}</td>
@@ -1839,6 +1853,7 @@
                     <td class="px-3 py-2 text-[11px] text-[#4a7a2e] font-bold">${esc(plotTxt) || '—'}</td>
                     <td class="px-3 py-2 text-[11px] text-[#3d2610]">${esc(reasonTxt) || '—'}</td>
                     <td class="px-3 py-2 text-[10px] text-[#8a7a68]">${esc(r.last_edited_by || '—')}</td>
+                    ${actionsCell}
                 </tr>`;
             }).join('');
             histEl.innerHTML = `<table class="w-full text-left">
@@ -1849,9 +1864,67 @@
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Plot / Tray</th>
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Reason</th>
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">By</th>
+                    <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">${adminActions ? 'Actions' : 'Lock'}</th>
                 </tr></thead>
                 <tbody>${rowsHtml}</tbody>
             </table>`;
+        }
+
+        // Tab 7 Stock Calibration edit state. When non-null, saveCalibration
+        // updates the row with this id instead of inserting a new one. The Edit
+        // and Del action buttons in the history table are admin-only — see
+        // renderCalibrationHistory.
+        let _t7EditingId = null;
+
+        function editCalibration(id, qty, report, plot, reason) {
+            if (typeof isAdmin !== 'undefined' && !isAdmin) {
+                showToast('Only admins can edit calibration entries.', 'error');
+                return;
+            }
+            _t7EditingId = id;
+            const qtyEl    = document.getElementById('t7-cal-qty');
+            const reportEl = document.getElementById('t7-cal-report');
+            const plotEl   = document.getElementById('t7-cal-plot');
+            const reasonEl = document.getElementById('t7-cal-reason');
+            const btn      = document.getElementById('t7-cal-save-btn');
+            const banner   = document.getElementById('t7-cal-edit-banner');
+            if (qtyEl)    qtyEl.value    = qty;
+            if (reportEl) reportEl.value = report || '';
+            if (plotEl)   plotEl.value   = plot   || '';
+            if (reasonEl) reasonEl.value = reason || '';
+            if (btn)      btn.innerText  = 'Update Adjustment';
+            if (banner)   banner.classList.remove('hidden');
+            qtyEl?.focus();
+            qtyEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function cancelEditCalibration() {
+            _t7EditingId = null;
+            const qtyEl    = document.getElementById('t7-cal-qty');
+            const reportEl = document.getElementById('t7-cal-report');
+            const plotEl   = document.getElementById('t7-cal-plot');
+            const reasonEl = document.getElementById('t7-cal-reason');
+            const btn      = document.getElementById('t7-cal-save-btn');
+            const banner   = document.getElementById('t7-cal-edit-banner');
+            if (qtyEl)    qtyEl.value    = '';
+            if (reportEl) reportEl.value = '';
+            if (plotEl)   plotEl.value   = '';
+            if (reasonEl) reasonEl.value = '';
+            if (btn)      btn.innerText  = 'Save Adjustment';
+            if (banner)   banner.classList.add('hidden');
+        }
+
+        async function deleteCalibration(id) {
+            if (typeof isAdmin !== 'undefined' && !isAdmin) {
+                showToast('Only admins can delete calibration entries.', 'error');
+                return;
+            }
+            if (!confirm('Delete this calibration adjustment? This cannot be undone.')) return;
+            const { error } = await _supabase.from('shared_inventory_logs').delete().eq('id', id);
+            if (error) { showToast('Failed to delete: ' + error.message, 'error'); return; }
+            showToast('Calibration deleted.', 'success');
+            const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
+            renderCalibrationHistory(batchId);
         }
 
         async function saveCalibration() {
@@ -1871,7 +1944,7 @@
             if (!plot)   { showToast('Select which plot or tray this calibration applies to.', 'error'); plotEl.focus(); return; }
             if (!reason) { showToast('Reason is required for every calibration.', 'error'); reasonEl.focus(); return; }
 
-            btn.disabled = true; btn.innerText = 'Saving…';
+            btn.disabled = true; btn.innerText = _t7EditingId ? 'Updating…' : 'Saving…';
 
             // plot_name is the right schema column for the location; report
             // and the freeform reason are stored as labelled fragments in the
@@ -1884,17 +1957,33 @@
                 quantity_change: qty,
                 remark: `Report: ${report}. Plot: ${plot}. ${reason}`
             });
-            let { error } = await _supabase.from('shared_inventory_logs').insert([payload]);
-            if (error && isEditMetaColumnError && isEditMetaColumnError(error)) {
-                ({ error } = await _supabase.from('shared_inventory_logs').insert(stripEditMeta([payload])));
+
+            let error;
+            if (_t7EditingId) {
+                // Edit path — admin updating an existing calibration row.
+                ({ error } = await _supabase.from('shared_inventory_logs').update(payload).eq('id', _t7EditingId));
+                if (error && isEditMetaColumnError && isEditMetaColumnError(error)) {
+                    ({ error } = await _supabase.from('shared_inventory_logs').update(stripEditMeta([payload])[0]).eq('id', _t7EditingId));
+                }
+            } else {
+                // Insert path — first save of a new calibration row.
+                ({ error } = await _supabase.from('shared_inventory_logs').insert([payload]));
+                if (error && isEditMetaColumnError && isEditMetaColumnError(error)) {
+                    ({ error } = await _supabase.from('shared_inventory_logs').insert(stripEditMeta([payload])));
+                }
             }
 
-            btn.disabled = false; btn.innerText = 'Save Adjustment';
-            if (error) { showToast('Failed to save calibration: ' + error.message, 'error'); return; }
-            qtyEl.value = ''; reasonEl.value = '';
-            if (reportEl) reportEl.value = '';
-            if (plotEl)   plotEl.value   = '';
-            showToast(`Calibration recorded: ${qty > 0 ? '+' : ''}${qty}`, 'success');
+            btn.disabled = false;
+            if (error) {
+                showToast(`Failed to ${_t7EditingId ? 'update' : 'save'} calibration: ${error.message}`, 'error');
+                btn.innerText = _t7EditingId ? 'Update Adjustment' : 'Save Adjustment';
+                return;
+            }
+            const wasEditing = !!_t7EditingId;
+            cancelEditCalibration(); // clears form + resets button + banner
+            showToast(wasEditing
+                ? `Calibration updated: ${qty > 0 ? '+' : ''}${qty}`
+                : `Calibration recorded: ${qty > 0 ? '+' : ''}${qty}`, 'success');
             renderCalibrationHistory(batchId);
         }
 
