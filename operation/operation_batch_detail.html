@@ -5437,6 +5437,12 @@ Thank you.`;
                             savedCullDate: saved.cullDate ?? null
                         });
                     });
+                    // Merge MAIN + D-TONE transplants of the same plot into
+                    // one row BEFORE rendering. (Bug fix: previously the
+                    // merge only ran on the Tab 3 DOM-scrape fallback path,
+                    // so DB-loaded transplant rows kept appearing as two
+                    // entries — e.g. U1 with 427 and 20 instead of 447.)
+                    t5_plotData = _t5MergeByPlot(t5_plotData);
                     renderT5PlotRows();
                     return;
                 }
@@ -5454,11 +5460,7 @@ Thank you.`;
                 }
             });
 
-            // Merge MAIN + D-TONE transplants of the same plot into a single
-            // row. The auditor only sees one B1, with the combined transplant
-            // qty (MAIN qty + D-Tone qty), so there's no possibility of the
-            // two destinations overwriting each other's dead/alive values.
-            // savedDead values from legacy split saves are summed in too.
+            // Same merge for the DOM-scrape fallback path.
             t5_plotData = _t5MergeByPlot(t5_plotData);
 
             renderT5PlotRows();
@@ -5472,10 +5474,15 @@ Thank you.`;
         function _t5MergeByPlot(rows) {
             const byPlot = new Map();
             for (const r of rows) {
-                const key = r.plot;
+                // Normalise the merge key so trailing whitespace or stray case
+                // differences don't keep two genuinely-same plots apart.
+                const key = String(r.plot || '').trim().toUpperCase();
+                if (!key) continue;
                 const existing = byPlot.get(key);
                 if (!existing) {
                     byPlot.set(key, {
+                        // Preserve the original display string (don't store the
+                        // uppercased / trimmed merge key).
                         plot: r.plot,
                         qty: Number(r.qty) || 0,
                         // Earliest transplant date wins so the due-date pill
