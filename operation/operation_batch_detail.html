@@ -1482,10 +1482,33 @@
                                         </div>
                                     </div>
 
-                                    <div class="grid grid-cols-1 md:grid-cols-[180px_1fr_auto] gap-3 items-end pt-2">
+                                    <div class="grid grid-cols-1 md:grid-cols-[180px_180px_1fr_1fr_auto] gap-3 items-end pt-2">
                                         <div>
                                             <label class="label-style">Adjustment Qty (+/-)</label>
                                             <input type="number" id="t7-cal-qty" class="input-style" placeholder="e.g. 50 or -20" step="1">
+                                        </div>
+                                        <div>
+                                            <label class="label-style">Report</label>
+                                            <div class="select-wrapper">
+                                                <select id="t7-cal-report" class="input-style">
+                                                    <option value="">— Select report —</option>
+                                                    <option value="Seeds Received">Seeds Received</option>
+                                                    <option value="Planting">Planting</option>
+                                                    <option value="Transplanting">Transplanting</option>
+                                                    <option value="1st Culling">1st Culling</option>
+                                                    <option value="2nd Culling">2nd Culling</option>
+                                                    <option value="3rd Culling">3rd Culling</option>
+                                                    <option value="Seed Audit">Seed Audit</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label class="label-style">Plot / Tray</label>
+                                            <div class="select-wrapper">
+                                                <select id="t7-cal-plot" class="input-style">
+                                                    <option value="">— Select plot / tray —</option>
+                                                </select>
+                                            </div>
                                         </div>
                                         <div>
                                             <label class="label-style">Reason (required)</label>
@@ -1717,7 +1740,51 @@
         }
 
         // ── TAB 7: Stock Calibration ─────────────────────────────────────
+        // Build the Plot / Tray dropdown for the Stock Calibration form from
+        // globalPlots + the pre-nursery tray names already on Tab 2/3, so any
+        // calibration can be tied to the exact location it relates to.
+        function _t7PopulatePlotDropdown() {
+            const sel = document.getElementById('t7-cal-plot');
+            if (!sel) return;
+            const previous = sel.value;
+            const seen = new Set();
+            const opts = ['<option value="">— Select plot / tray —</option>'];
+
+            // Pre-nursery special trays first (they're rarely listed in globalPlots)
+            ['Pre-Nursery', 'DOUBLE-TONE', 'PREMIUM CARE'].forEach(name => {
+                if (!seen.has(name)) { seen.add(name); opts.push(`<option value="${name}">${name}</option>`); }
+            });
+            // Tray names for THIS batch (from Tab 2 planted trays)
+            try {
+                (preNurseryTrayData || []).forEach(t => {
+                    const n = t && t.name;
+                    if (n && !seen.has(n)) { seen.add(n); opts.push(`<option value="${n}">${n}</option>`); }
+                });
+            } catch (e) {}
+            // Master plots grouped by nursery
+            if (Array.isArray(globalPlots) && globalPlots.length) {
+                const grouped = {};
+                globalPlots.forEach(p => {
+                    const n = p.nursery_name || 'Plots';
+                    (grouped[n] = grouped[n] || []).push(p.plot_name);
+                });
+                Object.keys(grouped).sort().forEach(nurs => {
+                    opts.push(`<optgroup label="${nurs}">`);
+                    grouped[nurs].forEach(name => {
+                        if (name && !seen.has(name)) { seen.add(name); opts.push(`<option value="${name}">${name}</option>`); }
+                    });
+                    opts.push('</optgroup>');
+                });
+            }
+            sel.innerHTML = opts.join('');
+            if (previous && seen.has(previous)) sel.value = previous;
+        }
+
         async function renderCalibrationHistory(batchId) {
+            // Keep the Plot / Tray dropdown in sync with the loaded globalPlots
+            // and any planted trays for this batch.
+            _t7PopulatePlotDropdown();
+
             const histEl = document.getElementById('t7-cal-history');
             const setStat = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
             if (!histEl) return;
@@ -1749,21 +1816,37 @@
                 histEl.innerHTML = '<div class="text-center p-6 text-[#8a7a68] text-xs">No calibration adjustments recorded for this batch yet.</div>';
                 return;
             }
+            const esc = s => String(s || '').replace(/</g, '&lt;');
             const rowsHtml = safe.map(r => {
                 const q = Number(r.quantity_change) || 0;
                 const sign = q > 0 ? '+' : '';
                 const cls = q > 0 ? 'text-emerald-700' : 'text-rose-700';
+                // Remark format: "Report: <r>. Plot: <p>. <reason>" — pull each
+                // labelled field out so the table can show them in their own
+                // columns. Legacy rows (no labelled fields) fall back to "—".
+                const reportMatch = r.remark ? r.remark.match(/Report:\s*([^.]+?)\s*\.\s*/i) : null;
+                const plotMatch   = r.remark ? r.remark.match(/Plot:\s*([^.]+?)\s*\.\s*/i)   : null;
+                const reportTxt   = reportMatch ? reportMatch[1].trim() : '';
+                const plotTxt     = plotMatch   ? plotMatch[1].trim()   : '';
+                let reasonTxt = r.remark || '';
+                if (reportMatch) reasonTxt = reasonTxt.replace(reportMatch[0], '');
+                if (plotMatch)   reasonTxt = reasonTxt.replace(plotMatch[0], '');
+                reasonTxt = reasonTxt.trim();
                 return `<tr class="border-t border-[#e8dcc8]">
                     <td class="px-3 py-2 text-[11px] font-bold text-[#3d2610]">${formatAuditDate(r.created_at)}</td>
                     <td class="px-3 py-2 text-sm font-black ${cls}">${sign}${q.toLocaleString()}</td>
-                    <td class="px-3 py-2 text-[11px] text-[#3d2610]">${(r.remark || '').replace(/</g,'&lt;')}</td>
-                    <td class="px-3 py-2 text-[10px] text-[#8a7a68]">${(r.last_edited_by || '—').replace(/</g,'&lt;')}</td>
+                    <td class="px-3 py-2 text-[11px] text-[#3a7ab4] font-bold">${esc(reportTxt) || '—'}</td>
+                    <td class="px-3 py-2 text-[11px] text-[#4a7a2e] font-bold">${esc(plotTxt) || '—'}</td>
+                    <td class="px-3 py-2 text-[11px] text-[#3d2610]">${esc(reasonTxt) || '—'}</td>
+                    <td class="px-3 py-2 text-[10px] text-[#8a7a68]">${esc(r.last_edited_by || '—')}</td>
                 </tr>`;
             }).join('');
             histEl.innerHTML = `<table class="w-full text-left">
                 <thead><tr class="bg-[#fdf6e8]">
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Date</th>
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Qty</th>
+                    <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Report</th>
+                    <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Plot / Tray</th>
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Reason</th>
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">By</th>
                 </tr></thead>
@@ -1774,21 +1857,32 @@
         async function saveCalibration() {
             const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
             if (!batchId) { showToast('Save Tab 1 first to assign a batch number before recording a calibration.', 'error'); return; }
-            const qtyEl = document.getElementById('t7-cal-qty');
+            const qtyEl    = document.getElementById('t7-cal-qty');
+            const reportEl = document.getElementById('t7-cal-report');
+            const plotEl   = document.getElementById('t7-cal-plot');
             const reasonEl = document.getElementById('t7-cal-reason');
-            const btn = document.getElementById('t7-cal-save-btn');
-            const qty = parseInt(qtyEl.value, 10);
-            const reason = (reasonEl.value || '').trim();
+            const btn      = document.getElementById('t7-cal-save-btn');
+            const qty      = parseInt(qtyEl.value, 10);
+            const report   = (reportEl?.value || '').trim();
+            const plot     = (plotEl?.value   || '').trim();
+            const reason   = (reasonEl.value  || '').trim();
             if (isNaN(qty) || qty === 0) { showToast('Enter a non-zero adjustment quantity (use a negative value to subtract).', 'error'); qtyEl.focus(); return; }
+            if (!report) { showToast('Select which report this calibration relates to.', 'error'); reportEl.focus(); return; }
+            if (!plot)   { showToast('Select which plot or tray this calibration applies to.', 'error'); plotEl.focus(); return; }
             if (!reason) { showToast('Reason is required for every calibration.', 'error'); reasonEl.focus(); return; }
 
             btn.disabled = true; btn.innerText = 'Saving…';
 
+            // plot_name is the right schema column for the location; report
+            // and the freeform reason are stored as labelled fragments in the
+            // remark so the history table can show each in its own column
+            // without a schema change.
             const payload = withEditMeta({
                 batch_name: batchId,
                 transaction_type: 'Stock_Calibration',
+                plot_name: plot,
                 quantity_change: qty,
-                remark: reason
+                remark: `Report: ${report}. Plot: ${plot}. ${reason}`
             });
             let { error } = await _supabase.from('shared_inventory_logs').insert([payload]);
             if (error && isEditMetaColumnError && isEditMetaColumnError(error)) {
@@ -1798,6 +1892,8 @@
             btn.disabled = false; btn.innerText = 'Save Adjustment';
             if (error) { showToast('Failed to save calibration: ' + error.message, 'error'); return; }
             qtyEl.value = ''; reasonEl.value = '';
+            if (reportEl) reportEl.value = '';
+            if (plotEl)   plotEl.value   = '';
             showToast(`Calibration recorded: ${qty > 0 ? '+' : ''}${qty}`, 'success');
             renderCalibrationHistory(batchId);
         }
