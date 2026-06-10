@@ -4948,12 +4948,34 @@ Thank you.`;
                     }
                     logError = error;
                 } else {
-                    ledgerPayload.created_at = new Date(dateReceived).toISOString();
-                    let { error } = await _supabase.from('shared_inventory_logs').insert([ledgerPayload]);
-                    if (error && isEditMetaColumnError(error)) {
-                        ({ error } = await _supabase.from('shared_inventory_logs').insert(stripEditMeta([ledgerPayload])));
+                    // Guard against duplicate Seeds_Received rows when the form
+                    // is saved more than once for the same batch (this is what
+                    // caused batch 261 / 260 to appear 7x / 2x in the batch
+                    // list). If a row already exists for this batch_name,
+                    // update it in place instead of inserting another.
+                    const { data: existingRows, error: existingErr } = await _supabase
+                        .from('shared_inventory_logs')
+                        .select('created_at')
+                        .eq('transaction_type', 'Seeds_Received')
+                        .eq('batch_name', batch)
+                        .limit(1);
+                    if (existingErr) console.warn('Could not check for existing Seeds_Received row:', existingErr.message);
+                    const existing = (existingRows && existingRows[0]) || null;
+                    if (existing) {
+                        let { error } = await _supabase.from('shared_inventory_logs').update(ledgerPayload).eq('created_at', existing.created_at);
+                        if (error && isEditMetaColumnError(error)) {
+                            const fb = stripEditMeta([ledgerPayload])[0];
+                            ({ error } = await _supabase.from('shared_inventory_logs').update(fb).eq('created_at', existing.created_at));
+                        }
+                        logError = error;
+                    } else {
+                        ledgerPayload.created_at = new Date(dateReceived).toISOString();
+                        let { error } = await _supabase.from('shared_inventory_logs').insert([ledgerPayload]);
+                        if (error && isEditMetaColumnError(error)) {
+                            ({ error } = await _supabase.from('shared_inventory_logs').insert(stripEditMeta([ledgerPayload])));
+                        }
+                        logError = error;
                     }
-                    logError = error;
                 }
                 if(logError) { showToast('Database blocked save: ' + logError.message, 'error'); throw logError; }
                 updateTracker(1); document.getElementById('time-received').innerText = 'Rec: ' + new Date(dateReceived).toLocaleDateString('en-MY', {day: '2-digit', month: 'short', year: 'numeric'}); setTimeout(updateT1Completion, 100);
