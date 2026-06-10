@@ -260,7 +260,13 @@
                     const newTs = new Date(r.created_at   || 0).getTime();
                     if (newTs > curTs) newestByBatch[name] = r;
                 });
-                const dedupedReception = Object.values(newestByBatch);
+                // Sort latest → oldest by created_at so the most recent batches
+                // sit at the top of both Active and Completed lists.
+                const dedupedReception = Object.values(newestByBatch).sort((a, b) => {
+                    const ta = new Date(a.created_at || 0).getTime();
+                    const tb = new Date(b.created_at || 0).getTime();
+                    return tb - ta;
+                });
 
                 // Process logic & simulate stages.
                 masterBatches = dedupedReception.map(b => {
