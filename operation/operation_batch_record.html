@@ -260,12 +260,16 @@
                     const newTs = new Date(r.created_at   || 0).getTime();
                     if (newTs > curTs) newestByBatch[name] = r;
                 });
-                // Sort latest → oldest by created_at so the most recent batches
-                // sit at the top of both Active and Completed lists.
+                // Sort latest → oldest by created_at, with batch_name as a
+                // tiebreaker (natural sort, descending) so two batches saved
+                // on the same date — e.g. 255 and 256 both on 13 Feb 2026 —
+                // still fall in the expected numeric order (256 above 255).
+                const _natCmp = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
                 const dedupedReception = Object.values(newestByBatch).sort((a, b) => {
                     const ta = new Date(a.created_at || 0).getTime();
                     const tb = new Date(b.created_at || 0).getTime();
-                    return tb - ta;
+                    if (tb !== ta) return tb - ta;
+                    return _natCmp(String(b.batch_name || ''), String(a.batch_name || ''));
                 });
 
                 // Process logic & simulate stages.
