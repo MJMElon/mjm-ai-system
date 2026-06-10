@@ -162,7 +162,7 @@ const STAGE_TYPES = {
 };
 
 function fmtNum(n)   { return (n || 0).toLocaleString(); }
-function fmtPct(n)   { return (Math.max(0, Math.min(999, n || 0))).toFixed(1) + '%'; }
+function fmtPct(n)   { return (Math.max(0, Math.min(999, n || 0))).toFixed(2) + '%'; }
 function fmtDate(d)  { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? '—' : x.toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' }); }
 
 function defaultRange() {

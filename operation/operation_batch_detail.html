@@ -2725,9 +2725,9 @@
             document.getElementById('t3-bar-untransplanted').style.width = `${Math.max(0, 100 - pctMain - pctCull)}%`;
 
             // Always show % labels below bar
-            const mainPctStr    = totalPlantedRaw > 0 ? pctMain.toFixed(1) + '%' : '0%';
-            const cullPctStr    = totalPlantedRaw > 0 ? pctCull.toFixed(1) + '%' : '0%';
-            const pendingPctStr = totalPlantedRaw > 0 ? pctPending.toFixed(1) + '%' : '100%';
+            const mainPctStr    = totalPlantedRaw > 0 ? pctMain.toFixed(2) + '%' : '0%';
+            const cullPctStr    = totalPlantedRaw > 0 ? pctCull.toFixed(2) + '%' : '0%';
+            const pendingPctStr = totalPlantedRaw > 0 ? pctPending.toFixed(2) + '%' : '100%';
             const lblMain = document.getElementById('t3-lbl-main-pct');
             const lblCull = document.getElementById('t3-lbl-cull-pct');
             const lblPend = document.getElementById('t3-lbl-pending-pct');
@@ -2748,23 +2748,23 @@
 
             // Stat cards
             document.getElementById('t3-val-main').innerText = totalMain.toLocaleString();
-            document.getElementById('t3-val-main-pct').innerText = totalPlantedRaw > 0 ? pctMain.toFixed(1) + '% of total' : '—';
+            document.getElementById('t3-val-main-pct').innerText = totalPlantedRaw > 0 ? pctMain.toFixed(2) + '% of total' : '—';
             // Main Plot (D-Tone) = qty transplanted to the D-Tone destination
             const dtoneMainEl    = document.getElementById('t3-val-dtone-main');
             const dtoneMainPctEl = document.getElementById('t3-val-dtone-main-pct');
             if (dtoneMainEl)    dtoneMainEl.innerText    = totalDoubletone.toLocaleString();
-            if (dtoneMainPctEl) dtoneMainPctEl.innerText = totalPlantedRaw > 0 ? pctDoubletone.toFixed(1) + '% of total' : '—';
+            if (dtoneMainPctEl) dtoneMainPctEl.innerText = totalPlantedRaw > 0 ? pctDoubletone.toFixed(2) + '% of total' : '—';
             // Total 1st Culled (normal + D-Tone) — mockCullingTab4 already sums every 1st_Culling row
             document.getElementById('t3-val-cull').innerText = mockCullingTab4.toLocaleString();
-            document.getElementById('t3-val-cull-pct').innerText = totalPlantedRaw > 0 ? pctCull.toFixed(1) + '% of total' : '—';
+            document.getElementById('t3-val-cull-pct').innerText = totalPlantedRaw > 0 ? pctCull.toFixed(2) + '% of total' : '—';
             document.getElementById('t3-val-untransplanted').innerText = pendingTotal.toLocaleString();
-            document.getElementById('t3-val-pending-pct').innerText = totalPlantedRaw > 0 ? pctPending.toFixed(1) + '% remaining' : '—';
+            document.getElementById('t3-val-pending-pct').innerText = totalPlantedRaw > 0 ? pctPending.toFixed(2) + '% remaining' : '—';
 
             // Premium + D-Tone note — update hidden ids for compat (use net values)
             document.getElementById('t3-val-premium').innerText = netPremium.toLocaleString();
-            document.getElementById('t3-val-premium-pct').innerText = pctPremium.toFixed(1) + '%';
+            document.getElementById('t3-val-premium-pct').innerText = pctPremium.toFixed(2) + '%';
             document.getElementById('t3-val-doubletone').innerText = netDtone.toLocaleString();
-            document.getElementById('t3-val-doubletone-pct').innerText = pctDoubletone.toFixed(1) + '%';
+            document.getElementById('t3-val-doubletone-pct').innerText = pctDoubletone.toFixed(2) + '%';
 
             // Pending note
             const specialNote = document.getElementById('t3-special-note');
@@ -2833,7 +2833,7 @@
                     const trayInfo = preNurseryTrayData.find(t => t.name === tray);
                     const initialQty = trayInfo?.initialQty || 0;
                     const cullQty = (initialQty > 0 && window._t3CullByTray) ? (window._t3CullByTray[tray] || 0) : 0;
-                    const cullPct = initialQty > 0 && cullQty > 0 ? ((cullQty / initialQty) * 100).toFixed(1) : null;
+                    const cullPct = initialQty > 0 && cullQty > 0 ? ((cullQty / initialQty) * 100).toFixed(2) : null;
                     const cullColor = cullPct !== null ? (parseFloat(cullPct) > 20 ? 'text-[#a83020]' : parseFloat(cullPct) > 10 ? 'text-[#c07820]' : 'text-[#4a7a2e]') : '';
                     const cullBadge = cullPct !== null
                         ? `<span class="ml-1 px-1.5 py-0.5 rounded text-[8px] font-black bg-[#fff5f5] ${cullColor}">✂️ ${cullPct}% culled</span>`
@@ -3199,7 +3199,7 @@
             const expectedRaw = parseInt(document.getElementById('display-total-qty').dataset.raw || 0);
             const focRaw = parseInt(document.getElementById('display-foc-qty').dataset.raw || 0);
             const doRaw = expectedRaw - focRaw;
-            const focPercent = doRaw > 0 ? ((focRaw / doRaw) * 100).toFixed(1) : 0;
+            const focPercent = doRaw > 0 ? ((focRaw / doRaw) * 100).toFixed(2) : 0;
             const damaged = readNumericInput('t2-damaged');
 
             let totalActualPlanted = 0;
@@ -3286,9 +3286,9 @@
             document.getElementById('t2-damage-actual-text').innerText = damaged.toLocaleString();
             document.getElementById('t2-foc-allowance-pct').innerText = focPercent + '%';
 
-            const dmgRatePct = expectedRaw > 0 ? ((damaged / expectedRaw) * 100).toFixed(1) : 0;
+            const dmgRatePct = expectedRaw > 0 ? ((damaged / expectedRaw) * 100).toFixed(2) : 0;
             document.getElementById('t2-dmg-pct').innerText = expectedRaw > 0 ? dmgRatePct + '%' : '—';
-            document.getElementById('t2-dmg-used-pct').innerText = focRaw > 0 ? ((damaged / focRaw) * 100).toFixed(1) + '% of FOC limit' : '—';
+            document.getElementById('t2-dmg-used-pct').innerText = focRaw > 0 ? ((damaged / focRaw) * 100).toFixed(2) + '% of FOC limit' : '—';
 
             const chart2Max = Math.max(focRaw, damaged) * 1.1 || 1;
             const barW2 = Math.min(100, (damaged / chart2Max) * 100).toFixed(1);
@@ -4223,7 +4223,7 @@
             auditBar.style.width = auditPct + '%';
             document.getElementById('t8-chart-actual-text').innerText = audited.toLocaleString();
             document.getElementById('t8-chart-target-text').innerText = target.toLocaleString();
-            document.getElementById('t8-audit-pct').innerText = target > 0 && audited > 0 ? auditPct.toFixed(1) + '%' : '—';
+            document.getElementById('t8-audit-pct').innerText = target > 0 && audited > 0 ? auditPct.toFixed(2) + '%' : '—';
             document.getElementById('t8-supplier-note').innerText = totalSupplier.toLocaleString();
 
             const matchIcon = document.getElementById('t8-match-icon');
@@ -4253,7 +4253,7 @@
             const shortagePct = baseline > 0 ? (shortage / baseline) * 100 : 0;
             document.getElementById('t8-shortage-bar').style.width = Math.min(100, shortagePct) + '%';
             document.getElementById('t8-shortage-text').innerText = shortage.toLocaleString();
-            document.getElementById('t8-shortage-pct').innerText = (audited > 0 && baseline > 0) ? shortagePct.toFixed(1) + '%' : '—';
+            document.getElementById('t8-shortage-pct').innerText = (audited > 0 && baseline > 0) ? shortagePct.toFixed(2) + '%' : '—';
             document.getElementById('t8-audited-note').innerText = audited.toLocaleString();
             document.getElementById('t8-baseline-note').innerText = baseline.toLocaleString();
 
@@ -4679,10 +4679,10 @@ Thank you.`;
             doc.text('RECEIVE (D/O + FOC) & AUDIT ANALYSIS', margin, y); y += 14;
             doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
             doc.text('Seeds Audited (vs Target):  ', margin, y);
-            doc.setFont('times', 'bold'); doc.text(auditPct.toFixed(1) + '%', margin + 160, y);
+            doc.setFont('times', 'bold'); doc.text(auditPct.toFixed(2) + '%', margin + 160, y);
             doc.setFont('times', 'normal'); doc.text('Shortage Seeds:  ', margin + 260, y);
             doc.setFont('times', 'bold'); setText(shortage > 0 ? RED : GREEN);
-            doc.text(shortage.toLocaleString() + ' (' + shortagePct.toFixed(1) + '%)', margin + 350, y);
+            doc.text(shortage.toLocaleString() + ' (' + shortagePct.toFixed(2) + '%)', margin + 350, y);
             y += 18;
 
             // ── REMARK
@@ -5202,7 +5202,7 @@ Thank you.`;
                 if (trayQty > 0) totalTrayQty += trayQty;
 
                 if (trayQty > 0 && culledQty >= 0) {
-                    const rate = ((culledQty / trayQty) * 100).toFixed(1);
+                    const rate = ((culledQty / trayQty) * 100).toFixed(2);
                     rateDiv.innerText = rate + '%';
                     // Colour code the rate
                     if (parseFloat(rate) > 20) rateDiv.className = 'input-style bg-[#fff5f5] font-black text-[#a83020] cull-rate h-[45px] flex items-center';
@@ -5217,7 +5217,7 @@ Thank you.`;
             document.getElementById('t4-total-culled').innerText = totalCulled.toLocaleString();
             // Qty-weighted cull rate (total culled / total tray qty) so it matches the
             // dashboard percentage instead of being the arithmetic mean of per-tray rates.
-            const avgRate = totalTrayQty > 0 ? ((totalCulled / totalTrayQty) * 100).toFixed(1) + '%' : '0.0%';
+            const avgRate = totalTrayQty > 0 ? ((totalCulled / totalTrayQty) * 100).toFixed(2) + '%' : '0.00%';
             document.getElementById('t4-avg-cull-rate').innerText = avgRate;
 
             // Feed culling total back into Tab 3 engine for cross-tab sync
@@ -5253,14 +5253,14 @@ Thank you.`;
             const lblTrans = document.getElementById('t4-lbl-trans-pct');
             const lblCull2 = document.getElementById('t4-lbl-cull-pct');
             const lblGap   = document.getElementById('t4-lbl-gap-pct');
-            if (lblTrans) lblTrans.innerText = pctMain.toFixed(1) + '%';
-            if (lblCull2) lblCull2.innerText = pctCull.toFixed(1) + '%';
-            if (lblGap)   lblGap.innerText   = pctUnaccounted.toFixed(1) + '%';
+            if (lblTrans) lblTrans.innerText = pctMain.toFixed(2) + '%';
+            if (lblCull2) lblCull2.innerText = pctCull.toFixed(2) + '%';
+            if (lblGap)   lblGap.innerText   = pctUnaccounted.toFixed(2) + '%';
 
             // Update stat cards
             function setPct(id, pctId, val, pct) {
                 const el = document.getElementById(id); if (el) el.innerText = val.toLocaleString();
-                const pe = document.getElementById(pctId); if (pe) pe.innerText = pct.toFixed(1) + '%';
+                const pe = document.getElementById(pctId); if (pe) pe.innerText = pct.toFixed(2) + '%';
             }
             setPct('t4-val-main',        't4-val-main-pct',        t4_totalMain,             pctMain);
             setPct('t4-val-premium',     't4-val-premium-pct',     t4_totalPremium,          0);
@@ -5612,7 +5612,7 @@ Thank you.`;
             }
 
             if (transplanted > 0 && deadInput.value !== '') {
-                const cullPct = ((dead / transplanted) * 100).toFixed(1);
+                const cullPct = ((dead / transplanted) * 100).toFixed(2);
                 cullCell.innerText = cullPct + '%';
                 cullCell.className = 'text-sm font-black text-[#a83020] t5-cull-cell';
             } else {
@@ -5646,7 +5646,7 @@ Thank you.`;
             setEl('t5-total-dead',        totDead.toLocaleString());
 
             const cullRateTxt = totTransplanted > 0 && totDead > 0
-                ? ((totDead / totTransplanted) * 100).toFixed(1) + '%' : '—';
+                ? ((totDead / totTransplanted) * 100).toFixed(2) + '%' : '—';
             setEl('t5-cull-rate', cullRateTxt);
 
             const avgDeadEl = document.getElementById('t5-avg-dead');
@@ -5737,7 +5737,7 @@ Thank you.`;
                     const alive        = Math.max(0, transplanted - dead);
                     const cullDate     = cullDateInput ? cullDateInput.value : '';
                     if (deadInput.value === '') return; // skip unfilled rows
-                    const cullPct = transplanted > 0 ? ((dead / transplanted) * 100).toFixed(1) : '0';
+                    const cullPct = transplanted > 0 ? ((dead / transplanted) * 100).toFixed(2) : '0';
                     logsToInsert.push(withEditMeta({
                         transaction_type: '2nd_Culling',
                         batch_name:       batchId,
@@ -6010,7 +6010,7 @@ Thank you.`;
             const cullCell     = document.getElementById(`${rowId}-cullrate`);
 
             if (cullVal !== '' && transplanted > 0) {
-                const cullPct = ((culled / transplanted) * 100).toFixed(1);
+                const cullPct = ((culled / transplanted) * 100).toFixed(2);
                 cullCell.innerText = cullPct + '%';
                 // Always red to match 2nd culling style
                 cullCell.className = 'text-base font-black text-[#a83020] t6-cull-rate-cell';
@@ -6065,7 +6065,7 @@ Thank you.`;
             // (total culled / total transplanted), not the arithmetic mean of
             // per-plot rates which can mislead when plot sizes vary widely.
             const avgStr = (totTransplanted > 0 && totCulled > 0)
-                ? ((totCulled / totTransplanted) * 100).toFixed(1) + '%'
+                ? ((totCulled / totTransplanted) * 100).toFixed(2) + '%'
                 : '—';
 
             // Dashboard
@@ -6180,7 +6180,7 @@ Thank you.`;
                     const culled  = parseInt(cullVal);
                     if (isNaN(culled)) return;
                     if (isNaN(balance) || balVal === '') return;
-                    const cullPct = transplanted > 0 ? ((culled / transplanted) * 100).toFixed(1) : '0';
+                    const cullPct = transplanted > 0 ? ((culled / transplanted) * 100).toFixed(2) : '0';
                     logsToInsert.push(withEditMeta({
                         transaction_type: '3rd_Culling',
                         batch_name:       batchId,
