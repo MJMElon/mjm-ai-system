@@ -311,7 +311,7 @@
                 let avgCulling = 0;
                 if (currentYearBatches.length > 0) {
                     const sumCulling = currentYearBatches.reduce((sum, b) => sum + b.cullRate, 0);
-                    avgCulling = (sumCulling / currentYearBatches.length).toFixed(1);
+                    avgCulling = (sumCulling / currentYearBatches.length).toFixed(2);
                 }
 
                 document.getElementById('stat-active-batches').innerText = totalActive;
@@ -415,9 +415,9 @@
                 const plantedQty = plantedQtyNum > 0 ? plantedQtyNum.toLocaleString() : '—';
 
                 const survPct = Math.max(0, 100 - b.cullRate);
-                const survRate = survPct.toFixed(1) + '%';
+                const survRate = survPct.toFixed(2) + '%';
                 const survColor = survPct > 90 ? 'text-[#6aa83c]' : 'text-[#c07820]';
-                const cullDisplay = b.cullRate.toFixed(1);
+                const cullDisplay = b.cullRate.toFixed(2);
 
                 body.insertAdjacentHTML('beforeend', `
                     <tr class="hover:bg-[#f8f4ec] transition-colors batch-row">
