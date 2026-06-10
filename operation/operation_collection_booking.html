@@ -940,6 +940,19 @@ async function loadALData() {
   populateNurseryPlotSelects();
 }
 
+// Booking pills can be saved with an empty customer_name (e.g. when a
+// customer self-books on the mobile app using only their order number).
+// Prefer the booking's own customer_name; fall back to the linked AL's
+// customer_name (lookup via al_number, then order_number); finally fall
+// back to the order number / dash so the pill is never blank.
+function bookingDisplayName(b) {
+  if (b && b.customer_name) return b.customer_name;
+  const ref = b && (b.al_number || b.order_number);
+  const al = ref && alData.find(a => a.al_number === ref);
+  if (al && al.customer_name) return al.customer_name;
+  return (b && b.order_number) || '—';
+}
+
 async function loadBookings() {
   const weekEnd = new Date(currentWeekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
@@ -1117,7 +1130,7 @@ function renderDesktop() {
         const pills = cellBookings.map(b => {
           const cls = b.status === 'completed' ? 'completed' : b.status === 'cancelled' ? 'cancelled' : b.status === 'pending' ? 'pending' : 'booked';
           const pendingIcon = b.status === 'pending' ? '⏳ ' : '';
-          const displayName = (b.customer_name || b.order_number || '—');
+          const displayName = bookingDisplayName(b);
           const plotTag = b.plot_name ? ' · ' + b.plot_name : '';
           return '<div class="booking-pill ' + cls + '" onclick="event.stopPropagation();viewBooking(\'' + b.id + '\')" title="' + displayName + ' - ' + (b.al_number || '') + '" style="white-space:normal;line-height:1.3;">' +
             pendingIcon + displayName + ' (' + (b.collection_qty || 0) + ')' + plotTag +
@@ -1198,7 +1211,7 @@ function renderMonth() {
       bks.slice(0, 2).forEach(function(b) {
         var cls = b.status === 'completed' ? 'completed' : b.status === 'pending' ? 'pending' : 'booked';
         pillsHtml += '<div class="booking-pill ' + cls + '" style="font-size:9px;padding:2px 5px;" onclick="event.stopPropagation();openDayModal(\'' + ds + '\')">' +
-          (b.customer_name || '').substring(0, 10) + ' (' + (b.collection_qty || 0) + ')</div>';
+          bookingDisplayName(b).substring(0, 10) + ' (' + (b.collection_qty || 0) + ')</div>';
       });
       if (bks.length > 2) {
         pillsHtml += '<div class="text-[9px] font-bold text-slate-400 cursor-pointer" onclick="event.stopPropagation();openDayModal(\'' + ds + '\')">+' + (bks.length - 2) + ' more</div>';
@@ -1253,7 +1266,7 @@ function renderMobile() {
     const pillsHtml = cellBookings.map(b => {
       const cls = b.status === 'completed' ? 'completed' : b.status === 'cancelled' ? 'cancelled' : b.status === 'pending' ? 'pending' : 'booked';
       const pendingIcon = b.status === 'pending' ? '⏳ ' : '';
-      const displayName = (b.customer_name || b.order_number || '—');
+      const displayName = bookingDisplayName(b);
       const plotTag = b.plot_name ? ' · ' + b.plot_name : '';
       return '<div class="booking-pill ' + cls + '" onclick="event.stopPropagation();viewBooking(\'' + b.id + '\')">' +
         pendingIcon + displayName + ' · ' + (b.collection_qty || 0) + ' pcs' + plotTag +
