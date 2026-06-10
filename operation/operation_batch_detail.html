@@ -3398,47 +3398,27 @@
 
         // ── Photo persistence helpers ──
         async function savePhotosToStorage(batchId) {
-            // Upload photos to the Supabase `documents` bucket and persist the
-            // public URL in the remark column. The previous implementation stored
-            // the base64 truncated at 50 000 characters — the saved bytes were
-            // an incomplete image so the View button could never render the
-            // photo properly. Now the remark only holds a URL; the actual bytes
-            // live in storage and can be opened cleanly.
+            // Store photos as base64 strings in inventory_logs with transaction_type 'Planting_Photo'
+            // Delete old ones first, then insert new
             try {
                 await _supabase.from('shared_inventory_logs').delete()
                     .eq('batch_name', batchId).eq('transaction_type', 'Planting_Photo');
                 const photoLogs = [];
-                if (opsPhotoBase64) {
-                    const url = await _uploadBatchDoc(batchId, 'planting_photo', 'ops', opsPhotoBase64);
-                    if (url) {
-                        opsPhotoBase64 = url; // swap in-memory base64 for the URL so subsequent saves don't re-upload
-                        photoLogs.push({
-                            transaction_type: 'Planting_Photo', batch_name: batchId,
-                            plot_name: 'ops', quantity_change: 0,
-                            remark: `PhotoUrl:${url}`
-                        });
-                    } else {
-                        showToast('Ops photo upload failed — record was not saved.', 'error');
-                    }
-                }
-                if (auditPhotoBase64) {
-                    const url = await _uploadBatchDoc(batchId, 'planting_photo', 'audit', auditPhotoBase64);
-                    if (url) {
-                        auditPhotoBase64 = url;
-                        photoLogs.push({
-                            transaction_type: 'Planting_Photo', batch_name: batchId,
-                            plot_name: 'audit', quantity_change: 0,
-                            remark: `PhotoUrl:${url}`
-                        });
-                    } else {
-                        showToast('Auditor photo upload failed — record was not saved.', 'error');
-                    }
-                }
+                if (opsPhotoBase64) photoLogs.push({
+                    transaction_type: 'Planting_Photo', batch_name: batchId,
+                    plot_name: 'ops', quantity_change: 0,
+                    remark: opsPhotoBase64.substring(0, 50000) // store first 50k chars
+                });
+                if (auditPhotoBase64) photoLogs.push({
+                    transaction_type: 'Planting_Photo', batch_name: batchId,
+                    plot_name: 'audit', quantity_change: 0,
+                    remark: auditPhotoBase64.substring(0, 50000)
+                });
                 if (photoLogs.length > 0) {
                     const { error } = await _supabase.from('shared_inventory_logs').insert(photoLogs);
                     if (error) console.warn('Photo save warning:', error.message);
                 }
-            } catch (e) { console.warn('Photo save failed:', e.message); }
+            } catch(e) { console.warn('Photo save failed:', e.message); }
         }
 
         async function loadPhotosFromStorage(batchId) {
@@ -3449,30 +3429,15 @@
                 data.forEach(log => {
                     if (!log.remark) return;
                     const type = log.plot_name; // 'ops' or 'audit'
-                    // New rows store "PhotoUrl:<https://…>" — use the URL directly
-                    // so View / preview thumb render the full image. Legacy rows
-                    // hold a truncated base64 fragment; surface them as best we
-                    // can but warn — they cannot render cleanly until re-saved.
-                    const urlMatch = log.remark.match(/PhotoUrl:(\S+)/);
-                    const src = urlMatch ? urlMatch[1] : log.remark;
-                    const display = urlMatch ? src : (src && src.startsWith('data:') ? src : null);
-                    if (!urlMatch && src && !src.startsWith('data:')) {
-                        console.warn(`Legacy ${type} photo log can't render (base64 truncated). Re-upload the photo and Save.`);
-                        return;
-                    }
-                    if (type === 'ops')   { opsPhotoBase64   = src; restorePhotoUI('ops',   display, 'Site photo'); }
-                    else if (type === 'audit') { auditPhotoBase64 = src; restorePhotoUI('audit', display, 'Audit photo'); }
+                    const b64 = log.remark;
+                    if (type === 'ops') { opsPhotoBase64 = b64; restorePhotoUI('ops', b64, 'Site photo'); }
+                    else if (type === 'audit') { auditPhotoBase64 = b64; restorePhotoUI('audit', b64, 'Audit photo'); }
                 });
             } catch(e) { console.warn('Photo load failed:', e.message); }
         }
 
-        function restorePhotoUI(type, src, name) {
-            // src is a public storage URL (preferred) or a complete data: URL.
-            // Anything else (e.g. a legacy truncated base64 fragment) is null
-            // so we skip the UI restore — the upload zone stays visible so the
-            // admin can re-attach and re-save.
-            if (!src) return;
-            document.getElementById(`t2-photo-${type}-thumb`).style.backgroundImage = `url('${src}')`;
+        function restorePhotoUI(type, b64, name) {
+            document.getElementById(`t2-photo-${type}-thumb`).style.backgroundImage = `url('${b64}')`;
             document.getElementById(`t2-photo-${type}-name`).innerText = name;
             document.getElementById(`t2-photo-${type}-zone`).classList.add('hidden');
             const preview = document.getElementById(`t2-photo-${type}-preview`);
@@ -3961,34 +3926,6 @@
                 return data?.publicUrl || null;
             } catch (e) {
                 console.warn('Seed audit photo upload failed:', e);
-                return null;
-            }
-        }
-
-        // Generic uploader for batch-detail docs (planting photos, drone maps,
-        // 1st/2nd/3rd culling docs). Uploads to the existing `documents` bucket
-        // and returns the public URL. The old behaviour of storing base64 in
-        // the remark column truncated at 50 KB produced unrenderable files —
-        // every doc/photo on this page should go through this helper now.
-        async function _uploadBatchDoc(batchId, kind, identifier, dataUrl) {
-            try {
-                if (!dataUrl || typeof dataUrl !== 'string') return null;
-                if (dataUrl.startsWith('http')) return dataUrl;     // already a URL, nothing to upload
-                const blob = await fetch(dataUrl).then(r => r.blob());
-                const safeBatch = String(batchId || 'batch').replace(/[^A-Za-z0-9_-]/g, '_');
-                const safeKind  = String(kind   || 'doc').replace(/[^A-Za-z0-9_-]/g, '_');
-                const safeId    = String(identifier || 'item').replace(/[^A-Za-z0-9_-]/g, '_');
-                const mime = blob.type || 'application/octet-stream';
-                const ext  = mime.startsWith('image/') ? (mime.split('/')[1] || 'jpg')
-                          : mime === 'application/pdf' ? 'pdf'
-                          : 'bin';
-                const path = `batch_docs/${safeBatch}/${safeKind}/${safeId}-${Date.now()}.${ext}`;
-                const { error } = await _supabase.storage.from('documents').upload(path, blob, { contentType: mime, upsert: true });
-                if (error) throw error;
-                const { data } = _supabase.storage.from('documents').getPublicUrl(path);
-                return data?.publicUrl || null;
-            } catch (e) {
-                console.warn(`Batch doc upload failed (kind=${kind}, id=${identifier}):`, e);
                 return null;
             }
         }
