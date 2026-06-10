@@ -5376,42 +5376,62 @@ Thank you.`;
             const batchId = document.getElementById('f-batchno').value.trim();
             t5_plotData = [];
 
-            // Build saved 2nd_Culling map: { plotName: { dead, alive, cullDate } }
-            let savedCullMap = {};
+            // Build saved 2nd_Culling map keyed by (plot, destType) so the same
+            // plot under MAIN and D-TONE doesn't collide. Older logs that
+            // don't carry DestType in their remark are parked in a per-plot
+            // queue and consumed by render order (matches the Tab 6 pattern).
+            let savedCullMap    = {};
+            let legacyCullQueue = {};
             if (batchId) {
                 const { data: cullLogs } = await _supabase
                     .from('shared_inventory_logs')
                     .select('plot_name, quantity_change, remark, created_at')
                     .eq('batch_name', batchId)
-                    .eq('transaction_type', '2nd_Culling');
+                    .eq('transaction_type', '2nd_Culling')
+                    .order('created_at', { ascending: true });
                 (cullLogs || []).forEach(log => {
                     const aliveMatch    = log.remark ? log.remark.match(/Alive:\s*(\d+)/)                : null;
                     const cullDateMatch = log.remark ? log.remark.match(/CullDate:\s*(\d{4}-\d{2}-\d{2})/) : null;
-                    savedCullMap[log.plot_name] = {
+                    const destMatch     = log.remark ? log.remark.match(/DestType:\s*(main|premium|doubletone)/) : null;
+                    const entry = {
                         dead:     log.quantity_change,
                         alive:    aliveMatch    ? parseInt(aliveMatch[1])    : null,
                         cullDate: cullDateMatch ? cullDateMatch[1]           : (log.created_at ? log.created_at.split('T')[0] : null)
                     };
+                    if (destMatch) {
+                        savedCullMap[`${log.plot_name}|${destMatch[1]}`] = entry;
+                    } else {
+                        if (!legacyCullQueue[log.plot_name]) legacyCullQueue[log.plot_name] = [];
+                        legacyCullQueue[log.plot_name].push(entry);
+                    }
                 });
             }
 
-            // Load transplant logs — main plot only
+            // Load transplant logs — include MAIN and D-TONE destinations so
+            // the 2nd Culling report covers both. Premium is excluded
+            // (stays a holding pool until something is transplanted out of it).
             if (batchId) {
                 const { data: logs } = await _supabase
                     .from('shared_inventory_logs')
                     .select('*')
                     .eq('batch_name', batchId)
-                    .eq('transaction_type', 'Transplanted'); // main plot only
+                    .in('transaction_type', ['Transplanted', 'Transplanted_DoubleTone'])
+                    .order('created_at', { ascending: true });
 
                 if (logs && logs.length > 0) {
                     logs.forEach(log => {
+                        const destType = log.transaction_type === 'Transplanted_DoubleTone' ? 'doubletone' : 'main';
                         const dateMatch = log.remark ? log.remark.match(/Date:\s*(\d{4}-\d{2}-\d{2})/) : null;
                         const transplantDate = dateMatch ? dateMatch[1] : (log.created_at ? log.created_at.split('T')[0] : '');
-                        const saved = savedCullMap[log.plot_name] || {};
+                        let saved = savedCullMap[`${log.plot_name}|${destType}`];
+                        if (!saved) {
+                            const queue = legacyCullQueue[log.plot_name];
+                            saved = (queue && queue.length) ? queue.shift() : {};
+                        }
                         t5_plotData.push({
                             plot: log.plot_name,
                             qty: log.quantity_change,
-                            destType: 'main',
+                            destType,
                             transplantDate,
                             savedDead:     saved.dead     ?? null,
                             savedCullDate: saved.cullDate ?? null
@@ -5425,12 +5445,12 @@ Thank you.`;
             // Fallback: scrape Tab 3 DOM (same session before saving)
             document.querySelectorAll('.action-row.transplant-row').forEach(row => {
                 const destType = row.querySelector('.t3-dest-type').value;
-                if (destType !== 'main') return; // only main plots
+                if (destType !== 'main' && destType !== 'doubletone') return; // include main + d-tone
                 const destPlot = row.querySelector('.t3-dest-plot').value;
                 const qty      = parseInt(row.querySelector('.t3-qty').value) || 0;
                 const dateVal  = row.querySelector('.t3-date').value;
                 if (destPlot && qty > 0) {
-                    t5_plotData.push({ plot: destPlot, qty, destType: 'main', transplantDate: dateVal, savedDead: null, savedCullDate: null });
+                    t5_plotData.push({ plot: destPlot, qty, destType, transplantDate: dateVal, savedDead: null, savedCullDate: null });
                 }
             });
 
@@ -5472,9 +5492,15 @@ Thank you.`;
                 const rowId  = `t5-row-${i}`;
                 const due    = calcDueDate(p.transplantDate);
                 const deadVal = p.savedDead !== null && p.savedDead !== undefined ? p.savedDead : '';
+                // Mirror Tab 6's destType styling so MAIN and D-TONE rows are
+                // distinguishable at a glance (cyan card + 🎯 D-Tone label).
+                const isDtone   = p.destType === 'doubletone';
+                const rowBg     = isDtone ? 'bg-[#ecfeff] border-[#a5f3fc]' : 'bg-[#fdfaf4] border-[#e8dcc8]';
+                const typeLabel = isDtone ? '🎯 D-Tone' : '🌿 Main Plot';
+                const typeLblCls = isDtone ? 'text-[#0891b2]' : 'text-[#4a7a2e]';
 
                 container.insertAdjacentHTML('beforeend', `
-                    <div id="${rowId}" class="t5-plot-row border bg-[#fdfaf4] border-[#e8dcc8] rounded-xl overflow-hidden">
+                    <div id="${rowId}" class="t5-plot-row border ${rowBg} rounded-xl overflow-hidden">
                         <div class="grid grid-cols-1 lg:grid-cols-[1fr_1.1fr_0.8fr_0.8fr_0.8fr_0.8fr_1.4fr] gap-2 p-4 items-center">
 
                             <!-- Date column: shows due date by default; user can override with actual culling date -->
@@ -5489,9 +5515,9 @@ Thank you.`;
 
                             <!-- Plot name -->
                             <div class="flex flex-col gap-0.5">
-                                <div class="text-[9px] font-black text-[#8a7a68] uppercase lg:hidden mb-0.5">Main Plot</div>
+                                <div class="text-[9px] font-black text-[#8a7a68] uppercase lg:hidden mb-0.5">Plot</div>
                                 <div class="text-sm font-black text-[#3d2610]">${p.plot}</div>
-                                <div class="text-[9px] font-bold text-[#4a7a2e] uppercase tracking-widest">🌿 Main Plot</div>
+                                <div class="text-[9px] font-bold ${typeLblCls} uppercase tracking-widest">${typeLabel}</div>
                             </div>
 
                             <!-- Transplanted qty -->
@@ -5703,6 +5729,7 @@ Thank you.`;
                 let logsToInsert = [];
                 document.querySelectorAll('.t5-plot-row').forEach((row, i) => {
                     const plotName     = t5_plotData[i]?.plot || '?';
+                    const destType     = t5_plotData[i]?.destType || 'main';
                     const deadInput    = row.querySelector('.t5-dead');
                     const cullDateInput = row.querySelector('.t5-cull-date');
                     const transplanted = parseInt(deadInput.dataset.transplanted) || 0;
@@ -5717,7 +5744,10 @@ Thank you.`;
                         breed_name:       breed,
                         plot_name:        plotName,
                         quantity_change:  dead,
-                        remark: `2nd Culling. Alive: ${alive}, Dead: ${dead}, Cull: ${cullPct}%. Transplanted: ${transplanted}. CullDate: ${cullDate}`
+                        // DestType keeps MAIN and D-TONE entries for the same plot
+                        // independent — the load uses (plot_name, destType) as
+                        // the unique key.
+                        remark: `2nd Culling. Alive: ${alive}, Dead: ${dead}, Cull: ${cullPct}%. Transplanted: ${transplanted}. CullDate: ${cullDate}. DestType: ${destType}`
                     }));
                 });
 
