@@ -885,11 +885,70 @@
             if (!reason) return;
 
             try {
-                const orderId = document.getElementById('edit-id').value;
-                const { error } = await _supabase.from('shared_al_orders').update({ status: 'Cancelled', remark: '[CANCELLED] ' + reason }).eq('id', orderId);
+                const alId = document.getElementById('edit-id').value;
 
-                if(error) { alert("Database Error: " + error.message); }
-                else { alert("AL Cancelled successfully!"); closeModal('manage-modal'); fetchData(); }
+                // Snapshot the AL BEFORE we flip its status so we can compute
+                // whether anything was already collected (qty_ordered − balance)
+                // and trace back to the linked sales-web order.
+                const { data: alRow } = await _supabase.from('shared_al_orders')
+                    .select('al_number, order_number, quantity_ordered, balance_quantity')
+                    .eq('id', alId).maybeSingle();
+
+                const { error } = await _supabase.from('shared_al_orders')
+                    .update({ status: 'Cancelled', remark: '[CANCELLED] ' + reason })
+                    .eq('id', alId);
+                if(error) { alert("Database Error: " + error.message); return; }
+
+                // Propagate to the linked sales-web order.
+                //   - Nothing collected yet → auto-cancel the order too.
+                //   - Partial collection   → leave order open but stamp it
+                //     with "Cancelled order uncollected seedlings : N" so the
+                //     uncollected qty is on the order record for traceability.
+                if (alRow && alRow.order_number) {
+                    try {
+                        const qtyOrd  = Number(alRow.quantity_ordered) || 0;
+                        const balance = Number(alRow.balance_quantity) || 0;
+                        const collected = Math.max(0, qtyOrd - balance);
+
+                        const { data: orderRow } = await _supabase
+                            .from('salesweb_customer_orders')
+                            .select('id, status, customer_remark')
+                            .eq('order_number', alRow.order_number)
+                            .maybeSingle();
+
+                        if (orderRow && orderRow.status !== 'Cancelled') {
+                            const nowIso = new Date().toISOString();
+                            if (collected === 0) {
+                                await _supabase.from('salesweb_customer_orders')
+                                    .update({ status: 'Cancelled', updated_at: nowIso })
+                                    .eq('id', orderRow.id);
+                                await _supabase.from('salesweb_order_timeline').insert([{
+                                    order_id: orderRow.id, status: 'Cancelled',
+                                    note: 'Auto-cancelled because linked AL ' + alRow.al_number +
+                                          ' was cancelled in AI system. Reason: ' + reason,
+                                    changed_by: 'ai-system'
+                                }]);
+                            } else {
+                                const stamp = 'Cancelled order uncollected seedlings : ' + balance.toLocaleString();
+                                const newRemark = (orderRow.customer_remark ? orderRow.customer_remark + ' | ' : '') + stamp;
+                                await _supabase.from('salesweb_customer_orders')
+                                    .update({ customer_remark: newRemark, updated_at: nowIso })
+                                    .eq('id', orderRow.id);
+                                await _supabase.from('salesweb_order_timeline').insert([{
+                                    order_id: orderRow.id, status: orderRow.status,
+                                    note: stamp + ' (AL ' + alRow.al_number + ' cancelled in AI system; ' +
+                                          collected.toLocaleString() + ' already collected). Reason: ' + reason,
+                                    changed_by: 'ai-system'
+                                }]);
+                            }
+                        }
+                    } catch(propErr) {
+                        console.warn('Order-link propagation failed (AL cancel succeeded):', propErr);
+                    }
+                }
+
+                alert("AL Cancelled successfully!");
+                closeModal('manage-modal'); fetchData();
             } catch(err) {
                 alert("Error: " + err.message);
             }
