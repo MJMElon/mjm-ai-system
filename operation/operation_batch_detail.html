@@ -2469,6 +2469,24 @@
                                     </div>
                                 </div>
                             `);
+                            // Restore drone map (if any) into the inline edit form so
+                            // the admin can preview / replace it without re-uploading.
+                            const mapMatch = log.remark ? log.remark.match(/MapUrl:(\S+)/) : null;
+                            if (mapMatch) {
+                                const mapUrl = mapMatch[1];
+                                t3EditMaps[idx] = mapUrl;
+                                // The edit form isn't in the DOM yet (rendered above
+                                // but innerHTML is parsed asynchronously) — defer.
+                                setTimeout(() => {
+                                    const zone    = document.getElementById(`t3e-map-zone-${idx}`);
+                                    const preview = document.getElementById(`t3e-map-preview-${idx}`);
+                                    const thumb   = document.getElementById(`t3e-map-thumb-${idx}`);
+                                    if (zone)    zone.classList.add('hidden');
+                                    if (thumb)   thumb.style.backgroundImage = `url('${mapUrl}')`;
+                                    if (preview) { preview.classList.remove('hidden'); preview.classList.add('flex'); }
+                                }, 60);
+                            }
+
                             // Pre-select values in edit form
                             setTimeout(() => {
                                 const ef = document.getElementById(editId);
@@ -2505,6 +2523,10 @@
                             togglePlotInput(rowId);
                             lastRow.querySelector('.t3-dest-plot').value = log.plot_name;
                             lastRow.querySelector('.t3-qty').value = log.quantity_change;
+                            // Restore map URL on the hidden form row too, so the next
+                            // saveTransplantTab keeps the existing map instead of dropping it.
+                            const mapMatch2 = log.remark ? log.remark.match(/MapUrl:(\S+)/) : null;
+                            if (mapMatch2) rowMaps[rowId] = mapMatch2[1];
                         });
                         // Hide form rows — only show table, forms hidden
                         container.classList.add('hidden');
@@ -2584,7 +2606,16 @@
             const qty = parseInt(ef.querySelector('.t3e-qty').value) || 0;
             if (!srcTray || !destPlot || qty <= 0 || !dateVal) { alert('Please fill in all fields.'); return; }
             const txType = destType === 'premium' ? 'Transplanted_Premium' : destType === 'doubletone' ? 'Transplanted_DoubleTone' : 'Transplanted';
-            const remark = `Transplanted from tray [${srcTray}] to ${destType === 'main' ? 'Main Plot' : destType === 'premium' ? 'PREMIUM CARE' : 'DOUBLE-TONE'} [${destPlot}]. Date: ${dateVal}`;
+
+            // Upload the edited drone map (if any) so it survives a refresh.
+            let mapUrl = '';
+            const mapData = t3EditMaps[idx];
+            if (mapData) {
+                const uploaded = await _uploadBatchDoc('transplant_maps', batchId, `${destPlot}-edit-${idx}`, mapData);
+                if (uploaded) { mapUrl = uploaded; t3EditMaps[idx] = uploaded; }
+            }
+            const mapSuffix = mapUrl ? ` MapUrl:${mapUrl}` : '';
+            const remark = `Transplanted from tray [${srcTray}] to ${destType === 'main' ? 'Main Plot' : destType === 'premium' ? 'PREMIUM CARE' : 'DOUBLE-TONE'} [${destPlot}]. Date: ${dateVal}${mapSuffix}`;
             try {
                 // Delete old record at this index and reinsert all to preserve order
                 // Simpler: fetch all, replace at idx, delete all, reinsert all
@@ -2803,10 +2834,7 @@
         }
 
         function viewMap(rowId) {
-            if(rowMaps[rowId]) {
-                const win = window.open();
-                win.document.write(`<img src="${_escAttr(rowMaps[rowId])}" style="max-width:100%;height:auto;display:block;margin:auto;">`);
-            }
+            _openDocInNewWindow(rowMaps[rowId]);
         }
 
         // ── T3 Edit-form drone map handlers ──────────────────────────────────────
@@ -2846,10 +2874,7 @@
         }
 
         function viewT3EditMap(idx) {
-            if (t3EditMaps[idx]) {
-                const win = window.open();
-                win.document.write(`<img src="${_escAttr(t3EditMaps[idx])}" style="max-width:100%;height:auto;display:block;margin:auto;">`);
-            }
+            _openDocInNewWindow(t3EditMaps[idx]);
         }
 
         function removeTransplantRow(rowId) {
@@ -3170,14 +3195,25 @@
                 let logsToInsert = [];
                 let trayUpdates = []; // For PREMIUM CARE and DOUBLE-TONE tray qty updates
 
-                document.querySelectorAll('.action-row.transplant-row').forEach(row => {
+                // for-of instead of forEach so we can `await` the per-row map upload.
+                for (const row of Array.from(document.querySelectorAll('.action-row.transplant-row'))) {
                     const dateVal = row.querySelector('.t3-date').value;
                     const sourceTray = row.querySelector('.t3-source-tray').value;
                     const destType = row.querySelector('.t3-dest-type').value;
                     const destPlot = row.querySelector('.t3-dest-plot').value;
                     const qty = parseInt(row.querySelector('.t3-qty').value) || 0;
 
-                    if (!sourceTray || !destPlot || qty <= 0) return;
+                    if (!sourceTray || !destPlot || qty <= 0) continue;
+
+                    // Upload the drone map (if any) to Storage and embed its
+                    // public URL in the remark so it survives a refresh.
+                    let mapUrl = '';
+                    const mapData = rowMaps[row.id];
+                    if (mapData) {
+                        const url = await _uploadBatchDoc('transplant_maps', batchId, `${destPlot}-${row.id}`, mapData);
+                        if (url) { mapUrl = url; rowMaps[row.id] = url; }
+                    }
+                    const mapSuffix = mapUrl ? ` MapUrl:${mapUrl}` : '';
 
                     if (destType === 'main') {
                         logsToInsert.push(withEditMeta({
@@ -3186,7 +3222,7 @@
                             breed_name: breed,
                             plot_name: destPlot,
                             quantity_change: qty,
-                            remark: `Transplanted from tray [${sourceTray}] to Main Plot [${destPlot}]. Date: ${dateVal}`
+                            remark: `Transplanted from tray [${sourceTray}] to Main Plot [${destPlot}]. Date: ${dateVal}${mapSuffix}`
                         }));
                     } else if (destType === 'premium') {
                         logsToInsert.push(withEditMeta({
@@ -3195,7 +3231,7 @@
                             breed_name: breed,
                             plot_name: 'PREMIUM CARE',
                             quantity_change: qty,
-                            remark: `Moved from tray [${sourceTray}] to PREMIUM CARE tray. Date: ${dateVal}`
+                            remark: `Moved from tray [${sourceTray}] to PREMIUM CARE tray. Date: ${dateVal}${mapSuffix}`
                         }));
                         trayUpdates.push({ tray_name: 'PREMIUM CARE', qty });
                     } else if (destType === 'doubletone') {
@@ -3205,11 +3241,11 @@
                             breed_name: breed,
                             plot_name: 'DOUBLE-TONE',
                             quantity_change: qty,
-                            remark: `Moved from tray [${sourceTray}] to DOUBLE-TONE tray. Date: ${dateVal}`
+                            remark: `Moved from tray [${sourceTray}] to DOUBLE-TONE tray. Date: ${dateVal}${mapSuffix}`
                         }));
                         trayUpdates.push({ tray_name: 'DOUBLE-TONE', qty });
                     }
-                });
+                }
 
                 if (logsToInsert.length === 0) {
                     showToast('No valid rows to save. Fill in at least one complete row.', 'error');
@@ -3674,27 +3710,39 @@
         }
 
         function viewAuditPhoto(type) {
-            const url = (type === 'ops') ? opsPhotoBase64 : auditPhotoBase64;
-            if(url) { const win = window.open(); win.document.write(`<img src="${_escAttr(url)}" style="max-width:100%;height:auto;">`); }
+            _openDocInNewWindow((type === 'ops') ? opsPhotoBase64 : auditPhotoBase64);
         }
 
         // ── Photo persistence helpers ──
+        // Photos are uploaded to Supabase Storage (`documents` bucket) and the
+        // public URL is stored in the `remark` column. The previous version
+        // stored base64 truncated to 50,000 chars directly in `remark`, which
+        // chops real phone photos mid-stream — the row looked saved but the
+        // image couldn't be decoded on reload.
         async function savePhotosToStorage(batchId) {
-            // Store photos as base64 strings in inventory_logs with transaction_type 'Planting_Photo'
-            // Delete old ones first, then insert new
             try {
+                // Upload fresh (data: URL) photos first; keep already-uploaded URLs.
+                if (opsPhotoBase64 && String(opsPhotoBase64).startsWith('data:')) {
+                    const url = await _uploadBatchDoc('planting_photos', batchId, 'ops', opsPhotoBase64);
+                    if (url) opsPhotoBase64 = url;
+                }
+                if (auditPhotoBase64 && String(auditPhotoBase64).startsWith('data:')) {
+                    const url = await _uploadBatchDoc('planting_photos', batchId, 'audit', auditPhotoBase64);
+                    if (url) auditPhotoBase64 = url;
+                }
+
                 await _supabase.from('shared_inventory_logs').delete()
                     .eq('batch_name', batchId).eq('transaction_type', 'Planting_Photo');
                 const photoLogs = [];
-                if (opsPhotoBase64) photoLogs.push({
+                if (opsPhotoBase64 && /^https?:\/\//i.test(opsPhotoBase64)) photoLogs.push({
                     transaction_type: 'Planting_Photo', batch_name: batchId,
                     plot_name: 'ops', quantity_change: 0,
-                    remark: opsPhotoBase64.substring(0, 50000) // store first 50k chars
+                    remark: opsPhotoBase64
                 });
-                if (auditPhotoBase64) photoLogs.push({
+                if (auditPhotoBase64 && /^https?:\/\//i.test(auditPhotoBase64)) photoLogs.push({
                     transaction_type: 'Planting_Photo', batch_name: batchId,
                     plot_name: 'audit', quantity_change: 0,
-                    remark: auditPhotoBase64.substring(0, 50000)
+                    remark: auditPhotoBase64
                 });
                 if (photoLogs.length > 0) {
                     const { error } = await _supabase.from('shared_inventory_logs').insert(photoLogs);
@@ -3709,11 +3757,14 @@
                     .select('*').eq('batch_name', batchId).eq('transaction_type', 'Planting_Photo');
                 if (!data) return;
                 data.forEach(log => {
-                    if (!log.remark) return;
+                    const remark = (log.remark || '').trim();
+                    if (!remark) return;
+                    // Legacy rows held truncated base64 that can't be rendered —
+                    // skip them so the upload zone reappears for re-attachment.
+                    if (!/^https?:\/\//i.test(remark)) return;
                     const type = log.plot_name; // 'ops' or 'audit'
-                    const b64 = log.remark;
-                    if (type === 'ops') { opsPhotoBase64 = b64; restorePhotoUI('ops', b64, 'Site photo'); }
-                    else if (type === 'audit') { auditPhotoBase64 = b64; restorePhotoUI('audit', b64, 'Audit photo'); }
+                    if (type === 'ops')   { opsPhotoBase64   = remark; restorePhotoUI('ops',   remark, 'Site photo');  }
+                    else if (type === 'audit') { auditPhotoBase64 = remark; restorePhotoUI('audit', remark, 'Audit photo'); }
                 });
             } catch(e) { console.warn('Photo load failed:', e.message); }
         }
@@ -4209,6 +4260,53 @@
             } catch (e) {
                 console.warn('Seed audit photo upload failed:', e);
                 return null;
+            }
+        }
+
+        // Upload a data: URL into the `documents` Storage bucket and return
+        // a public URL we can embed in `shared_inventory_logs.remark`.
+        // If the input is already an http(s) URL, return it untouched so
+        // save-after-load doesn't re-upload the same file.
+        async function _uploadBatchDoc(folder, batchId, label, dataUrl) {
+            try {
+                if (!dataUrl) return null;
+                if (/^https?:\/\//i.test(dataUrl)) return dataUrl;
+                if (!String(dataUrl).startsWith('data:')) return null;
+
+                const mimeMatch = dataUrl.match(/^data:([^;,]+)/);
+                const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+                const ext = mime === 'application/pdf' ? 'pdf'
+                          : mime === 'image/png'        ? 'png'
+                          : mime === 'image/jpeg'       ? 'jpg'
+                          : mime === 'image/webp'       ? 'webp'
+                          : mime === 'image/gif'        ? 'gif'
+                          : 'bin';
+                const blob = await fetch(dataUrl).then(r => r.blob());
+                const safeBatch = String(batchId || 'batch').replace(/[^A-Za-z0-9_-]/g, '_');
+                const safeLabel = String(label || 'doc').replace(/[^A-Za-z0-9_-]/g, '_');
+                const path = `${folder}/${safeBatch}/${safeLabel}-${Date.now()}.${ext}`;
+                const { error } = await _supabase.storage.from('documents')
+                    .upload(path, blob, { contentType: mime, upsert: true });
+                if (error) throw error;
+                const { data } = _supabase.storage.from('documents').getPublicUrl(path);
+                return data?.publicUrl || null;
+            } catch (e) {
+                console.warn('[uploadBatchDoc] failed:', e);
+                return null;
+            }
+        }
+
+        // Open a remote URL (or data: URL) in a popup. Picks <iframe> for
+        // PDFs and <img> for everything else so PDF maps/docs render too.
+        function _openDocInNewWindow(url) {
+            if (!url) return;
+            const win = window.open();
+            if (!win) return;
+            const isPdf = /\.pdf(\?|#|$)/i.test(url) || String(url).startsWith('data:application/pdf');
+            if (isPdf) {
+                win.document.write(`<iframe src="${_escAttr(url)}" style="width:100%;height:100vh;border:none;"></iframe>`);
+            } else {
+                win.document.write(`<img src="${_escAttr(url)}" style="max-width:100%;height:auto;display:block;margin:auto;">`);
             }
         }
 
@@ -5630,10 +5728,12 @@ Thank you.`;
                     const aliveMatch    = log.remark ? log.remark.match(/Alive:\s*(\d+)/)                : null;
                     const cullDateMatch = log.remark ? log.remark.match(/CullDate:\s*(\d{4}-\d{2}-\d{2})/) : null;
                     const destMatch     = log.remark ? log.remark.match(/DestType:\s*(main|premium|doubletone)/) : null;
+                    const mapMatch      = log.remark ? log.remark.match(/MapUrl:(\S+)/) : null;
                     const entry = {
                         dead:     log.quantity_change,
                         alive:    aliveMatch    ? parseInt(aliveMatch[1])    : null,
-                        cullDate: cullDateMatch ? cullDateMatch[1]           : (log.created_at ? log.created_at.split('T')[0] : null)
+                        cullDate: cullDateMatch ? cullDateMatch[1]           : (log.created_at ? log.created_at.split('T')[0] : null),
+                        mapUrl:   mapMatch ? mapMatch[1] : null
                     };
                     if (destMatch) {
                         savedCullMap[`${log.plot_name}|${destMatch[1]}`] = entry;
@@ -5671,7 +5771,8 @@ Thank you.`;
                             destType,
                             transplantDate,
                             savedDead:     saved.dead     ?? null,
-                            savedCullDate: saved.cullDate ?? null
+                            savedCullDate: saved.cullDate ?? null,
+                            savedMapUrl:   saved.mapUrl   ?? null
                         });
                     });
                     // Merge MAIN + D-TONE transplants of the same plot into
@@ -5727,6 +5828,7 @@ Thank you.`;
                         transplantDate: r.transplantDate || '',
                         savedDead:     (r.savedDead     != null) ? Number(r.savedDead) : null,
                         savedCullDate: r.savedCullDate || null,
+                        savedMapUrl:   r.savedMapUrl   || null,
                         destTypes: new Set([r.destType || 'main'])
                     });
                 } else {
@@ -5738,6 +5840,7 @@ Thank you.`;
                         existing.savedDead = (existing.savedDead || 0) + Number(r.savedDead);
                     }
                     if (r.savedCullDate && !existing.savedCullDate) existing.savedCullDate = r.savedCullDate;
+                    if (r.savedMapUrl   && !existing.savedMapUrl)   existing.savedMapUrl   = r.savedMapUrl;
                     existing.destTypes.add(r.destType || 'main');
                 }
             }
@@ -5747,6 +5850,7 @@ Thank you.`;
                 transplantDate: v.transplantDate,
                 savedDead:      v.savedDead,
                 savedCullDate:  v.savedCullDate,
+                savedMapUrl:    v.savedMapUrl,
                 // Set "destType" for compatibility with downstream code that
                 // checks it for styling — when only D-TONE contributed, keep
                 // the D-TONE look; if both, treat as MAIN with a mixed label.
@@ -5882,6 +5986,17 @@ Thank you.`;
 
                 // Pre-fill alive display if savedDead exists
                 if (deadVal !== '') calcT5Row(rowId);
+
+                // Restore a previously-uploaded drone map.
+                if (p.savedMapUrl) {
+                    t5_plotMaps[rowId] = p.savedMapUrl;
+                    const zone    = document.getElementById(`${rowId}-map-zone`);
+                    const preview = document.getElementById(`${rowId}-map-preview`);
+                    const thumb   = document.getElementById(`${rowId}-map-thumb`);
+                    if (zone)    zone.classList.add('hidden');
+                    if (thumb)   thumb.style.backgroundImage = `url('${p.savedMapUrl}')`;
+                    if (preview) { preview.classList.remove('hidden'); preview.classList.add('flex'); }
+                }
             });
 
             calcT5();
@@ -6015,10 +6130,7 @@ Thank you.`;
         }
 
         function viewT5Map(rowId) {
-            if (t5_plotMaps[rowId]) {
-                const win = window.open();
-                win.document.write(`<img src="${_escAttr(t5_plotMaps[rowId])}" style="max-width:100%;height:auto;display:block;margin:auto;">`);
-            }
+            _openDocInNewWindow(t5_plotMaps[rowId]);
         }
 
         async function saveTab5() {
@@ -6031,7 +6143,10 @@ Thank you.`;
                 if (!batchId) throw new Error('No batch number. Complete Tab 1 first.');
 
                 let logsToInsert = [];
-                document.querySelectorAll('.t5-plot-row').forEach((row, i) => {
+                // for-of so we can await per-row drone-map uploads.
+                const t5Rows = Array.from(document.querySelectorAll('.t5-plot-row'));
+                for (let i = 0; i < t5Rows.length; i++) {
+                    const row = t5Rows[i];
                     const plotName     = t5_plotData[i]?.plot || '?';
                     const deadInput    = row.querySelector('.t5-dead');
                     const cullDateInput = row.querySelector('.t5-cull-date');
@@ -6039,8 +6154,18 @@ Thank you.`;
                     const dead         = parseInt(deadInput.value) || 0;
                     const alive        = Math.max(0, transplanted - dead);
                     const cullDate     = cullDateInput ? cullDateInput.value : '';
-                    if (deadInput.value === '') return; // skip unfilled rows
+                    if (deadInput.value === '') continue; // skip unfilled rows
                     const cullPct = transplanted > 0 ? ((dead / transplanted) * 100).toFixed(2) : '0';
+
+                    // Upload the drone map (if any) so it survives a refresh.
+                    let mapUrl = '';
+                    const mapData = t5_plotMaps[row.id];
+                    if (mapData) {
+                        const url = await _uploadBatchDoc('cull2_maps', batchId, `${plotName}-${row.id}`, mapData);
+                        if (url) { mapUrl = url; t5_plotMaps[row.id] = url; }
+                    }
+                    const mapSuffix = mapUrl ? ` MapUrl:${mapUrl}` : '';
+
                     // MAIN + D-TONE for the same plot are merged into a single
                     // on-screen row, so we also persist exactly one 2nd_Culling
                     // log per plot. No DestType is written — the saved log
@@ -6052,9 +6177,9 @@ Thank you.`;
                         breed_name:       breed,
                         plot_name:        plotName,
                         quantity_change:  dead,
-                        remark: `2nd Culling. Alive: ${alive}, Dead: ${dead}, Cull: ${cullPct}%. Transplanted: ${transplanted}. CullDate: ${cullDate}`
+                        remark: `2nd Culling. Alive: ${alive}, Dead: ${dead}, Cull: ${cullPct}%. Transplanted: ${transplanted}. CullDate: ${cullDate}${mapSuffix}`
                     }));
-                });
+                }
 
                 if (logsToInsert.length === 0) throw new Error('No filled rows to save.');
                 await _supabase.from('shared_inventory_logs').delete().eq('batch_name', batchId).eq('transaction_type', '2nd_Culling');
@@ -6104,9 +6229,15 @@ Thank you.`;
                 (cull3Logs || []).forEach(log => {
                     const balMatch  = log.remark ? log.remark.match(/Remaining Balance:\s*(\d+)/) : null;
                     const destMatch = log.remark ? log.remark.match(/DestType:\s*(main|premium|doubletone)/) : null;
+                    const docMatch  = log.remark ? log.remark.match(/DocUrl:(\S+)/) : null;
+                    const nameMatch = log.remark ? log.remark.match(/DocName:(\S+)/) : null;
+                    let docName = '';
+                    if (nameMatch) { try { docName = decodeURIComponent(nameMatch[1]); } catch(_) { docName = nameMatch[1]; } }
                     const entry = {
                         culled:  log.quantity_change,
-                        balance: balMatch ? parseInt(balMatch[1]) : null,
+                        balance: balMatch  ? parseInt(balMatch[1]) : null,
+                        docUrl:  docMatch  ? docMatch[1]           : null,
+                        docName: docName || null
                     };
                     if (destMatch) {
                         savedCull3Map[`${log.plot_name}|${destMatch[1]}`] = entry;
@@ -6143,7 +6274,9 @@ Thank you.`;
                             qty:          log.quantity_change,
                             destType,
                             savedBalance: saved.balance ?? null,
-                            savedCulled:  saved.culled  ?? null
+                            savedCulled:  saved.culled  ?? null,
+                            savedDocUrl:  saved.docUrl  ?? null,
+                            savedDocName: saved.docName ?? null
                         });
                     });
                     renderT6PlotRows();
@@ -6157,7 +6290,7 @@ Thank you.`;
                 const destPlot = row.querySelector('.t3-dest-plot').value;
                 const qty      = parseInt(row.querySelector('.t3-qty').value) || 0;
                 if (destPlot && qty > 0) {
-                    t6_plotData.push({ plot: destPlot, qty, destType: destType || 'main', savedBalance: null, savedCulled: null });
+                    t6_plotData.push({ plot: destPlot, qty, destType: destType || 'main', savedBalance: null, savedCulled: null, savedDocUrl: null, savedDocName: null });
                 }
             });
             renderT6PlotRows();
@@ -6277,6 +6410,24 @@ Thank you.`;
                         </div>
                     </div>
                 `);
+            });
+
+            // Restore previously-uploaded drone maps / docs.
+            t6_plotData.forEach((p, i) => {
+                if (!p.savedDocUrl) return;
+                const rowId = `t6-row-${i}`;
+                const url   = p.savedDocUrl;
+                const name  = p.savedDocName || 'document';
+                const isImg = /\.(jpg|jpeg|png|webp|gif)(\?|#|$)/i.test(url);
+                t6_plotDocs[rowId] = { name, base64: url, isImg };
+                const zone    = document.getElementById(`${rowId}-doc-zone`);
+                const preview = document.getElementById(`${rowId}-doc-preview`);
+                const icon    = document.getElementById(`${rowId}-doc-icon`);
+                const nameEl  = document.getElementById(`${rowId}-doc-name`);
+                if (zone)    zone.classList.add('hidden');
+                if (icon)    icon.innerText = isImg ? '🖼️' : (/\.pdf(\?|#|$)/i.test(url) ? '📋' : '📄');
+                if (nameEl)  nameEl.innerText = name;
+                if (preview) { preview.classList.remove('hidden'); preview.classList.add('flex'); }
             });
 
             // Recalculate per-row cull rates for any pre-filled saved values.
@@ -6453,12 +6604,7 @@ Thank you.`;
         function viewT6Doc(rowId) {
             const doc = t6_plotDocs[rowId];
             if (!doc) return;
-            const win = window.open();
-            if (doc.isImg) {
-                win.document.write(`<img src="${_escAttr(doc.base64)}" style="max-width:100%;height:auto;display:block;margin:auto;">`);
-            } else {
-                win.document.write(`<iframe src="${_escAttr(doc.base64)}" style="width:100%;height:100vh;border:none;"></iframe>`);
-            }
+            _openDocInNewWindow(doc.base64);
         }
 
         async function saveTab6() {
@@ -6471,7 +6617,9 @@ Thank you.`;
                 if (!batchId) throw new Error('No batch number. Complete Tab 1 first.');
 
                 let logsToInsert = [];
-                document.querySelectorAll('.t6-plot-row').forEach((row, i) => {
+                const t6Rows = Array.from(document.querySelectorAll('.t6-plot-row'));
+                for (let i = 0; i < t6Rows.length; i++) {
+                    const row = t6Rows[i];
                     const plotName     = t6_plotData[i]?.plot || '?';
                     const destType     = t6_plotData[i]?.destType || 'main';
                     const transplanted = parseInt(row.querySelector('.t6-balance').dataset.transplanted) || 0;
@@ -6480,12 +6628,28 @@ Thank you.`;
                     // Skip rows the admin hasn't keyed in. A blank Culled Qty means
                     // "not entered yet" and must NOT be persisted as 0 — that would
                     // make the batch look complete on reload when it isn't.
-                    if (cullVal === '' || cullVal === null || cullVal === undefined) return;
+                    if (cullVal === '' || cullVal === null || cullVal === undefined) continue;
                     const balance = parseInt(balVal);
                     const culled  = parseInt(cullVal);
-                    if (isNaN(culled)) return;
-                    if (isNaN(balance) || balVal === '') return;
+                    if (isNaN(culled)) continue;
+                    if (isNaN(balance) || balVal === '') continue;
                     const cullPct = transplanted > 0 ? ((culled / transplanted) * 100).toFixed(2) : '0';
+
+                    // Upload the drone map / proof doc (if any) so it survives a refresh.
+                    let docUrl = '', docNamePart = '';
+                    const doc = t6_plotDocs[row.id];
+                    if (doc) {
+                        // doc.base64 may already be an https URL (loaded from a
+                        // previous save) — _uploadBatchDoc returns it as-is.
+                        const url = await _uploadBatchDoc('cull3_docs', batchId, `${plotName}-${row.id}`, doc.base64);
+                        if (url) {
+                            docUrl = url;
+                            t6_plotDocs[row.id] = { ...doc, base64: url };
+                            if (doc.name) docNamePart = ` DocName:${encodeURIComponent(doc.name)}`;
+                        }
+                    }
+                    const docSuffix = docUrl ? `${docNamePart} DocUrl:${docUrl}` : '';
+
                     logsToInsert.push(withEditMeta({
                         transaction_type: '3rd_Culling',
                         batch_name:       batchId,
@@ -6495,9 +6659,9 @@ Thank you.`;
                         // DestType is critical: the same plot (e.g. B10) can appear under
                         // both MAIN and D-TONE; the load uses (plot_name, destType) to
                         // distinguish them so values don't overwrite each other.
-                        remark: `3rd Culling. Transplanted: ${transplanted}, Remaining Balance: ${balance}, Culled: ${culled}, Cull Rate: ${cullPct}%, DestType: ${destType}`
+                        remark: `3rd Culling. Transplanted: ${transplanted}, Remaining Balance: ${balance}, Culled: ${culled}, Cull Rate: ${cullPct}%, DestType: ${destType}${docSuffix}`
                     }));
-                });
+                }
 
                 if (logsToInsert.length === 0) throw new Error('Enter at least one plot’s Culled Qty before saving.');
                 await _supabase.from('shared_inventory_logs').delete().eq('batch_name', batchId).eq('transaction_type', '3rd_Culling');
