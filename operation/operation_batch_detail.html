@@ -1830,22 +1830,38 @@
                 // Remark format: "Report: <r>. Plot: <p>. <reason>" — pull each
                 // labelled field out so the table can show them in their own
                 // columns. Legacy rows (no labelled fields) fall back to "—".
-                const reportMatch = r.remark ? r.remark.match(/Report:\s*([^.]+?)\s*\.\s*/i) : null;
-                const plotMatch   = r.remark ? r.remark.match(/Plot:\s*([^.]+?)\s*\.\s*/i)   : null;
+                const approvedMatch = r.remark ? r.remark.match(/\[APPROVED by ([^\]]+) on ([^\]]+)\]/) : null;
+                const isApproved    = !!approvedMatch;
+                const approvedBy    = approvedMatch ? approvedMatch[1].trim() : '';
+                const approvedAt    = approvedMatch ? approvedMatch[2].trim() : '';
+                let remarkBody = r.remark || '';
+                if (approvedMatch) remarkBody = remarkBody.replace(approvedMatch[0], '').trim();
+                const reportMatch = remarkBody.match(/Report:\s*([^.]+?)\s*\.\s*/i);
+                const plotMatch   = remarkBody.match(/Plot:\s*([^.]+?)\s*\.\s*/i);
                 const reportTxt   = reportMatch ? reportMatch[1].trim() : '';
                 const plotTxt     = plotMatch   ? plotMatch[1].trim()   : (r.plot_name || '');
-                let reasonTxt = r.remark || '';
+                let reasonTxt = remarkBody;
                 if (reportMatch) reasonTxt = reasonTxt.replace(reportMatch[0], '');
                 if (plotMatch)   reasonTxt = reasonTxt.replace(plotMatch[0], '');
                 reasonTxt = reasonTxt.trim();
-                // Action buttons are visible to admins only — normal users can
-                // see history but never edit or delete a row once it's keyed in.
-                const actionsCell = adminActions
-                    ? `<td class="px-3 py-2 whitespace-nowrap">
-                            <button type="button" onclick="editCalibration('${esc(r.id)}', ${q}, '${esc(reportTxt)}', '${esc(plotTxt)}', '${esc(reasonTxt)}')" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[9px] font-black uppercase rounded hover:bg-[#f0f8ff] mr-1">Edit</button>
-                            <button type="button" onclick="deleteCalibration('${esc(r.id)}')" class="px-2 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[9px] font-black uppercase rounded hover:bg-[#fff5f5]">Del</button>
-                       </td>`
-                    : `<td class="px-3 py-2 text-[10px] text-[#8a7a68]">🔒</td>`;
+                // Lock column:
+                //   Approved (any user)              → green ✓ Approved pill
+                //   Not approved + admin             → Edit | Del | Approve
+                //   Not approved + non-admin         → 🔒 placeholder
+                let actionsCell;
+                if (isApproved) {
+                    const whoTxt = approvedBy ? ` <span class="text-[#4a7a2e]">${esc(approvedBy)}</span>` : '';
+                    const whenTxt = approvedAt ? ` · ${esc(formatAuditDate(approvedAt) || approvedAt)}` : '';
+                    actionsCell = `<td class="px-3 py-2 whitespace-nowrap"><span class="inline-flex items-center gap-1 px-2 py-1 bg-[#f0f8ec] border border-[#c3e6cb] text-[#3d4f1e] text-[9px] font-black uppercase tracking-wider rounded" title="Locked${approvedBy ? ' by ' + approvedBy : ''}${approvedAt ? ' on ' + approvedAt : ''}">🔒 Approved${whoTxt}${whenTxt}</span></td>`;
+                } else if (adminActions) {
+                    actionsCell = `<td class="px-3 py-2 whitespace-nowrap">
+                        <button type="button" onclick="editCalibration('${esc(r.id)}', ${q}, '${esc(reportTxt)}', '${esc(plotTxt)}', '${esc(reasonTxt)}')" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[9px] font-black uppercase rounded hover:bg-[#f0f8ff] mr-1">Edit</button>
+                        <button type="button" onclick="deleteCalibration('${esc(r.id)}')" class="px-2 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[9px] font-black uppercase rounded hover:bg-[#fff5f5] mr-1">Del</button>
+                        <button type="button" onclick="approveCalibration('${esc(r.id)}')" class="px-2 py-1 bg-[#4a7a2e] text-white text-[9px] font-black uppercase rounded hover:bg-[#3d6624]">Approve</button>
+                    </td>`;
+                } else {
+                    actionsCell = `<td class="px-3 py-2 text-[10px] text-[#8a7a68]">🔒</td>`;
+                }
                 return `<tr class="border-t border-[#e8dcc8]">
                     <td class="px-3 py-2 text-[11px] font-bold text-[#3d2610]">${formatAuditDate(r.created_at)}</td>
                     <td class="px-3 py-2 text-sm font-black ${cls}">${sign}${q.toLocaleString()}</td>
@@ -1876,9 +1892,24 @@
         // renderCalibrationHistory.
         let _t7EditingId = null;
 
+        // Returns true when the row referenced by id carries the approval
+        // suffix in its remark. Reads the cached value from the rendered
+        // history table so we don't have to round-trip to the DB.
+        function _t7IsRowApproved(id) {
+            const btn = document.querySelector(`#t7-cal-history button[onclick*="'${id}'"]`);
+            // If the only button rendered for this id is gone, the row is
+            // already approved (the lock pill replaces the action buttons).
+            if (!btn) return true;
+            return false;
+        }
+
         function editCalibration(id, qty, report, plot, reason) {
             if (typeof isAdmin !== 'undefined' && !isAdmin) {
                 showToast('Only admins can edit calibration entries.', 'error');
+                return;
+            }
+            if (_t7IsRowApproved(id)) {
+                showToast('This calibration is approved and cannot be edited.', 'error');
                 return;
             }
             _t7EditingId = id;
@@ -1919,10 +1950,50 @@
                 showToast('Only admins can delete calibration entries.', 'error');
                 return;
             }
+            if (_t7IsRowApproved(id)) {
+                showToast('This calibration is approved and cannot be deleted.', 'error');
+                return;
+            }
             if (!confirm('Delete this calibration adjustment? This cannot be undone.')) return;
             const { error } = await _supabase.from('shared_inventory_logs').delete().eq('id', id);
             if (error) { showToast('Failed to delete: ' + error.message, 'error'); return; }
             showToast('Calibration deleted.', 'success');
+            const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
+            renderCalibrationHistory(batchId);
+        }
+
+        // Per-row Approve. Appends "[APPROVED by <email> on <ISO>]" to the
+        // remark so the history render flips the row's Lock column to a
+        // green pill and the Edit/Del buttons disappear. There is no
+        // unapprove path via UI — that's the explicit spec.
+        async function approveCalibration(id) {
+            if (typeof isAdmin !== 'undefined' && !isAdmin) {
+                showToast('Only admins can approve calibration entries.', 'error');
+                return;
+            }
+            if (!confirm('Approve and lock this adjustment? Once approved, no further edits are allowed for this row.')) return;
+            const { data: row, error: readErr } = await _supabase
+                .from('shared_inventory_logs')
+                .select('remark')
+                .eq('id', id)
+                .maybeSingle();
+            if (readErr) { showToast('Failed to read row: ' + readErr.message, 'error'); return; }
+            if (row && /\[APPROVED by [^\]]+\]/.test(row.remark || '')) {
+                showToast('This adjustment is already approved.', 'success');
+                const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
+                renderCalibrationHistory(batchId);
+                return;
+            }
+            const u = (typeof MJMAccess !== 'undefined' && MJMAccess.user && MJMAccess.user()) || {};
+            const who = u.email || u.full_name || 'admin';
+            const stamp = new Date().toISOString();
+            const newRemark = ((row && row.remark) || '').trim() + ` [APPROVED by ${who} on ${stamp}]`;
+            const { error } = await _supabase
+                .from('shared_inventory_logs')
+                .update({ remark: newRemark })
+                .eq('id', id);
+            if (error) { showToast('Failed to approve: ' + error.message, 'error'); return; }
+            showToast('Calibration approved and locked.', 'success');
             const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
             renderCalibrationHistory(batchId);
         }
@@ -6494,10 +6565,10 @@ Thank you.`;
     <script>
     (function () {
       // Map tab index → stage key in operation_batch_reviews.
-      // Tab 7 (Adjustments & Audit) uses a separate Approve/Edit-only flow
-      // — see renderBanner for the branch.
-      const STAGE_BY_TAB = { 1: 'seeds_in', 2: 'planting', 3: 'transplanting', 4: 'cull_1', 5: 'cull_2', 6: 'cull_3', 7: 'adjustments_audit', 8: 'seed_audit' };
-      const TAB_INDICES = [1, 2, 3, 4, 5, 6, 7, 8];
+      // Tab 7 (Adjustments & Audit) has no top banner — Approve/Edit live
+      // per-row in the Stock Calibration history table instead.
+      const STAGE_BY_TAB = { 1: 'seeds_in', 2: 'planting', 3: 'transplanting', 4: 'cull_1', 5: 'cull_2', 6: 'cull_3', 8: 'seed_audit' };
+      const TAB_INDICES = [1, 2, 3, 4, 5, 6, 8];
 
       const reviews       = {}; // stage → { reviewed_by, reviewer_name, reviewer_email, reviewed_at }
       const verifications = {}; // stage → { verified_by, verifier_name, verifier_email, verified_at }
@@ -6537,56 +6608,6 @@ Thank you.`;
         const r     = reviews[stage];
         const v     = verifications[stage];
         const batch = currentBatchId();
-
-        // ── Tab 7 (Adjustments & Audit) uses a separate Approve/Edit-only
-        // flow. The two-stage Verifier → Reviewer pipeline does not apply
-        // here — admins simply approve when they're done reconciling. ──
-        if (stage === 'adjustments_audit') {
-          if (!batch) {
-            banner.className = 'mjm-review-banner mjm-review-open';
-            banner.style.display = 'none';
-            banner.innerHTML = '';
-            tab.classList.remove('mjm-locked');
-            return;
-          }
-          if (r) {
-            const who = r.reviewer_name || r.reviewer_email || 'an admin';
-            banner.className = 'mjm-review-banner mjm-review-locked';
-            banner.style.display = '';
-            banner.innerHTML = `
-              <div>
-                <div class="mjm-review-meta">✓ Approved &amp; Locked</div>
-                <div class="mt-1">Approved by <strong>${who}</strong> on <strong>${fmtDate(r.reviewed_at)}</strong>.</div>
-              </div>
-            `;
-            tab.classList.add('mjm-locked');
-            return;
-          }
-          if (!isAdmin) {
-            // Non-admins see no banner pre-approval.
-            banner.className = 'mjm-review-banner mjm-review-open';
-            banner.style.display = 'none';
-            banner.innerHTML = '';
-            tab.classList.remove('mjm-locked');
-            return;
-          }
-          banner.className = 'mjm-review-banner mjm-review-open';
-          banner.style.display = '';
-          banner.innerHTML = `
-            <div>
-              <div class="mjm-review-meta">Admin Controls</div>
-              <div class="mt-1 text-[#7a4a10]">Edit values as needed, then click <strong>Approve</strong> to lock this tab.</div>
-            </div>
-            <div class="mjm-review-btn-row">
-              <button class="mjm-review-btn mjm-review-btn-verify mjm-review-allow"
-                      onclick="MJMReview.editIndicator(${tabIdx})">✏️ Edit</button>
-              <button class="mjm-review-btn mjm-review-btn-mark mjm-review-allow"
-                      onclick="MJMReview.approve(${tabIdx})">✓ Approve</button>
-            </div>
-          `;
-          tab.classList.remove('mjm-locked');
-          return;
-        }
 
         // ── Tabs 1–6 + 8: original Verify → Mark-as-Reviewed flow. ──
         if (!batch) {
@@ -6790,49 +6811,10 @@ Thank you.`;
         renderBanner(tabIdx);
       }
 
-      // Admin: lock this tab as Approved. Stored in operation_batch_reviews,
-      // keyed by (batch_name, stage). Once approved, the row is read-only —
-      // there is no Unapprove button per the explicit spec.
-      async function approve(tabIdx) {
-        if (!isAdmin) return;
-        const batch = currentBatchId();
-        if (!batch) { alert('Save Tab 1 first to assign a batch number.'); return; }
-        const stage = STAGE_BY_TAB[tabIdx];
-        if (!confirm('Approve and lock this tab? Once approved, no further edits are allowed.')) return;
-        const u = MJMAccess.user() || {};
-        const payload = {
-          batch_name:     batch,
-          stage,
-          reviewed_by:    u.id || null,
-          reviewer_email: u.email || null,
-          reviewer_name:  u.full_name || null,
-          reviewed_at:    new Date().toISOString()
-        };
-        const { error } = await _supabase
-          .from('operation_batch_reviews')
-          .upsert(payload, { onConflict: 'batch_name,stage' });
-        if (error) { alert('Failed to approve: ' + error.message); return; }
-        reviews[stage] = payload;
-        renderBanner(tabIdx);
-      }
 
-      // Edit button is a visual pair to Approve — it acknowledges the admin
-      // is making changes. The form fields are editable anyway pre-approval,
-      // so this is a soft hint rather than a state toggle.
-      function editIndicator(tabIdx) {
-        if (!isAdmin) return;
-        const tab = document.getElementById('tab-' + tabIdx);
-        const firstInput = tab && tab.querySelector('input:not([type=hidden]), select, textarea');
-        if (firstInput && typeof firstInput.focus === 'function') {
-          firstInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          firstInput.focus();
-        }
-      }
-
-      // Tab 7 (Adjustments & Audit) only — admins lock the stock-calibration
-      // history with this single button. There is no Unapprove (per spec).
-      // For a genuine data-correction case the row in
-      // operation_batch_reviews has to be removed via the DB.
+      // (Tab 7 row-level Approve / Edit live in renderCalibrationHistory in
+      // the main page script, not here. Removed the per-tab approve()
+      // helper since Tab 7 no longer has a top banner.)
 
       async function boot() {
         if (booted) { await refresh(); return; }
@@ -6877,7 +6859,7 @@ Thank you.`;
         await refresh();
       }
 
-      window.MJMReview = { boot, refresh, mark, unmark, verify, unverify, approve, editIndicator };
+      window.MJMReview = { boot, refresh, mark, unmark, verify, unverify };
     })();
     </script>
 </body>
