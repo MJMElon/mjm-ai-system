@@ -2612,7 +2612,12 @@
             const mapData = t3EditMaps[idx];
             if (mapData) {
                 const uploaded = await _uploadBatchDoc('transplant_maps', batchId, `${destPlot}-edit-${idx}`, mapData);
-                if (uploaded) { mapUrl = uploaded; t3EditMaps[idx] = uploaded; }
+                if (uploaded) {
+                    mapUrl = uploaded;
+                    t3EditMaps[idx] = uploaded;
+                } else {
+                    showToast('⚠️ Drone map upload failed: ' + (window._mjmLastUploadError || 'storage error') + '. Edit saved without map — fix bucket and re-edit to attach.', 'error');
+                }
             }
             const mapSuffix = mapUrl ? ` MapUrl:${mapUrl}` : '';
             const remark = `Transplanted from tray [${srcTray}] to ${destType === 'main' ? 'Main Plot' : destType === 'premium' ? 'PREMIUM CARE' : 'DOUBLE-TONE'} [${destPlot}]. Date: ${dateVal}${mapSuffix}`;
@@ -3194,6 +3199,7 @@
 
                 let logsToInsert = [];
                 let trayUpdates = []; // For PREMIUM CARE and DOUBLE-TONE tray qty updates
+                let uploadFailures = 0;
 
                 // for-of instead of forEach so we can `await` the per-row map upload.
                 for (const row of Array.from(document.querySelectorAll('.action-row.transplant-row'))) {
@@ -3211,7 +3217,14 @@
                     const mapData = rowMaps[row.id];
                     if (mapData) {
                         const url = await _uploadBatchDoc('transplant_maps', batchId, `${destPlot}-${row.id}`, mapData);
-                        if (url) { mapUrl = url; rowMaps[row.id] = url; }
+                        if (url) {
+                            mapUrl = url;
+                            rowMaps[row.id] = url;
+                            console.log('[saveTransplant] map uploaded for', row.id, '→', url);
+                        } else {
+                            uploadFailures++;
+                            console.warn('[saveTransplant] map upload FAILED for', row.id, ':', window._mjmLastUploadError);
+                        }
                     }
                     const mapSuffix = mapUrl ? ` MapUrl:${mapUrl}` : '';
 
@@ -3245,6 +3258,10 @@
                         }));
                         trayUpdates.push({ tray_name: 'DOUBLE-TONE', qty });
                     }
+                }
+
+                if (uploadFailures > 0) {
+                    showToast(`⚠️ ${uploadFailures} drone map(s) failed to upload: ${window._mjmLastUploadError || 'storage error'}. Those rows saved without the map. Fix the documents bucket and re-save.`, 'error');
                 }
 
                 if (logsToInsert.length === 0) {
@@ -6175,6 +6192,7 @@ Thank you.`;
                 if (!batchId) throw new Error('No batch number. Complete Tab 1 first.');
 
                 let logsToInsert = [];
+                let uploadFailures = 0;
                 // for-of so we can await per-row drone-map uploads.
                 const t5Rows = Array.from(document.querySelectorAll('.t5-plot-row'));
                 for (let i = 0; i < t5Rows.length; i++) {
@@ -6194,7 +6212,14 @@ Thank you.`;
                     const mapData = t5_plotMaps[row.id];
                     if (mapData) {
                         const url = await _uploadBatchDoc('cull2_maps', batchId, `${plotName}-${row.id}`, mapData);
-                        if (url) { mapUrl = url; t5_plotMaps[row.id] = url; }
+                        if (url) {
+                            mapUrl = url;
+                            t5_plotMaps[row.id] = url;
+                            console.log('[saveTab5] map uploaded for', plotName, '→', url);
+                        } else {
+                            uploadFailures++;
+                            console.warn('[saveTab5] map upload FAILED for', plotName, ':', window._mjmLastUploadError);
+                        }
                     }
                     const mapSuffix = mapUrl ? ` MapUrl:${mapUrl}` : '';
 
@@ -6219,6 +6244,9 @@ Thank you.`;
                 if (error) throw error;
                 setEditMetaUI(5, new Date().toISOString(), window.currentUserEmail);
 
+                if (uploadFailures > 0) {
+                    showToast(`⚠️ ${uploadFailures} drone map(s) failed to upload: ${window._mjmLastUploadError || 'storage error'}. Rows saved without map. Fix bucket and re-save.`, 'error');
+                }
                 showToast(`2nd Culling report saved — ${logsToInsert.length} plot record(s) logged.`, 'success');
                 btn.innerText = originalText; btn.disabled = false;
             } catch(e) {
@@ -6649,6 +6677,7 @@ Thank you.`;
                 if (!batchId) throw new Error('No batch number. Complete Tab 1 first.');
 
                 let logsToInsert = [];
+                let uploadFailures = 0;
                 const t6Rows = Array.from(document.querySelectorAll('.t6-plot-row'));
                 for (let i = 0; i < t6Rows.length; i++) {
                     const row = t6Rows[i];
@@ -6678,6 +6707,10 @@ Thank you.`;
                             docUrl = url;
                             t6_plotDocs[row.id] = { ...doc, base64: url };
                             if (doc.name) docNamePart = ` DocName:${encodeURIComponent(doc.name)}`;
+                            console.log('[saveTab6] doc uploaded for', plotName, '→', url);
+                        } else {
+                            uploadFailures++;
+                            console.warn('[saveTab6] doc upload FAILED for', plotName, ':', window._mjmLastUploadError);
                         }
                     }
                     const docSuffix = docUrl ? `${docNamePart} DocUrl:${docUrl}` : '';
@@ -6700,6 +6733,9 @@ Thank you.`;
                 const { error } = await safeInsertLogs(logsToInsert);
                 if (error) throw error;
                 setEditMetaUI(6, new Date().toISOString(), window.currentUserEmail);
+                if (uploadFailures > 0) {
+                    showToast(`⚠️ ${uploadFailures} doc(s) failed to upload: ${window._mjmLastUploadError || 'storage error'}. Rows saved without doc. Fix bucket and re-save.`, 'error');
+                }
                 showToast(`3rd Culling report saved — ${logsToInsert.length} plot record(s) logged.`, 'success');
                 btn.innerText = originalText; btn.disabled = false;
             } catch(e) {
