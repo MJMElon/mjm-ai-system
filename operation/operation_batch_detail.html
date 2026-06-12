@@ -124,9 +124,6 @@
         .close-btn { background: #ffffff; border: 1.5px solid #e8dcc8; color: #8a7a68; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
         .close-btn:hover { background: #f8f4ec; color: #a83020; border-color: #a83020; transform: rotate(90deg); }
 
-        .drop-zone { border: 2px dashed #c07820; background-color: #fdfaf4; padding: 20px; border-radius: 1.5rem; text-align: center; cursor: pointer; transition: all 0.3s; box-shadow: inset 0 2px 10px rgba(0,0,0,0.02); }
-        .drop-zone:hover, .drop-zone.drag-over { background-color: #f3efe6; border-color: #6aa83c; }
-
         /* --- STAGE TABS --- */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -188,7 +185,6 @@
           opacity: .55;
           filter: grayscale(.25);
         }
-        .mjm-locked .drop-zone { pointer-events:none !important; opacity:.55; }
     </style>
 </head>
 <body>
@@ -327,17 +323,6 @@
                                 </div>
                             </div>
 
-                            <div id="drop-zone" class="drop-zone mb-8 bg-white" onclick="document.getElementById('file-upload').click()">
-                                <div id="drop-content" class="flex flex-col md:flex-row items-center justify-center gap-4 pointer-events-none">
-                                    <span class="text-4xl">📄</span>
-                                    <div>
-                                        <p class="text-sm font-black text-[#8a7a68] uppercase tracking-widest">Drag & Drop D/O, Invoice or Use Camera</p>
-                                        <p class="text-[10px] font-bold text-[#a39584] mt-1 uppercase">Tap to open phone camera or drag PDF/Image to auto-fill</p>
-                                    </div>
-                                </div>
-                                <input type="file" id="file-upload" class="hidden" accept=".pdf,image/*" capture="environment">
-                            </div>
-                            
                             <form id="reception-form" class="space-y-6">
                                 <input type="hidden" id="f-original-create" value="">
                                 
@@ -5063,146 +5048,6 @@ Thank you.`;
             if(document.getElementById('tab-2').classList.contains('active')) syncTab2();
             if(document.getElementById('tab-3').classList.contains('active')) syncTab3();
             if(document.getElementById('tab-8').classList.contains('active')) syncTab8();
-        }
-
-        const dropZone = document.getElementById('drop-zone'); const fileInput = document.getElementById('file-upload'); const dropContent = document.getElementById('drop-content');
-        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-        dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); });
-        dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); if(e.dataTransfer.files.length) handleFileUpload(e.dataTransfer.files[0]); });
-        fileInput.addEventListener('change', function() { if(this.files.length) handleFileUpload(this.files[0]); });
-
-        // ─── Tab 1 D/O / Invoice OCR ─────────────────────────────────────
-        // Replaces the previous demo stub (which always returned the same
-        // fake "FELDA Seeds Sdn Bhd / DO-99201-B / 100,000" values) with a
-        // real Gemini vision call. Returns null for any field the model
-        // can't read off the page, so partial extractions don't overwrite
-        // good values with confidence-free guesses.
-        const T1_OCR_PROMPT =
-            'You are reading a seed supplier\'s Delivery Order (D/O) or Invoice. Extract ONLY this JSON (no prose, no markdown fence):\n' +
-            '{ "supplier_name": "<seller company>", "do_number": "<DO/invoice/delivery number>", "do_qty": <integer total seed qty, NOT price or weight>, "foc_percent": <FOC % as a plain number, e.g. 5 not "5%">, "seed_breed": "<breed/variety name>" }\n' +
-            'Rules:\n' +
-            '- do_qty is the total seed COUNT delivered. Look for "Qty", "Quantity", "Total Seeds". Do NOT confuse with unit price, total amount, or weight in kg/g.\n' +
-            '- foc_percent: if you see "FOC 5%", "Free of Charge 5%", or similar, return 5. If none mentioned, return 0.\n' +
-            '- supplier_name is the company SELLING the seeds (not the buyer / nursery).\n' +
-            '- seed_breed examples: "UPB Premier Hybrid", "AA Hybrida 1S", "IOI DxP Hybrid". Use the exact phrasing on the document.\n' +
-            '- If a field cannot be confidently extracted, return null for that field.\n' +
-            '- Return ONLY the JSON object.';
-
-        async function _t1OcrDocument(file) {
-            const dataUrl = await new Promise((resolve, reject) => {
-                const r = new FileReader();
-                r.onload  = () => resolve(r.result);
-                r.onerror = reject;
-                r.readAsDataURL(file);
-            });
-            const mime = file.type || 'application/octet-stream';
-            const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${SEED_GEMINI_KEY}`;
-            const payload = {
-                contents: [{ parts: [
-                    { text: T1_OCR_PROMPT },
-                    { inlineData: { mimeType: mime, data: base64 } }
-                ]}],
-                generationConfig: { temperature: 0, topP: 1, topK: 1, responseMimeType: 'application/json' }
-            };
-            const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error?.message || 'Gemini API error');
-            const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            return JSON.parse(String(raw).replace(/```json/gi, '').replace(/```/g, '').trim());
-        }
-
-        // Pick the dropdown option whose label/value matches (case-insensitive,
-        // punctuation-tolerant) the OCR'd value. Returns the option value or
-        // null when no match — at which point we leave the field as-is rather
-        // than overwriting with a near-miss.
-        function _t1MatchOption(selectEl, target) {
-            if (!selectEl || !target) return null;
-            const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
-            const t = norm(target);
-            if (!t) return null;
-            for (const opt of selectEl.options) {
-                if (!opt.value) continue;
-                if (norm(opt.value) === t || norm(opt.textContent) === t) return opt.value;
-            }
-            // Forgiving second pass — startsWith / contains
-            for (const opt of selectEl.options) {
-                if (!opt.value) continue;
-                const ov = norm(opt.value);
-                if (ov.includes(t) || t.includes(ov)) return opt.value;
-            }
-            return null;
-        }
-
-        async function handleFileUpload(file) {
-            const setStatus = (icon, color, msg) => {
-                dropContent.innerHTML = `<span class="text-4xl">${icon}</span><div><p class="text-sm font-black ${color} uppercase tracking-widest">${msg}</p></div>`;
-            };
-            setStatus('🤖', 'text-[#c07820]', 'Scanning Document/Image with AI…');
-            try {
-                if (!file) throw new Error('No file received.');
-                if (file.size > 20 * 1024 * 1024) throw new Error('File too large (max 20 MB).');
-
-                const result = await _t1OcrDocument(file);
-                const filled = [];
-
-                // Breed first so the supplier dropdown re-populates with the
-                // right options before we try to pick a supplier value.
-                if (result && result.seed_breed) {
-                    const breedSel = document.getElementById('f-brand');
-                    const matched  = _t1MatchOption(breedSel, result.seed_breed);
-                    if (matched) {
-                        breedSel.value = matched;
-                        if (typeof syncSupplierOptions === 'function') syncSupplierOptions();
-                        filled.push('breed');
-                    }
-                }
-                if (result && result.supplier_name) {
-                    const supSel = document.getElementById('f-supplier');
-                    const matched = _t1MatchOption(supSel, result.supplier_name);
-                    if (matched) {
-                        supSel.value = matched;
-                        if (typeof syncMpobOptions === 'function') syncMpobOptions();
-                        filled.push('supplier');
-                    }
-                }
-                if (result && result.do_number) {
-                    document.getElementById('f-dono').value = String(result.do_number).trim();
-                    filled.push('D/O #');
-                }
-                if (result && result.do_qty != null) {
-                    const n = Number(result.do_qty);
-                    if (Number.isFinite(n) && n > 0) {
-                        setNumericInput('f-do-qty', Math.round(n));
-                        filled.push('D/O qty');
-                    }
-                }
-                if (result && result.foc_percent != null) {
-                    const f = Number(result.foc_percent);
-                    if (Number.isFinite(f) && f >= 0) {
-                        document.getElementById('f-foc-percent').value = String(f);
-                        filled.push('FOC %');
-                    }
-                }
-                if (typeof calculateTotalSeeds === 'function') calculateTotalSeeds();
-
-                if (filled.length === 0) {
-                    setStatus('⚠️', 'text-[#a83020]', 'Scan completed but no fields recognised — fill manually.');
-                    dropZone.style.borderColor = '#a83020';
-                    dropZone.style.backgroundColor = '#fff5f5';
-                } else {
-                    setStatus('✅', 'text-[#4a7a2e]', `Auto-filled: ${filled.join(', ')}. Please verify before saving.`);
-                    dropZone.style.borderColor = '#4a7a2e';
-                    dropZone.style.backgroundColor = '#edf5e0';
-                }
-            } catch (e) {
-                console.warn('[Tab1 OCR] failed:', e);
-                setStatus('❌', 'text-[#a83020]', `Scan failed: ${(e && e.message) || 'Unknown error'} — fill manually.`);
-                dropZone.style.borderColor = '#a83020';
-                dropZone.style.backgroundColor = '#fff5f5';
-            } finally {
-                if (fileInput) fileInput.value = '';
-            }
         }
 
         function updateTracker(activeStageIndex) {
