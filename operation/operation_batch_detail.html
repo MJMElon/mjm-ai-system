@@ -3731,6 +3731,7 @@
                         showToast('⚠️ Ops photo NOT saved: ' + (window._mjmLastUploadError || 'storage upload failed') + ' — fix the documents bucket policy and re-save.', 'error');
                         return;
                     }
+                    console.log('[savePhotos] ops uploaded →', url);
                     opsPhotoBase64 = url;
                 }
                 if (auditPhotoBase64 && String(auditPhotoBase64).startsWith('data:')) {
@@ -3739,6 +3740,7 @@
                         showToast('⚠️ Auditor photo NOT saved: ' + (window._mjmLastUploadError || 'storage upload failed') + ' — fix the documents bucket policy and re-save.', 'error');
                         return;
                     }
+                    console.log('[savePhotos] audit uploaded →', url);
                     auditPhotoBase64 = url;
                 }
 
@@ -3755,12 +3757,18 @@
                     plot_name: 'audit', quantity_change: 0,
                     remark: auditPhotoBase64
                 });
+                console.log('[savePhotos] planning to insert', photoLogs.length, 'log row(s):', photoLogs);
                 if (photoLogs.length > 0) {
-                    const { error } = await _supabase.from('shared_inventory_logs').insert(photoLogs);
+                    const { data: inserted, error } = await _supabase.from('shared_inventory_logs').insert(photoLogs).select();
                     if (error) {
-                        console.warn('Photo save warning:', error.message);
+                        console.warn('[savePhotos] insert error:', error);
                         showToast('⚠️ Photo URLs uploaded but the log row failed: ' + error.message, 'error');
+                    } else {
+                        console.log('[savePhotos] inserted rows:', inserted);
+                        showToast(`📷 ${photoLogs.length} photo(s) persisted.`, 'success');
                     }
+                } else {
+                    console.log('[savePhotos] no photo logs to insert (both variables empty/non-URL).');
                 }
             } catch(e) {
                 console.warn('Photo save failed:', e.message);
@@ -3770,16 +3778,18 @@
 
         async function loadPhotosFromStorage(batchId) {
             try {
-                const { data } = await _supabase.from('shared_inventory_logs')
+                const { data, error } = await _supabase.from('shared_inventory_logs')
                     .select('*').eq('batch_name', batchId).eq('transaction_type', 'Planting_Photo');
+                console.log('[loadPhotos] query for batch', batchId, '→ rows:', data, 'error:', error);
                 if (!data) return;
                 data.forEach(log => {
                     const remark = (log.remark || '').trim();
-                    if (!remark) return;
+                    if (!remark) { console.log('[loadPhotos] skipping empty remark for', log.plot_name); return; }
                     // Legacy rows held truncated base64 that can't be rendered —
                     // skip them so the upload zone reappears for re-attachment.
-                    if (!/^https?:\/\//i.test(remark)) return;
+                    if (!/^https?:\/\//i.test(remark)) { console.log('[loadPhotos] skipping non-URL remark for', log.plot_name, '→', remark.slice(0, 60)); return; }
                     const type = log.plot_name; // 'ops' or 'audit'
+                    console.log('[loadPhotos] restoring', type, '→', remark);
                     if (type === 'ops')   { opsPhotoBase64   = remark; restorePhotoUI('ops',   remark, 'Site photo');  }
                     else if (type === 'audit') { auditPhotoBase64 = remark; restorePhotoUI('audit', remark, 'Audit photo'); }
                 });
