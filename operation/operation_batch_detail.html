@@ -1822,7 +1822,9 @@
                 return;
             }
             const esc = s => String(s || '').replace(/</g, '&lt;');
-            const adminActions = (typeof isAdmin !== 'undefined' && isAdmin);
+            // MJMAccess is the source of truth — the MJMReview module's
+            // closure-scoped `isAdmin` isn't visible here.
+            const adminActions = _t7IsAdmin();
             const rowsHtml = safe.map(r => {
                 const q = Number(r.quantity_change) || 0;
                 const sign = q > 0 ? '+' : '';
@@ -1892,6 +1894,18 @@
         // renderCalibrationHistory.
         let _t7EditingId = null;
 
+        // Returns true when the current user is admin of the operation
+        // module. Reads MJMAccess directly because the MJMReview module's
+        // `isAdmin` is closure-scoped and not visible here — see the bug
+        // where all calibration rows showed 🔒 instead of action buttons.
+        function _t7IsAdmin() {
+            try {
+                return !!(typeof MJMAccess !== 'undefined'
+                    && typeof MJMAccess.isAdminOf === 'function'
+                    && MJMAccess.isAdminOf('operation'));
+            } catch (_) { return false; }
+        }
+
         // Returns true when the row referenced by id carries the approval
         // suffix in its remark. Reads the cached value from the rendered
         // history table so we don't have to round-trip to the DB.
@@ -1904,7 +1918,7 @@
         }
 
         function editCalibration(id, qty, report, plot, reason) {
-            if (typeof isAdmin !== 'undefined' && !isAdmin) {
+            if (!_t7IsAdmin()) {
                 showToast('Only admins can edit calibration entries.', 'error');
                 return;
             }
@@ -1946,7 +1960,7 @@
         }
 
         async function deleteCalibration(id) {
-            if (typeof isAdmin !== 'undefined' && !isAdmin) {
+            if (!_t7IsAdmin()) {
                 showToast('Only admins can delete calibration entries.', 'error');
                 return;
             }
@@ -1967,7 +1981,7 @@
         // green pill and the Edit/Del buttons disappear. There is no
         // unapprove path via UI — that's the explicit spec.
         async function approveCalibration(id) {
-            if (typeof isAdmin !== 'undefined' && !isAdmin) {
+            if (!_t7IsAdmin()) {
                 showToast('Only admins can approve calibration entries.', 'error');
                 return;
             }
@@ -6605,6 +6619,18 @@ Thank you.`;
         if (!banner) return;
         const tab   = document.getElementById('tab-' + tabIdx);
         const stage = STAGE_BY_TAB[tabIdx];
+
+        // Tabs without a configured stage (e.g. Tab 7 — Adjustments & Audit)
+        // have their own per-row Approve flow in the calibration history.
+        // Hide the verify/review banner entirely so it doesn't fall through
+        // to the "Pending Verification" branch below.
+        if (!stage) {
+          banner.style.display = 'none';
+          banner.innerHTML = '';
+          tab.classList.remove('mjm-locked');
+          return;
+        }
+
         const r     = reviews[stage];
         const v     = verifications[stage];
         const batch = currentBatchId();
