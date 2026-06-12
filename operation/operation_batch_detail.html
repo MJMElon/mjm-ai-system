@@ -2913,6 +2913,7 @@
         function calcTransplanting() {
             let totalPlantedRaw = parseInt(document.getElementById('t3-total-planted').innerText.replace(/,/g, '') || 0);
             let totalMain = 0; let totalPremium = 0; let totalDoubletone = 0;
+            let mainFromDtone = 0; // Subset of totalMain — seedlings that reached a main plot via the D-Tone holding tray.
             let premiumSourceUsed = 0; let dtoneSourceUsed = 0;
             let activeTrayBalances = {};
 
@@ -2934,7 +2935,15 @@
                     if (tray === 'DOUBLE-TONE')  dtoneSourceUsed  += qty;
                 }
                 if (qty > 0) {
-                    if (type === 'main') totalMain += qty;
+                    if (type === 'main') {
+                        totalMain += qty;
+                        // "Main Plot (D-Tone)" tracks the D-Tone-sourced subset
+                        // of main-plot transplants — seedlings that got D-Tone
+                        // treatment before reaching a main plot. Without this
+                        // the tile only saw qty routed INTO the D-Tone holding
+                        // tray and stayed at 0 once everything was forwarded out.
+                        if (tray === 'DOUBLE-TONE') mainFromDtone += qty;
+                    }
                     else if (type === 'premium') totalPremium += qty;
                     else if (type === 'doubletone') totalDoubletone += qty;
                 }
@@ -3034,11 +3043,16 @@
             // Stat cards
             document.getElementById('t3-val-main').innerText = totalMain.toLocaleString();
             document.getElementById('t3-val-main-pct').innerText = totalPlantedRaw > 0 ? pctMain.toFixed(2) + '% of total' : '—';
-            // Main Plot (D-Tone) = qty transplanted to the D-Tone destination
+            // "Main Plot (D-Tone)" = D-Tone-sourced subset of main-plot
+            // transplants (rows with dest=main AND source=DOUBLE-TONE tray).
+            // The earlier code used totalDoubletone here, which is the inflow
+            // INTO the D-Tone holding tray — that's a different number and
+            // dropped to 0 once everything was forwarded to a main plot.
             const dtoneMainEl    = document.getElementById('t3-val-dtone-main');
             const dtoneMainPctEl = document.getElementById('t3-val-dtone-main-pct');
-            if (dtoneMainEl)    dtoneMainEl.innerText    = totalDoubletone.toLocaleString();
-            if (dtoneMainPctEl) dtoneMainPctEl.innerText = totalPlantedRaw > 0 ? pctDoubletone.toFixed(2) + '% of total' : '—';
+            const pctMainFromDtone = totalPlantedRaw > 0 ? (mainFromDtone / totalPlantedRaw) * 100 : 0;
+            if (dtoneMainEl)    dtoneMainEl.innerText    = mainFromDtone.toLocaleString();
+            if (dtoneMainPctEl) dtoneMainPctEl.innerText = totalPlantedRaw > 0 ? pctMainFromDtone.toFixed(2) + '% of total' : '—';
             // Total 1st Culled (normal + D-Tone) — mockCullingTab4 already sums every 1st_Culling row
             document.getElementById('t3-val-cull').innerText = mockCullingTab4.toLocaleString();
             document.getElementById('t3-val-cull-pct').innerText = totalPlantedRaw > 0 ? pctCull.toFixed(2) + '% of total' : '—';
