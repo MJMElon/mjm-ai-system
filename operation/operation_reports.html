@@ -81,6 +81,7 @@
             <select id="f-report" class="input-style">
               <option value="batch_production">Batch Production Summary</option>
               <option value="nursery_movement">Nursery Movement Report (by Plot / Batch)</option>
+              <option value="sales_record">Sales Record (by Plot / Batch)</option>
               <option value="seedling_sales">Seedling Sales Report (Yearly)</option>
             </select>
           </div>
@@ -384,6 +385,7 @@ async function runReport() {
   const which = document.getElementById('f-report').value;
   if (which === 'batch_production')   return runBatchProduction();
   if (which === 'nursery_movement')   return runSummaryMovement();
+  if (which === 'sales_record')       return runSalesRecord();
   if (which === 'seedling_sales')     return runSeedlingSales();
 }
 
@@ -393,9 +395,10 @@ function syncFilterVisibility() {
   const isMove    = (which === 'nursery_movement');
   const isBatch   = (which === 'batch_production');
   const isSales   = (which === 'seedling_sales');
-  document.querySelectorAll('.f-range').forEach(el         => el.classList.toggle('hidden', !(isBatch || isMove)));
+  const isRecord  = (which === 'sales_record');
+  document.querySelectorAll('.f-range').forEach(el         => el.classList.toggle('hidden', !(isBatch || isMove || isRecord)));
   document.querySelectorAll('.f-group').forEach(el         => el.classList.toggle('hidden', !isMove));
-  document.querySelectorAll('.f-nursery-pick').forEach(el  => el.classList.toggle('hidden', !isMove));
+  document.querySelectorAll('.f-nursery-pick').forEach(el  => el.classList.toggle('hidden', !(isMove || isRecord)));
   document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !isBatch));
   document.querySelectorAll('.f-sales-mode').forEach(el    => el.classList.toggle('hidden', !isSales));
   document.querySelectorAll('.f-sales-years').forEach(el   => el.classList.toggle('hidden', !isSales));
@@ -964,6 +967,213 @@ async function runSummaryMovement() {
         Sold is taken from delivery (DO) line items <code>plot_n / batch_n / qty_n</code>; cancelled DOs are excluded.
         Audit, photo, and stock-calibration entries are not counted as movements.
         Pre-nursery plots populate <em>Planted</em> / <em>1st Cull</em>; main-nursery plots populate <em>Transplanted</em> / <em>Double Tone</em> / <em>2nd Cull</em>. Empty cells are zero.
+      </div>
+    </div>
+  `;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Sales Record (by Plot / Batch)
+// ════════════════════════════════════════════════════════════════════════════
+// Reproduces the printed "Sales Record" sheet: one block per (Plot, Batch).
+// Each block opens with a "Transplanting" line (the batch's total transplanted
+// pool), then lists every DO line item that drew from that plot+batch —
+//   Date · AL No. · DO No. · Customer Name · Sales Qty
+// and closes with a Total = Transplanting − Σ(all line quantities), i.e. the
+// remaining balance. Transfer / culling DO lines (detected from the DO remark)
+// are highlighted yellow / red, matching the source sheet.
+
+// Best-effort: pull a plot's drone area (Ha) from whatever column carries it.
+function _plotArea(p) {
+  if (!p) return '';
+  const cand = p.drone_area_ha ?? p.drone_area ?? p.area_ha ?? p.area_hectare ?? p.hectare ?? p.area;
+  if (cand == null || cand === '') return '';
+  const n = Number(cand);
+  return isNaN(n) ? String(cand) : n.toFixed(2);
+}
+
+async function runSalesRecord() {
+  const out = document.getElementById('report-output');
+  const loading = document.getElementById('loading');
+  out.classList.add('hidden');
+  loading.classList.remove('hidden');
+
+  const fromStr = document.getElementById('f-from').value;
+  const toStr   = document.getElementById('f-to').value;
+  const fromMs  = fromStr ? new Date(fromStr).getTime() : -Infinity;
+  const toMs    = toStr   ? new Date(toStr).getTime() + 86400000 : Infinity;
+
+  const [logsRes, dosRes, plotsRes, alsRes] = await Promise.all([
+    _supabase.from('shared_inventory_logs')
+      .select('transaction_type, plot_name, batch_name, quantity_change'),
+    _supabase.from('shared_do_records')
+      .select('do_number, al_number, delivery_date, status, remark, plot_1, batch_1, qty_1, plot_2, batch_2, qty_2, plot_3, batch_3, qty_3, plot_4, batch_4, qty_4, plot_5, batch_5, qty_5'),
+    _supabase.from('shared_plots').select('*'),
+    _supabase.from('shared_al_orders').select('al_number, customer_name')
+  ]);
+  if (logsRes.error || dosRes.error || plotsRes.error || alsRes.error) {
+    loading.classList.add('hidden');
+    out.classList.remove('hidden');
+    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-red-700 text-sm">Failed to load data.</div>`;
+    return;
+  }
+
+  // Plot → nursery + area lookups. Pre-nursery aliases collapse to one location.
+  const plotMeta = {};
+  (plotsRes.data || []).forEach(p => { plotMeta[p.plot_name] = p; });
+  const locOf  = (plot) => (plot && PRE_NURSERY_PLOTS.includes(plot)) ? 'Pre-Nursery'
+                          : (plotMeta[plot]?.nursery_name || 'Unassigned');
+  const areaOf = (plot) => _plotArea(plotMeta[plot]);
+
+  const selectedLocs = new Set(selectedNurseries());
+  const passLoc = (plot) => selectedLocs.size > 0 && selectedLocs.has(locOf(plot));
+
+  // AL No. → customer name.
+  const alMap = {};
+  (alsRes.data || []).forEach(a => { if (a.al_number) alMap[a.al_number] = a.customer_name || ''; });
+
+  const keyOf = (plot, batch) => (plot || '—') + '' + (batch || '—');
+
+  // Transplanting pool per (plot, batch) — cumulative, all-time.
+  const transByKey = {};
+  (logsRes.data || []).forEach(l => {
+    if (!TRANSPLANT_TYPES.includes(l.transaction_type)) return;
+    if (!passLoc(l.plot_name)) return;
+    transByKey[keyOf(l.plot_name, l.batch_name)] = (transByKey[keyOf(l.plot_name, l.batch_name)] || 0) + Number(l.quantity_change || 0);
+  });
+
+  // DO line items per (plot, batch), within the date range.
+  const linesByKey = {};
+  (dosRes.data || []).forEach(d => {
+    if (d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'))) return;
+    const ts = d.delivery_date ? new Date(d.delivery_date).getTime() : NaN;
+    if (!isFinite(ts) || ts < fromMs || ts > toMs) return;
+    const remark = d.remark || '';
+    let kind = 'sale';
+    if (/transfer/i.test(remark)) kind = 'transfer';
+    else if (/cull/i.test(remark)) kind = 'culling';
+    for (let i = 1; i <= 5; i++) {
+      const qty = Number(d[`qty_${i}`] || 0);
+      if (!qty) continue;
+      const plot = d[`plot_${i}`];
+      if (!passLoc(plot)) continue;
+      const batch = d[`batch_${i}`];
+      const customer = (kind !== 'sale') ? remark : (alMap[d.al_number] || remark || 'Unknown');
+      (linesByKey[keyOf(plot, batch)] ||= []).push({
+        date: d.delivery_date, al: d.al_number || '', do: d.do_number || '', customer, qty, kind
+      });
+    }
+  });
+
+  // Union of keys that have a transplant pool or any line items.
+  const _natCmp = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
+  const blocks = [...new Set([...Object.keys(transByKey), ...Object.keys(linesByKey)])]
+    .map(k => {
+      const [plot, batch] = k.split('');
+      const lines = (linesByKey[k] || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+      const trans = transByKey[k] || 0;
+      const outflow = lines.reduce((s, l) => s + l.qty, 0);
+      return { plot, batch, nursery: locOf(plot), area: areaOf(plot), trans, lines, balance: trans - outflow };
+    })
+    .filter(b => b.trans !== 0 || b.lines.length > 0)
+    .sort((a, b) => _natCmp(a.nursery, b.nursery) || _natCmp(a.plot, b.plot) || _natCmp(a.batch, b.batch));
+
+  loading.classList.add('hidden');
+  out.classList.remove('hidden');
+  if (!blocks.length) {
+    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-[#8a7a68] text-sm">No sales records found for the selected locations / period.</div>`;
+    return;
+  }
+
+  // Grand totals across all blocks.
+  const grand = blocks.reduce((s, b) => {
+    s.trans += b.trans;
+    s.qty   += b.lines.reduce((t, l) => t + l.qty, 0);
+    s.bal   += b.balance;
+    s.lines += b.lines.length;
+    return s;
+  }, { trans: 0, qty: 0, bal: 0, lines: 0 });
+
+  const rowBg = (kind) => kind === 'transfer' ? ' style="background:#fef9c3"'
+                        : kind === 'culling'  ? ' style="background:#fee2e2"'
+                        : '';
+
+  const blockHtml = blocks.map(b => {
+    const span = 1 + b.lines.length; // Transplanting row + line rows
+    const leftCells = `
+      <td class="font-black text-[#3d2610] align-top" rowspan="${span}">${b.nursery || '—'}</td>
+      <td class="font-black text-[#3d2610] align-top" rowspan="${span}">${b.plot || '—'}</td>
+      <td class="text-right align-top" rowspan="${span}">${b.area || '—'}</td>
+      <td class="font-black text-[#3d2610] align-top" rowspan="${span}">${b.batch || '—'}</td>`;
+
+    const transRow = `
+      <tr style="background:#eff6ff">
+        ${leftCells}
+        <td></td><td></td><td></td>
+        <td class="font-black text-[#3a7ab4] uppercase tracking-widest text-[11px]">Transplanting</td>
+        <td class="text-right font-black text-[#3a7ab4]">${fmtNum(b.trans)}</td>
+      </tr>`;
+
+    const lineRows = b.lines.map(l => `
+      <tr${rowBg(l.kind)}>
+        <td>${fmtDate(l.date)}</td>
+        <td>${l.al || '—'}</td>
+        <td>${l.do || '—'}</td>
+        <td class="${l.kind === 'culling' ? 'text-[#a83020] font-black' : l.kind === 'transfer' ? 'text-[#9a6a00] font-black' : ''}">${l.customer || '—'}</td>
+        <td class="text-right font-black">${fmtNum(l.qty)}</td>
+      </tr>`).join('');
+
+    const totalRow = `
+      <tr style="background:#fdf3e6">
+        <td colspan="8" class="text-right font-black text-[#3d2610] uppercase tracking-widest text-[11px]">Total (Balance)</td>
+        <td class="text-right font-black ${b.balance < 0 ? 'text-[#a83020]' : 'text-[#4a7a2e]'}">${fmtNum(b.balance)}</td>
+      </tr>`;
+
+    return transRow + lineRows + totalRow;
+  }).join('');
+
+  const rangeLabel = `${fromStr ? fmtDate(fromStr) : '—'} → ${toStr ? fmtDate(toStr) : '—'}`;
+  out.innerHTML = `
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="stat-card"><div class="stat-label">Plot / Batch Blocks</div><div class="stat-num">${fmtNum(blocks.length)}</div></div>
+      <div class="stat-card"><div class="stat-label">Transplanted Pool</div><div class="stat-num text-[#3a7ab4]">${fmtNum(grand.trans)}</div></div>
+      <div class="stat-card"><div class="stat-label">Sales / Out Qty</div><div class="stat-num text-[#a83020]">${fmtNum(grand.qty)}</div></div>
+      <div class="stat-card"><div class="stat-label">Balance</div><div class="stat-num text-[#4a7a2e]">${fmtNum(grand.bal)}</div></div>
+    </div>
+
+    <div class="glass-panel p-6 rounded-[2rem]">
+      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
+        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Sales Record · by Plot / Batch</h3>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${rangeLabel}</div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Nurseries</th>
+              <th>Plot</th>
+              <th class="text-right">Drone Area (Ha)</th>
+              <th>Batch</th>
+              <th>Date</th>
+              <th>AL No.</th>
+              <th>DO No.</th>
+              <th>Customer Name</th>
+              <th class="text-right">Sales Qty</th>
+            </tr>
+          </thead>
+          <tbody>${blockHtml}</tbody>
+        </table>
+      </div>
+
+      <div class="text-[10px] font-bold text-[#8a7a68] mt-4 leading-relaxed">
+        <strong class="text-[#3d2610]">Notes —</strong>
+        Each block opens with the batch's <em>Transplanting</em> pool (sum of Transplanted / Premium / Double-Tone logs for that plot &amp; batch, all-time).
+        Line items are delivery (DO) entries <code>plot_n / batch_n / qty_n</code> in the selected date range; cancelled DOs are excluded.
+        Customer Name comes from the linked AL order, falling back to the DO remark.
+        <span style="background:#fef9c3;padding:0 4px;border-radius:3px">Transfer</span> and
+        <span style="background:#fee2e2;padding:0 4px;border-radius:3px">Culling</span> lines (detected from the DO remark) are highlighted.
+        <em>Total (Balance)</em> = Transplanting − Σ all line quantities. Drone Area is read from the plot record when available.
       </div>
     </div>
   `;
