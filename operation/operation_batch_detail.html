@@ -6494,14 +6494,16 @@ Thank you.`;
     <script>
     (function () {
       // Map tab index → stage key in operation_batch_reviews.
-      // Tab 7 (Adjustments & Audit) is included so admins can approve / lock
-      // the stock calibration history once they're done reconciling counts.
+      // Tab 7 (Adjustments & Audit) uses a separate Approve/Edit-only flow
+      // — see renderBanner for the branch.
       const STAGE_BY_TAB = { 1: 'seeds_in', 2: 'planting', 3: 'transplanting', 4: 'cull_1', 5: 'cull_2', 6: 'cull_3', 7: 'adjustments_audit', 8: 'seed_audit' };
       const TAB_INDICES = [1, 2, 3, 4, 5, 6, 7, 8];
 
       const reviews       = {}; // stage → { reviewed_by, reviewer_name, reviewer_email, reviewed_at }
-      let booted  = false;
-      let isAdmin = false;
+      const verifications = {}; // stage → { verified_by, verifier_name, verifier_email, verified_at }
+      let booted     = false;
+      let isAdmin    = false;
+      let isVerifier = false;
 
       function fmtDate(iso) {
         if (!iso) return '';
@@ -6533,59 +6535,142 @@ Thank you.`;
         const tab   = document.getElementById('tab-' + tabIdx);
         const stage = STAGE_BY_TAB[tabIdx];
         const r     = reviews[stage];
+        const v     = verifications[stage];
         const batch = currentBatchId();
 
-        // No batch yet — banner hidden, tab unlocked.
-        if (!batch) {
+        // ── Tab 7 (Adjustments & Audit) uses a separate Approve/Edit-only
+        // flow. The two-stage Verifier → Reviewer pipeline does not apply
+        // here — admins simply approve when they're done reconciling. ──
+        if (stage === 'adjustments_audit') {
+          if (!batch) {
+            banner.className = 'mjm-review-banner mjm-review-open';
+            banner.style.display = 'none';
+            banner.innerHTML = '';
+            tab.classList.remove('mjm-locked');
+            return;
+          }
+          if (r) {
+            const who = r.reviewer_name || r.reviewer_email || 'an admin';
+            banner.className = 'mjm-review-banner mjm-review-locked';
+            banner.style.display = '';
+            banner.innerHTML = `
+              <div>
+                <div class="mjm-review-meta">✓ Approved &amp; Locked</div>
+                <div class="mt-1">Approved by <strong>${who}</strong> on <strong>${fmtDate(r.reviewed_at)}</strong>.</div>
+              </div>
+            `;
+            tab.classList.add('mjm-locked');
+            return;
+          }
+          if (!isAdmin) {
+            // Non-admins see no banner pre-approval.
+            banner.className = 'mjm-review-banner mjm-review-open';
+            banner.style.display = 'none';
+            banner.innerHTML = '';
+            tab.classList.remove('mjm-locked');
+            return;
+          }
           banner.className = 'mjm-review-banner mjm-review-open';
-          banner.style.display = 'none';
-          banner.innerHTML = '';
+          banner.style.display = '';
+          banner.innerHTML = `
+            <div>
+              <div class="mjm-review-meta">Admin Controls</div>
+              <div class="mt-1 text-[#7a4a10]">Edit values as needed, then click <strong>Approve</strong> to lock this tab.</div>
+            </div>
+            <div class="mjm-review-btn-row">
+              <button class="mjm-review-btn mjm-review-btn-verify mjm-review-allow"
+                      onclick="MJMReview.editIndicator(${tabIdx})">✏️ Edit</button>
+              <button class="mjm-review-btn mjm-review-btn-mark mjm-review-allow"
+                      onclick="MJMReview.approve(${tabIdx})">✓ Approve</button>
+            </div>
+          `;
           tab.classList.remove('mjm-locked');
           return;
         }
 
-        // Approved → both Approve and Edit hidden, "Approved" status pill shown,
-        // and the tab is locked for everyone (admins included). Per spec:
-        // "Approved records are locked — no further edits allowed".
+        // ── Tabs 1–6 + 8: original Verify → Mark-as-Reviewed flow. ──
+        if (!batch) {
+          banner.className = 'mjm-review-banner mjm-review-open';
+          banner.style.display = '';
+          banner.innerHTML = `
+            <div>
+              <div class="mjm-review-meta">Review Status</div>
+              <div class="mt-1 text-[#7a4a10]">Save Tab 1 first — verify &amp; review can only be applied once a batch number is assigned.</div>
+            </div>`;
+          tab.classList.remove('mjm-locked');
+          return;
+        }
+
         if (r) {
-          const who = r.reviewer_name || r.reviewer_email || 'an admin';
+          // Reviewed → locked for non-admins.
+          const whoR = r.reviewer_name || r.reviewer_email || 'a reviewer';
+          const whoV = v ? (v.verifier_name || v.verifier_email || 'a verifier') : null;
           banner.className = 'mjm-review-banner mjm-review-locked';
           banner.style.display = '';
           banner.innerHTML = `
             <div>
-              <div class="mjm-review-meta">✓ Approved &amp; Locked</div>
-              <div class="mt-1">Approved by <strong>${who}</strong> on <strong>${fmtDate(r.reviewed_at)}</strong>.</div>
+              <div class="mjm-review-meta">✓ Reviewed &amp; Locked</div>
+              <div class="mt-1">Reviewed by <strong>${whoR}</strong> on <strong>${fmtDate(r.reviewed_at)}</strong>.${
+                whoV ? ` Verified by <strong>${whoV}</strong> on <strong>${fmtDate(v.verified_at)}</strong>.` : ''
+              }</div>
             </div>
+            ${ isAdmin
+              ? `<button class="mjm-review-btn mjm-review-btn-unmark mjm-review-allow"
+                         onclick="MJMReview.unmark(${tabIdx})">Unreview</button>`
+              : `<span class="mjm-review-meta">Read-only for your role</span>` }
           `;
-          tab.classList.add('mjm-locked');
+          if (!isAdmin) tab.classList.add('mjm-locked');
+          else          tab.classList.remove('mjm-locked');
           return;
         }
 
-        // Not approved + non-admin → no banner at all. Form interactions on
-        // the tab itself are unchanged (the form is editable as before until
-        // an admin locks it).
-        if (!isAdmin) {
-          banner.className = 'mjm-review-banner mjm-review-open';
-          banner.style.display = 'none';
-          banner.innerHTML = '';
+        if (v) {
+          // Verified, awaiting admin review.
+          const whoV = v.verifier_name || v.verifier_email || 'a verifier';
+          banner.className = 'mjm-review-banner mjm-review-verified';
+          banner.style.display = '';
+          const adminBtn = isAdmin
+            ? `<button class="mjm-review-btn mjm-review-btn-mark mjm-review-allow"
+                       onclick="MJMReview.mark(${tabIdx})">Mark as Reviewed</button>`
+            : '';
+          const unverifyBtn = (isVerifier || isAdmin)
+            ? `<button class="mjm-review-btn mjm-review-btn-unverify mjm-review-allow"
+                       onclick="MJMReview.unverify(${tabIdx})">Unverify</button>`
+            : '';
+          banner.innerHTML = `
+            <div>
+              <div class="mjm-review-meta">✓ Verified — Awaiting Review</div>
+              <div class="mt-1">Verified by <strong>${whoV}</strong> on <strong>${fmtDate(v.verified_at)}</strong>.</div>
+            </div>
+            <div class="mjm-review-btn-row">${adminBtn}${unverifyBtn}${
+              !isAdmin && !isVerifier ? '<span class="mjm-review-meta">Awaiting admin review</span>' : ''
+            }</div>
+          `;
           tab.classList.remove('mjm-locked');
           return;
         }
 
-        // Not approved + admin → Edit + Approve buttons.
+        // Not yet verified.
         banner.className = 'mjm-review-banner mjm-review-open';
         banner.style.display = '';
+        const verifyBtn = (isVerifier || isAdmin)
+          ? `<button class="mjm-review-btn mjm-review-btn-verify mjm-review-allow"
+                     onclick="MJMReview.verify(${tabIdx})">Verify</button>`
+          : '';
+        const reviewBtn = isAdmin
+          ? `<button class="mjm-review-btn mjm-review-btn-mark mjm-review-allow"
+                     disabled
+                     title="A verifier must sign off this tab before it can be reviewed"
+                     onclick="event.preventDefault();">Mark as Reviewed</button>`
+          : '';
         banner.innerHTML = `
           <div>
-            <div class="mjm-review-meta">Admin Controls</div>
-            <div class="mt-1 text-[#7a4a10]">Edit values as needed, then click <strong>Approve</strong> to lock this tab.</div>
+            <div class="mjm-review-meta">Pending Verification</div>
+            <div class="mt-1 text-[#7a4a10]">A verifier must sign off this tab before an admin can mark it as reviewed.</div>
           </div>
-          <div class="mjm-review-btn-row">
-            <button class="mjm-review-btn mjm-review-btn-verify mjm-review-allow"
-                    onclick="MJMReview.editIndicator(${tabIdx})">✏️ Edit</button>
-            <button class="mjm-review-btn mjm-review-btn-mark mjm-review-allow"
-                    onclick="MJMReview.approve(${tabIdx})">✓ Approve</button>
-          </div>
+          <div class="mjm-review-btn-row">${verifyBtn}${reviewBtn}${
+            !isVerifier && !isAdmin ? '<span class="mjm-review-meta">Awaiting verifier</span>' : ''
+          }</div>
         `;
         tab.classList.remove('mjm-locked');
       }
@@ -6596,20 +6681,113 @@ Thank you.`;
 
       async function refresh() {
         const batch = currentBatchId();
-        for (const k of Object.keys(reviews)) delete reviews[k];
+        for (const k of Object.keys(reviews))       delete reviews[k];
+        for (const k of Object.keys(verifications)) delete verifications[k];
         if (batch) {
           try {
-            const { data, error } = await _supabase
-              .from('operation_batch_reviews')
-              .select('stage, reviewer_name, reviewer_email, reviewed_at')
-              .eq('batch_name', batch);
-            if (error) throw error;
-            (data || []).forEach(r => { reviews[r.stage] = r; });
+            const [revRes, verRes] = await Promise.all([
+              _supabase
+                .from('operation_batch_reviews')
+                .select('stage, reviewer_name, reviewer_email, reviewed_at')
+                .eq('batch_name', batch),
+              _supabase
+                .from('operation_batch_verifications')
+                .select('stage, verifier_name, verifier_email, verified_at')
+                .eq('batch_name', batch)
+            ]);
+            if (revRes.error) throw revRes.error;
+            (revRes.data || []).forEach(r => { reviews[r.stage] = r; });
+            if (!verRes.error) {
+              (verRes.data || []).forEach(v => { verifications[v.stage] = v; });
+            } else {
+              console.warn('[MJMReview] verifications unavailable:', verRes.error.message);
+            }
           } catch (e) {
             console.warn('[MJMReview] failed to load reviews:', e);
           }
         }
         renderAll();
+      }
+
+      async function mark(tabIdx) {
+        if (!isAdmin) return;
+        const batch = currentBatchId();
+        if (!batch) { alert('Save Tab 1 first to assign a batch number.'); return; }
+        const stage = STAGE_BY_TAB[tabIdx];
+        if (!verifications[stage]) {
+          alert('A verifier must sign off this tab before it can be marked as reviewed.');
+          return;
+        }
+        const u = MJMAccess.user() || {};
+        const payload = {
+          batch_name:     batch,
+          stage,
+          reviewed_by:    u.id || null,
+          reviewer_email: u.email || null,
+          reviewer_name:  u.full_name || null,
+          reviewed_at:    new Date().toISOString()
+        };
+        const { error } = await _supabase
+          .from('operation_batch_reviews')
+          .upsert(payload, { onConflict: 'batch_name,stage' });
+        if (error) { alert('Failed to mark reviewed: ' + error.message); return; }
+        reviews[stage] = payload;
+        renderBanner(tabIdx);
+      }
+
+      async function verify(tabIdx) {
+        if (!isVerifier && !isAdmin) return;
+        const batch = currentBatchId();
+        if (!batch) { alert('Save Tab 1 first to assign a batch number.'); return; }
+        const stage = STAGE_BY_TAB[tabIdx];
+        const u = MJMAccess.user() || {};
+        const payload = {
+          batch_name:     batch,
+          stage,
+          verified_by:    u.id || null,
+          verifier_email: u.email || null,
+          verifier_name:  u.full_name || null,
+          verified_at:    new Date().toISOString()
+        };
+        const { error } = await _supabase
+          .from('operation_batch_verifications')
+          .upsert(payload, { onConflict: 'batch_name,stage' });
+        if (error) { alert('Failed to verify: ' + error.message); return; }
+        verifications[stage] = payload;
+        renderBanner(tabIdx);
+      }
+
+      async function unverify(tabIdx) {
+        if (!isVerifier && !isAdmin) return;
+        const batch = currentBatchId();
+        if (!batch) return;
+        const stage = STAGE_BY_TAB[tabIdx];
+        if (reviews[stage]) { alert('Unreview this tab first before removing the verification.'); return; }
+        if (!confirm('Remove the verification on this tab?')) return;
+        const { error } = await _supabase
+          .from('operation_batch_verifications')
+          .delete()
+          .eq('batch_name', batch)
+          .eq('stage', stage);
+        if (error) { alert('Failed to unverify: ' + error.message); return; }
+        delete verifications[stage];
+        renderBanner(tabIdx);
+      }
+
+      async function unmark(tabIdx) {
+        if (!isAdmin) return;
+        const batch = currentBatchId();
+        if (!batch) return;
+        const stage = STAGE_BY_TAB[tabIdx];
+        if (!confirm('Unlock this tab for editing again? The review record will be removed.')) return;
+        const { error } = await _supabase
+          .from('operation_batch_reviews')
+          .delete()
+          .eq('batch_name', batch)
+          .eq('stage', stage);
+        if (error) { alert('Failed to unreview: ' + error.message); return; }
+        delete reviews[stage];
+        renderBanner(tabIdx);
       }
 
       // Admin: lock this tab as Approved. Stored in operation_batch_reviews,
@@ -6651,11 +6829,10 @@ Thank you.`;
         }
       }
 
-      // verify / unverify / unmark were removed when the two-stage
-      // verifier+reviewer flow was replaced with a single Approve button.
-      // Approval is permanent per spec — if a record needs unapproval for
-      // a genuine data-correction case, it must be done via the database
-      // (DELETE FROM operation_batch_reviews WHERE batch_name=... AND stage=...).
+      // Tab 7 (Adjustments & Audit) only — admins lock the stock-calibration
+      // history with this single button. There is no Unapprove (per spec).
+      // For a genuine data-correction case the row in
+      // operation_batch_reviews has to be removed via the DB.
 
       async function boot() {
         if (booted) { await refresh(); return; }
@@ -6667,7 +6844,8 @@ Thank you.`;
           window.location.href = 'operation_dashboard.html';
           return;
         }
-        isAdmin = MJMAccess.isAdminOf('operation');
+        isAdmin    = MJMAccess.isAdminOf('operation');
+        isVerifier = typeof MJMAccess.canVerifyOperation === 'function' && MJMAccess.canVerifyOperation();
 
         // Re-apply lock when tab switches (other code may inject rows).
         const _origSwitchTab = window.switchTab;
@@ -6699,7 +6877,7 @@ Thank you.`;
         await refresh();
       }
 
-      window.MJMReview = { boot, refresh, approve, editIndicator };
+      window.MJMReview = { boot, refresh, mark, unmark, verify, unverify, approve, editIndicator };
     })();
     </script>
 </body>
