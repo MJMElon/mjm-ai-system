@@ -3722,13 +3722,24 @@
         async function savePhotosToStorage(batchId) {
             try {
                 // Upload fresh (data: URL) photos first; keep already-uploaded URLs.
+                // If an upload fails (most likely a `documents` bucket RLS block),
+                // surface the actual storage error AND bail BEFORE deleting any
+                // previously-saved rows so existing photos aren't lost.
                 if (opsPhotoBase64 && String(opsPhotoBase64).startsWith('data:')) {
                     const url = await _uploadBatchDoc('planting_photos', batchId, 'ops', opsPhotoBase64);
-                    if (url) opsPhotoBase64 = url;
+                    if (!url) {
+                        showToast('⚠️ Ops photo NOT saved: ' + (window._mjmLastUploadError || 'storage upload failed') + ' — fix the documents bucket policy and re-save.', 'error');
+                        return;
+                    }
+                    opsPhotoBase64 = url;
                 }
                 if (auditPhotoBase64 && String(auditPhotoBase64).startsWith('data:')) {
                     const url = await _uploadBatchDoc('planting_photos', batchId, 'audit', auditPhotoBase64);
-                    if (url) auditPhotoBase64 = url;
+                    if (!url) {
+                        showToast('⚠️ Auditor photo NOT saved: ' + (window._mjmLastUploadError || 'storage upload failed') + ' — fix the documents bucket policy and re-save.', 'error');
+                        return;
+                    }
+                    auditPhotoBase64 = url;
                 }
 
                 await _supabase.from('shared_inventory_logs').delete()
@@ -3746,9 +3757,15 @@
                 });
                 if (photoLogs.length > 0) {
                     const { error } = await _supabase.from('shared_inventory_logs').insert(photoLogs);
-                    if (error) console.warn('Photo save warning:', error.message);
+                    if (error) {
+                        console.warn('Photo save warning:', error.message);
+                        showToast('⚠️ Photo URLs uploaded but the log row failed: ' + error.message, 'error');
+                    }
                 }
-            } catch(e) { console.warn('Photo save failed:', e.message); }
+            } catch(e) {
+                console.warn('Photo save failed:', e.message);
+                showToast('Photo save failed: ' + e.message, 'error');
+            }
         }
 
         async function loadPhotosFromStorage(batchId) {
@@ -4267,7 +4284,11 @@
         // a public URL we can embed in `shared_inventory_logs.remark`.
         // If the input is already an http(s) URL, return it untouched so
         // save-after-load doesn't re-upload the same file.
+        //
+        // On failure, returns null AND stashes the Storage error message on
+        // `window._mjmLastUploadError` so callers can surface it in a toast.
         async function _uploadBatchDoc(folder, batchId, label, dataUrl) {
+            window._mjmLastUploadError = null;
             try {
                 if (!dataUrl) return null;
                 if (/^https?:\/\//i.test(dataUrl)) return dataUrl;
@@ -4287,11 +4308,12 @@
                 const path = `${folder}/${safeBatch}/${safeLabel}-${Date.now()}.${ext}`;
                 const { error } = await _supabase.storage.from('documents')
                     .upload(path, blob, { contentType: mime, upsert: true });
-                if (error) throw error;
+                if (error) throw new Error(error.message || String(error));
                 const { data } = _supabase.storage.from('documents').getPublicUrl(path);
                 return data?.publicUrl || null;
             } catch (e) {
                 console.warn('[uploadBatchDoc] failed:', e);
+                window._mjmLastUploadError = e?.message || String(e);
                 return null;
             }
         }
