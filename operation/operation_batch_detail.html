@@ -3040,17 +3040,19 @@
             setBarLbl('t3-bar-cull-lbl', pctCull, Math.round(pctCull) + '%');
             setBarLbl('t3-bar-untransplanted-lbl', Math.max(0, 100 - pctMain - pctCull), Math.round(Math.max(0, 100 - pctMain - pctCull)) + '%');
 
-            // Stat cards
-            document.getElementById('t3-val-main').innerText = totalMain.toLocaleString();
-            document.getElementById('t3-val-main-pct').innerText = totalPlantedRaw > 0 ? pctMain.toFixed(2) + '% of total' : '—';
-            // "Main Plot (D-Tone)" = D-Tone-sourced subset of main-plot
-            // transplants (rows with dest=main AND source=DOUBLE-TONE tray).
-            // The earlier code used totalDoubletone here, which is the inflow
-            // INTO the D-Tone holding tray — that's a different number and
-            // dropped to 0 once everything was forwarded to a main plot.
+            // Stat cards — Main Plot and Main Plot (D-Tone) are DISJOINT:
+            //   • "Main Plot" counts PN-direct → main-plot transplants only.
+            //   • "Main Plot (D-Tone)" counts PN → DOUBLE-TONE tray → main plot.
+            // Per the user spec, seedlings that took the D-Tone route belong
+            // exclusively in the D-Tone tile so the two tiles add up to the
+            // total main-plot population (totalMain) without overlap.
+            const mainExDtone = Math.max(0, totalMain - mainFromDtone);
+            const pctMainExDtone   = totalPlantedRaw > 0 ? (mainExDtone   / totalPlantedRaw) * 100 : 0;
+            const pctMainFromDtone = totalPlantedRaw > 0 ? (mainFromDtone / totalPlantedRaw) * 100 : 0;
+            document.getElementById('t3-val-main').innerText = mainExDtone.toLocaleString();
+            document.getElementById('t3-val-main-pct').innerText = totalPlantedRaw > 0 ? pctMainExDtone.toFixed(2) + '% of total' : '—';
             const dtoneMainEl    = document.getElementById('t3-val-dtone-main');
             const dtoneMainPctEl = document.getElementById('t3-val-dtone-main-pct');
-            const pctMainFromDtone = totalPlantedRaw > 0 ? (mainFromDtone / totalPlantedRaw) * 100 : 0;
             if (dtoneMainEl)    dtoneMainEl.innerText    = mainFromDtone.toLocaleString();
             if (dtoneMainPctEl) dtoneMainPctEl.innerText = totalPlantedRaw > 0 ? pctMainFromDtone.toFixed(2) + '% of total' : '—';
             // Total 1st Culled (normal + D-Tone) — mockCullingTab4 already sums every 1st_Culling row
