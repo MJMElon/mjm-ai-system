@@ -95,5 +95,5 @@ FROM salesweb_customer_orders o
 LEFT JOIN shared_profiles p ON p.id = o.customer_id
 WHERE o.payment_terms = 'credit'
   AND o.credit_billed_at IS NULL
-  AND COALESCE(o.status,'') NOT IN ('Cancelled')
+  AND COALESCE(o.order_status,'') NOT IN ('Cancelled')
 GROUP BY o.customer_id, p.full_name, p.email, p.credit_limit, o.credit_billing_period;
