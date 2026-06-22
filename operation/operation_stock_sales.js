@@ -949,7 +949,7 @@
                 //    overrides its own numbers with the AL's values so that
                 //    any AL amendment flows through here automatically.
                 _supabase.from('shared_al_orders')
-                    .select('al_number,order_number,quantity_ordered,balance_quantity,status')
+                    .select('al_number,order_number,customer_name,quantity_ordered,balance_quantity,status')
                     .then(r => r, e => ({ data: null, error: e }))
             ]);
 
@@ -1047,7 +1047,10 @@
                     id: o.id,
                     orderNumber: o.order_number,
                     alNumber: al ? al.al_number : null,
-                    customer: o.billing_name || o.customer_name,
+                    // AL is the source of truth: when a linked AL carries a
+                    // customer name, prefer it so AL name amendments flow
+                    // through to Customer Order Management on next reload.
+                    customer: (al && al.customer_name) ? al.customer_name : (o.billing_name || o.customer_name),
                     orderDate: o.created_at ? new Date(o.created_at) : null,
                     totalQty,
                     totalAmount: o.total ?? it.amt,
