@@ -1160,39 +1160,99 @@
               </div>`;
         }).join('');
 
-        // 6-week scheduled trend
-        const bars     = document.getElementById('mon-dash-week-bars');
-        const totLabel = document.getElementById('mon-dash-week-total');
-        if (bars) {
-            const weeks = [];
-            const totals = [];
-            for (let i = 0; i < 6; i++) {
-                const ws = _monAddDays(weekStart, i * 7);
-                const we = _monAddDays(ws, 6);
-                const wsKey = _monDateKey(ws);
-                const weKey = _monDateKey(we);
-                let total = 0;
-                Object.entries(allBookingsByDate || {}).forEach(([k, qty]) => {
-                    if (k >= wsKey && k <= weKey) total += Number(qty || 0);
-                });
-                weeks.push({ ws, we, total });
-                totals.push(total);
-            }
-            const maxQ = Math.max(1, ...totals);
-            bars.innerHTML = weeks.map((w, i) => {
-                const h = Math.max(2, Math.round((w.total / maxQ) * 64));
-                const isCurrent = i === 0;
-                const barCls = isCurrent ? 'bg-blue-500' : 'bg-blue-200';
-                const lblCls = isCurrent ? 'text-blue-700' : 'text-slate-500';
-                const dateCls = isCurrent ? 'text-blue-600' : 'text-slate-400';
-                return `
-                  <div class="flex-1 flex flex-col items-center gap-1">
-                    <div class="text-[9px] font-black ${lblCls} leading-none">${w.total ? _monFmt(w.total) : '·'}</div>
-                    <div class="w-full rounded-md ${barCls}" style="height:${h}px" title="${dayMon(w.ws)} – ${dayMon(w.we)}: ${_monFmt(w.total)} qty"></div>
-                    <div class="text-[9px] font-bold ${dateCls} leading-tight">${w.ws.getDate()}/${w.ws.getMonth() + 1}</div>
-                  </div>`;
-            }).join('');
-            if (totLabel) totLabel.textContent = 'Next 6 wk total: ' + _monFmt(totals.reduce((s, n) => s + n, 0));
+        // Monthly Order vs Collection trend — 6 months at a time,
+        // toggle 1st half (Jan–Jun) / 2nd half (Jul–Dec) of the current year.
+        // Defaults to whichever half contains "now" so the chart opens on the
+        // active period.
+        renderMonthDashChart();
+    }
+
+    // ── Order vs Collection chart (half-year selectable) ──────────────
+    // Aggregates `allCustomerOrders` into per-month order/collection totals
+    // for the active year and renders two paired bars per month.
+    let _monDashHalf = null; // 1 | 2 — null = "infer from today" on next render
+    function renderMonthDashChart() {
+        const bars       = document.getElementById('mon-dash-month-bars');
+        const halfLabel  = document.getElementById('mon-dash-half-year');
+        const totLabel   = document.getElementById('mon-dash-half-total');
+        const toggleWrap = document.getElementById('mon-dash-half-toggle');
+        if (!bars) return;
+
+        const now  = new Date();
+        const year = now.getFullYear();
+        if (_monDashHalf == null) _monDashHalf = now.getMonth() < 6 ? 1 : 2;
+        const half  = _monDashHalf;
+        const start = half === 1 ? 0 : 6;
+
+        // Sum order qty (bookings) and collection qty by YYYY-MM across all orders.
+        const orderByMonth      = {};
+        const collectionByMonth = {};
+        (allCustomerOrders || []).forEach(o => {
+            Object.entries(o.bookingsByMonth || {}).forEach(([k, v]) => {
+                orderByMonth[k] = (orderByMonth[k] || 0) + Number(v || 0);
+            });
+            Object.entries(o.collectionsByMonth || {}).forEach(([k, v]) => {
+                collectionByMonth[k] = (collectionByMonth[k] || 0) + Number(v || 0);
+            });
+        });
+
+        const months = [];
+        for (let i = 0; i < 6; i++) {
+            const m = start + i;
+            const k = `${year}-${String(m + 1).padStart(2, '0')}`;
+            months.push({
+                key: k,
+                idx: m,
+                label: new Date(year, m, 1).toLocaleString('en-MY', { month: 'short' }),
+                order:      Number(orderByMonth[k]      || 0),
+                collection: Number(collectionByMonth[k] || 0)
+            });
+        }
+        const maxQ = Math.max(1, ...months.flatMap(m => [m.order, m.collection]));
+        const nowMonth = now.getMonth();
+
+        bars.innerHTML = months.map(m => {
+            const ho = Math.max(2, Math.round((m.order      / maxQ) * 80));
+            const hc = Math.max(2, Math.round((m.collection / maxQ) * 80));
+            const isCurrent = m.idx === nowMonth && year === now.getFullYear();
+            const labelCls  = isCurrent ? 'text-blue-700 font-black' : 'text-slate-500 font-bold';
+            return `
+              <div class="flex flex-col items-stretch gap-1 h-full">
+                <div class="flex items-end justify-center gap-1 flex-1">
+                  <div class="flex flex-col items-center justify-end gap-0.5 w-1/2">
+                    <div class="text-[8px] font-black text-blue-700 leading-none">${m.order ? _monFmt(m.order) : '·'}</div>
+                    <div class="w-full rounded-t-md bg-blue-500" style="height:${ho}px" title="${m.label} ${year} — Order: ${_monFmt(m.order)} qty"></div>
+                  </div>
+                  <div class="flex flex-col items-center justify-end gap-0.5 w-1/2">
+                    <div class="text-[8px] font-black text-emerald-700 leading-none">${m.collection ? _monFmt(m.collection) : '·'}</div>
+                    <div class="w-full rounded-t-md bg-emerald-500" style="height:${hc}px" title="${m.label} ${year} — Collection: ${_monFmt(m.collection)} qty"></div>
+                  </div>
+                </div>
+                <div class="text-[10px] ${labelCls} leading-tight text-center">${m.label}</div>
+              </div>`;
+        }).join('');
+
+        const totOrder = months.reduce((s, m) => s + m.order, 0);
+        const totColl  = months.reduce((s, m) => s + m.collection, 0);
+        if (halfLabel) halfLabel.textContent = `${half === 1 ? '1st half' : '2nd half'} ${year}`;
+        if (totLabel)  totLabel.textContent  = `Order ${_monFmt(totOrder)} · Collected ${_monFmt(totColl)}`;
+
+        if (toggleWrap && !toggleWrap._wired) {
+            toggleWrap.addEventListener('click', e => {
+                const btn = e.target.closest('button[data-half]');
+                if (!btn) return;
+                _monDashHalf = Number(btn.dataset.half) === 2 ? 2 : 1;
+                renderMonthDashChart();
+            });
+            toggleWrap._wired = true;
+        }
+        if (toggleWrap) {
+            toggleWrap.querySelectorAll('button[data-half]').forEach(btn => {
+                const active = Number(btn.dataset.half) === half;
+                btn.classList.toggle('bg-blue-600', active);
+                btn.classList.toggle('text-white', active);
+                btn.classList.toggle('text-slate-500', !active);
+            });
         }
     }
 
