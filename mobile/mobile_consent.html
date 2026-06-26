@@ -342,24 +342,14 @@ const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 // ════════════════════════════════════════════════════════
 //  GEMINI API (Google AI Studio)
 // ════════════════════════════════════════════════════════
-const _gk1 = 'AIzaSyCvSAVEeOa_'; const _gk2 = 'PkZxRKDJkYz3hqzdgvbGIyQ';
-const GEMINI_KEY = _gk1 + _gk2;
-
 async function callGemini(base64, mimeType, prompt) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_KEY}`;
-  const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
-  const payload = {
-    contents: [{ parts: [
-      { text: prompt },
-      { inlineData: { mimeType: mimeType || 'image/jpeg', data: base64Data } }
-    ]}],
-    generationConfig: { responseMimeType: 'application/json' }
-  };
-  const res  = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error?.message || 'Gemini API error');
-  const raw = data.candidates[0].content.parts[0].text;
-  return JSON.parse(raw.replace(/```json/gi,'').replace(/```/g,'').trim());
+  const data = base64.includes(',') ? base64.split(',')[1] : base64;
+  const { data: result, error } = await _supabase.functions.invoke('gemini-scan', {
+    body: { image: data, mimeType: mimeType || 'image/jpeg', prompt, model: 'gemini-3-flash-preview' }
+  });
+  if (error) throw new Error(error.message || 'AI scan failed');
+  if (result && result.error) throw new Error(result.error);
+  return result;
 }
 
 function compressImage(base64, maxWidth = 1400, quality = 0.82) {

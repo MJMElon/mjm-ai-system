@@ -4188,8 +4188,6 @@
                 e.returnValue = ''; // browser shows its own "Leave site?" prompt
             }
         });
-        const _sgk1 = 'AIzaSyCvSAVEeOa_', _sgk2 = 'PkZxRKDJkYz3hqzdgvbGIyQ';
-        const SEED_GEMINI_KEY = _sgk1 + _sgk2;
         const SEED_COUNT_PROMPT =
             'You are a seed-counting auditor. The photo shows the seeds from ONE seed bag arranged on a counting tray for verification.\n\n' +
             'Your job is to LOCATE every individual seed. A "seed" is each dark, roughly round/oval spot on the tray surface — one dark round spot = exactly ONE seed.\n\n' +
@@ -4291,21 +4289,13 @@
         }
 
         async function _seedCallGemini(dataUrl, prompt) {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${SEED_GEMINI_KEY}`;
             const base64Data = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
-            const payload = {
-                contents: [{ parts: [
-                    { text: prompt },
-                    { inlineData: { mimeType: 'image/jpeg', data: base64Data } }
-                ]}],
-                // temperature 0 → deterministic: the same photo yields the same count.
-                generationConfig: { temperature: 0, topP: 1, topK: 1, responseMimeType: 'application/json' }
-            };
-            const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error?.message || 'Gemini API error');
-            const raw = data.candidates[0].content.parts[0].text;
-            return JSON.parse(String(raw).replace(/```json/gi, '').replace(/```/g, '').trim());
+            const { data: _aiResult, error: _aiErr } = await _supabase.functions.invoke('gemini-scan', {
+                body: { image: base64Data, mimeType: 'image/jpeg', prompt: prompt, model: 'gemini-3-flash-preview' }
+            });
+            if (_aiErr) throw new Error(_aiErr.message || 'AI scan failed');
+            if (_aiResult && _aiResult.error) throw new Error(_aiResult.error);
+            return _aiResult;
         }
 
         async function _uploadSeedAuditPhoto(batchId, bagNo, dataUrl) {

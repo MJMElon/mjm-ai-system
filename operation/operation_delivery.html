@@ -269,18 +269,14 @@
         const SUPABASE_URL = 'https://kibqjztozokohqmhqqqf.supabase.co'; 
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpYnFqenRvem9rb2hxbWhxcXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQzNjIsImV4cCI6MjA4OTgxMDM2Mn0.J7qJUZhWXYf5b9oey4wXJkjdi66jomEMw_NeV9NWF7M'; 
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        
-        const _k1 = 'AIzaSyCvSAVEeOa_'; const _k2 = 'PkZxRKDJkYz3hqzdgvbGIyQ'; const GEMINI_API_KEY = _k1 + _k2; 
-        
-        async function analyzeImageWithGemini(base64Image, mimeType, prompt) { 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`; 
-            const base64Data = base64Image.split(',')[1]; 
-            const payload = { contents: [{ parts: [ { text: prompt }, { inlineData: { mimeType: mimeType || "image/jpeg", data: base64Data } } ] }], generationConfig: { responseMimeType: "application/json" } }; 
-            const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); 
-            const data = await response.json(); 
-            if (!response.ok) throw new Error(data.error?.message || "Gemini API Error"); 
-            let rawText = data.candidates[0].content.parts[0].text; 
-            return JSON.parse(rawText.replace(/```json/gi, '').replace(/```/g, '').trim()); 
+
+        async function analyzeImageWithGemini(base64Image, mimeType, prompt) {
+            const { data: _aiResult, error: _aiErr } = await _supabase.functions.invoke('gemini-scan', {
+                body: { image: base64Image, mimeType: mimeType || 'image/jpeg', prompt: prompt, model: 'gemini-3-flash-preview' }
+            });
+            if (_aiErr) throw new Error(_aiErr.message || 'AI scan failed');
+            if (_aiResult && _aiResult.error) throw new Error(_aiResult.error);
+            return _aiResult;
         }
 
         function spawnHealingEmoji() { const zone = document.getElementById('title-animation-zone'); if (!zone || document.hidden) return; const el = document.createElement('div'); el.className = 'nature-critter'; const emojis = ["🌿", "🍃", "🌱", "🪴", "🌳", "🌤️", "⛅️", "🦋", "🐌", "🐞", "🐢", "🍓", "🍵", "🌸", "🦦"]; el.innerText = emojis[Math.floor(Math.random() * emojis.length)]; el.style.left = (35 + Math.random() * 30) + '%'; el.style.top = (35 + Math.random() * 30) + '%'; el.style.setProperty('--tx', (Math.random() - 0.5) * 300 + 'px'); el.style.setProperty('--ty', (Math.random() - 0.5) * 150 - 50 + 'px'); zone.appendChild(el); setTimeout(() => { if(zone.contains(el)) zone.removeChild(el); }, 8500); }
@@ -564,26 +560,16 @@
                 statusEl.classList.remove('hidden');
 
                 // Call Gemini to extract BA number and customer name
-                const _k1 = 'AIzaSyCvSAVEeOa_'; const _k2 = 'PkZxRKDJkYz3hqzdgvbGIyQ';
                 const base64 = e.target.result.split(',')[1];
                 const mimeType = file.type || 'image/jpeg';
 
                 try {
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${_k1+_k2}`;
-                    const resp = await fetch(url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            contents: [{ parts: [
-                                { text: 'Extract from this Borang Akuan (BA) form image. Return JSON only: {"ba_number": "the BA reference number", "customer_name": "the customer/buyer name on the form", "total_qty": number or null}. If you cannot find a field, use null.' },
-                                { inlineData: { mimeType: mimeType, data: base64 } }
-                            ]}],
-                            generationConfig: { responseMimeType: 'application/json' }
-                        })
+                    const { data: _aiResult, error: _aiErr } = await _supabase.functions.invoke('gemini-scan', {
+                        body: { image: base64, mimeType: mimeType, prompt: 'Extract from this Borang Akuan (BA) form image. Return JSON only: {"ba_number": "the BA reference number", "customer_name": "the customer/buyer name on the form", "total_qty": number or null}. If you cannot find a field, use null.', model: 'gemini-2.0-flash' }
                     });
-                    const result = await resp.json();
-                    const text = result?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-                    const parsed = JSON.parse(text);
+                    if (_aiErr) throw new Error(_aiErr.message || 'AI scan failed');
+                    if (_aiResult && _aiResult.error) throw new Error(_aiResult.error);
+                    const parsed = _aiResult;
 
                     // Auto-fill BA number
                     if (parsed.ba_number) {

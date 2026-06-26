@@ -305,20 +305,13 @@
     </div>
 
     <script>
-        const _k1 = 'AIzaSyCvSAVEeOa_'; 
-        const _k2 = 'PkZxRKDJkYz3hqzdgvbGIyQ'; 
-        const GEMINI_API_KEY = _k1 + _k2; 
-        
-        async function analyzeImageWithGemini(base64Image, mimeType, prompt) { 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`; 
-            const base64Data = base64Image.split(',')[1]; 
-            const payload = { contents: [{ parts: [ { text: prompt }, { inlineData: { mimeType: mimeType || "image/jpeg", data: base64Data } } ] }], generationConfig: { responseMimeType: "application/json" } }; 
-            const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); 
-            const data = await response.json(); 
-            if (!response.ok) throw new Error(data.error?.message || "Gemini API Error"); 
-            let rawText = data.candidates[0].content.parts[0].text; 
-            rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim(); 
-            return JSON.parse(rawText); 
+        async function analyzeImageWithGemini(base64Image, mimeType, prompt) {
+            const { data: _aiResult, error: _aiErr } = await _supabase.functions.invoke('gemini-scan', {
+                body: { image: base64Image, mimeType: mimeType || 'image/jpeg', prompt: prompt, model: 'gemini-3-flash-preview' }
+            });
+            if (_aiErr) throw new Error(_aiErr.message || 'AI scan failed');
+            if (_aiResult && _aiResult.error) throw new Error(_aiResult.error);
+            return _aiResult;
         }
 
         const SUPABASE_URL = 'https://kibqjztozokohqmhqqqf.supabase.co'; 
