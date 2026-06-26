@@ -924,6 +924,9 @@
     // every active order. Populated by loadCustomerOrders() so the Order
     // Monitoring dashboard can show week-level totals without re-querying.
     let allBookingsByDate = {};
+    // Delivery-order rows for the Collected-by-month chart. Each entry is
+    // { delivery_date, total_qty, status } — non-cancelled only.
+    let allDoRecords = [];
 
     async function loadCustomerOrders() {
         try {
@@ -932,7 +935,7 @@
                 return d.toISOString().slice(0,10);
             })();
 
-            const [ordRes, _itemsRes, _collRes, _bookRes, _alRes] = await Promise.all([
+            const [ordRes, _itemsRes, _collRes, _bookRes, _alRes, _doRes] = await Promise.all([
                 _supabase.from('salesweb_customer_orders')
                     .select('id,order_number,customer_name,billing_name,total,status,created_at,payment_terms,collected_qty,collected_at')
                     .order('created_at', { ascending: true }),
@@ -950,6 +953,13 @@
                 //    any AL amendment flows through here automatically.
                 _supabase.from('shared_al_orders')
                     .select('al_number,order_number,quantity_ordered,balance_quantity,status')
+                    .then(r => r, e => ({ data: null, error: e })),
+                // ── DO records drive the Collected-qty-by-month chart.
+                //    A DO row IS a collection: the customer signed for the
+                //    listed qty on that delivery_date. Cancelled DOs are
+                //    excluded so they don't inflate the bar.
+                _supabase.from('shared_do_records')
+                    .select('delivery_date,total_qty,status')
                     .then(r => r, e => ({ data: null, error: e }))
             ]);
 
@@ -959,6 +969,10 @@
             const bookings    = _bookRes?.data || [];
             const alRows      = _alRes?.data || [];
             allAls = alRows;
+            allDoRecords = (_doRes?.data || []).filter(d => {
+                const s = String(d.status || '').toLowerCase();
+                return s !== 'cancelled';
+            });
 
             // Index ALs by the customer order number they're linked to.
             // If a single order_number happens to map to multiple ALs (e.g.
@@ -1186,11 +1200,11 @@
 
         // Ordered qty buckets by the month the order was CREATED — e.g.
         // June 2026 Ordered = sum of totalQty of every order placed in
-        // June 2026. (Previously this used bookingsByMonth, the scheduled
-        // pickup distribution, which double-counts one order across the
-        // months its pickups span.)
-        // Collected qty stays sourced from collectionsByMonth — actual
-        // collection month.
+        // June 2026.
+        // Collected qty buckets by the DO delivery_date month — every DO
+        // row represents seedlings the customer collected (the customer
+        // signs for total_qty on delivery_date). This matches the user's
+        // mental model: "issued DO = collected".
         const orderByMonth      = {};
         const collectionByMonth = {};
         (allCustomerOrders || []).forEach(o => {
@@ -1198,9 +1212,13 @@
                 const k = `${o.orderDate.getFullYear()}-${String(o.orderDate.getMonth() + 1).padStart(2, '0')}`;
                 orderByMonth[k] = (orderByMonth[k] || 0) + Number(o.totalQty || 0);
             }
-            Object.entries(o.collectionsByMonth || {}).forEach(([k, v]) => {
-                collectionByMonth[k] = (collectionByMonth[k] || 0) + Number(v || 0);
-            });
+        });
+        (allDoRecords || []).forEach(d => {
+            if (!d.delivery_date) return;
+            // delivery_date is stored as YYYY-MM-DD (string) — slice avoids
+            // a Date parse + timezone wobble.
+            const k = String(d.delivery_date).slice(0, 7);
+            collectionByMonth[k] = (collectionByMonth[k] || 0) + Number(d.total_qty || 0);
         });
 
         const months = [];
