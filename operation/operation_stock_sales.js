@@ -1184,13 +1184,20 @@
         const half  = _monDashHalf;
         const start = half === 1 ? 0 : 6;
 
-        // Sum order qty (bookings) and collection qty by YYYY-MM across all orders.
+        // Ordered qty buckets by the month the order was CREATED — e.g.
+        // June 2026 Ordered = sum of totalQty of every order placed in
+        // June 2026. (Previously this used bookingsByMonth, the scheduled
+        // pickup distribution, which double-counts one order across the
+        // months its pickups span.)
+        // Collected qty stays sourced from collectionsByMonth — actual
+        // collection month.
         const orderByMonth      = {};
         const collectionByMonth = {};
         (allCustomerOrders || []).forEach(o => {
-            Object.entries(o.bookingsByMonth || {}).forEach(([k, v]) => {
-                orderByMonth[k] = (orderByMonth[k] || 0) + Number(v || 0);
-            });
+            if (o.orderDate instanceof Date && !isNaN(o.orderDate)) {
+                const k = `${o.orderDate.getFullYear()}-${String(o.orderDate.getMonth() + 1).padStart(2, '0')}`;
+                orderByMonth[k] = (orderByMonth[k] || 0) + Number(o.totalQty || 0);
+            }
             Object.entries(o.collectionsByMonth || {}).forEach(([k, v]) => {
                 collectionByMonth[k] = (collectionByMonth[k] || 0) + Number(v || 0);
             });
