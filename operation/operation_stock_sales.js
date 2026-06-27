@@ -959,7 +959,7 @@
                 //    listed qty on that delivery_date. Cancelled DOs are
                 //    excluded so they don't inflate the bar.
                 _supabase.from('shared_do_records')
-                    .select('delivery_date,total_qty,status')
+                    .select('do_number,al_number,delivery_date,total_qty,status,remark')
                     .then(r => r, e => ({ data: null, error: e }))
             ]);
 
@@ -1246,11 +1246,11 @@
                 <div class="flex items-end justify-center gap-0.5 flex-1">
                   <div class="flex flex-col items-center justify-end gap-0.5 w-1/2">
                     <div class="text-[8px] font-black text-blue-700 leading-none">${m.order ? _monFmt(m.order) : '·'}</div>
-                    <div class="w-full rounded-t-md bg-blue-500" style="height:${ho}px" title="${m.label} ${year} — Order: ${_monFmt(m.order)} qty"></div>
+                    <div class="w-full rounded-t-md bg-blue-500 hover:bg-blue-600 cursor-pointer transition-colors" style="height:${ho}px" title="${m.label} ${year} — Order: ${_monFmt(m.order)} qty (click for details)" data-month-key="${m.key}" data-bar-type="order"></div>
                   </div>
                   <div class="flex flex-col items-center justify-end gap-0.5 w-1/2">
                     <div class="text-[8px] font-black text-emerald-700 leading-none">${m.collection ? _monFmt(m.collection) : '·'}</div>
-                    <div class="w-full rounded-t-md bg-emerald-500" style="height:${hc}px" title="${m.label} ${year} — Collection: ${_monFmt(m.collection)} qty"></div>
+                    <div class="w-full rounded-t-md bg-emerald-500 hover:bg-emerald-600 cursor-pointer transition-colors" style="height:${hc}px" title="${m.label} ${year} — Collection: ${_monFmt(m.collection)} qty (click for details)" data-month-key="${m.key}" data-bar-type="collection"></div>
                   </div>
                 </div>
                 <div class="text-[10px] ${labelCls} leading-tight text-center">${m.label}</div>
@@ -1261,7 +1261,106 @@
         const totColl  = months.reduce((s, m) => s + m.collection, 0);
         if (yearLbl)  yearLbl.textContent  = String(year);
         if (totLabel) totLabel.textContent = `Order ${_monFmt(totOrder)} · Collected ${_monFmt(totColl)}`;
+
+        // Wire bar clicks once. Delegation handles every month/type pair.
+        if (!bars._wiredDrill) {
+            bars.addEventListener('click', e => {
+                const t = e.target.closest('[data-bar-type]');
+                if (!t) return;
+                openMonDashDrill(t.dataset.monthKey, t.dataset.barType);
+            });
+            bars._wiredDrill = true;
+        }
     }
+
+    // ── Click-through drilldown ─────────────────────────────────────
+    // Show the actual rows behind a single bar:
+    //   • order      → every customer order created in that month
+    //   • collection → every non-cancelled DO delivered in that month
+    function openMonDashDrill(monthKey, barType) {
+        if (!monthKey || !barType) return;
+        const modal     = document.getElementById('mon-dash-drill-modal');
+        const eyebrow   = document.getElementById('mon-dash-drill-eyebrow');
+        const titleEl   = document.getElementById('mon-dash-drill-title');
+        const subEl     = document.getElementById('mon-dash-drill-sub');
+        const body      = document.getElementById('mon-dash-drill-body');
+        if (!modal || !body) return;
+
+        const [yStr, mStr] = monthKey.split('-');
+        const monthLabel = new Date(Number(yStr), Number(mStr) - 1, 1)
+            .toLocaleString('en-MY', { month: 'long', year: 'numeric' });
+
+        let rows = [];
+        let columns = [];
+        let total = 0;
+        if (barType === 'order') {
+            eyebrow.textContent = '📦 Order qty · click-through';
+            titleEl.textContent = `${monthLabel} · Orders`;
+            (allCustomerOrders || []).forEach(o => {
+                if (!(o.orderDate instanceof Date) || isNaN(o.orderDate)) return;
+                const k = `${o.orderDate.getFullYear()}-${String(o.orderDate.getMonth() + 1).padStart(2, '0')}`;
+                if (k !== monthKey) return;
+                rows.push({
+                    date: o.orderDate.toISOString().slice(0, 10),
+                    ref: o.orderNumber || '—',
+                    al:  o.alNumber || '',
+                    customer: o.customer || '—',
+                    qty: Number(o.totalQty || 0)
+                });
+            });
+            columns = ['Order date', 'Order #', 'AL #', 'Customer', 'Qty'];
+        } else {
+            eyebrow.textContent = '🚚 Collection qty · click-through';
+            titleEl.textContent = `${monthLabel} · Delivery Orders`;
+            (allDoRecords || []).forEach(d => {
+                if (!d.delivery_date) return;
+                if (String(d.delivery_date).slice(0, 7) !== monthKey) return;
+                rows.push({
+                    date: String(d.delivery_date).slice(0, 10),
+                    ref: d.do_number || '—',
+                    al: d.al_number || '',
+                    customer: d.remark || d.customer_name || '—',
+                    qty: Number(d.total_qty || 0)
+                });
+            });
+            columns = ['Delivery date', 'DO #', 'AL #', 'Customer', 'Qty'];
+        }
+        rows.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        total = rows.reduce((s, r) => s + r.qty, 0);
+
+        subEl.textContent = `${rows.length} row${rows.length === 1 ? '' : 's'} · ${_monFmt(total)} qty total`;
+
+        if (!rows.length) {
+            body.innerHTML = '<div class="text-[12px] text-slate-500 font-bold text-center py-10">No rows for this month.</div>';
+        } else {
+            body.innerHTML = `
+              <div class="overflow-x-auto">
+                <table class="w-full text-[11px]">
+                  <thead><tr class="text-left text-slate-500 font-black uppercase tracking-widest text-[9px] border-b border-slate-200">
+                    ${columns.map(c => `<th class="py-2 pr-3">${c}</th>`).join('')}
+                  </tr></thead>
+                  <tbody class="text-slate-700">
+                    ${rows.map(r => `
+                      <tr class="border-b border-slate-100 hover:bg-slate-50">
+                        <td class="py-2 pr-3 font-bold text-slate-600">${r.date || '—'}</td>
+                        <td class="py-2 pr-3 font-black text-blue-700">${r.ref}</td>
+                        <td class="py-2 pr-3 text-[10px] text-slate-500">${r.al || ''}</td>
+                        <td class="py-2 pr-3 truncate" style="max-width:240px">${r.customer || ''}</td>
+                        <td class="py-2 pr-3 font-black text-emerald-700">${_monFmt(r.qty)}</td>
+                      </tr>`).join('')}
+                  </tbody>
+                </table>
+              </div>`;
+        }
+        modal.classList.add('open');
+    }
+
+    function closeMonDashDrill() {
+        const modal = document.getElementById('mon-dash-drill-modal');
+        if (modal) modal.classList.remove('open');
+    }
+    window.openMonDashDrill  = openMonDashDrill;
+    window.closeMonDashDrill = closeMonDashDrill;
 
     function customerActiveMonths() {
         const now = new Date();
