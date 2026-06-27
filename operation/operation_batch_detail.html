@@ -6004,7 +6004,7 @@ Thank you.`;
                             <div>
                                 <label class="label-style lg:hidden !text-[#a83020]">Dead ✂️</label>
                                 <input type="number" class="input-style !text-[#a83020] font-black t5-dead text-sm"
-                                    min="0" max="${p.qty}" placeholder="0"
+                                    min="0" max="${p.qty}" placeholder=""
                                     data-transplanted="${p.qty}"
                                     value="${deadVal}"
                                     oninput="autoFillCullDate('${rowId}'); calcT5Row('${rowId}'); calcT5()">
@@ -6093,7 +6093,9 @@ Thank you.`;
             if (aliveHidden) { aliveHidden.value = alive; }
 
             if (aliveDisp) {
-                aliveDisp.innerText = dead !== '' || deadInput.value !== '' ? alive.toLocaleString() : '—';
+                // Only show a computed Alive once a Dead value has actually been
+                // keyed in — a blank Dead box means "no data yet", not 0.
+                aliveDisp.innerText = deadInput.value !== '' ? alive.toLocaleString() : '—';
             }
 
             if (transplanted > 0 && deadInput.value !== '') {
