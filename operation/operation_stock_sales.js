@@ -952,7 +952,7 @@
                 //    overrides its own numbers with the AL's values so that
                 //    any AL amendment flows through here automatically.
                 _supabase.from('shared_al_orders')
-                    .select('al_number,order_number,quantity_ordered,balance_quantity,status')
+                    .select('al_number,order_number,order_date,customer_name,quantity_ordered,balance_quantity,status,created_at')
                     .then(r => r, e => ({ data: null, error: e })),
                 // ── DO records drive the Collected-qty-by-month chart.
                 //    A DO row IS a collection: the customer signed for the
@@ -1208,13 +1208,18 @@
         const now  = new Date();
         const year = now.getFullYear();
 
+        // "Order" qty buckets by the AL's order_date month — i.e. the
+        // Approval Letter tab on Customer Order Monitoring. Falls back
+        // to created_at when order_date isn't populated. (Previously this
+        // pulled from allCustomerOrders, which is the salesweb-orders
+        // table — not the same population as the AL list the user sees.)
         const orderByMonth      = {};
         const collectionByMonth = {};
-        (allCustomerOrders || []).forEach(o => {
-            if (o.orderDate instanceof Date && !isNaN(o.orderDate)) {
-                const k = `${o.orderDate.getFullYear()}-${String(o.orderDate.getMonth() + 1).padStart(2, '0')}`;
-                orderByMonth[k] = (orderByMonth[k] || 0) + Number(o.totalQty || 0);
-            }
+        (allAls || []).forEach(a => {
+            const ds = a.order_date || a.created_at;
+            if (!ds) return;
+            const k = String(ds).slice(0, 7);
+            orderByMonth[k] = (orderByMonth[k] || 0) + Number(a.quantity_ordered || 0);
         });
         (allDoRecords || []).forEach(d => {
             if (!d.delivery_date) return;
@@ -1293,40 +1298,50 @@
         let rows = [];
         let columns = [];
         let total = 0;
+        // Each entry in `rows` is an aligned array of <td> cells; `columns`
+        // is the matching list of headers. Renderer just zips them.
         if (barType === 'order') {
             eyebrow.textContent = '📦 Order qty · click-through';
-            titleEl.textContent = `${monthLabel} · Orders`;
-            (allCustomerOrders || []).forEach(o => {
-                if (!(o.orderDate instanceof Date) || isNaN(o.orderDate)) return;
-                const k = `${o.orderDate.getFullYear()}-${String(o.orderDate.getMonth() + 1).padStart(2, '0')}`;
-                if (k !== monthKey) return;
+            titleEl.textContent = `${monthLabel} · Approval Letters`;
+            columns = ['Order date', 'AL #', 'Customer', 'Qty'];
+            (allAls || []).forEach(a => {
+                const ds = a.order_date || a.created_at;
+                if (!ds) return;
+                if (String(ds).slice(0, 7) !== monthKey) return;
+                const qty = Number(a.quantity_ordered || 0);
+                total += qty;
                 rows.push({
-                    date: o.orderDate.toISOString().slice(0, 10),
-                    ref: o.orderNumber || '—',
-                    al:  o.alNumber || '',
-                    customer: o.customer || '—',
-                    qty: Number(o.totalQty || 0)
+                    sort: String(ds).slice(0, 10),
+                    cells: [
+                        `<td class="py-2 pr-3 font-bold text-slate-600">${String(ds).slice(0, 10)}</td>`,
+                        `<td class="py-2 pr-3 font-black text-blue-700">${a.al_number || '—'}</td>`,
+                        `<td class="py-2 pr-3 truncate" style="max-width:280px">${a.customer_name || '—'}</td>`,
+                        `<td class="py-2 pr-3 font-black text-emerald-700">${_monFmt(qty)}</td>`
+                    ]
                 });
             });
-            columns = ['Order date', 'Order #', 'AL #', 'Customer', 'Qty'];
         } else {
             eyebrow.textContent = '🚚 Collection qty · click-through';
             titleEl.textContent = `${monthLabel} · Delivery Orders`;
+            columns = ['Delivery date', 'AL #', 'DO #', 'Customer', 'Qty'];
             (allDoRecords || []).forEach(d => {
                 if (!d.delivery_date) return;
                 if (String(d.delivery_date).slice(0, 7) !== monthKey) return;
+                const qty = Number(d.total_qty || 0);
+                total += qty;
                 rows.push({
-                    date: String(d.delivery_date).slice(0, 10),
-                    ref: d.do_number || '—',
-                    al: d.al_number || '',
-                    customer: d.remark || d.customer_name || '—',
-                    qty: Number(d.total_qty || 0)
+                    sort: String(d.delivery_date).slice(0, 10),
+                    cells: [
+                        `<td class="py-2 pr-3 font-bold text-slate-600">${String(d.delivery_date).slice(0, 10)}</td>`,
+                        `<td class="py-2 pr-3 text-[10px] text-slate-500">${d.al_number || ''}</td>`,
+                        `<td class="py-2 pr-3 font-black text-blue-700">${d.do_number || '—'}</td>`,
+                        `<td class="py-2 pr-3 truncate" style="max-width:240px">${d.remark || ''}</td>`,
+                        `<td class="py-2 pr-3 font-black text-emerald-700">${_monFmt(qty)}</td>`
+                    ]
                 });
             });
-            columns = ['Delivery date', 'DO #', 'AL #', 'Customer', 'Qty'];
         }
-        rows.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-        total = rows.reduce((s, r) => s + r.qty, 0);
+        rows.sort((a, b) => (b.sort || '').localeCompare(a.sort || ''));
 
         subEl.textContent = `${rows.length} row${rows.length === 1 ? '' : 's'} · ${_monFmt(total)} qty total`;
 
@@ -1340,14 +1355,7 @@
                     ${columns.map(c => `<th class="py-2 pr-3">${c}</th>`).join('')}
                   </tr></thead>
                   <tbody class="text-slate-700">
-                    ${rows.map(r => `
-                      <tr class="border-b border-slate-100 hover:bg-slate-50">
-                        <td class="py-2 pr-3 font-bold text-slate-600">${r.date || '—'}</td>
-                        <td class="py-2 pr-3 font-black text-blue-700">${r.ref}</td>
-                        <td class="py-2 pr-3 text-[10px] text-slate-500">${r.al || ''}</td>
-                        <td class="py-2 pr-3 truncate" style="max-width:240px">${r.customer || ''}</td>
-                        <td class="py-2 pr-3 font-black text-emerald-700">${_monFmt(r.qty)}</td>
-                      </tr>`).join('')}
+                    ${rows.map(r => `<tr class="border-b border-slate-100 hover:bg-slate-50">${r.cells.join('')}</tr>`).join('')}
                   </tbody>
                 </table>
               </div>`;
