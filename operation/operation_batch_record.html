@@ -261,16 +261,20 @@
                     const newTs = new Date(r.created_at   || 0).getTime();
                     if (newTs > curTs) newestByBatch[name] = r;
                 });
-                // Sort latest → oldest by created_at, with batch_name as a
-                // tiebreaker (natural sort, descending) so two batches saved
-                // on the same date — e.g. 255 and 256 both on 13 Feb 2026 —
-                // still fall in the expected numeric order (256 above 255).
+                // Sort newest → oldest by batch_name (numeric, descending) so
+                // the list always reads 262 → 261 → 260 → … regardless of when
+                // each Seeds_Received row was inserted. created_at is only used
+                // as a tiebreaker for the rare case of duplicate batch names.
+                // Previously we primary-sorted on created_at, which collapsed
+                // every bulk-imported batch to nearly identical timestamps and
+                // made the order hard to predict.
                 const _natCmp = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
                 const dedupedReception = Object.values(newestByBatch).sort((a, b) => {
+                    const cmp = _natCmp(String(b.batch_name || ''), String(a.batch_name || ''));
+                    if (cmp !== 0) return cmp;
                     const ta = new Date(a.created_at || 0).getTime();
                     const tb = new Date(b.created_at || 0).getTime();
-                    if (tb !== ta) return tb - ta;
-                    return _natCmp(String(b.batch_name || ''), String(a.batch_name || ''));
+                    return tb - ta;
                 });
 
                 // Process logic & simulate stages.
@@ -410,7 +414,15 @@
             const pageBatches = searchFiltered.slice(start, start + PAGE_SIZE);
 
             pageBatches.forEach(b => {
-                const datePlanted = new Date(b.created_at).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' });
+                // The "Planted Date" column should reflect the actual planting
+                // date keyed in on Tab 1 (transaction_date on the Seeds_Received
+                // row), not the row's DB insert timestamp. Falling back to
+                // created_at keeps batches with a missing transaction_date
+                // displayable instead of showing "Invalid Date".
+                const plantedSource = b.transaction_date || b.created_at;
+                const datePlanted = plantedSource
+                    ? new Date(plantedSource).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' })
+                    : '—';
                 // Planted Qty = actual planted (totalPlanted − empty holes), summed across the batch's Planted log rows.
                 const plantedQtyNum = b.actualPlanted || 0;
                 const plantedQty = plantedQtyNum > 0 ? plantedQtyNum.toLocaleString() : '—';
