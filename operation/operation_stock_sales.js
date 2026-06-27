@@ -1134,8 +1134,18 @@
                 pendingCollection += Number(o.balance) || 0;
             }
             monthSched     += Number(o.bookingsByMonth    && o.bookingsByMonth[monthKeyNow]    || 0);
-            monthCollected += Number(o.collectionsByMonth && o.collectionsByMonth[monthKeyNow] || 0);
         });
+
+        // `monthCollected` now sources from the same DO records the
+        // Order & Collection chart uses — sum of total_qty on every
+        // non-cancelled DO delivered in the current month. Keeps the
+        // card in lock-step with the chart's current-month bar.
+        monthCollected = (allDoRecords || []).reduce((s, d) => {
+            if (!d.delivery_date) return s;
+            return String(d.delivery_date).slice(0, 7) === monthKeyNow
+                ? s + Number(d.total_qty || 0)
+                : s;
+        }, 0);
 
         // Week-level scheduled — slice the date-keyed map
         let weekSched = 0;
@@ -1147,14 +1157,18 @@
             ? Math.round((monthCollected / (monthSched + monthCollected)) * 100)
             : (monthCollected > 0 ? 100 : 0);
 
-        const dayMon = (d) => d.toLocaleDateString('en-MY', { day: '2-digit', month: 'short' });
+        const dayMon  = (d) => d.toLocaleDateString('en-MY', { day: '2-digit', month: 'short' });
+        // "Now"-anchored month label — e.g. "June 2026". Used in both the
+        // "<Month> Scheduled" and "<Month> Collection" card labels so the
+        // dashboard always names the live month it's reporting on.
+        const monthLbl = now.toLocaleString('en-MY', { month: 'long', year: 'numeric' });
         const cards = [
-            { label: 'This Week Scheduled', value: weekSched,         accent: 'blue',    sub: `${dayMon(weekStart)} – ${dayMon(weekEnd)}` },
-            { label: 'This Month Scheduled',value: monthSched,        accent: 'indigo',  sub: 'Bookings pending pickup' },
-            { label: 'Collected This Month',value: monthCollected,    accent: 'emerald', sub: monthCollected ? `${monthAttainment}% of month activity` : 'No pickups recorded yet' },
-            { label: 'Pending Collection',  value: pendingCollection, accent: 'amber',   sub: 'Balance across active orders' },
-            { label: 'Active Orders',       value: activeOrders,      accent: 'slate',   sub: 'With outstanding balance' },
-            { label: 'Cash · Unpaid',       value: unpaidCash,        accent: 'rose',    sub: 'Awaiting customer payment' }
+            { label: 'Weekly Scheduled',         value: weekSched,         accent: 'blue',    sub: `${dayMon(weekStart)} – ${dayMon(weekEnd)}` },
+            { label: `${monthLbl} Scheduled`,    value: monthSched,        accent: 'indigo',  sub: 'Bookings pending pickup' },
+            { label: `${monthLbl} Collection`,   value: monthCollected,    accent: 'emerald', sub: monthCollected ? `${monthAttainment}% of month activity` : 'No pickups recorded yet' },
+            { label: 'Pending Collection',       value: pendingCollection, accent: 'amber',   sub: 'Balance across active orders' },
+            { label: 'Active Orders',            value: activeOrders,      accent: 'slate',   sub: 'With outstanding balance' },
+            { label: 'Unpaid Orders',            value: unpaidCash,        accent: 'rose',    sub: 'Awaiting customer payment' }
         ];
         const accents = {
             blue:    { bg: 'bg-blue-50',    text: 'text-blue-700',    label: 'text-blue-500'    },
@@ -1181,30 +1195,19 @@
         renderMonthDashChart();
     }
 
-    // ── Order vs Collection chart (half-year selectable) ──────────────
-    // Aggregates `allCustomerOrders` into per-month order/collection totals
-    // for the active year and renders two paired bars per month.
-    let _monDashHalf = null; // 1 | 2 — null = "infer from today" on next render
+    // ── Order vs Collection chart — full 12-month view of the live year.
+    // Ordered qty buckets by orderDate month; Collected qty buckets by
+    // shared_do_records.delivery_date month (every non-cancelled DO is a
+    // collection event). The visible bar for "now" is highlighted.
     function renderMonthDashChart() {
-        const bars       = document.getElementById('mon-dash-month-bars');
-        const halfLabel  = document.getElementById('mon-dash-half-year');
-        const totLabel   = document.getElementById('mon-dash-half-total');
-        const toggleWrap = document.getElementById('mon-dash-half-toggle');
+        const bars     = document.getElementById('mon-dash-month-bars');
+        const yearLbl  = document.getElementById('mon-dash-year');
+        const totLabel = document.getElementById('mon-dash-year-total');
         if (!bars) return;
 
         const now  = new Date();
         const year = now.getFullYear();
-        if (_monDashHalf == null) _monDashHalf = now.getMonth() < 6 ? 1 : 2;
-        const half  = _monDashHalf;
-        const start = half === 1 ? 0 : 6;
 
-        // Ordered qty buckets by the month the order was CREATED — e.g.
-        // June 2026 Ordered = sum of totalQty of every order placed in
-        // June 2026.
-        // Collected qty buckets by the DO delivery_date month — every DO
-        // row represents seedlings the customer collected (the customer
-        // signs for total_qty on delivery_date). This matches the user's
-        // mental model: "issued DO = collected".
         const orderByMonth      = {};
         const collectionByMonth = {};
         (allCustomerOrders || []).forEach(o => {
@@ -1215,15 +1218,12 @@
         });
         (allDoRecords || []).forEach(d => {
             if (!d.delivery_date) return;
-            // delivery_date is stored as YYYY-MM-DD (string) — slice avoids
-            // a Date parse + timezone wobble.
             const k = String(d.delivery_date).slice(0, 7);
             collectionByMonth[k] = (collectionByMonth[k] || 0) + Number(d.total_qty || 0);
         });
 
         const months = [];
-        for (let i = 0; i < 6; i++) {
-            const m = start + i;
+        for (let m = 0; m < 12; m++) {
             const k = `${year}-${String(m + 1).padStart(2, '0')}`;
             months.push({
                 key: k,
@@ -1233,7 +1233,7 @@
                 collection: Number(collectionByMonth[k] || 0)
             });
         }
-        const maxQ = Math.max(1, ...months.flatMap(m => [m.order, m.collection]));
+        const maxQ     = Math.max(1, ...months.flatMap(m => [m.order, m.collection]));
         const nowMonth = now.getMonth();
 
         bars.innerHTML = months.map(m => {
@@ -1243,7 +1243,7 @@
             const labelCls  = isCurrent ? 'text-blue-700 font-black' : 'text-slate-500 font-bold';
             return `
               <div class="flex flex-col items-stretch gap-1 h-full">
-                <div class="flex items-end justify-center gap-1 flex-1">
+                <div class="flex items-end justify-center gap-0.5 flex-1">
                   <div class="flex flex-col items-center justify-end gap-0.5 w-1/2">
                     <div class="text-[8px] font-black text-blue-700 leading-none">${m.order ? _monFmt(m.order) : '·'}</div>
                     <div class="w-full rounded-t-md bg-blue-500" style="height:${ho}px" title="${m.label} ${year} — Order: ${_monFmt(m.order)} qty"></div>
@@ -1259,26 +1259,8 @@
 
         const totOrder = months.reduce((s, m) => s + m.order, 0);
         const totColl  = months.reduce((s, m) => s + m.collection, 0);
-        if (halfLabel) halfLabel.textContent = `${half === 1 ? '1st half' : '2nd half'} ${year}`;
-        if (totLabel)  totLabel.textContent  = `Order ${_monFmt(totOrder)} · Collected ${_monFmt(totColl)}`;
-
-        if (toggleWrap && !toggleWrap._wired) {
-            toggleWrap.addEventListener('click', e => {
-                const btn = e.target.closest('button[data-half]');
-                if (!btn) return;
-                _monDashHalf = Number(btn.dataset.half) === 2 ? 2 : 1;
-                renderMonthDashChart();
-            });
-            toggleWrap._wired = true;
-        }
-        if (toggleWrap) {
-            toggleWrap.querySelectorAll('button[data-half]').forEach(btn => {
-                const active = Number(btn.dataset.half) === half;
-                btn.classList.toggle('bg-blue-600', active);
-                btn.classList.toggle('text-white', active);
-                btn.classList.toggle('text-slate-500', !active);
-            });
-        }
+        if (yearLbl)  yearLbl.textContent  = String(year);
+        if (totLabel) totLabel.textContent = `Order ${_monFmt(totOrder)} · Collected ${_monFmt(totColl)}`;
     }
 
     function customerActiveMonths() {
