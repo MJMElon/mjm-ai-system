@@ -338,6 +338,7 @@
                                             <span class="text-[9px] font-bold text-[#8a7a68] uppercase tracking-widest">Latest: <span id="latest-batch-id" class="text-[#c07820]">Loading...</span></span>
                                         </div>
                                         <input type="text" id="f-batchno" class="input-style font-black !text-[#c07820]" required readonly title="Auto-generated batch number — cannot be edited">
+                                        <button type="button" id="renumber-batch-btn" onclick="renumberBatch()" class="hidden mt-1.5 text-[9px] font-black text-[#3a7ab4] uppercase tracking-widest hover:underline" title="Admin only — rename this batch number across every linked record">↺ Renumber this batch</button>
                                     </div>
                                     <div>
                                         <label class="label-style">Breed Variety *</label>
@@ -2172,6 +2173,11 @@
                         document.getElementById('f-original-create').value = data.created_at; 
                         document.getElementById('f-datereceived').value = data.transaction_date || new Date(data.created_at).toISOString().split('T')[0];
                         document.getElementById('f-batchno').value = data.batch_name;
+                        // Admin-only: reveal the renumber control for an existing batch.
+                        if (_t7IsAdmin()) {
+                            const rbtn = document.getElementById('renumber-batch-btn');
+                            if (rbtn) rbtn.classList.remove('hidden');
+                        }
                         document.getElementById('f-brand').value = data.breed_name;
                         // The `workers` column lives on the Seeds_Received row → restore Tab 2 worker count from here.
                         if (data.workers != null && data.workers !== '') {
@@ -3970,6 +3976,80 @@
             updateT1Completion();
         }
 
+        // Admin-only: rename the current batch's number across EVERY table that
+        // stores a batch identifier. Use this to fix a mis-numbered batch
+        // (e.g. an auto-generated 266 that should have been 264) without
+        // touching the database by hand. The target number must be free.
+        async function renumberBatch() {
+            if (!_t7IsAdmin()) { showToast('Only operation admins can renumber a batch.', 'error'); return; }
+            const oldName = (document.getElementById('f-batchno').value || '').trim();
+            if (!oldName || !isEditing) { showToast('Open an existing batch before renumbering.', 'error'); return; }
+
+            const newName = (prompt(`Renumber batch "${oldName}" to which number?`, oldName) || '').trim();
+            if (!newName || newName === oldName) return;
+
+            // Guard: refuse if the target number is already taken anywhere that
+            // decides the batch list / numbering, so we never create a duplicate.
+            try {
+                const [{ data: clashLogs }, { data: clashBatch }] = await Promise.all([
+                    _supabase.from('shared_inventory_logs').select('batch_name').eq('batch_name', newName).limit(1),
+                    _supabase.from('operation_batches').select('name').eq('name', newName).limit(1)
+                ]);
+                if ((clashLogs && clashLogs.length) || (clashBatch && clashBatch.length)) {
+                    showToast(`Batch "${newName}" already exists — pick a free number.`, 'error');
+                    return;
+                }
+            } catch (e) {
+                showToast('Could not verify the target number: ' + (e.message || e), 'error');
+                return;
+            }
+
+            if (!confirm(`Rename batch "${oldName}" → "${newName}" across all linked records?\n\nThis updates inventory logs, plot allocations, reviews, verifications, customer allocations and field-audit records. It cannot be auto-undone.`)) return;
+
+            // Core tables decide visibility + numbering — these must succeed.
+            const core = [
+                ['shared_inventory_logs', 'batch_name'],
+                ['operation_batches',     'name'],
+            ];
+            // Peripheral links — best-effort (may not exist / RLS-restricted in
+            // some deployments); collected as warnings rather than hard failures.
+            const linked = [
+                ['operation_batch_reviews',           'batch_name'],
+                ['operation_batch_verifications',     'batch_name'],
+                ['shared_batch_customer_allocations', 'batch_name'],
+                ['shared_plot_allocations',           'batch_name'],
+                ['audit_plot_audits',                 'batch'],
+                ['audit_height_records',              'batch'],
+                ['audit_papan_audits',                'batch_no'],
+            ];
+
+            try {
+                for (const [table, col] of core) {
+                    const { error } = await _supabase.from(table).update({ [col]: newName }).eq(col, oldName);
+                    if (error) throw new Error(`${table}: ${error.message}`);
+                }
+            } catch (e) {
+                showToast('Renumber failed (no changes applied to the rest): ' + (e.message || e), 'error');
+                return;
+            }
+
+            const warnings = [];
+            for (const [table, col] of linked) {
+                try {
+                    const { error } = await _supabase.from(table).update({ [col]: newName }).eq(col, oldName);
+                    if (error) warnings.push(`${table}: ${error.message}`);
+                } catch (e) { warnings.push(`${table}: ${e.message || e}`); }
+            }
+
+            if (warnings.length) {
+                console.warn('[renumberBatch] non-fatal link updates skipped:', warnings);
+                showToast(`Batch renumbered ${oldName} → ${newName}. ${warnings.length} linked table(s) skipped — see console.`, 'success');
+            } else {
+                showToast(`Batch renumbered ${oldName} → ${newName}.`, 'success');
+            }
+            setTimeout(() => { window.location.href = `operation_batch_detail.html?id=${encodeURIComponent(newName)}`; }, 1100);
+        }
+
         // ── Numeric input helpers (thousand separators) ──────────────────────────
         function formatNumericInput(input) {
             if (!input) return;
@@ -5361,7 +5441,7 @@ Thank you.`;
             e.preventDefault(); const saveBtn = document.getElementById('save-btn'); saveBtn.innerText = 'SAVING...'; saveBtn.disabled = true;
             const dateReceived = document.getElementById('f-datereceived').value; const batch = document.getElementById('f-batchno').value.trim(); const breed = document.getElementById('f-brand').value; const supplier = document.getElementById('f-supplier').value; const mpob = document.getElementById('f-mpob').value; const dono = document.getElementById('f-dono').value; const focPercent = parseFloat(document.getElementById('f-foc-percent').value) || 0; const totalQtyRaw = document.getElementById('display-total-qty').dataset.raw || 0; const doQty = readNumericInput('f-do-qty');
             let remarkStr = `Seeds received.`; if (supplier) remarkStr += ` Supplier: ${supplier}.`; if (mpob) remarkStr += ` MPOB: ${mpob}.`; if (dono) remarkStr += ` D/O: ${dono}.`; remarkStr += ` DO_Qty: ${doQty}.`; if (focPercent > 0) remarkStr += ` Incl. ${focPercent}% FOC.`;
-            const ledgerPayload = withEditMeta({ transaction_type: 'Seeds_Received', batch_name: batch, breed_name: breed, quantity_change: parseInt(totalQtyRaw), plot_name: 'Pre-Nursery', remark: remarkStr });
+            const ledgerPayload = withEditMeta({ transaction_type: 'Seeds_Received', batch_name: batch, breed_name: breed, quantity_change: parseInt(totalQtyRaw), plot_name: 'Pre-Nursery', transaction_date: dateReceived, remark: remarkStr });
             try {
                 if(!isEditing) {
                     const batchExists = masterBatchesList.some(b => b.name === batch);
@@ -6004,7 +6084,7 @@ Thank you.`;
                             <div>
                                 <label class="label-style lg:hidden !text-[#a83020]">Dead ✂️</label>
                                 <input type="number" class="input-style !text-[#a83020] font-black t5-dead text-sm"
-                                    min="0" max="${p.qty}" placeholder="0"
+                                    min="0" max="${p.qty}" placeholder=""
                                     data-transplanted="${p.qty}"
                                     value="${deadVal}"
                                     oninput="autoFillCullDate('${rowId}'); calcT5Row('${rowId}'); calcT5()">
@@ -6093,7 +6173,9 @@ Thank you.`;
             if (aliveHidden) { aliveHidden.value = alive; }
 
             if (aliveDisp) {
-                aliveDisp.innerText = dead !== '' || deadInput.value !== '' ? alive.toLocaleString() : '—';
+                // Only show a computed Alive once a Dead value has actually been
+                // keyed in — a blank Dead box means "no data yet", not 0.
+                aliveDisp.innerText = deadInput.value !== '' ? alive.toLocaleString() : '—';
             }
 
             if (transplanted > 0 && deadInput.value !== '') {
