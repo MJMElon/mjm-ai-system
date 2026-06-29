@@ -5361,7 +5361,7 @@ Thank you.`;
             e.preventDefault(); const saveBtn = document.getElementById('save-btn'); saveBtn.innerText = 'SAVING...'; saveBtn.disabled = true;
             const dateReceived = document.getElementById('f-datereceived').value; const batch = document.getElementById('f-batchno').value.trim(); const breed = document.getElementById('f-brand').value; const supplier = document.getElementById('f-supplier').value; const mpob = document.getElementById('f-mpob').value; const dono = document.getElementById('f-dono').value; const focPercent = parseFloat(document.getElementById('f-foc-percent').value) || 0; const totalQtyRaw = document.getElementById('display-total-qty').dataset.raw || 0; const doQty = readNumericInput('f-do-qty');
             let remarkStr = `Seeds received.`; if (supplier) remarkStr += ` Supplier: ${supplier}.`; if (mpob) remarkStr += ` MPOB: ${mpob}.`; if (dono) remarkStr += ` D/O: ${dono}.`; remarkStr += ` DO_Qty: ${doQty}.`; if (focPercent > 0) remarkStr += ` Incl. ${focPercent}% FOC.`;
-            const ledgerPayload = withEditMeta({ transaction_type: 'Seeds_Received', batch_name: batch, breed_name: breed, quantity_change: parseInt(totalQtyRaw), plot_name: 'Pre-Nursery', remark: remarkStr });
+            const ledgerPayload = withEditMeta({ transaction_type: 'Seeds_Received', batch_name: batch, breed_name: breed, quantity_change: parseInt(totalQtyRaw), plot_name: 'Pre-Nursery', transaction_date: dateReceived, remark: remarkStr });
             try {
                 if(!isEditing) {
                     const batchExists = masterBatchesList.some(b => b.name === batch);
