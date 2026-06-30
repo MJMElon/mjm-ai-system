@@ -1412,12 +1412,27 @@
         return ['pill-paid', derived];
     }
 
+    // Pagination state for the customer grid. Page resets to 1 whenever
+    // the search input or filter dropdown changes (handled below).
+    const CUST_PAGE_SIZE = 10;
+    let _custPage = 1;
+    let _custSearchLast = '';
+    let _custFilterLast = '';
+
     function renderCustomerGrid() {
         const thead  = document.getElementById('cust-thead');
         const tbody  = document.getElementById('cust-tbody');
         const tfoot  = document.getElementById('cust-tfoot');
         const search = (document.getElementById('cust-search')?.value || '').toLowerCase().trim();
         const filter = document.getElementById('cust-filter')?.value || 'active';
+
+        // Reset to page 1 if the user changed the search or filter (so
+        // they don't land on an empty page 5 of a fresh result set).
+        if (search !== _custSearchLast || filter !== _custFilterLast) {
+            _custPage = 1;
+            _custSearchLast = search;
+            _custFilterLast = filter;
+        }
 
         const months = customerActiveMonths();
         const nowKey = monthKey(new Date());
@@ -1436,7 +1451,7 @@
                 <th class="h-tot">Order Total</th>
             </tr>`;
 
-        let rows = allCustomerOrders.filter(r => {
+        let allRows = allCustomerOrders.filter(r => {
             // Visibility rule (per product spec):
             //   • Cash payment + Unpaid → HIDE (customer hasn't paid yet)
             //   • Cash payment + Paid (any collection state) → SHOW
@@ -1453,25 +1468,54 @@
             return true;
         });
 
-        if (!rows.length) {
-            tbody.innerHTML = `<tr><td colspan="${5 + months.length + 3}" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">📋</div><div class="text-[10px] font-bold uppercase tracking-widest">No customer orders match the filter</div></td></tr>`;
+        // Latest → oldest by orderDate so the newest row is at the top.
+        // Rows with a missing orderDate sink to the bottom.
+        allRows.sort((a, b) => {
+            const ta = a.orderDate instanceof Date ? a.orderDate.getTime() : 0;
+            const tb = b.orderDate instanceof Date ? b.orderDate.getTime() : 0;
+            return tb - ta;
+        });
+
+        const colsTotal = 5 + months.length + 3;
+
+        if (!allRows.length) {
+            tbody.innerHTML = `<tr><td colspan="${colsTotal}" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">📋</div><div class="text-[10px] font-bold uppercase tracking-widest">No customer orders match the filter</div></td></tr>`;
             tfoot.innerHTML = '';
             return;
         }
 
+        // Slice to the current page (10 rows). The "#" column shows the
+        // global row index so rows on page 3 still read 21, 22, 23 etc.
+        const totalRows  = allRows.length;
+        const totalPages = Math.max(1, Math.ceil(totalRows / CUST_PAGE_SIZE));
+        if (_custPage > totalPages) _custPage = totalPages;
+        if (_custPage < 1)          _custPage = 1;
+        const startIdx = (_custPage - 1) * CUST_PAGE_SIZE;
+        const endIdx   = Math.min(startIdx + CUST_PAGE_SIZE, totalRows);
+        const rows     = allRows.slice(startIdx, endIdx);
+
+        // Totals reflect the full filtered dataset (every page), not just
+        // the visible 10 rows — otherwise the footer line would shrink
+        // every time the user paged.
         let totQty = 0, totColl = 0, totBalance = 0, totAmt = 0;
         const colCollTotals = months.map(() => 0);
         const colBookTotals = months.map(() => 0);
+        allRows.forEach(r => {
+            totQty += r.totalQty; totColl += r.totalCollected;
+            totBalance += r.balance; totAmt += (r.totalAmount || 0);
+            months.forEach((m, i) => {
+                colCollTotals[i] += (r.collectionsByMonth[m.key] || 0);
+                colBookTotals[i] += (r.bookingsByMonth[m.key] || 0);
+            });
+        });
 
-        tbody.innerHTML = rows.map((r, idx) => {
-            totQty += r.totalQty; totColl += r.totalCollected; totBalance += r.balance; totAmt += (r.totalAmount || 0);
+        tbody.innerHTML = rows.map((r, pageIdx) => {
+            const idx = startIdx + pageIdx;
             const orderMonth = r.orderDate ? r.orderDate.toLocaleString('en-MY',{month:'short',year:'numeric'}) : '—';
             const [pillCls, pillTxt] = pillFor(r.derivedStatus, r.paymentMethod);
             const cellsHtml = months.map((m, i) => {
                 const collected = r.collectionsByMonth[m.key] || 0;
                 const booked    = r.bookingsByMonth[m.key]    || 0;
-                if (collected) colCollTotals[i] += collected;
-                if (booked)    colBookTotals[i] += booked;
 
                 const cls = [
                     't-mo',
@@ -1508,16 +1552,56 @@
             return       `<td class="t-tot">—</td>`;
         }).join('');
 
+        // Build a compact page-number row: «  1  2  3 … 215  »
+        const pages = (() => {
+            const out = new Set([1, totalPages, _custPage]);
+            for (let d = 1; d <= 2; d++) {
+                if (_custPage - d > 1)            out.add(_custPage - d);
+                if (_custPage + d < totalPages)   out.add(_custPage + d);
+            }
+            return Array.from(out).sort((a, b) => a - b);
+        })();
+        const pageBtns = pages.map((p, i) => {
+            const gap = i > 0 && pages[i] - pages[i - 1] > 1
+                ? `<span class="px-1 text-slate-400">…</span>` : '';
+            const active = p === _custPage
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200';
+            return `${gap}<button type="button" class="px-2.5 py-1 rounded text-[10px] font-black ${active}" onclick="goCustPage(${p})">${p}</button>`;
+        }).join('');
+        const prevDisabled = _custPage <= 1            ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-100';
+        const nextDisabled = _custPage >= totalPages   ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-100';
+
         tfoot.innerHTML = `
             <tr class="bg-slate-50 font-black">
-                <td colspan="4" class="text-right text-[10px] uppercase tracking-widest text-slate-500" style="padding:8px;">Totals (${rows.length} orders)</td>
+                <td colspan="4" class="text-right text-[10px] uppercase tracking-widest text-slate-500" style="padding:8px;">Totals (${totalRows} orders)</td>
                 <td class="t-tot">${totQty.toLocaleString()}</td>
                 ${monthFootCells}
                 <td class="t-tot">${totColl.toLocaleString()}</td>
                 <td class="t-tot">${totBalance.toLocaleString()}</td>
                 <td class="t-tot">${fmtRM(totAmt)}</td>
+            </tr>
+            <tr>
+                <td colspan="${colsTotal}" class="bg-white" style="padding:10px 12px;">
+                    <div class="flex items-center justify-between gap-3 flex-wrap text-[10px] font-bold text-slate-600">
+                        <div>Showing <span class="font-black text-slate-800">${startIdx + 1}</span> to <span class="font-black text-slate-800">${endIdx}</span> of <span class="font-black text-slate-800">${totalRows.toLocaleString()}</span> entries</div>
+                        <div class="flex items-center gap-1">
+                            <button type="button" class="px-2.5 py-1 rounded bg-white text-slate-700 border border-slate-200 text-[10px] font-black ${prevDisabled}" onclick="goCustPage(${Math.max(1, _custPage - 1)})">‹ Prev</button>
+                            ${pageBtns}
+                            <button type="button" class="px-2.5 py-1 rounded bg-white text-slate-700 border border-slate-200 text-[10px] font-black ${nextDisabled}" onclick="goCustPage(${Math.min(totalPages, _custPage + 1)})">Next ›</button>
+                        </div>
+                    </div>
+                </td>
             </tr>`;
     }
+
+    function goCustPage(p) {
+        const n = Number(p);
+        if (!Number.isFinite(n)) return;
+        _custPage = Math.max(1, Math.floor(n));
+        renderCustomerGrid();
+    }
+    window.goCustPage = goCustPage;
 
     let schedWeekStart = getSchedMonday(new Date());
 
