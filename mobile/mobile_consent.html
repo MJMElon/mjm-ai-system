@@ -665,8 +665,13 @@ async function openConsentModal(alNumber) {
     totalPreviouslyConsented = prevConsents.reduce((sum, c) => sum + (c.consent_qty || 0), 0);
   }
 
-  const balance = currentConsentAL.balance_quantity || 0;
-  const remaining = Math.max(0, balance - totalPreviouslyConsented);
+  // Consent allowance is gated by the AL's TOTAL ORDERED qty, not its
+  // remaining balance. Each consent records customer agreement for a
+  // portion of what they ordered; cumulative consents across collection
+  // events can total the full ordered qty, regardless of how much has
+  // physically been delivered (DO'd) so far.
+  const ordered = currentConsentAL.quantity_ordered || 0;
+  const remaining = Math.max(0, ordered - totalPreviouslyConsented);
 
   // Reset qty
   selectedQty = 0;
@@ -675,7 +680,7 @@ async function openConsentModal(alNumber) {
   document.getElementById('custom-qty-input').max = remaining;
   document.getElementById('qty-selected-label').classList.add('hidden');
   document.getElementById('max-qty-hint').textContent =
-    '(Max: ' + remaining.toLocaleString() + ' remaining of ' + balance.toLocaleString() + ' balance)';
+    '(Max: ' + remaining.toLocaleString() + ' remaining of ' + ordered.toLocaleString() + ' ordered)';
 
   document.getElementById('consent-modal').classList.add('open');
   loadConsentHistory(alNumber);
@@ -691,8 +696,11 @@ function closeConsentModal() {
 // ════════════════════════════════════════════════════════
 function getMaxConsentQty() {
   if (!currentConsentAL) return 0;
-  const balance = currentConsentAL.balance_quantity || 0;
-  return Math.max(0, balance - totalPreviouslyConsented);
+  // Consent allowance = total ordered minus what's already been consented
+  // (across all previous consent events on this AL). Not related to the
+  // delivery balance.
+  const ordered = currentConsentAL.quantity_ordered || 0;
+  return Math.max(0, ordered - totalPreviouslyConsented);
 }
 
 function selectQty(qty) {
@@ -949,8 +957,8 @@ async function submitConsent() {
   consentCountMap[currentConsentAL.al_number] = (consentCountMap[currentConsentAL.al_number] || 0) + 1;
   totalPreviouslyConsented += selectedQty;
 
-  const balance = currentConsentAL.balance_quantity || 0;
-  const remaining = Math.max(0, balance - totalPreviouslyConsented);
+  const ordered = currentConsentAL.quantity_ordered || 0;
+  const remaining = Math.max(0, ordered - totalPreviouslyConsented);
 
   showToast('\u2705 Consent saved! ' + selectedQty.toLocaleString() + ' seedlings for ' + currentConsentAL.al_number);
   btn.textContent = '\ud83d\udcbe Save Consent';
@@ -966,7 +974,7 @@ async function submitConsent() {
   document.getElementById('custom-qty-input').max = remaining;
   document.getElementById('qty-selected-label').classList.add('hidden');
   document.getElementById('max-qty-hint').textContent =
-    '(Max: ' + remaining.toLocaleString() + ' remaining of ' + balance.toLocaleString() + ' balance)';
+    '(Max: ' + remaining.toLocaleString() + ' remaining of ' + ordered.toLocaleString() + ' ordered)';
 
   // Refresh main list
   renderCombined(document.getElementById('input-search').value || '');
