@@ -560,11 +560,16 @@
             document.getElementById('manage-ba-modal').classList.remove('hidden');
         }
 
-        function recalculateMngBADOs() {
-            const doStr = document.getElementById('mng-ba-dos').value; const doList = doStr.split(',').map(s=>s.trim()).filter(s=>s); let sum = 0; 
-            doList.forEach(num => { 
-                const match = globalDOs.find(d => d.do_number && d.do_number.includes(num)); 
-                if(match) { sum += (parseInt(match.total_qty) || 0); } 
+        async function recalculateMngBADOs() {
+            const doStr = document.getElementById('mng-ba-dos').value;
+            const doList = doStr.split(',').map(s=>s.trim()).filter(s=>s);
+            // Same cache-staleness fix as recalcBASum — re-query the DB for
+            // the typed numbers so DOs created after page load are honoured.
+            await refreshDOCacheForNumbers(doList);
+            let sum = 0;
+            doList.forEach(num => {
+                const match = findMatchingDO(num, globalDOs);
+                if (match) sum += (parseInt(match.total_qty) || 0);
             });
             document.getElementById('mng-ba-do-qty').value = sum;
             recheckMngBAStatus();
@@ -611,7 +616,7 @@
                             newDos.push(cleanNum);
                             newQty += dQty;
                             
-                            if(!globalDOs.some(g => g.do_number && g.do_number.includes(cleanNum))) {
+                            if(!globalDOs.some(g => g.do_number === cleanNum)) {
                                 globalDOs.push({ do_number: cleanNum, total_qty: dQty });
                             }
                         }
@@ -758,9 +763,15 @@
             try {
                 await _supabase.from('shared_do_records').update({ ba_number: null, ba_raw_name: null, ba_raw_qty: null, ba_image_url: null, status: 'Delivered' }).or(`ba_number.eq."${originalKey}",ba_raw_name.eq."${originalKey}"`);
 
+                // Cross-check: re-query DB for the typed DO numbers before
+                // deciding which are "missing", so a DO created by another
+                // operator since page-load is honoured instead of being
+                // duplicated as an empty placeholder.
+                await refreshDOCacheForNumbers(newDos);
+
                 let missingDOs = [];
                 for(let num of newDos) {
-                    const match = globalDOs.find(d => d.do_number && d.do_number.includes(num));
+                    const match = findMatchingDO(num, globalDOs);
                     if(match) {
                         await _supabase.from('shared_do_records').update({ ba_number: newNum === '' ? null : newNum, ba_raw_name: newName, ba_raw_qty: newQty, ba_image_url: currentMngBaImage, status: newStatus }).eq('id', match.id);
                     } else {
@@ -847,12 +858,61 @@
             }
         }
 
-        function recalcBASum(rowId) { 
-            const doStr = document.getElementById(`dos_${rowId}`).value; const baQty = parseInt(document.getElementById(`qty_${rowId}`).value) || 0; const doList = doStr.split(',').map(s=>s.trim()).filter(s=>s); let sum = 0; let matchedIds = []; 
-            doList.forEach(num => { const match = globalDOs.find(d => d.do_number && d.do_number.includes(num)); if(match && !matchedIds.includes(match.id)) { sum += parseInt(match.total_qty); matchedIds.push(match.id); } }); 
-            const sumEl = document.getElementById(`sum_${rowId}`); sumEl.innerText = sum; 
-            if(sum === baQty && baQty > 0) { sumEl.className = 'text-xl font-black text-emerald-600'; } else { sumEl.className = 'text-xl font-black text-rose-500'; } 
-            window.extractedBulkBAs[rowId].matchedIds = matchedIds; 
+        // Prefer an EXACT do_number match (correct for stored numbers like
+        // "03373"). Fall back to substring match only if no exact hit —
+        // preserves legacy support for prefixed numbers like "DO-03373"
+        // pointing at "03373" inputs, without the previous bug where
+        // "3373" stored matched a "03373" input falsely.
+        function findMatchingDO(num, dos) {
+            const exact = dos.find(d => d.do_number === num);
+            if (exact) return exact;
+            return dos.find(d => d.do_number && d.do_number.includes(num));
+        }
+
+        // Re-fetch DOs from the DB for a specific list of numbers, then
+        // merge them into the in-memory globalDOs cache. The cache is
+        // populated at page load and goes stale the moment another
+        // operator creates a DO — which is exactly what caused the
+        // "DO 03373 not found" false negative even though the DO existed.
+        async function refreshDOCacheForNumbers(nums) {
+            const want = (nums || []).map(s => String(s).trim()).filter(s => s);
+            if (!want.length) return;
+            const { data: fresh, error } = await _supabase
+                .from('shared_do_records')
+                .select('id,do_number,total_qty,ba_number,ba_raw_name,ba_raw_qty,ba_image_url,status')
+                .in('do_number', want);
+            if (error) { console.warn('refreshDOCacheForNumbers:', error.message); return; }
+            (fresh || []).forEach(d => {
+                const i = globalDOs.findIndex(g => g.id === d.id);
+                if (i >= 0) globalDOs[i] = { ...globalDOs[i], ...d };
+                else globalDOs.push(d);
+            });
+        }
+
+        async function recalcBASum(rowId) {
+            const doStr = document.getElementById(`dos_${rowId}`).value;
+            const baQty = parseInt(document.getElementById(`qty_${rowId}`).value) || 0;
+            const doList = doStr.split(',').map(s=>s.trim()).filter(s=>s);
+
+            // Always re-fetch fresh DO data for the typed numbers before
+            // matching — the in-memory globalDOs cache is loaded at page
+            // open and otherwise misses any DO created since then.
+            await refreshDOCacheForNumbers(doList);
+
+            let sum = 0;
+            let matchedIds = [];
+            doList.forEach(num => {
+                const match = findMatchingDO(num, globalDOs);
+                if (match && !matchedIds.includes(match.id)) {
+                    sum += parseInt(match.total_qty) || 0;
+                    matchedIds.push(match.id);
+                }
+            });
+            const sumEl = document.getElementById(`sum_${rowId}`);
+            sumEl.innerText = sum;
+            if (sum === baQty && baQty > 0) sumEl.className = 'text-xl font-black text-emerald-600';
+            else sumEl.className = 'text-xl font-black text-rose-500';
+            window.extractedBulkBAs[rowId].matchedIds = matchedIds;
         }
 
         async function saveBulkBA() {
@@ -862,13 +922,46 @@
             for (let row of rows) {
                 if(row.innerHTML.includes('Scanning') || row.innerHTML.includes('Failed')) continue; 
                 
-                const rId = row.id; const baNum = document.getElementById(`num_${rId}`).value.trim(); const baName = document.getElementById(`name_${rId}`).value.trim() || 'Unknown'; const baQty = parseInt(document.getElementById(`qty_${rId}`).value) || 0; const baImage = window.extractedBulkBAs[rId].base64 || null; const matchedIds = window.extractedBulkBAs[rId].matchedIds || [];
+                const rId = row.id; const baNum = document.getElementById(`num_${rId}`).value.trim(); const baName = document.getElementById(`name_${rId}`).value.trim() || 'Unknown'; const baQty = parseInt(document.getElementById(`qty_${rId}`).value) || 0; const baImage = window.extractedBulkBAs[rId].base64 || null;
                 const typedDosStr = document.getElementById(`dos_${rId}`).value; const typedDos = typedDosStr.split(',').map(s=>s.trim()).filter(s=>s);
-                
+
+                // CROSS-CHECK pass before deciding to create empty DOs:
+                // re-fetch the DB for the typed numbers and re-run the
+                // match so a DO created by another operator (or after the
+                // page loaded) is honoured. The old code trusted the
+                // cached matchedIds from recalcBASum and would offer to
+                // create duplicates for any DO not in that stale snapshot
+                // — that's exactly how DO 03373 ended up looking missing
+                // even though it already existed in the DB.
+                await refreshDOCacheForNumbers(typedDos);
+                let matchedIds = [];
+                let recheckSum = 0;
+                typedDos.forEach(num => {
+                    const match = findMatchingDO(num, globalDOs);
+                    if (match && !matchedIds.includes(match.id)) {
+                        matchedIds.push(match.id);
+                        recheckSum += parseInt(match.total_qty) || 0;
+                    }
+                });
+                // Keep the in-memory snapshot + the visible "Matched DOs Sum"
+                // cell in sync with the fresh match.
+                window.extractedBulkBAs[rId].matchedIds = matchedIds;
+                const sumEl = document.getElementById(`sum_${rId}`);
+                if (sumEl) {
+                    sumEl.innerText = recheckSum;
+                    sumEl.className = (recheckSum === baQty && baQty > 0)
+                      ? 'text-xl font-black text-emerald-600'
+                      : 'text-xl font-black text-rose-500';
+                }
+
                 if(matchedIds.length === 0) {
                     if(typedDos.length === 0) { alert(`Cannot save BA ${baName}: No DO numbers entered.`); row.classList.add('bg-red-50'); continue; }
-                    if(confirm(`⚠️ The DO numbers (${typedDosStr}) were not found in the database. Create empty DO records to link this BA?`)) {
-                        for(let num of typedDos) {
+                    // Identify EXACTLY which numbers are still missing so the
+                    // prompt names only the truly-missing ones (not all typed
+                    // numbers as a flat list — useful when SOME matched).
+                    const stillMissing = typedDos.filter(n => !findMatchingDO(n, globalDOs));
+                    if(confirm(`⚠️ After re-checking the database, these DO number(s) still do not exist:\n\n  ${stillMissing.join(', ')}\n\nCreate empty placeholder DO record(s) to link this BA?`)) {
+                        for(let num of stillMissing) {
                             await _supabase.from('shared_do_records').insert([{ do_number: num, ba_number: baNum === '' ? null : baNum, ba_raw_name: baName, ba_raw_qty: baQty, ba_image_url: baImage, status: 'Unverified' }]);
                         }
                         row.remove(); successCount++; continue;
