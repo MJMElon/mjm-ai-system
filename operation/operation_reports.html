@@ -209,7 +209,10 @@ async function runBatchProduction() {
   // plot_name joins us to nursery (main-nursery drilldowns need it).
   const [logsRes, batchesRes, plotsRes] = await Promise.all([
     _supabase.from('shared_inventory_logs')
-      .select('batch_name, transaction_type, quantity_change, transaction_date, created_at, plot_name')
+      // breed_name comes off the log too — bulk-imported batches don't
+      // have an operation_batches mirror row, so we can't rely on that
+      // table alone to name the source.
+      .select('batch_name, transaction_type, quantity_change, transaction_date, created_at, plot_name, breed_name')
       .order('transaction_date', { ascending: true }),
     _supabase.from('operation_batches').select('name, breed_name, created_at'),
     _supabase.from('shared_plots').select('plot_name, nursery_name')
@@ -251,9 +254,11 @@ async function runBatchProduction() {
       seeds: 0, planted: 0, trans: 0, cull1: 0, cull2: 0, cull3: 0,
       damaged: 0,
       seeds_date: null,
+      log_breed: null,               // captured from any log with breed_name
       seedsLogs: [], transLogs: [], cull1Logs: [], cull2Logs: [], cull3Logs: []
     };
     const row = byBatch[b];
+    if (!row.log_breed && l.breed_name) row.log_breed = l.breed_name;
     const qty = Number(l.quantity_change || 0);
     const t = l.transaction_type;
     if (STAGE_TYPES.seeds.includes(t))   { row.seeds   += qty; row.seeds_date = row.seeds_date || l.transaction_date || l.created_at; row.seedsLogs.push(l); }
@@ -271,7 +276,10 @@ async function runBatchProduction() {
 
   let rows = Object.values(byBatch).map(r => {
     const m = meta[r.batch_name] || {};
-    r.breed_name = m.breed_name || '—';
+    // Prefer the breed captured on the actual log rows — bulk-imported
+    // batches don't have an operation_batches row to consult, but every
+    // Seeds_Received log has breed_name filled in.
+    r.breed_name = r.log_breed || m.breed_name || '—';
     r.batch_created_at = m.created_at || r.seeds_date;
     const finalAlive = Math.max(0, r.trans - r.cull1 - r.cull2 - r.cull3);
     const survival   = r.seeds > 0 ? (finalAlive / r.seeds) * 100 : 0;
@@ -1007,8 +1015,17 @@ async function bootstrap() {
     return;
   }
   const { from, to } = defaultRange();
-  document.getElementById('f-from').value = from;
-  document.getElementById('f-to').value   = to;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const fFrom = document.getElementById('f-from');
+  const fTo   = document.getElementById('f-to');
+  fFrom.value = from; fTo.value = to;
+  // Reports look at what has actually happened — future dates make no
+  // sense. Cap the "To" picker at today; keep "From" bounded by "To"
+  // so you can't pick From > To either.
+  fFrom.max = todayStr;
+  fTo.max   = todayStr;
+  fTo.addEventListener('input',   () => { fFrom.max = fTo.value || todayStr; });
+  fFrom.addEventListener('input', () => { fTo.min   = fFrom.value || ''; });
   await Promise.all([loadBreeds(), loadNurseryFilter()]);
   _setSalesView('table');
   document.getElementById('f-mode-table').addEventListener('click', () => { _setSalesView('table'); runReport(); });
