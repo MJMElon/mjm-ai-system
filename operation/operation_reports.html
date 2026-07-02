@@ -206,12 +206,16 @@ async function runBatchProduction() {
   const breed = document.getElementById('f-breed').value;
 
   // Fetch all batches in range — anchor date is Seeds_Received transaction_date.
-  let q = _supabase
-    .from('shared_inventory_logs')
-    .select('batch_name, transaction_type, quantity_change, transaction_date, created_at')
-    .order('transaction_date', { ascending: true });
+  // plot_name joins us to nursery (main-nursery drilldowns need it).
+  const [logsRes, batchesRes, plotsRes] = await Promise.all([
+    _supabase.from('shared_inventory_logs')
+      .select('batch_name, transaction_type, quantity_change, transaction_date, created_at, plot_name')
+      .order('transaction_date', { ascending: true }),
+    _supabase.from('operation_batches').select('name, breed_name, created_at'),
+    _supabase.from('shared_plots').select('plot_name, nursery_name')
+  ]);
 
-  const { data: logs, error: logErr } = await q;
+  const { data: logs, error: logErr } = logsRes;
   if (logErr) {
     loading.classList.add('hidden');
     out.classList.remove('hidden');
@@ -219,32 +223,46 @@ async function runBatchProduction() {
     return;
   }
 
-  // Pull batch metadata for breed/created_at filtering.
-  const { data: batches } = await _supabase
-    .from('operation_batches')
-    .select('name, breed_name, created_at');
-
+  const batches = batchesRes.data || [];
   const meta = {};
-  (batches || []).forEach(b => { meta[b.name] = b; });
+  batches.forEach(b => { meta[b.name] = b; });
 
-  // Group logs by batch.
+  // Nursery lookup — Pre-Nursery holding trays map to a virtual "Pre-Nursery"
+  // slot; main-nursery plots resolve via shared_plots.nursery_name; anything
+  // missing lands in "Unassigned" so it's still visible in the drilldown.
+  const plotToNursery = {};
+  (plotsRes.data || []).forEach(p => {
+    if (p.plot_name) plotToNursery[p.plot_name] = p.nursery_name || 'Unassigned';
+  });
+  const nurseryOf = (plot) => {
+    if (!plot) return 'Unassigned';
+    if (PRE_NURSERY_PLOTS.includes(plot)) return 'Pre-Nursery';
+    return plotToNursery[plot] || 'Unassigned';
+  };
+
+  // Group logs by batch. Also track per-batch damaged qty (for the seeds
+  // drilldown) and raw records per stage (for the transplant / cull
+  // drilldowns).
   const byBatch = {};
   (logs || []).forEach(l => {
     const b = l.batch_name; if (!b) return;
     if (!byBatch[b]) byBatch[b] = {
       batch_name: b,
       seeds: 0, planted: 0, trans: 0, cull1: 0, cull2: 0, cull3: 0,
-      seeds_date: null
+      damaged: 0,
+      seeds_date: null,
+      seedsLogs: [], transLogs: [], cull1Logs: [], cull2Logs: [], cull3Logs: []
     };
     const row = byBatch[b];
     const qty = Number(l.quantity_change || 0);
     const t = l.transaction_type;
-    if (STAGE_TYPES.seeds.includes(t))   { row.seeds   += qty; row.seeds_date = row.seeds_date || l.transaction_date || l.created_at; }
+    if (STAGE_TYPES.seeds.includes(t))   { row.seeds   += qty; row.seeds_date = row.seeds_date || l.transaction_date || l.created_at; row.seedsLogs.push(l); }
+    else if (t === 'Damaged_Seeds')      { row.damaged += Math.abs(qty); }
     else if (STAGE_TYPES.planted.includes(t)) row.planted += qty;
-    else if (STAGE_TYPES.trans.includes(t))   row.trans   += qty;
-    else if (STAGE_TYPES.cull1.includes(t))   row.cull1   += Math.abs(qty);
-    else if (STAGE_TYPES.cull2.includes(t))   row.cull2   += Math.abs(qty);
-    else if (STAGE_TYPES.cull3.includes(t))   row.cull3   += Math.abs(qty);
+    else if (STAGE_TYPES.trans.includes(t))   { row.trans += qty; row.transLogs.push(l); }
+    else if (STAGE_TYPES.cull1.includes(t))   { row.cull1 += Math.abs(qty); row.cull1Logs.push(l); }
+    else if (STAGE_TYPES.cull2.includes(t))   { row.cull2 += Math.abs(qty); row.cull2Logs.push(l); }
+    else if (STAGE_TYPES.cull3.includes(t))   { row.cull3 += Math.abs(qty); row.cull3Logs.push(l); }
   });
 
   // Filter by date range (on Seeds_Received date) and breed.
@@ -288,10 +306,16 @@ async function runBatchProduction() {
 
   const overallSurvival = summary.seeds > 0 ? (summary.final / summary.seeds) * 100 : 0;
 
+  // Stash drilldown data on window for the click-through modal below.
+  // We only publish rows that survived the filter step so drilldowns
+  // reflect exactly what the summary is counting.
+  window._bpDetails = { rows, nurseryOf, filterFrom: from, filterTo: to, breed };
+
   // ── Render ──
   loading.classList.add('hidden');
   out.classList.remove('hidden');
 
+  const clickable = 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all';
   out.innerHTML = `
     <!-- Summary cards -->
     <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -299,17 +323,20 @@ async function runBatchProduction() {
         <div class="stat-label">Batches</div>
         <div class="stat-num">${fmtNum(summary.batches)}</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card ${clickable}" onclick="openBpDrill('seeds')" title="Click to see the seed intake per batch">
         <div class="stat-label">Seeds Received</div>
         <div class="stat-num text-[#c07820]">${fmtNum(summary.seeds)}</div>
+        <div class="text-[9px] font-bold text-[#8a7a68] mt-1 uppercase tracking-widest">Click for details</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card ${clickable}" onclick="openBpDrill('trans')" title="Click to see the transplant rows per nursery">
         <div class="stat-label">Transplanted</div>
         <div class="stat-num text-[#3a7ab4]">${fmtNum(summary.trans)}</div>
+        <div class="text-[9px] font-bold text-[#8a7a68] mt-1 uppercase tracking-widest">Click for details</div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card ${clickable}" onclick="openBpDrill('cull')" title="Click to see the culled qty per nursery">
         <div class="stat-label">Culled (1+2+3)</div>
         <div class="stat-num text-[#a83020]">${fmtNum(summary.cull)}</div>
+        <div class="text-[9px] font-bold text-[#8a7a68] mt-1 uppercase tracking-widest">Click for details</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Final Alive</div>
@@ -994,6 +1021,210 @@ async function bootstrap() {
 }
 
 bootstrap();
+
+// ── Batch Production drilldown modal ─────────────────────────────
+// A single centred modal reused for the Seeds Received / Transplanted /
+// Culled tiles. Content is regenerated on every open so we always
+// reflect the active date+breed filter.
+function openBpDrill(kind) {
+  const D = window._bpDetails; if (!D) return;
+  const rows = D.rows || [];
+  const rangeLabel = [
+    D.filterFrom ? 'From ' + fmtDate(D.filterFrom) : '',
+    D.filterTo   ? 'to '   + fmtDate(D.filterTo)   : '',
+    D.breed || ''
+  ].filter(Boolean).join(' · ') || 'All time';
+
+  let title = '', body = '';
+  if (kind === 'seeds') {
+    title = 'Seeds Received · detail';
+    const list = [];
+    rows.forEach(r => {
+      const seedsQty = r.seedsLogs.reduce((s, l) => s + Number(l.quantity_change || 0), 0) || r.seeds;
+      list.push({
+        date:     r.seeds_date,
+        breed:    r.breed_name,
+        batch:    r.batch_name,
+        received: seedsQty,
+        damaged:  r.damaged || 0
+      });
+    });
+    list.sort((a, b) => (new Date(b.date || 0)) - (new Date(a.date || 0)));
+    const totRcv = list.reduce((s, x) => s + x.received, 0);
+    const totDmg = list.reduce((s, x) => s + x.damaged,  0);
+    body = `
+      <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">${rangeLabel} · ${list.length} batch${list.length === 1 ? '' : 'es'}</div>
+      <div class="overflow-x-auto">
+        <table class="report-table w-full">
+          <thead><tr>
+            <th>Date</th><th>Breed (Source)</th><th>Batch</th>
+            <th class="text-right">Qty Received</th><th class="text-right">Damaged</th>
+          </tr></thead>
+          <tbody>
+            ${list.map(x => `
+              <tr>
+                <td>${fmtDate(x.date)}</td>
+                <td>${x.breed}</td>
+                <td class="font-black">${x.batch}</td>
+                <td class="text-right text-[#c07820] font-black">${fmtNum(x.received)}</td>
+                <td class="text-right ${x.damaged ? 'text-[#a83020] font-black' : 'text-[#8a7a68]'}">${x.damaged ? fmtNum(x.damaged) : '—'}</td>
+              </tr>`).join('')}
+          </tbody>
+          <tfoot><tr class="font-black bg-[#f8f4ec]">
+            <td colspan="3" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Totals</td>
+            <td class="text-right text-[#c07820]">${fmtNum(totRcv)}</td>
+            <td class="text-right text-[#a83020]">${fmtNum(totDmg)}</td>
+          </tr></tfoot>
+        </table>
+      </div>`;
+  }
+  else if (kind === 'trans') {
+    title = 'Transplanted · detail';
+    // Every Transplanted* log becomes a row. Nursery derived from
+    // plot_name via shared_plots.
+    const list = [];
+    rows.forEach(r => r.transLogs.forEach(l => {
+      list.push({
+        date:    l.transaction_date || l.created_at || null,
+        batch:   r.batch_name,
+        breed:   r.breed_name,
+        plot:    l.plot_name || '—',
+        nursery: D.nurseryOf(l.plot_name),
+        qty:     Number(l.quantity_change || 0)
+      });
+    }));
+    list.sort((a, b) => (new Date(b.date || 0)) - (new Date(a.date || 0)));
+    // Roll up by nursery for the summary strip.
+    const roll = {};
+    list.forEach(x => { roll[x.nursery] = (roll[x.nursery] || 0) + x.qty; });
+    const rollRows = Object.entries(roll).sort((a, b) => b[1] - a[1]);
+    const total = list.reduce((s, x) => s + x.qty, 0);
+    body = `
+      <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">${rangeLabel} · ${list.length} transplant record${list.length === 1 ? '' : 's'}</div>
+      <div class="mb-4 grid grid-cols-2 md:grid-cols-4 gap-2">
+        ${rollRows.map(([n, q]) => `
+          <div class="bg-[#eef5fc] border border-[#bee3f8] rounded-xl px-3 py-2">
+            <div class="text-[9px] font-black text-[#3a7ab4] uppercase tracking-widest">${n}</div>
+            <div class="text-lg font-black text-[#3a7ab4]">${fmtNum(q)}</div>
+          </div>`).join('') || '<div class="text-[10px] text-[#8a7a68] uppercase tracking-widest col-span-full">No transplant records for this range.</div>'}
+      </div>
+      <div class="overflow-x-auto">
+        <table class="report-table w-full">
+          <thead><tr>
+            <th>Date</th><th>Batch</th><th>Breed (Source)</th>
+            <th>Nursery</th><th>Plot</th><th class="text-right">Qty</th>
+          </tr></thead>
+          <tbody>
+            ${list.map(x => `
+              <tr>
+                <td>${fmtDate(x.date)}</td>
+                <td class="font-black">${x.batch}</td>
+                <td>${x.breed}</td>
+                <td class="font-black text-[#3a7ab4]">${x.nursery}</td>
+                <td>${x.plot}</td>
+                <td class="text-right text-[#3a7ab4] font-black">${fmtNum(x.qty)}</td>
+              </tr>`).join('')}
+          </tbody>
+          <tfoot><tr class="font-black bg-[#f8f4ec]">
+            <td colspan="5" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
+            <td class="text-right text-[#3a7ab4]">${fmtNum(total)}</td>
+          </tr></tfoot>
+        </table>
+      </div>`;
+  }
+  else if (kind === 'cull') {
+    title = 'Culled (1 + 2 + 3) · detail';
+    // Flatten every culling log across the 3 stages.
+    const list = [];
+    const push = (r, l, stage) => list.push({
+      date:    l.transaction_date || l.created_at || null,
+      stage,
+      batch:   r.batch_name,
+      breed:   r.breed_name,
+      plot:    l.plot_name || '—',
+      // 1st_Culling always belongs to Pre-Nursery even if the plot name
+      // isn't in PRE_NURSERY_PLOTS (some batches used custom PN tray labels).
+      nursery: stage === '1st' ? 'Pre-Nursery' : D.nurseryOf(l.plot_name),
+      qty:     Math.abs(Number(l.quantity_change || 0))
+    });
+    rows.forEach(r => {
+      r.cull1Logs.forEach(l => push(r, l, '1st'));
+      r.cull2Logs.forEach(l => push(r, l, '2nd'));
+      r.cull3Logs.forEach(l => push(r, l, '3rd'));
+    });
+    list.sort((a, b) => (new Date(b.date || 0)) - (new Date(a.date || 0)));
+    // Roll up per nursery + per stage.
+    const roll = {};
+    list.forEach(x => {
+      if (!roll[x.nursery]) roll[x.nursery] = { total: 0, '1st': 0, '2nd': 0, '3rd': 0 };
+      roll[x.nursery].total  += x.qty;
+      roll[x.nursery][x.stage] += x.qty;
+    });
+    const rollEntries = Object.entries(roll).sort((a, b) => b[1].total - a[1].total);
+    const total = list.reduce((s, x) => s + x.qty, 0);
+    body = `
+      <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">${rangeLabel} · ${list.length} culling record${list.length === 1 ? '' : 's'}</div>
+      <div class="mb-4 grid grid-cols-2 md:grid-cols-4 gap-2">
+        ${rollEntries.map(([n, v]) => `
+          <div class="bg-[#fff5f5] border border-[#f8d7da] rounded-xl px-3 py-2">
+            <div class="text-[9px] font-black text-[#a83020] uppercase tracking-widest">${n}</div>
+            <div class="text-lg font-black text-[#a83020]">${fmtNum(v.total)}</div>
+            <div class="text-[9px] font-bold text-[#8a7a68] mt-0.5">1st ${fmtNum(v['1st'])} · 2nd ${fmtNum(v['2nd'])} · 3rd ${fmtNum(v['3rd'])}</div>
+          </div>`).join('') || '<div class="text-[10px] text-[#8a7a68] uppercase tracking-widest col-span-full">No culling records for this range.</div>'}
+      </div>
+      <div class="overflow-x-auto">
+        <table class="report-table w-full">
+          <thead><tr>
+            <th>Date</th><th>Stage</th><th>Batch</th><th>Breed (Source)</th>
+            <th>Nursery</th><th>Plot</th><th class="text-right">Culled Qty</th>
+          </tr></thead>
+          <tbody>
+            ${list.map(x => `
+              <tr>
+                <td>${fmtDate(x.date)}</td>
+                <td class="font-black text-[#a83020]">${x.stage}</td>
+                <td class="font-black">${x.batch}</td>
+                <td>${x.breed}</td>
+                <td class="font-black text-[#a83020]">${x.nursery}</td>
+                <td>${x.plot}</td>
+                <td class="text-right text-[#a83020] font-black">${fmtNum(x.qty)}</td>
+              </tr>`).join('')}
+          </tbody>
+          <tfoot><tr class="font-black bg-[#f8f4ec]">
+            <td colspan="6" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
+            <td class="text-right text-[#a83020]">${fmtNum(total)}</td>
+          </tr></tfoot>
+        </table>
+      </div>`;
+  }
+
+  document.getElementById('bp-drill-title').textContent = title;
+  document.getElementById('bp-drill-body').innerHTML = body;
+  document.getElementById('bp-drill-modal').classList.remove('hidden');
+  document.getElementById('bp-drill-modal').classList.add('flex');
+}
+
+function closeBpDrill() {
+  const m = document.getElementById('bp-drill-modal');
+  if (!m) return;
+  m.classList.add('hidden');
+  m.classList.remove('flex');
+}
+
+window.openBpDrill  = openBpDrill;
+window.closeBpDrill = closeBpDrill;
 </script>
+
+<!-- Batch Production drilldown modal — reused across Seeds Received / Transplanted / Culled tiles. -->
+<div id="bp-drill-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/60 p-4" onclick="if(event.target===this)closeBpDrill()">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-[#e8dcc8] bg-gradient-to-r from-[#f8f4ec] to-white">
+      <div class="text-base font-black text-[#3d2610] uppercase tracking-widest" id="bp-drill-title">Detail</div>
+      <button onclick="closeBpDrill()" class="w-9 h-9 rounded-lg bg-[#e8dcc8]/60 hover:bg-[#e8dcc8] text-[#3d2610] text-xl leading-none flex items-center justify-center transition-colors">×</button>
+    </div>
+    <div class="p-5 overflow-y-auto" id="bp-drill-body"></div>
+  </div>
+</div>
+
 </body>
 </html>
