@@ -2166,8 +2166,19 @@
                     handleNewBatchSetup(); // Show latest batch number even when editing
                     document.getElementById('window-title').innerText = `Batch: ${batchIdParam}`;
                     
-                    const { data, error } = await _supabase.from('shared_inventory_logs').select('*').eq('transaction_type', 'Seeds_Received').eq('batch_name', batchIdParam).maybeSingle();
+                    // NOT .maybeSingle(): legacy batches (e.g. 260, 261) carry
+                    // duplicate Seeds_Received rows from repeated Tab 1 saves
+                    // before the duplicate-guard existed — maybeSingle() throws
+                    // "JSON object requested, multiple rows returned" and the
+                    // whole page dies. Match the list page: newest row wins.
+                    const { data: srRows, error } = await _supabase.from('shared_inventory_logs')
+                        .select('*')
+                        .eq('transaction_type', 'Seeds_Received')
+                        .eq('batch_name', batchIdParam)
+                        .order('created_at', { ascending: false })
+                        .limit(1);
                     if (error) throw error;
+                    const data = (srRows && srRows[0]) || null;
                     if (data) {
                         batchData = data;
                         document.getElementById('f-original-create').value = data.created_at; 
