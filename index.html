@@ -327,30 +327,53 @@
     }
   });
 
+  // 20-second timeout on any auth network call — if Supabase or the
+  // user's network is unreachable, the promise races against a rejected
+  // Timeout so the button can never stick on "Processing…" forever.
+  const AUTH_TIMEOUT_MS = 20000;
+  const withTimeout = (p, ms) => Promise.race([
+    p,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(`Timed out after ${Math.round(ms/1000)}s — check your internet or Supabase status.`)), ms))
+  ]);
+
   mainBtn.addEventListener('click', async () => {
     const email = document.getElementById('email').value.trim();
     const pw    = document.getElementById('password').value;
     if (!email || !pw) return alert('Please enter email and password.');
+    const baseLabel = isSignUpMode ? 'Sign Up' : 'Login';
     mainBtn.innerText = 'Processing…'; mainBtn.disabled = true;
-    if (isSignUpMode) {
-      const name = document.getElementById('user-name').value.trim();
-      const { error } = await _supabase.auth.signUp({ email, password: pw, options: { data: { full_name: name } } });
-      if (error) { alert('Signup Error: ' + error.message); mainBtn.innerText = 'Sign Up'; }
-      else {
+    try {
+      if (isSignUpMode) {
+        const name = document.getElementById('user-name').value.trim();
+        const { error } = await withTimeout(
+          _supabase.auth.signUp({ email, password: pw, options: { data: { full_name: name } } }),
+          AUTH_TIMEOUT_MS
+        );
+        if (error) { alert('Signup Error: ' + error.message); return; }
         // New ops accounts have zero module permissions until an admin
         // grants them via User Access. Set expectations up front instead
         // of letting them log in and find an empty "Pending Access"
         // screen with no context.
         alert('Account created.\n\nPlease contact an admin to grant access for this AI system. Once granted, you\'ll be able to log in and use the modules.');
         isSignUpMode = false; signupFields.classList.add('hidden');
-        mainBtn.innerText = 'Login'; toggleBtn.innerText = 'Create Account';
+        toggleBtn.innerText = 'Create Account';
         forgotBtn.style.display = 'inline-block';
+      } else {
+        const { error } = await withTimeout(
+          _supabase.auth.signInWithPassword({ email, password: pw }),
+          AUTH_TIMEOUT_MS
+        );
+        if (error) { alert('Login Error: ' + error.message); return; }
       }
-    } else {
-      const { error } = await _supabase.auth.signInWithPassword({ email, password: pw });
-      if (error) { alert('Login Error: ' + error.message); mainBtn.innerText = 'Login'; }
+    } catch (e) {
+      // Covers thrown network errors AND the withTimeout rejection.
+      alert('Login Error: ' + (e && e.message ? e.message : String(e)));
+    } finally {
+      // Always restore the button. On success, the onAuthStateChange
+      // handler hides this screen anyway, so the reset is invisible.
+      mainBtn.innerText = isSignUpMode ? 'Sign Up' : 'Login';
+      mainBtn.disabled  = false;
     }
-    mainBtn.disabled = false;
   });
 
   forgotBtn.addEventListener('click', async () => {
