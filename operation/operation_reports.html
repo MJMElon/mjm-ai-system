@@ -225,6 +225,12 @@ async function runBatchProduction() {
       // have an operation_batches mirror row, so we can't rely on that
       // table alone to name the source.
       .select('batch_name, transaction_type, quantity_change, transaction_date, created_at, plot_name, breed_name')
+      // Only the funnel's types — the aggregation loop ignores everything
+      // else anyway, and pulling the full table (photo rows, calibration,
+      // audit notes…) was hammering the database on every report open.
+      .in('transaction_type', ['Seeds_Received', 'Damaged_Seeds', 'Planted',
+          'Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone',
+          '1st_Culling', '2nd_Culling', '3rd_Culling'])
       .order('transaction_date', { ascending: true }),
     _supabase.from('operation_batches').select('name, breed_name, created_at'),
     _supabase.from('shared_plots').select('plot_name, nursery_name')
@@ -779,7 +785,12 @@ async function runSummaryMovement() {
 
   const [logsRes, dosRes, plotsRes] = await Promise.all([
     _supabase.from('shared_inventory_logs')
-      .select('transaction_type, transaction_date, plot_name, batch_name, quantity_change'),
+      .select('transaction_type, transaction_date, plot_name, batch_name, quantity_change')
+      // _categorise() only handles these types; fetching the rest of the
+      // table (photos, audit notes, calibration) just burned DB CPU.
+      .in('transaction_type', ['Seeds_Received', 'Planted', 'Transplanted',
+          'Transplanted_Premium', 'Transplanted_DoubleTone', 'Damaged_Seeds',
+          '1st_Culling', '2nd_Culling', '3rd_Culling', 'Sold']),
     _supabase.from('shared_do_records')
       .select('delivery_date, status, remark, plot_1, qty_1, batch_1, plot_2, qty_2, batch_2, plot_3, qty_3, batch_3, plot_4, qty_4, batch_4, plot_5, qty_5, batch_5'),
     _supabase.from('shared_plots').select('plot_name, nursery_name')

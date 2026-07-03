@@ -2636,9 +2636,8 @@
                     .order('created_at', { ascending: true });
                 if (!all) { alert('Could not fetch records.'); return; }
                 all[idx] = { ...all[idx], transaction_type: txType, plot_name: destPlot, quantity_change: qty, breed_name: breed, remark };
-                await _supabase.from('shared_inventory_logs').delete().eq('batch_name', batchId).in('transaction_type', ['Transplanted','Transplanted_Premium','Transplanted_DoubleTone']);
                 const toInsert = all.map(l => withEditMeta({ transaction_type: l.transaction_type, batch_name: batchId, breed_name: breed, plot_name: l.plot_name, quantity_change: l.quantity_change, remark: l.remark }));
-                const { error } = await safeInsertLogs(toInsert);
+                const { error } = await safeReplaceLogs(batchId, ['Transplanted','Transplanted_Premium','Transplanted_DoubleTone'], toInsert);
                 if (error) throw error;
                 setEditMetaUI(3, new Date().toISOString(), window.currentUserEmail);
                 alert('✅ Record updated!');
@@ -3338,13 +3337,9 @@
                     }
                 }
 
-                // 1. Delete old transplant logs for this batch to avoid duplicates
-                await _supabase.from('shared_inventory_logs').delete()
-                    .eq('batch_name', batchId)
-                    .in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']);
-
-                // 2. Insert new transplant logs
-                const { error: logError } = await safeInsertLogs(logsToInsert);
+                // Replace old transplant logs with the new set — insert-first so a
+                // failed save can never wipe the existing records.
+                const { error: logError } = await safeReplaceLogs(batchId, ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone'], logsToInsert);
                 if (logError) throw logError;
                 setEditMetaUI(3, new Date().toISOString(), window.currentUserEmail);
 
@@ -3784,8 +3779,6 @@
                     auditPhotoBase64 = url;
                 }
 
-                await _supabase.from('shared_inventory_logs').delete()
-                    .eq('batch_name', batchId).eq('transaction_type', 'Planting_Photo');
                 const photoLogs = [];
                 if (opsPhotoBase64 && /^https?:\/\//i.test(opsPhotoBase64)) photoLogs.push({
                     transaction_type: 'Planting_Photo', batch_name: batchId,
@@ -3798,15 +3791,12 @@
                     remark: auditPhotoBase64
                 });
                 console.log('[savePhotos] planning to insert', photoLogs.length, 'log row(s):', photoLogs);
-                if (photoLogs.length > 0) {
-                    const { data: inserted, error } = await _supabase.from('shared_inventory_logs').insert(photoLogs).select();
-                    if (error) {
-                        console.warn('[savePhotos] insert error:', error);
-                        showToast('⚠️ Photo URLs uploaded but the log row failed: ' + error.message, 'error');
-                    } else {
-                        console.log('[savePhotos] inserted rows:', inserted);
-                        showToast(`📷 ${photoLogs.length} photo(s) persisted.`, 'success');
-                    }
+                const { error } = await safeReplaceLogs(batchId, ['Planting_Photo'], photoLogs);
+                if (error) {
+                    console.warn('[savePhotos] replace error:', error);
+                    showToast('⚠️ Photo save issue: ' + error.message, 'error');
+                } else if (photoLogs.length > 0) {
+                    showToast(`📷 ${photoLogs.length} photo(s) persisted.`, 'success');
                 } else {
                     console.log('[savePhotos] no photo logs to insert (both variables empty/non-URL).');
                 }
@@ -3899,10 +3889,9 @@
                 }
 
                 if (logsToInsert.length > 0) {
-                    // Prevent duplicate logs on re-saving
-                    await _supabase.from('shared_inventory_logs').delete().eq('batch_name', batchId).in('transaction_type', ['Planted', 'Damaged_Seeds']);
-
-                    const { error } = await safeInsertLogs(logsToInsert);
+                    // Replace (insert-first) — prevents duplicates on re-save without
+                    // the delete-then-insert window that could destroy saved rows.
+                    const { error } = await safeReplaceLogs(batchId, ['Planted', 'Damaged_Seeds'], logsToInsert);
                     if (error) throw error;
                 }
 
@@ -4150,6 +4139,43 @@
                 ({ error } = await _supabase.from('shared_inventory_logs').insert(payload));
             }
             return { error };
+        }
+        // Replace a batch's rows of the given transaction types WITHOUT the
+        // delete-then-insert window. The old pattern deleted first and inserted
+        // after as two independent requests — when the DB was slow, the delete
+        // succeeded, the insert timed out, and the batch's existing records
+        // were destroyed (how batch 264's culling data vanished). Here we:
+        //   1. capture the ids of the current rows,
+        //   2. insert the replacement rows,
+        //   3. only then delete the captured ids.
+        // If the insert fails, nothing was deleted. If the delete fails, both
+        // copies exist (visible + recoverable) rather than neither.
+        async function safeReplaceLogs(batchId, types, logsToInsert) {
+            const { data: oldRows, error: selErr } = await _supabase
+                .from('shared_inventory_logs')
+                .select('id')
+                .eq('batch_name', batchId)
+                .in('transaction_type', types);
+            if (selErr) return { error: selErr };
+
+            if (logsToInsert && logsToInsert.length) {
+                const { error: insErr } = await safeInsertLogs(logsToInsert);
+                if (insErr) return { error: insErr };
+            }
+
+            const oldIds = (oldRows || []).map(r => r.id).filter(v => v !== null && v !== undefined);
+            if (oldIds.length) {
+                const { error: delErr } = await _supabase
+                    .from('shared_inventory_logs')
+                    .delete()
+                    .in('id', oldIds);
+                if (delErr) {
+                    // New data is saved; old rows linger as duplicates. Surface it
+                    // so the user re-saves (which will capture + clear them).
+                    return { error: new Error('Saved, but old rows could not be cleared (' + delErr.message + '). Please save once more.') };
+                }
+            }
+            return { error: null };
         }
         async function loadAllEditMeta(batchId) {
             if (!batchId) return;
@@ -5846,10 +5872,7 @@ Thank you.`;
 
                 if (logsToInsert.length === 0) throw new Error('No valid rows to save.');
 
-                await _supabase.from('shared_inventory_logs').delete()
-                    .eq('batch_name', batchId).eq('transaction_type', '1st_Culling');
-
-                const { error } = await safeInsertLogs(logsToInsert);
+                const { error } = await safeReplaceLogs(batchId, ['1st_Culling'], logsToInsert);
                 if (error) throw error;
                 setEditMetaUI(4, new Date().toISOString(), window.currentUserEmail);
 
@@ -6352,8 +6375,7 @@ Thank you.`;
                 }
 
                 if (logsToInsert.length === 0) throw new Error('No filled rows to save.');
-                await _supabase.from('shared_inventory_logs').delete().eq('batch_name', batchId).eq('transaction_type', '2nd_Culling');
-                const { error } = await safeInsertLogs(logsToInsert);
+                const { error } = await safeReplaceLogs(batchId, ['2nd_Culling'], logsToInsert);
                 if (error) throw error;
                 setEditMetaUI(5, new Date().toISOString(), window.currentUserEmail);
 
@@ -6842,8 +6864,7 @@ Thank you.`;
                 }
 
                 if (logsToInsert.length === 0) throw new Error('Enter at least one plot’s Culled Qty before saving.');
-                await _supabase.from('shared_inventory_logs').delete().eq('batch_name', batchId).eq('transaction_type', '3rd_Culling');
-                const { error } = await safeInsertLogs(logsToInsert);
+                const { error } = await safeReplaceLogs(batchId, ['3rd_Culling'], logsToInsert);
                 if (error) throw error;
                 setEditMetaUI(6, new Date().toISOString(), window.currentUserEmail);
                 if (uploadFailures > 0) {
