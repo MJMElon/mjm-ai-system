@@ -846,7 +846,7 @@
                                     <h4 class="font-black text-[#3d2610] uppercase tracking-widest text-sm">Photo Evidence</h4>
                                 </div>
                                 <div class="p-6">
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div class="grid grid-cols-1 gap-6">
 
                                         <!-- Ops photo -->
                                         <div class="bg-[#fdfaf4] p-5 rounded-2xl border border-[#e8dcc8]">
@@ -867,25 +867,10 @@
                                             </div>
                                         </div>
 
-                                        <!-- Audit photo -->
-                                        <div class="bg-[#f0f8ec] p-5 rounded-2xl border border-[#4a7a2e]">
-                                            <label class="label-style !text-[#4a7a2e]">Auditor Final Verification Proof *</label>
-                                            <p class="text-[10px] font-bold text-[#8a7a68] mb-3 -mt-1 leading-tight">Attach evidence auditor counter-checked the damage.</p>
-                                            <div id="t2-photo-audit-zone" class="border-2 border-dashed border-[#4a7a2e] bg-white rounded-xl p-6 text-center cursor-pointer hover:bg-[#f3efe6] transition-colors" onclick="triggerPhotoUpload('audit')">
-                                                <span class="text-3xl">📷</span>
-                                                <p class="text-xs font-black text-[#4a7a2e] uppercase tracking-widest mt-2">Auditor Check Camera / Upload</p>
-                                                <input type="file" id="t2-photo-audit-upload" class="hidden" accept="image/*" capture="environment" onchange="handleAuditPhoto(this, 'audit')">
-                                            </div>
-                                            <div id="t2-photo-audit-preview" class="hidden items-center gap-3 p-3 border-2 border-[#4a7a2e] rounded-xl bg-white mt-2">
-                                                <div class="w-12 h-12 bg-gray-200 rounded-lg bg-cover bg-center shadow-sm shrink-0" id="t2-photo-audit-thumb"></div>
-                                                <div class="flex-1 overflow-hidden"><p class="text-[10px] font-black text-[#3d2610] uppercase tracking-wider truncate" id="t2-photo-audit-name">auditor_final.jpg</p><p class="text-[9px] font-bold text-[#6aa83c] uppercase">Final Check Attached</p></div>
-                                                <div class="flex flex-col gap-1 shrink-0">
-                                                    <button type="button" class="px-3 py-1 bg-[#fdfaf4] border border-[#e8dcc8] text-[#3d2610] text-[9px] font-black uppercase tracking-widest rounded hover:bg-[#e8dcc8]" onclick="viewAuditPhoto('audit')">View</button>
-                                                    <button type="button" class="px-3 py-1 bg-[#fdfaf4] border border-[#f8d7da] text-[#a83020] text-[9px] font-black uppercase tracking-widest rounded hover:bg-[#f8d7da]" onclick="removeAuditPhoto('audit')">Del</button>
-                                                </div>
-                                            </div>
-                                        </div>
-
+                                        <!-- Auditor Final Verification panel removed — HQ/auditor
+                                             counter-check photo is no longer collected on this report.
+                                             Legacy audit photos already saved remain in the DB and are
+                                             still re-persisted on save (see loadSavedPlantingData). -->
                                     </div>
                                 </div>
                             </div>
@@ -3679,7 +3664,7 @@
             requiredChecks++; if (document.getElementById('t2-damaged').value !== "") filledCount++;
             requiredChecks++; if (currentWorkers > 0) filledCount++;
             requiredChecks++; if (opsPhotoBase64 !== null) filledCount++;
-            requiredChecks++; if (auditPhotoBase64 !== null) filledCount++;
+            // Auditor verification photo no longer required — panel removed.
             
             const rows = document.querySelectorAll('.tray-row');
             rows.forEach(row => {
@@ -3838,7 +3823,13 @@
         }
 
         function restorePhotoUI(type, b64, name) {
-            document.getElementById(`t2-photo-${type}-thumb`).style.backgroundImage = `url('${b64}')`;
+            // The 'audit' panel was removed from the form — legacy batches may
+            // still carry an audit photo row, so bail quietly if the UI for
+            // this photo type doesn't exist (the value stays in memory and is
+            // re-persisted on save; only the display is gone).
+            const thumb = document.getElementById(`t2-photo-${type}-thumb`);
+            if (!thumb) return;
+            thumb.style.backgroundImage = `url('${b64}')`;
             document.getElementById(`t2-photo-${type}-name`).innerText = name;
             document.getElementById(`t2-photo-${type}-zone`).classList.add('hidden');
             const preview = document.getElementById(`t2-photo-${type}-preview`);
