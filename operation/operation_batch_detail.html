@@ -3972,7 +3972,15 @@
             const nextNum = Math.max(BATCH_NUMBER_FLOOR, latestNum + 1);
             const latestEl = document.getElementById('latest-batch-id');
             if (latestEl) latestEl.innerText = latestName || 'None';
-            document.getElementById('f-batchno').value = String(nextNum);
+            // Only assign a fresh number when CREATING a new batch. When editing
+            // an existing batch this function is called just to show the
+            // "Latest:" label — it must NOT touch f-batchno. Because it is async
+            // (it scans every Seeds_Received row), it otherwise races the
+            // batch-load and can overwrite the real batch number with latest+1,
+            // so a re-save silently bumps the batch to a new number.
+            if (!isEditing) {
+                document.getElementById('f-batchno').value = String(nextNum);
+            }
             updateT1Completion();
         }
 
@@ -5439,6 +5447,12 @@ Thank you.`;
 
         document.getElementById('reception-form').addEventListener('submit', async function(e) {
             e.preventDefault(); const saveBtn = document.getElementById('save-btn'); saveBtn.innerText = 'SAVING...'; saveBtn.disabled = true;
+            // Safety net: an existing batch's number is immutable. If anything
+            // left a wrong number in the (read-only) field, restore the real one
+            // before saving so a re-save can never re-label the batch.
+            if (isEditing && batchData && batchData.batch_name) {
+                document.getElementById('f-batchno').value = String(batchData.batch_name);
+            }
             const dateReceived = document.getElementById('f-datereceived').value; const batch = document.getElementById('f-batchno').value.trim(); const breed = document.getElementById('f-brand').value; const supplier = document.getElementById('f-supplier').value; const mpob = document.getElementById('f-mpob').value; const dono = document.getElementById('f-dono').value; const focPercent = parseFloat(document.getElementById('f-foc-percent').value) || 0; const totalQtyRaw = document.getElementById('display-total-qty').dataset.raw || 0; const doQty = readNumericInput('f-do-qty');
             let remarkStr = `Seeds received.`; if (supplier) remarkStr += ` Supplier: ${supplier}.`; if (mpob) remarkStr += ` MPOB: ${mpob}.`; if (dono) remarkStr += ` D/O: ${dono}.`; remarkStr += ` DO_Qty: ${doQty}.`; if (focPercent > 0) remarkStr += ` Incl. ${focPercent}% FOC.`;
             const ledgerPayload = withEditMeta({ transaction_type: 'Seeds_Received', batch_name: batch, breed_name: breed, quantity_change: parseInt(totalQtyRaw), plot_name: 'Pre-Nursery', transaction_date: dateReceived, remark: remarkStr });
