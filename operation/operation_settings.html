@@ -1216,5 +1216,21 @@
 
         _supabase.auth.getSession().then(({ data: { session } }) => { if (!session) window.location.href = 'operation_dashboard.html'; else fetchData(); });
     </script>
+<!-- Page-access guard: this page can be locked per user in the module's
+     User Access (operation_user_access.html). Fails open on read errors. -->
+<script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_access.js"></script>
+<script>
+(async () => {
+  try {
+    const _gc = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+    await MJMAccess.load(_gc);
+    if (MJMAccess.user() && !MJMAccess.canOpenOperationPage('settings')) {
+      alert('You do not have access to System Settings.');
+      location.replace('operation_dashboard.html');
+    }
+  } catch (e) { console.warn('[page-guard] skipped:', e && e.message); }
+})();
+</script>
 </body>
 </html>

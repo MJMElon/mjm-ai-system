@@ -2,11 +2,411 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>User Access — moved</title>
-<!-- User Access is now the main access management on the module-selection
-     page (hub). This stub keeps old links working. -->
-<meta http-equiv="refresh" content="0;url=../user_access.html">
-<script>location.replace('../user_access.html');</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>User Access — Nursery Seedling Stock Management</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_access.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Outfit', system-ui, sans-serif; }
+  body { background:#f1f5f9; margin:0; }
+
+  .card { background:white; border:1px solid #e2e8f0; border-radius:20px; box-shadow:0 4px 16px rgba(0,0,0,.06); }
+
+  .chip { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+  .chip-admin  { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+  .chip-normal { background:#eff6ff; color:#1e3a8a; border:1px solid #bfdbfe; }
+  .chip-none   { background:#fff1f2; color:#9f1239; border:1px solid #fecdd3; }
+  .chip-info   { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
+  .chip-manage { background:#fffbeb; color:#92400e; border:1px solid #fde68a; }
+
+  .edit-btn { display:inline-flex; align-items:center; gap:6px; padding:10px 16px; border-radius:12px; font-size:11px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; background:linear-gradient(135deg,#10b981,#059669); color:white; border:none; cursor:pointer; box-shadow:0 6px 14px -4px rgba(16,185,129,.4); transition:all .15s; }
+  .edit-btn:hover { transform:translateY(-1px); box-shadow:0 10px 18px -4px rgba(16,185,129,.5); }
+
+  .drawer-backdrop { position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:60; opacity:0; pointer-events:none; transition:opacity .25s; backdrop-filter:blur(4px); }
+  .drawer-backdrop.open { opacity:1; pointer-events:auto; }
+  .drawer { position:fixed; top:0; right:0; bottom:0; width:100%; max-width:480px; background:white; z-index:70; transform:translateX(100%); transition:transform .3s cubic-bezier(.4,0,.2,1); display:flex; flex-direction:column; box-shadow:-20px 0 60px rgba(0,0,0,.2); }
+  .drawer.open { transform:translateX(0); }
+
+  .lvl-select { appearance:none; -webkit-appearance:none; padding:10px 36px 10px 14px; border-radius:12px; font-weight:900; font-size:12px; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; border:1.5px solid transparent; outline:none; min-width:140px; transition:all .15s; background-position:right 12px center; background-repeat:no-repeat; background-size:10px; }
+  .lvl-admin  { background-color:#10b981; color:white;   border-color:#059669; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='white' d='M5 6L0 0h10z'/></svg>"); }
+  .lvl-normal { background-color:#3b82f6; color:white;   border-color:#2563eb; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='white' d='M5 6L0 0h10z'/></svg>"); }
+  .lvl-none   { background-color:#f8fafc; color:#475569; border-color:#cbd5e1; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='%23475569' d='M5 6L0 0h10z'/></svg>"); }
+  .lvl-select:focus { box-shadow:0 0 0 3px rgba(59,130,246,.25); }
+
+  .tog { position:relative; display:inline-block; width:48px; height:26px; flex-shrink:0; }
+  .tog input { opacity:0; width:0; height:0; }
+  .tog-slider { position:absolute; cursor:pointer; inset:0; background:#cbd5e1; border-radius:999px; transition:.25s; }
+  .tog-slider::before { position:absolute; content:''; left:3px; top:3px; width:20px; height:20px; background:white; border-radius:50%; transition:.25s; box-shadow:0 1px 3px rgba(0,0,0,.25); }
+  .tog input:checked + .tog-slider { background:#f59e0b; }
+  .tog input:checked + .tog-slider::before { transform:translateX(22px); }
+
+  .preset-btn { padding:8px 14px; font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; border-radius:10px; border:1.5px solid #e2e8f0; background:white; color:#334155; cursor:pointer; transition:all .15s; }
+  .preset-btn:hover { background:#f1f5f9; border-color:#cbd5e1; }
+
+  .user-row { padding:18px 22px; display:flex; align-items:center; gap:16px; border-bottom:1px solid #f1f5f9; transition:background .15s; }
+  .user-row:hover { background:#f8fafc; }
+  .user-row:last-child { border-bottom:none; }
+</style>
 </head>
-<body><p>User Access has moved to the <a href="../user_access.html">module-selection page</a>.</p></body>
+<body>
+
+<div class="bg-white border-b border-slate-200 px-6 py-4 grid grid-cols-3 items-center sticky top-0 z-30 shadow-sm">
+  <a href="operation_dashboard.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Back to Main Page</a>
+  <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm">Module User Access</span>
+  <div class="justify-self-end flex items-center gap-2">
+    <div class="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-black text-xs">AI</div>
+  </div>
+</div>
+
+<div id="loading" class="max-w-[900px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading user list…</div>
+
+<div id="forbidden" class="max-w-[900px] mx-auto px-6 py-16 hidden">
+  <div class="card p-10 text-center">
+    <div class="text-4xl mb-3">🔒</div>
+    <h2 class="text-lg font-black text-slate-800 uppercase tracking-widest">Access Denied</h2>
+    <p class="text-xs text-slate-500 mt-2">Only users with <strong>Manage Users</strong> permission can open this page.</p>
+    <a href="operation_dashboard.html" class="inline-block mt-6 text-[10px] font-bold text-emerald-700 uppercase tracking-widest bg-emerald-50 border border-emerald-200 rounded-full px-4 py-2 no-underline">Back to Main Page</a>
+  </div>
+</div>
+
+<div id="main" class="max-w-[900px] mx-auto px-6 py-8 space-y-6 hidden">
+
+  <div class="card p-6 space-y-4">
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">🌱</span>
+      <h1 class="text-base font-black text-slate-800 uppercase tracking-widest">Nursery Seedling Stock Management — User Access</h1>
+    </div>
+    <p class="text-[13px] text-slate-600 leading-relaxed">
+      This page manages users who were <strong>opened for this module</strong> on the main portal's User Access.
+      For each of them, set which pages inside the module they can open — Batch Records, Delivery Orders, Stock &amp; Sales, Reports, Audit Trail, System Settings — and the Batch Verifier role.
+    </p>
+    <p class="text-[12px] text-slate-500 leading-relaxed">
+      To open or close the module itself for someone (or add a new user), use the main portal's <a href="../user_access.html" class="text-emerald-700 font-bold underline underline-offset-2">User Access</a>.
+    </p>
+  </div>
+
+  <div class="flex flex-col md:flex-row gap-3 items-stretch">
+    <input id="search" type="text" placeholder="🔎 Search users by email or name…" class="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
+    <button id="reload-btn" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl border border-slate-200">Reload</button>
+  </div>
+
+  <div id="users-list" class="card overflow-hidden"></div>
+
+  <p class="text-[11px] text-slate-500 text-center">
+    Someone missing here? They haven't been opened for this module yet — grant them <strong>Operation</strong> access on the main portal's User Access first.
+  </p>
+
+</div>
+
+<!-- Drawer -->
+<div id="drawer-backdrop" class="drawer-backdrop"></div>
+<aside id="drawer" class="drawer" aria-hidden="true">
+  <header class="px-6 py-5 border-b border-slate-200 flex items-start justify-between gap-4">
+    <div class="flex items-center gap-3 min-w-0">
+      <div id="d-avatar" class="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-black text-sm shrink-0">??</div>
+      <div class="min-w-0">
+        <div id="d-name"  class="font-black text-slate-800 truncate">—</div>
+        <div id="d-email" class="text-[12px] text-slate-500 font-semibold truncate">—</div>
+        <div id="d-level" class="mt-1"></div>
+      </div>
+    </div>
+    <button id="d-close" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center text-xl leading-none">×</button>
+  </header>
+
+  <div class="flex-1 overflow-y-auto">
+    <!-- Page access inside this module -->
+    <section class="px-6 py-5">
+      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Page Access — Inside This Module</div>
+      <div id="d-pages" class="space-y-3"><!-- rows injected --></div>
+
+      <div class="mt-5 pt-4 border-t border-dashed border-slate-200">
+        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Quick Set — applies to all pages</div>
+        <div class="flex flex-wrap gap-2">
+          <button class="preset-btn" data-preset="admin">Set All to Admin</button>
+          <button class="preset-btn" data-preset="normal">Set All to Normal</button>
+          <button class="preset-btn" data-preset="none">Set All to None</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Operation Batch Verifier — moved here from the main portal -->
+    <section class="px-6 py-5 border-t border-slate-200 bg-amber-50/40">
+      <div class="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-2">Operation Batch Verifier</div>
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <div class="font-black text-slate-800 text-sm">Can verify operation batch tabs</div>
+          <p class="text-[11px] text-slate-600 mt-1 leading-relaxed">
+            Lets this user click <strong>Verify</strong> on each tab of a batch record.
+            An operation admin can only <strong>Mark as Reviewed</strong> after a verifier has signed off.
+          </p>
+        </div>
+        <label class="tog mt-1">
+          <input id="d-verify-operation" type="checkbox">
+          <span class="tog-slider"></span>
+        </label>
+      </div>
+    </section>
+  </div>
+
+  <footer class="px-6 py-4 border-t border-slate-200 flex justify-end items-center gap-3 bg-slate-50">
+    <button id="d-cancel" class="px-5 py-3 rounded-xl text-slate-600 font-black text-[11px] uppercase tracking-widest hover:bg-slate-100">Cancel</button>
+    <button id="d-save"   class="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] uppercase tracking-widest shadow">Save Changes</button>
+  </footer>
+</aside>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-6 right-6 hidden z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg"></div>
+
+<script>
+const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+const LEVELS = ['admin', 'normal', 'none'];
+const LEVEL_LABEL = { admin:'Admin', normal:'Normal', none:'None' };
+
+/* The pages inside this module.
+   store:'pages'   → saved in permissions.operation_pages.<key>
+                     (missing key = allowed, so existing users keep access)
+   store:'modules' → saved in permissions.modules.<key>
+                     (Reports & Audit Trail keep their historical storage so
+                      existing grants and page gates keep working) */
+const PAGE_DEFS = [
+  { key:'batch',       store:'pages',   def:'normal', label:'Batch Records',   desc:'Create and edit production batch records' },
+  { key:'orders',      store:'pages',   def:'normal', label:'Delivery Orders', desc:'Delivery scheduling and order handling' },
+  { key:'stock',       store:'pages',   def:'normal', label:'Stock & Sales',   desc:'Stock levels, publishing, and sales' },
+  { key:'reports',     store:'modules', def:'none',   label:'Reports',         desc:'Batch production summary, analytics' },
+  { key:'audit_trail', store:'modules', def:'none',   label:'Audit Trail',     desc:'Who edited what — admins can clear logs' },
+  { key:'settings',    store:'pages',   def:'normal', label:'System Settings', desc:'Nurseries, plots, breeds, master data' }
+];
+
+let allUsers   = [];   // system users opened for this module
+let editingUid = null;
+let editingPerms = null; // FULL permissions object of the row being edited
+
+function showToast(msg, kind) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'fixed bottom-6 right-6 z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg ' +
+    (kind === 'err'
+      ? 'bg-red-50 text-red-700 border border-red-200'
+      : 'bg-emerald-50 text-emerald-700 border border-emerald-200');
+  setTimeout(() => t.classList.add('hidden'), 2400);
+  t.classList.remove('hidden');
+}
+
+function initials(p) {
+  const src = (p.full_name || p.email || '?').trim();
+  return src.split(/\s+/).map(s => s[0]).slice(0,2).join('').toUpperCase() || '?';
+}
+
+/* Current level of one page for a permissions object (with defaults). */
+function pageLevel(perms, def_) {
+  const v = def_.store === 'modules'
+    ? perms.modules && perms.modules[def_.key]
+    : perms.operation_pages && perms.operation_pages[def_.key];
+  return LEVELS.includes(v) ? v : def_.def;
+}
+
+function summaryHtml(perms) {
+  const chips = PAGE_DEFS.map(d => {
+    const lvl = pageLevel(perms, d);
+    if (lvl === 'none') return `<span class="chip chip-none">${d.label} · Locked</span>`;
+    if (lvl === 'admin') return `<span class="chip chip-admin">${d.label} · Admin</span>`;
+    return '';
+  }).filter(Boolean).join(' ');
+  const verifyChip = perms.can_verify_operation ? '<span class="chip chip-manage">Batch Verifier</span>' : '';
+  const allNormal = !chips && !verifyChip ? '<span class="chip chip-info">All pages · Normal</span>' : '';
+  return `<div class="flex flex-wrap gap-1.5">${chips}${verifyChip}${allNormal}</div>`;
+}
+
+function rowHtml(p) {
+  const lvl = (p.permissions.modules && p.permissions.modules.operation) || 'none';
+  return `
+    <div class="user-row" data-uid="${p.id}">
+      <div class="w-11 h-11 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-black text-sm shrink-0">${initials(p)}</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-black text-slate-800 text-sm leading-tight truncate">${p.full_name || '<span class="text-slate-400">(no name)</span>'}
+          <span class="chip chip-${lvl === 'admin' ? 'admin' : 'normal'}" style="margin-left:6px">Module · ${LEVEL_LABEL[lvl] || lvl}</span>
+        </div>
+        <div class="text-[12px] text-slate-500 font-semibold truncate">${p.email || '—'}</div>
+        <div class="mt-2">${summaryHtml(p.permissions)}</div>
+      </div>
+      <button class="edit-btn shrink-0" data-action="edit" data-uid="${p.id}">
+        Edit Access
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>`;
+}
+
+function render() {
+  const q = (document.getElementById('search').value || '').toLowerCase().trim();
+  const filtered = !q ? allUsers
+    : allUsers.filter(p =>
+        (p.email || '').toLowerCase().includes(q) ||
+        (p.full_name || '').toLowerCase().includes(q));
+  const list = document.getElementById('users-list');
+  list.innerHTML = filtered.length
+    ? filtered.map(rowHtml).join('')
+    : `<div class="text-center text-slate-400 text-sm py-12">${allUsers.length ? 'No users match your search.' : 'No users have been opened for this module yet.'}</div>`;
+}
+
+// ── Drawer ─────────────────────────────────────────────────────
+function syncDropdownColor(sel) { sel.className = 'lvl-select lvl-' + sel.value; }
+
+function pageRowHtml(d, lvl) {
+  return `
+    <div class="flex items-center justify-between gap-4">
+      <div>
+        <div class="font-black text-slate-800 text-sm">${d.label}</div>
+        <div class="text-[11px] text-slate-500">${d.desc}</div>
+      </div>
+      <select id="d-page-${d.key}" class="lvl-select lvl-${lvl}">
+        ${LEVELS.map(l => `<option value="${l}" ${l === lvl ? 'selected' : ''}>${LEVEL_LABEL[l]}</option>`).join('')}
+      </select>
+    </div>`;
+}
+
+function openDrawer(uid) {
+  const p = allUsers.find(x => x.id === uid);
+  if (!p) return;
+  editingUid = uid;
+  editingPerms = JSON.parse(JSON.stringify(p.permissions));
+  document.getElementById('d-avatar').textContent = initials(p);
+  document.getElementById('d-name').textContent  = p.full_name || '(no name)';
+  document.getElementById('d-email').textContent = p.email || '—';
+  const lvl = (editingPerms.modules && editingPerms.modules.operation) || 'none';
+  document.getElementById('d-level').innerHTML =
+    `<span class="chip chip-${lvl === 'admin' ? 'admin' : 'normal'}">Module level · ${LEVEL_LABEL[lvl] || lvl}</span>
+     <span class="chip chip-info">set on main portal</span>`;
+  document.getElementById('d-pages').innerHTML =
+    PAGE_DEFS.map(d => pageRowHtml(d, pageLevel(editingPerms, d))).join('');
+  document.getElementById('d-verify-operation').checked = !!editingPerms.can_verify_operation;
+
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawer-backdrop').classList.add('open');
+  document.getElementById('drawer').setAttribute('aria-hidden', 'false');
+}
+
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawer-backdrop').classList.remove('open');
+  document.getElementById('drawer').setAttribute('aria-hidden', 'true');
+  editingUid = null;
+  editingPerms = null;
+}
+
+function applyPreset(level) {
+  if (!LEVELS.includes(level)) return;
+  PAGE_DEFS.forEach(d => {
+    const sel = document.getElementById('d-page-' + d.key);
+    if (sel) { sel.value = level; syncDropdownColor(sel); }
+  });
+}
+
+async function saveDrawer() {
+  if (!editingUid || !editingPerms) return;
+  const p = allUsers.find(x => x.id === editingUid);
+  if (!p) return;
+
+  // Mutate ONLY this module's fields on the full permissions object so
+  // nothing managed elsewhere (module levels, manage_users…) is touched.
+  const next = JSON.parse(JSON.stringify(editingPerms));
+  next.modules = next.modules || {};
+  next.operation_pages = next.operation_pages || {};
+  PAGE_DEFS.forEach(d => {
+    const v = document.getElementById('d-page-' + d.key).value;
+    if (d.store === 'modules') next.modules[d.key] = v;
+    else next.operation_pages[d.key] = v;
+  });
+  next.can_verify_operation = document.getElementById('d-verify-operation').checked;
+
+  const saveBtn = document.getElementById('d-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+
+  const { error } = await _supabase
+    .from('shared_profiles')
+    .update({ permissions: next })
+    .eq('id', editingUid);
+
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Save Changes';
+
+  if (error) {
+    console.error(error);
+    showToast('Save failed: ' + error.message, 'err');
+    return;
+  }
+
+  p.permissions = next;
+  showToast('Saved. Changes apply on the user’s next refresh.');
+  render();
+  closeDrawer();
+}
+
+// ── Events ─────────────────────────────────────────────────────
+document.addEventListener('click', (e) => {
+  const editBtn = e.target.closest('[data-action="edit"]');
+  if (editBtn) { openDrawer(editBtn.dataset.uid); return; }
+  const preset = e.target.closest('[data-preset]');
+  if (preset) { applyPreset(preset.dataset.preset); return; }
+});
+document.addEventListener('change', (e) => {
+  if (e.target.matches('select[id^="d-page-"]')) syncDropdownColor(e.target);
+});
+document.getElementById('d-close' ).addEventListener('click', closeDrawer);
+document.getElementById('d-cancel').addEventListener('click', closeDrawer);
+document.getElementById('d-save'  ).addEventListener('click', saveDrawer);
+document.getElementById('drawer-backdrop').addEventListener('click', closeDrawer);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
+document.getElementById('search').addEventListener('input', render);
+document.getElementById('reload-btn').addEventListener('click', () => bootstrap());
+
+// ── Bootstrap ─────────────────────────────────────────────────
+async function bootstrap() {
+  document.getElementById('loading').classList.remove('hidden');
+  document.getElementById('main').classList.add('hidden');
+  document.getElementById('forbidden').classList.add('hidden');
+
+  await MJMAccess.load(_supabase);
+  if (!MJMAccess.user()) { window.location.href = 'operation_dashboard.html'; return; }
+  // Saving other users' permissions requires the Manage Users flag (enforced
+  // by the database RLS policy), so the page is gated on the same flag.
+  if (!MJMAccess.canManageUsers()) {
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('forbidden').classList.remove('hidden');
+    return;
+  }
+
+  const { data, error } = await _supabase
+    .from('shared_profiles')
+    .select('id, email, full_name, permissions, user_type')
+    .order('email', { ascending: true });
+
+  if (error) {
+    document.getElementById('loading').classList.add('hidden');
+    showToast('Load failed: ' + error.message, 'err');
+    return;
+  }
+
+  // Only users opened for THIS module on the main portal.
+  allUsers = (data || [])
+    .filter(p => (p.user_type || 'system') === 'system')
+    .map(p => ({ id: p.id, email: p.email, full_name: p.full_name,
+                 permissions: (p.permissions && typeof p.permissions === 'object') ? p.permissions : {} }))
+    .filter(p => {
+      const lvl = p.permissions.modules && p.permissions.modules.operation;
+      return lvl === 'admin' || lvl === 'normal';
+    });
+
+  document.getElementById('loading').classList.add('hidden');
+  document.getElementById('main').classList.remove('hidden');
+  render();
+}
+
+bootstrap();
+</script>
+</body>
 </html>

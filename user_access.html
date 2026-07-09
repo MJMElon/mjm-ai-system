@@ -91,7 +91,7 @@
       This is the main access management for the whole AI System — it decides which module cards each user sees on the module-selection page, and at what level. Only staff who signed up through the AI System appear below; Salesweb customers are kept out of this list to keep it clean.
     </p>
     <ul class="text-[12px] text-slate-700 leading-relaxed space-y-1.5 pl-4 list-disc marker:text-slate-300">
-      <li><strong>Edit Access</strong> on a row — open a panel to set each module's level and toggle <em>Manage Users</em>.</li>
+      <li><strong>Edit Access</strong> on a row — set each module's level and toggle <em>Manage Users</em>. Finer settings (which pages inside a module, batch verifier…) are managed inside each module's own User Access page.</li>
       <li><strong>+ Add User</strong> — pull a customer in from the Salesweb list and promote them to a system user.</li>
       <li>Inside the panel, <strong>Move to customer</strong> sends them back out (their access is cleared).</li>
     </ul>
@@ -159,20 +159,6 @@
         </div>
         <div class="flex items-center justify-between gap-4">
           <div>
-            <div class="font-black text-slate-800 text-sm">Reports</div>
-            <div class="text-[11px] text-slate-500">Batch production summary, analytics</div>
-          </div>
-          <select id="d-mod-reports" class="lvl-select"></select>
-        </div>
-        <div class="flex items-center justify-between gap-4">
-          <div>
-            <div class="font-black text-slate-800 text-sm">Audit Trail</div>
-            <div class="text-[11px] text-slate-500">Who edited what — admins can clear logs</div>
-          </div>
-          <select id="d-mod-audit_trail" class="lvl-select"></select>
-        </div>
-        <div class="flex items-center justify-between gap-4">
-          <div>
             <div class="font-black text-slate-800 text-sm">Salesweb</div>
             <div class="text-[11px] text-slate-500">Customer-facing orders &amp; pricing</div>
           </div>
@@ -230,23 +216,6 @@
       </div>
     </section>
 
-    <!-- Operation Batch Verifier -->
-    <section class="px-6 py-5 border-t border-slate-200 bg-amber-50/40">
-      <div class="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-2">Operation Batch Verifier</div>
-      <div class="flex items-start justify-between gap-4">
-        <div>
-          <div class="font-black text-slate-800 text-sm">Can verify operation batch tabs</div>
-          <p class="text-[11px] text-slate-600 mt-1 leading-relaxed">
-            Lets this user click <strong>Verify</strong> on each tab of a batch record.
-            An operation admin can only <strong>Mark as Reviewed</strong> after a verifier has signed off.
-          </p>
-        </div>
-        <label class="tog mt-1">
-          <input id="d-verify-operation" type="checkbox">
-          <span class="tog-slider"></span>
-        </label>
-      </div>
-    </section>
   </div>
 
   <footer class="px-6 py-4 border-t border-slate-200 flex justify-between items-center gap-3 bg-slate-50">
@@ -263,7 +232,9 @@
 
 <script>
 const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
-const MODULES = ['operation', 'reports', 'audit_trail', 'salesweb', 'audit', 'mobile', 'training'];
+// Top-level modules only — page access INSIDE a module (batch record,
+// stock, reports…) is managed from that module's own User Access page.
+const MODULES = ['operation', 'salesweb', 'audit', 'mobile', 'training'];
 const LEVELS  = ['admin', 'normal', 'none'];
 const LEVEL_LABEL = { admin:'Admin', normal:'Normal', none:'None' };
 
@@ -293,10 +264,13 @@ function normPerms(p) {
   const out = defaultPerms();
   if (!p || typeof p !== 'object') return out;
   if (p.modules) {
-    for (const k of MODULES) if (LEVELS.includes(p.modules[k])) out.modules[k] = p.modules[k];
+    // Copy EVERY valid module key — including ones this page has no UI for
+    // (reports, audit_trail) — so saving here never wipes them.
+    for (const [k, v] of Object.entries(p.modules)) if (LEVELS.includes(v)) out.modules[k] = v;
   }
   out.manage_users = !!p.manage_users;
   out.can_verify_operation = !!p.can_verify_operation;
+  if (p.operation_pages && typeof p.operation_pages === 'object') out.operation_pages = p.operation_pages;
   return out;
 }
 
@@ -316,8 +290,7 @@ function summaryHtml(perms) {
     .join(' ');
   const noneChip = !chips ? '<span class="chip chip-none">No module access</span>' : '';
   const manageChip = perms.manage_users ? '<span class="chip chip-manage">Manage Users</span>' : '';
-  const verifyChip = perms.can_verify_operation ? '<span class="chip chip-manage">Op Verifier</span>' : '';
-  return `<div class="flex flex-wrap gap-1.5">${chips}${noneChip}${manageChip}${verifyChip}</div>`;
+  return `<div class="flex flex-wrap gap-1.5">${chips}${noneChip}${manageChip}</div>`;
 }
 
 function rowHtml(p) {
@@ -371,7 +344,6 @@ function openDrawer(uid) {
   document.getElementById('d-email').textContent = p.email || '—';
   MODULES.forEach(m => rebuildDropdown('d-mod-' + m, pending.modules[m]));
   document.getElementById('d-manage-users').checked = !!pending.manage_users;
-  document.getElementById('d-verify-operation').checked = !!pending.can_verify_operation;
 
   document.getElementById('drawer').classList.add('open');
   document.getElementById('drawer-backdrop').classList.add('open');
@@ -405,7 +377,6 @@ async function saveDrawer() {
   // Read latest values from the form (in case of last-second changes).
   MODULES.forEach(m => { pending.modules[m] = document.getElementById('d-mod-' + m).value; });
   pending.manage_users = document.getElementById('d-manage-users').checked;
-  pending.can_verify_operation = document.getElementById('d-verify-operation').checked;
 
   const saveBtn = document.getElementById('d-save');
   saveBtn.disabled = true;
@@ -456,7 +427,8 @@ async function demoteCurrentToCustomer() {
   const cleared = {
     modules: { operation:'none', reports:'none', audit_trail:'none', salesweb:'none', audit:'none', mobile:'none', training:'none' },
     manage_users: false,
-    can_verify_operation: false
+    can_verify_operation: false,
+    operation_pages: {}
   };
   const { error: clearErr } = await _supabase
     .from('shared_profiles')

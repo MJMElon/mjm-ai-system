@@ -58,6 +58,16 @@
     }
     out.manage_users = !!perms.manage_users;
     out.can_verify_operation = !!perms.can_verify_operation;
+    // Per-page access INSIDE the operation module, managed from the module's
+    // own User Access page. Shape: { batch:'admin'|'normal'|'none', ... }.
+    // A missing key means "allowed" (default 'normal') so existing users are
+    // unaffected until an admin explicitly locks a page.
+    if (perms.operation_pages && typeof perms.operation_pages === 'object') {
+      out.operation_pages = {};
+      for (const [k, v] of Object.entries(perms.operation_pages)) {
+        if (VALID_LEVELS.has(v)) out.operation_pages[k] = v;
+      }
+    }
     return out;
   }
 
@@ -152,6 +162,16 @@
     return !!permissions().can_verify_operation || isAdminOf('operation');
   }
 
+  // Per-page access inside the operation module (see operation_pages above).
+  // Page keys mirror the dashboard cards: batch, orders, stock, settings.
+  // (Reports and Audit Trail keep their own module levels.)
+  function operationPageLevel(name) {
+    const op = permissions().operation_pages;
+    const v = op && op[name];
+    return VALID_LEVELS.has(v) ? v : 'normal'; // unset = allowed
+  }
+  function canOpenOperationPage(name) { return operationPageLevel(name) !== 'none'; }
+
   /**
    * Redirect away from a module page if the user lacks access.
    * Call after MJMAccess.load(supa).
@@ -175,6 +195,8 @@
     canManageUsers,
     canReviewOperation,
     canVerifyOperation,
+    operationPageLevel,
+    canOpenOperationPage,
     guard
   };
 })(window);
