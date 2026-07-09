@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seedling Sales Management - MJM Nursery AI</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Outfit', system-ui, sans-serif; }
+        body { background-color: #f1f5f9; margin: 0; min-height: 100vh; }
+
+        .dash-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+        .metric-card { border-radius: 16px; border: 1px solid #e2e8f0; background: white; transition: all .2s; }
+
+        /* Compact segmented switch */
+        .combo-switch{display:grid;grid-template-columns:1fr 1fr;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:12px;padding:4px;gap:4px;}
+        .combo-switch-btn{padding:10px 12px;border-radius:9px;border:none;background:transparent;color:#64748b;cursor:pointer;text-align:center;transition:all .25s ease;display:flex;flex-direction:column;align-items:center;gap:2px;}
+        .combo-switch-btn .csw-title{font-weight:900;font-size:11px;text-transform:uppercase;letter-spacing:.1em;}
+        .combo-switch-btn .csw-sub{font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;}
+        .combo-switch-btn:hover:not(.active){background:rgba(255,255,255,.6);color:#1e293b;}
+        .combo-switch-btn.active{background:#ffffff;color:#065f46;box-shadow:0 4px 10px -3px rgba(16,185,129,.35),0 1px 0 rgba(255,255,255,.6) inset;}
+        .combo-switch-btn.active .csw-sub{color:#10b981;}
+        .combo-switch-btn.active.verified{color:#92400e;box-shadow:0 4px 10px -3px rgba(245,158,11,.35),0 1px 0 rgba(255,255,255,.6) inset;}
+        .combo-switch-btn.active.verified .csw-sub{color:#d97706;}
+
+        /* Gearing slider */
+        .gear-slider{-webkit-appearance:none;width:100%;height:5px;border-radius:3px;background:linear-gradient(90deg,#10b981 0%,#f59e0b 50%,#ef4444 100%);outline:none;cursor:pointer;}
+        .gear-slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:white;border:2px solid #1e293b;box-shadow:0 2px 6px rgba(0,0,0,.2);cursor:grab;}
+
+        /* To-do tabs (compact) */
+        .todo-tab{padding:8px 14px;font-weight:900;font-size:10px;text-transform:uppercase;letter-spacing:.08em;border-radius:10px;transition:all .15s;color:#64748b;background:transparent;border:1.5px solid transparent;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;}
+        .todo-tab:hover:not(.active){background:#f8fafc;color:#1e293b;}
+        .todo-tab.active.unpaid{background:#fef2f2;color:#b91c1c;border-color:#fca5a5;}
+        .todo-tab.active.credit{background:#eff6ff;color:#1d4ed8;border-color:#93c5fd;}
+        .todo-tab .tab-count{background:white;border:1px solid currentColor;border-radius:999px;padding:1px 6px;font-size:10px;font-weight:900;}
+
+        /* Notebook-style to-do list */
+        .notebook{background:repeating-linear-gradient(180deg,#fffbeb 0 28px,#fef3c7 28px 29px);border:1px solid #fde68a;border-radius:10px;box-shadow:inset 3px 0 0 #f59e0b,0 1px 4px rgba(0,0,0,.04);}
+        .notebook-row{display:flex;flex-direction:column;gap:2px;padding:6px 10px 6px 14px;border-bottom:1px dashed #fde68a;font-size:11px;}
+        .notebook-row:last-child{border-bottom:none;}
+        .notebook-row:hover{background:rgba(255,255,255,.5);}
+        .notebook-row .nb-line1{display:flex;justify-content:space-between;align-items:center;gap:6px;}
+        .notebook-row .nb-line2{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:10px;color:#a16207;}
+        .notebook-row .note-id{font-family:'Courier New',monospace;font-weight:900;color:#92400e;}
+        .notebook-row .note-name{font-weight:900;color:#451a03;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .notebook-row .note-amt{font-weight:900;color:#b91c1c;font-variant-numeric:tabular-nums;white-space:nowrap;}
+        .notebook-row.credit .note-amt{color:#1d4ed8;}
+
+        /* Credit-invoice row buttons */
+        .ci-btn{font-size:9px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;border-radius:6px;padding:3px 8px;border:1px solid;cursor:pointer;white-space:nowrap;transition:all .15s;}
+        .ci-btn-upload{background:#dbeafe;color:#1d4ed8;border-color:#93c5fd;}
+        .ci-btn-upload:hover{background:#1d4ed8;color:#fff;}
+        .ci-btn-paid{background:#dcfce7;color:#166534;border-color:#86efac;}
+        .ci-btn-paid:hover{background:#166534;color:#fff;}
+        .ci-link{text-decoration:none;font-size:13px;line-height:1;padding:1px 4px;border-radius:5px;}
+        .ci-link:hover{background:#f1f5f9;}
+
+        /* Credit-invoice modal */
+        .ci-modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:1000;align-items:center;justify-content:center;padding:1rem;}
+        .ci-modal.open{display:flex;}
+        .ci-modal-card{background:#fff;border-radius:16px;width:100%;max-width:520px;box-shadow:0 30px 80px -10px rgba(0,0,0,.4);overflow:hidden;display:flex;flex-direction:column;max-height:92vh;}
+        .ci-modal-head{padding:14px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:12px;background:linear-gradient(180deg,#f8fafc,#fff);}
+        .ci-modal-title{font-size:13px;font-weight:900;color:#0f172a;text-transform:uppercase;letter-spacing:.08em;}
+        .ci-modal-close{background:transparent;border:none;font-size:20px;color:#64748b;cursor:pointer;line-height:1;}
+        .ci-modal-close:hover{color:#0f172a;}
+        .ci-modal-body{padding:18px 20px;overflow-y:auto;flex:1;}
+        .ci-field{margin-bottom:.85rem;}
+        .ci-field-label{font-size:10px;font-weight:900;color:#475569;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;display:block;}
+        .ci-input,.ci-textarea{width:100%;border:1.5px solid #cbd5e1;border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;color:#0f172a;background:#fff;}
+        .ci-input:focus,.ci-textarea:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.18);}
+        .ci-textarea{resize:vertical;min-height:60px;}
+        .ci-readonly-row{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;font-size:12px;color:#334155;margin-bottom:.4rem;}
+        .ci-readonly-row strong{color:#0f172a;font-weight:900;}
+        .ci-modal-error{color:#b91c1c;font-size:11px;font-weight:700;min-height:16px;margin-top:.4rem;}
+        .ci-modal-foot{padding:12px 20px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:.5rem;background:#f8fafc;}
+        .ci-btn-primary{background:#1d4ed8;color:#fff;border:1px solid #1d4ed8;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;}
+        .ci-btn-primary:hover{background:#1e40af;}
+        .ci-btn-primary:disabled{opacity:.6;cursor:wait;}
+        .ci-btn-ghost{background:#fff;color:#475569;border:1px solid #cbd5e1;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;}
+        .ci-btn-ghost:hover{background:#f1f5f9;color:#0f172a;}
+
+        /* Maturity month tabs */
+        .month-tab{padding:8px 14px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1.5px solid transparent;background:transparent;color:#64748b;cursor:pointer;white-space:nowrap;transition:all .15s;}
+        .month-tab:hover:not(.active){background:#f1f5f9;}
+        .month-tab.active{background:#ecfdf5;color:#065f46;border-color:#10b981;}
+        .month-tab.is-current{font-weight:900;}
+
+        /* Maturity table */
+        .mat-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;}
+        .mat-table thead th{background:#f1f5f9;color:#334155;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;padding:11px 10px;text-align:left;border-bottom:2px solid #cbd5e1;position:sticky;top:0;z-index:1;}
+        .mat-table tbody td{padding:11px 10px;border-bottom:1px solid #eef2f6;color:#1e293b;font-weight:600;vertical-align:middle;}
+        .mat-table tbody tr{transition:background .12s;}
+        .mat-table tbody tr:nth-child(even){background:#fbfcfe;}
+        .mat-table tbody tr:hover{background:#eff6ff;}
+        .mat-table .num{text-align:right;font-variant-numeric:tabular-nums;font-weight:900;}
+        .mat-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid #e2e8f0;background:linear-gradient(180deg,#f8fafc,#ffffff);border-top-left-radius:16px;border-top-right-radius:16px;flex-wrap:wrap;}
+        .mat-card-title{display:flex;align-items:center;gap:10px;}
+        .mat-card-title-icon{width:30px;height:30px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:white;display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 4px 12px rgba(16,185,129,.30);}
+        .mat-card-title-text{font-size:12px;font-weight:900;color:#0f172a;text-transform:uppercase;letter-spacing:.12em;}
+        .mat-card-title-sub{font-size:9px;font-weight:700;color:#64748b;letter-spacing:.06em;margin-top:1px;}
+
+        /* ── Column-group headers (3 logical sections) ───────────────────── */
+        .mat-table thead .mat-group-row th{padding:6px 10px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;text-align:center;border-bottom:1px solid #e2e8f0;}
+        .mat-group-prod{background:#eff6ff;color:#1d4ed8;border-right:2px solid #cbd5e1;}
+        .mat-group-plot{background:#fef9c3;color:#854d0e;border-right:2px solid #cbd5e1;}
+        .mat-group-alloc{background:#ecfdf5;color:#065f46;}
+        /* Visible vertical separators between the three sections */
+        .mat-table thead th.mat-sep-r,
+        .mat-table tbody td.mat-sep-r,
+        .mat-table tfoot td.mat-sep-r{border-right:2px solid #cbd5e1;}
+        /* Subtle column-group tints in the body to reinforce sections */
+        .mat-table tbody td.col-prod {background:rgba(239,246,255,.4);}
+        .mat-table tbody td.col-plot {background:rgba(254,249,195,.45);}
+        .mat-table tbody td.col-alloc{background:rgba(236,253,245,.45);}
+        .mat-table tbody tr:hover td.col-prod {background:rgba(219,234,254,.55);}
+        .mat-table tbody tr:hover td.col-plot {background:rgba(254,240,138,.55);}
+        .mat-table tbody tr:hover td.col-alloc{background:rgba(187,247,208,.55);}
+
+        /* "No Status" pill for plots that haven't been opened yet */
+        .plot-status-empty{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;background:#f1f5f9;color:#64748b;border:1px dashed #cbd5e1;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;}
+        .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1px solid;}
+        .pill-open{background:#dcfce7;color:#15803d;border-color:#86efac;}
+        .pill-sisa{background:#fef3c7;color:#a16207;border-color:#fcd34d;}
+        .pill-finished{background:#fee2e2;color:#b91c1c;border-color:#fca5a5;}
+        .premium-toggle{appearance:none;width:34px;height:18px;border-radius:999px;background:#cbd5e1;position:relative;cursor:pointer;transition:all .2s;outline:none;border:none;}
+        .premium-toggle::before{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:white;transition:all .2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+        .premium-toggle:checked{background:#a855f7;}
+        .premium-toggle:checked::before{left:18px;}
+
+        .scroll-x-fade{overflow-x:auto;scrollbar-width:thin;}
+        .scroll-x-fade::-webkit-scrollbar{height:6px;}
+        .scroll-x-fade::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
+
+        /* Customer order grid */
+        .cust-table{width:100%;border-collapse:separate;border-spacing:0;font-size:11px;}
+        .cust-table thead th{background:#f8fafc;color:#475569;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;padding:8px 6px;text-align:center;border-bottom:2px solid #e2e8f0;white-space:nowrap;}
+        .cust-table thead th.h-cust{text-align:left;background:#eff6ff;color:#1e3a8a;}
+        .cust-table thead th.h-mo{background:#f1f5f9;}
+        .cust-table thead th.h-mo.is-now{background:#ecfdf5;color:#065f46;}
+        .cust-table thead th.h-tot{background:#fef9c3;color:#854d0e;}
+        .cust-table tbody td{padding:7px 6px;border-bottom:1px solid #f1f5f9;color:#1e293b;font-weight:600;text-align:center;font-variant-numeric:tabular-nums;}
+        .cust-table tbody td.t-cust{text-align:left;font-weight:900;color:#1e3a8a;}
+        .cust-table tbody td.t-cust .t-sub{font-weight:600;color:#64748b;font-size:10px;font-family:'Courier New',monospace;}
+        .cust-table tbody td.t-mo.has-qty{background:#dbeafe;color:#1d4ed8;font-weight:900;}
+        .cust-table tbody td.t-mo.is-now{background:#ecfdf5;color:#065f46;}
+        .cust-table tbody td.t-mo.has-booked{background:#fef3c7;color:#a16207;font-weight:900;border:1px dashed #fcd34d;}
+        .cust-table tbody td.t-mo .booked-tag{display:block;font-size:8px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:#a16207;margin-top:1px;}
+        .cust-table tbody td.t-tot{background:#fefce8;color:#854d0e;font-weight:900;}
+        .cust-table tbody tr:hover{background:#fafbff;}
+        .cust-table tbody tr:hover td.t-mo.has-qty{background:#bfdbfe;}
+        .cust-table tbody tr:hover td.t-mo.has-booked{background:#fde68a;}
+        /* Totals row — center-align numbers to match the body cells above, with
+           the highlight colours from the header so totals read as a summary band. */
+        .cust-table tfoot td{padding:8px 6px;text-align:center;font-variant-numeric:tabular-nums;border-top:2px solid #e2e8f0;color:#1e293b;font-weight:900;font-size:11px;background:#f8fafc;}
+        .cust-table tfoot td.t-tot{background:#fef9c3;color:#854d0e;}
+        .cust-table tfoot td.text-right{text-align:right;}
+        .pill-status{display:inline-block;padding:2px 7px;border-radius:999px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1px solid;white-space:nowrap;}
+        .pill-paid     { background:#dcfce7;color:#15803d;border-color:#86efac;}
+        .pill-partial  { background:#fef3c7;color:#a16207;border-color:#fcd34d;}
+        .pill-pending  { background:#fee2e2;color:#b91c1c;border-color:#fca5a5;}
+        .pill-completed{ background:#e0e7ff;color:#3730a3;border-color:#a5b4fc;}
+        .pill-cancelled{ background:#f1f5f9;color:#64748b;border-color:#cbd5e1;}
+
+        /* ── Sales-module tab switcher ── */
+        .ssm-tabs{display:flex;gap:6px;background:white;border:1px solid #e2e8f0;border-radius:14px;padding:6px;box-shadow:0 2px 8px rgba(0,0,0,.04);width:100%;}
+        .ssm-tab{flex:1 1 0;padding:14px 22px;border:none;background:transparent;border-radius:10px;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:10px;font-family:'Outfit',sans-serif;}
+        .ssm-tab:hover:not(.active){background:#f8fafc;color:#1e293b;}
+        .ssm-tab.active.customer{background:#eff6ff;color:#1d4ed8;box-shadow:0 4px 12px rgba(37,99,235,.18);}
+        .ssm-tab.active.stock{background:#ecfdf5;color:#065f46;box-shadow:0 4px 12px rgba(16,185,129,.18);}
+        .ssm-tab .ssm-tab-emoji{font-size:14px;line-height:1;}
+        .ssm-tab .ssm-tab-sub{font-size:9px;font-weight:700;color:#94a3b8;letter-spacing:.04em;text-transform:none;}
+        .ssm-tab.active .ssm-tab-sub{color:currentColor;opacity:.7;}
+
+        /* ── Aging report ── */
+        .aging-table{width:100%;border-collapse:separate;border-spacing:0;font-size:11px;}
+        .aging-table thead th{background:#fef2f2;color:#991b1b;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;padding:9px 10px;text-align:left;border-bottom:2px solid #fecaca;position:sticky;top:0;}
+        .aging-table tbody td{padding:8px 10px;border-bottom:1px solid #f1f5f9;color:#1e293b;font-weight:600;}
+        .aging-table tbody tr:hover{background:#fffbfb;}
+        .aging-table .num{text-align:right;font-variant-numeric:tabular-nums;font-weight:900;}
+        .aging-pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:9px;font-weight:900;border:1px solid;}
+        .aging-pill.warn{background:#fef3c7;color:#a16207;border-color:#fcd34d;}
+        .aging-pill.bad{background:#fee2e2;color:#b91c1c;border-color:#fca5a5;}
+        .aging-pill.severe{background:#7f1d1d;color:white;border-color:#7f1d1d;}
+
+        /* ── Capacity heatmap ── */
+        .heat-grid{display:grid;gap:6px;font-variant-numeric:tabular-nums;}
+        .heat-cell{padding:10px 12px;border-radius:10px;font-size:11px;font-weight:900;color:#0f172a;text-align:center;border:1px solid transparent;transition:transform .15s;}
+        .heat-cell:hover{transform:translateY(-1px);}
+        .heat-cell.h-label{background:#f8fafc;color:#475569;font-size:10px;text-align:left;border-color:#e2e8f0;font-weight:900;text-transform:uppercase;letter-spacing:.06em;}
+        .heat-cell.h-month-label{background:#f1f5f9;color:#475569;text-align:center;border-color:#e2e8f0;font-size:10px;text-transform:uppercase;letter-spacing:.06em;}
+        .heat-cell .h-pct{font-size:14px;display:block;line-height:1.1;}
+        .heat-cell .h-meta{font-size:8px;font-weight:700;opacity:.7;display:block;line-height:1.2;}
+        .heat-0{background:#dcfce7;color:#15803d;border-color:#bbf7d0;}
+        .heat-1{background:#d1fae5;color:#065f46;border-color:#a7f3d0;}
+        .heat-2{background:#fef9c3;color:#854d0e;border-color:#fde68a;}
+        .heat-3{background:#fed7aa;color:#9a3412;border-color:#fdba74;}
+        .heat-4{background:#fecaca;color:#991b1b;border-color:#fca5a5;}
+        .heat-5{background:#7f1d1d;color:white;border-color:#7f1d1d;}
+        .heat-na{background:#f8fafc;color:#cbd5e1;border-color:#e2e8f0;font-weight:600;}
+
+        /* ── Customer pickup history modal ── */
+        .pickup-modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:200;align-items:center;justify-content:center;padding:20px;}
+        .pickup-modal-overlay.open{display:flex;}
+        .pickup-modal-box{background:white;border-radius:20px;width:100%;max-width:760px;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.35);}
+        .pickup-modal-head{padding:18px 22px;border-bottom:1px solid #e2e8f0;background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:white;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+        .pickup-modal-body{padding:18px 22px;overflow-y:auto;}
+        .ph-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;}
+        .ph-table thead th{background:#f8fafc;color:#475569;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0;}
+        .ph-table tbody td{padding:8px 10px;border-bottom:1px solid #f1f5f9;color:#1e293b;font-weight:600;}
+        .ph-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
+        .ph-summary-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;}
+        .ph-summary-card .ph-label{font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;}
+        .ph-summary-card .ph-num{font-size:18px;font-weight:900;color:#1e293b;font-variant-numeric:tabular-nums;}
+        .cust-link{color:#1d4ed8;cursor:pointer;text-decoration:underline dotted;}
+        .cust-link:hover{color:#1e40af;}
+
+        /* ── Allocation drawer (drag customer orders onto batch rows) ── */
+        .alloc-fab{position:fixed;right:20px;bottom:24px;z-index:90;display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:999px;background:linear-gradient(135deg,#1d4ed8,#1e40af);color:white;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;border:none;cursor:pointer;box-shadow:0 16px 40px rgba(30,64,175,.45);transition:transform .15s,box-shadow .15s;font-family:'Outfit',sans-serif;}
+        .alloc-fab:hover{transform:translateY(-2px);box-shadow:0 20px 50px rgba(30,64,175,.55);}
+        .alloc-fab .alloc-fab-emoji{font-size:18px;line-height:1;}
+        .alloc-fab .alloc-fab-badge{background:#fbbf24;color:#78350f;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:900;min-width:20px;text-align:center;}
+        .alloc-fab.hidden-fab{display:none;}
+
+        /* Allocation drawer is now a draggable + resizable floating window. */
+        .alloc-drawer{position:fixed;top:80px;right:24px;width:380px;height:520px;min-width:300px;min-height:280px;max-width:96vw;max-height:calc(100vh - 40px);background:white;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.22);z-index:95;display:none;flex-direction:column;overflow:hidden;}
+        .alloc-drawer.open{display:flex;}
+        .alloc-drawer-head{padding:14px 16px;border-bottom:1px solid #e2e8f0;background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:white;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;cursor:move;user-select:none;-webkit-user-select:none;touch-action:none;}
+        .alloc-drawer-head::before{content:"⋮⋮";color:rgba(255,255,255,.55);font-weight:900;letter-spacing:-2px;margin-right:4px;font-size:18px;line-height:1;align-self:center;}
+        .alloc-resize-handle{position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:nwse-resize;user-select:none;touch-action:none;z-index:2;}
+        .alloc-resize-handle::after{content:"";position:absolute;right:3px;bottom:3px;width:10px;height:10px;border-right:2px solid #94a3b8;border-bottom:2px solid #94a3b8;opacity:.7;}
+        .alloc-resize-handle:hover::after{opacity:1;border-color:#1d4ed8;}
+        .alloc-drawer-head h3{font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;margin:0;}
+        .alloc-drawer-head p{font-size:10px;color:#bfdbfe;margin:2px 0 0;font-weight:600;}
+        .alloc-drawer-tabs{display:flex;gap:4px;background:#f1f5f9;padding:4px;border-bottom:1px solid #e2e8f0;}
+        .alloc-drawer-tab{flex:1;padding:8px 10px;border:none;background:transparent;border-radius:8px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#64748b;cursor:pointer;transition:all .15s;font-family:'Outfit',sans-serif;}
+        .alloc-drawer-tab.active{background:white;color:#1d4ed8;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+        .alloc-drawer-tab .alloc-tab-count{display:inline-block;margin-left:4px;background:#e2e8f0;color:#475569;border-radius:999px;padding:1px 7px;font-size:9px;}
+        .alloc-drawer-tab.active .alloc-tab-count{background:#dbeafe;color:#1d4ed8;}
+        .alloc-drawer-body{flex:1;overflow-y:auto;padding:12px;background:#f8fafc;}
+        .alloc-drawer-empty{text-align:center;padding:32px 12px;color:#94a3b8;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
+
+        .order-card{background:white;border:1px solid #e2e8f0;border-radius:14px;padding:11px 13px;margin-bottom:10px;cursor:grab;transition:all .15s;position:relative;user-select:none;}
+        .order-card:hover{border-color:#3b82f6;box-shadow:0 6px 16px rgba(59,130,246,.18);transform:translateY(-1px);}
+        .order-card:active{cursor:grabbing;}
+        .order-card.dragging{opacity:.5;cursor:grabbing;}
+        .order-card.fully-allocated{opacity:.6;border-color:#10b981;background:#f0fdf4;cursor:default;}
+        .order-card.fully-allocated:hover{transform:none;}
+        .order-card-name{font-size:12px;font-weight:900;color:#0f172a;line-height:1.2;}
+        .order-card-meta{font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-top:2px;font-family:'Outfit',sans-serif;}
+        .order-card-qty-row{display:flex;align-items:baseline;gap:6px;margin-top:8px;}
+        .order-card-qty-big{font-size:22px;font-weight:900;color:#1d4ed8;line-height:1;font-variant-numeric:tabular-nums;}
+        .order-card-qty-sub{font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;}
+        .order-card-progress{height:5px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:6px;}
+        .order-card-progress-bar{height:100%;background:linear-gradient(90deg,#3b82f6,#1d4ed8);transition:width .25s;}
+        .order-card-progress-bar.full{background:linear-gradient(90deg,#10b981,#059669);}
+        .order-card-remark{margin-top:6px;font-size:10px;color:#475569;line-height:1.35;background:#f8fafc;border:1px dashed #e2e8f0;border-radius:6px;padding:5px 7px;}
+        .order-card-grip{position:absolute;top:10px;right:10px;color:#cbd5e1;font-size:14px;line-height:1;}
+
+        .order-card.past-due{cursor:default;border-left:3px solid #f59e0b;}
+        .order-card.past-due:hover{border-color:#fbbf24;transform:none;box-shadow:0 4px 10px rgba(245,158,11,.15);}
+        .order-card.past-due .order-card-qty-big{color:#b45309;}
+
+        /* Drop targets — maturity rows */
+        .mat-table tbody tr{transition:background .12s,outline .12s;}
+        .mat-table tbody tr.drop-target{outline:2px dashed #93c5fd;outline-offset:-2px;background:#eff6ff !important;}
+        .mat-table tbody tr.drop-hover{outline:2px solid #1d4ed8;outline-offset:-2px;background:#dbeafe !important;}
+        .mat-table tbody tr.drop-disabled{opacity:.4;}
+
+        /* Reservation cell — multi-allocation chips */
+        .reserv-stack{display:flex;flex-direction:column;gap:4px;min-width:180px;}
+        .reserv-chip{display:flex;align-items:center;gap:6px;background:linear-gradient(180deg,#ffffff,#f1f5f9);border:1px solid #cbd5e1;border-radius:9px;padding:5px 6px 5px 7px;font-size:11px;font-weight:700;color:#1e293b;cursor:grab;transition:transform .12s,box-shadow .12s,border-color .12s;user-select:none;}
+        .reserv-chip:hover{border-color:#3b82f6;box-shadow:0 4px 12px rgba(59,130,246,.18);transform:translateY(-1px);}
+        .reserv-chip:active{cursor:grabbing;}
+        .reserv-chip.dragging{opacity:.45;cursor:grabbing;border-color:#1d4ed8;}
+        .reserv-chip-grip{color:#94a3b8;font-size:11px;line-height:1;flex-shrink:0;font-weight:900;letter-spacing:-1px;}
+        .reserv-chip-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .reserv-chip-qty{font-variant-numeric:tabular-nums;color:#1d4ed8;font-weight:900;background:#dbeafe;border-radius:6px;padding:1px 6px;font-size:10px;}
+        .reserv-chip-x{border:none;background:#fee2e2;color:#b91c1c;border-radius:6px;width:18px;height:18px;font-weight:900;font-size:11px;line-height:1;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:0;}
+        .reserv-chip-x:hover{background:#fca5a5;color:white;}
+        .reserv-empty{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 10px;border:1.5px dashed #cbd5e1;border-radius:9px;background:#fafbfc;font-size:9px;color:#94a3b8;font-weight:900;text-transform:uppercase;letter-spacing:.08em;}
+        .reserv-empty-emoji{font-size:11px;line-height:1;}
+
+        /* Inventory map plot labels */
+        .invmap-plot-shape{transition:all .2s ease-in-out;cursor:pointer;}
+        .invmap-plot-shape:hover{fill:rgba(250,204,21,.55)!important;stroke-width:.6!important;}
+        .invmap-label{position:absolute;display:flex;flex-direction:column;align-items:center;text-align:center;pointer-events:none;max-width:140px;transform-origin:center center;transform:translate(-50%,-50%) scale(calc(1 / var(--inv-zoom, 1)));}
+        .invmap-plot-tag{font-size:10px;font-weight:900;background:white;padding:2px 7px;border-radius:6px;color:#1e293b;margin-bottom:2px;box-shadow:0 2px 6px rgba(0,0,0,.18);text-transform:uppercase;border:1px solid #cbd5e1;letter-spacing:.04em;}
+        .invmap-batch-line{font-size:9px;font-weight:800;line-height:1.15;color:#1e293b;background:rgba(255,255,255,.85);padding:1px 5px;border-radius:4px;margin-top:1px;white-space:nowrap;text-shadow:0 1px 1px rgba(255,255,255,.9);}
+        .invmap-batch-line.empty{color:#94a3b8;font-weight:700;background:transparent;}
+        .invmap-tab-btn{padding:8px 18px;font-weight:900;font-size:11px;text-transform:uppercase;letter-spacing:.08em;border-radius:12px;transition:all .2s;color:#64748b;background:white;border:1.5px solid transparent;white-space:nowrap;cursor:pointer;}
+        .invmap-tab-btn:hover{background:#dbeafe;color:#1d4ed8;}
+        .invmap-tab-btn.active{background:#3b82f6;color:white;border-color:#2563eb;box-shadow:0 4px 10px -2px rgba(59,130,246,.45);}
+
+        /* Map zoom + pan */
+        .invmap-viewport{position:relative;width:100%;height:100%;overflow:hidden;touch-action:none;}
+        .invmap-stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transform-origin:center center;transition:transform .12s ease-out;will-change:transform;cursor:grab;}
+        .invmap-stage.is-dragging{cursor:grabbing;transition:none;}
+        .invmap-zoom-controls{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:4px;z-index:5;background:white;border-radius:10px;box-shadow:0 4px 10px rgba(0,0,0,.12);padding:4px;border:1px solid #e2e8f0;}
+        .invmap-zoom-btn{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border:none;background:white;color:#475569;font-weight:900;font-size:14px;cursor:pointer;border-radius:6px;transition:all .15s;}
+        .invmap-zoom-btn:hover{background:#dbeafe;color:#1d4ed8;}
+        .invmap-zoom-level{font-size:9px;font-weight:900;color:#64748b;text-align:center;padding:2px 0;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;}
+        .invmap-breed-chip{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;padding:5px 9px;border-radius:9px;border:1.5px solid #e2e8f0;background:white;color:#475569;cursor:pointer;transition:all .15s;}
+        .invmap-breed-chip:hover{border-color:#3b82f6;color:#1d4ed8;background:#eff6ff;}
+        .invmap-breed-chip.active{background:#f59e0b;color:white;border-color:#d97706;box-shadow:0 2px 6px -1px rgba(245,158,11,.4);}
+        .invmap-breed-chip-count{display:inline-block;margin-left:5px;font-size:9px;opacity:.8;}
+    </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="bg-white border-b border-slate-200 px-5 py-3 flex justify-between items-center sticky top-0 z-30 shadow-sm">
+    <div class="flex items-center gap-3">
+        <button onclick="window.location.href='operation_dashboard.html'" class="text-[10px] font-bold text-slate-500 hover:text-blue-700 uppercase tracking-widest bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-sm">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Back to main page
+        </button>
+        <span class="font-black text-slate-800 uppercase tracking-widest text-xs">Seedling Sales Management</span>
+    </div>
+    <div class="flex items-center gap-2">
+        <a href="operation_sales_analysis.html" class="text-[10px] font-bold text-pink-600 hover:text-pink-800 uppercase tracking-widest bg-pink-50 hover:bg-pink-100 px-3 py-1.5 rounded-full border border-pink-200 transition-colors no-underline" style="text-decoration:none;">📊 Sales Analysis</a>
+        <a href="operation_quotation.html" class="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 uppercase tracking-widest bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-full border border-emerald-200 transition-colors no-underline" style="text-decoration:none;">📝 Create Quotation</a>
+    </div>
+</div>
+
+<div class="max-w-[1500px] mx-auto px-5 py-5 space-y-5">
+
+    <!-- ── Tab switcher ── -->
+    <div class="ssm-tabs">
+        <button class="ssm-tab active customer" id="ssm-tab-customer" onclick="switchSsmTab('customer')">
+            <span class="ssm-tab-emoji">👥</span>
+            <span><div>Customer Order Monitoring</div><div class="ssm-tab-sub">Admin pickups &amp; follow-ups</div></span>
+        </button>
+        <button class="ssm-tab stock" id="ssm-tab-stock" onclick="switchSsmTab('stock')">
+            <span class="ssm-tab-emoji">🌱</span>
+            <span><div>Stock Allocation</div><div class="ssm-tab-sub">Matured, plots, gearing</div></span>
+        </button>
+        <button class="ssm-tab map" id="ssm-tab-map" onclick="switchSsmTab('map')">
+            <span class="ssm-tab-emoji">🗺️</span>
+            <span><div>Inventory Map</div><div class="ssm-tab-sub">Plot batches, collected, balance</div></span>
+        </button>
+    </div>
+
+    <!-- ══════════════ STOCK PANE (hidden by default) ══════════════ -->
+    <div id="ssm-pane-stock" class="hidden space-y-5">
+
+    <!-- ── NSD + Available for Sales (2 columns) ── -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        <!-- Nursery Status Dashboard -->
+        <div class="metric-card border-l-4 border-emerald-500 relative overflow-hidden" id="nsd-card">
+            <div class="absolute top-0 right-0 w-20 h-20 bg-emerald-50 rounded-full blur-2xl"></div>
+            <div class="px-4 pt-4 pb-3 border-b border-slate-100 relative z-10">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                        </div>
+                        <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Nursery Status Dashboard</span>
+                    </div>
+                    <div class="flex items-baseline gap-1">
+                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">As of</span>
+                        <span class="text-base font-black text-emerald-600 leading-none" id="current-month-label">—</span>
+                    </div>
+                </div>
+                <div class="combo-switch">
+                    <button class="combo-switch-btn active" id="combo-tab-basic" onclick="switchComboTab('basic')">
+                        <span class="csw-title">Stock To-Date</span>
+                        <span class="csw-sub">9-month only</span>
+                    </button>
+                    <button class="combo-switch-btn verified" id="combo-tab-verified" onclick="switchComboTab('verified')">
+                        <span class="csw-title">Verified Stock</span>
+                        <span class="csw-sub">+ Audit ≥ 1.5m</span>
+                    </button>
+                </div>
+            </div>
+            <div class="px-4 pt-3 pb-4 relative z-10 flex flex-col gap-3">
+                <div class="rounded-xl bg-emerald-50/60 border border-emerald-100 p-3">
+                    <div class="text-[9px] font-black text-emerald-700 uppercase tracking-widest mb-0.5" id="matured-tile-label">Total Matured (To-Date)</div>
+                    <div class="text-3xl font-black text-emerald-700 leading-none mb-1" id="stat-matured">—</div>
+                    <div class="text-[9px] font-bold text-slate-500 leading-tight" id="matured-tile-sub">9 months in main nursery</div>
+                </div>
+                <div class="rounded-xl bg-blue-50/60 border border-blue-100 p-3">
+                    <div class="text-[9px] font-black text-blue-700 uppercase tracking-widest mb-0.5">Pending Collection</div>
+                    <div class="text-3xl font-black text-blue-700 leading-none mb-1" id="stat-orders-current">—</div>
+                    <div class="text-[9px] font-bold text-slate-500 leading-tight">Cumulative paid not yet collected</div>
+                </div>
+                <div class="space-y-1 text-[9px] text-slate-500 leading-snug bg-slate-50 border border-slate-100 rounded-lg p-2.5" id="nsd-remark-block">
+                    <div class="flex gap-1.5"><span class="font-black text-emerald-600 shrink-0">①</span><span><span class="font-black text-emerald-700 uppercase tracking-wider">9-Month</span> — Transplant + 9 months → matured.</span></div>
+                    <div class="flex gap-1.5" id="nsd-remark-audit"><span class="font-black text-amber-600 shrink-0">②</span><span><span class="font-black text-amber-700 uppercase tracking-wider">Audit</span> — Sample ≥ 150 cm → matured.</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Available for Sales -->
+        <div class="metric-card border-l-4 border-emerald-500 relative overflow-hidden flex flex-col">
+            <div class="absolute top-0 right-0 w-20 h-20 bg-emerald-50 rounded-full blur-2xl"></div>
+
+            <div class="px-4 pt-4 pb-3 border-b border-slate-100 relative z-10">
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        </div>
+                        <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Available for Sales</span>
+                    </div>
+                    <span id="avail-status-badge" class="text-[9px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full uppercase tracking-widest">OK</span>
+                </div>
+                <div class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1" id="avail-tab-label">From <span class="text-emerald-700 font-black">Stock To-Date</span></div>
+            </div>
+
+            <div class="px-4 pt-3 pb-3 relative z-10">
+                <div class="flex items-baseline gap-3 mb-3">
+                    <div class="text-4xl font-black text-emerald-600 leading-none" id="stat-available">—</div>
+                    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-tight">Seedlings<br>safe to sell</div>
+                </div>
+
+                <!-- Compact formula -->
+                <div class="bg-slate-50 border border-slate-100 rounded-lg p-2.5 text-[10px] space-y-1 mb-3">
+                    <div class="flex justify-between"><span class="text-slate-500 font-bold">Matured (after culling)</span><span class="font-black text-slate-700" id="calc-matured">—</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500 font-bold">− Pending collection</span><span class="font-black text-slate-700" id="calc-orders">—</span></div>
+                    <div class="flex justify-between border-t border-slate-200 pt-1"><span class="text-emerald-700 font-black uppercase tracking-wider">= Available</span><span class="font-black text-emerald-700" id="calc-available">—</span></div>
+                </div>
+
+                <!-- Gearing tool -->
+                <div class="bg-emerald-50/60 border border-emerald-100 rounded-lg p-2.5 mb-2">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-[9px] font-black text-slate-700 uppercase tracking-widest">⚙ Gearing Power</span>
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-sm font-black text-emerald-700" id="gearing-display">1.0×</span>
+                            <span id="gearing-badge" class="text-[8px] font-black text-emerald-600 bg-white border border-emerald-200 rounded-full px-1.5 py-0.5 uppercase tracking-wider">Conservative</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[8px] font-black text-emerald-600 uppercase tracking-widest">1.0×</span>
+                        <input type="range" id="gearing-slider" class="gear-slider flex-1" min="10" max="30" step="1" value="10">
+                        <span class="text-[8px] font-black text-red-500 uppercase tracking-widest">3.0×</span>
+                    </div>
+                </div>
+
+                <div class="hidden bg-red-50 border-l-2 border-red-500 rounded-lg p-2.5 text-[10px] text-red-700 space-y-0.5" id="oversold-warning">
+                    <div class="font-black uppercase tracking-widest text-red-600">⚠ Oversold</div>
+                    <div>Orders exceed by <span id="oversold-qty" class="font-black">—</span> (<span id="oversold-factor" class="font-black">—×</span>).</div>
+                    <div>Need <span id="oversold-needed-gearing" class="font-black">—×</span> gearing to cover.</div>
+                </div>
+
+                <div class="text-[9px] text-slate-500 leading-snug bg-emerald-50/60 border border-emerald-100 rounded-lg p-2 mt-2">
+                    <span class="font-black text-emerald-700 uppercase tracking-wider">Note</span> — "Matured" is this month's freshly matured seedlings, already with 10% culling deducted. Available = matured × gearing − pending collection.
+                </div>
+            </div>
+        </div>
+
+    </div>
+    <!-- /NSD + Available 2-col grid -->
+
+    <!-- ── Capacity Heatmap (matured vs reserved by nursery × month) ── -->
+    <!-- Sits ABOVE the maturity allocation so admins watch live utilisation while dragging cards. -->
+    <div>
+        <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">🔥 Capacity Heatmap</h2>
+            <span class="text-[9px] font-bold text-slate-400">Live: matured-stock utilisation by nursery × month</span>
+        </div>
+        <div class="dash-card p-3 scroll-x-fade">
+            <div id="heatmap-area" class="min-w-[700px]">
+                <div class="text-center py-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading heatmap…</div>
+            </div>
+            <div class="flex items-center gap-2 mt-3 text-[9px] font-bold text-slate-500 flex-wrap">
+                <span class="uppercase tracking-widest">Legend:</span>
+                <span class="heat-cell heat-0" style="padding:2px 8px;">0–20%</span>
+                <span class="heat-cell heat-1" style="padding:2px 8px;">20–40%</span>
+                <span class="heat-cell heat-2" style="padding:2px 8px;">40–60%</span>
+                <span class="heat-cell heat-3" style="padding:2px 8px;">60–80%</span>
+                <span class="heat-cell heat-4" style="padding:2px 8px;">80–100%</span>
+                <span class="heat-cell heat-5" style="padding:2px 8px;">Oversold</span>
+            </div>
+        </div>
+        <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
+            <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — % = pending-collection qty ÷ matured qty (after 10% culling) for that nursery × month. Higher % = less spare capacity.
+        </div>
+    </div>
+
+    <!-- ── Monthly Maturity Allocation ── -->
+    <div>
+        <div id="active-month-banner" class="hidden text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 mb-2"></div>
+
+        <div class="dash-card overflow-hidden">
+            <div class="mat-card-head">
+                <div class="mat-card-title">
+                    <div class="mat-card-title-icon">🌱</div>
+                    <div>
+                        <div class="mat-card-title-text">Monthly Maturity Allocation</div>
+                        <div class="mat-card-title-sub">Drag customer cards onto a row · drag a chip to move it to another row</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 relative flex-wrap">
+                    <div id="month-tabs" class="flex gap-1 bg-slate-50 rounded-xl border border-slate-200 p-1 shadow-sm scroll-x-fade flex-wrap"></div>
+                    <div class="relative">
+                        <button id="history-btn" onclick="toggleHistoryMenu()" class="text-[10px] font-black text-slate-600 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 transition-colors flex items-center gap-1.5 shadow-sm uppercase tracking-widest" title="Show past maturity months">
+                            <span>🕘</span><span>History</span>
+                            <span id="history-count" class="text-[9px] bg-slate-200 text-slate-700 rounded-full px-1.5 py-0.5">0</span>
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"/></svg>
+                        </button>
+                        <div id="history-menu" class="hidden absolute right-0 mt-1 w-56 max-h-[300px] overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-xl z-40 p-1.5"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="scroll-x-fade">
+                <table class="mat-table min-w-[1400px]">
+                    <thead>
+                        <tr class="mat-group-row">
+                            <th colspan="7" class="mat-group mat-group-prod">📦 Production</th>
+                            <th colspan="3" class="mat-group mat-group-plot">🪴 Plot Status</th>
+                            <th colspan="3" class="mat-group mat-group-alloc">🛒 Customer Allocation</th>
+                        </tr>
+                        <tr>
+                            <!-- Production -->
+                            <th>Maturity Date</th>
+                            <th>Location</th>
+                            <th>Plot</th>
+                            <th>Batch</th>
+                            <th>Breed</th>
+                            <th class="text-right">Qty Transplanted</th>
+                            <th class="text-right mat-sep-r">After 10% Culling</th>
+                            <!-- Plot status -->
+                            <th>Status</th>
+                            <th class="text-right">Total Collected</th>
+                            <th class="text-right mat-sep-r">Plot Balance</th>
+                            <!-- Customer allocation -->
+                            <th>Customers (drag here)</th>
+                            <th class="text-right">Reserved Qty</th>
+                            <th class="text-right">After Deduct Reserve</th>
+                        </tr>
+                    </thead>
+                    <tbody id="maturity-rows">
+                        <tr><td colspan="13" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading maturity data…</td></tr>
+                    </tbody>
+                    <tfoot id="maturity-foot"></tfoot>
+                </table>
+            </div>
+        </div>
+
+        <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
+            <span class="font-black uppercase tracking-wider text-slate-700">Notes</span> —
+            <strong>Plot Balance</strong> = After 10% Culling − Total Collected (what's still in the plot).
+            <strong>After Deduct Reserve</strong> = Plot Balance − Reserved Qty (what's still free to allocate).
+            <strong>Plot Status</strong> defaults to <em>No Status</em>; an admin opens it for collection. Total Collected is computed from customer order collections proportionally to allocations.
+        </div>
+    </div>
+
+    </div>
+    <!-- /STOCK PANE -->
+
+    <!-- ══════════════ CUSTOMER PANE (default) ══════════════ -->
+    <div id="ssm-pane-customer" class="space-y-5">
+
+        <!-- ── Order Monitoring Dashboard (summary stat cards + 6-week trend) ── -->
+        <div class="metric-card border-l-4 border-emerald-500 relative overflow-hidden">
+            <div class="px-4 pt-4 pb-3 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                    </div>
+                    <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Order Monitoring Dashboard</span>
+                </div>
+                <span class="text-[10px] font-bold text-slate-400">As of <span id="mon-dash-asof" class="text-emerald-700 font-black">—</span></span>
+            </div>
+            <div class="p-3 space-y-3">
+                <div id="mon-dash-cards" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                    <div class="text-center py-4 text-[10px] text-slate-400 font-bold uppercase tracking-widest col-span-full animate-pulse">Loading…</div>
+                </div>
+                <div class="pt-3 border-t border-slate-100">
+                    <div class="flex items-center justify-between mb-2 gap-3 flex-wrap">
+                        <span class="text-[11px] font-black text-slate-700 uppercase tracking-widest">Order &amp; Collection · <span id="mon-dash-year" class="text-emerald-700">—</span></span>
+                        <span id="mon-dash-year-total" class="text-[10px] font-bold text-blue-700">—</span>
+                    </div>
+                    <div class="flex items-center gap-3 text-[9px] font-bold text-slate-500 mb-1">
+                        <span class="inline-flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-sm bg-blue-500"></span>Order</span>
+                        <span class="inline-flex items-center gap-1"><span class="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-500"></span>Collection</span>
+                    </div>
+                    <div id="mon-dash-month-bars" class="grid grid-cols-12 gap-1 h-28 items-end"></div>
+                    <div class="text-[9px] font-bold text-slate-400 mt-2 text-center">Click a bar to see the rows behind that month.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── To-Do List (full-width) ── -->
+        <div class="metric-card !border-amber-300 border-l-4 relative overflow-hidden flex flex-col">
+            <div class="px-4 pt-4 pb-3 border-b border-slate-100">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center text-amber-600">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                        </div>
+                        <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">To-Do List</span>
+                        <span id="todo-section-meta" class="text-[9px] font-bold text-slate-400 ml-1"></span>
+                    </div>
+                    <div class="flex gap-1.5">
+                        <button class="todo-tab active unpaid" id="todo-tab-unpaid" onclick="switchTodoTab('unpaid')">
+                            <span>💰</span><span>Unpaid</span>
+                            <span class="tab-count" id="todo-count-unpaid">0</span>
+                        </button>
+                        <button class="todo-tab credit" id="todo-tab-credit" onclick="switchTodoTab('credit')">
+                            <span>🧾</span><span>Credit</span>
+                            <span class="tab-count" id="todo-count-credit">0</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="px-3 pt-3 pb-3 flex-1 min-h-0">
+                <div class="notebook max-h-[360px] overflow-y-auto" id="todo-body">
+                    <div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading…</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- This Week's Scheduled Collection -->
+        <div class="metric-card border-l-4 border-blue-500 relative overflow-hidden">
+            <div class="px-4 pt-4 pb-3 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    </div>
+                    <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">This Week's Scheduled Collection</span>
+                    <span id="sched-week-label" class="text-[10px] font-bold text-slate-400 ml-1">—</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button onclick="changeSchedWeek(-1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-100 flex items-center justify-center text-slate-500 hover:text-blue-700 font-black text-base cursor-pointer transition-colors border-none">‹</button>
+                    <button onclick="goSchedToday()" class="text-[9px] font-black text-emerald-700 uppercase tracking-widest bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 cursor-pointer transition-colors">Today</button>
+                    <button onclick="changeSchedWeek(1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-blue-100 flex items-center justify-center text-slate-500 hover:text-blue-700 font-black text-base cursor-pointer transition-colors border-none">›</button>
+                    <a href="operation_collection_booking.html" class="text-[9px] font-black text-blue-700 uppercase tracking-widest bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors no-underline ml-1" style="text-decoration:none;">Collection Bookings →</a>
+                </div>
+            </div>
+            <div class="p-3">
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5" id="sched-week-grid">
+                    <div class="text-center py-4 text-[10px] text-slate-400 font-bold uppercase tracking-widest col-span-full animate-pulse">Loading…</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Customer Order Management -->
+        <div>
+            <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">📋 Customer Order Management</h2>
+                <div class="flex items-center gap-2">
+                    <input id="cust-search" type="text" placeholder="Search customer / order #" oninput="renderCustomerGrid()"
+                        class="text-[11px] font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-500 w-56">
+                    <select id="cust-filter" onchange="renderCustomerGrid()"
+                        class="text-[10px] font-black uppercase tracking-widest text-slate-700 bg-white border border-slate-200 rounded-lg px-2 py-1.5">
+                        <option value="active">Active orders only</option>
+                        <option value="outstanding">Outstanding balance</option>
+                        <option value="completed">Completed</option>
+                        <option value="all">All (incl. cancelled)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="dash-card scroll-x-fade">
+                <table class="cust-table min-w-[1400px]">
+                    <thead id="cust-thead"></thead>
+                    <tbody id="cust-tbody">
+                        <tr><td colspan="20" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading customer orders…</td></tr>
+                    </tbody>
+                    <tfoot id="cust-tfoot"></tfoot>
+                </table>
+            </div>
+
+            <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
+                <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Months start from the current month. Future months only appear when a customer has a booking that month. <span class="inline-block px-1 rounded" style="background:#dbeafe;color:#1d4ed8;font-weight:900;">blue</span> = qty collected (<span class="font-mono">salesweb_order_collections</span>) · <span class="inline-block px-1 rounded" style="background:#fef3c7;color:#a16207;font-weight:900;border:1px dashed #fcd34d;">amber</span> = qty booked for collection (<span class="font-mono">shared_collection_bookings</span>). Click a customer name for the full pickup history.
+            </div>
+        </div>
+
+    </div>
+    <!-- /CUSTOMER PANE -->
+
+    <!-- ══════════════ INVENTORY MAP PANE ══════════════ -->
+    <div id="ssm-pane-map" class="hidden space-y-5">
+        <div class="metric-card border-l-4 border-blue-500 relative overflow-hidden">
+            <div class="p-4">
+                <!-- Nursery sub-tabs (All Maps + per-nursery) -->
+                <div id="invmap-nursery-tabs" class="bg-slate-100 p-2 rounded-2xl flex gap-2 mb-4 overflow-x-auto border border-slate-200">
+                    <span id="invmap-loading-tabs" class="text-[10px] font-bold text-slate-400 p-3 animate-pulse">Loading nurseries…</span>
+                </div>
+
+                <!-- Two-column layout: maps on the left, side info bar on the right -->
+                <div class="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-4">
+
+                    <!-- LEFT: Map stack (1 large for a single nursery; vertical rows for All Maps) -->
+                    <div id="invmap-stack" class="flex flex-col gap-4">
+                        <!-- Filled by renderInvmapStack() -->
+                    </div>
+
+                    <!-- RIGHT: Info sidebar -->
+                    <aside class="bg-slate-50 rounded-2xl border border-slate-200 p-4 flex flex-col gap-3 h-fit sticky top-4">
+                        <!-- Search by batch -->
+                        <div class="relative">
+                            <input id="invmap-batch-search" type="text" placeholder="Search batch number…"
+                                oninput="onInvmapBatchSearch(this.value)"
+                                class="w-full px-3 py-2 pl-9 text-[12px] font-bold text-slate-800 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder-slate-400">
+                            <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            <button id="invmap-batch-search-clear" onclick="clearInvmapBatchSearch()" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-rose-500 hover:text-rose-700 font-black text-base leading-none px-1">×</button>
+                        </div>
+
+                        <!-- Totals chips -->
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="bg-white rounded-lg border border-slate-200 p-2 text-center">
+                                <div class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Full</div>
+                                <div class="text-base font-black text-slate-800 leading-tight" id="invmap-tot-full">0</div>
+                            </div>
+                            <div class="bg-white rounded-lg border border-blue-200 p-2 text-center">
+                                <div class="text-[8px] font-black text-blue-500 uppercase tracking-widest">Collected</div>
+                                <div class="text-base font-black text-blue-700 leading-tight" id="invmap-tot-coll">0</div>
+                            </div>
+                            <div class="bg-white rounded-lg border border-emerald-200 p-2 text-center">
+                                <div class="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Balance</div>
+                                <div class="text-base font-black text-emerald-700 leading-tight" id="invmap-tot-bal">0</div>
+                            </div>
+                        </div>
+
+                        <!-- Breed filter chip row -->
+                        <div>
+                            <div class="flex items-center justify-between mb-1.5">
+                                <div class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Filter by Breed</div>
+                                <button id="invmap-breed-clear" onclick="clearInvmapBreed()" class="hidden text-[10px] font-black text-rose-600 hover:underline">clear ✕</button>
+                            </div>
+                            <div id="invmap-breed-chips" class="flex flex-wrap gap-1.5">
+                                <span class="text-[10px] text-slate-400 animate-pulse">Loading breeds…</span>
+                            </div>
+                        </div>
+
+                        <!-- By-batch/by-plot list (always visible; filtered when a breed is selected) -->
+                        <div id="invmap-side-body" class="overflow-y-auto pr-1 -mr-1" style="max-height:55vh;">
+                            <div class="text-center py-8 text-slate-400 text-[10px] font-bold uppercase tracking-widest animate-pulse">Loading…</div>
+                        </div>
+                    </aside>
+                </div>
+
+                <div class="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    <span class="text-slate-600">Plot color:</span>
+                    <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded bg-emerald-400/40 border border-emerald-500"></span>≥ 80% remaining</span>
+                    <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded bg-amber-400/40 border border-amber-500"></span>20–80%</span>
+                    <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded bg-rose-400/40 border border-rose-500"></span>&lt; 20%</span>
+                    <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded bg-slate-300/40 border border-slate-400"></span>Empty / no batch</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- /INVENTORY MAP PANE -->
+
+</div>
+
+<!-- ══════════════ Plot details modal (Inventory Map) ══════════════ -->
+<div id="invmap-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-4" onclick="if(event.target===this)closeInvmapModal()">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <div>
+                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Plot</div>
+                <div class="text-lg font-black text-slate-800" id="invmap-modal-plot">—</div>
+            </div>
+            <button onclick="closeInvmapModal()" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">×</button>
+        </div>
+        <div class="p-5" id="invmap-modal-body"></div>
+    </div>
+</div>
+
+<!-- ══════════════ Allocation drawer (Stock tab only) ══════════════ -->
+<button class="alloc-fab hidden-fab" id="alloc-fab" onclick="toggleAllocDrawer()" title="Customer orders to allocate">
+    <span class="alloc-fab-emoji">🛒</span>
+    <span>Allocate Orders</span>
+    <span class="alloc-fab-badge" id="alloc-fab-badge">0</span>
+</button>
+
+<div class="alloc-drawer" id="alloc-drawer">
+    <div class="alloc-drawer-head">
+        <div>
+            <h3>🛒 Customer Orders</h3>
+            <p>Drag a card onto a matured-stock row</p>
+        </div>
+        <button onclick="toggleAllocDrawer()" class="w-8 h-8 rounded-lg bg-white/15 hover:bg-white/25 text-white font-black text-base flex items-center justify-center transition-colors shrink-0 border-none cursor-pointer">×</button>
+    </div>
+    <div class="alloc-drawer-tabs">
+        <button class="alloc-drawer-tab active" id="alloc-tab-active" onclick="switchAllocTab('active')">
+            Active <span class="alloc-tab-count" id="alloc-count-active">0</span>
+        </button>
+        <button class="alloc-drawer-tab" id="alloc-tab-past" onclick="switchAllocTab('past')">
+            Past Due <span class="alloc-tab-count" id="alloc-count-past">0</span>
+        </button>
+    </div>
+    <div class="px-3 pt-3 pb-2 border-b border-slate-200 bg-white">
+        <div class="relative">
+            <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+            <input id="alloc-search" type="text"
+                placeholder="Search customer or order #…"
+                class="w-full pl-9 pr-8 py-2 text-[12px] font-semibold border border-slate-200 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-slate-50">
+            <button id="alloc-search-clear" class="hidden absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-slate-200 text-slate-600 text-xs font-black hover:bg-slate-300" title="Clear search">×</button>
+        </div>
+    </div>
+    <div class="alloc-drawer-body" id="alloc-drawer-body">
+        <div class="alloc-drawer-empty">Loading orders…</div>
+    </div>
+    <div class="alloc-resize-handle" id="alloc-resize-handle" title="Drag to resize"></div>
+</div>
+
+<!-- ══════════════ Month-drilldown modal (Order / Collection chart) ══════════════ -->
+<div class="pickup-modal-overlay" id="mon-dash-drill-modal" onclick="if(event.target===this)closeMonDashDrill()">
+    <div class="pickup-modal-box">
+        <div class="pickup-modal-head">
+            <div>
+                <div class="text-[10px] font-black text-blue-200 uppercase tracking-widest mb-1" id="mon-dash-drill-eyebrow">📊 Detail</div>
+                <div class="text-base font-black" id="mon-dash-drill-title">—</div>
+                <div class="text-[10px] text-blue-100 mt-1" id="mon-dash-drill-sub"></div>
+            </div>
+            <button onclick="closeMonDashDrill()" class="w-8 h-8 rounded-lg bg-white/15 hover:bg-white/25 text-white font-black text-base flex items-center justify-center transition-colors shrink-0">×</button>
+        </div>
+        <div class="pickup-modal-body">
+            <div id="mon-dash-drill-body"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════ Customer Pickup History modal ══════════════ -->
+<div class="pickup-modal-overlay" id="pickup-modal">
+    <div class="pickup-modal-box">
+        <div class="pickup-modal-head">
+            <div>
+                <div class="text-[10px] font-black text-blue-200 uppercase tracking-widest mb-1">📜 Pickup history</div>
+                <div class="text-base font-black" id="pickup-modal-title">—</div>
+                <div class="text-[10px] text-blue-100 mt-1" id="pickup-modal-sub"></div>
+            </div>
+            <button onclick="closePickupHistory()" class="w-8 h-8 rounded-lg bg-white/15 hover:bg-white/25 text-white font-black text-base flex items-center justify-center transition-colors shrink-0">×</button>
+        </div>
+        <div class="pickup-modal-body">
+            <div class="ph-summary" id="pickup-summary"></div>
+            <div id="pickup-table-wrap"></div>
+        </div>
+    </div>
+</div>
+
+<script src="operation_stock_sales.js"></script>
+<!-- ══════════════ CREDIT-INVOICE MODALS ══════════════ -->
+<div class="ci-modal" id="ci-upload-modal">
+    <div class="ci-modal-card">
+        <div class="ci-modal-head">
+            <div class="ci-modal-title">📤 Upload Invoice</div>
+            <button class="ci-modal-close" onclick="closeInvoiceUploadModal()">×</button>
+        </div>
+        <div class="ci-modal-body">
+            <input type="hidden" id="ci-up-key">
+            <div class="ci-readonly-row">Customer: <strong id="ci-up-customer">—</strong></div>
+            <div class="ci-readonly-row">Billing period: <strong id="ci-up-period">—</strong></div>
+            <div class="ci-readonly-row" id="ci-up-summary" style="margin-bottom:1rem;">—</div>
+
+            <div class="ci-field">
+                <label class="ci-field-label" for="ci-up-invoice-no">Invoice Number *</label>
+                <input type="text" id="ci-up-invoice-no" class="ci-input" placeholder="e.g. INV-2026-05-014" autocomplete="off">
+            </div>
+            <div class="ci-field">
+                <label class="ci-field-label" for="ci-up-file">Invoice PDF / Image *</label>
+                <input type="file" id="ci-up-file" class="ci-input" accept="application/pdf,image/*">
+            </div>
+            <div class="ci-field">
+                <label class="ci-field-label" for="ci-up-due">Due Date (optional)</label>
+                <input type="date" id="ci-up-due" class="ci-input">
+            </div>
+            <div class="ci-field">
+                <label class="ci-field-label" for="ci-up-notes">Notes (optional)</label>
+                <textarea id="ci-up-notes" class="ci-textarea" placeholder="Internal notes for this invoice"></textarea>
+            </div>
+            <div class="ci-modal-error" id="ci-up-error"></div>
+        </div>
+        <div class="ci-modal-foot">
+            <button class="ci-btn-ghost" onclick="closeInvoiceUploadModal()">Cancel</button>
+            <button class="ci-btn-primary" id="ci-up-submit" onclick="submitInvoiceUpload()">Upload &amp; Issue Invoice</button>
+        </div>
+    </div>
+</div>
+
+<div class="ci-modal" id="ci-paid-modal">
+    <div class="ci-modal-card">
+        <div class="ci-modal-head">
+            <div class="ci-modal-title">✓ Mark Invoice Paid</div>
+            <button class="ci-modal-close" onclick="closeMarkPaidModal()">×</button>
+        </div>
+        <div class="ci-modal-body">
+            <input type="hidden" id="ci-paid-id">
+            <div class="ci-readonly-row" id="ci-paid-summary" style="margin-bottom:1rem;">—</div>
+            <div class="ci-field">
+                <label class="ci-field-label" for="ci-paid-file">Payment Proof (optional)</label>
+                <input type="file" id="ci-paid-file" class="ci-input" accept="application/pdf,image/*">
+            </div>
+            <div class="ci-modal-error" id="ci-paid-error"></div>
+        </div>
+        <div class="ci-modal-foot">
+            <button class="ci-btn-ghost" onclick="closeMarkPaidModal()">Cancel</button>
+            <button class="ci-btn-primary" id="ci-paid-submit" onclick="submitMarkPaid()">Mark as Paid</button>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

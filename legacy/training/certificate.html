@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Earn a Certificate — MJM Training Center</title>
+<meta name="description" content="Role certification — complete each program's training slides and practical record to earn your certificate.">
+<meta name="theme-color" content="#1E3A20">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/auth.js"></script>
+</head>
+<body>
+
+<nav class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="index.html"><i class="fa-solid fa-award"></i> Earn a Certificate</a>
+    <a class="homelink" href="index.html"><i class="fa-solid fa-arrow-left"></i> Module Mainpage</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <span class="blob b1"></span><span class="blob b2"></span>
+  <div class="hero-in">
+    <div class="seed"><i class="fa-solid fa-award"></i></div>
+    <div class="eyebrow">Certification</div>
+    <h1>Role Certification</h1>
+    <div class="rule"></div>
+    <p class="lede">Each role requires completing its training programs — read every slide and fulfil each program's practical record. Complete them all to claim your certificate.</p>
+  </div>
+</header>
+
+<section class="slide"><div class="wrap">
+  <div class="cert-pick">
+    <label for="roleSelect">Select a role</label>
+    <div class="cert-select">
+      <select id="roleSelect" aria-label="Select a role">
+        <option value="" selected disabled>— Choose the role you're training for —</option>
+        <option value="Assistant Field Conductor">Assistant Field Conductor</option>
+        <option value="Field Conductor">Field Conductor</option>
+        <option value="Administrator">Administrator</option>
+        <option value="Auditor">Auditor</option>
+        <option value="Nursery Manager">Nursery Manager</option>
+      </select>
+      <i class="fa-solid fa-chevron-down chev"></i>
+    </div>
+    <span class="cstatus" id="roleStatus" hidden></span>
+
+    <div class="cert-panel" id="certPanel">
+      <div class="certificate" id="certCard">
+        <div class="seal"><i class="fa-solid fa-award"></i></div>
+        <div class="ctag">Certificate of Qualification</div>
+        <h3>MJM Training Center</h3>
+        <p class="cfor" id="certLead">This certifies qualification for the role of</p>
+        <div class="cname" id="certName" hidden>—</div>
+        <div class="ccourse" id="certRole">—</div>
+        <div class="cmeta" id="certMeta" hidden>
+          <span id="certDate"></span>
+          <span id="certReqs"></span>
+        </div>
+        <div class="name-form" id="claimBox" hidden>
+          <label for="nameInput">Your full name (as it will appear on the certificate)</label>
+          <input type="text" id="nameInput" maxlength="60" placeholder="e.g. Aisyah binti Rahman">
+          <div class="err" id="nameErr"></div>
+        </div>
+        <div class="cert-actions" id="certActions"></div>
+        <div class="cert-note" id="certNote"></div>
+      </div>
+
+      <div class="reqs" id="reqs"></div>
+    </div>
+  </div>
+</div></section>
+
+<footer>
+  <p><b>MJM Training Center</b> · Certification</p>
+</footer>
+
+<script src="assets/app.js"></script>
+<script>
+(function(){
+  if(!MJM.user()) return;
+  MJM.initTopbar();
+
+  /* Role = the programs that must be completed (slides + practical record). */
+  var ROLES={
+    'Assistant Field Conductor': {slug:'afc',     programs:['operation']},
+    'Field Conductor':           {slug:'fc',      programs:['operation','troubleshoot']},
+    'Administrator':             {slug:'admin',   programs:['operation','admin-operation','sales']},
+    'Auditor':                   {slug:'auditor', programs:['operation','troubleshoot','admin-operation','copn']},
+    'Nursery Manager':           {slug:'manager', programs:['operation','troubleshoot','admin-operation','copn','sales','management']}
+  };
+
+  var sel=document.getElementById('roleSelect'),
+      status=document.getElementById('roleStatus'),
+      panel=document.getElementById('certPanel'),
+      lead=document.getElementById('certLead'),
+      nameEl=document.getElementById('certName'),
+      roleEl=document.getElementById('certRole'),
+      meta=document.getElementById('certMeta'),
+      dateEl=document.getElementById('certDate'),
+      reqsMeta=document.getElementById('certReqs'),
+      claimBox=document.getElementById('claimBox'),
+      nameInput=document.getElementById('nameInput'),
+      nameErr=document.getElementById('nameErr'),
+      actions=document.getElementById('certActions'),
+      note=document.getElementById('certNote'),
+      reqsEl=document.getElementById('reqs');
+
+  function getRoleCert(role){
+    var raw=MJM.get('rolecert-'+role.slug); if(!raw) return null;
+    try{ return JSON.parse(raw); }catch(e){ return null; }
+  }
+  function fmtDate(iso){
+    var d=iso?new Date(iso):new Date();
+    return d.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+  }
+  function el(tag,cls,html){ var n=document.createElement(tag); if(cls)n.className=cls; if(html!=null)n.innerHTML=html; return n; }
+  function setStatus(kind,html){
+    if(!kind){ status.hidden=true; return; }
+    status.hidden=false; status.className='cstatus '+kind; status.innerHTML=html;
+  }
+
+  function assess(role){
+    var progs=role.programs.map(function(slug){
+      var p=MJM.progress(slug);
+      p.slug=slug; p.name=MJM.PROGRAMS[slug].name; p.page=MJM.PROGRAMS[slug].page;
+      return p;
+    });
+    var met=progs.filter(function(p){return p.complete;}).length;
+    return {programs:progs, met:met, total:progs.length, allMet:met===progs.length};
+  }
+
+  function renderReqs(state){
+    reqsEl.innerHTML='';
+    var g=el('div','req-group');
+    g.appendChild(el('h3',null,'<i class="fa-solid fa-graduation-cap" style="color:var(--green);margin-right:8px"></i>Program Completion'));
+    g.appendChild(el('div','rg-sub','Each program needs all training slides read and its <a href="logbook.html">practical record</a> fulfilled.'));
+    state.programs.forEach(function(p){
+      var row=el('div','req'+(p.complete?' met':''));
+      row.appendChild(el('div','icon-badge','<i class="fa-solid fa-book-open"></i>'));
+      var body=el('div','req-body');
+      var nm=el('div','req-name');
+      var link=el('a',null,p.name);
+      link.href='logbook.html?program='+p.slug;
+      nm.appendChild(link);
+      body.appendChild(nm);
+      body.appendChild(el('div','req-count',
+        p.complete?'Program complete'
+                  :'Slides '+p.slides.got+'/'+p.slides.total+
+                   (p.practical.length?' · Practical '+p.practicalPct+'%':'')));
+      var bar=el('div','bar');
+      var fill=el('span','fill'); fill.style.width=p.score+'%';
+      bar.appendChild(fill); body.appendChild(bar);
+      row.appendChild(body);
+      row.appendChild(el('div','req-state','<i class="fa-solid '+(p.complete?'fa-circle-check':'fa-circle')+'"></i>'));
+      g.appendChild(row);
+    });
+    reqsEl.appendChild(g);
+  }
+
+  function showProgress(roleName,role,state){
+    lead.textContent='This certifies qualification for the role of';
+    nameEl.hidden=true; meta.hidden=true; claimBox.hidden=true;
+    roleEl.textContent=roleName;
+    actions.innerHTML=''; note.innerHTML='';
+    reqsEl.style.display='';
+
+    if(state.allMet){
+      claimBox.hidden=false;
+      nameInput.value=MJM.get('name')||MJM.userName()||'';
+      nameErr.textContent='';
+      var claim=el('button','btn','<i class="fa-solid fa-award"></i> Claim certificate');
+      claim.addEventListener('click',function(){
+        var name=nameInput.value.trim();
+        if(!name){ nameErr.textContent='Please enter your name.'; nameInput.focus(); return; }
+        MJM.set('name',name);
+        var cert={name:name,date:new Date().toISOString()};
+        MJM.set('rolecert-'+role.slug,JSON.stringify(cert));
+        markSelectBadges();
+        showEarned(roleName,role,cert);
+      });
+      actions.appendChild(claim);
+      setStatus('ok','<i class="fa-solid fa-circle-check"></i> '+(state.total>1?'All '+state.total+' programs':'Program')+' complete — claim your certificate');
+    }else{
+      note.innerHTML='Complete each program below — training slides plus practical record — then come back to claim your certificate.';
+      setStatus('todo','<i class="fa-solid fa-bars-progress"></i> '+state.met+' of '+state.total+' programs complete');
+    }
+  }
+
+  function showEarned(roleName,role,cert){
+    lead.textContent='This certificate is proudly presented to';
+    nameEl.hidden=false; nameEl.textContent=cert.name;
+    roleEl.textContent='for qualifying as '+roleName;
+    meta.hidden=false; claimBox.hidden=true;
+    dateEl.innerHTML='<i class="fa-solid fa-calendar-check"></i> '+fmtDate(cert.date);
+    reqsMeta.innerHTML='<i class="fa-solid fa-list-check"></i> All programs completed';
+    actions.innerHTML=''; note.innerHTML='';
+    reqsEl.style.display='none';
+
+    var print=el('button','btn','<i class="fa-solid fa-print"></i> Print certificate');
+    print.addEventListener('click',function(){ window.print(); });
+    actions.appendChild(print);
+    var view=el('button','btn ghost','<i class="fa-solid fa-bars-progress"></i> View requirements');
+    view.addEventListener('click',function(){
+      reqsEl.style.display=(reqsEl.style.display==='none')?'':'none';
+    });
+    actions.appendChild(view);
+    setStatus('ok','<i class="fa-solid fa-award"></i> Certified on '+fmtDate(cert.date));
+  }
+
+  function showFor(roleName){
+    var role=ROLES[roleName];
+    if(!role) return;
+    var state=assess(role);
+    renderReqs(state);
+    var cert=getRoleCert(role);
+    if(cert) showEarned(roleName,role,cert);
+    else showProgress(roleName,role,state);
+    panel.classList.add('show');
+  }
+
+  function markSelectBadges(){
+    [].forEach.call(sel.options,function(o){
+      if(!o.value) return;
+      var r=ROLES[o.value];
+      if(r&&getRoleCert(r)&&o.text.indexOf('✓')===-1) o.text=o.text+' ✓';
+    });
+  }
+  markSelectBadges();
+
+  sel.addEventListener('change',function(){
+    if(!sel.value){ panel.classList.remove('show'); setStatus(null); return; }
+    showFor(sel.value);
+    panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+  });
+})();
+</script>
+
+</body>
+</html>
