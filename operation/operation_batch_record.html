@@ -274,21 +274,33 @@
                     return parseInt(m[1], 10) < LEGACY_BATCH_CUTOFF;
                 };
 
-                const completedBatchNames = new Set();
-                Object.keys(expectedPlots).forEach(batch => {
-                    const need = expectedPlots[batch];
-                    if (!need.size) return;
-                    const keyed  = cull3Keyed[batch] || new Set();
-                    const legacy = new Map(cull3Legacy[batch] || []);
+                // Raw row counts per batch — the legacy rule must count EVERY
+                // row exactly like the original code did, including old rows
+                // with blank plot names (which the plot-key sets above skip).
+                const transplantRowCount = {};
+                (transplantRes.data || []).forEach(r => {
+                    if (r.batch_name) transplantRowCount[r.batch_name] = (transplantRowCount[r.batch_name] || 0) + 1;
+                });
+                const cull3RowCount = {};
+                (cull3Res.data || []).forEach(r => {
+                    if (r.batch_name) cull3RowCount[r.batch_name] = (cull3RowCount[r.batch_name] || 0) + 1;
+                });
 
+                const completedBatchNames = new Set();
+                const _allTransplanted = new Set([...Object.keys(transplantRowCount), ...Object.keys(expectedPlots)]);
+                _allTransplanted.forEach(batch => {
                     if (_isLegacyBatch(batch)) {
-                        // Old rule: enough 3rd-culling rows to cover the plots.
-                        let cullRows = keyed.size;
-                        legacy.forEach(n => { cullRows += n; });
-                        if (cullRows >= need.size) completedBatchNames.add(batch);
+                        // Historical batches: the original row-count rule, verbatim.
+                        const expected = transplantRowCount[batch] || 0;
+                        const actual   = cull3RowCount[batch] || 0;
+                        if (expected > 0 && actual >= expected) completedBatchNames.add(batch);
                         return;
                     }
-
+                    // Current batches (>= 263): every plot+destination covered.
+                    const need = expectedPlots[batch];
+                    if (!need || !need.size) return;
+                    const keyed  = cull3Keyed[batch] || new Set();
+                    const legacy = new Map(cull3Legacy[batch] || []);
                     let allCovered = true;
                     for (const key of need) {
                         if (keyed.has(key)) continue;
