@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MJM Nursery AI</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../shared/shared_access.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Outfit', system-ui, sans-serif; }
+        body { background-color: #050a0e; margin: 0; overflow-x: hidden; }
+
+        .auth-bg { position:fixed;inset:0;z-index:0;background:radial-gradient(ellipse at 50% 40%,#0a1a12 0%,#050a0e 70%); }
+        .grid-lines { position:fixed;inset:0;z-index:1;pointer-events:none;
+            background-image:linear-gradient(rgba(16,185,129,.04)1px,transparent 1px),linear-gradient(90deg,rgba(16,185,129,.04)1px,transparent 1px);
+            background-size:60px 60px; }
+
+        @keyframes scan{0%{top:-4px}100%{top:100%}}
+        .scan-beam{position:fixed;left:0;right:0;height:3px;z-index:2;pointer-events:none;
+            background:linear-gradient(90deg,transparent,rgba(16,185,129,.6),transparent);
+            box-shadow:0 0 20px 4px rgba(16,185,129,.3);animation:scan 6s linear infinite;}
+
+        @keyframes hBeam{0%{transform:translateX(-100%);opacity:0}10%{opacity:1}90%{opacity:1}100%{transform:translateX(100vw);opacity:0}}
+        @keyframes vBeam{0%{transform:translateY(-100%);opacity:0}10%{opacity:1}90%{opacity:1}100%{transform:translateY(100vh);opacity:0}}
+        .beam{position:fixed;pointer-events:none;z-index:2;}
+        .beam-h{height:1px;left:0;right:0;background:linear-gradient(90deg,transparent 0%,rgba(16,185,129,.8)30%,#a7f3d0 50%,rgba(16,185,129,.8)70%,transparent 100%);box-shadow:0 0 8px 2px rgba(16,185,129,.5);}
+        .beam-v{width:1px;top:0;bottom:0;background:linear-gradient(180deg,transparent 0%,rgba(16,185,129,.8)30%,#a7f3d0 50%,rgba(16,185,129,.8)70%,transparent 100%);box-shadow:0 0 8px 2px rgba(16,185,129,.5);}
+        .bh1{top:28%;animation:hBeam 7s linear infinite;}
+        .bh2{top:61%;animation:hBeam 11s linear infinite 3.5s;}
+        .bh3{top:82%;animation:hBeam 8s linear infinite 1.2s;}
+        .bv1{left:22%;animation:vBeam 9s linear infinite .8s;}
+        .bv2{left:55%;animation:vBeam 13s linear infinite 4s;}
+        .bv3{left:78%;animation:vBeam 10s linear infinite 2s;}
+
+        .corner{position:absolute;width:18px;height:18px;pointer-events:none;}
+        .corner-tl{top:16px;left:16px;border-top:2px solid #10b981;border-left:2px solid #10b981;}
+        .corner-tr{top:16px;right:16px;border-top:2px solid #10b981;border-right:2px solid #10b981;}
+        .corner-bl{bottom:16px;left:16px;border-bottom:2px solid #10b981;border-left:2px solid #10b981;}
+        .corner-br{bottom:16px;right:16px;border-bottom:2px solid #10b981;border-right:2px solid #10b981;}
+
+        @keyframes crossH{0%{transform:scaleX(0);opacity:0}30%{transform:scaleX(1);opacity:1}70%{transform:scaleX(1);opacity:1}100%{transform:scaleX(0);opacity:0}}
+        @keyframes crossV{0%{transform:scaleY(0);opacity:0}30%{transform:scaleY(1);opacity:1}70%{transform:scaleY(1);opacity:1}100%{transform:scaleY(0);opacity:0}}
+        @keyframes pulseGlow{0%,100%{text-shadow:0 0 20px rgba(52,211,153,.4),0 0 60px rgba(16,185,129,.2)}50%{text-shadow:0 0 40px rgba(52,211,153,.9),0 0 100px rgba(16,185,129,.5)}}
+        @keyframes aiFlicker{0%,95%,100%{opacity:1;box-shadow:0 0 20px rgba(16,185,129,.6)}96%{opacity:.6}97%{opacity:1}98%{opacity:.4;box-shadow:0 0 40px rgba(16,185,129,1)}}
+
+        .logo-title{font-size:clamp(2rem,5vw,3rem);font-weight:900;color:#ecfdf5;letter-spacing:.04em;animation:pulseGlow 4s ease-in-out infinite;}
+        .logo-cross-h{position:absolute;left:0;right:0;height:1px;top:50%;background:linear-gradient(90deg,transparent,#34d399,#a7f3d0,#34d399,transparent);transform-origin:center;animation:crossH 3s ease-in-out infinite;box-shadow:0 0 8px #34d399;}
+        .logo-cross-v{position:absolute;top:0;bottom:0;width:1px;left:50%;background:linear-gradient(180deg,transparent,#34d399,#a7f3d0,#34d399,transparent);transform-origin:center;animation:crossV 3s ease-in-out infinite;box-shadow:0 0 8px #34d399;}
+        .ai-badge{display:inline-flex;align-items:center;justify-content:center;padding:6px 16px;border-radius:10px;background:linear-gradient(135deg,#059669,#10b981);color:white;font-size:22px;font-weight:900;letter-spacing:.12em;border:1px solid #34d399;animation:aiFlicker 5s infinite;position:relative;}
+        .ai-badge::before{content:'';position:absolute;inset:-3px;border-radius:13px;background:radial-gradient(ellipse,rgba(52,211,153,.4),transparent 70%);animation:pulseGlow 2s ease-in-out infinite;}
+
+        .auth-card{background:rgba(5,20,12,.88);backdrop-filter:blur(24px);border:1px solid rgba(52,211,153,.2);box-shadow:0 0 0 1px rgba(16,185,129,.1),0 40px 80px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.05);}
+        .auth-input{background:rgba(255,255,255,.05);border:1px solid rgba(52,211,153,.2);color:#ecfdf5;border-radius:14px;padding:14px 18px;width:100%;font-size:14px;font-weight:600;outline:none;transition:all .2s;box-sizing:border-box;}
+        .auth-input::placeholder{color:rgba(167,243,208,.4);}
+        .auth-input:focus{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.15);background:rgba(255,255,255,.08);}
+        .auth-btn{width:100%;padding:14px;background:linear-gradient(135deg,#059669,#10b981);color:white;font-weight:900;font-size:12px;letter-spacing:.15em;text-transform:uppercase;border:none;border-radius:14px;cursor:pointer;box-shadow:0 8px 20px rgba(16,185,129,.35);transition:all .2s;}
+        .auth-btn:hover{transform:translateY(-1px);box-shadow:0 12px 28px rgba(16,185,129,.45);}
+
+        /* Dashboard */
+        .dash-bg{background:#f1f5f9;min-height:100vh;}
+        .dash-card{background:white;border-radius:20px;border:1px solid #e2e8f0;box-shadow:0 4px 16px rgba(0,0,0,.06);position:relative;}
+        .dash-card.dragging{opacity:.35;outline:2px dashed #10b981;outline-offset:2px;}
+        .dash-grip{position:absolute;top:14px;right:14px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:8px;color:#cbd5e1;cursor:grab;z-index:5;transition:background .15s,color .15s;}
+        .dash-grip:hover{background:#f1f5f9;color:#64748b;}
+        .dash-grip:active{cursor:grabbing;}
+        #modules-grid.reordering .dash-card{user-select:none;}
+
+        .fade-enter{animation:fadeIn .4s ease-out;}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+        .nature-critter{position:absolute;font-size:1.5rem;pointer-events:none;opacity:0;z-index:50;animation:floatSlow 8s ease-in-out forwards;}
+        @keyframes floatSlow{0%{transform:translate(0,0) scale(.6) rotate(-10deg);opacity:0}20%{opacity:.9}80%{opacity:.9}100%{transform:translate(var(--tx),var(--ty)) scale(1.2) rotate(10deg);opacity:0}}
+        .no-scrollbar::-webkit-scrollbar{display:none;}.no-scrollbar{-ms-overflow-style:none;scrollbar-width:none;}
+    </style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen" style="display:none" class="min-h-screen flex items-center justify-center p-4 relative">
+    <div class="auth-bg"></div>
+    <div class="grid-lines"></div>
+    <div class="scan-beam"></div>
+    <div class="beam beam-h bh1"></div><div class="beam beam-h bh2"></div><div class="beam beam-h bh3"></div>
+    <div class="beam beam-v bv1"></div><div class="beam beam-v bv2"></div><div class="beam beam-v bv3"></div>
+
+    <div class="auth-card rounded-[2.5rem] w-full max-w-md p-10 relative z-10">
+        <div class="corner corner-tl"></div><div class="corner corner-tr"></div>
+        <div class="corner corner-bl"></div><div class="corner corner-br"></div>
+
+        <div class="flex flex-col items-center mb-10">
+            <!-- Title with cross lightning -->
+            <div class="relative w-full flex items-center justify-center mb-3" style="height:90px;">
+                <div class="logo-cross-h"></div>
+                <div class="logo-cross-v"></div>
+                <div class="logo-title z-10 relative text-center px-4" style="font-size:clamp(2.2rem,6vw,3.2rem);line-height:1.1;">
+                    MJM<br>
+                    <span style="font-size:0.55em;letter-spacing:0.3em;color:#34d399;font-weight:900;display:block;margin-top:2px;">NURSERY</span>
+                </div>
+            </div>
+            <!-- AI badge -->
+            <div class="ai-badge mt-1">AI</div>
+            <!-- Tagline below badge -->
+            <p class="text-[11px] font-black text-emerald-500 uppercase tracking-[0.35em] mt-5 text-center">The future is here</p>
+        </div>
+
+        <div id="standard-auth-fields" class="space-y-3">
+            <div id="signup-fields" class="hidden"><input type="text" id="user-name" placeholder="Full Name" class="auth-input mb-3"></div>
+            <input type="email" id="email" placeholder="Email Address" class="auth-input">
+            <input type="password" id="password" placeholder="Password" class="auth-input">
+            <button id="main-auth-btn" class="auth-btn mt-2">Login</button>
+            <div class="flex justify-between items-center pt-2">
+                <button id="forgot-password-btn" class="text-[10px] font-bold text-emerald-600/70 hover:text-emerald-400 uppercase tracking-widest bg-transparent border-none cursor-pointer transition-colors">Forgot Password?</button>
+                <button id="toggle-auth-btn" class="text-[10px] font-bold text-slate-400 hover:text-emerald-400 uppercase tracking-widest bg-transparent border-none cursor-pointer transition-colors">Create Account</button>
+            </div>
+        </div>
+        <div id="recovery-auth-fields" class="hidden space-y-3">
+            <div class="text-center text-[10px] font-bold text-emerald-500 uppercase tracking-widest mb-4">Create New Password</div>
+            <input type="password" id="new-password" placeholder="Enter New Password" class="auth-input">
+            <button id="update-password-btn" class="auth-btn mt-2">Save Password</button>
+        </div>
+    </div>
+</div>
+
+<!-- DASHBOARD SCREEN -->
+<div id="dashboard-screen" style="display:none" class="dash-bg fade-enter">
+    <div class="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center sticky top-0 z-30 shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-black text-xs">AI</div>
+            <span class="font-black text-slate-800 uppercase tracking-widest text-sm">MJM Nursery AI</span>
+        </div>
+        <div class="flex items-center gap-4">
+            <span id="welcome-text" class="text-xs font-bold text-slate-400 hidden md:block"></span>
+            <!-- Portal link: force a real navigation via JS (window.location.replace)
+                 so bfcache can't restore this same dashboard page as if the user
+                 never left. The href stays as a fallback for middle-click / open-
+                 in-new-tab. -->
+            <a href="../index.html" onclick="event.preventDefault(); window.location.replace('../index.html');" class="text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 px-4 py-2 rounded-full border border-slate-200 cursor-pointer transition-colors no-underline" style="text-decoration:none;">&#8592; Portal</a>
+            <button id="logout-btn" onclick="handleLogout()" class="text-[10px] font-bold text-slate-500 hover:text-red-500 uppercase tracking-widest bg-slate-50 px-4 py-2 rounded-full border border-slate-200 cursor-pointer transition-colors">Sign Out</button>
+        </div>
+    </div>
+
+    <div class="max-w-[1400px] mx-auto px-6 py-8 space-y-8">
+
+        <!-- System Modules -->
+        <div>
+            <div class="flex items-center justify-between mb-5">
+                <h2 class="text-[11px] font-black text-slate-400 uppercase tracking-[0.25em]">🧩 System Modules</h2>
+                <span class="text-[10px] font-bold text-slate-300 uppercase tracking-widest hidden sm:block">Drag the grip ⠿ to rearrange · saved to your account</span>
+            </div>
+            <div id="modules-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                <a data-card-key="batch" href="operation_batch_record.html" class="block dash-card p-7 group hover:border-indigo-400 hover:shadow-xl hover:shadow-indigo-100 transition-all duration-300 decoration-transparent border border-transparent">
+                    <div class="w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600 mb-5 group-hover:bg-indigo-500 group-hover:text-white transition-all">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                    </div>
+                    <h3 class="font-black text-lg text-indigo-900 uppercase tracking-widest mb-2">Batch Records<br><span style="font-size:0.7em;opacity:0.7">(Life of Seedling)</span></h3>
+                    <p class="text-xs text-slate-500 font-semibold leading-relaxed">Track seed batches through every lifecycle stage from reception to sale.</p>
+                    <div class="mt-5 flex items-center text-[10px] font-bold text-indigo-600 uppercase tracking-widest group-hover:translate-x-2 transition-transform">Enter Module <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></div>
+                </a>
+                <a data-card-key="orders" href="operation_delivery.html" class="block dash-card p-7 group hover:border-emerald-400 hover:shadow-xl hover:shadow-emerald-100 transition-all duration-300 decoration-transparent border border-transparent">
+                    <div class="w-12 h-12 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 mb-5 group-hover:bg-emerald-500 group-hover:text-white transition-all">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    </div>
+                    <h3 class="font-black text-lg text-emerald-900 uppercase tracking-widest mb-2">Customer Order<br>Management</h3>
+                    <p class="text-xs text-slate-500 font-semibold leading-relaxed">Orders, Approval Letters, Delivery Orders, L3 Forms.</p>
+                    <div class="mt-5 flex items-center text-[10px] font-bold text-emerald-600 uppercase tracking-widest group-hover:translate-x-2 transition-transform">Enter Module <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></div>
+                </a>
+                <a data-card-key="stock" href="operation_stock_sales.html" class="block dash-card p-7 group hover:border-blue-400 hover:shadow-xl hover:shadow-blue-100 transition-all duration-300 decoration-transparent border border-transparent">
+                    <div class="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600 mb-5 group-hover:bg-blue-500 group-hover:text-white transition-all">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+                    </div>
+                    <h3 class="font-black text-lg text-blue-900 uppercase tracking-widest mb-2">Seedling Sales<br>Management</h3>
+                    <p class="text-xs text-slate-500 font-semibold leading-relaxed">Stock dashboard, payment to-do list, nursery maps and sales analytics.</p>
+                    <div class="mt-5 flex items-center text-[10px] font-bold text-blue-600 uppercase tracking-widest group-hover:translate-x-2 transition-transform">Enter Module <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></div>
+                </a>
+                <a id="reports-card" data-card-key="reports" href="operation_reports.html" class="hidden block dash-card p-7 group hover:border-amber-400 hover:shadow-xl hover:shadow-amber-100 transition-all duration-300 decoration-transparent border border-transparent">
+                    <div class="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600 mb-5 group-hover:bg-amber-500 group-hover:text-white transition-all">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                    </div>
+                    <h3 class="font-black text-lg text-amber-900 uppercase tracking-widest mb-2">Reports</h3>
+                    <p class="text-xs text-slate-500 font-semibold leading-relaxed">Batch production summary, survival rates, and per-stage analytics.</p>
+                    <div class="mt-5 flex items-center text-[10px] font-bold text-amber-600 uppercase tracking-widest group-hover:translate-x-2 transition-transform">Enter Module <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></div>
+                </a>
+                <a id="audit-trail-card" data-card-key="audit" href="operation_audit_trail.html" class="hidden block dash-card p-7 group hover:border-slate-400 hover:shadow-xl hover:shadow-slate-100 transition-all duration-300 decoration-transparent border border-transparent">
+                    <div class="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-700 mb-5 group-hover:bg-slate-700 group-hover:text-white transition-all">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m-6-8h6M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"/></svg>
+                    </div>
+                    <h3 class="font-black text-lg text-slate-900 uppercase tracking-widest mb-2">Audit Trail</h3>
+                    <p class="text-xs text-slate-500 font-semibold leading-relaxed">See who edited what across the system. Restore confidence after unexpected changes.</p>
+                    <div class="mt-5 flex items-center text-[10px] font-bold text-slate-700 uppercase tracking-widest group-hover:translate-x-2 transition-transform">Enter Module <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></div>
+                </a>
+                <a data-card-key="settings" href="operation_settings.html" class="block dash-card p-7 group hover:border-purple-400 hover:shadow-xl hover:shadow-purple-100 transition-all duration-300 decoration-transparent border border-transparent">
+                    <div class="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center text-purple-600 mb-5 group-hover:bg-purple-500 group-hover:text-white transition-all">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    </div>
+                    <h3 class="font-black text-lg text-purple-900 uppercase tracking-widest mb-2">System<br>Settings</h3>
+                    <p class="text-xs text-slate-500 font-semibold leading-relaxed">Configure nurseries, plots, breeds, and inventory master data.</p>
+                    <div class="mt-5 flex items-center text-[10px] font-bold text-purple-600 uppercase tracking-widest group-hover:translate-x-2 transition-transform">Enter Module <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></div>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const SUPABASE_URL = 'https://kibqjztozokohqmhqqqf.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpYnFqenRvem9rb2hxbWhxcXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQzNjIsImV4cCI6MjA4OTgxMDM2Mn0.J7qJUZhWXYf5b9oey4wXJkjdi66jomEMw_NeV9NWF7M';
+    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // ── DOM refs ──────────────────────────────────────────────────────────────
+    const authScreen     = document.getElementById('auth-screen');
+    const dashScreen     = document.getElementById('dashboard-screen');
+    const mainBtn        = document.getElementById('main-auth-btn');
+    const toggleBtn      = document.getElementById('toggle-auth-btn');
+    const signupFields   = document.getElementById('signup-fields');
+    const forgotBtn      = document.getElementById('forgot-password-btn');
+    const updatePwBtn    = document.getElementById('update-password-btn');
+    const welcomeText    = document.getElementById('welcome-text');
+    const standardFields = document.getElementById('standard-auth-fields');
+    const recoveryFields = document.getElementById('recovery-auth-fields');
+
+    // ── Show / hide helpers (bypass Tailwind hidden/flex conflict entirely) ──
+    function showAuth() {
+        dashScreen.style.display = 'none';
+        authScreen.style.display = 'flex';
+    }
+    function showDash() {
+        authScreen.style.display = 'none';
+        dashScreen.style.display = 'block';
+    }
+
+    // ── State ─────────────────────────────────────────────────────────────────
+    let isSignUpMode = false;   // tracks Create Account vs Login mode
+    let isRecovering = window.location.hash.includes('type=recovery');
+    let isLoggingOut = false;   // prevents onAuthStateChange from interfering during logout
+
+    // ── Sign Out ──────────────────────────────────────────────────────────────
+    window.handleLogout = async function() {
+        isLoggingOut = true;
+        const btn = document.getElementById('logout-btn');
+        if (btn) { btn.innerText = 'Signing Out…'; btn.disabled = true; }
+
+        // Clear the auth token from every persistence layer supabase-js uses
+        // so nothing rehydrates a stale session on the next page.
+        try {
+            Object.keys(localStorage).forEach(k => {
+                if (k.startsWith('sb-')) localStorage.removeItem(k);
+            });
+            Object.keys(sessionStorage).forEach(k => {
+                if (k.startsWith('sb-') || k === 'mjm_session_active') sessionStorage.removeItem(k);
+            });
+        } catch(e) { /* ignore */ }
+
+        // Race signOut against a 1.5s timeout — Supabase's navigator-lock
+        // can stall behind in-flight dashboard queries and hang the UI.
+        try {
+            await Promise.race([
+                _supabase.auth.signOut({ scope: 'local' }),
+                new Promise(resolve => setTimeout(resolve, 1500))
+            ]);
+        } catch(e) { /* ignore */ }
+
+        // Navigate to the portal (a DIFFERENT page) instead of reloading
+        // this dashboard. Reloading kept the same tab context — same
+        // navigator-lock mutex Supabase's auth uses — which stalled the
+        // next sign-in attempt on the reloaded dashboard until the whole
+        // tab was closed. Going to ../index.html gets a fresh page +
+        // fresh lock context and lets the user log back in immediately.
+        window.location.replace('../index.html');
+    };
+
+    // ── Reset auth form to Login state ───────────────────────────────────────
+    function resetAuthForm() {
+        isSignUpMode = false;
+        signupFields.classList.add('hidden');
+        mainBtn.innerText = 'Login';
+        toggleBtn.innerText = 'Create Account';
+        forgotBtn.style.display = 'inline-block';
+        document.getElementById('email').value = '';
+        document.getElementById('password').value = '';
+        document.getElementById('user-name').value = '';
+    }
+
+    // ── Toggle Login ↔ Create Account ─────────────────────────────────────────
+    toggleBtn.addEventListener('click', () => {
+        isSignUpMode = !isSignUpMode;
+        if (isSignUpMode) {
+            signupFields.classList.remove('hidden');
+            mainBtn.innerText = 'Sign Up';
+            toggleBtn.innerText = 'Back to Login';
+            forgotBtn.style.display = 'none';
+        } else {
+            signupFields.classList.add('hidden');
+            mainBtn.innerText = 'Login';
+            toggleBtn.innerText = 'Create Account';
+            forgotBtn.style.display = 'inline-block';
+        }
+    });
+
+    // ── Login / Sign Up button ────────────────────────────────────────────────
+    mainBtn.addEventListener('click', async () => {
+        const email = document.getElementById('email').value.trim();
+        const pw    = document.getElementById('password').value;
+        if (!email || !pw) return alert('Please enter email and password.');
+
+        mainBtn.innerText = 'Processing…';
+        mainBtn.disabled = true;
+
+        if (isSignUpMode) {
+            const name = document.getElementById('user-name').value.trim();
+            const { error } = await _supabase.auth.signUp({
+                email, password: pw,
+                options: { data: { full_name: name } }
+            });
+            if (error) {
+                alert('Signup Error: ' + error.message);
+                mainBtn.innerText = 'Sign Up';
+            } else {
+                alert('Account created! You can now log in.');
+                // Go back to login mode cleanly — do NOT call toggleBtn.click()
+                isSignUpMode = false;
+                signupFields.classList.add('hidden');
+                mainBtn.innerText = 'Login';
+                toggleBtn.innerText = 'Create Account';
+                forgotBtn.style.display = 'inline-block';
+            }
+        } else {
+            const { error } = await _supabase.auth.signInWithPassword({ email, password: pw });
+            if (error) {
+                alert('Login Error: ' + error.message);
+                mainBtn.innerText = 'Login';
+            }
+            // On success, onAuthStateChange will call showDash()
+        }
+
+        mainBtn.disabled = false;
+    });
+
+    // ── Forgot Password ───────────────────────────────────────────────────────
+    forgotBtn.addEventListener('click', async () => {
+        const email = document.getElementById('email').value.trim();
+        if (!email) return alert('Enter your email first.');
+        forgotBtn.innerText = 'Sending…';
+        const { error } = await _supabase.auth.resetPasswordForEmail(email);
+        if (error) alert('Error: ' + error.message);
+        else alert('Reset link sent! Check your inbox.');
+        forgotBtn.innerText = 'Forgot Password?';
+    });
+
+    // ── Update Password (recovery flow) ──────────────────────────────────────
+    updatePwBtn.addEventListener('click', async () => {
+        const pw = document.getElementById('new-password').value;
+        if (!pw || pw.length < 6) return alert('Password must be at least 6 characters.');
+        updatePwBtn.innerText = 'Updating…';
+        const { error } = await _supabase.auth.updateUser({ password: pw });
+        if (error) {
+            alert('Error: ' + error.message);
+            updatePwBtn.innerText = 'Save Password';
+        } else {
+            alert('Password updated! Please log in.');
+            isRecovering = false;
+            window.location.hash = '';
+            recoveryFields.classList.add('hidden');
+            standardFields.classList.remove('hidden');
+            showAuth();
+        }
+    });
+
+    // ── Auth state listener ───────────────────────────────────────────────────
+    _supabase.auth.onAuthStateChange(async (event, session) => {
+        // Never interfere while we're intentionally logging out
+        if (isLoggingOut) return;
+
+        if (event === 'PASSWORD_RECOVERY') {
+            isRecovering = true;
+            showAuth();
+            standardFields.classList.add('hidden');
+            recoveryFields.classList.remove('hidden');
+            return;
+        }
+
+        if (event === 'SIGNED_OUT' || !session) {
+            showAuth();
+            return;
+        }
+
+        if (session) {
+            showDash();
+            welcomeText.innerText = `Welcome, ${session.user.user_metadata?.full_name || session.user.email}`;
+            applyAccessForCurrentUser();
+            setupDashboardDnD(session.user.id);
+        }
+    });
+
+    // Initial-session bootstrap — show the modules hub on cold page loads
+    // even if INITIAL_SESSION from onAuthStateChange doesn't fire reliably.
+    async function applyAccessForCurrentUser() {
+        try {
+            await MJMAccess.load(_supabase);
+            const reportsCard = document.getElementById('reports-card');
+            const auditCard   = document.getElementById('audit-trail-card');
+            if (reportsCard && MJMAccess.canAccess('reports'))      reportsCard.classList.remove('hidden');
+            if (auditCard   && MJMAccess.canAccess('audit_trail'))  auditCard.classList.remove('hidden');
+        } catch (e) { /* ignore — cards stay hidden */ }
+    }
+
+    _supabase.auth.getSession().then(({ data: { session } }) => {
+        if (isRecovering) return;
+        if (!session) { showAuth(); return; }
+        showDash();
+        welcomeText.innerText = `Welcome, ${session.user.user_metadata?.full_name || session.user.email}`;
+        applyAccessForCurrentUser();
+        setupDashboardDnD(session.user.id);
+    });
+
+    // ── Per-account drag-to-rearrange of module cards ──────────────────────────
+    // Order is stored in localStorage keyed by the user's id, so each account
+    // keeps its own arrangement and never affects anyone else.
+    let _dndWired = false;
+    function setupDashboardDnD(userId) {
+        const grid = document.getElementById('modules-grid');
+        if (!grid || !userId) return;
+        const storeKey = `mjm_dash_order_${userId}`;
+
+        // 1) Apply this account's saved order (if any).
+        try {
+            const saved = JSON.parse(localStorage.getItem(storeKey) || 'null');
+            if (Array.isArray(saved)) {
+                saved.forEach(key => {
+                    const el = grid.querySelector(`[data-card-key="${key}"]`);
+                    if (el) grid.appendChild(el);  // re-append in saved order
+                });
+            }
+        } catch (e) { /* ignore corrupt prefs */ }
+
+        // 2) Wire drag handlers once.
+        if (_dndWired) return;
+        _dndWired = true;
+
+        const cards = grid.querySelectorAll('.dash-card');
+        let dragging = null;
+        let didDrag = false;
+
+        const saveOrder = () => {
+            const keys = [...grid.children]
+                .map(c => c.dataset.cardKey)
+                .filter(Boolean);
+            try { localStorage.setItem(storeKey, JSON.stringify(keys)); } catch (e) {}
+        };
+
+        cards.forEach(card => {
+            // Add a grip affordance in the corner.
+            const grip = document.createElement('span');
+            grip.className = 'dash-grip';
+            grip.title = 'Drag to rearrange';
+            grip.setAttribute('aria-label', 'Drag to rearrange');
+            grip.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="3" r="1.4"/><circle cx="11" cy="3" r="1.4"/><circle cx="5" cy="8" r="1.4"/><circle cx="11" cy="8" r="1.4"/><circle cx="5" cy="13" r="1.4"/><circle cx="11" cy="13" r="1.4"/></svg>';
+            // Clicking the grip should not navigate.
+            grip.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); });
+            card.appendChild(grip);
+
+            card.setAttribute('draggable', 'true');
+
+            card.addEventListener('dragstart', e => {
+                dragging = card;
+                didDrag = true;
+                grid.classList.add('reordering');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', card.dataset.cardKey || '');
+                try { e.dataTransfer.setDragImage(card, 20, 20); } catch (err) {}
+                // defer so the drag image is captured before the card fades
+                setTimeout(() => card.classList.add('dragging'), 0);
+            });
+
+            card.addEventListener('dragover', e => {
+                e.preventDefault();
+                if (!dragging || dragging === card) return;
+                const box = card.getBoundingClientRect();
+                const after = (e.clientX - box.left) > box.width / 2;
+                if (after) card.after(dragging); else card.before(dragging);
+            });
+
+            card.addEventListener('dragend', () => {
+                if (dragging) dragging.classList.remove('dragging');
+                dragging = null;
+                grid.classList.remove('reordering');
+                saveOrder();
+                // Reset the click guard shortly after, so future clicks navigate.
+                setTimeout(() => { didDrag = false; }, 50);
+            });
+
+            // Prevent the navigation click that can fire right after a drag.
+            card.addEventListener('click', e => {
+                if (didDrag) { e.preventDefault(); }
+            });
+        });
+
+        grid.addEventListener('dragover', e => e.preventDefault());
+    }
+</script>
+</body>
+</html>

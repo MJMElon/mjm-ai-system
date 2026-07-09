@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MJM Training Center</title>
+<meta name="description" content="MJM Training Center — nursery training, vibe coding, and role-based training pathways.">
+<meta name="theme-color" content="#1E3A20">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/auth.js"></script>
+</head>
+<body>
+
+<nav class="topbar">
+  <div class="topbar-in">
+    <a class="brand brandmark" href="index.html">
+      <span class="mjm-logo">MJM</span>
+      <span class="tc-label">Training<br>Center</span>
+    </a>
+  </div>
+</nav>
+
+<section class="slide" id="modules"><div class="wrap">
+  <div class="titlewrap">
+    <div class="kicker">Available Modules</div>
+    <h2 class="slide-title">Choose a Module</h2>
+  </div>
+  <div class="modules">
+    <a class="module-card" href="nursery.html">
+      <div class="m-icon"><i class="fa-solid fa-seedling"></i></div>
+      <span class="mbadge free"><i class="fa-solid fa-unlock"></i> Open Access</span>
+      <h3>Nursery Training</h3>
+      <p>From seed planting to seedling sales — the full nursery operations flow, stage by stage.</p>
+      <span class="m-open">Open module <i class="fa-solid fa-arrow-right"></i></span>
+    </a>
+    <a class="module-card locked" href="vibe-coding.html">
+      <div class="m-icon"><i class="fa-solid fa-laptop-code"></i></div>
+      <span class="mbadge lock"><i class="fa-solid fa-lock"></i> Password</span>
+      <h3>Vibe Coding Class</h3>
+      <p>Learn to build real web apps with AI — 4 classes, step-by-step, from your first project to a live database-backed site.</p>
+      <span class="lock-note"><i class="fa-solid fa-key"></i> Enrolled students only</span>
+      <span class="m-open">Unlock module <i class="fa-solid fa-arrow-right"></i></span>
+    </a>
+  </div>
+</div></section>
+
+<section class="slide" id="certify"><div class="wrap">
+  <div class="titlewrap">
+    <div class="kicker">Certification</div>
+    <h2 class="slide-title">Earn a Certificate</h2>
+  </div>
+  <a class="cert-banner" href="certificate.html">
+    <div class="cb-icon"><i class="fa-solid fa-award"></i></div>
+    <div class="cb-text">
+      <h3>Get certified</h3>
+      <p>Pick the role you're training for — read all its course slides, meet its practical targets, and claim your certificate.</p>
+    </div>
+    <span class="cb-go"><i class="fa-solid fa-arrow-right"></i></span>
+  </a>
+  <a class="cert-banner" href="logbook.html" style="margin-top:18px">
+    <div class="cb-icon" style="background:linear-gradient(135deg,var(--leaf),var(--green))"><i class="fa-solid fa-list-check"></i></div>
+    <div class="cb-text">
+      <h3>Practical Logbook</h3>
+      <p>Log your field work every time you do it — seeds planted, cases resolved, orders processed — and build toward certification.</p>
+    </div>
+    <span class="cb-go"><i class="fa-solid fa-arrow-right"></i></span>
+  </a>
+</div></section>
+
+<footer>
+  <p><b>MJM Training Center</b></p>
+</footer>
+
+<script src="assets/app.js"></script>
+<script>MJM.initTopbar();</script>
+
+</body>
+</html>

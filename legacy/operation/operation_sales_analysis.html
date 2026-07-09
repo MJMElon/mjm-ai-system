@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monthly Sales Analysis - MJM Nursery AI</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { background:#f8fafc; margin:0; font-family:'Outfit',system-ui,sans-serif; }
+        .bg-pattern { position:fixed; inset:0; background-image:radial-gradient(#cbd5e1 1px,transparent 1px); background-size:24px 24px; z-index:-1; opacity:.5; }
+        .glass-panel { background:rgba(255,255,255,.95); backdrop-filter:blur(24px); border:1px solid #fff; border-left:12px solid #db2777; box-shadow:0 25px 50px -12px rgba(0,0,0,.15); }
+        table.msa { width:100%; border-collapse:collapse; font-size:12px; }
+        table.msa th { background:#f3f4f6; padding:8px 10px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; font-size:10px; color:#475569; border-bottom:2px solid #e2e8f0; text-align:left; }
+        table.msa th.r,table.msa td.r { text-align:right; }
+        table.msa td { padding:8px 10px; border-bottom:1px solid #f1f5f9; }
+        table.msa tr:hover td { background:#fafafa; }
+        .grp { background:linear-gradient(180deg,#fce7f3,#fbcfe8); color:#9d174d; font-weight:900; text-transform:uppercase; letter-spacing:.05em; font-size:10px; padding:6px 10px; border-bottom:2px solid #f9a8d4; text-align:center; }
+        .est-input { width:88px; text-align:right; padding:5px 8px; font-weight:700; border:1px solid #cbd5e1; border-radius:6px; background:#fff; transition:border .15s; }
+        .est-input:focus { outline:none; border-color:#6366f1; box-shadow:0 0 0 3px rgba(99,102,241,.15); }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+    <div class="bg-pattern"></div>
+
+    <div class="max-w-[1400px] mx-auto space-y-5">
+        <!-- Header -->
+        <div class="glass-panel rounded-[2rem] p-6 flex flex-col md:flex-row gap-3 items-center justify-between">
+            <button onclick="window.location.href='operation_stock_sales.html'" class="text-[10px] font-bold text-slate-500 hover:text-pink-700 uppercase tracking-widest bg-slate-100 hover:bg-slate-200 px-5 py-3 rounded-xl flex items-center gap-2 shadow-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> Stock Sales
+            </button>
+            <h1 class="text-2xl md:text-3xl font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-pink-700 via-rose-600 to-pink-500 text-center">📊 Monthly Sales Analysis</h1>
+            <div class="hidden md:block w-[130px]"></div>
+        </div>
+
+        <!-- Filter & legend -->
+        <div class="glass-panel rounded-2xl p-4 flex flex-wrap items-center gap-3 justify-between">
+            <div class="flex items-center gap-2">
+                <label class="text-[10px] font-black uppercase tracking-widest text-slate-600">Sell Year</label>
+                <select id="msa-year" onchange="loadMonthlySalesAnalysis()" class="text-[11px] font-black text-slate-700 bg-white border border-slate-300 rounded-xl px-3 py-2 shadow-sm uppercase tracking-widest"></select>
+                <button onclick="loadMonthlySalesAnalysis()" class="text-[10px] font-black text-slate-600 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 shadow-sm uppercase tracking-widest">🔄 Refresh</button>
+            </div>
+            <div class="text-[10px] text-slate-500 leading-snug max-w-[600px]">
+                <strong>Δ comparisons</strong> — <span class="text-emerald-700 font-extrabold">positive = spare</span>, <span class="text-red-700 font-extrabold">negative = oversold</span>. The Sales Web Publish popup uses these same numbers; the third option ("maturity + suitable − estimate") is the recommended publish qty.
+            </div>
+        </div>
+
+        <!-- Analysis table -->
+        <div class="glass-panel rounded-2xl overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="msa min-w-[1300px]">
+                    <thead>
+                        <tr>
+                            <th colspan="2" class="grp">📅 Period</th>
+                            <th colspan="4" class="grp" style="background:linear-gradient(180deg,#dbeafe,#bfdbfe);color:#1e40af;border-bottom-color:#93c5fd;">📦 Stock Pool</th>
+                            <th colspan="2" class="grp" style="background:linear-gradient(180deg,#fef3c7,#fde68a);color:#92400e;border-bottom-color:#fcd34d;">🛒 Demand</th>
+                            <th colspan="2" class="grp">⚖️ Δ Comparisons</th>
+                        </tr>
+                        <tr>
+                            <th>Sell Year</th>
+                            <th>Sell Month</th>
+                            <th class="r">Maturity (after 10% cull)</th>
+                            <th class="r">Suitable for Sales (audited ≥1.5m, prev/curr)</th>
+                            <th class="r">Customer Allocation (reserved)</th>
+                            <th class="r">Estimate Collection (editable)</th>
+                            <th class="r">Actual Order (web)</th>
+                            <th class="r">Maturity − Order</th>
+                            <th class="r">Maturity − Estimate</th>
+                            <th class="r">(Maturity+Suitable) − Order / Estimate</th>
+                        </tr>
+                    </thead>
+                    <tbody id="msa-rows">
+                        <tr><td colspan="10" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading sales analysis…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="text-[9px] text-slate-500 px-4 py-3 border-t border-slate-200 leading-snug">
+                <span class="font-black uppercase tracking-wider text-slate-700">Notes</span> —
+                <strong>Maturity</strong> = transplanted − 10% culling for batches whose maturity (transplant + 9 mo) falls in this month.
+                <strong>Suitable for Sales</strong> = remaining stock for plots whose latest height audit has any sample &gt;1.5m, from current and previous months (excludes this month's own raw maturity).
+                <strong>Customer Allocation</strong> = sum of <code>shared_plot_allocations.reserved_qty</code> for batches maturing this month.
+                <strong>Estimate Collection</strong> = admin-keyed (click value to edit, blur or Tab to save).
+                <strong>Actual Order</strong> = sum of <code>salesweb_customer_orders</code> items (status ≠ Cancelled) for this sell month.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://kibqjztozokohqmhqqqf.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpYnFqenRvem9rb2hxbWhxcXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQzNjIsImV4cCI6MjA4OTgxMDM2Mn0.J7qJUZhWXYf5b9oey4wXJkjdi66jomEMw_NeV9NWF7M';
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const MSA_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const MSA_TALL_CM = 150;
+        const MSA_CULL = 0.10;
+
+        function msaPopulateYearDropdown(years) {
+            const sel = document.getElementById('msa-year');
+            const cur = sel.value;
+            const all = years.length ? years : [new Date().getFullYear()];
+            sel.innerHTML = all.map(y => `<option value="${y}">${y}</option>`).join('');
+            if (cur && all.includes(parseInt(cur))) sel.value = cur;
+            else sel.value = String(all[Math.max(0, all.length - 1)]);
+        }
+
+        async function loadMonthlySalesAnalysis() {
+            const tbody = document.getElementById('msa-rows');
+            tbody.innerHTML = `<tr><td colspan="10" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading…</td></tr>`;
+
+            let transplants, audits, allocations, orders, items, estimates, products;
+            try {
+                const r = await Promise.all([
+                    _supabase.from('shared_inventory_logs')
+                        .select('batch_name,plot_name,quantity_change,created_at,remark')
+                        .eq('transaction_type','Transplanted'),
+                    _supabase.from('audit_height_records')
+                        .select('plot,batch,sample_1,sample_2,sample_3,date,created_at'),
+                    _supabase.from('shared_plot_allocations')
+                        .select('batch_name,plot_name,reserved_qty')
+                        .then(r => r, () => ({ data: [] })),
+                    _supabase.from('salesweb_customer_orders')
+                        .select('id,status')
+                        .neq('status','Cancelled'),
+                    _supabase.from('salesweb_order_items')
+                        .select('order_id,product_id,quantity'),
+                    _supabase.from('salesweb_monthly_estimate_collection')
+                        .select('sell_year,sell_month,qty')
+                        .then(r => r, () => ({ data: [] })),
+                    _supabase.from('salesweb_products')
+                        .select('id,sell_month,sell_year')
+                        .eq('product_type','Seedling'),
+                ]);
+                transplants = r[0].data || [];
+                audits      = r[1].data || [];
+                allocations = r[2].data || [];
+                orders      = r[3].data || [];
+                items       = r[4].data || [];
+                estimates   = r[5].data || [];
+                products    = r[6].data || [];
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="10" class="text-center py-6 text-[10px] text-red-500 font-bold uppercase tracking-widest">Failed to load: ${(e?.message||e)}</td></tr>`;
+                return;
+            }
+
+            // 1. Per-batch+plot maturity (after culling) and its sell month/year.
+            const batchPlotMaturity = [];
+            transplants.forEach(t => {
+                const pl = (t.plot_name || '').toLowerCase();
+                if (pl.includes('premium') || pl.includes('double') || pl.includes('tray')) return;
+                let tDate = null;
+                if (t.remark) { const m = t.remark.match(/Date:\s*(\d{4}-\d{2}-\d{2})/); if (m) tDate = new Date(m[1]); }
+                if (!tDate) tDate = new Date(t.created_at);
+                const sd = new Date(tDate); sd.setMonth(sd.getMonth() + 9);
+                const qty = t.quantity_change || 0;
+                batchPlotMaturity.push({
+                    batch: t.batch_name, plot: t.plot_name,
+                    sellMonth: sd.toLocaleDateString('en-MY', { month: 'long' }),
+                    sellYear:  sd.getFullYear(),
+                    raw: Math.max(0, qty - Math.round(qty * MSA_CULL)),
+                });
+            });
+
+            // 2. Suitable plots — latest audit with any sample > 150cm.
+            audits.sort((a,b) => (b.date || '').localeCompare(a.date || '') || (b.created_at || '').localeCompare(a.created_at || ''));
+            const seenAudit = new Set(); const suitableKeys = new Set();
+            audits.forEach(a => {
+                const k = (a.batch || '') + '||' + (a.plot || '');
+                if (seenAudit.has(k)) return;
+                seenAudit.add(k);
+                const max = Math.max(parseFloat(a.sample_1) || 0, parseFloat(a.sample_2) || 0, parseFloat(a.sample_3) || 0);
+                if (max > MSA_TALL_CM) suitableKeys.add(k);
+            });
+
+            // 3. Allocation lookup by (batch+plot).
+            const allocKey = {};
+            allocations.forEach(a => {
+                const k = (a.batch_name || '') + '||' + (a.plot_name || '');
+                allocKey[k] = (allocKey[k] || 0) + (a.reserved_qty || 0);
+            });
+
+            // 4. Build per-month buckets.
+            const buckets = {};
+            const ensure = (year, month) => {
+                const k = year + '|' + month;
+                if (!buckets[k]) buckets[k] = { year, month, maturity: 0, suitable: 0, alloc: 0, estimate: 0, orderQty: 0 };
+                return buckets[k];
+            };
+            batchPlotMaturity.forEach(bp => {
+                const b = ensure(bp.sellYear, bp.sellMonth);
+                b.maturity += bp.raw;
+                b.alloc    += allocKey[(bp.batch || '') + '||' + (bp.plot || '')] || 0;
+            });
+
+            // 5. Suitable for sales — roll forward into all later months.
+            const monthIdx = (m) => MSA_MONTHS.indexOf(m);
+            batchPlotMaturity.forEach(bp => {
+                if (!suitableKeys.has((bp.batch || '') + '||' + (bp.plot || ''))) return;
+                Object.values(buckets).forEach(b => {
+                    if (b.year < bp.sellYear) return;
+                    if (b.year === bp.sellYear && monthIdx(b.month) <= monthIdx(bp.sellMonth)) return;
+                    b.suitable += bp.raw;
+                });
+            });
+
+            // 6. Estimate collection.
+            estimates.forEach(e => {
+                const b = ensure(e.sell_year, e.sell_month);
+                b.estimate = e.qty || 0;
+            });
+
+            // 7. Orders.
+            const productMonth = {};
+            products.forEach(p => productMonth[p.id] = p.sell_year + '|' + p.sell_month);
+            const liveOrderIds = new Set(orders.map(o => o.id));
+            items.forEach(it => {
+                if (!liveOrderIds.has(it.order_id)) return;
+                const km = productMonth[it.product_id]; if (!km) return;
+                const [yy, mm] = km.split('|');
+                const b = ensure(parseInt(yy), mm);
+                b.orderQty += (it.quantity || 0);
+            });
+
+            // 8. Render.
+            const rows = Object.values(buckets).sort((a, b) => (a.year - b.year) || (monthIdx(a.month) - monthIdx(b.month)));
+            const years = Array.from(new Set(rows.map(r => r.year))).sort();
+            msaPopulateYearDropdown(years);
+            const filterYear = parseInt(document.getElementById('msa-year').value || (years.length ? years[years.length-1] : new Date().getFullYear()));
+            const filtered = rows.filter(r => r.year === filterYear);
+
+            if (!filtered.length) {
+                tbody.innerHTML = `<tr><td colspan="10" class="text-center py-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest">No data for ${filterYear}</td></tr>`;
+                return;
+            }
+
+            const numCell = (n, color) => {
+                const cls = color === 'red' ? 'text-red-700 font-extrabold' :
+                            color === 'green' ? 'text-emerald-700 font-extrabold' :
+                            color === 'amber' ? 'text-amber-700 font-extrabold' : 'text-slate-800 font-bold';
+                return `<td class="r"><span class="${cls}">${(n||0).toLocaleString()}</span></td>`;
+            };
+            const deltaCell = (val) => numCell(val, val < 0 ? 'red' : val > 0 ? 'green' : '');
+
+            tbody.innerHTML = filtered.map(r => {
+                const matVsOrder    = r.maturity - r.orderQty;
+                const matVsEst      = r.maturity - r.estimate;
+                const matSuitOrder  = (r.maturity + r.suitable) - r.orderQty;
+                const matSuitEst    = (r.maturity + r.suitable) - r.estimate;
+                return `
+                <tr>
+                    <td class="font-bold text-slate-700">${r.year}</td>
+                    <td class="font-bold text-slate-700">${r.month}</td>
+                    ${numCell(r.maturity)}
+                    ${numCell(r.suitable, r.suitable > 0 ? 'green' : '')}
+                    ${numCell(r.alloc, r.alloc > 0 ? 'amber' : '')}
+                    <td class="r"><input type="number" min="0" value="${r.estimate}" data-y="${r.year}" data-m="${r.month}" onchange="saveEstimateCollection(this)" class="est-input"/></td>
+                    ${numCell(r.orderQty, r.orderQty > 0 ? 'amber' : '')}
+                    ${deltaCell(matVsOrder)}
+                    ${deltaCell(matVsEst)}
+                    <td class="r leading-tight">
+                        <div class="${matSuitOrder < 0 ? 'text-red-700' : 'text-emerald-700'} font-extrabold">${matSuitOrder.toLocaleString()} <span class="text-[9px] text-slate-400 font-normal">vs order</span></div>
+                        <div class="${matSuitEst < 0 ? 'text-red-700' : 'text-emerald-700'} font-extrabold">${matSuitEst.toLocaleString()} <span class="text-[9px] text-slate-400 font-normal">vs est</span></div>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        async function saveEstimateCollection(input) {
+            const year = parseInt(input.dataset.y);
+            const month = input.dataset.m;
+            const qty = parseInt(input.value) || 0;
+            if (!year || !month) return;
+            input.style.borderColor = '#fbbf24';
+            try {
+                const { data: { session } } = await _supabase.auth.getSession();
+                const email = session?.user?.email || 'admin';
+                const { error } = await _supabase.from('salesweb_monthly_estimate_collection').upsert({
+                    sell_year: year, sell_month: month, qty, updated_by: email, updated_at: new Date().toISOString()
+                }, { onConflict: 'sell_year,sell_month' });
+                if (error) throw error;
+                input.style.borderColor = '#10b981';
+                loadMonthlySalesAnalysis();
+            } catch (e) {
+                input.style.borderColor = '#ef4444';
+                console.error('estimate save failed:', e);
+            }
+        }
+        window.saveEstimateCollection = saveEstimateCollection;
+        window.loadMonthlySalesAnalysis = loadMonthlySalesAnalysis;
+
+        _supabase.auth.getSession().then(({ data: { session } }) => {
+            if (!session) { window.location.href = 'operation_dashboard.html'; return; }
+            loadMonthlySalesAnalysis();
+        });
+    </script>
+</body>
+</html>

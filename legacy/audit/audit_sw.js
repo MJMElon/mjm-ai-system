@@ -1,0 +1,145 @@
+/* ================================================================
+   MJM NURSERY AUDIT — SERVICE WORKER v7
+   
+   Strategy:
+   - On install: cache ALL files immediately
+   - HTML pages: try network first (get latest), fallback to cache
+   - JS/CSS/images: cache first (fast load)
+   - Supabase API: network only (never cache)
+   - On activate: delete old caches, claim all clients
+================================================================ */
+const VER = 'mjm-1779422042';
+
+const ALL_FILES = [
+  './audit_index.html',
+  './audit_home.html',
+  './audit_plot_audit.html',
+  './audit_styles.css',
+  './audit_script.js',
+  './audit_height_index.html',
+  './audit_height_styles.css',
+  './audit_height_script.js',
+  './audit_papan_index.html',
+  './audit_papan_styles.css',
+  './audit_papan_script.js',
+  './audit_maintenance_index.html',
+  './audit_maintenance_styles.css',
+  './audit_maintenance_script.js',
+  './audit_supabase.js',
+  './audit_dexie_offline.js',
+  './audit_dexie.min.js',
+  './audit_lang.js',
+  './audit_manifest.json',
+  './audit_icon-192.png',
+  './audit_icon-512.png',
+];
+
+/* ── INSTALL: cache everything ── */
+self.addEventListener('install', e => {
+  console.log('[SW] Installing', VER);
+  self.skipWaiting(); // activate immediately
+  e.waitUntil(
+    caches.open(VER).then(cache =>
+      Promise.allSettled(
+        ALL_FILES.map(url =>
+          cache.add(url).catch(err =>
+            console.warn('[SW] Failed to cache:', url, err.message)
+          )
+        )
+      )
+    )
+  );
+});
+
+/* ── ACTIVATE: clear old caches ── */
+self.addEventListener('activate', e => {
+  console.log('[SW] Activating', VER);
+  e.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(
+        keys.filter(k => k !== VER).map(k => {
+          console.log('[SW] Deleting old cache:', k);
+          return caches.delete(k);
+        })
+      )
+    ).then(() => self.clients.claim())
+  );
+});
+
+/* ── FETCH ── */
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  const url = e.request.url;
+  if (!url.startsWith('http')) return;
+
+  /* Supabase — always network, never cache */
+  if (url.includes('supabase.co')) {
+    e.respondWith(
+      fetch(e.request).catch(() =>
+        new Response(JSON.stringify({ error: 'offline' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' }
+        })
+      )
+    );
+    return;
+  }
+
+  /* Google Fonts — cache first */
+  if (url.includes('fonts.googleapis.com') || url.includes('fonts.gstatic.com')) {
+    e.respondWith(
+      caches.match(e.request).then(cached => {
+        if (cached) return cached;
+        return fetch(e.request).then(res => {
+          const clone = res.clone();
+          caches.open(VER).then(c => c.put(e.request, clone));
+          return res;
+        }).catch(() => new Response('', { status: 200 }));
+      })
+    );
+    return;
+  }
+
+  /* HTML pages — network first, fallback to cache */
+  if (url.endsWith('.html') || url.endsWith('/') || 
+      e.request.headers.get('accept')?.includes('text/html')) {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          /* Cache the fresh copy for offline use */
+          if (res && res.status === 200) {
+            const clone = res.clone();
+            caches.open(VER).then(c => c.put(e.request, clone));
+          }
+          return res;
+        })
+        .catch(() => {
+          /* Offline — serve from cache */
+          return caches.match(e.request)
+            .then(cached => cached || caches.match('./audit_index.html'));
+        })
+    );
+    return;
+  }
+
+  /* JS / CSS / images / fonts — cache first, update in background */
+  e.respondWith(
+    caches.match(e.request).then(cached => {
+      /* Return cache immediately */
+      const fetchPromise = fetch(e.request).then(res => {
+        if (res && res.status === 200) {
+          const clone = res.clone();
+          caches.open(VER).then(c => c.put(e.request, clone));
+        }
+        return res;
+      }).catch(() => null);
+
+      return cached || fetchPromise;
+    })
+  );
+});
+
+/* ── Force update ── */
+self.addEventListener('message', e => {
+  if (e.data === 'skipWaiting') self.skipWaiting();
+});
