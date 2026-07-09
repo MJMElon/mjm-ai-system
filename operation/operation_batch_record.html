@@ -261,12 +261,34 @@
                     }
                 });
 
+                // Historical batches (numbered before 263, where the current
+                // numbering scheme started) predate DestType stamps and strict
+                // plot bookkeeping — judging them plot-by-plot kicks finished
+                // batches (e.g. 225/226/228/229) back into the Active list.
+                // They keep the old row-count rule; only current batches
+                // (>= 263) get the strict every-plot-covered check.
+                const LEGACY_BATCH_CUTOFF = 263;
+                const _isLegacyBatch = (name) => {
+                    const m = String(name || '').match(/(\d+)\s*$/);
+                    if (!m) return true; // old "MJM-YYYY-NNN"-style or unparseable names
+                    return parseInt(m[1], 10) < LEGACY_BATCH_CUTOFF;
+                };
+
                 const completedBatchNames = new Set();
                 Object.keys(expectedPlots).forEach(batch => {
                     const need = expectedPlots[batch];
                     if (!need.size) return;
                     const keyed  = cull3Keyed[batch] || new Set();
                     const legacy = new Map(cull3Legacy[batch] || []);
+
+                    if (_isLegacyBatch(batch)) {
+                        // Old rule: enough 3rd-culling rows to cover the plots.
+                        let cullRows = keyed.size;
+                        legacy.forEach(n => { cullRows += n; });
+                        if (cullRows >= need.size) completedBatchNames.add(batch);
+                        return;
+                    }
+
                     let allCovered = true;
                     for (const key of need) {
                         if (keyed.has(key)) continue;
