@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Practical Record — MJM Training Center</title>
+<meta name="description" content="Record your practical work — every task you complete counts toward completing each program.">
+<meta name="theme-color" content="#1E3A20">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/auth.js"></script>
+</head>
+<body>
+
+<nav class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="index.html"><i class="fa-solid fa-list-check"></i> Practical Record</a>
+    <a class="homelink" href="nursery.html"><i class="fa-solid fa-arrow-left"></i> Training Pathways</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <span class="blob b1"></span><span class="blob b2"></span>
+  <div class="hero-in">
+    <div class="seed"><i class="fa-solid fa-list-check"></i></div>
+    <div class="eyebrow" id="heroEyebrow">Practical Experience</div>
+    <h1 id="heroTitle">Practical Record</h1>
+    <div class="rule"></div>
+    <p class="lede" id="heroLede">Tap <b>+</b> every time you complete a task on site. Reach every target — and read all the training slides — to complete the program.</p>
+  </div>
+</header>
+
+<section class="slide"><div class="wrap">
+  <div class="cert-pick" style="max-width:760px">
+    <span class="cstatus" id="progStatus" hidden></span>
+    <div id="logGroups"></div>
+  </div>
+</div></section>
+
+<footer>
+  <p><b>MJM Training Center</b> · Practical Record</p>
+</footer>
+
+<script src="assets/app.js"></script>
+<script>
+(function(){
+  if(!MJM.user()) return;
+  MJM.initTopbar();
+
+  var root=document.getElementById('logGroups'),
+      status=document.getElementById('progStatus');
+
+  function el(tag,cls,html){ var n=document.createElement(tag); if(cls)n.className=cls; if(html!=null)n.innerHTML=html; return n; }
+
+  function param(name){
+    var m=new RegExp('[?&]'+name+'=([^&]*)').exec(location.search);
+    return m?decodeURIComponent(m[1]):null;
+  }
+
+  /* counter row; onChange is called after every +/- so progress can refresh */
+  function actRow(a,color,target,onChange){
+    var log=MJM.log();
+    var row=el('div','act');
+    var body=el('div','act-body');
+    body.appendChild(el('h3',null,a.name));
+    body.appendChild(el('p',null,a.desc));
+    var bar=null,tgt=null;
+    if(target){
+      tgt=el('span','tgt');
+      bar=el('div','bar'); bar.appendChild(el('span','fill'));
+      body.appendChild(bar);
+    }
+    row.appendChild(el('div','icon-badge '+color,'<i class="fa-solid '+a.icon+'"></i>'));
+    row.appendChild(body);
+    if(tgt) row.appendChild(tgt);
+    var counter=el('div','counter');
+    var minus=el('button','cbtn minus','<i class="fa-solid fa-minus"></i>');
+    minus.type='button'; minus.setAttribute('aria-label','Remove one from '+a.name);
+    var cnt=el('span','cnt','0');
+    var plus=el('button','cbtn plus','<i class="fa-solid fa-plus"></i>');
+    plus.type='button'; plus.setAttribute('aria-label','Add one to '+a.name);
+    counter.appendChild(minus); counter.appendChild(cnt); counter.appendChild(plus);
+    row.appendChild(counter);
+
+    function paint(){
+      var l=MJM.log(), v=l[a.key]||0;
+      cnt.textContent=v;
+      minus.disabled=(v===0);
+      if(target){
+        row.classList.toggle('met',v>=target);
+        tgt.textContent=Math.min(v,target)+' / '+target;
+        bar.firstChild.style.width=Math.min(100,v/target*100)+'%';
+      }
+    }
+    function bump(d){
+      var l=MJM.log();
+      l[a.key]=Math.max(0,(l[a.key]||0)+d);
+      MJM.saveLog(l);
+      paint();
+      if(onChange) onChange();
+    }
+    plus.addEventListener('click',function(){ bump(1); });
+    minus.addEventListener('click',function(){ bump(-1); });
+    paint();
+    return row;
+  }
+
+  /* ---------- per-program view (?program=slug) ---------- */
+  function renderProgram(slug){
+    var prog=MJM.PROGRAMS[slug];
+    document.title=prog.name+' — Practical Record — MJM Training Center';
+    document.getElementById('heroEyebrow').textContent='Practical Record';
+    document.getElementById('heroTitle').textContent=prog.name;
+    document.getElementById('heroLede').innerHTML=
+      'Complete this program by reading all its training slides and reaching every practical target below. Tap <b>+</b> each time you do a task on site.';
+
+    function refresh(){
+      var p=MJM.progress(slug);
+      status.hidden=false;
+      if(p.complete){
+        status.className='cstatus ok';
+        status.innerHTML='<i class="fa-solid fa-circle-check"></i> Program complete — well done!';
+      }else{
+        status.className='cstatus todo';
+        status.innerHTML='<i class="fa-solid fa-bars-progress"></i> Program result: '+p.score+'%'+
+          ' &nbsp;·&nbsp; Slides '+p.slides.got+'/'+p.slides.total+
+          (p.practical.length?' &nbsp;·&nbsp; Practical '+p.practicalPct+'%':'');
+      }
+      // slides requirement row
+      var slidesRow=document.getElementById('slidesReq');
+      if(slidesRow){
+        slidesRow.className='req'+(p.slides.met?' met':'');
+        slidesRow.querySelector('.req-count').textContent=
+          p.slides.met?'All '+p.slides.total+' slides read':p.slides.got+' of '+p.slides.total+' slides read';
+        slidesRow.querySelector('.bar .fill').style.width=
+          Math.min(100,p.slides.total?p.slides.got/p.slides.total*100:0)+'%';
+        slidesRow.querySelector('.req-state i').className=
+          'fa-solid '+(p.slides.met?'fa-circle-check':'fa-circle');
+      }
+    }
+
+    var g1=el('div','req-group');
+    g1.appendChild(el('h3',null,'<i class="fa-solid fa-book-open" style="color:var(--green);margin-right:8px"></i>Training Slides'));
+    g1.appendChild(el('div','rg-sub','Reading is recorded automatically as you go through the slides.'));
+    var sr=el('div','req'); sr.id='slidesReq';
+    sr.innerHTML='<div class="icon-badge"><i class="fa-solid fa-book-open"></i></div>'+
+      '<div class="req-body"><div class="req-name"><a href="'+prog.page+'">'+prog.name+' — open slides</a></div>'+
+      '<div class="req-count"></div><div class="bar"><span class="fill"></span></div></div>'+
+      '<div class="req-state"><i class="fa-solid fa-circle"></i></div>';
+    g1.appendChild(sr);
+    root.appendChild(g1);
+
+    var g2=el('div','req-group');
+    g2.appendChild(el('h3',null,'<i class="fa-solid fa-list-check" style="color:var(--green);margin-right:8px"></i>Practical Tasks'));
+    var keys=Object.keys(prog.practical);
+    if(keys.length){
+      g2.appendChild(el('div','rg-sub','Reach each target to fulfil the practical requirement.'));
+      keys.forEach(function(k){
+        var a=MJM.ACTIVITIES[k];
+        g2.appendChild(actRow({key:k,name:a.name,icon:a.icon,desc:a.desc},'ib-green',prog.practical[k],refresh));
+      });
+    }else{
+      g2.appendChild(el('div','rg-sub','No practical tasks for this program — completing the training slides completes it.'));
+    }
+    root.appendChild(g2);
+
+    var back=el('a','btn ghost','<i class="fa-solid fa-arrow-left"></i> Back to Training Pathways');
+    back.href='nursery.html'; back.style.marginTop='26px';
+    root.appendChild(back);
+
+    refresh();
+  }
+
+  /* ---------- full logbook (no program selected) ---------- */
+  function renderAll(){
+    var GROUPS=[
+      {title:'Field Work', sub:'Nursery operations carried out in the field.', color:'ib-green',
+       keys:['seed-planting','seed-culling','watering','manuring','weeding','spraying','interrow','transplanting','culling']},
+      {title:'Troubleshoot & Cases', sub:'Problems logged and resolved in Carlos.', color:'ib-earth',
+       keys:['case-open','case-solve']},
+      {title:'Site Office', sub:'Admin and sales work at the site office.', color:'ib-forest',
+       keys:['order','report','collection']}
+    ];
+    GROUPS.forEach(function(g){
+      var grp=el('div','req-group','<h3>'+g.title+'</h3><div class="rg-sub">'+g.sub+'</div>');
+      g.keys.forEach(function(k){
+        var a=MJM.ACTIVITIES[k];
+        grp.appendChild(actRow({key:k,name:a.name,icon:a.icon,desc:a.desc},g.color,null,null));
+      });
+      root.appendChild(grp);
+    });
+
+    var banner=el('a','cert-banner',
+      '<div class="cb-icon"><i class="fa-solid fa-award"></i></div>'+
+      '<div class="cb-text"><h3>Check your certification progress</h3>'+
+      '<p>See how your logged work counts toward each program and role — and claim your certificate when you\'re ready.</p></div>'+
+      '<span class="cb-go"><i class="fa-solid fa-arrow-right"></i></span>');
+    banner.href='certificate.html'; banner.style.marginTop='30px';
+    root.appendChild(banner);
+  }
+
+  var slug=param('program');
+  if(slug&&MJM.PROGRAMS[slug]) renderProgram(slug);
+  else renderAll();
+})();
+</script>
+
+</body>
+</html>

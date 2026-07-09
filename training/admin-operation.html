@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Operation — MJM Training Center</title>
+<meta name="description" content="Admin operation training — batch reports and records.">
+<meta name="theme-color" content="#1E3A20">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/auth.js"></script>
+</head>
+<body>
+
+<div class="pagebar"><div class="fill" id="pgfill"></div></div>
+
+<!-- BATCH REPORTS -->
+<section class="slide" id="reports"><div class="wrap">
+  <div class="titlewrap reveal">
+    <div class="kicker">Admin Operation</div>
+    <span class="role-pill">Site Office Admin</span>
+    <h2 class="slide-title">Batch Reports</h2>
+    <p class="subtitle">For every batch, the site office admin compiles six reports tracking it from planting to sale.</p>
+  </div>
+  <div class="reports reveal">
+    <div class="rrow"><div class="badge" style="background:var(--green)">1</div>
+      <div class="bar"><h3>Seeds Planting Report</h3><span>Recorded at the seed-planting stage</span></div></div>
+    <div class="rrow alt"><div class="badge" style="background:var(--earth)">2</div>
+      <div class="bar"><h3>Seeds Damage Report</h3><span>From seed-damage culling during planting</span></div></div>
+    <div class="rrow"><div class="badge" style="background:var(--earth)">3</div>
+      <div class="bar"><h3>1st Culling Report</h3><span>Picking before transplant · month 3–5</span></div></div>
+    <div class="rrow alt"><div class="badge" style="background:var(--green)">4</div>
+      <div class="bar"><h3>Transplanting Report</h3><span>When seedlings move into the main plot</span></div></div>
+    <div class="rrow"><div class="badge" style="background:var(--earth)">5</div>
+      <div class="bar"><h3>2nd Culling Report</h3><span>Drone count of dead palms · month 4</span></div></div>
+    <div class="rrow alt"><div class="badge" style="background:var(--earth)">6</div>
+      <div class="bar"><h3>3rd Culling Report</h3><span>Drone count again when the plot is sold</span></div></div>
+  </div>
+</div></section>
+
+<div class="pager">
+  <div class="pager-in">
+    <a class="phome" href="nursery.html"><i class="fa-solid fa-arrow-left"></i> Back to main page</a>
+    <div class="pmeta">
+      <div class="pstep" id="pstep">Page 1</div>
+      <div class="pname" id="pname"></div>
+    </div>
+    <div class="pbtns">
+      <button class="pbtn ghost" id="prevBtn"><i class="fa-solid fa-arrow-left"></i> <span class="lbl">Previous</span></button>
+      <button class="pbtn" id="nextBtn">Next <i class="fa-solid fa-arrow-right"></i></button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <p><b>MJM Training Center</b> · Admin Operation</p>
+</footer>
+
+<div class="done-modal" id="doneModal">
+  <div class="done-card">
+    <div class="done-seal"><i class="fa-solid fa-circle-check"></i></div>
+    <h2>Congratulations!</h2>
+    <p>You've finished the course — your reading has been recorded toward certification.</p>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <a class="btn" href="certificate.html"><i class="fa-solid fa-award"></i> Get certified</a>
+      <a class="btn ghost" href="nursery.html"><i class="fa-solid fa-arrow-left"></i> Back to main page</a>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var body=document.body;
+  var steps=[].slice.call(document.querySelectorAll('section.slide'));
+  var fill=document.getElementById('pgfill');
+  var stepEl=document.getElementById('pstep'),nameEl=document.getElementById('pname');
+  var prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn');
+  var total=steps.length, cur=0;
+  var SLUG='admin-operation';
+  var PFX='mjm-u-'+(localStorage.getItem('mjm-user')||'guest')+'-';
+  var seen={};
+  try{JSON.parse(localStorage.getItem(PFX+'read-'+SLUG)||'[]').forEach(function(n){seen[n]=1});}catch(e){}
+  function record(i){
+    seen[i]=1;
+    var arr=Object.keys(seen).map(Number);
+    try{
+      localStorage.setItem(PFX+'read-'+SLUG,JSON.stringify(arr));
+      localStorage.setItem(PFX+'pages-'+SLUG,String(total));
+      if(arr.length>=total) localStorage.setItem(PFX+'done-'+SLUG,'1');
+    }catch(e){}
+  }
+  [].forEach.call(document.querySelectorAll('.reveal'),function(el){el.classList.add('in');});
+  function nameOf(sec){var t=sec.querySelector('.slide-title');return t?t.textContent.trim():'';}
+  function show(i,scroll){
+    cur=Math.max(0,Math.min(total-1,i));
+    record(cur);
+    steps.forEach(function(s,idx){s.classList.toggle('active',idx===cur);});
+    fill.style.width=((cur+1)/total*100)+'%';
+    stepEl.textContent='Page '+(cur+1)+' of '+total;
+    nameEl.textContent=nameOf(steps[cur]);
+    prevBtn.disabled=(cur===0);
+    nextBtn.innerHTML=(cur===total-1)?'Finish <i class="fa-solid fa-check"></i>':'Next <i class="fa-solid fa-arrow-right"></i>';
+    if(scroll!==false) window.scrollTo({top:0,behavior:'smooth'});
+  }
+  prevBtn.addEventListener('click',function(){ if(cur>0) show(cur-1); });
+  nextBtn.addEventListener('click',function(){ if(cur<total-1) show(cur+1); else{ try{localStorage.setItem(PFX+'done-admin-operation','1');}catch(e){} document.getElementById('doneModal').classList.add('show'); } });
+  document.addEventListener('keydown',function(e){
+    if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+    if(e.key==='ArrowRight'){ if(cur<total-1) show(cur+1); }
+    else if(e.key==='ArrowLeft'){ if(cur>0) show(cur-1); }
+  });
+  body.classList.add('paged');
+  show(0,false);
+})();
+</script>
+
+</body>
+</html>
