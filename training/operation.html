@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nursery Operation — MJM Training Center</title>
+<meta name="description" content="Staff training guide for nursery operations, from seed planting to seedling sales.">
+<meta name="theme-color" content="#1E3A20">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/auth.js"></script>
+</head>
+<body>
+
+
+<div class="pagebar"><div class="fill" id="pgfill"></div></div>
+
+<!-- OVERVIEW -->
+<section class="slide" id="overview"><div class="wrap">
+  <div class="titlewrap reveal">
+    <div class="kicker">Training Overview</div>
+    <h2 class="slide-title">What This Training Covers</h2>
+  </div>
+  <div class="grid g2 reveal">
+    <div class="card"><div class="ov">
+      <div class="icon-badge ib-forest"><i class="fa-solid fa-seedling"></i></div>
+      <div><h3>Nursery Stages &amp; Things to Know</h3>
+        <p>The three stages — seed planting, pre-nursery and main nursery — plus the technique, care and operations for each.</p></div>
+      <div class="num">1</div></div></div>
+    <div class="card"><div class="ov">
+      <div class="icon-badge ib-forest"><i class="fa-solid fa-filter"></i></div>
+      <div><h3>Culling</h3>
+        <p>Quality control: removing damaged or off-type palms at every checkpoint.</p></div>
+      <div class="num">2</div></div></div>
+    <div class="card"><div class="ov">
+      <div class="icon-badge ib-forest"><i class="fa-solid fa-right-left"></i></div>
+      <div><h3>Transplanting</h3>
+        <p>Moving selected seedlings from pre-nursery trays into larger main-nursery bags.</p></div>
+      <div class="num">3</div></div></div>
+    <div class="card"><div class="ov">
+      <div class="icon-badge ib-forest"><i class="fa-solid fa-truck-ramp-box"></i></div>
+      <div><h3>Sales &amp; Collection</h3>
+        <p>The site-office order flow, plus how seedlings are selected, loaded and handed over on site.</p></div>
+      <div class="num">4</div></div></div>
+  </div>
+</div></section>
+
+<!-- STAGES -->
+<section class="slide" id="stages"><div class="wrap">
+  <div class="titlewrap reveal">
+    <div class="kicker">Section 1</div>
+    <h2 class="slide-title">The Three Nursery Stages</h2>
+    <p class="subtitle">Every seedling moves through three stages in order. Each stage has its own location and routine.</p>
+  </div>
+  <div class="flow reveal">
+    <div class="node"><div class="stage">
+      <div class="bar" style="background:var(--green)"></div>
+      <div class="body">
+        <div class="circle" style="background:var(--green)"><i class="fa-solid fa-seedling"></i></div>
+        <h3>Seed Planting</h3>
+        <div class="dur" style="background:#cfe0bf">Germination</div>
+        <p>Germinated seeds are planted with the correct depth and orientation.</p>
+      </div></div></div>
+    <div class="arrow"><i class="fa-solid fa-arrow-right"></i></div>
+    <div class="node"><div class="stage">
+      <div class="bar" style="background:var(--leaf)"></div>
+      <div class="body">
+        <div class="circle" style="background:var(--leaf)"><i class="fa-solid fa-leaf"></i></div>
+        <h3>Pre-Nursery</h3>
+        <div class="dur" style="background:#d4e6bd">3–5 months</div>
+        <p>Young seedlings raised in trays with close daily care.</p>
+      </div></div></div>
+    <div class="arrow"><i class="fa-solid fa-arrow-right"></i></div>
+    <div class="node"><div class="stage">
+      <div class="bar" style="background:var(--earth)"></div>
+      <div class="body">
+        <div class="circle" style="background:var(--earth)"><i class="fa-solid fa-tree"></i></div>
+        <h3>Main Nursery</h3>
+        <div class="dur" style="background:#ecd8c2">7–9 months</div>
+        <p>Transplanted to larger bags and grown until ready for sale.</p>
+      </div></div></div>
+  </div>
+</div></section>
+
+<!-- SEED PLANTING -->
+<section class="slide" id="planting"><div class="wrap">
+  <div class="titlewrap reveal">
+    <div class="kicker">Section 2 • Seed Planting</div>
+    <h2 class="slide-title">Planting Technique</h2>
+    <p class="subtitle">When planting germinated seeds, two things must be correct every time: orientation and depth.</p>
+  </div>
+  <div class="split reveal">
+    <div class="card">
+      <h3 style="color:var(--forest);font-size:20px;margin-bottom:14px">Telling Root from Shoot</h3>
+      <div class="seedfig-wrap">
+        <svg class="seedfig" viewBox="0 0 280 290" role="img" aria-label="Germinated oil palm seed: two pale sprouts from one spot, the root being the longer one">
+          <defs>
+            <radialGradient id="nut" cx="44%" cy="40%" r="70%">
+              <stop offset="0%" stop-color="#6e4a2c"/>
+              <stop offset="55%" stop-color="#46301f"/>
+              <stop offset="100%" stop-color="#241509"/>
+            </radialGradient>
+            <linearGradient id="sprout" x1="0" y1="1" x2="0" y2="0">
+              <stop offset="0%" stop-color="#dccba4"/>
+              <stop offset="100%" stop-color="#f6efdd"/>
+            </linearGradient>
+          </defs>
+          <!-- seed nut -->
+          <ellipse cx="140" cy="198" rx="88" ry="66" fill="url(#nut)" stroke="#1c1006" stroke-width="2.5"/>
+          <g stroke="#5a3e28" stroke-width="1.4" fill="none" opacity=".5" stroke-linecap="round">
+            <path d="M140,150 Q96,196 104,252"/>
+            <path d="M140,150 Q118,200 126,256"/>
+            <path d="M140,150 Q140,202 140,258"/>
+            <path d="M140,150 Q162,200 154,256"/>
+            <path d="M140,150 Q184,196 176,252"/>
+            <path d="M138,150 Q80,188 86,236"/>
+            <path d="M142,150 Q200,188 194,236"/>
+          </g>
+          <ellipse cx="140" cy="150" rx="22" ry="11" fill="#c9a06a" opacity=".45"/>
+          <!-- root (longer) -->
+          <path d="M132,148 C116,116 96,84 80,54 Q74,44 84,45 Q97,53 109,76 C122,100 136,126 144,146 Z" fill="url(#sprout)" stroke="#cbb588" stroke-width="1.5" stroke-linejoin="round"/>
+          <ellipse cx="82" cy="50" rx="7" ry="6" fill="#d09a55"/>
+          <!-- shoot (shorter) -->
+          <path d="M150,148 C162,124 176,106 190,92 Q197,85 200,93 Q197,102 185,114 C173,128 161,138 157,150 Z" fill="url(#sprout)" stroke="#cbb588" stroke-width="1.5" stroke-linejoin="round"/>
+          <ellipse cx="194" cy="91" rx="6.5" ry="5.5" fill="#d09a55"/>
+          <!-- labels -->
+          <text x="58" y="34" text-anchor="middle" font-size="12.5" font-weight="700" fill="#9C5E2C">Root — longer</text>
+          <text x="214" y="78" text-anchor="middle" font-size="12.5" font-weight="700" fill="#3E6B2E">Shoot</text>
+        </svg>
+      </div>
+      <div class="row-item"><div class="ring earth"><i class="fa-solid fa-ruler"></i></div>
+        <div><b>Radicle (root) — the longer sprout</b><br><span>Both sprouts grow from the same spot and look alike — the longer one is the root. When planting, point it DOWN into the soil.</span></div></div>
+      <div class="row-item"><div class="ring leaf"><i class="fa-solid fa-arrow-up"></i></div>
+        <div><b>Plumule (shoot) — the shorter sprout</b><br><span>The shorter sprout becomes the leaves. Point it UP toward the surface.</span></div></div>
+      <p style="color:var(--earth-d);font-style:italic;font-size:13.5px;margin-top:6px">Wrong orientation slows growth or kills the seed. Always check before covering.</p>
+    </div>
+    <div class="card earthbg">
+      <h3 style="color:var(--forest);font-size:20px;margin-bottom:16px"><i class="fa-solid fa-ruler-vertical" style="color:var(--green);margin-right:8px"></i>Planting Depth</h3>
+      <div class="seedfig-wrap">
+        <svg class="seedfig" viewBox="0 0 320 270" role="img" aria-label="Seed planted just below the soil surface inside a pot">
+          <defs>
+            <radialGradient id="potnut" cx="40%" cy="32%" r="75%">
+              <stop offset="0%" stop-color="#6e4a2c"/>
+              <stop offset="60%" stop-color="#46301f"/>
+              <stop offset="100%" stop-color="#2a1a0d"/>
+            </radialGradient>
+          </defs>
+          <rect x="44" y="62" width="232" height="20" rx="9" fill="#9C5E2C"/>
+          <path d="M58,82 L262,82 L232,250 Q231,256 225,256 L95,256 Q89,256 88,250 Z" fill="#C17A3F"/>
+          <path d="M70,116 L250,116 L231,248 L89,248 Z" fill="#7a5a33"/>
+          <line x1="70" y1="116" x2="250" y2="116" stroke="#5f4527" stroke-width="4"/>
+          <ellipse cx="172" cy="156" rx="23" ry="16" fill="url(#potnut)" stroke="#1f1207" stroke-width="2"/>
+          <ellipse cx="164" cy="150" rx="6" ry="3.5" fill="#8a623a" opacity=".7"/>
+          <text x="172" y="201" text-anchor="middle" font-size="12" fill="#ecdcb8" font-weight="700">seed</text>
+          <line x1="118" y1="116" x2="150" y2="116" stroke="#1E3A20" stroke-width="1" opacity=".4"/>
+          <line x1="118" y1="140" x2="172" y2="140" stroke="#1E3A20" stroke-width="1" opacity=".4"/>
+          <line x1="118" y1="119" x2="118" y2="137" stroke="#1E3A20" stroke-width="1.5"/>
+          <path d="M114,122 L118,115 L122,122 Z" fill="#1E3A20"/>
+          <path d="M114,134 L118,141 L122,134 Z" fill="#1E3A20"/>
+          <text x="110" y="124" text-anchor="end" font-size="12" fill="#1E3A20" font-weight="700">just</text>
+          <text x="110" y="138" text-anchor="end" font-size="12" fill="#1E3A20" font-weight="700">covered</text>
+          <text x="248" y="108" text-anchor="end" font-size="11" fill="#3a2c18" font-style="italic">soil surface</text>
+        </svg>
+      </div>
+      <ul class="ticks">
+        <li>Plant at the recommended shallow depth — just covered.</li>
+        <li>Too deep delays emergence; too shallow exposes the seed.</li>
+        <li>Firm the soil gently and water in after planting.</li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<!-- PRE-NURSERY -->
+<section class="slide" id="pre-nursery"><div class="wrap">
+  <div class="titlewrap reveal">
+    <div class="kicker">Section 3 • Pre-Nursery</div>
+    <h2 class="slide-title">Pre-Nursery Care Routine</h2>
+    <p class="subtitle">Work to a monthly schedule — check it every month, then carry out each task at its set rate.</p>
+  </div>
+  <div class="grid reveal" style="grid-template-columns:1.05fr 1.5fr">
+    <div class="schedhero">
+      <div class="head"><div class="icon-badge ib-leaf"><i class="fa-solid fa-calendar-days"></i></div>
+        <h3>Monthly Schedule</h3></div>
+      <p class="lead">Reviewed every month. The schedule sets the plan for:</p>
+      <ul>
+        <li>Watering schedule</li>
+        <li>Pest &amp; disease spraying schedule</li>
+        <li>Weeding schedule</li>
+        <li>Manuring schedule</li>
+      </ul>
+    </div>
+    <div class="grid g2">
+      <div class="card"><div class="op green">
+        <div class="icon-badge ib-green"><i class="fa-solid fa-droplet"></i></div>
+        <div class="op-body"><div class="op-title">Watering</div>
+          <div class="op-value">10 min</div><div class="op-note">per watering session</div></div></div></div>
+      <div class="card"><div class="op green">
+        <div class="icon-badge ib-green"><i class="fa-solid fa-bug"></i></div>
+        <div class="op-body"><div class="op-title">Pest &amp; Disease</div>
+          <div class="op-value sm">Per schedule</div><div class="op-note">spray as scheduled</div></div></div></div>
+      <div class="card"><div class="op green">
+        <div class="icon-badge ib-green"><i class="fa-solid fa-scissors"></i></div>
+        <div class="op-body"><div class="op-title">Weeding</div>
+          <div class="op-value sm">Once a month</div><div class="op-note">remove weeds monthly</div></div></div></div>
+      <div class="card"><div class="op green">
+        <div class="icon-badge ib-green"><i class="fa-solid fa-flask"></i></div>
+        <div class="op-body"><div class="op-title">Manuring</div>
+          <div class="op-value sm">5 g / seed</div><div class="op-note">from the 2nd month old</div></div></div></div>
+    </div>
+  </div>
+</div></section>
+
+<!-- MAIN NURSERY -->
+<section class="slide" id="main-nursery"><div class="wrap">
+  <div class="titlewrap reveal">
+    <div class="kicker">Section 4 • Main Nursery</div>
+    <h2 class="slide-title">Main Nursery Operations</h2>
+    <p class="subtitle">Five routine operations keep main-nursery seedlings healthy — all guided by the monthly schedule.</p>
+  </div>
+  <div class="grid reveal" style="grid-template-columns:1.05fr 1.5fr">
+    <div class="schedhero">
+      <div class="head"><div class="icon-badge ib-leaf"><i class="fa-solid fa-calendar-days"></i></div>
+        <h3>Monthly Schedule</h3></div>
+      <p class="lead">All rates and frequencies follow the monthly schedule — reviewed and updated every month for:</p>
+      <ul>
+        <li>Manuring / fertiliser schedule</li>
+        <li>Watering schedule</li>
+        <li>Pest &amp; disease spraying schedule</li>
+        <li>Weeding schedule</li>
+        <li>Inter-row spray schedule</li>
+      </ul>
+    </div>
+    <div class="grid g2">
+      <div class="card"><div class="op green">
+        <div class="icon-badge ib-green"><i class="fa-solid fa-flask"></i></div>
+        <div class="op-body"><div class="op-title">Manuring / Fertiliser</div>
+          <div class="op-value">20 g</div><div class="op-note">of fertiliser per seedling, every month</div></div></div></div>
+      <div class="card"><div class="op green">
+        <div class="icon-badge ib-green"><i class="fa-solid fa-droplet"></i></div>
+        <div class="op-body"><div class="op-title">Watering</div>
+          <div class="op-value">1.5 L</div><div class="op-note">of water per seedling, every day</div></div></div></div>
+      <div class="card"><div class="op green">
+        <div class="icon-badge ib-green"><i class="fa-solid fa-bug"></i></div>
+        <div class="op-body"><div class="op-title">Pest &amp; Disease</div>
+          <div class="op-value sm">Per schedule</div><div class="op-note">monitor and treat following the spray schedule</div></div></div></div>
+      <div class="card earthbg"><div class="op earth">
+        <div class="icon-badge ib-earth"><i class="fa-solid fa-scissors"></i></div>
+        <div class="op-body"><div class="op-title">Weeding</div>
+          <div class="op-value">2× / month</div><div class="op-note">remove weeds from inside the polybags</div></div></div></div>
+      <div class="card earthbg"><div class="op earth">
+        <div class="icon-badge ib-earth"><i class="fa-solid fa-spray-can"></i></div>
+        <div class="op-body"><div class="op-title">Inter-Row Spray</div>
+          <div class="op-value">2× / month</div><div class="op-note">weed control sprayed between the rows</div></div></div></div>
+    </div>
+  </div>
+</div></section>
+
+<!-- BEYOND -->
+<section class="slide" id="beyond"><div class="wrap">
+  <div class="titlewrap reveal">
+    <div class="kicker">Section 5</div>
+    <h2 class="slide-title">Beyond the Routine: Quality &amp; Movement</h2>
+    <p class="subtitle">On top of daily operations, three activities control quality and move seedlings toward sale.</p>
+  </div>
+  <div class="grid g3 reveal">
+    <div class="big bg-green"><div class="icon-badge"><i class="fa-solid fa-filter"></i></div>
+      <h3>Culling</h3><p>Removing damaged or off-type seedlings at several checkpoints so only healthy ones continue.</p></div>
+    <div class="big bg-leaf"><div class="icon-badge"><i class="fa-solid fa-right-left"></i></div>
+      <h3>Transplanting</h3><p>Moving selected seedlings from pre-nursery trays into larger main-nursery bags.</p></div>
+    <div class="big bg-earth"><div class="icon-badge"><i class="fa-solid fa-truck-ramp-box"></i></div>
+      <h3>Collection of Seedling</h3><p>Selecting, loading and handing over seedlings to the customer at the point of sale.</p></div>
+  </div>
+</div></section>
+
+<!-- CULLING -->
+<section class="slide" id="culling"><div class="wrap">
+  <div class="titlewrap reveal">
+    <div class="kicker">Section 5 • Culling</div>
+    <h2 class="slide-title">Culling at Every Stage</h2>
+  </div>
+  <div class="flow reveal">
+    <div class="node"><div class="cull">
+      <div class="circle" style="background:var(--moss)"><i class="fa-solid fa-seedling"></i></div>
+      <h3>Seed-Damage Culling</h3><div class="when" style="background:#dfeccd">During seed planting</div>
+      <p>Damaged or non-viable seeds are removed as we plant.</p></div></div>
+    <div class="arrow"><i class="fa-solid fa-arrow-right"></i></div>
+    <div class="node"><div class="cull">
+      <div class="circle" style="background:var(--leaf)"><i class="fa-solid fa-filter"></i></div>
+      <h3>1st Culling</h3><div class="when" style="background:#d8e8c2">Month 3–5 · before transplant</div>
+      <p>Picking is done before transplant. At the plot, workers only transplant.</p></div></div>
+    <div class="arrow"><i class="fa-solid fa-arrow-right"></i></div>
+    <div class="node"><div class="cull">
+      <div class="circle" style="background:var(--green)"><i class="fa-solid fa-filter"></i></div>
+      <h3>2nd Culling</h3><div class="when" style="background:#cfe0bf">Month 4 · after transplant</div>
+      <p>Drone mapping identifies and counts dead palms in the main plot.</p></div></div>
+    <div class="arrow"><i class="fa-solid fa-arrow-right"></i></div>
+    <div class="node"><div class="cull">
+      <div class="circle" style="background:var(--earth)"><i class="fa-solid fa-filter"></i></div>
+      <h3>3rd Culling</h3><div class="when" style="background:#ecd8c2">At point of sale</div>
+      <p>Drone mapping is used again to count and cull when the plot is sold.</p></div></div>
+  </div>
+</div></section>
+
+<!-- TRANSPLANTING -->
+<section class="slide" id="transplanting"><div class="wrap">
+  <div class="titlewrap reveal">
+    <div class="kicker">Section 5 • Transplanting</div>
+    <h2 class="slide-title">Transplanting to the Main Plot</h2>
+  </div>
+  <div class="grid transplant reveal" style="grid-template-columns:1.3fr 1fr;gap:30px">
+    <div class="steps">
+      <div class="step"><div class="dot">1</div><div><b>Send soil to the empty plot</b><span>Soil is delivered to the prepared empty plot.</span></div></div>
+      <div class="step"><div class="dot">2</div><div><b>Fill the polybags</b><span>Polybags are filled with the soil medium.</span></div></div>
+      <div class="step"><div class="dot">3</div><div><b>Line up the polybags</b><span>Lined out at 3 ft × 3 ft spacing between polybags.</span></div></div>
+      <div class="step"><div class="dot">4</div><div><b>Transplant the seedlings</b><span>Selected seedlings are transplanted into the polybags.</span></div></div>
+      <div class="step"><div class="dot">5</div><div><b>Water twice daily</b><span>Watered 2× daily for the first 2 months until established.</span></div></div>
+    </div>
+    <div class="sidecard">
+      <div class="circle"><i class="fa-solid fa-right-left"></i></div>
+      <h3>From Pre-Nursery<br>to Main Nursery</h3>
+      <div class="em">Transplanted at month 3–5</div>
+      <div class="hr"></div>
+      <p>New transplants are watered twice daily for their first 2 months until they are well established.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- COLLECTION -->
+<section class="slide" id="collection"><div class="wrap">
+  <div class="titlewrap reveal">
+    <div class="kicker">Section 6 • Sales</div>
+    <span class="role-pill">Site Operation Personnel</span>
+    <h2 class="slide-title">Collection at Site</h2>
+    <p class="subtitle">How site operation personnel run a collection once the customer arrives on site.</p>
+  </div>
+  <div class="grid g3 reveal">
+    <div class="pcard"><div class="top"><div class="icon-badge ib-green"><i class="fa-solid fa-truck-ramp-box"></i></div>
+      <div><div class="stepno">Step 1</div><h3>Customer Arrives</h3></div></div>
+      <p>Customer comes to the site for collection.</p></div>
+    <div class="pcard"><div class="top"><div class="icon-badge ib-green"><i class="fa-solid fa-tree"></i></div>
+      <div><div class="stepno">Step 2</div><h3>Go to the Plot</h3></div></div>
+      <p>We bring the customer to the plot to choose seedlings.</p></div>
+    <div class="pcard"><div class="top"><div class="icon-badge ib-green"><i class="fa-solid fa-tag"></i></div>
+      <div><div class="stepno">Step 3</div><h3>Select with Sticker</h3></div></div>
+      <p>Customer marks chosen seedlings using a sticker or seal.</p></div>
+    <div class="pcard earthbg"><div class="top"><div class="icon-badge ib-earth"><i class="fa-solid fa-hand-pointer"></i></div>
+      <div><div class="stepno">Step 4</div><h3>Worker Identifies</h3></div></div>
+      <p>Our worker identifies the stickered / sealed seedlings.</p></div>
+    <div class="pcard earthbg"><div class="top"><div class="icon-badge ib-earth"><i class="fa-solid fa-box-open"></i></div>
+      <div><div class="stepno">Step 5</div><h3>Load to Lorry</h3></div></div>
+      <p>Selected seedlings are loaded onto the customer's lorry.</p></div>
+    <div class="pcard earthbg"><div class="top"><div class="icon-badge ib-earth"><i class="fa-solid fa-file-invoice"></i></div>
+      <div><div class="stepno">Step 6</div><h3>Issue DO</h3></div></div>
+      <p>On completion, our PIC issues the Delivery Order (DO).</p></div>
+  </div>
+</div></section>
+
+<div class="pager">
+  <div class="pager-in">
+    <a class="phome" href="nursery.html"><i class="fa-solid fa-arrow-left"></i> Back to main page</a>
+    <div class="pmeta">
+      <div class="pstep" id="pstep">Page 1</div>
+      <div class="pname" id="pname"></div>
+    </div>
+    <div class="pbtns">
+      <button class="pbtn ghost" id="prevBtn"><i class="fa-solid fa-arrow-left"></i> <span class="lbl">Previous</span></button>
+      <button class="pbtn" id="nextBtn">Next <i class="fa-solid fa-arrow-right"></i></button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <p><b>MJM Training Center</b> · Nursery Operation</p>
+  <p style="margin-top:6px;opacity:.8">Staff training guide · from seed planting to seedling sales</p>
+</footer>
+
+<div class="done-modal" id="doneModal">
+  <div class="done-card">
+    <div class="done-seal"><i class="fa-solid fa-circle-check"></i></div>
+    <h2>Congratulations!</h2>
+    <p>You've finished the course — your reading has been recorded toward certification.</p>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <a class="btn" href="certificate.html"><i class="fa-solid fa-award"></i> Get certified</a>
+      <a class="btn ghost" href="nursery.html"><i class="fa-solid fa-arrow-left"></i> Back to main page</a>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var body=document.body;
+  var hero=document.getElementById('top');
+  var steps=[].slice.call(document.querySelectorAll('section.slide'));
+  var fill=document.getElementById('pgfill');
+  var stepEl=document.getElementById('pstep'),nameEl=document.getElementById('pname');
+  var prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn');
+  var total=steps.length, cur=0;
+  var SLUG='operation';
+  var PFX='mjm-u-'+(localStorage.getItem('mjm-user')||'guest')+'-';
+  var seen={};
+  try{JSON.parse(localStorage.getItem(PFX+'read-'+SLUG)||'[]').forEach(function(n){seen[n]=1});}catch(e){}
+  function record(i){
+    seen[i]=1;
+    var arr=Object.keys(seen).map(Number);
+    try{
+      localStorage.setItem(PFX+'read-'+SLUG,JSON.stringify(arr));
+      localStorage.setItem(PFX+'pages-'+SLUG,String(total));
+      if(arr.length>=total) localStorage.setItem(PFX+'done-'+SLUG,'1');
+    }catch(e){}
+  }
+
+  // reveal everything up front; per-page animation handles the entrance
+  [].forEach.call(document.querySelectorAll('.reveal'),function(el){el.classList.add('in');});
+
+  function nameOf(sec){var t=sec.querySelector('.slide-title');return t?t.textContent.trim():'';}
+
+  function show(i,scroll){
+    cur=Math.max(0,Math.min(total-1,i));
+    record(cur);
+    steps.forEach(function(s,idx){s.classList.toggle('active',idx===cur);});
+    if(hero) hero.style.display=(cur===0?'':'none');
+    fill.style.width=((cur+1)/total*100)+'%';
+    stepEl.textContent='Page '+(cur+1)+' of '+total;
+    nameEl.textContent=nameOf(steps[cur]);
+    prevBtn.disabled=(cur===0);
+    nextBtn.innerHTML=(cur===total-1)
+      ? 'Finish <i class="fa-solid fa-check"></i>'
+      : 'Next <i class="fa-solid fa-arrow-right"></i>';
+    if(scroll!==false) window.scrollTo({top:0,behavior:'smooth'});
+  }
+
+  prevBtn.addEventListener('click',function(){ if(cur>0) show(cur-1); });
+  nextBtn.addEventListener('click',function(){
+    if(cur<total-1) show(cur+1);
+    else{
+      try{localStorage.setItem(PFX+'done-operation','1');}catch(e){}
+      document.getElementById('doneModal').classList.add('show');
+    }
+  });
+
+  // keyboard navigation
+  document.addEventListener('keydown',function(e){
+    if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+    if(e.key==='ArrowRight'){ if(cur<total-1) show(cur+1); }
+    else if(e.key==='ArrowLeft'){ if(cur>0) show(cur-1); }
+  });
+
+  body.classList.add('paged');
+  show(0,false);
+})();
+</script>
+</body>
+</html>
