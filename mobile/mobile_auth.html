@@ -291,7 +291,11 @@ async function forgotPassword() {
   var email = document.getElementById('ep-email').value.trim();
   if (!email) { showStatus('Enter your email first, then click Forgot Password.', 'error'); return; }
   showStatus('Sending reset link...', 'success');
-  var { error } = await _supabase.auth.resetPasswordForEmail(email);
+  // Pin the reset link to THIS page. Without an explicit redirectTo,
+  // Supabase falls back to the project-wide Site URL (a different MJM app).
+  var { error } = await _supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + window.location.pathname
+  });
   if (error) { showStatus(error.message, 'error'); return; }
   showStatus('Reset link sent! Check your inbox.', 'success');
 }
