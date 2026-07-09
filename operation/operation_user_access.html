@@ -96,8 +96,9 @@
 
   <div id="users-list" class="card overflow-hidden"></div>
 
+  <p id="count-line" class="text-[11px] font-bold text-slate-600 text-center">—</p>
   <p class="text-[11px] text-slate-500 text-center">
-    Someone missing here? They haven't been opened for this module yet — grant them <strong>Operation</strong> access on the main portal's User Access first.
+    Someone missing here? They haven't been opened for this module yet — grant them <strong>Operation</strong> access on the main portal's <a href="../user_access.html" class="text-emerald-700 font-bold underline underline-offset-2">User Access</a> first.
   </p>
 
 </div>
@@ -182,6 +183,7 @@ const PAGE_DEFS = [
 ];
 
 let allUsers   = [];   // system users opened for this module
+let totalSystem = 0;   // ALL system users (incl. ones not opened here)
 let editingUid = null;
 let editingPerms = null; // FULL permissions object of the row being edited
 
@@ -250,6 +252,13 @@ function render() {
   list.innerHTML = filtered.length
     ? filtered.map(rowHtml).join('')
     : `<div class="text-center text-slate-400 text-sm py-12">${allUsers.length ? 'No users match your search.' : 'No users have been opened for this module yet.'}</div>`;
+  // This list is module-scoped on purpose — say so with numbers.
+  const cl = document.getElementById('count-line');
+  if (cl) {
+    const notOpened = Math.max(0, totalSystem - allUsers.length);
+    cl.textContent = `${allUsers.length} user${allUsers.length === 1 ? '' : 's'} opened for this module` +
+      (notOpened ? ` · ${notOpened} other system user${notOpened === 1 ? '' : 's'} not opened for it (manage on the main portal)` : '');
+  }
 }
 
 // ── Drawer ─────────────────────────────────────────────────────
@@ -392,14 +401,15 @@ async function bootstrap() {
   }
 
   // Only users opened for THIS module on the main portal.
-  allUsers = (data || [])
+  const systemUsers = (data || [])
     .filter(p => (p.user_type || 'system') === 'system')
     .map(p => ({ id: p.id, email: p.email, full_name: p.full_name,
-                 permissions: (p.permissions && typeof p.permissions === 'object') ? p.permissions : {} }))
-    .filter(p => {
-      const lvl = p.permissions.modules && p.permissions.modules.operation;
-      return lvl === 'admin' || lvl === 'normal';
-    });
+                 permissions: (p.permissions && typeof p.permissions === 'object') ? p.permissions : {} }));
+  totalSystem = systemUsers.length;
+  allUsers = systemUsers.filter(p => {
+    const lvl = p.permissions.modules && p.permissions.modules.operation;
+    return lvl === 'admin' || lvl === 'normal';
+  });
 
   document.getElementById('loading').classList.add('hidden');
   document.getElementById('main').classList.remove('hidden');

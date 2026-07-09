@@ -109,6 +109,7 @@
   <!-- User list -->
   <div id="users-list" class="card overflow-hidden"></div>
 
+  <p id="count-line" class="text-[11px] font-bold text-slate-600 text-center">—</p>
   <p class="text-[11px] text-slate-500 text-center">
     Customers who signed up through the Salesweb don't appear here. Use <strong>+ Add User</strong> to promote one.
   </p>
@@ -320,6 +321,14 @@ function render() {
   list.innerHTML = filtered.length
     ? filtered.map(rowHtml).join('')
     : `<div class="text-center text-slate-400 text-sm py-12">${pool.length ? 'No system users match your search.' : 'No system users yet — use “+ Add User” to promote a customer.'}</div>`;
+  // Always show the full tally so nobody wonders where users "went".
+  const cl = document.getElementById('count-line');
+  if (cl) {
+    const cust = customerProfiles().length;
+    cl.textContent = (q ? `${filtered.length} of ${pool.length}` : `${pool.length}`) +
+      ` system user${pool.length === 1 ? '' : 's'}` +
+      (cust ? ` · ${cust} customer account${cust === 1 ? '' : 's'} not shown (promote via + Add User)` : '');
+  }
 }
 
 // ── Drawer ─────────────────────────────────────────────────────
