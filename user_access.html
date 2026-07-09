@@ -46,6 +46,10 @@
   .tog input:checked + .tog-slider { background:#f43f5e; }
   .tog input:checked + .tog-slider::before { transform:translateX(22px); }
 
+  .tab-btn { padding:9px 18px; font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; border-radius:999px; border:1.5px solid #e2e8f0; background:white; color:#64748b; cursor:pointer; transition:all .15s; }
+  .tab-btn.active { background:#059669; border-color:#047857; color:white; box-shadow:0 4px 10px -2px rgba(5,150,105,.4); }
+  .tab-btn:not(.active):hover { background:#f1f5f9; }
+
   .preset-btn { padding:8px 14px; font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; border-radius:10px; border:1.5px solid #e2e8f0; background:white; color:#334155; cursor:pointer; transition:all .15s; }
   .preset-btn:hover { background:#f1f5f9; border-color:#cbd5e1; }
   .preset-admin:hover  { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
@@ -106,12 +110,18 @@
     <button id="reload-btn" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl border border-slate-200">Reload</button>
   </div>
 
+  <!-- View tabs: system users vs every account (incl. Salesweb customers) -->
+  <div class="flex gap-2 items-center">
+    <button id="tab-system" class="tab-btn active" data-view="system">System Users</button>
+    <button id="tab-all"    class="tab-btn"        data-view="all">All Accounts</button>
+  </div>
+
   <!-- User list -->
   <div id="users-list" class="card overflow-hidden"></div>
 
   <p id="count-line" class="text-[11px] font-bold text-slate-600 text-center">—</p>
   <p class="text-[11px] text-slate-500 text-center">
-    Customers who signed up through the Salesweb don't appear here. Use <strong>+ Add User</strong> to promote one.
+    Looking for someone who isn't listed? Switch to <strong>All Accounts</strong> — Salesweb customer sign-ups are there, with an <strong>Open Access</strong> button to promote them.
   </p>
 
 </div>
@@ -240,6 +250,7 @@ const LEVELS  = ['admin', 'normal', 'none'];
 const LEVEL_LABEL = { admin:'Admin', normal:'Normal', none:'None' };
 
 let allProfiles = [];          // every profile, system + customer
+let viewMode    = 'system';    // 'system' | 'all'
 let editingUid  = null;
 let pending     = null;        // working copy of permissions while drawer is open
 
@@ -294,7 +305,24 @@ function summaryHtml(perms) {
   return `<div class="flex flex-wrap gap-1.5">${chips}${noneChip}${manageChip}</div>`;
 }
 
+function customerRowHtml(p) {
+  return `
+    <div class="user-row" data-uid="${p.id}" style="background:#fafafa">
+      <div class="w-11 h-11 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 text-white flex items-center justify-center font-black text-sm shrink-0">${initials(p)}</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-black text-slate-700 text-sm leading-tight truncate">${p.full_name || '<span class="text-slate-400">(no name)</span>'}</div>
+        <div class="text-[12px] text-slate-500 font-semibold truncate">${p.email || '—'}</div>
+        <div class="mt-2"><span class="chip chip-none">Customer · no system access</span></div>
+      </div>
+      <button class="edit-btn shrink-0" style="background:linear-gradient(135deg,#64748b,#475569);box-shadow:0 6px 14px -4px rgba(71,85,105,.4)" data-action="promote" data-uid="${p.id}">
+        Open Access
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>`;
+}
+
 function rowHtml(p) {
+  if ((p.user_type || 'system') === 'customer') return customerRowHtml(p);
   return `
     <div class="user-row" data-uid="${p.id}">
       <div class="w-11 h-11 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center font-black text-sm shrink-0">${initials(p)}</div>
@@ -312,7 +340,11 @@ function rowHtml(p) {
 
 function render() {
   const q = (document.getElementById('search').value || '').toLowerCase().trim();
-  const pool = systemProfiles();
+  const sys = systemProfiles();
+  const cust = customerProfiles();
+  document.getElementById('tab-system').textContent = `System Users (${sys.length})`;
+  document.getElementById('tab-all').textContent    = `All Accounts (${sys.length + cust.length})`;
+  const pool = viewMode === 'all' ? sys.concat(cust) : sys;
   const filtered = !q ? pool
     : pool.filter(p =>
         (p.email || '').toLowerCase().includes(q) ||
@@ -324,10 +356,11 @@ function render() {
   // Always show the full tally so nobody wonders where users "went".
   const cl = document.getElementById('count-line');
   if (cl) {
-    const cust = customerProfiles().length;
-    cl.textContent = (q ? `${filtered.length} of ${pool.length}` : `${pool.length}`) +
-      ` system user${pool.length === 1 ? '' : 's'}` +
-      (cust ? ` · ${cust} customer account${cust === 1 ? '' : 's'} not shown (promote via + Add User)` : '');
+    const shown = q ? `${filtered.length} of ${pool.length} shown · ` : '';
+    cl.textContent = viewMode === 'all'
+      ? `${shown}${sys.length} system user${sys.length === 1 ? '' : 's'} + ${cust.length} customer account${cust.length === 1 ? '' : 's'}`
+      : `${shown}${sys.length} system user${sys.length === 1 ? '' : 's'}` +
+        (cust.length ? ` · ${cust.length} customer account${cust.length === 1 ? '' : 's'} in All Accounts` : '');
   }
 }
 
@@ -516,6 +549,14 @@ document.addEventListener('click', (e) => {
 
   const promote = e.target.closest('[data-action="promote"]');
   if (promote) { promoteCustomer(promote.dataset.uid); return; }
+
+  const tab = e.target.closest('.tab-btn[data-view]');
+  if (tab) {
+    viewMode = tab.dataset.view;
+    document.querySelectorAll('.tab-btn[data-view]').forEach(b => b.classList.toggle('active', b === tab));
+    render();
+    return;
+  }
 });
 
 document.addEventListener('change', (e) => {
