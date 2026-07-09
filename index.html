@@ -74,6 +74,21 @@
   .module-card:nth-child(3){animation:fadeUp .4s .3s both;}
   .module-card:nth-child(4){animation:fadeUp .4s .4s both;}
   .module-card:nth-child(5){animation:fadeUp .4s .5s both;}
+
+  /* ── Sector blocks: categorized module groups, draggable to reorder ── */
+  .sector-block{background:rgba(5,20,12,.55);border:1px solid rgba(52,211,153,.12);border-radius:26px;padding:22px 22px 26px;backdrop-filter:blur(14px);box-shadow:0 12px 30px rgba(0,0,0,.35);transition:box-shadow .2s,border-color .2s,opacity .2s;}
+  .sector-block.dragging{opacity:.45;border-color:#10b981;box-shadow:0 0 30px rgba(16,185,129,.25);}
+  .sector-block.drag-over{border-color:#34d399;box-shadow:0 0 0 2px rgba(52,211,153,.35);}
+  .sector-head{display:flex;align-items:center;gap:12px;margin-bottom:18px;cursor:grab;user-select:none;}
+  .sector-head:active{cursor:grabbing;}
+  .drag-handle{display:flex;flex-direction:column;gap:3px;padding:6px;border-radius:8px;border:1px solid rgba(52,211,153,.2);background:rgba(16,185,129,.08);}
+  .drag-handle span{display:block;width:16px;height:2px;border-radius:2px;background:rgba(52,211,153,.55);}
+  .sector-title{font-size:12px;font-weight:900;letter-spacing:.22em;text-transform:uppercase;color:#34d399;}
+  .sector-sub{font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#475569;margin-left:auto;}
+  .module-card.coming-soon{cursor:default;opacity:.55;}
+  .module-card.coming-soon:hover{transform:none;border-color:rgba(52,211,153,.15);box-shadow:none;}
+  .module-card.coming-soon:hover::before{opacity:0;}
+  .soon-badge{position:absolute;top:12px;right:12px;z-index:2;font-size:8px;font-weight:900;letter-spacing:.14em;color:#0b1220;background:#f59e0b;border-radius:99px;padding:3px 8px;}
   .glow-line{height:1px;background:linear-gradient(90deg,transparent,rgba(52,211,153,.4),transparent);}
   .user-chip{display:inline-flex;align-items:center;gap:8px;background:rgba(16,185,129,.1);border:1px solid rgba(52,211,153,.25);border-radius:999px;padding:7px 16px;font-size:11px;font-weight:700;color:#6ee7b7;letter-spacing:.04em;}
   .user-dot{width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 6px #10b981;animation:pulseGlow 2s infinite;flex-shrink:0;}
@@ -174,8 +189,17 @@
     <p class="text-[11px] font-black text-emerald-500 uppercase tracking-[.25em] mb-8 text-center" style="margin-top:8px;">Select a module to continue</p>
     <div class="glow-line w-56 mb-10 mx-auto"></div>
 
-    <!-- 4 Module cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 w-full max-w-2xl">
+    <!-- Sector blocks (draggable to reorder; order saved per browser) -->
+    <div id="sector-list" class="flex flex-col gap-6 w-full max-w-4xl">
+
+      <!-- ── NURSERY SECTOR ── -->
+      <div class="sector-block" data-sector="nursery" draggable="true">
+        <div class="sector-head" title="Drag to reorder sectors">
+          <div class="drag-handle"><span></span><span></span><span></span></div>
+          <div class="sector-title">🌱 Nursery Sector</div>
+          <div class="sector-sub">drag to reorder</div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
 
       <a class="module-card" data-module="operation" href="operation/operation_dashboard.html"
          style="--accent:#10b981;--glow:rgba(16,185,129,.25);--glow-strong:rgba(16,185,129,.35);--icon-bg:rgba(16,185,129,.12);">
@@ -188,9 +212,25 @@
             <circle cx="17" cy="27" r="1.5" fill="#10b981"/>
           </svg>
         </div>
-        <div class="module-name">Nursery<br>Operations</div>
+        <div class="module-name">Nursery Seedling<br>Stock Management</div>
         <div class="module-tag">operation_</div>
       </a>
+
+      <div class="module-card coming-soon"
+         style="--accent:#14b8a6;--glow:rgba(20,184,166,.25);--glow-strong:rgba(20,184,166,.35);--icon-bg:rgba(20,184,166,.12);">
+        <div class="soon-badge">SOON</div>
+        <div class="card-corner card-tl"></div><div class="card-corner card-tr"></div>
+        <div class="card-corner card-bl"></div><div class="card-corner card-br"></div>
+        <div class="module-icon-wrap">
+          <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
+            <path d="M6 12l11-6 11 6-11 6-11-6z" fill="rgba(20,184,166,.18)" stroke="#14b8a6" stroke-width="1.5" stroke-linejoin="round"/>
+            <path d="M6 12v10l11 6 11-6V12" stroke="#14b8a6" stroke-width="1.5" stroke-linejoin="round"/>
+            <path d="M17 18v10" stroke="#2dd4bf" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="module-name">Nursery Operation<br>Stock Management</div>
+        <div class="module-tag">nstock_</div>
+      </div>
 
       <a class="module-card" data-module="salesweb" href="https://www.mjmnursery.com/admin.html" target="_blank" rel="noopener"
          style="--accent:#f59e0b;--glow:rgba(245,158,11,.25);--glow-strong:rgba(245,158,11,.35);--icon-bg:rgba(245,158,11,.12);">
@@ -220,9 +260,21 @@
             <path d="M21.5 25l1.2 1.3L25 23" stroke="#f97316" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
-        <div class="module-name">Field<br>Audit</div>
+        <div class="module-name">Nursery<br>Audit</div>
         <div class="module-tag">audit_</div>
       </a>
+
+        </div>
+      </div>
+
+      <!-- ── MJM SECTOR ── -->
+      <div class="sector-block" data-sector="mjm" draggable="true">
+        <div class="sector-head" title="Drag to reorder sectors">
+          <div class="drag-handle"><span></span><span></span><span></span></div>
+          <div class="sector-title">🏢 MJM Sector</div>
+          <div class="sector-sub">drag to reorder</div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
 
       <a class="module-card" data-module="training" href="training/index.html"
          style="--accent:#38bdf8;--glow:rgba(56,189,248,.25);--glow-strong:rgba(56,189,248,.35);--icon-bg:rgba(56,189,248,.12);">
@@ -256,6 +308,9 @@
         <div class="module-name">User<br>Access</div>
         <div class="module-tag">admin_</div>
       </a>
+
+        </div>
+      </div>
 
     </div>
 
@@ -534,6 +589,67 @@
       showHub();
     }
   });
+</script>
+<script>
+  // ── Draggable sector blocks: reorder by dragging the sector header; the
+  //    order is remembered per browser (localStorage). Touch fallback:
+  //    tapping the drag handle moves the sector up one position (HTML5
+  //    drag & drop is mouse-only).
+  (function () {
+    const LIST = document.getElementById('sector-list');
+    if (!LIST) return;
+    const KEY = 'mjm_sector_order_v1';
+
+    // Restore saved order.
+    try {
+      const saved = JSON.parse(localStorage.getItem(KEY) || '[]');
+      saved.forEach((id) => {
+        const el = LIST.querySelector(`.sector-block[data-sector="${id}"]`);
+        if (el) LIST.appendChild(el);
+      });
+    } catch (e) { /* ignore corrupt state */ }
+
+    function saveOrder() {
+      const order = [...LIST.querySelectorAll('.sector-block')].map((b) => b.dataset.sector);
+      try { localStorage.setItem(KEY, JSON.stringify(order)); } catch (e) { /* ignore */ }
+    }
+
+    let dragged = null;
+    LIST.querySelectorAll('.sector-block').forEach((block) => {
+      block.addEventListener('dragstart', (e) => {
+        dragged = block;
+        block.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', block.dataset.sector); } catch (err) {}
+      });
+      block.addEventListener('dragend', () => {
+        block.classList.remove('dragging');
+        LIST.querySelectorAll('.sector-block').forEach((b) => b.classList.remove('drag-over'));
+        dragged = null;
+        saveOrder();
+      });
+      block.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (!dragged || dragged === block) return;
+        block.classList.add('drag-over');
+        const rect = block.getBoundingClientRect();
+        const before = e.clientY < rect.top + rect.height / 2;
+        LIST.insertBefore(dragged, before ? block : block.nextSibling);
+      });
+      block.addEventListener('dragleave', () => block.classList.remove('drag-over'));
+      block.addEventListener('drop', (e) => { e.preventDefault(); block.classList.remove('drag-over'); });
+
+      // Cards inside are links — don't let them hijack the drag.
+      block.querySelectorAll('.module-card').forEach((c) => c.setAttribute('draggable', 'false'));
+
+      // Touch fallback: tap the handle to move the sector up one slot.
+      const handle = block.querySelector('.drag-handle');
+      if (handle) handle.addEventListener('click', () => {
+        const prev = block.previousElementSibling;
+        if (prev) { LIST.insertBefore(block, prev); saveOrder(); }
+      });
+    });
+  })();
 </script>
 </body>
 </html>
