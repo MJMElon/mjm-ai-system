@@ -89,6 +89,8 @@
   .module-card.coming-soon:hover{transform:none;border-color:rgba(52,211,153,.15);box-shadow:none;}
   .module-card.coming-soon:hover::before{opacity:0;}
   .soon-badge{position:absolute;top:12px;right:12px;z-index:2;font-size:8px;font-weight:900;letter-spacing:.14em;color:#0b1220;background:#f59e0b;border-radius:99px;padding:3px 8px;}
+  .module-card.card-dragging{opacity:.4;border-color:#34d399;box-shadow:0 0 24px rgba(52,211,153,.35);}
+  .module-card.card-drag-over{border-color:#34d399;box-shadow:0 0 0 2px rgba(52,211,153,.4);}
   .glow-line{height:1px;background:linear-gradient(90deg,transparent,rgba(52,211,153,.4),transparent);}
   .user-chip{display:inline-flex;align-items:center;gap:8px;background:rgba(16,185,129,.1);border:1px solid rgba(52,211,153,.25);border-radius:999px;padding:7px 16px;font-size:11px;font-weight:700;color:#6ee7b7;letter-spacing:.04em;}
   .user-dot{width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 6px #10b981;animation:pulseGlow 2s infinite;flex-shrink:0;}
@@ -201,7 +203,7 @@
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
 
-      <a class="module-card" data-module="operation" href="operation/operation_dashboard.html"
+      <a class="module-card" data-card="operation" data-module="operation" href="operation/operation_dashboard.html"
          style="--accent:#10b981;--glow:rgba(16,185,129,.25);--glow-strong:rgba(16,185,129,.35);--icon-bg:rgba(16,185,129,.12);">
         <div class="card-corner card-tl"></div><div class="card-corner card-tr"></div>
         <div class="card-corner card-bl"></div><div class="card-corner card-br"></div>
@@ -216,7 +218,7 @@
         <div class="module-tag">operation_</div>
       </a>
 
-      <div class="module-card coming-soon"
+      <div class="module-card coming-soon" data-card="nstock"
          style="--accent:#14b8a6;--glow:rgba(20,184,166,.25);--glow-strong:rgba(20,184,166,.35);--icon-bg:rgba(20,184,166,.12);">
         <div class="soon-badge">SOON</div>
         <div class="card-corner card-tl"></div><div class="card-corner card-tr"></div>
@@ -232,7 +234,7 @@
         <div class="module-tag">nstock_</div>
       </div>
 
-      <a class="module-card" data-module="salesweb" href="https://www.mjmnursery.com/admin.html" target="_blank" rel="noopener"
+      <a class="module-card" data-card="salesweb" data-module="salesweb" href="https://www.mjmnursery.com/admin.html" target="_blank" rel="noopener"
          style="--accent:#f59e0b;--glow:rgba(245,158,11,.25);--glow-strong:rgba(245,158,11,.35);--icon-bg:rgba(245,158,11,.12);">
         <div class="card-corner card-tl"></div><div class="card-corner card-tr"></div>
         <div class="card-corner card-bl"></div><div class="card-corner card-br"></div>
@@ -248,7 +250,7 @@
         <div class="module-tag">salesweb_</div>
       </a>
 
-      <a class="module-card" data-module="audit" href="audit/audit_home.html" onclick="sessionStorage.setItem('mjm_portal_entry','1')"
+      <a class="module-card" data-card="audit" data-module="audit" href="audit/audit_home.html" onclick="sessionStorage.setItem('mjm_portal_entry','1')"
          style="--accent:#f97316;--glow:rgba(249,115,22,.25);--glow-strong:rgba(249,115,22,.35);--icon-bg:rgba(249,115,22,.12);">
         <div class="card-corner card-tl"></div><div class="card-corner card-tr"></div>
         <div class="card-corner card-bl"></div><div class="card-corner card-br"></div>
@@ -276,7 +278,7 @@
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
 
-      <a class="module-card" data-module="training" href="training/index.html"
+      <a class="module-card" data-card="training" data-module="training" href="training/index.html"
          style="--accent:#38bdf8;--glow:rgba(56,189,248,.25);--glow-strong:rgba(56,189,248,.35);--icon-bg:rgba(56,189,248,.12);">
         <div class="card-corner card-tl"></div><div class="card-corner card-tr"></div>
         <div class="card-corner card-bl"></div><div class="card-corner card-br"></div>
@@ -294,7 +296,7 @@
 
       <!-- Main user access management — visible only to Manage Users admins.
            Controls which module cards each email sees on this page. -->
-      <a class="module-card" id="hub-user-access" href="user_access.html" style="display:none;--accent:#f43f5e;--glow:rgba(244,63,94,.25);--glow-strong:rgba(244,63,94,.35);--icon-bg:rgba(244,63,94,.12);">
+      <a class="module-card" data-card="useraccess" id="hub-user-access" href="user_access.html" style="display:none;--accent:#f43f5e;--glow:rgba(244,63,94,.25);--glow-strong:rgba(244,63,94,.35);--icon-bg:rgba(244,63,94,.12);">
         <div class="card-corner card-tl"></div><div class="card-corner card-tr"></div>
         <div class="card-corner card-bl"></div><div class="card-corner card-br"></div>
         <div class="module-icon-wrap">
@@ -639,15 +641,74 @@
       block.addEventListener('dragleave', () => block.classList.remove('drag-over'));
       block.addEventListener('drop', (e) => { e.preventDefault(); block.classList.remove('drag-over'); });
 
-      // Cards inside are links — don't let them hijack the drag.
-      block.querySelectorAll('.module-card').forEach((c) => c.setAttribute('draggable', 'false'));
-
       // Touch fallback: tap the handle to move the sector up one slot.
       const handle = block.querySelector('.drag-handle');
       if (handle) handle.addEventListener('click', () => {
         const prev = block.previousElementSibling;
         if (prev) { LIST.insertBefore(block, prev); saveOrder(); }
       });
+    });
+
+    // ── Card-level drag: reorder module cards WITHIN their sector to the
+    //    user's preferred sequence. Saved per browser, per sector.
+    const CARD_KEY = 'mjm_card_order_v1';
+    const grids = {};
+    LIST.querySelectorAll('.sector-block').forEach((b) => {
+      const g = b.querySelector('.grid');
+      if (g) grids[b.dataset.sector] = g;
+    });
+
+    // Restore saved card order inside each sector.
+    try {
+      const savedCards = JSON.parse(localStorage.getItem(CARD_KEY) || '{}');
+      Object.entries(savedCards).forEach(([sector, keys]) => {
+        const grid = grids[sector];
+        if (!grid || !Array.isArray(keys)) return;
+        keys.forEach((k) => {
+          const card = grid.querySelector(`.module-card[data-card="${k}"]`);
+          if (card) grid.appendChild(card);
+        });
+      });
+    } catch (e) { /* ignore corrupt state */ }
+
+    function saveCardOrder() {
+      const out = {};
+      Object.entries(grids).forEach(([sector, grid]) => {
+        out[sector] = [...grid.querySelectorAll('.module-card[data-card]')].map((c) => c.dataset.card);
+      });
+      try { localStorage.setItem(CARD_KEY, JSON.stringify(out)); } catch (e) { /* ignore */ }
+    }
+
+    let draggedCard = null;
+    LIST.querySelectorAll('.module-card[data-card]').forEach((card) => {
+      card.setAttribute('draggable', 'true');
+      card.addEventListener('dragstart', (e) => {
+        e.stopPropagation(); // don't start a sector drag underneath
+        draggedCard = card;
+        card.classList.add('card-dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', 'card:' + card.dataset.card); } catch (err) {}
+      });
+      card.addEventListener('dragend', () => {
+        card.classList.remove('card-dragging');
+        LIST.querySelectorAll('.module-card').forEach((c) => c.classList.remove('card-drag-over'));
+        draggedCard = null;
+        saveCardOrder();
+      });
+      card.addEventListener('dragover', (e) => {
+        if (!draggedCard || draggedCard === card) return;
+        if (draggedCard.parentElement !== card.parentElement) return; // same sector only
+        e.preventDefault();
+        e.stopPropagation();
+        card.classList.add('card-drag-over');
+        const r = card.getBoundingClientRect();
+        // Left half → insert before; right half → after. Works row by row
+        // in the grid; dragging across rows uses the hovered card's side.
+        const before = e.clientX < r.left + r.width / 2;
+        card.parentElement.insertBefore(draggedCard, before ? card : card.nextSibling);
+      });
+      card.addEventListener('dragleave', () => card.classList.remove('card-drag-over'));
+      card.addEventListener('drop', (e) => { e.preventDefault(); card.classList.remove('card-drag-over'); });
     });
   })();
 </script>

@@ -7187,6 +7187,12 @@ Thank you.`;
           window.location.href = 'operation_dashboard.html';
           return;
         }
+        // Page-level lock (batch pages), set in the module's User Access.
+        if (!MJMAccess.canOpenOperationPage('batch')) {
+          alert('You do not have access to Batch Records.');
+          window.location.href = 'operation_dashboard.html';
+          return;
+        }
         isAdmin    = MJMAccess.isAdminOf('operation');
         isVerifier = typeof MJMAccess.canVerifyOperation === 'function' && MJMAccess.canVerifyOperation();
 

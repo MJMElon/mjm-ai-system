@@ -1,0 +1,27 @@
+{
+  "name": "mjm-ai-system",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "MJM AI System — operations hub (React + Vite + Supabase)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check:urls": "bash scripts/check_urls.sh"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "dexie": "^3.2.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "esbuild": "^0.21.0",
+    "postcss": "^8.4.40",
+    "tailwindcss": "^3.4.7",
+    "vite": "^5.4.0"
+  }
+}
