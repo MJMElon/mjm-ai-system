@@ -132,7 +132,11 @@
         </div>
         <div class="flex items-center gap-4">
             <span id="welcome-text" class="text-xs font-bold text-slate-400 hidden md:block"></span>
-            <a href="../index.html" class="text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 px-4 py-2 rounded-full border border-slate-200 cursor-pointer transition-colors no-underline" style="text-decoration:none;">&#8592; Portal</a>
+            <!-- Portal link: force a real navigation via JS (window.location.replace)
+                 so bfcache can't restore this same dashboard page as if the user
+                 never left. The href stays as a fallback for middle-click / open-
+                 in-new-tab. -->
+            <a href="../index.html" onclick="event.preventDefault(); window.location.replace('../index.html');" class="text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 px-4 py-2 rounded-full border border-slate-200 cursor-pointer transition-colors no-underline" style="text-decoration:none;">&#8592; Portal</a>
             <button id="logout-btn" onclick="handleLogout()" class="text-[10px] font-bold text-slate-500 hover:text-red-500 uppercase tracking-widest bg-slate-50 px-4 py-2 rounded-full border border-slate-200 cursor-pointer transition-colors">Sign Out</button>
         </div>
     </div>
@@ -245,10 +249,16 @@
         const btn = document.getElementById('logout-btn');
         if (btn) { btn.innerText = 'Signing Out…'; btn.disabled = true; }
 
-        // Clear session from localStorage first so nothing lingers
-        Object.keys(localStorage).forEach(k => {
-            if (k.startsWith('sb-')) localStorage.removeItem(k);
-        });
+        // Clear the auth token from every persistence layer supabase-js uses
+        // so nothing rehydrates a stale session on the next page.
+        try {
+            Object.keys(localStorage).forEach(k => {
+                if (k.startsWith('sb-')) localStorage.removeItem(k);
+            });
+            Object.keys(sessionStorage).forEach(k => {
+                if (k.startsWith('sb-') || k === 'mjm_session_active') sessionStorage.removeItem(k);
+            });
+        } catch(e) { /* ignore */ }
 
         // Race signOut against a 1.5s timeout — Supabase's navigator-lock
         // can stall behind in-flight dashboard queries and hang the UI.
@@ -259,8 +269,13 @@
             ]);
         } catch(e) { /* ignore */ }
 
-        // Hard reload guarantees a clean state regardless of pending queries.
-        window.location.replace(window.location.pathname);
+        // Navigate to the portal (a DIFFERENT page) instead of reloading
+        // this dashboard. Reloading kept the same tab context — same
+        // navigator-lock mutex Supabase's auth uses — which stalled the
+        // next sign-in attempt on the reloaded dashboard until the whole
+        // tab was closed. Going to ../index.html gets a fresh page +
+        // fresh lock context and lets the user log back in immediately.
+        window.location.replace('../index.html');
     };
 
     // ── Reset auth form to Login state ───────────────────────────────────────
