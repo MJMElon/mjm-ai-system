@@ -17,7 +17,7 @@ export default defineConfig({
     outDir: 'dist',
     rollupOptions: {
       input: {
-        dev: resolve(__dirname, 'dev.html'),
+        col_booking: resolve(__dirname, 'col_booking/col_booking.html'),
       },
     },
   },
