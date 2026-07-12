@@ -6931,6 +6931,7 @@ Thank you.`;
       const reviews       = {}; // stage → { reviewed_by, reviewer_name, reviewer_email, reviewed_at }
       const verifications = {}; // stage → { verified_by, verifier_name, verifier_email, verified_at }
       const rejections    = {}; // stage → { id, remark, created_at, last_edited_by } — HQ reject-with-remark rows
+      const lastEdits     = {}; // tabIdx → { ts, by } — latest report save per tab (detects post-rejection amendment)
       let booted     = false;
       let isAdmin    = false;
       let isVerifier = false;
@@ -7031,10 +7032,33 @@ Thank you.`;
             ? `<button class="mjm-review-btn mjm-review-btn-reject mjm-review-allow"
                        onclick="MJMReview.reject(${tabIdx})">Edit Remark</button>`
             : '';
+          const rejectAgainBtn = isAdmin
+            ? `<button class="mjm-review-btn mjm-review-btn-reject mjm-review-allow"
+                       onclick="MJMReview.reject(${tabIdx})">Reject</button>`
+            : '';
           const clearBtn = isAdmin
             ? `<button class="mjm-review-btn mjm-review-btn-clearrej mjm-review-allow"
                        onclick="MJMReview.clearRejection(${tabIdx})">Clear Rejection</button>`
             : '';
+
+          // Amended? The tab was saved AFTER the rejection was raised — show
+          // who amended it and surface Verify / Reject for the next decision.
+          const le = lastEdits[tabIdx];
+          const amended = le && le.ts && rej.created_at && new Date(le.ts) > new Date(rej.created_at);
+          if (amended) {
+            const whoAmd = le.by || 'an admin';
+            banner.innerHTML = `
+              <div class="flex-1">
+                <div class="mjm-review-meta">✏️ Amended — Awaiting Re-Verification</div>
+                <div class="mt-1">Rejected by <strong>${whoRej}</strong> on <strong>${fmtDate(rej.created_at)}</strong>. <strong>Amended by ${whoAmd}</strong> on <strong>${fmtDate(le.ts)}</strong> — verify the correction, or reject again.</div>
+                <div class="mjm-reject-remark">${(rej.remark || '').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>
+              </div>
+              <div class="mjm-review-btn-row">${verifyBtn}${rejectAgainBtn}${clearBtn}</div>
+            `;
+            tab.classList.remove('mjm-locked');
+            return;
+          }
+
           banner.innerHTML = `
             <div class="flex-1">
               <div class="mjm-review-meta">❌ Rejected — Amendment Required</div>
@@ -7109,9 +7133,10 @@ Thank you.`;
         for (const k of Object.keys(reviews))       delete reviews[k];
         for (const k of Object.keys(verifications)) delete verifications[k];
         for (const k of Object.keys(rejections))    delete rejections[k];
+        for (const k of Object.keys(lastEdits))     delete lastEdits[k];
         if (batch) {
           try {
-            const [revRes, verRes, rejRes] = await Promise.all([
+            const [revRes, verRes, rejRes, editRes] = await Promise.all([
               _supabase
                 .from('operation_batch_reviews')
                 .select('stage, reviewer_name, reviewer_email, reviewed_at')
@@ -7128,7 +7153,20 @@ Thank you.`;
                 .select('*')
                 .eq('batch_name', batch)
                 .eq('transaction_type', 'Review_Rejection')
-                .order('created_at', { ascending: true })
+                .order('created_at', { ascending: true }),
+              // Per-tab latest save time — detects a post-rejection amendment.
+              // Falls back to created_at-only if the edit-meta columns are absent.
+              (async () => {
+                let r = await _supabase.from('shared_inventory_logs')
+                  .select('transaction_type, created_at, last_edited_at, last_edited_by')
+                  .eq('batch_name', batch);
+                if (r.error && typeof isEditMetaColumnError === 'function' && isEditMetaColumnError(r.error)) {
+                  r = await _supabase.from('shared_inventory_logs')
+                    .select('transaction_type, created_at')
+                    .eq('batch_name', batch);
+                }
+                return r;
+              })()
             ]);
             if (revRes.error) throw revRes.error;
             (revRes.data || []).forEach(r => { reviews[r.stage] = r; });
@@ -7141,6 +7179,19 @@ Thank you.`;
               (rejRes.data || []).forEach(x => { rejections[x.plot_name] = x; }); // newest wins
             } else {
               console.warn('[MJMReview] rejections unavailable:', rejRes.error.message);
+            }
+            if (!editRes.error && typeof TAB_TXN_TYPES !== 'undefined') {
+              (editRes.data || []).forEach(row => {
+                const ts = row.last_edited_at || row.created_at;
+                if (!ts) return;
+                for (const [idx, types] of Object.entries(TAB_TXN_TYPES)) {
+                  if (!types.includes(row.transaction_type)) continue;
+                  const cur = lastEdits[idx];
+                  if (!cur || new Date(ts) > new Date(cur.ts)) {
+                    lastEdits[idx] = { ts, by: row.last_edited_by || null };
+                  }
+                }
+              });
             }
           } catch (e) {
             console.warn('[MJMReview] failed to load reviews:', e);
@@ -7361,6 +7412,21 @@ Thank you.`;
           window.switchTab = function (idx) {
             const r = _origSwitchTab.apply(this, arguments);
             try { renderBanner(idx); } catch (e) { /* ignore */ }
+            return r;
+          };
+        }
+
+        // Every successful tab save calls setEditMetaUI — piggyback on it so a
+        // post-rejection amendment flips the banner to "Amended" immediately,
+        // without waiting for a reload.
+        const _origSetEditMetaUI = window.setEditMetaUI;
+        if (typeof _origSetEditMetaUI === 'function') {
+          window.setEditMetaUI = function (tabIdx, dateLike, email) {
+            const r = _origSetEditMetaUI.apply(this, arguments);
+            try {
+              lastEdits[tabIdx] = { ts: dateLike || new Date().toISOString(), by: email || null };
+              renderBanner(tabIdx);
+            } catch (e) { /* ignore */ }
             return r;
           };
         }
