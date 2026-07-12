@@ -256,25 +256,14 @@
                 const transplantCountMap = countByBatch(transplantRes);
                 const cull3CountMap      = countByBatch(cull3Res);
 
-                // ── Completion rule ─────────────────────────────────────────
-                // Current batches (>= 263, where the new numbering started):
-                // Completed ONLY when EVERY transplanted plot+destination
-                // (main / premium / d-tone — matching how Tab 6 builds its
-                // rows) has its own saved 3rd_Culling record. Filling the 2nd
-                // culling report does NOT complete a batch; partially-filled
-                // 3rd culling keeps it in the Active list.
-                //
-                // Historical batches (< 263, incl. old MJM-YYYY-NNN names):
-                // their data predates DestType stamps and strict plot
-                // bookkeeping, so they keep the original row-count rule
-                // (3rd-culling rows >= transplant rows) and classify exactly
-                // as they always did.
-                const LEGACY_CUTOFF = 263;
-                const _isLegacyBatch = (name) => {
-                    const m = String(name || '').match(/(\d+)\s*$/);
-                    if (!m) return true;
-                    return parseInt(m[1], 10) < LEGACY_CUTOFF;
-                };
+                // ── Completion rule (ALL batches) ───────────────────────────
+                // A batch is Completed ONLY when EVERY transplanted
+                // plot+destination (main / premium / d-tone — matching how
+                // Tab 6 builds its rows) has its own saved 3rd_Culling
+                // record. Filling the 2nd culling report does NOT complete a
+                // batch; a partially-filled 3rd culling report keeps it in
+                // the Active list. Old 3rd-culling rows without a DestType
+                // stamp each cover one slot for their plot.
                 const _normPlot   = p => String(p || '').trim().toUpperCase();
                 const _destOfType = t => t === 'Transplanted_DoubleTone' ? 'doubletone'
                                        : t === 'Transplanted_Premium'    ? 'premium' : 'main';
@@ -306,16 +295,8 @@
                 });
 
                 const completedBatchNames = new Set();
-                const _allTransplanted = new Set([...Object.keys(transplantCountMap), ...Object.keys(expectedPlots)]);
-                _allTransplanted.forEach(batch => {
-                    if (_isLegacyBatch(batch)) {
-                        // Historical batches: the original row-count rule, verbatim.
-                        const expected = transplantCountMap[batch] || 0;
-                        const actual   = cull3CountMap[batch] || 0;
-                        if (expected > 0 && actual >= expected) completedBatchNames.add(batch);
-                        return;
-                    }
-                    // Current batches: every plot+destination must be covered.
+                Object.keys(expectedPlots).forEach(batch => {
+                    // Every plot+destination must be covered — no exceptions.
                     const need = expectedPlots[batch];
                     if (!need || !need.size) return;
                     const keyed  = cull3Keyed[batch] || new Set();
