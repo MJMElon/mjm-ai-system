@@ -229,8 +229,8 @@
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', 'Damaged_Seeds').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '1st_Culling').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '2nd_Culling').order('id', { ascending: true })),
-                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '3rd_Culling').order('id', { ascending: true })),
-                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name').in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']).order('id', { ascending: true }))
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change, plot_name, remark').eq('transaction_type', '3rd_Culling').order('id', { ascending: true })),
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, plot_name, transaction_type').in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']).order('id', { ascending: true }))
                 ]);
                 if (recRes.error) throw recRes.error;
 
@@ -256,16 +256,79 @@
                 const transplantCountMap = countByBatch(transplantRes);
                 const cull3CountMap      = countByBatch(cull3Res);
 
-                // A batch is completed only when EVERY transplant plot for that
-                // batch has a corresponding 3rd_Culling row saved. Partial
-                // entries (some plots keyed in, some blank) keep the batch in
-                // the Active list — moving it to Completed would hide
-                // unfinished work.
+                // ── Completion rule ─────────────────────────────────────────
+                // Current batches (>= 263, where the new numbering started):
+                // Completed ONLY when EVERY transplanted plot+destination
+                // (main / premium / d-tone — matching how Tab 6 builds its
+                // rows) has its own saved 3rd_Culling record. Filling the 2nd
+                // culling report does NOT complete a batch; partially-filled
+                // 3rd culling keeps it in the Active list.
+                //
+                // Historical batches (< 263, incl. old MJM-YYYY-NNN names):
+                // their data predates DestType stamps and strict plot
+                // bookkeeping, so they keep the original row-count rule
+                // (3rd-culling rows >= transplant rows) and classify exactly
+                // as they always did.
+                const LEGACY_CUTOFF = 263;
+                const _isLegacyBatch = (name) => {
+                    const m = String(name || '').match(/(\d+)\s*$/);
+                    if (!m) return true;
+                    return parseInt(m[1], 10) < LEGACY_CUTOFF;
+                };
+                const _normPlot   = p => String(p || '').trim().toUpperCase();
+                const _destOfType = t => t === 'Transplanted_DoubleTone' ? 'doubletone'
+                                       : t === 'Transplanted_Premium'    ? 'premium' : 'main';
+
+                // Expected coverage: batch → Set of "PLOT|dest" from transplant logs.
+                const expectedPlots = {};
+                (transplantRes.data || []).forEach(r => {
+                    const p = _normPlot(r.plot_name);
+                    if (!p || !r.batch_name) return;
+                    (expectedPlots[r.batch_name] = expectedPlots[r.batch_name] || new Set())
+                        .add(p + '|' + _destOfType(r.transaction_type));
+                });
+
+                // Actual coverage from 3rd_Culling rows. DestType-stamped rows
+                // match exactly; legacy rows (no DestType in remark) each
+                // cover one expected slot for their plot.
+                const cull3Keyed  = {}; // batch → Set("PLOT|dest")
+                const cull3Legacy = {}; // batch → Map(PLOT → row count)
+                (cull3Res.data || []).forEach(r => {
+                    if (!r.batch_name) return;
+                    const p = _normPlot(r.plot_name);
+                    const m = r.remark ? r.remark.match(/DestType:\s*(main|premium|doubletone)/) : null;
+                    if (m) {
+                        (cull3Keyed[r.batch_name] = cull3Keyed[r.batch_name] || new Set()).add(p + '|' + m[1]);
+                    } else {
+                        const map = (cull3Legacy[r.batch_name] = cull3Legacy[r.batch_name] || new Map());
+                        map.set(p, (map.get(p) || 0) + 1);
+                    }
+                });
+
                 const completedBatchNames = new Set();
-                Object.keys(transplantCountMap).forEach(batch => {
-                    const expected = transplantCountMap[batch];
-                    const actual   = cull3CountMap[batch] || 0;
-                    if (expected > 0 && actual >= expected) completedBatchNames.add(batch);
+                const _allTransplanted = new Set([...Object.keys(transplantCountMap), ...Object.keys(expectedPlots)]);
+                _allTransplanted.forEach(batch => {
+                    if (_isLegacyBatch(batch)) {
+                        // Historical batches: the original row-count rule, verbatim.
+                        const expected = transplantCountMap[batch] || 0;
+                        const actual   = cull3CountMap[batch] || 0;
+                        if (expected > 0 && actual >= expected) completedBatchNames.add(batch);
+                        return;
+                    }
+                    // Current batches: every plot+destination must be covered.
+                    const need = expectedPlots[batch];
+                    if (!need || !need.size) return;
+                    const keyed  = cull3Keyed[batch] || new Set();
+                    const legacy = new Map(cull3Legacy[batch] || []);
+                    let allCovered = true;
+                    for (const key of need) {
+                        if (keyed.has(key)) continue;
+                        const plot = key.split('|')[0];
+                        const n = legacy.get(plot) || 0;
+                        if (n > 0) { legacy.set(plot, n - 1); continue; }
+                        allCovered = false; break;
+                    }
+                    if (allCovered) completedBatchNames.add(batch);
                 });
                 // A batch is in Main Nursery once any transplant log has been written.
                 const transplantedBatchNames = new Set((transplantRes.data || []).map(r => r.batch_name));
