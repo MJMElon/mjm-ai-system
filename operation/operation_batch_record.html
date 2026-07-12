@@ -198,20 +198,39 @@
             return true;
         }
 
+        // Supabase returns AT MOST 1000 rows per request — silently. Once a
+        // transaction type grows past that, single-shot queries drop rows and
+        // the oldest batches vanish from this list even though their records
+        // are still in the database. Fetch in 1000-row pages until exhausted
+        // so the ledger always sees the complete data set. A deterministic
+        // .order() inside the builder is required for stable paging.
+        async function fetchAllRows(buildQuery) {
+            const PAGE = 1000;
+            let all = [];
+            for (let from = 0; ; from += PAGE) {
+                const { data, error } = await buildQuery().range(from, from + PAGE - 1);
+                if (error) return { data: all, error };
+                all = all.concat(data || []);
+                if (!data || data.length < PAGE) break;
+            }
+            return { data: all, error: null };
+        }
+
         async function initLedger() {
             try {
                 // Fetch reception logs + every culling-related log type + transplant logs in parallel.
                 const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes] = await Promise.all([
-                    _supabase.from('shared_inventory_logs')
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs')
                         .select('*')
                         .eq('transaction_type', 'Seeds_Received')
-                        .order('created_at', { ascending: false }),
-                    _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', 'Planted'),
-                    _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', 'Damaged_Seeds'),
-                    _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '1st_Culling'),
-                    _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '2nd_Culling'),
-                    _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '3rd_Culling'),
-                    _supabase.from('shared_inventory_logs').select('batch_name').in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone'])
+                        .order('created_at', { ascending: false })
+                        .order('id', { ascending: true })),
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', 'Planted').order('id', { ascending: true })),
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', 'Damaged_Seeds').order('id', { ascending: true })),
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '1st_Culling').order('id', { ascending: true })),
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '2nd_Culling').order('id', { ascending: true })),
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '3rd_Culling').order('id', { ascending: true })),
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name').in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']).order('id', { ascending: true }))
                 ]);
                 if (recRes.error) throw recRes.error;
 
