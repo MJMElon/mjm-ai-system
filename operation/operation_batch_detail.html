@@ -129,7 +129,7 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        .stage-tab-btn { padding: 14px 24px; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; cursor: pointer; transition: all 0.2s; border-bottom: 3px solid transparent; display: flex; align-items: center; gap: 8px; }
+        .stage-tab-btn { padding: 12px 14px; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; cursor: pointer; transition: all 0.2s; border-bottom: 3px solid transparent; display: flex; align-items: center; gap: 7px; }
         .stage-tab-active { color: #4a7a2e; border-bottom-color: #6aa83c; background-color: #fdfaf4; border-radius: 16px 16px 0 0; }
         .stage-tab-inactive { color: #8a7a68; }
         .stage-tab-inactive:hover { color: #3d2610; background-color: rgba(253, 250, 244, 0.5); border-radius: 16px 16px 0 0; }
@@ -166,6 +166,12 @@
         .mjm-review-open    { background:#fff8eb; border:1.5px dashed #c07820; color:#7a4a10; }
         .mjm-review-verified{ background:#eff6ff; border:1.5px solid #bfdbfe; color:#1e3a8a; }
         .mjm-review-locked  { background:#ecfdf5; border:1.5px solid #a7f3d0; color:#065f46; }
+        .mjm-review-rejected{ background:#fff5f5; border:1.5px solid #fca5a5; color:#991b1b; }
+        .mjm-review-btn-reject { background:#dc2626; color:white; box-shadow:0 6px 14px -4px rgba(220,38,38,.4); }
+        .mjm-review-btn-reject:hover { transform:translateY(-1px); }
+        .mjm-review-btn-clearrej { background:white; color:#991b1b; border:1.5px solid #fca5a5; }
+        .mjm-review-btn-clearrej:hover { background:#fff5f5; }
+        .mjm-reject-remark { margin-top:6px; padding:10px 12px; background:white; border:1px solid #fca5a5; border-radius:10px; font-weight:600; color:#7f1d1d; white-space:pre-wrap; }
         .mjm-review-meta    { font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.12em; opacity:.85; }
         .mjm-review-btn     { font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.15em; padding:8px 16px; border-radius:999px; cursor:pointer; border:none; transition:all .15s; }
         .mjm-review-btn-mark   { background:#10b981; color:white; box-shadow:0 6px 14px -4px rgba(16,185,129,.4); }
@@ -264,7 +270,10 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
                         </button>
 
-                        <div id="tab-scroll-container" class="flex overflow-x-auto no-scrollbar px-8 pt-2 scroll-smooth"
+                        <!-- flex-wrap: every stage tab (Seeds In → Adjustments & Audit) stays
+                             visible at once — no horizontal scrolling. The scroll arrows
+                             self-hide because the container never overflows. -->
+                        <div id="tab-scroll-container" class="flex flex-wrap px-4 pt-2"
                             onscroll="updateTabScrollArrows()">
                         <button id="tab-btn-1" class="stage-tab-btn stage-tab-active" onclick="switchTab(1)">
                             <div class="completion-pie-container"><div class="completion-pie completion-pie-fill" style="--percentage: 100"></div><div class="completion-pie-cover"></div></div>
@@ -6921,6 +6930,7 @@ Thank you.`;
 
       const reviews       = {}; // stage → { reviewed_by, reviewer_name, reviewer_email, reviewed_at }
       const verifications = {}; // stage → { verified_by, verifier_name, verifier_email, verified_at }
+      const rejections    = {}; // stage → { id, remark, created_at, last_edited_by } — HQ reject-with-remark rows
       let booted     = false;
       let isAdmin    = false;
       let isVerifier = false;
@@ -7006,6 +7016,37 @@ Thank you.`;
           return;
         }
 
+        // Rejected by HQ — show the remark until the report is amended and
+        // re-verified (verify/mark clear it), or an admin clears it manually.
+        const rej = rejections[stage];
+        if (rej) {
+          const whoRej = rej.last_edited_by || 'HQ';
+          banner.className = 'mjm-review-banner mjm-review-rejected';
+          banner.style.display = '';
+          const verifyBtn = (isVerifier || isAdmin)
+            ? `<button class="mjm-review-btn mjm-review-btn-verify mjm-review-allow"
+                       onclick="MJMReview.verify(${tabIdx})">Verify</button>`
+            : '';
+          const editBtn = isAdmin
+            ? `<button class="mjm-review-btn mjm-review-btn-reject mjm-review-allow"
+                       onclick="MJMReview.reject(${tabIdx})">Edit Remark</button>`
+            : '';
+          const clearBtn = isAdmin
+            ? `<button class="mjm-review-btn mjm-review-btn-clearrej mjm-review-allow"
+                       onclick="MJMReview.clearRejection(${tabIdx})">Clear Rejection</button>`
+            : '';
+          banner.innerHTML = `
+            <div class="flex-1">
+              <div class="mjm-review-meta">❌ Rejected — Amendment Required</div>
+              <div class="mt-1">Rejected by <strong>${whoRej}</strong> on <strong>${fmtDate(rej.created_at)}</strong>. Amend the report below, then re-verify.</div>
+              <div class="mjm-reject-remark">${(rej.remark || '').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>
+            </div>
+            <div class="mjm-review-btn-row">${verifyBtn}${editBtn}${clearBtn}</div>
+          `;
+          tab.classList.remove('mjm-locked');
+          return;
+        }
+
         if (v) {
           // Verified, awaiting admin review.
           const whoV = v.verifier_name || v.verifier_email || 'a verifier';
@@ -7013,7 +7054,9 @@ Thank you.`;
           banner.style.display = '';
           const adminBtn = isAdmin
             ? `<button class="mjm-review-btn mjm-review-btn-mark mjm-review-allow"
-                       onclick="MJMReview.mark(${tabIdx})">Mark as Reviewed</button>`
+                       onclick="MJMReview.mark(${tabIdx})">Mark as Reviewed</button>
+               <button class="mjm-review-btn mjm-review-btn-reject mjm-review-allow"
+                       onclick="MJMReview.reject(${tabIdx})">Reject</button>`
             : '';
           const unverifyBtn = (isVerifier || isAdmin)
             ? `<button class="mjm-review-btn mjm-review-btn-unverify mjm-review-allow"
@@ -7039,18 +7082,18 @@ Thank you.`;
           ? `<button class="mjm-review-btn mjm-review-btn-verify mjm-review-allow"
                      onclick="MJMReview.verify(${tabIdx})">Verify</button>`
           : '';
-        const reviewBtn = isAdmin
-          ? `<button class="mjm-review-btn mjm-review-btn-mark mjm-review-allow"
-                     disabled
-                     title="A verifier must sign off this tab before it can be reviewed"
-                     onclick="event.preventDefault();">Mark as Reviewed</button>`
+        // HQ can reject with a remark at any point — this replaces the old
+        // disabled "Mark as Reviewed" placeholder in the pending state.
+        const rejectBtn = isAdmin
+          ? `<button class="mjm-review-btn mjm-review-btn-reject mjm-review-allow"
+                     onclick="MJMReview.reject(${tabIdx})">Reject</button>`
           : '';
         banner.innerHTML = `
           <div>
             <div class="mjm-review-meta">Pending Verification</div>
             <div class="mt-1 text-[#7a4a10]">A verifier must sign off this tab before an admin can mark it as reviewed.</div>
           </div>
-          <div class="mjm-review-btn-row">${verifyBtn}${reviewBtn}${
+          <div class="mjm-review-btn-row">${verifyBtn}${rejectBtn}${
             !isVerifier && !isAdmin ? '<span class="mjm-review-meta">Awaiting verifier</span>' : ''
           }</div>
         `;
@@ -7065,9 +7108,10 @@ Thank you.`;
         const batch = currentBatchId();
         for (const k of Object.keys(reviews))       delete reviews[k];
         for (const k of Object.keys(verifications)) delete verifications[k];
+        for (const k of Object.keys(rejections))    delete rejections[k];
         if (batch) {
           try {
-            const [revRes, verRes] = await Promise.all([
+            const [revRes, verRes, rejRes] = await Promise.all([
               _supabase
                 .from('operation_batch_reviews')
                 .select('stage, reviewer_name, reviewer_email, reviewed_at')
@@ -7075,7 +7119,16 @@ Thank you.`;
               _supabase
                 .from('operation_batch_verifications')
                 .select('stage, verifier_name, verifier_email, verified_at')
+                .eq('batch_name', batch),
+              // HQ rejections live in shared_inventory_logs (no schema change
+              // needed): plot_name carries the stage key. select('*') so we
+              // pick up last_edited_by only if the column exists.
+              _supabase
+                .from('shared_inventory_logs')
+                .select('*')
                 .eq('batch_name', batch)
+                .eq('transaction_type', 'Review_Rejection')
+                .order('created_at', { ascending: true })
             ]);
             if (revRes.error) throw revRes.error;
             (revRes.data || []).forEach(r => { reviews[r.stage] = r; });
@@ -7083,6 +7136,11 @@ Thank you.`;
               (verRes.data || []).forEach(v => { verifications[v.stage] = v; });
             } else {
               console.warn('[MJMReview] verifications unavailable:', verRes.error.message);
+            }
+            if (!rejRes.error) {
+              (rejRes.data || []).forEach(x => { rejections[x.plot_name] = x; }); // newest wins
+            } else {
+              console.warn('[MJMReview] rejections unavailable:', rejRes.error.message);
             }
           } catch (e) {
             console.warn('[MJMReview] failed to load reviews:', e);
@@ -7114,6 +7172,7 @@ Thank you.`;
           .upsert(payload, { onConflict: 'batch_name,stage' });
         if (error) { alert('Failed to mark reviewed: ' + error.message); return; }
         reviews[stage] = payload;
+        await _clearRejectionRows(batch, stage); // approving supersedes any rejection
         renderBanner(tabIdx);
       }
 
@@ -7136,6 +7195,7 @@ Thank you.`;
           .upsert(payload, { onConflict: 'batch_name,stage' });
         if (error) { alert('Failed to verify: ' + error.message); return; }
         verifications[stage] = payload;
+        await _clearRejectionRows(batch, stage); // re-verifying after amendment clears the rejection
         renderBanner(tabIdx);
       }
 
@@ -7172,6 +7232,105 @@ Thank you.`;
         renderBanner(tabIdx);
       }
 
+
+      // ── HQ Reject-with-remark flow ─────────────────────────────
+      // Rejections are stored in shared_inventory_logs (transaction_type
+      // 'Review_Rejection', stage in plot_name) so no schema migration is
+      // needed. Rejecting voids the verification: the ops team amends the
+      // report, the verifier re-verifies, and the rejection clears itself.
+      let _rejTabIdx = null;
+
+      async function _clearRejectionRows(batch, stage) {
+        if (!rejections[stage]) return;
+        try {
+          await _supabase.from('shared_inventory_logs').delete()
+            .eq('batch_name', batch)
+            .eq('transaction_type', 'Review_Rejection')
+            .eq('plot_name', stage);
+          delete rejections[stage];
+        } catch (e) { console.warn('[MJMReview] could not clear rejection:', e); }
+      }
+
+      function _ensureRejectModal() {
+        if (document.getElementById('mjm-reject-overlay')) return;
+        const overlay = document.createElement('div');
+        overlay.id = 'mjm-reject-overlay';
+        overlay.style.cssText = 'display:none; position:fixed; inset:0; background:rgba(26,21,13,.55); z-index:9999; align-items:center; justify-content:center; padding:20px;';
+        overlay.innerHTML = `
+          <div style="background:#f8f4ec; border-radius:1.5rem; max-width:560px; width:100%; padding:28px; box-shadow:0 30px 60px rgba(0,0,0,.4);">
+            <div class="mjm-review-meta" style="color:#991b1b;">❌ Reject This Tab</div>
+            <h3 style="font-weight:900; color:#3d2610; font-size:18px; margin:6px 0 2px;">HQ Remark — what needs to be amended?</h3>
+            <p style="font-size:11px; font-weight:700; color:#8a7a68; margin-bottom:12px;">The remark is shown on this tab so the admin knows exactly what to fix. Rejecting removes the current verification; after amendment the tab must be re-verified.</p>
+            <textarea id="mjm-reject-remark" rows="4" class="input-style" style="width:100%; resize:vertical;" placeholder="e.g. Dead qty for plot U18 doesn't match the drone map — please re-check and amend."></textarea>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+              <button type="button" class="mjm-review-btn" style="background:white; color:#3d2610; border:1.5px solid #e8dcc8;" onclick="document.getElementById('mjm-reject-overlay').style.display='none'">Cancel</button>
+              <button type="button" class="mjm-review-btn mjm-review-btn-reject" onclick="MJMReview.submitReject()">Reject &amp; Send Remark</button>
+            </div>
+          </div>`;
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.style.display = 'none'; });
+        document.body.appendChild(overlay);
+      }
+
+      function reject(tabIdx) {
+        if (!isAdmin) return;
+        const batch = currentBatchId();
+        if (!batch) { alert('Save Tab 1 first to assign a batch number.'); return; }
+        _ensureRejectModal();
+        _rejTabIdx = tabIdx;
+        const stage = STAGE_BY_TAB[tabIdx];
+        const existing = rejections[stage];
+        document.getElementById('mjm-reject-remark').value = existing ? (existing.remark || '') : '';
+        const overlay = document.getElementById('mjm-reject-overlay');
+        overlay.style.display = 'flex';
+        setTimeout(() => document.getElementById('mjm-reject-remark').focus(), 50);
+      }
+
+      async function submitReject() {
+        if (!isAdmin || _rejTabIdx === null) return;
+        const tabIdx = _rejTabIdx;
+        const batch  = currentBatchId();
+        const stage  = STAGE_BY_TAB[tabIdx];
+        const remark = (document.getElementById('mjm-reject-remark').value || '').trim();
+        if (!remark) { alert('Please write what needs to be amended before rejecting.'); return; }
+
+        // Capture old rejection rows (edit case), insert the new one first,
+        // then clean up — same insert-first pattern as the report saves.
+        const { data: olds } = await _supabase.from('shared_inventory_logs').select('id')
+          .eq('batch_name', batch).eq('transaction_type', 'Review_Rejection').eq('plot_name', stage);
+        const row = withEditMeta({
+          transaction_type: 'Review_Rejection',
+          batch_name: batch,
+          plot_name: stage,
+          quantity_change: 0,
+          remark
+        });
+        const { error } = await safeInsertLogs([row]);
+        if (error) { alert('Failed to save rejection: ' + error.message); return; }
+        const oldIds = (olds || []).map(r => r.id).filter(v => v != null);
+        if (oldIds.length) await _supabase.from('shared_inventory_logs').delete().in('id', oldIds);
+
+        // Void the verification — the sign-off no longer stands.
+        if (verifications[stage]) {
+          await _supabase.from('operation_batch_verifications').delete()
+            .eq('batch_name', batch).eq('stage', stage);
+          delete verifications[stage];
+        }
+
+        rejections[stage] = { plot_name: stage, remark, created_at: new Date().toISOString(), last_edited_by: (MJMAccess.user() || {}).email || 'HQ' };
+        document.getElementById('mjm-reject-overlay').style.display = 'none';
+        _rejTabIdx = null;
+        renderBanner(tabIdx);
+      }
+
+      async function clearRejection(tabIdx) {
+        if (!isAdmin) return;
+        const batch = currentBatchId();
+        const stage = STAGE_BY_TAB[tabIdx];
+        if (!batch || !rejections[stage]) return;
+        if (!confirm('Clear this rejection? The remark will be removed and the tab returns to Pending Verification.')) return;
+        await _clearRejectionRows(batch, stage);
+        renderBanner(tabIdx);
+      }
 
       // (Tab 7 row-level Approve / Edit live in renderCalibrationHistory in
       // the main page script, not here. Removed the per-tab approve()
@@ -7226,7 +7385,7 @@ Thank you.`;
         await refresh();
       }
 
-      window.MJMReview = { boot, refresh, mark, unmark, verify, unverify };
+      window.MJMReview = { boot, refresh, mark, unmark, verify, unverify, reject, submitReject, clearRejection };
     })();
     </script>
 </body>
