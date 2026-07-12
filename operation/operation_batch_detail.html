@@ -2193,13 +2193,20 @@
                             }
                         }
                         if(data.remark) {
-                            const supMatch = data.remark.match(/Supplier:\s*([^.]+)/);
+                            // Capture up to the next known remark field (or end), NOT up to
+                            // the first period — supplier names like "Applied Agricultural
+                            // Resources Sdn. Bhd." contain periods, and the old ([^.]+)
+                            // pattern truncated them, blanking the dropdown on load (and
+                            // erasing the value on the next save).
+                            const supMatch = data.remark.match(/Supplier:\s*(.*?)\s*\.?\s*(?=MPOB:|D\/O:|DO_Qty:|Incl\.|$)/);
                             const mpobMatch = data.remark.match(/MPOB:\s*([0-9\-]+)/);
                             if (supMatch) {
                                 // Refresh cascading dropdowns based on the just-loaded breed,
                                 // then pin the supplier + MPOB values from the stored remark.
+                                // (No direct .value set here — syncSupplierOptions resolves the
+                                // saved name against the options, including fuzzy matching for
+                                // legacy truncated remarks.)
                                 syncSupplierOptions(supMatch[1].trim());
-                                document.getElementById('f-supplier').value = supMatch[1].trim();
                                 syncMpobOptions(mpobMatch ? mpobMatch[1].trim() : '');
                             }
                             const doMatch = data.remark.match(/D\/O:\s*([^.]+)/); if(doMatch) document.getElementById('f-dono').value = doMatch[1].trim();
@@ -5433,6 +5440,16 @@ Thank you.`;
             });
             if (prev && Array.from(sel.options).some(o => o.value === prev)) {
                 sel.value = prev;
+            } else if (prev) {
+                // Fuzzy fallback: legacy remarks truncated supplier names at the
+                // first period ("Applied Agricultural Resources Sdn" instead of
+                // "… Sdn. Bhd.") — match on normalized text / prefix so the
+                // saved value still resolves instead of silently blanking.
+                const normPrev = _normBreed(prev);
+                const hit = Array.from(sel.options).find(o => o.value && _normBreed(o.value) === normPrev)
+                         || Array.from(sel.options).find(o => o.value && (
+                                _normBreed(o.value).startsWith(normPrev) || normPrev.startsWith(_normBreed(o.value))));
+                sel.value = hit ? hit.value : '';
             } else {
                 sel.value = '';
             }
