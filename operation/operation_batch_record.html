@@ -411,7 +411,12 @@
         // Detail page rules: stage = 1 (Pre-Nursery) by default once Seeds_Received exists,
         // → 2 (Main Nursery) once any Transplanted log exists, → 3 (Completed) once 3rd Culling is logged.
         function processBatchLogic(b, completedBatchNames) {
-            const ageDays = Math.max(0, Math.floor((new Date() - new Date(b.created_at)) / (1000 * 60 * 60 * 24)));
+            // Age anchors on the KEYED seed-in date (transaction_date), not the
+            // row's DB insert time — re-created / re-saved Seeds_Received rows
+            // get a fresh created_at, which made old batches (224-241) read as
+            // 0 days old and show "Maturing Progress: 0%".
+            const ageAnchor = b.transaction_date || b.created_at;
+            const ageDays = Math.max(0, Math.floor((new Date() - new Date(ageAnchor)) / (1000 * 60 * 60 * 24)));
             const ageMonths = ageDays / 30.44;
 
             const finalTabSaved = completedBatchNames && completedBatchNames.has(b.batch_name);
