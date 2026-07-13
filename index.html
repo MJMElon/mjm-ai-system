@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- BUILD: 2026-05-29a · ops-gate + pending-access screen -->
+<!-- BUILD: 2026-07-13a · scan module access -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
@@ -141,12 +141,7 @@
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════ PENDING SCREEN
-     Shown when a user authenticates successfully but has no module
-     permissions yet (fresh ops signup OR a customer-portal account who
-     tried to log in here). Same screen, same message: "ask the admin
-     to grant access". The user stays signed in so they can refresh
-     once access is granted without re-authenticating. -->
+<!-- ═══════════════════════════════════════════════════════ PENDING SCREEN -->
 <div id="pending-screen" style="display:none" class="hub-bg min-h-screen flex flex-col items-center justify-center px-6 py-12">
   <div class="max-w-md w-full bg-slate-900/80 border border-amber-500/30 rounded-3xl shadow-2xl p-8 text-center" style="backdrop-filter:blur(8px);">
     <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-2xl">⏳</div>
@@ -266,6 +261,25 @@
         <div class="module-tag">audit_</div>
       </a>
 
+      <a class="module-card" data-card="scan" data-module="scan" href="https://scan.mjmnursery.com" target="_blank" rel="noopener"
+         style="--accent:#8b5cf6;--glow:rgba(139,92,246,.25);--glow-strong:rgba(139,92,246,.35);--icon-bg:rgba(139,92,246,.12);">
+        <div class="card-corner card-tl"></div><div class="card-corner card-tr"></div>
+        <div class="card-corner card-bl"></div><div class="card-corner card-br"></div>
+        <div class="module-icon-wrap">
+          <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
+            <rect x="6" y="10" width="3" height="14" rx="1" fill="#8b5cf6"/>
+            <rect x="11" y="10" width="1.5" height="14" rx=".75" fill="#8b5cf6" opacity=".7"/>
+            <rect x="14" y="10" width="2.5" height="14" rx="1" fill="#8b5cf6"/>
+            <rect x="18.5" y="10" width="1.5" height="14" rx=".75" fill="#8b5cf6" opacity=".7"/>
+            <rect x="21.5" y="10" width="3" height="14" rx="1" fill="#8b5cf6"/>
+            <rect x="26.5" y="10" width="1.5" height="14" rx=".75" fill="#8b5cf6" opacity=".7"/>
+            <path d="M6 8h4M24 8h4M6 26h4M24 26h4" stroke="#8b5cf6" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="module-name">FC Scan<br>Portal</div>
+        <div class="module-tag">scan_</div>
+      </a>
+
         </div>
       </div>
 
@@ -338,12 +352,6 @@
   const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpYnFqenRvem9rb2hxbWhxcXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQzNjIsImV4cCI6MjA4OTgxMDM2Mn0.J7qJUZhWXYf5b9oey4wXJkjdi66jomEMw_NeV9NWF7M';
   const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  // Single gate for entry into the ops system: does the signed-in user
-  // hold ANY staff-grade module permission? If not (whether they're a
-  // sales-web customer who shares this auth DB, or a fresh ops signup
-  // that the admin hasn't granted permissions to yet) → route them to
-  // the Pending Access screen instead of the module hub. Same screen
-  // and message for both cases, per spec.
   const _STAFF_MODULE_VALUES = ['admin','normal','view','edit','manage','read','write','full','staff'];
   function hasOpsAccess(profile) {
     if (!profile) return false;
@@ -357,9 +365,6 @@
     return false;
   }
 
-  // Per-module card visibility — the main User Access management decides
-  // which email sees which module card here. Fails OPEN (all cards shown)
-  // when the profile could not be read, same policy as the ops gate.
   function applyModuleVisibility(profile) {
     const perms = profile && profile.permissions;
     const mods  = (perms && perms.modules) || null;
@@ -434,9 +439,6 @@
     }
   });
 
-  // 20-second timeout on any auth network call — if Supabase or the
-  // user's network is unreachable, the promise races against a rejected
-  // Timeout so the button can never stick on "Processing…" forever.
   const AUTH_TIMEOUT_MS = 20000;
   const withTimeout = (p, ms) => Promise.race([
     p,
@@ -457,10 +459,6 @@
           AUTH_TIMEOUT_MS
         );
         if (error) { alert('Signup Error: ' + error.message); return; }
-        // New ops accounts have zero module permissions until an admin
-        // grants them via User Access. Set expectations up front instead
-        // of letting them log in and find an empty "Pending Access"
-        // screen with no context.
         alert('Account created.\n\nPlease contact an admin to grant access for this AI system. Once granted, you\'ll be able to log in and use the modules.');
         isSignUpMode = false; signupFields.classList.add('hidden');
         toggleBtn.innerText = 'Create Account';
@@ -473,11 +471,8 @@
         if (error) { alert('Login Error: ' + error.message); return; }
       }
     } catch (e) {
-      // Covers thrown network errors AND the withTimeout rejection.
       alert('Login Error: ' + (e && e.message ? e.message : String(e)));
     } finally {
-      // Always restore the button. On success, the onAuthStateChange
-      // handler hides this screen anyway, so the reset is invisible.
       mainBtn.innerText = isSignUpMode ? 'Sign Up' : 'Login';
       mainBtn.disabled  = false;
     }
@@ -524,7 +519,6 @@
 
   // ── If recovery link, show password form immediately on page load ──
   if (_isRecoveryLink) {
-    // Show auth screen with recovery form right away, don't wait for onAuthStateChange
     document.getElementById('auth-screen').style.display = 'flex';
     document.getElementById('hub-screen').style.display = 'none';
     document.getElementById('standard-auth-fields').classList.add('hidden');
@@ -541,19 +535,9 @@
       standardFields.classList.add('hidden');
       recoveryFields.classList.remove('hidden'); return;
     }
-    // Don't do anything if we're in recovery mode
     if (isRecovering) return;
     if (event === 'SIGNED_OUT' || !session) { showAuth(); return; }
     if (session) {
-      // Module-permission gate. Anyone without staff-grade access
-      // (sales-web customer crossing over, or a fresh ops signup the
-      // admin hasn't granted access to yet) goes to the Pending
-      // Access screen — same screen for both cases, per spec.
-      //
-      // Diagnostics: always log the gate decision and the raw profile
-      // / error pair so when "I'm getting in but shouldn't be" gets
-      // reported we can confirm the gate ran and see what it saw,
-      // without adding more debug code later.
       let canEnter = true;
       let profile  = null;
       try {
@@ -578,9 +562,7 @@
       }
 
       welcomeText.innerText = session.user.user_metadata?.full_name || session.user.email;
-      // Mark session active for this window (clears on window close)
       sessionStorage.setItem('mjm_session_active', '1');
-      // Set mjm_user so audit_home and other modules can read it
       localStorage.setItem('mjm_user', JSON.stringify({
         email: session.user.email,
         full_name: session.user.user_metadata?.full_name || session.user.email,
@@ -593,16 +575,11 @@
   });
 </script>
 <script>
-  // ── Draggable sector blocks: reorder by dragging the sector header; the
-  //    order is remembered per browser (localStorage). Touch fallback:
-  //    tapping the drag handle moves the sector up one position (HTML5
-  //    drag & drop is mouse-only).
   (function () {
     const LIST = document.getElementById('sector-list');
     if (!LIST) return;
     const KEY = 'mjm_sector_order_v1';
 
-    // Restore saved order.
     try {
       const saved = JSON.parse(localStorage.getItem(KEY) || '[]');
       saved.forEach((id) => {
@@ -641,7 +618,6 @@
       block.addEventListener('dragleave', () => block.classList.remove('drag-over'));
       block.addEventListener('drop', (e) => { e.preventDefault(); block.classList.remove('drag-over'); });
 
-      // Touch fallback: tap the handle to move the sector up one slot.
       const handle = block.querySelector('.drag-handle');
       if (handle) handle.addEventListener('click', () => {
         const prev = block.previousElementSibling;
@@ -649,8 +625,6 @@
       });
     });
 
-    // ── Card-level drag: reorder module cards WITHIN their sector to the
-    //    user's preferred sequence. Saved per browser, per sector.
     const CARD_KEY = 'mjm_card_order_v1';
     const grids = {};
     LIST.querySelectorAll('.sector-block').forEach((b) => {
@@ -658,7 +632,6 @@
       if (g) grids[b.dataset.sector] = g;
     });
 
-    // Restore saved card order inside each sector.
     try {
       const savedCards = JSON.parse(localStorage.getItem(CARD_KEY) || '{}');
       Object.entries(savedCards).forEach(([sector, keys]) => {
@@ -683,7 +656,7 @@
     LIST.querySelectorAll('.module-card[data-card]').forEach((card) => {
       card.setAttribute('draggable', 'true');
       card.addEventListener('dragstart', (e) => {
-        e.stopPropagation(); // don't start a sector drag underneath
+        e.stopPropagation();
         draggedCard = card;
         card.classList.add('card-dragging');
         e.dataTransfer.effectAllowed = 'move';
@@ -697,13 +670,11 @@
       });
       card.addEventListener('dragover', (e) => {
         if (!draggedCard || draggedCard === card) return;
-        if (draggedCard.parentElement !== card.parentElement) return; // same sector only
+        if (draggedCard.parentElement !== card.parentElement) return;
         e.preventDefault();
         e.stopPropagation();
         card.classList.add('card-drag-over');
         const r = card.getBoundingClientRect();
-        // Left half → insert before; right half → after. Works row by row
-        // in the grid; dragging across rows uses the hovered card's side.
         const before = e.clientX < r.left + r.width / 2;
         card.parentElement.insertBefore(draggedCard, before ? card : card.nextSibling);
       });

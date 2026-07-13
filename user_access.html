@@ -196,6 +196,13 @@
           </div>
           <select id="d-mod-training" class="lvl-select"></select>
         </div>
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <div class="font-black text-slate-800 text-sm">Scan / FC Portal</div>
+            <div class="text-[11px] text-slate-500">Barcode scanner &amp; seal counting for FC</div>
+          </div>
+          <select id="d-mod-scan" class="lvl-select"></select>
+        </div>
       </div>
 
       <!-- Quick set-all presets — same words as the dropdown -->
@@ -245,7 +252,7 @@
 const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
 // Top-level modules only — page access INSIDE a module (batch record,
 // stock, reports…) is managed from that module's own User Access page.
-const MODULES = ['operation', 'salesweb', 'audit', 'mobile', 'training'];
+const MODULES = ['operation', 'salesweb', 'audit', 'mobile', 'training', 'scan'];
 const LEVELS  = ['admin', 'normal', 'none'];
 const LEVEL_LABEL = { admin:'Admin', normal:'Normal', none:'None' };
 
@@ -269,7 +276,7 @@ function showToast(msg, kind) {
 }
 
 function defaultPerms() {
-  return { modules: { operation:'none', reports:'none', audit_trail:'none', salesweb:'none', audit:'none', mobile:'none', training:'none' }, manage_users:false, can_verify_operation:false };
+  return { modules: { operation:'none', reports:'none', audit_trail:'none', salesweb:'none', audit:'none', mobile:'none', training:'none', scan:'none' }, manage_users:false, can_verify_operation:false };
 }
 
 function normPerms(p) {
@@ -293,7 +300,7 @@ function initials(p) {
 
 const MODULE_LABEL = {
   operation: 'operation', reports: 'reports', audit_trail: 'audit trail',
-  salesweb: 'salesweb', audit: 'audit', mobile: 'mobile', training: 'training'
+  salesweb: 'salesweb', audit: 'audit', mobile: 'mobile', training: 'training', scan: 'scan'
 };
 function summaryHtml(perms) {
   const chips = MODULES
@@ -352,7 +359,7 @@ function render() {
   const list = document.getElementById('users-list');
   list.innerHTML = filtered.length
     ? filtered.map(rowHtml).join('')
-    : `<div class="text-center text-slate-400 text-sm py-12">${pool.length ? 'No system users match your search.' : 'No system users yet — use “+ Add User” to promote a customer.'}</div>`;
+    : `<div class="text-center text-slate-400 text-sm py-12">${pool.length ? 'No system users match your search.' : 'No system users yet — use "+ Add User" to promote a customer.'}</div>`;
   // Always show the full tally so nobody wonders where users "went".
   const cl = document.getElementById('count-line');
   if (cl) {
@@ -384,7 +391,7 @@ function openDrawer(uid) {
   document.getElementById('d-avatar').textContent = initials(p);
   document.getElementById('d-name').textContent  = p.full_name || '(no name)';
   document.getElementById('d-email').textContent = p.email || '—';
-  MODULES.forEach(m => rebuildDropdown('d-mod-' + m, pending.modules[m]));
+  MODULES.forEach(m => rebuildDropdown('d-mod-' + m, pending.modules[m] || 'none'));
   document.getElementById('d-manage-users').checked = !!pending.manage_users;
 
   document.getElementById('drawer').classList.add('open');
@@ -439,7 +446,7 @@ async function saveDrawer() {
   }
 
   p.permissions = JSON.parse(JSON.stringify(pending));
-  showToast('Saved. Changes apply on the user’s next refresh.');
+  showToast('Saved. Changes apply on the user\'s next refresh.');
   render();
   closeDrawer();
 }
@@ -467,7 +474,7 @@ async function demoteCurrentToCustomer() {
   if (!confirm(`Move "${p.full_name || p.email}" to customer?\nThey will be removed from the system list. Their module access will also be cleared.`)) return;
   // Clear access first so nothing lingers if they're promoted again later.
   const cleared = {
-    modules: { operation:'none', reports:'none', audit_trail:'none', salesweb:'none', audit:'none', mobile:'none', training:'none' },
+    modules: { operation:'none', reports:'none', audit_trail:'none', salesweb:'none', audit:'none', mobile:'none', training:'none', scan:'none' },
     manage_users: false,
     can_verify_operation: false,
     operation_pages: {}
