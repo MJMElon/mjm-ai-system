@@ -633,6 +633,7 @@
         }
 
         async function confirmCreateBA() {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'manage')) return;
             const baNumEl = document.getElementById('new-ba-num'); const baNameEl = document.getElementById('new-ba-name');
             const baNum = baNumEl ? baNumEl.value.trim() : ''; const baName = baNameEl ? baNameEl.value.trim() : '';
 
@@ -959,6 +960,7 @@
         function openDOModal() { document.getElementById('do-modal').classList.remove('hidden'); document.getElementById('bulk-do-tbody').innerHTML = ''; window.extractedBulkDOs = {}; document.getElementById('main-file-input').value = ''; document.getElementById('do-file-input').value = ''; }
         
         function enableEditDOMode() { 
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'manage')) return;
             document.querySelectorAll('#manage-do-modal .edit-field').forEach(el => el.disabled = false); 
             document.getElementById('items_container_mng').querySelectorAll('input, select, button').forEach(el => el.disabled = false);
             
@@ -971,6 +973,7 @@
         }
 
         async function saveEditDO() { 
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'manage')) return;
             const doId = document.getElementById('manage-do-id').value; 
             const newNum = document.getElementById('mng-do-num').value; 
             const newDate = document.getElementById('mng-do-date').value; 
@@ -1022,6 +1025,7 @@
         function viewAttachedDocument() { if(!currentViewImage) return; openStandaloneDoc(currentViewImage); }
         
         async function deleteDO() { 
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'manage')) return;
             const pin = prompt("Enter Master PIN to delete DO:");
             if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN.");
             
@@ -1157,6 +1161,7 @@
         function recalcBulkTotal(rowId) { const container = document.getElementById(`items_container_${rowId}`); let sum = 0; container.querySelectorAll('.item-qty').forEach(inp => { sum += (parseInt(inp.value) || 0); }); document.getElementById(`qty_${rowId}`).value = sum; }
         
         async function saveBulkDO() { 
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'manage')) return;
             const btn = document.getElementById('save-bulk-btn'); btn.innerText = 'SAVING ALL...'; btn.disabled = true; const rows = document.querySelectorAll('#bulk-do-tbody tr'); let successCount = 0; window.localSavedDOs.clear(); 
             for (let row of rows) { 
                 if(row.innerHTML.includes('Scanning') || row.innerHTML.includes('Failed')) continue; 

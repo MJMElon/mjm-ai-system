@@ -290,6 +290,9 @@ function normPerms(p) {
   out.manage_users = !!p.manage_users;
   out.can_verify_operation = !!p.can_verify_operation;
   if (p.operation_pages && typeof p.operation_pages === 'object') out.operation_pages = p.operation_pages;
+  // Per-function ticks managed inside the operation module's own User
+  // Access page — carry them through so saving here never wipes them.
+  if (p.operation_actions && typeof p.operation_actions === 'object') out.operation_actions = p.operation_actions;
   return out;
 }
 

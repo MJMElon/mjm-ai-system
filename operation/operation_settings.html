@@ -611,6 +611,7 @@
         }
 
         async function saveActiveShape() {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('settings', 'manage')) return;
             if(!activeMapPlotId) return;
             if(currentPoly.length > 0 && currentPoly.length < 3) return alert("A custom shape must have at least 3 points!");
             
@@ -826,6 +827,7 @@
         function closeEditPlotModal() { document.getElementById('edit-plot-modal').classList.add('hidden'); }
 
         async function saveEditPlot() {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('settings', 'manage')) return;
             const id = document.getElementById('edit-plot-id').value;
             const name = document.getElementById('edit-plot-name').value.trim().toUpperCase();
             const nursery = document.getElementById('edit-plot-nursery').value;
@@ -866,6 +868,7 @@
         function closeEditTrayModal() { document.getElementById('edit-tray-modal').classList.add('hidden'); }
 
         async function saveEditTray() {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('settings', 'manage')) return;
             const id = document.getElementById('edit-tray-id').value;
             const name = document.getElementById('edit-tray-name').value.trim();
             const nursery = document.getElementById('edit-tray-nursery').value;
@@ -931,6 +934,7 @@
         // every shared_inventory_logs row tied to it, so Manage Batches stays
         // in sync with the Batch Record list.
         async function deleteBatchByName(name) {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('settings', 'manage')) return;
             const typed = prompt(
                 'Delete batch "' + name + '"?\n\n' +
                 'This permanently removes:\n' +
@@ -1040,6 +1044,7 @@
         function closeEditNurseryModal() { document.getElementById('edit-nursery-modal').classList.add('hidden'); }
         
         async function saveEditNursery() {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('settings', 'manage')) return;
             const btn = document.getElementById('save-nursery-btn'); const id = document.getElementById('edit-nursery-id').value; const license = document.getElementById('edit-nursery-license').value.trim().toUpperCase(); const fileInput = document.getElementById('edit-nursery-image-file');
             if(!license) return alert("Provide license.");
             btn.innerText = 'SAVING...'; btn.disabled = true;
@@ -1076,7 +1081,8 @@
             });
         }
         
-        async function addBreed(event) { 
+        async function addBreed(event) {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('settings', 'manage')) return; 
             const name = document.getElementById('new-breed-name').value.trim(); 
             if(!name) return; 
             
@@ -1099,6 +1105,7 @@
         }
         
         async function addBatch(event) {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('settings', 'manage')) return;
             const name = document.getElementById('new-batch-name').value.trim().toUpperCase();
             if(!name) return;
 
@@ -1141,6 +1148,7 @@
         
         // Add Tray logic
         async function addTray(event) {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('settings', 'manage')) return;
             const nursery = document.getElementById('tray-nursery-select').value; 
             const trayName = document.getElementById('new-tray-name').value.trim().toUpperCase();
             if(!nursery || !trayName) return alert("Select a Nursery and provide a Tray Name.");
@@ -1164,6 +1172,7 @@
         }
 
         async function addNursery(event) {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('settings', 'manage')) return;
             const name = document.getElementById('new-nursery-name').value.trim().toUpperCase(); const license = document.getElementById('new-nursery-license').value.trim().toUpperCase(); const fileInput = document.getElementById('new-nursery-image-file');
             if(!name || !license) return alert("Provide Nursery Name and License.");
             
@@ -1187,6 +1196,7 @@
         }
         
         async function addPlot(event) {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('settings', 'manage')) return;
             const nursery = document.getElementById('plot-nursery-select').value; const plot = document.getElementById('new-plot-name').value.trim().toUpperCase();
             if(!nursery || !plot) return alert("Select a Nursery and provide a Plot Name.");
             
@@ -1208,7 +1218,8 @@
             }
         }
         
-        async function deleteItem(table, id) { 
+        async function deleteItem(table, id) {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('settings', 'manage')) return; 
             if(!confirm(`Delete this item?`)) return; 
             await _supabase.from(table).delete().eq('id', id); 
             fetchData(); 

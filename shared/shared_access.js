@@ -25,7 +25,23 @@
          "audit":     "admin" | "normal" | "none",
          "mobile":    "admin" | "normal" | "none"
        },
-       "manage_users": true | false
+       "manage_users": true | false,
+
+       // Per-FUNCTION access inside the operation module, one object per
+       // page. Managed from operation/operation_user_access.html. When a
+       // page's object is present it is authoritative for that page —
+       // every unticked function is denied. When absent, the legacy
+       // fields (module level, operation_pages, can_verify_operation)
+       // decide, so users saved before this shape existed keep working.
+       "operation_actions": {
+         "batch":       { "view":true, "add_new":true, "fill_report":true,
+                          "verify":false, "review":false, "delete":false },
+         "orders":      { "view":true, "manage":true },
+         "stock":       { "view":true, "manage":true },
+         "reports":     { "view":false },
+         "audit_trail": { "view":false, "clear_logs":false },
+         "settings":    { "view":true, "manage":true }
+       }
      }
    ================================================================ */
 (function (global) {
@@ -66,6 +82,18 @@
       out.operation_pages = {};
       for (const [k, v] of Object.entries(perms.operation_pages)) {
         if (VALID_LEVELS.has(v)) out.operation_pages[k] = v;
+      }
+    }
+    // Per-function access inside the operation module (see header comment).
+    // Booleans only; a page key that isn't a plain object is dropped so a
+    // corrupted value falls back to the legacy fields for that page.
+    if (perms.operation_actions && typeof perms.operation_actions === 'object') {
+      out.operation_actions = {};
+      for (const [page, acts] of Object.entries(perms.operation_actions)) {
+        if (!acts || typeof acts !== 'object' || Array.isArray(acts)) continue;
+        const clean = {};
+        for (const [a, v] of Object.entries(acts)) clean[a] = !!v;
+        out.operation_actions[page] = clean;
       }
     }
     return out;
@@ -124,6 +152,12 @@
           if (p.modules[k] && p.modules[k] !== 'none') { anyAccess = true; break; }
         }
       }
+      if (!anyAccess && p.operation_actions) {
+        for (const k in p.operation_actions) {
+          const acts = p.operation_actions[k];
+          if (acts && Object.keys(acts).some(a => acts[a])) { anyAccess = true; break; }
+        }
+      }
       if (!anyAccess) {
         console.warn('[MJMAccess] no ops access — redirecting to hub');
         const here = (global.location && global.location.pathname) || '';
@@ -153,15 +187,6 @@
   function isAdminOf(name)  { return moduleLevel(name) === 'admin'; }
   function canManageUsers() { return !!permissions().manage_users; }
 
-  // Convenience for batch-detail tab review gating.
-  function canReviewOperation() { return isAdminOf('operation'); }
-
-  // Two-person batch verification: Verifier flag (or operation admin) may verify
-  // a tab; only operation admins may then mark it as reviewed.
-  function canVerifyOperation() {
-    return !!permissions().can_verify_operation || isAdminOf('operation');
-  }
-
   // Per-page access inside the operation module (see operation_pages above).
   // Page keys mirror the dashboard cards: batch, orders, stock, settings.
   // (Reports and Audit Trail keep their own module levels.)
@@ -170,7 +195,68 @@
     const v = op && op[name];
     return VALID_LEVELS.has(v) ? v : 'normal'; // unset = allowed
   }
-  function canOpenOperationPage(name) { return operationPageLevel(name) !== 'none'; }
+
+  // ── Per-FUNCTION access inside the operation module ──────────────
+  // canDoOperation(page, action) is the single gate every operation page
+  // should use. When the user has an operation_actions entry for the page
+  // it is authoritative (unticked = denied). Otherwise the answer is
+  // derived from the legacy fields so pre-existing users are unaffected:
+  //   view        → operation_pages level (or module level for reports /
+  //                 audit_trail, which historically live in modules)
+  //   verify      → can_verify_operation flag, or operation admin
+  //   review      → operation admin (mark reviewed / reject / unreview)
+  //   delete      → operation admin
+  //   clear_logs  → audit_trail admin
+  //   anything else (add_new, fill_report, manage…) → allowed when the
+  //                 page itself is open (the legacy "normal" behaviour)
+  const MODULE_STORED_PAGES = new Set(['reports', 'audit_trail']);
+
+  function canDoOperation(page, action) {
+    const p = permissions();
+    const acts = p.operation_actions && p.operation_actions[page];
+    if (acts) {
+      // The module itself must still be open for this user (set on the
+      // main portal). Reports/Audit Trail are their own module entries,
+      // mirrored to modules.* on save, so the tick below is the grant.
+      if (!MODULE_STORED_PAGES.has(page) && !canAccess('operation')) return false;
+      if (!acts.view) return false;      // page closed → every function closed
+      if (action === 'view') return true;
+      return !!acts[action];
+    }
+    // Legacy fallback.
+    const viewOk = MODULE_STORED_PAGES.has(page)
+      ? canAccess(page)
+      : (canAccess('operation') && operationPageLevel(page) !== 'none');
+    if (action === 'view') return viewOk;
+    if (!viewOk) return false;
+    switch (action) {
+      case 'verify':     return !!p.can_verify_operation || isAdminOf('operation');
+      case 'review':     return isAdminOf('operation');
+      case 'delete':     return isAdminOf('operation');
+      case 'clear_logs': return isAdminOf('audit_trail');
+      default:           return true; // add_new, fill_report, manage…
+    }
+  }
+
+  // Click-time guard for write actions: returns true when allowed,
+  // otherwise alerts and returns false so the caller can just bail out.
+  function requireOperationAction(page, action, message) {
+    if (canDoOperation(page, action)) return true;
+    try {
+      alert(message || 'Access denied — you do not have permission for this action. Ask an admin to grant it in User Access.');
+    } catch (e) { /* non-browser context */ }
+    return false;
+  }
+
+  function canOpenOperationPage(name) { return canDoOperation(name, 'view'); }
+
+  // Convenience for batch-detail tab review gating.
+  function canReviewOperation() { return canDoOperation('batch', 'review'); }
+
+  // Two-person batch verification: Verifier tick (or operation admin under
+  // the legacy shape) may verify a tab; only reviewers may then mark it
+  // as reviewed.
+  function canVerifyOperation() { return canDoOperation('batch', 'verify'); }
 
   /**
    * Redirect away from a module page if the user lacks access.
@@ -197,6 +283,8 @@
     canVerifyOperation,
     operationPageLevel,
     canOpenOperationPage,
+    canDoOperation,
+    requireOperationAction,
     guard
   };
 })(window);

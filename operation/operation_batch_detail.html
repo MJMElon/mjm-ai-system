@@ -1875,15 +1875,18 @@
         // renderCalibrationHistory.
         let _t7EditingId = null;
 
-        // Returns true when the current user is admin of the operation
-        // module. Reads MJMAccess directly because the MJMReview module's
-        // `isAdmin` is closure-scoped and not visible here — see the bug
-        // where all calibration rows showed 🔒 instead of action buttons.
+        // Returns true when the current user holds the batch "Review &
+        // approve" tick (the old operation-admin role). Reads MJMAccess
+        // directly because the MJMReview module's `isAdmin` is
+        // closure-scoped and not visible here — see the bug where all
+        // calibration rows showed 🔒 instead of action buttons.
         function _t7IsAdmin() {
             try {
-                return !!(typeof MJMAccess !== 'undefined'
-                    && typeof MJMAccess.isAdminOf === 'function'
-                    && MJMAccess.isAdminOf('operation'));
+                if (typeof MJMAccess === 'undefined') return false;
+                if (typeof MJMAccess.canDoOperation === 'function') {
+                    return !!MJMAccess.canDoOperation('batch', 'review');
+                }
+                return typeof MJMAccess.isAdminOf === 'function' && MJMAccess.isAdminOf('operation');
             } catch (_) { return false; }
         }
 
@@ -6956,8 +6959,16 @@ Thank you.`;
       const rejections    = {}; // stage → { id, remark, created_at, last_edited_by } — HQ reject-with-remark rows
       const lastEdits     = {}; // tabIdx → { ts, by } — latest report save per tab (detects post-rejection amendment)
       let booted     = false;
-      let isAdmin    = false;
-      let isVerifier = false;
+      let isAdmin    = false; // "Review & approve reports" tick
+      let isVerifier = false; // "Verify reports" tick
+      let canFill    = true;  // "Fill in report" tick — false = read-only tabs
+
+      // Central un/lock so a user without the Fill-in-report tick can never
+      // be unlocked by a banner state change.
+      function setTabLock(tab, locked) {
+        if (locked || !canFill) tab.classList.add('mjm-locked');
+        else tab.classList.remove('mjm-locked');
+      }
 
       function fmtDate(iso) {
         if (!iso) return '';
@@ -6996,7 +7007,7 @@ Thank you.`;
         if (!stage) {
           banner.style.display = 'none';
           banner.innerHTML = '';
-          tab.classList.remove('mjm-locked');
+          setTabLock(tab, false);
           return;
         }
 
@@ -7013,7 +7024,7 @@ Thank you.`;
               <div class="mjm-review-meta">Review Status</div>
               <div class="mt-1 text-[#7a4a10]">Save Tab 1 first — verify &amp; review can only be applied once a batch number is assigned.</div>
             </div>`;
-          tab.classList.remove('mjm-locked');
+          setTabLock(tab, false);
           return;
         }
 
@@ -7035,8 +7046,7 @@ Thank you.`;
                          onclick="MJMReview.unmark(${tabIdx})">Unreview</button>`
               : `<span class="mjm-review-meta">Read-only for your role</span>` }
           `;
-          if (!isAdmin) tab.classList.add('mjm-locked');
-          else          tab.classList.remove('mjm-locked');
+          setTabLock(tab, !isAdmin);
           return;
         }
 
@@ -7078,7 +7088,7 @@ Thank you.`;
               </div>
               <div class="mjm-review-btn-row">${verifyBtn}${rejectAgainBtn}${clearBtn}</div>
             `;
-            tab.classList.remove('mjm-locked');
+            setTabLock(tab, false);
             return;
           }
 
@@ -7090,7 +7100,7 @@ Thank you.`;
             </div>
             <div class="mjm-review-btn-row">${verifyBtn}${editBtn}${clearBtn}</div>
           `;
-          tab.classList.remove('mjm-locked');
+          setTabLock(tab, false);
           return;
         }
 
@@ -7118,7 +7128,7 @@ Thank you.`;
               !isAdmin && !isVerifier ? '<span class="mjm-review-meta">Awaiting admin review</span>' : ''
             }</div>
           `;
-          tab.classList.remove('mjm-locked');
+          setTabLock(tab, false);
           return;
         }
 
@@ -7144,7 +7154,7 @@ Thank you.`;
             !isVerifier && !isAdmin ? '<span class="mjm-review-meta">Awaiting verifier</span>' : ''
           }</div>
         `;
-        tab.classList.remove('mjm-locked');
+        setTabLock(tab, false);
       }
 
       function renderAll() {
@@ -7426,8 +7436,20 @@ Thank you.`;
           window.location.href = 'operation_dashboard.html';
           return;
         }
-        isAdmin    = MJMAccess.isAdminOf('operation');
-        isVerifier = typeof MJMAccess.canVerifyOperation === 'function' && MJMAccess.canVerifyOperation();
+        // Function-level ticks from the module's User Access page.
+        if (isNewBatch && !MJMAccess.canDoOperation('batch', 'add_new')) {
+          alert('You do not have permission to add new batch records.');
+          window.location.href = 'operation_batch_record.html';
+          return;
+        }
+        isAdmin    = MJMAccess.canDoOperation('batch', 'review');
+        isVerifier = MJMAccess.canDoOperation('batch', 'verify');
+        canFill    = MJMAccess.canDoOperation('batch', 'fill_report');
+        // Users without the "Fill in report" tick get every tab read-only.
+        if (!canFill) TAB_INDICES.forEach(idx => {
+          const tab = document.getElementById('tab-' + idx);
+          if (tab) tab.classList.add('mjm-locked');
+        });
 
         // Re-apply lock when tab switches (other code may inject rows).
         const _origSwitchTab = window.switchTab;
@@ -7467,7 +7489,7 @@ Thank you.`;
           if (!tab) return;
           new MutationObserver(() => {
             const stage = STAGE_BY_TAB[idx];
-            if (reviews[stage] && !isAdmin) tab.classList.add('mjm-locked');
+            if ((reviews[stage] && !isAdmin) || !canFill) tab.classList.add('mjm-locked');
           }).observe(tab, { childList: true, subtree: true });
         });
 
