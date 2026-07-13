@@ -10,6 +10,43 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <link rel="stylesheet" href="assets/style.css">
 <script src="assets/auth.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
+<style>
+  /* ── Proof modal ─────────────────────────────────────────── */
+  .proof-overlay{position:fixed;inset:0;background:rgba(15,30,18,.65);backdrop-filter:blur(4px);z-index:90;display:none;align-items:center;justify-content:center;padding:16px;}
+  .proof-overlay.open{display:flex;}
+  .proof-card{background:#fff;border-radius:20px;max-width:440px;width:100%;max-height:92vh;overflow-y:auto;box-shadow:0 30px 70px rgba(0,0,0,.35);padding:22px;}
+  .proof-card h3{margin:0 0 2px;font-size:1.15rem;}
+  .proof-card .p-sub{color:#6b7a6b;font-size:.85rem;margin:0 0 14px;}
+  .p-photo{display:block;width:100%;border:2px dashed #b9ccb9;border-radius:14px;background:#f3f7f3;text-align:center;padding:26px 12px;cursor:pointer;transition:all .15s;}
+  .p-photo:hover{border-color:var(--green,#2f7d32);background:#ecf4ec;}
+  .p-photo i{font-size:1.9rem;color:var(--green,#2f7d32);display:block;margin-bottom:8px;}
+  .p-photo span{font-weight:700;color:#33472f;font-size:.9rem;}
+  .p-photo small{display:block;color:#7d8d7d;margin-top:4px;font-size:.75rem;}
+  .p-photo img{max-width:100%;max-height:240px;border-radius:10px;display:block;margin:0 auto;}
+  .p-photo.hasimg{padding:10px;border-style:solid;}
+  .p-meta{margin:14px 0 4px;display:flex;flex-direction:column;gap:8px;}
+  .p-meta-row{display:flex;align-items:center;gap:10px;background:#f6f8f6;border:1px solid #e3eae3;border-radius:10px;padding:9px 12px;font-size:.85rem;color:#33472f;}
+  .p-meta-row i{width:18px;text-align:center;color:var(--green,#2f7d32);}
+  .p-meta-row .warn{color:#a15c00;}
+  .p-btns{display:flex;gap:10px;margin-top:16px;}
+  .p-btns .btn{flex:1;justify-content:center;}
+  .p-btns .btn.ghost{background:#eef2ee;color:#33472f;box-shadow:none;}
+  .p-btns .btn:disabled{opacity:.5;cursor:not-allowed;}
+  /* ── Per-activity history ───────────────────────────────── */
+  .ph-toggle{background:none;border:none;color:#5c7a5c;font-size:.78rem;font-weight:700;cursor:pointer;padding:2px 0 0;display:inline-flex;align-items:center;gap:6px;}
+  .ph-toggle:hover{color:var(--green,#2f7d32);}
+  .proof-hist{display:none;margin:2px 0 10px;padding:10px 12px;background:#f6f8f6;border:1px solid #e3eae3;border-radius:12px;}
+  .proof-hist.open{display:block;}
+  .ph-item{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dashed #dbe5db;font-size:.8rem;color:#3c4f3c;}
+  .ph-item:last-child{border-bottom:none;}
+  .ph-item img{width:46px;height:46px;object-fit:cover;border-radius:8px;flex-shrink:0;cursor:pointer;}
+  .ph-item .ph-noimg{width:46px;height:46px;border-radius:8px;background:#e3eae3;display:flex;align-items:center;justify-content:center;color:#8ba18b;flex-shrink:0;}
+  .ph-item a{color:#2f7d32;font-weight:700;text-decoration:none;}
+  .ph-item .ph-pend{color:#a15c00;font-weight:700;font-size:.72rem;}
+  .ph-empty{font-size:.8rem;color:#7d8d7d;padding:4px 0;}
+</style>
 </head>
 <body>
 
@@ -27,7 +64,7 @@
     <div class="eyebrow" id="heroEyebrow">Practical Experience</div>
     <h1 id="heroTitle">Practical Record</h1>
     <div class="rule"></div>
-    <p class="lede" id="heroLede">Tap <b>+</b> every time you complete a task on site. Reach every target — and read all the training slides — to complete the program.</p>
+    <p class="lede" id="heroLede">Tap <b>+</b> every time you complete a task on site — snap a photo as proof, and the time and location are recorded with it.</p>
   </div>
 </header>
 
@@ -42,6 +79,31 @@
   <p><b>MJM Training Center</b> · Practical Record</p>
 </footer>
 
+<!-- ── Proof-capture modal ─────────────────────────────────── -->
+<div class="proof-overlay" id="proofOverlay">
+  <div class="proof-card">
+    <h3 id="pTitle">Add record</h3>
+    <p class="p-sub">Take a photo of the work as proof — location, date and time are saved with it.</p>
+
+    <label class="p-photo" id="pPhotoBox">
+      <i class="fa-solid fa-camera"></i>
+      <span>Take / choose photo</span>
+      <small>Required — this is your proof of work</small>
+      <input type="file" id="pFile" accept="image/*" capture="environment" hidden>
+    </label>
+
+    <div class="p-meta">
+      <div class="p-meta-row"><i class="fa-solid fa-calendar-day"></i> <span id="pWhen">—</span></div>
+      <div class="p-meta-row"><i class="fa-solid fa-location-dot"></i> <span id="pWhere">Getting location…</span></div>
+    </div>
+
+    <div class="p-btns">
+      <button class="btn ghost" type="button" id="pCancel">Cancel</button>
+      <button class="btn" type="button" id="pSave" disabled><i class="fa-solid fa-check"></i> Save record</button>
+    </div>
+  </div>
+</div>
+
 <script src="assets/app.js"></script>
 <script>
 (function(){
@@ -51,16 +113,216 @@
   var root=document.getElementById('logGroups'),
       status=document.getElementById('progStatus');
 
+  /* ── Supabase (shares the AI System login session on this domain) ── */
+  var _sb=null;
+  try{ _sb=supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY); }catch(e){}
+  var BUCKET='documents';
+
   function el(tag,cls,html){ var n=document.createElement(tag); if(cls)n.className=cls; if(html!=null)n.innerHTML=html; return n; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 
   function param(name){
     var m=new RegExp('[?&]'+name+'=([^&]*)').exec(location.search);
     return m?decodeURIComponent(m[1]):null;
   }
 
+  /* ── Local proof entries (per user, per activity) ─────────────
+     entries-<act>: [{at,lat,lng,acc,url,synced}]  (small — no image data)
+     pending-proofs: [{act,at,lat,lng,acc,dataUrl}] queued while offline */
+  function entries(act){ try{ return JSON.parse(MJM.get('entries-'+act)||'[]'); }catch(e){ return []; } }
+  function saveEntries(act,list){ MJM.set('entries-'+act,JSON.stringify(list)); }
+  function pending(){ try{ return JSON.parse(MJM.get('pending-proofs')||'[]'); }catch(e){ return []; } }
+  function savePending(list){ MJM.set('pending-proofs',JSON.stringify(list)); }
+
+  function fmtWhen(iso){
+    try{ return new Date(iso).toLocaleString(undefined,{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+    catch(e){ return iso; }
+  }
+  function whereHtml(e){
+    if(e.lat==null||e.lng==null) return '<span class="ph-pend">no location</span>';
+    var ll=e.lat.toFixed(5)+', '+e.lng.toFixed(5);
+    return '<a href="https://maps.google.com/?q='+e.lat+','+e.lng+'" target="_blank" rel="noopener">'+ll+'</a>'+
+           (e.acc?' <small>±'+Math.round(e.acc)+'m</small>':'');
+  }
+
+  /* ── Photo helpers ──────────────────────────────────────── */
+  function compress(file,maxDim,quality){
+    return new Promise(function(res,rej){
+      var img=new Image();
+      img.onload=function(){
+        var w=img.width,h=img.height,s=Math.min(1,maxDim/Math.max(w,h));
+        var c=document.createElement('canvas');
+        c.width=Math.round(w*s); c.height=Math.round(h*s);
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        c.toBlob(function(b){ b?res(b):rej(new Error('compress failed')); },'image/jpeg',quality);
+        URL.revokeObjectURL(img.src);
+      };
+      img.onerror=function(){ rej(new Error('cannot read image')); };
+      img.src=URL.createObjectURL(file);
+    });
+  }
+  function blobToDataUrl(b){
+    return new Promise(function(res,rej){
+      var r=new FileReader();
+      r.onload=function(){res(r.result)}; r.onerror=function(){rej(r.error)};
+      r.readAsDataURL(b);
+    });
+  }
+  function dataUrlToBlob(d){
+    var p=d.split(','),m=/data:(.*?);/.exec(p[0]),bin=atob(p[1]),a=new Uint8Array(bin.length);
+    for(var i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);
+    return new Blob([a],{type:m?m[1]:'image/jpeg'});
+  }
+
+  /* ── Upload one proof (blob) → storage + table row. Returns {url,path}. ── */
+  async function uploadProof(act,blob,meta){
+    if(!_sb) throw new Error('no client');
+    var s=await _sb.auth.getSession();
+    var session=s&&s.data&&s.data.session;
+    if(!session) throw new Error('not signed in to Supabase');
+    var uid=session.user.id;
+    var path='training_proofs/'+uid+'/'+act+'-'+Date.now()+'.jpg';
+    var up=await _sb.storage.from(BUCKET).upload(path,blob,{contentType:'image/jpeg',upsert:false});
+    if(up.error) throw up.error;
+    var url=_sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+    // Proof row — best-effort: the photo in storage is already proof if the
+    // table migration hasn't been run yet.
+    try{
+      var ins=await _sb.from('training_practical_logs').insert({
+        user_id:uid,
+        email:session.user.email||null,
+        full_name:(session.user.user_metadata&&session.user.user_metadata.full_name)||null,
+        activity:act,
+        taken_at:meta.at,
+        lat:meta.lat, lng:meta.lng, accuracy_m:meta.acc,
+        photo_path:path, photo_url:url
+      });
+      if(ins.error) console.warn('[proof] table insert failed (photo still uploaded):',ins.error.message);
+    }catch(e){ console.warn('[proof] table insert threw:',e); }
+    return {url:url,path:path};
+  }
+
+  /* ── Sync queued offline proofs (best effort, on page load) ── */
+  async function syncPending(){
+    var q=pending();
+    if(!q.length) return;
+    var rest=[];
+    for(var i=0;i<q.length;i++){
+      var it=q[i];
+      try{
+        var r=await uploadProof(it.act,dataUrlToBlob(it.dataUrl),it);
+        var list=entries(it.act);
+        // match the placeholder entry by timestamp and mark it synced
+        for(var j=0;j<list.length;j++){
+          if(list[j].at===it.at&&!list[j].synced){ list[j].synced=true; list[j].url=r.url; break; }
+        }
+        saveEntries(it.act,list);
+      }catch(e){ rest.push(it); }
+    }
+    savePending(rest);
+  }
+
+  /* ── Proof modal ────────────────────────────────────────── */
+  var pv={act:null,name:'',blob:null,geo:null,geoDone:false,onSaved:null,saving:false};
+  var overlay=document.getElementById('proofOverlay'),
+      pTitle=document.getElementById('pTitle'),
+      pBox=document.getElementById('pPhotoBox'),
+      pFile=document.getElementById('pFile'),
+      pWhen=document.getElementById('pWhen'),
+      pWhere=document.getElementById('pWhere'),
+      pSave=document.getElementById('pSave'),
+      pCancel=document.getElementById('pCancel');
+
+  function resetPhotoBox(){
+    pBox.classList.remove('hasimg');
+    pBox.innerHTML='<i class="fa-solid fa-camera"></i><span>Take / choose photo</span>'+
+      '<small>Required — this is your proof of work</small>';
+    pBox.appendChild(pFile);
+    pFile.value='';
+  }
+
+  function openProof(a,onSaved){
+    pv={act:a.key,name:a.name,blob:null,geo:null,geoDone:false,onSaved:onSaved,saving:false};
+    pTitle.textContent='Add record — '+a.name;
+    pWhen.textContent=fmtWhen(new Date().toISOString());
+    pWhere.textContent='Getting location…';
+    pSave.disabled=true;
+    pSave.innerHTML='<i class="fa-solid fa-check"></i> Save record';
+    resetPhotoBox();
+    overlay.classList.add('open');
+    if(navigator.geolocation){
+      navigator.geolocation.getCurrentPosition(
+        function(pos){ pv.geo={lat:pos.coords.latitude,lng:pos.coords.longitude,acc:pos.coords.accuracy}; pv.geoDone=true;
+          pWhere.innerHTML=pv.geo.lat.toFixed(5)+', '+pv.geo.lng.toFixed(5)+' <small>±'+Math.round(pv.geo.acc)+'m</small>'; },
+        function(err){ pv.geoDone=true;
+          pWhere.innerHTML='<span class="warn">Location unavailable ('+esc(err.message)+') — record saves without it</span>'; },
+        {enableHighAccuracy:true,timeout:10000,maximumAge:30000}
+      );
+    }else{
+      pv.geoDone=true;
+      pWhere.innerHTML='<span class="warn">This device has no location support</span>';
+    }
+  }
+  function closeProof(){ overlay.classList.remove('open'); pv.saving=false; }
+
+  pFile.addEventListener('change',async function(){
+    var f=pFile.files&&pFile.files[0];
+    if(!f) return;
+    try{
+      pv.blob=await compress(f,1000,0.72);
+      var url=URL.createObjectURL(pv.blob);
+      pBox.classList.add('hasimg');
+      pBox.innerHTML='<img alt="proof photo" src="'+url+'">'+
+        '<small style="display:block;margin-top:6px;color:#5c7a5c;font-weight:700">Tap to retake</small>';
+      pBox.appendChild(pFile);
+      pSave.disabled=false;
+    }catch(e){ alert('Could not read that photo — please try again.'); }
+  });
+
+  pCancel.addEventListener('click',closeProof);
+  overlay.addEventListener('click',function(e){ if(e.target===overlay&&!pv.saving) closeProof(); });
+
+  pSave.addEventListener('click',async function(){
+    if(!pv.blob||pv.saving) return;
+    pv.saving=true;
+    pSave.disabled=true;
+    pSave.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+    var meta={at:new Date().toISOString(),
+              lat:pv.geo?pv.geo.lat:null,lng:pv.geo?pv.geo.lng:null,acc:pv.geo?pv.geo.acc:null};
+    var entry={at:meta.at,lat:meta.lat,lng:meta.lng,acc:meta.acc,url:null,synced:false};
+    try{
+      var r=await uploadProof(pv.act,pv.blob,meta);
+      entry.url=r.url; entry.synced=true;
+    }catch(e){
+      console.warn('[proof] upload failed:',e);
+      var ok=confirm('Photo upload failed ('+(e&&e.message?e.message:'offline?')+').\n\nSave the record on this device and upload automatically later?');
+      if(!ok){ pv.saving=false; pSave.disabled=false; pSave.innerHTML='<i class="fa-solid fa-check"></i> Save record'; return; }
+      try{
+        var q=pending();
+        if(q.length>=25){ alert('Too many unsynced records on this device — please get online to sync before adding more.'); pv.saving=false; pSave.disabled=false; pSave.innerHTML='<i class="fa-solid fa-check"></i> Save record'; return; }
+        q.push({act:pv.act,at:meta.at,lat:meta.lat,lng:meta.lng,acc:meta.acc,dataUrl:await blobToDataUrl(pv.blob)});
+        savePending(q);
+      }catch(ex){ alert('Could not save offline — storage is full or blocked.'); pv.saving=false; pSave.disabled=false; pSave.innerHTML='<i class="fa-solid fa-check"></i> Save record'; return; }
+    }
+    var list=entries(pv.act); list.unshift(entry); saveEntries(pv.act,list);
+    if(pv.onSaved) pv.onSaved();
+    closeProof();
+  });
+
+  /* ── History list under each activity ───────────────────── */
+  function histItemHtml(e){
+    var thumb;
+    if(e.url) thumb='<img src="'+esc(e.url)+'" loading="lazy" onclick="window.open(this.src,\'_blank\')" alt="proof">';
+    else thumb='<div class="ph-noimg"><i class="fa-solid '+(e.synced?'fa-image':'fa-cloud-arrow-up')+'"></i></div>';
+    return '<div class="ph-item">'+thumb+
+      '<div style="flex:1;min-width:0"><div>'+fmtWhen(e.at)+'</div><div>'+whereHtml(e)+'</div></div>'+
+      (e.synced?'':'<span class="ph-pend"><i class="fa-solid fa-cloud-arrow-up"></i> pending sync</span>')+
+      '</div>';
+  }
+
   /* counter row; onChange is called after every +/- so progress can refresh */
   function actRow(a,color,target,onChange){
-    var log=MJM.log();
+    var wrap=el('div');
     var row=el('div','act');
     var body=el('div','act-body');
     body.appendChild(el('h3',null,a.name));
@@ -71,6 +333,9 @@
       bar=el('div','bar'); bar.appendChild(el('span','fill'));
       body.appendChild(bar);
     }
+    var histBtn=el('button','ph-toggle','<i class="fa-solid fa-clock-rotate-left"></i> <span>0 records</span>');
+    histBtn.type='button';
+    body.appendChild(histBtn);
     row.appendChild(el('div','icon-badge '+color,'<i class="fa-solid '+a.icon+'"></i>'));
     row.appendChild(body);
     if(tgt) row.appendChild(tgt);
@@ -79,9 +344,23 @@
     minus.type='button'; minus.setAttribute('aria-label','Remove one from '+a.name);
     var cnt=el('span','cnt','0');
     var plus=el('button','cbtn plus','<i class="fa-solid fa-plus"></i>');
-    plus.type='button'; plus.setAttribute('aria-label','Add one to '+a.name);
+    plus.type='button'; plus.setAttribute('aria-label','Add one to '+a.name+' with photo proof');
     counter.appendChild(minus); counter.appendChild(cnt); counter.appendChild(plus);
     row.appendChild(counter);
+
+    var hist=el('div','proof-hist');
+
+    function paintHist(){
+      var list=entries(a.key);
+      histBtn.querySelector('span').textContent=list.length+' record'+(list.length===1?'':'s');
+      if(hist.classList.contains('open')){
+        hist.innerHTML=list.length?list.map(histItemHtml).join(''):'<div class="ph-empty">No records yet — tap + to add your first one with a photo.</div>';
+      }
+    }
+    histBtn.addEventListener('click',function(){
+      hist.classList.toggle('open');
+      paintHist();
+    });
 
     function paint(){
       var l=MJM.log(), v=l[a.key]||0;
@@ -92,6 +371,7 @@
         tgt.textContent=Math.min(v,target)+' / '+target;
         bar.firstChild.style.width=Math.min(100,v/target*100)+'%';
       }
+      paintHist();
     }
     function bump(d){
       var l=MJM.log();
@@ -100,10 +380,14 @@
       paint();
       if(onChange) onChange();
     }
-    plus.addEventListener('click',function(){ bump(1); });
+    /* "+" now requires photo proof — the count only goes up after the
+       record (photo + location + time) is saved. */
+    plus.addEventListener('click',function(){ openProof(a,function(){ bump(1); }); });
     minus.addEventListener('click',function(){ bump(-1); });
     paint();
-    return row;
+    wrap.appendChild(row);
+    wrap.appendChild(hist);
+    return wrap;
   }
 
   /* ---------- per-program view (?program=slug) ---------- */
@@ -113,7 +397,7 @@
     document.getElementById('heroEyebrow').textContent='Practical Record';
     document.getElementById('heroTitle').textContent=prog.name;
     document.getElementById('heroLede').innerHTML=
-      'Complete this program by reading all its training slides and reaching every practical target below. Tap <b>+</b> each time you do a task on site.';
+      'Complete this program by reading all its training slides and reaching every practical target below. Tap <b>+</b> each time you do a task on site — with a photo as proof.';
 
     function refresh(){
       var p=MJM.progress(slug);
@@ -155,7 +439,7 @@
     g2.appendChild(el('h3',null,'<i class="fa-solid fa-list-check" style="color:var(--green);margin-right:8px"></i>Practical Tasks'));
     var keys=Object.keys(prog.practical);
     if(keys.length){
-      g2.appendChild(el('div','rg-sub','Reach each target to fulfil the practical requirement.'));
+      g2.appendChild(el('div','rg-sub','Reach each target to fulfil the practical requirement. Every + needs a photo — location, date and time are recorded as proof.'));
       keys.forEach(function(k){
         var a=MJM.ACTIVITIES[k];
         g2.appendChild(actRow({key:k,name:a.name,icon:a.icon,desc:a.desc},'ib-green',prog.practical[k],refresh));
@@ -175,7 +459,7 @@
   /* ---------- full logbook (no program selected) ---------- */
   function renderAll(){
     var GROUPS=[
-      {title:'Field Work', sub:'Nursery operations carried out in the field.', color:'ib-green',
+      {title:'Field Work', sub:'Nursery operations carried out in the field. Every + needs a photo — location, date and time are recorded as proof.', color:'ib-green',
        keys:['seed-planting','seed-culling','watering','manuring','weeding','spraying','interrow','transplanting','culling']},
       {title:'Troubleshoot & Cases', sub:'Problems logged and resolved in Carlos.', color:'ib-earth',
        keys:['case-open','case-solve']},
@@ -203,6 +487,9 @@
   var slug=param('program');
   if(slug&&MJM.PROGRAMS[slug]) renderProgram(slug);
   else renderAll();
+
+  // Try to push any offline-queued proofs up in the background.
+  syncPending();
 })();
 </script>
 
