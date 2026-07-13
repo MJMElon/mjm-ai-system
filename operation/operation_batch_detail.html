@@ -5516,11 +5516,17 @@ Thank you.`;
                     if (!batchExists) { const { error: batchErr } = await _supabase.from('operation_batches').insert([{ name: batch }]); if(batchErr) console.warn("Could not save to master batches list (Check RLS policy):", batchErr); }
                 }
                 let logError;
+                // CRITICAL: updates must target the row's primary key (id),
+                // NEVER created_at. Bulk-imported batches share one identical
+                // created_at, so an update keyed on the timestamp rewrote EVERY
+                // batch in the import (this is how the 224-241 range collapsed
+                // into copies of a single edited batch and vanished from the
+                // ledger).
                 if(isEditing && batchData) {
-                    let { error } = await _supabase.from('shared_inventory_logs').update(ledgerPayload).eq('created_at', batchData.created_at);
+                    let { error } = await _supabase.from('shared_inventory_logs').update(ledgerPayload).eq('id', batchData.id);
                     if (error && isEditMetaColumnError(error)) {
                         const fb = stripEditMeta([ledgerPayload])[0];
-                        ({ error } = await _supabase.from('shared_inventory_logs').update(fb).eq('created_at', batchData.created_at));
+                        ({ error } = await _supabase.from('shared_inventory_logs').update(fb).eq('id', batchData.id));
                     }
                     logError = error;
                 } else {
@@ -5531,17 +5537,17 @@ Thank you.`;
                     // update it in place instead of inserting another.
                     const { data: existingRows, error: existingErr } = await _supabase
                         .from('shared_inventory_logs')
-                        .select('created_at')
+                        .select('id')
                         .eq('transaction_type', 'Seeds_Received')
                         .eq('batch_name', batch)
                         .limit(1);
                     if (existingErr) console.warn('Could not check for existing Seeds_Received row:', existingErr.message);
                     const existing = (existingRows && existingRows[0]) || null;
                     if (existing) {
-                        let { error } = await _supabase.from('shared_inventory_logs').update(ledgerPayload).eq('created_at', existing.created_at);
+                        let { error } = await _supabase.from('shared_inventory_logs').update(ledgerPayload).eq('id', existing.id);
                         if (error && isEditMetaColumnError(error)) {
                             const fb = stripEditMeta([ledgerPayload])[0];
-                            ({ error } = await _supabase.from('shared_inventory_logs').update(fb).eq('created_at', existing.created_at));
+                            ({ error } = await _supabase.from('shared_inventory_logs').update(fb).eq('id', existing.id));
                         }
                         logError = error;
                     } else {
