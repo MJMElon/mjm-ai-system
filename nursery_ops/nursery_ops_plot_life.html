@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Life of Plot — Nursery Operation Management</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230d9488%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3ENO%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_access.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  * { font-family:'Outfit', system-ui, sans-serif; }
+  body { background:#f0fdfa; margin:0; }
+  .card { background:white; border:1px solid #ccfbf1; border-radius:20px; box-shadow:0 4px 16px rgba(13,148,136,.08); }
+  .chip { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+  .chip-planned     { background:#eff6ff; color:#1e3a8a; border:1px solid #bfdbfe; }
+  .chip-in_progress { background:#fffbeb; color:#92400e; border:1px solid #fde68a; }
+  .chip-done        { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+  .chip-cancelled   { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
+  .chip-over        { background:#fff1f2; color:#9f1239; border:1px solid #fecdd3; }
+  .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 14px; border-radius:12px; font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; border:none; cursor:pointer; transition:all .15s; }
+  .btn-teal  { background:linear-gradient(135deg,#14b8a6,#0d9488); color:white; box-shadow:0 6px 14px -4px rgba(13,148,136,.4); }
+  .btn-teal:hover { transform:translateY(-1px); }
+  .btn-ghost { background:white; color:#475569; border:1.5px solid #e2e8f0; }
+  .btn-ghost:hover { background:#f8fafc; }
+  .inp { width:100%; background:white; border:1.5px solid #e2e8f0; border-radius:12px; padding:10px 14px; font-size:14px; font-weight:600; outline:none; }
+  .inp:focus { border-color:#14b8a6; box-shadow:0 0 0 3px rgba(20,184,166,.15); }
+  .lbl { display:block; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:#64748b; margin-bottom:5px; }
+  .modal-back { position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:60; backdrop-filter:blur(4px); }
+  .modal { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:calc(100% - 32px); max-width:520px; max-height:88vh; overflow-y:auto; background:white; border-radius:20px; z-index:70; box-shadow:0 30px 80px rgba(0,0,0,.3); }
+  .plot-item { width:100%; text-align:left; padding:12px 16px; border:none; background:white; border-bottom:1px solid #f1f5f9; cursor:pointer; transition:background .15s; }
+  .plot-item:hover { background:#f0fdfa; }
+  .plot-item.active { background:#ccfbf1; }
+  .tl-dot { position:absolute; left:-7px; top:6px; width:12px; height:12px; border-radius:50%; border:2.5px solid white; box-shadow:0 0 0 1.5px #99f6e4; }
+</style>
+</head>
+<body>
+
+<div class="bg-white border-b border-teal-100 px-6 py-4 grid grid-cols-3 items-center sticky top-0 z-30 shadow-sm">
+  <a href="nursery_ops_dashboard.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-teal-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Back</a>
+  <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm">Life of Plot</span>
+  <div class="justify-self-end"><div class="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center text-white font-black text-xs">NO</div></div>
+</div>
+
+<div id="loading" class="max-w-[1150px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading…</div>
+
+<div id="main" class="max-w-[1150px] mx-auto px-4 md:px-6 py-8 hidden">
+  <div class="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
+
+    <!-- ── Plot picker ─────────────────────────────────────── -->
+    <div class="card overflow-hidden">
+      <div class="p-4 border-b border-slate-100 space-y-3">
+        <h2 class="font-black text-slate-800 uppercase tracking-widest text-[12px]">📍 Plots</h2>
+        <select id="nursery-filter" class="inp !py-2 text-[13px]"><option value="">All nurseries</option></select>
+        <input id="plot-search" class="inp !py-2 text-[13px]" placeholder="🔎 Search plot…">
+      </div>
+      <div id="plot-list" class="max-h-[60vh] overflow-y-auto"></div>
+      <p class="text-[11px] text-slate-400 p-3 border-t border-slate-100">
+        Plots are the same ones managed in the Seedling Stock Management <strong>System Settings</strong>.
+      </p>
+    </div>
+
+    <!-- ── Timeline ────────────────────────────────────────── -->
+    <div class="space-y-4">
+      <div id="plot-empty" class="card p-12 text-center text-slate-400 text-sm">← Pick a plot to see everything ever done on it.</div>
+
+      <div id="plot-view" class="hidden space-y-4">
+        <div class="card p-5 md:p-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <h2 id="pv-name" class="font-black text-slate-800 text-lg">—</h2>
+              <p id="pv-stats" class="text-[12px] font-bold text-slate-500 mt-1">—</p>
+            </div>
+            <button id="add-log-btn" class="btn btn-teal">+ Log Work Done</button>
+          </div>
+        </div>
+        <div class="card p-5 md:p-6">
+          <h3 class="font-black text-slate-700 uppercase tracking-widest text-[12px] mb-4">Work Timeline</h3>
+          <div id="timeline" class="relative border-l-2 border-teal-100 ml-2 pl-6 space-y-5"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Ad-hoc work log modal ─────────────────────────────────── -->
+<div id="log-back" class="modal-back hidden"></div>
+<div id="log-modal" class="modal hidden">
+  <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+    <h3 class="font-black text-slate-800 uppercase tracking-widest text-sm">Log Work Done</h3>
+    <button data-close class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 text-xl leading-none">×</button>
+  </div>
+  <div class="p-6 space-y-4">
+    <p id="l-plot-line" class="text-[13px] font-semibold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-3">—</p>
+    <div>
+      <label class="lbl">Work type (from Motion Study)</label>
+      <select id="l-type" class="inp"></select>
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div><label class="lbl">Started</label><input id="l-start" type="date" class="inp"></div>
+      <div><label class="lbl">Finished</label><input id="l-end" type="date" class="inp"></div>
+    </div>
+    <div><label class="lbl">Remark</label><textarea id="l-remark" rows="2" class="inp"></textarea></div>
+    <p class="text-[11px] text-slate-400">This records work that was done outside the monthly schedule. It appears in both this timeline and the month's Done history.</p>
+  </div>
+  <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 rounded-b-[20px]">
+    <button data-close class="btn btn-ghost">Cancel</button>
+    <button id="l-save" class="btn btn-teal">Save Log</button>
+  </div>
+</div>
+
+<div id="toast" class="fixed bottom-6 right-6 hidden z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg"></div>
+
+<script>
+const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+let plots = [];         // shared_plots
+let workTypes = [];     // nops_work_types
+let workCounts = {};    // plot_name → total works
+let curPlot = null;     // selected plot row
+let curWorks = [];      // works of selected plot
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmtDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+
+function showToast(msg, kind) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'fixed bottom-6 right-6 z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg ' +
+    (kind === 'err' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200');
+  t.classList.remove('hidden');
+  setTimeout(() => t.classList.add('hidden'), 2600);
+}
+
+// ── Plot list ────────────────────────────────────────────────
+function renderPlotList() {
+  const nur = $('nursery-filter').value;
+  const q = ($('plot-search').value || '').toLowerCase().trim();
+  const list = plots.filter(p =>
+    (!nur || p.nursery_name === nur) &&
+    (!q || (p.plot_name || '').toLowerCase().includes(q)));
+  $('plot-list').innerHTML = list.length ? list.map(p => `
+    <button class="plot-item ${curPlot && curPlot.plot_name === p.plot_name ? 'active' : ''}" data-plot="${esc(p.plot_name)}">
+      <span class="font-black text-slate-800 text-[13px]">${esc(p.plot_name)}</span>
+      <span class="block text-[11px] text-slate-500 font-semibold">${esc(p.nursery_name || '—')} · ${workCounts[p.plot_name] || 0} work record${(workCounts[p.plot_name] || 0) === 1 ? '' : 's'}</span>
+    </button>`).join('')
+    : '<div class="text-center text-slate-400 text-sm py-8">No plots found.</div>';
+}
+
+// ── Timeline ─────────────────────────────────────────────────
+function actualDays(w) {
+  if (!w.actual_start || !w.actual_end) return null;
+  return Math.max(1, Math.round((new Date(w.actual_end) - new Date(w.actual_start)) / 86400000) + 1);
+}
+
+function timelineItemHtml(w) {
+  const dotColor = { planned:'#3b82f6', in_progress:'#f59e0b', done:'#10b981', cancelled:'#94a3b8' }[w.status] || '#94a3b8';
+  const days = actualDays(w);
+  const wt = workTypes.find(t => t.id === w.work_type_id);
+  const std = wt && wt.std_days != null ? Number(wt.std_days) : (w.planned_days != null ? Number(w.planned_days) : null);
+  let pace = '';
+  if (w.status === 'done' && days != null && std != null && std > 0) {
+    pace = days <= std
+      ? `<span class="chip chip-done">${days}d — on the ${std}d standard</span>`
+      : `<span class="chip chip-over">${days}d — over the ${std}d standard</span>`;
+  }
+  const statusLabel = { planned:'Planned', in_progress:'In Progress', done:'Done', cancelled:'Cancelled' }[w.status] || w.status;
+  const when = w.actual_end || w.actual_start || w.planned_start;
+  return `
+    <div class="relative">
+      <span class="tl-dot" style="background:${dotColor}"></span>
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="font-black text-slate-800 text-[14px]">${esc(w.work_type)}</span>
+        <span class="chip chip-${w.status}">${statusLabel}</span>
+        ${pace}
+      </div>
+      <div class="text-[12px] text-slate-500 font-semibold mt-0.5">
+        ${when ? fmtDate(when) : ''} · month ${esc(w.month)}
+        ${w.actual_start && w.actual_end ? ` · ${fmtDate(w.actual_start)} → ${fmtDate(w.actual_end)}` : ''}
+        ${w.done_by ? ` · by ${esc(w.done_by)}` : ''}
+      </div>
+      ${w.remark ? `<div class="text-[12px] text-slate-400 mt-0.5">${esc(w.remark)}</div>` : ''}
+    </div>`;
+}
+
+async function selectPlot(plotName) {
+  curPlot = plots.find(p => p.plot_name === plotName) || { plot_name: plotName };
+  renderPlotList();
+  const { data, error } = await _supabase
+    .from('nops_plot_works').select('*')
+    .eq('plot_name', plotName)
+    .order('created_at', { ascending: false });
+  if (error) { showToast('Load failed: ' + error.message, 'err'); return; }
+  curWorks = (data || []).sort((a, b) => {
+    const ka = a.actual_end || a.actual_start || a.planned_start || a.created_at || '';
+    const kb = b.actual_end || b.actual_start || b.planned_start || b.created_at || '';
+    return kb.localeCompare(ka);
+  });
+  $('pv-name').textContent = `📍 ${curPlot.plot_name}` + (curPlot.nursery_name ? ` — ${curPlot.nursery_name}` : '');
+  const done = curWorks.filter(w => w.status === 'done');
+  const last = curWorks.find(w => w.actual_end || w.actual_start);
+  $('pv-stats').textContent =
+    `${curWorks.length} work record${curWorks.length === 1 ? '' : 's'} · ${done.length} done` +
+    (last ? ` · last activity ${fmtDate(last.actual_end || last.actual_start)}` : '');
+  $('timeline').innerHTML = curWorks.length
+    ? curWorks.map(timelineItemHtml).join('')
+    : '<div class="text-slate-400 text-sm py-4">Nothing recorded for this plot yet. Schedule work in the Monthly Schedule, or use “Log Work Done”.</div>';
+  $('plot-empty').classList.add('hidden');
+  $('plot-view').classList.remove('hidden');
+}
+
+// ── Ad-hoc log ───────────────────────────────────────────────
+function openLogModal() {
+  if (!curPlot) return;
+  $('l-plot-line').innerHTML = `Logging work on <strong>${esc(curPlot.plot_name)}</strong>${curPlot.nursery_name ? ' · ' + esc(curPlot.nursery_name) : ''}`;
+  $('l-type').innerHTML = workTypes.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')
+    || '<option value="">— no work types yet —</option>';
+  const today = new Date().toISOString().slice(0, 10);
+  $('l-start').value = today;
+  $('l-end').value = today;
+  $('l-remark').value = '';
+  $('log-back').classList.remove('hidden');
+  $('log-modal').classList.remove('hidden');
+}
+function closeModals() { ['log-back','log-modal'].forEach(id => $(id).classList.add('hidden')); }
+
+async function saveLog() {
+  const t = workTypes.find(x => String(x.id) === $('l-type').value);
+  const start = $('l-start').value, end = $('l-end').value;
+  if (!t || !start || !end) { showToast('Work type and both dates are required.', 'err'); return; }
+  if (end < start) { showToast('Finish date cannot be before start date.', 'err'); return; }
+  const u = MJMAccess.user() || {};
+  const who = u.full_name || u.email || null;
+  const { error } = await _supabase.from('nops_plot_works').insert([{
+    month: end.slice(0, 7),
+    nursery_name: curPlot.nursery_name || null,
+    plot_name: curPlot.plot_name,
+    work_type_id: t.id,
+    work_type: t.name,
+    planned_start: start,
+    planned_days: t.std_days != null ? Number(t.std_days) : null,
+    status: 'done',
+    actual_start: start,
+    actual_end: end,
+    done_by: who,
+    remark: $('l-remark').value.trim() || null,
+    created_by: who
+  }]);
+  if (error) { showToast('Save failed: ' + error.message, 'err'); return; }
+  showToast('Work logged.');
+  closeModals();
+  workCounts[curPlot.plot_name] = (workCounts[curPlot.plot_name] || 0) + 1;
+  selectPlot(curPlot.plot_name);
+}
+
+// ── Events ───────────────────────────────────────────────────
+document.addEventListener('click', e => {
+  if (e.target.closest('[data-close]')) { closeModals(); return; }
+  const pi = e.target.closest('[data-plot]');
+  if (pi) { selectPlot(pi.dataset.plot); return; }
+});
+$('add-log-btn').addEventListener('click', openLogModal);
+$('l-save').addEventListener('click', saveLog);
+$('nursery-filter').addEventListener('change', renderPlotList);
+$('plot-search').addEventListener('input', renderPlotList);
+$('log-back').addEventListener('click', closeModals);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModals(); });
+
+// ── Bootstrap ────────────────────────────────────────────────
+(async () => {
+  try {
+    await MJMAccess.load(_supabase);
+    if (!MJMAccess.user()) { window.location.href = '../index.html'; return; }
+    if (!MJMAccess.canAccess('nursery_ops')) {
+      alert('You do not have access to Nursery Operation Management.');
+      window.location.href = '../index.html';
+      return;
+    }
+    const [{ data: pl, error: e1 }, { data: wt, error: e2 }, { data: wk }] = await Promise.all([
+      _supabase.from('shared_plots').select('nursery_name, plot_name').order('plot_name'),
+      _supabase.from('nops_work_types').select('*').order('sort_order').order('name'),
+      _supabase.from('nops_plot_works').select('plot_name')
+    ]);
+    if (e1 || e2) showToast('Load failed: ' + (e1 || e2).message, 'err');
+    plots = pl || [];
+    workTypes = wt || [];
+    workCounts = {};
+    (wk || []).forEach(w => { workCounts[w.plot_name] = (workCounts[w.plot_name] || 0) + 1; });
+    const nurseries = [...new Set(plots.map(p => p.nursery_name).filter(Boolean))].sort();
+    $('nursery-filter').innerHTML = '<option value="">All nurseries</option>' +
+      nurseries.map(n => `<option>${esc(n)}</option>`).join('');
+    renderPlotList();
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('main').classList.remove('hidden');
+  } catch (e) {
+    if (e && e.message === 'NO_OPS_ACCESS') return;
+    console.warn(e);
+    window.location.href = '../index.html';
+  }
+})();
+</script>
+</body>
+</html>

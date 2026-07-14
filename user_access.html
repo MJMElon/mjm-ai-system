@@ -170,6 +170,13 @@
         </div>
         <div class="flex items-center justify-between gap-4">
           <div>
+            <div class="font-black text-slate-800 text-sm">Nursery Operation Management</div>
+            <div class="text-[11px] text-slate-500">Seeds, monthly work schedule, life of plot</div>
+          </div>
+          <select id="d-mod-nursery_ops" class="lvl-select"></select>
+        </div>
+        <div class="flex items-center justify-between gap-4">
+          <div>
             <div class="font-black text-slate-800 text-sm">Salesweb</div>
             <div class="text-[11px] text-slate-500">Customer-facing orders &amp; pricing</div>
           </div>
@@ -252,7 +259,7 @@
 const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
 // Top-level modules only — page access INSIDE a module (batch record,
 // stock, reports…) is managed from that module's own User Access page.
-const MODULES = ['operation', 'salesweb', 'audit', 'mobile', 'training', 'scan'];
+const MODULES = ['operation', 'nursery_ops', 'salesweb', 'audit', 'mobile', 'training', 'scan'];
 const LEVELS  = ['admin', 'normal', 'none'];
 const LEVEL_LABEL = { admin:'Admin', normal:'Normal', none:'None' };
 
@@ -276,7 +283,7 @@ function showToast(msg, kind) {
 }
 
 function defaultPerms() {
-  return { modules: { operation:'none', reports:'none', audit_trail:'none', salesweb:'none', audit:'none', mobile:'none', training:'none', scan:'none' }, manage_users:false, can_verify_operation:false };
+  return { modules: { operation:'none', nursery_ops:'none', reports:'none', audit_trail:'none', salesweb:'none', audit:'none', mobile:'none', training:'none', scan:'none' }, manage_users:false, can_verify_operation:false };
 }
 
 function normPerms(p) {
@@ -302,7 +309,7 @@ function initials(p) {
 }
 
 const MODULE_LABEL = {
-  operation: 'operation', reports: 'reports', audit_trail: 'audit trail',
+  operation: 'operation', nursery_ops: 'nursery ops', reports: 'reports', audit_trail: 'audit trail',
   salesweb: 'salesweb', audit: 'audit', mobile: 'mobile', training: 'training', scan: 'scan'
 };
 function summaryHtml(perms) {
