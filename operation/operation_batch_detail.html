@@ -1055,6 +1055,17 @@
                                         </button>
                                     </div>
 
+                                    <!-- Double Tone quantity currently sitting in the nursery (all
+                                         batches). This figure is the balance available when a row's
+                                         source tray is DOUBLE-TONE. -->
+                                    <div class="flex items-center justify-between gap-4 bg-[#ecfeff] border border-[#a5f3fc] rounded-xl px-5 py-3 mb-4">
+                                        <div>
+                                            <div class="text-[10px] font-black text-[#0891b2] uppercase tracking-widest">🎯 Double Tone Quantity in Nursery</div>
+                                            <div class="text-[9px] font-bold text-[#8a7a68] mt-0.5">Available when source tray is DOUBLE-TONE — accumulated across all batches.</div>
+                                        </div>
+                                        <div id="t3-dtone-nursery" class="text-2xl font-black text-[#0891b2]">0</div>
+                                    </div>
+
                                     <!-- Saved records table -->
                                     <div id="t3-saved-rows-table" class="hidden mb-4">
                                         <div class="hidden md:grid grid-cols-[2fr_1.2fr_1.5fr_0.8fr_0.6fr_80px] gap-2 px-3 pb-1 text-[8px] font-black text-[#8a7a68] uppercase tracking-widest border-b border-[#e8dcc8] mb-1">
@@ -2308,7 +2319,13 @@
 
         // --- TAB 3 LOGIC (Transplanting) ---
         let transplantRowCount = 0;
-        let preNurseryTrayData = []; 
+        let preNurseryTrayData = [];
+        // D-Tone pool contributed by OTHER batches (inflow into DOUBLE-TONE
+        // minus rows sourced FROM it). Added to this batch's live flow to give
+        // the "Double Tone Quantity in Nursery" figure shown above the
+        // transplant records — the balance available when a row's source tray
+        // is DOUBLE-TONE.
+        let t3_dtoneNurseryBase = 0;
         let mockCullingTab4 = 0; 
 
         async function syncTab3() {
@@ -2396,6 +2413,27 @@
                     }
                 } catch(e) { console.warn('Could not load premium/dtone qty:', e.message); }
             }
+
+            // Nursery-wide D-Tone pool from OTHER batches: everything ever
+            // routed INTO the DOUBLE-TONE tray minus everything transplanted
+            // OUT of it (rows whose remark records `tray [DOUBLE-TONE]`).
+            // This batch's own flow is added live in calcTransplanting().
+            t3_dtoneNurseryBase = 0;
+            try {
+                const notBatch = (q) => (batch && batch !== '—') ? q.neq('batch_name', batch) : q;
+                const [dtInRes, dtOutRes] = await Promise.all([
+                    notBatch(_supabase.from('shared_inventory_logs')
+                        .select('quantity_change')
+                        .eq('transaction_type', 'Transplanted_DoubleTone')),
+                    notBatch(_supabase.from('shared_inventory_logs')
+                        .select('quantity_change')
+                        .in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone'])
+                        .ilike('remark', '%tray [DOUBLE-TONE]%'))
+                ]);
+                const dtIn  = (dtInRes.data  || []).reduce((s, l) => s + (l.quantity_change || 0), 0);
+                const dtOut = (dtOutRes.data || []).reduce((s, l) => s + (l.quantity_change || 0), 0);
+                t3_dtoneNurseryBase = dtIn - dtOut;
+            } catch(e) { console.warn('Could not load nursery D-Tone pool:', e.message); }
 
             // Load 1st Culling data per tray for this batch
             window._t3CullByTray = {};
@@ -2970,6 +3008,14 @@
             // Net balance in each special tray (inflow minus outflow used as source)
             const netPremium = Math.max(0, totalPremium - premiumSourceUsed);
             const netDtone   = Math.max(0, totalDoubletone - dtoneSourceUsed);
+            // DOUBLE-TONE availability is NURSERY-WIDE: other batches' pool
+            // plus this form's live flow — this is the figure shown in the
+            // "Double Tone Quantity in Nursery" section and the balance
+            // offered when a row's source tray is DOUBLE-TONE. Premium and
+            // PN trays keep their per-batch behavior.
+            const dtoneAvailable = Math.max(0, t3_dtoneNurseryBase + totalDoubletone - dtoneSourceUsed);
+            const dtoneNurseryEl = document.getElementById('t3-dtone-nursery');
+            if (dtoneNurseryEl) dtoneNurseryEl.innerText = dtoneAvailable.toLocaleString();
 
             // Update Premium / D-Tone running qty in preNurseryTrayData + dropdown + panel
             const updateSpecial = (name, qty) => {
@@ -2982,7 +3028,7 @@
                 }
             };
             updateSpecial('PREMIUM CARE', netPremium);
-            updateSpecial('DOUBLE-TONE', netDtone);
+            updateSpecial('DOUBLE-TONE', dtoneAvailable); // dropdown offers the nursery-wide balance
 
             // Refresh all source tray dropdowns with updated live balances
             document.querySelectorAll('.transplant-row').forEach(row => {
