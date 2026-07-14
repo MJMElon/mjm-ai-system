@@ -435,6 +435,7 @@
     function closeInvoiceUploadModal() { document.getElementById('ci-upload-modal').classList.remove('open'); }
 
     async function submitInvoiceUpload() {
+        if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('stock', 'manage')) return;
         const groupKey = document.getElementById('ci-up-key').value;
         const g = findCreditGroup(groupKey);
         const errEl = document.getElementById('ci-up-error');
@@ -544,6 +545,7 @@
     function closeMarkPaidModal() { document.getElementById('ci-paid-modal').classList.remove('open'); }
 
     async function submitMarkPaid() {
+        if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('stock', 'manage')) return;
         const id = document.getElementById('ci-paid-id').value;
         const errEl = document.getElementById('ci-paid-error');
         errEl.innerText = '';
@@ -882,6 +884,7 @@
     }
 
     async function updateAllocation(el) {
+        if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('stock', 'manage')) return;
         const key = el.dataset.allockey;
         const field = el.dataset.allocfield;
         let value = el.type === 'checkbox' ? el.checked : el.value;
@@ -2483,6 +2486,7 @@
     }
 
     async function moveAllocationToBatch(allocId, batchName, plotName, qty) {
+        if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('stock', 'manage')) return;
         const idx = batchAllocations.findIndex(a => a.id === allocId);
         if (idx === -1) return;
         const orig = batchAllocations[idx];
@@ -2506,6 +2510,7 @@
     }
 
     async function allocateOrderToBatch({ orderId, customer, orderNumber, batchName, plotName, qty }) {
+        if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('stock', 'manage')) return;
         const payload = {
             batch_name:    batchName,
             plot_name:     plotName,
@@ -2539,6 +2544,7 @@
     }
 
     async function removeAllocation(allocId) {
+        if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('stock', 'manage')) return;
         const idx = batchAllocations.findIndex(a => a.id === allocId);
         if (idx === -1) return;
         const removed = batchAllocations[idx];

@@ -367,7 +367,9 @@ async function bootstrap() {
     document.getElementById('forbidden').classList.remove('hidden');
     return;
   }
-  isAdmin = MJMAccess.isAdminOf('audit_trail');
+  // "Clear old logs" tick from the module's User Access page (falls back
+  // to the legacy audit_trail admin level for users saved before it).
+  isAdmin = MJMAccess.canDoOperation('audit_trail', 'clear_logs');
   if (isAdmin) document.getElementById('f-purge').classList.remove('hidden');
 
   const { from, to } = defaultRange();

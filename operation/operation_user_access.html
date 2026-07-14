@@ -31,11 +31,16 @@
   .drawer { position:fixed; top:0; right:0; bottom:0; width:100%; max-width:480px; background:white; z-index:70; transform:translateX(100%); transition:transform .3s cubic-bezier(.4,0,.2,1); display:flex; flex-direction:column; box-shadow:-20px 0 60px rgba(0,0,0,.2); }
   .drawer.open { transform:translateX(0); }
 
-  .lvl-select { appearance:none; -webkit-appearance:none; padding:10px 36px 10px 14px; border-radius:12px; font-weight:900; font-size:12px; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; border:1.5px solid transparent; outline:none; min-width:140px; transition:all .15s; background-position:right 12px center; background-repeat:no-repeat; background-size:10px; }
-  .lvl-admin  { background-color:#10b981; color:white;   border-color:#059669; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='white' d='M5 6L0 0h10z'/></svg>"); }
-  .lvl-normal { background-color:#3b82f6; color:white;   border-color:#2563eb; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='white' d='M5 6L0 0h10z'/></svg>"); }
-  .lvl-none   { background-color:#f8fafc; color:#475569; border-color:#cbd5e1; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='%23475569' d='M5 6L0 0h10z'/></svg>"); }
-  .lvl-select:focus { box-shadow:0 0 0 3px rgba(59,130,246,.25); }
+  .page-card { border:1.5px solid #e2e8f0; border-radius:16px; overflow:hidden; transition:border-color .15s; }
+  .page-card.page-off { border-color:#fecdd3; background:#fff7f7; }
+  .page-card-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; background:#f8fafc; }
+  .page-card.page-off .page-card-head { background:#fff1f2; }
+  .page-card-acts { padding:6px 16px 12px; }
+  .page-card.page-off .page-card-acts { opacity:.45; pointer-events:none; }
+
+  .act-row { display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px dashed #f1f5f9; cursor:pointer; }
+  .act-row:last-child { border-bottom:none; }
+  .act-chk { width:19px; height:19px; margin-top:1px; accent-color:#10b981; cursor:pointer; flex-shrink:0; }
 
   .tog { position:relative; display:inline-block; width:48px; height:26px; flex-shrink:0; }
   .tog input { opacity:0; width:0; height:0; }
@@ -82,7 +87,9 @@
     </div>
     <p class="text-[13px] text-slate-600 leading-relaxed">
       This page manages users who were <strong>opened for this module</strong> on the main portal's User Access.
-      For each of them, set which pages inside the module they can open — Batch Records, Delivery Orders, Stock &amp; Sales, Reports, Audit Trail, System Settings — and the Batch Verifier role.
+      For each of them, tick exactly what they can do on every page — open the page, add new records, fill in reports,
+      <strong>verify reports</strong>, review &amp; approve, clear logs, edit master data — and whether they can
+      <strong>change other users' roles</strong>.
     </p>
     <p class="text-[12px] text-slate-500 leading-relaxed">
       To open or close the module itself for someone (or add a new user), use the main portal's <a href="../user_access.html" class="text-emerald-700 font-bold underline underline-offset-2">User Access</a>.
@@ -119,34 +126,38 @@
   </header>
 
   <div class="flex-1 overflow-y-auto">
-    <!-- Page access inside this module -->
+    <!-- Per-function access inside this module -->
     <section class="px-6 py-5">
-      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Page Access — Inside This Module</div>
-      <div id="d-pages" class="space-y-3"><!-- rows injected --></div>
+      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Function Access — Inside This Module</div>
+      <p class="text-[11px] text-slate-500 leading-relaxed mb-4">
+        Tick each function this user may use. <strong>Open page</strong> controls whether the page appears at all —
+        switching it off locks every function on that page.
+      </p>
+      <div id="d-pages" class="space-y-3"><!-- page cards injected --></div>
 
       <div class="mt-5 pt-4 border-t border-dashed border-slate-200">
         <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Quick Set — applies to all pages</div>
         <div class="flex flex-wrap gap-2">
-          <button class="preset-btn" data-preset="admin">Set All to Admin</button>
-          <button class="preset-btn" data-preset="normal">Set All to Normal</button>
-          <button class="preset-btn" data-preset="none">Set All to None</button>
+          <button class="preset-btn" data-preset="full">Full Access</button>
+          <button class="preset-btn" data-preset="view">View Only</button>
+          <button class="preset-btn" data-preset="none">No Access</button>
         </div>
       </div>
     </section>
 
-    <!-- Operation Batch Verifier — moved here from the main portal -->
-    <section class="px-6 py-5 border-t border-slate-200 bg-amber-50/40">
-      <div class="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-2">Operation Batch Verifier</div>
+    <!-- User management -->
+    <section class="px-6 py-5 border-t border-slate-200 bg-rose-50/40">
+      <div class="text-[10px] font-black text-rose-700 uppercase tracking-widest mb-2">User Management</div>
       <div class="flex items-start justify-between gap-4">
         <div>
-          <div class="font-black text-slate-800 text-sm">Can verify operation batch tabs</div>
+          <div class="font-black text-slate-800 text-sm">Able to change user roles</div>
           <p class="text-[11px] text-slate-600 mt-1 leading-relaxed">
-            Lets this user click <strong>Verify</strong> on each tab of a batch record.
-            An operation admin can only <strong>Mark as Reviewed</strong> after a verifier has signed off.
+            Lets this user open the <strong>User Access</strong> pages and set every other user's
+            access — pages, functions, and roles. Give this only to admins you trust to manage access for you.
           </p>
         </div>
         <label class="tog mt-1">
-          <input id="d-verify-operation" type="checkbox">
+          <input id="d-manage-users" type="checkbox">
           <span class="tog-slider"></span>
         </label>
       </div>
@@ -167,19 +178,42 @@ const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
 const LEVELS = ['admin', 'normal', 'none'];
 const LEVEL_LABEL = { admin:'Admin', normal:'Normal', none:'None' };
 
-/* The pages inside this module.
-   store:'pages'   → saved in permissions.operation_pages.<key>
-                     (missing key = allowed, so existing users keep access)
-   store:'modules' → saved in permissions.modules.<key>
-                     (Reports & Audit Trail keep their historical storage so
-                      existing grants and page gates keep working) */
+/* The pages inside this module and the FUNCTIONS each one offers.
+   What gets saved: permissions.operation_actions.<page> =
+     { view:bool, <function>:bool, ... } — authoritative once present.
+   Legacy fields are mirrored on save so older cached pages and the
+   other portals keep working:
+     store:'pages'   → permissions.operation_pages.<key> = 'normal'|'none'
+     store:'modules' → permissions.modules.<key> (Reports & Audit Trail
+                       historically live there)
+     batch.verify    → permissions.can_verify_operation */
 const PAGE_DEFS = [
-  { key:'batch',       store:'pages',   def:'normal', label:'Batch Records',   desc:'Create and edit production batch records' },
-  { key:'orders',      store:'pages',   def:'normal', label:'Delivery Orders', desc:'Delivery scheduling and order handling' },
-  { key:'stock',       store:'pages',   def:'normal', label:'Stock & Sales',   desc:'Stock levels, publishing, and sales' },
-  { key:'reports',     store:'modules', def:'none',   label:'Reports',         desc:'Batch production summary, analytics' },
-  { key:'audit_trail', store:'modules', def:'none',   label:'Audit Trail',     desc:'Who edited what — admins can clear logs' },
-  { key:'settings',    store:'pages',   def:'normal', label:'System Settings', desc:'Nurseries, plots, breeds, master data' }
+  { key:'batch', store:'pages', def:'normal', label:'Batch Records', desc:'Create and edit production batch records',
+    actions:[
+      { key:'add_new',     label:'Add new batch',            desc:'Create a new batch record' },
+      { key:'fill_report', label:'Fill in report',           desc:'Edit and save the report data in each batch tab' },
+      { key:'verify',      label:'Verify reports',           desc:'Sign off a batch tab as Verifier (before review)' },
+      { key:'review',      label:'Review & approve reports', desc:'Mark as Reviewed, Reject, Unreview (HQ decision)' },
+      { key:'delete',      label:'Delete batch records',     desc:'Permanently delete a whole batch' }
+    ]},
+  { key:'orders', store:'pages', def:'normal', label:'Delivery Orders', desc:'Delivery scheduling and order handling',
+    actions:[
+      { key:'manage', label:'Add, edit & delete orders', desc:'Create DOs / BAs, edit and delete existing ones' }
+    ]},
+  { key:'stock', store:'pages', def:'normal', label:'Stock & Sales', desc:'Stock levels, publishing, and sales',
+    actions:[
+      { key:'manage', label:'Update stock & sales', desc:'Change allocations, upload invoices, mark orders paid' }
+    ]},
+  { key:'reports', store:'modules', def:'none', label:'Reports', desc:'Batch production summary, analytics',
+    actions:[] },
+  { key:'audit_trail', store:'modules', def:'none', label:'Audit Trail', desc:'Who edited what, and when',
+    actions:[
+      { key:'clear_logs', label:'Clear old logs', desc:'Purge audit logs older than 30 days' }
+    ]},
+  { key:'settings', store:'pages', def:'normal', label:'System Settings', desc:'Nurseries, plots, breeds, master data',
+    actions:[
+      { key:'manage', label:'Edit master data', desc:'Add, edit and delete nurseries, plots, breeds, trays…' }
+    ]}
 ];
 
 let allUsers   = [];   // system users opened for this module
@@ -203,7 +237,7 @@ function initials(p) {
   return src.split(/\s+/).map(s => s[0]).slice(0,2).join('').toUpperCase() || '?';
 }
 
-/* Current level of one page for a permissions object (with defaults). */
+/* Legacy level of one page for a permissions object (with defaults). */
 function pageLevel(perms, def_) {
   const v = def_.store === 'modules'
     ? perms.modules && perms.modules[def_.key]
@@ -211,16 +245,49 @@ function pageLevel(perms, def_) {
   return LEVELS.includes(v) ? v : def_.def;
 }
 
+/* Effective ticks for one page — { view:bool, <action>:bool, ... }.
+   Uses the saved operation_actions when present; otherwise derives the
+   same answer the legacy fields give, so the drawer always shows what
+   the user can ACTUALLY do today. */
+function effectiveActions(perms, d) {
+  const saved = perms.operation_actions && perms.operation_actions[d.key];
+  if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+    const out = { view: !!saved.view };
+    d.actions.forEach(a => { out[a.key] = out.view && !!saved[a.key]; });
+    return out;
+  }
+  const view = pageLevel(perms, d) !== 'none';
+  const isOpAdmin = !!(perms.modules && perms.modules.operation === 'admin');
+  const out = { view };
+  d.actions.forEach(a => {
+    let v;
+    switch (a.key) {
+      case 'verify':     v = !!perms.can_verify_operation || isOpAdmin; break;
+      case 'review':
+      case 'delete':     v = isOpAdmin; break;
+      case 'clear_logs': v = !!(perms.modules && perms.modules.audit_trail === 'admin'); break;
+      default:           v = true; // legacy "normal" could always use page functions
+    }
+    out[a.key] = view && v;
+  });
+  return out;
+}
+
 function summaryHtml(perms) {
-  const chips = PAGE_DEFS.map(d => {
-    const lvl = pageLevel(perms, d);
-    if (lvl === 'none') return `<span class="chip chip-none">${d.label} · Locked</span>`;
-    if (lvl === 'admin') return `<span class="chip chip-admin">${d.label} · Admin</span>`;
-    return '';
-  }).filter(Boolean).join(' ');
-  const verifyChip = perms.can_verify_operation ? '<span class="chip chip-manage">Batch Verifier</span>' : '';
-  const allNormal = !chips && !verifyChip ? '<span class="chip chip-info">All pages · Normal</span>' : '';
-  return `<div class="flex flex-wrap gap-1.5">${chips}${verifyChip}${allNormal}</div>`;
+  const locked = [], roles = [];
+  PAGE_DEFS.forEach(d => {
+    const eff = effectiveActions(perms, d);
+    if (!eff.view) { locked.push(`<span class="chip chip-none">${d.label} · Locked</span>`); return; }
+    if (d.key === 'batch') {
+      if (eff.verify) roles.push('<span class="chip chip-manage">Verify Reports</span>');
+      if (eff.review) roles.push('<span class="chip chip-admin">Review &amp; Approve</span>');
+    }
+    if (d.key === 'audit_trail' && eff.clear_logs) roles.push('<span class="chip chip-admin">Clear Logs</span>');
+  });
+  const manageChip = perms.manage_users ? '<span class="chip chip-manage">Can Change User Roles</span>' : '';
+  const chips = locked.join(' ') + roles.join(' ');
+  const fallback = !chips && !manageChip ? '<span class="chip chip-info">All pages open</span>' : '';
+  return `<div class="flex flex-wrap gap-1.5">${chips}${manageChip}${fallback}</div>`;
 }
 
 function rowHtml(p) {
@@ -262,19 +329,45 @@ function render() {
 }
 
 // ── Drawer ─────────────────────────────────────────────────────
-function syncDropdownColor(sel) { sel.className = 'lvl-select lvl-' + sel.value; }
-
-function pageRowHtml(d, lvl) {
+function pageCardHtml(d, eff) {
+  const acts = d.actions.map(a => `
+      <label class="act-row" for="d-act-${d.key}-${a.key}">
+        <input type="checkbox" class="act-chk" id="d-act-${d.key}-${a.key}"
+               data-page="${d.key}" data-action="${a.key}" ${eff[a.key] ? 'checked' : ''}>
+        <span>
+          <span class="block font-bold text-slate-800 text-[13px] leading-tight">${a.label}</span>
+          <span class="block text-[11px] text-slate-500">${a.desc}</span>
+        </span>
+      </label>`).join('');
   return `
-    <div class="flex items-center justify-between gap-4">
-      <div>
-        <div class="font-black text-slate-800 text-sm">${d.label}</div>
-        <div class="text-[11px] text-slate-500">${d.desc}</div>
+    <div class="page-card ${eff.view ? '' : 'page-off'}" id="d-card-${d.key}">
+      <div class="page-card-head">
+        <div>
+          <div class="font-black text-slate-800 text-sm">${d.label}</div>
+          <div class="text-[11px] text-slate-500">${d.desc}</div>
+        </div>
+        <label class="flex items-center gap-2 cursor-pointer shrink-0">
+          <span class="text-[9px] font-black uppercase tracking-widest ${eff.view ? 'text-emerald-700' : 'text-rose-600'}" id="d-view-label-${d.key}">${eff.view ? 'Open Page' : 'Locked'}</span>
+          <span class="tog">
+            <input type="checkbox" id="d-view-${d.key}" data-view-page="${d.key}" ${eff.view ? 'checked' : ''}>
+            <span class="tog-slider"></span>
+          </span>
+        </label>
       </div>
-      <select id="d-page-${d.key}" class="lvl-select lvl-${lvl}">
-        ${LEVELS.map(l => `<option value="${l}" ${l === lvl ? 'selected' : ''}>${LEVEL_LABEL[l]}</option>`).join('')}
-      </select>
+      ${acts ? `<div class="page-card-acts">${acts}</div>`
+             : `<div class="page-card-acts text-[11px] text-slate-400 py-2">View-only page — no extra functions.</div>`}
     </div>`;
+}
+
+function syncPageCard(pageKey) {
+  const view = document.getElementById('d-view-' + pageKey).checked;
+  const card = document.getElementById('d-card-' + pageKey);
+  const lbl  = document.getElementById('d-view-label-' + pageKey);
+  card.classList.toggle('page-off', !view);
+  if (lbl) {
+    lbl.textContent = view ? 'Open Page' : 'Locked';
+    lbl.className = 'text-[9px] font-black uppercase tracking-widest ' + (view ? 'text-emerald-700' : 'text-rose-600');
+  }
 }
 
 function openDrawer(uid) {
@@ -290,8 +383,8 @@ function openDrawer(uid) {
     `<span class="chip chip-${lvl === 'admin' ? 'admin' : 'normal'}">Module level · ${LEVEL_LABEL[lvl] || lvl}</span>
      <span class="chip chip-info">set on main portal</span>`;
   document.getElementById('d-pages').innerHTML =
-    PAGE_DEFS.map(d => pageRowHtml(d, pageLevel(editingPerms, d))).join('');
-  document.getElementById('d-verify-operation').checked = !!editingPerms.can_verify_operation;
+    PAGE_DEFS.map(d => pageCardHtml(d, effectiveActions(editingPerms, d))).join('');
+  document.getElementById('d-manage-users').checked = !!editingPerms.manage_users;
 
   document.getElementById('drawer').classList.add('open');
   document.getElementById('drawer-backdrop').classList.add('open');
@@ -306,11 +399,15 @@ function closeDrawer() {
   editingPerms = null;
 }
 
-function applyPreset(level) {
-  if (!LEVELS.includes(level)) return;
+function applyPreset(preset) {
   PAGE_DEFS.forEach(d => {
-    const sel = document.getElementById('d-page-' + d.key);
-    if (sel) { sel.value = level; syncDropdownColor(sel); }
+    const viewEl = document.getElementById('d-view-' + d.key);
+    if (viewEl) viewEl.checked = preset !== 'none';
+    d.actions.forEach(a => {
+      const el = document.getElementById(`d-act-${d.key}-${a.key}`);
+      if (el) el.checked = preset === 'full';
+    });
+    syncPageCard(d.key);
   });
 }
 
@@ -320,16 +417,36 @@ async function saveDrawer() {
   if (!p) return;
 
   // Mutate ONLY this module's fields on the full permissions object so
-  // nothing managed elsewhere (module levels, manage_users…) is touched.
+  // nothing managed elsewhere (module levels…) is touched.
   const next = JSON.parse(JSON.stringify(editingPerms));
   next.modules = next.modules || {};
   next.operation_pages = next.operation_pages || {};
+  next.operation_actions = next.operation_actions || {};
   PAGE_DEFS.forEach(d => {
-    const v = document.getElementById('d-page-' + d.key).value;
-    if (d.store === 'modules') next.modules[d.key] = v;
-    else next.operation_pages[d.key] = v;
+    const view = document.getElementById('d-view-' + d.key).checked;
+    const acts = { view };
+    d.actions.forEach(a => {
+      acts[a.key] = view && document.getElementById(`d-act-${d.key}-${a.key}`).checked;
+    });
+    next.operation_actions[d.key] = acts;
+    // Mirror the legacy fields so older cached pages and the other
+    // portals (which only check open/closed) keep agreeing with this.
+    if (d.store === 'modules') {
+      next.modules[d.key] = !view ? 'none'
+        : (d.key === 'audit_trail' && acts.clear_logs) ? 'admin' : 'normal';
+    } else {
+      next.operation_pages[d.key] = view ? 'normal' : 'none';
+    }
   });
-  next.can_verify_operation = document.getElementById('d-verify-operation').checked;
+  next.can_verify_operation = !!(next.operation_actions.batch && next.operation_actions.batch.verify);
+
+  const manageEl = document.getElementById('d-manage-users');
+  if (editingUid === (MJMAccess.user() && MJMAccess.user().id)
+      && editingPerms.manage_users && !manageEl.checked
+      && !confirm('You are removing YOUR OWN "able to change user roles" permission. You will lose access to this page. Continue?')) {
+    return;
+  }
+  next.manage_users = manageEl.checked;
 
   const saveBtn = document.getElementById('d-save');
   saveBtn.disabled = true;
@@ -363,7 +480,7 @@ document.addEventListener('click', (e) => {
   if (preset) { applyPreset(preset.dataset.preset); return; }
 });
 document.addEventListener('change', (e) => {
-  if (e.target.matches('select[id^="d-page-"]')) syncDropdownColor(e.target);
+  if (e.target.matches('input[data-view-page]')) syncPageCard(e.target.dataset.viewPage);
 });
 document.getElementById('d-close' ).addEventListener('click', closeDrawer);
 document.getElementById('d-cancel').addEventListener('click', closeDrawer);
