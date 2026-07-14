@@ -1055,15 +1055,17 @@
                                         </button>
                                     </div>
 
-                                    <!-- Double Tone quantity currently sitting in the nursery (all
-                                         batches). This figure is the balance available when a row's
-                                         source tray is DOUBLE-TONE. -->
-                                    <div class="flex items-center justify-between gap-4 bg-[#ecfeff] border border-[#a5f3fc] rounded-xl px-5 py-3 mb-4">
+                                    <!-- Double Tone quantity in nursery — keyed in by the admin,
+                                         stored per batch. This is the balance available when a
+                                         row's source tray is DOUBLE-TONE. -->
+                                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-[#ecfeff] border border-[#a5f3fc] rounded-xl px-5 py-3 mb-4">
                                         <div>
                                             <div class="text-[10px] font-black text-[#0891b2] uppercase tracking-widest">🎯 Double Tone Quantity in Nursery</div>
-                                            <div class="text-[9px] font-bold text-[#8a7a68] mt-0.5">Available when source tray is DOUBLE-TONE — accumulated across all batches.</div>
+                                            <div class="text-[9px] font-bold text-[#8a7a68] mt-0.5">Key in this batch's D-Tone quantity — used as the balance when source tray is DOUBLE-TONE.</div>
                                         </div>
-                                        <div id="t3-dtone-nursery" class="text-2xl font-black text-[#0891b2]">0</div>
+                                        <input type="number" id="t3-dtone-nursery-qty" min="0" placeholder="0"
+                                            class="input-style !text-[#0891b2] font-black text-lg md:w-48"
+                                            oninput="calcTransplanting()" onchange="saveT3DtoneQty()">
                                     </div>
 
                                     <!-- Saved records table -->
@@ -2320,12 +2322,6 @@
         // --- TAB 3 LOGIC (Transplanting) ---
         let transplantRowCount = 0;
         let preNurseryTrayData = [];
-        // D-Tone pool contributed by OTHER batches (inflow into DOUBLE-TONE
-        // minus rows sourced FROM it). Added to this batch's live flow to give
-        // the "Double Tone Quantity in Nursery" figure shown above the
-        // transplant records — the balance available when a row's source tray
-        // is DOUBLE-TONE.
-        let t3_dtoneNurseryBase = 0;
         let mockCullingTab4 = 0; 
 
         async function syncTab3() {
@@ -2414,26 +2410,24 @@
                 } catch(e) { console.warn('Could not load premium/dtone qty:', e.message); }
             }
 
-            // Nursery-wide D-Tone pool from OTHER batches: everything ever
-            // routed INTO the DOUBLE-TONE tray minus everything transplanted
-            // OUT of it (rows whose remark records `tray [DOUBLE-TONE]`).
-            // This batch's own flow is added live in calcTransplanting().
-            t3_dtoneNurseryBase = 0;
-            try {
-                const notBatch = (q) => (batch && batch !== '—') ? q.neq('batch_name', batch) : q;
-                const [dtInRes, dtOutRes] = await Promise.all([
-                    notBatch(_supabase.from('shared_inventory_logs')
+            // Load this batch's keyed-in "Double Tone Quantity in Nursery".
+            // Stored as a single DTone_Nursery_Qty log row per batch — admin
+            // keys the number directly; nothing is mixed in from other batches.
+            const dtoneQtyInput = document.getElementById('t3-dtone-nursery-qty');
+            if (dtoneQtyInput) dtoneQtyInput.value = '';
+            if (batch && batch !== '—') {
+                try {
+                    const { data: dtRows } = await _supabase.from('shared_inventory_logs')
                         .select('quantity_change')
-                        .eq('transaction_type', 'Transplanted_DoubleTone')),
-                    notBatch(_supabase.from('shared_inventory_logs')
-                        .select('quantity_change')
-                        .in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone'])
-                        .ilike('remark', '%tray [DOUBLE-TONE]%'))
-                ]);
-                const dtIn  = (dtInRes.data  || []).reduce((s, l) => s + (l.quantity_change || 0), 0);
-                const dtOut = (dtOutRes.data || []).reduce((s, l) => s + (l.quantity_change || 0), 0);
-                t3_dtoneNurseryBase = dtIn - dtOut;
-            } catch(e) { console.warn('Could not load nursery D-Tone pool:', e.message); }
+                        .eq('batch_name', batch)
+                        .eq('transaction_type', 'DTone_Nursery_Qty')
+                        .order('created_at', { ascending: false })
+                        .limit(1);
+                    if (dtoneQtyInput && dtRows && dtRows[0] && dtRows[0].quantity_change != null) {
+                        dtoneQtyInput.value = dtRows[0].quantity_change;
+                    }
+                } catch(e) { console.warn('Could not load D-Tone nursery qty:', e.message); }
+            }
 
             // Load 1st Culling data per tray for this batch
             window._t3CullByTray = {};
@@ -2732,6 +2726,43 @@
             selectEl.value = value;
         }
 
+        // Persist the admin-keyed "Double Tone Quantity in Nursery" for THIS
+        // batch (one DTone_Nursery_Qty row per batch, updated in place by id).
+        async function saveT3DtoneQty() {
+            const batch = document.getElementById('f-batchno').value.trim();
+            if (!batch) return;
+            const raw = (document.getElementById('t3-dtone-nursery-qty')?.value ?? '').trim();
+            if (raw === '') return; // blank = not keyed; leave any stored value untouched
+            const qty = Math.max(0, parseInt(raw) || 0);
+            try {
+                const { data: rows } = await _supabase.from('shared_inventory_logs')
+                    .select('id')
+                    .eq('batch_name', batch)
+                    .eq('transaction_type', 'DTone_Nursery_Qty')
+                    .limit(1);
+                const payload = withEditMeta({
+                    transaction_type: 'DTone_Nursery_Qty',
+                    batch_name: batch,
+                    plot_name: 'D-Tone',
+                    quantity_change: qty,
+                    remark: `Double Tone quantity in nursery (admin keyed): ${qty}`
+                });
+                let error;
+                if (rows && rows[0]) {
+                    ({ error } = await _supabase.from('shared_inventory_logs').update(payload).eq('id', rows[0].id));
+                    if (error && isEditMetaColumnError(error)) {
+                        ({ error } = await _supabase.from('shared_inventory_logs').update(stripEditMeta([payload])[0]).eq('id', rows[0].id));
+                    }
+                } else {
+                    ({ error } = await safeInsertLogs([payload]));
+                }
+                if (error) showToast('D-Tone qty not saved: ' + error.message, 'error');
+                else showToast('🎯 D-Tone nursery quantity saved.', 'success');
+            } catch (e) {
+                showToast('D-Tone qty not saved: ' + (e.message || e), 'error');
+            }
+        }
+
         function getTab3TrayOptionsHTML(liveBalances) {
             liveBalances = liveBalances || {};
             let html = '<option value="">Select Tray...</option>';
@@ -3008,14 +3039,15 @@
             // Net balance in each special tray (inflow minus outflow used as source)
             const netPremium = Math.max(0, totalPremium - premiumSourceUsed);
             const netDtone   = Math.max(0, totalDoubletone - dtoneSourceUsed);
-            // DOUBLE-TONE availability is NURSERY-WIDE: other batches' pool
-            // plus this form's live flow — this is the figure shown in the
-            // "Double Tone Quantity in Nursery" section and the balance
-            // offered when a row's source tray is DOUBLE-TONE. Premium and
-            // PN trays keep their per-batch behavior.
-            const dtoneAvailable = Math.max(0, t3_dtoneNurseryBase + totalDoubletone - dtoneSourceUsed);
-            const dtoneNurseryEl = document.getElementById('t3-dtone-nursery');
-            if (dtoneNurseryEl) dtoneNurseryEl.innerText = dtoneAvailable.toLocaleString();
+            // DOUBLE-TONE availability = the admin-keyed "Double Tone Quantity
+            // in Nursery" for THIS batch, minus what the form's rows already
+            // draw from the DOUBLE-TONE source. If the box is blank the tray
+            // falls back to the original automatic behavior (this batch's net
+            // D-Tone inflow). Premium and PN trays keep their existing behavior.
+            const dtoneKeyedRaw = (document.getElementById('t3-dtone-nursery-qty')?.value ?? '').trim();
+            const dtoneAvailable = dtoneKeyedRaw !== ''
+                ? Math.max(0, (parseInt(dtoneKeyedRaw) || 0) - dtoneSourceUsed)
+                : netDtone;
 
             // Update Premium / D-Tone running qty in preNurseryTrayData + dropdown + panel
             const updateSpecial = (name, qty) => {
