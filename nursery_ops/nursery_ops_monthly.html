@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monthly Schedule — Nursery Operation Management</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230d9488%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3ENO%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_access.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  * { font-family:'Outfit', system-ui, sans-serif; }
+  body { background:#f0fdfa; margin:0; }
+  .card { background:white; border:1px solid #ccfbf1; border-radius:20px; box-shadow:0 4px 16px rgba(13,148,136,.08); }
+  .chip { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+  .chip-planned     { background:#eff6ff; color:#1e3a8a; border:1px solid #bfdbfe; }
+  .chip-in_progress { background:#fffbeb; color:#92400e; border:1px solid #fde68a; }
+  .chip-done        { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+  .chip-cancelled   { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
+  .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 14px; border-radius:12px; font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; border:none; cursor:pointer; transition:all .15s; }
+  .btn-teal   { background:linear-gradient(135deg,#14b8a6,#0d9488); color:white; box-shadow:0 6px 14px -4px rgba(13,148,136,.4); }
+  .btn-teal:hover { transform:translateY(-1px); }
+  .btn-amber  { background:#fef3c7; color:#92400e; border:1.5px solid #fde68a; }
+  .btn-amber:hover { background:#fde68a; }
+  .btn-green  { background:#d1fae5; color:#065f46; border:1.5px solid #a7f3d0; }
+  .btn-green:hover { background:#a7f3d0; }
+  .btn-ghost  { background:white; color:#475569; border:1.5px solid #e2e8f0; }
+  .btn-ghost:hover { background:#f8fafc; }
+  .btn-danger { background:white; color:#be123c; border:1.5px solid #fecdd3; }
+  .btn-danger:hover { background:#fff1f2; }
+  .inp { width:100%; background:white; border:1.5px solid #e2e8f0; border-radius:12px; padding:10px 14px; font-size:14px; font-weight:600; outline:none; }
+  .inp:focus { border-color:#14b8a6; box-shadow:0 0 0 3px rgba(20,184,166,.15); }
+  .lbl { display:block; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:#64748b; margin-bottom:5px; }
+  .modal-back { position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:60; backdrop-filter:blur(4px); }
+  .modal { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:calc(100% - 32px); max-width:520px; max-height:88vh; overflow-y:auto; background:white; border-radius:20px; z-index:70; box-shadow:0 30px 80px rgba(0,0,0,.3); }
+  .tab-btn { padding:8px 16px; font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; border-radius:999px; border:1.5px solid #e2e8f0; background:white; color:#64748b; cursor:pointer; }
+  .tab-btn.active { background:#0d9488; border-color:#0f766e; color:white; }
+</style>
+</head>
+<body>
+
+<div class="bg-white border-b border-teal-100 px-6 py-4 grid grid-cols-3 items-center sticky top-0 z-30 shadow-sm">
+  <a href="nursery_ops_dashboard.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-teal-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Back</a>
+  <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm">Nursery Monthly Schedule</span>
+  <div class="justify-self-end"><div class="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center text-white font-black text-xs">NO</div></div>
+</div>
+
+<div id="loading" class="max-w-[1100px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading…</div>
+
+<div id="main" class="max-w-[1100px] mx-auto px-4 md:px-6 py-8 space-y-6 hidden">
+
+  <div class="card p-5 md:p-6">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <h2 class="font-black text-slate-800 uppercase tracking-widest text-sm">🗓️ Work Schedule</h2>
+        <p class="text-[12px] text-slate-500 mt-1">Preset this month's or a following month's plot work. Work types &amp; standard days come from the <a href="nursery_ops_settings.html" class="text-teal-700 font-bold underline underline-offset-2">Motion Study settings</a>; plots come from the Seedling Stock Management settings.</p>
+      </div>
+      <div class="flex flex-wrap gap-2 items-center">
+        <button id="prev-month" class="btn btn-ghost">←</button>
+        <input id="month-pick" type="month" class="inp !w-auto">
+        <button id="next-month" class="btn btn-ghost">→</button>
+        <button id="add-work-btn" class="btn btn-teal">+ Schedule Work</button>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap gap-2 mt-5" id="status-tabs">
+      <button class="tab-btn active" data-tab="all">All</button>
+      <button class="tab-btn" data-tab="planned">Planned</button>
+      <button class="tab-btn" data-tab="in_progress">In Progress</button>
+      <button class="tab-btn" data-tab="done">Done</button>
+      <button class="tab-btn" data-tab="cancelled">Cancelled</button>
+    </div>
+    <p id="month-summary" class="text-[12px] font-bold text-slate-500 mt-3">—</p>
+  </div>
+
+  <div id="work-list" class="space-y-3"></div>
+</div>
+
+<!-- ── Add / edit work modal ─────────────────────────────────── -->
+<div id="work-back" class="modal-back hidden"></div>
+<div id="work-modal" class="modal hidden">
+  <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+    <h3 id="work-title" class="font-black text-slate-800 uppercase tracking-widest text-sm">Schedule Work</h3>
+    <button data-close class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 text-xl leading-none">×</button>
+  </div>
+  <div class="p-6 space-y-4">
+    <input type="hidden" id="w-id">
+    <div>
+      <label class="lbl">Work type (from Motion Study)</label>
+      <select id="w-type" class="inp"></select>
+      <p id="w-type-hint" class="text-[11px] text-slate-500 mt-1"></p>
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div><label class="lbl">Nursery</label><select id="w-nursery" class="inp"></select></div>
+      <div><label class="lbl">Plot</label><select id="w-plot" class="inp"></select></div>
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div><label class="lbl">Planned start</label><input id="w-start" type="date" class="inp"></div>
+      <div><label class="lbl">Planned days</label><input id="w-days" type="number" min="0" step="0.5" class="inp" placeholder="from motion study"></div>
+    </div>
+    <div><label class="lbl">Remark</label><textarea id="w-remark" rows="2" class="inp"></textarea></div>
+  </div>
+  <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 rounded-b-[20px]">
+    <button data-close class="btn btn-ghost">Cancel</button>
+    <button id="w-save" class="btn btn-teal">Save Work</button>
+  </div>
+</div>
+
+<div id="toast" class="fixed bottom-6 right-6 hidden z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg"></div>
+
+<script>
+const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+let works = [];        // rows for the selected month
+let workTypes = [];    // nops_work_types
+let plots = [];        // shared_plots {nursery_name, plot_name}
+let curTab = 'all';
+let isAdmin = false;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmtDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-MY', { day:'2-digit', month:'short' }) : '—';
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const curMonth = () => $('month-pick').value;
+
+function showToast(msg, kind) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'fixed bottom-6 right-6 z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg ' +
+    (kind === 'err' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200');
+  t.classList.remove('hidden');
+  setTimeout(() => t.classList.add('hidden'), 2600);
+}
+
+// ── Rendering ────────────────────────────────────────────────
+function actualDays(w) {
+  if (!w.actual_start || !w.actual_end) return null;
+  const ms = new Date(w.actual_end) - new Date(w.actual_start);
+  return Math.max(1, Math.round(ms / 86400000) + 1); // inclusive of both days
+}
+
+function workRowHtml(w) {
+  const days = actualDays(w);
+  const wt = workTypes.find(t => t.id === w.work_type_id);
+  const std = wt && wt.std_days != null ? Number(wt.std_days) : (w.planned_days != null ? Number(w.planned_days) : null);
+  let paceChip = '';
+  if (w.status === 'done' && days != null && std != null && std > 0) {
+    paceChip = days <= std
+      ? `<span class="chip chip-done">On pace · ${days}d vs ${std}d std</span>`
+      : `<span class="chip chip-in_progress">Over · ${days}d vs ${std}d std</span>`;
+  }
+  const statusLabel = { planned:'Planned', in_progress:'In Progress', done:'Done', cancelled:'Cancelled' }[w.status] || w.status;
+  return `
+    <div class="card p-4">
+      <div class="flex flex-col md:flex-row md:items-center gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="font-black text-slate-800">${esc(w.work_type)}</span>
+            <span class="chip chip-${w.status}">${statusLabel}</span>
+            ${paceChip}
+          </div>
+          <div class="text-[12px] text-slate-500 font-semibold mt-1">
+            📍 ${esc(w.plot_name)}${w.nursery_name ? ' · ' + esc(w.nursery_name) : ''}
+            · Planned ${fmtDate(w.planned_start)}${w.planned_days != null ? ` for ${w.planned_days}d` : ''}
+            ${w.actual_start ? ` · Started ${fmtDate(w.actual_start)}` : ''}
+            ${w.actual_end ? ` · Finished ${fmtDate(w.actual_end)}` : ''}
+            ${w.done_by ? ` · by ${esc(w.done_by)}` : ''}
+          </div>
+          ${w.remark ? `<div class="text-[12px] text-slate-400 mt-1">${esc(w.remark)}</div>` : ''}
+        </div>
+        <div class="flex flex-wrap gap-2 shrink-0">
+          ${w.status === 'planned' ? `<button class="btn btn-amber" data-start="${w.id}">▶ Start</button>` : ''}
+          ${w.status === 'planned' || w.status === 'in_progress' ? `<button class="btn btn-green" data-done="${w.id}">✓ Done</button>` : ''}
+          ${w.status === 'planned' ? `<button class="btn btn-ghost" data-edit="${w.id}">Edit</button>` : ''}
+          ${w.status === 'planned' || w.status === 'in_progress' ? `<button class="btn btn-ghost" data-cancel="${w.id}">Cancel</button>` : ''}
+          ${w.status === 'done' ? `<button class="btn btn-ghost" data-reopen="${w.id}">Reopen</button>` : ''}
+          ${isAdmin ? `<button class="btn btn-danger" data-del="${w.id}" title="Admin — delete permanently">🗑️</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+}
+
+function render() {
+  const rows = works.filter(w => curTab === 'all' ? true : w.status === curTab);
+  $('work-list').innerHTML = rows.length
+    ? rows.map(workRowHtml).join('')
+    : `<div class="card p-10 text-center text-slate-400 text-sm">No ${curTab === 'all' ? '' : curTab.replace('_',' ') + ' '}work in this month. Use <strong>+ Schedule Work</strong> to preset it.</div>`;
+  const c = s => works.filter(w => w.status === s).length;
+  $('month-summary').textContent =
+    `${works.length} work item${works.length === 1 ? '' : 's'} — ${c('planned')} planned · ${c('in_progress')} in progress · ${c('done')} done` +
+    (c('cancelled') ? ` · ${c('cancelled')} cancelled` : '');
+}
+
+async function loadMonth() {
+  const m = curMonth();
+  if (!m) return;
+  const { data, error } = await _supabase
+    .from('nops_plot_works').select('*')
+    .eq('month', m)
+    .order('planned_start', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true });
+  if (error) { showToast('Load failed: ' + error.message, 'err'); return; }
+  works = data || [];
+  render();
+}
+
+// ── Modal ────────────────────────────────────────────────────
+function fillTypeOptions(selectedId) {
+  $('w-type').innerHTML = workTypes.map(t =>
+    `<option value="${t.id}" ${String(t.id) === String(selectedId) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')
+    || '<option value="">— no work types yet —</option>';
+  updateTypeHint();
+}
+function updateTypeHint() {
+  const t = workTypes.find(x => String(x.id) === $('w-type').value);
+  $('w-type-hint').textContent = t
+    ? `Motion study: ${t.std_days != null ? t.std_days + ' day(s)' : 'no standard days'}${t.std_crew ? ' · crew of ' + t.std_crew : ''}${t.remark ? ' · ' + t.remark : ''}`
+    : '';
+  if (t && t.std_days != null && !$('w-days').value) $('w-days').value = t.std_days;
+}
+function fillNurseryOptions(selected) {
+  const names = [...new Set(plots.map(p => p.nursery_name).filter(Boolean))].sort();
+  $('w-nursery').innerHTML = '<option value="">All / unspecified</option>' +
+    names.map(n => `<option ${n === selected ? 'selected' : ''}>${esc(n)}</option>`).join('');
+}
+function fillPlotOptions(selected) {
+  const nur = $('w-nursery').value;
+  const list = plots.filter(p => !nur || p.nursery_name === nur);
+  $('w-plot').innerHTML = list.map(p =>
+    `<option value="${esc(p.plot_name)}" ${p.plot_name === selected ? 'selected' : ''}>${esc(p.plot_name)}</option>`).join('')
+    || '<option value="">— no plots —</option>';
+}
+
+function openWorkModal(row) {
+  $('w-id').value = row ? row.id : '';
+  $('work-title').textContent = row ? 'Edit Scheduled Work' : 'Schedule Work — ' + curMonth();
+  $('w-days').value = row && row.planned_days != null ? row.planned_days : '';
+  fillTypeOptions(row ? row.work_type_id : (workTypes[0] && workTypes[0].id));
+  fillNurseryOptions(row ? row.nursery_name : '');
+  fillPlotOptions(row ? row.plot_name : '');
+  $('w-start').value = row && row.planned_start ? row.planned_start : (curMonth() ? curMonth() + '-01' : todayStr());
+  $('w-remark').value = row ? (row.remark || '') : '';
+  if (!row) { $('w-days').value = ''; updateTypeHint(); }
+  $('work-back').classList.remove('hidden');
+  $('work-modal').classList.remove('hidden');
+}
+function closeModals() { ['work-back','work-modal'].forEach(id => $(id).classList.add('hidden')); }
+
+async function saveWork() {
+  const typeId = $('w-type').value;
+  const t = workTypes.find(x => String(x.id) === typeId);
+  const plot = $('w-plot').value;
+  if (!t || !plot) { showToast('Work type and plot are required.', 'err'); return; }
+  const payload = {
+    month: curMonth(),
+    nursery_name: $('w-nursery').value || (plots.find(p => p.plot_name === plot) || {}).nursery_name || null,
+    plot_name: plot,
+    work_type_id: t.id,
+    work_type: t.name,
+    planned_start: $('w-start').value || null,
+    planned_days: $('w-days').value === '' ? null : Number($('w-days').value),
+    remark: $('w-remark').value.trim() || null
+  };
+  const id = $('w-id').value;
+  let error;
+  if (id) ({ error } = await _supabase.from('nops_plot_works').update(payload).eq('id', id));
+  else {
+    const u = MJMAccess.user() || {};
+    payload.created_by = u.full_name || u.email || null;
+    ({ error } = await _supabase.from('nops_plot_works').insert([payload]));
+  }
+  if (error) { showToast('Save failed: ' + error.message, 'err'); return; }
+  showToast('Work saved.');
+  closeModals();
+  loadMonth();
+}
+
+async function setStatus(id, patch, confirmMsg) {
+  if (confirmMsg && !confirm(confirmMsg)) return;
+  const { error } = await _supabase.from('nops_plot_works').update(patch).eq('id', id);
+  if (error) { showToast('Update failed: ' + error.message, 'err'); return; }
+  loadMonth();
+}
+
+async function deleteWork(id) {
+  if (!isAdmin) return;
+  if (!confirm('Permanently DELETE this work record? It also disappears from Life of Plot. This cannot be undone.')) return;
+  const { error } = await _supabase.from('nops_plot_works').delete().eq('id', id);
+  if (error) { showToast('Delete failed: ' + error.message, 'err'); return; }
+  showToast('Deleted.');
+  loadMonth();
+}
+
+// ── Month navigation ─────────────────────────────────────────
+function shiftMonth(delta) {
+  const [y, m] = curMonth().split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  $('month-pick').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  loadMonth();
+}
+
+// ── Events ───────────────────────────────────────────────────
+document.addEventListener('click', e => {
+  if (e.target.closest('[data-close]')) { closeModals(); return; }
+  const tab = e.target.closest('#status-tabs .tab-btn');
+  if (tab) {
+    curTab = tab.dataset.tab;
+    document.querySelectorAll('#status-tabs .tab-btn').forEach(b => b.classList.toggle('active', b === tab));
+    render(); return;
+  }
+  const u = MJMAccess.user() || {};
+  const who = u.full_name || u.email || null;
+  const st = e.target.closest('[data-start]');
+  if (st) { setStatus(st.dataset.start, { status: 'in_progress', actual_start: todayStr() }); return; }
+  const dn = e.target.closest('[data-done]');
+  if (dn) {
+    const w = works.find(x => String(x.id) === dn.dataset.done);
+    setStatus(dn.dataset.done, {
+      status: 'done',
+      actual_start: (w && w.actual_start) || todayStr(),
+      actual_end: todayStr(),
+      done_by: who
+    });
+    return;
+  }
+  const rp = e.target.closest('[data-reopen]');
+  if (rp) { setStatus(rp.dataset.reopen, { status: 'in_progress', actual_end: null, done_by: null }, 'Reopen this work as In Progress?'); return; }
+  const cx = e.target.closest('[data-cancel]');
+  if (cx) { setStatus(cx.dataset.cancel, { status: 'cancelled' }, 'Cancel this scheduled work?'); return; }
+  const ed = e.target.closest('[data-edit]');
+  if (ed) { const w = works.find(x => String(x.id) === ed.dataset.edit); if (w) openWorkModal(w); return; }
+  const dl = e.target.closest('[data-del]');
+  if (dl) { deleteWork(dl.dataset.del); return; }
+});
+$('add-work-btn').addEventListener('click', () => openWorkModal(null));
+$('w-save').addEventListener('click', saveWork);
+$('w-type').addEventListener('change', () => { $('w-days').value = ''; updateTypeHint(); });
+$('w-nursery').addEventListener('change', () => fillPlotOptions(''));
+$('month-pick').addEventListener('change', loadMonth);
+$('prev-month').addEventListener('click', () => shiftMonth(-1));
+$('next-month').addEventListener('click', () => shiftMonth(1));
+$('work-back').addEventListener('click', closeModals);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModals(); });
+
+// ── Bootstrap ────────────────────────────────────────────────
+(async () => {
+  try {
+    await MJMAccess.load(_supabase);
+    if (!MJMAccess.user()) { window.location.href = '../index.html'; return; }
+    if (!MJMAccess.canAccess('nursery_ops')) {
+      alert('You do not have access to Nursery Operation Management.');
+      window.location.href = '../index.html';
+      return;
+    }
+    isAdmin = MJMAccess.isAdminOf('nursery_ops');
+    const now = new Date();
+    $('month-pick').value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const [{ data: wt, error: e1 }, { data: pl, error: e2 }] = await Promise.all([
+      _supabase.from('nops_work_types').select('*').order('sort_order').order('name'),
+      _supabase.from('shared_plots').select('nursery_name, plot_name').order('plot_name')
+    ]);
+    if (e1 || e2) { showToast('Load failed: ' + (e1 || e2).message, 'err'); }
+    workTypes = wt || [];
+    plots = pl || [];
+    await loadMonth();
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('main').classList.remove('hidden');
+  } catch (e) {
+    if (e && e.message === 'NO_OPS_ACCESS') return;
+    console.warn(e);
+    window.location.href = '../index.html';
+  }
+})();
+</script>
+</body>
+</html>

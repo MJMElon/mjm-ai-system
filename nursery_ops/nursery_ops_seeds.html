@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seeds Management — Nursery Operation Management</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230d9488%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3ENO%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_access.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  * { font-family:'Outfit', system-ui, sans-serif; }
+  body { background:#f0fdfa; margin:0; }
+  .card { background:white; border:1px solid #ccfbf1; border-radius:20px; box-shadow:0 4px 16px rgba(13,148,136,.08); }
+  .chip { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+  .chip-scheduled { background:#eff6ff; color:#1e3a8a; border:1px solid #bfdbfe; }
+  .chip-partial   { background:#fffbeb; color:#92400e; border:1px solid #fde68a; }
+  .chip-received  { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+  .chip-cancelled { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
+  .btn { display:inline-flex; align-items:center; gap:6px; padding:10px 16px; border-radius:12px; font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; border:none; cursor:pointer; transition:all .15s; }
+  .btn-teal { background:linear-gradient(135deg,#14b8a6,#0d9488); color:white; box-shadow:0 6px 14px -4px rgba(13,148,136,.4); }
+  .btn-teal:hover { transform:translateY(-1px); }
+  .btn-lite { background:#f0fdfa; color:#0f766e; border:1.5px solid #99f6e4; }
+  .btn-lite:hover { background:#ccfbf1; }
+  .btn-ghost { background:white; color:#475569; border:1.5px solid #e2e8f0; }
+  .btn-ghost:hover { background:#f8fafc; }
+  .btn-danger { background:white; color:#be123c; border:1.5px solid #fecdd3; }
+  .btn-danger:hover { background:#fff1f2; }
+  .inp { width:100%; background:white; border:1.5px solid #e2e8f0; border-radius:12px; padding:10px 14px; font-size:14px; font-weight:600; outline:none; }
+  .inp:focus { border-color:#14b8a6; box-shadow:0 0 0 3px rgba(20,184,166,.15); }
+  .lbl { display:block; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:#64748b; margin-bottom:5px; }
+  .modal-back { position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:60; backdrop-filter:blur(4px); }
+  .modal { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:calc(100% - 32px); max-width:520px; max-height:88vh; overflow-y:auto; background:white; border-radius:20px; z-index:70; box-shadow:0 30px 80px rgba(0,0,0,.3); }
+  .calc-out { background:#f0fdfa; border:1.5px dashed #99f6e4; border-radius:14px; padding:14px; }
+</style>
+</head>
+<body>
+
+<div class="bg-white border-b border-teal-100 px-6 py-4 grid grid-cols-3 items-center sticky top-0 z-30 shadow-sm">
+  <a href="nursery_ops_dashboard.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-teal-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Back</a>
+  <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm">Seeds Management</span>
+  <div class="justify-self-end"><div class="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center text-white font-black text-xs">NO</div></div>
+</div>
+
+<div id="loading" class="max-w-[1100px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading…</div>
+
+<div id="main" class="max-w-[1100px] mx-auto px-4 md:px-6 py-8 space-y-8 hidden">
+
+  <!-- ── Scheduled Seeds In ─────────────────────────────────── -->
+  <section class="card p-5 md:p-7">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
+      <div>
+        <h2 class="font-black text-slate-800 uppercase tracking-widest text-sm">🌰 Scheduled Seeds In</h2>
+        <p class="text-[12px] text-slate-500 mt-1">Plan incoming seed deliveries, then record what actually arrives. Partial receives are tracked until the schedule is fully received.</p>
+      </div>
+      <div class="flex gap-2 items-center">
+        <select id="filter-status" class="inp !w-auto !py-2 text-[12px]">
+          <option value="open">Open (scheduled + partial)</option>
+          <option value="all">All</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="partial">Partially received</option>
+          <option value="received">Received</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <button id="add-sched-btn" class="btn btn-teal">+ Schedule Seeds In</button>
+      </div>
+    </div>
+    <div id="sched-list" class="space-y-3"></div>
+  </section>
+
+  <!-- ── Planning calculators ───────────────────────────────── -->
+  <section class="card p-5 md:p-7">
+    <h2 class="font-black text-slate-800 uppercase tracking-widest text-sm mb-1">🧮 Seeds Planning Tools</h2>
+    <p class="text-[12px] text-slate-500 mb-6">Quick calculators — nothing here is saved, they're planning aids.</p>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- 1. Seeds needed -->
+      <div class="border border-slate-200 rounded-2xl p-5">
+        <h3 class="font-black text-slate-700 text-[13px] uppercase tracking-widest mb-3">Seeds Needed</h3>
+        <div class="space-y-3">
+          <div><label class="lbl">Target seedlings to deliver</label><input id="c1-target" type="number" min="0" class="inp" placeholder="e.g. 10000"></div>
+          <div><label class="lbl">Germination rate %</label><input id="c1-germ" type="number" min="1" max="100" value="85" class="inp"></div>
+          <div><label class="lbl">Expected culling loss % (all cullings)</label><input id="c1-cull" type="number" min="0" max="99" value="15" class="inp"></div>
+          <div><label class="lbl">Safety buffer %</label><input id="c1-buffer" type="number" min="0" max="100" value="5" class="inp"></div>
+        </div>
+        <div class="calc-out mt-4 text-[13px] font-semibold text-slate-700 space-y-1">
+          <div>Germinated: <span id="c1-germed" class="font-black text-slate-900">—</span></div>
+          <div>After culling: <span id="c1-after" class="font-black text-slate-900">—</span></div>
+          <div class="pt-1 border-t border-teal-200">Seeds to order: <span id="c1-out" class="font-black text-teal-700 text-lg">—</span></div>
+        </div>
+      </div>
+
+      <!-- 2. Trays & plots -->
+      <div class="border border-slate-200 rounded-2xl p-5">
+        <h3 class="font-black text-slate-700 text-[13px] uppercase tracking-widest mb-3">Trays &amp; Plots</h3>
+        <div class="space-y-3">
+          <div><label class="lbl">Seeds to sow</label><input id="c2-seeds" type="number" min="0" class="inp" placeholder="e.g. 13000"></div>
+          <div><label class="lbl">Cells per tray</label><input id="c2-cells" type="number" min="1" value="104" class="inp"></div>
+          <div><label class="lbl">Polybags per plot (after transplant)</label><input id="c2-perplot" type="number" min="1" class="inp" placeholder="e.g. 2000"></div>
+        </div>
+        <div class="calc-out mt-4 text-[13px] font-semibold text-slate-700 space-y-1">
+          <div>Trays needed: <span id="c2-trays" class="font-black text-teal-700 text-lg">—</span></div>
+          <div>Plots needed: <span id="c2-plots" class="font-black text-slate-900">—</span></div>
+        </div>
+      </div>
+
+      <!-- 3. Date back-planner -->
+      <div class="border border-slate-200 rounded-2xl p-5">
+        <h3 class="font-black text-slate-700 text-[13px] uppercase tracking-widest mb-3">Order-By Date Planner</h3>
+        <div class="space-y-3">
+          <div><label class="lbl">Target transplant date</label><input id="c3-date" type="date" class="inp"></div>
+          <div><label class="lbl">Days from seeds-in to transplant</label><input id="c3-grow" type="number" min="0" value="30" class="inp"></div>
+          <div><label class="lbl">Supplier lead time (days)</label><input id="c3-lead" type="number" min="0" value="14" class="inp"></div>
+        </div>
+        <div class="calc-out mt-4 text-[13px] font-semibold text-slate-700 space-y-1">
+          <div>Seeds-in by: <span id="c3-seedin" class="font-black text-slate-900">—</span></div>
+          <div class="pt-1 border-t border-teal-200">Order seeds by: <span id="c3-out" class="font-black text-teal-700 text-lg">—</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ── Add / edit schedule modal ──────────────────────────────── -->
+<div id="sched-back" class="modal-back hidden"></div>
+<div id="sched-modal" class="modal hidden">
+  <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+    <h3 id="sched-title" class="font-black text-slate-800 uppercase tracking-widest text-sm">Schedule Seeds In</h3>
+    <button data-close class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 text-xl leading-none">×</button>
+  </div>
+  <div class="p-6 space-y-4">
+    <input type="hidden" id="s-id">
+    <div>
+      <label class="lbl">Breed</label>
+      <input id="s-breed" class="inp" list="breed-list" placeholder="Pick or type a breed">
+      <datalist id="breed-list"></datalist>
+    </div>
+    <div><label class="lbl">Supplier</label><input id="s-supplier" class="inp" placeholder="Supplier name (optional)"></div>
+    <div class="grid grid-cols-2 gap-4">
+      <div><label class="lbl">Scheduled date</label><input id="s-date" type="date" class="inp"></div>
+      <div><label class="lbl">Quantity (seeds)</label><input id="s-qty" type="number" min="1" class="inp"></div>
+    </div>
+    <div><label class="lbl">Remark</label><textarea id="s-remark" rows="2" class="inp"></textarea></div>
+  </div>
+  <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 rounded-b-[20px]">
+    <button data-close class="btn btn-ghost">Cancel</button>
+    <button id="s-save" class="btn btn-teal">Save Schedule</button>
+  </div>
+</div>
+
+<!-- ── Receive modal ──────────────────────────────────────────── -->
+<div id="recv-back" class="modal-back hidden"></div>
+<div id="recv-modal" class="modal hidden">
+  <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+    <h3 class="font-black text-slate-800 uppercase tracking-widest text-sm">Record Actual Receive</h3>
+    <button data-close class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 text-xl leading-none">×</button>
+  </div>
+  <div class="p-6 space-y-4">
+    <input type="hidden" id="r-sched-id">
+    <div id="r-summary" class="text-[13px] font-semibold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-3"></div>
+    <div class="grid grid-cols-2 gap-4">
+      <div><label class="lbl">Received date</label><input id="r-date" type="date" class="inp"></div>
+      <div><label class="lbl">Quantity received</label><input id="r-qty" type="number" min="1" class="inp"></div>
+    </div>
+    <div><label class="lbl">Remark (condition, batch no…)</label><textarea id="r-remark" rows="2" class="inp"></textarea></div>
+  </div>
+  <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 rounded-b-[20px]">
+    <button data-close class="btn btn-ghost">Cancel</button>
+    <button id="r-save" class="btn btn-teal">Save Receive</button>
+  </div>
+</div>
+
+<div id="toast" class="fixed bottom-6 right-6 hidden z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg"></div>
+
+<script>
+const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+let schedules = [];   // rows + receipts aggregated
+let breeds = [];
+let isAdmin = false;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmt = n => Number(n || 0).toLocaleString('en-MY');
+const fmtDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+
+function showToast(msg, kind) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'fixed bottom-6 right-6 z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg ' +
+    (kind === 'err' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200');
+  t.classList.remove('hidden');
+  setTimeout(() => t.classList.add('hidden'), 2600);
+}
+
+// ── List ─────────────────────────────────────────────────────
+function receivedQty(s) { return (s.receipts || []).reduce((a, r) => a + (r.qty || 0), 0); }
+
+function schedRowHtml(s) {
+  const got = receivedQty(s);
+  const pct = s.scheduled_qty ? Math.min(100, Math.round(got / s.scheduled_qty * 100)) : 0;
+  const receiptRows = (s.receipts || []).map(r => `
+    <div class="flex items-center justify-between text-[12px] font-semibold text-slate-600 border-t border-dashed border-slate-200 py-1.5">
+      <span>↳ ${fmtDate(r.received_date)} — <strong>${fmt(r.qty)}</strong> seeds ${r.received_by ? 'by ' + esc(r.received_by) : ''}</span>
+      <span class="text-slate-400">${esc(r.remark || '')}</span>
+    </div>`).join('');
+  const canReceive = s.status === 'scheduled' || s.status === 'partial';
+  return `
+    <div class="border border-slate-200 rounded-2xl p-4">
+      <div class="flex flex-col md:flex-row md:items-center gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="font-black text-slate-800">${esc(s.breed)}</span>
+            <span class="chip chip-${s.status}">${s.status === 'partial' ? 'Partially received' : s.status}</span>
+          </div>
+          <div class="text-[12px] text-slate-500 font-semibold mt-1">
+            Scheduled ${fmtDate(s.scheduled_date)} · <strong>${fmt(s.scheduled_qty)}</strong> seeds
+            ${s.supplier ? ' · ' + esc(s.supplier) : ''}
+            ${s.remark ? ' · ' + esc(s.remark) : ''}
+          </div>
+          <div class="mt-2 h-2 bg-slate-100 rounded-full overflow-hidden max-w-[260px]">
+            <div class="h-full bg-teal-500" style="width:${pct}%"></div>
+          </div>
+          <div class="text-[11px] font-bold text-slate-500 mt-1">Received ${fmt(got)} / ${fmt(s.scheduled_qty)} (${pct}%)</div>
+        </div>
+        <div class="flex flex-wrap gap-2 shrink-0">
+          ${canReceive ? `<button class="btn btn-teal" data-receive="${s.id}">Receive</button>` : ''}
+          ${canReceive ? `<button class="btn btn-lite" data-edit="${s.id}">Edit</button>` : ''}
+          ${canReceive ? `<button class="btn btn-ghost" data-cancel="${s.id}">Cancel</button>` : ''}
+          ${isAdmin ? `<button class="btn btn-danger" data-del="${s.id}" title="Admin — delete schedule and its receipts">🗑️</button>` : ''}
+        </div>
+      </div>
+      ${receiptRows ? `<div class="mt-3">${receiptRows}</div>` : ''}
+    </div>`;
+}
+
+function render() {
+  const f = $('filter-status').value;
+  const rows = schedules.filter(s =>
+    f === 'all' ? true :
+    f === 'open' ? (s.status === 'scheduled' || s.status === 'partial') :
+    s.status === f);
+  $('sched-list').innerHTML = rows.length
+    ? rows.map(schedRowHtml).join('')
+    : '<div class="text-center text-slate-400 text-sm py-10">No seed schedules here yet.</div>';
+}
+
+async function loadData() {
+  const [{ data: sch, error: e1 }, { data: rec, error: e2 }, { data: brd }] = await Promise.all([
+    _supabase.from('nops_seed_schedules').select('*').order('scheduled_date', { ascending: false }),
+    _supabase.from('nops_seed_receipts').select('*').order('received_date', { ascending: true }),
+    _supabase.from('shared_breeds').select('name').order('name')
+  ]);
+  if (e1 || e2) { showToast('Load failed: ' + (e1 || e2).message, 'err'); return; }
+  const bySched = {};
+  (rec || []).forEach(r => { (bySched[r.schedule_id] = bySched[r.schedule_id] || []).push(r); });
+  schedules = (sch || []).map(s => ({ ...s, receipts: bySched[s.id] || [] }));
+  breeds = (brd || []).map(b => b.name);
+  $('breed-list').innerHTML = breeds.map(b => `<option value="${esc(b)}">`).join('');
+  render();
+}
+
+// ── Schedule modal ───────────────────────────────────────────
+function openSchedModal(row) {
+  $('s-id').value = row ? row.id : '';
+  $('sched-title').textContent = row ? 'Edit Seed Schedule' : 'Schedule Seeds In';
+  $('s-breed').value = row ? row.breed : '';
+  $('s-supplier').value = row ? (row.supplier || '') : '';
+  $('s-date').value = row ? row.scheduled_date : '';
+  $('s-qty').value = row ? row.scheduled_qty : '';
+  $('s-remark').value = row ? (row.remark || '') : '';
+  $('sched-back').classList.remove('hidden');
+  $('sched-modal').classList.remove('hidden');
+}
+function closeModals() {
+  ['sched-back','sched-modal','recv-back','recv-modal'].forEach(id => $(id).classList.add('hidden'));
+}
+
+async function saveSchedule() {
+  const breed = $('s-breed').value.trim();
+  const date = $('s-date').value;
+  const qty = parseInt($('s-qty').value, 10);
+  if (!breed || !date || !qty || qty <= 0) { showToast('Breed, date and a quantity above 0 are required.', 'err'); return; }
+  const payload = {
+    breed, supplier: $('s-supplier').value.trim() || null,
+    scheduled_date: date, scheduled_qty: qty,
+    remark: $('s-remark').value.trim() || null
+  };
+  const id = $('s-id').value;
+  let error;
+  if (id) ({ error } = await _supabase.from('nops_seed_schedules').update(payload).eq('id', id));
+  else {
+    const u = MJMAccess.user() || {};
+    payload.created_by = u.full_name || u.email || null;
+    ({ error } = await _supabase.from('nops_seed_schedules').insert([payload]));
+  }
+  if (error) { showToast('Save failed: ' + error.message, 'err'); return; }
+  showToast('Schedule saved.');
+  closeModals();
+  loadData();
+}
+
+// ── Receive modal ────────────────────────────────────────────
+function openRecvModal(s) {
+  const got = receivedQty(s);
+  $('r-sched-id').value = s.id;
+  $('r-summary').innerHTML = `<strong>${esc(s.breed)}</strong> — scheduled ${fmt(s.scheduled_qty)} seeds on ${fmtDate(s.scheduled_date)}.<br>Received so far: <strong>${fmt(got)}</strong> · Outstanding: <strong>${fmt(Math.max(0, s.scheduled_qty - got))}</strong>`;
+  $('r-date').value = new Date().toISOString().slice(0, 10);
+  $('r-qty').value = Math.max(0, s.scheduled_qty - got) || '';
+  $('r-remark').value = '';
+  $('recv-back').classList.remove('hidden');
+  $('recv-modal').classList.remove('hidden');
+}
+
+async function saveReceive() {
+  const schedId = $('r-sched-id').value;
+  const s = schedules.find(x => String(x.id) === String(schedId));
+  const date = $('r-date').value;
+  const qty = parseInt($('r-qty').value, 10);
+  if (!s || !date || !qty || qty <= 0) { showToast('Date and a quantity above 0 are required.', 'err'); return; }
+  const u = MJMAccess.user() || {};
+  const { error } = await _supabase.from('nops_seed_receipts').insert([{
+    schedule_id: s.id, received_date: date, qty,
+    remark: $('r-remark').value.trim() || null,
+    received_by: u.full_name || u.email || null
+  }]);
+  if (error) { showToast('Save failed: ' + error.message, 'err'); return; }
+  // Roll the schedule status forward from the receipt total.
+  const total = receivedQty(s) + qty;
+  const status = total >= s.scheduled_qty ? 'received' : 'partial';
+  await _supabase.from('nops_seed_schedules').update({ status }).eq('id', s.id);
+  showToast('Receive recorded.');
+  closeModals();
+  loadData();
+}
+
+async function cancelSchedule(id) {
+  if (!confirm('Cancel this seed schedule? It stays in history as Cancelled.')) return;
+  const { error } = await _supabase.from('nops_seed_schedules').update({ status: 'cancelled' }).eq('id', id);
+  if (error) { showToast('Cancel failed: ' + error.message, 'err'); return; }
+  showToast('Schedule cancelled.');
+  loadData();
+}
+
+async function deleteSchedule(id) {
+  if (!isAdmin) return;
+  if (!confirm('Permanently DELETE this schedule and all its receive records? This cannot be undone.')) return;
+  const { error } = await _supabase.from('nops_seed_schedules').delete().eq('id', id);
+  if (error) { showToast('Delete failed: ' + error.message, 'err'); return; }
+  showToast('Schedule deleted.');
+  loadData();
+}
+
+// ── Calculators (client-only) ────────────────────────────────
+function calcSeeds() {
+  const t = parseFloat($('c1-target').value) || 0;
+  const g = (parseFloat($('c1-germ').value) || 0) / 100;
+  const c = (parseFloat($('c1-cull').value) || 0) / 100;
+  const b = (parseFloat($('c1-buffer').value) || 0) / 100;
+  if (!t || !g || c >= 1) { $('c1-out').textContent = $('c1-germed').textContent = $('c1-after').textContent = '—'; return; }
+  const seeds = Math.ceil(t / (g * (1 - c)) * (1 + b));
+  $('c1-germed').textContent = fmt(Math.round(seeds / (1 + b) * g));
+  $('c1-after').textContent = fmt(Math.round(seeds / (1 + b) * g * (1 - c)));
+  $('c1-out').textContent = fmt(seeds);
+}
+function calcTrays() {
+  const s = parseFloat($('c2-seeds').value) || 0;
+  const cells = parseFloat($('c2-cells').value) || 0;
+  const per = parseFloat($('c2-perplot').value) || 0;
+  $('c2-trays').textContent = s && cells ? fmt(Math.ceil(s / cells)) : '—';
+  $('c2-plots').textContent = s && per ? fmt(Math.ceil(s / per)) : '—';
+}
+function calcDates() {
+  const d = $('c3-date').value;
+  if (!d) { $('c3-seedin').textContent = $('c3-out').textContent = '—'; return; }
+  const grow = parseInt($('c3-grow').value, 10) || 0;
+  const lead = parseInt($('c3-lead').value, 10) || 0;
+  const target = new Date(d + 'T00:00:00');
+  const seedIn = new Date(target); seedIn.setDate(seedIn.getDate() - grow);
+  const orderBy = new Date(seedIn); orderBy.setDate(orderBy.getDate() - lead);
+  const f = x => x.toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' });
+  $('c3-seedin').textContent = f(seedIn);
+  $('c3-out').textContent = f(orderBy);
+}
+
+// ── Events ───────────────────────────────────────────────────
+document.addEventListener('click', e => {
+  if (e.target.closest('[data-close]')) { closeModals(); return; }
+  const rc = e.target.closest('[data-receive]');
+  if (rc) { const s = schedules.find(x => String(x.id) === rc.dataset.receive); if (s) openRecvModal(s); return; }
+  const ed = e.target.closest('[data-edit]');
+  if (ed) { const s = schedules.find(x => String(x.id) === ed.dataset.edit); if (s) openSchedModal(s); return; }
+  const cx = e.target.closest('[data-cancel]');
+  if (cx) { cancelSchedule(cx.dataset.cancel); return; }
+  const dl = e.target.closest('[data-del]');
+  if (dl) { deleteSchedule(dl.dataset.del); return; }
+});
+$('add-sched-btn').addEventListener('click', () => openSchedModal(null));
+$('s-save').addEventListener('click', saveSchedule);
+$('r-save').addEventListener('click', saveReceive);
+$('filter-status').addEventListener('change', render);
+['sched-back','recv-back'].forEach(id => $(id).addEventListener('click', closeModals));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModals(); });
+['c1-target','c1-germ','c1-cull','c1-buffer'].forEach(id => $(id).addEventListener('input', calcSeeds));
+['c2-seeds','c2-cells','c2-perplot'].forEach(id => $(id).addEventListener('input', calcTrays));
+['c3-date','c3-grow','c3-lead'].forEach(id => $(id).addEventListener('input', calcDates));
+
+// ── Bootstrap ────────────────────────────────────────────────
+(async () => {
+  try {
+    await MJMAccess.load(_supabase);
+    if (!MJMAccess.user()) { window.location.href = '../index.html'; return; }
+    if (!MJMAccess.canAccess('nursery_ops')) {
+      alert('You do not have access to Nursery Operation Management.');
+      window.location.href = '../index.html';
+      return;
+    }
+    isAdmin = MJMAccess.isAdminOf('nursery_ops');
+    await loadData();
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('main').classList.remove('hidden');
+  } catch (e) {
+    if (e && e.message === 'NO_OPS_ACCESS') return;
+    console.warn(e);
+    window.location.href = '../index.html';
+  }
+})();
+</script>
+</body>
+</html>

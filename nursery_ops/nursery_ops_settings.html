@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings · Motion Study — Nursery Operation Management</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230d9488%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3ENO%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_access.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  * { font-family:'Outfit', system-ui, sans-serif; }
+  body { background:#f0fdfa; margin:0; }
+  .card { background:white; border:1px solid #ccfbf1; border-radius:20px; box-shadow:0 4px 16px rgba(13,148,136,.08); }
+  .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 14px; border-radius:12px; font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; border:none; cursor:pointer; transition:all .15s; }
+  .btn-teal  { background:linear-gradient(135deg,#14b8a6,#0d9488); color:white; box-shadow:0 6px 14px -4px rgba(13,148,136,.4); }
+  .btn-teal:hover { transform:translateY(-1px); }
+  .btn-ghost { background:white; color:#475569; border:1.5px solid #e2e8f0; }
+  .btn-ghost:hover { background:#f8fafc; }
+  .btn-danger { background:white; color:#be123c; border:1.5px solid #fecdd3; }
+  .btn-danger:hover { background:#fff1f2; }
+  .btn-mini { padding:6px 9px; border-radius:9px; font-size:12px; }
+  .inp { width:100%; background:white; border:1.5px solid #e2e8f0; border-radius:12px; padding:10px 14px; font-size:14px; font-weight:600; outline:none; }
+  .inp:focus { border-color:#14b8a6; box-shadow:0 0 0 3px rgba(20,184,166,.15); }
+  .lbl { display:block; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:#64748b; margin-bottom:5px; }
+  .modal-back { position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:60; backdrop-filter:blur(4px); }
+  .modal { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:calc(100% - 32px); max-width:520px; max-height:88vh; overflow-y:auto; background:white; border-radius:20px; z-index:70; box-shadow:0 30px 80px rgba(0,0,0,.3); }
+  .wt-row { display:flex; align-items:center; gap:12px; padding:14px 16px; border:1px solid #e2e8f0; border-radius:16px; background:white; }
+  .wt-num { width:34px; height:34px; border-radius:10px; background:#f0fdfa; border:1.5px solid #99f6e4; color:#0f766e; font-weight:900; font-size:13px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+</style>
+</head>
+<body>
+
+<div class="bg-white border-b border-teal-100 px-6 py-4 grid grid-cols-3 items-center sticky top-0 z-30 shadow-sm">
+  <a href="nursery_ops_dashboard.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-teal-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Back</a>
+  <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm">Settings — Motion Study</span>
+  <div class="justify-self-end"><div class="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center text-white font-black text-xs">NO</div></div>
+</div>
+
+<div id="loading" class="max-w-[900px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading…</div>
+
+<div id="main" class="max-w-[900px] mx-auto px-4 md:px-6 py-8 space-y-6 hidden">
+
+  <div class="card p-5 md:p-7">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-2">
+      <div>
+        <h2 class="font-black text-slate-800 uppercase tracking-widest text-sm">⏱️ Motion Study — Work Types</h2>
+        <p class="text-[12px] text-slate-500 mt-1 leading-relaxed">
+          The work a plot goes through, in order — e.g. Soil Transport → Polybag Filling → Polybag Lining → Transplanting → Seedling Maturing → Seedling Open Collection → 3rd Culling.
+          Nothing is fixed: <strong>add or remove</strong> work types freely, and record the motion study of each — how many days it usually needs per plot, the usual crew size, and notes.
+          These standards drive the Monthly Schedule (planned days prefill) and Life of Plot (on-pace / over-standard flags).
+        </p>
+      </div>
+      <button id="add-wt-btn" class="btn btn-teal shrink-0">+ Add Work Type</button>
+    </div>
+    <div id="wt-list" class="space-y-3 mt-4"></div>
+    <p class="text-[11px] text-slate-400 mt-4">
+      Removing a work type does <strong>not</strong> delete history — past schedule and plot records keep the work's name.
+      Use ↑ ↓ to keep the list in real working order.
+    </p>
+  </div>
+</div>
+
+<!-- ── Add / edit work type modal ─────────────────────────────── -->
+<div id="wt-back" class="modal-back hidden"></div>
+<div id="wt-modal" class="modal hidden">
+  <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+    <h3 id="wt-title" class="font-black text-slate-800 uppercase tracking-widest text-sm">Add Work Type</h3>
+    <button data-close class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 text-xl leading-none">×</button>
+  </div>
+  <div class="p-6 space-y-4">
+    <input type="hidden" id="t-id">
+    <div><label class="lbl">Work name</label><input id="t-name" class="inp" placeholder="e.g. Polybag Filling"></div>
+    <div class="grid grid-cols-2 gap-4">
+      <div><label class="lbl">Standard days per plot</label><input id="t-days" type="number" min="0" step="0.5" class="inp" placeholder="e.g. 3"></div>
+      <div><label class="lbl">Usual crew size</label><input id="t-crew" type="number" min="0" step="1" class="inp" placeholder="e.g. 4"></div>
+    </div>
+    <div><label class="lbl">Motion study notes</label><textarea id="t-remark" rows="3" class="inp" placeholder="Method, tools, pace, conditions that change the timing…"></textarea></div>
+  </div>
+  <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 rounded-b-[20px]">
+    <button data-close class="btn btn-ghost">Cancel</button>
+    <button id="t-save" class="btn btn-teal">Save Work Type</button>
+  </div>
+</div>
+
+<div id="toast" class="fixed bottom-6 right-6 hidden z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg"></div>
+
+<script>
+const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+let workTypes = [];
+let isAdmin = false;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function showToast(msg, kind) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'fixed bottom-6 right-6 z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg ' +
+    (kind === 'err' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200');
+  t.classList.remove('hidden');
+  setTimeout(() => t.classList.add('hidden'), 2600);
+}
+
+function render() {
+  $('wt-list').innerHTML = workTypes.length ? workTypes.map((t, i) => `
+    <div class="wt-row">
+      <div class="wt-num">${i + 1}</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-black text-slate-800 text-[14px]">${esc(t.name)}</div>
+        <div class="text-[12px] text-slate-500 font-semibold">
+          ${t.std_days != null ? `⏱ ${t.std_days} day${Number(t.std_days) === 1 ? '' : 's'} / plot` : '⏱ no standard set'}
+          ${t.std_crew ? ` · 👷 crew of ${t.std_crew}` : ''}
+        </div>
+        ${t.remark ? `<div class="text-[12px] text-slate-400 mt-0.5">${esc(t.remark)}</div>` : ''}
+      </div>
+      <div class="flex gap-1.5 shrink-0">
+        <button class="btn btn-ghost btn-mini" data-up="${t.id}" ${i === 0 ? 'disabled style="opacity:.3"' : ''} title="Move up">↑</button>
+        <button class="btn btn-ghost btn-mini" data-down="${t.id}" ${i === workTypes.length - 1 ? 'disabled style="opacity:.3"' : ''} title="Move down">↓</button>
+        <button class="btn btn-ghost btn-mini" data-edit="${t.id}">Edit</button>
+        <button class="btn btn-danger btn-mini" data-del="${t.id}" title="Remove work type">✕</button>
+      </div>
+    </div>`).join('')
+    : '<div class="text-center text-slate-400 text-sm py-10">No work types yet — add the first one.</div>';
+}
+
+async function loadData() {
+  const { data, error } = await _supabase
+    .from('nops_work_types').select('*')
+    .order('sort_order').order('name');
+  if (error) { showToast('Load failed: ' + error.message, 'err'); return; }
+  workTypes = data || [];
+  render();
+}
+
+// ── Add / edit ───────────────────────────────────────────────
+function openModal(row) {
+  $('t-id').value = row ? row.id : '';
+  $('wt-title').textContent = row ? 'Edit Work Type' : 'Add Work Type';
+  $('t-name').value = row ? row.name : '';
+  $('t-days').value = row && row.std_days != null ? row.std_days : '';
+  $('t-crew').value = row && row.std_crew != null ? row.std_crew : '';
+  $('t-remark').value = row ? (row.remark || '') : '';
+  $('wt-back').classList.remove('hidden');
+  $('wt-modal').classList.remove('hidden');
+}
+function closeModals() { ['wt-back','wt-modal'].forEach(id => $(id).classList.add('hidden')); }
+
+async function saveWorkType() {
+  const name = $('t-name').value.trim();
+  if (!name) { showToast('Work name is required.', 'err'); return; }
+  const payload = {
+    name,
+    std_days: $('t-days').value === '' ? null : Number($('t-days').value),
+    std_crew: $('t-crew').value === '' ? null : parseInt($('t-crew').value, 10),
+    remark: $('t-remark').value.trim() || null
+  };
+  const id = $('t-id').value;
+  let error;
+  if (id) ({ error } = await _supabase.from('nops_work_types').update(payload).eq('id', id));
+  else {
+    payload.sort_order = workTypes.length ? Math.max(...workTypes.map(t => t.sort_order || 0)) + 1 : 1;
+    ({ error } = await _supabase.from('nops_work_types').insert([payload]));
+  }
+  if (error) {
+    showToast(error.code === '23505' ? 'A work type with this name already exists.' : 'Save failed: ' + error.message, 'err');
+    return;
+  }
+  showToast('Work type saved.');
+  closeModals();
+  loadData();
+}
+
+async function deleteWorkType(id) {
+  const t = workTypes.find(x => String(x.id) === String(id));
+  if (!t) return;
+  if (!confirm(`Remove work type "${t.name}"?\n\nPast schedule and plot history keep the name — only the reusable work type (and its motion-study standard) is removed.`)) return;
+  const { error } = await _supabase.from('nops_work_types').delete().eq('id', id);
+  if (error) { showToast('Remove failed: ' + error.message, 'err'); return; }
+  showToast('Work type removed.');
+  loadData();
+}
+
+async function moveWorkType(id, delta) {
+  const i = workTypes.findIndex(x => String(x.id) === String(id));
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= workTypes.length) return;
+  const a = workTypes[i], b = workTypes[j];
+  // Renumber the pair deterministically (handles legacy duplicate sort_orders).
+  const [e1, e2] = await Promise.all([
+    _supabase.from('nops_work_types').update({ sort_order: j + 1 }).eq('id', a.id),
+    _supabase.from('nops_work_types').update({ sort_order: i + 1 }).eq('id', b.id)
+  ]);
+  if ((e1 && e1.error) || (e2 && e2.error)) { showToast('Reorder failed.', 'err'); return; }
+  // Normalise every row to its list position so future moves stay clean.
+  workTypes.splice(i, 1); workTypes.splice(j, 0, a);
+  await Promise.all(workTypes.map((t, idx) =>
+    t.sort_order === idx + 1 ? null : _supabase.from('nops_work_types').update({ sort_order: idx + 1 }).eq('id', t.id)
+  ).filter(Boolean));
+  loadData();
+}
+
+// ── Events ───────────────────────────────────────────────────
+document.addEventListener('click', e => {
+  if (e.target.closest('[data-close]')) { closeModals(); return; }
+  const up = e.target.closest('[data-up]');
+  if (up && !up.disabled) { moveWorkType(up.dataset.up, -1); return; }
+  const dn = e.target.closest('[data-down]');
+  if (dn && !dn.disabled) { moveWorkType(dn.dataset.down, 1); return; }
+  const ed = e.target.closest('[data-edit]');
+  if (ed) { const t = workTypes.find(x => String(x.id) === ed.dataset.edit); if (t) openModal(t); return; }
+  const dl = e.target.closest('[data-del]');
+  if (dl) { deleteWorkType(dl.dataset.del); return; }
+});
+$('add-wt-btn').addEventListener('click', () => openModal(null));
+$('t-save').addEventListener('click', saveWorkType);
+$('wt-back').addEventListener('click', closeModals);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModals(); });
+
+// ── Bootstrap ────────────────────────────────────────────────
+(async () => {
+  try {
+    await MJMAccess.load(_supabase);
+    if (!MJMAccess.user()) { window.location.href = '../index.html'; return; }
+    if (!MJMAccess.canAccess('nursery_ops')) {
+      alert('You do not have access to Nursery Operation Management.');
+      window.location.href = '../index.html';
+      return;
+    }
+    isAdmin = MJMAccess.isAdminOf('nursery_ops');
+    await loadData();
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('main').classList.remove('hidden');
+  } catch (e) {
+    if (e && e.message === 'NO_OPS_ACCESS') return;
+    console.warn(e);
+    window.location.href = '../index.html';
+  }
+})();
+</script>
+</body>
+</html>
