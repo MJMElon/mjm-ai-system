@@ -206,9 +206,19 @@
         <div class="flex items-center justify-between gap-4">
           <div>
             <div class="font-black text-slate-800 text-sm">Scan / FC Portal</div>
-            <div class="text-[11px] text-slate-500">Barcode scanner &amp; seal counting for FC</div>
+            <div class="text-[11px] text-slate-500">Barcode scanner, seal counting &amp; plot status for FC</div>
           </div>
           <select id="d-mod-scan" class="lvl-select"></select>
+        </div>
+
+        <!-- FC Portal · Plot Status — which nurseries this user can see -->
+        <div id="fc-nursery-panel" class="ml-3 pl-4 border-l-2 border-slate-100 hidden">
+          <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Plot Status — Nursery Access</div>
+          <label class="flex items-center gap-2 text-[13px] font-bold text-slate-700 py-1 cursor-pointer">
+            <input type="checkbox" id="d-psn-all" class="w-4 h-4 accent-emerald-600"> All nurseries
+          </label>
+          <div id="d-psn-list" class="grid grid-cols-2 gap-x-3"></div>
+          <p class="text-[10px] text-slate-400 mt-1.5">Controls which nurseries' plot status this user can see and key in on the FC Portal.</p>
         </div>
       </div>
 
@@ -300,6 +310,9 @@ function normPerms(p) {
   // Per-function ticks managed inside the operation module's own User
   // Access page — carry them through so saving here never wipes them.
   if (p.operation_actions && typeof p.operation_actions === 'object') out.operation_actions = p.operation_actions;
+  // FC Portal · Plot Status nursery restriction. Array = only those
+  // nurseries; key absent = all nurseries allowed.
+  if (Array.isArray(p.plot_status_nurseries)) out.plot_status_nurseries = p.plot_status_nurseries;
   return out;
 }
 
@@ -403,6 +416,7 @@ function openDrawer(uid) {
   document.getElementById('d-email').textContent = p.email || '—';
   MODULES.forEach(m => rebuildDropdown('d-mod-' + m, pending.modules[m] || 'none'));
   document.getElementById('d-manage-users').checked = !!pending.manage_users;
+  renderNurseryPanel();
 
   document.getElementById('drawer').classList.add('open');
   document.getElementById('drawer-backdrop').classList.add('open');
@@ -428,6 +442,39 @@ function applyPresetToPending(level) {
   });
 }
 
+// ── FC Portal · Plot Status nursery checklist ─────────────────
+let allNurseries = []; // distinct nursery names from shared_plots
+
+function renderNurseryPanel() {
+  const panel = document.getElementById('fc-nursery-panel');
+  const scanLvl = document.getElementById('d-mod-scan').value;
+  panel.classList.toggle('hidden', !pending || scanLvl === 'none' || !allNurseries.length);
+  if (!pending) return;
+  const restricted = Array.isArray(pending.plot_status_nurseries);
+  const chosen = new Set(restricted ? pending.plot_status_nurseries : allNurseries);
+  document.getElementById('d-psn-all').checked = !restricted;
+  document.getElementById('d-psn-list').innerHTML = allNurseries.map(n => `
+    <label class="flex items-center gap-2 text-[13px] font-semibold py-1 cursor-pointer ${restricted ? 'text-slate-700' : 'text-slate-400'}">
+      <input type="checkbox" class="w-4 h-4 accent-emerald-600" data-psn="${n.replace(/"/g,'&quot;')}"
+             ${chosen.has(n) ? 'checked' : ''} ${restricted ? '' : 'disabled'}>
+      ${n.replace(/&/g,'&amp;').replace(/</g,'&lt;')}
+    </label>`).join('');
+}
+
+document.getElementById('d-psn-all').addEventListener('change', () => {
+  if (!pending) return;
+  if (document.getElementById('d-psn-all').checked) delete pending.plot_status_nurseries;
+  else pending.plot_status_nurseries = allNurseries.slice(); // start from all ticked, untick to restrict
+  renderNurseryPanel();
+});
+document.addEventListener('change', (e) => {
+  if (e.target.matches('[data-psn]') && pending) {
+    pending.plot_status_nurseries = [...document.querySelectorAll('[data-psn]')]
+      .filter(cb => cb.checked).map(cb => cb.dataset.psn);
+  }
+  if (e.target.id === 'd-mod-scan') renderNurseryPanel();
+});
+
 async function saveDrawer() {
   if (!editingUid || !pending) return;
   const p = allProfiles.find(x => x.id === editingUid);
@@ -436,6 +483,10 @@ async function saveDrawer() {
   // Read latest values from the form (in case of last-second changes).
   MODULES.forEach(m => { pending.modules[m] = document.getElementById('d-mod-' + m).value; });
   pending.manage_users = document.getElementById('d-manage-users').checked;
+  // Nursery checklist state already lives on `pending` (see listeners above).
+  // Closing the FC Portal module clears the restriction so re-opening later
+  // starts clean at "all nurseries".
+  if (pending.modules.scan === 'none') delete pending.plot_status_nurseries;
 
   const saveBtn = document.getElementById('d-save');
   saveBtn.disabled = true;
@@ -613,6 +664,13 @@ async function bootstrap() {
     document.getElementById('forbidden').classList.remove('hidden');
     return;
   }
+
+  // Nursery list for the FC Portal plot-status checklist (best effort —
+  // panel simply hides if plots can't be read).
+  try {
+    const { data: pl } = await _supabase.from('shared_plots').select('nursery_name');
+    allNurseries = [...new Set((pl || []).map(r => r.nursery_name).filter(Boolean))].sort();
+  } catch (e) { allNurseries = []; }
 
   const { data, error } = await _supabase
     .from('shared_profiles')
