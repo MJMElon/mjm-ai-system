@@ -372,7 +372,9 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModals(
     ]);
     if (e1 || e2) { showToast('Load failed: ' + (e1 || e2).message, 'err'); }
     workTypes = wt || [];
-    plots = pl || [];
+    // Natural order (B1, B2 … B10, B11), not the DB's alphabetical order.
+    plots = (pl || []).sort((a, b) =>
+      String(a.plot_name).localeCompare(String(b.plot_name), undefined, { numeric: true, sensitivity: 'base' }));
     await loadMonth();
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('main').classList.remove('hidden');
