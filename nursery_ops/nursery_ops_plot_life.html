@@ -52,7 +52,10 @@
     <!-- ── Plot picker ─────────────────────────────────────── -->
     <div class="card overflow-hidden">
       <div class="p-4 border-b border-slate-100 space-y-3">
-        <h2 class="font-black text-slate-800 uppercase tracking-widest text-[12px]">📍 Plots</h2>
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="font-black text-slate-800 uppercase tracking-widest text-[12px]">📍 Plots</h2>
+          <button id="stages-btn" class="btn btn-ghost !py-1.5 !px-3 !text-[10px]" title="Set the plot status stages the FC Portal reports against">🚦 Status Stages</button>
+        </div>
         <select id="nursery-filter" class="inp !py-2 text-[13px]"><option value="">All nurseries</option></select>
         <input id="plot-search" class="inp !py-2 text-[13px]" placeholder="🔎 Search plot…">
       </div>
@@ -72,6 +75,7 @@
             <div>
               <h2 id="pv-name" class="font-black text-slate-800 text-lg">—</h2>
               <p id="pv-stats" class="text-[12px] font-bold text-slate-500 mt-1">—</p>
+              <p id="pv-status" class="mt-2 hidden"></p>
             </div>
             <button id="add-log-btn" class="btn btn-teal">+ Log Work Done</button>
           </div>
@@ -111,6 +115,39 @@
   </div>
 </div>
 
+<!-- ── Plot Status Stages settings modal ─────────────────────── -->
+<div id="stages-back" class="modal-back hidden"></div>
+<div id="stages-modal" class="modal hidden" style="max-width:600px">
+  <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+    <h3 class="font-black text-slate-800 uppercase tracking-widest text-sm">🚦 Plot Status Stages</h3>
+    <button data-close class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 text-xl leading-none">×</button>
+  </div>
+  <div class="p-6 space-y-5">
+    <p class="text-[12px] text-slate-500 leading-relaxed -mt-1">
+      The stages a plot moves through, in order. Field Conductors report against these daily on the FC Portal's
+      <strong>Plot Status</strong>. Set the <strong>ideal days</strong> a plot should stay in each stage before
+      moving to the next — the day counter (and the coming over-time alert) uses it.
+    </p>
+
+    <!-- add / edit form -->
+    <div class="border border-slate-200 rounded-2xl p-4 space-y-3 bg-slate-50/60">
+      <input type="hidden" id="st-id">
+      <div class="grid grid-cols-1 md:grid-cols-[1fr_130px] gap-3">
+        <div><label class="lbl">Stage name</label><input id="st-name" class="inp !bg-white" placeholder="e.g. Transplanted"></div>
+        <div><label class="lbl">Ideal days</label><input id="st-days" type="number" min="0" step="0.5" class="inp !bg-white" placeholder="e.g. 30"></div>
+      </div>
+      <div><label class="lbl">Remark</label><input id="st-remark" class="inp !bg-white" placeholder="Optional note"></div>
+      <div class="flex justify-end gap-2">
+        <button id="st-clear" class="btn btn-ghost hidden">Clear</button>
+        <button id="st-save" class="btn btn-teal">+ Add Stage</button>
+      </div>
+    </div>
+
+    <div id="stages-list" class="space-y-2"></div>
+    <p class="text-[11px] text-slate-400">Deleting a stage keeps its name on past daily entries — only the reusable stage is removed.</p>
+  </div>
+</div>
+
 <div id="toast" class="fixed bottom-6 right-6 hidden z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg"></div>
 
 <script>
@@ -120,6 +157,7 @@ let workTypes = [];     // nops_work_types
 let workCounts = {};    // plot_name → total works
 let curPlot = null;     // selected plot row
 let curWorks = [];      // works of selected plot
+let statusStages = [];  // nops_plot_status_stages
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -209,6 +247,7 @@ async function selectPlot(plotName) {
     : '<div class="text-slate-400 text-sm py-4">Nothing recorded for this plot yet. Schedule work in the Monthly Schedule, or use “Log Work Done”.</div>';
   $('plot-empty').classList.add('hidden');
   $('plot-view').classList.remove('hidden');
+  loadPlotStatus(plotName); // fire-and-forget — fills the 🚦 line when data exists
 }
 
 // ── Ad-hoc log ───────────────────────────────────────────────
@@ -224,7 +263,132 @@ function openLogModal() {
   $('log-back').classList.remove('hidden');
   $('log-modal').classList.remove('hidden');
 }
-function closeModals() { ['log-back','log-modal'].forEach(id => $(id).classList.add('hidden')); }
+function closeModals() { ['log-back','log-modal','stages-back','stages-modal'].forEach(id => $(id).classList.add('hidden')); }
+
+// ── Current plot status (daily entries from the FC Portal) ───
+async function loadPlotStatus(plotName) {
+  const el = $('pv-status');
+  el.classList.add('hidden');
+  try {
+    const { data, error } = await _supabase
+      .from('nops_plot_status_entries').select('entry_date, stage_id, stage_name, reported_by')
+      .eq('plot_name', plotName)
+      .order('entry_date', { ascending: false })
+      .limit(120);
+    if (error || !data || !data.length) return;
+    const cur = data[0];
+    // Walk back through consecutive entries with the same stage to find
+    // when this stage started.
+    let since = cur.entry_date;
+    for (const e of data) {
+      if (e.stage_name !== cur.stage_name) break;
+      since = e.entry_date;
+    }
+    // Calendar days, inclusive — compare midnights so time of day never shifts it.
+    const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    const days = Math.max(1, Math.round((t0 - new Date(since + 'T00:00:00')) / 86400000) + 1);
+    const stage = statusStages.find(s => s.id === cur.stage_id) || statusStages.find(s => s.name === cur.stage_name);
+    const ideal = stage && stage.ideal_days != null ? Number(stage.ideal_days) : null;
+    const over = ideal != null && days > ideal;
+    el.innerHTML = `
+      <span class="chip ${over ? 'chip-over' : 'chip-done'}">🚦 ${esc(cur.stage_name)}</span>
+      <span class="text-[12px] font-bold ${over ? 'text-rose-600' : 'text-slate-500'} ml-1">
+        day ${days}${ideal != null ? ' of ideal ' + ideal : ''} · since ${fmtDate(since)} · last report ${fmtDate(cur.entry_date)}${cur.reported_by ? ' by ' + esc(cur.reported_by) : ''}
+      </span>`;
+    el.classList.remove('hidden');
+  } catch (e) { /* table may not exist yet — stay hidden */ }
+}
+
+// ── Plot Status Stages settings ──────────────────────────────
+function stageFormReset() {
+  $('st-id').value = '';
+  $('st-name').value = '';
+  $('st-days').value = '';
+  $('st-remark').value = '';
+  $('st-save').textContent = '+ Add Stage';
+  $('st-clear').classList.add('hidden');
+}
+
+function renderStages() {
+  $('stages-list').innerHTML = statusStages.length ? statusStages.map((s, i) => `
+    <div class="flex items-center gap-3 border border-slate-200 rounded-xl px-3.5 py-2.5">
+      <span class="w-7 h-7 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 font-black text-[12px] flex items-center justify-center shrink-0">${i + 1}</span>
+      <div class="flex-1 min-w-0">
+        <div class="font-black text-slate-800 text-[13px]">${esc(s.name)}</div>
+        <div class="text-[11px] text-slate-500 font-semibold">${s.ideal_days != null ? `ideal ${s.ideal_days} day${Number(s.ideal_days) === 1 ? '' : 's'} → next stage` : 'no ideal days set'}${s.remark ? ' · ' + esc(s.remark) : ''}</div>
+      </div>
+      <div class="flex gap-1 shrink-0">
+        <button class="btn btn-ghost !px-2 !py-1" data-st-up="${s.id}" ${i === 0 ? 'disabled style="opacity:.3"' : ''}>↑</button>
+        <button class="btn btn-ghost !px-2 !py-1" data-st-down="${s.id}" ${i === statusStages.length - 1 ? 'disabled style="opacity:.3"' : ''}>↓</button>
+        <button class="btn btn-ghost !px-2.5 !py-1" data-st-edit="${s.id}">Edit</button>
+        <button class="btn !px-2.5 !py-1" style="background:white;color:#be123c;border:1.5px solid #fecdd3" data-st-del="${s.id}">✕</button>
+      </div>
+    </div>`).join('')
+    : '<div class="text-center text-slate-400 text-sm py-6">No stages yet — add the first stage above.</div>';
+}
+
+async function loadStages() {
+  try {
+    const { data } = await _supabase.from('nops_plot_status_stages').select('*').order('sort_order').order('name');
+    statusStages = data || [];
+  } catch (e) { statusStages = []; }
+}
+
+async function saveStage() {
+  const name = $('st-name').value.trim();
+  if (!name) { showToast('Stage name is required.', 'err'); return; }
+  const payload = {
+    name,
+    ideal_days: $('st-days').value === '' ? null : Number($('st-days').value),
+    remark: $('st-remark').value.trim() || null
+  };
+  const id = $('st-id').value;
+  let error;
+  if (id) ({ error } = await _supabase.from('nops_plot_status_stages').update(payload).eq('id', id));
+  else {
+    payload.sort_order = statusStages.length ? Math.max(...statusStages.map(s => s.sort_order || 0)) + 1 : 1;
+    ({ error } = await _supabase.from('nops_plot_status_stages').insert([payload]));
+  }
+  if (error) {
+    showToast(error.code === '23505' ? 'A stage with this name already exists.' : 'Save failed: ' + error.message, 'err');
+    return;
+  }
+  showToast('Stage saved.');
+  stageFormReset();
+  await loadStages();
+  renderStages();
+}
+
+async function deleteStage(id) {
+  const s = statusStages.find(x => String(x.id) === String(id));
+  if (!s) return;
+  if (!confirm(`Delete stage "${s.name}"?\n\nPast daily entries keep the name — only the reusable stage is removed.`)) return;
+  const { error } = await _supabase.from('nops_plot_status_stages').delete().eq('id', id);
+  if (error) { showToast('Delete failed: ' + error.message, 'err'); return; }
+  showToast('Stage deleted.');
+  await loadStages();
+  renderStages();
+}
+
+async function moveStage(id, delta) {
+  const i = statusStages.findIndex(x => String(x.id) === String(id));
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= statusStages.length) return;
+  const a = statusStages[i];
+  statusStages.splice(i, 1); statusStages.splice(j, 0, a);
+  await Promise.all(statusStages.map((s, idx) =>
+    s.sort_order === idx + 1 ? null : _supabase.from('nops_plot_status_stages').update({ sort_order: idx + 1 }).eq('id', s.id)
+  ).filter(Boolean));
+  await loadStages();
+  renderStages();
+}
+
+function openStagesModal() {
+  stageFormReset();
+  renderStages();
+  $('stages-back').classList.remove('hidden');
+  $('stages-modal').classList.remove('hidden');
+}
 
 async function saveLog() {
   const t = workTypes.find(x => String(x.id) === $('l-type').value);
@@ -262,12 +426,35 @@ document.addEventListener('click', e => {
   if (e.target.closest('[data-close]')) { closeModals(); return; }
   const pi = e.target.closest('[data-plot]');
   if (pi) { selectPlot(pi.dataset.plot); return; }
+  const se = e.target.closest('[data-st-edit]');
+  if (se) {
+    const s = statusStages.find(x => String(x.id) === se.dataset.stEdit);
+    if (s) {
+      $('st-id').value = s.id;
+      $('st-name').value = s.name;
+      $('st-days').value = s.ideal_days != null ? s.ideal_days : '';
+      $('st-remark').value = s.remark || '';
+      $('st-save').textContent = 'Save Stage';
+      $('st-clear').classList.remove('hidden');
+    }
+    return;
+  }
+  const sd = e.target.closest('[data-st-del]');
+  if (sd) { deleteStage(sd.dataset.stDel); return; }
+  const su = e.target.closest('[data-st-up]');
+  if (su && !su.disabled) { moveStage(su.dataset.stUp, -1); return; }
+  const sn = e.target.closest('[data-st-down]');
+  if (sn && !sn.disabled) { moveStage(sn.dataset.stDown, 1); return; }
 });
 $('add-log-btn').addEventListener('click', openLogModal);
 $('l-save').addEventListener('click', saveLog);
+$('stages-btn').addEventListener('click', openStagesModal);
+$('st-save').addEventListener('click', saveStage);
+$('st-clear').addEventListener('click', stageFormReset);
 $('nursery-filter').addEventListener('change', renderPlotList);
 $('plot-search').addEventListener('input', renderPlotList);
 $('log-back').addEventListener('click', closeModals);
+$('stages-back').addEventListener('click', closeModals);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModals(); });
 
 // ── Bootstrap ────────────────────────────────────────────────
@@ -288,6 +475,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModals(
     if (e1 || e2) showToast('Load failed: ' + (e1 || e2).message, 'err');
     plots = pl || [];
     workTypes = wt || [];
+    await loadStages();
     workCounts = {};
     (wk || []).forEach(w => { workCounts[w.plot_name] = (workCounts[w.plot_name] || 0) + 1; });
     const nurseries = [...new Set(plots.map(p => p.nursery_name).filter(Boolean))].sort();
