@@ -246,7 +246,9 @@ async function saveLog() {
     actual_end: end,
     done_by: who,
     remark: $('l-remark').value.trim() || null,
-    created_by: who
+    created_by: who,
+    updated_by: who,
+    updated_at: new Date().toISOString()
   }]);
   if (error) { showToast('Save failed: ' + error.message, 'err'); return; }
   showToast('Work logged.');

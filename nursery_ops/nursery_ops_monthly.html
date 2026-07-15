@@ -252,6 +252,8 @@ async function saveWork() {
   const t = workTypes.find(x => String(x.id) === typeId);
   const plot = $('w-plot').value;
   if (!t || !plot) { showToast('Work type and plot are required.', 'err'); return; }
+  const u0 = MJMAccess.user() || {};
+  const who0 = u0.full_name || u0.email || null;
   const payload = {
     month: curMonth(),
     nursery_name: $('w-nursery').value || (plots.find(p => p.plot_name === plot) || {}).nursery_name || null,
@@ -260,14 +262,15 @@ async function saveWork() {
     work_type: t.name,
     planned_start: $('w-start').value || null,
     planned_days: $('w-days').value === '' ? null : Number($('w-days').value),
-    remark: $('w-remark').value.trim() || null
+    remark: $('w-remark').value.trim() || null,
+    updated_by: who0,
+    updated_at: new Date().toISOString()
   };
   const id = $('w-id').value;
   let error;
   if (id) ({ error } = await _supabase.from('nops_plot_works').update(payload).eq('id', id));
   else {
-    const u = MJMAccess.user() || {};
-    payload.created_by = u.full_name || u.email || null;
+    payload.created_by = who0;
     ({ error } = await _supabase.from('nops_plot_works').insert([payload]));
   }
   if (error) { showToast('Save failed: ' + error.message, 'err'); return; }
@@ -278,6 +281,9 @@ async function saveWork() {
 
 async function setStatus(id, patch, confirmMsg) {
   if (confirmMsg && !confirm(confirmMsg)) return;
+  const u = MJMAccess.user() || {};
+  patch.updated_by = u.full_name || u.email || null;
+  patch.updated_at = new Date().toISOString();
   const { error } = await _supabase.from('nops_plot_works').update(patch).eq('id', id);
   if (error) { showToast('Update failed: ' + error.message, 'err'); return; }
   loadMonth();
@@ -354,8 +360,12 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModals(
       return;
     }
     isAdmin = MJMAccess.isAdminOf('nursery_ops');
+    // ?month=YYYY-MM (the dashboard chalkboard's Edit button passes it).
+    const qMonth = new URLSearchParams(window.location.search).get('month');
     const now = new Date();
-    $('month-pick').value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    $('month-pick').value = /^\d{4}-\d{2}$/.test(qMonth || '')
+      ? qMonth
+      : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const [{ data: wt, error: e1 }, { data: pl, error: e2 }] = await Promise.all([
       _supabase.from('nops_work_types').select('*').order('sort_order').order('name'),
       _supabase.from('shared_plots').select('nursery_name, plot_name').order('plot_name')

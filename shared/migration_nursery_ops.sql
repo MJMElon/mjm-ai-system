@@ -170,8 +170,14 @@ CREATE TABLE IF NOT EXISTS nops_plot_works (
   done_by        TEXT,
   remark         TEXT,
   created_by     TEXT,
-  created_at     TIMESTAMPTZ DEFAULT now()
+  created_at     TIMESTAMPTZ DEFAULT now(),
+  updated_by     TEXT,               -- who last touched this row (any edit)
+  updated_at     TIMESTAMPTZ         -- shown as "last update" on the chalkboard
 );
+
+-- Idempotent for databases that ran an earlier version of this migration.
+ALTER TABLE nops_plot_works ADD COLUMN IF NOT EXISTS updated_by TEXT;
+ALTER TABLE nops_plot_works ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS nops_plot_works_month_idx ON nops_plot_works (month);
 CREATE INDEX IF NOT EXISTS nops_plot_works_plot_idx  ON nops_plot_works (plot_name);

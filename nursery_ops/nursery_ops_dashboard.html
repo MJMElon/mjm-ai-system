@@ -9,14 +9,60 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_access.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
 <style>
   * { font-family:'Outfit', system-ui, sans-serif; }
   body { background:#f0fdfa; margin:0; }
-  .mod-card { display:block; background:white; border:1px solid #ccfbf1; border-radius:24px; padding:28px; text-decoration:none;
-              box-shadow:0 4px 16px rgba(13,148,136,.08); transition:all .2s; position:relative; overflow:hidden; }
-  .mod-card:hover { transform:translateY(-3px); box-shadow:0 14px 30px -8px rgba(13,148,136,.25); border-color:#5eead4; }
-  .mod-icon { width:56px; height:56px; border-radius:16px; display:flex; align-items:center; justify-content:center; font-size:26px; margin-bottom:16px; }
+
+  /* Small tool buttons */
+  .tool-btn { display:inline-flex; align-items:center; gap:8px; padding:9px 16px; border-radius:999px;
+              background:white; border:1.5px solid #99f6e4; color:#0f766e; font-weight:900; font-size:11px;
+              letter-spacing:.08em; text-transform:uppercase; text-decoration:none; transition:all .15s;
+              box-shadow:0 3px 10px rgba(13,148,136,.10); }
+  .tool-btn:hover { background:#ccfbf1; transform:translateY(-1px); }
+
+  /* ── Chalkboard ─────────────────────────────────────────── */
+  .board-frame { background:linear-gradient(135deg,#a9743f,#8b5e34 40%,#75491f); border-radius:22px; padding:12px;
+                 box-shadow:0 18px 44px -12px rgba(60,40,10,.45); }
+  .board { position:relative; background:
+             radial-gradient(ellipse at 30% 20%, rgba(255,255,255,.045), transparent 55%),
+             radial-gradient(ellipse at 75% 80%, rgba(255,255,255,.035), transparent 50%),
+             linear-gradient(160deg,#2e4b3f,#243d33 55%,#1f352c);
+           border-radius:14px; padding:22px 20px 26px; min-height:420px;
+           box-shadow:inset 0 0 46px rgba(0,0,0,.45); color:#f2ead8; }
+  .chalk { font-family:'Caveat', cursive; }
+  .board-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .board-title { font-family:'Caveat', cursive; font-size:clamp(28px,4.5vw,40px); font-weight:700; color:#fdfaf2;
+                 text-align:center; letter-spacing:1px; text-shadow:0 0 6px rgba(255,255,255,.18); }
+  .board-sub { text-align:center; font-family:'Caveat', cursive; font-size:18px; color:rgba(242,234,216,.55); margin-top:-6px; }
+  .nav-btn { width:44px; height:44px; border-radius:50%; border:2px dashed rgba(255,255,255,.35); background:transparent;
+             color:#fdfaf2; font-size:22px; font-weight:900; cursor:pointer; flex-shrink:0; transition:all .15s;
+             font-family:'Caveat', cursive; line-height:1; }
+  .nav-btn:hover { background:rgba(255,255,255,.10); border-style:solid; }
+
+  .chalk-line { display:flex; align-items:baseline; gap:12px; padding:9px 4px; border-bottom:1px dashed rgba(255,255,255,.14); }
+  .chalk-line:last-child { border-bottom:none; }
+  .chalk-date { font-family:'Caveat', cursive; font-size:21px; font-weight:700; color:#ffd97a; min-width:64px; text-align:right; flex-shrink:0; }
+  .chalk-work { font-family:'Caveat', cursive; font-size:23px; font-weight:600; color:#fdfaf2; }
+  .chalk-meta { font-family:'Caveat', cursive; font-size:19px; color:rgba(242,234,216,.75); }
+  .chalk-status { font-family:'Caveat', cursive; font-size:18px; margin-left:auto; flex-shrink:0; white-space:nowrap; }
+  .st-planned     { color:rgba(242,234,216,.65); }
+  .st-in_progress { color:#ffd97a; }
+  .st-done        { color:#8ff0b4; }
+  .st-cancelled   { color:rgba(242,234,216,.4); }
+  .line-done .chalk-work { color:#bfe9cd; }
+  .line-cancelled .chalk-work, .line-cancelled .chalk-meta { text-decoration:line-through; opacity:.55; }
+
+  .board-empty { text-align:center; font-family:'Caveat', cursive; font-size:26px; color:rgba(242,234,216,.55); padding:70px 10px; }
+
+  .chalk-tray { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-top:14px; padding-top:12px;
+                border-top:2px solid rgba(255,255,255,.12); }
+  .edit-chalk { display:inline-flex; align-items:center; gap:8px; padding:9px 18px; border-radius:12px;
+                background:#fdfaf2; color:#243d33; font-weight:900; font-size:11px; letter-spacing:.08em;
+                text-transform:uppercase; text-decoration:none; border:none; cursor:pointer;
+                box-shadow:0 5px 14px rgba(0,0,0,.3); transition:all .15s; }
+  .edit-chalk:hover { transform:translateY(-1px); background:white; }
+  .last-update { font-family:'Caveat', cursive; font-size:18px; color:rgba(242,234,216,.7); }
 </style>
 </head>
 <body>
@@ -30,47 +76,113 @@
   </div>
 </div>
 
-<div id="loading" class="max-w-[1000px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Checking access…</div>
+<div id="loading" class="max-w-[980px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Checking access…</div>
 
-<div id="main" class="max-w-[1000px] mx-auto px-6 py-10 hidden">
-  <div class="mb-8">
-    <h1 class="text-2xl font-black text-slate-800">Nursery Operation Management</h1>
-    <p class="text-sm text-slate-500 mt-1">Seeds planning, monthly work schedule, and the full life of every plot — powered by your Motion Study standards.</p>
+<div id="main" class="max-w-[980px] mx-auto px-4 md:px-6 py-8 hidden">
+
+  <!-- Small tool buttons -->
+  <div class="flex flex-wrap items-center justify-center gap-3 mb-7">
+    <a class="tool-btn" href="nursery_ops_seeds.html">🌰 Seeds Management</a>
+    <a class="tool-btn" href="nursery_ops_plot_life.html">🌱 Life of Plot</a>
+    <a class="tool-btn" href="nursery_ops_settings.html">⏱️ Motion Study Settings</a>
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-    <a class="mod-card" href="nursery_ops_seeds.html">
-      <div class="mod-icon bg-amber-50 border border-amber-200">🌰</div>
-      <h3 class="font-black text-lg text-slate-800 uppercase tracking-widest mb-1">Seeds Management</h3>
-      <p class="text-[13px] text-slate-500 leading-relaxed">Schedule seeds-in, record actual receives against each schedule, and plan seed orders with the calculator tools.</p>
-    </a>
+  <!-- Live chalkboard: the month's work schedule -->
+  <div class="board-frame">
+    <div class="board">
+      <div class="board-head">
+        <button id="prev-month" class="nav-btn" title="Previous month's schedule">‹</button>
+        <div class="flex-1">
+          <div id="board-title" class="board-title">—</div>
+          <div class="board-sub">Nursery Work Schedule</div>
+        </div>
+        <button id="next-month" class="nav-btn" title="Next month — set the following month's schedule">›</button>
+      </div>
 
-    <a class="mod-card" href="nursery_ops_monthly.html">
-      <div class="mod-icon bg-blue-50 border border-blue-200">🗓️</div>
-      <h3 class="font-black text-lg text-slate-800 uppercase tracking-widest mb-1">Monthly Schedule</h3>
-      <p class="text-[13px] text-slate-500 leading-relaxed">Preset this month's or next month's plot work, track start &amp; completion, and browse the history of what was done.</p>
-    </a>
+      <div id="board-lines" class="mt-4"></div>
 
-    <a class="mod-card" href="nursery_ops_plot_life.html">
-      <div class="mod-icon bg-emerald-50 border border-emerald-200">🌱</div>
-      <h3 class="font-black text-lg text-slate-800 uppercase tracking-widest mb-1">Life of Plot</h3>
-      <p class="text-[13px] text-slate-500 leading-relaxed">Pick any plot (the same plots from the Seedling Stock Management settings) and see every piece of work ever done on it.</p>
-    </a>
-
-    <a class="mod-card" href="nursery_ops_settings.html">
-      <div class="mod-icon bg-violet-50 border border-violet-200">⏱️</div>
-      <h3 class="font-black text-lg text-slate-800 uppercase tracking-widest mb-1">Settings — Motion Study</h3>
-      <p class="text-[13px] text-slate-500 leading-relaxed">Define the work types a plot goes through and the standard days &amp; crew each one needs. Add and remove freely — nothing is fixed.</p>
-    </a>
+      <div class="chalk-tray">
+        <span id="last-update" class="last-update">&nbsp;</span>
+        <a id="edit-btn" class="edit-chalk" href="nursery_ops_monthly.html">✏️ Edit Schedule</a>
+      </div>
+    </div>
   </div>
 
-  <p class="text-[11px] text-slate-400 text-center mt-10">
+  <p class="text-[11px] text-slate-400 text-center mt-8">
     Module access is granted per user on the main portal's <a href="../user_access.html" class="text-teal-700 font-bold underline underline-offset-2">User Access</a>.
   </p>
 </div>
 
 <script>
 const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+let boardMonth = '';   // 'YYYY-MM' currently on the board
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function monthLabel(m) {
+  const [y, mo] = m.split('-').map(Number);
+  return `${MONTHS[mo - 1]} ${y}`;
+}
+function shiftMonth(m, delta) {
+  const [y, mo] = m.split('-').map(Number);
+  const d = new Date(y, mo - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+const fmtDay = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-MY', { day:'numeric', month:'short' }) : '';
+
+function lineHtml(w) {
+  const statusTxt = {
+    planned:     '· planned',
+    in_progress: '✎ in progress…',
+    done:        `✓ done${w.done_by ? ' — ' + esc(w.done_by) : ''}`,
+    cancelled:   '✗ cancelled'
+  }[w.status] || w.status;
+  return `
+    <div class="chalk-line line-${w.status}">
+      <span class="chalk-date">${fmtDay(w.planned_start) || '·'}</span>
+      <span>
+        <span class="chalk-work">${esc(w.work_type)}</span>
+        <span class="chalk-meta"> — ${esc(w.plot_name)}${w.nursery_name ? ' (' + esc(w.nursery_name) + ')' : ''}${w.planned_days != null ? ' · ' + w.planned_days + 'd' : ''}</span>
+      </span>
+      <span class="chalk-status st-${w.status}">${statusTxt}</span>
+    </div>`;
+}
+
+async function loadBoard() {
+  $('board-title').textContent = monthLabel(boardMonth);
+  $('edit-btn').href = 'nursery_ops_monthly.html?month=' + boardMonth;
+  $('board-lines').innerHTML = '<div class="board-empty">loading…</div>';
+  const { data, error } = await _supabase
+    .from('nops_plot_works').select('*')
+    .eq('month', boardMonth)
+    .order('planned_start', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true });
+  if (error) {
+    $('board-lines').innerHTML = `<div class="board-empty">could not load the board — ${esc(error.message)}</div>`;
+    $('last-update').innerHTML = '&nbsp;';
+    return;
+  }
+  const works = data || [];
+  $('board-lines').innerHTML = works.length
+    ? works.map(lineHtml).join('')
+    : '<div class="board-empty">nothing on the board for this month yet —<br>press “Edit Schedule” to set it ✏️</div>';
+
+  // "Last update by …" — latest touch across the month's rows.
+  let latest = null;
+  works.forEach(w => {
+    const ts = w.updated_at || w.created_at;
+    if (ts && (!latest || ts > latest.ts)) latest = { ts, by: w.updated_by || w.created_by || null };
+  });
+  $('last-update').innerHTML = latest
+    ? `Last update by <strong>${esc(latest.by || 'unknown')}</strong> · ${new Date(latest.ts).toLocaleString('en-MY', { day:'2-digit', month:'short', year:'numeric', hour:'numeric', minute:'2-digit' })}`
+    : '&nbsp;';
+}
+
+$('prev-month').addEventListener('click', () => { boardMonth = shiftMonth(boardMonth, -1); loadBoard(); });
+$('next-month').addEventListener('click', () => { boardMonth = shiftMonth(boardMonth,  1); loadBoard(); });
+
 (async () => {
   try {
     await MJMAccess.load(_supabase);
@@ -82,10 +194,13 @@ const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
     }
     const u = MJMAccess.user();
     document.getElementById('who').textContent = u.full_name || u.email || '';
+    const now = new Date();
+    boardMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    await loadBoard();
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('main').classList.remove('hidden');
   } catch (e) {
-    if (e && e.message === 'NO_OPS_ACCESS') return; // shared gate already redirected
+    if (e && e.message === 'NO_OPS_ACCESS') return;
     console.warn(e);
     window.location.href = '../index.html';
   }
