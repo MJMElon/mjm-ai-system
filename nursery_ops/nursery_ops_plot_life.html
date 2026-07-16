@@ -34,6 +34,18 @@
   .plot-item:hover { background:#f0fdfa; }
   .plot-item.active { background:#ccfbf1; }
   .tl-dot { position:absolute; left:-7px; top:6px; width:12px; height:12px; border-radius:50%; border:2.5px solid white; box-shadow:0 0 0 1.5px #99f6e4; }
+
+  /* Rounds (production cycles) */
+  .round-sec { border:1.5px solid #e2e8f0; border-radius:16px; overflow:hidden; }
+  .round-sec.current { border-color:#5eead4; box-shadow:0 4px 14px rgba(13,148,136,.10); }
+  .round-head { width:100%; display:flex; align-items:center; gap:10px; padding:13px 16px; background:#f8fafc; border:none; text-align:left; cursor:pointer; transition:background .15s; }
+  .round-sec.current > .round-head { background:#f0fdfa; cursor:default; }
+  .round-head:hover { background:#f1f5f9; }
+  .round-sec.current > .round-head:hover { background:#f0fdfa; }
+  .round-chev { margin-left:auto; color:#94a3b8; font-weight:900; transition:transform .2s; flex-shrink:0; }
+  .round-sec.open .round-chev { transform:rotate(90deg); }
+  .round-body { padding:16px 18px 18px; }
+  .round-tl { position:relative; border-left:2px solid #ccfbf1; margin-left:8px; padding-left:24px; display:flex; flex-direction:column; gap:18px; }
 </style>
 </head>
 <body>
@@ -77,12 +89,16 @@
               <p id="pv-stats" class="text-[12px] font-bold text-slate-500 mt-1">—</p>
               <p id="pv-status" class="mt-2 hidden"></p>
             </div>
-            <button id="add-log-btn" class="btn btn-teal">+ Log Work Done</button>
+            <div class="flex flex-wrap gap-2 shrink-0">
+              <button id="complete-round-btn" class="btn btn-ghost">🏁 Complete Round</button>
+              <button id="add-log-btn" class="btn btn-teal">+ Log Work Done</button>
+            </div>
           </div>
         </div>
         <div class="card p-5 md:p-6">
-          <h3 class="font-black text-slate-700 uppercase tracking-widest text-[12px] mb-4">Work Timeline</h3>
-          <div id="timeline" class="relative border-l-2 border-teal-100 ml-2 pl-6 space-y-5"></div>
+          <h3 class="font-black text-slate-700 uppercase tracking-widest text-[12px] mb-1">Work Timeline — By Round</h3>
+          <p class="text-[11px] text-slate-400 mb-4">One round = one complete production cycle (usually ~12 months). Completed rounds are folded up — click a round title to see its full details.</p>
+          <div id="rounds" class="space-y-3"></div>
         </div>
       </div>
     </div>
@@ -158,6 +174,8 @@ let workCounts = {};    // plot_name → total works
 let curPlot = null;     // selected plot row
 let curWorks = [];      // works of selected plot
 let statusStages = [];  // nops_plot_status_stages
+let plotRounds = [];    // nops_plot_rounds of selected plot (ascending round_no)
+let expandedRounds = new Set(); // completed rounds the user opened
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -225,12 +243,20 @@ function timelineItemHtml(w) {
 
 async function selectPlot(plotName) {
   curPlot = plots.find(p => p.plot_name === plotName) || { plot_name: plotName };
+  expandedRounds = new Set();
   renderPlotList();
-  const { data, error } = await _supabase
-    .from('nops_plot_works').select('*')
-    .eq('plot_name', plotName)
-    .order('created_at', { ascending: false });
+  let rounds = [];
+  const [{ data, error }, roundsRes] = await Promise.all([
+    _supabase.from('nops_plot_works').select('*')
+      .eq('plot_name', plotName)
+      .order('created_at', { ascending: false }),
+    _supabase.from('nops_plot_rounds').select('*')
+      .eq('plot_name', plotName)
+      .order('round_no', { ascending: true })
+  ]);
   if (error) { showToast('Load failed: ' + error.message, 'err'); return; }
+  if (roundsRes && !roundsRes.error) rounds = roundsRes.data || [];
+  plotRounds = rounds;
   curWorks = (data || []).sort((a, b) => {
     const ka = a.actual_end || a.actual_start || a.planned_start || a.created_at || '';
     const kb = b.actual_end || b.actual_start || b.planned_start || b.created_at || '';
@@ -242,12 +268,126 @@ async function selectPlot(plotName) {
   $('pv-stats').textContent =
     `${curWorks.length} work record${curWorks.length === 1 ? '' : 's'} · ${done.length} done` +
     (last ? ` · last activity ${fmtDate(last.actual_end || last.actual_start)}` : '');
-  $('timeline').innerHTML = curWorks.length
-    ? curWorks.map(timelineItemHtml).join('')
-    : '<div class="text-slate-400 text-sm py-4">Nothing recorded for this plot yet. Schedule work in the Monthly Schedule, or use “Log Work Done”.</div>';
+  renderRounds();
   $('plot-empty').classList.add('hidden');
   $('plot-view').classList.remove('hidden');
   loadPlotStatus(plotName); // fire-and-forget — fills the 🚦 line when data exists
+}
+
+// ── Rounds (production cycles) ───────────────────────────────
+// A work belongs to the LATEST round whose started_on is on/before the
+// work's reference date. Plots with no rounds rows yet are treated as
+// one implicit current Round 1 — so nothing else has to change when a
+// work is created.
+function workRefDate(w) {
+  return w.actual_end || w.actual_start || w.planned_start || String(w.created_at || '').slice(0, 10);
+}
+
+function roundList() {
+  if (plotRounds.length) {
+    const list = plotRounds.slice();
+    // Safety: if every round is closed, synthesize the next open one so
+    // new works always have a current home.
+    if (!list.some(r => !r.closed_on)) {
+      const lastR = list[list.length - 1];
+      const d = new Date(lastR.closed_on + 'T00:00:00'); d.setDate(d.getDate() + 1);
+      list.push({ round_no: lastR.round_no + 1, started_on: d.toISOString().slice(0, 10), closed_on: null, synthetic: true });
+    }
+    return list;
+  }
+  return [{ round_no: 1, started_on: null, closed_on: null, implicit: true }];
+}
+
+function assignWorksToRounds(rounds) {
+  const buckets = new Map(rounds.map(r => [r.round_no, []]));
+  for (const w of curWorks) {
+    const d = workRefDate(w) || '';
+    let target = rounds[0];
+    for (const r of rounds) {
+      if (!r.started_on || (d && d >= r.started_on)) target = r;
+    }
+    buckets.get(target.round_no).push(w);
+  }
+  return buckets;
+}
+
+function roundDuration(startedOn, closedOn) {
+  if (!startedOn) return '';
+  const end = closedOn ? new Date(closedOn + 'T00:00:00') : new Date();
+  const days = Math.max(1, Math.round((end - new Date(startedOn + 'T00:00:00')) / 86400000) + 1);
+  if (days < 62) return `${days} day${days === 1 ? '' : 's'}`;
+  return `≈ ${Math.round(days / 30.44)} months`;
+}
+
+function renderRounds() {
+  const rounds = roundList();
+  const buckets = assignWorksToRounds(rounds);
+  const html = rounds.slice().reverse().map(r => {
+    const works = buckets.get(r.round_no) || [];
+    const doneCount = works.filter(w => w.status === 'done').length;
+    const isCurrent = !r.closed_on;
+    const isOpen = isCurrent || expandedRounds.has(r.round_no);
+    const range = r.started_on
+      ? `${fmtDate(r.started_on)} → ${r.closed_on ? fmtDate(r.closed_on) : 'now'}`
+      : 'since first record';
+    const body = works.length
+      ? `<div class="round-tl">${works.map(timelineItemHtml).join('')}</div>`
+      : '<div class="text-slate-400 text-sm py-2">No work recorded in this round yet. Schedule it in the Monthly Schedule, or use “Log Work Done”.</div>';
+    return `
+      <div class="round-sec ${isCurrent ? 'current' : ''} ${isOpen ? 'open' : ''}">
+        <button class="round-head" ${isCurrent ? '' : `data-round-toggle="${r.round_no}"`}>
+          <span class="text-lg">${isCurrent ? '🔄' : '✅'}</span>
+          <span>
+            <span class="font-black text-slate-800 text-[14px]">Round ${r.round_no}${isCurrent ? ' — Current Cycle' : ' — Completed'}</span>
+            <span class="block text-[11px] text-slate-500 font-semibold">${range} · ${roundDuration(r.started_on, r.closed_on)} · ${works.length} work${works.length === 1 ? '' : 's'} · ${doneCount} done</span>
+          </span>
+          ${isCurrent ? '' : '<span class="round-chev">›</span>'}
+        </button>
+        ${isOpen ? `<div class="round-body">${body}</div>` : ''}
+      </div>`;
+  }).join('');
+  $('rounds').innerHTML = html;
+}
+
+async function completeRound() {
+  if (!curPlot) return;
+  const rounds = roundList();
+  const cur = rounds[rounds.length - 1];
+  const works = assignWorksToRounds(rounds).get(cur.round_no) || [];
+  if (!confirm(
+    `Complete Round ${cur.round_no} for plot ${curPlot.plot_name}?\n\n` +
+    `Its ${works.length} work record${works.length === 1 ? '' : 's'} will fold up as a finished cycle, and Round ${cur.round_no + 1} starts fresh from today.`)) return;
+  const u = MJMAccess.user() || {};
+  const who = u.full_name || u.email || null;
+  const today = new Date().toISOString().slice(0, 10);
+  let error;
+  if (cur.implicit) {
+    // First ever completion: materialise Round 1 from the earliest record,
+    // preferring when work STARTED over when it finished.
+    const dates = curWorks
+      .map(w => w.actual_start || w.planned_start || w.actual_end || String(w.created_at || '').slice(0, 10))
+      .filter(Boolean).sort();
+    const startedOn = dates[0] || today;
+    ({ error } = await _supabase.from('nops_plot_rounds').insert([
+      { plot_name: curPlot.plot_name, round_no: 1, started_on: startedOn, closed_on: today, created_by: who },
+      { plot_name: curPlot.plot_name, round_no: 2, started_on: today, created_by: who }
+    ]));
+  } else if (cur.synthetic) {
+    ({ error } = await _supabase.from('nops_plot_rounds').insert([
+      { plot_name: curPlot.plot_name, round_no: cur.round_no, started_on: cur.started_on, closed_on: today, created_by: who },
+      { plot_name: curPlot.plot_name, round_no: cur.round_no + 1, started_on: today, created_by: who }
+    ]));
+  } else {
+    ({ error } = await _supabase.from('nops_plot_rounds').update({ closed_on: today }).eq('id', cur.id));
+    if (!error) {
+      ({ error } = await _supabase.from('nops_plot_rounds').insert([
+        { plot_name: curPlot.plot_name, round_no: cur.round_no + 1, started_on: today, created_by: who }
+      ]));
+    }
+  }
+  if (error) { showToast('Complete round failed: ' + error.message, 'err'); return; }
+  showToast(`Round ${cur.round_no} completed — Round ${cur.round_no + 1} started.`);
+  selectPlot(curPlot.plot_name);
 }
 
 // ── Ad-hoc log ───────────────────────────────────────────────
@@ -426,6 +566,13 @@ document.addEventListener('click', e => {
   if (e.target.closest('[data-close]')) { closeModals(); return; }
   const pi = e.target.closest('[data-plot]');
   if (pi) { selectPlot(pi.dataset.plot); return; }
+  const rt = e.target.closest('[data-round-toggle]');
+  if (rt) {
+    const no = Number(rt.dataset.roundToggle);
+    expandedRounds.has(no) ? expandedRounds.delete(no) : expandedRounds.add(no);
+    renderRounds();
+    return;
+  }
   const se = e.target.closest('[data-st-edit]');
   if (se) {
     const s = statusStages.find(x => String(x.id) === se.dataset.stEdit);
@@ -447,6 +594,7 @@ document.addEventListener('click', e => {
   if (sn && !sn.disabled) { moveStage(sn.dataset.stDown, 1); return; }
 });
 $('add-log-btn').addEventListener('click', openLogModal);
+$('complete-round-btn').addEventListener('click', completeRound);
 $('l-save').addEventListener('click', saveLog);
 $('stages-btn').addEventListener('click', openStagesModal);
 $('st-save').addEventListener('click', saveStage);
