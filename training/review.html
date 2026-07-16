@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Practical Proof Review — MJM Training Center</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_access.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Outfit', system-ui, sans-serif; }
+  body { background:#f1f5f9; margin:0; }
+  .card { background:white; border:1px solid #e2e8f0; border-radius:20px; box-shadow:0 4px 16px rgba(0,0,0,.06); }
+  .chip { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:999px; font-size:10px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; }
+  .chip-act { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+  .chip-info { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
+  .fsel { background:white; border:1px solid #e2e8f0; border-radius:12px; padding:10px 14px; font-size:13px; font-weight:700; color:#334155; outline:none; }
+  .fsel:focus { border-color:#10b981; box-shadow:0 0 0 3px rgba(16,185,129,.15); }
+  .proof-card { background:white; border:1px solid #e2e8f0; border-radius:14px; overflow:hidden; display:flex; flex-direction:column; }
+  .proof-card img { width:100%; height:130px; object-fit:cover; cursor:pointer; background:#f1f5f9; }
+  .proof-card .noimg { width:100%; height:130px; display:flex; align-items:center; justify-content:center; background:#f1f5f9; color:#94a3b8; font-size:24px; }
+  .proof-meta { padding:9px 11px; font-size:11px; color:#475569; line-height:1.45; }
+  .proof-meta .act { font-weight:900; color:#065f46; text-transform:uppercase; letter-spacing:.05em; font-size:10px; }
+  .proof-meta a { color:#059669; font-weight:700; text-decoration:none; }
+  .u-head { display:flex; align-items:center; gap:12px; }
+  .u-avatar { width:42px; height:42px; border-radius:50%; background:linear-gradient(135deg,#10b981,#0d9488); color:white; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:13px; flex-shrink:0; }
+</style>
+</head>
+<body>
+
+<div class="bg-white border-b border-slate-200 px-6 py-4 grid grid-cols-3 items-center sticky top-0 z-30 shadow-sm">
+  <a href="index.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Training Center</a>
+  <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm">Practical Proof Review</span>
+  <div class="justify-self-end flex items-center gap-2">
+    <div class="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-black text-xs">AI</div>
+  </div>
+</div>
+
+<div id="loading" class="max-w-[1100px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading proof records…</div>
+
+<div id="forbidden" class="max-w-[1100px] mx-auto px-6 py-16 hidden">
+  <div class="card p-10 text-center">
+    <div class="text-4xl mb-3">🔒</div>
+    <h2 class="text-lg font-black text-slate-800 uppercase tracking-widest">Access Denied</h2>
+    <p class="text-xs text-slate-500 mt-2">Only users with <strong>Manage Users</strong> permission can review proof records.</p>
+    <a href="index.html" class="inline-block mt-6 text-[10px] font-bold text-emerald-700 uppercase tracking-widest bg-emerald-50 border border-emerald-200 rounded-full px-4 py-2 no-underline">Back to Training Center</a>
+  </div>
+</div>
+
+<div id="setup" class="max-w-[1100px] mx-auto px-6 py-16 hidden">
+  <div class="card p-10 text-center">
+    <div class="text-4xl mb-3">🛠️</div>
+    <h2 class="text-lg font-black text-slate-800 uppercase tracking-widest">One-time setup needed</h2>
+    <p class="text-xs text-slate-500 mt-3 leading-relaxed max-w-md mx-auto">
+      The proof-log table doesn't exist yet. Run
+      <code class="bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 text-[11px]">shared/migration_training_practical_logs.sql</code>
+      in the Supabase SQL Editor, then reload this page.
+    </p>
+  </div>
+</div>
+
+<div id="main" class="max-w-[1100px] mx-auto px-6 py-8 space-y-6 hidden">
+
+  <div class="card p-6 space-y-3">
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">📸</span>
+      <h1 class="text-base font-black text-slate-800 uppercase tracking-widest">Practical Proof Review</h1>
+    </div>
+    <p class="text-[13px] text-slate-600 leading-relaxed">
+      Every record a trainee logs on the Practical Record page — photo, location, date and time — appears here.
+      Review the evidence before certifying. Records synced from a trainee's phone may take until their next visit with internet to show up.
+    </p>
+  </div>
+
+  <div class="flex flex-col md:flex-row gap-3 md:items-center flex-wrap">
+    <select id="f-user" class="fsel flex-1 min-w-[180px]"><option value="">All trainees</option></select>
+    <select id="f-act" class="fsel flex-1 min-w-[180px]"><option value="">All activities</option></select>
+    <input id="f-from" type="date" class="fsel" title="From date">
+    <input id="f-to" type="date" class="fsel" title="To date">
+    <button id="reload-btn" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl border border-slate-200">Reload</button>
+  </div>
+
+  <p id="count-line" class="text-[11px] font-bold text-slate-600 text-center">—</p>
+
+  <div id="groups" class="space-y-6"></div>
+
+  <div class="text-center">
+    <button id="more-btn" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest px-6 py-3 rounded-xl shadow">Load older records</button>
+  </div>
+
+</div>
+
+<script>
+const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+
+/* Activity names (kept in sync with training/assets/app.js) */
+const ACTIVITY_NAME = {
+  'seed-planting':'Seeds Planting','seed-culling':'Seed-Damage Culling','watering':'Watering Sessions',
+  'manuring':'Manuring Rounds','weeding':'Weeding Rounds','spraying':'Pest & Disease Sprays',
+  'interrow':'Inter-Row Sprays','transplanting':'Seedlings Transplanted','culling':'Culling Checks',
+  'case-open':'Carlos Cases Opened','case-solve':'Carlos Cases Resolved','order':'Sales Orders Processed',
+  'report':'Batch Reports Filed','collection':'Collections Handled'
+};
+const PAGE = 300;
+
+let rows = [];        // all fetched rows, newest first
+let offset = 0;       // next range start
+let exhausted = false;
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function actName(k){ return ACTIVITY_NAME[k] || k; }
+function initialsOf(name, email){
+  const src = (name || email || '?').trim();
+  return src.split(/\s+/).map(s=>s[0]).slice(0,2).join('').toUpperCase() || '?';
+}
+function fmtWhen(iso){
+  try{ return new Date(iso).toLocaleString(undefined,{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+  catch(e){ return iso; }
+}
+
+function userKey(r){ return r.user_id; }
+function userLabel(r){ return r.full_name || r.email || r.user_id.slice(0,8); }
+
+function applyFilters(){
+  const u = document.getElementById('f-user').value;
+  const a = document.getElementById('f-act').value;
+  const from = document.getElementById('f-from').value;
+  const to = document.getElementById('f-to').value;
+  return rows.filter(r =>
+    (!u || r.user_id === u) &&
+    (!a || r.activity === a) &&
+    (!from || r.taken_at >= from) &&
+    (!to || r.taken_at <= to + 'T23:59:59.999Z'));
+}
+
+function rebuildFilterOptions(){
+  const users = new Map(), acts = new Set();
+  rows.forEach(r => { users.set(r.user_id, userLabel(r)); acts.add(r.activity); });
+  const uSel = document.getElementById('f-user'), aSel = document.getElementById('f-act');
+  const uVal = uSel.value, aVal = aSel.value;
+  uSel.innerHTML = '<option value="">All trainees</option>' +
+    [...users.entries()].sort((x,y)=>x[1].localeCompare(y[1]))
+      .map(([id,l])=>`<option value="${esc(id)}">${esc(l)}</option>`).join('');
+  aSel.innerHTML = '<option value="">All activities</option>' +
+    [...acts].sort().map(k=>`<option value="${esc(k)}">${esc(actName(k))}</option>`).join('');
+  uSel.value = uVal; aSel.value = aVal;
+}
+
+function proofCardHtml(r){
+  const img = r.photo_url
+    ? `<img src="${esc(r.photo_url)}" loading="lazy" alt="proof" onclick="window.open(this.src,'_blank')">`
+    : `<div class="noimg">📷</div>`;
+  const loc = (r.lat != null && r.lng != null)
+    ? `<a href="https://maps.google.com/?q=${r.lat},${r.lng}" target="_blank" rel="noopener">${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}</a>${r.accuracy_m ? ` <span class="text-slate-400">±${Math.round(r.accuracy_m)}m</span>` : ''}`
+    : '<span class="text-amber-600 font-bold">no location</span>';
+  return `<div class="proof-card">${img}
+    <div class="proof-meta">
+      <div class="act">${esc(actName(r.activity))}</div>
+      <div>${fmtWhen(r.taken_at)}</div>
+      <div>${loc}</div>
+    </div></div>`;
+}
+
+function render(){
+  const list = applyFilters();
+  // group by user, keep newest-first inside each group
+  const groups = new Map();
+  list.forEach(r => {
+    if (!groups.has(userKey(r))) groups.set(userKey(r), []);
+    groups.get(userKey(r)).push(r);
+  });
+
+  const wrap = document.getElementById('groups');
+  wrap.innerHTML = '';
+  groups.forEach((items) => {
+    const first = items[0];
+    // per-activity tallies for this user (within current filter)
+    const tally = {};
+    items.forEach(r => { tally[r.activity] = (tally[r.activity]||0)+1; });
+    const chips = Object.entries(tally).sort((a,b)=>b[1]-a[1])
+      .map(([k,n])=>`<span class="chip chip-act">${esc(actName(k))} × ${n}</span>`).join(' ');
+
+    const g = document.createElement('div');
+    g.className = 'card p-5 space-y-4';
+    g.innerHTML = `
+      <div class="u-head">
+        <div class="u-avatar">${esc(initialsOf(first.full_name, first.email))}</div>
+        <div class="min-w-0">
+          <div class="font-black text-slate-800 text-sm truncate">${esc(first.full_name || '(no name)')}</div>
+          <div class="text-[12px] text-slate-500 font-semibold truncate">${esc(first.email || '—')}</div>
+        </div>
+        <span class="chip chip-info" style="margin-left:auto">${items.length} record${items.length===1?'':'s'}</span>
+      </div>
+      <div class="flex flex-wrap gap-1.5">${chips}</div>
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">${items.map(proofCardHtml).join('')}</div>`;
+    wrap.appendChild(g);
+  });
+
+  if (!list.length) {
+    wrap.innerHTML = `<div class="card p-10 text-center text-slate-400 text-sm">No proof records${rows.length ? ' match the filters' : ' yet — they appear as trainees log work with photos'}.</div>`;
+  }
+
+  document.getElementById('count-line').textContent =
+    `${list.length} of ${rows.length} loaded record${rows.length===1?'':'s'} shown · ${groups.size} trainee${groups.size===1?'':'s'}` +
+    (exhausted ? '' : ' · older records available');
+  document.getElementById('more-btn').classList.toggle('hidden', exhausted);
+}
+
+async function fetchPage(){
+  const { data, error } = await _supabase
+    .from('training_practical_logs')
+    .select('id, user_id, email, full_name, activity, taken_at, lat, lng, accuracy_m, photo_url')
+    .order('taken_at', { ascending: false })
+    .range(offset, offset + PAGE - 1);
+  if (error) throw error;
+  rows = rows.concat(data || []);
+  offset += (data || []).length;
+  if (!data || data.length < PAGE) exhausted = true;
+}
+
+['f-user','f-act','f-from','f-to'].forEach(id =>
+  document.getElementById(id).addEventListener('change', render));
+document.getElementById('more-btn').addEventListener('click', async function(){
+  this.disabled = true; this.textContent = 'Loading…';
+  try { await fetchPage(); render(); } catch(e){ alert('Load failed: ' + e.message); }
+  this.disabled = false; this.textContent = 'Load older records';
+});
+document.getElementById('reload-btn').addEventListener('click', () => location.reload());
+
+async function bootstrap(){
+  try {
+    await MJMAccess.load(_supabase);
+  } catch(e) { /* redirect already handled by the helper */ }
+  if (!MJMAccess.user()) { window.location.href = '../index.html'; return; }
+  if (!MJMAccess.canManageUsers()) {
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('forbidden').classList.remove('hidden');
+    return;
+  }
+  try {
+    await fetchPage();
+  } catch(e) {
+    document.getElementById('loading').classList.add('hidden');
+    // Missing table → friendly setup screen instead of a raw error
+    if (/training_practical_logs/.test(e.message || '') || /does not exist|schema cache/i.test(e.message || '')) {
+      document.getElementById('setup').classList.remove('hidden');
+    } else {
+      alert('Load failed: ' + e.message);
+    }
+    return;
+  }
+  document.getElementById('loading').classList.add('hidden');
+  document.getElementById('main').classList.remove('hidden');
+  rebuildFilterOptions();
+  render();
+}
+bootstrap();
+</script>
+</body>
+</html>
