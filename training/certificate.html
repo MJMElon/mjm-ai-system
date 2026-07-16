@@ -18,7 +18,7 @@
   .stage-in{position:relative;display:flex;align-items:flex-end;justify-content:center;gap:1.5%;padding:26px 3% 0;height:min(440px,72vw);}
   .hero-slot{position:relative;flex:1 1 0;max-width:158px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;cursor:pointer;-webkit-tap-highlight-color:transparent;}
   .hero-slot .lamp{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:24px;height:9px;border-radius:50%;background:#ffeaae;box-shadow:0 0 16px 6px rgba(255,234,174,.75);z-index:3;}
-  .hero-slot .spot{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:175%;height:calc(100% - var(--figH) - var(--lblH) + 52px);clip-path:polygon(44% 0,56% 0,100% 100%,0 100%);background:linear-gradient(to bottom,rgba(255,240,196,.42),rgba(255,240,196,.14) 62%,rgba(255,240,196,.02));filter:blur(.5px);pointer-events:none;animation:spotFlick 5.5s ease-in-out infinite;z-index:1;}
+  .hero-slot .spot{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:175%;height:calc(100% - var(--figH) - var(--lblH) + 30px);clip-path:polygon(44% 0,56% 0,100% 100%,0 100%);background:linear-gradient(to bottom,rgba(255,240,196,.42),rgba(255,240,196,.14) 62%,rgba(255,240,196,.02));filter:blur(.5px);pointer-events:none;animation:spotFlick 5.5s ease-in-out infinite;z-index:1;}
   .hero-slot:nth-child(2) .spot{animation-delay:1.2s}.hero-slot:nth-child(3) .spot{animation-delay:2.4s}
   .hero-slot:nth-child(4) .spot{animation-delay:.7s}.hero-slot:nth-child(5) .spot{animation-delay:1.9s}
   @keyframes spotFlick{0%,100%{opacity:.95}50%{opacity:.72}}
@@ -27,8 +27,14 @@
   .hero-fig::after{content:'';position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);width:150%;height:15px;border-radius:50%;background:radial-gradient(ellipse,rgba(255,240,196,.28),transparent 68%);z-index:-1;}
   .hero-slot:hover .hero-fig,.hero-slot:focus-visible .hero-fig{transform:scale(1.06);}
   .hero-slot:hover .spot{opacity:1;animation:none;}
-  .hero-count{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:#ffeaae;color:#4a3a10;border-radius:999px;padding:2px 9px;font-size:.66rem;font-weight:900;white-space:nowrap;box-shadow:0 0 12px rgba(255,234,174,.55);z-index:4;}
-  .hero-label{--x:1;margin:10px 2px 0;height:var(--lblH);display:flex;align-items:flex-start;justify-content:center;text-align:center;font-size:clamp(.48rem,1.55vw,.7rem);font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#c8d2c8;line-height:1.35;z-index:2;}
+  .hero-plaque{margin-top:2px;background:linear-gradient(180deg,#3a434f,#1f252d);border:1px solid rgba(255,234,174,.42);border-radius:8px;padding:3px 12px 4px;font-size:.63rem;font-weight:900;letter-spacing:.06em;color:#ffeaae;white-space:nowrap;box-shadow:0 4px 10px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.14);z-index:3;}
+  .hero-gold .hero-plaque{background:linear-gradient(180deg,#e9c452,#93671c);color:#2a1f05;border-color:#ffe9a0;box-shadow:0 4px 14px rgba(212,175,55,.45),inset 0 1px 0 rgba(255,255,255,.35);}
+  .hero-gold .spot{background:linear-gradient(to bottom,rgba(255,222,140,.5),rgba(255,222,140,.17) 62%,rgba(255,222,140,.03));}
+  .hero-gold .lamp{background:#ffdf8f;box-shadow:0 0 20px 8px rgba(255,223,143,.85);}
+  .hero-gold .hero-fig{filter:drop-shadow(0 12px 16px rgba(0,0,0,.6)) drop-shadow(0 0 24px rgba(255,205,90,.38));}
+  .hero-gold .hero-fig::after{background:radial-gradient(ellipse,rgba(255,215,120,.4),transparent 68%);}
+  .hero-gold .hero-label{color:#ffe9a0;}
+  .hero-label{--x:1;margin:7px 2px 0;height:calc(var(--lblH) - 2.2em);display:flex;align-items:flex-start;justify-content:center;text-align:center;font-size:clamp(.48rem,1.55vw,.7rem);font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#c8d2c8;line-height:1.35;z-index:2;}
   .stage-floor{height:26px;background:linear-gradient(to bottom,rgba(255,255,255,.07),transparent);}
   .stage-hint{text-align:center;color:#8fa08f;font-size:.74rem;padding:0 16px 16px;}
   /* modal — who's certified for this hero */
@@ -178,10 +184,10 @@
      title:'MJM Certified Nursery Auditor',
      desc:'Operation, troubleshooting, admin operation and COPN.',
      programs:['operation','troubleshoot','admin-operation','copn']},
-    {key:'nursery-manager', legacy:'manager', icon:'fa-user-tie',
-     title:'MJM Certified Nursery Manager',
-     desc:'Every program — the full training pathway.',
-     programs:['operation','troubleshoot','admin-operation','copn','sales','management']}
+    {key:'nursery-sales', legacy:null, icon:'fa-cart-shopping',
+     title:'MJM Certified Nursery Sales',
+     desc:'Sales program slides + the sales practical record.',
+     programs:['sales']}
   ];
   var CERT_BY_KEY={}; CERTS.forEach(function(c){ CERT_BY_KEY[c.key]=c; });
 
@@ -223,7 +229,7 @@
 
   /* Local (this device) claim record — new key with legacy fallback. */
   function getLocalCert(cert){
-    var raw=MJM.get('rolecert-'+cert.key)||MJM.get('rolecert-'+cert.legacy);
+    var raw=MJM.get('rolecert-'+cert.key)||(cert.legacy&&MJM.get('rolecert-'+cert.legacy));
     if(!raw) return null;
     try{ return JSON.parse(raw); }catch(e){ return null; }
   }
@@ -231,49 +237,64 @@
   /* ── Board rendering — hero stage ───────────────────────── */
   /* Line-up: tallest in the middle, sides step down. Height reflects
      how far up the certification ladder each title is. */
-  var LINEUP = ['nursery-grower','nursery-admin','nursery-manager','nursery-auditor','field-conductor'];
-  var HEIGHTS = {'nursery-grower':.62,'nursery-admin':.82,'nursery-manager':1,'nursery-auditor':.82,'field-conductor':.62};
+  /* Grower stands centre stage in GOLD and larger; the four grey heroes
+     beside it are all the same size:
+     admin · auditor · GROWER · sales · field-conductor */
+  var LINEUP = ['nursery-admin','nursery-auditor','nursery-grower','nursery-sales','field-conductor'];
+  var HEIGHTS = {'nursery-grower':1,'nursery-admin':.74,'nursery-auditor':.74,'nursery-sales':.74,'field-conductor':.74};
+  var GOLD_KEY = 'nursery-grower';
   var byKeyMap = {};   // cert_key -> sorted rows
   var openKey = null;  // cert shown in the modal
 
-  /* Grey superhero silhouette — cape, fists on hips. */
-  function heroSvg(){
-    return '<svg viewBox="0 0 120 232" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'+
+  /* Superhero silhouette — smooth curves: cape, fists on hips, boots.
+     kind: 'grey' (line-up) or 'gold' (centre-stage Grower). */
+  function heroSvg(kind){
+    var g = kind==='gold';
+    var idB='hb-'+kind, idC='hc-'+kind;
+    // body clearly lighter than the cape so the figure reads against it
+    var stops = g
+      ? {b1:'#ffeeb0', b2:'#d09c2e', c1:'#b8862b', c2:'#6b4c12'}
+      : {b1:'#d3dbe3', b2:'#6a7380', c1:'#4d5866', c2:'#22272e'};
+    return '<svg viewBox="0 0 140 240" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'+
       '<defs>'+
-      '<linearGradient id="hgB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c3ccd6"/><stop offset="1" stop-color="#565e68"/></linearGradient>'+
-      '<linearGradient id="hgC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#98a2ad"/><stop offset="1" stop-color="#343a42"/></linearGradient>'+
+      '<linearGradient id="'+idB+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+stops.b1+'"/><stop offset="1" stop-color="'+stops.b2+'"/></linearGradient>'+
+      '<linearGradient id="'+idC+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+stops.c1+'"/><stop offset="1" stop-color="'+stops.c2+'"/></linearGradient>'+
       '</defs>'+
-      '<path fill="url(#hgC)" d="M60 38 C46 42 36 48 32 56 L14 204 L38 190 L60 200 L82 190 L106 204 L88 56 C84 48 74 42 60 38 Z"/>'+
-      '<g fill="url(#hgB)">'+
-      '<circle cx="60" cy="18" r="12.5"/>'+
-      '<path d="M53 29 h14 l3 9 h-20 z"/>'+
-      '<path d="M32 38 L88 38 L83 72 L73 108 L47 108 L37 72 Z"/>'+
-      '<path d="M34 40 L20 70 L35 101 L45 94 L31 70 L44 48 Z"/>'+
-      '<path d="M86 40 L100 70 L85 101 L75 94 L89 70 L76 48 Z"/>'+
-      '<circle cx="41" cy="99" r="6.5"/>'+
-      '<circle cx="79" cy="99" r="6.5"/>'+
-      '<path d="M46 108 L74 108 L76 120 L44 120 Z"/>'+
-      '<path d="M46 120 L33 194 L49 194 L57 142 L60 130 Z"/>'+
-      '<path d="M74 120 L87 194 L71 194 L63 142 L60 130 Z"/>'+
-      '<path d="M29 194 h22 l2 11 h-25 z"/>'+
-      '<path d="M69 194 h22 l3 11 h-26 z"/>'+
+      // cape — dark, tight at the shoulders, flaring gently behind the legs
+      '<path fill="url(#'+idC+')" d="M70 40 C58 43 50 48 46 55 L36 196 C44 190 52 188 58 190 L70 194 L82 190 C88 188 96 190 104 196 L94 55 C90 48 82 43 70 40 Z"/>'+
+      '<g fill="url(#'+idB+')">'+
+      // head + neck
+      '<circle cx="70" cy="17" r="12"/>'+
+      '<path d="M64 27 C66 31 74 31 76 27 L77 38 L63 38 Z"/>'+
+      // torso — rounded shoulders, tapered waist, hips
+      '<path d="M44 42 C50 36 63 33 70 33 C77 33 90 36 96 42 C94 57 91 71 88 83 C85 93 83 100 80 105 L82 110 C83 116 81 121 78 123 L62 123 C59 121 57 116 58 110 L60 105 C57 100 55 93 52 83 C49 71 46 57 44 42 Z"/>'+
+      // arms — swing wide of the torso so daylight shows through the elbows,
+      // bending back in to fists planted on the hips
+      '<path d="M44 44 C34 48 26 57 23 67 C20 77 22 88 28 96 C32 102 39 105 46 106 C51 107 54 103 54 100 C54 97 52 95 48 93 C41 89 37 83 37 74 C37 66 41 58 47 52 C50 49 48 45 44 44 Z"/>'+
+      '<circle cx="48" cy="101" r="6"/>'+
+      '<path d="M96 44 C106 48 114 57 117 67 C120 77 118 88 112 96 C108 102 101 105 94 106 C89 107 86 103 86 100 C86 97 88 95 92 93 C99 89 103 83 103 74 C103 66 99 58 93 52 C90 49 92 45 96 44 Z"/>'+
+      '<circle cx="92" cy="101" r="6"/>'+
+      // legs — long taper, standing proud of the cape
+      '<path d="M62 122 C61 138 59 154 56 170 C54 180 52 190 51 198 L66 198 C67 187 68 174 69 161 C69.5 149 70 136 70 127 L70 122 Z"/>'+
+      '<path d="M78 122 C79 138 81 154 84 170 C86 180 88 190 89 198 L74 198 C73 187 72 174 71 161 C70.5 149 70 136 70 127 L70 122 Z"/>'+
+      // boots
+      '<path d="M47 198 C45 203 44 207 44 212 L69 212 C69 207 68 202 67 198 Z"/>'+
+      '<path d="M73 198 C72 202 71 207 71 212 L96 212 C96 207 95 203 93 198 Z"/>'+
       '</g>'+
-      '<rect x="44" y="108" width="32" height="7" rx="3.5" fill="#7c8691"/>'+
-      '<path fill="#828c97" d="M60 50 L70 57 L66 69 L54 69 L50 57 Z"/>'+
       '</svg>';
   }
 
-  function buildStage(){
+    function buildStage(){
     boardEl.innerHTML = LINEUP.map(function(k){
       var c = CERT_BY_KEY[k];
-      var h = HEIGHTS[k] || .7;
-      return '<div class="hero-slot" data-key="'+k+'" role="button" tabindex="0" '+
+      var h = HEIGHTS[k] || .74;
+      var gold = (k === GOLD_KEY);
+      return '<div class="hero-slot'+(gold?' hero-gold':'')+'" data-key="'+k+'" role="button" tabindex="0" '+
         'aria-label="'+esc(c.title)+'" '+
-        'style="--figH:calc(clamp(96px,30vw,220px) * '+h+');--lblH:3.9em">'+
+        'style="--figH:calc(clamp(96px,30vw,220px) * '+h+');--lblH:5.2em">'+
         '<span class="lamp"></span><span class="spot"></span>'+
-        '<div class="hero-fig">'+heroSvg()+
-          '<span class="hero-count" data-count>0</span>'+
-        '</div>'+
+        '<div class="hero-fig">'+heroSvg(gold?'gold':'grey')+'</div>'+
+        '<div class="hero-plaque" data-count>0 certified</div>'+
         '<div class="hero-label">'+esc(c.title.replace(/^MJM Certified /,''))+'</div>'+
       '</div>';
     }).join('');
