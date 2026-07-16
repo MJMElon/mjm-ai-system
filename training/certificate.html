@@ -13,25 +13,45 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
 <style>
-  /* ── Certified Board ─────────────────────────────────────── */
-  .board-card{background:#fff;border:1px solid #e2e8da;border-radius:18px;box-shadow:0 6px 20px rgba(30,58,32,.07);margin-bottom:22px;overflow:hidden;}
-  .board-head{display:flex;align-items:center;gap:14px;padding:18px 20px;background:linear-gradient(135deg,#1E3A20,#2f5a33);color:#f0f5ee;}
-  .board-head .b-icon{width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;color:#cfe8b8;}
-  .board-head h3{margin:0;font-size:1.02rem;line-height:1.25;}
-  .board-head p{margin:2px 0 0;font-size:.76rem;opacity:.75;}
-  .board-count{margin-left:auto;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:5px 13px;font-size:.75rem;font-weight:800;white-space:nowrap;}
+  /* ── Certified Board — hero stage ────────────────────────── */
+  .stage{position:relative;border-radius:24px;overflow:hidden;background:radial-gradient(ellipse at 50% -10%,#39424e 0%,#1b212a 45%,#0b0f15 100%);box-shadow:0 24px 60px rgba(10,16,12,.45);}
+  .stage-in{position:relative;display:flex;align-items:flex-end;justify-content:center;gap:1.5%;padding:26px 3% 0;height:min(440px,72vw);}
+  .hero-slot{position:relative;flex:1 1 0;max-width:158px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  .hero-slot .lamp{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:24px;height:9px;border-radius:50%;background:#ffeaae;box-shadow:0 0 16px 6px rgba(255,234,174,.75);z-index:3;}
+  .hero-slot .spot{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:175%;height:calc(100% - var(--figH) - var(--lblH) + 52px);clip-path:polygon(44% 0,56% 0,100% 100%,0 100%);background:linear-gradient(to bottom,rgba(255,240,196,.42),rgba(255,240,196,.14) 62%,rgba(255,240,196,.02));filter:blur(.5px);pointer-events:none;animation:spotFlick 5.5s ease-in-out infinite;z-index:1;}
+  .hero-slot:nth-child(2) .spot{animation-delay:1.2s}.hero-slot:nth-child(3) .spot{animation-delay:2.4s}
+  .hero-slot:nth-child(4) .spot{animation-delay:.7s}.hero-slot:nth-child(5) .spot{animation-delay:1.9s}
+  @keyframes spotFlick{0%,100%{opacity:.95}50%{opacity:.72}}
+  .hero-fig{position:relative;height:var(--figH);display:flex;align-items:flex-end;justify-content:center;transition:transform .22s;z-index:2;filter:drop-shadow(0 12px 14px rgba(0,0,0,.6));}
+  .hero-fig svg{height:100%;width:auto;display:block;}
+  .hero-fig::after{content:'';position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);width:150%;height:15px;border-radius:50%;background:radial-gradient(ellipse,rgba(255,240,196,.28),transparent 68%);z-index:-1;}
+  .hero-slot:hover .hero-fig,.hero-slot:focus-visible .hero-fig{transform:scale(1.06);}
+  .hero-slot:hover .spot{opacity:1;animation:none;}
+  .hero-count{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:#ffeaae;color:#4a3a10;border-radius:999px;padding:2px 9px;font-size:.66rem;font-weight:900;white-space:nowrap;box-shadow:0 0 12px rgba(255,234,174,.55);z-index:4;}
+  .hero-label{--x:1;margin:10px 2px 0;height:var(--lblH);display:flex;align-items:flex-start;justify-content:center;text-align:center;font-size:clamp(.48rem,1.55vw,.7rem);font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#c8d2c8;line-height:1.35;z-index:2;}
+  .stage-floor{height:26px;background:linear-gradient(to bottom,rgba(255,255,255,.07),transparent);}
+  .stage-hint{text-align:center;color:#8fa08f;font-size:.74rem;padding:0 16px 16px;}
+  /* modal — who's certified for this hero */
+  .hero-modal{position:fixed;inset:0;z-index:95;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(6,10,8,.72);backdrop-filter:blur(5px);}
+  .hero-modal.open{display:flex;}
+  .hm-card{width:100%;max-width:460px;max-height:88vh;overflow-y:auto;background:linear-gradient(180deg,#161d26,#0e1319);border:1px solid rgba(255,234,174,.28);border-radius:20px;box-shadow:0 30px 80px rgba(0,0,0,.6);color:#e8eee6;}
+  .hm-head{display:flex;align-items:center;gap:14px;padding:18px 20px;border-bottom:1px solid rgba(255,255,255,.08);}
+  .hm-icon{width:46px;height:46px;border-radius:14px;background:rgba(255,234,174,.12);border:1px solid rgba(255,234,174,.35);display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:#ffeaae;flex-shrink:0;}
+  .hm-head h3{margin:0;font-size:1rem;line-height:1.3;color:#f4f7f2;}
+  .hm-head p{margin:2px 0 0;font-size:.74rem;color:#9fb09f;}
+  .hm-close{margin-left:auto;background:none;border:1px solid rgba(255,255,255,.18);color:#c8d2c8;width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;flex-shrink:0;}
+  .hm-close:hover{background:rgba(255,255,255,.08);}
   .board-list{list-style:none;margin:0;padding:6px 0;}
-  .board-list li{display:flex;align-items:center;gap:12px;padding:11px 20px;border-bottom:1px dashed #e8eee4;font-size:.9rem;color:#2c3e2c;}
+  .board-list li{display:flex;align-items:center;gap:12px;padding:11px 20px;border-bottom:1px dashed rgba(255,255,255,.08);font-size:.9rem;color:#dbe4d9;}
   .board-list li:last-child{border-bottom:none;}
-  .board-list .rank{width:34px;text-align:center;font-weight:900;color:#5c7a5c;font-size:.95rem;flex-shrink:0;}
+  .board-list .rank{width:34px;text-align:center;font-weight:900;color:#ffeaae;font-size:.95rem;flex-shrink:0;}
   .board-list .medal{font-size:1.15rem;}
   .board-list .who{flex:1;min-width:0;}
-  .board-list .who b{display:block;color:#1E3A20;}
-  .board-list .who small{color:#7d8d7d;font-size:.72rem;}
-  .board-list .when{font-size:.75rem;color:#5c7a5c;font-weight:700;white-space:nowrap;}
-  .board-list li.me{background:#f0f7ec;}
-  .board-list li.me .who b::after{content:' — You';color:#2f7d32;font-size:.78em;}
-  .board-empty{padding:18px 20px;color:#7d8d7d;font-size:.85rem;}
+  .board-list .who b{display:block;color:#f4f7f2;}
+  .board-list .when{font-size:.75rem;color:#9fb09f;font-weight:700;white-space:nowrap;}
+  .board-list li.me{background:rgba(255,234,174,.08);}
+  .board-list li.me .who b::after{content:' — You';color:#ffeaae;font-size:.78em;}
+  .board-empty{padding:20px;color:#9fb09f;font-size:.85rem;text-align:center;}
   .board-note{text-align:center;color:#7d8d7d;font-size:.8rem;margin:-6px 0 18px;}
 </style>
 </head>
@@ -61,9 +81,28 @@
     <div class="kicker">Hall of Certified</div>
     <h2 class="slide-title">Who's Certified</h2>
   </div>
-  <div style="max-width:760px;margin:0 auto">
+  <div style="max-width:820px;margin:0 auto">
     <p class="board-note" id="boardNote" hidden></p>
-    <div id="board"></div>
+    <div class="stage">
+      <div class="stage-in" id="board"></div>
+      <div class="stage-floor"></div>
+      <div class="stage-hint"><i class="fa-solid fa-hand-pointer"></i> Tap a hero to see who's certified for that title</div>
+    </div>
+  </div>
+
+  <!-- who's-certified modal -->
+  <div class="hero-modal" id="heroModal">
+    <div class="hm-card">
+      <div class="hm-head">
+        <div class="hm-icon"><i class="fa-solid fa-award" id="hmIcon"></i></div>
+        <div style="min-width:0">
+          <h3 id="hmTitle">—</h3>
+          <p id="hmDesc"></p>
+        </div>
+        <button class="hm-close" id="hmClose" aria-label="Close">✕</button>
+      </div>
+      <ol class="board-list" id="hmList"></ol>
+    </div>
   </div>
 </div></section>
 
@@ -189,53 +228,117 @@
     try{ return JSON.parse(raw); }catch(e){ return null; }
   }
 
-  /* ── Board rendering ────────────────────────────────────── */
+  /* ── Board rendering — hero stage ───────────────────────── */
+  /* Line-up: tallest in the middle, sides step down. Height reflects
+     how far up the certification ladder each title is. */
+  var LINEUP = ['nursery-grower','nursery-admin','nursery-manager','nursery-auditor','field-conductor'];
+  var HEIGHTS = {'nursery-grower':.62,'nursery-admin':.82,'nursery-manager':1,'nursery-auditor':.82,'field-conductor':.62};
+  var byKeyMap = {};   // cert_key -> sorted rows
+  var openKey = null;  // cert shown in the modal
+
+  /* Grey superhero silhouette — cape, fists on hips. */
+  function heroSvg(){
+    return '<svg viewBox="0 0 120 232" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'+
+      '<defs>'+
+      '<linearGradient id="hgB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c3ccd6"/><stop offset="1" stop-color="#565e68"/></linearGradient>'+
+      '<linearGradient id="hgC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#98a2ad"/><stop offset="1" stop-color="#343a42"/></linearGradient>'+
+      '</defs>'+
+      '<path fill="url(#hgC)" d="M60 38 C46 42 36 48 32 56 L14 204 L38 190 L60 200 L82 190 L106 204 L88 56 C84 48 74 42 60 38 Z"/>'+
+      '<g fill="url(#hgB)">'+
+      '<circle cx="60" cy="18" r="12.5"/>'+
+      '<path d="M53 29 h14 l3 9 h-20 z"/>'+
+      '<path d="M32 38 L88 38 L83 72 L73 108 L47 108 L37 72 Z"/>'+
+      '<path d="M34 40 L20 70 L35 101 L45 94 L31 70 L44 48 Z"/>'+
+      '<path d="M86 40 L100 70 L85 101 L75 94 L89 70 L76 48 Z"/>'+
+      '<circle cx="41" cy="99" r="6.5"/>'+
+      '<circle cx="79" cy="99" r="6.5"/>'+
+      '<path d="M46 108 L74 108 L76 120 L44 120 Z"/>'+
+      '<path d="M46 120 L33 194 L49 194 L57 142 L60 130 Z"/>'+
+      '<path d="M74 120 L87 194 L71 194 L63 142 L60 130 Z"/>'+
+      '<path d="M29 194 h22 l2 11 h-25 z"/>'+
+      '<path d="M69 194 h22 l3 11 h-26 z"/>'+
+      '</g>'+
+      '<rect x="44" y="108" width="32" height="7" rx="3.5" fill="#7c8691"/>'+
+      '<path fill="#828c97" d="M60 50 L70 57 L66 69 L54 69 L50 57 Z"/>'+
+      '</svg>';
+  }
+
+  function buildStage(){
+    boardEl.innerHTML = LINEUP.map(function(k){
+      var c = CERT_BY_KEY[k];
+      var h = HEIGHTS[k] || .7;
+      return '<div class="hero-slot" data-key="'+k+'" role="button" tabindex="0" '+
+        'aria-label="'+esc(c.title)+'" '+
+        'style="--figH:calc(clamp(96px,30vw,220px) * '+h+');--lblH:3.9em">'+
+        '<span class="lamp"></span><span class="spot"></span>'+
+        '<div class="hero-fig">'+heroSvg()+
+          '<span class="hero-count" data-count>0</span>'+
+        '</div>'+
+        '<div class="hero-label">'+esc(c.title.replace(/^MJM Certified /,''))+'</div>'+
+      '</div>';
+    }).join('');
+  }
+
+  function renderBoard(){
+    if(!boardEl.children.length) buildStage();
+    byKeyMap = {};
+    boardRows.forEach(function(r){ (byKeyMap[r.cert_key]=byKeyMap[r.cert_key]||[]).push(r); });
+    Object.keys(byKeyMap).forEach(function(k){
+      byKeyMap[k].sort(function(a,b){ return a.awarded_at<b.awarded_at?-1:1; });
+    });
+    [].forEach.call(boardEl.querySelectorAll('.hero-slot'),function(slot){
+      var n=(byKeyMap[slot.getAttribute('data-key')]||[]).length;
+      slot.querySelector('[data-count]').textContent = n+' certified';
+    });
+    if(openKey) fillModal(openKey);   // keep an open list live
+  }
+
   function medal(i){
     if(i===0)return '<span class="medal">🥇</span>';
     if(i===1)return '<span class="medal">🥈</span>';
     if(i===2)return '<span class="medal">🥉</span>';
     return (i+1);
   }
-  function renderBoard(){
-    boardEl.innerHTML='';
+  function fillModal(k){
+    var c=CERT_BY_KEY[k]; if(!c) return;
+    var list=byKeyMap[k]||[];
     var myId=_session&&_session.user.id;
-    // group rows per certification, earliest awarded first (rank 1 = first certified)
-    var byKey={};
-    boardRows.forEach(function(r){ (byKey[r.cert_key]=byKey[r.cert_key]||[]).push(r); });
-    Object.keys(byKey).forEach(function(k){ byKey[k].sort(function(a,b){ return a.awarded_at<b.awarded_at?-1:1; }); });
-
-    // known certs in defined order first, then any unknown keys from data
-    var keys=CERTS.map(function(c){return c.key;});
-    Object.keys(byKey).forEach(function(k){ if(keys.indexOf(k)===-1) keys.push(k); });
-
-    keys.forEach(function(k){
-      var c=CERT_BY_KEY[k];
-      var list=byKey[k]||[];
-      if(!c&&!list.length) return;
-      var title=c?c.title:(list[0]&&list[0].cert_title)||k;
-      var card=el('div','board-card');
-      card.appendChild(el('div','board-head',
-        '<div class="b-icon"><i class="fa-solid '+(c?c.icon:'fa-award')+'"></i></div>'+
-        '<div><h3>'+esc(title)+'</h3>'+(c?'<p>'+esc(c.desc)+'</p>':'')+'</div>'+
-        '<span class="board-count">'+list.length+' certified</span>'));
-      if(list.length){
-        var ol=el('ol','board-list');
-        list.forEach(function(r,i){
-          var li=el('li',(myId&&r.user_id===myId)?'me':null,
+    document.getElementById('hmIcon').className='fa-solid '+c.icon;
+    document.getElementById('hmTitle').textContent=c.title;
+    document.getElementById('hmDesc').textContent=c.desc+' · '+list.length+' certified';
+    document.getElementById('hmList').innerHTML=list.length
+      ? list.map(function(r,i){
+          return '<li'+((myId&&r.user_id===myId)?' class="me"':'')+'>'+
             '<span class="rank">'+medal(i)+'</span>'+
             '<span class="who"><b>'+esc(r.full_name)+'</b></span>'+
-            '<span class="when"><i class="fa-solid fa-calendar-check"></i> '+fmtDate(r.awarded_at)+'</span>');
-          ol.appendChild(li);
-        });
-        card.appendChild(ol);
-      }else{
-        card.appendChild(el('div','board-empty','No one certified yet — be the first! 🌱'));
-      }
-      boardEl.appendChild(card);
-    });
+            '<span class="when"><i class="fa-solid fa-calendar-check"></i> '+fmtDate(r.awarded_at)+'</span></li>';
+        }).join('')
+      : '<div class="board-empty">No one certified yet — be the first! 🌱</div>';
   }
+  function openHero(k){
+    openKey=k; fillModal(k);
+    document.getElementById('heroModal').classList.add('open');
+  }
+  function closeHero(){
+    openKey=null;
+    document.getElementById('heroModal').classList.remove('open');
+  }
+  boardEl.addEventListener('click',function(e){
+    var slot=e.target.closest('.hero-slot');
+    if(slot) openHero(slot.getAttribute('data-key'));
+  });
+  boardEl.addEventListener('keydown',function(e){
+    if(e.key!=='Enter'&&e.key!==' ') return;
+    var slot=e.target.closest('.hero-slot');
+    if(slot){ e.preventDefault(); openHero(slot.getAttribute('data-key')); }
+  });
+  document.getElementById('hmClose').addEventListener('click',closeHero);
+  document.getElementById('heroModal').addEventListener('click',function(e){
+    if(e.target===this) closeHero();
+  });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeHero(); });
 
-  async function loadBoard(){
+    async function loadBoard(){
     if(!_sb) return;
     try{
       var s=await _sb.auth.getSession();
