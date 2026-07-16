@@ -3,19 +3,43 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Earn a Certificate — MJM Training Center</title>
-<meta name="description" content="Role certification — complete each program's training slides and practical record to earn your certificate.">
+<title>MJM Group Certified Board — MJM Training Center</title>
+<meta name="description" content="The MJM Group Certified Board — who is certified in what, and how to earn your own certificate.">
 <meta name="theme-color" content="#1E3A20">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <link rel="stylesheet" href="assets/style.css">
 <script src="assets/auth.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
+<style>
+  /* ── Certified Board ─────────────────────────────────────── */
+  .board-card{background:#fff;border:1px solid #e2e8da;border-radius:18px;box-shadow:0 6px 20px rgba(30,58,32,.07);margin-bottom:22px;overflow:hidden;}
+  .board-head{display:flex;align-items:center;gap:14px;padding:18px 20px;background:linear-gradient(135deg,#1E3A20,#2f5a33);color:#f0f5ee;}
+  .board-head .b-icon{width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;color:#cfe8b8;}
+  .board-head h3{margin:0;font-size:1.02rem;line-height:1.25;}
+  .board-head p{margin:2px 0 0;font-size:.76rem;opacity:.75;}
+  .board-count{margin-left:auto;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:5px 13px;font-size:.75rem;font-weight:800;white-space:nowrap;}
+  .board-list{list-style:none;margin:0;padding:6px 0;}
+  .board-list li{display:flex;align-items:center;gap:12px;padding:11px 20px;border-bottom:1px dashed #e8eee4;font-size:.9rem;color:#2c3e2c;}
+  .board-list li:last-child{border-bottom:none;}
+  .board-list .rank{width:34px;text-align:center;font-weight:900;color:#5c7a5c;font-size:.95rem;flex-shrink:0;}
+  .board-list .medal{font-size:1.15rem;}
+  .board-list .who{flex:1;min-width:0;}
+  .board-list .who b{display:block;color:#1E3A20;}
+  .board-list .who small{color:#7d8d7d;font-size:.72rem;}
+  .board-list .when{font-size:.75rem;color:#5c7a5c;font-weight:700;white-space:nowrap;}
+  .board-list li.me{background:#f0f7ec;}
+  .board-list li.me .who b::after{content:' — You';color:#2f7d32;font-size:.78em;}
+  .board-empty{padding:18px 20px;color:#7d8d7d;font-size:.85rem;}
+  .board-note{text-align:center;color:#7d8d7d;font-size:.8rem;margin:-6px 0 18px;}
+</style>
 </head>
 <body>
 
 <nav class="topbar">
   <div class="topbar-in">
-    <a class="brand" href="index.html"><i class="fa-solid fa-award"></i> Earn a Certificate</a>
+    <a class="brand" href="index.html"><i class="fa-solid fa-ranking-star"></i> Certified Board</a>
     <a class="homelink" href="index.html"><i class="fa-solid fa-arrow-left"></i> Module Mainpage</a>
   </div>
 </nav>
@@ -23,25 +47,37 @@
 <header class="hero">
   <span class="blob b1"></span><span class="blob b2"></span>
   <div class="hero-in">
-    <div class="seed"><i class="fa-solid fa-award"></i></div>
-    <div class="eyebrow">Certification</div>
-    <h1>Role Certification</h1>
+    <div class="seed"><i class="fa-solid fa-ranking-star"></i></div>
+    <div class="eyebrow">MJM Group</div>
+    <h1>Certified Board</h1>
     <div class="rule"></div>
-    <p class="lede">Each role requires completing its training programs — read every slide and fulfil each program's practical record. Complete them all to claim your certificate.</p>
+    <p class="lede">The official board of MJM Group certifications. Pass a course — all training slides plus its practical record — and your name goes up here.</p>
   </div>
 </header>
 
+<!-- ── The board ─────────────────────────────────────────────── -->
 <section class="slide"><div class="wrap">
+  <div class="titlewrap">
+    <div class="kicker">Hall of Certified</div>
+    <h2 class="slide-title">Who's Certified</h2>
+  </div>
+  <div style="max-width:760px;margin:0 auto">
+    <p class="board-note" id="boardNote" hidden></p>
+    <div id="board"></div>
+  </div>
+</div></section>
+
+<!-- ── Earn yours ────────────────────────────────────────────── -->
+<section class="slide"><div class="wrap">
+  <div class="titlewrap">
+    <div class="kicker">Certification</div>
+    <h2 class="slide-title">Earn Your Certificate</h2>
+  </div>
   <div class="cert-pick">
-    <label for="roleSelect">Select a role</label>
+    <label for="roleSelect">Select a certification</label>
     <div class="cert-select">
-      <select id="roleSelect" aria-label="Select a role">
-        <option value="" selected disabled>— Choose the role you're training for —</option>
-        <option value="Assistant Field Conductor">Assistant Field Conductor</option>
-        <option value="Field Conductor">Field Conductor</option>
-        <option value="Administrator">Administrator</option>
-        <option value="Auditor">Auditor</option>
-        <option value="Nursery Manager">Nursery Manager</option>
+      <select id="roleSelect" aria-label="Select a certification">
+        <option value="" selected disabled>— Choose the certification you're working toward —</option>
       </select>
       <i class="fa-solid fa-chevron-down chev"></i>
     </div>
@@ -52,7 +88,7 @@
         <div class="seal"><i class="fa-solid fa-award"></i></div>
         <div class="ctag">Certificate of Qualification</div>
         <h3>MJM Training Center</h3>
-        <p class="cfor" id="certLead">This certifies qualification for the role of</p>
+        <p class="cfor" id="certLead">This certifies qualification as</p>
         <div class="cname" id="certName" hidden>—</div>
         <div class="ccourse" id="certRole">—</div>
         <div class="cmeta" id="certMeta" hidden>
@@ -60,7 +96,7 @@
           <span id="certReqs"></span>
         </div>
         <div class="name-form" id="claimBox" hidden>
-          <label for="nameInput">Your full name (as it will appear on the certificate)</label>
+          <label for="nameInput">Your full name (as it will appear on the certificate and the board)</label>
           <input type="text" id="nameInput" maxlength="60" placeholder="e.g. Aisyah binti Rahman">
           <div class="err" id="nameErr"></div>
         </div>
@@ -74,7 +110,7 @@
 </div></section>
 
 <footer>
-  <p><b>MJM Training Center</b> · Certification</p>
+  <p><b>MJM Training Center</b> · MJM Group Certified Board</p>
 </footer>
 
 <script src="assets/app.js"></script>
@@ -83,14 +119,39 @@
   if(!MJM.user()) return;
   MJM.initTopbar();
 
-  /* Role = the programs that must be completed (slides + practical record). */
-  var ROLES={
-    'Assistant Field Conductor': {slug:'afc',     programs:['operation']},
-    'Field Conductor':           {slug:'fc',      programs:['operation','troubleshoot']},
-    'Administrator':             {slug:'admin',   programs:['operation','admin-operation','sales']},
-    'Auditor':                   {slug:'auditor', programs:['operation','troubleshoot','admin-operation','copn']},
-    'Nursery Manager':           {slug:'manager', programs:['operation','troubleshoot','admin-operation','copn','sales','management']}
-  };
+  /* Certifications = course tracks. Each needs its programs completed
+     (all slides read + practical record fulfilled). `legacy` maps the
+     old role-based localStorage keys so earlier claims still count. */
+  var CERTS=[
+    {key:'nursery-grower', legacy:'afc', icon:'fa-seedling',
+     title:'MJM Certified Oil Palm Nursery Grower',
+     desc:'Nursery training slides + the full nursery practical record.',
+     programs:['operation']},
+    {key:'field-conductor', legacy:'fc', icon:'fa-clipboard-list',
+     title:'MJM Certified Field Conductor',
+     desc:'Nursery Grower requirements plus troubleshooting & Carlos cases.',
+     programs:['operation','troubleshoot']},
+    {key:'nursery-admin', legacy:'admin', icon:'fa-briefcase',
+     title:'MJM Certified Nursery Administrator',
+     desc:'Nursery operation, admin operation and sales programs.',
+     programs:['operation','admin-operation','sales']},
+    {key:'nursery-auditor', legacy:'auditor', icon:'fa-magnifying-glass-chart',
+     title:'MJM Certified Nursery Auditor',
+     desc:'Operation, troubleshooting, admin operation and COPN.',
+     programs:['operation','troubleshoot','admin-operation','copn']},
+    {key:'nursery-manager', legacy:'manager', icon:'fa-user-tie',
+     title:'MJM Certified Nursery Manager',
+     desc:'Every program — the full training pathway.',
+     programs:['operation','troubleshoot','admin-operation','copn','sales','management']}
+  ];
+  var CERT_BY_KEY={}; CERTS.forEach(function(c){ CERT_BY_KEY[c.key]=c; });
+
+  /* ── Supabase (shares the AI System login on this domain) ── */
+  var _sb=null;
+  try{ _sb=supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY); }catch(e){}
+  var _session=null;
+  var boardRows=[];       // rows from training_certifications
+  var boardReady=false;   // table reachable?
 
   var sel=document.getElementById('roleSelect'),
       status=document.getElementById('roleStatus'),
@@ -106,24 +167,136 @@
       nameErr=document.getElementById('nameErr'),
       actions=document.getElementById('certActions'),
       note=document.getElementById('certNote'),
-      reqsEl=document.getElementById('reqs');
+      reqsEl=document.getElementById('reqs'),
+      boardEl=document.getElementById('board'),
+      boardNote=document.getElementById('boardNote');
 
-  function getRoleCert(role){
-    var raw=MJM.get('rolecert-'+role.slug); if(!raw) return null;
-    try{ return JSON.parse(raw); }catch(e){ return null; }
-  }
+  function el(tag,cls,html){ var n=document.createElement(tag); if(cls)n.className=cls; if(html!=null)n.innerHTML=html; return n; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
   function fmtDate(iso){
     var d=iso?new Date(iso):new Date();
     return d.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
   }
-  function el(tag,cls,html){ var n=document.createElement(tag); if(cls)n.className=cls; if(html!=null)n.innerHTML=html; return n; }
   function setStatus(kind,html){
     if(!kind){ status.hidden=true; return; }
     status.hidden=false; status.className='cstatus '+kind; status.innerHTML=html;
   }
 
-  function assess(role){
-    var progs=role.programs.map(function(slug){
+  /* Local (this device) claim record — new key with legacy fallback. */
+  function getLocalCert(cert){
+    var raw=MJM.get('rolecert-'+cert.key)||MJM.get('rolecert-'+cert.legacy);
+    if(!raw) return null;
+    try{ return JSON.parse(raw); }catch(e){ return null; }
+  }
+
+  /* ── Board rendering ────────────────────────────────────── */
+  function medal(i){
+    if(i===0)return '<span class="medal">🥇</span>';
+    if(i===1)return '<span class="medal">🥈</span>';
+    if(i===2)return '<span class="medal">🥉</span>';
+    return (i+1);
+  }
+  function renderBoard(){
+    boardEl.innerHTML='';
+    var myId=_session&&_session.user.id;
+    // group rows per certification, earliest awarded first (rank 1 = first certified)
+    var byKey={};
+    boardRows.forEach(function(r){ (byKey[r.cert_key]=byKey[r.cert_key]||[]).push(r); });
+    Object.keys(byKey).forEach(function(k){ byKey[k].sort(function(a,b){ return a.awarded_at<b.awarded_at?-1:1; }); });
+
+    // known certs in defined order first, then any unknown keys from data
+    var keys=CERTS.map(function(c){return c.key;});
+    Object.keys(byKey).forEach(function(k){ if(keys.indexOf(k)===-1) keys.push(k); });
+
+    keys.forEach(function(k){
+      var c=CERT_BY_KEY[k];
+      var list=byKey[k]||[];
+      if(!c&&!list.length) return;
+      var title=c?c.title:(list[0]&&list[0].cert_title)||k;
+      var card=el('div','board-card');
+      card.appendChild(el('div','board-head',
+        '<div class="b-icon"><i class="fa-solid '+(c?c.icon:'fa-award')+'"></i></div>'+
+        '<div><h3>'+esc(title)+'</h3>'+(c?'<p>'+esc(c.desc)+'</p>':'')+'</div>'+
+        '<span class="board-count">'+list.length+' certified</span>'));
+      if(list.length){
+        var ol=el('ol','board-list');
+        list.forEach(function(r,i){
+          var li=el('li',(myId&&r.user_id===myId)?'me':null,
+            '<span class="rank">'+medal(i)+'</span>'+
+            '<span class="who"><b>'+esc(r.full_name)+'</b></span>'+
+            '<span class="when"><i class="fa-solid fa-calendar-check"></i> '+fmtDate(r.awarded_at)+'</span>');
+          ol.appendChild(li);
+        });
+        card.appendChild(ol);
+      }else{
+        card.appendChild(el('div','board-empty','No one certified yet — be the first! 🌱'));
+      }
+      boardEl.appendChild(card);
+    });
+  }
+
+  async function loadBoard(){
+    if(!_sb) return;
+    try{
+      var s=await _sb.auth.getSession();
+      _session=s&&s.data&&s.data.session;
+      var r=await _sb.from('training_certifications')
+        .select('user_id, full_name, cert_key, cert_title, awarded_at')
+        .order('awarded_at',{ascending:true})
+        .limit(1000);
+      if(r.error) throw r.error;
+      boardRows=r.data||[];
+      boardReady=true;
+    }catch(e){
+      console.warn('[board] load failed:',e&&e.message);
+      boardNote.hidden=false;
+      boardNote.textContent='Board is showing offline — names appear once the connection (and one-time database setup) is in place. Your own progress below still works.';
+    }
+    renderBoard();
+  }
+
+  /* Push my claim to the shared board. */
+  async function publishCert(cert,localCert){
+    if(!_sb) throw new Error('offline');
+    if(!_session){
+      var s=await _sb.auth.getSession();
+      _session=s&&s.data&&s.data.session;
+    }
+    if(!_session) throw new Error('not signed in');
+    var row={
+      user_id:_session.user.id,
+      email:_session.user.email||null,
+      full_name:localCert.name,
+      cert_key:cert.key,
+      cert_title:cert.title,
+      awarded_at:localCert.date
+    };
+    var r=await _sb.from('training_certifications').insert(row);
+    if(r.error&&r.error.code!=='23505') throw r.error;  // 23505 = already on the board
+    return row;
+  }
+
+  /* Local certs earned before the board existed (or claimed offline):
+     push them up quietly so the board stays complete. */
+  async function syncLocalCerts(){
+    if(!boardReady||!_session) return;
+    var myId=_session.user.id;
+    for(var i=0;i<CERTS.length;i++){
+      var c=CERTS[i], lc=getLocalCert(c);
+      if(!lc) continue;
+      var onBoard=boardRows.some(function(r){ return r.user_id===myId&&r.cert_key===c.key; });
+      if(onBoard) continue;
+      try{
+        var row=await publishCert(c,lc);
+        boardRows.push(row);
+      }catch(e){ console.warn('[board] sync failed for',c.key,e&&e.message); }
+    }
+    renderBoard();
+  }
+
+  /* ── Requirements / claim panel ─────────────────────────── */
+  function assess(cert){
+    var progs=cert.programs.map(function(slug){
       var p=MJM.progress(slug);
       p.slug=slug; p.name=MJM.PROGRAMS[slug].name; p.page=MJM.PROGRAMS[slug].page;
       return p;
@@ -136,7 +309,7 @@
     reqsEl.innerHTML='';
     var g=el('div','req-group');
     g.appendChild(el('h3',null,'<i class="fa-solid fa-graduation-cap" style="color:var(--green);margin-right:8px"></i>Program Completion'));
-    g.appendChild(el('div','rg-sub','Each program needs all training slides read and its <a href="logbook.html">practical record</a> fulfilled.'));
+    g.appendChild(el('div','rg-sub','Each program needs all training slides read and its <a href="logbook.html">practical record</a> fulfilled — with photo proof for every task.'));
     state.programs.forEach(function(p){
       var row=el('div','req'+(p.complete?' met':''));
       row.appendChild(el('div','icon-badge','<i class="fa-solid fa-book-open"></i>'));
@@ -160,10 +333,10 @@
     reqsEl.appendChild(g);
   }
 
-  function showProgress(roleName,role,state){
-    lead.textContent='This certifies qualification for the role of';
+  function showProgress(cert,state){
+    lead.textContent='This certifies qualification as';
     nameEl.hidden=true; meta.hidden=true; claimBox.hidden=true;
-    roleEl.textContent=roleName;
+    roleEl.textContent=cert.title;
     actions.innerHTML=''; note.innerHTML='';
     reqsEl.style.display='';
 
@@ -171,30 +344,39 @@
       claimBox.hidden=false;
       nameInput.value=MJM.get('name')||MJM.userName()||'';
       nameErr.textContent='';
-      var claim=el('button','btn','<i class="fa-solid fa-award"></i> Claim certificate');
-      claim.addEventListener('click',function(){
+      var claim=el('button','btn','<i class="fa-solid fa-award"></i> Claim & join the board');
+      claim.addEventListener('click',async function(){
         var name=nameInput.value.trim();
         if(!name){ nameErr.textContent='Please enter your name.'; nameInput.focus(); return; }
+        claim.disabled=true; claim.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Claiming…';
         MJM.set('name',name);
-        var cert={name:name,date:new Date().toISOString()};
-        MJM.set('rolecert-'+role.slug,JSON.stringify(cert));
+        var cert_={name:name,date:new Date().toISOString()};
+        MJM.set('rolecert-'+cert.key,JSON.stringify(cert_));
+        try{
+          var row=await publishCert(cert,cert_);
+          boardRows.push(row);
+          renderBoard();
+        }catch(e){
+          console.warn('[board] publish failed:',e&&e.message);
+          alert('Certificate saved on this device, but the board could not be updated ('+(e&&e.message?e.message:'offline')+').\nIt will be added to the board automatically next time you open this page with internet.');
+        }
         markSelectBadges();
-        showEarned(roleName,role,cert);
+        showEarned(cert,cert_);
       });
       actions.appendChild(claim);
       setStatus('ok','<i class="fa-solid fa-circle-check"></i> '+(state.total>1?'All '+state.total+' programs':'Program')+' complete — claim your certificate');
     }else{
-      note.innerHTML='Complete each program below — training slides plus practical record — then come back to claim your certificate.';
+      note.innerHTML='Complete each program below — training slides plus practical record — then come back to claim your certificate and join the board.';
       setStatus('todo','<i class="fa-solid fa-bars-progress"></i> '+state.met+' of '+state.total+' programs complete');
     }
   }
 
-  function showEarned(roleName,role,cert){
+  function showEarned(cert,localCert){
     lead.textContent='This certificate is proudly presented to';
-    nameEl.hidden=false; nameEl.textContent=cert.name;
-    roleEl.textContent='for qualifying as '+roleName;
+    nameEl.hidden=false; nameEl.textContent=localCert.name;
+    roleEl.textContent=cert.title;
     meta.hidden=false; claimBox.hidden=true;
-    dateEl.innerHTML='<i class="fa-solid fa-calendar-check"></i> '+fmtDate(cert.date);
+    dateEl.innerHTML='<i class="fa-solid fa-calendar-check"></i> '+fmtDate(localCert.date);
     reqsMeta.innerHTML='<i class="fa-solid fa-list-check"></i> All programs completed';
     actions.innerHTML=''; note.innerHTML='';
     reqsEl.style.display='none';
@@ -207,25 +389,31 @@
       reqsEl.style.display=(reqsEl.style.display==='none')?'':'none';
     });
     actions.appendChild(view);
-    setStatus('ok','<i class="fa-solid fa-award"></i> Certified on '+fmtDate(cert.date));
+    setStatus('ok','<i class="fa-solid fa-award"></i> Certified on '+fmtDate(localCert.date)+' — you\'re on the board!');
   }
 
-  function showFor(roleName){
-    var role=ROLES[roleName];
-    if(!role) return;
-    var state=assess(role);
+  function showFor(key){
+    var cert=CERT_BY_KEY[key];
+    if(!cert) return;
+    var state=assess(cert);
     renderReqs(state);
-    var cert=getRoleCert(role);
-    if(cert) showEarned(roleName,role,cert);
-    else showProgress(roleName,role,state);
+    var lc=getLocalCert(cert);
+    if(lc) showEarned(cert,lc);
+    else showProgress(cert,state);
     panel.classList.add('show');
   }
 
+  /* Build the certification dropdown from CERTS */
+  CERTS.forEach(function(c){
+    var o=document.createElement('option');
+    o.value=c.key; o.text=c.title;
+    sel.appendChild(o);
+  });
   function markSelectBadges(){
     [].forEach.call(sel.options,function(o){
       if(!o.value) return;
-      var r=ROLES[o.value];
-      if(r&&getRoleCert(r)&&o.text.indexOf('✓')===-1) o.text=o.text+' ✓';
+      var c=CERT_BY_KEY[o.value];
+      if(c&&getLocalCert(c)&&o.text.indexOf('✓')===-1) o.text=o.text+' ✓';
     });
   }
   markSelectBadges();
@@ -235,6 +423,9 @@
     showFor(sel.value);
     panel.scrollIntoView({behavior:'smooth',block:'nearest'});
   });
+
+  renderBoard();                    // instant paint (empty/known state)
+  loadBoard().then(syncLocalCerts); // then fill from the shared table
 })();
 </script>
 
