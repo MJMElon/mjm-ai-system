@@ -129,9 +129,10 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* Font scales with viewport width (clamped) so the 8 tabs read larger
-           on wide screens yet still fit on a single row on smaller ones. */
-        .stage-tab-btn { padding: 12px 10px; font-size: clamp(10px, 0.95vw, 13px); font-weight: 900; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; cursor: pointer; transition: all 0.2s; border-bottom: 3px solid transparent; display: flex; align-items: center; gap: 6px; }
+        /* One guaranteed row: the 8 tabs share the width equally and each
+           label WRAPS to two lines inside its tab (e.g. "SEED" / "AUDIT"),
+           so the wording stays big without ever spilling to a second row. */
+        .stage-tab-btn { flex: 1 1 0; min-width: 0; padding: 10px 8px; font-size: clamp(11px, 1vw, 13.5px); line-height: 1.2; font-weight: 900; text-transform: uppercase; letter-spacing: 0.03em; white-space: normal; text-align: left; overflow-wrap: break-word; cursor: pointer; transition: all 0.2s; border-bottom: 3px solid transparent; display: flex; align-items: center; gap: 6px; }
         .stage-tab-active { color: #4a7a2e; border-bottom-color: #6aa83c; background-color: #fdfaf4; border-radius: 16px 16px 0 0; }
         .stage-tab-inactive { color: #8a7a68; }
         .stage-tab-inactive:hover { color: #3d2610; background-color: rgba(253, 250, 244, 0.5); border-radius: 16px 16px 0 0; }
@@ -279,10 +280,10 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
                         </button>
 
-                        <!-- flex-wrap: every stage tab (Seeds In → Adjustments & Audit) stays
-                             visible at once — no horizontal scrolling. The scroll arrows
-                             self-hide because the container never overflows. -->
-                        <div id="tab-scroll-container" class="flex flex-wrap px-2 pt-2"
+                        <!-- Single fixed row: tabs share the width equally and their labels
+                             wrap to two lines inside each tab. No horizontal scrolling;
+                             the scroll arrows self-hide because nothing overflows. -->
+                        <div id="tab-scroll-container" class="flex px-2 pt-2"
                             onscroll="updateTabScrollArrows()">
                         <button id="tab-btn-1" class="stage-tab-btn stage-tab-active" onclick="switchTab(1)">
                             <div class="completion-pie-container"><div class="completion-pie completion-pie-fill" style="--percentage: 100"></div><div class="completion-pie-cover"></div></div>
