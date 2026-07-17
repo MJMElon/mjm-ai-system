@@ -1418,13 +1418,14 @@
                                     </div>
                                 </div>
 
-                                <!-- Column headers: Plot → Transplanted → Balance After Sales → 3rd Culled Qty → 3rd Culled % → Drone Map -->
-                                <div class="hidden lg:grid gap-3 px-6 pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest" style="grid-template-columns: 1.2fr 0.8fr 1fr 0.8fr 0.8fr 1.6fr;">
+                                <!-- Column headers: Plot → Transplanted → Balance After Sales → 3rd Culled Qty → 3rd Culled % → Transfer → Drone Map -->
+                                <div class="hidden lg:grid gap-3 px-6 pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest" style="grid-template-columns: 1.2fr 0.8fr 1fr 0.8fr 0.7fr 1.3fr 1.5fr;">
                                     <span>Main Plot</span>
                                     <span>Transplanted</span>
                                     <span class="text-[#4a7a2e]">Balance After Sales</span>
                                     <span class="text-[#a83020]">3rd Culled Qty</span>
                                     <span class="text-[#a83020]">3rd Culled %</span>
+                                    <span class="text-[#0891b2]">Transfer</span>
                                     <span>Drone Map</span>
                                 </div>
 
@@ -6569,6 +6570,54 @@ Thank you.`;
                 });
             }
 
+            // Load saved transfers (Cull3_Transfer logs): plot_name = target
+            // plot, quantity_change = qty, remark carries the source row.
+            let savedTransfers = [];
+            if (batchId) {
+                const { data: trLogs } = await _supabase
+                    .from('shared_inventory_logs')
+                    .select('plot_name, quantity_change, remark')
+                    .eq('batch_name', batchId)
+                    .eq('transaction_type', 'Cull3_Transfer')
+                    .order('created_at', { ascending: true });
+                (trLogs || []).forEach(log => {
+                    const fromMatch = log.remark ? log.remark.match(/From:\s*\[([^\]|]+)\|(main|premium|doubletone)\]/) : null;
+                    savedTransfers.push({
+                        target:     log.plot_name,
+                        qty:        log.quantity_change || 0,
+                        source:     fromMatch ? fromMatch[1] : null,
+                        sourceDest: fromMatch ? fromMatch[2] : 'main'
+                    });
+                });
+            }
+
+            // Pre-fill each transfer's SOURCE row and append the TARGET plot as
+            // its own row so its culled qty can be keyed in later.
+            const injectTransfers = () => {
+                savedTransfers.forEach(t => {
+                    if (t.source) {
+                        const src = t6_plotData.find(p => !p.transferFrom && p.plot === t.source
+                            && p.destType === t.sourceDest && p.savedTransferPlot == null);
+                        if (src) { src.savedTransferPlot = t.target; src.savedTransferQty = t.qty; }
+                    }
+                    let saved = savedCull3Map[`${t.target}|main`];
+                    if (!saved) {
+                        const q = legacyCull3Queue[t.target];
+                        saved = (q && q.length) ? q.shift() : {};
+                    }
+                    t6_plotData.push({
+                        plot:         t.target,
+                        qty:          t.qty,
+                        destType:     'main',
+                        transferFrom: t.source || '—',
+                        savedBalance: saved.balance ?? null,
+                        savedCulled:  saved.culled  ?? null,
+                        savedDocUrl:  saved.docUrl  ?? null,
+                        savedDocName: saved.docName ?? null
+                    });
+                });
+            };
+
             // Load ALL transplant types (main + premium + doubletone)
             if (batchId) {
                 const { data: logs } = await _supabase
@@ -6600,6 +6649,7 @@ Thank you.`;
                             savedDocName: saved.docName ?? null
                         });
                     });
+                    injectTransfers();
                     renderT6PlotRows();
                     return;
                 }
@@ -6614,6 +6664,7 @@ Thank you.`;
                     t6_plotData.push({ plot: destPlot, qty, destType: destType || 'main', savedBalance: null, savedCulled: null, savedDocUrl: null, savedDocName: null });
                 }
             });
+            injectTransfers();
             renderT6PlotRows();
         }
 
@@ -6655,12 +6706,13 @@ Thank you.`;
 
                 container.insertAdjacentHTML('beforeend', `
                     <div id="${rowId}" class="t6-plot-row border ${rowBg} rounded-xl overflow-hidden">
-                        <div class="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr_1fr_0.8fr_0.8fr_2fr] gap-3 p-4 items-start">
+                        <div class="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr_1fr_0.8fr_0.7fr_1.3fr_1.6fr] gap-3 p-4 items-start">
 
                             <!-- Plot -->
                             <div class="flex flex-col gap-0.5 pt-1">
                                 <div class="text-sm font-black text-[#3d2610]">${p.plot}</div>
                                 <div class="text-[9px] font-bold text-[#8a7a68] uppercase tracking-widest">${typeLabel}</div>
+                                ${p.transferFrom ? `<div class="text-[8px] font-black text-[#0891b2] uppercase tracking-widest">↘ Transferred from ${p.transferFrom}</div>` : ''}
                             </div>
 
                             <!-- Transplanted qty -->
@@ -6699,6 +6751,15 @@ Thank you.`;
                                 <div class="text-base font-black text-[#8a7a68] t6-cull-rate-cell" id="${rowId}-cullrate">—</div>
                             </div>
 
+                            <!-- Transfer — move seedlings from this plot to another plot.
+                                 On save this creates a new row for the target plot so its
+                                 culled qty can be keyed in later. -->
+                            <div>
+                                <div class="text-[9px] font-black text-[#0891b2] uppercase lg:hidden mb-0.5">Transfer</div>
+                                <div class="select-wrapper"><select class="input-style !text-[#0891b2] t6-transfer-plot !text-xs !py-2">${getPlotOptionsHTML()}</select></div>
+                                <input type="number" min="0" class="input-style !text-[#0891b2] font-black t6-transfer-qty !text-xs !py-2 mt-1.5" placeholder="Transfer qty" value="${p.savedTransferQty ?? ''}">
+                            </div>
+
                             <!-- Drone Map — compact style matching Tab 3 / Tab 5 -->
                             <div class="flex flex-col gap-1.5">
                                 <div class="text-[9px] font-black text-[#8a7a68] uppercase lg:hidden mb-0.5">Drone Map</div>
@@ -6731,6 +6792,14 @@ Thank you.`;
                         </div>
                     </div>
                 `);
+            });
+
+            // Restore saved transfer selections (select options exist only
+            // after insertion, so values are set here rather than inline).
+            t6_plotData.forEach((p, i) => {
+                if (!p.savedTransferPlot) return;
+                const sel = document.querySelector(`#t6-row-${i} .t6-transfer-plot`);
+                if (sel) sel.value = p.savedTransferPlot;
             });
 
             // Restore previously-uploaded drone maps / docs.
@@ -6938,6 +7007,7 @@ Thank you.`;
                 if (!batchId) throw new Error('No batch number. Complete Tab 1 first.');
 
                 let logsToInsert = [];
+                let transferLogs = [];
                 let uploadFailures = 0;
                 const t6Rows = Array.from(document.querySelectorAll('.t6-plot-row'));
                 for (let i = 0; i < t6Rows.length; i++) {
@@ -6947,6 +7017,21 @@ Thank you.`;
                     const transplanted = parseInt(row.querySelector('.t6-balance').dataset.transplanted) || 0;
                     const balVal       = row.querySelector('.t6-balance').value;
                     const cullVal      = row.querySelector('.t6-culled-input').value;
+
+                    // Transfers persist independently of the culled qty — a row can
+                    // be transferred now and have its culled qty keyed in later.
+                    const trPlot = row.querySelector('.t6-transfer-plot')?.value || '';
+                    const trQty  = parseInt(row.querySelector('.t6-transfer-qty')?.value) || 0;
+                    if (trPlot && trQty > 0) {
+                        transferLogs.push(withEditMeta({
+                            transaction_type: 'Cull3_Transfer',
+                            batch_name:       batchId,
+                            breed_name:       breed,
+                            plot_name:        trPlot,
+                            quantity_change:  trQty,
+                            remark: `3rd Culling transfer. From: [${plotName}|${destType}] To: [${trPlot}] Qty: ${trQty}.`
+                        }));
+                    }
                     // Skip rows the admin hasn't keyed in. A blank Culled Qty means
                     // "not entered yet" and must NOT be persisted as 0 — that would
                     // make the batch look complete on reload when it isn't.
@@ -6989,15 +7074,24 @@ Thank you.`;
                     }));
                 }
 
-                if (logsToInsert.length === 0) throw new Error('Enter at least one plot’s Culled Qty before saving.');
-                const { error } = await safeReplaceLogs(batchId, ['3rd_Culling'], logsToInsert);
-                if (error) throw error;
+                if (logsToInsert.length === 0 && transferLogs.length === 0) throw new Error('Enter at least one plot’s Culled Qty or a Transfer before saving.');
+                if (logsToInsert.length > 0) {
+                    const { error } = await safeReplaceLogs(batchId, ['3rd_Culling'], logsToInsert);
+                    if (error) throw error;
+                }
+                // Transfers replace as a set every save — rows re-emit their
+                // (pre-filled) transfer values, so removing one in the form
+                // removes it from the DB too.
+                const { error: trErr } = await safeReplaceLogs(batchId, ['Cull3_Transfer'], transferLogs);
+                if (trErr) throw trErr;
                 setEditMetaUI(6, new Date().toISOString(), window.currentUserEmail);
                 if (uploadFailures > 0) {
                     showToast(`⚠️ ${uploadFailures} doc(s) failed to upload: ${window._mjmLastUploadError || 'storage error'}. Rows saved without doc. Fix bucket and re-save.`, 'error');
                 }
-                showToast(`3rd Culling report saved — ${logsToInsert.length} plot record(s) logged.`, 'success');
+                showToast(`3rd Culling report saved — ${logsToInsert.length} plot record(s)${transferLogs.length ? `, ${transferLogs.length} transfer(s)` : ''} logged.`, 'success');
                 btn.innerText = originalText; btn.disabled = false;
+                // Re-sync so newly-transferred plots appear as their own rows.
+                await syncTab6();
             } catch(e) {
                 showToast('Error saving: ' + e.message, 'error');
                 btn.innerText = originalText; btn.disabled = false;
