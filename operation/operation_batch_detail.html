@@ -129,7 +129,9 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        .stage-tab-btn { padding: 11px 8px; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap; cursor: pointer; transition: all 0.2s; border-bottom: 3px solid transparent; display: flex; align-items: center; gap: 5px; }
+        /* Font scales with viewport width (clamped) so the 8 tabs read larger
+           on wide screens yet still fit on a single row on smaller ones. */
+        .stage-tab-btn { padding: 12px 10px; font-size: clamp(10px, 0.95vw, 13px); font-weight: 900; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; cursor: pointer; transition: all 0.2s; border-bottom: 3px solid transparent; display: flex; align-items: center; gap: 6px; }
         .stage-tab-active { color: #4a7a2e; border-bottom-color: #6aa83c; background-color: #fdfaf4; border-radius: 16px 16px 0 0; }
         .stage-tab-inactive { color: #8a7a68; }
         .stage-tab-inactive:hover { color: #3d2610; background-color: rgba(253, 250, 244, 0.5); border-radius: 16px 16px 0 0; }
@@ -144,7 +146,7 @@
         .worker-icon.inactive { color: #8a7a68; opacity: 0.2; }
         
         /* Completion Gauge Pie Style */
-        .completion-pie-container { width: 15px; height: 15px; position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .completion-pie-container { width: 17px; height: 17px; position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .completion-pie { width: 100%; height: 100%; border-radius: 50%; background: #e8dcc8; position: absolute; inset: 0; }
         .completion-pie-fill { background: conic-gradient(#6aa83c calc(var(--percentage) * 1%), #e8dcc8 0); }
         .completion-pie-cover { width: 14px; height: 14px; border-radius: 50%; background: #fdfaf4; position: relative; z-index: 10;}
