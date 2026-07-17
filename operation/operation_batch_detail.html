@@ -6713,7 +6713,10 @@ Thank you.`;
                                 <div class="text-sm font-black text-[#3d2610]">${p.plot}</div>
                                 <div class="text-[9px] font-bold text-[#8a7a68] uppercase tracking-widest">${typeLabel}</div>
                                 ${p.transferFrom ? `<div class="text-[8px] font-black text-[#0891b2] uppercase tracking-widest">↘ Transferred from ${p.transferFrom}</div>
-                                <button type="button" class="mt-1 px-2 py-1 bg-[#fff5f5] border border-[#f8d7da] text-[#a83020] text-[8px] font-black uppercase tracking-widest rounded hover:bg-[#f8d7da] w-max" title="Delete this transfer — removes this row" onclick="deleteT6Transfer(${i})">🗑 Delete</button>` : ''}
+                                <div class="flex gap-1 mt-1">
+                                    <button type="button" class="px-2 py-1 bg-[#f0f8ff] border border-[#bee3f8] text-[#2b6cb0] text-[8px] font-black uppercase tracking-widest rounded hover:bg-[#bee3f8]" title="Change this transfer's plot or quantity" onclick="editT6Transfer(${i})">✏️ Edit</button>
+                                    <button type="button" class="px-2 py-1 bg-[#fff5f5] border border-[#f8d7da] text-[#a83020] text-[8px] font-black uppercase tracking-widest rounded hover:bg-[#f8d7da]" title="Delete this transfer — removes this row" onclick="deleteT6Transfer(${i})">🗑 Delete</button>
+                                </div>` : ''}
                             </div>
 
                             <!-- Transplanted qty -->
@@ -7029,6 +7032,56 @@ Thank you.`;
                 await syncTab6();
             } catch (e) {
                 showToast('Failed to delete transfer: ' + (e.message || e), 'error');
+            }
+        }
+
+        // Edit a transferred-plot row: change the transfer's target plot and/or
+        // quantity in place, then re-sync so the row reflects the new values.
+        async function editT6Transfer(idx) {
+            const p = t6_plotData[idx];
+            if (!p || !p.transferFrom) return;
+            const batchId = document.getElementById('f-batchno').value.trim();
+            if (!batchId) return;
+
+            const newPlot = (prompt('Transfer to which plot?', p.plot) || '').trim();
+            if (!newPlot) return;
+            const qtyRaw = prompt(`Transfer quantity to "${newPlot}"?`, p.qty || 0);
+            if (qtyRaw === null) return;
+            const newQty = parseInt(String(qtyRaw).replace(/,/g, ''), 10);
+            if (isNaN(newQty) || newQty <= 0) { showToast('Enter a valid quantity above 0.', 'error'); return; }
+
+            try {
+                const { data: rows, error: selErr } = await _supabase.from('shared_inventory_logs')
+                    .select('id, remark')
+                    .eq('batch_name', batchId)
+                    .eq('transaction_type', 'Cull3_Transfer')
+                    .eq('plot_name', p.plot);
+                if (selErr) throw selErr;
+                let matches = rows || [];
+                if (p.transferFrom && p.transferFrom !== '—') {
+                    const bySource = matches.filter(r => (r.remark || '').includes(`From: [${p.transferFrom}|`));
+                    if (bySource.length) matches = bySource;
+                }
+                const target = matches[0];
+                if (!target) { showToast('Transfer record not found — reload the batch and try again.', 'error'); return; }
+
+                // Preserve the source (plot|dest) recorded in the remark.
+                const fromMatch = (target.remark || '').match(/From:\s*\[([^\]|]+)\|(main|premium|doubletone)\]/);
+                const fromStr   = fromMatch ? `[${fromMatch[1]}|${fromMatch[2]}]` : `[${p.transferFrom}|main]`;
+                const payload = withEditMeta({
+                    plot_name:       newPlot,
+                    quantity_change: newQty,
+                    remark: `3rd Culling transfer. From: ${fromStr} To: [${newPlot}] Qty: ${newQty}.`
+                });
+                let { error } = await _supabase.from('shared_inventory_logs').update(payload).eq('id', target.id);
+                if (error && isEditMetaColumnError(error)) {
+                    ({ error } = await _supabase.from('shared_inventory_logs').update(stripEditMeta([payload])[0]).eq('id', target.id));
+                }
+                if (error) throw error;
+                showToast(`Transfer updated → ${newPlot} (${newQty.toLocaleString()}).`, 'success');
+                await syncTab6();
+            } catch (e) {
+                showToast('Failed to edit transfer: ' + (e.message || e), 'error');
             }
         }
 
