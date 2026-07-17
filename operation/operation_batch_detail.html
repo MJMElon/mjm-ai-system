@@ -6712,7 +6712,8 @@ Thank you.`;
                             <div class="flex flex-col gap-0.5 pt-1">
                                 <div class="text-sm font-black text-[#3d2610]">${p.plot}</div>
                                 <div class="text-[9px] font-bold text-[#8a7a68] uppercase tracking-widest">${typeLabel}</div>
-                                ${p.transferFrom ? `<div class="text-[8px] font-black text-[#0891b2] uppercase tracking-widest">↘ Transferred from ${p.transferFrom}</div>` : ''}
+                                ${p.transferFrom ? `<div class="text-[8px] font-black text-[#0891b2] uppercase tracking-widest">↘ Transferred from ${p.transferFrom}</div>
+                                <button type="button" class="mt-1 px-2 py-1 bg-[#fff5f5] border border-[#f8d7da] text-[#a83020] text-[8px] font-black uppercase tracking-widest rounded hover:bg-[#f8d7da] w-max" title="Delete this transfer — removes this row" onclick="deleteT6Transfer(${i})">🗑 Delete</button>` : ''}
                             </div>
 
                             <!-- Transplanted qty -->
@@ -6995,6 +6996,40 @@ Thank you.`;
             const doc = t6_plotDocs[rowId];
             if (!doc) return;
             _openDocInNewWindow(doc.base64);
+        }
+
+        // Delete a transferred-plot row: removes its Cull3_Transfer record and
+        // re-syncs (the source row's transfer inputs clear and the target row
+        // disappears). Any 3rd_Culling qty already saved for that plot stays
+        // in the records untouched.
+        async function deleteT6Transfer(idx) {
+            const p = t6_plotData[idx];
+            if (!p || !p.transferFrom) return;
+            const batchId = document.getElementById('f-batchno').value.trim();
+            if (!batchId) return;
+            if (!confirm(`Delete the transfer to plot "${p.plot}" (${(p.qty || 0).toLocaleString()} seedlings)?\n\nThis row will be removed. Any culled qty already saved for this plot stays in the records.`)) return;
+            try {
+                const { data: rows, error: selErr } = await _supabase.from('shared_inventory_logs')
+                    .select('id, remark')
+                    .eq('batch_name', batchId)
+                    .eq('transaction_type', 'Cull3_Transfer')
+                    .eq('plot_name', p.plot);
+                if (selErr) throw selErr;
+                let matches = rows || [];
+                if (p.transferFrom && p.transferFrom !== '—') {
+                    const bySource = matches.filter(r => (r.remark || '').includes(`From: [${p.transferFrom}|`));
+                    if (bySource.length) matches = bySource;
+                }
+                const ids = matches.slice(0, 1).map(r => r.id); // one transfer per click
+                if (ids.length) {
+                    const { error } = await _supabase.from('shared_inventory_logs').delete().in('id', ids);
+                    if (error) throw error;
+                }
+                showToast(`Transfer to ${p.plot} deleted.`, 'success');
+                await syncTab6();
+            } catch (e) {
+                showToast('Failed to delete transfer: ' + (e.message || e), 'error');
+            }
         }
 
         async function saveTab6() {
