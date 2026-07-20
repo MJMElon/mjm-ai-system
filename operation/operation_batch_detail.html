@@ -179,7 +179,7 @@
         .mjm-review-btn-clearrej:hover { background:#fff5f5; }
         .mjm-reject-remark { margin-top:6px; padding:10px 12px; background:white; border:1px solid #fca5a5; border-radius:10px; font-weight:600; color:#7f1d1d; white-space:pre-wrap; }
         /* Per-row verify/reject strip (transplant + culling rows) */
-        .mjm-row-review { grid-column: 1 / -1; display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; padding:8px 14px; border-top:1px dashed #e8dcc8; background:rgba(253,250,244,.6); }
+        .mjm-row-review { grid-column: 1 / -1; flex: 1 1 100%; display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; padding:8px 14px; border-top:1px dashed #e8dcc8; background:rgba(253,250,244,.6); }
         .mjm-row-review .mjm-review-btn { padding:5px 12px; font-size:9px; }
         .mjm-row-chip { font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:.1em; padding:4px 10px; border-radius:999px; }
         .mjm-row-chip-ok  { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
@@ -1071,14 +1071,14 @@
                                     <!-- Double Tone quantity in nursery — keyed in by the admin,
                                          stored per batch. This is the balance available when a
                                          row's source tray is DOUBLE-TONE. -->
-                                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-[#ecfeff] border border-[#a5f3fc] rounded-xl px-5 py-3 mb-4">
+                                    <div id="t3-dtone-nursery-box" class="flex flex-col md:flex-row md:flex-wrap md:items-center justify-between gap-3 bg-[#ecfeff] border border-[#a5f3fc] rounded-xl px-5 py-3 mb-4">
                                         <div>
                                             <div class="text-[10px] font-black text-[#0891b2] uppercase tracking-widest">🎯 Double Tone Quantity in Nursery</div>
-                                            <div class="text-[9px] font-bold text-[#8a7a68] mt-0.5">Key in this batch's D-Tone quantity — used as the balance when source tray is DOUBLE-TONE.</div>
+                                            <div class="text-[9px] font-bold text-[#8a7a68] mt-0.5">Key in this batch's D-Tone quantity — used as the balance when source tray is DOUBLE-TONE, and added to the allocation total.</div>
                                         </div>
                                         <input type="number" id="t3-dtone-nursery-qty" min="0" placeholder="0"
                                             class="input-style !text-[#0891b2] font-black text-lg md:w-48"
-                                            oninput="calcTransplanting()" onchange="saveT3DtoneQty()">
+                                            oninput="calcTransplanting(); calcCulling();" onchange="saveT3DtoneQty()">
                                     </div>
 
                                     <!-- Saved records table -->
@@ -2744,6 +2744,14 @@
             selectEl.value = value;
         }
 
+        // The admin-keyed "Double Tone Quantity in Nursery" (0 when blank).
+        // It joins the planted total as the allocation base for the Tab 3
+        // and Tab 4 engines: total pool = planted + D-Tone nursery qty.
+        function getDtoneNurseryQty() {
+            const raw = (document.getElementById('t3-dtone-nursery-qty')?.value ?? '').trim();
+            return raw !== '' ? (parseInt(raw.replace(/,/g, ''), 10) || 0) : 0;
+        }
+
         // Persist the admin-keyed "Double Tone Quantity in Nursery" for THIS
         // batch (one DTone_Nursery_Qty row per batch, updated in place by id).
         async function saveT3DtoneQty() {
@@ -3095,19 +3103,17 @@
             const totalTransplanted = totalMain + totalPremium + totalDoubletone;
             const totalTrayBalance = Object.values(activeTrayBalances).reduce((s, v) => s + Math.max(0, v), 0);
 
-            // Pending formula per spec: D-Tone quantities do NOT reduce
-            // pending — neither seedlings routed INTO the D-Tone tray nor
-            // main-plot transplants SOURCED FROM it (the D-Tone pool is
-            // managed separately via the admin-keyed quantity above).
-            //   pending = planted
-            //             - main transplants excluding D-Tone-sourced rows
-            //             - 1st culled excluding the D-Tone tray's culls
-            const cull1Dtone = (window._t3CullByTray && Number(window._t3CullByTray['DOUBLE-TONE'])) || 0;
+            // Balance per spec: the allocation base is planted PLUS the
+            // admin-keyed D-Tone nursery quantity — that pool covers the
+            // D-Tone-sourced main-plot transplants, so:
+            //   balance = (planted + D-Tone nursery qty)
+            //             - main transplants (incl. D-Tone-sourced)
+            //             - total 1st culled
+            const allocBase = totalPlantedRaw + getDtoneNurseryQty();
             const pendingTotal = Math.max(
                 0,
-                totalPlantedRaw
-                - (totalMain - mainFromDtone)
-                + cull1Dtone
+                allocBase
+                - totalMain
                 - mockCullingTab4
             );
 
@@ -3117,11 +3123,13 @@
 
             renderTrayBalances(activeTrayBalances, netPremium, netDtone, pendingTotal);
 
-            const pctMain        = totalPlantedRaw > 0 ? (totalMain / totalPlantedRaw) * 100 : 0;
-            const pctPremium     = totalPlantedRaw > 0 ? (totalPremium / totalPlantedRaw) * 100 : 0;
-            const pctDoubletone  = totalPlantedRaw > 0 ? (totalDoubletone / totalPlantedRaw) * 100 : 0;
-            const pctCull        = totalPlantedRaw > 0 ? (mockCullingTab4 / totalPlantedRaw) * 100 : 0;
-            const pctPending     = totalPlantedRaw > 0 ? (pendingTotal / totalPlantedRaw) * 100 : 100;
+            // All "% of total" figures divide by the allocation base
+            // (planted + D-Tone nursery qty) per spec.
+            const pctMain        = allocBase > 0 ? (totalMain / allocBase) * 100 : 0;
+            const pctPremium     = allocBase > 0 ? (totalPremium / allocBase) * 100 : 0;
+            const pctDoubletone  = allocBase > 0 ? (totalDoubletone / allocBase) * 100 : 0;
+            const pctCull        = allocBase > 0 ? (mockCullingTab4 / allocBase) * 100 : 0;
+            const pctPending     = allocBase > 0 ? (pendingTotal / allocBase) * 100 : 100;
             const pctTransplanted = pctMain + pctPremium + pctDoubletone;
 
             // Bar: Main (blue) + Culled (red) + Pending (grey background)
@@ -3130,9 +3138,9 @@
             document.getElementById('t3-bar-untransplanted').style.width = `${Math.max(0, 100 - pctMain - pctCull)}%`;
 
             // Always show % labels below bar
-            const mainPctStr    = totalPlantedRaw > 0 ? pctMain.toFixed(2) + '%' : '0%';
-            const cullPctStr    = totalPlantedRaw > 0 ? pctCull.toFixed(2) + '%' : '0%';
-            const pendingPctStr = totalPlantedRaw > 0 ? pctPending.toFixed(2) + '%' : '100%';
+            const mainPctStr    = allocBase > 0 ? pctMain.toFixed(2) + '%' : '0%';
+            const cullPctStr    = allocBase > 0 ? pctCull.toFixed(2) + '%' : '0%';
+            const pendingPctStr = allocBase > 0 ? pctPending.toFixed(2) + '%' : '100%';
             const lblMain = document.getElementById('t3-lbl-main-pct');
             const lblCull = document.getElementById('t3-lbl-cull-pct');
             const lblPend = document.getElementById('t3-lbl-pending-pct');
@@ -3158,19 +3166,19 @@
             // exclusively in the D-Tone tile so the two tiles add up to the
             // total main-plot population (totalMain) without overlap.
             const mainExDtone = Math.max(0, totalMain - mainFromDtone);
-            const pctMainExDtone   = totalPlantedRaw > 0 ? (mainExDtone   / totalPlantedRaw) * 100 : 0;
-            const pctMainFromDtone = totalPlantedRaw > 0 ? (mainFromDtone / totalPlantedRaw) * 100 : 0;
+            const pctMainExDtone   = allocBase > 0 ? (mainExDtone   / allocBase) * 100 : 0;
+            const pctMainFromDtone = allocBase > 0 ? (mainFromDtone / allocBase) * 100 : 0;
             document.getElementById('t3-val-main').innerText = mainExDtone.toLocaleString();
-            document.getElementById('t3-val-main-pct').innerText = totalPlantedRaw > 0 ? pctMainExDtone.toFixed(2) + '% of total' : '—';
+            document.getElementById('t3-val-main-pct').innerText = allocBase > 0 ? pctMainExDtone.toFixed(2) + '% of total' : '—';
             const dtoneMainEl    = document.getElementById('t3-val-dtone-main');
             const dtoneMainPctEl = document.getElementById('t3-val-dtone-main-pct');
             if (dtoneMainEl)    dtoneMainEl.innerText    = mainFromDtone.toLocaleString();
-            if (dtoneMainPctEl) dtoneMainPctEl.innerText = totalPlantedRaw > 0 ? pctMainFromDtone.toFixed(2) + '% of total' : '—';
+            if (dtoneMainPctEl) dtoneMainPctEl.innerText = allocBase > 0 ? pctMainFromDtone.toFixed(2) + '% of total' : '—';
             // Total 1st Culled (normal + D-Tone) — mockCullingTab4 already sums every 1st_Culling row
             document.getElementById('t3-val-cull').innerText = mockCullingTab4.toLocaleString();
-            document.getElementById('t3-val-cull-pct').innerText = totalPlantedRaw > 0 ? pctCull.toFixed(2) + '% of total' : '—';
+            document.getElementById('t3-val-cull-pct').innerText = allocBase > 0 ? pctCull.toFixed(2) + '% of total' : '—';
             document.getElementById('t3-val-untransplanted').innerText = pendingTotal.toLocaleString();
-            document.getElementById('t3-val-pending-pct').innerText = totalPlantedRaw > 0 ? pctPending.toFixed(2) + '% remaining' : '—';
+            document.getElementById('t3-val-pending-pct').innerText = allocBase > 0 ? pctPending.toFixed(2) + '% remaining' : '—';
 
             // Premium + D-Tone note — update hidden ids for compat (use net values)
             document.getElementById('t3-val-premium').innerText = netPremium.toLocaleString();
@@ -3193,16 +3201,14 @@
             const matchTitle = document.getElementById('t3-match-title');
             const matchDesc = document.getElementById('t3-match-desc');
 
-            // Match box: aligned with the dashboard pills (Main % + Culled % + Pending %).
-            // netPremium and netDtone are intermediate holding pools — those seeds are
-            // still in the pre-nursery, just in a different tray, so they belong on the
-            // "Pending" side, not the "accounted" side. Including them in fullyAccounted
-            // caused false Over-Allocated readings whenever the user redistributed seeds
-            // to D-Tone / Premium holding without yet moving them to main or culling.
+            // Match box: balance is judged against the allocation base
+            // (planted + D-Tone nursery qty), so main-plot transplants covered
+            // by the keyed D-Tone pool no longer read as Over-Allocated.
+            // netPremium / netDtone holding pools stay on the "Pending" side.
             const fullyAccounted = totalMain + mockCullingTab4;
-            const rawPending = totalPlantedRaw - fullyAccounted;
+            const rawPending = allocBase - fullyAccounted;
 
-            if (rawPending === 0 && totalPlantedRaw > 0) {
+            if (rawPending === 0 && allocBase > 0) {
                 matchBox.className = "w-full md:w-40 p-4 rounded-xl border border-[#4a7a2e] bg-[#f0f8ec] flex flex-col justify-center items-center text-center transition-colors shrink-0 shadow-[0_0_15px_rgba(106,168,60,0.3)]";
                 matchIcon.innerText = "✅"; 
                 matchTitle.innerText = "Satisfied"; matchTitle.className = "text-[11px] font-black uppercase tracking-wider text-[#4a7a2e] leading-tight";
@@ -3219,7 +3225,7 @@
                 matchDesc.innerText = "Balance Remaining"; matchDesc.className = "text-[9px] font-bold text-[#c07820] uppercase tracking-widest mt-1 leading-tight";
             }
 
-            updateTransplantCompletion(totalPlantedRaw, fullyAccounted, rawPending);
+            updateTransplantCompletion(allocBase, fullyAccounted, rawPending);
         }
 
         function renderTrayBalances(balances, netPremium, netDtone, pendingTotal) {
@@ -5874,7 +5880,9 @@ Thank you.`;
             // Recompute allocation engine for Tab 4
             // Pending definition: seeds not yet at MAIN PLOT and not culled.
             // Premium PN and D-Tone PN are still "pending" (haven't reached main plot).
-            const total = t4_totalPlanted;
+            // The base includes the admin-keyed D-Tone nursery quantity (Tab 3)
+            // per spec: balance = planted + D-Tone qty − main − culled.
+            const total = t4_totalPlanted + (typeof getDtoneNurseryQty === 'function' ? getDtoneNurseryQty() : 0);
             const accounted = t4_totalMain + totalCulled; // only main plot + culled = truly resolved
             const unaccounted = total - accounted;        // pending = tray remainder + premium + d-tone
 
@@ -7236,8 +7244,14 @@ Thank you.`;
       // Transplanting + 1st/2nd/3rd Culling. Each entry knows how to list the
       // tab's row elements and derive a stable key for each row.
       const ROW_TAB_CONFIG = {
-        3: () => Array.from(document.querySelectorAll('#t3-saved-rows-list .t3-saved-row'))
-                  .map(el => ({ el, key: (el.dataset.reviewKey || '').trim() })),
+        3: () => {
+                  const rows = Array.from(document.querySelectorAll('#t3-saved-rows-list .t3-saved-row'))
+                    .map(el => ({ el, key: (el.dataset.reviewKey || '').trim() }));
+                  // The Double Tone Quantity in Nursery box is verifiable/rejectable too.
+                  const dt = document.getElementById('t3-dtone-nursery-box');
+                  if (dt) rows.push({ el: dt, key: 'DTONE-NURSERY-QTY' });
+                  return rows;
+                },
         4: () => Array.from(document.querySelectorAll('#cull-rows-container .cull-row'))
                   .map(el => ({ el, key: (el.querySelector('.cull-tray-name')?.value || '').trim() })),
         5: () => Array.from(document.querySelectorAll('#t5-plot-rows .t5-plot-row'))
