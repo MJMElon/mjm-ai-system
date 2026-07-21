@@ -46,6 +46,24 @@
   .round-sec.open .round-chev { transform:rotate(90deg); }
   .round-body { padding:16px 18px 18px; }
   .round-tl { position:relative; border-left:2px solid #ccfbf1; margin-left:8px; padding-left:24px; display:flex; flex-direction:column; gap:18px; }
+
+  /* Plot status map — same live map as the Stock Inventory Map */
+  .map-tab { padding:8px 16px; font-weight:900; font-size:11px; text-transform:uppercase; letter-spacing:.06em; border-radius:12px; border:1.5px solid #e2e8f0; background:white; color:#64748b; cursor:pointer; white-space:nowrap; transition:all .15s; }
+  .map-tab.active { background:#0d9488; border-color:#0f766e; color:white; box-shadow:0 4px 10px -2px rgba(13,148,136,.4); }
+  .map-viewport { position:relative; width:100%; height:100%; overflow:hidden; touch-action:none; }
+  .map-stage { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; transform-origin:center center; transition:transform .12s ease-out; will-change:transform; cursor:grab; }
+  .map-stage.is-dragging { cursor:grabbing; transition:none; }
+  .map-plot-shape { transition:all .2s ease-in-out; cursor:pointer; }
+  .map-plot-shape:hover { fill:rgba(250,204,21,.55)!important; stroke-width:.7!important; }
+  .map-label { position:absolute; display:flex; flex-direction:column; align-items:center; text-align:center; pointer-events:none; max-width:150px; transform-origin:center center; transform:translate(-50%,-50%) scale(calc(1 / var(--map-zoom, 1))); }
+  .map-plot-tag { font-size:11px; font-weight:900; background:white; padding:2px 7px; border-radius:6px; color:#1e293b; margin-bottom:2px; box-shadow:0 2px 6px rgba(0,0,0,.18); text-transform:uppercase; border:1px solid #cbd5e1; letter-spacing:.04em; }
+  .map-status-line { font-size:9.5px; font-weight:800; line-height:1.15; padding:1px 6px; border-radius:4px; margin-top:1px; white-space:nowrap; background:rgba(255,255,255,.9); color:#065f46; }
+  .map-status-line.over { color:#9f1239; }
+  .map-status-line.none { color:#94a3b8; font-weight:700; }
+  .map-zoom-controls { position:absolute; top:8px; right:8px; display:flex; flex-direction:column; gap:4px; z-index:5; background:white; border-radius:10px; box-shadow:0 4px 10px rgba(0,0,0,.12); padding:4px; border:1px solid #e2e8f0; }
+  .map-zoom-btn { width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:none; background:white; color:#475569; font-weight:900; font-size:14px; cursor:pointer; border-radius:6px; transition:all .15s; }
+  .map-zoom-btn:hover { background:#ccfbf1; color:#0f766e; }
+  .map-zoom-level { font-size:9px; font-weight:900; color:#64748b; text-align:center; padding:2px 0; border-top:1px solid #e2e8f0; border-bottom:1px solid #e2e8f0; }
 </style>
 </head>
 <body>
@@ -59,6 +77,43 @@
 <div id="loading" class="max-w-[1150px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading…</div>
 
 <div id="main" class="max-w-[1150px] mx-auto px-4 md:px-6 py-8 hidden">
+
+  <!-- ── Plot Status Map (same map as the Stock Inventory Map) ── -->
+  <div class="card overflow-hidden mb-6">
+    <div class="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <h2 class="font-black text-slate-800 uppercase tracking-widest text-[13px]">🗺️ Plot Status Map</h2>
+      <div id="map-tabs" class="flex gap-2 overflow-x-auto"></div>
+    </div>
+    <div class="relative bg-slate-100" style="height:58vh; min-height:420px;">
+      <div class="map-viewport" id="map-viewport">
+        <div class="map-stage" id="map-stage">
+          <div class="relative inline-block">
+            <img id="map-image" alt="Nursery map" style="max-height:calc(58vh - 16px); width:auto; object-fit:contain; display:block; user-select:none; -webkit-user-drag:none;">
+            <svg id="map-svg" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%;"></svg>
+            <div id="map-labels" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;"></div>
+          </div>
+        </div>
+        <div class="map-zoom-controls">
+          <button class="map-zoom-btn" id="map-zoom-in" title="Zoom in">＋</button>
+          <div class="map-zoom-level" id="map-zoom-lvl">100%</div>
+          <button class="map-zoom-btn" id="map-zoom-out" title="Zoom out">－</button>
+          <button class="map-zoom-btn" id="map-zoom-reset" title="Reset zoom">↺</button>
+        </div>
+      </div>
+      <div id="map-none" style="display:none; position:absolute; inset:0; flex-direction:column; align-items:center; justify-content:center; gap:8px;" class="text-slate-400 bg-slate-100">
+        <span class="font-bold uppercase tracking-widest text-[11px]">No map uploaded for this nursery</span>
+        <span class="text-[11px]">Upload it in Seedling Stock Management → System Settings, where the plots are mapped.</span>
+      </div>
+    </div>
+    <div class="px-4 py-3 border-t border-slate-100 flex flex-wrap gap-x-6 gap-y-2 items-center bg-slate-50/60">
+      <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Legend:</span>
+      <span class="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600"><span class="w-3.5 h-3.5 rounded border-2 inline-block" style="background:rgba(74,222,128,.4); border-color:#22c55e"></span> On schedule</span>
+      <span class="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600"><span class="w-3.5 h-3.5 rounded border-2 inline-block" style="background:rgba(244,114,128,.45); border-color:#ef4444"></span> Over ideal days</span>
+      <span class="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600"><span class="w-3.5 h-3.5 rounded border-2 inline-block" style="background:rgba(148,163,184,.25); border-color:#94a3b8"></span> No status reported</span>
+      <span class="text-[11px] text-slate-400">Click a plot on the map to open its life record.</span>
+    </div>
+  </div>
+
   <div class="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
 
     <!-- ── Plot picker ─────────────────────────────────────── -->
@@ -176,6 +231,11 @@ let curWorks = [];      // works of selected plot
 let statusStages = [];  // nops_plot_status_stages
 let plotRounds = [];    // nops_plot_rounds of selected plot (ascending round_no)
 let expandedRounds = new Set(); // completed rounds the user opened
+let mapNurseries = [];  // operation_nurseries (name, map_image_url)
+let statusByPlot = new Map(); // plot_name → current status summary
+let mapActive = null;   // nursery shown on the map
+let mapZoom = { zoom: 1, panX: 0, panY: 0 };
+let mapDragDist = 0;    // to tell a pan-drag from a plot click
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -405,6 +465,148 @@ function openLogModal() {
 }
 function closeModals() { ['log-back','log-modal','stages-back','stages-modal'].forEach(id => $(id).classList.add('hidden')); }
 
+// ── Plot Status Map ──────────────────────────────────────────
+// Same map as Seedling Stock Management → Stock Management → Inventory
+// Map: the nursery's uploaded map image with the plot polygons drawn in
+// System Settings (shared_plots.map_top) — here colored by plot status.
+function computeCurrentStatus(entries) { // entries sorted newest first
+  if (!entries || !entries.length) return null;
+  const cur = entries[0];
+  let since = cur.entry_date;
+  for (const e of entries) {
+    if (e.stage_name !== cur.stage_name) break;
+    since = e.entry_date;
+  }
+  const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+  const days = Math.max(1, Math.round((t0 - new Date(since + 'T00:00:00')) / 86400000) + 1);
+  const stage = statusStages.find(s => s.id === cur.stage_id) || statusStages.find(s => s.name === cur.stage_name);
+  const ideal = stage && stage.ideal_days != null ? Number(stage.ideal_days) : null;
+  return { stage_name: cur.stage_name, since, days, ideal, over: ideal != null && days > ideal };
+}
+
+async function loadAllStatuses() {
+  statusByPlot = new Map();
+  try {
+    const { data, error } = await _supabase
+      .from('nops_plot_status_entries')
+      .select('plot_name, entry_date, stage_id, stage_name')
+      .order('entry_date', { ascending: false })
+      .limit(5000);
+    if (error || !data) return;
+    const grouped = new Map();
+    data.forEach(e => {
+      if (!grouped.has(e.plot_name)) grouped.set(e.plot_name, []);
+      grouped.get(e.plot_name).push(e);
+    });
+    grouped.forEach((list, plot) => {
+      const st = computeCurrentStatus(list);
+      if (st) statusByPlot.set(plot, st);
+    });
+  } catch (e) { /* table may not exist yet — map still shows plots in grey */ }
+}
+
+function renderMapTabs() {
+  $('map-tabs').innerHTML = mapNurseries.length
+    ? mapNurseries.map(n => `<button class="map-tab ${mapActive === n.name ? 'active' : ''}" data-map-tab="${esc(n.name)}">🏠 ${esc(n.name)}</button>`).join('')
+    : '<span class="text-[11px] text-slate-400 font-bold">No nurseries configured</span>';
+}
+
+function switchMapNursery(name) {
+  mapActive = name;
+  mapZoom = { zoom: 1, panX: 0, panY: 0 };
+  renderMapTabs();
+  const n = mapNurseries.find(x => x.name === name);
+  const hasMap = !!(n && n.map_image_url);
+  $('map-viewport').style.display = hasMap ? '' : 'none';
+  $('map-none').style.display = hasMap ? 'none' : 'flex';
+  if (!hasMap) return;
+  $('map-image').src = n.map_image_url;
+  renderMapPlots();
+  applyMapTransform();
+}
+
+function renderMapPlots() {
+  const svg = $('map-svg'), labels = $('map-labels');
+  svg.innerHTML = ''; labels.innerHTML = '';
+  plots.filter(p => p.nursery_name === mapActive).forEach(p => {
+    if (!p.map_top || !String(p.map_top).startsWith('[')) return;
+    let pts;
+    try { pts = JSON.parse(p.map_top); } catch (e) { return; }
+    if (!Array.isArray(pts) || !pts.length) return;
+    const ptsStr = pts.map(pt => pt.x + ',' + pt.y).join(' ');
+    const st = statusByPlot.get(p.plot_name);
+    let fill = 'rgba(148,163,184,.25)', stroke = '#94a3b8';
+    if (st) {
+      if (st.over) { fill = 'rgba(244,114,128,.45)'; stroke = '#ef4444'; }
+      else         { fill = 'rgba(74,222,128,.40)';  stroke = '#22c55e'; }
+    }
+    svg.innerHTML += `<polygon points="${ptsStr}" fill="${fill}" stroke="${stroke}" stroke-width=".4" class="map-plot-shape" data-map-plot="${esc(p.plot_name)}"/>`;
+    const cx = pts.reduce((s, pt) => s + pt.x, 0) / pts.length;
+    const cy = pts.reduce((s, pt) => s + pt.y, 0) / pts.length;
+    const line = st
+      ? `<div class="map-status-line ${st.over ? 'over' : ''}">${esc(st.stage_name)} · day ${st.days}${st.ideal != null ? '/' + st.ideal : ''}</div>`
+      : '<div class="map-status-line none">no status</div>';
+    labels.innerHTML += `
+      <div class="map-label" style="left:${cx}%; top:${cy}%;">
+        <div class="map-plot-tag">${esc(p.plot_name)}</div>
+        ${line}
+      </div>`;
+  });
+}
+
+function applyMapTransform() {
+  $('map-stage').style.transform = `translate(${mapZoom.panX}px, ${mapZoom.panY}px) scale(${mapZoom.zoom})`;
+  $('map-labels').style.setProperty('--map-zoom', mapZoom.zoom);
+  $('map-zoom-lvl').innerText = Math.round(mapZoom.zoom * 100) + '%';
+}
+function mapZoomBy(delta) {
+  mapZoom.zoom = Math.max(0.5, Math.min(5, mapZoom.zoom + delta));
+  if (mapZoom.zoom <= 1.01) { mapZoom.panX = 0; mapZoom.panY = 0; }
+  applyMapTransform();
+}
+function wireMapZoom() {
+  const viewport = $('map-viewport'), stage = $('map-stage');
+  viewport.addEventListener('wheel', e => {
+    e.preventDefault();
+    const oldZoom = mapZoom.zoom;
+    mapZoom.zoom = Math.max(0.5, Math.min(5, mapZoom.zoom + (e.deltaY < 0 ? 0.15 : -0.15)));
+    const rect = viewport.getBoundingClientRect();
+    const cx = e.clientX - rect.left - rect.width / 2;
+    const cy = e.clientY - rect.top  - rect.height / 2;
+    const k = mapZoom.zoom / oldZoom;
+    mapZoom.panX = (mapZoom.panX - cx) * k + cx;
+    mapZoom.panY = (mapZoom.panY - cy) * k + cy;
+    if (mapZoom.zoom <= 1.01) { mapZoom.panX = 0; mapZoom.panY = 0; }
+    applyMapTransform();
+  }, { passive: false });
+
+  let dragging = false, lastX = 0, lastY = 0;
+  const onDown = e => {
+    if (e.target.closest('.map-zoom-controls')) return;
+    dragging = true; mapDragDist = 0;
+    stage.classList.add('is-dragging');
+    const pt = e.touches ? e.touches[0] : e;
+    lastX = pt.clientX; lastY = pt.clientY;
+    e.preventDefault();
+  };
+  const onMove = e => {
+    if (!dragging) return;
+    const pt = e.touches ? e.touches[0] : e;
+    const dx = pt.clientX - lastX, dy = pt.clientY - lastY;
+    lastX = pt.clientX; lastY = pt.clientY;
+    mapDragDist += Math.abs(dx) + Math.abs(dy);
+    mapZoom.panX += dx; mapZoom.panY += dy;
+    applyMapTransform();
+  };
+  const onUp = () => { if (dragging) { dragging = false; stage.classList.remove('is-dragging'); } };
+  viewport.addEventListener('mousedown', onDown);
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+  viewport.addEventListener('touchstart', onDown, { passive: false });
+  window.addEventListener('touchmove', onMove, { passive: false });
+  window.addEventListener('touchend', onUp);
+}
+
 // ── Current plot status (daily entries from the FC Portal) ───
 async function loadPlotStatus(plotName) {
   const el = $('pv-status');
@@ -566,6 +768,15 @@ document.addEventListener('click', e => {
   if (e.target.closest('[data-close]')) { closeModals(); return; }
   const pi = e.target.closest('[data-plot]');
   if (pi) { selectPlot(pi.dataset.plot); return; }
+  const mt = e.target.closest('[data-map-tab]');
+  if (mt) { switchMapNursery(mt.dataset.mapTab); return; }
+  const mp = e.target.closest('[data-map-plot]');
+  if (mp) {
+    if (mapDragDist > 6) { mapDragDist = 0; return; } // that was a pan, not a click
+    selectPlot(mp.dataset.mapPlot).then(() =>
+      $('plot-view').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    return;
+  }
   const rt = e.target.closest('[data-round-toggle]');
   if (rt) {
     const no = Number(rt.dataset.roundToggle);
@@ -615,23 +826,32 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModals(
       window.location.href = '../index.html';
       return;
     }
-    const [{ data: pl, error: e1 }, { data: wt, error: e2 }, { data: wk }] = await Promise.all([
-      _supabase.from('shared_plots').select('nursery_name, plot_name').order('plot_name'),
+    const [{ data: pl, error: e1 }, { data: wt, error: e2 }, { data: wk }, nurRes] = await Promise.all([
+      _supabase.from('shared_plots').select('nursery_name, plot_name, map_top').order('plot_name'),
       _supabase.from('nops_work_types').select('*').order('sort_order').order('name'),
-      _supabase.from('nops_plot_works').select('plot_name')
+      _supabase.from('nops_plot_works').select('plot_name'),
+      _supabase.from('operation_nurseries').select('name, map_image_url').order('name')
     ]);
     if (e1 || e2) showToast('Load failed: ' + (e1 || e2).message, 'err');
     // Natural order (B1, B2 … B10, B11), not the DB's alphabetical order.
     plots = (pl || []).sort((a, b) =>
       String(a.plot_name).localeCompare(String(b.plot_name), undefined, { numeric: true, sensitivity: 'base' }));
     workTypes = wt || [];
+    mapNurseries = (nurRes && !nurRes.error && nurRes.data) ? nurRes.data : [];
     await loadStages();
+    await loadAllStatuses();
     workCounts = {};
     (wk || []).forEach(w => { workCounts[w.plot_name] = (workCounts[w.plot_name] || 0) + 1; });
     const nurseries = [...new Set(plots.map(p => p.nursery_name).filter(Boolean))].sort();
     $('nursery-filter').innerHTML = '<option value="">All nurseries</option>' +
       nurseries.map(n => `<option>${esc(n)}</option>`).join('');
     renderPlotList();
+    wireMapZoom();
+    $('map-zoom-in').addEventListener('click', () => mapZoomBy(0.25));
+    $('map-zoom-out').addEventListener('click', () => mapZoomBy(-0.25));
+    $('map-zoom-reset').addEventListener('click', () => { mapZoom = { zoom:1, panX:0, panY:0 }; applyMapTransform(); });
+    if (mapNurseries.length) switchMapNursery(mapNurseries[0].name);
+    else { renderMapTabs(); $('map-viewport').style.display = 'none'; $('map-none').style.display = 'flex'; }
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('main').classList.remove('hidden');
   } catch (e) {
