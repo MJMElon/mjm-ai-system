@@ -15,8 +15,8 @@
 <style>
   /* ── Certified Board — hero stage ────────────────────────── */
   .stage{position:relative;border-radius:24px;overflow:hidden;background:radial-gradient(ellipse at 50% -10%,#39424e 0%,#1b212a 45%,#0b0f15 100%);box-shadow:0 24px 60px rgba(10,16,12,.45);}
-  .stage-in{position:relative;display:flex;align-items:flex-end;justify-content:center;gap:1.5%;padding:26px 3% 0;height:min(440px,72vw);}
-  .hero-slot{position:relative;flex:1 1 0;max-width:158px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  .stage-in{position:relative;display:flex;align-items:flex-end;justify-content:center;gap:2%;padding:26px 2% 0;height:min(500px,70vw);}
+  .hero-slot{position:relative;flex:1 1 0;max-width:200px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;cursor:pointer;-webkit-tap-highlight-color:transparent;}
   .hero-slot .lamp{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:24px;height:9px;border-radius:50%;background:#ffeaae;box-shadow:0 0 16px 6px rgba(255,234,174,.75);z-index:3;}
   .hero-slot .spot{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:175%;height:calc(100% - var(--figH) - var(--lblH) + 30px);clip-path:polygon(44% 0,56% 0,100% 100%,0 100%);background:linear-gradient(to bottom,rgba(255,240,196,.42),rgba(255,240,196,.14) 62%,rgba(255,240,196,.02));filter:blur(.5px);pointer-events:none;animation:spotFlick 5.5s ease-in-out infinite;z-index:1;}
   .hero-slot:nth-child(2) .spot{animation-delay:1.2s}.hero-slot:nth-child(3) .spot{animation-delay:2.4s}
@@ -34,7 +34,7 @@
   .hero-gold .hero-fig{filter:drop-shadow(0 12px 16px rgba(0,0,0,.6)) drop-shadow(0 0 24px rgba(255,205,90,.38));}
   .hero-gold .hero-fig::after{background:radial-gradient(ellipse,rgba(255,215,120,.4),transparent 68%);}
   .hero-gold .hero-label{color:#ffe9a0;}
-  .hero-label{--x:1;margin:7px 2px 0;height:calc(var(--lblH) - 2.2em);display:flex;align-items:flex-start;justify-content:center;text-align:center;font-size:clamp(.48rem,1.55vw,.7rem);font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#c8d2c8;line-height:1.35;z-index:2;}
+  .hero-label{--x:1;margin:7px 2px 0;height:calc(var(--lblH) - 2.2em);display:flex;align-items:flex-start;justify-content:center;text-align:center;font-size:clamp(.48rem,1.55vw,.78rem);font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#c8d2c8;line-height:1.35;z-index:2;}
   .stage-floor{height:26px;background:linear-gradient(to bottom,rgba(255,255,255,.07),transparent);}
   .stage-hint{text-align:center;color:#8fa08f;font-size:.74rem;padding:0 16px 16px;}
   /* modal — who's certified for this hero */
@@ -59,6 +59,20 @@
   .board-list li.me .who b::after{content:' — You';color:#ffeaae;font-size:.78em;}
   .board-empty{padding:20px;color:#9fb09f;font-size:.85rem;text-align:center;}
   .board-note{text-align:center;color:#7d8d7d;font-size:.8rem;margin:-6px 0 18px;}
+  /* ── Swipeable panes: board ⟷ earn ─────────────────────── */
+  .pane-nav{max-width:var(--maxw);margin:26px auto 0;padding:0 20px;display:flex;gap:10px;align-items:center;}
+  .pane-tab{flex:0 0 auto;padding:10px 18px;border-radius:999px;border:1.5px solid #dde5da;background:#fff;color:#4b5e4b;font-weight:800;font-size:.8rem;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:8px;}
+  .pane-tab:hover{border-color:#b9ccb9;}
+  .pane-tab.active{background:var(--green,#2f7d32);border-color:var(--green,#2f7d32);color:#fff;box-shadow:0 6px 16px rgba(47,125,50,.3);}
+  .pane-swipe-hint{margin-left:auto;font-size:.7rem;color:#8ba18b;font-weight:700;letter-spacing:.06em;text-transform:uppercase;}
+  .panes{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+  .panes::-webkit-scrollbar{display:none;}
+  .pane{flex:0 0 100%;min-width:100%;scroll-snap-align:start;scroll-snap-stop:always;padding:36px 0 54px;}
+  @media print{
+    .pane-nav,.pane-board{display:none!important}
+    .panes{display:block;overflow:visible}
+    .pane{padding:0;min-width:0}
+  }
 </style>
 </head>
 <body>
@@ -81,13 +95,19 @@
   </div>
 </header>
 
-<!-- ── The board ─────────────────────────────────────────────── -->
-<section class="slide"><div class="wrap">
+<!-- ── Swipeable panes: Certified Board ⟷ Earn Certificate ──── -->
+<div class="pane-nav">
+  <button type="button" class="pane-tab active" data-pane="0"><i class="fa-solid fa-ranking-star"></i> Certified Board</button>
+  <button type="button" class="pane-tab" data-pane="1"><i class="fa-solid fa-award"></i> Earn Certificate</button>
+  <span class="pane-swipe-hint"><i class="fa-solid fa-left-right"></i> swipe</span>
+</div>
+<div class="panes" id="panes">
+<section class="pane pane-board"><div class="wrap">
   <div class="titlewrap">
     <div class="kicker">Hall of Certified</div>
     <h2 class="slide-title">Who's Certified</h2>
   </div>
-  <div style="max-width:820px;margin:0 auto">
+  <div style="margin:0 auto">
     <p class="board-note" id="boardNote" hidden></p>
     <div class="stage">
       <div class="stage-in" id="board"></div>
@@ -96,24 +116,10 @@
     </div>
   </div>
 
-  <!-- who's-certified modal -->
-  <div class="hero-modal" id="heroModal">
-    <div class="hm-card">
-      <div class="hm-head">
-        <div class="hm-icon"><i class="fa-solid fa-award" id="hmIcon"></i></div>
-        <div style="min-width:0">
-          <h3 id="hmTitle">—</h3>
-          <p id="hmDesc"></p>
-        </div>
-        <button class="hm-close" id="hmClose" aria-label="Close">✕</button>
-      </div>
-      <ol class="board-list" id="hmList"></ol>
-    </div>
-  </div>
+
 </div></section>
 
-<!-- ── Earn yours ────────────────────────────────────────────── -->
-<section class="slide"><div class="wrap">
+<section class="pane pane-earn"><div class="wrap">
   <div class="titlewrap">
     <div class="kicker">Certification</div>
     <h2 class="slide-title">Earn Your Certificate</h2>
@@ -153,6 +159,22 @@
     </div>
   </div>
 </div></section>
+</div>
+
+  <!-- who's-certified modal -->
+  <div class="hero-modal" id="heroModal">
+    <div class="hm-card">
+      <div class="hm-head">
+        <div class="hm-icon"><i class="fa-solid fa-award" id="hmIcon"></i></div>
+        <div style="min-width:0">
+          <h3 id="hmTitle">—</h3>
+          <p id="hmDesc"></p>
+        </div>
+        <button class="hm-close" id="hmClose" aria-label="Close">✕</button>
+      </div>
+      <ol class="board-list" id="hmList"></ol>
+    </div>
+  </div>
 
 <footer>
   <p><b>MJM Training Center</b> · MJM Group Certified Board</p>
@@ -291,7 +313,7 @@
       var gold = (k === GOLD_KEY);
       return '<div class="hero-slot'+(gold?' hero-gold':'')+'" data-key="'+k+'" role="button" tabindex="0" '+
         'aria-label="'+esc(c.title)+'" '+
-        'style="--figH:calc(clamp(96px,30vw,220px) * '+h+');--lblH:5.2em">'+
+        'style="--figH:calc(clamp(96px,28vw,255px) * '+h+');--lblH:5.2em">'+
         '<span class="lamp"></span><span class="spot"></span>'+
         '<div class="hero-fig">'+heroSvg(gold?'gold':'grey')+'</div>'+
         '<div class="hero-plaque" data-count>0 certified</div>'+
@@ -547,6 +569,26 @@
     showFor(sel.value);
     panel.scrollIntoView({behavior:'smooth',block:'nearest'});
   });
+
+  /* ── Swipeable panes: tabs follow swipes, taps scroll panes ── */
+  var panesEl=document.getElementById('panes');
+  var paneTabs=document.querySelectorAll('.pane-tab');
+  function goPane(i,instant){
+    panesEl.scrollTo({left:panesEl.clientWidth*i,behavior:instant?'auto':'smooth'});
+  }
+  [].forEach.call(paneTabs,function(b){
+    b.addEventListener('click',function(){ goPane(+b.getAttribute('data-pane')); });
+  });
+  var paneTick=null;
+  panesEl.addEventListener('scroll',function(){
+    if(paneTick) return;
+    paneTick=setTimeout(function(){
+      paneTick=null;
+      var i=Math.round(panesEl.scrollLeft/Math.max(1,panesEl.clientWidth));
+      [].forEach.call(paneTabs,function(b,j){ b.classList.toggle('active',j===i); });
+    },90);
+  });
+  if(location.hash==='#earn') goPane(1,true);
 
   renderBoard();                    // instant paint (empty/known state)
   loadBoard().then(syncLocalCerts); // then fill from the shared table
