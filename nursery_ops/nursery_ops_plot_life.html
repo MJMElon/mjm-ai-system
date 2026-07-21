@@ -91,6 +91,15 @@
 
 <div id="main" class="max-w-[1150px] mx-auto px-4 md:px-6 py-8 hidden">
 
+  <!-- ── Over-ideal-time Alert Board ─────────────────────────── -->
+  <div class="card overflow-hidden mb-6" style="border-color:#fecdd3;">
+    <div class="p-4 border-b border-slate-100 flex items-center justify-between gap-3" style="background:#fff1f2;">
+      <h2 class="font-black text-rose-700 uppercase tracking-widest text-[13px]">🚨 Alert Board — Over Ideal Time</h2>
+      <span id="alert-count" class="chip chip-over hidden">—</span>
+    </div>
+    <div id="alert-list" class="divide-y divide-slate-100"></div>
+  </div>
+
   <!-- ── Plot Status Map (same map as the Stock Inventory Map) ── -->
   <div class="card overflow-hidden mb-6">
     <div class="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -236,6 +245,27 @@
 
     <div id="stages-list" class="space-y-2"></div>
     <p class="text-[11px] text-slate-400">Deleting a stage keeps its name on past daily entries — only the reusable stage is removed.</p>
+  </div>
+</div>
+
+<!-- ── Record action taken on an alert ───────────────────────── -->
+<div id="act-back" class="modal-back hidden"></div>
+<div id="act-modal" class="modal hidden">
+  <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+    <h3 class="font-black text-slate-800 uppercase tracking-widest text-sm">🛠 Record Action Taken</h3>
+    <button data-close class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 text-xl leading-none">×</button>
+  </div>
+  <div class="p-6 space-y-4">
+    <p id="act-plot-line" class="text-[13px] font-semibold text-slate-600 bg-rose-50 border border-rose-200 rounded-xl p-3">—</p>
+    <div>
+      <label class="lbl">What action was taken?</label>
+      <textarea id="act-text" rows="3" class="inp" placeholder="e.g. Sprayed fungicide, moving to next stage tomorrow…"></textarea>
+    </div>
+    <p class="text-[11px] text-slate-400">Saved with the date, time and your name — so everyone can see the alert is being worked on.</p>
+  </div>
+  <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 rounded-b-[20px]">
+    <button data-close class="btn btn-ghost">Cancel</button>
+    <button id="act-save" class="btn btn-teal">Save Action</button>
   </div>
 </div>
 
@@ -505,7 +535,7 @@ function openLogModal() {
   $('log-back').classList.remove('hidden');
   $('log-modal').classList.remove('hidden');
 }
-function closeModals() { ['log-back','log-modal','stages-back','stages-modal','ps-back','ps-modal'].forEach(id => $(id).classList.add('hidden')); }
+function closeModals() { ['log-back','log-modal','stages-back','stages-modal','ps-back','ps-modal','act-back','act-modal'].forEach(id => $(id).classList.add('hidden')); }
 
 // ── Plot Status Map ──────────────────────────────────────────
 // Same map as Seedling Stock Management → Stock Management → Inventory
@@ -604,6 +634,106 @@ function renderStatusTable() {
           </tr>`;
       }).join('')}</tbody>
     </table>`;
+}
+
+// ── Alert board: plots over their stage's ideal time ─────────
+let plotActions = new Map(); // plot_name → actions taken (newest first)
+let actionPlot = null;       // plot the action modal is open for
+
+const fmtDateTime = ts => ts ? new Date(ts).toLocaleString('en-MY',
+  { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+
+function overPlots() {
+  return plots.filter(p => {
+    const st = statusByPlot.get(p.plot_name);
+    return st && st.over;
+  });
+}
+
+async function loadActions() {
+  plotActions = new Map();
+  const names = overPlots().map(p => p.plot_name);
+  if (!names.length) return;
+  try {
+    const { data, error } = await _supabase
+      .from('nops_plot_status_actions')
+      .select('plot_name, stage_name, action_text, taken_by, taken_at')
+      .in('plot_name', names)
+      .order('taken_at', { ascending: false })
+      .limit(500);
+    if (error || !data) return;
+    data.forEach(a => {
+      if (!plotActions.has(a.plot_name)) plotActions.set(a.plot_name, []);
+      plotActions.get(a.plot_name).push(a);
+    });
+  } catch (e) { /* table may not exist yet — board still lists the alerts */ }
+}
+
+function renderAlerts() {
+  const list = overPlots();
+  const badge = $('alert-count');
+  badge.textContent = `${list.length} plot${list.length === 1 ? '' : 's'} over time`;
+  badge.classList.toggle('hidden', !list.length);
+  if (!list.length) {
+    $('alert-list').innerHTML =
+      '<div class="p-5 text-center text-[13px] font-bold text-emerald-600">✅ All plots are within their ideal time — no alerts.</div>';
+    return;
+  }
+  $('alert-list').innerHTML = list.map(p => {
+    const st = statusByPlot.get(p.plot_name);
+    const acts = plotActions.get(p.plot_name) || [];
+    const actsHtml = acts.length
+      ? acts.slice(0, 6).map(a => `
+          <div class="flex items-baseline gap-2 text-[12px]">
+            <span class="shrink-0">🛠</span>
+            <span class="font-semibold text-slate-700">${esc(a.action_text)}</span>
+            <span class="text-slate-400 ml-auto text-right shrink-0">${a.taken_by ? esc(a.taken_by) + ' · ' : ''}${fmtDateTime(a.taken_at)}</span>
+          </div>`).join('')
+        + (acts.length > 6 ? `<div class="text-[11px] text-slate-400">…and ${acts.length - 6} earlier action${acts.length - 6 === 1 ? '' : 's'}</div>` : '')
+      : '<div class="text-[12px] text-slate-400">No action recorded yet.</div>';
+    return `
+      <div class="p-4">
+        <div class="flex flex-wrap items-center gap-2">
+          <button class="plot-link" data-plot-pop="${esc(p.plot_name)}">${esc(p.plot_name)}</button>
+          ${p.nursery_name ? `<span class="text-[11px] font-bold text-slate-400">${esc(p.nursery_name)}</span>` : ''}
+          <span class="chip chip-over">${esc(st.stage_name)}</span>
+          <span class="text-[12px] font-bold text-slate-500">ideal ${st.ideal} day${Number(st.ideal) === 1 ? '' : 's'}</span>
+          <span class="text-[12px] font-black text-rose-600">actual ${st.days} days · over by ${st.days - st.ideal}</span>
+          <button class="btn btn-teal !py-1.5 !px-3 !text-[10px] ml-auto shrink-0" data-action-add="${esc(p.plot_name)}">+ Record Action Taken</button>
+        </div>
+        <div class="mt-2.5 pl-1 space-y-1.5 border-l-2 border-slate-100 ml-1.5 pl-3">${actsHtml}</div>
+      </div>`;
+  }).join('');
+}
+
+function openActionModal(plotName) {
+  actionPlot = plotName;
+  const st = statusByPlot.get(plotName);
+  $('act-plot-line').innerHTML = `Action for <strong>${esc(plotName)}</strong>` +
+    (st ? ` — ${esc(st.stage_name)}, day ${st.days} of ideal ${st.ideal} (over by ${st.days - st.ideal})` : '');
+  $('act-text').value = '';
+  $('act-back').classList.remove('hidden');
+  $('act-modal').classList.remove('hidden');
+  $('act-text').focus();
+}
+
+async function saveAction() {
+  const txt = $('act-text').value.trim();
+  if (!txt) { showToast('Describe the action taken.', 'err'); return; }
+  const st = statusByPlot.get(actionPlot);
+  const u = MJMAccess.user() || {};
+  const { error } = await _supabase.from('nops_plot_status_actions').insert([{
+    plot_name: actionPlot,
+    stage_name: st ? st.stage_name : null,
+    action_text: txt,
+    taken_by: u.full_name || u.email || null,
+    taken_at: new Date().toISOString()
+  }]);
+  if (error) { showToast('Save failed: ' + error.message, 'err'); return; }
+  showToast('Action recorded.');
+  closeModals();
+  await loadActions();
+  renderAlerts();
 }
 
 // ── Plot status pop-out (current + daily history) ────────────
@@ -897,6 +1027,8 @@ document.addEventListener('click', e => {
   if (mt) { switchMapNursery(mt.dataset.mapTab); return; }
   const pp = e.target.closest('[data-plot-pop]');
   if (pp) { openPlotPopup(pp.dataset.plotPop); return; }
+  const aa = e.target.closest('[data-action-add]');
+  if (aa) { openActionModal(aa.dataset.actionAdd); return; }
   const mp = e.target.closest('[data-map-plot]');
   if (mp) {
     if (mapDragDist > 6) { mapDragDist = 0; return; } // that was a pan, not a click
@@ -942,6 +1074,8 @@ $('plot-search').addEventListener('input', renderPlotList);
 $('log-back').addEventListener('click', closeModals);
 $('stages-back').addEventListener('click', closeModals);
 $('ps-back').addEventListener('click', closeModals);
+$('act-back').addEventListener('click', closeModals);
+$('act-save').addEventListener('click', saveAction);
 $('ps-open-life').addEventListener('click', () => {
   if (!popupPlot) return;
   closeModals();
@@ -974,6 +1108,8 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModals(
     mapNurseries = (nurRes && !nurRes.error && nurRes.data) ? nurRes.data : [];
     await loadStages();
     await loadAllStatuses();
+    await loadActions();
+    renderAlerts();
     workCounts = {};
     (wk || []).forEach(w => { workCounts[w.plot_name] = (workCounts[w.plot_name] || 0) + 1; });
     const nurseries = [...new Set(plots.map(p => p.nursery_name).filter(Boolean))].sort();
