@@ -22,21 +22,21 @@
   .btn-danger { background:white; color:#be123c; border:1.5px solid #fecdd3; }
   .btn-danger:hover { background:#fff1f2; }
   .btn-mini { padding:6px 9px; border-radius:9px; font-size:12px; }
-  .inp { width:100%; background:white; border:1.5px solid #e2e8f0; border-radius:10px; padding:8px 10px; font-size:13px; font-weight:600; outline:none; }
+  .inp { width:100%; background:white; border:1.5px solid #e2e8f0; border-radius:10px; padding:10px 12px; font-size:15px; font-weight:600; outline:none; }
   .inp:focus { border-color:#14b8a6; box-shadow:0 0 0 3px rgba(20,184,166,.15); }
 
-  /* One-page table: # · Job · Motion Study · Unit · actions */
-  .wt-grid { display:grid; grid-template-columns:30px 34px minmax(180px,1fr) 110px 150px 176px; gap:10px; align-items:center; }
-  .wt-head { padding:0 16px 6px; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:#94a3b8; }
-  .wt-row { padding:12px 16px; border:1px solid #e2e8f0; border-radius:16px; background:white; }
+  /* One-page table: # · Job · Motion Study · Unit · Remark · actions */
+  .wt-grid { display:grid; grid-template-columns:32px 40px minmax(200px,1.1fr) 120px 160px minmax(180px,1fr) 176px; gap:12px; align-items:center; }
+  .wt-head { padding:0 18px 8px; font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:#94a3b8; }
+  .wt-row { padding:14px 18px; border:1px solid #e2e8f0; border-radius:16px; background:white; }
   .wt-row.editing { border-color:#5eead4; box-shadow:0 0 0 3px rgba(20,184,166,.12); }
   .wt-row.dragging { opacity:.55; border-style:dashed; border-color:#14b8a6; background:#f0fdfa; }
-  .wt-num { width:34px; height:34px; border-radius:10px; background:#f0fdfa; border:1.5px solid #99f6e4; color:#0f766e; font-weight:900; font-size:13px; display:flex; align-items:center; justify-content:center; }
-  .wt-handle { cursor:grab; touch-action:none; user-select:none; color:#cbd5e1; font-size:17px; line-height:1; padding:6px 4px; border-radius:8px; }
+  .wt-num { width:38px; height:38px; border-radius:10px; background:#f0fdfa; border:1.5px solid #99f6e4; color:#0f766e; font-weight:900; font-size:15px; display:flex; align-items:center; justify-content:center; }
+  .wt-handle { cursor:grab; touch-action:none; user-select:none; color:#cbd5e1; font-size:19px; line-height:1; padding:6px 4px; border-radius:8px; }
   .wt-handle:hover { color:#0d9488; background:#f0fdfa; }
-  .wt-sub { grid-column:3 / -1; }
-  .wt-val { font-weight:900; color:#0f172a; font-size:15px; }
-  .wt-unit { font-weight:700; color:#475569; font-size:13px; }
+  .wt-val { font-weight:900; color:#0f172a; font-size:18px; }
+  .wt-unit { font-weight:700; color:#475569; font-size:15px; }
+  .wt-remark { font-weight:600; color:#64748b; font-size:14px; }
 </style>
 </head>
 <body>
@@ -52,22 +52,14 @@
 <div id="main" class="max-w-[1000px] mx-auto px-4 md:px-6 py-8 space-y-6 hidden">
 
   <div class="card p-5 md:p-7">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-2">
-      <div>
-        <h2 class="font-black text-slate-800 uppercase tracking-widest text-sm">⏱️ Motion Study — Work Types</h2>
-        <p class="text-[12px] text-slate-500 mt-1 leading-relaxed">
-          The work a plot goes through, in order. Key in everything on this one page:
-          click <strong>Edit</strong> on a row to type new values, <strong>Save</strong> to fix them.
-          Drag the <strong>⠿</strong> handle to reorder the list into real working order.
-          These standards drive the Monthly Schedule (planned days prefill) and Life of Plot.
-        </p>
-      </div>
+    <div class="flex items-center justify-between gap-3 mb-2">
+      <h2 class="font-black text-slate-800 uppercase tracking-widest text-base">⏱️ Motion Study — Work Types</h2>
       <button id="add-wt-btn" class="btn btn-teal shrink-0">+ Add Work Type</button>
     </div>
     <div class="overflow-x-auto -mx-2 px-2">
-      <div class="min-w-[700px]">
+      <div class="min-w-[880px]">
         <div class="wt-grid wt-head mt-4">
-          <div></div><div>#</div><div>Job</div><div>Motion Study</div><div>Unit</div><div class="text-right pr-1">&nbsp;</div>
+          <div></div><div>#</div><div>Job</div><div>Motion Study</div><div>Unit</div><div>Remark</div><div class="text-right pr-1">&nbsp;</div>
         </div>
         <div id="wt-list" class="space-y-3"></div>
       </div>
@@ -104,13 +96,10 @@ function displayRow(t, i) {
     <div class="wt-row wt-grid" data-id="${t.id}">
       <div class="wt-handle" data-drag title="Drag to reorder">⠿</div>
       <div class="wt-num">${i + 1}</div>
-      <div class="min-w-0">
-        <div class="font-black text-slate-800 text-[14px] truncate">${esc(t.name)}</div>
-        ${t.std_crew ? `<div class="text-[11px] text-slate-500 font-semibold">👷 crew of ${t.std_crew}</div>` : ''}
-        ${t.remark ? `<div class="text-[11px] text-slate-400 truncate">${esc(t.remark)}</div>` : ''}
-      </div>
+      <div class="font-black text-slate-800 text-[16px] truncate">${esc(t.name)}</div>
       <div class="wt-val">${t.std_days != null ? t.std_days : '—'}</div>
       <div class="wt-unit">${esc(t.unit || (t.std_days != null ? 'days / plot' : '—'))}</div>
+      <div class="wt-remark truncate" title="${esc(t.remark || '')}">${t.remark ? esc(t.remark) : '—'}</div>
       <div class="flex gap-1.5 justify-end">
         <button class="btn btn-ghost btn-mini" data-edit="${t.id}">Edit</button>
         <button class="btn btn-danger btn-mini" data-del="${t.id}" title="Remove work type">✕</button>
@@ -127,13 +116,10 @@ function editRow(t, i) {
       <div><input id="e-name" class="inp" placeholder="e.g. Polybag Filling" value="${isNew ? '' : esc(t.name)}"></div>
       <div><input id="e-days" type="number" min="0" step="0.5" class="inp" placeholder="e.g. 3" value="${!isNew && t.std_days != null ? t.std_days : ''}"></div>
       <div><input id="e-unit" class="inp" placeholder="days / plot" value="${isNew ? '' : esc(t.unit || '')}"></div>
+      <div><input id="e-remark" class="inp" placeholder="Optional note" value="${isNew ? '' : esc(t.remark || '')}"></div>
       <div class="flex gap-1.5 justify-end">
         <button class="btn btn-teal btn-mini" data-save>Save</button>
         <button class="btn btn-ghost btn-mini" data-cancel>Cancel</button>
-      </div>
-      <div class="wt-sub grid grid-cols-[110px_1fr] gap-2.5">
-        <input id="e-crew" type="number" min="0" step="1" class="inp" placeholder="Crew size" value="${!isNew && t.std_crew != null ? t.std_crew : ''}">
-        <input id="e-remark" class="inp" placeholder="Motion study notes — method, tools, pace…" value="${isNew ? '' : esc(t.remark || '')}">
       </div>
     </div>`;
 }
@@ -164,7 +150,6 @@ async function saveEditing() {
     name,
     std_days: $('e-days').value === '' ? null : Number($('e-days').value),
     unit: $('e-unit').value.trim() || null,
-    std_crew: $('e-crew').value === '' ? null : parseInt($('e-crew').value, 10),
     remark: $('e-remark').value.trim() || null
   };
   let error;
