@@ -120,13 +120,14 @@
                 <button id="tab-active" class="list-tab-btn list-tab-active" onclick="switchListTab('active')">🟢 Active</button>
                 <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="Batch is moved here automatically only when every transplanted plot has a 3rd Culling entry saved (partial entries stay in Active)">✅ Completed / In-Active</button>
                 <button id="tab-amendment" class="list-tab-btn list-tab-inactive" onclick="switchListTab('amendment')" title="Batches with at least one report tab rejected by HQ — open the batch to see the rejection remark and amend the report">🔴 Amendment Needed</button>
+                <button id="tab-reserved" class="list-tab-btn list-tab-inactive" onclick="switchListTab('reserved')" title="Plots holding seedlings transferred in the 3rd Culling report. A batch's transfers drop off this list once the batch is sold out.">🅿️ Plot Reserved Status</button>
             </div>
             
             <div class="bg-white rounded-2xl border border-[#e8dcc8] overflow-hidden shadow-inner">
                 <div class="overflow-x-auto">
                     <table class="w-full min-w-[900px]" id="ledger-table">
                         <thead class="bg-[#f8f4ec]">
-                            <tr>
+                            <tr id="ledger-head-row">
                                 <th>Batch</th>
                                 <th>Breed</th>
                                 <th>Planted Date</th>
@@ -168,6 +169,7 @@
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let masterBatches = [];
+        let plotReserves  = []; // 3rd-culling plot transfers → "Plot Reserved Status" tab
         let currentListTab = 'active';
         let currentPage = 1;
         const PAGE_SIZE = 15;
@@ -226,7 +228,7 @@
         async function initLedger() {
             try {
                 // Fetch reception logs + every culling-related log type + transplant logs in parallel.
-                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes] = await Promise.all([
+                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, collectRes] = await Promise.all([
                     fetchAllRows(() => _supabase.from('shared_inventory_logs')
                         .select('*')
                         .eq('transaction_type', 'Seeds_Received')
@@ -237,8 +239,10 @@
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '1st_Culling').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '2nd_Culling').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change, plot_name, remark').eq('transaction_type', '3rd_Culling').order('id', { ascending: true })),
-                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, plot_name, transaction_type').in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']).order('id', { ascending: true })),
-                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name').eq('transaction_type', 'Review_Rejection').order('id', { ascending: true }))
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, plot_name, transaction_type, quantity_change').in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']).order('id', { ascending: true })),
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name').eq('transaction_type', 'Review_Rejection').order('id', { ascending: true })),
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, plot_name, quantity_change, remark, created_at').eq('transaction_type', 'Cull3_Transfer').order('id', { ascending: true })),
+                    fetchAllRows(() => _supabase.from('shared_collection_bookings').select('batch_name, collection_qty, status').order('id', { ascending: true }))
                 ]);
                 if (recRes.error) throw recRes.error;
 
@@ -282,29 +286,37 @@
                     const p = _normPlot(r.plot_name);
                     if (!p || !r.batch_name) return;
                     (expectedPlots[r.batch_name] = expectedPlots[r.batch_name] || new Set())
-                        .add(p + '|' + _destOfType(r.transaction_type));
+                        .add(p); // per PLOT — Tab 6 merges same-plot rows and saves one record per plot
                 });
 
-                // Actual coverage from 3rd_Culling rows. DestType-stamped rows
-                // match exactly; legacy rows (no DestType in remark) each
-                // cover one expected slot for their plot.
-                const cull3Keyed  = {}; // batch → Set("PLOT|dest")
+                // Actual coverage from 3rd_Culling rows. A row only COUNTS as
+                // covering its plot when its drone map is uploaded (DocUrl)
+                // AND the drone map qty was keyed in (MapQty) — a record
+                // without both keeps the batch in the Active list.
+                const cull3Keyed  = {}; // batch → Set(PLOT)
                 const cull3Legacy = {}; // batch → Map(PLOT → row count)
                 (cull3Res.data || []).forEach(r => {
                     if (!r.batch_name) return;
+                    const hasProof = !!(r.remark && /DocUrl:\S+/.test(r.remark) && /MapQty:\s*\d+/.test(r.remark));
+                    if (!hasProof) return;
                     const p = _normPlot(r.plot_name);
                     const m = r.remark ? r.remark.match(/DestType:\s*(main|premium|doubletone)/) : null;
                     if (m) {
-                        (cull3Keyed[r.batch_name] = cull3Keyed[r.batch_name] || new Set()).add(p + '|' + m[1]);
+                        (cull3Keyed[r.batch_name] = cull3Keyed[r.batch_name] || new Set()).add(p); // per PLOT
                     } else {
                         const map = (cull3Legacy[r.batch_name] = cull3Legacy[r.batch_name] || new Map());
                         map.set(p, (map.get(p) || 0) + 1);
                     }
                 });
 
+                // Any outstanding plot transfer keeps the batch Active — the
+                // transferred plot's culling is still pending by definition.
+                const batchesWithTransfers = new Set((transferRes.data || []).map(r => r.batch_name));
+
                 const completedBatchNames = new Set();
                 Object.keys(expectedPlots).forEach(batch => {
-                    // Every plot+destination must be covered — no exceptions.
+                    if (batchesWithTransfers.has(batch)) return; // transfer → stays Active
+                    // Every plot must be covered by a proofed record — no exceptions.
                     const need = expectedPlots[batch];
                     if (!need || !need.size) return;
                     const keyed  = cull3Keyed[batch] || new Set();
@@ -325,6 +337,41 @@
                 // in the "Amendment Needed" list tab (in ADDITION to their
                 // normal Active/Completed placement, which is unchanged).
                 const rejectedBatchNames = new Set((rejectRes.data || []).map(r => r.batch_name));
+
+                // ── Plot Reserved Status ────────────────────────────────────
+                // 3rd-culling plot transfers: target plot is "reserved" for the
+                // batch. A batch's transfers drop off once it is SOLD OUT:
+                // transplanted − 2nd cull − 3rd cull − collected ≤ 0.
+                plotReserves = (transferRes.data || []).map(r => {
+                    const m = r.remark ? r.remark.match(/From:\s*\[([^\]|]+)\|(main|premium|doubletone)\]/) : null;
+                    return {
+                        batch: r.batch_name,
+                        plot:  r.plot_name,
+                        from:  m ? m[1] : '—',
+                        qty:   r.quantity_change || 0,
+                        date:  r.created_at
+                    };
+                });
+                if (plotReserves.length) {
+                    const transplantQtyMap = {};
+                    (transplantRes.data || []).forEach(r => {
+                        if (r.batch_name) transplantQtyMap[r.batch_name] = (transplantQtyMap[r.batch_name] || 0) + (r.quantity_change || 0);
+                    });
+                    const collectedMap = {};
+                    (collectRes.data || []).forEach(r => {
+                        if (!r.batch_name || /cancel/i.test(r.status || '')) return;
+                        collectedMap[r.batch_name] = (collectedMap[r.batch_name] || 0) + (r.collection_qty || 0);
+                    });
+                    const soldOutBatches = new Set();
+                    Object.keys(transplantQtyMap).forEach(b => {
+                        const bal = transplantQtyMap[b]
+                            - Math.abs(cull2Map[b] || 0)
+                            - Math.abs(cull3Map[b] || 0)
+                            - (collectedMap[b] || 0);
+                        if (bal <= 0) soldOutBatches.add(b);
+                    });
+                    plotReserves = plotReserves.filter(r => !soldOutBatches.has(r.batch));
+                }
 
                 // De-dupe Seeds_Received rows: keep only the most-recent log
                 // per batch_name. Repeated saves on Tab 1 can leave multiple
@@ -457,10 +504,19 @@
             currentPage = 1;
 
             // Update Button Styles
-            ['active', 'completed', 'amendment'].forEach(name => {
+            ['active', 'completed', 'amendment', 'reserved'].forEach(name => {
                 const el = document.getElementById('tab-' + name);
                 if (el) el.className = 'list-tab-btn ' + (tabName === name ? 'list-tab-active' : 'list-tab-inactive');
             });
+
+            // The Plot Reserved tab shows transfer columns instead of batch columns.
+            const headRow = document.getElementById('ledger-head-row');
+            if (headRow) {
+                if (!window._defaultLedgerHead) window._defaultLedgerHead = headRow.innerHTML;
+                headRow.innerHTML = (tabName === 'reserved')
+                    ? '<th>Batch</th><th>Plot Reserved</th><th>Original Plot</th><th>Quantity Transfer</th><th>Date Transfer</th>'
+                    : window._defaultLedgerHead;
+            }
 
             renderLedgerTable();
         }
@@ -471,6 +527,39 @@
 
             // Filter by tab, then by search query, then paginate.
             const query = (document.getElementById('search-input')?.value || '').trim().toLowerCase();
+
+            // Plot Reserved Status — its own row format (transfers, not batches).
+            if (currentListTab === 'reserved') {
+                const filtered = query
+                    ? plotReserves.filter(r =>
+                        (r.batch || '').toLowerCase().includes(query) ||
+                        (r.plot  || '').toLowerCase().includes(query) ||
+                        (r.from  || '').toLowerCase().includes(query))
+                    : plotReserves;
+                const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+                if (currentPage > totalPages) currentPage = totalPages;
+                if (currentPage < 1) currentPage = 1;
+                updatePagination(filtered.length, totalPages);
+                if (filtered.length === 0) {
+                    body.innerHTML = `<tr><td colspan="8" class="text-center p-16 text-[#8a7a68] font-bold">${
+                        query ? `No reserved plots matching "${query}".`
+                              : 'No plots reserved — no active 3rd-culling transfers.'}</td></tr>`;
+                    return;
+                }
+                const start = (currentPage - 1) * PAGE_SIZE;
+                filtered.slice(start, start + PAGE_SIZE).forEach(r => {
+                    const dateStr = r.date ? new Date(r.date).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+                    body.insertAdjacentHTML('beforeend', `
+                        <tr>
+                            <td class="text-[#3d2610] font-black tracking-wider text-base">${r.batch}</td>
+                            <td class="font-black text-[#0891b2]">🅿️ ${r.plot}</td>
+                            <td class="font-bold text-[#8a7a68]">${r.from}</td>
+                            <td class="font-black text-[#3d2610]">${(r.qty || 0).toLocaleString()}</td>
+                            <td class="font-bold text-[#3d2610]">${dateStr}</td>
+                        </tr>`);
+                });
+                return;
+            }
             // "Amendment Needed" lists every batch with an HQ-rejected tab,
             // regardless of Active/Completed status — the other two tabs are
             // untouched (a rejected batch still appears in its normal tab too).
