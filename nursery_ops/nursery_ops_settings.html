@@ -22,13 +22,21 @@
   .btn-danger { background:white; color:#be123c; border:1.5px solid #fecdd3; }
   .btn-danger:hover { background:#fff1f2; }
   .btn-mini { padding:6px 9px; border-radius:9px; font-size:12px; }
-  .inp { width:100%; background:white; border:1.5px solid #e2e8f0; border-radius:12px; padding:10px 14px; font-size:14px; font-weight:600; outline:none; }
+  .inp { width:100%; background:white; border:1.5px solid #e2e8f0; border-radius:10px; padding:8px 10px; font-size:13px; font-weight:600; outline:none; }
   .inp:focus { border-color:#14b8a6; box-shadow:0 0 0 3px rgba(20,184,166,.15); }
-  .lbl { display:block; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:#64748b; margin-bottom:5px; }
-  .modal-back { position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:60; backdrop-filter:blur(4px); }
-  .modal { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:calc(100% - 32px); max-width:520px; max-height:88vh; overflow-y:auto; background:white; border-radius:20px; z-index:70; box-shadow:0 30px 80px rgba(0,0,0,.3); }
-  .wt-row { display:flex; align-items:center; gap:12px; padding:14px 16px; border:1px solid #e2e8f0; border-radius:16px; background:white; }
-  .wt-num { width:34px; height:34px; border-radius:10px; background:#f0fdfa; border:1.5px solid #99f6e4; color:#0f766e; font-weight:900; font-size:13px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+
+  /* One-page table: # · Job · Motion Study · Unit · actions */
+  .wt-grid { display:grid; grid-template-columns:30px 34px minmax(180px,1fr) 110px 150px 176px; gap:10px; align-items:center; }
+  .wt-head { padding:0 16px 6px; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:#94a3b8; }
+  .wt-row { padding:12px 16px; border:1px solid #e2e8f0; border-radius:16px; background:white; }
+  .wt-row.editing { border-color:#5eead4; box-shadow:0 0 0 3px rgba(20,184,166,.12); }
+  .wt-row.dragging { opacity:.55; border-style:dashed; border-color:#14b8a6; background:#f0fdfa; }
+  .wt-num { width:34px; height:34px; border-radius:10px; background:#f0fdfa; border:1.5px solid #99f6e4; color:#0f766e; font-weight:900; font-size:13px; display:flex; align-items:center; justify-content:center; }
+  .wt-handle { cursor:grab; touch-action:none; user-select:none; color:#cbd5e1; font-size:17px; line-height:1; padding:6px 4px; border-radius:8px; }
+  .wt-handle:hover { color:#0d9488; background:#f0fdfa; }
+  .wt-sub { grid-column:3 / -1; }
+  .wt-val { font-weight:900; color:#0f172a; font-size:15px; }
+  .wt-unit { font-weight:700; color:#475569; font-size:13px; }
 </style>
 </head>
 <body>
@@ -39,49 +47,34 @@
   <div class="justify-self-end"><div class="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center text-white font-black text-xs">NO</div></div>
 </div>
 
-<div id="loading" class="max-w-[900px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading…</div>
+<div id="loading" class="max-w-[1000px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading…</div>
 
-<div id="main" class="max-w-[900px] mx-auto px-4 md:px-6 py-8 space-y-6 hidden">
+<div id="main" class="max-w-[1000px] mx-auto px-4 md:px-6 py-8 space-y-6 hidden">
 
   <div class="card p-5 md:p-7">
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-2">
       <div>
         <h2 class="font-black text-slate-800 uppercase tracking-widest text-sm">⏱️ Motion Study — Work Types</h2>
         <p class="text-[12px] text-slate-500 mt-1 leading-relaxed">
-          The work a plot goes through, in order — e.g. Soil Transport → Polybag Filling → Polybag Lining → Transplanting → Seedling Maturing → Seedling Open Collection → 3rd Culling.
-          Nothing is fixed: <strong>add or remove</strong> work types freely, and record the motion study of each — how many days it usually needs per plot, the usual crew size, and notes.
-          These standards drive the Monthly Schedule (planned days prefill) and Life of Plot (on-pace / over-standard flags).
+          The work a plot goes through, in order. Key in everything on this one page:
+          click <strong>Edit</strong> on a row to type new values, <strong>Save</strong> to fix them.
+          Drag the <strong>⠿</strong> handle to reorder the list into real working order.
+          These standards drive the Monthly Schedule (planned days prefill) and Life of Plot.
         </p>
       </div>
       <button id="add-wt-btn" class="btn btn-teal shrink-0">+ Add Work Type</button>
     </div>
-    <div id="wt-list" class="space-y-3 mt-4"></div>
+    <div class="overflow-x-auto -mx-2 px-2">
+      <div class="min-w-[700px]">
+        <div class="wt-grid wt-head mt-4">
+          <div></div><div>#</div><div>Job</div><div>Motion Study</div><div>Unit</div><div class="text-right pr-1">&nbsp;</div>
+        </div>
+        <div id="wt-list" class="space-y-3"></div>
+      </div>
+    </div>
     <p class="text-[11px] text-slate-400 mt-4">
       Removing a work type does <strong>not</strong> delete history — past schedule and plot records keep the work's name.
-      Use ↑ ↓ to keep the list in real working order.
     </p>
-  </div>
-</div>
-
-<!-- ── Add / edit work type modal ─────────────────────────────── -->
-<div id="wt-back" class="modal-back hidden"></div>
-<div id="wt-modal" class="modal hidden">
-  <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-    <h3 id="wt-title" class="font-black text-slate-800 uppercase tracking-widest text-sm">Add Work Type</h3>
-    <button data-close class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 text-xl leading-none">×</button>
-  </div>
-  <div class="p-6 space-y-4">
-    <input type="hidden" id="t-id">
-    <div><label class="lbl">Work name</label><input id="t-name" class="inp" placeholder="e.g. Polybag Filling"></div>
-    <div class="grid grid-cols-2 gap-4">
-      <div><label class="lbl">Standard days per plot</label><input id="t-days" type="number" min="0" step="0.5" class="inp" placeholder="e.g. 3"></div>
-      <div><label class="lbl">Usual crew size</label><input id="t-crew" type="number" min="0" step="1" class="inp" placeholder="e.g. 4"></div>
-    </div>
-    <div><label class="lbl">Motion study notes</label><textarea id="t-remark" rows="3" class="inp" placeholder="Method, tools, pace, conditions that change the timing…"></textarea></div>
-  </div>
-  <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 rounded-b-[20px]">
-    <button data-close class="btn btn-ghost">Cancel</button>
-    <button id="t-save" class="btn btn-teal">Save Work Type</button>
   </div>
 </div>
 
@@ -91,6 +84,7 @@
 const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
 let workTypes = [];
 let isAdmin = false;
+let editingId = null;          // id being edited, 'new' for the add row, or null
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -104,26 +98,53 @@ function showToast(msg, kind) {
   setTimeout(() => t.classList.add('hidden'), 2600);
 }
 
-function render() {
-  $('wt-list').innerHTML = workTypes.length ? workTypes.map((t, i) => `
-    <div class="wt-row">
+// ── Rendering ────────────────────────────────────────────────
+function displayRow(t, i) {
+  return `
+    <div class="wt-row wt-grid" data-id="${t.id}">
+      <div class="wt-handle" data-drag title="Drag to reorder">⠿</div>
       <div class="wt-num">${i + 1}</div>
-      <div class="flex-1 min-w-0">
-        <div class="font-black text-slate-800 text-[14px]">${esc(t.name)}</div>
-        <div class="text-[12px] text-slate-500 font-semibold">
-          ${t.std_days != null ? `⏱ ${t.std_days} day${Number(t.std_days) === 1 ? '' : 's'} / plot` : '⏱ no standard set'}
-          ${t.std_crew ? ` · 👷 crew of ${t.std_crew}` : ''}
-        </div>
-        ${t.remark ? `<div class="text-[12px] text-slate-400 mt-0.5">${esc(t.remark)}</div>` : ''}
+      <div class="min-w-0">
+        <div class="font-black text-slate-800 text-[14px] truncate">${esc(t.name)}</div>
+        ${t.std_crew ? `<div class="text-[11px] text-slate-500 font-semibold">👷 crew of ${t.std_crew}</div>` : ''}
+        ${t.remark ? `<div class="text-[11px] text-slate-400 truncate">${esc(t.remark)}</div>` : ''}
       </div>
-      <div class="flex gap-1.5 shrink-0">
-        <button class="btn btn-ghost btn-mini" data-up="${t.id}" ${i === 0 ? 'disabled style="opacity:.3"' : ''} title="Move up">↑</button>
-        <button class="btn btn-ghost btn-mini" data-down="${t.id}" ${i === workTypes.length - 1 ? 'disabled style="opacity:.3"' : ''} title="Move down">↓</button>
+      <div class="wt-val">${t.std_days != null ? t.std_days : '—'}</div>
+      <div class="wt-unit">${esc(t.unit || (t.std_days != null ? 'days / plot' : '—'))}</div>
+      <div class="flex gap-1.5 justify-end">
         <button class="btn btn-ghost btn-mini" data-edit="${t.id}">Edit</button>
         <button class="btn btn-danger btn-mini" data-del="${t.id}" title="Remove work type">✕</button>
       </div>
-    </div>`).join('')
+    </div>`;
+}
+
+function editRow(t, i) {
+  const isNew = t == null;
+  return `
+    <div class="wt-row wt-grid editing" data-id="${isNew ? 'new' : t.id}">
+      <div class="wt-handle" style="opacity:.25; cursor:default">⠿</div>
+      <div class="wt-num">${i + 1}</div>
+      <div><input id="e-name" class="inp" placeholder="e.g. Polybag Filling" value="${isNew ? '' : esc(t.name)}"></div>
+      <div><input id="e-days" type="number" min="0" step="0.5" class="inp" placeholder="e.g. 3" value="${!isNew && t.std_days != null ? t.std_days : ''}"></div>
+      <div><input id="e-unit" class="inp" placeholder="days / plot" value="${isNew ? '' : esc(t.unit || '')}"></div>
+      <div class="flex gap-1.5 justify-end">
+        <button class="btn btn-teal btn-mini" data-save>Save</button>
+        <button class="btn btn-ghost btn-mini" data-cancel>Cancel</button>
+      </div>
+      <div class="wt-sub grid grid-cols-[110px_1fr] gap-2.5">
+        <input id="e-crew" type="number" min="0" step="1" class="inp" placeholder="Crew size" value="${!isNew && t.std_crew != null ? t.std_crew : ''}">
+        <input id="e-remark" class="inp" placeholder="Motion study notes — method, tools, pace…" value="${isNew ? '' : esc(t.remark || '')}">
+      </div>
+    </div>`;
+}
+
+function render() {
+  const rows = workTypes.map((t, i) => editingId != null && String(editingId) === String(t.id) ? editRow(t, i) : displayRow(t, i));
+  if (editingId === 'new') rows.push(editRow(null, workTypes.length));
+  $('wt-list').innerHTML = rows.length ? rows.join('')
     : '<div class="text-center text-slate-400 text-sm py-10">No work types yet — add the first one.</div>';
+  const name = document.getElementById('e-name');
+  if (name && editingId === 'new') name.focus();
 }
 
 async function loadData() {
@@ -135,41 +156,30 @@ async function loadData() {
   render();
 }
 
-// ── Add / edit ───────────────────────────────────────────────
-function openModal(row) {
-  $('t-id').value = row ? row.id : '';
-  $('wt-title').textContent = row ? 'Edit Work Type' : 'Add Work Type';
-  $('t-name').value = row ? row.name : '';
-  $('t-days').value = row && row.std_days != null ? row.std_days : '';
-  $('t-crew').value = row && row.std_crew != null ? row.std_crew : '';
-  $('t-remark').value = row ? (row.remark || '') : '';
-  $('wt-back').classList.remove('hidden');
-  $('wt-modal').classList.remove('hidden');
-}
-function closeModals() { ['wt-back','wt-modal'].forEach(id => $(id).classList.add('hidden')); }
-
-async function saveWorkType() {
-  const name = $('t-name').value.trim();
-  if (!name) { showToast('Work name is required.', 'err'); return; }
+// ── Inline save / delete ─────────────────────────────────────
+async function saveEditing() {
+  const name = $('e-name').value.trim();
+  if (!name) { showToast('Job name is required.', 'err'); return; }
   const payload = {
     name,
-    std_days: $('t-days').value === '' ? null : Number($('t-days').value),
-    std_crew: $('t-crew').value === '' ? null : parseInt($('t-crew').value, 10),
-    remark: $('t-remark').value.trim() || null
+    std_days: $('e-days').value === '' ? null : Number($('e-days').value),
+    unit: $('e-unit').value.trim() || null,
+    std_crew: $('e-crew').value === '' ? null : parseInt($('e-crew').value, 10),
+    remark: $('e-remark').value.trim() || null
   };
-  const id = $('t-id').value;
   let error;
-  if (id) ({ error } = await _supabase.from('nops_work_types').update(payload).eq('id', id));
-  else {
+  if (editingId === 'new') {
     payload.sort_order = workTypes.length ? Math.max(...workTypes.map(t => t.sort_order || 0)) + 1 : 1;
     ({ error } = await _supabase.from('nops_work_types').insert([payload]));
+  } else {
+    ({ error } = await _supabase.from('nops_work_types').update(payload).eq('id', editingId));
   }
   if (error) {
     showToast(error.code === '23505' ? 'A work type with this name already exists.' : 'Save failed: ' + error.message, 'err');
     return;
   }
   showToast('Work type saved.');
-  closeModals();
+  editingId = null;
   loadData();
 }
 
@@ -180,44 +190,77 @@ async function deleteWorkType(id) {
   const { error } = await _supabase.from('nops_work_types').delete().eq('id', id);
   if (error) { showToast('Remove failed: ' + error.message, 'err'); return; }
   showToast('Work type removed.');
+  if (String(editingId) === String(id)) editingId = null;
   loadData();
 }
 
-async function moveWorkType(id, delta) {
-  const i = workTypes.findIndex(x => String(x.id) === String(id));
-  const j = i + delta;
-  if (i < 0 || j < 0 || j >= workTypes.length) return;
-  const a = workTypes[i], b = workTypes[j];
-  // Renumber the pair deterministically (handles legacy duplicate sort_orders).
-  const [e1, e2] = await Promise.all([
-    _supabase.from('nops_work_types').update({ sort_order: j + 1 }).eq('id', a.id),
-    _supabase.from('nops_work_types').update({ sort_order: i + 1 }).eq('id', b.id)
-  ]);
-  if ((e1 && e1.error) || (e2 && e2.error)) { showToast('Reorder failed.', 'err'); return; }
-  // Normalise every row to its list position so future moves stay clean.
-  workTypes.splice(i, 1); workTypes.splice(j, 0, a);
-  await Promise.all(workTypes.map((t, idx) =>
-    t.sort_order === idx + 1 ? null : _supabase.from('nops_work_types').update({ sort_order: idx + 1 }).eq('id', t.id)
-  ).filter(Boolean));
-  loadData();
+// ── Drag to reorder ──────────────────────────────────────────
+let drag = null;
+
+function rowAfterPointer(y) {
+  const rows = [...$('wt-list').querySelectorAll('.wt-row:not(.dragging)')];
+  return rows.find(r => { const b = r.getBoundingClientRect(); return y < b.top + b.height / 2; }) || null;
 }
+
+document.addEventListener('pointerdown', e => {
+  const h = e.target.closest('[data-drag]');
+  if (!h || editingId != null) return;
+  const row = h.closest('.wt-row');
+  if (!row) return;
+  drag = { row };
+  row.classList.add('dragging');
+  try { h.setPointerCapture(e.pointerId); } catch (_) {}
+  e.preventDefault();
+});
+
+document.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const after = rowAfterPointer(e.clientY);
+  const list = $('wt-list');
+  if (after) { if (after !== drag.row) list.insertBefore(drag.row, after); }
+  else list.appendChild(drag.row);
+});
+
+async function endDrag() {
+  if (!drag) return;
+  drag.row.classList.remove('dragging');
+  drag = null;
+  const ids = [...$('wt-list').querySelectorAll('.wt-row')].map(r => r.dataset.id);
+  workTypes.sort((a, b) => ids.indexOf(String(a.id)) - ids.indexOf(String(b.id)));
+  render(); // renumber immediately
+  const updates = workTypes
+    .map((t, idx) => t.sort_order === idx + 1 ? null
+      : _supabase.from('nops_work_types').update({ sort_order: idx + 1 }).eq('id', t.id))
+    .filter(Boolean);
+  if (!updates.length) return;
+  const results = await Promise.all(updates);
+  if (results.some(r => r && r.error)) { showToast('Reorder failed — reloading.', 'err'); loadData(); return; }
+  workTypes.forEach((t, idx) => { t.sort_order = idx + 1; });
+  showToast('Order saved.');
+}
+
+document.addEventListener('pointerup', endDrag);
+document.addEventListener('pointercancel', endDrag);
 
 // ── Events ───────────────────────────────────────────────────
 document.addEventListener('click', e => {
-  if (e.target.closest('[data-close]')) { closeModals(); return; }
-  const up = e.target.closest('[data-up]');
-  if (up && !up.disabled) { moveWorkType(up.dataset.up, -1); return; }
-  const dn = e.target.closest('[data-down]');
-  if (dn && !dn.disabled) { moveWorkType(dn.dataset.down, 1); return; }
+  if (e.target.closest('[data-save]')) { saveEditing(); return; }
+  if (e.target.closest('[data-cancel]')) { editingId = null; render(); return; }
   const ed = e.target.closest('[data-edit]');
-  if (ed) { const t = workTypes.find(x => String(x.id) === ed.dataset.edit); if (t) openModal(t); return; }
+  if (ed) { editingId = ed.dataset.edit; render(); return; }
   const dl = e.target.closest('[data-del]');
   if (dl) { deleteWorkType(dl.dataset.del); return; }
 });
-$('add-wt-btn').addEventListener('click', () => openModal(null));
-$('t-save').addEventListener('click', saveWorkType);
-$('wt-back').addEventListener('click', closeModals);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModals(); });
+$('add-wt-btn').addEventListener('click', () => {
+  editingId = 'new';
+  render();
+  const row = $('wt-list').querySelector('.wt-row.editing');
+  if (row) row.scrollIntoView({ block: 'nearest' });
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && editingId != null) { editingId = null; render(); }
+  if (e.key === 'Enter' && editingId != null && e.target.closest('.wt-row.editing')) saveEditing();
+});
 
 // ── Bootstrap ────────────────────────────────────────────────
 (async () => {
