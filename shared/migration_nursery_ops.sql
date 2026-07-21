@@ -37,6 +37,9 @@ CREATE TABLE IF NOT EXISTS nops_work_types (
   created_at  TIMESTAMPTZ DEFAULT now()
 );
 
+-- Unit label for the motion-study value (e.g. 'days / plot', 'polybags / day').
+ALTER TABLE nops_work_types ADD COLUMN IF NOT EXISTS unit TEXT;
+
 ALTER TABLE nops_work_types ENABLE ROW LEVEL SECURITY;
 
 DO $$
