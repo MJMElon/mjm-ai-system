@@ -46,8 +46,8 @@
           <th><span class="rdot r3"><i class="fa-solid fa-user-tie"></i></span><span class="rname">Administrator</span></th>
           <th><span class="rdot r4"><i class="fa-solid fa-user-shield"></i></span><span class="rname">Auditor</span></th>
           <th><span class="rdot r5"><i class="fa-solid fa-star"></i></span><span class="rname">Nursery<br>Manager</span></th>
-          <th class="open-h">Result</th>
           <th class="open-h">Training<br>Slides</th>
+          <th class="open-h">Result</th>
           <th class="open-h">Practical</th>
         </tr>
       </thead>
@@ -59,8 +59,8 @@
           <td><i class="fa-solid fa-check tick"></i></td>
           <td><i class="fa-solid fa-check tick"></i></td>
           <td><i class="fa-solid fa-check tick"></i></td>
-          <td><a class="score-pill" data-prog="operation" href="logbook.html?program=operation" aria-label="Result: Nursery Operation">—</a></td>
           <td><a class="go" href="operation.html" aria-label="Training slides: Nursery Operation"><i class="fa-solid fa-book-open"></i></a></td>
+          <td><a class="score-pill" data-prog="operation" href="logbook.html?program=operation" aria-label="Result: Nursery Operation">—</a></td>
           <td><a class="go alt" href="logbook.html?program=operation" aria-label="Log practical: Nursery Operation"><i class="fa-solid fa-list-check"></i></a></td>
         </tr>
         <tr>
@@ -70,8 +70,8 @@
           <td><span class="no">–</span></td>
           <td><i class="fa-solid fa-check tick"></i></td>
           <td><i class="fa-solid fa-check tick"></i></td>
-          <td><a class="score-pill" data-prog="troubleshoot" href="logbook.html?program=troubleshoot" aria-label="Result: Troubleshoot &amp; Cases">—</a></td>
           <td><a class="go" href="troubleshoot.html" aria-label="Training slides: Troubleshoot &amp; Cases"><i class="fa-solid fa-book-open"></i></a></td>
+          <td><a class="score-pill" data-prog="troubleshoot" href="logbook.html?program=troubleshoot" aria-label="Result: Troubleshoot &amp; Cases">—</a></td>
           <td><a class="go alt" href="logbook.html?program=troubleshoot" aria-label="Log practical: Troubleshoot &amp; Cases"><i class="fa-solid fa-list-check"></i></a></td>
         </tr>
         <tr>
@@ -81,8 +81,8 @@
           <td><i class="fa-solid fa-check tick"></i></td>
           <td><i class="fa-solid fa-check tick"></i></td>
           <td><i class="fa-solid fa-check tick"></i></td>
-          <td><a class="score-pill" data-prog="admin-operation" href="logbook.html?program=admin-operation" aria-label="Result: Admin Operation">—</a></td>
           <td><a class="go" href="admin-operation.html" aria-label="Training slides: Admin Operation"><i class="fa-solid fa-book-open"></i></a></td>
+          <td><a class="score-pill" data-prog="admin-operation" href="logbook.html?program=admin-operation" aria-label="Result: Admin Operation">—</a></td>
           <td><a class="go alt" href="logbook.html?program=admin-operation" aria-label="Log practical: Admin Operation"><i class="fa-solid fa-list-check"></i></a></td>
         </tr>
         <tr>
@@ -92,8 +92,8 @@
           <td><span class="no">–</span></td>
           <td><i class="fa-solid fa-check tick"></i></td>
           <td><i class="fa-solid fa-check tick"></i></td>
-          <td><a class="score-pill" data-prog="copn" href="logbook.html?program=copn" aria-label="Result: COPN">—</a></td>
           <td><a class="go" href="copn.html" aria-label="Training slides: COPN"><i class="fa-solid fa-book-open"></i></a></td>
+          <td><a class="score-pill" data-prog="copn" href="logbook.html?program=copn" aria-label="Result: COPN">—</a></td>
           <td><span class="no">–</span></td>
         </tr>
         <tr>
@@ -103,8 +103,8 @@
           <td><i class="fa-solid fa-check tick"></i></td>
           <td><span class="no">–</span></td>
           <td><i class="fa-solid fa-check tick"></i></td>
-          <td><a class="score-pill" data-prog="sales" href="logbook.html?program=sales" aria-label="Result: Sales">—</a></td>
           <td><a class="go" href="sales.html" aria-label="Training slides: Sales"><i class="fa-solid fa-book-open"></i></a></td>
+          <td><a class="score-pill" data-prog="sales" href="logbook.html?program=sales" aria-label="Result: Sales">—</a></td>
           <td><a class="go alt" href="logbook.html?program=sales" aria-label="Log practical: Sales"><i class="fa-solid fa-list-check"></i></a></td>
         </tr>
         <tr>
@@ -114,8 +114,8 @@
           <td><span class="no">–</span></td>
           <td><span class="no">–</span></td>
           <td><i class="fa-solid fa-check tick"></i></td>
-          <td><a class="score-pill" data-prog="management" href="logbook.html?program=management" aria-label="Result: Team &amp; Resource Management">—</a></td>
           <td><a class="go" href="management.html" aria-label="Training slides: Team &amp; Resource Management"><i class="fa-solid fa-book-open"></i></a></td>
+          <td><a class="score-pill" data-prog="management" href="logbook.html?program=management" aria-label="Result: Team &amp; Resource Management">—</a></td>
           <td><span class="no">–</span></td>
         </tr>
       </tbody>
@@ -127,6 +127,8 @@
   <p><b>MJM Training Center</b> · Nursery Training</p>
 </footer>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
 <script src="assets/app.js"></script>
 <script>
 (function(){
@@ -146,6 +148,23 @@
     pill.title='Slides '+p.slides.got+'/'+p.slides.total+
       (p.practical.length?' · Practical '+p.practicalPct+'%':'');
   });
+
+  // Hide the whole program row when an admin unticked its slides for
+  // this user (set in Training User Access). Cache first, then refresh.
+  function applySlideAccess(){
+    [].forEach.call(document.querySelectorAll('.score-pill'),function(pill){
+      var slug=pill.getAttribute('data-prog');
+      var tr=pill.closest?pill.closest('tr'):null;
+      if(tr) tr.style.display=MJM.allowedSlide(slug)?'':'none';
+    });
+  }
+  try{
+    applySlideAccess();
+    if(window.supabase&&window.SHARED_SUPA_URL){
+      var _sb=supabase.createClient(SHARED_SUPA_URL,SHARED_SUPA_KEY);
+      MJM.refreshTrainingAccess(_sb).then(function(c){ if(c) applySlideAccess(); });
+    }
+  }catch(e){}
 })();
 </script>
 

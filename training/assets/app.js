@@ -37,6 +37,19 @@ window.MJM = (function(){
     'management': {name:'Team & Resource Management', page:'management.html', pages:1, practical:{}}
   };
 
+  /* Role presets — which programs (slides + practical targets) each nursery
+     role must complete. Mirrors the Training Pathways matrix on nursery.html.
+     An admin assigns a user's role in training/user_access.html; the
+     Practical Record then shows only that role's required practicals. */
+  var ROLES = {
+    'afc':     {name:'Assistant Field Conductor', programs:['operation']},
+    'fc':      {name:'Field Conductor',           programs:['operation','troubleshoot']},
+    'admin':   {name:'Administrator',             programs:['operation','admin-operation','sales']},
+    'auditor': {name:'Auditor',                   programs:['operation','troubleshoot','admin-operation','copn']},
+    'sales':   {name:'Sales',                     programs:['sales']},
+    'manager': {name:'Nursery Manager',           programs:['operation','troubleshoot','admin-operation','copn','sales','management']}
+  };
+
   function user(){ try{ return localStorage.getItem('mjm-user'); }catch(e){ return null; } }
   function users(){ try{ return JSON.parse(localStorage.getItem('mjm-users')||'{}'); }catch(e){ return {}; } }
   function userName(){
@@ -93,8 +106,8 @@ window.MJM = (function(){
     chip.innerHTML='<i class="fa-solid fa-circle-user"></i> ';
     chip.appendChild(document.createTextNode(userName()));
     var hub=document.createElement('button');
-    hub.className='logout'; hub.type='button'; hub.title='Back to AI System hub';
-    hub.innerHTML='<i class="fa-solid fa-table-cells-large"></i><span class="lbl"> Hub</span>';
+    hub.className='logout'; hub.type='button'; hub.title='Back to the MJM AI System portal';
+    hub.innerHTML='<i class="fa-solid fa-arrow-left"></i><span class="lbl"> Back to Portal</span>';
     hub.addEventListener('click',function(){ location.href='../index.html'; });
     var out=document.createElement('button');
     out.className='logout'; out.type='button'; out.title='Log out';
@@ -119,10 +132,66 @@ window.MJM = (function(){
   function startPage(){ return get('startpage')||'modules'; }
   function setStartPage(v){ set('startpage', v==='logbook'?'logbook':'modules'); }
 
+  /* ── Per-user training access (set by admins in user_access.html) ──
+     Stored in shared_profiles.permissions.training as
+       { role:'afc'|'fc'|'admin'|'auditor'|'sales'|'manager'|null,
+         slides:{ operation:true, troubleshoot:false, ... } }
+     and cached locally so every page can read it synchronously.
+     No cache / no settings = everything visible (backwards compatible). */
+  function trainingAccess(){ try{ return JSON.parse(get('training-access')||'null'); }catch(e){ return null; } }
+  function roleKey(){
+    var t=trainingAccess();
+    return (t&&t.role&&ROLES[t.role])?t.role:null;
+  }
+  /* A slide/program is visible unless the admin explicitly unticked it. */
+  function allowedSlide(slug){
+    var t=trainingAccess();
+    if(!t||!t.slides||typeof t.slides!=='object') return true;
+    return t.slides[slug]!==false;
+  }
+  /* Union of practical targets across the user's role programs
+     (highest target wins on overlap). null = no role set. */
+  function rolePractical(){
+    var rk=roleKey();
+    if(!rk) return null;
+    var out={};
+    ROLES[rk].programs.forEach(function(s){
+      var pr=(PROGRAMS[s]&&PROGRAMS[s].practical)||{};
+      Object.keys(pr).forEach(function(k){ if(!out[k]||pr[k]>out[k]) out[k]=pr[k]; });
+    });
+    return out;
+  }
+  /* Refresh the cache from shared_profiles. Pass a supabase client. */
+  function refreshTrainingAccess(sb){
+    return sb.auth.getSession().then(function(s){
+      var sess=s&&s.data&&s.data.session;
+      if(!sess) return null;
+      return sb.from('shared_profiles').select('permissions').eq('id',sess.user.id).single().then(function(r){
+        if(r.error||!r.data) return null;
+        var p=r.data.permissions||{};
+        var t=(p.training&&typeof p.training==='object')?p.training:{};
+        var cache={
+          role:(typeof t.role==='string')?t.role:null,
+          slides:(t.slides&&typeof t.slides==='object')?t.slides:null,
+          manage_users:!!p.manage_users
+        };
+        set('training-access',JSON.stringify(cache));
+        return cache;
+      });
+    }).catch(function(){ return null; });
+  }
+  /* Drop-in guard for a slide page: bounce users who may not see it. */
+  function guardSlide(slug){
+    if(!allowedSlide(slug)){ location.replace('nursery.html'); return false; }
+    return true;
+  }
+
   return {
-    ACTIVITIES:ACTIVITIES, PROGRAMS:PROGRAMS,
+    ACTIVITIES:ACTIVITIES, PROGRAMS:PROGRAMS, ROLES:ROLES,
     user:user, userName:userName, requireLogin:requireLogin,
     startPage:startPage, setStartPage:setStartPage,
+    trainingAccess:trainingAccess, roleKey:roleKey, allowedSlide:allowedSlide,
+    rolePractical:rolePractical, refreshTrainingAccess:refreshTrainingAccess, guardSlide:guardSlide,
     get:get, set:set,
     readCount:readCount, pageTotal:pageTotal, log:log, saveLog:saveLog,
     progress:progress, initTopbar:initTopbar

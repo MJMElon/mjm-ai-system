@@ -74,7 +74,30 @@ try{
     <div class="cb-icon"><i class="fa-solid fa-award"></i></div>
     <div class="cb-text">
       <h3>MJM Group Certified Board</h3>
-      <p>See who's certified — and earn your own title, like <b>MJM Certified Oil Palm Nursery Grower</b>, by completing the course slides and practical record.</p>
+      <p>Check your certification progress, see who's certified — and earn your own title, like <b>MJM Certified Oil Palm Nursery Grower</b>, by completing the course slides and practical record.</p>
+    </div>
+    <span class="cb-go"><i class="fa-solid fa-arrow-right"></i></span>
+  </a>
+</div></section>
+
+<section class="slide" id="trainerTools" style="display:none"><div class="wrap">
+  <div class="titlewrap">
+    <div class="kicker">Trainers &amp; Admin</div>
+    <h2 class="slide-title">Trainer Tools</h2>
+  </div>
+  <a class="cert-banner" href="user_access.html">
+    <div class="cb-icon" style="background:linear-gradient(135deg,#3b5f8a,#22405c)"><i class="fa-solid fa-user-gear"></i></div>
+    <div class="cb-text">
+      <h3>Training User Access</h3>
+      <p>Set each trainee's nursery role and choose which training slides they can see.</p>
+    </div>
+    <span class="cb-go"><i class="fa-solid fa-arrow-right"></i></span>
+  </a>
+  <a class="cert-banner" href="review.html" style="margin-top:18px">
+    <div class="cb-icon" style="background:linear-gradient(135deg,#8a5a2b,#5c3d1e)"><i class="fa-solid fa-camera"></i></div>
+    <div class="cb-text">
+      <h3>Practical Proof Review</h3>
+      <p>Review every trainee's proof records — photos, locations and times — before certifying.</p>
     </div>
     <span class="cb-go"><i class="fa-solid fa-arrow-right"></i></span>
   </a>
@@ -84,9 +107,26 @@ try{
   <p><b>MJM Training Center</b></p>
 </footer>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
 <script src="assets/app.js"></script>
 <script>
 MJM.initTopbar();
+(function(){
+  /* Trainer tools show only for Manage Users accounts. Painted from the
+     local cache first, then refreshed from the server in the background
+     (which also updates this user's role / slide-visibility settings). */
+  function paintTools(t){
+    if(t&&t.manage_users) document.getElementById('trainerTools').style.display='';
+  }
+  try{
+    paintTools(MJM.trainingAccess());
+    if(window.supabase&&window.SHARED_SUPA_URL){
+      var _sb=supabase.createClient(SHARED_SUPA_URL,SHARED_SUPA_KEY);
+      MJM.refreshTrainingAccess(_sb).then(paintTools);
+    }
+  }catch(e){}
+})();
 (function(){
   /* "Set as my start page" — this page is 'modules' */
   var btn=document.getElementById('tcStart');

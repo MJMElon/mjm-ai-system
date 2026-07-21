@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Training User Access — MJM Training Center</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_access.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Outfit', system-ui, sans-serif; }
+  body { background:#f1f5f9; margin:0; }
+  .card { background:white; border:1px solid #e2e8f0; border-radius:20px; box-shadow:0 4px 16px rgba(0,0,0,.06); }
+  .fsel { background:white; border:1px solid #e2e8f0; border-radius:12px; padding:10px 14px; font-size:13px; font-weight:700; color:#334155; outline:none; }
+  .fsel:focus { border-color:#10b981; box-shadow:0 0 0 3px rgba(16,185,129,.15); }
+  .u-avatar { width:42px; height:42px; border-radius:50%; background:linear-gradient(135deg,#10b981,#0d9488); color:white; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:13px; flex-shrink:0; }
+  .slide-chk { display:flex; align-items:center; gap:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:8px 12px; font-size:12px; font-weight:700; color:#334155; cursor:pointer; user-select:none; }
+  .slide-chk input { accent-color:#10b981; width:15px; height:15px; }
+  .slide-chk.off { color:#94a3b8; background:#f1f5f9; }
+</style>
+</head>
+<body>
+
+<div class="bg-white border-b border-slate-200 px-6 py-4 grid grid-cols-3 items-center sticky top-0 z-30 shadow-sm">
+  <a href="index.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-emerald-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Training Center</a>
+  <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm">Training User Access</span>
+  <div class="justify-self-end flex items-center gap-2">
+    <div class="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-black text-xs">AI</div>
+  </div>
+</div>
+
+<div id="loading" class="max-w-[900px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading users…</div>
+
+<div id="forbidden" class="max-w-[900px] mx-auto px-6 py-16 hidden">
+  <div class="card p-10 text-center">
+    <div class="text-4xl mb-3">🔒</div>
+    <h2 class="text-lg font-black text-slate-800 uppercase tracking-widest">Access Denied</h2>
+    <p class="text-xs text-slate-500 mt-2">Only users with <strong>Manage Users</strong> permission can change training access.</p>
+    <a href="index.html" class="inline-block mt-6 text-[10px] font-bold text-emerald-700 uppercase tracking-widest bg-emerald-50 border border-emerald-200 rounded-full px-4 py-2 no-underline">Back to Training Center</a>
+  </div>
+</div>
+
+<div id="main" class="max-w-[900px] mx-auto px-6 py-8 space-y-6 hidden">
+
+  <div class="card p-6 space-y-3">
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">🎓</span>
+      <h1 class="text-base font-black text-slate-800 uppercase tracking-widest">Training User Access</h1>
+    </div>
+    <p class="text-[13px] text-slate-600 leading-relaxed">
+      Everyone listed below has the <b>Training Center</b> module opened on the main portal.
+      For each user, set their <b>nursery role</b> — the Practical Record then shows exactly the practicals
+      that role must complete — and untick any <b>training slides</b> they should not see.
+      Changes apply the next time the user opens the Training Center.
+    </p>
+  </div>
+
+  <input id="f-search" class="fsel w-full" placeholder="Search by name or email…">
+
+  <p id="count-line" class="text-[11px] font-bold text-slate-600 text-center">—</p>
+
+  <div id="list" class="space-y-4"></div>
+
+</div>
+
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[11px] font-bold px-5 py-3 rounded-full shadow-lg hidden z-50"></div>
+
+<script src="assets/app.js"></script>
+<script>
+const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+
+const ROLES = MJM.ROLES;           // role key -> {name, programs}
+const PROGRAMS = MJM.PROGRAMS;     // program slug -> {name, ...}
+const SLUGS = Object.keys(PROGRAMS);
+
+let profiles = [];                 // users with the training module open
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function initialsOf(name, email){
+  const src = (name || email || '?').trim();
+  return src.split(/\s+/).map(s=>s[0]).slice(0,2).join('').toUpperCase() || '?';
+}
+function showToast(msg, kind){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.className='fixed bottom-6 left-1/2 -translate-x-1/2 text-white text-[11px] font-bold px-5 py-3 rounded-full shadow-lg z-50 '+(kind==='err'?'bg-rose-600':'bg-slate-900');
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.add('hidden'),2600);
+}
+
+function trainingOf(p){
+  const t=(p.permissions&&p.permissions.training&&typeof p.permissions.training==='object')?p.permissions.training:{};
+  return { role:(typeof t.role==='string'&&ROLES[t.role])?t.role:'',
+           slides:(t.slides&&typeof t.slides==='object')?t.slides:null };
+}
+function slideOn(t, slug){ return !t.slides || t.slides[slug]!==false; }
+
+function rolePracticalPreview(rk){
+  if(!rk||!ROLES[rk]) return 'No role — the Practical Record shows every activity.';
+  const progs=ROLES[rk].programs.map(s=>PROGRAMS[s].name).join(', ');
+  return 'Required programs: '+progs+'. The Practical Record shows only these programs\' practicals.';
+}
+
+function userCard(p){
+  const t=trainingOf(p);
+  const card=document.createElement('div');
+  card.className='card p-5 space-y-4';
+  card.innerHTML=
+    '<div class="flex items-center gap-3">'+
+      '<div class="u-avatar">'+esc(initialsOf(p.full_name,p.email))+'</div>'+
+      '<div class="min-w-0 flex-1">'+
+        '<div class="font-black text-slate-800 text-sm truncate">'+esc(p.full_name||'(no name)')+'</div>'+
+        '<div class="text-[11px] text-slate-500 truncate">'+esc(p.email||'')+'</div>'+
+      '</div>'+
+      '<button data-save class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest px-5 py-2.5 rounded-xl shadow disabled:opacity-50">Save</button>'+
+    '</div>'+
+    '<div>'+
+      '<div class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Nursery role — decides the practicals</div>'+
+      '<select data-role class="fsel w-full"></select>'+
+      '<p data-role-hint class="text-[11px] text-slate-500 mt-1.5"></p>'+
+    '</div>'+
+    '<div>'+
+      '<div class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Training slides this user can see</div>'+
+      '<div data-slides class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>'+
+    '</div>';
+
+  const sel=card.querySelector('[data-role]');
+  sel.innerHTML='<option value="">— No role (show all practicals) —</option>'+
+    Object.keys(ROLES).map(k=>'<option value="'+k+'">'+esc(ROLES[k].name)+'</option>').join('');
+  sel.value=t.role;
+  const hint=card.querySelector('[data-role-hint]');
+  function paintHint(){ hint.textContent=rolePracticalPreview(sel.value); }
+  sel.addEventListener('change',paintHint); paintHint();
+
+  const box=card.querySelector('[data-slides]');
+  SLUGS.forEach(slug=>{
+    const lab=document.createElement('label');
+    lab.className='slide-chk'+(slideOn(t,slug)?'':' off');
+    lab.innerHTML='<input type="checkbox" data-slug="'+slug+'"'+(slideOn(t,slug)?' checked':'')+'> '+esc(PROGRAMS[slug].name);
+    lab.querySelector('input').addEventListener('change',function(){ lab.classList.toggle('off',!this.checked); });
+    box.appendChild(lab);
+  });
+
+  card.querySelector('[data-save]').addEventListener('click',async function(){
+    const btn=this;
+    btn.disabled=true; btn.textContent='Saving…';
+    const slides={};
+    box.querySelectorAll('input[data-slug]').forEach(i=>{ slides[i.getAttribute('data-slug')]=i.checked; });
+    // Merge into the user's existing permissions — touch ONLY the training key.
+    const perms=(p.permissions&&typeof p.permissions==='object')?p.permissions:{};
+    perms.training={ role:sel.value||null, slides:slides };
+    const { error }=await _supabase.from('shared_profiles').update({ permissions:perms }).eq('id',p.id);
+    btn.disabled=false; btn.textContent='Save';
+    if(error){ showToast('Save failed: '+error.message,'err'); return; }
+    p.permissions=perms;
+    showToast('Saved — applies on '+(p.full_name||p.email||'the user')+'\'s next visit.');
+  });
+
+  return card;
+}
+
+function render(){
+  const q=(document.getElementById('f-search').value||'').toLowerCase();
+  const list=document.getElementById('list');
+  list.innerHTML='';
+  const shown=profiles.filter(p=>!q||String(p.full_name||'').toLowerCase().includes(q)||String(p.email||'').toLowerCase().includes(q));
+  shown.forEach(p=>list.appendChild(userCard(p)));
+  document.getElementById('count-line').textContent=
+    shown.length+' of '+profiles.length+' user'+(profiles.length===1?'':'s')+' with the Training module open';
+  if(!shown.length){
+    list.innerHTML='<div class="card p-8 text-center text-xs font-bold text-slate-400 uppercase tracking-widest">No matching users</div>';
+  }
+}
+
+async function bootstrap(){
+  try {
+    await MJMAccess.load(_supabase);
+  } catch(e) { /* redirect already handled by the helper */ }
+  if (!MJMAccess.user()) { window.location.href = '../index.html'; return; }
+  if (!MJMAccess.canManageUsers()) {
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('forbidden').classList.remove('hidden');
+    return;
+  }
+  const { data, error } = await _supabase
+    .from('shared_profiles')
+    .select('id, email, full_name, permissions')
+    .order('full_name', { ascending: true });
+  document.getElementById('loading').classList.add('hidden');
+  if (error) { showToast('Load failed: '+error.message,'err'); return; }
+  profiles=(data||[]).filter(p=>{
+    const m=p.permissions&&p.permissions.modules;
+    return m&&m.training&&m.training!=='none';
+  });
+  document.getElementById('main').classList.remove('hidden');
+  document.getElementById('f-search').addEventListener('input',render);
+  render();
+}
+bootstrap();
+</script>
+
+</body>
+</html>

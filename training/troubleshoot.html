@@ -10,6 +10,15 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <link rel="stylesheet" href="assets/style.css">
 <script src="assets/auth.js"></script>
+<script>
+/* Slide access guard — if an admin unticked these slides for this user in
+   Training User Access, bounce back to the pathway page. */
+try{
+  var _tgu=localStorage.getItem('mjm-user');
+  var _tga=JSON.parse(localStorage.getItem('mjm-u-'+_tgu+'-training-access')||'null');
+  if(_tga&&_tga.slides&&_tga.slides['troubleshoot']===false) location.replace('nursery.html');
+}catch(e){}
+</script>
 </head>
 <body>
 
