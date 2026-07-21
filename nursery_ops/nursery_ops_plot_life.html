@@ -64,6 +64,19 @@
   .map-zoom-btn { width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:none; background:white; color:#475569; font-weight:900; font-size:14px; cursor:pointer; border-radius:6px; transition:all .15s; }
   .map-zoom-btn:hover { background:#ccfbf1; color:#0f766e; }
   .map-zoom-level { font-size:9px; font-weight:900; color:#64748b; text-align:center; padding:2px 0; border-top:1px solid #e2e8f0; border-bottom:1px solid #e2e8f0; }
+
+  /* Plot status decision table (follows the map's nursery tab) */
+  .ps-table { width:100%; border-collapse:separate; border-spacing:0; font-size:13.5px; }
+  .ps-table th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:#94a3b8; font-weight:900; padding:9px 14px; border-bottom:1.5px solid #e2e8f0; white-space:nowrap; }
+  .ps-table td { padding:11px 14px; border-bottom:1px solid #f1f5f9; font-weight:600; color:#334155; }
+  .ps-table tbody tr:last-child td { border-bottom:none; }
+  .ps-table tbody tr:hover { background:#f8fafc; }
+  .ps-table tbody tr.over { background:#fff1f2; }
+  .ps-table tbody tr.over:hover { background:#ffe4e6; }
+  .plot-link { font-weight:900; color:#0d9488; cursor:pointer; background:none; border:none; padding:0; font-size:13.5px; text-decoration:underline; text-underline-offset:3px; font-family:inherit; }
+  .plot-link:hover { color:#0f766e; }
+  .ps-hist-row { display:flex; align-items:baseline; gap:10px; padding:8px 4px; border-bottom:1px solid #f1f5f9; }
+  .ps-hist-row:last-child { border-bottom:none; }
 </style>
 </head>
 <body>
@@ -111,6 +124,13 @@
       <span class="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600"><span class="w-3.5 h-3.5 rounded border-2 inline-block" style="background:rgba(244,114,128,.45); border-color:#ef4444"></span> Over ideal days</span>
       <span class="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600"><span class="w-3.5 h-3.5 rounded border-2 inline-block" style="background:rgba(148,163,184,.25); border-color:#94a3b8"></span> No status reported</span>
       <span class="text-[11px] text-slate-400">Click a plot on the map to open its life record.</span>
+    </div>
+
+    <!-- ── Plot status decision table (follows the nursery tab) ── -->
+    <div class="px-4 md:px-5 py-4 border-t border-slate-100">
+      <h3 class="font-black text-slate-700 uppercase tracking-widest text-[12px] mb-3">📋 Plot Status Table — <span id="st-tab-name">—</span></h3>
+      <div class="overflow-x-auto"><div id="status-table" class="min-w-[640px]"></div></div>
+      <p class="text-[11px] text-slate-400 mt-2.5">Click a plot name to see its current status and full daily history.</p>
     </div>
   </div>
 
@@ -216,6 +236,28 @@
 
     <div id="stages-list" class="space-y-2"></div>
     <p class="text-[11px] text-slate-400">Deleting a stage keeps its name on past daily entries — only the reusable stage is removed.</p>
+  </div>
+</div>
+
+<!-- ── Plot status pop-out (current + daily history) ──────────── -->
+<div id="ps-back" class="modal-back hidden"></div>
+<div id="ps-modal" class="modal hidden" style="max-width:640px">
+  <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+    <h3 id="ps-title" class="font-black text-slate-800 uppercase tracking-widest text-sm">Plot Status</h3>
+    <button data-close class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 text-xl leading-none">×</button>
+  </div>
+  <div class="p-6 space-y-5">
+    <div>
+      <div class="lbl">Current Status</div>
+      <div id="ps-current" class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-[13px] font-semibold text-slate-600">—</div>
+    </div>
+    <div>
+      <div class="lbl">Daily Status History (from the FC Portal)</div>
+      <div id="ps-history" class="border border-slate-200 rounded-xl px-4 py-2 max-h-[42vh] overflow-y-auto"></div>
+    </div>
+    <div class="flex justify-end">
+      <button id="ps-open-life" class="btn btn-teal">Open Full Life Record ↓</button>
+    </div>
   </div>
 </div>
 
@@ -463,7 +505,7 @@ function openLogModal() {
   $('log-back').classList.remove('hidden');
   $('log-modal').classList.remove('hidden');
 }
-function closeModals() { ['log-back','log-modal','stages-back','stages-modal'].forEach(id => $(id).classList.add('hidden')); }
+function closeModals() { ['log-back','log-modal','stages-back','stages-modal','ps-back','ps-modal'].forEach(id => $(id).classList.add('hidden')); }
 
 // ── Plot Status Map ──────────────────────────────────────────
 // Same map as Seedling Stock Management → Stock Management → Inventory
@@ -481,7 +523,8 @@ function computeCurrentStatus(entries) { // entries sorted newest first
   const days = Math.max(1, Math.round((t0 - new Date(since + 'T00:00:00')) / 86400000) + 1);
   const stage = statusStages.find(s => s.id === cur.stage_id) || statusStages.find(s => s.name === cur.stage_name);
   const ideal = stage && stage.ideal_days != null ? Number(stage.ideal_days) : null;
-  return { stage_name: cur.stage_name, since, days, ideal, over: ideal != null && days > ideal };
+  return { stage_name: cur.stage_name, since, days, ideal, over: ideal != null && days > ideal,
+           last: cur.entry_date, reported_by: cur.reported_by || null };
 }
 
 async function loadAllStatuses() {
@@ -489,7 +532,7 @@ async function loadAllStatuses() {
   try {
     const { data, error } = await _supabase
       .from('nops_plot_status_entries')
-      .select('plot_name, entry_date, stage_id, stage_name')
+      .select('plot_name, entry_date, stage_id, stage_name, reported_by')
       .order('entry_date', { ascending: false })
       .limit(5000);
     if (error || !data) return;
@@ -515,6 +558,7 @@ function switchMapNursery(name) {
   mapActive = name;
   mapZoom = { zoom: 1, panX: 0, panY: 0 };
   renderMapTabs();
+  renderStatusTable();
   const n = mapNurseries.find(x => x.name === name);
   const hasMap = !!(n && n.map_image_url);
   $('map-viewport').style.display = hasMap ? '' : 'none';
@@ -523,6 +567,87 @@ function switchMapNursery(name) {
   $('map-image').src = n.map_image_url;
   renderMapPlots();
   applyMapTransform();
+}
+
+// ── Plot status decision table (per nursery tab) ─────────────
+function renderStatusTable() {
+  $('st-tab-name').textContent = mapActive || '—';
+  const wrap = $('status-table');
+  const list = plots.filter(p => p.nursery_name === mapActive);
+  if (!list.length) {
+    wrap.innerHTML = '<div class="text-center text-slate-400 text-sm py-6">No plots registered for this nursery.</div>';
+    return;
+  }
+  wrap.innerHTML = `
+    <table class="ps-table">
+      <thead><tr>
+        <th>Plot</th><th>Current Status</th><th>Ideal Time</th><th>Actual Time Spent</th><th>Last Report</th>
+      </tr></thead>
+      <tbody>${list.map(p => {
+        const st = statusByPlot.get(p.plot_name);
+        if (!st) return `
+          <tr>
+            <td><button class="plot-link" data-plot-pop="${esc(p.plot_name)}">${esc(p.plot_name)}</button></td>
+            <td class="text-slate-400">— no status reported —</td>
+            <td class="text-slate-400">—</td><td class="text-slate-400">—</td><td class="text-slate-400">—</td>
+          </tr>`;
+        const idealTxt = st.ideal != null ? `${st.ideal} day${Number(st.ideal) === 1 ? '' : 's'}` : '—';
+        const actualTxt = `${st.days} day${st.days === 1 ? '' : 's'}` +
+          (st.over ? ` <span class="text-rose-600 font-black">· over by ${st.days - st.ideal}</span>` : '');
+        return `
+          <tr class="${st.over ? 'over' : ''}">
+            <td><button class="plot-link" data-plot-pop="${esc(p.plot_name)}">${esc(p.plot_name)}</button></td>
+            <td><span class="chip ${st.over ? 'chip-over' : 'chip-done'}">${esc(st.stage_name)}</span></td>
+            <td>${idealTxt}</td>
+            <td class="${st.over ? 'text-rose-600 font-black' : ''}">${actualTxt}</td>
+            <td class="text-slate-500">${fmtDate(st.last)}${st.reported_by ? ' · ' + esc(st.reported_by) : ''}</td>
+          </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+}
+
+// ── Plot status pop-out (current + daily history) ────────────
+let popupPlot = null;
+async function openPlotPopup(plotName) {
+  popupPlot = plotName;
+  const p = plots.find(x => x.plot_name === plotName) || { plot_name: plotName };
+  $('ps-title').textContent = `📍 ${p.plot_name}` + (p.nursery_name ? ` — ${p.nursery_name}` : '');
+  const st = statusByPlot.get(plotName);
+  $('ps-current').innerHTML = st ? `
+    <span class="chip ${st.over ? 'chip-over' : 'chip-done'}">🚦 ${esc(st.stage_name)}</span>
+    <span class="ml-1 ${st.over ? 'text-rose-600 font-black' : ''}">
+      day ${st.days}${st.ideal != null ? ' of ideal ' + st.ideal : ''}${st.over ? ' · over by ' + (st.days - st.ideal) + ' day' + (st.days - st.ideal === 1 ? '' : 's') : ''}
+    </span>
+    <span class="block text-[12px] text-slate-500 mt-1.5">in this stage since ${fmtDate(st.since)} · last report ${fmtDate(st.last)}${st.reported_by ? ' by ' + esc(st.reported_by) : ''}</span>`
+    : '<span class="text-slate-400">No status reported for this plot yet.</span>';
+  $('ps-history').innerHTML = '<div class="text-slate-400 text-sm py-3 animate-pulse">Loading history…</div>';
+  $('ps-back').classList.remove('hidden');
+  $('ps-modal').classList.remove('hidden');
+  try {
+    const { data, error } = await _supabase
+      .from('nops_plot_status_entries')
+      .select('entry_date, stage_name, reported_by, remark')
+      .eq('plot_name', plotName)
+      .order('entry_date', { ascending: false })
+      .limit(180);
+    if (error) throw error;
+    if (!data || !data.length) {
+      $('ps-history').innerHTML = '<div class="text-slate-400 text-sm py-3">No daily entries yet.</div>';
+      return;
+    }
+    $('ps-history').innerHTML = data.map((e, i) => {
+      // Bold the day the plot MOVED into this stage (stage differs from the older entry).
+      const changed = i === data.length - 1 || data[i + 1].stage_name !== e.stage_name;
+      return `
+        <div class="ps-hist-row">
+          <span class="text-[12px] font-bold text-slate-500 shrink-0 w-[92px]">${fmtDate(e.entry_date)}</span>
+          <span class="text-[13px] ${changed ? 'font-black text-teal-700' : 'font-semibold text-slate-700'}">${changed ? '➜ ' : ''}${esc(e.stage_name)}</span>
+          <span class="text-[11px] text-slate-400 ml-auto text-right">${e.reported_by ? esc(e.reported_by) : ''}${e.remark ? ` · ${esc(e.remark)}` : ''}</span>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    $('ps-history').innerHTML = '<div class="text-slate-400 text-sm py-3">History not available.</div>';
+  }
 }
 
 function renderMapPlots() {
@@ -770,6 +895,8 @@ document.addEventListener('click', e => {
   if (pi) { selectPlot(pi.dataset.plot); return; }
   const mt = e.target.closest('[data-map-tab]');
   if (mt) { switchMapNursery(mt.dataset.mapTab); return; }
+  const pp = e.target.closest('[data-plot-pop]');
+  if (pp) { openPlotPopup(pp.dataset.plotPop); return; }
   const mp = e.target.closest('[data-map-plot]');
   if (mp) {
     if (mapDragDist > 6) { mapDragDist = 0; return; } // that was a pan, not a click
@@ -814,6 +941,13 @@ $('nursery-filter').addEventListener('change', renderPlotList);
 $('plot-search').addEventListener('input', renderPlotList);
 $('log-back').addEventListener('click', closeModals);
 $('stages-back').addEventListener('click', closeModals);
+$('ps-back').addEventListener('click', closeModals);
+$('ps-open-life').addEventListener('click', () => {
+  if (!popupPlot) return;
+  closeModals();
+  selectPlot(popupPlot).then(() =>
+    $('plot-view').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+});
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModals(); });
 
 // ── Bootstrap ────────────────────────────────────────────────
