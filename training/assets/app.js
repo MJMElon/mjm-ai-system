@@ -114,9 +114,15 @@ window.MJM = (function(){
     bar.appendChild(box);
   }
 
+  /* Per-user start page inside the Training Center:
+     'modules' (index) or 'logbook' (photo practical record). */
+  function startPage(){ return get('startpage')||'modules'; }
+  function setStartPage(v){ set('startpage', v==='logbook'?'logbook':'modules'); }
+
   return {
     ACTIVITIES:ACTIVITIES, PROGRAMS:PROGRAMS,
     user:user, userName:userName, requireLogin:requireLogin,
+    startPage:startPage, setStartPage:setStartPage,
     get:get, set:set,
     readCount:readCount, pageTotal:pageTotal, log:log, saveLog:saveLog,
     progress:progress, initTopbar:initTopbar

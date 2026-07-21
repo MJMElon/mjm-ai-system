@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <link rel="stylesheet" href="assets/style.css">
 <script src="assets/auth.js"></script>
+<script>try{sessionStorage.setItem('mjm-tc-entered','1');}catch(e){}</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
 <style>
@@ -56,6 +57,13 @@
     <a class="homelink" href="nursery.html"><i class="fa-solid fa-arrow-left"></i> Training Pathways</a>
   </div>
 </nav>
+
+<div class="tc-tabs">
+  <a class="tc-tab" href="index.html"><i class="fa-solid fa-table-cells-large"></i> Modules</a>
+  <span class="tc-tab active"><i class="fa-solid fa-camera"></i> Practical Record</span>
+  <span class="tc-swipe-hint"><i class="fa-solid fa-left-right"></i> swipe</span>
+  <button type="button" class="tc-start" id="tcStart"></button>
+</div>
 
 <header class="hero">
   <span class="blob b1"></span><span class="blob b2"></span>
@@ -109,6 +117,37 @@
 (function(){
   if(!MJM.user()) return;
   MJM.initTopbar();
+
+  /* "Set as my start page" — this page is 'logbook' */
+  (function(){
+    var btn=document.getElementById('tcStart');
+    if(!btn) return;
+    function paint(){
+      var on=MJM.startPage()==='logbook';
+      btn.className='tc-start'+(on?' on':'');
+      btn.innerHTML=on
+        ? '<i class="fa-solid fa-circle-check"></i> Your start page'
+        : '<i class="fa-regular fa-star"></i> Set as my start page';
+    }
+    btn.addEventListener('click',function(){ MJM.setStartPage('logbook'); paint(); });
+    paint();
+  })();
+
+  /* Swipe right (finger moves right) → back to the Modules page.
+     Ignored while the photo-proof modal is open. */
+  (function(){
+    var sx=null,sy=null;
+    document.addEventListener('touchstart',function(e){
+      var t=e.touches[0]; sx=t.clientX; sy=t.clientY;
+    },{passive:true});
+    document.addEventListener('touchend',function(e){
+      if(sx==null) return;
+      var t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy;
+      sx=null;
+      var modalOpen=document.querySelector('.proof-overlay.open');
+      if(!modalOpen&&dx>70&&Math.abs(dy)<60) location.href='index.html';
+    },{passive:true});
+  })();
 
   var root=document.getElementById('logGroups'),
       status=document.getElementById('progStatus');

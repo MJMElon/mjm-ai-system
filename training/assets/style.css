@@ -576,3 +576,14 @@
     .cert-panel{margin-top:0}
     .certificate{box-shadow:none;page-break-inside:avoid}
   }
+
+/* ── Training top tabs (Modules ⟷ Practical Record) + start-page pick ── */
+.tc-tabs{max-width:var(--maxw);margin:16px auto 0;padding:0 20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.tc-tab{flex:0 0 auto;padding:10px 18px;border-radius:999px;border:1.5px solid #dde5da;background:#fff;color:#4b5e4b;font-weight:800;font-size:.8rem;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:8px;text-decoration:none}
+.tc-tab:hover{border-color:#b9ccb9}
+.tc-tab.active{background:var(--green);border-color:var(--green);color:#fff;box-shadow:0 6px 16px rgba(47,125,50,.3)}
+.tc-swipe-hint{font-size:.68rem;color:#8ba18b;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.tc-start{margin-left:auto;font-size:.72rem;font-weight:800;color:#7d8d7d;background:#fff;border:1.5px dashed #cdd9cd;border-radius:999px;padding:8px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .15s}
+.tc-start:hover{border-color:#9fbf9f;color:#4b5e4b}
+.tc-start.on{border-style:solid;color:var(--green);border-color:var(--green);background:#eef6ec;cursor:default}
+@media print{.tc-tabs{display:none!important}}

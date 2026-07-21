@@ -10,6 +10,18 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <link rel="stylesheet" href="assets/style.css">
 <script src="assets/auth.js"></script>
+<script>
+/* Start-page preference: first entry into the Training Center this session
+   jumps to the user's chosen page. Deliberate navigation back here later in
+   the session stays put (the flag marks "already inside"). */
+try{
+  if(!sessionStorage.getItem('mjm-tc-entered')){
+    sessionStorage.setItem('mjm-tc-entered','1');
+    var _tcu=localStorage.getItem('mjm-user');
+    if(_tcu&&localStorage.getItem('mjm-u-'+_tcu+'-startpage')==='logbook') location.replace('logbook.html');
+  }
+}catch(e){}
+</script>
 </head>
 <body>
 
@@ -21,6 +33,13 @@
     </a>
   </div>
 </nav>
+
+<div class="tc-tabs">
+  <span class="tc-tab active"><i class="fa-solid fa-table-cells-large"></i> Modules</span>
+  <a class="tc-tab" href="logbook.html"><i class="fa-solid fa-camera"></i> Practical Record</a>
+  <span class="tc-swipe-hint"><i class="fa-solid fa-left-right"></i> swipe</span>
+  <button type="button" class="tc-start" id="tcStart"></button>
+</div>
 
 <section class="slide" id="modules"><div class="wrap">
   <div class="titlewrap">
@@ -82,7 +101,34 @@
 </footer>
 
 <script src="assets/app.js"></script>
-<script>MJM.initTopbar();</script>
+<script>
+MJM.initTopbar();
+(function(){
+  /* "Set as my start page" — this page is 'modules' */
+  var btn=document.getElementById('tcStart');
+  function paint(){
+    var on=MJM.startPage()==='modules';
+    btn.className='tc-start'+(on?' on':'');
+    btn.innerHTML=on
+      ? '<i class="fa-solid fa-circle-check"></i> Your start page'
+      : '<i class="fa-regular fa-star"></i> Set as my start page';
+  }
+  btn.addEventListener('click',function(){ MJM.setStartPage('modules'); paint(); });
+  paint();
+
+  /* Swipe left (finger moves left) → the Practical Record page */
+  var sx=null,sy=null;
+  document.addEventListener('touchstart',function(e){
+    var t=e.touches[0]; sx=t.clientX; sy=t.clientY;
+  },{passive:true});
+  document.addEventListener('touchend',function(e){
+    if(sx==null) return;
+    var t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy;
+    sx=null;
+    if(dx<-70&&Math.abs(dy)<60) location.href='logbook.html';
+  },{passive:true});
+})();
+</script>
 
 </body>
 </html>
