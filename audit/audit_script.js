@@ -330,6 +330,31 @@ async function doDelete(){
   }catch(e){showToast(t('err_delete'));console.error(e);setLoading(false);}
 }
 
+/* --- NURSERY ACCESS FILTER --- */
+// Fetch the logged-in user's plot_status_nurseries from shared_profiles and
+// hide any tabs that are not in their allowed list. Fails open — if the fetch
+// errors or the field is absent the user sees all tabs.
+async function applyNurseryFilter() {
+  try {
+    const user = JSON.parse(localStorage.getItem('mjm_user') || '{}');
+    if (!user.id) return;
+    const rows = await sbFetch(`shared_profiles?select=permissions&id=eq.${encodeURIComponent(user.id)}`);
+    const perms = (rows && rows[0] && rows[0].permissions) || {};
+    const allowed = Array.isArray(perms.plot_status_nurseries) ? perms.plot_status_nurseries : null;
+    if (allowed === null) return; // null = all nurseries allowed
+    const allKeys = Object.keys(NURSERY_PLOTS);
+    allKeys.forEach(n => {
+      const btn = document.querySelector(`.tab-item[data-n="${n}"]`);
+      if (btn) btn.style.display = allowed.includes(n) ? '' : 'none';
+    });
+    // If the current active tab is not allowed, switch to first allowed tab.
+    if (!allowed.includes(activeTab)) {
+      const first = allKeys.find(n => allowed.includes(n));
+      if (first) selectTab(first);
+    }
+  } catch(e) { /* fail open — user sees all tabs */ }
+}
+
 /* --- INIT --- */
 function init(){
   const d=document.getElementById('nav-today');if(d)d.textContent=fmtDate(todayISO());
@@ -341,6 +366,7 @@ function init(){
     if(e.target===document.getElementById('lightbox'))closeLightbox();
   });
   selectTab('PN');
+  applyNurseryFilter();
   loadRecords();
 }
 document.addEventListener('DOMContentLoaded',init);

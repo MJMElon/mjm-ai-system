@@ -210,7 +210,28 @@
             alert(`Opening details for Plot: ${plotName}\n\nLive Inventory Stock connections coming up next!`);
         }
 
-        _supabase.auth.getSession().then(({ data: { session } }) => { if (!session) window.location.href = 'operation_dashboard.html'; else init(); });
+        _supabase.auth.getSession().then(async ({ data: { session } }) => {
+            if (!session) { window.location.href = 'operation_dashboard.html'; return; }
+            await init();
+            // Filter nursery tabs by plot_status_nurseries from the user's shared_profiles.
+            // Fails open — if the field is absent the user sees all tabs.
+            try {
+                const { data: profData } = await _supabase
+                    .from('shared_profiles')
+                    .select('permissions')
+                    .eq('id', session.user.id)
+                    .maybeSingle();
+                const perms = (profData && profData.permissions) || {};
+                const allowed = Array.isArray(perms.plot_status_nurseries) ? perms.plot_status_nurseries : null;
+                if (allowed !== null) {
+                    globalNurseries = globalNurseries.filter(n => allowed.includes(n.name));
+                    renderTabs();
+                    if (globalNurseries.length > 0 && !globalNurseries.find(n => n.name === activeNurseryName)) {
+                        switchNursery(globalNurseries[0].name);
+                    }
+                }
+            } catch(e) { /* fail open */ }
+        });
     </script>
 </body>
 </html>
