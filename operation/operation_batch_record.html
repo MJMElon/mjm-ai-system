@@ -289,13 +289,16 @@
                         .add(p); // per PLOT — Tab 6 merges same-plot rows and saves one record per plot
                 });
 
-                // Actual coverage from 3rd_Culling rows. DestType-stamped rows
-                // match exactly; legacy rows (no DestType in remark) each
-                // cover one expected slot for their plot.
-                const cull3Keyed  = {}; // batch → Set("PLOT|dest")
+                // Actual coverage from 3rd_Culling rows. A row only COUNTS as
+                // covering its plot when its drone map is uploaded (DocUrl)
+                // AND the drone map qty was keyed in (MapQty) — a record
+                // without both keeps the batch in the Active list.
+                const cull3Keyed  = {}; // batch → Set(PLOT)
                 const cull3Legacy = {}; // batch → Map(PLOT → row count)
                 (cull3Res.data || []).forEach(r => {
                     if (!r.batch_name) return;
+                    const hasProof = !!(r.remark && /DocUrl:\S+/.test(r.remark) && /MapQty:\s*\d+/.test(r.remark));
+                    if (!hasProof) return;
                     const p = _normPlot(r.plot_name);
                     const m = r.remark ? r.remark.match(/DestType:\s*(main|premium|doubletone)/) : null;
                     if (m) {
@@ -306,9 +309,14 @@
                     }
                 });
 
+                // Any outstanding plot transfer keeps the batch Active — the
+                // transferred plot's culling is still pending by definition.
+                const batchesWithTransfers = new Set((transferRes.data || []).map(r => r.batch_name));
+
                 const completedBatchNames = new Set();
                 Object.keys(expectedPlots).forEach(batch => {
-                    // Every plot+destination must be covered — no exceptions.
+                    if (batchesWithTransfers.has(batch)) return; // transfer → stays Active
+                    // Every plot must be covered by a proofed record — no exceptions.
                     const need = expectedPlots[batch];
                     if (!need || !need.size) return;
                     const keyed  = cull3Keyed[batch] || new Set();
