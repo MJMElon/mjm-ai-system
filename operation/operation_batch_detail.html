@@ -185,6 +185,14 @@
         .mjm-row-chip-ok  { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
         .mjm-row-chip-rej { background:#fff5f5; color:#991b1b; border:1px solid #fca5a5; }
         .mjm-row-rej-remark { flex:1 1 100%; font-size:11px; font-weight:600; color:#7f1d1d; background:white; border:1px solid #fca5a5; border-radius:8px; padding:6px 10px; white-space:pre-wrap; }
+        /* Tidy report grids (transplant/cull tables): cells centered both ways,
+           header text wraps instead of overflowing. */
+        .t-tidy { align-items: center !important; }
+        .t-tidy > div, .t-tidy > span { text-align: center; min-width: 0; }
+        .t-tidy > span { white-space: normal; overflow-wrap: break-word; }
+        .t-tidy > div.flex { align-items: center; }
+        .t-tidy input.input-style, .t-tidy select.input-style { text-align: center; }
+        .t-tidy div.input-style { justify-content: center; text-align: center; }
         .mjm-review-meta    { font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.12em; opacity:.85; }
         .mjm-review-btn     { font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.15em; padding:8px 16px; border-radius:999px; cursor:pointer; border:none; transition:all .15s; }
         .mjm-review-btn-mark   { background:#10b981; color:white; box-shadow:0 6px 14px -4px rgba(16,185,129,.4); }
@@ -1083,7 +1091,7 @@
 
                                     <!-- Saved records table -->
                                     <div id="t3-saved-rows-table" class="hidden mb-4">
-                                        <div class="hidden md:grid grid-cols-[2fr_1.2fr_1.5fr_0.8fr_0.6fr_80px] gap-2 px-3 pb-1 text-[8px] font-black text-[#8a7a68] uppercase tracking-widest border-b border-[#e8dcc8] mb-1">
+                                        <div class="hidden md:grid grid-cols-[2fr_1.2fr_1.5fr_0.8fr_0.6fr_80px] gap-2 px-3 pb-1 text-[8px] font-black text-[#8a7a68] uppercase tracking-widest border-b border-[#e8dcc8] mb-1 t-tidy">
                                             <span class="text-[#3a7ab4]">Plot / Destination</span>
                                             <span>Date</span>
                                             <span class="text-[#c07820]">Source Tray</span>
@@ -1211,7 +1219,7 @@
                                     </div>
 
                                     <!-- Column headers -->
-                                    <div class="hidden md:grid grid-cols-[1fr_1fr_1fr_1fr_1fr] gap-3 px-6 pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">
+                                    <div class="hidden md:grid grid-cols-[1fr_1fr_1fr_1fr_1fr] gap-3 px-6 pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy">
                                         <span>Cull Date</span>
                                         <span>Tray No.</span>
                                         <span>Tray Planted Qty</span>
@@ -1306,7 +1314,7 @@
                                 </div>
 
                                 <!-- Column headers: Date → Plot → Transplanted → Dead → Alive (auto) → Cull% → Map -->
-                                <div class="hidden lg:grid gap-2 px-6 pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest" style="grid-template-columns: 1fr 1.1fr 0.8fr 0.8fr 0.8fr 0.8fr 1.4fr;">
+                                <div class="hidden lg:grid gap-2 px-6 pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 1fr 1.1fr 0.8fr 0.8fr 0.8fr 0.8fr 1.4fr;">
                                     <span class="text-[#c07820]">Date</span>
                                     <span>Main Plot</span>
                                     <span>Transplanted</span>
@@ -1419,7 +1427,7 @@
                                 </div>
 
                                 <!-- Column headers: Plot → Transplanted → 2nd Culled → Sales → Balance → 3rd Culled Qty → 3rd Culled % → Transfer → Drone Map -->
-                                <div class="hidden lg:grid gap-3 px-6 pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest" style="grid-template-columns: 1.1fr 0.65fr 0.65fr 0.65fr 0.85fr 0.75fr 0.55fr 1.15fr 1.35fr;">
+                                <div class="hidden lg:grid gap-3 px-6 pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 1.1fr 0.65fr 0.65fr 0.65fr 0.85fr 0.75fr 0.55fr 1.15fr 1.35fr;">
                                     <span>Main Plot</span>
                                     <span>Transplanted</span>
                                     <span class="text-[#a83020]">2nd Culled</span>
@@ -2491,7 +2499,7 @@
                             tableList.insertAdjacentHTML('beforeend', `
                                 <div class="t3-saved-row" data-review-key="${reviewKey}">
                                     <!-- Compact row -->
-                                    <div id="t3-row-view-${idx}" class="grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_80px] gap-2 items-center px-3 py-2 rounded-lg bg-[#fdfaf4] border border-[#e8dcc8] hover:bg-white transition-colors">
+                                    <div id="t3-row-view-${idx}" class="grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_80px] gap-2 items-center px-3 py-2 rounded-lg bg-[#fdfaf4] border border-[#e8dcc8] hover:bg-white transition-colors t-tidy">
                                         <div class="font-black text-[11px] ${color}">${icon} ${log.plot_name}</div>
                                         <div class="text-[10px] font-bold text-[#3d2610]">${dateStr}</div>
                                         <div class="text-[10px] font-bold text-[#c07820] truncate">${trayStr}</div>
@@ -5811,7 +5819,7 @@ Thank you.`;
             const trayColor = isPremium ? 'text-[#9333ea]' : isDTone ? 'text-[#0891b2]' : 'text-[#3d2610]';
 
             const html = `
-                <div id="${rowId}" class="cull-row grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_1fr_1fr] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end relative">
+                <div id="${rowId}" class="cull-row grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_1fr_1fr] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end relative t-tidy">
                     <input type="hidden" class="cull-tray-name" value="${displayName}">
                     <div>
                         <label class="label-style md:hidden">Cull Date</label>
@@ -6238,7 +6246,7 @@ Thank you.`;
 
                 container.insertAdjacentHTML('beforeend', `
                     <div id="${rowId}" class="t5-plot-row border ${rowBg} rounded-xl overflow-hidden">
-                        <div class="grid grid-cols-1 lg:grid-cols-[1fr_1.1fr_0.8fr_0.8fr_0.8fr_0.8fr_1.4fr] gap-2 p-4 items-center">
+                        <div class="grid grid-cols-1 lg:grid-cols-[1fr_1.1fr_0.8fr_0.8fr_0.8fr_0.8fr_1.4fr] gap-2 p-4 items-center t-tidy">
 
                             <!-- Date column: shows due date by default; user can override with actual culling date -->
                             <div>
@@ -6788,7 +6796,7 @@ Thank you.`;
 
                 container.insertAdjacentHTML('beforeend', `
                     <div id="${rowId}" class="t6-plot-row border ${rowBg} rounded-xl overflow-hidden">
-                        <div class="grid grid-cols-1 lg:grid-cols-[1.1fr_0.65fr_0.65fr_0.65fr_0.85fr_0.75fr_0.55fr_1.15fr_1.35fr] gap-3 p-4 items-start">
+                        <div class="grid grid-cols-1 lg:grid-cols-[1.1fr_0.65fr_0.65fr_0.65fr_0.85fr_0.75fr_0.55fr_1.15fr_1.35fr] gap-3 p-4 items-start t-tidy">
 
                             <!-- Plot -->
                             <div class="flex flex-col gap-0.5 pt-1">
