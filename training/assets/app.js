@@ -105,6 +105,14 @@ window.MJM = (function(){
     chip.className='userchip';
     chip.innerHTML='<i class="fa-solid fa-circle-user"></i> ';
     chip.appendChild(document.createTextNode(userName()));
+    /* Gear icon → Training User Access, admins (Manage Users) only */
+    var cog=null, ta=trainingAccess();
+    if(ta&&ta.manage_users){
+      cog=document.createElement('a');
+      cog.className='logout'; cog.title='Training User Access';
+      cog.href='user_access.html'; cog.style.textDecoration='none';
+      cog.innerHTML='<i class="fa-solid fa-gear"></i>';
+    }
     var hub=document.createElement('button');
     hub.className='logout'; hub.type='button'; hub.title='Back to the MJM AI System portal';
     hub.innerHTML='<i class="fa-solid fa-arrow-left"></i><span class="lbl"> Back to Portal</span>';
@@ -123,7 +131,9 @@ window.MJM = (function(){
       }catch(e){}
       location.href='../index.html';
     });
-    box.appendChild(chip); box.appendChild(hub); box.appendChild(out);
+    box.appendChild(chip);
+    if(cog) box.appendChild(cog);
+    box.appendChild(hub); box.appendChild(out);
     bar.appendChild(box);
   }
 
