@@ -1091,7 +1091,7 @@
 
                                     <!-- Saved records table -->
                                     <div id="t3-saved-rows-table" class="hidden mb-4">
-                                        <div class="hidden md:grid grid-cols-[2fr_1.2fr_1.5fr_0.8fr_0.6fr_80px] gap-2 px-3 pb-1 text-[8px] font-black text-[#8a7a68] uppercase tracking-widest border-b border-[#e8dcc8] mb-1 t-tidy">
+                                        <div class="hidden md:grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_80px] gap-2 px-3 pb-1 text-[8px] font-black text-[#8a7a68] uppercase tracking-widest border-b border-[#e8dcc8] mb-1 t-tidy">
                                             <span class="text-[#3a7ab4]">Plot / Destination</span>
                                             <span>Date</span>
                                             <span class="text-[#c07820]">Source Tray</span>
@@ -2500,11 +2500,11 @@
                                 <div class="t3-saved-row" data-review-key="${reviewKey}">
                                     <!-- Compact row -->
                                     <div id="t3-row-view-${idx}" class="grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_80px] gap-2 items-center px-3 py-2 rounded-lg bg-[#fdfaf4] border border-[#e8dcc8] hover:bg-white transition-colors t-tidy">
-                                        <div class="font-black text-[11px] ${color}">${icon} ${log.plot_name}</div>
-                                        <div class="text-[10px] font-bold text-[#3d2610]">${dateStr}</div>
-                                        <div class="text-[10px] font-bold text-[#c07820] truncate">${trayStr}</div>
-                                        <div class="text-[11px] font-black text-[#4a7a2e]">${log.quantity_change.toLocaleString()}</div>
-                                        <div class="text-[10px] text-[#8a7a68]">—</div>
+                                        <div class="font-black text-sm ${color}">${icon} ${log.plot_name}</div>
+                                        <div class="text-sm font-bold text-[#3d2610]">${dateStr}</div>
+                                        <div class="text-sm font-bold text-[#c07820] truncate">${trayStr}</div>
+                                        <div class="text-sm font-black text-[#4a7a2e]">${log.quantity_change.toLocaleString()}</div>
+                                        <div class="text-sm text-[#8a7a68]">—</div>
                                         <div class="flex gap-1">
                                             <button type="button" onclick="toggleT3EditRow(${idx})" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[8px] font-black uppercase rounded hover:bg-[#f0f8ff] transition-colors">Edit</button>
                                             <button type="button" onclick="deleteT3Row(${idx})" class="px-2 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[8px] font-black uppercase rounded hover:bg-[#fff5f5] transition-colors">Del</button>
