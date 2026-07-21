@@ -5734,10 +5734,19 @@ Thank you.`;
             const premiumEntry = preNurseryTrayData.find(t => t.name === 'PREMIUM CARE');
             const dtoneEntry   = preNurseryTrayData.find(t => t.name === 'DOUBLE-TONE');
 
+            // The DOUBLE-TONE culling row's tray quantity is the admin-keyed
+            // "Double Tone Quantity in Nursery" (Tab 3) — the full nursery
+            // pool — not just this batch's own D-Tone inflow. Falls back to
+            // the batch inflow when nothing has been keyed.
+            const dtoneNurseryQty = (typeof getDtoneNurseryQty === 'function') ? getDtoneNurseryQty() : 0;
+            const dtoneCullEntry  = dtoneNurseryQty > 0
+                ? { name: 'DOUBLE-TONE', initialQty: dtoneNurseryQty }
+                : dtoneEntry;
+
             const cullTrayList = [
                 ...plantedTrays,
-                ...(premiumEntry ? [premiumEntry] : []),
-                ...(dtoneEntry   ? [dtoneEntry]   : [])
+                ...(premiumEntry   ? [premiumEntry]   : []),
+                ...(dtoneCullEntry ? [dtoneCullEntry] : [])
             ];
 
             // Load saved 1st Culling records from DB (keyed by plot_name = tray name)
