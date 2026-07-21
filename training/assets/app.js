@@ -143,21 +143,35 @@ window.MJM = (function(){
   function setStartPage(v){ set('startpage', v==='logbook'?'logbook':'modules'); }
 
   /* ── Per-user training access (set by admins in user_access.html) ──
-     Stored in shared_profiles.permissions.training as
-       { role:'afc'|'fc'|'admin'|'auditor'|'sales'|'manager'|null,
-         slides:{ operation:true, troubleshoot:false, ... } }
+     Stored per training module in shared_profiles.permissions.training:
+       { nursery:{ role:'afc'|'fc'|..., slides:{ operation:true, ... } },
+         vibe:   { access:'password'|'open'|'hidden' } }
      and cached locally so every page can read it synchronously.
-     No cache / no settings = everything visible (backwards compatible). */
+     Older rows/caches with role/slides at the top level are read as
+     nursery settings. No cache / no settings = everything visible. */
   function trainingAccess(){ try{ return JSON.parse(get('training-access')||'null'); }catch(e){ return null; } }
-  function roleKey(){
+  function nurseryAccess(){
     var t=trainingAccess();
-    return (t&&t.role&&ROLES[t.role])?t.role:null;
+    if(!t) return null;
+    if(t.nursery&&typeof t.nursery==='object') return t.nursery;
+    return {role:t.role||null, slides:t.slides||null};   // legacy shape
+  }
+  function roleKey(){
+    var n=nurseryAccess();
+    return (n&&n.role&&ROLES[n.role])?n.role:null;
   }
   /* A slide/program is visible unless the admin explicitly unticked it. */
   function allowedSlide(slug){
+    var n=nurseryAccess();
+    if(!n||!n.slides||typeof n.slides!=='object') return true;
+    return n.slides[slug]!==false;
+  }
+  /* Vibe Coding module: 'password' (default), 'open' (no password
+     needed for this user) or 'hidden' (module not visible). */
+  function vibeAccess(){
     var t=trainingAccess();
-    if(!t||!t.slides||typeof t.slides!=='object') return true;
-    return t.slides[slug]!==false;
+    var v=t&&t.vibe;
+    return (v&&typeof v==='object'&&(v.access==='open'||v.access==='hidden'))?v.access:'password';
   }
   /* Union of practical targets across the user's role programs
      (highest target wins on overlap). null = no role set. */
@@ -180,9 +194,15 @@ window.MJM = (function(){
         if(r.error||!r.data) return null;
         var p=r.data.permissions||{};
         var t=(p.training&&typeof p.training==='object')?p.training:{};
+        var nur=(t.nursery&&typeof t.nursery==='object')?t.nursery
+              :{role:(typeof t.role==='string')?t.role:null,
+                slides:(t.slides&&typeof t.slides==='object')?t.slides:null};
         var cache={
-          role:(typeof t.role==='string')?t.role:null,
-          slides:(t.slides&&typeof t.slides==='object')?t.slides:null,
+          nursery:{
+            role:(typeof nur.role==='string')?nur.role:null,
+            slides:(nur.slides&&typeof nur.slides==='object')?nur.slides:null
+          },
+          vibe:{access:(t.vibe&&(t.vibe.access==='open'||t.vibe.access==='hidden'))?t.vibe.access:'password'},
           manage_users:!!p.manage_users
         };
         set('training-access',JSON.stringify(cache));
@@ -200,7 +220,8 @@ window.MJM = (function(){
     ACTIVITIES:ACTIVITIES, PROGRAMS:PROGRAMS, ROLES:ROLES,
     user:user, userName:userName, requireLogin:requireLogin,
     startPage:startPage, setStartPage:setStartPage,
-    trainingAccess:trainingAccess, roleKey:roleKey, allowedSlide:allowedSlide,
+    trainingAccess:trainingAccess, nurseryAccess:nurseryAccess, vibeAccess:vibeAccess,
+    roleKey:roleKey, allowedSlide:allowedSlide,
     rolePractical:rolePractical, refreshTrainingAccess:refreshTrainingAccess, guardSlide:guardSlide,
     get:get, set:set,
     readCount:readCount, pageTotal:pageTotal, log:log, saveLog:saveLog,

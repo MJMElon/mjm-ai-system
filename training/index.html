@@ -91,11 +91,17 @@ try{
 MJM.initTopbar();
 (function(){
   /* Refresh this user's role / slide-visibility settings in the background
-     so the pathway page and Practical Record stay up to date. */
+     so the pathway page and Practical Record stay up to date. Hide the
+     Vibe Coding card for users whose access is set to 'hidden'. */
+  function applyVibe(){
+    var c=document.querySelector('.module-card[href="vibe-coding.html"]');
+    if(c) c.style.display=(MJM.vibeAccess()==='hidden')?'none':'';
+  }
   try{
+    applyVibe();
     if(window.supabase&&window.SHARED_SUPA_URL){
       var _sb=supabase.createClient(SHARED_SUPA_URL,SHARED_SUPA_KEY);
-      MJM.refreshTrainingAccess(_sb);
+      MJM.refreshTrainingAccess(_sb).then(function(c){ if(c) applyVibe(); });
     }
   }catch(e){}
 })();

@@ -16,7 +16,8 @@
 try{
   var _tgu=localStorage.getItem('mjm-user');
   var _tga=JSON.parse(localStorage.getItem('mjm-u-'+_tgu+'-training-access')||'null');
-  if(_tga&&_tga.slides&&_tga.slides['admin-operation']===false) location.replace('nursery.html');
+  var _tgs=_tga&&((_tga.nursery&&_tga.nursery.slides)||_tga.slides);
+  if(_tgs&&_tgs['admin-operation']===false) location.replace('nursery.html');
 }catch(e){}
 </script>
 </head>

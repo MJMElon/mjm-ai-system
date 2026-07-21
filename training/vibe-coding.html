@@ -2883,6 +2883,15 @@
                 setTimeout(function(){ gate.classList.remove('shake'); }, 460);
             }
         }
+        // Per-user access set in Training User Access: 'open' skips the
+        // password, 'hidden' means this user shouldn't see the module.
+        try{
+            var _vu = localStorage.getItem('mjm-user');
+            var _vt = JSON.parse(localStorage.getItem('mjm-u-'+_vu+'-training-access')||'null');
+            var _va = (_vt && _vt.vibe && _vt.vibe.access) || 'password';
+            if (_va === 'hidden'){ location.replace('index.html'); return; }
+            if (_va === 'open'){ unlock(); return; }
+        }catch(e){}
         btn.addEventListener('click', check);
         input.addEventListener('keydown', function(e){ if (e.key === 'Enter'){ e.preventDefault(); check(); } });
         if (!gate.classList.contains('unlocked')) input.focus();

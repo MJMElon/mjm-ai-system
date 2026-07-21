@@ -20,6 +20,8 @@
   .slide-chk { display:flex; align-items:center; gap:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:8px 12px; font-size:12px; font-weight:700; color:#334155; cursor:pointer; user-select:none; }
   .slide-chk input { accent-color:#10b981; width:15px; height:15px; }
   .slide-chk.off { color:#94a3b8; background:#f1f5f9; }
+  .mod-tab { flex:1; display:flex; align-items:center; justify-content:center; gap:8px; padding:12px 16px; border-radius:14px; border:1px solid #e2e8f0; background:white; font-size:12px; font-weight:900; text-transform:uppercase; letter-spacing:.08em; color:#64748b; cursor:pointer; }
+  .mod-tab.on { background:#065f46; border-color:#065f46; color:white; box-shadow:0 4px 14px rgba(6,95,70,.25); }
 </style>
 </head>
 <body>
@@ -51,12 +53,18 @@
       <h1 class="text-base font-black text-slate-800 uppercase tracking-widest">Training User Access</h1>
     </div>
     <p class="text-[13px] text-slate-600 leading-relaxed">
-      Everyone listed below has the <b>Training Center</b> module opened on the main portal.
-      For each user, set their <b>nursery role</b> — the Practical Record then shows exactly the practicals
-      that role must complete — and untick any <b>training slides</b> they should not see.
+      Pick a <b>training module</b> first, then set each user's access inside it.
+      Everyone listed has the Training Center opened on the main portal.
       Changes apply the next time the user opens the Training Center.
     </p>
   </div>
+
+  <div class="flex gap-3">
+    <button class="mod-tab on" id="tab-nursery" data-mod="nursery">🌱 Nursery Training</button>
+    <button class="mod-tab" id="tab-vibe" data-mod="vibe">💻 Vibe Coding Class</button>
+  </div>
+
+  <p id="mod-hint" class="text-[12px] text-slate-500 leading-relaxed px-1"></p>
 
   <input id="f-search" class="fsel w-full" placeholder="Search by name or email…">
 
@@ -76,7 +84,13 @@ const ROLES = MJM.ROLES;           // role key -> {name, programs}
 const PROGRAMS = MJM.PROGRAMS;     // program slug -> {name, ...}
 const SLUGS = Object.keys(PROGRAMS);
 
+const MOD_HINTS = {
+  nursery: 'Set each user\'s nursery role — the Practical Record then shows exactly the practicals that role must complete — and untick any training slides they should not see.',
+  vibe: 'Choose how each user gets into the Vibe Coding Class: password required (default), unlocked without a password, or hidden from their module page.'
+};
+
 let profiles = [];                 // users with the training module open
+let activeMod = 'nursery';
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function initialsOf(name, email){
@@ -90,32 +104,51 @@ function showToast(msg, kind){
   clearTimeout(t._h); t._h=setTimeout(()=>t.classList.add('hidden'),2600);
 }
 
-function trainingOf(p){
-  const t=(p.permissions&&p.permissions.training&&typeof p.permissions.training==='object')?p.permissions.training:{};
-  return { role:(typeof t.role==='string'&&ROLES[t.role])?t.role:'',
-           slides:(t.slides&&typeof t.slides==='object')?t.slides:null };
+/* Normalise permissions.training into the per-module shape, reading the
+   old top-level {role, slides} rows as nursery settings. */
+function normTraining(perms){
+  const t=(perms&&perms.training&&typeof perms.training==='object')?perms.training:{};
+  const nur=(t.nursery&&typeof t.nursery==='object')?t.nursery
+    :{role:(typeof t.role==='string')?t.role:null,
+      slides:(t.slides&&typeof t.slides==='object')?t.slides:null};
+  return {
+    nursery:{ role:(typeof nur.role==='string'&&ROLES[nur.role])?nur.role:null,
+              slides:(nur.slides&&typeof nur.slides==='object')?nur.slides:null },
+    vibe:{ access:(t.vibe&&(t.vibe.access==='open'||t.vibe.access==='hidden'))?t.vibe.access:'password' }
+  };
 }
-function slideOn(t, slug){ return !t.slides || t.slides[slug]!==false; }
+function slideOn(slides, slug){ return !slides || slides[slug]!==false; }
 
-function rolePracticalPreview(rk){
-  if(!rk||!ROLES[rk]) return 'No role — the Practical Record shows every activity.';
-  const progs=ROLES[rk].programs.map(s=>PROGRAMS[s].name).join(', ');
-  return 'Required programs: '+progs+'. The Practical Record shows only these programs\' practicals.';
+async function saveTraining(p, btn, mutate){
+  btn.disabled=true; btn.textContent='Saving…';
+  const perms=(p.permissions&&typeof p.permissions==='object')?p.permissions:{};
+  const T=normTraining(perms);
+  mutate(T);
+  perms.training=T;   // touch ONLY the training key
+  const { error }=await _supabase.from('shared_profiles').update({ permissions:perms }).eq('id',p.id);
+  btn.disabled=false; btn.textContent='Save';
+  if(error){ showToast('Save failed: '+error.message,'err'); return; }
+  p.permissions=perms;
+  showToast('Saved — applies on '+(p.full_name||p.email||'the user')+'\'s next visit.');
 }
 
-function userCard(p){
-  const t=trainingOf(p);
+function cardHead(p){
+  return '<div class="flex items-center gap-3">'+
+    '<div class="u-avatar">'+esc(initialsOf(p.full_name,p.email))+'</div>'+
+    '<div class="min-w-0 flex-1">'+
+      '<div class="font-black text-slate-800 text-sm truncate">'+esc(p.full_name||'(no name)')+'</div>'+
+      '<div class="text-[11px] text-slate-500 truncate">'+esc(p.email||'')+'</div>'+
+    '</div>'+
+    '<button data-save class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest px-5 py-2.5 rounded-xl shadow disabled:opacity-50">Save</button>'+
+  '</div>';
+}
+
+/* ── Nursery Training section: role + slide visibility ── */
+function nurseryCard(p){
+  const t=normTraining(p.permissions).nursery;
   const card=document.createElement('div');
   card.className='card p-5 space-y-4';
-  card.innerHTML=
-    '<div class="flex items-center gap-3">'+
-      '<div class="u-avatar">'+esc(initialsOf(p.full_name,p.email))+'</div>'+
-      '<div class="min-w-0 flex-1">'+
-        '<div class="font-black text-slate-800 text-sm truncate">'+esc(p.full_name||'(no name)')+'</div>'+
-        '<div class="text-[11px] text-slate-500 truncate">'+esc(p.email||'')+'</div>'+
-      '</div>'+
-      '<button data-save class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest px-5 py-2.5 rounded-xl shadow disabled:opacity-50">Save</button>'+
-    '</div>'+
+  card.innerHTML=cardHead(p)+
     '<div>'+
       '<div class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Nursery role — decides the practicals</div>'+
       '<select data-role class="fsel w-full"></select>'+
@@ -129,35 +162,52 @@ function userCard(p){
   const sel=card.querySelector('[data-role]');
   sel.innerHTML='<option value="">— No role (show all practicals) —</option>'+
     Object.keys(ROLES).map(k=>'<option value="'+k+'">'+esc(ROLES[k].name)+'</option>').join('');
-  sel.value=t.role;
+  sel.value=t.role||'';
   const hint=card.querySelector('[data-role-hint]');
-  function paintHint(){ hint.textContent=rolePracticalPreview(sel.value); }
+  function paintHint(){
+    hint.textContent=(!sel.value||!ROLES[sel.value])
+      ? 'No role — the Practical Record shows every activity.'
+      : 'Required programs: '+ROLES[sel.value].programs.map(s=>PROGRAMS[s].name).join(', ')+'. The Practical Record shows only these programs\' practicals.';
+  }
   sel.addEventListener('change',paintHint); paintHint();
 
   const box=card.querySelector('[data-slides]');
   SLUGS.forEach(slug=>{
+    const on=slideOn(t.slides,slug);
     const lab=document.createElement('label');
-    lab.className='slide-chk'+(slideOn(t,slug)?'':' off');
-    lab.innerHTML='<input type="checkbox" data-slug="'+slug+'"'+(slideOn(t,slug)?' checked':'')+'> '+esc(PROGRAMS[slug].name);
+    lab.className='slide-chk'+(on?'':' off');
+    lab.innerHTML='<input type="checkbox" data-slug="'+slug+'"'+(on?' checked':'')+'> '+esc(PROGRAMS[slug].name);
     lab.querySelector('input').addEventListener('change',function(){ lab.classList.toggle('off',!this.checked); });
     box.appendChild(lab);
   });
 
-  card.querySelector('[data-save]').addEventListener('click',async function(){
-    const btn=this;
-    btn.disabled=true; btn.textContent='Saving…';
+  card.querySelector('[data-save]').addEventListener('click',function(){
     const slides={};
     box.querySelectorAll('input[data-slug]').forEach(i=>{ slides[i.getAttribute('data-slug')]=i.checked; });
-    // Merge into the user's existing permissions — touch ONLY the training key.
-    const perms=(p.permissions&&typeof p.permissions==='object')?p.permissions:{};
-    perms.training={ role:sel.value||null, slides:slides };
-    const { error }=await _supabase.from('shared_profiles').update({ permissions:perms }).eq('id',p.id);
-    btn.disabled=false; btn.textContent='Save';
-    if(error){ showToast('Save failed: '+error.message,'err'); return; }
-    p.permissions=perms;
-    showToast('Saved — applies on '+(p.full_name||p.email||'the user')+'\'s next visit.');
+    saveTraining(p,this,T=>{ T.nursery={ role:sel.value||null, slides:slides }; });
   });
+  return card;
+}
 
+/* ── Vibe Coding section: module access ── */
+function vibeCard(p){
+  const t=normTraining(p.permissions).vibe;
+  const card=document.createElement('div');
+  card.className='card p-5 space-y-4';
+  card.innerHTML=cardHead(p)+
+    '<div>'+
+      '<div class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Vibe Coding Class access</div>'+
+      '<select data-access class="fsel w-full">'+
+        '<option value="password">🔑 Password required (default)</option>'+
+        '<option value="open">✅ Unlocked — no password needed</option>'+
+        '<option value="hidden">🚫 Hidden — cannot see this module</option>'+
+      '</select>'+
+    '</div>';
+  const sel=card.querySelector('[data-access]');
+  sel.value=t.access;
+  card.querySelector('[data-save]').addEventListener('click',function(){
+    saveTraining(p,this,T=>{ T.vibe={ access:sel.value }; });
+  });
   return card;
 }
 
@@ -165,13 +215,20 @@ function render(){
   const q=(document.getElementById('f-search').value||'').toLowerCase();
   const list=document.getElementById('list');
   list.innerHTML='';
+  document.getElementById('mod-hint').textContent=MOD_HINTS[activeMod];
   const shown=profiles.filter(p=>!q||String(p.full_name||'').toLowerCase().includes(q)||String(p.email||'').toLowerCase().includes(q));
-  shown.forEach(p=>list.appendChild(userCard(p)));
+  shown.forEach(p=>list.appendChild(activeMod==='nursery'?nurseryCard(p):vibeCard(p)));
   document.getElementById('count-line').textContent=
     shown.length+' of '+profiles.length+' user'+(profiles.length===1?'':'s')+' with the Training module open';
   if(!shown.length){
     list.innerHTML='<div class="card p-8 text-center text-xs font-bold text-slate-400 uppercase tracking-widest">No matching users</div>';
   }
+}
+
+function setMod(m){
+  activeMod=m;
+  document.querySelectorAll('.mod-tab').forEach(b=>b.classList.toggle('on',b.getAttribute('data-mod')===m));
+  render();
 }
 
 async function bootstrap(){
@@ -196,6 +253,7 @@ async function bootstrap(){
   });
   document.getElementById('main').classList.remove('hidden');
   document.getElementById('f-search').addEventListener('input',render);
+  document.querySelectorAll('.mod-tab').forEach(b=>b.addEventListener('click',()=>setMod(b.getAttribute('data-mod'))));
   render();
 }
 bootstrap();
