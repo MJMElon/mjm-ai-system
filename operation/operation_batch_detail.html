@@ -1418,11 +1418,12 @@
                                     </div>
                                 </div>
 
-                                <!-- Column headers: Plot → Transplanted → Balance After Sales → 3rd Culled Qty → 3rd Culled % → Transfer → Drone Map -->
-                                <div class="hidden lg:grid gap-3 px-6 pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest" style="grid-template-columns: 1.2fr 0.8fr 1fr 0.8fr 0.7fr 1.3fr 1.5fr;">
+                                <!-- Column headers: Plot → Transplanted → 2nd Culled → Balance → 3rd Culled Qty → 3rd Culled % → Transfer → Drone Map -->
+                                <div class="hidden lg:grid gap-3 px-6 pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest" style="grid-template-columns: 1.1fr 0.7fr 0.7fr 0.9fr 0.8fr 0.6fr 1.2fr 1.4fr;">
                                     <span>Main Plot</span>
                                     <span>Transplanted</span>
-                                    <span class="text-[#4a7a2e]">Balance After Sales</span>
+                                    <span class="text-[#a83020]">2nd Culled</span>
+                                    <span class="text-[#4a7a2e]" title="Auto: Transplanted − 2nd Culled − Sales">Balance</span>
                                     <span class="text-[#a83020]">3rd Culled Qty</span>
                                     <span class="text-[#a83020]">3rd Culled %</span>
                                     <span class="text-[#0891b2]">Transfer</span>
@@ -6572,11 +6573,13 @@ Thank you.`;
                     const nameMatch = log.remark ? log.remark.match(/DocName:(\S+)/) : null;
                     let docName = '';
                     if (nameMatch) { try { docName = decodeURIComponent(nameMatch[1]); } catch(_) { docName = nameMatch[1]; } }
+                    const mapQtyMatch = log.remark ? log.remark.match(/MapQty:\s*(\d+)/) : null;
                     const entry = {
                         culled:  log.quantity_change,
                         balance: balMatch  ? parseInt(balMatch[1]) : null,
                         docUrl:  docMatch  ? docMatch[1]           : null,
-                        docName: docName || null
+                        docName: docName || null,
+                        mapQty:  mapQtyMatch ? parseInt(mapQtyMatch[1]) : null
                     };
                     if (destMatch) {
                         savedCull3Map[`${log.plot_name}|${destMatch[1]}`] = entry;
@@ -6584,6 +6587,32 @@ Thank you.`;
                         if (!legacyCull3Queue[log.plot_name]) legacyCull3Queue[log.plot_name] = [];
                         legacyCull3Queue[log.plot_name].push(entry);
                     }
+                });
+            }
+
+            // 2nd-culling dead + sales per plot — feed the AUTO balance:
+            //   balance = transplanted − 2nd culled (dead) − sales.
+            const dead2Map = {}; // PLOT → 2nd-culling dead qty
+            const salesMap = {}; // PLOT → collected (sold) qty
+            if (batchId) {
+                const [c2Res, colRes] = await Promise.all([
+                    _supabase.from('shared_inventory_logs')
+                        .select('plot_name, quantity_change')
+                        .eq('batch_name', batchId)
+                        .eq('transaction_type', '2nd_Culling'),
+                    _supabase.from('shared_collection_bookings')
+                        .select('plot_name, collection_qty, status')
+                        .eq('batch_name', batchId)
+                        .then(r => r, () => ({ data: [] }))
+                ]);
+                ((c2Res && c2Res.data) || []).forEach(l => {
+                    const k = String(l.plot_name || '').trim().toUpperCase();
+                    if (k) dead2Map[k] = (dead2Map[k] || 0) + Math.abs(l.quantity_change || 0);
+                });
+                ((colRes && colRes.data) || []).forEach(b => {
+                    if (/cancel/i.test(b.status || '')) return;
+                    const k = String(b.plot_name || '').trim().toUpperCase();
+                    if (k) salesMap[k] = (salesMap[k] || 0) + (b.collection_qty || 0);
                 });
             }
 
@@ -6622,15 +6651,19 @@ Thank you.`;
                         const q = legacyCull3Queue[t.target];
                         saved = (q && q.length) ? q.shift() : {};
                     }
+                    const tKey = String(t.target || '').trim().toUpperCase();
                     t6_plotData.push({
                         plot:         t.target,
                         qty:          t.qty,
                         destType:     'main',
                         transferFrom: t.source || '—',
+                        dead2:        dead2Map[tKey] || 0,
+                        sales:        salesMap[tKey] || 0,
                         savedBalance: saved.balance ?? null,
                         savedCulled:  saved.culled  ?? null,
                         savedDocUrl:  saved.docUrl  ?? null,
-                        savedDocName: saved.docName ?? null
+                        savedDocName: saved.docName ?? null,
+                        savedMapQty:  saved.mapQty  ?? null
                     });
                 });
             };
@@ -6645,25 +6678,55 @@ Thank you.`;
                     .order('created_at', { ascending: true });
 
                 if (logs && logs.length > 0) {
+                    // Merge same-plot transplants into ONE row (matching the
+                    // 2nd Culling report): quantities sum across MAIN /
+                    // PREMIUM / D-TONE and across repeated transplants.
+                    const byPlot = new Map();
                     logs.forEach(log => {
                         const destType = log.transaction_type === 'Transplanted_Premium'    ? 'premium'
                                        : log.transaction_type === 'Transplanted_DoubleTone' ? 'doubletone' : 'main';
-                        // Prefer the explicit composite-key entry. If nothing's there,
-                        // fall back to a legacy ambiguous log (one per consumption)
-                        // so each row gets at most one legacy value.
-                        let saved = savedCull3Map[`${log.plot_name}|${destType}`];
-                        if (!saved) {
-                            const queue = legacyCull3Queue[log.plot_name];
-                            saved = (queue && queue.length) ? queue.shift() : {};
+                        const key = String(log.plot_name || '').trim().toUpperCase();
+                        if (!key) return;
+                        const cur = byPlot.get(key);
+                        if (!cur) {
+                            byPlot.set(key, { plot: log.plot_name, qty: Number(log.quantity_change) || 0, destTypes: new Set([destType]) });
+                        } else {
+                            cur.qty += Number(log.quantity_change) || 0;
+                            cur.destTypes.add(destType);
+                        }
+                    });
+                    byPlot.forEach((v, key) => {
+                        // Collect every saved culling entry for this plot (all
+                        // DestType keys + legacy queue) — merged rows carry the
+                        // summed culled qty and the first doc/map values found.
+                        let culled = null, balance = null, docUrl = null, docName = null, mapQty = null;
+                        ['main', 'premium', 'doubletone'].forEach(d => {
+                            const e = savedCull3Map[`${v.plot}|${d}`];
+                            if (!e) return;
+                            culled = (culled || 0) + (e.culled || 0);
+                            if (balance == null) balance = e.balance;
+                            if (!docUrl)         { docUrl = e.docUrl; docName = e.docName; }
+                            if (mapQty == null)  mapQty = e.mapQty ?? null;
+                        });
+                        const q = legacyCull3Queue[v.plot];
+                        while (q && q.length) {
+                            const e = q.shift();
+                            culled = (culled || 0) + (e.culled || 0);
+                            if (balance == null) balance = e.balance;
+                            if (!docUrl)         { docUrl = e.docUrl; docName = e.docName; }
                         }
                         t6_plotData.push({
-                            plot:         log.plot_name,
-                            qty:          log.quantity_change,
-                            destType,
-                            savedBalance: saved.balance ?? null,
-                            savedCulled:  saved.culled  ?? null,
-                            savedDocUrl:  saved.docUrl  ?? null,
-                            savedDocName: saved.docName ?? null
+                            plot:         v.plot,
+                            qty:          v.qty,
+                            destType:     (v.destTypes.has('main') || v.destTypes.size > 1) ? 'main' : Array.from(v.destTypes)[0],
+                            destTypes:    Array.from(v.destTypes),
+                            dead2:        dead2Map[key] || 0,
+                            sales:        salesMap[key] || 0,
+                            savedBalance: balance,
+                            savedCulled:  culled,
+                            savedDocUrl:  docUrl,
+                            savedDocName: docName,
+                            savedMapQty:  mapQty
                         });
                     });
                     injectTransfers();
@@ -6708,22 +6771,23 @@ Thank you.`;
 
             t6_plotData.forEach((p, i) => {
                 const rowId    = `t6-row-${i}`;
-                const typeLabel = p.destType === 'premium'    ? '⭐ Premium'
-                                : p.destType === 'doubletone' ? '🎯 D-Tone' : '🌿 Main';
+                const dts      = p.destTypes || [p.destType];
+                const typeLabel = dts.map(d => d === 'premium' ? '⭐ Premium' : d === 'doubletone' ? '🎯 D-Tone' : '🌿 Main').join(' + ');
                 const rowBg    = p.destType === 'premium'    ? 'bg-[#faf5ff] border-[#e9d5ff]'
                                 : p.destType === 'doubletone' ? 'bg-[#ecfeff] border-[#a5f3fc]'
                                 : 'bg-[#fdfaf4] border-[#e8dcc8]';
-                const balVal   = p.savedBalance !== null ? p.savedBalance : '';
-                // Blank input = "not yet keyed in". A saved 0 is also treated as
-                // blank so the row still reads as needing admin attention (the
-                // operation page's "X / N Done" counter only counts non-empty
-                // inputs). If the admin really means zero, they can type 0
-                // again — that explicit "0" persists on save.
-                const cullVal  = (p.savedCulled  !== null && p.savedCulled  > 0) ? p.savedCulled  : '';
+                // AUTO balance = transplanted − 2nd culled (dead) − sales.
+                const dead2   = p.dead2 || 0;
+                const sales   = p.sales || 0;
+                const autoBal = Math.max(0, (p.qty || 0) - dead2 - sales);
+                // AUTO 3rd culled = 2nd culled + balance; a previously-saved
+                // value wins, and the admin can always overtype.
+                const autoCulled = dead2 + autoBal;
+                const cullVal  = (p.savedCulled !== null && p.savedCulled > 0) ? p.savedCulled : (autoCulled > 0 ? autoCulled : '');
 
                 container.insertAdjacentHTML('beforeend', `
                     <div id="${rowId}" class="t6-plot-row border ${rowBg} rounded-xl overflow-hidden">
-                        <div class="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr_1fr_0.8fr_0.7fr_1.3fr_1.6fr] gap-3 p-4 items-start">
+                        <div class="grid grid-cols-1 lg:grid-cols-[1.1fr_0.7fr_0.7fr_0.9fr_0.8fr_0.6fr_1.2fr_1.5fr] gap-3 p-4 items-start">
 
                             <!-- Plot -->
                             <div class="flex flex-col gap-0.5 pt-1">
@@ -6742,13 +6806,19 @@ Thank you.`;
                                 <div class="text-base font-black text-[#3d2610]">${p.qty.toLocaleString()}</div>
                             </div>
 
-                            <!-- Balance After Sales — auto from transplanted qty (sales deduction TBD) -->
+                            <!-- 2nd Culled (dead) — from the 2nd Culling report -->
+                            <div class="pt-1">
+                                <div class="text-[9px] font-black text-[#a83020] uppercase lg:hidden mb-0.5">2nd Culled</div>
+                                <div class="text-base font-black text-[#a83020]">${dead2.toLocaleString()}</div>
+                            </div>
+
+                            <!-- Balance — AUTO: transplanted − 2nd culled − sales -->
                             <div>
-                                <div class="text-[9px] font-black text-[#8a7a68] uppercase lg:hidden mb-0.5">Balance After Sales</div>
+                                <div class="text-[9px] font-black text-[#8a7a68] uppercase lg:hidden mb-0.5">Balance</div>
                                 <div class="input-style bg-[#f0f8ec] font-black text-[#4a7a2e] flex items-center text-sm"
-                                    title="Auto-calculated: Transplanted − Sales (sales module pending)">${p.qty.toLocaleString()}</div>
-                                <input type="hidden" class="t6-balance" data-transplanted="${p.qty}" value="${p.qty}">
-                                <div class="text-[8px] font-bold text-[#8a7a68] mt-0.5 uppercase tracking-wide">— Sales pending</div>
+                                    title="Auto: Transplanted − 2nd Culled − Sales">${autoBal.toLocaleString()}</div>
+                                <input type="hidden" class="t6-balance" data-transplanted="${p.qty}" value="${autoBal}">
+                                <div class="text-[8px] font-bold text-[#8a7a68] mt-0.5 uppercase tracking-wide">− ${dead2.toLocaleString()} dead − ${sales.toLocaleString()} sold</div>
                             </div>
 
                             <!-- Culled qty — manual input. Blank = not yet keyed in
@@ -6781,9 +6851,11 @@ Thank you.`;
                                 <input type="number" min="0" class="input-style !text-[#0891b2] font-black t6-transfer-qty !text-xs !py-2 mt-1.5" placeholder="Transfer qty" value="${p.savedTransferQty ?? ''}">
                             </div>
 
-                            <!-- Drone Map — compact style matching Tab 3 / Tab 5 -->
+                            <!-- Drone Map — qty keyed from the drone map + attachment -->
                             <div class="flex flex-col gap-1.5">
                                 <div class="text-[9px] font-black text-[#8a7a68] uppercase lg:hidden mb-0.5">Drone Map</div>
+                                <input type="number" min="0" class="input-style t6-map-qty !text-xs !py-2" placeholder="Drone map qty"
+                                    value="${p.savedMapQty ?? ''}" oninput="calcT6()">
                                 <div id="${rowId}-doc-zone"
                                     class="border-2 border-dashed border-[#e8dcc8] bg-white rounded-xl h-[45px] flex items-center justify-center cursor-pointer hover:bg-[#f3efe6] hover:border-[#c07820] transition-all"
                                     onclick="document.getElementById('${rowId}-doc-input').click()"
@@ -7147,6 +7219,23 @@ Thank you.`;
                     if (isNaN(balance) || balVal === '') continue;
                     const cullPct = transplanted > 0 ? ((culled / transplanted) * 100).toFixed(2) : '0';
 
+                    // Drone map qty must tally with the 3rd culled qty — when it
+                    // doesn't, the admin must explain the discrepancy and how to
+                    // avoid it in future; the note is stored with the record.
+                    const mapQtyRaw = (row.querySelector('.t6-map-qty')?.value ?? '').trim();
+                    const mapQty    = mapQtyRaw !== '' ? (parseInt(mapQtyRaw) || 0) : null;
+                    let mismatchNote = '';
+                    if (mapQty !== null && mapQty !== culled) {
+                        const note = prompt(
+                            `Plot ${plotName}: 3rd culled qty (${culled.toLocaleString()}) and drone map qty (${mapQty.toLocaleString()}) do not tally.\n\nPlease explain the issue and how to avoid this in future:`);
+                        if (note === null || !note.trim()) {
+                            throw new Error(`Save cancelled — plot ${plotName}'s drone map qty doesn't tally with the 3rd culled qty and needs a remark.`);
+                        }
+                        mismatchNote = ` MismatchNote:${encodeURIComponent(note.trim())}`;
+                    }
+                    const dead2Part = `, 2ndCulled: ${t6_plotData[i]?.dead2 || 0}, Sales: ${t6_plotData[i]?.sales || 0}`;
+                    const mapQtyPart = mapQty !== null ? ` MapQty: ${mapQty}` : '';
+
                     // Upload the drone map / proof doc (if any) so it survives a refresh.
                     let docUrl = '', docNamePart = '';
                     const doc = t6_plotDocs[row.id];
@@ -7175,7 +7264,7 @@ Thank you.`;
                         // DestType is critical: the same plot (e.g. B10) can appear under
                         // both MAIN and D-TONE; the load uses (plot_name, destType) to
                         // distinguish them so values don't overwrite each other.
-                        remark: `3rd Culling. Transplanted: ${transplanted}, Remaining Balance: ${balance}, Culled: ${culled}, Cull Rate: ${cullPct}%, DestType: ${destType}${docSuffix}`
+                        remark: `3rd Culling. Transplanted: ${transplanted}, Remaining Balance: ${balance}, Culled: ${culled}, Cull Rate: ${cullPct}%${dead2Part}, DestType: ${destType}${mapQtyPart}${mismatchNote}${docSuffix}`
                     }));
                 }
 

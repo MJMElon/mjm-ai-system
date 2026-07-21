@@ -286,7 +286,7 @@
                     const p = _normPlot(r.plot_name);
                     if (!p || !r.batch_name) return;
                     (expectedPlots[r.batch_name] = expectedPlots[r.batch_name] || new Set())
-                        .add(p + '|' + _destOfType(r.transaction_type));
+                        .add(p); // per PLOT — Tab 6 merges same-plot rows and saves one record per plot
                 });
 
                 // Actual coverage from 3rd_Culling rows. DestType-stamped rows
@@ -299,7 +299,7 @@
                     const p = _normPlot(r.plot_name);
                     const m = r.remark ? r.remark.match(/DestType:\s*(main|premium|doubletone)/) : null;
                     if (m) {
-                        (cull3Keyed[r.batch_name] = cull3Keyed[r.batch_name] || new Set()).add(p + '|' + m[1]);
+                        (cull3Keyed[r.batch_name] = cull3Keyed[r.batch_name] || new Set()).add(p); // per PLOT
                     } else {
                         const map = (cull3Legacy[r.batch_name] = cull3Legacy[r.batch_name] || new Map());
                         map.set(p, (map.get(p) || 0) + 1);
