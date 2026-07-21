@@ -53,8 +53,10 @@
 
 <nav class="topbar">
   <div class="topbar-in">
-    <a class="brand" href="index.html"><i class="fa-solid fa-list-check"></i> Practical Record</a>
-    <a class="homelink" href="nursery.html"><i class="fa-solid fa-arrow-left"></i> Training Pathways</a>
+    <a class="brand brandmark" href="index.html">
+      <span class="mjm-logo">MJM</span>
+      <span class="tc-label">Training<br>Center</span>
+    </a>
   </div>
 </nav>
 
@@ -65,18 +67,10 @@
   <button type="button" class="tc-start" id="tcStart"></button>
 </div>
 
-<header class="hero">
-  <span class="blob b1"></span><span class="blob b2"></span>
-  <div class="hero-in">
-    <div class="seed"><i class="fa-solid fa-list-check"></i></div>
-    <div class="eyebrow" id="heroEyebrow">Practical Experience</div>
-    <h1 id="heroTitle">Practical Record</h1>
-    <div class="rule"></div>
-    <p class="lede" id="heroLede">Tap <b>+</b> every time you complete a task on site — snap a photo as proof, and the time and location are recorded with it.</p>
-  </div>
-</header>
-
 <section class="slide"><div class="wrap">
+  <div class="titlewrap">
+    <h2 class="slide-title" id="pageTitle">Practical Record</h2>
+  </div>
   <div class="cert-pick" style="max-width:760px">
     <span class="cstatus" id="progStatus" hidden></span>
     <div id="logGroups"></div>
@@ -400,6 +394,13 @@
       hist.classList.toggle('open');
       paintHist();
     });
+    /* Tap anywhere on the job row (except the buttons) to open its history */
+    row.style.cursor='pointer';
+    row.addEventListener('click',function(e){
+      if(e.target.closest&&(e.target.closest('button')||e.target.closest('a'))) return;
+      hist.classList.toggle('open');
+      paintHist();
+    });
 
     function paint(){
       var l=MJM.log(), v=l[a.key]||0;
@@ -433,12 +434,12 @@
   function renderProgram(slug){
     var prog=MJM.PROGRAMS[slug];
     document.title=prog.name+' — Practical Record — MJM Training Center';
-    document.getElementById('heroEyebrow').textContent='Practical Record';
-    document.getElementById('heroTitle').textContent=prog.name;
-    document.getElementById('heroLede').innerHTML=
-      'Complete this program by reading all its training slides and reaching every practical target below. Tap <b>+</b> each time you do a task on site — with a photo as proof.';
+    document.getElementById('pageTitle').textContent=prog.name;
+
+    var regroup=null;
 
     function refresh(){
+      if(regroup) regroup();
       var p=MJM.progress(slug);
       status.hidden=false;
       if(p.complete){
@@ -479,14 +480,35 @@
     var keys=Object.keys(prog.practical);
     if(keys.length){
       g2.appendChild(el('div','rg-sub','Reach each target to fulfil the practical requirement. Every + needs a photo — location, date and time are recorded as proof.'));
+      var pendBody=el('div'), allDone=el('div','rg-sub','All practical targets met — see the Completed section below.');
+      allDone.style.display='none';
+      g2.appendChild(pendBody); g2.appendChild(allDone);
+      // Completed tasks drop down here so pending work always stays on top.
+      var g3=el('div','req-group');
+      g3.appendChild(el('h3',null,'<i class="fa-solid fa-circle-check" style="color:var(--green);margin-right:8px"></i>Completed'));
+      g3.appendChild(el('div','rg-sub','Targets already met. Records stay here — tap a job to see its history.'));
+      var doneBody=el('div'); g3.appendChild(doneBody);
+      g3.style.display='none';
+      var rowByKey={};
       keys.forEach(function(k){
         var a=MJM.ACTIVITIES[k];
-        g2.appendChild(actRow({key:k,name:a.name,icon:a.icon,desc:a.desc},'ib-green',prog.practical[k],refresh));
+        rowByKey[k]=actRow({key:k,name:a.name,icon:a.icon,desc:a.desc},'ib-green',prog.practical[k],refresh);
       });
+      regroup=function(){
+        var l=MJM.log();
+        keys.forEach(function(k){
+          var met=(l[k]||0)>=prog.practical[k];
+          (met?doneBody:pendBody).appendChild(rowByKey[k]);
+        });
+        g3.style.display=doneBody.children.length?'':'none';
+        allDone.style.display=pendBody.children.length?'none':'';
+      };
+      root.appendChild(g2);
+      root.appendChild(g3);
     }else{
       g2.appendChild(el('div','rg-sub','No practical tasks for this program — completing the training slides completes it.'));
+      root.appendChild(g2);
     }
-    root.appendChild(g2);
 
     var back=el('a','btn ghost','<i class="fa-solid fa-arrow-left"></i> Back to Training Pathways');
     back.href='nursery.html'; back.style.marginTop='26px';
@@ -505,14 +527,49 @@
       {title:'Site Office', sub:'Admin and sales work at the site office.', color:'ib-forest',
        keys:['order','report','collection']}
     ];
+    /* An activity's target here = the highest target any program sets for it */
+    function targetFor(k){
+      var t=0;
+      Object.keys(MJM.PROGRAMS).forEach(function(s){
+        var v=MJM.PROGRAMS[s].practical[k];
+        if(v&&v>t) t=v;
+      });
+      return t||null;
+    }
+
+    var rowByKey={}, homeBody={}, groupEls=[];
     GROUPS.forEach(function(g){
       var grp=el('div','req-group','<h3>'+g.title+'</h3><div class="rg-sub">'+g.sub+'</div>');
+      var body=el('div'); grp.appendChild(body);
       g.keys.forEach(function(k){
         var a=MJM.ACTIVITIES[k];
-        grp.appendChild(actRow({key:k,name:a.name,icon:a.icon,desc:a.desc},g.color,null,null));
+        rowByKey[k]=actRow({key:k,name:a.name,icon:a.icon,desc:a.desc},g.color,targetFor(k),regroup);
+        homeBody[k]=body;
       });
       root.appendChild(grp);
+      groupEls.push({grp:grp,body:body});
     });
+
+    /* Completed jobs drop down here — pending work always stays on top */
+    var doneGrp=el('div','req-group',
+      '<h3><i class="fa-solid fa-circle-check" style="color:var(--green);margin-right:8px"></i>Completed</h3>'+
+      '<div class="rg-sub">Targets already met. Records stay here — tap a job to see its history.</div>');
+    var doneBody=el('div'); doneGrp.appendChild(doneBody);
+    doneGrp.style.display='none';
+    root.appendChild(doneGrp);
+
+    function regroup(){
+      var l=MJM.log();
+      GROUPS.forEach(function(g){
+        g.keys.forEach(function(k){
+          var t=targetFor(k), met=!!t&&(l[k]||0)>=t;
+          (met?doneBody:homeBody[k]).appendChild(rowByKey[k]);
+        });
+      });
+      groupEls.forEach(function(x){ x.grp.style.display=x.body.children.length?'':'none'; });
+      doneGrp.style.display=doneBody.children.length?'':'none';
+    }
+    regroup();
 
     var banner=el('a','cert-banner',
       '<div class="cb-icon"><i class="fa-solid fa-award"></i></div>'+
@@ -521,6 +578,26 @@
       '<span class="cb-go"><i class="fa-solid fa-arrow-right"></i></span>');
     banner.href='certificate.html'; banner.style.marginTop='30px';
     root.appendChild(banner);
+
+    /* Trainers/admin only: link to the proof-review page (its banner was
+       removed from the module-selection page). */
+    (async function(){
+      try{
+        if(!_sb) return;
+        var s=await _sb.auth.getSession();
+        var u=s&&s.data&&s.data.session&&s.data.session.user;
+        if(!u) return;
+        var r=await _sb.from('shared_profiles').select('permissions').eq('id',u.id).single();
+        if(r.error||!r.data||!r.data.permissions||!r.data.permissions.manage_users) return;
+        var rv=el('a','cert-banner',
+          '<div class="cb-icon" style="background:linear-gradient(135deg,#8a5a2b,#5c3d1e)"><i class="fa-solid fa-camera"></i></div>'+
+          '<div class="cb-text"><h3>Practical Proof Review <span style="font-size:.7em;opacity:.7">— trainers/admin</span></h3>'+
+          '<p>Review every trainee\'s proof records — photos, locations and times — before certifying.</p></div>'+
+          '<span class="cb-go"><i class="fa-solid fa-arrow-right"></i></span>');
+        rv.href='review.html'; rv.style.marginTop='18px';
+        root.appendChild(rv);
+      }catch(e){}
+    })();
   }
 
   var slug=param('program');
