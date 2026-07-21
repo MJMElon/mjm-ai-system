@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Practical Record — MJM Training Center</title>
+<title>MJM Nursery Practical Record — MJM Training Center</title>
 <meta name="description" content="Record your practical work — every task you complete counts toward completing each program.">
 <meta name="theme-color" content="#1E3A20">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
@@ -47,6 +47,13 @@
   .ph-item a{color:#2f7d32;font-weight:700;text-decoration:none;}
   .ph-item .ph-pend{color:#a15c00;font-weight:700;font-size:.72rem;}
   .ph-empty{font-size:.8rem;color:#7d8d7d;padding:4px 0;}
+  /* ── Collapsible category groups ────────────────────────── */
+  .req-group.clps>h3{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;user-select:none;}
+  .req-group.clps>h3 .clps-n{font-size:.72em;font-weight:800;color:#5c7a5c;background:#eef4ee;border:1px solid #dbe5db;border-radius:999px;padding:2px 10px;margin-left:auto;}
+  .req-group.clps>h3 .clps-arrow{color:#8ba18b;font-size:.75em;transition:transform .15s;}
+  .req-group.clps.open>h3 .clps-arrow{transform:rotate(180deg);}
+  .req-group.clps .grp-body{display:none;}
+  .req-group.clps.open .grp-body{display:block;}
 </style>
 </head>
 <body>
@@ -69,7 +76,7 @@
 
 <section class="slide"><div class="wrap">
   <div class="titlewrap">
-    <h2 class="slide-title" id="pageTitle">Practical Record</h2>
+    <h2 class="slide-title" id="pageTitle">MJM Nursery Practical Record</h2>
   </div>
   <div class="cert-pick" style="max-width:760px">
     <span class="cstatus" id="progStatus" hidden></span>
@@ -527,8 +534,12 @@
       {title:'Site Office', sub:'Admin and sales work at the site office.', color:'ib-forest',
        keys:['order','report','collection']}
     ];
-    /* An activity's target here = the highest target any program sets for it */
+    /* If an admin assigned this user a role, only that role's practicals
+       show, with the role's targets. Otherwise show everything, with each
+       activity's highest target across all programs. */
+    var roleMap=MJM.rolePractical();
     function targetFor(k){
+      if(roleMap) return roleMap[k]||null;
       var t=0;
       Object.keys(MJM.PROGRAMS).forEach(function(s){
         var v=MJM.PROGRAMS[s].practical[k];
@@ -536,73 +547,77 @@
       });
       return t||null;
     }
+    function keyShown(k){ return roleMap?!!roleMap[k]:true; }
+
+    var rk=MJM.roleKey();
+    if(rk){
+      root.appendChild(el('div','rg-sub',
+        '<i class="fa-solid fa-user-check" style="color:var(--green);margin-right:6px"></i>Your role: <b>'+
+        MJM.ROLES[rk].name+'</b> — showing the practicals this role must complete.'));
+    }
+
+    /* Categories are collapsed by default — tap one to expand its jobs */
+    function collapsibleGroup(titleHtml,sub){
+      var grp=el('div','req-group clps');
+      var head=el('h3',null,'<span>'+titleHtml+'</span><span class="clps-n" data-n></span><i class="fa-solid fa-chevron-down clps-arrow"></i>');
+      head.addEventListener('click',function(){ grp.classList.toggle('open'); });
+      grp.appendChild(head);
+      grp.appendChild(el('div','rg-sub',sub));
+      var body=el('div','grp-body'); grp.appendChild(body);
+      return {grp:grp,body:body,n:head.querySelector('[data-n]')};
+    }
 
     var rowByKey={}, homeBody={}, groupEls=[];
     GROUPS.forEach(function(g){
-      var grp=el('div','req-group','<h3>'+g.title+'</h3><div class="rg-sub">'+g.sub+'</div>');
-      var body=el('div'); grp.appendChild(body);
-      g.keys.forEach(function(k){
+      var keys=g.keys.filter(keyShown);
+      if(!keys.length) return;
+      var c=collapsibleGroup(g.title,g.sub);
+      keys.forEach(function(k){
         var a=MJM.ACTIVITIES[k];
         rowByKey[k]=actRow({key:k,name:a.name,icon:a.icon,desc:a.desc},g.color,targetFor(k),regroup);
-        homeBody[k]=body;
+        homeBody[k]=c.body;
       });
-      root.appendChild(grp);
-      groupEls.push({grp:grp,body:body});
+      root.appendChild(c.grp);
+      groupEls.push({grp:c.grp,body:c.body,n:c.n,keys:keys});
     });
 
     /* Completed jobs drop down here — pending work always stays on top */
-    var doneGrp=el('div','req-group',
-      '<h3><i class="fa-solid fa-circle-check" style="color:var(--green);margin-right:8px"></i>Completed</h3>'+
-      '<div class="rg-sub">Targets already met. Records stay here — tap a job to see its history.</div>');
-    var doneBody=el('div'); doneGrp.appendChild(doneBody);
-    doneGrp.style.display='none';
-    root.appendChild(doneGrp);
+    var done=collapsibleGroup(
+      '<i class="fa-solid fa-circle-check" style="color:var(--green);margin-right:8px"></i>Completed',
+      'Targets already met. Records stay here — tap a job to see its history.');
+    done.grp.style.display='none';
+    root.appendChild(done.grp);
 
     function regroup(){
       var l=MJM.log();
-      GROUPS.forEach(function(g){
-        g.keys.forEach(function(k){
+      groupEls.forEach(function(x){
+        x.keys.forEach(function(k){
           var t=targetFor(k), met=!!t&&(l[k]||0)>=t;
-          (met?doneBody:homeBody[k]).appendChild(rowByKey[k]);
+          (met?done.body:homeBody[k]).appendChild(rowByKey[k]);
         });
       });
-      groupEls.forEach(function(x){ x.grp.style.display=x.body.children.length?'':'none'; });
-      doneGrp.style.display=doneBody.children.length?'':'none';
+      groupEls.forEach(function(x){
+        x.grp.style.display=x.body.children.length?'':'none';
+        x.n.textContent=x.body.children.length+' job'+(x.body.children.length===1?'':'s');
+      });
+      done.grp.style.display=done.body.children.length?'':'none';
+      done.n.textContent=done.body.children.length+' job'+(done.body.children.length===1?'':'s');
     }
     regroup();
-
-    var banner=el('a','cert-banner',
-      '<div class="cb-icon"><i class="fa-solid fa-award"></i></div>'+
-      '<div class="cb-text"><h3>Check your certification progress</h3>'+
-      '<p>See how your logged work counts toward each program and role — and claim your certificate when you\'re ready.</p></div>'+
-      '<span class="cb-go"><i class="fa-solid fa-arrow-right"></i></span>');
-    banner.href='certificate.html'; banner.style.marginTop='30px';
-    root.appendChild(banner);
-
-    /* Trainers/admin only: link to the proof-review page (its banner was
-       removed from the module-selection page). */
-    (async function(){
-      try{
-        if(!_sb) return;
-        var s=await _sb.auth.getSession();
-        var u=s&&s.data&&s.data.session&&s.data.session.user;
-        if(!u) return;
-        var r=await _sb.from('shared_profiles').select('permissions').eq('id',u.id).single();
-        if(r.error||!r.data||!r.data.permissions||!r.data.permissions.manage_users) return;
-        var rv=el('a','cert-banner',
-          '<div class="cb-icon" style="background:linear-gradient(135deg,#8a5a2b,#5c3d1e)"><i class="fa-solid fa-camera"></i></div>'+
-          '<div class="cb-text"><h3>Practical Proof Review <span style="font-size:.7em;opacity:.7">— trainers/admin</span></h3>'+
-          '<p>Review every trainee\'s proof records — photos, locations and times — before certifying.</p></div>'+
-          '<span class="cb-go"><i class="fa-solid fa-arrow-right"></i></span>');
-        rv.href='review.html'; rv.style.marginTop='18px';
-        root.appendChild(rv);
-      }catch(e){}
-    })();
   }
 
-  var slug=param('program');
-  if(slug&&MJM.PROGRAMS[slug]) renderProgram(slug);
-  else renderAll();
+  var slug=param('program'), usedAll=!(slug&&MJM.PROGRAMS[slug]);
+  if(usedAll) renderAll();
+  else renderProgram(slug);
+
+  // Refresh this user's role/slides settings from the server in the
+  // background; re-render if an admin changed them since last visit.
+  if(_sb&&usedAll){
+    var _before=JSON.stringify(MJM.trainingAccess());
+    MJM.refreshTrainingAccess(_sb).then(function(c){
+      if(c&&JSON.stringify(c)!==_before){ root.innerHTML=''; renderAll(); }
+    });
+  }
 
   // Try to push any offline-queued proofs up in the background.
   syncPending();
