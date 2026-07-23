@@ -7,10 +7,6 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<!-- Chart.js drives the twin bar+line charts on the Seed Received Summary. -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<!-- jsPDF renders the two-chart download PDF for the same report. -->
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_access.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
@@ -99,7 +95,6 @@
               <option value="batch_production">Batch Production Summary</option>
               <option value="nursery_movement">Nursery Movement Report (by Plot / Batch)</option>
               <option value="seedling_sales">Seedling Sales Report (Yearly)</option>
-              <option value="seed_received">Seed Received Summary Report</option>
             </select>
           </div>
         </div>
@@ -122,18 +117,6 @@
           <label class="label-style">Breed</label>
           <select id="f-breed" class="input-style">
             <option value="">All breeds</option>
-          </select>
-        </div>
-        <div class="md:col-span-3 f-supplier hidden">
-          <label class="label-style">Supplier</label>
-          <select id="f-supplier" class="input-style">
-            <option value="">All suppliers</option>
-          </select>
-        </div>
-        <div class="md:col-span-2 f-year-single hidden">
-          <label class="label-style">Year</label>
-          <select id="f-year-single" class="input-style">
-            <option value="">All years</option>
           </select>
         </div>
         <div class="md:col-span-2 f-sales-mode hidden">
@@ -456,7 +439,6 @@ async function runReport() {
   if (which === 'batch_production')   return runBatchProduction();
   if (which === 'nursery_movement')   return runSummaryMovement();
   if (which === 'seedling_sales')     return runSeedlingSales();
-  if (which === 'seed_received')      return runSeedReceived();
 }
 
 // ── Filter visibility by report type ─────────────────────────────────────────
@@ -465,15 +447,12 @@ function syncFilterVisibility() {
   const isMove    = (which === 'nursery_movement');
   const isBatch   = (which === 'batch_production');
   const isSales   = (which === 'seedling_sales');
-  const isSeed    = (which === 'seed_received');
   document.querySelectorAll('.f-range').forEach(el         => el.classList.toggle('hidden', !(isBatch || isMove)));
   document.querySelectorAll('.f-group').forEach(el         => el.classList.toggle('hidden', !isMove));
   document.querySelectorAll('.f-nursery-pick').forEach(el  => el.classList.toggle('hidden', !isMove));
   document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !isBatch));
   document.querySelectorAll('.f-sales-mode').forEach(el    => el.classList.toggle('hidden', !isSales));
   document.querySelectorAll('.f-sales-years').forEach(el   => el.classList.toggle('hidden', !isSales));
-  document.querySelectorAll('.f-supplier').forEach(el      => el.classList.toggle('hidden', !isSeed));
-  document.querySelectorAll('.f-year-single').forEach(el   => el.classList.toggle('hidden', !isSeed));
 }
 
 // View mode (Table vs Chart) for the Seedling Sales report
@@ -512,13 +491,6 @@ function selectedNurseries() {
 
 document.getElementById('f-run').addEventListener('click', runReport);
 document.getElementById('f-report').addEventListener('change', () => { syncFilterVisibility(); runReport(); });
-// Seed Received filters — re-run instantly when either changes.
-['f-supplier', 'f-year-single'].forEach(id => {
-  const el = document.getElementById(id);
-  if (el) el.addEventListener('change', () => {
-    if (document.getElementById('f-report').value === 'seed_received') runReport();
-  });
-});
 
 // ════════════════════════════════════════════════════════════════════════════
 // Seedling Sales Report (year × month grid)
@@ -732,336 +704,6 @@ async function runSeedlingSales() {
     </div>
   `;
 }
-
-// ════════════════════════════════════════════════════════════════════════════
-// Seed Received Summary Report
-// ════════════════════════════════════════════════════════════════════════════
-// Per (supplier, breed) group, plot two charts against a shared row set:
-//   1. Seed Received      — Actual received bar + Purchased (+5%) bar +
-//                           Variance % line on a secondary axis.
-//   2. Seed Damage         — Seed damage % bar + Maximum-allowed 5% line.
-// Under the charts a review table (all detail columns) is visible in the
-// app; the PDF download strips it out and prints only the two charts,
-// heading, and a signature line stamped with the logged-in user's name.
-//
-// Row model per Seeds_Received log (one per batch):
-//   supplier          — parsed from remark "Supplier: <name>."
-//   breed             — from breed_name column
-//   date              — transaction_date
-//   batch             — batch_name
-//   purchased         — parsed from remark "DO_Qty: <n>."
-//   purchasedWith5    — purchased * 1.05  (delivery-note qty, +5% buffer)
-//   received          — quantity_change on the Seeds_Received log
-//   variancePct       — (received − purchasedWith5) / purchasedWith5 * 100
-//   damaged           — |sum of Damaged_Seeds qty for same batch|
-//   damagedPct        — damaged / purchasedWith5 * 100
-//   maxDamagedPct     — 5 (constant; the supplier acceptance ceiling)
-//
-// Invoice-number label used on the x-axis: SSO/YYYY/MM/DD (B.<batch>)
-// matches the sample PDF the user attached. If a batch has no Seeds_Received
-// remark parseable, the row still shows using batch_name as the label.
-
-let _seedRcvChart1 = null;   // Chart.js instance — Seed Received
-let _seedRcvChart2 = null;   // Chart.js instance — Seed Damage
-let _seedRcvGroups = [];     // last-computed groups, used by the PDF download
-
-function _parseRemarkField(remark, field) {
-  if (!remark) return null;
-  const m = String(remark).match(new RegExp(field + '\\s*:\\s*([^.\\n]+?)(?:\\.|$)'));
-  return m ? m[1].trim() : null;
-}
-function _invoiceLabel(dateStr, batch) {
-  if (!dateStr) return `B.${batch || '—'}`;
-  const d = String(dateStr).slice(0, 10).replace(/-/g, '/');
-  return `SSO/${d} (B.${batch || '—'})`;
-}
-
-// Populate the Supplier and Year filter dropdowns from what's on record
-// so the user only ever picks values that produce results.
-async function _seedRcvPopulateFilters() {
-  const supSel = document.getElementById('f-supplier');
-  const yrSel  = document.getElementById('f-year-single');
-  if (!supSel || !yrSel) return;
-  // Cheap query — only Seeds_Received rows carry the (supplier, year) pair we need.
-  const { data } = await _supabase.from('shared_inventory_logs')
-    .select('remark, transaction_date, created_at')
-    .eq('transaction_type', 'Seeds_Received');
-  const suppliers = new Set();
-  const years     = new Set();
-  (data || []).forEach(r => {
-    const sup = _parseRemarkField(r.remark, 'Supplier');
-    if (sup) suppliers.add(sup);
-    const d = r.transaction_date || r.created_at;
-    if (d) years.add(new Date(d).getFullYear());
-  });
-  const prevSup = supSel.value;
-  const prevYr  = yrSel.value;
-  supSel.innerHTML = '<option value="">All suppliers</option>' +
-    Array.from(suppliers).sort().map(s => `<option value="${_htmlEsc(s)}">${_htmlEsc(s)}</option>`).join('');
-  yrSel.innerHTML  = '<option value="">All years</option>' +
-    Array.from(years).sort((a,b)=>b-a).map(y => `<option value="${y}">${y}</option>`).join('');
-  // Restore previous selections if they still exist.
-  if (prevSup && Array.from(supSel.options).some(o => o.value === prevSup)) supSel.value = prevSup;
-  if (prevYr  && Array.from(yrSel.options).some(o  => o.value === prevYr))  yrSel.value  = prevYr;
-}
-function _htmlEsc(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-async function runSeedReceived() {
-  const out = document.getElementById('report-output');
-  const loading = document.getElementById('loading');
-  out.classList.add('hidden');
-  loading.classList.remove('hidden');
-
-  await _seedRcvPopulateFilters();
-  const supplierFilter = document.getElementById('f-supplier').value;
-  const yearFilter     = document.getElementById('f-year-single').value;
-
-  const [rcvRes, dmgRes] = await Promise.all([
-    _supabase.from('shared_inventory_logs')
-      .select('batch_name, breed_name, quantity_change, transaction_date, created_at, remark')
-      .eq('transaction_type', 'Seeds_Received')
-      .order('transaction_date', { ascending: true }),
-    _supabase.from('shared_inventory_logs')
-      .select('batch_name, quantity_change')
-      .eq('transaction_type', 'Damaged_Seeds')
-  ]);
-  if (rcvRes.error) {
-    loading.classList.add('hidden');
-    out.classList.remove('hidden');
-    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-red-700 text-sm">Failed to load Seeds_Received: ${rcvRes.error.message}</div>`;
-    return;
-  }
-  const damagedByBatch = {};
-  (dmgRes.data || []).forEach(r => {
-    damagedByBatch[r.batch_name] = (damagedByBatch[r.batch_name] || 0) + Math.abs(Number(r.quantity_change || 0));
-  });
-
-  // Row per Seeds_Received log, then group by (supplier, breed).
-  const groupMap = {};
-  (rcvRes.data || []).forEach(r => {
-    const dateStr = r.transaction_date || r.created_at;
-    if (!dateStr) return;
-    const year = new Date(dateStr).getFullYear();
-    if (yearFilter && String(year) !== String(yearFilter)) return;
-    const supplier = _parseRemarkField(r.remark, 'Supplier') || 'Unknown supplier';
-    if (supplierFilter && supplier !== supplierFilter) return;
-    const breed = r.breed_name || 'Unspecified';
-    const doQtyRaw = _parseRemarkField(r.remark, 'DO_Qty') || _parseRemarkField(r.remark, 'D/O');
-    const purchased = Number(String(doQtyRaw || '').replace(/[^\d]/g, '')) || 0;
-    const purchasedWith5 = Math.round(purchased * 1.05);
-    const received = Number(r.quantity_change || 0);
-    const varPct   = purchasedWith5 > 0 ? ((received - purchasedWith5) / purchasedWith5) * 100 : 0;
-    const damaged  = damagedByBatch[r.batch_name] || 0;
-    const damagedPct = purchasedWith5 > 0 ? (damaged / purchasedWith5) * 100 : 0;
-
-    const key = `${supplier}||${breed}`;
-    if (!groupMap[key]) groupMap[key] = { supplier, breed, rows: [] };
-    groupMap[key].rows.push({
-      date: dateStr.slice(0, 10),
-      invoice: _invoiceLabel(dateStr, r.batch_name),
-      batch: r.batch_name,
-      purchased, purchasedWith5, received,
-      varPct, damaged, damagedPct, maxDamagedPct: 5
-    });
-  });
-
-  const groups = Object.values(groupMap).map(g => {
-    g.rows.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-    return g;
-  }).sort((a, b) => a.supplier.localeCompare(b.supplier) || a.breed.localeCompare(b.breed));
-
-  _seedRcvGroups = groups;
-
-  loading.classList.add('hidden');
-  out.classList.remove('hidden');
-
-  if (!groups.length) {
-    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-[#8a7a68] text-sm">No Seed Received records found for the selected filters.</div>`;
-    return;
-  }
-
-  const yearNote = yearFilter ? ` · ${yearFilter}` : '';
-  const supNote  = supplierFilter ? ` · ${supplierFilter}` : '';
-  out.innerHTML = groups.map((g, gi) => `
-    <div class="glass-panel p-6 rounded-[2rem]" data-seed-group="${gi}">
-      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
-        <div>
-          <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Seed Received Summary — ${_htmlEsc(g.breed)}</h3>
-          <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1">Supplier: ${_htmlEsc(g.supplier)}${yearNote}${supNote ? '' : ''}</div>
-        </div>
-        <button onclick="downloadSeedReceivedPDF(${gi})" class="text-[10px] font-black text-white uppercase tracking-widest bg-[#4a7a2e] hover:bg-[#3d6423] px-4 py-2 rounded-xl shadow">⬇ Download PDF</button>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="border border-[#e8dcc8] rounded-2xl p-3 bg-white">
-          <div class="text-[11px] font-black text-[#3d2610] uppercase tracking-widest mb-2">Seed Received — ${_htmlEsc(g.breed)}</div>
-          <div style="position:relative;height:260px"><canvas id="seedRcv-received-${gi}"></canvas></div>
-        </div>
-        <div class="border border-[#e8dcc8] rounded-2xl p-3 bg-white">
-          <div class="text-[11px] font-black text-[#3d2610] uppercase tracking-widest mb-2">Seed Damage — ${_htmlEsc(g.breed)}</div>
-          <div style="position:relative;height:260px"><canvas id="seedRcv-damage-${gi}"></canvas></div>
-        </div>
-      </div>
-
-      <div class="overflow-x-auto mt-6">
-        <table class="report-table w-full">
-          <thead><tr>
-            <th>Invoice No.</th>
-            <th class="text-right">Seed Purchased</th>
-            <th class="text-right">Seed Purchased (+5%)</th>
-            <th class="text-right">Actual Received</th>
-            <th class="text-right">Variance (%)</th>
-            <th class="text-right">Seed Damage</th>
-            <th class="text-right">Maximum (%)</th>
-            <th class="text-right">Damage (%)</th>
-            <th class="text-right">Delivery Note Qty</th>
-          </tr></thead>
-          <tbody>
-            ${g.rows.map(r => `
-              <tr>
-                <td class="font-black text-[#3d2610]">${_htmlEsc(r.invoice)}</td>
-                <td class="text-right">${fmtNum(r.purchased)}</td>
-                <td class="text-right">${fmtNum(r.purchasedWith5)}</td>
-                <td class="text-right font-black text-[#4a7a2e]">${fmtNum(r.received)}</td>
-                <td class="text-right ${r.varPct >= 0 ? 'text-[#4a7a2e]' : 'text-[#a83020]'} font-black">${(r.varPct >= 0 ? '+' : '') + r.varPct.toFixed(2)}%</td>
-                <td class="text-right text-[#a83020] font-black">${fmtNum(r.damaged)}</td>
-                <td class="text-right text-[#8a7a68]">${r.maxDamagedPct}%</td>
-                <td class="text-right ${r.damagedPct <= r.maxDamagedPct ? 'text-[#4a7a2e]' : 'text-[#a83020]'} font-black">${r.damagedPct.toFixed(2)}%</td>
-                <td class="text-right">${fmtNum(r.purchasedWith5)}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
-
-      <div class="text-[10px] font-bold text-[#8a7a68] mt-4 leading-relaxed">
-        <strong class="text-[#3d2610]">Notes —</strong>
-        Delivery Note Quantity = D/O purchased qty × 1.05 (supplier's +5% buffer). Variance compares
-        Actual Received to Delivery Note Quantity; Damage % is Damaged Seeds ÷ Delivery Note Quantity.
-        Maximum acceptable damage per invoice: 5%.
-      </div>
-    </div>
-  `).join('');
-
-  // Kill any old Chart instances before rendering new ones.
-  if (_seedRcvChart1) try { _seedRcvChart1.forEach(c => c.destroy()); } catch(e){}
-  if (_seedRcvChart2) try { _seedRcvChart2.forEach(c => c.destroy()); } catch(e){}
-  _seedRcvChart1 = []; _seedRcvChart2 = [];
-
-  groups.forEach((g, gi) => {
-    const labels = g.rows.map(r => r.invoice);
-    // Received chart: two overlapping bars + variance % line on a secondary axis.
-    _seedRcvChart1.push(new Chart(document.getElementById(`seedRcv-received-${gi}`), {
-      data: {
-        labels,
-        datasets: [
-          { type: 'bar', label: 'Seed Purchased (+5%)', data: g.rows.map(r => r.purchasedWith5),
-            backgroundColor: 'rgba(197, 227, 179, 0.65)', borderColor:'#c5e3b3', borderWidth:1, order: 3 },
-          { type: 'bar', label: 'Actual Seed Received', data: g.rows.map(r => r.received),
-            backgroundColor: '#6aa83c', borderColor:'#4a7a2e', borderWidth:1, order: 2 },
-          { type: 'line', label: 'Variance (%)', data: g.rows.map(r => r.varPct),
-            yAxisID:'variance', borderColor:'#1a150d', backgroundColor:'#1a150d',
-            pointRadius: 3, pointBackgroundColor:'#1a150d', tension: 0, order: 1 }
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        scales: {
-          x: { ticks: { font: { size: 9 } } },
-          y: { beginAtZero: true, title: { display: true, text: 'Quantity of Seeds' } },
-          variance: {
-            position: 'right', title: { display: true, text: 'Variance (%)' },
-            ticks: { callback: v => v + '%' },
-            grid: { drawOnChartArea: false }
-          }
-        },
-        plugins: { legend: { position: 'top', labels: { font: { size: 10 } } } }
-      }
-    }));
-    // Damage chart: damage % bar + constant 5% max line.
-    _seedRcvChart2.push(new Chart(document.getElementById(`seedRcv-damage-${gi}`), {
-      data: {
-        labels,
-        datasets: [
-          { type: 'bar', label: 'Seed Damage (%)', data: g.rows.map(r => Number(r.damagedPct.toFixed(2))),
-            backgroundColor: '#6aa83c', borderColor:'#4a7a2e', borderWidth:1, order: 2 },
-          { type: 'line', label: 'Maximum (%)', data: g.rows.map(_ => 5),
-            borderColor:'#a83020', backgroundColor:'#a83020', pointRadius: 0, borderDash: [4, 4], order: 1 }
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        scales: {
-          x: { ticks: { font: { size: 9 } } },
-          y: { beginAtZero: true, title: { display: true, text: 'Seed Damage' },
-               ticks: { callback: v => v + '%' } }
-        },
-        plugins: { legend: { position: 'top', labels: { font: { size: 10 } } } }
-      }
-    }));
-  });
-}
-
-// PDF download: only header + two charts + signature line stamped with
-// the logged-in user's name. The on-screen review table is dropped.
-async function downloadSeedReceivedPDF(gi) {
-  const g = _seedRcvGroups[gi];
-  if (!g) return;
-  const chart1 = _seedRcvChart1 && _seedRcvChart1[gi];
-  const chart2 = _seedRcvChart2 && _seedRcvChart2[gi];
-  if (!chart1 || !chart2) { alert('Charts not ready yet — click Run Report first.'); return; }
-  const img1 = chart1.toBase64Image('image/png', 1);
-  const img2 = chart2.toBase64Image('image/png', 1);
-
-  // Who's downloading? Prefer MJMAccess (populated on session load) so
-  // the signature block matches the app-wide identity.
-  let userName = '';
-  try {
-    if (window.MJMAccess && MJMAccess.user) userName = MJMAccess.user.full_name || MJMAccess.user.email || '';
-  } catch(e) {}
-  if (!userName) {
-    try { const u = JSON.parse(localStorage.getItem('mjm_user') || 'null');
-          if (u) userName = u.full_name || u.name || u.email || ''; } catch(e) {}
-  }
-
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-  const pageW = doc.internal.pageSize.getWidth();
-  let y = 40;
-
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
-  doc.text('MEGA JUTAMAS SDN BHD', pageW / 2, y, { align: 'center' }); y += 20;
-  doc.setFontSize(12);
-  doc.text('SEED RECEIVED SUMMARY REPORT', pageW / 2, y, { align: 'center' }); y += 24;
-
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-  doc.text(`Supplier Name : ${g.supplier}`, 40, y); y += 14;
-  doc.text(`Breed : ${g.breed}`, 40, y); y += 18;
-
-  // Two-chart panel — 480 × 200 pts each, stacked.
-  const imgW = pageW - 80;
-  const imgH = 220;
-  doc.setFont('helvetica','bold'); doc.setFontSize(10);
-  doc.text(`Seed Received - ${g.breed}`, 40, y); y += 8;
-  doc.addImage(img1, 'PNG', 40, y, imgW, imgH); y += imgH + 18;
-  doc.text(`Seed Damage - ${g.breed}`, 40, y); y += 8;
-  doc.addImage(img2, 'PNG', 40, y, imgW, imgH); y += imgH + 24;
-
-  doc.setFont('helvetica','normal'); doc.setFontSize(9);
-  doc.text('Prepared and Verified by', 40, y); y += 26;
-  doc.line(40, y, 200, y); y += 12;
-  doc.setFont('helvetica','bold');
-  doc.text(userName || '—', 40, y); y += 14;
-  doc.setFont('helvetica','normal');
-  const today = new Date().toLocaleDateString('en-MY', { day:'2-digit', month:'2-digit', year:'numeric' });
-  doc.text(today, 40, y);
-
-  const safe = (s) => String(s).replace(/[^A-Za-z0-9_-]/g, '_');
-  doc.save(`Seed_Received_${safe(g.supplier)}_${safe(g.breed)}_${new Date().toISOString().slice(0,10)}.pdf`);
-}
-window.downloadSeedReceivedPDF = downloadSeedReceivedPDF;
 
 // ════════════════════════════════════════════════════════════════════════════
 // Nursery Summary Report (per-nursery monthly movement for a chosen year)
