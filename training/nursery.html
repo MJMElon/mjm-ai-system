@@ -134,20 +134,23 @@
 (function(){
   MJM.initTopbar();
   // Fill the Result column with each program's combined score
-  // (slides read + practical logged). 100% = program complete.
-  [].forEach.call(document.querySelectorAll('.score-pill'),function(pill){
-    var slug=pill.getAttribute('data-prog');
-    if(!MJM.PROGRAMS[slug]) return;
-    var p=MJM.progress(slug);
-    if(p.complete){
-      pill.classList.add('full');
-      pill.innerHTML='<i class="fa-solid fa-circle-check"></i> Complete';
-    }else{
-      pill.textContent=p.score+'%';
-    }
-    pill.title='Slides '+p.slides.got+'/'+p.slides.total+
-      (p.practical.length?' · Practical '+p.practicalPct+'%':'');
-  });
+  // (slides read + practical assessed). 100% = program complete.
+  function paintPills(){
+    [].forEach.call(document.querySelectorAll('.score-pill'),function(pill){
+      var slug=pill.getAttribute('data-prog');
+      if(!MJM.PROGRAMS[slug]) return;
+      var p=MJM.progress(slug);
+      if(p.complete){
+        pill.classList.add('full');
+        pill.innerHTML='<i class="fa-solid fa-circle-check"></i> Complete';
+      }else{
+        pill.textContent=p.score+'%';
+      }
+      pill.title='Slides '+p.slides.got+'/'+p.slides.total+
+        (p.practical.length?' · Practical '+p.practicalPct+'%':'');
+    });
+  }
+  paintPills();
 
   // Hide the whole program row when an admin unticked its slides for
   // this user (set in Training User Access). Cache first, then refresh.
@@ -163,6 +166,9 @@
     if(window.supabase&&window.SHARED_SUPA_URL){
       var _sb=supabase.createClient(SHARED_SUPA_URL,SHARED_SUPA_KEY);
       MJM.refreshTrainingAccess(_sb).then(function(c){ if(c) applySlideAccess(); });
+      // Pull assessments recorded for this user so the Result column
+      // reflects them on any device.
+      MJM.syncAssessments(_sb).then(function(t){ if(t) paintPills(); });
     }
   }catch(e){}
 })();
