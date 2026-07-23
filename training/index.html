@@ -36,7 +36,7 @@ try{
 
 <div class="tc-tabs">
   <span class="tc-tab active"><i class="fa-solid fa-table-cells-large"></i> Modules</span>
-  <a class="tc-tab" href="logbook.html"><i class="fa-solid fa-camera"></i> Practical Record</a>
+  <a class="tc-tab" href="logbook.html"><i class="fa-solid fa-clipboard-check"></i> Assessment Record</a>
   <span class="tc-swipe-hint"><i class="fa-solid fa-left-right"></i> swipe</span>
   <button type="button" class="tc-start" id="tcStart"></button>
 </div>
@@ -102,6 +102,7 @@ MJM.initTopbar();
     if(window.supabase&&window.SHARED_SUPA_URL){
       var _sb=supabase.createClient(SHARED_SUPA_URL,SHARED_SUPA_KEY);
       MJM.refreshTrainingAccess(_sb).then(function(c){ if(c) applyVibe(); });
+      MJM.syncAssessments(_sb);
     }
   }catch(e){}
 })();

@@ -210,6 +210,29 @@ window.MJM = (function(){
       });
     }).catch(function(){ return null; });
   }
+  /* Pull this user's assessment counts (recorded by assessors in the
+     Assessment Record) into the local practical log, so progress and
+     certification pages reflect them on any device. */
+  function syncAssessments(sb){
+    return sb.auth.getSession().then(function(s){
+      var sess=s&&s.data&&s.data.session;
+      var em=sess&&sess.user&&sess.user.email;
+      if(!em) return null;
+      return sb.from('training_assessments').select('activity')
+        .eq('trainee_email',em).limit(5000).then(function(r){
+          if(r.error||!r.data) return null;
+          var tally={};
+          r.data.forEach(function(x){ tally[x.activity]=(tally[x.activity]||0)+1; });
+          var l=log(), changed=false;
+          Object.keys(tally).forEach(function(k){
+            if((l[k]||0)<tally[k]){ l[k]=tally[k]; changed=true; }
+          });
+          if(changed) saveLog(l);
+          return tally;
+        });
+    }).catch(function(){ return null; });
+  }
+
   /* Drop-in guard for a slide page: bounce users who may not see it. */
   function guardSlide(slug){
     if(!allowedSlide(slug)){ location.replace('nursery.html'); return false; }
@@ -222,7 +245,8 @@ window.MJM = (function(){
     startPage:startPage, setStartPage:setStartPage,
     trainingAccess:trainingAccess, nurseryAccess:nurseryAccess, vibeAccess:vibeAccess,
     roleKey:roleKey, allowedSlide:allowedSlide,
-    rolePractical:rolePractical, refreshTrainingAccess:refreshTrainingAccess, guardSlide:guardSlide,
+    rolePractical:rolePractical, refreshTrainingAccess:refreshTrainingAccess,
+    syncAssessments:syncAssessments, guardSlide:guardSlide,
     get:get, set:set,
     readCount:readCount, pageTotal:pageTotal, log:log, saveLog:saveLog,
     progress:progress, initTopbar:initTopbar

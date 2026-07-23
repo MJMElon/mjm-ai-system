@@ -216,6 +216,9 @@
   /* ── Supabase (shares the AI System login on this domain) ── */
   var _sb=null;
   try{ _sb=supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY); }catch(e){}
+  // Pull assessments recorded for this user into the local log so
+  // certification progress reflects them on any device.
+  if(_sb){ try{ MJM.syncAssessments(_sb); }catch(e){} }
   var _session=null;
   var boardRows=[];       // rows from training_certifications
   var boardReady=false;   // table reachable?
@@ -455,7 +458,7 @@
     reqsEl.innerHTML='';
     var g=el('div','req-group');
     g.appendChild(el('h3',null,'<i class="fa-solid fa-graduation-cap" style="color:var(--green);margin-right:8px"></i>Program Completion'));
-    g.appendChild(el('div','rg-sub','Each program needs all training slides read and its <a href="logbook.html">practical record</a> fulfilled — with photo proof for every task.'));
+    g.appendChild(el('div','rg-sub','Each program needs all training slides read and its <a href="logbook.html">assessment record</a> fulfilled — with photo proof for every task.'));
     state.programs.forEach(function(p){
       var row=el('div','req'+(p.complete?' met':''));
       row.appendChild(el('div','icon-badge','<i class="fa-solid fa-book-open"></i>'));

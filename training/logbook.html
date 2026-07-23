@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MJM Nursery Practical Record — MJM Training Center</title>
-<meta name="description" content="Record your practical work — every task you complete counts toward completing each program.">
+<title>MJM Nursery Assessment Record — MJM Training Center</title>
+<meta name="description" content="Assessors record practical assessments for trainees — with photo, location and time as evidence.">
 <meta name="theme-color" content="#1E3A20">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
@@ -54,6 +54,16 @@
   .req-group.clps.open>h3 .clps-arrow{transform:rotate(180deg);}
   .req-group.clps .grp-body{display:none;}
   .req-group.clps.open .grp-body{display:block;}
+  /* ── Trainee picker ─────────────────────────────────────── */
+  .assess-pick{background:#fff;border:1px solid #e0e8e0;border-radius:18px;box-shadow:0 6px 22px rgba(30,58,32,.08);padding:18px 20px;margin:0 0 22px;}
+  .assess-pick label{display:block;font-size:.72rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#5c7a5c;margin-bottom:8px;}
+  .assess-pick select,.assess-pick input[type=text],.assess-pick input[type=email]{width:100%;border:1px solid #cfdccf;border-radius:12px;padding:11px 14px;font-size:.95rem;font-weight:700;color:#25381f;background:#fbfdfb;outline:none;}
+  .assess-pick select:focus,.assess-pick input:focus{border-color:var(--green,#2f7d32);}
+  .assess-line{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:.85rem;color:#3c4f3c;}
+  .assess-line i{color:var(--green,#2f7d32);}
+  .assess-done{margin:0 0 20px;padding:16px 18px;border-radius:16px;background:linear-gradient(135deg,#eaf6ea,#f6fbf0);border:1px solid #bcd9b4;color:#25501f;font-weight:800;font-size:.95rem;display:flex;align-items:center;gap:10px;}
+  .assess-done i{font-size:1.3rem;color:#2f7d32;}
+  .cbtn.minusless{visibility:hidden;}
 </style>
 </head>
 <body>
@@ -69,35 +79,53 @@
 
 <div class="tc-tabs">
   <a class="tc-tab" href="index.html"><i class="fa-solid fa-table-cells-large"></i> Modules</a>
-  <span class="tc-tab active"><i class="fa-solid fa-camera"></i> Practical Record</span>
+  <span class="tc-tab active"><i class="fa-solid fa-clipboard-check"></i> Assessment Record</span>
   <span class="tc-swipe-hint"><i class="fa-solid fa-left-right"></i> swipe</span>
   <button type="button" class="tc-start" id="tcStart"></button>
 </div>
 
 <section class="slide"><div class="wrap">
   <div class="titlewrap">
-    <h2 class="slide-title" id="pageTitle">MJM Nursery Practical Record</h2>
+    <h2 class="slide-title" id="pageTitle">MJM Nursery Assessment Record</h2>
   </div>
   <div class="cert-pick" style="max-width:760px">
+
+    <div class="assess-pick" id="pickCard">
+      <label><i class="fa-solid fa-user-pen"></i> Who are you assessing?</label>
+      <select id="traineeSel"><option value="">— Choose the trainee —</option></select>
+      <div id="manualBox" style="display:none;margin-top:10px">
+        <input type="email" id="manualEmail" placeholder="Trainee email" style="margin-bottom:8px">
+        <input type="text" id="manualName" placeholder="Trainee name">
+        <button class="btn" type="button" id="manualBtn" style="margin-top:10px"><i class="fa-solid fa-check"></i> Assess this trainee</button>
+      </div>
+      <div class="assess-line" id="traineeInfo" style="display:none"></div>
+    </div>
+
+    <div class="assess-done" id="setupNote" style="display:none;background:#fff7ea;border-color:#e6cb96;color:#7a5410">
+      <i class="fa-solid fa-triangle-exclamation" style="color:#b07c1e"></i>
+      <span>One-time setup needed: run <b>shared/migration_training_assessments.sql</b> in the Supabase SQL Editor, then reload this page.</span>
+    </div>
+
     <span class="cstatus" id="progStatus" hidden></span>
+    <div class="assess-done" id="doneBanner" style="display:none"></div>
     <div id="logGroups"></div>
   </div>
 </div></section>
 
 <footer>
-  <p><b>MJM Training Center</b> · Practical Record</p>
+  <p><b>MJM Training Center</b> · Assessment Record</p>
 </footer>
 
 <!-- ── Proof-capture modal ─────────────────────────────────── -->
 <div class="proof-overlay" id="proofOverlay">
   <div class="proof-card">
-    <h3 id="pTitle">Add record</h3>
-    <p class="p-sub">Take a photo of the work as proof — location, date and time are saved with it.</p>
+    <h3 id="pTitle">Record assessment</h3>
+    <p class="p-sub" id="pSub">Take a photo of the trainee doing the work — location, date and time are saved as evidence.</p>
 
     <label class="p-photo" id="pPhotoBox">
       <i class="fa-solid fa-camera"></i>
       <span>Take / choose photo</span>
-      <small>Required — this is your proof of work</small>
+      <small>Required — this is the assessment evidence</small>
       <input type="file" id="pFile" accept="image/*" capture="environment" hidden>
     </label>
 
@@ -108,7 +136,7 @@
 
     <div class="p-btns">
       <button class="btn ghost" type="button" id="pCancel">Cancel</button>
-      <button class="btn" type="button" id="pSave" disabled><i class="fa-solid fa-check"></i> Save record</button>
+      <button class="btn" type="button" id="pSave" disabled><i class="fa-solid fa-check"></i> Save assessment</button>
     </div>
   </div>
 </div>
@@ -151,38 +179,138 @@
   })();
 
   var root=document.getElementById('logGroups'),
-      status=document.getElementById('progStatus');
+      status=document.getElementById('progStatus'),
+      doneBanner=document.getElementById('doneBanner'),
+      setupNote=document.getElementById('setupNote'),
+      traineeSel=document.getElementById('traineeSel'),
+      traineeInfo=document.getElementById('traineeInfo'),
+      manualBox=document.getElementById('manualBox');
 
   /* ── Supabase (shares the AI System login session on this domain) ── */
   var _sb=null;
   try{ _sb=supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY); }catch(e){}
-  var BUCKET='documents';
+  var BUCKET='documents', TABLE='training_assessments';
 
   function el(tag,cls,html){ var n=document.createElement(tag); if(cls)n.className=cls; if(html!=null)n.innerHTML=html; return n; }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
-
   function param(name){
     var m=new RegExp('[?&]'+name+'=([^&]*)').exec(location.search);
     return m?decodeURIComponent(m[1]):null;
   }
-
-  /* ── Local proof entries (per user, per activity) ─────────────
-     entries-<act>: [{at,lat,lng,acc,url,synced}]  (small — no image data)
-     pending-proofs: [{act,at,lat,lng,acc,dataUrl}] queued while offline */
-  function entries(act){ try{ return JSON.parse(MJM.get('entries-'+act)||'[]'); }catch(e){ return []; } }
-  function saveEntries(act,list){ MJM.set('entries-'+act,JSON.stringify(list)); }
-  function pending(){ try{ return JSON.parse(MJM.get('pending-proofs')||'[]'); }catch(e){ return []; } }
-  function savePending(list){ MJM.set('pending-proofs',JSON.stringify(list)); }
-
   function fmtWhen(iso){
     try{ return new Date(iso).toLocaleString(undefined,{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
     catch(e){ return iso; }
   }
-  function whereHtml(e){
-    if(e.lat==null||e.lng==null) return '<span class="ph-pend">no location</span>';
-    var ll=e.lat.toFixed(5)+', '+e.lng.toFixed(5);
-    return '<a href="https://maps.google.com/?q='+e.lat+','+e.lng+'" target="_blank" rel="noopener">'+ll+'</a>'+
-           (e.acc?' <small>±'+Math.round(e.acc)+'m</small>':'');
+
+  /* ── State ──────────────────────────────────────────────── */
+  var USERS=[];        // [{user_id,email,name,role}] other training users
+  var trainee=null;    // the user being assessed
+  var rows=[];         // fetched assessment rows for the selected trainee
+  var slug=param('program');
+  if(slug&&!MJM.PROGRAMS[slug]) slug=null;
+
+  function roleOfTraining(t){
+    if(!t||typeof t!=='object') return null;
+    var n=(t.nursery&&typeof t.nursery==='object')?t.nursery:t;   // legacy
+    return (typeof n.role==='string'&&MJM.ROLES[n.role])?n.role:null;
+  }
+
+  /* Offline queue (per assessor device): assessments waiting to upload */
+  function queue(){ try{ return JSON.parse(MJM.get('pending-assessments')||'[]'); }catch(e){ return []; } }
+  function saveQueue(q){ MJM.set('pending-assessments',JSON.stringify(q)); }
+  function queuedFor(email,act){
+    return queue().filter(function(x){ return x.trainee_email===email&&(!act||x.act===act); });
+  }
+
+  function countOf(act){
+    if(!trainee) return 0;
+    var n=0;
+    rows.forEach(function(r){ if(r.activity===act) n++; });
+    return n+queuedFor(trainee.email,act).length;
+  }
+
+  /* ── Trainee picker ─────────────────────────────────────── */
+  function setTrainee(t){
+    trainee=t;
+    try{ sessionStorage.setItem('mjm-assess-trainee',JSON.stringify(t)); }catch(e){}
+    traineeInfo.style.display='';
+    var roleTxt=t.role?('Role: <b>'+MJM.ROLES[t.role].name+'</b> — assessing this role\'s required practicals.')
+                      :'No role set — showing every activity. (Set the role in Training User Access.)';
+    traineeInfo.innerHTML='<i class="fa-solid fa-user-check"></i> <span>Assessing <b>'+esc(t.name||t.email)+'</b> · '+roleTxt+'</span>';
+    fetchRows().then(render);
+  }
+
+  async function loadUsers(){
+    if(!_sb) return;
+    var me=(MJM.user()||'').toLowerCase();
+    try{
+      var r=await _sb.rpc('training_users');
+      if(r.error) throw r.error;
+      USERS=(r.data||[]).map(function(u){
+        return {user_id:u.user_id,email:u.email,name:u.full_name||u.email,role:roleOfTraining(u.training)};
+      }).filter(function(u){ return u.email&&u.email.toLowerCase()!==me; });
+    }catch(e){
+      // rpc missing (migration not run) or blocked — try a direct read
+      try{
+        var d=await _sb.from('shared_profiles').select('id, email, full_name, permissions');
+        if(d.error) throw d.error;
+        USERS=(d.data||[]).filter(function(p){
+          var m=p.permissions&&p.permissions.modules;
+          return m&&m.training&&m.training!=='none';
+        }).map(function(p){
+          return {user_id:p.id,email:p.email,name:p.full_name||p.email,
+                  role:roleOfTraining(p.permissions&&p.permissions.training)};
+        }).filter(function(u){ return u.email&&u.email.toLowerCase()!==me; });
+      }catch(e2){ USERS=[]; }
+    }
+    USERS.sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
+    if(USERS.length){
+      traineeSel.innerHTML='<option value="">— Choose the trainee —</option>'+
+        USERS.map(function(u,i){ return '<option value="'+i+'">'+esc(u.name)+' ('+esc(u.email)+')</option>'; }).join('');
+    }else{
+      // No visible user list — let the assessor type the trainee manually
+      traineeSel.style.display='none';
+      manualBox.style.display='';
+    }
+    // restore a trainee chosen earlier this session
+    try{
+      var saved=JSON.parse(sessionStorage.getItem('mjm-assess-trainee')||'null');
+      if(saved&&saved.email){
+        var idx=-1;
+        USERS.forEach(function(u,i){ if(u.email===saved.email) idx=i; });
+        if(idx>=0){ traineeSel.value=String(idx); setTrainee(USERS[idx]); }
+        else if(!USERS.length) setTrainee(saved);
+      }
+    }catch(e){}
+  }
+
+  traineeSel.addEventListener('change',function(){
+    var u=USERS[parseInt(traineeSel.value,10)];
+    if(u) setTrainee(u);
+  });
+  document.getElementById('manualBtn').addEventListener('click',function(){
+    var em=(document.getElementById('manualEmail').value||'').trim();
+    if(!em){ alert('Enter the trainee\'s email.'); return; }
+    setTrainee({user_id:null,email:em,name:(document.getElementById('manualName').value||'').trim()||em,role:null});
+  });
+
+  /* ── Fetch this trainee's assessment rows ───────────────── */
+  async function fetchRows(){
+    rows=[];
+    if(!_sb||!trainee) return;
+    try{
+      var r=await _sb.from(TABLE)
+        .select('activity, taken_at, lat, lng, accuracy_m, photo_url, assessor_name, assessor_email')
+        .eq('trainee_email',trainee.email)
+        .order('taken_at',{ascending:false})
+        .limit(2000);
+      if(r.error) throw r.error;
+      rows=r.data||[];
+      setupNote.style.display='none';
+    }catch(e){
+      if(e&&(e.code==='42P01'||/does not exist/i.test(e.message||''))) setupNote.style.display='';
+      console.warn('[assess] fetch failed:',e&&e.message);
+    }
   }
 
   /* ── Photo helpers ──────────────────────────────────────── */
@@ -214,58 +342,58 @@
     return new Blob([a],{type:m?m[1]:'image/jpeg'});
   }
 
-  /* ── Upload one proof (blob) → storage + table row. Returns {url,path}. ── */
-  async function uploadProof(act,blob,meta){
+  /* ── Upload one assessment (photo + row). Returns the row. ── */
+  async function uploadAssessment(t,act,blob,meta){
     if(!_sb) throw new Error('no client');
     var s=await _sb.auth.getSession();
     var session=s&&s.data&&s.data.session;
     if(!session) throw new Error('not signed in to Supabase');
     var uid=session.user.id;
-    var path='training_proofs/'+uid+'/'+act+'-'+Date.now()+'.jpg';
+    var path='training_assessments/'+uid+'/'+act+'-'+Date.now()+'.jpg';
     var up=await _sb.storage.from(BUCKET).upload(path,blob,{contentType:'image/jpeg',upsert:false});
     if(up.error) throw up.error;
     var url=_sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
-    // Proof row — best-effort: the photo in storage is already proof if the
-    // table migration hasn't been run yet.
-    try{
-      var ins=await _sb.from('training_practical_logs').insert({
-        user_id:uid,
-        email:session.user.email||null,
-        full_name:(session.user.user_metadata&&session.user.user_metadata.full_name)||null,
-        activity:act,
-        taken_at:meta.at,
-        lat:meta.lat, lng:meta.lng, accuracy_m:meta.acc,
-        photo_path:path, photo_url:url
-      });
-      if(ins.error) console.warn('[proof] table insert failed (photo still uploaded):',ins.error.message);
-    }catch(e){ console.warn('[proof] table insert threw:',e); }
-    return {url:url,path:path};
+    var row={
+      trainee_user_id:t.user_id||null,
+      trainee_email:t.email,
+      trainee_name:t.name||null,
+      assessor_user_id:uid,
+      assessor_email:session.user.email||null,
+      assessor_name:(session.user.user_metadata&&session.user.user_metadata.full_name)||MJM.userName()||null,
+      activity:act,
+      taken_at:meta.at,
+      lat:meta.lat, lng:meta.lng, accuracy_m:meta.acc,
+      photo_path:path, photo_url:url
+    };
+    var ins=await _sb.from(TABLE).insert(row);
+    if(ins.error) throw ins.error;
+    return row;
   }
 
-  /* ── Sync queued offline proofs (best effort, on page load) ── */
+  /* ── Sync queued offline assessments (best effort, on load) ── */
   async function syncPending(){
-    var q=pending();
+    var q=queue();
     if(!q.length) return;
     var rest=[];
     for(var i=0;i<q.length;i++){
       var it=q[i];
       try{
-        var r=await uploadProof(it.act,dataUrlToBlob(it.dataUrl),it);
-        var list=entries(it.act);
-        // match the placeholder entry by timestamp and mark it synced
-        for(var j=0;j<list.length;j++){
-          if(list[j].at===it.at&&!list[j].synced){ list[j].synced=true; list[j].url=r.url; break; }
-        }
-        saveEntries(it.act,list);
+        var row=await uploadAssessment(
+          {user_id:it.trainee_user_id,email:it.trainee_email,name:it.trainee_name},
+          it.act, dataUrlToBlob(it.dataUrl),
+          {at:it.at,lat:it.lat,lng:it.lng,acc:it.acc});
+        if(trainee&&trainee.email===it.trainee_email) rows.unshift(row);
       }catch(e){ rest.push(it); }
     }
-    savePending(rest);
+    saveQueue(rest);
+    if(trainee) render();
   }
 
   /* ── Proof modal ────────────────────────────────────────── */
-  var pv={act:null,name:'',blob:null,geo:null,geoDone:false,onSaved:null,saving:false};
+  var pv={act:null,name:'',blob:null,geo:null,onSaved:null,saving:false};
   var overlay=document.getElementById('proofOverlay'),
       pTitle=document.getElementById('pTitle'),
+      pSub=document.getElementById('pSub'),
       pBox=document.getElementById('pPhotoBox'),
       pFile=document.getElementById('pFile'),
       pWhen=document.getElementById('pWhen'),
@@ -276,30 +404,30 @@
   function resetPhotoBox(){
     pBox.classList.remove('hasimg');
     pBox.innerHTML='<i class="fa-solid fa-camera"></i><span>Take / choose photo</span>'+
-      '<small>Required — this is your proof of work</small>';
+      '<small>Required — this is the assessment evidence</small>';
     pBox.appendChild(pFile);
     pFile.value='';
   }
+  function resetSaveBtn(){ pSave.disabled=!pv.blob; pSave.innerHTML='<i class="fa-solid fa-check"></i> Save assessment'; }
 
   function openProof(a,onSaved){
-    pv={act:a.key,name:a.name,blob:null,geo:null,geoDone:false,onSaved:onSaved,saving:false};
-    pTitle.textContent='Add record — '+a.name;
+    pv={act:a.key,name:a.name,blob:null,geo:null,onSaved:onSaved,saving:false};
+    pTitle.textContent='Assess — '+a.name;
+    pSub.innerHTML='Recording for <b>'+esc(trainee.name||trainee.email)+'</b>. Take a photo of the work as evidence — location, date and time are saved with it.';
     pWhen.textContent=fmtWhen(new Date().toISOString());
     pWhere.textContent='Getting location…';
     pSave.disabled=true;
-    pSave.innerHTML='<i class="fa-solid fa-check"></i> Save record';
+    pSave.innerHTML='<i class="fa-solid fa-check"></i> Save assessment';
     resetPhotoBox();
     overlay.classList.add('open');
     if(navigator.geolocation){
       navigator.geolocation.getCurrentPosition(
-        function(pos){ pv.geo={lat:pos.coords.latitude,lng:pos.coords.longitude,acc:pos.coords.accuracy}; pv.geoDone=true;
+        function(pos){ pv.geo={lat:pos.coords.latitude,lng:pos.coords.longitude,acc:pos.coords.accuracy};
           pWhere.innerHTML=pv.geo.lat.toFixed(5)+', '+pv.geo.lng.toFixed(5)+' <small>±'+Math.round(pv.geo.acc)+'m</small>'; },
-        function(err){ pv.geoDone=true;
-          pWhere.innerHTML='<span class="warn">Location unavailable ('+esc(err.message)+') — record saves without it</span>'; },
+        function(err){ pWhere.innerHTML='<span class="warn">Location unavailable ('+esc(err.message)+') — record saves without it</span>'; },
         {enableHighAccuracy:true,timeout:10000,maximumAge:30000}
       );
     }else{
-      pv.geoDone=true;
       pWhere.innerHTML='<span class="warn">This device has no location support</span>';
     }
   }
@@ -312,7 +440,7 @@
       pv.blob=await compress(f,1000,0.72);
       var url=URL.createObjectURL(pv.blob);
       pBox.classList.add('hasimg');
-      pBox.innerHTML='<img alt="proof photo" src="'+url+'">'+
+      pBox.innerHTML='<img alt="assessment photo" src="'+url+'">'+
         '<small style="display:block;margin-top:6px;color:#5c7a5c;font-weight:700">Tap to retake</small>';
       pBox.appendChild(pFile);
       pSave.disabled=false;
@@ -323,28 +451,28 @@
   overlay.addEventListener('click',function(e){ if(e.target===overlay&&!pv.saving) closeProof(); });
 
   pSave.addEventListener('click',async function(){
-    if(!pv.blob||pv.saving) return;
+    if(!pv.blob||pv.saving||!trainee) return;
     pv.saving=true;
     pSave.disabled=true;
     pSave.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
     var meta={at:new Date().toISOString(),
               lat:pv.geo?pv.geo.lat:null,lng:pv.geo?pv.geo.lng:null,acc:pv.geo?pv.geo.acc:null};
-    var entry={at:meta.at,lat:meta.lat,lng:meta.lng,acc:meta.acc,url:null,synced:false};
     try{
-      var r=await uploadProof(pv.act,pv.blob,meta);
-      entry.url=r.url; entry.synced=true;
+      var row=await uploadAssessment(trainee,pv.act,pv.blob,meta);
+      rows.unshift(row);
     }catch(e){
-      console.warn('[proof] upload failed:',e);
-      var ok=confirm('Photo upload failed ('+(e&&e.message?e.message:'offline?')+').\n\nSave the record on this device and upload automatically later?');
-      if(!ok){ pv.saving=false; pSave.disabled=false; pSave.innerHTML='<i class="fa-solid fa-check"></i> Save record'; return; }
+      console.warn('[assess] upload failed:',e);
+      var ok=confirm('Could not save online ('+(e&&e.message?e.message:'offline?')+').\n\nKeep the assessment on this device and upload automatically later?');
+      if(!ok){ pv.saving=false; resetSaveBtn(); return; }
       try{
-        var q=pending();
-        if(q.length>=25){ alert('Too many unsynced records on this device — please get online to sync before adding more.'); pv.saving=false; pSave.disabled=false; pSave.innerHTML='<i class="fa-solid fa-check"></i> Save record'; return; }
-        q.push({act:pv.act,at:meta.at,lat:meta.lat,lng:meta.lng,acc:meta.acc,dataUrl:await blobToDataUrl(pv.blob)});
-        savePending(q);
-      }catch(ex){ alert('Could not save offline — storage is full or blocked.'); pv.saving=false; pSave.disabled=false; pSave.innerHTML='<i class="fa-solid fa-check"></i> Save record'; return; }
+        var q=queue();
+        if(q.length>=25){ alert('Too many unsynced assessments on this device — please get online to sync before adding more.'); pv.saving=false; resetSaveBtn(); return; }
+        q.push({trainee_user_id:trainee.user_id,trainee_email:trainee.email,trainee_name:trainee.name,
+                act:pv.act,at:meta.at,lat:meta.lat,lng:meta.lng,acc:meta.acc,
+                dataUrl:await blobToDataUrl(pv.blob)});
+        saveQueue(q);
+      }catch(ex){ alert('Could not save offline — storage is full or blocked.'); pv.saving=false; resetSaveBtn(); return; }
     }
-    var list=entries(pv.act); list.unshift(entry); saveEntries(pv.act,list);
     if(pv.onSaved) pv.onSaved();
     closeProof();
   });
@@ -352,15 +480,26 @@
   /* ── History list under each activity ───────────────────── */
   function histItemHtml(e){
     var thumb;
-    if(e.url) thumb='<img src="'+esc(e.url)+'" loading="lazy" onclick="window.open(this.src,\'_blank\')" alt="proof">';
-    else thumb='<div class="ph-noimg"><i class="fa-solid '+(e.synced?'fa-image':'fa-cloud-arrow-up')+'"></i></div>';
+    if(e.photo_url) thumb='<img src="'+esc(e.photo_url)+'" loading="lazy" onclick="window.open(this.src,\'_blank\')" alt="evidence">';
+    else thumb='<div class="ph-noimg"><i class="fa-solid '+(e.pending?'fa-cloud-arrow-up':'fa-image')+'"></i></div>';
+    var where=(e.lat!=null&&e.lng!=null)
+      ? '<a href="https://maps.google.com/?q='+e.lat+','+e.lng+'" target="_blank" rel="noopener">'+e.lat.toFixed(5)+', '+e.lng.toFixed(5)+'</a>'+(e.accuracy_m?' <small>±'+Math.round(e.accuracy_m)+'m</small>':'')
+      : '<span class="ph-pend">no location</span>';
     return '<div class="ph-item">'+thumb+
-      '<div style="flex:1;min-width:0"><div>'+fmtWhen(e.at)+'</div><div>'+whereHtml(e)+'</div></div>'+
-      (e.synced?'':'<span class="ph-pend"><i class="fa-solid fa-cloud-arrow-up"></i> pending sync</span>')+
+      '<div style="flex:1;min-width:0"><div>'+fmtWhen(e.taken_at)+'</div><div>'+where+'</div>'+
+      (e.assessor_name?'<div style="opacity:.75">by '+esc(e.assessor_name)+'</div>':'')+'</div>'+
+      (e.pending?'<span class="ph-pend"><i class="fa-solid fa-cloud-arrow-up"></i> pending sync</span>':'')+
       '</div>';
   }
+  function histFor(act){
+    var list=queuedFor(trainee.email,act).map(function(x){
+      return {photo_url:null,taken_at:x.at,lat:x.lat,lng:x.lng,accuracy_m:x.acc,assessor_name:null,pending:true};
+    });
+    rows.forEach(function(r){ if(r.activity===act) list.push(r); });
+    return list;
+  }
 
-  /* counter row; onChange is called after every +/- so progress can refresh */
+  /* Assessment row: + records with photo evidence; count = records */
   function actRow(a,color,target,onChange){
     var wrap=el('div');
     var row=el('div','act');
@@ -373,28 +512,26 @@
       bar=el('div','bar'); bar.appendChild(el('span','fill'));
       body.appendChild(bar);
     }
-    var histBtn=el('button','ph-toggle','<i class="fa-solid fa-clock-rotate-left"></i> <span>0 records</span>');
+    var histBtn=el('button','ph-toggle','<i class="fa-solid fa-clock-rotate-left"></i> <span>0 assessments</span>');
     histBtn.type='button';
     body.appendChild(histBtn);
     row.appendChild(el('div','icon-badge '+color,'<i class="fa-solid '+a.icon+'"></i>'));
     row.appendChild(body);
     if(tgt) row.appendChild(tgt);
     var counter=el('div','counter');
-    var minus=el('button','cbtn minus','<i class="fa-solid fa-minus"></i>');
-    minus.type='button'; minus.setAttribute('aria-label','Remove one from '+a.name);
     var cnt=el('span','cnt','0');
     var plus=el('button','cbtn plus','<i class="fa-solid fa-plus"></i>');
-    plus.type='button'; plus.setAttribute('aria-label','Add one to '+a.name+' with photo proof');
-    counter.appendChild(minus); counter.appendChild(cnt); counter.appendChild(plus);
+    plus.type='button'; plus.setAttribute('aria-label','Record an assessment for '+a.name+' with photo evidence');
+    counter.appendChild(cnt); counter.appendChild(plus);
     row.appendChild(counter);
 
     var hist=el('div','proof-hist');
 
     function paintHist(){
-      var list=entries(a.key);
-      histBtn.querySelector('span').textContent=list.length+' record'+(list.length===1?'':'s');
+      var list=histFor(a.key);
+      histBtn.querySelector('span').textContent=list.length+' assessment'+(list.length===1?'':'s');
       if(hist.classList.contains('open')){
-        hist.innerHTML=list.length?list.map(histItemHtml).join(''):'<div class="ph-empty">No records yet — tap + to add your first one with a photo.</div>';
+        hist.innerHTML=list.length?list.map(histItemHtml).join(''):'<div class="ph-empty">No assessments yet — tap + to record the first one with a photo.</div>';
       }
     }
     histBtn.addEventListener('click',function(){
@@ -410,9 +547,8 @@
     });
 
     function paint(){
-      var l=MJM.log(), v=l[a.key]||0;
+      var v=countOf(a.key);
       cnt.textContent=v;
-      minus.disabled=(v===0);
       if(target){
         row.classList.toggle('met',v>=target);
         tgt.textContent=Math.min(v,target)+' / '+target;
@@ -420,154 +556,82 @@
       }
       paintHist();
     }
-    function bump(d){
-      var l=MJM.log();
-      l[a.key]=Math.max(0,(l[a.key]||0)+d);
-      MJM.saveLog(l);
-      paint();
-      if(onChange) onChange();
-    }
-    /* "+" now requires photo proof — the count only goes up after the
-       record (photo + location + time) is saved. */
-    plus.addEventListener('click',function(){ openProof(a,function(){ bump(1); }); });
-    minus.addEventListener('click',function(){ bump(-1); });
+    plus.addEventListener('click',function(){ openProof(a,function(){ paint(); if(onChange) onChange(); }); });
     paint();
     wrap.appendChild(row);
     wrap.appendChild(hist);
+    wrap._paint=paint;
     return wrap;
   }
 
-  /* ---------- per-program view (?program=slug) ---------- */
-  function renderProgram(slug){
-    var prog=MJM.PROGRAMS[slug];
-    document.title=prog.name+' — Practical Record — MJM Training Center';
-    document.getElementById('pageTitle').textContent=prog.name;
-
-    var regroup=null;
-
-    function refresh(){
-      if(regroup) regroup();
-      var p=MJM.progress(slug);
-      status.hidden=false;
-      if(p.complete){
-        status.className='cstatus ok';
-        status.innerHTML='<i class="fa-solid fa-circle-check"></i> Program complete — well done!';
-      }else{
-        status.className='cstatus todo';
-        status.innerHTML='<i class="fa-solid fa-bars-progress"></i> Program result: '+p.score+'%'+
-          ' &nbsp;·&nbsp; Slides '+p.slides.got+'/'+p.slides.total+
-          (p.practical.length?' &nbsp;·&nbsp; Practical '+p.practicalPct+'%':'');
-      }
-      // slides requirement row
-      var slidesRow=document.getElementById('slidesReq');
-      if(slidesRow){
-        slidesRow.className='req'+(p.slides.met?' met':'');
-        slidesRow.querySelector('.req-count').textContent=
-          p.slides.met?'All '+p.slides.total+' slides read':p.slides.got+' of '+p.slides.total+' slides read';
-        slidesRow.querySelector('.bar .fill').style.width=
-          Math.min(100,p.slides.total?p.slides.got/p.slides.total*100:0)+'%';
-        slidesRow.querySelector('.req-state i').className=
-          'fa-solid '+(p.slides.met?'fa-circle-check':'fa-circle');
-      }
-    }
-
-    var g1=el('div','req-group');
-    g1.appendChild(el('h3',null,'<i class="fa-solid fa-book-open" style="color:var(--green);margin-right:8px"></i>Training Slides'));
-    g1.appendChild(el('div','rg-sub','Reading is recorded automatically as you go through the slides.'));
-    var sr=el('div','req'); sr.id='slidesReq';
-    sr.innerHTML='<div class="icon-badge"><i class="fa-solid fa-book-open"></i></div>'+
-      '<div class="req-body"><div class="req-name"><a href="'+prog.page+'">'+prog.name+' — open slides</a></div>'+
-      '<div class="req-count"></div><div class="bar"><span class="fill"></span></div></div>'+
-      '<div class="req-state"><i class="fa-solid fa-circle"></i></div>';
-    g1.appendChild(sr);
-    root.appendChild(g1);
-
-    var g2=el('div','req-group');
-    g2.appendChild(el('h3',null,'<i class="fa-solid fa-list-check" style="color:var(--green);margin-right:8px"></i>Practical Tasks'));
-    var keys=Object.keys(prog.practical);
-    if(keys.length){
-      g2.appendChild(el('div','rg-sub','Reach each target to fulfil the practical requirement. Every + needs a photo — location, date and time are recorded as proof.'));
-      var pendBody=el('div'), allDone=el('div','rg-sub','All practical targets met — see the Completed section below.');
-      allDone.style.display='none';
-      g2.appendChild(pendBody); g2.appendChild(allDone);
-      // Completed tasks drop down here so pending work always stays on top.
-      var g3=el('div','req-group');
-      g3.appendChild(el('h3',null,'<i class="fa-solid fa-circle-check" style="color:var(--green);margin-right:8px"></i>Completed'));
-      g3.appendChild(el('div','rg-sub','Targets already met. Records stay here — tap a job to see its history.'));
-      var doneBody=el('div'); g3.appendChild(doneBody);
-      g3.style.display='none';
-      var rowByKey={};
-      keys.forEach(function(k){
-        var a=MJM.ACTIVITIES[k];
-        rowByKey[k]=actRow({key:k,name:a.name,icon:a.icon,desc:a.desc},'ib-green',prog.practical[k],refresh);
-      });
-      regroup=function(){
-        var l=MJM.log();
-        keys.forEach(function(k){
-          var met=(l[k]||0)>=prog.practical[k];
-          (met?doneBody:pendBody).appendChild(rowByKey[k]);
-        });
-        g3.style.display=doneBody.children.length?'':'none';
-        allDone.style.display=pendBody.children.length?'none':'';
-      };
-      root.appendChild(g2);
-      root.appendChild(g3);
-    }else{
-      g2.appendChild(el('div','rg-sub','No practical tasks for this program — completing the training slides completes it.'));
-      root.appendChild(g2);
-    }
-
-    var back=el('a','btn ghost','<i class="fa-solid fa-arrow-left"></i> Back to Training Pathways');
-    back.href='nursery.html'; back.style.marginTop='26px';
-    root.appendChild(back);
-
-    refresh();
+  /* ── Targets for the selected trainee ───────────────────── */
+  function traineeRoleMap(){
+    var rk=trainee&&trainee.role;
+    if(!rk||!MJM.ROLES[rk]) return null;
+    var out={};
+    MJM.ROLES[rk].programs.forEach(function(s){
+      var pr=(MJM.PROGRAMS[s]&&MJM.PROGRAMS[s].practical)||{};
+      Object.keys(pr).forEach(function(k){ if(!out[k]||pr[k]>out[k]) out[k]=pr[k]; });
+    });
+    return out;
+  }
+  function maxTarget(k){
+    var t=0;
+    Object.keys(MJM.PROGRAMS).forEach(function(s){
+      var v=MJM.PROGRAMS[s].practical[k];
+      if(v&&v>t) t=v;
+    });
+    return t||null;
   }
 
-  /* ---------- full logbook (no program selected) ---------- */
-  function renderAll(){
+  /* ── Render ─────────────────────────────────────────────── */
+  function collapsibleGroup(titleHtml,sub){
+    var grp=el('div','req-group clps');
+    var head=el('h3',null,'<span>'+titleHtml+'</span><span class="clps-n" data-n></span><i class="fa-solid fa-chevron-down clps-arrow"></i>');
+    head.addEventListener('click',function(){ grp.classList.toggle('open'); });
+    grp.appendChild(head);
+    grp.appendChild(el('div','rg-sub',sub));
+    var body=el('div','grp-body'); grp.appendChild(body);
+    return {grp:grp,body:body,n:head.querySelector('[data-n]')};
+  }
+
+  function render(){
+    root.innerHTML='';
+    status.hidden=true;
+    doneBanner.style.display='none';
+    if(!trainee){
+      root.appendChild(el('div','rg-sub','<i class="fa-solid fa-circle-info" style="color:var(--green);margin-right:6px"></i>Choose the trainee you are assessing to start recording.'));
+      return;
+    }
+
+    // Which activities + targets: program view > trainee role > everything
+    var roleMap=slug?null:traineeRoleMap();
+    var progMap=slug?MJM.PROGRAMS[slug].practical:null;
+    function targetFor(k){
+      if(progMap) return progMap[k]||null;
+      if(roleMap) return roleMap[k]||null;
+      return maxTarget(k);
+    }
+    function keyShown(k){
+      if(progMap) return !!progMap[k];
+      if(roleMap) return !!roleMap[k];
+      return true;
+    }
+
     var GROUPS=[
-      {title:'Field Work', sub:'Nursery operations carried out in the field. Every + needs a photo — location, date and time are recorded as proof.', color:'ib-green',
+      {title:'Field Work', sub:'Nursery operations carried out in the field. Every + needs a photo — location, date and time are recorded as evidence.', color:'ib-green',
        keys:['seed-planting','seed-culling','watering','manuring','weeding','spraying','interrow','transplanting','culling']},
       {title:'Troubleshoot & Cases', sub:'Problems logged and resolved in Carlos.', color:'ib-earth',
        keys:['case-open','case-solve']},
       {title:'Site Office', sub:'Admin and sales work at the site office.', color:'ib-forest',
        keys:['order','report','collection']}
     ];
-    /* If an admin assigned this user a role, only that role's practicals
-       show, with the role's targets. Otherwise show everything, with each
-       activity's highest target across all programs. */
-    var roleMap=MJM.rolePractical();
-    function targetFor(k){
-      if(roleMap) return roleMap[k]||null;
-      var t=0;
-      Object.keys(MJM.PROGRAMS).forEach(function(s){
-        var v=MJM.PROGRAMS[s].practical[k];
-        if(v&&v>t) t=v;
-      });
-      return t||null;
-    }
-    function keyShown(k){ return roleMap?!!roleMap[k]:true; }
 
-    var rk=MJM.roleKey();
-    if(rk){
-      root.appendChild(el('div','rg-sub',
-        '<i class="fa-solid fa-user-check" style="color:var(--green);margin-right:6px"></i>Your role: <b>'+
-        MJM.ROLES[rk].name+'</b> — showing the practicals this role must complete.'));
+    if(slug){
+      document.getElementById('pageTitle').textContent=MJM.PROGRAMS[slug].name+' — Assessment';
     }
 
-    /* Categories are collapsed by default — tap one to expand its jobs */
-    function collapsibleGroup(titleHtml,sub){
-      var grp=el('div','req-group clps');
-      var head=el('h3',null,'<span>'+titleHtml+'</span><span class="clps-n" data-n></span><i class="fa-solid fa-chevron-down clps-arrow"></i>');
-      head.addEventListener('click',function(){ grp.classList.toggle('open'); });
-      grp.appendChild(head);
-      grp.appendChild(el('div','rg-sub',sub));
-      var body=el('div','grp-body'); grp.appendChild(body);
-      return {grp:grp,body:body,n:head.querySelector('[data-n]')};
-    }
-
-    var rowByKey={}, homeBody={}, groupEls=[];
+    var rowByKey={}, homeBody={}, groupEls=[], shownKeys=[];
     GROUPS.forEach(function(g){
       var keys=g.keys.filter(keyShown);
       if(!keys.length) return;
@@ -576,12 +640,13 @@
         var a=MJM.ACTIVITIES[k];
         rowByKey[k]=actRow({key:k,name:a.name,icon:a.icon,desc:a.desc},g.color,targetFor(k),regroup);
         homeBody[k]=c.body;
+        shownKeys.push(k);
       });
       root.appendChild(c.grp);
       groupEls.push({grp:c.grp,body:c.body,n:c.n,keys:keys});
     });
 
-    /* Completed jobs drop down here — pending work always stays on top */
+    /* Completed assessments drop down here — pending stays on top */
     var done=collapsibleGroup(
       '<i class="fa-solid fa-circle-check" style="color:var(--green);margin-right:8px"></i>Completed',
       'Targets already met. Records stay here — tap a job to see its history.');
@@ -589,12 +654,16 @@
     root.appendChild(done.grp);
 
     function regroup(){
-      var l=MJM.log();
+      var met=0,total=0;
       groupEls.forEach(function(x){
         x.keys.forEach(function(k){
-          var t=targetFor(k), met=!!t&&(l[k]||0)>=t;
-          (met?done.body:homeBody[k]).appendChild(rowByKey[k]);
+          var t=targetFor(k), m=!!t&&countOf(k)>=t;
+          (m?done.body:homeBody[k]).appendChild(rowByKey[k]);
         });
+      });
+      shownKeys.forEach(function(k){
+        var t=targetFor(k);
+        if(t){ total++; if(countOf(k)>=t) met++; }
       });
       groupEls.forEach(function(x){
         x.grp.style.display=x.body.children.length?'':'none';
@@ -602,25 +671,29 @@
       });
       done.grp.style.display=done.body.children.length?'':'none';
       done.n.textContent=done.body.children.length+' job'+(done.body.children.length===1?'':'s');
+
+      // Overall progress + "test complete"
+      if(total>0){
+        status.hidden=false;
+        status.className='cstatus '+(met===total?'ok':'todo');
+        status.innerHTML=(met===total?'<i class="fa-solid fa-circle-check"></i> ':'<i class="fa-solid fa-bars-progress"></i> ')+
+          'Assessment targets met: '+met+' / '+total;
+        if(met===total){
+          doneBanner.style.display='';
+          doneBanner.innerHTML='<i class="fa-solid fa-award"></i><span>'+esc(trainee.name||trainee.email)+
+            ' has completed all assessments'+
+            (trainee.role&&!slug?' — qualified as <b>'+MJM.ROLES[trainee.role].name+'</b>!':(slug?' for <b>'+esc(MJM.PROGRAMS[slug].name)+'</b>!':'!'))+
+            '</span>';
+        }else{
+          doneBanner.style.display='none';
+        }
+      }
     }
     regroup();
   }
 
-  var slug=param('program'), usedAll=!(slug&&MJM.PROGRAMS[slug]);
-  if(usedAll) renderAll();
-  else renderProgram(slug);
-
-  // Refresh this user's role/slides settings from the server in the
-  // background; re-render if an admin changed them since last visit.
-  if(_sb&&usedAll){
-    var _before=JSON.stringify(MJM.trainingAccess());
-    MJM.refreshTrainingAccess(_sb).then(function(c){
-      if(c&&JSON.stringify(c)!==_before){ root.innerHTML=''; renderAll(); }
-    });
-  }
-
-  // Try to push any offline-queued proofs up in the background.
-  syncPending();
+  render();
+  loadUsers().then(syncPending);
 })();
 </script>
 
