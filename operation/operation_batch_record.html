@@ -452,7 +452,20 @@
                 document.getElementById('stat-culling-rate').innerText = avgCulling + '%';
 
                 renderCullingChart(currentYearBatches);
-                switchListTab('active'); // Initial render
+
+                // Initial render — restore the tab/page/scroll the user was at
+                // before opening a batch, so returning from a batch detail page
+                // lands exactly where they left off instead of page 1 / top.
+                let _restore = null;
+                try { _restore = JSON.parse(sessionStorage.getItem('mjm_batchlist_state') || 'null'); } catch (_) {}
+                if (_restore && _restore.tab) {
+                    sessionStorage.removeItem('mjm_batchlist_state');
+                    switchListTab(_restore.tab);
+                    if (_restore.page && _restore.page > 1) { currentPage = _restore.page; renderLedgerTable(); }
+                    if (_restore.scrollY) setTimeout(() => window.scrollTo(0, _restore.scrollY), 60);
+                } else {
+                    switchListTab('active');
+                }
 
             } catch(e) {
                 console.error("Data load error:", e);
@@ -497,6 +510,19 @@
             }
 
             return b;
+        }
+
+        // Open a batch, remembering where the list was (tab, page, scroll) so
+        // coming back restores the exact spot instead of page 1 / top.
+        function openBatchDetail(batchName) {
+            try {
+                sessionStorage.setItem('mjm_batchlist_state', JSON.stringify({
+                    tab: currentListTab,
+                    page: currentPage,
+                    scrollY: window.scrollY || window.pageYOffset || 0
+                }));
+            } catch (_) {}
+            window.location.href = 'operation_batch_detail.html?id=' + encodeURIComponent(batchName);
         }
 
         function switchListTab(tabName) {
@@ -630,7 +656,7 @@
                         <td class="text-[#c07820] font-black text-sm">${cullDisplay}%</td>
                         <td>
                             <div class="flex items-center gap-2">
-                                <button onclick="window.location.href='operation_batch_detail.html?id=${encodeURIComponent(b.batch_name)}'" class="px-4 py-2 rounded-xl bg-white border border-[#e8dcc8] text-[#4a7a2e] font-bold text-[10px] uppercase tracking-widest hover:bg-[#6aa83c] hover:text-white hover:border-[#6aa83c] transition-colors shadow-sm flex items-center gap-2">
+                                <button onclick="openBatchDetail('${(b.batch_name || '').replace(/'/g, "\\'")}')" class="px-4 py-2 rounded-xl bg-white border border-[#e8dcc8] text-[#4a7a2e] font-bold text-[10px] uppercase tracking-widest hover:bg-[#6aa83c] hover:text-white hover:border-[#6aa83c] transition-colors shadow-sm flex items-center gap-2">
                                     👁️ View
                                 </button>
                                 ${isAdmin ? `<button onclick="deleteBatchRecord('${b.batch_name.replace(/'/g,"\\'")}')" title="Admin only — permanently delete this batch" class="px-3 py-2 rounded-xl bg-white border border-rose-200 text-rose-700 font-bold text-[10px] uppercase tracking-widest hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-colors shadow-sm">🗑️</button>` : ''}
