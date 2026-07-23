@@ -1429,19 +1429,19 @@ bootstrap();
 // A single centred modal reused for the Seeds Received / Transplanted /
 // Culled tiles. Content is regenerated on every open so we always
 // reflect the active date+breed filter.
-function openBpDrill(kind) {
-  const D = window._bpDetails; if (!D) return;
-  const rows = D.rows || [];
-  const rangeLabel = [
-    D.filterFrom ? 'From ' + fmtDate(D.filterFrom) : '',
-    D.filterTo   ? 'to '   + fmtDate(D.filterTo)   : '',
-    D.breed || ''
-  ].filter(Boolean).join(' · ') || 'All time';
+// Persist the active drilldown's Year + Month picks so onchange handlers
+// on the modal's dropdowns can re-render without re-fetching.
+let _bpDrillState = { kind: null, year: '', month: '' };
 
-  let title = '', body = '';
+const _BP_MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// Extract raw records for the active drilldown kind. Each record must
+// carry a `date` so we can build Year / Month filters and re-filter
+// without re-querying the DB.
+function _bpDrillCollect(kind, D) {
+  const rows = D.rows || [];
+  const list = [];
   if (kind === 'seeds') {
-    title = 'Seeds Received · detail';
-    const list = [];
     rows.forEach(r => {
       const seedsQty = r.seedsLogs.reduce((s, l) => s + Number(l.quantity_change || 0), 0) || r.seeds;
       list.push({
@@ -1452,11 +1452,129 @@ function openBpDrill(kind) {
         damaged:  r.damaged || 0
       });
     });
+  } else if (kind === 'trans') {
+    rows.forEach(r => r.transLogs.forEach(l => list.push({
+      date:    l.transaction_date || l.created_at || null,
+      batch:   r.batch_name,
+      breed:   r.breed_name,
+      plot:    l.plot_name || '—',
+      nursery: D.nurseryOf(l.plot_name),
+      qty:     Number(l.quantity_change || 0)
+    })));
+  } else if (kind === 'cull') {
+    const push = (r, l, stage) => list.push({
+      date:    l.transaction_date || l.created_at || null,
+      stage,
+      batch:   r.batch_name,
+      breed:   r.breed_name,
+      plot:    l.plot_name || '—',
+      nursery: stage === '1st' ? 'Pre-Nursery' : D.nurseryOf(l.plot_name),
+      qty:     Math.abs(Number(l.quantity_change || 0))
+    });
+    rows.forEach(r => {
+      r.cull1Logs.forEach(l => push(r, l, '1st'));
+      r.cull2Logs.forEach(l => push(r, l, '2nd'));
+      r.cull3Logs.forEach(l => push(r, l, '3rd'));
+    });
+  }
+  return list;
+}
+
+// Render the Year/Month picker bar for the active drilldown. `all` is the
+// full extracted set (pre-filter) so we can offer only years/months that
+// actually have records — no dead selections.
+function _bpDrillFilterBar(all) {
+  const years = new Set(), months = new Set();
+  all.forEach(x => {
+    if (!x.date) return;
+    const d = new Date(x.date);
+    if (isNaN(d)) return;
+    years.add(d.getFullYear());
+    months.add(d.getMonth());
+  });
+  const yearOpts = ['<option value="">All years</option>']
+    .concat(Array.from(years).sort((a,b) => b-a)
+      .map(y => `<option value="${y}"${String(y) === String(_bpDrillState.year) ? ' selected' : ''}>${y}</option>`))
+    .join('');
+  const monthOpts = ['<option value="">All months</option>']
+    .concat(Array.from(months).sort((a,b) => a-b)
+      .map(m => `<option value="${m}"${String(m) === String(_bpDrillState.month) ? ' selected' : ''}>${_BP_MONTH_NAMES[m]}</option>`))
+    .join('');
+  return `
+    <div class="flex items-center gap-2 flex-wrap mb-3">
+      <span class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mr-1">Filter</span>
+      <label class="text-[10px] font-bold text-[#3d2610] flex items-center gap-1.5">Year
+        <select class="border border-[#e8dcc8] rounded-lg px-2 py-1 text-[11px] font-black text-[#3d2610]"
+                onchange="_bpDrillSetFilter('year', this.value)">${yearOpts}</select>
+      </label>
+      <label class="text-[10px] font-bold text-[#3d2610] flex items-center gap-1.5">Month
+        <select class="border border-[#e8dcc8] rounded-lg px-2 py-1 text-[11px] font-black text-[#3d2610]"
+                onchange="_bpDrillSetFilter('month', this.value)">${monthOpts}</select>
+      </label>
+      ${(_bpDrillState.year || _bpDrillState.month !== '') ? `
+        <button type="button" onclick="_bpDrillClearFilter()" class="text-[10px] font-black text-[#a83020] uppercase tracking-widest hover:underline ml-1">Clear</button>
+      ` : ''}
+    </div>`;
+}
+
+function _bpDrillSetFilter(key, value) {
+  _bpDrillState[key] = value;
+  _bpDrillRender();
+}
+function _bpDrillClearFilter() {
+  _bpDrillState.year = ''; _bpDrillState.month = '';
+  _bpDrillRender();
+}
+
+function _bpDrillApplyFilter(all) {
+  const y = _bpDrillState.year, m = _bpDrillState.month;
+  if (!y && m === '') return all.slice();
+  return all.filter(x => {
+    if (!x.date) return false;
+    const d = new Date(x.date);
+    if (isNaN(d)) return false;
+    if (y && d.getFullYear() !== Number(y)) return false;
+    if (m !== '' && d.getMonth() !== Number(m)) return false;
+    return true;
+  });
+}
+
+function openBpDrill(kind) {
+  if (!window._bpDetails) return;
+  _bpDrillState = { kind, year: '', month: '' };
+  _bpDrillRender();
+  document.getElementById('bp-drill-modal').classList.remove('hidden');
+  document.getElementById('bp-drill-modal').classList.add('flex');
+}
+
+function _bpDrillRender() {
+  const D = window._bpDetails; if (!D) return;
+  const kind = _bpDrillState.kind;
+  const rangeLabel = [
+    D.filterFrom ? 'From ' + fmtDate(D.filterFrom) : '',
+    D.filterTo   ? 'to '   + fmtDate(D.filterTo)   : '',
+    D.breed || ''
+  ].filter(Boolean).join(' · ') || 'All time';
+
+  const allList = _bpDrillCollect(kind, D);
+  const list    = _bpDrillApplyFilter(allList);
+
+  // Filter chip text so the count line reads honestly.
+  const activeYear  = _bpDrillState.year;
+  const activeMonth = _bpDrillState.month;
+  const filterNote = (activeYear || activeMonth !== '') ?
+    ` · Filtered: ${activeMonth !== '' ? _BP_MONTH_NAMES[Number(activeMonth)] : ''} ${activeYear || ''}`.trim() : '';
+
+  const barHtml = _bpDrillFilterBar(allList);
+
+  let title = '', bodyInner = '';
+  if (kind === 'seeds') {
+    title = 'Seeds Received · detail';
     list.sort((a, b) => (new Date(b.date || 0)) - (new Date(a.date || 0)));
     const totRcv = list.reduce((s, x) => s + x.received, 0);
     const totDmg = list.reduce((s, x) => s + x.damaged,  0);
-    body = `
-      <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">${rangeLabel} · ${list.length} batch${list.length === 1 ? '' : 'es'}</div>
+    bodyInner = `
+      <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">${rangeLabel} · ${list.length} batch${list.length === 1 ? '' : 'es'}${filterNote}</div>
       <div class="overflow-x-auto">
         <table class="report-table w-full">
           <thead><tr>
@@ -1464,14 +1582,14 @@ function openBpDrill(kind) {
             <th class="text-right">Qty Received</th><th class="text-right">Damaged</th>
           </tr></thead>
           <tbody>
-            ${list.map(x => `
+            ${list.length ? list.map(x => `
               <tr>
                 <td>${fmtDate(x.date)}</td>
                 <td>${x.breed}</td>
                 <td class="font-black">${x.batch}</td>
                 <td class="text-right text-[#c07820] font-black">${fmtNum(x.received)}</td>
                 <td class="text-right ${x.damaged ? 'text-[#a83020] font-black' : 'text-[#8a7a68]'}">${x.damaged ? fmtNum(x.damaged) : '—'}</td>
-              </tr>`).join('')}
+              </tr>`).join('') : '<tr><td colspan="5" class="text-center text-[#8a7a68] text-[11px] py-6">No records for the selected filter.</td></tr>'}
           </tbody>
           <tfoot><tr class="font-black bg-[#f8f4ec]">
             <td colspan="3" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Totals</td>
@@ -1483,33 +1601,19 @@ function openBpDrill(kind) {
   }
   else if (kind === 'trans') {
     title = 'Transplanted · detail';
-    // Every Transplanted* log becomes a row. Nursery derived from
-    // plot_name via shared_plots.
-    const list = [];
-    rows.forEach(r => r.transLogs.forEach(l => {
-      list.push({
-        date:    l.transaction_date || l.created_at || null,
-        batch:   r.batch_name,
-        breed:   r.breed_name,
-        plot:    l.plot_name || '—',
-        nursery: D.nurseryOf(l.plot_name),
-        qty:     Number(l.quantity_change || 0)
-      });
-    }));
     list.sort((a, b) => (new Date(b.date || 0)) - (new Date(a.date || 0)));
-    // Roll up by nursery for the summary strip.
     const roll = {};
     list.forEach(x => { roll[x.nursery] = (roll[x.nursery] || 0) + x.qty; });
     const rollRows = Object.entries(roll).sort((a, b) => b[1] - a[1]);
     const total = list.reduce((s, x) => s + x.qty, 0);
-    body = `
-      <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">${rangeLabel} · ${list.length} transplant record${list.length === 1 ? '' : 's'}</div>
+    bodyInner = `
+      <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">${rangeLabel} · ${list.length} transplant record${list.length === 1 ? '' : 's'}${filterNote}</div>
       <div class="mb-4 grid grid-cols-2 md:grid-cols-4 gap-2">
         ${rollRows.map(([n, q]) => `
           <div class="bg-[#eef5fc] border border-[#bee3f8] rounded-xl px-3 py-2">
             <div class="text-[9px] font-black text-[#3a7ab4] uppercase tracking-widest">${n}</div>
             <div class="text-lg font-black text-[#3a7ab4]">${fmtNum(q)}</div>
-          </div>`).join('') || '<div class="text-[10px] text-[#8a7a68] uppercase tracking-widest col-span-full">No transplant records for this range.</div>'}
+          </div>`).join('') || '<div class="text-[10px] text-[#8a7a68] uppercase tracking-widest col-span-full">No transplant records for the selected filter.</div>'}
       </div>
       <div class="overflow-x-auto">
         <table class="report-table w-full">
@@ -1518,7 +1622,7 @@ function openBpDrill(kind) {
             <th>Nursery</th><th>Plot</th><th class="text-right">Qty</th>
           </tr></thead>
           <tbody>
-            ${list.map(x => `
+            ${list.length ? list.map(x => `
               <tr>
                 <td>${fmtDate(x.date)}</td>
                 <td class="font-black">${x.batch}</td>
@@ -1526,7 +1630,7 @@ function openBpDrill(kind) {
                 <td class="font-black text-[#3a7ab4]">${x.nursery}</td>
                 <td>${x.plot}</td>
                 <td class="text-right text-[#3a7ab4] font-black">${fmtNum(x.qty)}</td>
-              </tr>`).join('')}
+              </tr>`).join('') : '<tr><td colspan="6" class="text-center text-[#8a7a68] text-[11px] py-6">No records for the selected filter.</td></tr>'}
           </tbody>
           <tfoot><tr class="font-black bg-[#f8f4ec]">
             <td colspan="5" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
@@ -1537,43 +1641,24 @@ function openBpDrill(kind) {
   }
   else if (kind === 'cull') {
     title = 'Culled (1 + 2 + 3) · detail';
-    // Flatten every culling log across the 3 stages.
-    const list = [];
-    const push = (r, l, stage) => list.push({
-      date:    l.transaction_date || l.created_at || null,
-      stage,
-      batch:   r.batch_name,
-      breed:   r.breed_name,
-      plot:    l.plot_name || '—',
-      // 1st_Culling always belongs to Pre-Nursery even if the plot name
-      // isn't in PRE_NURSERY_PLOTS (some batches used custom PN tray labels).
-      nursery: stage === '1st' ? 'Pre-Nursery' : D.nurseryOf(l.plot_name),
-      qty:     Math.abs(Number(l.quantity_change || 0))
-    });
-    rows.forEach(r => {
-      r.cull1Logs.forEach(l => push(r, l, '1st'));
-      r.cull2Logs.forEach(l => push(r, l, '2nd'));
-      r.cull3Logs.forEach(l => push(r, l, '3rd'));
-    });
     list.sort((a, b) => (new Date(b.date || 0)) - (new Date(a.date || 0)));
-    // Roll up per nursery + per stage.
     const roll = {};
     list.forEach(x => {
       if (!roll[x.nursery]) roll[x.nursery] = { total: 0, '1st': 0, '2nd': 0, '3rd': 0 };
-      roll[x.nursery].total  += x.qty;
+      roll[x.nursery].total    += x.qty;
       roll[x.nursery][x.stage] += x.qty;
     });
     const rollEntries = Object.entries(roll).sort((a, b) => b[1].total - a[1].total);
     const total = list.reduce((s, x) => s + x.qty, 0);
-    body = `
-      <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">${rangeLabel} · ${list.length} culling record${list.length === 1 ? '' : 's'}</div>
+    bodyInner = `
+      <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">${rangeLabel} · ${list.length} culling record${list.length === 1 ? '' : 's'}${filterNote}</div>
       <div class="mb-4 grid grid-cols-2 md:grid-cols-4 gap-2">
         ${rollEntries.map(([n, v]) => `
           <div class="bg-[#fff5f5] border border-[#f8d7da] rounded-xl px-3 py-2">
             <div class="text-[9px] font-black text-[#a83020] uppercase tracking-widest">${n}</div>
             <div class="text-lg font-black text-[#a83020]">${fmtNum(v.total)}</div>
             <div class="text-[9px] font-bold text-[#8a7a68] mt-0.5">1st ${fmtNum(v['1st'])} · 2nd ${fmtNum(v['2nd'])} · 3rd ${fmtNum(v['3rd'])}</div>
-          </div>`).join('') || '<div class="text-[10px] text-[#8a7a68] uppercase tracking-widest col-span-full">No culling records for this range.</div>'}
+          </div>`).join('') || '<div class="text-[10px] text-[#8a7a68] uppercase tracking-widest col-span-full">No culling records for the selected filter.</div>'}
       </div>
       <div class="overflow-x-auto">
         <table class="report-table w-full">
@@ -1582,7 +1667,7 @@ function openBpDrill(kind) {
             <th>Nursery</th><th>Plot</th><th class="text-right">Culled Qty</th>
           </tr></thead>
           <tbody>
-            ${list.map(x => `
+            ${list.length ? list.map(x => `
               <tr>
                 <td>${fmtDate(x.date)}</td>
                 <td class="font-black text-[#a83020]">${x.stage}</td>
@@ -1591,7 +1676,7 @@ function openBpDrill(kind) {
                 <td class="font-black text-[#a83020]">${x.nursery}</td>
                 <td>${x.plot}</td>
                 <td class="text-right text-[#a83020] font-black">${fmtNum(x.qty)}</td>
-              </tr>`).join('')}
+              </tr>`).join('') : '<tr><td colspan="7" class="text-center text-[#8a7a68] text-[11px] py-6">No records for the selected filter.</td></tr>'}
           </tbody>
           <tfoot><tr class="font-black bg-[#f8f4ec]">
             <td colspan="6" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
@@ -1602,10 +1687,10 @@ function openBpDrill(kind) {
   }
 
   document.getElementById('bp-drill-title').textContent = title;
-  document.getElementById('bp-drill-body').innerHTML = body;
-  document.getElementById('bp-drill-modal').classList.remove('hidden');
-  document.getElementById('bp-drill-modal').classList.add('flex');
+  document.getElementById('bp-drill-body').innerHTML   = barHtml + bodyInner;
 }
+window._bpDrillSetFilter   = _bpDrillSetFilter;
+window._bpDrillClearFilter = _bpDrillClearFilter;
 
 function closeBpDrill() {
   const m = document.getElementById('bp-drill-modal');
