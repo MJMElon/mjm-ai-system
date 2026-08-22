@@ -1658,7 +1658,110 @@
         let globalPlots = [];
         let rowMaps = {}; // Store uploaded map previews
         let trayUsageMap = {};  // { tray_name: 'MJN-2024-001' } — which batch is using each tray
-        let trayVacantMap = {}; // { tray_name: 1234 } — vacant holes (out of 2,560) for each tray
+        let trayVacantMap = {}; // { tray_name: 1234 } — holes free in each tray RIGHT NOW
+        let trayTotalMap  = {}; // { tray_name: 2560 } — each tray's TOTAL vacant, keyed in Settings
+        let trayPlantedByBatch = {}; // { tray_name: { batch: qty } } — who filled what, per tray
+
+        // Holes this batch may still fill in a tray.
+        //
+        // The ledger counts what is already planted as occupied, so a batch
+        // re-opening its own saved Tab 2 would find its trays full and be unable to
+        // correct a keying mistake. Saving REPLACES this batch's Planted logs rather
+        // than adding to them, so its own share is handed back before the cap is
+        // worked out — the tray is only full of everybody else's seedlings.
+        function trayVacantFor(trayName, batchName) {
+            if (!trayName) return 0;
+            const total = trayTotalMap[trayName] != null ? trayTotalMap[trayName] : 2560;
+            const vacant = trayVacantMap[trayName] != null ? trayVacantMap[trayName] : total;
+            const mine = batchName ? ((trayPlantedByBatch[trayName] || {})[batchName] || 0) : 0;
+            return Math.min(total, vacant + mine);
+        }
+
+        function trayTotalFor(trayName) {
+            return trayTotalMap[trayName] != null ? trayTotalMap[trayName] : 2560;
+        }
+
+        // ── The tray ledger ─────────────────────────────────────────────────────────
+        //
+        // Current vacant = the tray's TOTAL vacant (its full size, keyed once in
+        // Settings) − what has been planted into it + what has since left it.
+        // Seedlings leave a tray two ways and both give the hole back: transplanted
+        // out, or culled at 1st Culling.
+        //
+        // Every term is charged to the tray it actually happened on. This replaces a
+        // pro-rata split that spread a batch's outflow across all of that batch's
+        // trays in proportion to how much had been planted in each — so transplanting
+        // one tray dry handed a slice of that vacancy to every other tray the batch
+        // was using, and none of them read true.
+        //
+        // Planted and 1st_Culling both name the tray in plot_name. A transplant's
+        // plot_name is where the seedlings WENT, so its source tray is read out of the
+        // remark this page writes ("... from tray [P5] ..."), which is the only place
+        // that tray is recorded.
+        const DEFAULT_TRAY_CAP = 2560; // only for a tray with no total keyed yet
+
+        function buildTrayLedger(trays, plantedLogs, transplantedLogs, cullLogs) {
+            globalTrays = trays || [];
+            trayUsageMap = {}; trayVacantMap = {}; trayTotalMap = {}; trayPlantedByBatch = {};
+
+            const plantedByBatch = {}, outByBatch = {};
+            (plantedLogs || []).forEach(l => {
+                plantedByBatch[l.batch_name] = (plantedByBatch[l.batch_name] || 0) + (l.quantity_change || 0);
+            });
+            [...(transplantedLogs || []), ...(cullLogs || [])].forEach(l => {
+                outByBatch[l.batch_name] = (outByBatch[l.batch_name] || 0) + Math.abs(l.quantity_change || 0);
+            });
+            // A batch whose pre-nursery has emptied no longer occupies its trays, so
+            // they stop being listed as in use by it.
+            const batchPnEmptied = (b) => {
+                const planted = plantedByBatch[b] || 0;
+                if (planted <= 0) return false; // never planted — leave behaviour unchanged
+                return planted - (outByBatch[b] || 0) <= 0;
+            };
+
+            (plantedLogs || []).forEach(log => {
+                if (!trayPlantedByBatch[log.plot_name]) trayPlantedByBatch[log.plot_name] = {};
+                trayPlantedByBatch[log.plot_name][log.batch_name] =
+                    (trayPlantedByBatch[log.plot_name][log.batch_name] || 0) + (log.quantity_change || 0);
+                if (batchPnEmptied(log.batch_name)) return;
+                trayUsageMap[log.plot_name] = log.batch_name;
+            });
+
+            const freedByTray = {};
+            const freeHoles = (tray, qty) => {
+                if (!tray) return;
+                freedByTray[tray] = (freedByTray[tray] || 0) + Math.abs(qty || 0);
+            };
+            (transplantedLogs || []).forEach(l => {
+                const m = /from tray \[([^\]]+)\]/i.exec(l.remark || '');
+                freeHoles(m && m[1].trim(), l.quantity_change);
+            });
+            (cullLogs || []).forEach(l => freeHoles(l.plot_name, l.quantity_change));
+
+            globalTrays.forEach(t => {
+                const total = Number(t.total_vacant) > 0 ? Number(t.total_vacant) : DEFAULT_TRAY_CAP;
+                const plantedIn = Object.values(trayPlantedByBatch[t.tray_name] || {})
+                    .reduce((s, q) => s + (q || 0), 0);
+                // Clamped both ends: a tray can never hold more than it has holes, and
+                // mis-keyed outflow must not invent capacity that isn't there.
+                const occupied = Math.min(total, Math.max(0, plantedIn - (freedByTray[t.tray_name] || 0)));
+                trayVacantMap[t.tray_name] = total - occupied;
+                trayTotalMap[t.tray_name] = total;
+            });
+        }
+
+        // Re-read the ledger after work that moves holes — planting fills them,
+        // transplanting and culling give them back. Without this the vacancy on
+        // screen is whatever it was when the page opened.
+        async function refreshTrayLedger() {
+            const [trayRes, plantedRes, transplantedRes, cullRes] = await Promise.all([
+                _supabase.from('operation_trays').select('*'),
+                _supabase.from('shared_inventory_logs').select('plot_name, batch_name, quantity_change').eq('transaction_type', 'Planted'),
+                _supabase.from('shared_inventory_logs').select('plot_name, batch_name, quantity_change, remark').in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']),
+                _supabase.from('shared_inventory_logs').select('plot_name, batch_name, quantity_change').eq('transaction_type', '1st_Culling')
+            ]);
+            buildTrayLedger(trayRes.data, plantedRes.data, transplantedRes.data, cullRes.data);
+        }
 
         function switchTab(tabIndex) {
             for(let i = 1; i <= 8; i++) {
@@ -2142,64 +2245,13 @@
                     _supabase.from('operation_trays').select('*'),
                     _supabase.from('shared_plots').select('*'),
                     _supabase.from('shared_inventory_logs').select('plot_name, batch_name, quantity_change').eq('transaction_type', 'Planted'),
-                    _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']),
-                    _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '1st_Culling')
+                    _supabase.from('shared_inventory_logs').select('plot_name, batch_name, quantity_change, remark').in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']),
+                    _supabase.from('shared_inventory_logs').select('plot_name, batch_name, quantity_change').eq('transaction_type', '1st_Culling')
                 ]);
 
                 masterBatchesList = batchRes.data || [];
-                globalTrays = trayRes.data || [];
+                buildTrayLedger(trayRes.data, usedTrayRes.data, transplantedRes.data, cull1Res.data);
 
-                // Build per-batch totals so we can tell which batches have fully emptied their
-                // pre-nursery trays (planted − transplanted − 1st_culling ≤ 0). Trays from
-                // emptied batches are considered free for the next batch to reuse.
-                const plantedByBatch = {}, transplantedByBatch = {}, cull1ByBatch = {};
-                (usedTrayRes.data || []).forEach(l => {
-                    plantedByBatch[l.batch_name] = (plantedByBatch[l.batch_name] || 0) + (l.quantity_change || 0);
-                });
-                (transplantedRes.data || []).forEach(l => {
-                    transplantedByBatch[l.batch_name] = (transplantedByBatch[l.batch_name] || 0) + Math.abs(l.quantity_change || 0);
-                });
-                (cull1Res.data || []).forEach(l => {
-                    cull1ByBatch[l.batch_name] = (cull1ByBatch[l.batch_name] || 0) + Math.abs(l.quantity_change || 0);
-                });
-                const batchPnEmptied = (b) => {
-                    const planted = plantedByBatch[b] || 0;
-                    if (planted <= 0) return false; // never planted, leave behavior unchanged
-                    const remaining = planted - (transplantedByBatch[b] || 0) - (cull1ByBatch[b] || 0);
-                    return remaining <= 0;
-                };
-
-                // Build tray-usage map: which batch is each tray planted in?
-                // Skip trays whose batch's pre-nursery is already emptied so the tray frees up.
-                trayUsageMap = {};
-                const plantedByTrayBatch = {}; // { tray: { batch: qty } }
-                (usedTrayRes.data || []).forEach(log => {
-                    if (!plantedByTrayBatch[log.plot_name]) plantedByTrayBatch[log.plot_name] = {};
-                    plantedByTrayBatch[log.plot_name][log.batch_name] =
-                        (plantedByTrayBatch[log.plot_name][log.batch_name] || 0) + (log.quantity_change || 0);
-                    if (batchPnEmptied(log.batch_name)) return;
-                    trayUsageMap[log.plot_name] = log.batch_name;
-                });
-
-                // Per-tray vacant balance (2,560 − seeds currently sitting in the tray).
-                // For each occupying batch, the seeds still left in PN are distributed across
-                // its trays in proportion to how many were originally planted there.
-                trayVacantMap = {};
-                const TRAY_CAP = 2560;
-                globalTrays.forEach(t => {
-                    const occupier = trayUsageMap[t.tray_name];
-                    if (!occupier) { trayVacantMap[t.tray_name] = TRAY_CAP; return; }
-                    const plantedInTray   = (plantedByTrayBatch[t.tray_name] || {})[occupier] || 0;
-                    const plantedForBatch = plantedByBatch[occupier] || 0;
-                    const outflowForBatch = (transplantedByBatch[occupier] || 0) + (cull1ByBatch[occupier] || 0);
-                    const remainingForBatch = Math.max(0, plantedForBatch - outflowForBatch);
-                    const remainingInTray = plantedForBatch > 0
-                        ? Math.round(remainingForBatch * (plantedInTray / plantedForBatch))
-                        : 0;
-                    const inUse = Math.min(TRAY_CAP, remainingInTray);
-                    trayVacantMap[t.tray_name] = Math.max(0, TRAY_CAP - inUse);
-                });
-                
                 // NATURAL ALPHANUMERIC SORTING FOR PLOTS (B2 comes before B10)
                 globalPlots = plotRes.data || [];
                 globalPlots.sort((a, b) => {
@@ -2734,6 +2786,7 @@
                 const toInsert = all.map(l => withEditMeta({ transaction_type: l.transaction_type, batch_name: batchId, breed_name: breed, plot_name: l.plot_name, quantity_change: l.quantity_change, remark: l.remark }));
                 const { error } = await safeReplaceLogs(batchId, ['Transplanted','Transplanted_Premium','Transplanted_DoubleTone'], toInsert);
                 if (error) throw error;
+                await refreshTrayLedger(); // transplanting gave those holes back
                 setEditMetaUI(3, new Date().toISOString(), window.currentUserEmail);
                 alert('✅ Record updated!');
                 toggleT3EditRow(idx);
@@ -3488,6 +3541,7 @@
                 // failed save can never wipe the existing records.
                 const { error: logError } = await safeReplaceLogs(batchId, ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone'], logsToInsert);
                 if (logError) throw logError;
+                await refreshTrayLedger(); // transplanting gave those holes back
                 setEditMetaUI(3, new Date().toISOString(), window.currentUserEmail);
 
                 // 3. Update PREMIUM CARE and DOUBLE-TONE tray quantities in the trays table
@@ -3560,14 +3614,17 @@
                 for (const nurs in grouped) {
                     html += `<optgroup label="${nurs}">`;
                     grouped[nurs].forEach(tray => {
-                        const vacant = trayVacantMap[tray.tray_name] != null ? trayVacantMap[tray.tray_name] : 2560;
+                        const vacant = trayVacantFor(tray.tray_name, currentBatch);
+                        const total  = trayTotalFor(tray.tray_name);
                         // Disable only when there are no vacant holes. Any tray with
                         // remaining capacity is selectable — the vacant count already
                         // subtracts another batch's tail-end seedlings.
                         const disabled = vacant === 0 ? 'disabled' : '';
                         const colorHex = vacant === 0 ? '#a83020' : '#15803d';
                         const dot      = vacant === 0 ? '🔴' : '🟢';
-                        const label    = `${dot} Vacant: ${vacant.toLocaleString()}`;
+                        // Both figures, because "Vacant: 2,000" alone reads as a small
+                        // tray rather than as a part-full one.
+                        const label    = `${dot} Vacant: ${vacant.toLocaleString()} / ${total.toLocaleString()}`;
                         html += `<option value="${tray.tray_name}" ${disabled} style="color:${colorHex};">${tray.tray_name} — ${label}</option>`;
                     });
                     html += `</optgroup>`;
@@ -3592,6 +3649,7 @@
                     <div>
                         <label class="label-style">Total Planted</label>
                         <input type="text" inputmode="numeric" class="input-style t-planted" oninput="formatNumericInput(this); calcTrayRow('${rowId}')">
+                        <div class="t-cap hidden mt-1 text-[9px] font-black text-[#7a6a52]"></div>
                     </div>
                     <div>
                         <label class="label-style !text-[#a83020]">Empty Holes</label>
@@ -3639,8 +3697,8 @@
                 return;
             }
 
-            // Use cached trayVacantMap (loaded at init, no extra DB call needed).
-            const vacant = trayVacantMap[trayName] != null ? trayVacantMap[trayName] : 2560;
+            // Use the cached ledger (loaded at init, no extra DB call needed).
+            const vacant = trayVacantFor(trayName, currentBatch);
             if (vacant === 0) {
                 warnEl.querySelector('span').innerText = 'No vacant holes — tray is full';
                 warnEl.classList.remove('hidden');
@@ -3651,14 +3709,34 @@
             }
         }
 
-        // Each pre-nursery tray fits 2,560 holes; vacant = capacity − seeds currently in the tray.
-        // Each pre-nursery tray fits 2,560 holes — used by the dropdown's
-        // per-tray Vacant balance (see trayVacantMap in initDetail).
-        const TRAY_CAPACITY = 2560;
+        // A tray's size is no longer a constant — each one carries its own total
+        // vacant, keyed in Settings. See buildTrayLedger.
 
         function calcTrayRow(rowId) {
             const row = document.getElementById(rowId);
-            const planted = readNumericInput(row.querySelector('.t-planted'));
+            const trayName = row.querySelector('.t-select')?.value || '';
+            const plantedInput = row.querySelector('.t-planted');
+            let planted = readNumericInput(plantedInput);
+
+            // A tray cannot take more than it has room for. A tray that started at
+            // 2,560 and still holds 560 seedlings takes 2,000 and no more, so the
+            // figure is clamped as it is typed rather than rejected on save — the
+            // person keying it sees the ceiling instead of losing the entry.
+            const capEl = row.querySelector('.t-cap');
+            if (trayName) {
+                const room = trayVacantFor(trayName, document.getElementById('f-batchno').value.trim());
+                if (planted > room) {
+                    planted = room;
+                    plantedInput.value = room.toLocaleString();
+                }
+                if (capEl) {
+                    capEl.innerText = `Room: ${room.toLocaleString()} of ${trayTotalFor(trayName).toLocaleString()}`;
+                    capEl.classList.remove('hidden');
+                }
+            } else if (capEl) {
+                capEl.classList.add('hidden');
+            }
+
             const empty = readNumericInput(row.querySelector('.t-empty'));
             const actual = Math.max(0, planted - empty);
 
@@ -4046,6 +4124,7 @@
                     // the delete-then-insert window that could destroy saved rows.
                     const { error } = await safeReplaceLogs(batchId, ['Planted', 'Damaged_Seeds'], logsToInsert);
                     if (error) throw error;
+                    await refreshTrayLedger(); // those holes are filled now
                 }
 
                 // Persist worker count to the `workers` column on the Seeds_Received row (single source of truth).
@@ -6061,6 +6140,7 @@ Thank you.`;
 
                 const { error } = await safeReplaceLogs(batchId, ['1st_Culling'], logsToInsert);
                 if (error) throw error;
+                await refreshTrayLedger(); // culling frees holes too
                 setEditMetaUI(4, new Date().toISOString(), window.currentUserEmail);
 
                 showToast(`1st Culling report saved — ${logsToInsert.length} tray record(s) logged.`, 'success');
