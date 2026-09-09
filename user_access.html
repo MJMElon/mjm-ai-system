@@ -155,6 +155,13 @@
         </div>
         <div class="flex items-center justify-between gap-4">
           <div>
+            <div class="font-black text-slate-800 text-sm">Stock Inventory System</div>
+            <div class="text-[11px] text-slate-500">Nobody holds it until it is granted here</div>
+          </div>
+          <select id="d-mod-stock" class="lvl-select"></select>
+        </div>
+        <div class="flex items-center justify-between gap-4">
+          <div>
             <div class="font-black text-slate-800 text-sm">Nursery Operation Manage</div>
             <div class="text-[11px] text-slate-500">Seeds, monthly work schedule, life of plot</div>
           </div>
@@ -268,7 +275,7 @@
 const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
 // Top-level modules only — page access INSIDE a module (batch record,
 // stock, reports…) is managed from that module's own User Access page.
-const MODULES = ['operation', 'nursery_ops', 'nelos', 'npayroll', 'salesweb', 'audit', 'mobile', 'training', 'scan', 'demo555'];
+const MODULES = ['operation', 'stock', 'nursery_ops', 'nelos', 'npayroll', 'salesweb', 'audit', 'mobile', 'training', 'scan', 'demo555'];
 const LEVELS  = ['admin', 'normal', 'none'];
 const LEVEL_LABEL = { admin:'Admin', normal:'Normal', none:'None' };
 
