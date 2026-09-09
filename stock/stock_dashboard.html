@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stock Inventory System</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%2365a30d%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2714%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3ESI%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_access.js"></script>
+<script src="../shared/shared_nelos.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  * { font-family:'Outfit', system-ui, sans-serif; }
+  body { background:#f7fee7; margin:0; }
+  .hidden { display:none !important; }
+
+  /* The same square tiles Nursery Operation Manage uses, in this module's
+     colour. Kept here rather than invented: a person who knows one office
+     module should not have to learn another one's furniture. */
+  .tool-grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fill, minmax(132px, 1fr)); }
+  .tool-btn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+              aspect-ratio:1/1; padding:12px; border-radius:18px; text-align:center;
+              background:white; border:1.5px solid #d9f99d; color:#4d7c0f; font-weight:900; font-size:11px;
+              letter-spacing:.08em; text-transform:uppercase; text-decoration:none;
+              transition:transform .12s, background .15s, box-shadow .15s;
+              box-shadow:0 3px 10px rgba(101,163,13,.10); }
+  .tool-btn:hover { background:#ecfccb; transform:translateY(-2px); }
+  .tool-btn-access { background:#fff1f2; color:#9f1239; border-color:#fecdd3; }
+  .tool-btn-access:hover { background:#ffe4e6; }
+
+  /* Nothing has been built into this module yet, and the page says so in
+     plain words rather than showing tabs and tables with no numbers behind
+     them. An empty screen that admits it is empty can be trusted; one that
+     draws a dashboard over nothing cannot. */
+  .empty { background:white; border:1.5px dashed #d9f99d; border-radius:22px;
+           padding:44px 28px; text-align:center; box-shadow:0 6px 20px rgba(101,163,13,.07); }
+</style>
+</head>
+<body>
+
+<!-- Standardised MJM Nursery AI ribbon — see shared/shared_ribbon.js -->
+<div id="mjm-ribbon" data-brand="MJM Nursery AI System" data-center="Stock Inventory System"
+     data-center-scale="0.7" data-logo="off"></div>
+<script src="../shared/shared_ribbon.js"></script>
+
+<div id="loading" class="max-w-[980px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Checking access…</div>
+
+<div id="main" class="max-w-[980px] mx-auto px-4 md:px-6 py-8 hidden">
+
+  <!-- Where a Nelos case raised against this module will appear, the same
+       way it does on every other module's main page. hideIfEmpty, so a
+       clear list shows nothing at all rather than an "all clear" strip. -->
+  <div id="nelos-todo" class="mb-6"></div>
+
+  <div class="tool-grid mb-8" id="tools">
+    <a class="tool-btn tool-btn-access hidden" id="user-access-btn" href="../user_access.html">
+      <span style="font-size:22px">🔐</span><span class="tl">User<br>Access</span>
+    </a>
+  </div>
+
+  <div class="empty">
+    <div style="font-size:40px; line-height:1">📦</div>
+    <div class="text-slate-800 font-black text-lg mt-3">Stock Inventory System</div>
+    <p class="text-slate-500 text-sm font-bold mt-2 max-w-[460px] mx-auto leading-relaxed">
+      The module is open and access to it is granted per person on
+      <a href="../user_access.html" class="text-lime-700 underline">User Access</a>.
+      Nothing has been built into it yet — say what it should hold and it is
+      built here.
+    </p>
+  </div>
+
+  <p class="text-center text-[11px] font-bold text-slate-400 mt-8">
+    Module access is granted per user on the main portal's
+    <a href="../user_access.html" class="underline">User Access</a>.
+  </p>
+</div>
+
+<script>
+const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+
+(async () => {
+  try {
+    await MJMAccess.load(_supabase);
+    if (!MJMAccess.user()) { window.location.href = '../index.html'; return; }
+    /* A brand-new module, so it is hidden-by-default and this is a real
+       gate rather than a formality: nobody has it until somebody is granted
+       it. That is the opposite of the fail-open rule that governs modules
+       which existed before their switch did — there, an unset answer means
+       "nobody has been asked" and taking the tile away would be the bug.
+       Here an unset answer has only ever meant no. */
+    if (!MJMAccess.canAccess('stock')) {
+      alert('You do not have access to the Stock Inventory System.');
+      window.location.href = '../index.html';
+      return;
+    }
+
+    /* Fails OPEN if shared_access.js is an older cached copy without these
+       helpers — a stale script must not shut a door on somebody entitled to
+       walk through it. Wrapped so one missing helper cannot bounce the page. */
+    try {
+      if (MJMAccess.canManageUsers()) document.getElementById('user-access-btn').classList.remove('hidden');
+    } catch (_) { /* keep the page usable */ }
+
+    // Only for people who hold Nelos — the dock and this list are the same
+    // question asked twice otherwise.
+    if (MJMAccess.canAccess('nelos')) {
+      MJMNelos.init(_supabase, { root: '../' });
+      MJMNelos.mountTodo('#nelos-todo', {
+        module: 'stock',
+        title:  'Nelos To Do List',
+        hideIfEmpty: true
+      });
+    }
+
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('main').classList.remove('hidden');
+  } catch (e) {
+    console.warn(e);
+    window.location.href = '../index.html';
+  }
+})();
+</script>
+
+<!-- Nelos floating To-Do dock — the round button in the corner.
+     See shared/shared_nelos_dock.js -->
+<script src="../shared/shared_nelos_dock.js"></script>
+</body>
+</html>

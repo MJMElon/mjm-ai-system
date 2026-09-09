@@ -214,6 +214,34 @@
         <div class="module-tag">operation_</div>
       </a>
 
+      <!-- Stock Inventory System — next to Nursery Seedling Stock Management
+           because the two are the pair somebody looking for stock will be
+           choosing between, and a tile is easier to find beside its sibling
+           than at the end of a row of eleven. The saved drag order wins over
+           this once anybody has moved anything, so it is only where the tile
+           STARTS.
+
+           No `data-module-open`: a module that did not exist yesterday has
+           never been "not asked about", so an unset answer here is a no, and
+           the tile stays hidden until somebody is granted `stock` on User
+           Access. The fail-open rule is for switches added over doors that
+           were already open. -->
+      <a class="module-card" data-card="stock" data-module="stock" href="stock/stock_dashboard.html"
+         style="--accent:#84cc16;--glow:rgba(132,204,22,.25);--glow-strong:rgba(132,204,22,.35);--icon-bg:rgba(132,204,22,.12);">
+        <div class="card-corner card-tl"></div><div class="card-corner card-tr"></div>
+        <div class="card-corner card-bl"></div><div class="card-corner card-br"></div>
+        <div class="module-icon-wrap">
+          <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
+            <rect x="5" y="7" width="11" height="9" rx="2" fill="rgba(132,204,22,.18)" stroke="#84cc16" stroke-width="1.5"/>
+            <rect x="18" y="7" width="11" height="9" rx="2" fill="rgba(132,204,22,.18)" stroke="#84cc16" stroke-width="1.5"/>
+            <rect x="11.5" y="19" width="11" height="9" rx="2" fill="rgba(132,204,22,.28)" stroke="#84cc16" stroke-width="1.5"/>
+            <path d="M10.5 7v3.2M23.5 7v3.2M17 19v3.2" stroke="#a3e635" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="module-name">Stock Inventory<br>System</div>
+        <div class="module-tag">stock_</div>
+      </a>
+
       <a class="module-card" data-card="nstock" data-module="nursery_ops" href="nursery_ops/nursery_ops_dashboard.html"
          style="--accent:#14b8a6;--glow:rgba(20,184,166,.25);--glow-strong:rgba(20,184,166,.35);--icon-bg:rgba(20,184,166,.12);">
         <div class="card-corner card-tl"></div><div class="card-corner card-tr"></div>
