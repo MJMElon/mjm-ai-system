@@ -1462,8 +1462,8 @@
                                      changes which of the three panels below a row's markup lands in. -->
                                 <div class="flex flex-wrap gap-2 px-6 pt-4">
                                     <button type="button" id="t6-subtab-btn-main" onclick="switchT6SubTab('main')"
-                                        class="t6-subtab-btn px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors bg-[#6d28d9] border-[#6d28d9] text-white">
-                                        🌿 Main Culling <span id="t6-subtab-count-main" class="opacity-70"></span>
+                                        class="t6-subtab-btn px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors bg-[#4a7a2e] border-[#4a7a2e] text-white">
+                                        Main Culling <span id="t6-subtab-count-main" class="opacity-70"></span>
                                     </button>
                                     <button type="button" id="t6-subtab-btn-transferdata" onclick="switchT6SubTab('transferdata')"
                                         class="t6-subtab-btn px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors bg-[#fdfaf4] border-[#e8dcc8] text-[#8a7a68]">
@@ -1471,7 +1471,7 @@
                                     </button>
                                     <button type="button" id="t6-subtab-btn-transferplot" onclick="switchT6SubTab('transferplot')"
                                         class="t6-subtab-btn px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors bg-[#fdfaf4] border-[#e8dcc8] text-[#8a7a68]">
-                                        📦 P-R Culling <span id="t6-subtab-count-transferplot" class="opacity-70"></span>
+                                        P-R Culling <span id="t6-subtab-count-transferplot" class="opacity-70"></span>
                                     </button>
                                 </div>
 
@@ -1480,7 +1480,7 @@
                                     <!-- Column headers: Date → Main Plot (Transplanted + 2nd Culled shown
                                          compactly under the plot name, not their own columns) → Sales →
                                          Balance → 3rd Culled (qty over %) → Drone Map -->
-                                    <div class="hidden lg:grid gap-2 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 0.55fr 0.95fr 0.5fr 0.55fr 0.65fr 1.1fr;">
+                                    <div class="hidden lg:grid gap-2 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 0.95fr 0.85fr 0.45fr 0.5fr 0.6fr 1fr;">
                                         <span>Date</span>
                                         <span>Main Plot</span>
                                         <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch. CAL-… calibration DOs are included; only cancelled DOs are excluded. Click a figure to see the DOs behind it.">Sales</span>
@@ -7296,7 +7296,7 @@ Thank you.`;
                 // field), so its grid has one fewer column.
                 const gridCols = p.isTransferRow
                     ? '1fr_0.5fr_0.55fr_0.65fr_1.1fr'
-                    : '0.55fr_0.95fr_0.5fr_0.55fr_0.65fr_1.1fr';
+                    : '0.95fr_0.85fr_0.45fr_0.5fr_0.6fr_1fr';
 
                 const rowContainer = p.isTransferRow ? trContainer : mainContainer;
                 rowContainer.insertAdjacentHTML('beforeend', `
@@ -7308,7 +7308,7 @@ Thank you.`;
                             ${!p.isTransferRow ? `
                             <div class="pt-1">
                                 <div class="text-[9px] font-black text-[#8a7a68] uppercase lg:hidden mb-0.5">Date</div>
-                                <input type="date" class="input-style t6-cull-date !text-sm !py-2 w-full" value="${p.savedCullDate || ''}"
+                                <input type="date" class="input-style t6-cull-date !text-xs !py-2 !px-2 !text-left w-full" value="${p.savedCullDate || ''}"
                                     title="Date this plot was culled">
                             </div>` : ''}
 
@@ -7791,8 +7791,8 @@ Thank you.`;
                 if (btn) {
                     btn.className = 't6-subtab-btn px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors ' +
                         (n === name
-                            ? 'bg-[#6d28d9] border-[#6d28d9] text-white'
-                            : 'bg-[#fdfaf4] border-[#e8dcc8] text-[#8a7a68] hover:bg-[#f3e8ff]');
+                            ? 'bg-[#4a7a2e] border-[#4a7a2e] text-white'
+                            : 'bg-[#fdfaf4] border-[#e8dcc8] text-[#8a7a68] hover:bg-[#f0f8ec]');
                 }
             });
         }
