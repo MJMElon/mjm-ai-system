@@ -1887,6 +1887,7 @@
                 return;
             }
             histEl.innerHTML = '<div class="text-center p-6 text-[#8a7a68] text-xs animate-pulse">Loading…</div>';
+            await mjmLoadNames(); // "Edited By" column shows names, not emails
             const { data: rows, error } = await _supabase
                 .from('shared_inventory_logs')
                 .select('id, quantity_change, remark, created_at, last_edited_by, transaction_type')
@@ -1958,7 +1959,7 @@
                     <td class="px-3 py-2 text-[11px] text-[#3a7ab4] font-bold">${esc(reportTxt) || '—'}</td>
                     <td class="px-3 py-2 text-[11px] text-[#4a7a2e] font-bold">${esc(plotTxt) || '—'}</td>
                     <td class="px-3 py-2 text-[11px] text-[#3d2610]">${esc(reasonTxt) || '—'}</td>
-                    <td class="px-3 py-2 text-[10px] text-[#8a7a68]">${esc(r.last_edited_by || '—')}</td>
+                    <td class="px-3 py-2 text-[10px] text-[#8a7a68]">${esc(mjmWho(r.last_edited_by) || '—')}</td>
                     ${actionsCell}
                 </tr>`;
             }).join('');
@@ -4395,6 +4396,31 @@
         function stripEditMeta(rows) {
             return rows.map(r => { const { last_edited_by, last_edited_at, ...rest } = r; return rest; });
         }
+        // ── email → account name, page-wide ─────────────────────────────
+        // Every "by <person>" on this page (edit metas, calibration history,
+        // review badges) goes through mjmWho() so nobody's whole email
+        // address is displayed. Names come from shared_profiles, loaded once;
+        // an email with no profile name falls back to its part before the @.
+        // The stored rows keep the email — only the display changes.
+        window.MJMNameByEmail = window.MJMNameByEmail || {};
+        let _mjmNamesPromise = null;
+        function mjmLoadNames() {
+            if (_mjmNamesPromise) return _mjmNamesPromise;
+            _mjmNamesPromise = _supabase.from('shared_profiles').select('email, full_name')
+                .then(({ data }) => {
+                    (data || []).forEach(p => {
+                        if (p.email && p.full_name) window.MJMNameByEmail[String(p.email).toLowerCase()] = p.full_name;
+                    });
+                }, () => {});
+            return _mjmNamesPromise;
+        }
+        window.mjmWho = function (v) {
+            if (!v) return null;
+            const s = String(v).trim();
+            if (!s.includes('@')) return s; // already a name
+            return window.MJMNameByEmail[s.toLowerCase()] || s.split('@')[0];
+        };
+
         function formatEditMeta(dateLike, email) {
             if (!dateLike && !email) return '—';
             let when = '';
@@ -4404,8 +4430,9 @@
                     when = d.toLocaleString('en-MY', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
                 }
             }
-            const who = email ? ` by ${email}` : '';
-            return when ? when + who : (email || '—');
+            const name = mjmWho(email);
+            const who = name ? ` by ${name}` : '';
+            return when ? when + who : (name || '—');
         }
         function setEditMetaUI(tabIdx, dateLike, email) {
             const el = document.getElementById(`t${tabIdx}-edit-meta`);
@@ -4466,6 +4493,7 @@
         }
         async function loadAllEditMeta(batchId) {
             if (!batchId) return;
+            await mjmLoadNames(); // so the "by" shows a name, not an email
             // Try the rich select first; if columns are absent, retry with just created_at.
             let { data, error } = await _supabase.from('shared_inventory_logs')
                 .select('transaction_type, created_at, last_edited_at, last_edited_by')
@@ -8141,17 +8169,9 @@ Thank you.`;
       const rowVerifs     = {}; // `${stage}::${rowKey}` → Row_Verification log row
       const lastEdits     = {}; // tabIdx → { ts, by } — latest report save per tab (detects post-rejection amendment)
 
-      // email (lowercased) → full_name from shared_profiles, so the review
-      // badges show "Esther Wong" rather than the whole address. Loaded once
-      // per page in refresh(). A person with no profile name falls back to
-      // the part before the @ — a full email address is never displayed.
-      const nameByEmail = {};
-      function who(v) {
-        if (!v) return null;
-        const s = String(v).trim();
-        if (!s.includes('@')) return s; // already a name
-        return nameByEmail[s.toLowerCase()] || s.split('@')[0];
-      }
+      // Review badges show account names, never the whole email address —
+      // via the page-wide mjmWho()/mjmLoadNames() helpers in the main script.
+      function who(v) { return window.mjmWho ? window.mjmWho(v) : (v || null); }
 
       // Tabs whose verify/reject happens PER DATA ROW instead of a top banner:
       // Transplanting + 1st/2nd/3rd Culling. Each entry knows how to list the
@@ -8447,14 +8467,9 @@ Thank you.`;
         for (const k of Object.keys(lastEdits))     delete lastEdits[k];
         if (batch) {
           try {
-            // Names for the badges — once per page, profiles don't churn.
-            if (!Object.keys(nameByEmail).length) {
-              const { data: profs } = await _supabase
-                .from('shared_profiles').select('email, full_name');
-              (profs || []).forEach(p => {
-                if (p.email && p.full_name) nameByEmail[String(p.email).toLowerCase()] = p.full_name;
-              });
-            }
+            // Names for the badges — loaded once per page, shared with the
+            // edit metas and calibration history.
+            if (typeof mjmLoadNames === 'function') await mjmLoadNames();
             const [revRes, verRes, rejRes, editRes] = await Promise.all([
               _supabase
                 .from('operation_batch_reviews')
