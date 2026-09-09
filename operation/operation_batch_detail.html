@@ -1506,7 +1506,7 @@
                                 <div id="t6-subpanel-transferdata" class="t6-subpanel hidden">
                                     <div class="hidden sm:grid gap-2 px-6 pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest" style="grid-template-columns: 0.9fr 0.6fr 2.5fr;">
                                         <span>Plot</span>
-                                        <span title="Linked from the Culling record — Transplanted − 2nd Culled − Sales − Transferred out">Balance</span>
+                                        <span title="Transplanted − 2nd Culled − Sales. Fixed — does not deduct transfers keyed in below, and is not linked to Main Culling's Balance.">Balance</span>
                                         <span>Date · To Plot · Quantity</span>
                                     </div>
                                     <div id="t6-transferdata-rows" class="px-6 pb-4 space-y-3 mt-2"></div>
@@ -7281,6 +7281,12 @@ Thank you.`;
                 const dead2   = _n.dead2;
                 const sales   = _n.sales;
                 const autoBal = _n.bal;
+                // The Transfer Data tab's own Balance is a fixed reference — it
+                // does NOT deduct transfers keyed in there (unlike Main Culling's
+                // Balance, which is the remaining figure and does), and does not
+                // live-update as transfers are added. Same three inputs, moved
+                // pinned to 0 instead of read.
+                const staticBal = t6AutoNumbers(p, 0).bal;
                 // AUTO 3rd culled = 2nd culled + balance — fully calculated,
                 // not editable by hand. A computed 0 (e.g. everything sold) is
                 // real data and shows/saves as 0 rather than blank.
@@ -7421,7 +7427,7 @@ Thank you.`;
                             </div>
                             <div>
                                 <div class="text-[9px] font-black text-[#8a7a68] uppercase sm:hidden mb-0.5">Balance</div>
-                                <div class="text-base font-black text-[#3d2610]" id="${rowId}-tdata-balance" title="Linked from the Culling record">${autoBal.toLocaleString()}</div>
+                                <div class="text-base font-black text-[#3d2610]" id="${rowId}-tdata-balance" title="Transplanted − 2nd Culled − Sales. Fixed — does not deduct transfers keyed in below, and is not linked to Main Culling's Balance.">${staticBal.toLocaleString()}</div>
                             </div>
                             <div>
                                 <div class="flex items-center justify-between gap-2 mb-1">
@@ -7716,9 +7722,10 @@ Thank you.`;
             if (balEl) balEl.value = n.bal;
             const balDisp = rowEl.querySelector('.t6-balance-display');
             if (balDisp) balDisp.innerText = n.bal.toLocaleString();
-            // Mirror into the Transfer Data tab's own read-only Balance cell.
-            const tdataBal = document.getElementById(`t6-row-${rowIdx}-tdata-balance`);
-            if (tdataBal) tdataBal.innerText = n.bal.toLocaleString();
+            // The Transfer Data tab's own Balance is deliberately NOT touched
+            // here — it's a fixed reference (Transplanted − 2nd Culled − Sales,
+            // no transfer deduction) and isn't linked to Main Culling's Balance,
+            // so it doesn't move as transfers are keyed in.
             const cullEl = rowEl.querySelector('.t6-culled-input');
             if (cullEl) cullEl.value = n.culled;
 
