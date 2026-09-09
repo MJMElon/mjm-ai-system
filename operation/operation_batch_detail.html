@@ -56,6 +56,8 @@
   #t6-total-transplanted · #t6-total-culled · #t6-avg-cull-rate
   .t6-plot-row (Main + Transfer Plot only — NOT the Transfer Data rows)
   .t6-balance(hidden) · .t6-culled-input · .t6-cull-rate-cell · .t6-cull-date
+  #t6-sales-modal — DOs behind a Sales figure (openT6SalesModal)
+  #t6-sales-tip   — hover tooltip, same data (showT6SalesTip)
   NOTE: .t6-balance is now a hidden input (auto = transplanted qty).
   Each row's outgoing-transfer list (.t6-transfer-rec, #t6-row-N-transfers)
   now renders on the Transfer Data tab, not nested inside the row — always
@@ -225,6 +227,28 @@
 <body>
 
     <div id="toast-container"></div>
+
+    <!-- Tab 6 Sales click-through: the Customer Order Monitoring Delivery
+         Notes behind one plot's Sales figure. Sits ABOVE the page's own
+         modal-backdrop (z-10/20), below toasts (z-9999). -->
+    <div id="t6-sales-modal" class="hidden fixed inset-0 z-[9000] bg-[rgba(26,21,13,0.7)] backdrop-blur-sm overflow-y-auto flex justify-center items-start p-4 md:p-8" onclick="if (event.target === this) closeT6SalesModal()">
+        <div class="bg-[#f8f4ec] w-full max-w-2xl rounded-3xl shadow-2xl border border-[#e8dcc8] mt-8">
+            <div class="px-6 py-5 border-b border-[#e8dcc8] flex justify-between items-center bg-white rounded-t-3xl">
+                <div>
+                    <h3 class="text-lg font-black text-[#3d2610] uppercase tracking-widest" id="t6-sales-modal-title">Sales — Plot</h3>
+                </div>
+                <button type="button" onclick="closeT6SalesModal()" class="w-9 h-9 rounded-full bg-[#f8f4ec] border border-[#e8dcc8] text-[#8a7a68] hover:text-[#a83020] hover:border-[#a83020] flex items-center justify-center shrink-0" title="Close">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6" id="t6-sales-modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Hover tooltip for a Sales figure: the same DO lines the modal shows,
+         at a glance. pointer-events:none so it never swallows the click that
+         opens the full modal. -->
+    <div id="t6-sales-tip" class="hidden fixed z-[9500] pointer-events-none bg-white border border-[#e8dcc8] rounded-2xl shadow-[0_12px_32px_rgba(26,21,13,0.25)] px-4 py-3 max-w-[340px]"></div>
 
     <div class="modal-backdrop">
         <div class="modal-window flex flex-col">
@@ -1458,7 +1482,7 @@
                                         <span>Main Plot</span>
                                         <span class="!whitespace-nowrap">Transplanted</span>
                                         <span class="text-[#a83020]">2nd Culled</span>
-                                        <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch (cancelled DOs excluded)">Sales</span>
+                                        <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch. CAL-… calibration DOs are included; only cancelled DOs are excluded. Click a figure to see the DOs behind it.">Sales</span>
                                         <span title="Auto: Transplanted − 2nd Culled − Sales − Transferred out">Balance</span>
                                         <span class="text-[#a83020]" title="Auto: 2nd Culled + Balance, with the rate below it. Click 📅 to key in the date it was culled.">3rd Culled</span>
                                         <span>Drone Map</span>
@@ -1502,7 +1526,7 @@
                                         <span>Transfer Plot</span>
                                         <span class="!whitespace-nowrap">Transplanted</span>
                                         <span class="text-[#a83020]">2nd Culled</span>
-                                        <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch (cancelled DOs excluded)">Sales</span>
+                                        <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch. CAL-… calibration DOs are included; only cancelled DOs are excluded. Click a figure to see the DOs behind it.">Sales</span>
                                         <span title="Auto: Transplanted − 2nd Culled − Sales − Transferred out">Balance</span>
                                         <span class="text-[#a83020]" title="Auto: 2nd Culled + Balance, with the rate below it">3rd Culled</span>
                                         <span>Drone Map</span>
@@ -1934,6 +1958,7 @@
                 return;
             }
             histEl.innerHTML = '<div class="text-center p-6 text-[#8a7a68] text-xs animate-pulse">Loading…</div>';
+            await mjmLoadNames(); // "Edited By" column shows names, not emails
             const { data: rows, error } = await _supabase
                 .from('shared_inventory_logs')
                 .select('id, quantity_change, remark, created_at, last_edited_by, transaction_type')
@@ -2005,7 +2030,7 @@
                     <td class="px-3 py-2 text-[11px] text-[#3a7ab4] font-bold">${esc(reportTxt) || '—'}</td>
                     <td class="px-3 py-2 text-[11px] text-[#4a7a2e] font-bold">${esc(plotTxt) || '—'}</td>
                     <td class="px-3 py-2 text-[11px] text-[#3d2610]">${esc(reasonTxt) || '—'}</td>
-                    <td class="px-3 py-2 text-[10px] text-[#8a7a68]">${esc(r.last_edited_by || '—')}</td>
+                    <td class="px-3 py-2 text-[10px] text-[#8a7a68]">${esc(mjmWho(r.last_edited_by) || '—')}</td>
                     ${actionsCell}
                 </tr>`;
             }).join('');
@@ -4442,6 +4467,31 @@
         function stripEditMeta(rows) {
             return rows.map(r => { const { last_edited_by, last_edited_at, ...rest } = r; return rest; });
         }
+        // ── email → account name, page-wide ─────────────────────────────
+        // Every "by <person>" on this page (edit metas, calibration history,
+        // review badges) goes through mjmWho() so nobody's whole email
+        // address is displayed. Names come from shared_profiles, loaded once;
+        // an email with no profile name falls back to its part before the @.
+        // The stored rows keep the email — only the display changes.
+        window.MJMNameByEmail = window.MJMNameByEmail || {};
+        let _mjmNamesPromise = null;
+        function mjmLoadNames() {
+            if (_mjmNamesPromise) return _mjmNamesPromise;
+            _mjmNamesPromise = _supabase.from('shared_profiles').select('email, full_name')
+                .then(({ data }) => {
+                    (data || []).forEach(p => {
+                        if (p.email && p.full_name) window.MJMNameByEmail[String(p.email).toLowerCase()] = p.full_name;
+                    });
+                }, () => {});
+            return _mjmNamesPromise;
+        }
+        window.mjmWho = function (v) {
+            if (!v) return null;
+            const s = String(v).trim();
+            if (!s.includes('@')) return s; // already a name
+            return window.MJMNameByEmail[s.toLowerCase()] || s.split('@')[0];
+        };
+
         function formatEditMeta(dateLike, email) {
             if (!dateLike && !email) return '—';
             let when = '';
@@ -4451,8 +4501,9 @@
                     when = d.toLocaleString('en-MY', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
                 }
             }
-            const who = email ? ` by ${email}` : '';
-            return when ? when + who : (email || '—');
+            const name = mjmWho(email);
+            const who = name ? ` by ${name}` : '';
+            return when ? when + who : (name || '—');
         }
         function setEditMetaUI(tabIdx, dateLike, email) {
             const el = document.getElementById(`t${tabIdx}-edit-meta`);
@@ -4513,6 +4564,7 @@
         }
         async function loadAllEditMeta(batchId) {
             if (!batchId) return;
+            await mjmLoadNames(); // so the "by" shows a name, not an email
             // Try the rich select first; if columns are absent, retry with just created_at.
             let { data, error } = await _supabase.from('shared_inventory_logs')
                 .select('transaction_type, created_at, last_edited_at, last_edited_by')
@@ -6762,13 +6814,7 @@ Thank you.`;
         // TAB 6 — 3rd Culling
         // ═══════════════════════════════════════════════════════
         let t6_plotDocs = {};   // { rowId: { name, base64 } }
-        let t6_plotData = [];   // [{ plot, qty, destType }]
-        // { PLOT_KEY: [{do, line, qty, customer, raw_batch, status, fallback_from_total_qty}] } —
-        // every DO line that fed a plot's Sales figure, keyed the same way
-        // salesMap is (_normPlotKey). Was only ever printed to the console
-        // as [t6:sales]; kept here too so the Sales figure's hover tooltip
-        // (see renderT6PlotRows) can show the same thing without DevTools.
-        let t6_salesTraceByPlot = {};
+        let t6_plotData = [];   // [{ plot, qty, destType, salesDOs: [...] }]
 
         // Supabase caps one request at 1000 rows. shared_do_records is long
         // past that, so a plain .select() silently drops every DO after the
@@ -6860,9 +6906,7 @@ Thank you.`;
             //   balance = transplanted − 2nd culled (dead) − sales.
             const dead2Map = {}; // PLOT → 2nd-culling dead qty
             const salesMap = {}; // PLOT → sold qty from the D/O collection details
-            // Reset so a batch with no DO lines (or before batchId is known)
-            // doesn't keep showing the previous batch's breakdown.
-            t6_salesTraceByPlot = {};
+            const salesDOsByPlot = {}; // PLOT → the DO lines behind that qty (feeds the Sales click-through modal)
             if (batchId) {
                 const [c2Res, doRows, alRows] = await Promise.all([
                     _supabase.from('shared_inventory_logs')
@@ -6876,24 +6920,24 @@ Thank you.`;
                     // (see _fetchAllRows) — this table is well past the 1000-row
                     // single-request cap.
                     _fetchAllRows(() => _supabase.from('shared_do_records')
-                        .select('do_number, al_number, total_qty, status, remark, plot_1, qty_1, batch_1, plot_2, qty_2, batch_2, plot_3, qty_3, batch_3, plot_4, qty_4, batch_4, plot_5, qty_5, batch_5')
+                        .select('id, do_number, al_number, delivery_date, total_qty, status, remark, plot_1, qty_1, batch_1, plot_2, qty_2, batch_2, plot_3, qty_3, batch_3, plot_4, qty_4, batch_4, plot_5, qty_5, batch_5')
                         .order('id', { ascending: true })),
                     // A DO doesn't carry the customer's name itself — it lives on
                     // the Approval Letter it's linked to (same join Customer Order
                     // Monitoring and the DO List use). Fetched here only so the
-                    // Sales tooltip below can name whose order each line was —
-                    // paged for the same reason as shared_do_records above.
+                    // Sales modal/tooltip below can name whose order each line
+                    // was — paged for the same reason as shared_do_records above.
                     _fetchAllRows(() => _supabase.from('shared_al_orders')
                         .select('al_number, customer_name')
                         .order('al_number', { ascending: true }))
                 ]);
+                const custByAl = {};
+                (alRows || []).forEach(a => {
+                    if (a.al_number && !(a.al_number in custByAl)) custByAl[a.al_number] = a.customer_name || '';
+                });
                 ((c2Res && c2Res.data) || []).forEach(l => {
                     const k = String(l.plot_name || '').trim().toUpperCase();
                     if (k) dead2Map[k] = (dead2Map[k] || 0) + Math.abs(l.quantity_change || 0);
-                });
-                const alNameByNumber = {};
-                (alRows || []).forEach(a => {
-                    if (a.al_number) alNameByNumber[a.al_number] = a.customer_name || '';
                 });
 
                 // Read the DO collection details forgivingly, so a line keyed in
@@ -6914,6 +6958,17 @@ Thank you.`;
                 // list below is every DO/line/qty that added up to that N,
                 // ordered by DO number so you can cross-check against the
                 // DO modal.
+                // "CAL-…" calibration DOs COUNT as sales here, on purpose
+                // (asked for in Sep 2026, undoing a short-lived exclusion).
+                // A calibration DO records stock that left a plot outside a
+                // normal customer collection; leaving it out made Sales lower
+                // than what actually departed, which inflated Balance and 3rd
+                // Culled below (both are computed FROM Sales). Note this is
+                // DIFFERENT from operation_stock_sales.js's Collection
+                // dashboard, which still excludes CAL- DOs from its "sold"
+                // totals (_isCalibrationDo()) — that screen answers "what did
+                // customers collect", this one answers "what is left standing
+                // in the plot". Only cancelled DOs are skipped.
                 const _salesTrace = [];
                 (doRows || []).forEach(d => {
                     if (d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'))) return;
@@ -6929,26 +6984,22 @@ Thank you.`;
                         if (fallback) qty = Number(d.total_qty || 0); // single-line DO
                         if (!qty) { console.warn('[t6:sales] DO', d.do_number, 'line', i, 'has no qty — skipped'); continue; }
                         salesMap[plotKey] = (salesMap[plotKey] || 0) + qty;
-                        // Customer name lives on the linked AL, same as the DO
-                        // List's "Customer Name" column — a DO with no AL link
-                        // falls back to its own remark, same as operation_delivery.html.
-                        const customer = alNameByNumber[d.al_number] || d.remark || 'Unknown';
-                        _salesTrace.push({
-                            do: d.do_number, line: i, plot: plotKey, qty, customer,
-                            raw_batch: d[`batch_${i}`], status: d.status,
-                            fallback_from_total_qty: fallback
+                        // Same rows the console trace logs, kept for the
+                        // click-through modal so the office can see WHICH
+                        // Customer Order Monitoring DOs make up a Sales figure
+                        // without opening DevTools.
+                        (salesDOsByPlot[plotKey] = salesDOsByPlot[plotKey] || []).push({
+                            doId:     d.id,
+                            doNumber: d.do_number,
+                            date:     d.delivery_date,
+                            customer: custByAl[d.al_number] || d.remark || '—',
+                            qty,
+                            fallback
                         });
                     }
                 });
-                // Group the trace by plot so it reads as "here's what added
-                // up to that plot's number".
-                const _byPlot = {};
-                _salesTrace.forEach(t => { (_byPlot[t.plot] = _byPlot[t.plot] || []).push(t); });
-                // Persist past this function so the on-screen breakdown panel
-                // (renderT6PlotRows) can show the same thing the console does.
-                t6_salesTraceByPlot = _byPlot;
-                Object.keys(_byPlot).forEach(plot => {
-                    const rows = _byPlot[plot];
+                Object.keys(salesDOsByPlot).forEach(plot => {
+                    const rows = salesDOsByPlot[plot];
                     const total = rows.reduce((s, r) => s + r.qty, 0);
                     console.log('[t6:sales] batch', batchId, '· plot', plot, '=', total,
                                 '(' + rows.length + ' DO line' + (rows.length===1?'':'s') + ')', rows);
@@ -7038,10 +7089,7 @@ Thank you.`;
                         recordCount:   v.records,
                         dead2:         dead2Map[key] || 0,
                         sales:         salesMap[key] || 0,
-                        // Same key salesMap was looked up with — lets the
-                        // Sales breakdown panel find its DO trace without
-                        // recomputing (and risking a different answer).
-                        salesKey:      key,
+                        salesDOs:      salesDOsByPlot[key] || [],
                         savedBalance:  saved.balance ?? null,
                         savedCulled:   saved.culled  ?? null,
                         savedDocUrl:   saved.docUrl  ?? null,
@@ -7130,10 +7178,7 @@ Thank you.`;
                             destTypes:    Array.from(v.destTypes),
                             dead2:        dead2Map[key] || 0,
                             sales:        salesMap[key] || 0,
-                            // Same key salesMap was looked up with — lets the
-                            // Sales breakdown panel find its DO trace without
-                            // recomputing (and risking a different answer).
-                            salesKey:     key,
+                            salesDOs:     salesDOsByPlot[key] || [],
                             savedBalance: balance,
                             savedCulled:  culled,
                             savedDocUrl:  docUrl,
@@ -7240,23 +7285,6 @@ Thank you.`;
                 const autoCulled = _n.culled;
                 const cullVal  = autoCulled;
 
-                // Every DO line that fed this row's Sales figure — same data
-                // the [t6:sales] console diagnostic prints, surfaced as a
-                // native hover tooltip on the Sales number itself so the
-                // office can see "why does this plot show N sold" without
-                // opening DevTools. Empty when syncTab6() hasn't populated
-                // the trace yet (e.g. brand-new row, or before the DO fetch
-                // resolved) — the number just isn't hoverable then.
-                const salesTrace = t6_salesTraceByPlot[p.salesKey] || [];
-                const salesTitle = salesTrace.length
-                    ? salesTrace.map(t => `DO ${t.do} · ${t.customer} · ${t.qty.toLocaleString()}`).join('\n')
-                        + `\n—\nTotal: ${sales.toLocaleString()}`
-                    : '';
-                // A title attribute breaks on an unescaped quote — DO numbers
-                // and customer names are free text, so escape before it goes
-                // into the HTML string below.
-                const salesTitleEsc = salesTitle.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-
                 const rowContainer = p.isTransferRow ? trContainer : mainContainer;
                 rowContainer.insertAdjacentHTML('beforeend', `
                     <div id="${rowId}" class="t6-plot-row border ${rowBg} rounded-xl overflow-hidden">
@@ -7285,14 +7313,15 @@ Thank you.`;
                                 <div class="text-base font-black text-[#a83020]">${dead2.toLocaleString()}</div>
                             </div>
 
-                            <!-- Sales — collected qty from collection bookings. Hover
-                                 the number for the DO number / customer / qty of every
-                                 line that added up to it (see [t6:sales] in the console
-                                 for the same thing, unabridged). -->
+                            <!-- Sales — sold qty from Customer Order Monitoring DOs.
+                                 Clicking the figure opens the list of DOs behind it. -->
                             <div class="pt-1">
                                 <div class="text-[9px] font-black text-[#3a7ab4] uppercase lg:hidden mb-0.5">Sales</div>
-                                <div class="text-base font-black text-[#3a7ab4]${salesTrace.length ? ' cursor-help border-b border-dotted border-[#3a7ab4]/40 w-fit' : ''}"
-                                    ${salesTrace.length ? `title="${salesTitleEsc}"` : ''}>${sales.toLocaleString()}</div>
+                                ${(p.salesDOs && p.salesDOs.length)
+                                    ? `<button type="button" class="text-base font-black text-[#3a7ab4] underline decoration-dotted underline-offset-4 hover:text-[#1d5a94] cursor-pointer bg-transparent border-0 p-0 font-[inherit]"
+                                            onmouseenter="showT6SalesTip(this, ${i})" onmouseleave="hideT6SalesTip()"
+                                            onclick="hideT6SalesTip(); openT6SalesModal(${i})">${sales.toLocaleString()}</button>`
+                                    : `<div class="text-base font-black text-[#3a7ab4]">${sales.toLocaleString()}</div>`}
                             </div>
 
                             <!-- Balance — AUTO: transplanted − 2nd culled − sales − transferred out.
@@ -7467,6 +7496,122 @@ Thank you.`;
             const sales = p.sales || 0;
             const bal   = Math.max(0, (p.qty || 0) - dead2 - sales - (moved || 0));
             return { dead2, sales, bal, culled: dead2 + bal };
+        }
+
+        /* The DOs behind one plot row's Sales figure, on screen instead of in
+           the console. Each DO number links straight to its Manage/View modal
+           on the Customer Order Monitoring page (?manageDO= is handled there),
+           so a figure that looks wrong can be chased to its source in one
+           click. The listed rows are EXACTLY the ones summed into salesMap —
+           same data, no re-query — so the total here always equals the cell. */
+        function _t6Esc(v) {
+            return String(v == null ? '' : v)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+        function _t6FmtDate(v) {
+            if (!v) return '—';
+            const d = new Date(v);
+            if (isNaN(d.getTime())) return _t6Esc(v);
+            return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+        function openT6SalesModal(rowIdx) {
+            const p = t6_plotData[rowIdx];
+            if (!p || !p.salesDOs || !p.salesDOs.length) return;
+            const rows = p.salesDOs.slice().sort((a, b) =>
+                String(a.doNumber || '').localeCompare(String(b.doNumber || ''), undefined, { numeric: true }));
+            const total = rows.reduce((s, r) => s + (r.qty || 0), 0);
+            document.getElementById('t6-sales-modal-title').innerText = `Sales — Plot ${p.plot}`;
+            let html = `
+                <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest border-b border-[#e8dcc8]">
+                            <th class="py-2 pr-3">DO Number</th>
+                            <th class="py-2 pr-3">Delivery Date</th>
+                            <th class="py-2 pr-3">Customer</th>
+                            <th class="py-2 text-right">Qty</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+            rows.forEach(r => {
+                const doCell = r.doId != null
+                    ? `<a href="operation_delivery.html?manageDO=${encodeURIComponent(r.doId)}" target="_blank" rel="noopener"
+                          class="font-black text-[#3a7ab4] underline decoration-dotted underline-offset-4 hover:text-[#1d5a94]"
+                          title="Open this DO in Customer Order Monitoring">${_t6Esc(r.doNumber || '—')}</a>`
+                    : `<span class="font-black text-[#3d2610]">${_t6Esc(r.doNumber || '—')}</span>`;
+                html += `
+                        <tr class="border-b border-[#efe7d8] text-sm">
+                            <td class="py-2.5 pr-3">${doCell}</td>
+                            <td class="py-2.5 pr-3 font-bold text-[#3d2610] whitespace-nowrap">${_t6FmtDate(r.date)}</td>
+                            <td class="py-2.5 pr-3 font-bold text-[#3d2610] uppercase">${_t6Esc(r.customer)}</td>
+                            <td class="py-2.5 text-right font-black text-[#3a7ab4] whitespace-nowrap">${Number(r.qty || 0).toLocaleString()}${r.fallback ? ' <span class="text-[9px] font-black text-[#c07820] uppercase" title="This DO line had no qty of its own — the DO’s total qty was used (single-line DO)">*</span>' : ''}</td>
+                        </tr>`;
+            });
+            html += `
+                    </tbody>
+                    <tfoot>
+                        <tr class="text-sm">
+                            <td colspan="3" class="py-3 font-black text-[#3d2610] uppercase tracking-widest text-[10px]">Total — matches the Sales figure</td>
+                            <td class="py-3 text-right font-black text-[#3a7ab4] text-base">${total.toLocaleString()}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+                </div>`;
+            if (rows.some(r => r.fallback)) {
+                html += `<p class="mt-3 text-[10px] font-bold text-[#c07820]">* Qty taken from the DO's total qty because its only collection line had no qty keyed.</p>`;
+            }
+            document.getElementById('t6-sales-modal-body').innerHTML = html;
+            document.getElementById('t6-sales-modal').classList.remove('hidden');
+        }
+        function closeT6SalesModal() {
+            document.getElementById('t6-sales-modal').classList.add('hidden');
+        }
+
+        /* Hover version of the same breakdown: the DO lines appear the moment
+           the pointer rests on a Sales figure, no click needed. Long lists are
+           capped so the tip stays a tip — the modal (click) always has the
+           full list with links. */
+        function showT6SalesTip(anchorEl, rowIdx) {
+            const p = t6_plotData[rowIdx];
+            if (!p || !p.salesDOs || !p.salesDOs.length) return;
+            const rows = p.salesDOs.slice().sort((a, b) =>
+                String(a.doNumber || '').localeCompare(String(b.doNumber || ''), undefined, { numeric: true }));
+            const total = rows.reduce((s, r) => s + (r.qty || 0), 0);
+            const MAX = 8;
+            let html = `<div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">Sales — ${rows.length} Delivery Note${rows.length === 1 ? '' : 's'} · Plot ${_t6Esc(p.plot)}</div>`;
+            rows.slice(0, MAX).forEach(r => {
+                html += `
+                    <div class="flex items-baseline gap-2 py-0.5 text-[11px] whitespace-nowrap">
+                        <span class="font-black text-[#3a7ab4]">${_t6Esc(r.doNumber || '—')}</span>
+                        <span class="font-bold text-[#8a7a68]">${_t6FmtDate(r.date)}</span>
+                        <span class="font-bold text-[#3d2610] uppercase truncate max-w-[120px]">${_t6Esc(r.customer)}</span>
+                        <span class="ml-auto font-black text-[#3a7ab4]">${Number(r.qty || 0).toLocaleString()}${r.fallback ? '*' : ''}</span>
+                    </div>`;
+            });
+            if (rows.length > MAX) {
+                html += `<div class="text-[10px] font-black text-[#c07820] uppercase tracking-widest pt-1">+ ${rows.length - MAX} more…</div>`;
+            }
+            html += `
+                <div class="flex items-baseline gap-2 border-t border-[#e8dcc8] mt-1.5 pt-1.5 text-[11px]">
+                    <span class="font-black text-[#3d2610] uppercase tracking-widest text-[9px]">Total</span>
+                    <span class="ml-auto font-black text-[#3a7ab4]">${total.toLocaleString()}</span>
+                </div>
+                <div class="text-[9px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1.5">Click for full details & DO links</div>`;
+            const tip = document.getElementById('t6-sales-tip');
+            tip.innerHTML = html;
+            tip.classList.remove('hidden');
+            // Below the figure, clamped to the viewport; above it when there
+            // is no room underneath.
+            const a = anchorEl.getBoundingClientRect();
+            const t = tip.getBoundingClientRect();
+            let left = Math.min(Math.max(8, a.left), window.innerWidth - t.width - 8);
+            let top  = a.bottom + 8;
+            if (top + t.height > window.innerHeight - 8) top = Math.max(8, a.top - t.height - 8);
+            tip.style.left = left + 'px';
+            tip.style.top  = top + 'px';
+        }
+        function hideT6SalesTip() {
+            document.getElementById('t6-sales-tip').classList.add('hidden');
         }
 
         /* One movement out of a plot: when, where to, how many. A plot can send
@@ -8193,6 +8338,10 @@ Thank you.`;
       const rowVerifs     = {}; // `${stage}::${rowKey}` → Row_Verification log row
       const lastEdits     = {}; // tabIdx → { ts, by } — latest report save per tab (detects post-rejection amendment)
 
+      // Review badges show account names, never the whole email address —
+      // via the page-wide mjmWho()/mjmLoadNames() helpers in the main script.
+      function who(v) { return window.mjmWho ? window.mjmWho(v) : (v || null); }
+
       // Tabs whose verify/reject happens PER DATA ROW instead of a top banner:
       // Transplanting + 1st/2nd/3rd Culling. Each entry knows how to list the
       // tab's row elements and derive a stable key for each row.
@@ -8305,8 +8454,8 @@ Thank you.`;
 
         if (r) {
           // Reviewed → locked for non-admins.
-          const whoR = r.reviewer_name || r.reviewer_email || 'a reviewer';
-          const whoV = v ? (v.verifier_name || v.verifier_email || 'a verifier') : null;
+          const whoR = r.reviewer_name || who(r.reviewer_email) || 'a reviewer';
+          const whoV = v ? (v.verifier_name || who(v.verifier_email) || 'a verifier') : null;
           banner.className = 'mjm-review-banner mjm-review-locked';
           banner.style.display = '';
           banner.innerHTML = `
@@ -8329,7 +8478,7 @@ Thank you.`;
         // re-verified (verify/mark clear it), or an admin clears it manually.
         const rej = rejections[stage];
         if (rej) {
-          const whoRej = rej.last_edited_by || 'HQ';
+          const whoRej = who(rej.last_edited_by) || 'HQ';
           banner.className = 'mjm-review-banner mjm-review-rejected';
           banner.style.display = '';
           const verifyBtn = (isVerifier || isAdmin)
@@ -8382,7 +8531,7 @@ Thank you.`;
         if (v) {
           // Verified → locked. No separate "Mark as Reviewed" stage anymore:
           // verification IS the sign-off, so the data locks for non-admins.
-          const whoV = v.verifier_name || v.verifier_email || 'a verifier';
+          const whoV = v.verifier_name || who(v.verifier_email) || 'a verifier';
           banner.className = 'mjm-review-banner mjm-review-locked';
           banner.style.display = '';
           const unverifyBtn = (isVerifier || isAdmin)
@@ -8459,13 +8608,13 @@ Thank you.`;
             const clearBtn = isAdmin
               ? `<button class="mjm-review-btn mjm-review-btn-clearrej mjm-review-allow" onclick="MJMReview.clearRowRejection(${tabIdx}, '${k}')">Clear</button>` : '';
             box.innerHTML = `
-              <div class="mjm-row-rej-remark">❌ <strong>Rejected by ${esc(rej.last_edited_by || 'HQ')}</strong> — ${esc(rej.remark)}</div>
+              <div class="mjm-row-rej-remark">❌ <strong>Rejected by ${esc(who(rej.last_edited_by) || 'HQ')}</strong> — ${esc(rej.remark)}</div>
               <span class="mjm-row-chip mjm-row-chip-rej">Amendment Required</span>${verifyBtn}${editBtn}${clearBtn}`;
           } else if (ver) {
             const unverifyBtn = (isVerifier || isAdmin)
               ? `<button class="mjm-review-btn mjm-review-btn-unverify mjm-review-allow" onclick="MJMReview.rowUnverify(${tabIdx}, '${k}')">Unverify</button>` : '';
             box.innerHTML = `
-              <span class="mjm-row-chip mjm-row-chip-ok">✓ Verified by ${esc(ver.last_edited_by || 'verifier')} · ${fmtDate(ver.last_edited_at || ver.created_at)}</span>${unverifyBtn}`;
+              <span class="mjm-row-chip mjm-row-chip-ok">✓ Verified by ${esc(who(ver.last_edited_by) || 'verifier')} · ${fmtDate(ver.last_edited_at || ver.created_at)}</span>${unverifyBtn}`;
           } else {
             const verifyBtn = (isVerifier || isAdmin)
               ? `<button class="mjm-review-btn mjm-review-btn-verify mjm-review-allow" onclick="MJMReview.rowVerify(${tabIdx}, '${k}')">✓ Verify</button>` : '';
@@ -8491,6 +8640,9 @@ Thank you.`;
         for (const k of Object.keys(lastEdits))     delete lastEdits[k];
         if (batch) {
           try {
+            // Names for the badges — loaded once per page, shared with the
+            // edit metas and calibration history.
+            if (typeof mjmLoadNames === 'function') await mjmLoadNames();
             const [revRes, verRes, rejRes, editRes] = await Promise.all([
               _supabase
                 .from('operation_batch_reviews')
