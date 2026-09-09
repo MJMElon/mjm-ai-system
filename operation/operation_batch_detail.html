@@ -1525,13 +1525,14 @@
                                 <div id="t6-subpanel-transferplot" class="t6-subpanel hidden">
                                     <!-- Column headers: Plot (Transplanted + 2nd Culled shown compactly
                                          under the plot name, not their own columns) → Sales → Balance →
-                                         3rd Culled (qty over %) → Drone Map -->
-                                    <div class="hidden lg:grid gap-2 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 1fr 0.5fr 0.55fr 0.65fr 1.1fr;">
+                                         3rd Culled (qty over %) → Drone Map → Culled Date -->
+                                    <div class="hidden lg:grid gap-2 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 1fr 0.5fr 0.55fr 0.65fr 1fr 0.7fr;">
                                         <span>Transfer Plot</span>
                                         <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch. CAL-… calibration DOs are included; only cancelled DOs are excluded. Click a figure to see the DOs behind it.">Sales</span>
                                         <span title="Auto: Transplanted − 2nd Culled − Sales − Transferred out">Balance</span>
                                         <span class="text-[#a83020]" title="Auto: 2nd Culled + Balance, with the rate below it">3rd Culled</span>
                                         <span>Drone Map</span>
+                                        <span>Culled Date</span>
                                     </div>
 
                                     <div id="t6-plot-rows-transferplot" class="px-6 pb-4 space-y-3 mt-2"></div>
@@ -7301,11 +7302,11 @@ Thank you.`;
                 // nothing next to the plot name — only show the type label when
                 // it says something a Main row doesn't already imply.
                 const showTypeLabel = !(dts.length === 1 && dts[0] === 'main');
-                // Main Culling gets its own Date column in front of the plot;
-                // P-R Culling doesn't (a transfer-plot row has no Culled-date
-                // field), so its grid has one fewer column.
+                // Main Culling's Culled Date sits first, in front of the plot;
+                // P-R Culling's sits last, after Drone Map — same field
+                // (.t6-cull-date), just a different column position per tab.
                 const gridCols = p.isTransferRow
-                    ? '1fr_0.5fr_0.55fr_0.65fr_1.1fr'
+                    ? '1fr_0.5fr_0.55fr_0.65fr_1fr_0.7fr'
                     : '0.95fr_0.85fr_0.45fr_0.5fr_0.6fr_1fr';
 
                 const rowContainer = p.isTransferRow ? trContainer : mainContainer;
@@ -7313,8 +7314,9 @@ Thank you.`;
                     <div id="${rowId}" class="t6-plot-row border ${rowBg} rounded-xl overflow-hidden">
                         <div class="grid grid-cols-1 lg:grid-cols-[${gridCols}] gap-2 p-4 items-start t-tidy">
 
-                            <!-- Date — when this plot was actually culled. Main Culling only
-                                 (saved into the same 3rd_Culling log's remark as CullDate). -->
+                            <!-- Date — when this plot was actually culled (saved into the same
+                                 3rd_Culling log's remark as CullDate). Main Culling only — P-R
+                                 Culling gets the same field, later, after Drone Map. -->
                             ${!p.isTransferRow ? `
                             <div class="pt-1">
                                 <div class="text-[9px] font-black text-[#8a7a68] uppercase lg:hidden mb-0.5">Date</div>
@@ -7410,6 +7412,16 @@ Thank you.`;
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Culled Date — P-R Culling only, after Drone Map. Same field
+                                 (.t6-cull-date) Main Culling keys in first; saveTab6() reads
+                                 it the same way regardless of which tab it's on. -->
+                            ${p.isTransferRow ? `
+                            <div class="pt-1">
+                                <div class="text-[9px] font-black text-[#8a7a68] uppercase lg:hidden mb-0.5">Culled Date</div>
+                                <input type="date" class="input-style t6-cull-date !text-xs !py-2 !px-2 !text-left w-full" value="${p.savedCullDate || ''}"
+                                    title="Date this plot was culled">
+                            </div>` : ''}
 
                         </div>
                     </div>
@@ -8208,8 +8220,9 @@ Thank you.`;
                     }
                     const dead2Part = `, 2ndCulled: ${t6_plotData[i]?.dead2 || 0}, Sales: ${t6_plotData[i]?.sales || 0}`;
                     const mapQtyPart = mapQty !== null ? ` MapQty: ${mapQty}` : '';
-                    // Culled date — keyed in via the 📅 toggle, Main-tab rows only
-                    // (the input isn't rendered on Transfer Plot rows).
+                    // Culled date — the same .t6-cull-date field on every row,
+                    // just positioned differently: first on Main Culling, after
+                    // Drone Map on P-R Culling.
                     const cullDateVal = row.querySelector('.t6-cull-date')?.value || '';
                     const cullDatePart = cullDateVal ? ` CullDate:${cullDateVal}` : '';
 
