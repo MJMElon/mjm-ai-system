@@ -16,7 +16,8 @@
   L603   — Tab 3: Transplanting
   L800   — Tab 4: 1st Culling  (#cull-rows-container)
   L930   — Tab 5: 2nd Culling  (#t5-plot-rows)
-  L1040  — Tab 6: 3rd Culling  (#t6-plot-rows)
+  L1040  — Tab 6: 3rd Culling  (3 sub-tabs: #t6-plot-rows-main,
+           #t6-transferdata-rows, #t6-plot-rows-transferplot)
 
   SAVE BUTTONS
   L920   — saveCullingTab()   (1st Culling)
@@ -48,12 +49,17 @@
   L3870  — scrollTabs()
 
   ──────────────────────────────────────────────────────────────
-  KEY IDs — Tab 6 (3rd Culling)
-  #t6-plot-rows · #t6-no-plots · #t6-totals-row
+  KEY IDs — Tab 6 (3rd Culling) — 3 sub-tabs, switchT6SubTab('main'|'transferdata'|'transferplot')
+  #t6-plot-rows-main (Main) · #t6-transferdata-rows (Transfer Data)
+  · #t6-plot-rows-transferplot (Transfer Plot) · #t6-no-plots · #t6-totals-row
   #t6-done-count · #t6-plot-count
   #t6-total-transplanted · #t6-total-culled · #t6-avg-cull-rate
-  .t6-plot-row · .t6-balance(hidden) · .t6-culled-input · .t6-cull-rate-cell
-  NOTE: .t6-balance is now a hidden input (auto = transplanted qty)
+  .t6-plot-row (Main + Transfer Plot only — NOT the Transfer Data rows)
+  .t6-balance(hidden) · .t6-culled-input · .t6-cull-rate-cell · .t6-cull-date
+  NOTE: .t6-balance is now a hidden input (auto = transplanted qty).
+  Each row's outgoing-transfer list (.t6-transfer-rec, #t6-row-N-transfers)
+  now renders on the Transfer Data tab, not nested inside the row — always
+  looked up by id, never by searching inside the row element.
   ============================================================ -->
 <html lang="en">
 <head>
@@ -1427,29 +1433,94 @@
                                     </div>
                                 </div>
 
-                                <!-- Column headers: Plot → Transplanted → 2nd Culled → Sales → Balance → 3rd Culled (qty over %) → Transfer → Drone Map -->
-                                <div class="hidden lg:grid gap-2 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 0.8fr 0.75fr 0.5fr 0.5fr 0.55fr 0.7fr 1.1fr;">
-                                    <span>Main Plot</span>
-                                    <span class="!whitespace-nowrap">Transplanted</span>
-                                    <span class="text-[#a83020]">2nd Culled</span>
-                                    <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch (cancelled DOs excluded)">Sales</span>
-                                    <span title="Auto: Transplanted − 2nd Culled − Sales − Transferred out">Balance</span>
-                                    <span class="text-[#a83020]" title="Auto: 2nd Culled + Balance, with the rate below it">3rd Culled</span>
-                                    <span>Drone Map</span>
+                                <!-- Sub-tabs: 3rd Culling (Main) / Transfer Data / 3rd Culling (Transfer Plot).
+                                     One underlying t6_plotData / t6-row-N per plot either way — this only
+                                     changes which of the three panels below a row's markup lands in. -->
+                                <div class="flex flex-wrap gap-2 px-6 pt-4">
+                                    <button type="button" id="t6-subtab-btn-main" onclick="switchT6SubTab('main')"
+                                        class="t6-subtab-btn px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors bg-[#6d28d9] border-[#6d28d9] text-white">
+                                        🌿 3rd Culling (Main) <span id="t6-subtab-count-main" class="opacity-70"></span>
+                                    </button>
+                                    <button type="button" id="t6-subtab-btn-transferdata" onclick="switchT6SubTab('transferdata')"
+                                        class="t6-subtab-btn px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors bg-[#fdfaf4] border-[#e8dcc8] text-[#8a7a68]">
+                                        ↘ Transfer Data <span id="t6-subtab-count-transferdata" class="opacity-70"></span>
+                                    </button>
+                                    <button type="button" id="t6-subtab-btn-transferplot" onclick="switchT6SubTab('transferplot')"
+                                        class="t6-subtab-btn px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors bg-[#fdfaf4] border-[#e8dcc8] text-[#8a7a68]">
+                                        📦 3rd Culling (Transfer Plot) <span id="t6-subtab-count-transferplot" class="opacity-70"></span>
+                                    </button>
                                 </div>
 
-                                <div id="t6-plot-rows" class="px-6 pb-4 space-y-3 mt-2"></div>
+                                <!-- ── SUB-TAB: 3rd Culling (Main) ── -->
+                                <div id="t6-subpanel-main" class="t6-subpanel">
+                                    <!-- Column headers: Plot → Transplanted → 2nd Culled → Sales → Balance → 3rd Culled (qty over %) → Drone Map -->
+                                    <div class="hidden lg:grid gap-2 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 0.8fr 0.75fr 0.5fr 0.5fr 0.55fr 0.7fr 1.1fr;">
+                                        <span>Main Plot</span>
+                                        <span class="!whitespace-nowrap">Transplanted</span>
+                                        <span class="text-[#a83020]">2nd Culled</span>
+                                        <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch (cancelled DOs excluded)">Sales</span>
+                                        <span title="Auto: Transplanted − 2nd Culled − Sales − Transferred out">Balance</span>
+                                        <span class="text-[#a83020]" title="Auto: 2nd Culled + Balance, with the rate below it. Click 📅 to key in the date it was culled.">3rd Culled</span>
+                                        <span>Drone Map</span>
+                                    </div>
 
-                                <div id="t6-no-plots" class="px-6 pb-6 pt-2">
-                                    <div class="border-2 border-dashed border-[#e8dcc8] rounded-xl p-8 text-center text-[#8a7a68]">
-                                        <div class="text-3xl mb-2">🌱</div>
-                                        <div class="text-xs font-black uppercase tracking-widest">No transplanted plots found.</div>
-                                        <div class="text-[10px] font-bold mt-1">Complete Tab 3 (Transplanting) first.</div>
+                                    <div id="t6-plot-rows-main" class="px-6 pb-4 space-y-3 mt-2"></div>
+
+                                    <div id="t6-no-plots" class="px-6 pb-6 pt-2">
+                                        <div class="border-2 border-dashed border-[#e8dcc8] rounded-xl p-8 text-center text-[#8a7a68]">
+                                            <div class="text-3xl mb-2">🌱</div>
+                                            <div class="text-xs font-black uppercase tracking-widest">No transplanted plots found.</div>
+                                            <div class="text-[10px] font-bold mt-1">Complete Tab 3 (Transplanting) first.</div>
+                                        </div>
                                     </div>
                                 </div>
 
-                                <!-- Totals footer -->
-                                <div id="t6-totals-row" class="hidden mx-6 mb-6 mt-1 p-4 bg-[#fdfaf4] rounded-xl border border-[#e8dcc8]">
+                                <!-- ── SUB-TAB: Transfer Data — one row per plot (Main + Transfer Plot),
+                                     its Balance mirrored from the Culling record, and where its own
+                                     movements out (date / to plot / qty) are keyed in. ── -->
+                                <div id="t6-subpanel-transferdata" class="t6-subpanel hidden">
+                                    <div class="hidden sm:grid gap-2 px-6 pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest" style="grid-template-columns: 0.9fr 0.6fr 2.5fr;">
+                                        <span>Plot</span>
+                                        <span title="Linked from the Culling record — Transplanted − 2nd Culled − Sales − Transferred out">Balance</span>
+                                        <span>Transfer Records (Date · To Plot · Quantity)</span>
+                                    </div>
+                                    <div id="t6-transferdata-rows" class="px-6 pb-4 space-y-3 mt-2"></div>
+                                    <div id="t6-transferdata-empty" class="px-6 pb-6 pt-2 hidden">
+                                        <div class="border-2 border-dashed border-[#e8dcc8] rounded-xl p-8 text-center text-[#8a7a68]">
+                                            <div class="text-3xl mb-2">↘</div>
+                                            <div class="text-xs font-black uppercase tracking-widest">No plots yet.</div>
+                                            <div class="text-[10px] font-bold mt-1">Plots appear here once 3rd Culling (Main) has data.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- ── SUB-TAB: 3rd Culling (Transfer Plot) — unchanged from before, just
+                                     relocated here; its own inline transfer entry moved to the Transfer
+                                     Data tab above. ── -->
+                                <div id="t6-subpanel-transferplot" class="t6-subpanel hidden">
+                                    <div class="hidden lg:grid gap-2 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 0.8fr 0.75fr 0.5fr 0.5fr 0.55fr 0.7fr 1.1fr;">
+                                        <span>Transfer Plot</span>
+                                        <span class="!whitespace-nowrap">Transplanted</span>
+                                        <span class="text-[#a83020]">2nd Culled</span>
+                                        <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch (cancelled DOs excluded)">Sales</span>
+                                        <span title="Auto: Transplanted − 2nd Culled − Sales − Transferred out">Balance</span>
+                                        <span class="text-[#a83020]" title="Auto: 2nd Culled + Balance, with the rate below it">3rd Culled</span>
+                                        <span>Drone Map</span>
+                                    </div>
+
+                                    <div id="t6-plot-rows-transferplot" class="px-6 pb-4 space-y-3 mt-2"></div>
+
+                                    <div id="t6-transferplot-empty" class="px-6 pb-6 pt-2">
+                                        <div class="border-2 border-dashed border-[#e8dcc8] rounded-xl p-8 text-center text-[#8a7a68]">
+                                            <div class="text-3xl mb-2">📦</div>
+                                            <div class="text-xs font-black uppercase tracking-widest">No transferred plots yet.</div>
+                                            <div class="text-[10px] font-bold mt-1">Add a transfer record under the Transfer Data tab.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Totals footer — across every plot, Main + Transfer Plot together -->
+                                <div id="t6-totals-row" class="hidden mx-6 mb-6 mt-4 p-4 bg-[#fdfaf4] rounded-xl border border-[#e8dcc8]">
                                     <div class="hidden lg:grid gap-2 items-center text-sm font-black t-tidy" style="grid-template-columns: 0.8fr 0.75fr 0.5fr 0.5fr 0.55fr 0.7fr 1.1fr;">
                                         <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">TOTALS</div>
                                         <div class="text-[#3d2610]" id="t6-tot-transplanted">0</div>
@@ -6764,13 +6835,17 @@ Thank you.`;
                     const mmMatch = log.remark ? log.remark.match(/MismatchNote:(\S+)/) : null;
                     let mismatchNote = '';
                     if (mmMatch) { try { mismatchNote = decodeURIComponent(mmMatch[1]); } catch(_) { mismatchNote = mmMatch[1]; } }
+                    // The date this plot was actually culled — keyed in via the
+                    // 📅 toggle next to 3rd Culled on the Main sub-tab.
+                    const cullDateMatch = log.remark ? log.remark.match(/CullDate:(\d{4}-\d{2}-\d{2})/) : null;
                     const entry = {
                         culled:  log.quantity_change,
                         balance: balMatch  ? parseInt(balMatch[1]) : null,
                         docUrl:  docMatch  ? docMatch[1]           : null,
                         docName: docName || null,
                         mapQty:  mapQtyMatch ? parseInt(mapQtyMatch[1]) : null,
-                        mismatchNote: mismatchNote || null
+                        mismatchNote: mismatchNote || null,
+                        cullDate: cullDateMatch ? cullDateMatch[1] : null
                     };
                     if (destMatch) {
                         savedCull3Map[`${log.plot_name}|${destMatch[1]}`] = entry;
@@ -6972,7 +7047,8 @@ Thank you.`;
                         savedDocUrl:   saved.docUrl  ?? null,
                         savedDocName:  saved.docName ?? null,
                         savedMapQty:   saved.mapQty  ?? null,
-                        savedMismatchNote: saved.mismatchNote ?? null
+                        savedMismatchNote: saved.mismatchNote ?? null,
+                        savedCullDate: saved.cullDate ?? null
                     });
                 });
 
@@ -7027,7 +7103,7 @@ Thank you.`;
                         // DestType keys + legacy queue) — merged rows carry the
                         // summed culled qty and the first doc/map values found.
                         let culled = null, balance = null, docUrl = null, docName = null, mapQty = null;
-                        let mismatchNote = null;
+                        let mismatchNote = null, cullDate = null;
                         ['main', 'doubletone'].forEach(d => {   // premium excluded from this report
                             const e = savedCull3Map[`${v.plot}|${d}`];
                             if (!e) return;
@@ -7036,6 +7112,7 @@ Thank you.`;
                             if (!docUrl)         { docUrl = e.docUrl; docName = e.docName; }
                             if (mapQty == null)  mapQty = e.mapQty ?? null;
                             if (!mismatchNote)   mismatchNote = e.mismatchNote || null;
+                            if (!cullDate)       cullDate = e.cullDate || null;
                         });
                         const q = legacyCull3Queue[v.plot];
                         while (q && q.length) {
@@ -7044,6 +7121,7 @@ Thank you.`;
                             if (balance == null) balance = e.balance;
                             if (!docUrl)         { docUrl = e.docUrl; docName = e.docName; }
                             if (!mismatchNote)   mismatchNote = e.mismatchNote || null;
+                            if (!cullDate)       cullDate = e.cullDate || null;
                         }
                         t6_plotData.push({
                             plot:         v.plot,
@@ -7061,7 +7139,8 @@ Thank you.`;
                             savedDocUrl:  docUrl,
                             savedDocName: docName,
                             savedMapQty:  mapQty,
-                            savedMismatchNote: mismatchNote
+                            savedMismatchNote: mismatchNote,
+                            savedCullDate: cullDate
                         });
                     });
                     injectTransfers();
@@ -7085,25 +7164,56 @@ Thank you.`;
         }
 
         function renderT6PlotRows() {
-            const container  = document.getElementById('t6-plot-rows');
-            const noPlots    = document.getElementById('t6-no-plots');
-            const totalsRow  = document.getElementById('t6-totals-row');
+            // Three sub-tabs, one underlying t6_plotData: Main plots and
+            // Transfer-Plot rows go into their own containers (routed here,
+            // by p.isTransferRow, instead of rendered together and then
+            // DOM-moved apart like before); every row also gets a matching
+            // entry in the Transfer Data tab. Because main rows always sit
+            // before transfer rows in t6_plotData (injectTransfers appends
+            // them), and the Main container sits before the Transfer-Plot
+            // container in the document, `.t6-plot-row` in document order
+            // still lines up with t6_plotData by index — everything that
+            // indexes rows that way (calcT6, saveTab6, the review/verify
+            // system) keeps working unchanged.
+            const mainContainer   = document.getElementById('t6-plot-rows-main');
+            const trContainer     = document.getElementById('t6-plot-rows-transferplot');
+            const tdataContainer  = document.getElementById('t6-transferdata-rows');
+            const noPlots         = document.getElementById('t6-no-plots');
+            const trEmpty         = document.getElementById('t6-transferplot-empty');
+            const tdataEmpty      = document.getElementById('t6-transferdata-empty');
+            const totalsRow       = document.getElementById('t6-totals-row');
 
-            container.innerHTML = '';
+            mainContainer.innerHTML  = '';
+            trContainer.innerHTML    = '';
+            tdataContainer.innerHTML = '';
+
+            const setCount = (id, n) => { const el = document.getElementById(id); if (el) el.innerText = n ? `(${n})` : ''; };
 
             if (t6_plotData.length === 0) {
                 noPlots.classList.remove('hidden');
+                trEmpty.classList.remove('hidden');
+                tdataEmpty.classList.remove('hidden');
                 totalsRow.classList.add('hidden');
                 document.getElementById('t6-plot-count').innerText = '0';
                 const tp = document.getElementById('t6-total-plots'); if (tp) tp.innerText = '0';
+                setCount('t6-subtab-count-main', 0);
+                setCount('t6-subtab-count-transferdata', 0);
+                setCount('t6-subtab-count-transferplot', 0);
                 calcT6();
                 return;
             }
 
-            noPlots.classList.add('hidden');
+            const mainRows = t6_plotData.filter(p => !p.isTransferRow).length;
+            const trRows   = t6_plotData.filter(p => p.isTransferRow).length;
+            noPlots.classList.toggle('hidden', mainRows > 0);
+            trEmpty.classList.toggle('hidden', trRows > 0);
+            tdataEmpty.classList.add('hidden'); // there's at least one plot, so at least one Transfer Data row
             totalsRow.classList.remove('hidden');
             document.getElementById('t6-plot-count').innerText = t6_plotData.length;
             const tp6 = document.getElementById('t6-total-plots'); if (tp6) tp6.innerText = t6_plotData.length;
+            setCount('t6-subtab-count-main', mainRows);
+            setCount('t6-subtab-count-transferdata', t6_plotData.length);
+            setCount('t6-subtab-count-transferplot', trRows);
 
             t6_plotData.forEach((p, i) => {
                 const rowId    = `t6-row-${i}`;
@@ -7147,7 +7257,8 @@ Thank you.`;
                 // into the HTML string below.
                 const salesTitleEsc = salesTitle.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 
-                container.insertAdjacentHTML('beforeend', `
+                const rowContainer = p.isTransferRow ? trContainer : mainContainer;
+                rowContainer.insertAdjacentHTML('beforeend', `
                     <div id="${rowId}" class="t6-plot-row border ${rowBg} rounded-xl overflow-hidden">
                         <div class="grid grid-cols-1 lg:grid-cols-[0.8fr_0.75fr_0.5fr_0.5fr_0.55fr_0.7fr_1.1fr] gap-2 p-4 items-start t-tidy">
 
@@ -7195,14 +7306,24 @@ Thank you.`;
 
                             <!-- Culled qty — AUTO (2nd culled + balance). The value lives on a
                                  hidden input (every calc/save reads .t6-culled-input); the visible
-                                 cell shows it thousands-formatted, which a number input can't do. -->
+                                 cell shows it thousands-formatted, which a number input can't do.
+                                 Main-tab rows only: click 📅 to key in the date this plot was
+                                 actually culled (saved into the same log's remark as CullDate). -->
                             <!-- 3rd Culled — qty on top, its rate directly underneath. -->
                             <div class="pt-1">
                                 <label class="label-style lg:hidden !text-[#a83020]">3rd Culled (auto)</label>
                                 <input type="hidden" class="t6-culled-input" data-transplanted="${p.qty}" value="${cullVal}">
-                                <div class="text-base font-black text-[#a83020] t6-culled-display"
-                                     title="Auto-calculated: 2nd Culled + Balance">${cullVal === '' ? '—' : Number(cullVal).toLocaleString()}</div>
+                                <div class="flex items-center gap-1.5">
+                                    <div class="text-base font-black text-[#a83020] t6-culled-display"
+                                         title="Auto-calculated: 2nd Culled + Balance">${cullVal === '' ? '—' : Number(cullVal).toLocaleString()}</div>
+                                    ${!p.isTransferRow ? `<button type="button" onclick="toggleT6CullDate(${i})"
+                                        title="${p.savedCullDate ? 'Culled on ' + p.savedCullDate : 'Set the date this plot was culled'}"
+                                        class="text-[10px] font-black text-[#8a7a68] hover:text-[#a83020] transition-colors whitespace-nowrap">📅${p.savedCullDate ? ' ' + p.savedCullDate : ''}</button>` : ''}
+                                </div>
                                 <div class="text-[11px] font-black text-[#8a7a68] whitespace-nowrap t6-cull-rate-cell" id="${rowId}-cullrate">—</div>
+                                ${!p.isTransferRow ? `<div id="${rowId}-culldate-body" class="hidden mt-1">
+                                    <input type="date" class="input-style t6-cull-date !text-xs !py-1.5" value="${p.savedCullDate || ''}" title="Date this plot was culled">
+                                </div>` : ''}
                             </div>
 
                             <!-- Drone Map — qty keyed from the drone map + attachment -->
@@ -7240,27 +7361,40 @@ Thank you.`;
                             </div>
 
                         </div>
-                        ${`
-                        <div class="border-t border-dashed border-[#cfe9ef] bg-[#f7fdfe] px-4 py-3">
-                            <div class="flex items-center justify-between gap-2">
-                                <button type="button" onclick="toggleT6TransferPanel(${i})"
-                                    title="Show or hide this plot's transfers"
-                                    class="flex-1 min-w-0 flex items-center gap-2 text-left px-2 py-1.5 -ml-2 rounded-lg hover:bg-[#cffafe] transition-colors">
-                                    <span id="${rowId}-tr-caret" class="text-[#0891b2] text-xs font-black w-3 shrink-0">▾</span>
-                                    <span class="text-[12px] font-black text-[#0891b2] uppercase tracking-widest truncate">↘ Transfer from ${p.plot}</span>
-                                    <span id="${rowId}-tr-count" class="text-[11px] font-bold text-[#0891b2] opacity-70 shrink-0"></span>
-                                </button>
-                                <button type="button" onclick="addT6TransferRecord(${i})"
-                                    class="shrink-0 px-3 py-2 bg-[#0891b2] text-white text-[11px] font-black uppercase tracking-widest rounded-lg hover:bg-[#0e7490] transition-colors">+ Add Record</button>
+                    </div>
+                `);
+
+                // ── Transfer Data tab: one row per plot, its Balance mirrored
+                // from what's computed above, and where THIS plot's own
+                // outgoing movements (date / to plot / qty) are keyed in.
+                // Reuses the same t6-row-N-transfers / -tr-count ids the
+                // save loop and recalcT6Transfer already know how to find —
+                // only WHERE they render moved, not how they're read.
+                tdataContainer.insertAdjacentHTML('beforeend', `
+                    <div class="border bg-[#fdfaf4] border-[#e8dcc8] rounded-xl overflow-hidden">
+                        <div class="grid grid-cols-1 sm:grid-cols-[0.9fr_0.6fr_2.5fr] gap-3 p-4 items-start">
+                            <div>
+                                <div class="text-[9px] font-black text-[#8a7a68] uppercase sm:hidden mb-0.5">Plot</div>
+                                <div class="text-sm font-black text-[#3d2610]">${p.plot}</div>
+                                ${p.isTransferRow ? `<div class="text-[8px] font-black text-[#0891b2] uppercase tracking-widest mt-0.5">📦 Transfer Plot</div>` : ''}
                             </div>
-                            <div id="${rowId}-tr-body" class="mt-2">
-                                <div class="hidden sm:grid grid-cols-[1.1fr_1.1fr_0.8fr_32px] gap-2 pb-1 text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">
+                            <div>
+                                <div class="text-[9px] font-black text-[#8a7a68] uppercase sm:hidden mb-0.5">Balance</div>
+                                <div class="text-base font-black text-[#3d2610]" id="${rowId}-tdata-balance" title="Linked from the Culling record">${autoBal.toLocaleString()}</div>
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between gap-2 mb-1">
+                                    <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Transfer Records <span id="${rowId}-tr-count" class="opacity-70"></span></span>
+                                    <button type="button" onclick="addT6TransferRecord(${i})"
+                                        class="shrink-0 px-3 py-1.5 bg-[#0891b2] text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-[#0e7490] transition-colors">+ Add Record</button>
+                                </div>
+                                <div class="hidden sm:grid grid-cols-[1.1fr_1.1fr_0.8fr_32px] gap-2 pb-1 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">
                                     <span>Date Transferred</span><span>To Plot</span><span>Quantity</span><span></span>
                                 </div>
                                 <div id="${rowId}-transfers" class="flex flex-col gap-2"></div>
-                                <div id="${rowId}-transfers-empty" class="text-[12px] font-bold text-[#8a7a68] py-1">No transfer recorded.</div>
+                                <div id="${rowId}-transfers-empty" class="text-[11px] font-bold text-[#8a7a68] py-1">No transfer recorded.</div>
                             </div>
-                        </div>`}
+                        </div>
                     </div>
                 `);
             });
@@ -7271,31 +7405,6 @@ Thank you.`;
                 (p.savedTransfers || []).forEach(t => addT6TransferRecord(i, t));
                 syncT6TransferEmpty(i);
             });
-
-            // Transferred plots get their own heading that folds away. They are
-            // already the last rows (injectTransfers appends them), so moving
-            // them under the heading keeps .t6-plot-row in the same document
-            // order — which the save loop and calcT6 both index by position.
-            // Collapsing only hides them; they still save and still count.
-            const transferRows = Array.from(container.querySelectorAll('.t6-plot-row'))
-                .filter((_, idx) => t6_plotData[idx] && t6_plotData[idx].isTransferRow);
-            if (transferRows.length) {
-                const head = document.createElement('div');
-                head.className = 'mt-4';
-                head.innerHTML = `
-                    <button type="button" onclick="toggleT6TransferGroup()"
-                        class="w-full flex items-center gap-2 px-4 py-2.5 bg-[#ecfeff] border border-[#a5f3fc] rounded-xl hover:bg-[#cffafe] transition-colors">
-                        <span id="t6-transfer-caret" class="text-[#0891b2] text-[11px] font-black w-3">▾</span>
-                        <span class="text-[11px] font-black text-[#0891b2] uppercase tracking-widest">↘ Transfer Plot</span>
-                        <span class="text-[10px] font-bold text-[#0891b2] opacity-70">(${transferRows.length})</span>
-                    </button>`;
-                const group = document.createElement('div');
-                group.id = 't6-transfer-group';
-                group.className = 'space-y-3 mt-3';
-                container.appendChild(head);
-                container.appendChild(group);
-                transferRows.forEach(r => group.appendChild(r));
-            }
 
             // Restore previously-uploaded drone maps / docs.
             t6_plotData.forEach((p, i) => {
@@ -7435,8 +7544,11 @@ Thank you.`;
             if (!rowEl || !p) return;
             // Every recorded movement counts; a line with no target plot or no
             // quantity is still being filled in and moves nothing yet.
+            // The transfer list now renders on the Transfer Data tab, not
+            // nested inside this row — found by the list's own id, same as
+            // saveTab6() finds it, not by searching inside rowEl.
             let moved = 0;
-            rowEl.querySelectorAll('.t6-transfer-rec').forEach(rec => {
+            document.querySelectorAll(`#t6-row-${rowIdx}-transfers .t6-transfer-rec`).forEach(rec => {
                 const plot = rec.querySelector('.t6-tr-plot');
                 const qty  = rec.querySelector('.t6-tr-qty');
                 if (plot && plot.value) moved += parseInt(qty && qty.value) || 0;
@@ -7447,6 +7559,9 @@ Thank you.`;
             if (balEl) balEl.value = n.bal;
             const balDisp = rowEl.querySelector('.t6-balance-display');
             if (balDisp) balDisp.innerText = n.bal.toLocaleString();
+            // Mirror into the Transfer Data tab's own read-only Balance cell.
+            const tdataBal = document.getElementById(`t6-row-${rowIdx}-tdata-balance`);
+            if (tdataBal) tdataBal.innerText = n.bal.toLocaleString();
             const cullEl = rowEl.querySelector('.t6-culled-input');
             if (cullEl) cullEl.value = n.culled;
 
@@ -7505,6 +7620,32 @@ Thank you.`;
             if (!group) return;
             const collapsed = group.classList.toggle('hidden');
             if (caret) caret.innerText = collapsed ? '▸' : '▾';
+        }
+
+        /* Switch between the three 3rd Culling sub-tabs. Purely visual — every
+           row (Main, Transfer Plot, or its Transfer Data entry) stays in the
+           DOM and keeps saving regardless of which panel is showing. */
+        function switchT6SubTab(name) {
+            const panels = ['main', 'transferdata', 'transferplot'];
+            panels.forEach(n => {
+                const panel = document.getElementById(`t6-subpanel-${n}`);
+                if (panel) panel.classList.toggle('hidden', n !== name);
+                const btn = document.getElementById(`t6-subtab-btn-${n}`);
+                if (btn) {
+                    btn.className = 't6-subtab-btn px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors ' +
+                        (n === name
+                            ? 'bg-[#6d28d9] border-[#6d28d9] text-white'
+                            : 'bg-[#fdfaf4] border-[#e8dcc8] text-[#8a7a68] hover:bg-[#f3e8ff]');
+                }
+            });
+        }
+
+        /* Reveal the date input under a Main-tab row's 3rd Culled figure.
+           Purely a display toggle — the date only actually saves once
+           saveTab6() reads .t6-cull-date, same as every other field here. */
+        function toggleT6CullDate(rowIdx) {
+            const body = document.getElementById(`t6-row-${rowIdx}-culldate-body`);
+            if (body) body.classList.toggle('hidden');
         }
 
         /* Every plot whose drone map qty is keyed in and disagrees with the
@@ -7856,7 +7997,9 @@ Thank you.`;
                     // be transferred now and have its culled qty keyed in later.
                     // One log per movement, so a plot that sends seedlings out on
                     // two different days keeps both, each with its own date.
-                    row.querySelectorAll('.t6-transfer-rec').forEach(rec => {
+                    // The transfer list renders on the Transfer Data tab now, not
+                    // nested inside this row — found by the list's own id.
+                    document.querySelectorAll(`#t6-row-${i}-transfers .t6-transfer-rec`).forEach(rec => {
                         const trPlot = rec.querySelector('.t6-tr-plot')?.value || '';
                         const trQty  = parseInt(rec.querySelector('.t6-tr-qty')?.value) || 0;
                         const trDate = rec.querySelector('.t6-tr-date')?.value || '';
@@ -7900,6 +8043,10 @@ Thank you.`;
                     }
                     const dead2Part = `, 2ndCulled: ${t6_plotData[i]?.dead2 || 0}, Sales: ${t6_plotData[i]?.sales || 0}`;
                     const mapQtyPart = mapQty !== null ? ` MapQty: ${mapQty}` : '';
+                    // Culled date — keyed in via the 📅 toggle, Main-tab rows only
+                    // (the input isn't rendered on Transfer Plot rows).
+                    const cullDateVal = row.querySelector('.t6-cull-date')?.value || '';
+                    const cullDatePart = cullDateVal ? ` CullDate:${cullDateVal}` : '';
 
                     // Upload the drone map / proof doc (if any) so it survives a refresh.
                     let docUrl = '', docNamePart = '';
@@ -7929,7 +8076,7 @@ Thank you.`;
                         // DestType is critical: the same plot (e.g. B10) can appear under
                         // both MAIN and D-TONE; the load uses (plot_name, destType) to
                         // distinguish them so values don't overwrite each other.
-                        remark: `3rd Culling. Transplanted: ${transplanted}, Remaining Balance: ${balance}, Culled: ${culled}, Cull Rate: ${cullPct}%${dead2Part}, DestType: ${destType}${mapQtyPart}${mismatchNote}${docSuffix}`
+                        remark: `3rd Culling. Transplanted: ${transplanted}, Remaining Balance: ${balance}, Culled: ${culled}, Cull Rate: ${cullPct}%${dead2Part}, DestType: ${destType}${mapQtyPart}${mismatchNote}${cullDatePart}${docSuffix}`
                     }));
                 }
 
@@ -8066,7 +8213,11 @@ Thank you.`;
                     const p = (typeof t5_plotData !== 'undefined' && t5_plotData[i]) || null;
                     return { el, key: p ? String(p.plot || '').trim().toUpperCase() : '' };
                   }),
-        6: () => Array.from(document.querySelectorAll('#t6-plot-rows .t6-plot-row'))
+        // Rows now split across two containers (Main / Transfer Plot sub-tabs),
+        // so this can no longer be scoped to one parent id — .t6-plot-row is
+        // unique to Tab 6 regardless, same as calcT6()/saveTab6() already
+        // query it unscoped.
+        6: () => Array.from(document.querySelectorAll('.t6-plot-row'))
                   .map(el => {
                     const i = parseInt((el.id || '').replace('t6-row-', ''), 10);
                     const p = (typeof t6_plotData !== 'undefined' && t6_plotData[i]) || null;
