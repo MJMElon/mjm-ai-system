@@ -8141,6 +8141,18 @@ Thank you.`;
       const rowVerifs     = {}; // `${stage}::${rowKey}` → Row_Verification log row
       const lastEdits     = {}; // tabIdx → { ts, by } — latest report save per tab (detects post-rejection amendment)
 
+      // email (lowercased) → full_name from shared_profiles, so the review
+      // badges show "Esther Wong" rather than the whole address. Loaded once
+      // per page in refresh(). A person with no profile name falls back to
+      // the part before the @ — a full email address is never displayed.
+      const nameByEmail = {};
+      function who(v) {
+        if (!v) return null;
+        const s = String(v).trim();
+        if (!s.includes('@')) return s; // already a name
+        return nameByEmail[s.toLowerCase()] || s.split('@')[0];
+      }
+
       // Tabs whose verify/reject happens PER DATA ROW instead of a top banner:
       // Transplanting + 1st/2nd/3rd Culling. Each entry knows how to list the
       // tab's row elements and derive a stable key for each row.
@@ -8249,8 +8261,8 @@ Thank you.`;
 
         if (r) {
           // Reviewed → locked for non-admins.
-          const whoR = r.reviewer_name || r.reviewer_email || 'a reviewer';
-          const whoV = v ? (v.verifier_name || v.verifier_email || 'a verifier') : null;
+          const whoR = r.reviewer_name || who(r.reviewer_email) || 'a reviewer';
+          const whoV = v ? (v.verifier_name || who(v.verifier_email) || 'a verifier') : null;
           banner.className = 'mjm-review-banner mjm-review-locked';
           banner.style.display = '';
           banner.innerHTML = `
@@ -8273,7 +8285,7 @@ Thank you.`;
         // re-verified (verify/mark clear it), or an admin clears it manually.
         const rej = rejections[stage];
         if (rej) {
-          const whoRej = rej.last_edited_by || 'HQ';
+          const whoRej = who(rej.last_edited_by) || 'HQ';
           banner.className = 'mjm-review-banner mjm-review-rejected';
           banner.style.display = '';
           const verifyBtn = (isVerifier || isAdmin)
@@ -8326,7 +8338,7 @@ Thank you.`;
         if (v) {
           // Verified → locked. No separate "Mark as Reviewed" stage anymore:
           // verification IS the sign-off, so the data locks for non-admins.
-          const whoV = v.verifier_name || v.verifier_email || 'a verifier';
+          const whoV = v.verifier_name || who(v.verifier_email) || 'a verifier';
           banner.className = 'mjm-review-banner mjm-review-locked';
           banner.style.display = '';
           const unverifyBtn = (isVerifier || isAdmin)
@@ -8403,13 +8415,13 @@ Thank you.`;
             const clearBtn = isAdmin
               ? `<button class="mjm-review-btn mjm-review-btn-clearrej mjm-review-allow" onclick="MJMReview.clearRowRejection(${tabIdx}, '${k}')">Clear</button>` : '';
             box.innerHTML = `
-              <div class="mjm-row-rej-remark">❌ <strong>Rejected by ${esc(rej.last_edited_by || 'HQ')}</strong> — ${esc(rej.remark)}</div>
+              <div class="mjm-row-rej-remark">❌ <strong>Rejected by ${esc(who(rej.last_edited_by) || 'HQ')}</strong> — ${esc(rej.remark)}</div>
               <span class="mjm-row-chip mjm-row-chip-rej">Amendment Required</span>${verifyBtn}${editBtn}${clearBtn}`;
           } else if (ver) {
             const unverifyBtn = (isVerifier || isAdmin)
               ? `<button class="mjm-review-btn mjm-review-btn-unverify mjm-review-allow" onclick="MJMReview.rowUnverify(${tabIdx}, '${k}')">Unverify</button>` : '';
             box.innerHTML = `
-              <span class="mjm-row-chip mjm-row-chip-ok">✓ Verified by ${esc(ver.last_edited_by || 'verifier')} · ${fmtDate(ver.last_edited_at || ver.created_at)}</span>${unverifyBtn}`;
+              <span class="mjm-row-chip mjm-row-chip-ok">✓ Verified by ${esc(who(ver.last_edited_by) || 'verifier')} · ${fmtDate(ver.last_edited_at || ver.created_at)}</span>${unverifyBtn}`;
           } else {
             const verifyBtn = (isVerifier || isAdmin)
               ? `<button class="mjm-review-btn mjm-review-btn-verify mjm-review-allow" onclick="MJMReview.rowVerify(${tabIdx}, '${k}')">✓ Verify</button>` : '';
@@ -8435,6 +8447,14 @@ Thank you.`;
         for (const k of Object.keys(lastEdits))     delete lastEdits[k];
         if (batch) {
           try {
+            // Names for the badges — once per page, profiles don't churn.
+            if (!Object.keys(nameByEmail).length) {
+              const { data: profs } = await _supabase
+                .from('shared_profiles').select('email, full_name');
+              (profs || []).forEach(p => {
+                if (p.email && p.full_name) nameByEmail[String(p.email).toLowerCase()] = p.full_name;
+              });
+            }
             const [revRes, verRes, rejRes, editRes] = await Promise.all([
               _supabase
                 .from('operation_batch_reviews')
