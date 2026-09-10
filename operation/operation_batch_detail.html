@@ -733,25 +733,6 @@
                             </div>
 
                             <!-- ════════════════════════════════════════════ -->
-                            <!-- SECTION 1: Date & Damaged Seeds             -->
-                            <!-- ════════════════════════════════════════════ -->
-                            <div class="bg-white rounded-2xl border border-[#e8dcc8] shadow-sm mb-6 overflow-hidden">
-                                <div class="flex items-center gap-3 px-6 py-4 border-b border-[#e8dcc8] bg-[#fdfaf4]">
-                                    <h4 class="font-black text-[#3d2610] uppercase tracking-widest text-sm">Planting Date & Damage Count</h4>
-                                </div>
-                                <div class="p-6">
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div><label class="label-style">Planted Date *</label><input type="date" id="t2-date" class="input-style" required oninput="updatePlantingCompletion()"></div>
-                                        <div>
-                                            <label class="label-style !text-[#a83020]">Damaged Seeds Qty *</label>
-                                            <input type="text" inputmode="numeric" id="t2-damaged" class="input-style !text-[#a83020] font-black" required oninput="formatNumericInput(this); calcPlanting()" placeholder="0">
-                                            <p class="text-[9px] font-bold text-[#a39584] uppercase tracking-widest mt-1.5 ml-1">Physical count of seeds that arrived damaged / unusable.</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- ════════════════════════════════════════════ -->
                             <!-- SECTION 2: Receive & Damage Analysis Charts -->
                             <!-- ════════════════════════════════════════════ -->
                             <div class="bg-white rounded-2xl border border-[#e8dcc8] shadow-sm mb-6 overflow-hidden">
@@ -927,6 +908,30 @@
                                 </div>
                             </div>
 
+                            <!-- Moved down to sit immediately above Photo Evidence.
+                                 The date and the damaged count are what the photos are
+                                 evidence OF, and they were three sections apart — you keyed
+                                 a number at the top of the tab and proved it at the bottom,
+                                 with two charts in between. -->
+                            <!-- ════════════════════════════════════════════ -->
+                            <!-- SECTION 1: Date & Damaged Seeds             -->
+                            <!-- ════════════════════════════════════════════ -->
+                            <div class="bg-white rounded-2xl border border-[#e8dcc8] shadow-sm mb-6 overflow-hidden">
+                                <div class="flex items-center gap-3 px-6 py-4 border-b border-[#e8dcc8] bg-[#fdfaf4]">
+                                    <h4 class="font-black text-[#3d2610] uppercase tracking-widest text-sm">Planting Date & Damage Count</h4>
+                                </div>
+                                <div class="p-6">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div><label class="label-style">Planted Date *</label><input type="date" id="t2-date" class="input-style" required oninput="updatePlantingCompletion()"></div>
+                                        <div>
+                                            <label class="label-style !text-[#a83020]">Damaged Seeds Qty *</label>
+                                            <input type="text" inputmode="numeric" id="t2-damaged" class="input-style !text-[#a83020] font-black" required oninput="formatNumericInput(this); calcPlanting()" placeholder="0">
+                                            <p class="text-[9px] font-bold text-[#a39584] uppercase tracking-widest mt-1.5 ml-1">Physical count of seeds that arrived damaged / unusable.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- ════════════════════════════════════════════ -->
                             <!-- SECTION 4: Photo Proof                      -->
                             <!-- ════════════════════════════════════════════ -->
@@ -937,22 +942,32 @@
                                 <div class="p-6">
                                     <div class="grid grid-cols-1 gap-6">
 
-                                        <!-- Ops photo -->
+                                        <!-- Ops photos.
+
+                                             One photo was never enough: damaged seed is counted
+                                             in trays across a shed, and the proof is several
+                                             shots, not one. So this is a gallery — add as many
+                                             as the count needs, each one its own record.
+
+                                             And the whole tile opens the photo. It used to be a
+                                             three-word View button beside a thumbnail, which is
+                                             a small target for a thumb and an odd one when the
+                                             picture itself is right there. Press the picture. -->
                                         <div class="bg-[#fdfaf4] p-5 rounded-2xl border border-[#e8dcc8]">
                                             <label class="label-style">Operations Site Proof *</label>
-                                            <p class="text-[10px] font-bold text-[#8a7a68] mb-3 -mt-1 leading-tight">Attach photo of physical damaged seeds count at site.</p>
+                                            <p class="text-[10px] font-bold text-[#8a7a68] mb-3 -mt-1 leading-tight">Photos of the physical damaged seed count at site. Add as many as you need; tap one to see it full size.</p>
+
+                                            <div id="t2-photo-ops-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-3 hidden"></div>
+
                                             <div id="t2-photo-ops-zone" class="border-2 border-dashed border-[#e8dcc8] bg-white rounded-xl p-6 text-center cursor-pointer hover:bg-[#f3efe6] transition-colors" onclick="triggerPhotoUpload('ops')">
-                                                <span class="text-3xl">📷</span>
-                                                <p class="text-xs font-black text-[#8a7a68] uppercase tracking-widest mt-2">Ops Site Camera / Upload</p>
-                                                <input type="file" id="t2-photo-ops-upload" class="hidden" accept="image/*" capture="environment" onchange="handleAuditPhoto(this, 'ops')">
+                                                <p class="text-xs font-black text-[#8a7a68] uppercase tracking-widest">Ops Site Camera / Upload</p>
+                                                <p class="text-[10px] font-bold text-[#a39584] mt-1" id="t2-photo-ops-count">No photo yet</p>
+                                                <input type="file" id="t2-photo-ops-upload" class="hidden" accept="image/*" multiple capture="environment" onchange="handleAuditPhoto(this, 'ops')">
                                             </div>
-                                            <div id="t2-photo-ops-preview" class="hidden items-center gap-3 p-3 border border-[#e8dcc8] rounded-xl bg-white mt-2">
-                                                <div class="w-12 h-12 bg-gray-200 rounded-lg bg-cover bg-center shadow-sm shrink-0" id="t2-photo-ops-thumb"></div>
-                                                <div class="flex-1 overflow-hidden"><p class="text-[10px] font-black text-[#3d2610] uppercase tracking-wider truncate" id="t2-photo-ops-name">ops_site_count.jpg</p><p class="text-[9px] font-bold text-[#c07820] uppercase">Site Proof Attached</p></div>
-                                                <div class="flex flex-col gap-1 shrink-0">
-                                                    <button type="button" class="px-3 py-1 bg-[#fdfaf4] border border-[#e8dcc8] text-[#3d2610] text-[9px] font-black uppercase tracking-widest rounded hover:bg-[#e8dcc8]" onclick="viewAuditPhoto('ops')">View</button>
-                                                    <button type="button" class="px-3 py-1 bg-[#fdfaf4] border border-[#f8d7da] text-[#a83020] text-[9px] font-black uppercase tracking-widest rounded hover:bg-[#f8d7da]" onclick="removeAuditPhoto('ops')">Del</button>
-                                                </div>
+                                            <!-- Kept for the code that still addresses the old single
+                                                 preview by id; the gallery above is what is seen. -->
+                                            <div id="t2-photo-ops-preview" class="hidden">
+                                                <div id="t2-photo-ops-thumb"></div><span id="t2-photo-ops-name"></span>
                                             </div>
                                         </div>
 
@@ -4138,33 +4153,99 @@
 
         function triggerPhotoUpload(type) { document.getElementById(`t2-photo-${type}-upload`).click(); }
 
-        function handleAuditPhoto(input, type) {
-            if (input.files && input.files[0]) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    if(type === 'ops') opsPhotoBase64 = e.target.result; else auditPhotoBase64 = e.target.result;
-                    document.getElementById(`t2-photo-${type}-thumb`).style.backgroundImage = `url('${e.target.result}')`;
-                    document.getElementById(`t2-photo-${type}-name`).innerText = input.files[0].name;
-                    document.getElementById(`t2-photo-${type}-zone`).classList.add('hidden');
-                    const preview = document.getElementById(`t2-photo-${type}-preview`);
-                    preview.classList.remove('hidden'); preview.classList.add('flex');
-                    updatePlantingCompletion();
-                }
-                reader.readAsDataURL(input.files[0]);
+        /* The site proof is a GALLERY, not a photo.
+
+           Damaged seed is counted in trays across a shed and the proof is
+           several shots. It used to be one, so the second one overwrote the
+           first and the count was evidenced by whichever picture happened to
+           be taken last.
+
+           opsPhotos holds them in order; each entry is { name, src } where src
+           is a data: URL until it has been uploaded and an https URL after.
+           opsPhotoBase64 is kept in step with the FIRST of them, because other
+           code still reads it and a rename across this file would be a bigger
+           change than the feature. */
+        let opsPhotos = [];
+
+        function _syncOpsPhotoState() {
+            opsPhotoBase64 = opsPhotos.length ? opsPhotos[0].src : null;
+        }
+
+        function renderOpsPhotos() {
+            const grid  = document.getElementById('t2-photo-ops-grid');
+            const count = document.getElementById('t2-photo-ops-count');
+            if (!grid) return;
+            grid.innerHTML = opsPhotos.map((ph, i) => `
+                <div class="relative group rounded-xl overflow-hidden border border-[#e8dcc8] bg-white">
+                    <!-- The picture IS the button. -->
+                    <button type="button" onclick="viewOpsPhoto(${i})"
+                        title="${_escAttr(ph.name || 'photo')} — tap to view"
+                        class="block w-full aspect-square bg-cover bg-center cursor-zoom-in"
+                        style="background-image:url('${_escAttr(ph.src)}')"></button>
+                    <button type="button" onclick="removeOpsPhoto(${i})" title="Remove this photo"
+                        class="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 border border-[#f8d7da] text-[#a83020] text-xs font-black flex items-center justify-center hover:bg-[#f8d7da]">✕</button>
+                    <div class="px-2 py-1 text-[9px] font-black text-[#8a7a68] uppercase tracking-wider truncate">${_t6Esc(ph.name || `Photo ${i + 1}`)}</div>
+                </div>`).join('');
+            grid.classList.toggle('hidden', opsPhotos.length === 0);
+            if (count) {
+                count.innerText = opsPhotos.length
+                    ? `${opsPhotos.length} photo${opsPhotos.length === 1 ? '' : 's'} attached — add another`
+                    : 'No photo yet';
             }
+            _syncOpsPhotoState();
+        }
+
+        function viewOpsPhoto(i) {
+            const ph = opsPhotos[i];
+            if (ph) _openDocInNewWindow(ph.src);
+        }
+
+        function removeOpsPhoto(i) {
+            opsPhotos.splice(i, 1);
+            const up = document.getElementById('t2-photo-ops-upload');
+            if (up) up.value = '';
+            renderOpsPhotos();
+            updatePlantingCompletion();
+        }
+
+        function handleAuditPhoto(input, type) {
+            if (!input.files || !input.files.length) return;
+            if (type === 'ops') {
+                // Every file chosen, not just the first — and appended, so a
+                // second visit to the picker adds to the set rather than
+                // replacing it.
+                const files = Array.from(input.files);
+                let left = files.length;
+                files.forEach((file) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        opsPhotos.push({ name: file.name, src: e.target.result });
+                        if (--left === 0) { renderOpsPhotos(); updatePlantingCompletion(); }
+                    };
+                    reader.onerror = () => { if (--left === 0) { renderOpsPhotos(); updatePlantingCompletion(); } };
+                    reader.readAsDataURL(file);
+                });
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                auditPhotoBase64 = e.target.result;
+                updatePlantingCompletion();
+            };
+            reader.readAsDataURL(input.files[0]);
         }
 
         function removeAuditPhoto(type) {
-            if(type === 'ops') opsPhotoBase64 = null; else auditPhotoBase64 = null;
-            document.getElementById(`t2-photo-${type}-upload`).value = "";
-            const preview = document.getElementById(`t2-photo-${type}-preview`);
-            preview.classList.add('hidden'); preview.classList.remove('flex');
-            document.getElementById(`t2-photo-${type}-zone`).classList.remove('hidden');
+            if (type === 'ops') { opsPhotos = []; renderOpsPhotos(); }
+            else auditPhotoBase64 = null;
+            const up = document.getElementById(`t2-photo-${type}-upload`);
+            if (up) up.value = '';
             updatePlantingCompletion();
         }
 
         function viewAuditPhoto(type) {
-            _openDocInNewWindow((type === 'ops') ? opsPhotoBase64 : auditPhotoBase64);
+            if (type === 'ops') return viewOpsPhoto(0);
+            _openDocInNewWindow(auditPhotoBase64);
         }
 
         // ── Photo persistence helpers ──
@@ -4179,15 +4260,22 @@
                 // If an upload fails (most likely a `documents` bucket RLS block),
                 // surface the actual storage error AND bail BEFORE deleting any
                 // previously-saved rows so existing photos aren't lost.
-                if (opsPhotoBase64 && String(opsPhotoBase64).startsWith('data:')) {
-                    const url = await _uploadBatchDoc('planting_photos', batchId, 'ops', opsPhotoBase64);
+                /* Every ops photo, in order, each to its own object. The key
+                   carries its position so a second photo cannot overwrite the
+                   first in the bucket — which is exactly what a single fixed
+                   'ops' key would do now that there is more than one. */
+                for (let i = 0; i < opsPhotos.length; i++) {
+                    const ph = opsPhotos[i];
+                    if (!ph.src || !String(ph.src).startsWith('data:')) continue;
+                    const url = await _uploadBatchDoc('planting_photos', batchId, `ops_${i + 1}`, ph.src);
                     if (!url) {
-                        showToast('⚠️ Ops photo NOT saved: ' + (window._mjmLastUploadError || 'storage upload failed') + ' — fix the documents bucket policy and re-save.', 'error');
+                        showToast('Ops photo ' + (i + 1) + ' NOT saved: ' + (window._mjmLastUploadError || 'storage upload failed') + ' — fix the documents bucket policy and re-save.', 'error');
                         return;
                     }
-                    console.log('[savePhotos] ops uploaded →', url);
-                    opsPhotoBase64 = url;
+                    console.log('[savePhotos] ops', i + 1, 'uploaded →', url);
+                    ph.src = url;
                 }
+                _syncOpsPhotoState();
                 if (auditPhotoBase64 && String(auditPhotoBase64).startsWith('data:')) {
                     const url = await _uploadBatchDoc('planting_photos', batchId, 'audit', auditPhotoBase64);
                     if (!url) {
@@ -4199,10 +4287,15 @@
                 }
 
                 const photoLogs = [];
-                if (opsPhotoBase64 && /^https?:\/\//i.test(opsPhotoBase64)) photoLogs.push({
-                    transaction_type: 'Planting_Photo', batch_name: batchId,
-                    plot_name: 'ops', quantity_change: 0,
-                    remark: opsPhotoBase64
+                /* One row per photo, all under plot_name 'ops'. quantity_change
+                   carries the position so the gallery comes back in the order
+                   it was built rather than in whatever order the rows return. */
+                opsPhotos.forEach((ph, i) => {
+                    if (ph.src && /^https?:\/\//i.test(ph.src)) photoLogs.push({
+                        transaction_type: 'Planting_Photo', batch_name: batchId,
+                        plot_name: 'ops', quantity_change: i + 1,
+                        remark: ph.src
+                    });
                 });
                 if (auditPhotoBase64 && /^https?:\/\//i.test(auditPhotoBase64)) photoLogs.push({
                     transaction_type: 'Planting_Photo', batch_name: batchId,
@@ -4231,17 +4324,30 @@
                     .select('*').eq('batch_name', batchId).eq('transaction_type', 'Planting_Photo');
                 console.log('[loadPhotos] query for batch', batchId, '→ rows:', data, 'error:', error);
                 if (!data) return;
-                data.forEach(log => {
+                /* Ops rows are a gallery now — several of them, ordered by the
+                   position kept in quantity_change. A row saved before this
+                   change has no position (0), which sorts first and is right:
+                   it was the only one. */
+                opsPhotos = [];
+                const usable = (data || []).filter(log => {
                     const remark = (log.remark || '').trim();
-                    if (!remark) { console.log('[loadPhotos] skipping empty remark for', log.plot_name); return; }
+                    if (!remark) return false;
                     // Legacy rows held truncated base64 that can't be rendered —
                     // skip them so the upload zone reappears for re-attachment.
-                    if (!/^https?:\/\//i.test(remark)) { console.log('[loadPhotos] skipping non-URL remark for', log.plot_name, '→', remark.slice(0, 60)); return; }
-                    const type = log.plot_name; // 'ops' or 'audit'
-                    console.log('[loadPhotos] restoring', type, '→', remark);
-                    if (type === 'ops')   { opsPhotoBase64   = remark; restorePhotoUI('ops',   remark, 'Site photo');  }
-                    else if (type === 'audit') { auditPhotoBase64 = remark; restorePhotoUI('audit', remark, 'Audit photo'); }
+                    if (!/^https?:\/\//i.test(remark)) {
+                        console.log('[loadPhotos] skipping non-URL remark for', log.plot_name, '→', remark.slice(0, 60));
+                        return false;
+                    }
+                    return true;
                 });
+                usable.filter(l => l.plot_name === 'ops')
+                      .sort((a, b) => (a.quantity_change || 0) - (b.quantity_change || 0))
+                      .forEach((log, i) => {
+                          opsPhotos.push({ name: `Site photo ${i + 1}`, src: (log.remark || '').trim() });
+                      });
+                renderOpsPhotos();
+                const audit = usable.find(l => l.plot_name === 'audit');
+                if (audit) { auditPhotoBase64 = (audit.remark || '').trim(); }
             } catch(e) { console.warn('Photo load failed:', e.message); }
         }
 
