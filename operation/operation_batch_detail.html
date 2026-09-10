@@ -7673,10 +7673,15 @@ Thank you.`;
                                  was second-culled in a plot the seedlings only just reached. -->
                             <div class="min-w-0">
                                 <div class="text-lg font-black text-[#3d2610] leading-tight truncate">${p.plot}</div>
-                                <div class="flex items-center gap-2 mt-0.5">
+                                <!-- justify-center, because .t-tidy centres every CELL of the
+                                     row and this one holds a stack: without it the plot name
+                                     centred and the figure under it sat left, which is the
+                                     misalignment. Centred as a unit, the label and its figure
+                                     line up under the name and under the column heading. -->
+                                <div class="flex items-center justify-center gap-2 mt-0.5">
                                     <div>
                                         <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest leading-none">${p.isTransferRow ? 'Transferred' : 'Transplanted'}</div>
-                                        <div class="text-sm font-black text-[#3d2610] tabular-nums leading-tight">${t6Fmt(p.qty)}</div>
+                                        <div class="text-sm font-black text-[#a83020] tabular-nums leading-tight">${t6Fmt(p.qty)}</div>
                                     </div>
                                     ${p.isTransferRow ? '' : `<div class="w-px h-6 bg-[#e8dcc8]"></div>
                                     <div>
@@ -7721,7 +7726,7 @@ Thank you.`;
                             <div class="flex flex-col gap-0.5 pt-1">
                                 <div class="text-lg font-black text-[#3d2610] leading-tight">${p.plot}</div>
                                 ${showTypeLabel ? `<div class="text-[9px] font-bold text-[#8a7a68] uppercase tracking-widest">${typeLabel}</div>` : ''}
-                                <div class="flex items-center gap-3 mt-1">
+                                <div class="flex items-center justify-center gap-3 mt-1">
                                     <!-- On a "-R" plot this figure is not a transplant, it is
                                          the total moved in — possibly from several plots. Press
                                          it to see which. -->
@@ -7729,10 +7734,10 @@ Thank you.`;
                                         <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest">${p.isTransferRow ? 'Transferred' : 'Transplanted'}</div>
                                         ${p.isTransferRow
                                             ? `<button type="button" onclick="toggleT6DestSources(this)" title="From which plots?"
-                                                    class="t6-dest-qty text-base font-black text-[#3d2610] tabular-nums underline decoration-dotted underline-offset-4
+                                                    class="t6-dest-qty text-base font-black text-[#a83020] tabular-nums underline decoration-dotted underline-offset-4
                                                            hover:text-[#0891b2] cursor-pointer bg-transparent border-0 p-0 font-[inherit]">${t6Fmt(p.qty)}</button>
                                                <div class="t6-dest-from hidden absolute z-20 left-0 top-full mt-1 min-w-[140px] bg-white border border-[#e8dcc8] rounded-xl shadow-lg p-2 space-y-1"></div>`
-                                            : `<div class="text-base font-black text-[#3d2610] tabular-nums">${t6Fmt(p.qty)}</div>`}
+                                            : `<div class="text-base font-black text-[#a83020] tabular-nums">${t6Fmt(p.qty)}</div>`}
                                     </div>
                                     ${p.isTransferRow ? '' : `<div class="w-px h-7 bg-[#e8dcc8]"></div>
                                     <div>
