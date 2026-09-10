@@ -7497,16 +7497,22 @@ Thank you.`;
                    row — a main plot at zero balance is still part of the cull
                    arithmetic and keeps its cells. */
                 const soldOut   = !!p.isTransferRow && autoBal === 0;
-                /* A plot is finished when its drone map qty is keyed and it has
-                   a culled date — or when it is a sold-out -R plot, which will
-                   never have either and is finished all the same. Finished rows
-                   arrive folded; everything else arrives open, because an
-                   unfinished row IS the work and hiding it behind a button
-                   would mean twenty clicks before a single figure is keyed. */
+                /* Every row arrives FOLDED, finished or not.
+
+                   It used to open the unfinished ones on the reasoning that an
+                   unfinished row is the work. But the tab is read far more
+                   often than it is keyed — twenty plots' worth of upload zones
+                   and date pickers is what greets you either way, and the one
+                   row you came to change is somewhere inside it. Folded, the
+                   whole tab is twenty lines you can scan, and Edit opens the
+                   one you want.
+
+                   rowDone is still worked out because the progress count and
+                   the tick read it; it just no longer decides what is open. */
                 const rowDone   = soldOut ||
                                   (p.savedMapQty !== null && p.savedMapQty !== undefined && p.savedMapQty !== '' &&
                                    !!p.savedCullDate);
-                const folded    = rowDone;
+                const folded    = true;
                 // AUTO 3rd culled = 2nd culled + balance — fully calculated,
                 // not editable by hand. A computed 0 (e.g. everything sold) is
                 // real data and shows/saves as 0 rather than blank.
@@ -7538,9 +7544,24 @@ Thank you.`;
                              Same grid as the open half and the column headings, so folding one
                              row does not shift its neighbours' columns. -->
                         <div class="t6-pr-view ${folded ? '' : 'hidden'} grid grid-cols-2 lg:grid-cols-[${gridCols}] gap-2 px-4 py-3 items-center t-tidy">
+                            <!-- Folded, the plot still says what went in and what the 2nd cull
+                                 took — written out, not abbreviated. "2,812 in · 26 2nd" saved
+                                 a line and cost the reader the two words that say which figure
+                                 is which. Same two labelled figures as the open row, set
+                                 smaller. -->
                             <div class="min-w-0">
                                 <div class="text-base font-black text-[#3d2610] leading-tight truncate">${p.plot}</div>
-                                <div class="text-[9px] font-bold text-[#8a7a68] uppercase tracking-widest">${t6Fmt(p.qty)} in${dead2 ? ` · ${t6Fmt(dead2)} 2nd` : ''}</div>
+                                <div class="flex items-center gap-2 mt-0.5">
+                                    <div>
+                                        <div class="text-[7px] font-black text-[#8a7a68] uppercase tracking-widest leading-none">Transplanted</div>
+                                        <div class="text-[11px] font-black text-[#3d2610] tabular-nums leading-tight">${t6Fmt(p.qty)}</div>
+                                    </div>
+                                    <div class="w-px h-5 bg-[#e8dcc8]"></div>
+                                    <div>
+                                        <div class="text-[7px] font-black text-[#a83020] uppercase tracking-widest leading-none">2nd Culled</div>
+                                        <div class="text-[11px] font-black text-[#a83020] tabular-nums leading-tight">${t6Fmt(dead2)}</div>
+                                    </div>
+                                </div>
                             </div>
                             <div class="text-sm font-black text-[#3a7ab4] tabular-nums t6-v-sales">—</div>
                             <div class="text-sm font-black text-[#0891b2] tabular-nums t6-v-moved">—</div>
@@ -8080,11 +8101,23 @@ Thank you.`;
             put('.t6-v-culled', culled === '' ? '—' : t6Fmt(parseInt(culled) || 0));
             put('.t6-v-rate',   row.querySelector('.t6-cull-rate-cell')?.innerText.trim() || '—');
 
+            /* The map cell is the map's QUANTITY, and pressing it opens the
+               file. It used to read "268 · ATTACHED", which spends half the
+               cell on a word that the figure being there already implies —
+               and then made you reach for a separate button to see the thing.
+               No file attached: the number alone, nothing to press. */
             const mapQty = val('.t6-map-qty');
             const hasDoc = !row.querySelector('[id$="-doc-preview"]')?.classList.contains('hidden');
-            put('.t6-v-map', mapQty === ''
-                ? (hasDoc ? 'Attached' : '—')
-                : `${t6Fmt(parseInt(mapQty) || 0)}${hasDoc ? ' · Attached' : ''}`);
+            const mapTxt = mapQty === '' ? (hasDoc ? 'View map' : '—') : t6Fmt(parseInt(mapQty) || 0);
+            const mapCell = view.querySelector('.t6-v-map');
+            if (mapCell) {
+                const rowId = row.id;
+                mapCell.innerHTML = hasDoc
+                    ? `<button type="button" onclick="viewT6Doc('${rowId}')" title="Open the drone map"
+                            class="font-[inherit] text-[inherit] font-black underline decoration-dotted underline-offset-4
+                                   hover:text-[#c07820] cursor-pointer bg-transparent border-0 p-0">${_t6Esc(mapTxt)}</button>`
+                    : _t6Esc(mapTxt);
+            }
             put('.t6-v-date', val('.t6-cull-date') || '—');
         }
 
