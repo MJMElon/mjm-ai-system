@@ -98,6 +98,18 @@
 
            Below 1024px the rows stack, which is what the Tailwind grid-cols-1
            on each of them still does. */
+        /* A transfer record's six columns: from · balance · date · to · qty · del.
+           Safe in the stylesheet, unlike the plot-row grid below — nothing else
+           sets grid-template-columns on these elements, so there is no Tailwind
+           utility to lose a specificity fight with. */
+        .t6-tr-cols { grid-template-columns: 1fr 0.6fr 1fr 1fr 0.7fr 40px; }
+
+        /* Each plot's record container is a pass-through: its children join the
+           list above it directly, so records from every plot read as one flat
+           list while each still SITS in its own plot's container — which is what
+           saveTab6() walks and what the balance arithmetic counts. */
+        .t6-tr-bucket { display: contents; }
+
         /* NOTE — do not move the 3rd Culling row grid into this stylesheet.
            It was tried: one .t6-grid rule for the heading strips and both
            halves of every row, so the seven tracks had a single definition.
@@ -1602,16 +1614,49 @@
                                      movements out (date / to plot / qty) are keyed in. ── -->
                                 <div id="t6-subpanel-transferdata" class="t6-subpanel hidden">
 
-                                    <!-- ── PART 1: what each plot sent out ──────────────────
-                                         One card per plot. The plot and its balance are the card's
-                                         heading now rather than two columns beside the lines —
-                                         a plot is a thing, not a cell. -->
-                                    <div id="t6-transferdata-rows" class="px-6 pb-4 space-y-3 pt-4"></div>
-                                    <div id="t6-transferdata-empty" class="px-6 pb-6 pt-2 hidden">
+                                    <!-- ── PART 1: the movements ────────────────────────────
+
+                                         A LIST OF RECORDS, not a card per plot. The tab used to
+                                         print every plot on the batch whether or not anything had
+                                         ever left it — twenty headings and twenty empty spaces to
+                                         find the one movement you came to key. It starts empty
+                                         now: press Add Record, say which plot it left, and the
+                                         rest follows.
+
+                                         Each record still LIVES in its source plot's own
+                                         container (#t6-row-N-transfers), which is what saveTab6()
+                                         reads and what the balance arithmetic counts. Choosing a
+                                         source moves the record into that plot's container; the
+                                         containers are display:contents, so what you see is one
+                                         flat list and what the save sees is unchanged. -->
+                                    <div class="px-6 pt-4 pb-2 flex items-center justify-between gap-3">
+                                        <div>
+                                            <div class="text-[11px] font-black text-[#3d2610] uppercase tracking-widest">Transfers</div>
+                                            <div class="text-[10px] font-bold text-[#8a7a68] mt-0.5">Seedlings moved from one plot to another on this batch.</div>
+                                        </div>
+                                        <button type="button" onclick="addT6TransferRecord(null)"
+                                            class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e8dcc8]
+                                                   bg-white text-[#3a7ab4] text-[10px] font-black uppercase tracking-widest
+                                                   hover:bg-[#f4f8fc] hover:border-[#3a7ab4] transition-colors">
+                                            <span class="text-sm leading-none">+</span> Add Record
+                                        </button>
+                                    </div>
+
+                                    <div id="t6-tr-head" class="hidden px-6 pb-1">
+                                        <div class="hidden sm:grid t6-tr-cols gap-2 px-3 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">
+                                            <span>From Plot</span><span>Balance</span><span>Date Transferred</span>
+                                            <span>To Plot</span><span>Quantity</span><span></span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Every plot's container, and one for a record whose source
+                                         has not been chosen yet, all rendering as a single list. -->
+                                    <div id="t6-transferdata-rows" class="px-6 pb-4 flex flex-col gap-2"></div>
+
+                                    <div id="t6-transferdata-empty" class="px-6 pb-6 pt-2">
                                         <div class="border-2 border-dashed border-[#e8dcc8] rounded-xl p-8 text-center text-[#8a7a68]">
-                                            <div class="text-3xl mb-2">↘</div>
-                                            <div class="text-xs font-black uppercase tracking-widest">No plots yet.</div>
-                                            <div class="text-[10px] font-bold mt-1">Plots appear here once Main Culling has data.</div>
+                                            <div class="text-xs font-black uppercase tracking-widest">No transfer record</div>
+                                            <div class="text-[10px] font-bold mt-1">Press Add Record to move seedlings from one plot to another.</div>
                                         </div>
                                     </div>
 
@@ -7622,9 +7667,17 @@ Thank you.`;
                                 <div class="text-lg font-black text-[#3d2610] leading-tight">${p.plot}</div>
                                 ${showTypeLabel ? `<div class="text-[9px] font-bold text-[#8a7a68] uppercase tracking-widest">${typeLabel}</div>` : ''}
                                 <div class="flex items-center gap-3 mt-1">
-                                    <div>
-                                        <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest">Transplanted</div>
-                                        <div class="text-base font-black text-[#3d2610] tabular-nums">${t6Fmt(p.qty)}</div>
+                                    <!-- On a "-R" plot this figure is not a transplant, it is
+                                         the total moved in — possibly from several plots. Press
+                                         it to see which. -->
+                                    <div class="t6-dest-cell relative">
+                                        <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest">${p.isTransferRow ? 'Total Qty' : 'Transplanted'}</div>
+                                        ${p.isTransferRow
+                                            ? `<button type="button" onclick="toggleT6DestSources(this)" title="From which plots?"
+                                                    class="t6-dest-qty text-base font-black text-[#3d2610] tabular-nums underline decoration-dotted underline-offset-4
+                                                           hover:text-[#0891b2] cursor-pointer bg-transparent border-0 p-0 font-[inherit]">${t6Fmt(p.qty)}</button>
+                                               <div class="t6-dest-from hidden absolute z-20 left-0 top-full mt-1 min-w-[140px] bg-white border border-[#e8dcc8] rounded-xl shadow-lg p-2 space-y-1"></div>`
+                                            : `<div class="text-base font-black text-[#3d2610] tabular-nums">${t6Fmt(p.qty)}</div>`}
                                     </div>
                                     <div class="w-px h-7 bg-[#e8dcc8]"></div>
                                     <div>
@@ -7770,75 +7823,32 @@ Thank you.`;
                 // Reuses the same t6-row-N-transfers ids the
                 // save loop and recalcT6Transfer already know how to find —
                 // only WHERE they render moved, not how they're read.
-                tdataContainer.insertAdjacentHTML('beforeend', `
-                    <div id="${rowId}-tdata" class="border bg-[#fdfaf4] border-[#e8dcc8] rounded-xl overflow-hidden">
-                        <div class="p-4">
-
-                            <!-- The plot, and what it is holding, as the card's HEADING.
-                                 They were two narrow columns beside the lines, set at the
-                                 same size as everything else — so the thing the card is
-                                 about read as small print. Name over figure, both bigger,
-                                 the way a plot is written on a Main Culling row. -->
-                            <div class="flex flex-wrap items-end justify-between gap-3 pb-3 mb-3 border-b border-[#e8dcc8]">
-                                <div>
-                                    <div class="text-xl font-black text-[#3d2610] leading-none">${p.plot}</div>
-                                    ${p.isTransferRow ? `<div class="text-[8px] font-black text-[#0891b2] uppercase tracking-widest mt-1">Transfer Plot</div>` : ''}
-                                    <div class="mt-2">
-                                        <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Balance</div>
-                                        <!-- Transplanted less Sales, and NOT less the 2nd cull.
-                                             What this plot can still send somewhere is what is
-                                             standing in it; the 2nd cull took its share long
-                                             before any of this, and taking it off again made the
-                                             figure smaller than the quantity actually there to
-                                             move. -->
-                                        <div class="text-2xl font-black text-[#3d2610] leading-none tabular-nums" id="${rowId}-tdata-balance"
-                                             title="Transplanted less Sales. Fixed — does not deduct the 2nd cull, does not deduct the transfers keyed in below, and is not linked to Main Culling's Balance.">${t6Fmt(moveBal)}</div>
-                                    </div>
-                                </div>
-                                <button type="button" onclick="addT6TransferRecord(${i})"
-                                    class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e8dcc8]
-                                           bg-white text-[#3a7ab4] text-[10px] font-black uppercase tracking-widest
-                                           hover:bg-[#f4f8fc] hover:border-[#3a7ab4] transition-colors">
-                                    <span class="text-sm leading-none">+</span> Add Record
-                                </button>
-                            </div>
-
-                            <!-- The column names belong to the lines under them, so they
-                                 appear with the first line and not before it. A plot with
-                                 nothing transferred out of it is most plots, and five
-                                 headings over an empty space said nothing except that the
-                                 space was empty.
-
-                                 Two elements, deliberately: the OUTER one is what
-                                 "are there any lines?" toggles, the inner one is what
-                                 "is this a phone?" toggles. Put on one element the two
-                                 rules fight — hidden sm:grid brings the headings back
-                                 at every width above small, whatever the first rule
-                                 decided. -->
-                            <div id="${rowId}-tr-head" class="hidden">
-                                <div class="hidden sm:grid ${T6_TR_COLS} gap-2 px-3 pb-1 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">
-                                    <span>Date Transferred</span><span>To Plot</span><span>Quantity</span>
-                                    <span class="text-[#3a7ab4]">Sales</span><span>Balance</span><span></span>
-                                </div>
-                            </div>
-                            <div id="${rowId}-transfers" class="flex flex-col gap-2"></div>
-                            <!-- Wanted back after it was taken away, and rightly: an empty
-                                 list and a list that failed to draw look identical, and only
-                                 one of them is fine. -->
-                            <div id="${rowId}-tr-none" class="text-[11px] font-bold text-[#8a7a68] py-1">No transfer record</div>
-                        </div>
-                    </div>
-                `);
+                /* No card, no heading, no Add Record of its own — just the plot's
+                   bucket. It is display:contents, so any record inside it joins
+                   the one flat list above; but the record is still INSIDE it,
+                   which is how saveTab6() knows which plot the movement left. */
+                tdataContainer.insertAdjacentHTML('beforeend',
+                    `<div id="${rowId}-transfers" class="t6-tr-bucket" data-plot="${_escAttr(p.plot)}"></div>`);
             });
 
             // Restore saved transfer selections (select options exist only
             // after insertion, so values are set here rather than inline).
+            /* A record whose source has not been chosen yet needs somewhere to
+               live between Add Record and the first decision. Appended after
+               every plot's bucket so a new one appears at the FOOT of the list,
+               which is where the eye goes after pressing a button at the top. */
+            tdataContainer.insertAdjacentHTML('beforeend',
+                '<div id="t6-tr-unfiled" class="t6-tr-bucket"></div>');
+
             t6_plotData.forEach((p, i) => {
                 (p.savedTransfers || []).forEach(t => addT6TransferRecord(i, t));
-                syncT6TransferEmpty(i);
                 // A row that arrives folded has to arrive saying something.
                 t6PaintPlotRow(document.getElementById(`t6-row-${i}`));
             });
+            // The list's headings, its empty panel, and the destinations below
+            // it — all of them read the whole list, so they are settled once,
+            // after every saved movement is in.
+            syncT6TransferList();
 
             // Restore previously-uploaded drone maps / docs.
             t6_plotData.forEach((p, i) => {
@@ -8055,59 +8065,6 @@ Thank you.`;
         /* One movement out of a plot: when, where to, how many. A plot can send
            seedlings out more than once, on different days, so these are rows in
            a list rather than a single pair of fields on the plot. */
-        /* A transfer line is READ far more often than it is changed, so it
-           reads as a line — date, where to, how many, and what happened at the
-           other end — with Edit and Del beside it. Pressing Edit opens the
-           same three fields that used to be permanently on show.
-
-           The fields are always in the document, merely folded away, because
-           saveTab6() reads .t6-tr-date / .t6-tr-plot / .t6-tr-qty straight out
-           of it and then replaces the batch's transfer logs with what it found.
-           A field that is not there is a field that reads as blank, and blank
-           is how a movement gets dropped. */
-        function t6TransferRecordHtml(rowIdx, rec) {
-            rec = rec || {};
-            const isNew = !rec.date && rec.qty == null;
-            return `
-                <div class="t6-transfer-rec rounded-xl border border-[#efe6d6] bg-white">
-                    <!-- Folded: the line as somebody reads it -->
-                    <div class="t6-tr-view ${isNew ? 'hidden' : ''} grid grid-cols-2 sm:${T6_TR_COLS} gap-2 items-center px-3 py-2.5">
-                        <div class="text-sm font-black text-[#3d2610] tabular-nums t6-tr-v-date">—</div>
-                        <div class="text-sm font-black text-[#0891b2] t6-tr-v-plot">—</div>
-                        <div class="text-sm font-black text-[#4a7a2e] tabular-nums t6-tr-v-qty">—</div>
-                        <div class="text-sm font-black text-[#3a7ab4] tabular-nums t6-tr-v-sales">—</div>
-                        <div class="text-sm font-black text-[#3d2610] tabular-nums t6-tr-v-bal">—</div>
-                        <div class="flex gap-1 justify-end">
-                            <button type="button" title="Change this line"
-                                class="px-2 py-1 bg-white border border-[#d8cbb4] text-[#5b4a33] text-[9px] font-black uppercase tracking-widest rounded hover:bg-[#f5efe4]"
-                                onclick="toggleT6TransferEdit(this, true)">Edit</button>
-                            <button type="button" title="Remove this line"
-                                class="px-2 py-1 bg-[#fff5f5] border border-[#f8d7da] text-[#a83020] text-[9px] font-black uppercase tracking-widest rounded hover:bg-[#f8d7da]"
-                                onclick="removeT6TransferRecord(this, ${rowIdx})">Del</button>
-                        </div>
-                    </div>
-                    <!-- Open: the same line, editable -->
-                    <div class="t6-tr-edit ${isNew ? '' : 'hidden'} grid grid-cols-1 sm:${T6_TR_COLS} gap-2 items-center px-3 py-2.5 bg-[#fdfaf4] rounded-xl">
-                        <input type="date" class="input-style t6-tr-date !text-sm !py-2.5"
-                            value="${rec.date || ''}" onchange="recalcT6Transfer(${rowIdx})">
-                        <div class="select-wrapper w-full"><select class="input-style !text-[#0891b2] t6-tr-plot !text-sm !py-2.5 w-full"
-                            onchange="recalcT6Transfer(${rowIdx})">${getPlotOptionsHTML()}</select></div>
-                        <input type="number" min="0" class="input-style !text-[#0891b2] font-black t6-tr-qty !text-sm !py-2.5"
-                            placeholder="Qty" value="${rec.qty ?? ''}" oninput="recalcT6Transfer(${rowIdx})">
-                        <div class="text-sm font-black text-[#3a7ab4] tabular-nums t6-tr-v-sales2 hidden sm:block">—</div>
-                        <div class="text-sm font-black text-[#3d2610] tabular-nums t6-tr-v-bal2 hidden sm:block">—</div>
-                        <div class="flex gap-1 justify-end">
-                            <button type="button" title="Done with this line"
-                                class="px-2 py-1 bg-[#f0f8ec] border border-[#c3e6cb] text-[#4a7a2e] text-[9px] font-black uppercase tracking-widest rounded hover:bg-[#c3e6cb]"
-                                onclick="toggleT6TransferEdit(this, false)">Done</button>
-                            <button type="button" title="Remove this line"
-                                class="px-2 py-1 bg-[#fff5f5] border border-[#f8d7da] text-[#a83020] text-[9px] font-black uppercase tracking-widest rounded hover:bg-[#f8d7da]"
-                                onclick="removeT6TransferRecord(this, ${rowIdx})">Del</button>
-                        </div>
-                    </div>
-                </div>`;
-        }
-
         /* Fold a whole plot row open or shut, and keep its folded face true.
 
            The open half stays in the document either way — every calculation,
@@ -8158,58 +8115,135 @@ Thank you.`;
             put('.t6-v-date', val('.t6-cull-date') || '—');
         }
 
-        /* Fold one line open or shut. A line with nothing keyed into it yet
-           cannot fold — there would be nothing to read — so Done on an empty
-           line leaves it open rather than hiding a half-made record. */
-        function toggleT6TransferEdit(btn, open) {
-            const rec = btn.closest('.t6-transfer-rec');
-            if (!rec) return;
-            if (!open) {
-                const plot = rec.querySelector('.t6-tr-plot')?.value || '';
-                const qty  = parseInt(rec.querySelector('.t6-tr-qty')?.value) || 0;
-                if (!plot || qty <= 0) return;
-            }
-            rec.querySelector('.t6-tr-edit').classList.toggle('hidden', !open);
-            rec.querySelector('.t6-tr-view').classList.toggle('hidden', open);
-            t6PaintTransferRec(rec);
+        /* ONE MOVEMENT: which plot it left, how many that plot has to give,
+           when, where to, how many.
+
+           The source plot is chosen ON the record. Picking one moves this
+           element into that plot's bucket, which is where saveTab6() looks to
+           decide what "From:" to write — so the picker is not decoration, it
+           is the thing that files the record.
+
+           Balance is the source plot's, filled in the moment it is chosen and
+           read-only: it is Transplanted less Sales, what the plot has standing
+           and could still send. */
+        function t6TransferRecordHtml(rec) {
+            rec = rec || {};
+            return `
+                <div class="t6-transfer-rec grid grid-cols-1 sm:grid-cols-none sm:t6-tr-cols gap-2 items-center
+                            rounded-xl border border-[#efe6d6] bg-white px-3 py-2.5">
+                    <div class="select-wrapper w-full"><select class="input-style t6-tr-src !text-sm !py-2.5 w-full"
+                        onchange="onT6TransferSourceChange(this)">
+                        <option value="">Choose plot…</option>${t6SourcePlotOptions()}</select></div>
+                    <div class="text-sm font-black text-[#3d2610] tabular-nums t6-tr-srcbal"
+                         title="What that plot has standing: Transplanted less Sales.">—</div>
+                    <input type="date" class="input-style t6-tr-date !text-sm !py-2.5"
+                        onchange="recalcT6TransferFor(this)">
+                    <div class="select-wrapper w-full"><select class="input-style !text-[#0891b2] t6-tr-plot !text-sm !py-2.5 w-full"
+                        onchange="recalcT6TransferFor(this)">${getPlotOptionsHTML()}</select></div>
+                    <input type="number" min="0" class="input-style !text-[#0891b2] font-black t6-tr-qty !text-sm !py-2.5"
+                        placeholder="Qty" value="${rec.qty ?? ''}" oninput="recalcT6TransferFor(this)">
+                    <div class="flex justify-end">
+                        <button type="button" title="Remove this movement"
+                            class="w-8 h-8 bg-[#fff5f5] border border-[#f8d7da] text-[#a83020] rounded-lg hover:bg-[#f8d7da] text-sm font-black flex items-center justify-center"
+                            onclick="removeT6TransferRecord(this)">✕</button>
+                    </div>
+                </div>`;
         }
 
-        /* Copy one line's fields onto its folded face, and fetch the figures
-           for the plot it lands in. Called whenever anything on the line
-           changes, so the folded view is never a stale copy of the open one. */
+        /* The plots a movement can leave FROM: every plot on the batch, in the
+           order the report lists them, named exactly as t6_plotData names them
+           so the value can be matched straight back to a row. */
+        function t6SourcePlotOptions() {
+            return t6_plotData.map((p, i) =>
+                `<option value="${i}">${_t6Esc(p.plot)}</option>`).join('');
+        }
+
+        /** Which plot's bucket a record is sitting in, or -1 while it has none. */
+        function t6RecOwner(el) {
+            const bucket = el.closest('.t6-tr-bucket');
+            const m = bucket ? /^t6-row-(\d+)-transfers$/.exec(bucket.id) : null;
+            return m ? parseInt(m[1], 10) : -1;
+        }
+
+        /* Choosing the source FILES the record: it moves out of wherever it was
+           and into that plot's bucket. Both the old owner and the new one are
+           recalculated, because one has just lost a movement and the other has
+           just gained one. */
+        function onT6TransferSourceChange(sel) {
+            const rec  = sel.closest('.t6-transfer-rec');
+            const from = t6RecOwner(sel);
+            const to   = sel.value === '' ? -1 : parseInt(sel.value, 10);
+
+            const host = to >= 0
+                ? document.getElementById(`t6-row-${to}-transfers`)
+                : document.getElementById('t6-tr-unfiled');
+            if (host && rec.parentElement !== host) host.appendChild(rec);
+
+            t6PaintTransferRec(rec);
+            if (from >= 0) recalcT6Transfer(from);
+            if (to   >= 0) recalcT6Transfer(to);
+            syncT6TransferList();
+        }
+
+        /** Recalculate whichever plot the record that fired this belongs to. */
+        function recalcT6TransferFor(el) {
+            const rec = el.closest('.t6-transfer-rec');
+            if (rec) t6PaintTransferRec(rec);
+            const idx = t6RecOwner(el);
+            if (idx >= 0) recalcT6Transfer(idx);
+            syncT6TransferList();
+        }
+
+        /* Fill in what a record can work out for itself: the source plot's
+           balance. Everything else on the row is typed. */
         function t6PaintTransferRec(rec) {
             if (!rec) return;
-            const date = rec.querySelector('.t6-tr-date')?.value || '';
-            const plot = rec.querySelector('.t6-tr-plot')?.value || '';
-            const qty  = rec.querySelector('.t6-tr-qty')?.value;
-            const set  = (sel, txt) => rec.querySelectorAll(sel).forEach(el => { el.innerText = txt; });
-            set('.t6-tr-v-date', date || '—');
-            set('.t6-tr-v-plot', plot || '—');
-            set('.t6-tr-v-qty',  qty === '' || qty == null ? '—' : t6Fmt(parseInt(qty) || 0));
-
-            const dest = plot ? t6DestFigures(plot) : null;
-            set('.t6-tr-v-sales, .t6-tr-v-sales2', dest ? t6Fmt(dest.sales) : '—');
-            set('.t6-tr-v-bal, .t6-tr-v-bal2',     dest ? t6Fmt(dest.bal)   : '—');
+            const idx  = t6RecOwner(rec);
+            const bal  = rec.querySelector('.t6-tr-srcbal');
+            if (bal) {
+                const p = idx >= 0 ? t6_plotData[idx] : null;
+                bal.innerText = p ? t6Fmt(t6MoveBalance(p)) : '—';
+                bal.title = p
+                    ? `${p.plot}: Transplanted less Sales — what it has standing and could send.`
+                    : 'Choose the plot this movement left.';
+            }
         }
 
+        /**
+         * Add one movement.
+         *
+         * @param {number|null} rowIdx  the plot it left, when it is already
+         *   known — a saved record being restored. null puts the record in the
+         *   unfiled bucket for somebody to say where it came from.
+         * @param {object} [rec]  { target, qty, date } of a saved movement.
+         */
         function addT6TransferRecord(rowIdx, rec) {
-            const host = document.getElementById(`t6-row-${rowIdx}-transfers`);
+            const host = (rowIdx === null || rowIdx === undefined)
+                ? document.getElementById('t6-tr-unfiled')
+                : document.getElementById(`t6-row-${rowIdx}-transfers`);
             if (!host) return;
-            const body = document.getElementById(`t6-row-${rowIdx}-tr-body`);
-            if (body && body.classList.contains('hidden')) toggleT6TransferPanel(rowIdx);
-            host.insertAdjacentHTML('beforeend', t6TransferRecordHtml(rowIdx, rec));
+            host.insertAdjacentHTML('beforeend', t6TransferRecordHtml(rec));
+            const el = host.lastElementChild;
+
             // The options only exist once the markup is in the document.
+            const src = el.querySelector('.t6-tr-src');
+            if (src && rowIdx !== null && rowIdx !== undefined) src.value = String(rowIdx);
+
+            if (rec && rec.date) {
+                const d = el.querySelector('.t6-tr-date');
+                if (d) d.value = rec.date;
+            }
             if (rec && rec.target) {
-                const sel = host.lastElementChild.querySelector('.t6-tr-plot');
+                const sel = el.querySelector('.t6-tr-plot');
                 if (sel) {
                     sel.value = rec.target;
                     /* A saved movement names a plot that the dropdown may no
-                       longer offer — a plot renamed, retired, or belonging to
-                       another nursery. Assigning a value a <select> does not
-                       have fails SILENTLY and leaves it blank, and saveTab6()
-                       skips a line with no plot: the movement would vanish
-                       from the batch on the next save, without a word. So the
-                       plot it actually names is put back on the list. */
+                       longer offer — renamed, retired, or in another nursery.
+                       Assigning a value a <select> does not have fails SILENTLY
+                       and leaves it blank, and saveTab6() skips a line with no
+                       plot: the movement would vanish from the batch on the
+                       next save, without a word. So the plot it actually names
+                       is put back on the list. */
                     if (sel.value !== rec.target) {
                         sel.insertAdjacentHTML('beforeend',
                             `<option value="${_escAttr(rec.target)}">${_t6Esc(rec.target)}</option>`);
@@ -8217,70 +8251,96 @@ Thank you.`;
                     }
                 }
             }
-            // …and the folded face is only right once the value is on the select.
-            t6PaintTransferRec(host.lastElementChild);
-            syncT6TransferEmpty(rowIdx);
-            recalcT6Transfer(rowIdx);
+
+            t6PaintTransferRec(el);
+            syncT6TransferList();
+            if (rowIdx !== null && rowIdx !== undefined) recalcT6Transfer(rowIdx);
+            // A brand-new record: put the cursor where the first decision is.
+            if (!rec && src) src.focus();
         }
 
-        function removeT6TransferRecord(btn, rowIdx) {
+        function removeT6TransferRecord(btn) {
             const rec = btn.closest('.t6-transfer-rec');
+            const idx = rec ? t6RecOwner(rec) : -1;
             if (rec) rec.remove();
-            syncT6TransferEmpty(rowIdx);
-            recalcT6Transfer(rowIdx);
+            syncT6TransferList();
+            if (idx >= 0) recalcT6Transfer(idx);
         }
 
-        /* What a plot's transfer list shows when it is empty: nothing but the
-           Add Record button.
-
-           It used to carry the column headings, a "No transfer recorded." line
-           and a (n) tally. Most plots transfer nothing out, so on most rows all
-           three were furniture around an empty space — and the tally counted
-           what was already on screen right beside it.
-
-           A plot that only exists BECAUSE something was transferred INTO it is
-           dropped from this list altogether: it is the far end of a movement
-           already keyed on the plot that sent it, and listing it invites the
-           same movement being keyed twice, once from each end.
-
-           Dropped from the LIST, never from the page. The row stays in the DOM
-           with its inputs, because saveTab6() reads every plot's transfers out
-           of `#t6-row-N-transfers` and then REPLACES the batch's Cull3_Transfer
-           logs with what it found. A row that is not in the document is a row
-           whose transfers are not found — and the save would quietly delete
-           them. So it is hidden, and any -R plot that does have movements of
-           its own stays visible rather than becoming invisible and
-           un-deletable. */
-        /* Whether the Transfer Data tab has anything to show at all.
-           Every plot on the batch can be a transfer destination — a batch whose
-           whole story is "it was moved here" — and then every card is hidden
-           and the tab is a blank rectangle. The placeholder that was written
-           for "no plots" says the right thing here too. */
-        function syncT6TransferDataEmpty() {
-            const rows  = document.getElementById('t6-transferdata-rows');
+        /* The list's own furniture: column headings when there is at least one
+           record, and the "no transfer record" panel when there is none. */
+        function syncT6TransferList() {
+            const rows = document.getElementById('t6-transferdata-rows');
+            if (!rows) return;
+            const n = rows.querySelectorAll('.t6-transfer-rec').length;
+            const head  = document.getElementById('t6-tr-head');
             const empty = document.getElementById('t6-transferdata-empty');
-            if (!rows || !empty) return;
-            const shown = Array.from(rows.children).some(el => !el.classList.contains('hidden'));
-            empty.classList.toggle('hidden', shown);
+            if (head)  head.classList.toggle('hidden', n === 0);
+            if (empty) empty.classList.toggle('hidden', n > 0);
+            syncT6TransferDests();
         }
 
-        function syncT6TransferEmpty(rowIdx) {
-            const host = document.getElementById(`t6-row-${rowIdx}-transfers`);
-            if (!host) return;
-            const n = host.children.length;
+        /* WHERE THE MOVEMENTS LANDED.
 
-            const head = document.getElementById(`t6-row-${rowIdx}-tr-head`);
-            if (head) head.classList.toggle('hidden', n === 0);
+           One row per destination plot, whatever it took to fill it: two plots
+           sending into N18-R is one N18-R, with one quantity, one sales figure
+           and one balance — so the quantities COMBINE. Pressing the quantity
+           says where it came from, which is the only reason anybody would want
+           them apart.
 
-            const none = document.getElementById(`t6-row-${rowIdx}-tr-none`);
-            if (none) none.classList.toggle('hidden', n > 0);
+           The rows themselves are the -R plot rows the report already builds;
+           this only keeps their quantity in step with the movements as they are
+           keyed, and hides the ones nothing has been sent to yet. */
+        function t6TransferDests() {
+            const by = new Map();
+            document.querySelectorAll('#t6-transferdata-rows .t6-transfer-rec').forEach(rec => {
+                const target = rec.querySelector('.t6-tr-plot')?.value || '';
+                const qty    = parseInt(rec.querySelector('.t6-tr-qty')?.value) || 0;
+                const owner  = t6RecOwner(rec);
+                if (!target || qty <= 0 || owner < 0) return;      // still being filled in
+                const key = _t6PlotKey(target);
+                const cur = by.get(key) || { plot: target, qty: 0, from: [] };
+                cur.qty += qty;
+                cur.from.push({ plot: (t6_plotData[owner] || {}).plot || '—', qty });
+                by.set(key, cur);
+            });
+            return by;
+        }
 
-            const card = document.getElementById(`t6-row-${rowIdx}-tdata`);
-            if (card) {
-                const isDestination = !!(t6_plotData[rowIdx] || {}).isTransferRow;
-                card.classList.toggle('hidden', isDestination && n === 0);
-            }
-            syncT6TransferDataEmpty();
+        function syncT6TransferDests() {
+            const dests = t6TransferDests();
+            t6_plotData.forEach((p, i) => {
+                if (!p.isTransferRow) return;
+                const row = document.getElementById(`t6-row-${i}`);
+                if (!row) return;
+                const d = dests.get(_t6PlotKey(p.plot));
+                // A destination with nothing sent to it yet is not a plot on
+                // this batch. Hidden, not removed — saveTab6() still reads it.
+                row.classList.toggle('hidden', !d);
+                const cell = row.querySelector('.t6-dest-qty');
+                if (cell && d) {
+                    cell.innerText = t6Fmt(d.qty);
+                    cell.dataset.from = JSON.stringify(d.from);
+                }
+            });
+            const empty = document.getElementById('t6-transferplot-empty');
+            if (empty) empty.classList.toggle('hidden', dests.size > 0);
+        }
+
+        /** Press the quantity: how much came from where. */
+        function toggleT6DestSources(btn) {
+            const wrap = btn.closest('.t6-dest-cell');
+            const list = wrap && wrap.querySelector('.t6-dest-from');
+            if (!list) return;
+            let from = [];
+            try { from = JSON.parse(btn.dataset.from || '[]'); } catch (e) { from = []; }
+            if (!from.length) return;
+            list.innerHTML = from.map(f =>
+                `<div class="flex items-baseline justify-between gap-3">
+                    <span class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">${_t6Esc(f.plot)}</span>
+                    <span class="text-[11px] font-black text-[#0891b2] tabular-nums">${t6Fmt(f.qty)}</span>
+                 </div>`).join('');
+            list.classList.toggle('hidden');
         }
 
         /* Fold a plot's transfer list away. Visual only — the lines stay in the
