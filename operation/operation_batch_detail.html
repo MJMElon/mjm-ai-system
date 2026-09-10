@@ -7578,30 +7578,35 @@ Thank you.`;
                             <!-- Folded, the plot still says what went in and what the 2nd cull
                                  took — written out, not abbreviated. "2,812 in · 26 2nd" saved
                                  a line and cost the reader the two words that say which figure
-                                 is which. Same two labelled figures as the open row, set
-                                 smaller. -->
+                                 is which.
+
+                                 Set at the SAME sizes as the open row, not smaller. Folded is
+                                 how this tab is normally read, so it is the version that has to
+                                 be readable — shrinking it to signal "this row is closed" only
+                                 made the figures people actually look at the hardest ones to
+                                 see. Nothing here is a summary of the row; it IS the row. -->
                             <div class="min-w-0">
-                                <div class="text-base font-black text-[#3d2610] leading-tight truncate">${p.plot}</div>
+                                <div class="text-lg font-black text-[#3d2610] leading-tight truncate">${p.plot}</div>
                                 <div class="flex items-center gap-2 mt-0.5">
                                     <div>
-                                        <div class="text-[7px] font-black text-[#8a7a68] uppercase tracking-widest leading-none">Transplanted</div>
-                                        <div class="text-[11px] font-black text-[#3d2610] tabular-nums leading-tight">${t6Fmt(p.qty)}</div>
+                                        <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest leading-none">Transplanted</div>
+                                        <div class="text-sm font-black text-[#3d2610] tabular-nums leading-tight">${t6Fmt(p.qty)}</div>
                                     </div>
-                                    <div class="w-px h-5 bg-[#e8dcc8]"></div>
+                                    <div class="w-px h-6 bg-[#e8dcc8]"></div>
                                     <div>
-                                        <div class="text-[7px] font-black text-[#a83020] uppercase tracking-widest leading-none">2nd Culled</div>
-                                        <div class="text-[11px] font-black text-[#a83020] tabular-nums leading-tight">${t6Fmt(dead2)}</div>
+                                        <div class="text-[8px] font-black text-[#a83020] uppercase tracking-widest leading-none">2nd Culled</div>
+                                        <div class="text-sm font-black text-[#a83020] tabular-nums leading-tight">${t6Fmt(dead2)}</div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="text-sm font-black text-[#3a7ab4] tabular-nums t6-v-sales">—</div>
-                            <div class="text-sm font-black text-[#0891b2] tabular-nums t6-v-moved">—</div>
+                            <div class="text-base font-black text-[#3a7ab4] tabular-nums t6-v-sales">—</div>
+                            <div class="text-base font-black text-[#0891b2] tabular-nums t6-v-moved">—</div>
                             <div>
-                                <div class="text-sm font-black text-[#a83020] tabular-nums t6-v-culled">—</div>
-                                <div class="text-[10px] font-black text-[#8a7a68] tabular-nums t6-v-rate">—</div>
+                                <div class="text-base font-black text-[#a83020] tabular-nums t6-v-culled">—</div>
+                                <div class="text-[11px] font-black text-[#8a7a68] tabular-nums t6-v-rate">—</div>
                             </div>
-                            <div class="text-[11px] font-black text-[#4a7a2e] uppercase tracking-widest truncate t6-v-map">—</div>
-                            <div class="text-[11px] font-black text-[#3d2610] tabular-nums truncate t6-v-date">—</div>
+                            <div class="text-base font-black text-[#4a7a2e] tabular-nums truncate t6-v-map">—</div>
+                            <div class="text-sm font-black text-[#3d2610] tabular-nums truncate t6-v-date">—</div>
                             <div class="flex justify-end">
                                 <button type="button" title="Open this plot"
                                     class="shrink-0 px-2 py-1 bg-white border border-[#d8cbb4] text-[#5b4a33] text-[9px] font-black uppercase tracking-widest rounded hover:bg-[#f5efe4]"
