@@ -910,6 +910,7 @@ $('cf-ok').addEventListener('click', async () => {
     /* Re-read rather than patch: last update, the new due date and the days
        left all come off the log, and the server is the record. */
     LOGS = await MJMPalms.loadLogs(_supabase);
+    await MJMPalms.loadSaves(_supabase);
     btn.disabled = false;
     closeCf(false);
     render();
@@ -1004,6 +1005,11 @@ function render() {
        computed against the built-in eleven. */
     await MJMPalms.loadStages(_supabase);
     LOGS = await MJMPalms.loadLogs(_supabase);
+    /* The daily reports, which is where "last update" comes from: a Field
+       Conductor's Save records every plot in the nursery, changed or not, so
+       an unchanged plot is still a plot somebody looked at today. Its own
+       await and its own failure — the column falls back to entry dates. */
+    await MJMPalms.loadSaves(_supabase);
 
     PAL = buildPhases();
     MAP = MJMPlotMap.create({

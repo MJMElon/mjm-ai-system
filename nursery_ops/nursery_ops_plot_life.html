@@ -603,6 +603,10 @@ async function loadAllStatuses() {
     // before the log is parsed.
     await MJMPalms.loadStages(_supabase);
     const logs = await MJMPalms.loadLogs(_supabase);
+    // The daily reports, so "last reported" here means the same thing it
+    // means on the board: when somebody last saved this plot, not when its
+    // current stage started. Best effort — it falls back on its own.
+    await MJMPalms.loadSaves(_supabase);
     PALMS_LOGS = logs;
 
     /* PALMS logs against a UNIT — the plot while it is whole ("B2") and
