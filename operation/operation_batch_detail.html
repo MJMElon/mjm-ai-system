@@ -7666,26 +7666,40 @@ Thank you.`;
                                  be readable — shrinking it to signal "this row is closed" only
                                  made the figures people actually look at the hardest ones to
                                  see. Nothing here is a summary of the row; it IS the row. -->
+                            <!-- A "-R" plot folded says the six things that are true of it:
+                                 which plot, what came in, what was sold, what is left to
+                                 cull, whether it has been, and — from the two cells after
+                                 this — the map quantity and the date. No 2nd cull: nothing
+                                 was second-culled in a plot the seedlings only just reached. -->
                             <div class="min-w-0">
                                 <div class="text-lg font-black text-[#3d2610] leading-tight truncate">${p.plot}</div>
                                 <div class="flex items-center gap-2 mt-0.5">
                                     <div>
-                                        <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest leading-none">Transplanted</div>
+                                        <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest leading-none">${p.isTransferRow ? 'Transferred' : 'Transplanted'}</div>
                                         <div class="text-sm font-black text-[#3d2610] tabular-nums leading-tight">${t6Fmt(p.qty)}</div>
                                     </div>
-                                    <div class="w-px h-6 bg-[#e8dcc8]"></div>
+                                    ${p.isTransferRow ? '' : `<div class="w-px h-6 bg-[#e8dcc8]"></div>
                                     <div>
                                         <div class="text-[8px] font-black text-[#a83020] uppercase tracking-widest leading-none">2nd Culled</div>
                                         <div class="text-sm font-black text-[#a83020] tabular-nums leading-tight">${t6Fmt(dead2)}</div>
-                                    </div>
+                                    </div>`}
                                 </div>
                             </div>
                             <div class="text-base font-black text-[#3a7ab4] tabular-nums t6-v-sales">—</div>
-                            <div class="text-base font-black text-[#0891b2] tabular-nums t6-v-moved">—</div>
-                            <div>
-                                <div class="text-base font-black text-[#a83020] tabular-nums t6-v-culled">—</div>
-                                <div class="text-[11px] font-black text-[#8a7a68] tabular-nums t6-v-rate">—</div>
-                            </div>
+                            ${p.isTransferRow
+                                ? `<div class="text-base font-black text-[#a83020] tabular-nums t6-v-rcull">—</div>
+                                   <div class="t6-v-culledask">${soldOut
+                                        ? `<span class="text-[10px] font-black text-[#4a7a2e] uppercase tracking-widest">All Sold Out</span>`
+                                        : `<button type="button" onclick="t6FoldedCulled(this)"
+                                                class="t6-v-ask px-3 py-1.5 rounded-lg border border-[#c3e6cb] bg-[#f0f8ec] text-[#4a7a2e]
+                                                       text-[10px] font-black uppercase tracking-widest hover:bg-[#c3e6cb] ${rCulled ? 'hidden' : ''}">Culled?</button>
+                                           <span class="t6-v-yes text-[10px] font-black text-[#4a7a2e] uppercase tracking-widest ${rCulled ? '' : 'hidden'}">Culled</span>`}
+                                   </div>`
+                                : `<div class="text-base font-black text-[#0891b2] tabular-nums t6-v-moved">—</div>
+                                   <div>
+                                       <div class="text-base font-black text-[#a83020] tabular-nums t6-v-culled">—</div>
+                                       <div class="text-[11px] font-black text-[#8a7a68] tabular-nums t6-v-rate">—</div>
+                                   </div>`}
                             <div class="text-base font-black text-[#4a7a2e] tabular-nums truncate t6-v-map">—</div>
                             <div class="text-sm font-black text-[#3d2610] tabular-nums truncate t6-v-date">—</div>
                             <div class="flex justify-end">
@@ -7720,11 +7734,11 @@ Thank you.`;
                                                <div class="t6-dest-from hidden absolute z-20 left-0 top-full mt-1 min-w-[140px] bg-white border border-[#e8dcc8] rounded-xl shadow-lg p-2 space-y-1"></div>`
                                             : `<div class="text-base font-black text-[#3d2610] tabular-nums">${t6Fmt(p.qty)}</div>`}
                                     </div>
-                                    <div class="w-px h-7 bg-[#e8dcc8]"></div>
+                                    ${p.isTransferRow ? '' : `<div class="w-px h-7 bg-[#e8dcc8]"></div>
                                     <div>
                                         <div class="text-[8px] font-black text-[#a83020] uppercase tracking-widest">2nd Culled</div>
                                         <div class="text-base font-black text-[#a83020] tabular-nums">${t6Fmt(dead2)}</div>
-                                    </div>
+                                    </div>`}
                                 </div>
                                 ${p.transferFrom ? `<div class="text-[8px] font-black text-[#0891b2] uppercase tracking-widest">↘ Transferred from ${p.transferFrom}</div>` : ''}
                                 ${p.isTransferRow ? `<div class="flex gap-1 mt-1">
@@ -8160,6 +8174,21 @@ Thank you.`;
         /* One movement out of a plot: when, where to, how many. A plot can send
            seedlings out more than once, on different days, so these are rows in
            a list rather than a single pair of fields on the plot. */
+        /* Culled? pressed on a FOLDED row. Saying yes is only half of it — the
+           point of saying yes is to key a quantity, a map and a date, and none
+           of those are on the folded line. So it answers the question and
+           opens the row in one press. */
+        function t6FoldedCulled(btn) {
+            const row = btn.closest('.t6-plot-row');
+            if (!row) return;
+            setT6RCulled(btn, true);
+            const open = row.querySelector('.t6-pr-edit .t6-rcull-ask');
+            if (open) setT6RCulled(open, true);
+            row.querySelector('.t6-pr-edit')?.classList.remove('hidden');
+            row.querySelector('.t6-pr-view')?.classList.add('hidden');
+            row.querySelector('.t6-map-qty')?.focus();
+        }
+
         /* Yes, this transferred-into plot has been culled — so let its drone map
            and its culled date be keyed. Until then there is nothing to attach a
            map to and no date to give, and an empty upload zone on every -R plot
@@ -8173,6 +8202,10 @@ Thank you.`;
             if (!row) return;
             row.querySelector('.t6-rcull-ask')?.classList.toggle('hidden', yes);
             row.querySelector('.t6-rcull-yes')?.classList.toggle('hidden', !yes);
+            // …and the same question on the folded line, which is the one most
+            // people will actually be looking at.
+            row.querySelector('.t6-v-ask')?.classList.toggle('hidden', yes);
+            row.querySelector('.t6-v-yes')?.classList.toggle('hidden', !yes);
             row.querySelector('.t6-map-body')?.classList.toggle('hidden', !yes);
             row.querySelector('.t6-date-cell')?.classList.toggle('invisible', !yes);
             if (!yes) {
@@ -8213,6 +8246,8 @@ Thank you.`;
             put('.t6-v-moved',  row.querySelector('.t6-moved-display')?.innerText.trim() || '—');
             const culled = val('.t6-culled-input');
             put('.t6-v-culled', culled === '' ? '—' : t6Fmt(parseInt(culled) || 0));
+            // A "-R" row carries its 3rd Culled figure in the third cell.
+            put('.t6-v-rcull',  culled === '' ? '—' : t6Fmt(parseInt(culled) || 0));
             put('.t6-v-rate',   row.querySelector('.t6-cull-rate-cell')?.innerText.trim() || '—');
 
             /* The map cell is the map's QUANTITY, and pressing it opens the
