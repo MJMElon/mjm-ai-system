@@ -1648,28 +1648,23 @@
                                     </div>
                                 </div>
 
-                                <!-- Totals footer — across every plot, Main + Transfer Plot together -->
-                                <div id="t6-totals-row" class="hidden mx-6 mb-6 mt-4 p-4 bg-[#fdfaf4] rounded-xl border border-[#e8dcc8]">
-                                    <div class="hidden lg:grid gap-2 items-center text-sm font-black t-tidy" style="grid-template-columns: 0.8fr 0.75fr 0.5fr 0.5fr 0.55fr 0.7fr 1.1fr;">
-                                        <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">TOTALS</div>
-                                        <div class="text-[#3d2610]" id="t6-tot-transplanted">0</div>
-                                        <div></div>
-                                        <div></div>
-                                        <div class="text-[#3d2610]" id="t6-tot-balance">—</div>
-                                        <div>
-                                            <div class="text-[#a83020]" id="t6-tot-culled">—</div>
-                                            <div class="text-[11px] text-[#c07820] whitespace-nowrap" id="t6-tot-cull-rate">—</div>
-                                        </div>
-                                        <div></div>
-                                    </div>
-                                    <div class="flex flex-wrap gap-4 lg:hidden text-sm font-black">
-                                        <div><span class="text-[9px] text-[#8a7a68] uppercase block">Transplanted</span><span class="text-[#3d2610]" id="t6-tot-transplanted-m">0</span></div>
-                                        <div><span class="text-[9px] text-[#8a7a68] uppercase block">Remaining</span><span class="text-[#4a7a2e]" id="t6-tot-balance-m">—</span></div>
-                                        <div><span class="text-[9px] text-[#8a7a68] uppercase block">Culled</span><span class="text-[#a83020]" id="t6-tot-culled-m">—</span></div>
-                                        <div><span class="text-[9px] text-[#8a7a68] uppercase block">Avg Cull</span><span class="text-[#c07820]" id="t6-tot-cull-rate-m">—</span></div>
-                                    </div>
+                                <!-- The TOTALS band that sat here is gone. Every figure in it was
+                                     a sum of the rows immediately above, which the rows already
+                                     show, and the batch's headline transplanted / culled / rate
+                                     are on the Analysis Dashboard at the top of this same tab.
+                                     Three places for one set of figures is three chances for
+                                     them to disagree — which is what happened: it read 10,133
+                                     transplanted while 1st Culling read 9,607 for the same batch.
+
+                                     The elements other code writes to are kept, out of sight,
+                                     because a missing element is a thrown error rather than a
+                                     tidier page. -->
+                                <div id="t6-totals-row" class="hidden">
+                                    <span id="t6-tot-transplanted">0</span><span id="t6-tot-transplanted-m">0</span>
+                                    <span id="t6-tot-balance">—</span><span id="t6-tot-balance-m">—</span>
+                                    <span id="t6-tot-culled">—</span><span id="t6-tot-culled-m">—</span>
+                                    <span id="t6-tot-cull-rate">—</span><span id="t6-tot-cull-rate-m">—</span>
                                 </div>
-                            </div>
 
                             <!-- Drone map vs 3rd culled qty — the plots that do not tally.
                                  The report saves either way; an unexplained plot keeps the
@@ -7483,7 +7478,7 @@ Thank you.`;
             // whichever tab happens to be active when this re-renders (a save,
             // a tab switch back).
             const mainSubpanel = document.getElementById('t6-subpanel-main');
-            totalsRow.classList.toggle('hidden', !mainSubpanel || mainSubpanel.classList.contains('hidden'));
+            totalsRow.classList.add('hidden');   // retired — see the markup
             document.getElementById('t6-plot-count').innerText = t6_plotData.length;
             const tp6 = document.getElementById('t6-total-plots'); if (tp6) tp6.innerText = t6_plotData.length;
 
@@ -8427,7 +8422,7 @@ Thank you.`;
             // plots) — they don't mean anything on Transfer data or P-R Culling,
             // so only show the footer there.
             const totalsRow = document.getElementById('t6-totals-row');
-            if (totalsRow) totalsRow.classList.toggle('hidden', name !== 'main' || t6_plotData.length === 0);
+            if (totalsRow) totalsRow.classList.add('hidden');   // retired — see the markup
         }
 
         /* Every plot whose drone map qty is keyed in and disagrees with the
