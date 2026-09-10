@@ -1125,54 +1125,60 @@
 
                                         <div class="flex flex-col md:flex-row gap-5">
                                             <div class="flex-1 min-w-0">
-                                                <!-- Bar -->
-                                                <div class="w-full h-10 bg-[#d4c9b8] rounded-xl overflow-hidden flex shadow-inner relative mb-1">
-                                                    <div id="t3-bar-transplanted-total" class="stacked-segment bg-[#3a7ab4] flex items-center justify-center overflow-hidden transition-all duration-700" style="width:0%">
-                                                        <span id="t3-bar-transplanted-lbl" class="text-[9px] font-black text-white whitespace-nowrap hidden"></span>
-                                                    </div>
-                                                    <div id="t3-bar-cull" class="stacked-segment bg-[#a83020] flex items-center justify-center overflow-hidden transition-all duration-700" style="width:0%">
-                                                        <span id="t3-bar-cull-lbl" class="text-[9px] font-black text-white whitespace-nowrap hidden"></span>
-                                                    </div>
-                                                    <div id="t3-bar-untransplanted" class="stacked-segment flex items-center justify-center overflow-hidden transition-all duration-700" style="width:100%">
-                                                        <span id="t3-bar-untransplanted-lbl" class="text-[9px] font-black text-[#6b5c4e] whitespace-nowrap">100% pending</span>
-                                                    </div>
-                                                    <div id="t3-bar-premium" style="display:none"><span id="t3-bar-premium-lbl"></span></div>
-                                                    <div id="t3-bar-doubletone" style="display:none"><span id="t3-bar-doubletone-lbl"></span></div>
-                                                </div>
-                                                <!-- % labels -->
-                                                <div class="flex text-[9px] font-black gap-3 mb-4">
-                                                    <span class="text-[#3a7ab4]">🌿 Main: <span id="t3-lbl-main-pct">0%</span></span>
-                                                    <span class="text-[#a83020]">✂️ Culled: <span id="t3-lbl-cull-pct">0%</span></span>
-                                                    <span class="text-[#8a7a68]">⏳ Pending: <span id="t3-lbl-pending-pct">100%</span></span>
+                                                <!-- The stacked bar has gone, the same way it went from
+                                                     1st Culling: it drew the same figures the four cards
+                                                     below it already carry, and drew the small ones as
+                                                     slivers too thin to read. The line of percentages
+                                                     under it went with it — every one of those numbers
+                                                     is now the big figure on its own card.
+
+                                                     The elements are still written to by the existing
+                                                     maths, so they stay in the document out of sight
+                                                     rather than being deleted along with every line
+                                                     that sets them. -->
+                                                <div class="hidden">
+                                                    <div id="t3-bar-transplanted-total"><span id="t3-bar-transplanted-lbl"></span></div>
+                                                    <div id="t3-bar-cull"><span id="t3-bar-cull-lbl"></span></div>
+                                                    <div id="t3-bar-untransplanted"><span id="t3-bar-untransplanted-lbl"></span></div>
+                                                    <div id="t3-bar-premium"><span id="t3-bar-premium-lbl"></span></div>
+                                                    <div id="t3-bar-doubletone"><span id="t3-bar-doubletone-lbl"></span></div>
+                                                    <span id="t3-lbl-main-pct">0%</span>
+                                                    <span id="t3-lbl-cull-pct">0%</span>
+                                                    <span id="t3-lbl-pending-pct">100%</span>
                                                 </div>
 
-                                                <!-- 4 stat cards: Main Plot / Main Plot (D-Tone) / Total 1st Culled / Pending -->
-                                                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                                    <div class="bg-[#eef5fc] border border-[#bee3f8] rounded-lg px-3 py-2">
-                                                        <div class="text-[8px] font-black text-[#3a7ab4] uppercase tracking-wide leading-none">Main Plot</div>
-                                                        <div class="text-lg font-black text-[#3a7ab4] mt-1" id="t3-val-main">0</div>
-                                                        <div class="text-[9px] font-bold text-[#8a7a68]" id="t3-val-main-pct">—</div>
+                                                <!-- 4 stat cards — percentage first, count under it.
+                                                     The engine is asking "is all of it allocated", which
+                                                     is a question about proportions; the quantity is how
+                                                     the proportion was arrived at. Names carry no icon:
+                                                     a pictogram in front of every heading is four
+                                                     pictograms, which distinguishes nothing. -->
+                                                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                                    <div class="bg-[#eef5fc] border border-[#bee3f8] rounded-xl px-4 py-3">
+                                                        <div class="text-[11px] font-black text-[#3a7ab4] uppercase tracking-wide leading-tight">Main Plot</div>
+                                                        <div class="text-3xl font-black text-[#3a7ab4] mt-1 tabular-nums leading-none" id="t3-val-main-pct">—</div>
+                                                        <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1" id="t3-val-main">0</div>
                                                     </div>
-                                                    <div class="bg-[#ecfeff] border border-[#a5f3fc] rounded-lg px-3 py-2">
-                                                        <div class="text-[8px] font-black text-[#0891b2] uppercase tracking-wide leading-none">🎯 Main Plot (D-Tone)</div>
-                                                        <div class="text-lg font-black text-[#0891b2] mt-1" id="t3-val-dtone-main">0</div>
-                                                        <div class="text-[9px] font-bold text-[#8a7a68]" id="t3-val-dtone-main-pct">—</div>
+                                                    <div class="bg-[#ecfeff] border border-[#a5f3fc] rounded-xl px-4 py-3">
+                                                        <div class="text-[11px] font-black text-[#0891b2] uppercase tracking-wide leading-tight">Main Plot (D-Tone)</div>
+                                                        <div class="text-3xl font-black text-[#0891b2] mt-1 tabular-nums leading-none" id="t3-val-dtone-main-pct">—</div>
+                                                        <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1" id="t3-val-dtone-main">0</div>
                                                     </div>
-                                                    <div class="bg-[#fff5f5] border border-[#f8d7da] rounded-lg px-3 py-2">
-                                                        <div class="text-[8px] font-black text-[#a83020] uppercase tracking-wide leading-none">✂️ Total 1st Culled</div>
-                                                        <div class="text-lg font-black text-[#a83020] mt-1" id="t3-val-cull">0</div>
-                                                        <div class="text-[9px] font-bold text-[#8a7a68]" id="t3-val-cull-pct">—</div>
+                                                    <div class="bg-[#fff5f5] border border-[#f8d7da] rounded-xl px-4 py-3">
+                                                        <div class="text-[11px] font-black text-[#a83020] uppercase tracking-wide leading-tight">Total 1st Culled</div>
+                                                        <div class="text-3xl font-black text-[#a83020] mt-1 tabular-nums leading-none" id="t3-val-cull-pct">—</div>
+                                                        <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1" id="t3-val-cull">0</div>
                                                     </div>
-                                                    <div class="bg-[#fffaf0] border border-[#fde68a] rounded-lg px-3 py-2">
-                                                        <div class="text-[8px] font-black text-[#c07820] uppercase tracking-wide leading-none">⏳ Pending</div>
-                                                        <div class="text-lg font-black text-[#c07820] mt-1" id="t3-val-untransplanted">0</div>
-                                                        <div class="text-[9px] font-bold text-[#8a7a68]" id="t3-val-pending-pct">—</div>
+                                                    <div class="bg-[#fffaf0] border border-[#fde68a] rounded-xl px-4 py-3">
+                                                        <div class="text-[11px] font-black text-[#c07820] uppercase tracking-wide leading-tight">Pending</div>
+                                                        <div class="text-3xl font-black text-[#c07820] mt-1 tabular-nums leading-none" id="t3-val-pending-pct">—</div>
+                                                        <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1" id="t3-val-untransplanted">0</div>
                                                     </div>
                                                 </div>
 
                                                 <!-- Pending note -->
                                                 <div id="t3-special-note" class="hidden mt-2 text-[9px] font-bold text-[#8a7a68] px-1">
-                                                    ⏳ Pending includes: remaining tray balance + <span class="text-[#9333ea]" id="t3-pending-premium-note"></span><span class="text-[#0891b2]" id="t3-pending-dtone-note"></span>
+                                                    Pending includes: remaining tray balance + <span class="text-[#9333ea]" id="t3-pending-premium-note"></span><span class="text-[#0891b2]" id="t3-pending-dtone-note"></span>
                                                 </div>
                                                 <!-- Hidden value holders -->
                                                 <span id="t3-val-premium" class="hidden">0</span>
@@ -3624,16 +3630,20 @@
             const pctMainExDtone   = allocBase > 0 ? (mainExDtone   / allocBase) * 100 : 0;
             const pctMainFromDtone = allocBase > 0 ? (mainFromDtone / allocBase) * 100 : 0;
             document.getElementById('t3-val-main').innerText = mainExDtone.toLocaleString();
-            document.getElementById('t3-val-main-pct').innerText = allocBase > 0 ? pctMainExDtone.toFixed(2) + '% of total' : '—';
+            /* The percentage is the card's headline now, so it is the percentage
+               and nothing else — "89.41% of total" as a 30px figure is a
+               sentence set in display type. Which total it is of is what the
+               panel is called. */
+            document.getElementById('t3-val-main-pct').innerText = allocBase > 0 ? pctMainExDtone.toFixed(2) + '%' : '—';
             const dtoneMainEl    = document.getElementById('t3-val-dtone-main');
             const dtoneMainPctEl = document.getElementById('t3-val-dtone-main-pct');
             if (dtoneMainEl)    dtoneMainEl.innerText    = mainFromDtone.toLocaleString();
-            if (dtoneMainPctEl) dtoneMainPctEl.innerText = allocBase > 0 ? pctMainFromDtone.toFixed(2) + '% of total' : '—';
+            if (dtoneMainPctEl) dtoneMainPctEl.innerText = allocBase > 0 ? pctMainFromDtone.toFixed(2) + '%' : '—';
             // Total 1st Culled (normal + D-Tone) — mockCullingTab4 already sums every 1st_Culling row
             document.getElementById('t3-val-cull').innerText = mockCullingTab4.toLocaleString();
-            document.getElementById('t3-val-cull-pct').innerText = allocBase > 0 ? pctCull.toFixed(2) + '% of total' : '—';
+            document.getElementById('t3-val-cull-pct').innerText = allocBase > 0 ? pctCull.toFixed(2) + '%' : '—';
             document.getElementById('t3-val-untransplanted').innerText = pendingTotal.toLocaleString();
-            document.getElementById('t3-val-pending-pct').innerText = allocBase > 0 ? pctPending.toFixed(2) + '% remaining' : '—';
+            document.getElementById('t3-val-pending-pct').innerText = allocBase > 0 ? pctPending.toFixed(2) + '%' : '—';
 
             // Premium + D-Tone note — update hidden ids for compat (use net values)
             document.getElementById('t3-val-premium').innerText = netPremium.toLocaleString();
@@ -3646,8 +3656,8 @@
             if (specialNote) {
                 const elPrem  = document.getElementById('t3-pending-premium-note');
                 const elDtone = document.getElementById('t3-pending-dtone-note');
-                if (elPrem)  elPrem.innerText  = netPremium > 0  ? `⭐ Premium PN (${netPremium.toLocaleString()})` : '⭐ Premium PN';
-                if (elDtone) elDtone.innerText = netDtone > 0 ? ` + 🎯 D-Tone PN (${netDtone.toLocaleString()})` : ' + 🎯 D-Tone PN';
+                if (elPrem)  elPrem.innerText  = netPremium > 0  ? `Premium PN (${netPremium.toLocaleString()})` : 'Premium PN';
+                if (elDtone) elDtone.innerText = netDtone > 0 ? ` + D-Tone PN (${netDtone.toLocaleString()})` : ' + D-Tone PN';
                 specialNote.classList.remove('hidden');
             }
 
@@ -3744,11 +3754,31 @@
             const missingMaps = rowsNeedingMap.filter(r => !rowMaps[r.id]).length;
             const allMapsAttached = rowsNeedingMap.length > 0 && missingMaps === 0;
 
+            /* HQ's sign-off closes the drone-map gap, and NOTHING else.
+
+               A verifier looked at this stage and passed it. If every seedling
+               is accounted for and the only thing still outstanding is a map
+               file, the work is done and the tab should say so — sitting at
+               99% for an attachment HQ has already accepted just teaches
+               people that 99% means finished.
+
+               The condition is deliberately narrow, and stays narrow: the
+               allocation must balance exactly (untransplanted === 0) and the
+               maps must be the ONLY thing missing. A stage that does not
+               balance is not 100% however many people have signed it, and a
+               sign-off never invents allocation that is not there. */
+            const hqVerified = !!(window.MJMReview && typeof MJMReview.isVerified === 'function'
+                                  && MJMReview.isVerified('transplanting'));
+            const mapsAreAllThatIsLeft = untransplanted === 0 && !allMapsAttached
+                                         && missingMaps > 0 && hqVerified;
+
             let percentage = 0;
             if (total > 0) {
                 const balancePct = Math.round((accounted / total) * 100);
-                // Only allow 100% when fully balanced AND every required drone map is attached.
-                percentage = (untransplanted === 0 && allMapsAttached)
+                // 100% when fully balanced AND every required drone map is
+                // attached — or HQ has verified it and the maps are all that
+                // is outstanding.
+                percentage = (untransplanted === 0 && (allMapsAttached || mapsAreAllThatIsLeft))
                     ? 100
                     : Math.min(99, balancePct);
             }
@@ -3764,7 +3794,14 @@
             const saveBtn = document.getElementById('save-transplant-btn');
 
             saveBtn.innerText = `Save Transplant Report (${percentage}% Allocated)`;
-            if (untransplanted === 0 && total > 0 && !allMapsAttached) {
+            if (mapsAreAllThatIsLeft && total > 0) {
+                /* Complete, and still says what is outstanding. HQ passing the
+                   stage is what makes it 100%; it does not make the missing
+                   files appear, and a screen that stops mentioning them is how
+                   somebody later swears the maps were attached. */
+                desc.innerText = `100% Verified · ${missingMaps} Map${missingMaps>1?'s':''} Outstanding`;
+                desc.className = "text-base font-black uppercase text-[#4a7a2e] mt-1";
+            } else if (untransplanted === 0 && total > 0 && !allMapsAttached) {
                 desc.innerText = `Attach ${missingMaps} Drone Map${missingMaps>1?'s':''}`; desc.className = "text-base font-black uppercase text-[#c07820] mt-1";
             } else if (untransplanted === 0 && total > 0) {
                 desc.innerText = "100% Allocated"; desc.className = "text-base font-black uppercase text-[#4a7a2e] mt-1";
@@ -7833,10 +7870,12 @@ Thank you.`;
                                     </div>`}
                                 </div>
                                 ${p.transferFrom ? `<div class="text-[8px] font-black text-[#0891b2] uppercase tracking-widest">↘ Transferred from ${p.transferFrom}</div>` : ''}
-                                ${p.isTransferRow ? `<div class="flex gap-1 mt-1">
-                                    <button type="button" class="px-2 py-1 bg-[#f0f8ff] border border-[#bee3f8] text-[#2b6cb0] text-[8px] font-black uppercase tracking-widest rounded hover:bg-[#bee3f8]" title="Change this transfer's plot or quantity" onclick="editT6Transfer(${i})">✏️ Edit</button>
-                                    <button type="button" class="px-2 py-1 bg-[#fff5f5] border border-[#f8d7da] text-[#a83020] text-[8px] font-black uppercase tracking-widest rounded hover:bg-[#f8d7da]" title="Delete this transfer — removes this row" onclick="deleteT6Transfer(${i})">🗑 Delete</button>
-                                </div>` : ''}
+                                <!-- No Edit or Delete here. A "-R" row is not a record
+                                     somebody keyed, it is the sum of the movements that
+                                     landed in that plot — and those are edited and
+                                     removed on the Transfer Data tab, where they were
+                                     entered. Two doors into the same data is how one of
+                                     them ends up out of date. -->
                             </div>
 
                             <!-- Sales — sold qty from Customer Order Monitoring DOs.
@@ -9480,12 +9519,35 @@ Thank you.`;
         // so this can no longer be scoped to one parent id — .t6-plot-row is
         // unique to Tab 6 regardless, same as calcT6()/saveTab6() already
         // query it unscoped.
-        6: () => Array.from(document.querySelectorAll('.t6-plot-row'))
-                  .map(el => {
-                    const i = parseInt((el.id || '').replace('t6-row-', ''), 10);
+        6: () => {
+                  const rows = Array.from(document.querySelectorAll('.t6-plot-row'))
+                    .map(el => {
+                      const i = parseInt((el.id || '').replace('t6-row-', ''), 10);
+                      const p = (typeof t6_plotData !== 'undefined' && t6_plotData[i]) || null;
+                      return { el, key: p ? `${String(p.plot || '').trim().toUpperCase()}|${p.destType || 'main'}` : '' };
+                    });
+                  /* A Transfer Data card is verified in its own right.
+
+                     Where a plot's seedlings went is a claim like any other on
+                     this tab, and it was the one thing here nobody could sign
+                     off or send back. The card's key is the plot with
+                     "|transfer" after it, which cannot collide with a plot
+                     row's "|main" or "|premium" — so verifying a plot's
+                     movements and verifying its culling stay separate answers.
+
+                     Only cards that are on screen: a card is hidden until its
+                     plot has actually sent something, and there is nothing to
+                     verify about a movement that has not been keyed. They
+                     appear as transfers are added, which the tab's
+                     MutationObserver already re-decorates on. */
+                  document.querySelectorAll('[id^="t6-row-"][id$="-tdata"]').forEach(el => {
+                    if (el.classList.contains('hidden')) return;
+                    const i = parseInt(String(el.id).replace('t6-row-', '').replace('-tdata', ''), 10);
                     const p = (typeof t6_plotData !== 'undefined' && t6_plotData[i]) || null;
-                    return { el, key: p ? `${String(p.plot || '').trim().toUpperCase()}|${p.destType || 'main'}` : '' };
-                  })
+                    if (p) rows.push({ el, key: `${String(p.plot || '').trim().toUpperCase()}|transfer` });
+                  });
+                  return rows;
+                }
       };
       let booted     = false;
       let isAdmin    = false; // "Review & approve reports" tick
@@ -9790,6 +9852,15 @@ Thank you.`;
       function renderAll() {
         TAB_INDICES.forEach(renderBanner);
         syncTabTicks();
+        /* A tab whose ring depends on who has signed what has to be worked
+           out AFTER the sign-offs are known — Transplanting reads its own
+           verification to decide whether an outstanding drone map still
+           holds it at 99%. The review state loads asynchronously and lands
+           here, which is the only moment that answer can change without the
+           tab itself being touched. */
+        if (typeof window.calcTransplanting === 'function') {
+          try { window.calcTransplanting(); } catch (e) { console.warn(e); }
+        }
       }
 
       async function refresh() {
@@ -10222,7 +10293,11 @@ Thank you.`;
                            // Exposed so a tab's own maths can re-check its tick the
                            // moment its ring changes, rather than waiting for the
                            // next full refresh.
-                           syncTicks: syncTabTicks };
+                           syncTicks: syncTabTicks,
+                           // Has HQ signed this stage off? Read by a tab whose own
+                           // completion depends on the answer — see
+                           // updateTransplantCompletion.
+                           isVerified: (stage) => !!verifications[stage] };
     })();
     </script>
 
