@@ -87,6 +87,15 @@
         
         @keyframes popIn { 0% { opacity: 0; transform: scale(0.95) translateY(20px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
 
+        /* Where you were just sent. Rings the row for a couple of seconds after
+           a jump, because arriving somewhere by scroll leaves you looking at a
+           list and wondering which line was meant. */
+        .t6-row-flash { animation: t6RowFlash 2.2s ease-out 1; }
+        @keyframes t6RowFlash {
+            0%, 55% { box-shadow: 0 0 0 3px rgba(192,120,32,.55), 0 0 22px rgba(192,120,32,.35); }
+            100%    { box-shadow: 0 0 0 0 rgba(192,120,32,0), 0 0 0 rgba(192,120,32,0); }
+        }
+
         /* ── Toast notifications ── */
         #toast-container { position: fixed; bottom: 2rem; right: 2rem; z-index: 9999; display: flex; flex-direction: column; gap: 0.75rem; pointer-events: none; }
         .toast { display: flex; align-items: center; gap: 0.75rem; padding: 0.9rem 1.2rem; border-radius: 1rem; font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 13px; min-width: 260px; max-width: 380px; box-shadow: 0 8px 24px rgba(0,0,0,0.18); pointer-events: auto; animation: toastIn 0.35s cubic-bezier(0.16,1,0.3,1) forwards; }
@@ -253,10 +262,20 @@
     <div class="modal-backdrop">
         <div class="modal-window flex flex-col">
             
-            <div class="px-8 py-6 border-b border-[#e8dcc8] flex justify-between items-center bg-white rounded-t-[2.5rem]">
-                <div>
-                    <h1 class="text-2xl font-black text-[#3d2610] uppercase tracking-widest" id="window-title">New Batch Record</h1>
-                    <p class="text-[11px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1">Lifecycle Setup & Log</p>
+            <!-- The batch and its breed, kept on screen.
+
+                 This report is eight tabs deep and every one of them was
+                 repeating the batch number and the breed at the top, because by
+                 the time you had scrolled into a table you could no longer see
+                 which batch you were keying. Sticking the bar answers that once,
+                 for every tab, and the repeats below could then go.
+
+                 "Lifecycle Setup & Log" said the same thing on every batch that
+                 ever existed. The breed does not. -->
+            <div class="sticky top-0 z-40 px-8 py-4 border-b border-[#e8dcc8] flex justify-between items-center bg-white rounded-t-[2.5rem] shadow-[0_6px_16px_-10px_rgba(26,21,13,0.5)]">
+                <div class="min-w-0">
+                    <h1 class="text-2xl font-black text-[#3d2610] uppercase tracking-widest leading-none" id="window-title">New Batch Record</h1>
+                    <p class="text-[12px] font-black text-[#4a7a2e] uppercase tracking-widest mt-1 truncate" id="window-breed">—</p>
                 </div>
                 <button onclick="window.location.href='operation_batch_record.html'" class="close-btn" title="Close and return">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -404,7 +423,7 @@
                                     <div>
                                         <label class="label-style">Breed Variety *</label>
                                         <div class="select-wrapper">
-                                            <select id="f-brand" class="input-style !text-[#4a7a2e]" required onchange="updateT1Completion(); syncSupplierOptions();">
+                                            <select id="f-brand" class="input-style !text-[#4a7a2e]" required onchange="updateT1Completion(); syncSupplierOptions(); syncBatchHeader();">
                                                 <option value="">Loading breeds...</option>
                                             </select>
                                         </div>
@@ -478,10 +497,12 @@
                                 </div>
                             </div>
 
-                            <!-- Breed & expected qty summary bar -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-5 bg-white border border-[#e8dcc8] rounded-xl mb-6 shadow-sm">
-                                <div><label class="label-style">Seed Breed Variety</label><div class="text-base font-black text-[#4a7a2e]" id="t8-breed">—</div></div>
-                                <div><label class="label-style">Total Seed Expected (D/O + FOC)</label><div class="text-base font-black text-[#c07820]" id="t8-expected-qty">0</div></div>
+                            <!-- Expected qty. The breed used to share this bar; it is in the
+                                 frozen header now, on every tab. -->
+                            <div class="p-5 bg-white border border-[#e8dcc8] rounded-xl mb-6 shadow-sm">
+                                <span id="t8-breed" class="hidden">—</span>
+                                <label class="label-style">Total Seed Expected (D/O + FOC)</label>
+                                <div class="text-base font-black text-[#c07820]" id="t8-expected-qty">0</div>
                             </div>
 
                             <!-- ════════════════════════════════════════════ -->
@@ -698,10 +719,12 @@
                                 </div>
                             </div>
 
-                            <!-- Breed & expected qty summary bar -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-5 bg-white border border-[#e8dcc8] rounded-xl mb-6 shadow-sm">
-                                <div><label class="label-style">Seed Breed Variety</label><div class="text-base font-black text-[#4a7a2e]" id="t2-breed">—</div></div>
-                                <div><label class="label-style">Total Seeds Expected (D/O + FOC)</label><div class="text-base font-black text-[#c07820]" id="t2-expected-qty">0</div></div>
+                            <!-- Expected qty. The breed used to share this bar; it is in the
+                                 frozen header now, on every tab. -->
+                            <div class="p-5 bg-white border border-[#e8dcc8] rounded-xl mb-6 shadow-sm">
+                                <span id="t2-breed" class="hidden">—</span>
+                                <label class="label-style">Total Seeds Expected (D/O + FOC)</label>
+                                <div class="text-base font-black text-[#c07820]" id="t2-expected-qty">0</div>
                             </div>
 
                             <!-- ════════════════════════════════════════════ -->
@@ -963,23 +986,25 @@
 
                             <div class="space-y-4">
 
-                                <!-- ══ SECTION 1: Batch Info Bar ══ -->
+                                <!-- ══ SECTION 1: Batch Info Bar ══
+                                     Batch No. and Breed used to sit here too. They are in the
+                                     frozen bar at the top of the window now, on every tab and
+                                     at every scroll position, so printing them again here was
+                                     two lines saying what the header already says. They are
+                                     still in the document, hidden, because several places set
+                                     them by id and a missing element is a thrown error. -->
                                 <div class="bg-white rounded-2xl border border-[#e8dcc8] shadow-sm p-4">
-                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        <div>
-                                            <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest">Batch No.</div>
-                                            <div class="text-sm font-black text-[#c07820] mt-0.5" id="t3-engine-batch">—</div>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div class="hidden">
+                                            <div id="t3-engine-batch">—</div>
+                                            <div id="t3-engine-breed">—</div>
                                         </div>
                                         <div>
-                                            <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest">Breed</div>
-                                            <div class="text-sm font-black text-[#4a7a2e] mt-0.5" id="t3-engine-breed">—</div>
-                                        </div>
-                                        <div>
-                                            <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest">🌱 Planted Date</div>
+                                            <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest">Planted Date</div>
                                             <div class="text-sm font-black text-[#3d2610] mt-0.5" id="t3-planted-date">—</div>
                                         </div>
                                         <div>
-                                            <div class="text-[8px] font-black text-[#4a7a2e] uppercase tracking-widest">🎯 Est. Maturity</div>
+                                            <div class="text-[8px] font-black text-[#4a7a2e] uppercase tracking-widest">Est. Maturity</div>
                                             <div class="text-sm font-black text-[#4a7a2e] mt-0.5" id="t3-maturity-date">—</div>
                                         </div>
                                     </div>
@@ -1167,21 +1192,17 @@
 
                             <div class="space-y-4">
 
-                                <!-- ══ SECTION 1: Batch Info Bar ══ -->
-                                <div class="bg-white rounded-2xl border border-[#e8dcc8] shadow-sm p-4">
-                                    <div class="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest">Batch No.</div>
-                                            <div class="text-sm font-black text-[#c07820] mt-0.5" id="t4-engine-batch">—</div>
-                                        </div>
-                                        <div>
-                                            <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest">Breed</div>
-                                            <div class="text-sm font-black text-[#4a7a2e] mt-0.5" id="t4-engine-breed">—</div>
-                                        </div>
-                                    </div>
-                                    <!-- Hidden elements kept for JS compatibility -->
-                                    <span id="t4-chart-total" class="hidden">—</span>
-                                    <span id="t4-transplanted-total" class="hidden">—</span>
+                                <!-- ══ SECTION 1: Batch Info Bar ══
+                                     Held nothing but the batch number and the breed, which the
+                                     frozen bar at the top of the window now carries on every
+                                     tab. A white card repeating the header is furniture, so the
+                                     card has gone and only the elements other code writes to
+                                     are kept, out of sight. -->
+                                <div class="hidden">
+                                    <span id="t4-engine-batch">—</span>
+                                    <span id="t4-engine-breed">—</span>
+                                    <span id="t4-chart-total">—</span>
+                                    <span id="t4-transplanted-total">—</span>
                                 </div>
 
                                 <!-- ══ SECTION 2: Progress Dashboard ══ -->
@@ -1750,6 +1771,21 @@
         // XSS-safe escape — apply to every DB-sourced URL or string before
         // splicing into HTML attributes that we hand to document.write etc.
         function _escAttr(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+
+        /* The frozen bar at the top of the window: which batch, which breed.
+           Called from wherever the batch or the breed can change rather than
+           set once at load, because both are editable on Tab 1 and a bar that
+           is always on screen showing last week's breed is worse than no bar. */
+        function syncBatchHeader() {
+            const breedEl = document.getElementById('window-breed');
+            if (!breedEl) return;
+            const breed = (document.getElementById('f-brand')?.value || '').trim();
+            const batch = (document.getElementById('f-batchno')?.value || '').trim();
+            breedEl.innerText = breed || '—';
+            breedEl.title = breed || '';
+            const titleEl = document.getElementById('window-title');
+            if (titleEl && batch) titleEl.innerText = `Batch: ${batch}`;
+        }
 
         const params = new URLSearchParams(window.location.search);
         const isNewBatch = (params.get('type') === 'new');
@@ -2587,6 +2623,7 @@
             }
 
             // Populate engine header strip
+            syncBatchHeader();
             const breed = document.getElementById('f-brand').value || '—';
             document.getElementById('t3-engine-breed').innerText = breed;
             document.getElementById('t3-engine-batch').innerText = batch;
@@ -8189,6 +8226,31 @@ Thank you.`;
         /* Redraw the panel under the totals. Called from calcT6, so it follows
            every keystroke — which means it must not throw away a half-typed
            reason, hence reading the boxes back before rebuilding them. */
+        /* Take somebody to a plot row: the right sub-tab, unfolded, in view and
+           ringed for a moment so the eye lands on it.
+
+           Scrolls the MODAL, not the window — this report lives inside
+           .modal-backdrop, which is the element that actually scrolls, and
+           scrollIntoView on a row inside it moves the page behind instead if
+           you let the browser choose. */
+        function goToT6Plot(idx) {
+            const row = document.getElementById(`t6-row-${idx}`);
+            if (!row) return;
+            const p = t6_plotData[idx];
+            // Main plots live on Main Culling; a "-R" plot lives under the
+            // movements that made it, at the foot of Transfer Data.
+            switchT6SubTab(p && p.isTransferRow ? 'transferdata' : 'main');
+            const edit = row.querySelector('.t6-pr-edit');
+            const view = row.querySelector('.t6-pr-view');
+            if (edit && edit.classList.contains('hidden')) {
+                edit.classList.remove('hidden');
+                if (view) view.classList.add('hidden');
+            }
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            row.classList.add('t6-row-flash');
+            setTimeout(() => row.classList.remove('t6-row-flash'), 2200);
+        }
+
         function syncT6Mismatch() {
             const panel = document.getElementById('t6-mismatch-panel');
             const host  = document.getElementById('t6-mismatch-rows');
@@ -8211,9 +8273,17 @@ Thank you.`;
                 return `
                     <div class="border border-[#e8dcc8] rounded-2xl p-4 bg-[#fdfaf4]">
                         <div class="flex flex-wrap items-center gap-x-6 gap-y-2 mb-3">
+                            <!-- The plot name is the way back to the plot.
+                                 This panel names plots that are somewhere in a list of
+                                 twenty on one of two sub-tabs, and finding each one by
+                                 eye — twice, once to look and once to fix — was the
+                                 whole complaint. Pressing it opens the right sub-tab,
+                                 unfolds that row, scrolls to it and rings it. -->
                             <div>
                                 <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Plot</div>
-                                <div class="text-base font-black text-[#3d2610]">${m.plot}</div>
+                                <button type="button" onclick="goToT6Plot(${m.idx})"
+                                    title="Go to this plot"
+                                    class="text-base font-black text-[#3d2610] underline decoration-dotted underline-offset-4 hover:text-[#c07820] cursor-pointer bg-transparent border-0 p-0 font-[inherit]">${_t6Esc(m.plot)}</button>
                             </div>
                             <div>
                                 <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">3rd Culled Qty</div>
@@ -8709,7 +8779,7 @@ Thank you.`;
         _supabase.auth.getSession().then(({ data: { session } }) => {
             if (!session) { window.location.href = 'operation_dashboard.html'; return; }
             window.currentUserEmail = session.user?.email || '';
-            initDetail().then(() => MJMReview.boot());
+            initDetail().then(() => { syncBatchHeader(); MJMReview.boot(); });
         });
     </script>
 
