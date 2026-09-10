@@ -8560,15 +8560,37 @@ Thank you.`;
             let rowsDone = 0, totalRows = 0;
             let balanceFilled = 0;
 
-            document.querySelectorAll('.t6-plot-row').forEach((row, i) => {
+            document.querySelectorAll('.t6-plot-row').forEach((row) => {
+                /* Index off the row's OWN id, not its position in the list.
+                   Main rows and "-R" rows render into two different containers,
+                   so document order matching t6_plotData order is a coincidence
+                   of how the array happens to be built, not a guarantee. */
+                const idx = parseInt(String(row.id).replace('t6-row-', ''), 10);
+                const p   = t6_plotData[idx];
+
                 totalRows++;
                 const transplanted = parseInt(row.querySelector('.t6-balance').dataset.transplanted) || 0;
                 const cullVal      = row.querySelector('.t6-culled-input').value;
                 const culled       = parseInt(cullVal) || 0;
-                const hasDoc       = !!t6_plotDocs[`t6-row-${i}`];
+                const hasDoc       = !!t6_plotDocs[`t6-row-${idx}`];
                 const hasCulled    = cullVal !== '';
 
-                totTransplanted += transplanted;
+                /* A "-R" plot's quantity is NOT a transplant. It arrived by
+                   transfer from a plot on this same batch, which already
+                   counted those seedlings when they were transplanted — so
+                   adding it here counts them twice and inflates the figure
+                   every cull rate is divided by.
+
+                   It was doing exactly that: batch 224 read 10,133 here while
+                   1st Culling read 9,607 for the same batch, the 526 difference
+                   being the 113 + 397 + 16 transferred out of N19, N18 and B13.
+                   Same batch, two tabs, two answers — and the cull rate came
+                   out at 12.03% instead of 12.69%.
+
+                   Balance and Culled are NOT filtered, and must not be: a
+                   sending plot's balance already has its transfer deducted, so
+                   the seedlings standing in a -R plot are counted once, there. */
+                if (!(p && p.isTransferRow)) totTransplanted += transplanted;
                 // Was `+= transplanted`, left over from before sales and
                 // transfers existed, so the totals row repeated the
                 // transplanted figure instead of summing the balances.
