@@ -98,14 +98,15 @@
 
            Below 1024px the rows stack, which is what the Tailwind grid-cols-1
            on each of them still does. */
-        @media (min-width: 1024px) {
-            /* Tracks only — never `display`. Whether a row is shown is Tailwind's
-               `hidden` / `grid` doing its usual job, and a rule here that also
-               set display would be a second opinion on it: a folded-away half
-               carries both classes, and the one that wins decides whether
-               folding works at all. */
-            .t6-grid { grid-template-columns: 0.9fr 0.5fr 0.55fr 0.65fr 1fr 0.85fr 58px; }
-        }
+        /* NOTE — do not move the 3rd Culling row grid into this stylesheet.
+           It was tried: one .t6-grid rule for the heading strips and both
+           halves of every row, so the seven tracks had a single definition.
+           It broke the row in production. Tailwind's CDN injects its utilities
+           into a <style> appended AFTER this one, so its grid-cols-2 on the
+           folded row beat a same-specificity rule here and the row laid itself
+           out in two columns down the page. Tailwind's own
+           lg:grid-cols-[...] is ordered after grid-cols-2 in its output and
+           therefore wins, which is why the row markup uses it. */
 
         /* The tick inside a tab's completion ring. Sized to the ring's hole
            rather than to the text around it, so it reads as part of the ring.
@@ -1575,7 +1576,7 @@
                                     <!-- Column headers: Main Plot (Transplanted + 2nd Culled shown
                                          compactly under the plot name, not their own columns) → Sales →
                                          Balance → 3rd Culled (qty over %) → Drone Map → Date -->
-                                    <div class="hidden lg:grid t6-grid gap-2 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy">
+                                    <div class="hidden lg:grid gap-2 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 0.9fr 0.5fr 0.55fr 0.65fr 1fr 0.85fr 58px;">
                                         <span>Main Plot</span>
                                         <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch. CAL-… calibration DOs are included; only cancelled DOs are excluded. Click a figure to see the DOs behind it.">Sales</span>
                                         <span class="text-[#0891b2]" title="How many seedlings this plot sent to another plot, added up from its lines on the Transfer Data tab. Keyed there, shown here.">Transfer Amount</span>
@@ -1626,7 +1627,7 @@
                                         </div>
                                     </div>
 
-                                    <div class="hidden lg:grid t6-grid gap-2 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy">
+                                    <div class="hidden lg:grid gap-2 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 0.9fr 0.5fr 0.55fr 0.65fr 1fr 0.85fr 58px;">
                                         <span>Transfer Plot</span>
                                         <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch. CAL-… calibration DOs are included; only cancelled DOs are excluded. Click a figure to see the DOs behind it.">Sales</span>
                                         <span title="Auto: Transplanted − 2nd Culled − Sales − Transferred out">Balance</span>
@@ -7548,9 +7549,10 @@ Thank you.`;
                 // Same six columns, same widths, on both tabs — Main Culling
                 // and P-R Culling rows share one grid so switching between
                 // them doesn't shift anything left or right.
-                /* The seven tracks live in .t6-grid, in the stylesheet. The
-                   seventh is a fixed lane for the row's own button — Edit when
-                   folded, empty when open.
+                /* Seven tracks — see the note in the stylesheet for why they are
+                   a Tailwind lg:grid-cols-[…] class on the rows and not a rule
+                   of our own. The seventh is a fixed lane for the row's own
+                   button — Edit when folded, empty when open.
 
                    Edit used to share the Date cell, pushed apart by
                    justify-between, so the date sat wherever the button left
@@ -7572,7 +7574,7 @@ Thank you.`;
 
                              Same grid as the open half and the column headings, so folding one
                              row does not shift its neighbours' columns. -->
-                        <div class="t6-pr-view ${folded ? '' : 'hidden'} grid grid-cols-2 t6-grid gap-2 px-4 py-3 items-center t-tidy">
+                        <div class="t6-pr-view ${folded ? '' : 'hidden'} grid grid-cols-2 lg:grid-cols-[0.9fr_0.5fr_0.55fr_0.65fr_1fr_0.85fr_58px] gap-2 px-4 py-3 items-center t-tidy">
                             <!-- Folded, the plot still says what went in and what the 2nd cull
                                  took — written out, not abbreviated. "2,812 in · 26 2nd" saved
                                  a line and cost the reader the two words that say which figure
@@ -7608,7 +7610,7 @@ Thank you.`;
                         </div>
 
                         <div class="t6-pr-edit ${folded ? 'hidden' : ''}">
-                        <div class="grid grid-cols-1 t6-grid gap-2 p-4 items-start t-tidy">
+                        <div class="grid grid-cols-1 lg:grid-cols-[0.9fr_0.5fr_0.55fr_0.65fr_1fr_0.85fr_58px] gap-2 p-4 items-start t-tidy">
 
                             <!-- Plot — Transplanted + 2nd Culled shown compactly here instead of
                                  their own columns. -->
