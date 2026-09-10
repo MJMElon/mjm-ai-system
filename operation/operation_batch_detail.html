@@ -87,6 +87,11 @@
         
         @keyframes popIn { 0% { opacity: 0; transform: scale(0.95) translateY(20px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
 
+        /* The tick that sits inside a tab's completion ring once the stage is
+           both verified and full. Sized to the ring's hole rather than to the
+           text around it, so it reads as part of the ring. */
+        .tab-tick { font-size: 11px; font-weight: 900; color: #4a7a2e; line-height: 1; }
+
         /* Where you were just sent. Rings the row for a couple of seconds after
            a jump, because arriving somewhere by scroll leaves you looking at a
            list and wondering which line was meant. */
@@ -1030,7 +1035,7 @@
                                                 <span class="text-xs font-black text-[#9333ea]" id="t3-panel-premium">0</span>
                                             </div>
                                             <div class="flex justify-between items-center px-2 py-1.5 bg-[#ecfeff] border border-[#a5f3fc] rounded-lg">
-                                                <span class="text-[8px] font-black text-[#0891b2] uppercase tracking-widest">🎯 D-Tone PN</span>
+                                                <span class="text-[8px] font-black text-[#0891b2] uppercase tracking-widest">D-Tone PN</span>
                                                 <span class="text-xs font-black text-[#0891b2]" id="t3-panel-dtone">0</span>
                                             </div>
                                         </div>
@@ -1043,7 +1048,7 @@
 
                                         <!-- Total remaining seeds across all trays -->
                                         <div class="flex justify-between items-center mt-3 pt-2 border-t border-[#e8dcc8]">
-                                            <span class="text-[8px] font-black text-[#3d2610] uppercase tracking-widest">🌱 Total Seeds in Trays</span>
+                                            <span class="text-[8px] font-black text-[#3d2610] uppercase tracking-widest">Total Seeds in Trays</span>
                                             <span class="text-sm font-black text-[#4a7a2e]" id="t3-panel-grand-total">0</span>
                                         </div>
                                     </div>
@@ -1081,7 +1086,7 @@
                                                 <!-- 4 stat cards: Main Plot / Main Plot (D-Tone) / Total 1st Culled / Pending -->
                                                 <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
                                                     <div class="bg-[#eef5fc] border border-[#bee3f8] rounded-lg px-3 py-2">
-                                                        <div class="text-[8px] font-black text-[#3a7ab4] uppercase tracking-wide leading-none">🌿 Main Plot</div>
+                                                        <div class="text-[8px] font-black text-[#3a7ab4] uppercase tracking-wide leading-none">Main Plot</div>
                                                         <div class="text-lg font-black text-[#3a7ab4] mt-1" id="t3-val-main">0</div>
                                                         <div class="text-[9px] font-bold text-[#8a7a68]" id="t3-val-main-pct">—</div>
                                                     </div>
@@ -1205,43 +1210,70 @@
                                     <span id="t4-transplanted-total">—</span>
                                 </div>
 
-                                <!-- ══ SECTION 2: Progress Dashboard ══ -->
+                                <!-- ══ SECTION 2: Progress Dashboard ══
+
+                                     The stacked bar has gone. It drew the same three figures
+                                     that are in the three cards below it, in a shape where the
+                                     smallest of them — the one that matters — was a red sliver
+                                     you could not read. Three cards say it without the bar.
+
+                                     And the cards were the wrong way round: the QUANTITY was
+                                     the big number and the RATE was small print beneath it.
+                                     A cull rate is the thing being judged; the count is how it
+                                     was arrived at. So the percentage is the figure now, with
+                                     its count underneath, and the labels are big enough to read
+                                     without leaning in. -->
                                 <div class="bg-white rounded-2xl border border-[#e8dcc8] shadow-sm p-5">
-                                    <div class="flex items-center justify-between mb-4">
+                                    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
                                         <h4 class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">Culling Progress Dashboard</h4>
+                                        <!-- The totals used to be a wide red band at the very
+                                             bottom of the tab, under the records — so the
+                                             batch's headline figure was the last thing on the
+                                             page and out of sight from the dashboard it
+                                             belongs to. Same two figures, beside the heading. -->
+                                        <div class="flex items-center gap-4 px-4 py-2 rounded-xl bg-[#fff5f5] border border-[#f8d7da]">
+                                            <div>
+                                                <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest">Total Culled</div>
+                                                <div class="text-base font-black text-[#a83020] tabular-nums leading-tight" id="t4-total-culled">0</div>
+                                            </div>
+                                            <div class="w-px h-7 bg-[#f8d7da]"></div>
+                                            <div>
+                                                <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest">Avg Cull Rate</div>
+                                                <div class="text-base font-black text-[#c07820] tabular-nums leading-tight" id="t4-avg-cull-rate">0.0%</div>
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    <!-- Bar: Transplanted (blue) | 1st Culled (red) | Gap (grey) -->
-                                    <div class="w-full h-10 bg-[#d4c9b8] rounded-xl overflow-hidden flex shadow-inner mb-1">
-                                        <div id="t4-bar-main" class="stacked-segment bg-[#3a7ab4] flex items-center justify-center overflow-hidden" style="width: 0%;"><span id="t4-bar-main-lbl" class="text-[9px] font-black text-white whitespace-nowrap hidden"></span></div>
-                                        <div id="t4-bar-premium" style="display:none"><span id="t4-bar-premium-lbl"></span></div>
-                                        <div id="t4-bar-doubletone" style="display:none"><span id="t4-bar-doubletone-lbl"></span></div>
-                                        <div id="t4-bar-cull" class="stacked-segment bg-[#a83020] flex items-center justify-center overflow-hidden" style="width: 0%;"><span id="t4-bar-cull-lbl" class="text-[9px] font-black text-white whitespace-nowrap hidden"></span></div>
-                                        <div id="t4-bar-unaccounted" class="stacked-segment flex items-center justify-center overflow-hidden" style="width: 100%;"><span id="t4-bar-unaccounted-lbl" class="text-[9px] font-black text-[#6b5c4e] whitespace-nowrap">100% pending</span></div>
-                                    </div>
-                                    <!-- % labels always shown -->
-                                    <div class="flex flex-wrap text-[9px] font-black gap-3 mb-4">
-                                        <span class="text-[#3a7ab4]">🌿 Transplanted: <span id="t4-lbl-trans-pct">0%</span></span>
-                                        <span class="text-[#a83020]">✂️ 1st Culled: <span id="t4-lbl-cull-pct">0%</span></span>
-                                        <span class="text-[#8a7a68]">⏳ Pending: <span id="t4-lbl-gap-pct">100%</span></span>
+                                    <!-- The bar's elements are still written to by the existing
+                                         maths, so they stay in the document out of sight rather
+                                         than being deleted along with every line that sets them. -->
+                                    <div class="hidden">
+                                        <div id="t4-bar-main"><span id="t4-bar-main-lbl"></span></div>
+                                        <div id="t4-bar-premium"><span id="t4-bar-premium-lbl"></span></div>
+                                        <div id="t4-bar-doubletone"><span id="t4-bar-doubletone-lbl"></span></div>
+                                        <div id="t4-bar-cull"><span id="t4-bar-cull-lbl"></span></div>
+                                        <div id="t4-bar-unaccounted"><span id="t4-bar-unaccounted-lbl"></span></div>
+                                        <span id="t4-lbl-trans-pct">0%</span>
+                                        <span id="t4-lbl-cull-pct">0%</span>
+                                        <span id="t4-lbl-gap-pct">100%</span>
                                     </div>
 
-                                    <!-- 3 stat cards -->
+                                    <!-- 3 stat cards — rate first, count under it -->
                                     <div class="grid grid-cols-3 gap-3 mb-4">
                                         <div class="bg-[#eef5fc] border border-[#bee3f8] rounded-xl px-4 py-3">
-                                            <div class="text-[8px] font-black text-[#3a7ab4] uppercase tracking-wide leading-tight">🌿 Transplanted</div>
-                                            <div class="text-2xl font-black text-[#3a7ab4] mt-1" id="t4-val-main">0</div>
-                                            <div class="text-[9px] font-bold text-[#8a7a68]" id="t4-val-main-pct">0%</div>
+                                            <div class="text-[11px] font-black text-[#3a7ab4] uppercase tracking-wide leading-tight">Transplanted</div>
+                                            <div class="text-3xl font-black text-[#3a7ab4] mt-1 tabular-nums leading-none" id="t4-val-main-pct">0%</div>
+                                            <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1" id="t4-val-main">0</div>
                                         </div>
                                         <div class="bg-[#fff5f5] border border-[#f8d7da] rounded-xl px-4 py-3">
-                                            <div class="text-[8px] font-black text-[#a83020] uppercase tracking-wide leading-tight">✂️ 1st Culled</div>
-                                            <div class="text-2xl font-black text-[#a83020] mt-1" id="t4-val-cull">0</div>
-                                            <div class="text-[9px] font-bold text-[#8a7a68]" id="t4-val-cull-pct">0%</div>
+                                            <div class="text-[11px] font-black text-[#a83020] uppercase tracking-wide leading-tight">1st Culled</div>
+                                            <div class="text-3xl font-black text-[#a83020] mt-1 tabular-nums leading-none" id="t4-val-cull-pct">0%</div>
+                                            <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1" id="t4-val-cull">0</div>
                                         </div>
                                         <div class="bg-[#fffaf0] border border-[#fde68a] rounded-xl px-4 py-3">
-                                            <div class="text-[8px] font-black text-[#c07820] uppercase tracking-wide leading-tight">⏳ Pending</div>
-                                            <div class="text-2xl font-black text-[#c07820] mt-1" id="t4-val-unaccounted">0</div>
-                                            <div class="text-[9px] font-bold text-[#8a7a68]" id="t4-val-unaccounted-pct">100%</div>
+                                            <div class="text-[11px] font-black text-[#c07820] uppercase tracking-wide leading-tight">Pending</div>
+                                            <div class="text-3xl font-black text-[#c07820] mt-1 tabular-nums leading-none" id="t4-val-unaccounted-pct">100%</div>
+                                            <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1" id="t4-val-unaccounted">0</div>
                                         </div>
                                     </div>
 
@@ -1256,7 +1288,7 @@
                                         <span class="text-2xl shrink-0" id="t4-balance-icon">⏳</span>
                                         <div class="flex-1 min-w-0">
                                             <div class="text-xs font-black uppercase tracking-wider" id="t4-balance-title" style="color:#c07820">Pending: fill cull entries below</div>
-                                            <div class="text-[10px] font-bold uppercase tracking-widest mt-0.5" id="t4-balance-desc" style="color:#c07820">⏳ Pending includes: remaining tray balance + ⭐ Premium PN + 🎯 D-Tone PN</div>
+                                            <div class="text-[10px] font-bold uppercase tracking-widest mt-0.5" id="t4-balance-desc" style="color:#c07820">Pending includes: remaining tray balance + Premium PN + D-Tone PN</div>
                                         </div>
                                     </div>
                                 </div>
@@ -1281,17 +1313,9 @@
 
                                     <div id="cull-rows-container" class="px-6 pb-4 space-y-3"></div>
 
-                                    <!-- Totals footer -->
-                                    <div class="mx-6 mb-4 p-4 bg-[#fff5f5] rounded-xl border border-[#f8d7da] flex flex-wrap gap-x-10 gap-y-2 items-center">
-                                        <div class="flex items-center gap-3">
-                                            <span class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">Total Culled:</span>
-                                            <span class="text-2xl font-black text-[#a83020]" id="t4-total-culled">0</span>
-                                        </div>
-                                        <div class="flex items-center gap-3">
-                                            <span class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">Avg Cull Rate:</span>
-                                            <span class="text-2xl font-black text-[#c07820]" id="t4-avg-cull-rate">0.0%</span>
-                                        </div>
-                                    </div>
+                                    <!-- The totals band that used to sit here is now beside the
+                                         dashboard heading above, where it can be read at the
+                                         same time as the figures it summarises. -->
 
                                     <div class="px-6 pb-6 flex justify-end">
                                         <button type="button" id="save-cull-btn" class="btn-earth !bg-gradient-to-r !from-[#a83020] !to-[#7f1d1d] !shadow-[0_8px_20px_-4px_rgba(168,48,32,0.5)] px-12" onclick="saveCullingTab()">Save 1st Culling Report (0% Complete)</button>
@@ -1331,22 +1355,25 @@
                                 <div class="p-6">
                                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
 
+                                        <!-- Same shape as 1st Culling: the label big enough to
+                                             read, then the figure that is being judged, then
+                                             what it was worked out from underneath. -->
                                         <div class="bg-[#fdfaf4] border border-[#e8dcc8] rounded-xl p-5 flex flex-col gap-1">
-                                            <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Total Transplanted</div>
-                                            <div class="text-3xl font-black text-[#3d2610]" id="t5-from-transplanted">0</div>
-                                            <div class="text-[9px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1">across all plots</div>
+                                            <div class="text-[11px] font-black text-[#8a7a68] uppercase tracking-wide">Total Transplanted</div>
+                                            <div class="text-3xl font-black text-[#3d2610] tabular-nums leading-none" id="t5-from-transplanted">0</div>
+                                            <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1">across all plots</div>
                                         </div>
 
                                         <div class="bg-[#f0f8ec] border border-[#c3e6cb] rounded-xl p-5 flex flex-col gap-1">
-                                            <div class="text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest">✅ Total Alive</div>
-                                            <div class="text-3xl font-black text-[#4a7a2e]" id="t5-total-alive">0</div>
-                                            <div class="text-[9px] font-bold text-[#4a7a2e] uppercase tracking-widest mt-1">across all plots</div>
+                                            <div class="text-[11px] font-black text-[#4a7a2e] uppercase tracking-wide">Total Alive</div>
+                                            <div class="text-3xl font-black text-[#4a7a2e] tabular-nums leading-none" id="t5-total-alive">0</div>
+                                            <div class="text-[10px] font-bold text-[#4a7a2e] uppercase tracking-widest mt-1">across all plots</div>
                                         </div>
 
                                         <div class="bg-[#fff5f5] border border-[#f8d7da] rounded-xl p-5 flex flex-col gap-1">
-                                            <div class="text-[9px] font-black text-[#a83020] uppercase tracking-widest">✂️ 2nd Culling Rate</div>
-                                            <div class="text-3xl font-black text-[#a83020]" id="t5-cull-rate">—</div>
-                                            <div class="text-[9px] font-bold text-[#a83020] uppercase tracking-widest mt-1">Total Dead: <span id="t5-total-dead">0</span></div>
+                                            <div class="text-[11px] font-black text-[#a83020] uppercase tracking-wide">2nd Culling Rate</div>
+                                            <div class="text-3xl font-black text-[#a83020] tabular-nums leading-none" id="t5-cull-rate">—</div>
+                                            <div class="text-[10px] font-black text-[#a83020] uppercase tracking-widest mt-1">Total Dead: <span class="tabular-nums" id="t5-total-dead">0</span></div>
                                         </div>
                                         <!-- hidden compat for old refs -->
                                         <span id="t5-survival-rate" class="hidden">—</span>
@@ -1370,8 +1397,8 @@
                                     <span class="text-[#c07820]">Date</span>
                                     <span>Main Plot</span>
                                     <span>Transplanted</span>
-                                    <span class="text-[#a83020]">Dead ✂️</span>
-                                    <span class="text-[#4a7a2e]">Alive ✅ (auto)</span>
+                                    <span class="text-[#a83020]">Dead</span>
+                                    <span class="text-[#4a7a2e]">Alive (auto)</span>
                                     <span class="text-[#a83020]">2nd Culled %</span>
                                     <span>Drone Map</span>
                                 </div>
@@ -1447,19 +1474,22 @@
                                 <div class="p-6">
                                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <div class="bg-[#fdfaf4] border border-[#e8dcc8] rounded-xl p-5 flex flex-col gap-1">
-                                            <div class="text-[9px] font-black text-[#3d2610] uppercase tracking-widest">Total Transplanted</div>
-                                            <div class="text-3xl font-black text-[#3d2610]" id="t6-total-transplanted">0</div>
-                                            <div class="text-[9px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1">across all plots</div>
+                                            <div class="text-[11px] font-black text-[#3d2610] uppercase tracking-wide">Total Transplanted</div>
+                                            <div class="text-3xl font-black text-[#3d2610] tabular-nums leading-none" id="t6-total-transplanted">0</div>
+                                            <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1">across all plots</div>
+                                        </div>
+                                        <!-- Rate before quantity, and the bigger of the two: a
+                                             cull rate is what gets judged, the count is how it
+                                             was arrived at. -->
+                                        <div class="bg-[#fff5f5] border border-[#f8d7da] rounded-xl p-5 flex flex-col gap-1">
+                                            <div class="text-[11px] font-black text-[#a83020] uppercase tracking-wide">Avg Cull Rate</div>
+                                            <div class="text-3xl font-black text-[#a83020] tabular-nums leading-none" id="t6-avg-cull-rate">—</div>
+                                            <div class="text-[10px] font-bold text-[#a83020] uppercase tracking-widest mt-1">across plots</div>
                                         </div>
                                         <div class="bg-[#fff5f5] border border-[#f8d7da] rounded-xl p-5 flex flex-col gap-1">
-                                            <div class="text-[9px] font-black text-[#a83020] uppercase tracking-widest">✂️ Total Culled Quantity</div>
-                                            <div class="text-3xl font-black text-[#a83020]" id="t6-total-culled">—</div>
-                                            <div class="text-[9px] font-bold text-[#a83020] uppercase tracking-widest mt-1">across all plots</div>
-                                        </div>
-                                        <div class="bg-[#fff5f5] border border-[#f8d7da] rounded-xl p-5 flex flex-col gap-1">
-                                            <div class="text-[9px] font-black text-[#a83020] uppercase tracking-widest">✂️ Avg Cull Rate</div>
-                                            <div class="text-3xl font-black text-[#a83020]" id="t6-avg-cull-rate">—</div>
-                                            <div class="text-[9px] font-bold text-[#a83020] uppercase tracking-widest mt-1">across plots</div>
+                                            <div class="text-[11px] font-black text-[#a83020] uppercase tracking-wide">Total Culled Quantity</div>
+                                            <div class="text-3xl font-black text-[#a83020] tabular-nums leading-none" id="t6-total-culled">—</div>
+                                            <div class="text-[10px] font-bold text-[#a83020] uppercase tracking-widest mt-1">across all plots</div>
                                         </div>
                                     </div>
                                 </div>
@@ -2730,7 +2760,7 @@
                                         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
                                             <div><label class="label-style">Date *</label><input type="date" class="input-style t3e-date" value="${dateStr}"></div>
                                             <div><label class="label-style !text-[#c07820]">Source Tray *</label><div class="select-wrapper"><select class="input-style !text-[#c07820] t3e-source-tray">${getTab3TrayOptionsHTML({})}</select></div></div>
-                                            <div><label class="label-style">Destination *</label><div class="select-wrapper"><select class="input-style !bg-[#f0f8ff] !border-[#bee3f8] !text-[#2b6cb0] t3e-dest-type" onchange="toggleT3EditPlot('${editId}')"><option value="main">🌿 Main Plot</option><option value="premium">⭐ Premium Care PN</option><option value="doubletone">🎯 D-Tone PN</option></select></div></div>
+                                            <div><label class="label-style">Destination *</label><div class="select-wrapper"><select class="input-style !bg-[#f0f8ff] !border-[#bee3f8] !text-[#2b6cb0] t3e-dest-type" onchange="toggleT3EditPlot('${editId}')"><option value="main">Main Plot</option><option value="premium">Premium Care PN</option><option value="doubletone">D-Tone PN</option></select></div></div>
                                             <div><label class="label-style !text-[#3a7ab4] t3e-plot-label">Plot *</label><div class="select-wrapper"><select class="input-style !text-[#3a7ab4] t3e-dest-plot">${getPlotOptionsHTML()}</select></div></div>
                                         </div>
                                         <div class="grid grid-cols-2 gap-3">
@@ -2874,11 +2904,11 @@
             if (!sel) return;
             if (type === 'premium') {
                 if (lbl) lbl.innerText = 'Destination ⭐';
-                sel.innerHTML = '<option value="PREMIUM CARE">⭐ PREMIUM CARE</option>';
+                sel.innerHTML = '<option value="PREMIUM CARE">PREMIUM CARE</option>';
                 sel.disabled = true; sel.className = 'input-style !text-[#9333ea] t3e-dest-plot bg-[#faf5ff] cursor-not-allowed';
             } else if (type === 'doubletone') {
                 if (lbl) lbl.innerText = 'Destination 🎯';
-                sel.innerHTML = '<option value="DOUBLE-TONE">🎯 DOUBLE-TONE</option>';
+                sel.innerHTML = '<option value="DOUBLE-TONE">DOUBLE-TONE</option>';
                 sel.disabled = true; sel.className = 'input-style !text-[#0891b2] t3e-dest-plot bg-[#ecfeff] cursor-not-allowed';
             } else {
                 if (lbl) lbl.innerText = 'Plot *';
@@ -3091,9 +3121,9 @@
                             <label class="label-style">Destination Category *</label>
                             <div class="select-wrapper">
                                 <select class="input-style !bg-[#f0f8ff] !border-[#bee3f8] !text-[#2b6cb0] t3-dest-type" required onchange="togglePlotInput('${rowId}'); calcTransplanting()">
-                                    <option value="main">🌿 Main Plot</option>
-                                    <option value="premium">⭐ Premium Care PN</option>
-                                    <option value="doubletone">🎯 D-Tone PN</option>
+                                    <option value="main">Main Plot</option>
+                                    <option value="premium">Premium Care PN</option>
+                                    <option value="doubletone">D-Tone PN</option>
                                 </select>
                             </div>
                         </div>
@@ -3524,6 +3554,9 @@
             }
 
             document.getElementById('t3-pie-tab').style.setProperty('--percentage', percentage);
+            // The tab's tick follows its ring: a stage that stops being full
+            // must stop claiming it is finished.
+            if (window.MJMReview && MJMReview.syncTicks) MJMReview.syncTicks();
             document.getElementById('t3-pie-analysis').style.setProperty('--percentage', percentage);
             document.getElementById('t3-percent-text').innerText = percentage + '%';
 
@@ -4063,6 +4096,9 @@
             const percentage = Math.min(100, Math.round((filledCount / requiredChecks) * 100));
             
             document.getElementById('t2-pie-tab').style.setProperty('--percentage', percentage);
+            // The tab's tick follows its ring: a stage that stops being full
+            // must stop claiming it is finished.
+            if (window.MJMReview && MJMReview.syncTicks) MJMReview.syncTicks();
             document.getElementById('t2-pie-analysis').style.setProperty('--percentage', percentage);
             document.getElementById('t2-percent-text').innerText = percentage + '%';
             
@@ -5266,6 +5302,9 @@
                 pct = required > 0 ? Math.min(100, Math.round((filled / required) * 100)) : 0;
             }
             document.getElementById('t8-pie-tab').style.setProperty('--percentage', pct);
+            // The tab's tick follows its ring: a stage that stops being full
+            // must stop claiming it is finished.
+            if (window.MJMReview && MJMReview.syncTicks) MJMReview.syncTicks();
             document.getElementById('t8-pie-analysis').style.setProperty('--percentage', pct);
             document.getElementById('t8-percent-text').innerText = pct + '%';
             if (pct === 100) { desc.innerText = 'Report 100% Filled'; desc.className = 'text-base font-black uppercase text-[#4a7a2e] mt-1'; }
@@ -6270,7 +6309,7 @@ Thank you.`;
                 box.className = 'p-3 rounded-xl border border-[#c07820] bg-[#fffaf0] flex items-center gap-3';
                 icon.innerText = '⏳';
                 title.innerText = `Pending: ${unaccounted.toLocaleString()} seeds remaining`; title.style.color = '#c07820';
-                desc.innerText = '⏳ Pending includes: remaining tray balance + ⭐ Premium PN + 🎯 D-Tone PN'; desc.style.color = '#c07820';
+                desc.innerText = 'Pending includes: remaining tray balance + Premium PN + D-Tone PN'; desc.style.color = '#c07820';
             }
 
             // Update completion %
@@ -6288,6 +6327,9 @@ Thank you.`;
             }
 
             document.getElementById('t4-pie-tab').style.setProperty('--percentage', pct);
+            // The tab's tick follows its ring: a stage that stops being full
+            // must stop claiming it is finished.
+            if (window.MJMReview && MJMReview.syncTicks) MJMReview.syncTicks();
             document.getElementById('t4-pie-analysis').style.setProperty('--percentage', pct);
             document.getElementById('t4-percent-text').innerText = pct + '%';
 
@@ -6551,7 +6593,7 @@ Thank you.`;
                 const isDtone   = !p.hasMain && p.hasDtone;
                 const rowBg     = isDtone ? 'bg-[#ecfeff] border-[#a5f3fc]' : 'bg-[#fdfaf4] border-[#e8dcc8]';
                 const typeLabel = isMixed ? '🌿 Main + 🎯 D-Tone'
-                                : isDtone ? '🎯 D-Tone'
+                                : isDtone ? 'D-Tone'
                                           : '🌿 Main Plot';
                 const typeLblCls = isDtone ? 'text-[#0891b2]' : 'text-[#4a7a2e]';
 
@@ -6584,7 +6626,7 @@ Thank you.`;
 
                             <!-- Dead input (user enters) -->
                             <div>
-                                <label class="label-style lg:hidden !text-[#a83020]">Dead ✂️</label>
+                                <label class="label-style lg:hidden !text-[#a83020]">Dead</label>
                                 <input type="number" class="input-style !text-[#a83020] font-black t5-dead text-sm"
                                     min="0" max="${p.qty}" placeholder=""
                                     data-transplanted="${p.qty}"
@@ -6594,7 +6636,7 @@ Thank you.`;
 
                             <!-- Alive (auto-calculated: transplanted − dead) -->
                             <div>
-                                <div class="text-[9px] font-black text-[#4a7a2e] uppercase lg:hidden mb-0.5">Alive ✅ (auto)</div>
+                                <div class="text-[9px] font-black text-[#4a7a2e] uppercase lg:hidden mb-0.5">Alive (auto)</div>
                                 <div class="input-style bg-[#f0f8ec] font-black text-[#4a7a2e] t5-alive-display h-[45px] flex items-center text-sm" id="${rowId}-alive-disp" data-transplanted="${p.qty}">—</div>
                                 <input type="hidden" class="t5-alive" data-transplanted="${p.qty}" value="0">
                             </div>
@@ -6614,7 +6656,7 @@ Thank you.`;
                                     ondragover="event.preventDefault(); this.classList.add('!border-[#c07820]','!bg-[#fdfaf4]');"
                                     ondragleave="event.preventDefault(); this.classList.remove('!border-[#c07820]','!bg-[#fdfaf4]');"
                                     ondrop="event.preventDefault(); this.classList.remove('!border-[#c07820]','!bg-[#fdfaf4]'); handleT5MapDrop(event,'${rowId}')">
-                                    <span class="text-[10px] font-black text-[#c07820] uppercase tracking-wider pointer-events-none whitespace-nowrap">🗺️ Attach Map</span>
+                                    <span class="text-[10px] font-black text-[#c07820] uppercase tracking-wider pointer-events-none whitespace-nowrap">Attach Map</span>
                                 </div>
                                 <input type="file" id="${rowId}-map-input" class="hidden" accept="image/*,.pdf"
                                     onchange="handleT5MapUpload(this, '${rowId}')">
@@ -6737,6 +6779,9 @@ Thank you.`;
             const pct = required > 0 ? Math.min(100, Math.round((filled / required) * 100)) : 0;
 
             document.getElementById('t5-pie-tab').style.setProperty('--percentage', pct);
+            // The tab's tick follows its ring: a stage that stops being full
+            // must stop claiming it is finished.
+            if (window.MJMReview && MJMReview.syncTicks) MJMReview.syncTicks();
             document.getElementById('t5-pie-analysis').style.setProperty('--percentage', pct);
             document.getElementById('t5-percent-text').innerText = pct + '%';
 
@@ -7308,7 +7353,7 @@ Thank you.`;
             t6_plotData.forEach((p, i) => {
                 const rowId    = `t6-row-${i}`;
                 const dts      = p.destTypes || [p.destType];
-                const typeLabel = dts.map(d => d === 'premium' ? '⭐ Premium' : d === 'doubletone' ? '🎯 D-Tone' : '🌿 Main').join(' + ');
+                const typeLabel = dts.map(d => d === 'premium' ? 'Premium' : d === 'doubletone' ? 'D-Tone' : 'Main').join(' + ');
                 const rowBg    = p.destType === 'premium'    ? 'bg-[#faf5ff] border-[#e9d5ff]'
                                 : p.destType === 'doubletone' ? 'bg-[#ecfeff] border-[#a5f3fc]'
                                 : 'bg-[#fdfaf4] border-[#e8dcc8]';
@@ -7495,7 +7540,7 @@ Thank you.`;
                                     ondragover="event.preventDefault(); this.classList.add('!border-[#c07820]','!bg-[#fdfaf4]');"
                                     ondragleave="event.preventDefault(); this.classList.remove('!border-[#c07820]','!bg-[#fdfaf4]');"
                                     ondrop="event.preventDefault(); this.classList.remove('!border-[#c07820]','!bg-[#fdfaf4]'); handleT6DocDrop(event,'${rowId}')">
-                                    <span class="text-[10px] font-black text-[#c07820] uppercase tracking-wider pointer-events-none whitespace-nowrap">🗺️ Attach Map</span>
+                                    <span class="text-[10px] font-black text-[#c07820] uppercase tracking-wider pointer-events-none whitespace-nowrap">Attach Map</span>
                                 </div>
                                 </div>
                                 <input type="file" id="${rowId}-doc-input" class="hidden"
@@ -8392,6 +8437,9 @@ Thank you.`;
             }
 
             document.getElementById('t6-pie-tab').style.setProperty('--percentage', pct);
+            // The tab's tick follows its ring: a stage that stops being full
+            // must stop claiming it is finished.
+            if (window.MJMReview && MJMReview.syncTicks) MJMReview.syncTicks();
             document.getElementById('t6-pie-analysis').style.setProperty('--percentage', pct);
             document.getElementById('t6-percent-text').innerText = pct + '%';
 
@@ -9088,8 +9136,47 @@ Thank you.`;
         });
       }
 
+      /* A tick in the tab's ring when that stage is BOTH signed off and full.
+
+         Checking whether a tab was verified meant opening it and reading the
+         banner — eight tabs, one at a time, to answer a question about the
+         whole batch. The ring was already there and already showing how full
+         the stage is; it just never said whether anybody had signed it.
+
+         Both conditions, deliberately. A verified tab that is not yet complete
+         has had work added since it was signed, and a complete tab nobody has
+         signed is not finished either — a tick for either alone would be the
+         wrong kind of reassurance. */
+      const TAB_PIE = { 8: 't8-pie-tab', 2: 't2-pie-tab', 3: 't3-pie-tab',
+                        4: 't4-pie-tab', 5: 't5-pie-tab', 6: 't6-pie-tab' };
+
+      function syncTabTicks() {
+        Object.entries(STAGE_BY_TAB).forEach(([tab, stage]) => {
+          const btn = document.getElementById(`tab-btn-${tab}`);
+          if (!btn) return;
+          const cover = btn.querySelector('.completion-pie-cover');
+          if (!cover) return;
+
+          const pieId = TAB_PIE[tab];
+          // Tab 1's ring is fixed at 100 in the markup and carries no id.
+          const pct = pieId
+            ? parseFloat((document.getElementById(pieId) || {}).style?.getPropertyValue('--percentage') || '0')
+            : 100;
+          const done = !!verifications[stage] && pct >= 100;
+
+          let tick = cover.querySelector('.tab-tick');
+          if (done && !tick) {
+            cover.insertAdjacentHTML('beforeend',
+              '<span class="tab-tick" aria-label="Verified and complete" title="Verified and complete">✓</span>');
+          } else if (!done && tick) {
+            tick.remove();
+          }
+        });
+      }
+
       function renderAll() {
         TAB_INDICES.forEach(renderBanner);
+        syncTabTicks();
       }
 
       async function refresh() {
@@ -9518,7 +9605,11 @@ Thank you.`;
       }
 
       window.MJMReview = { boot, refresh, mark, unmark, verify, unverify, reject, submitReject, clearRejection,
-                           rowVerify, rowUnverify, rowReject, clearRowRejection };
+                           rowVerify, rowUnverify, rowReject, clearRowRejection,
+                           // Exposed so a tab's own maths can re-check its tick the
+                           // moment its ring changes, rather than waiting for the
+                           // next full refresh.
+                           syncTicks: syncTabTicks };
     })();
     </script>
 
