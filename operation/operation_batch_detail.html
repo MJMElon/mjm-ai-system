@@ -87,10 +87,14 @@
         
         @keyframes popIn { 0% { opacity: 0; transform: scale(0.95) translateY(20px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
 
-        /* The tick that sits inside a tab's completion ring once the stage is
-           both verified and full. Sized to the ring's hole rather than to the
-           text around it, so it reads as part of the ring. */
-        .tab-tick { font-size: 11px; font-weight: 900; color: #4a7a2e; line-height: 1; }
+        /* The tick inside a tab's completion ring. Sized to the ring's hole
+           rather than to the text around it, so it reads as part of the ring.
+           Outline while the stage is merely finished; filled once a verifier
+           has signed it, so "done" and "checked" are one glance apart. */
+        .tab-tick { font-size: 11px; font-weight: 900; color: #8fae72; line-height: 1;
+                    display: inline-flex; align-items: center; justify-content: center;
+                    width: 100%; height: 100%; border-radius: 999px; }
+        .tab-tick-signed { color: #ffffff; background: #4a7a2e; }
 
         /* Where you were just sent. Rings the row for a couple of seconds after
            a jump, because arriving somewhere by scroll leaves you looking at a
@@ -1239,24 +1243,8 @@
                                      its count underneath, and the labels are big enough to read
                                      without leaning in. -->
                                 <div class="bg-white rounded-2xl border border-[#e8dcc8] shadow-sm p-5">
-                                    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                                    <div class="flex items-center justify-between mb-4">
                                         <h4 class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">Culling Progress Dashboard</h4>
-                                        <!-- The totals used to be a wide red band at the very
-                                             bottom of the tab, under the records — so the
-                                             batch's headline figure was the last thing on the
-                                             page and out of sight from the dashboard it
-                                             belongs to. Same two figures, beside the heading. -->
-                                        <div class="flex items-center gap-4 px-4 py-2 rounded-xl bg-[#fff5f5] border border-[#f8d7da]">
-                                            <div>
-                                                <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest">Total Culled</div>
-                                                <div class="text-base font-black text-[#a83020] tabular-nums leading-tight" id="t4-total-culled">0</div>
-                                            </div>
-                                            <div class="w-px h-7 bg-[#f8d7da]"></div>
-                                            <div>
-                                                <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest">Avg Cull Rate</div>
-                                                <div class="text-base font-black text-[#c07820] tabular-nums leading-tight" id="t4-avg-cull-rate">0.0%</div>
-                                            </div>
-                                        </div>
                                     </div>
 
                                     <!-- The bar's elements are still written to by the existing
@@ -1298,14 +1286,6 @@
                                     <span id="t4-val-doubletone" class="hidden">0</span>
                                     <span id="t4-val-doubletone-pct" class="hidden">0%</span>
 
-                                    <!-- Balance status box -->
-                                    <div id="t4-balance-box" class="p-3 rounded-xl border border-[#c07820] bg-[#fffaf0] flex items-center gap-3">
-                                        <span class="text-2xl shrink-0" id="t4-balance-icon">⏳</span>
-                                        <div class="flex-1 min-w-0">
-                                            <div class="text-xs font-black uppercase tracking-wider" id="t4-balance-title" style="color:#c07820">Pending: fill cull entries below</div>
-                                            <div class="text-[10px] font-bold uppercase tracking-widest mt-0.5" id="t4-balance-desc" style="color:#c07820">Pending includes: remaining tray balance + Premium PN + D-Tone PN</div>
-                                        </div>
-                                    </div>
                                 </div>
 
                                 <!-- ══ SECTION 3: 1st Culling Records ══ -->
@@ -1328,9 +1308,37 @@
 
                                     <div id="cull-rows-container" class="px-6 pb-4 space-y-3"></div>
 
-                                    <!-- The totals band that used to sit here is now beside the
-                                         dashboard heading above, where it can be read at the
-                                         same time as the figures it summarises. -->
+                                    <!-- The tab's last word, on one line: what was culled, and
+                                         whether the batch adds up.
+
+                                         The totals belong here, at the foot of the records they
+                                         total — moving them up to the dashboard heading put them
+                                         above the rows they are the sum of, which reads
+                                         backwards. The balanced/pending box has come DOWN to
+                                         join them from the middle of the dashboard: it is a
+                                         verdict on the whole tab, so it belongs where the tab
+                                         ends, beside the figures it is a verdict on, and
+                                         immediately above the Save button that acts on both. -->
+                                    <div class="mx-6 mb-4 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)] gap-3 items-stretch">
+                                        <div class="p-4 bg-[#fff5f5] rounded-xl border border-[#f8d7da] flex flex-wrap gap-x-10 gap-y-2 items-center">
+                                            <div>
+                                                <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">Total Culled</div>
+                                                <div class="text-2xl font-black text-[#a83020] tabular-nums leading-tight" id="t4-total-culled">0</div>
+                                            </div>
+                                            <div>
+                                                <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">Avg Cull Rate</div>
+                                                <div class="text-2xl font-black text-[#c07820] tabular-nums leading-tight" id="t4-avg-cull-rate">0.0%</div>
+                                            </div>
+                                        </div>
+
+                                        <div id="t4-balance-box" class="p-4 rounded-xl border border-[#c07820] bg-[#fffaf0] flex items-center gap-3">
+                                            <span class="text-2xl shrink-0" id="t4-balance-icon">⏳</span>
+                                            <div class="flex-1 min-w-0">
+                                                <div class="text-xs font-black uppercase tracking-wider" id="t4-balance-title" style="color:#c07820">Pending: fill cull entries below</div>
+                                                <div class="text-[10px] font-bold uppercase tracking-widest mt-0.5" id="t4-balance-desc" style="color:#c07820">Pending includes: remaining tray balance + Premium PN + D-Tone PN</div>
+                                            </div>
+                                        </div>
+                                    </div>
 
                                     <div class="px-6 pb-6 flex justify-end">
                                         <button type="button" id="save-cull-btn" class="btn-earth !bg-gradient-to-r !from-[#a83020] !to-[#7f1d1d] !shadow-[0_8px_20px_-4px_rgba(168,48,32,0.5)] px-12" onclick="saveCullingTab()">Save 1st Culling Report (0% Complete)</button>
@@ -9242,17 +9250,18 @@ Thank you.`;
         });
       }
 
-      /* A tick in the tab's ring when that stage is BOTH signed off and full.
+      /* A tick in the tab's ring the moment that stage is complete.
 
-         Checking whether a tab was verified meant opening it and reading the
-         banner — eight tabs, one at a time, to answer a question about the
-         whole batch. The ring was already there and already showing how full
-         the stage is; it just never said whether anybody had signed it.
+         The ring going green already meant "full", but a ring is a shape you
+         have to look at twice — a full green circle and a nearly-full one are
+         the same circle at a glance. A tick is not.
 
-         Both conditions, deliberately. A verified tab that is not yet complete
-         has had work added since it was signed, and a complete tab nobody has
-         signed is not finished either — a tick for either alone would be the
-         wrong kind of reassurance. */
+         Signed off gets its own weight rather than its own rule: a complete
+         stage is ticked, and a complete stage that a verifier has ALSO signed
+         is ticked in solid green on a green ground. So one look answers both
+         "is it done" and "has anybody checked it", and neither answer is
+         hidden behind the other. (This started as verified-AND-complete, which
+         meant most finished tabs showed nothing at all.) */
       const TAB_PIE = { 8: 't8-pie-tab', 2: 't2-pie-tab', 3: 't3-pie-tab',
                         4: 't4-pie-tab', 5: 't5-pie-tab', 6: 't6-pie-tab' };
 
@@ -9268,14 +9277,21 @@ Thank you.`;
           const pct = pieId
             ? parseFloat((document.getElementById(pieId) || {}).style?.getPropertyValue('--percentage') || '0')
             : 100;
-          const done = !!verifications[stage] && pct >= 100;
+          const complete = pct >= 100;
+          const signed   = !!verifications[stage];
 
           let tick = cover.querySelector('.tab-tick');
-          if (done && !tick) {
-            cover.insertAdjacentHTML('beforeend',
-              '<span class="tab-tick" aria-label="Verified and complete" title="Verified and complete">✓</span>');
-          } else if (!done && tick) {
+          if (complete && !tick) {
+            cover.insertAdjacentHTML('beforeend', '<span class="tab-tick">✓</span>');
+            tick = cover.querySelector('.tab-tick');
+          } else if (!complete && tick) {
             tick.remove();
+            tick = null;
+          }
+          if (tick) {
+            tick.classList.toggle('tab-tick-signed', signed);
+            tick.title = signed ? 'Complete and verified' : 'Complete — not yet verified';
+            tick.setAttribute('aria-label', tick.title);
           }
         });
       }
