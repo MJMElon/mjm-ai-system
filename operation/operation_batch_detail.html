@@ -1484,7 +1484,7 @@
                                     <div class="hidden lg:grid gap-2 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 0.9fr 0.5fr 0.55fr 0.65fr 1fr 0.85fr;">
                                         <span>Main Plot</span>
                                         <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch. CAL-… calibration DOs are included; only cancelled DOs are excluded. Click a figure to see the DOs behind it.">Sales</span>
-                                        <span title="Auto: Transplanted − 2nd Culled − Sales − Transferred out">Balance</span>
+                                        <span class="text-[#0891b2]" title="How many seedlings this plot sent to another plot, added up from its lines on the Transfer Data tab. Keyed there, shown here.">Transfer Amount</span>
                                         <span class="text-[#a83020]" title="Auto: 2nd Culled + Balance, with the rate below it">3rd Culled</span>
                                         <span>Drone Map</span>
                                         <span>Date</span>
@@ -7301,6 +7301,16 @@ Thank you.`;
                    row — a main plot at zero balance is still part of the cull
                    arithmetic and keeps its cells. */
                 const soldOut   = !!p.isTransferRow && autoBal === 0;
+                /* A plot is finished when its drone map qty is keyed and it has
+                   a culled date — or when it is a sold-out -R plot, which will
+                   never have either and is finished all the same. Finished rows
+                   arrive folded; everything else arrives open, because an
+                   unfinished row IS the work and hiding it behind a button
+                   would mean twenty clicks before a single figure is keyed. */
+                const rowDone   = soldOut ||
+                                  (p.savedMapQty !== null && p.savedMapQty !== undefined && p.savedMapQty !== '' &&
+                                   !!p.savedCullDate);
+                const folded    = rowDone;
                 // AUTO 3rd culled = 2nd culled + balance — fully calculated,
                 // not editable by hand. A computed 0 (e.g. everything sold) is
                 // real data and shows/saves as 0 rather than blank.
@@ -7319,22 +7329,59 @@ Thank you.`;
                 const rowContainer = p.isTransferRow ? trContainer : mainContainer;
                 rowContainer.insertAdjacentHTML('beforeend', `
                     <div id="${rowId}" class="t6-plot-row border ${rowBg} rounded-xl overflow-hidden">
+
+                        <!-- FOLDED — a row that is finished reads as one line.
+
+                             A plot needs a map qty and a culled date and then it is done, and
+                             a done plot was still showing its upload zone, its date picker and
+                             every label around them. Twenty finished plots was a page of
+                             controls nobody was going to touch. So a finished row folds to
+                             what it says, with Edit to open it again; a row still waiting for
+                             something opens by itself, because that IS the work.
+
+                             Same grid as the open half and the column headings, so folding one
+                             row does not shift its neighbours' columns. -->
+                        <div class="t6-pr-view ${folded ? '' : 'hidden'} grid grid-cols-2 lg:grid-cols-[${gridCols}] gap-2 px-4 py-3 items-center t-tidy">
+                            <div class="min-w-0">
+                                <div class="text-base font-black text-[#3d2610] leading-tight truncate">${p.plot}</div>
+                                <div class="text-[9px] font-bold text-[#8a7a68] uppercase tracking-widest">${t6Fmt(p.qty)} in${dead2 ? ` · ${t6Fmt(dead2)} 2nd` : ''}</div>
+                            </div>
+                            <div class="text-sm font-black text-[#3a7ab4] tabular-nums t6-v-sales">—</div>
+                            <div class="text-sm font-black text-[#0891b2] tabular-nums t6-v-moved">—</div>
+                            <div>
+                                <div class="text-sm font-black text-[#a83020] tabular-nums t6-v-culled">—</div>
+                                <div class="text-[10px] font-black text-[#8a7a68] tabular-nums t6-v-rate">—</div>
+                            </div>
+                            <div class="text-[11px] font-black text-[#4a7a2e] uppercase tracking-widest truncate t6-v-map">—</div>
+                            <div class="flex items-center justify-between gap-2 min-w-0">
+                                <span class="text-[11px] font-black text-[#3d2610] tabular-nums truncate t6-v-date">—</span>
+                                <button type="button" title="Open this plot"
+                                    class="shrink-0 px-2 py-1 bg-white border border-[#d8cbb4] text-[#5b4a33] text-[9px] font-black uppercase tracking-widest rounded hover:bg-[#f5efe4]"
+                                    onclick="toggleT6PlotRow(this, true)">Edit</button>
+                            </div>
+                        </div>
+
+                        <div class="t6-pr-edit ${folded ? 'hidden' : ''}">
                         <div class="grid grid-cols-1 lg:grid-cols-[${gridCols}] gap-2 p-4 items-start t-tidy">
 
                             <!-- Plot — Transplanted + 2nd Culled shown compactly here instead of
                                  their own columns. -->
+                            <!-- The plot is what the row is ABOUT, and it was set at the same
+                                 size as the small print beside it. Name and figures both up a
+                                 step, so the eye lands on which plot before it lands on a
+                                 date input. -->
                             <div class="flex flex-col gap-0.5 pt-1">
-                                <div class="text-sm font-black text-[#3d2610]">${p.plot}</div>
+                                <div class="text-lg font-black text-[#3d2610] leading-tight">${p.plot}</div>
                                 ${showTypeLabel ? `<div class="text-[9px] font-bold text-[#8a7a68] uppercase tracking-widest">${typeLabel}</div>` : ''}
                                 <div class="flex items-center gap-3 mt-1">
                                     <div>
                                         <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest">Transplanted</div>
-                                        <div class="text-sm font-black text-[#3d2610]">${p.qty.toLocaleString()}</div>
+                                        <div class="text-base font-black text-[#3d2610] tabular-nums">${t6Fmt(p.qty)}</div>
                                     </div>
-                                    <div class="w-px h-6 bg-[#e8dcc8]"></div>
+                                    <div class="w-px h-7 bg-[#e8dcc8]"></div>
                                     <div>
                                         <div class="text-[8px] font-black text-[#a83020] uppercase tracking-widest">2nd Culled</div>
-                                        <div class="text-sm font-black text-[#a83020]">${dead2.toLocaleString()}</div>
+                                        <div class="text-base font-black text-[#a83020] tabular-nums">${t6Fmt(dead2)}</div>
                                     </div>
                                 </div>
                                 ${p.transferFrom ? `<div class="text-[8px] font-black text-[#0891b2] uppercase tracking-widest">↘ Transferred from ${p.transferFrom}</div>` : ''}
@@ -7349,18 +7396,30 @@ Thank you.`;
                             <div class="pt-1">
                                 <div class="text-[9px] font-black text-[#3a7ab4] uppercase lg:hidden mb-0.5">Sales</div>
                                 ${(p.salesDOs && p.salesDOs.length)
-                                    ? `<button type="button" class="text-base font-black text-[#3a7ab4] underline decoration-dotted underline-offset-4 hover:text-[#1d5a94] cursor-pointer bg-transparent border-0 p-0 font-[inherit]"
+                                    ? `<button type="button" class="t6-sales-display text-base font-black text-[#3a7ab4] tabular-nums underline decoration-dotted underline-offset-4 hover:text-[#1d5a94] cursor-pointer bg-transparent border-0 p-0 font-[inherit]"
                                             onmouseenter="showT6SalesTip(this, ${i})" onmouseleave="hideT6SalesTip()"
-                                            onclick="hideT6SalesTip(); openT6SalesModal(${i})">${sales.toLocaleString()}</button>`
-                                    : `<div class="text-base font-black text-[#3a7ab4]">${sales.toLocaleString()}</div>`}
+                                            onclick="hideT6SalesTip(); openT6SalesModal(${i})">${t6Fmt(sales)}</button>`
+                                    : `<div class="t6-sales-display text-base font-black text-[#3a7ab4] tabular-nums">${t6Fmt(sales)}</div>`}
                             </div>
 
-                            <!-- Balance — AUTO: transplanted − 2nd culled − sales − transferred out.
-                                 Plain black text, matching Transplanted. -->
+                            <!-- Transfer Amount — how many seedlings this plot SENT, added up
+                                 from its own lines on the Transfer Data tab.
+
+                                 This cell used to show Balance, which is the figure the 3rd
+                                 Culled qty is derived from and therefore already readable one
+                                 column to the right: Balance and 3rd Culled only ever differ
+                                 by the 2nd cull. What was NOT on this tab was where a plot's
+                                 missing seedlings went — that lived on another tab entirely,
+                                 so a row that did not add up sent somebody hunting.
+
+                                 Balance itself is unchanged and still drives everything; it
+                                 has simply stopped taking up a column to say what the next
+                                 column says. The hidden input below is what every calc and
+                                 the save read, and it must stay whatever this cell shows. -->
                             <div class="pt-1">
-                                <div class="text-[9px] font-black text-[#8a7a68] uppercase lg:hidden mb-0.5">Balance</div>
-                                <div class="text-base font-black text-[#3d2610] t6-balance-display"
-                                    title="Auto: Transplanted − 2nd Culled − Sales − Transferred out">${autoBal.toLocaleString()}</div>
+                                <div class="text-[9px] font-black text-[#0891b2] uppercase lg:hidden mb-0.5">Transfer Amount</div>
+                                <div class="text-base font-black ${moved ? 'text-[#0891b2]' : 'text-[#c9bda8]'} t6-moved-display tabular-nums"
+                                    title="Sent to other plots, from this plot's lines on the Transfer Data tab. Balance is Transplanted − 2nd Culled − Sales − this.">${moved ? t6Fmt(moved) : '—'}</div>
                                 <input type="hidden" class="t6-balance" data-transplanted="${p.qty}" value="${autoBal}">
                             </div>
 
@@ -7391,7 +7450,8 @@ Thank you.`;
                                                          text-[10px] font-black text-[#4a7a2e] uppercase tracking-widest whitespace-nowrap">[All Sold Out]</div>` : ''}
                                 <div class="flex flex-col gap-1.5 ${soldOut ? 'hidden' : ''}">
                                 <input type="number" min="0" class="input-style t6-map-qty !text-xs !py-2 w-full" placeholder="Map qty"
-                                    value="${p.savedMapQty ?? ''}" oninput="calcT6()">
+                                    value="${p.savedMapQty ?? ''}"
+                                    oninput="calcT6(); t6PaintPlotRow(this.closest('.t6-plot-row'))">
                                 <div id="${rowId}-doc-zone"
                                     class="w-full border-2 border-dashed border-[#c07820] bg-white rounded-xl h-[45px] flex items-center justify-center cursor-pointer hover:bg-[#fdfaf4] hover:border-[#a05e10] transition-all"
                                     onclick="document.getElementById('${rowId}-doc-input').click()"
@@ -7428,12 +7488,24 @@ Thank you.`;
                                  3rd_Culling log's remark as CullDate; saveTab6() reads
                                  .t6-cull-date the same way regardless of which tab it's on.
                                  Folded away, not removed, on a sold-out -R plot — see above. -->
-                            <div class="pt-1 min-w-[110px] ${soldOut ? 'invisible' : ''}">
+                            <!-- A date box only ever holds a date, so it is sized for one
+                                 rather than stretched to fill its column. Full width it was
+                                 the widest thing on the row, which put the eye on the least
+                                 interesting cell and left the box floating out of line with
+                                 the figures beside it. -->
+                            <div class="pt-1 ${soldOut ? 'invisible' : ''}">
                                 <div class="text-[9px] font-black text-[#8a7a68] uppercase lg:hidden mb-0.5">Date</div>
-                                <input type="date" class="input-style t6-cull-date !text-xs !py-2 !px-2 !text-left w-full" value="${p.savedCullDate || ''}"
+                                <input type="date" class="input-style t6-cull-date !text-[11px] !py-1.5 !px-2 !text-left w-full max-w-[118px]" value="${p.savedCullDate || ''}"
+                                    onchange="t6PaintPlotRow(this.closest('.t6-plot-row'))"
                                     title="Date this plot was culled">
                             </div>
 
+                        </div>
+                        <div class="flex justify-end px-4 pb-3 -mt-1">
+                            <button type="button" title="Fold this plot away"
+                                class="px-2.5 py-1 bg-[#f0f8ec] border border-[#c3e6cb] text-[#4a7a2e] text-[9px] font-black uppercase tracking-widest rounded hover:bg-[#c3e6cb]"
+                                onclick="toggleT6PlotRow(this, false)">Done</button>
+                        </div>
                         </div>
                     </div>
                 `);
@@ -7510,6 +7582,8 @@ Thank you.`;
             t6_plotData.forEach((p, i) => {
                 (p.savedTransfers || []).forEach(t => addT6TransferRecord(i, t));
                 syncT6TransferEmpty(i);
+                // A row that arrives folded has to arrive saying something.
+                t6PaintPlotRow(document.getElementById(`t6-row-${i}`));
             });
 
             // Restore previously-uploaded drone maps / docs.
@@ -7780,6 +7854,44 @@ Thank you.`;
                 </div>`;
         }
 
+        /* Fold a whole plot row open or shut, and keep its folded face true.
+
+           The open half stays in the document either way — every calculation,
+           the mismatch check and the save all read .t6-map-qty, .t6-cull-date
+           and .t6-culled-input by class, and a control that is not there reads
+           as blank rather than as unchanged. */
+        function toggleT6PlotRow(btn, open) {
+            const row = btn.closest('.t6-plot-row');
+            if (!row) return;
+            row.querySelector('.t6-pr-edit')?.classList.toggle('hidden', !open);
+            row.querySelector('.t6-pr-view')?.classList.toggle('hidden', open);
+            t6PaintPlotRow(row);
+        }
+
+        function t6PaintPlotRow(row) {
+            if (!row) return;
+            const view = row.querySelector('.t6-pr-view');
+            if (!view) return;
+            const txt = (sel) => row.querySelector(sel)?.innerText.trim() || '';
+            const val = (sel) => row.querySelector(sel)?.value ?? '';
+            const put = (sel, s) => { const el = view.querySelector(sel); if (el) el.innerText = s; };
+
+            // Read the open half rather than recompute: two sums of the same
+            // thing is how a screen ends up disagreeing with itself.
+            put('.t6-v-sales',  txt('.t6-sales-display') || '—');
+            put('.t6-v-moved',  row.querySelector('.t6-moved-display')?.innerText.trim() || '—');
+            const culled = val('.t6-culled-input');
+            put('.t6-v-culled', culled === '' ? '—' : t6Fmt(parseInt(culled) || 0));
+            put('.t6-v-rate',   row.querySelector('.t6-cull-rate-cell')?.innerText.trim() || '—');
+
+            const mapQty = val('.t6-map-qty');
+            const hasDoc = !row.querySelector('[id$="-doc-preview"]')?.classList.contains('hidden');
+            put('.t6-v-map', mapQty === ''
+                ? (hasDoc ? 'Attached' : '—')
+                : `${t6Fmt(parseInt(mapQty) || 0)}${hasDoc ? ' · Attached' : ''}`);
+            put('.t6-v-date', val('.t6-cull-date') || '—');
+        }
+
         /* Fold one line open or shut. A line with nothing keyed into it yet
            cannot fold — there would be nothing to read — so Done on an empty
            line leaves it open rather than hiding a half-made record. */
@@ -7942,8 +8054,15 @@ Thank you.`;
 
             const balEl = rowEl.querySelector('.t6-balance');
             if (balEl) balEl.value = n.bal;
-            const balDisp = rowEl.querySelector('.t6-balance-display');
-            if (balDisp) balDisp.innerText = n.bal.toLocaleString();
+            // The visible cell is the transfer amount now; Balance is still
+            // computed and still drives the culled qty, it just no longer
+            // takes up a column to repeat what the next column says.
+            const movedDisp = rowEl.querySelector('.t6-moved-display');
+            if (movedDisp) {
+                movedDisp.innerText = moved ? t6Fmt(moved) : '—';
+                movedDisp.classList.toggle('text-[#0891b2]', moved > 0);
+                movedDisp.classList.toggle('text-[#c9bda8]', moved === 0);
+            }
             // The Transfer Data tab's own Balance is deliberately NOT touched
             // here — it's a fixed reference (Transplanted − 2nd Culled − Sales,
             // no transfer deduction) and isn't linked to Main Culling's Balance,
@@ -7996,6 +8115,11 @@ Thank you.`;
                     }
                 });
             }
+
+            // Whatever this row now says, its folded face says the same. One
+            // call at the end of the recalculation rather than a repaint at
+            // every keystroke's call site, which is how the two drift apart.
+            t6PaintPlotRow(document.getElementById(rowId));
         }
 
         /* Fold the transferred plots away. Purely visual — hidden rows are still
@@ -8240,6 +8364,7 @@ Thank you.`;
             }
             if (zone) zone.classList.add('hidden');
             if (preview) { preview.classList.remove('hidden'); preview.classList.add('flex'); }
+            t6PaintPlotRow(preview && preview.closest('.t6-plot-row'));
         }
 
         function processT6Doc(file, rowId) {
@@ -8261,6 +8386,7 @@ Thank you.`;
             const icon = document.getElementById(`${rowId}-doc-icon`);
             if (icon) { icon.style.backgroundImage = ''; icon.innerText = '📄'; }
             document.getElementById(`${rowId}-doc-zone`).classList.remove('hidden');
+            t6PaintPlotRow(preview && preview.closest('.t6-plot-row'));
             calcT6();
         }
 
