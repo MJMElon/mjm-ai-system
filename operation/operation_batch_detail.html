@@ -328,23 +328,6 @@
                     <h1 class="text-2xl font-black text-[#3d2610] uppercase tracking-widest leading-none" id="window-title">New Batch Record</h1>
                     <p class="text-[12px] font-black text-[#4a7a2e] uppercase tracking-widest mt-1 truncate" id="window-breed">—</p>
                 </div>
-                <!-- WHICH COPY OF THIS PAGE AM I LOOKING AT?
-
-                     Asked three times, and every time the answer was a guess.
-                     GitHub Pages caches HTML for about ten minutes and the
-                     browser caches on top of that, so "I pushed it" and "you
-                     are seeing it" are different facts and neither of us could
-                     tell them apart.
-
-                     document.lastModified is the served file's own timestamp,
-                     straight from the response — no build step, nothing to keep
-                     in step by hand. If this says a time before the change was
-                     pushed, the answer is the cache and not the code. -->
-                <div class="hidden sm:block text-right mr-3 shrink-0">
-                    <div class="text-[8px] font-black text-[#a39584] uppercase tracking-widest leading-none">This page</div>
-                    <div class="text-[10px] font-bold text-[#8a7a68] tabular-nums leading-tight" id="window-build"
-                         title="When the copy of this page you are looking at was published. Older than a change you expect? It is the cache — reload with Ctrl+Shift+R.">—</div>
-                </div>
                 <button onclick="window.location.href='operation_batch_record.html'" class="close-btn" title="Close and return">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
@@ -1918,14 +1901,20 @@
            Called from wherever the batch or the breed can change rather than
            set once at load, because both are editable on Tab 1 and a bar that
            is always on screen showing last week's breed is worse than no bar. */
-        /* Stamp the served file's own timestamp into the header, once. */
+        /* WHICH COPY OF THIS PAGE AM I LOOKING AT?
+
+           GitHub Pages caches HTML for about ten minutes and the browser
+           caches on top, so "it is pushed" and "you are seeing it" are
+           different facts. document.lastModified is the served file's own
+           timestamp and settles it in one line.
+
+           In the CONSOLE, not on the page: it answers a question that only
+           comes up when something looks wrong, and a date in the header was
+           furniture the other 99% of the time. */
         function showPageBuild() {
-            const el = document.getElementById('window-build');
-            if (!el) return;
-            const d = new Date(document.lastModified);
-            el.innerText = isNaN(d.getTime())
-                ? '—'
-                : d.toLocaleString('en-MY', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+            try {
+                console.info('[MJM] this page was served as of', document.lastModified);
+            } catch (e) { /* never let a diagnostic take the page down */ }
         }
 
         function syncBatchHeader() {
