@@ -87,6 +87,26 @@
         
         @keyframes popIn { 0% { opacity: 0; transform: scale(0.95) translateY(20px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
 
+        /* The 3rd Culling row grid — column headings, folded row and open row all
+           on the same seven tracks, defined ONCE here.
+
+           It used to be a Tailwind arbitrary class repeated in four places
+           (grid-cols-[0.9fr_0.5fr_…]), which meant the CDN's JIT had to
+           generate it at runtime and any one of the four could be edited out of
+           step with the others. A rule in the stylesheet cannot drift from
+           itself, and does not depend on a script arriving to exist.
+
+           Below 1024px the rows stack, which is what the Tailwind grid-cols-1
+           on each of them still does. */
+        @media (min-width: 1024px) {
+            /* Tracks only — never `display`. Whether a row is shown is Tailwind's
+               `hidden` / `grid` doing its usual job, and a rule here that also
+               set display would be a second opinion on it: a folded-away half
+               carries both classes, and the one that wins decides whether
+               folding works at all. */
+            .t6-grid { grid-template-columns: 0.9fr 0.5fr 0.55fr 0.65fr 1fr 0.85fr 58px; }
+        }
+
         /* The tick inside a tab's completion ring. Sized to the ring's hole
            rather than to the text around it, so it reads as part of the ring.
            Outline while the stage is merely finished; filled once a verifier
@@ -1546,7 +1566,7 @@
                                     </button>
                                     <button type="button" id="t6-subtab-btn-transferdata" onclick="switchT6SubTab('transferdata')"
                                         class="t6-subtab-btn px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors bg-[#fdfaf4] border-[#e8dcc8] text-[#8a7a68]">
-                                        ↘ Transfer data
+                                        Transfer data
                                     </button>
                                 </div>
 
@@ -1555,13 +1575,14 @@
                                     <!-- Column headers: Main Plot (Transplanted + 2nd Culled shown
                                          compactly under the plot name, not their own columns) → Sales →
                                          Balance → 3rd Culled (qty over %) → Drone Map → Date -->
-                                    <div class="hidden lg:grid gap-2 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 0.9fr 0.5fr 0.55fr 0.65fr 1fr 0.85fr;">
+                                    <div class="hidden lg:grid t6-grid gap-2 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy">
                                         <span>Main Plot</span>
                                         <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch. CAL-… calibration DOs are included; only cancelled DOs are excluded. Click a figure to see the DOs behind it.">Sales</span>
                                         <span class="text-[#0891b2]" title="How many seedlings this plot sent to another plot, added up from its lines on the Transfer Data tab. Keyed there, shown here.">Transfer Amount</span>
                                         <span class="text-[#a83020]" title="Auto: 2nd Culled + Balance, with the rate below it">3rd Culled</span>
                                         <span>Drone Map</span>
                                         <span>Date</span>
+                                        <span></span>
                                     </div>
 
                                     <div id="t6-plot-rows-main" class="px-6 pb-4 space-y-3 mt-2"></div>
@@ -1605,13 +1626,14 @@
                                         </div>
                                     </div>
 
-                                    <div class="hidden lg:grid gap-2 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 0.9fr 0.5fr 0.55fr 0.65fr 1fr 0.85fr;">
+                                    <div class="hidden lg:grid t6-grid gap-2 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy">
                                         <span>Transfer Plot</span>
                                         <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch. CAL-… calibration DOs are included; only cancelled DOs are excluded. Click a figure to see the DOs behind it.">Sales</span>
                                         <span title="Auto: Transplanted − 2nd Culled − Sales − Transferred out">Balance</span>
                                         <span class="text-[#a83020]" title="Auto: 2nd Culled + Balance, with the rate below it">3rd Culled</span>
                                         <span>Drone Map</span>
                                         <span>Culled Date</span>
+                                        <span></span>
                                     </div>
 
                                     <div id="t6-plot-rows-transferplot" class="px-6 pb-4 space-y-3 mt-2"></div>
@@ -7526,7 +7548,14 @@ Thank you.`;
                 // Same six columns, same widths, on both tabs — Main Culling
                 // and P-R Culling rows share one grid so switching between
                 // them doesn't shift anything left or right.
-                const gridCols = '0.9fr_0.5fr_0.55fr_0.65fr_1fr_0.85fr';
+                /* The seven tracks live in .t6-grid, in the stylesheet. The
+                   seventh is a fixed lane for the row's own button — Edit when
+                   folded, empty when open.
+
+                   Edit used to share the Date cell, pushed apart by
+                   justify-between, so the date sat wherever the button left
+                   room for it and never under its own heading. A button that
+                   moves a figure is a button in the wrong column. */
 
                 const rowContainer = p.isTransferRow ? trContainer : mainContainer;
                 rowContainer.insertAdjacentHTML('beforeend', `
@@ -7543,7 +7572,7 @@ Thank you.`;
 
                              Same grid as the open half and the column headings, so folding one
                              row does not shift its neighbours' columns. -->
-                        <div class="t6-pr-view ${folded ? '' : 'hidden'} grid grid-cols-2 lg:grid-cols-[${gridCols}] gap-2 px-4 py-3 items-center t-tidy">
+                        <div class="t6-pr-view ${folded ? '' : 'hidden'} grid grid-cols-2 t6-grid gap-2 px-4 py-3 items-center t-tidy">
                             <!-- Folded, the plot still says what went in and what the 2nd cull
                                  took — written out, not abbreviated. "2,812 in · 26 2nd" saved
                                  a line and cost the reader the two words that say which figure
@@ -7570,8 +7599,8 @@ Thank you.`;
                                 <div class="text-[10px] font-black text-[#8a7a68] tabular-nums t6-v-rate">—</div>
                             </div>
                             <div class="text-[11px] font-black text-[#4a7a2e] uppercase tracking-widest truncate t6-v-map">—</div>
-                            <div class="flex items-center justify-between gap-2 min-w-0">
-                                <span class="text-[11px] font-black text-[#3d2610] tabular-nums truncate t6-v-date">—</span>
+                            <div class="text-[11px] font-black text-[#3d2610] tabular-nums truncate t6-v-date">—</div>
+                            <div class="flex justify-end">
                                 <button type="button" title="Open this plot"
                                     class="shrink-0 px-2 py-1 bg-white border border-[#d8cbb4] text-[#5b4a33] text-[9px] font-black uppercase tracking-widest rounded hover:bg-[#f5efe4]"
                                     onclick="toggleT6PlotRow(this, true)">Edit</button>
@@ -7579,7 +7608,7 @@ Thank you.`;
                         </div>
 
                         <div class="t6-pr-edit ${folded ? 'hidden' : ''}">
-                        <div class="grid grid-cols-1 lg:grid-cols-[${gridCols}] gap-2 p-4 items-start t-tidy">
+                        <div class="grid grid-cols-1 t6-grid gap-2 p-4 items-start t-tidy">
 
                             <!-- Plot — Transplanted + 2nd Culled shown compactly here instead of
                                  their own columns. -->
@@ -7716,6 +7745,12 @@ Thank you.`;
                                     onchange="t6PaintPlotRow(this.closest('.t6-plot-row'))"
                                     title="Date this plot was culled">
                             </div>
+
+                            <!-- The seventh track. Empty here: an open row's button is
+                                 Done, at its foot. Present so the open row's six columns
+                                 land on the same lines as the folded row's and the
+                                 headings above both. -->
+                            <div></div>
 
                         </div>
                         <div class="flex justify-end px-4 pb-3 -mt-1">
