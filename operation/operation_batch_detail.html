@@ -1224,6 +1224,26 @@
                                             <span></span>
                                         </div>
                                         <div id="t3-saved-rows-list" class="space-y-1"></div>
+                                        <!-- What the rows above add up to. The Qty column is
+                                             the one figure on this list anybody adds in their
+                                             head, and the allocation percentage on the Save
+                                             button is worked out from it — so the number it
+                                             is worked out FROM belongs on the screen, under
+                                             its own column, not left to be summed by eye.
+                                             Same grid as the rows, so it lines up with them. -->
+                                        <div class="hidden md:grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_80px] gap-2 items-center px-3 pt-2 mt-1 border-t-2 border-[#e8dcc8] t-tidy">
+                                            <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Total Transplanted</span>
+                                            <span></span>
+                                            <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest" id="t3-saved-total-count">—</span>
+                                            <span class="text-base font-black text-[#4a7a2e] tabular-nums" id="t3-saved-total-qty">0</span>
+                                            <span></span>
+                                            <span></span>
+                                        </div>
+                                        <!-- Phone: the same two figures, without the columns. -->
+                                        <div class="md:hidden flex items-baseline justify-between px-3 pt-2 mt-1 border-t-2 border-[#e8dcc8]">
+                                            <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Total Transplanted</span>
+                                            <span class="text-base font-black text-[#4a7a2e] tabular-nums" id="t3-saved-total-qty-m">0</span>
+                                        </div>
                                     </div>
 
                                     <!-- New form rows -->
@@ -1599,7 +1619,7 @@
                                     <!-- Column headers: Main Plot (Transplanted + 2nd Culled shown
                                          compactly under the plot name, not their own columns) → Sales →
                                          Balance → 3rd Culled (qty over %) → Drone Map → Date -->
-                                    <div class="hidden lg:grid gap-2 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 0.9fr 0.5fr 0.55fr 0.65fr 1fr 0.85fr 58px;">
+                                    <div class="hidden lg:grid gap-3 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 1.7fr 0.6fr 0.7fr 0.7fr 0.8fr 0.95fr 58px;">
                                         <span>Main Plot</span>
                                         <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch. CAL-… calibration DOs are included; only cancelled DOs are excluded. Click a figure to see the DOs behind it.">Sales</span>
                                         <span class="text-[#0891b2]" title="How many seedlings this plot sent to another plot, added up from its lines on the Transfer Data tab. Keyed there, shown here.">Transfer Amount</span>
@@ -1643,7 +1663,6 @@
                                     <div class="px-6 pt-4 pb-2 flex items-center justify-between gap-3">
                                         <div>
                                             <div class="text-[11px] font-black text-[#3d2610] uppercase tracking-widest">Transfers</div>
-                                            <div class="text-[10px] font-bold text-[#8a7a68] mt-0.5">Seedlings moved from one plot to another on this batch.</div>
                                         </div>
                                         <button type="button" onclick="askT6TransferSource()"
                                             class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e8dcc8]
@@ -1690,7 +1709,7 @@
                                         </div>
                                     </div>
 
-                                    <div class="hidden lg:grid gap-2 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 0.9fr 0.5fr 0.55fr 0.65fr 1fr 0.85fr 58px;">
+                                    <div class="hidden lg:grid gap-3 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 1.7fr 0.6fr 0.7fr 0.7fr 0.8fr 0.95fr 58px;">
                                         <span>Transfer Plot</span>
                                         <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch. CAL-… calibration DOs are included; only cancelled DOs are excluded. Click a figure to see the DOs behind it.">Sales</span>
                                         <span class="text-[#a83020]" title="What is standing in this plot after its sales — the quantity to be culled.">3rd Culled</span>
@@ -1989,6 +2008,38 @@
             if(tabIndex === 6) syncTab6();
             if(tabIndex === 7) syncTab7();
             if(tabIndex === 8) syncTab8();
+        }
+
+        /* Work out every tab's figures once, at load, instead of the first
+           time somebody opens that tab.
+
+           A tab's ring — and the tick in it — is set by that tab's own maths,
+           and that maths only ran on switchTab(). So a finished stage showed
+           no tick until you clicked into it, and then ticked while you were
+           looking at it. That is the tick saying nothing: you check the ones
+           without a tick, and checking is what puts the tick there.
+
+           In order, and awaited, because the later tabs read what the earlier
+           ones leave behind — 1st Culling wants Transplanting's totals. Each
+           in its own try/catch: one tab that cannot load must not stop the
+           rest, it just leaves its own ring where it was. */
+        let _tabsPrewarmed = false;
+        async function prewarmAllTabs() {
+            if (_tabsPrewarmed) return;
+            _tabsPrewarmed = true;
+            const steps = [
+                ['Planting',      () => syncTab2()],
+                ['Seed Audit',    () => syncTab8()],
+                ['Transplanting', () => syncTab3()],
+                ['1st Culling',   () => syncTab4()],
+                ['2nd Culling',   () => syncTab5()],
+                ['3rd Culling',   () => syncTab6()]
+            ];
+            for (const [name, run] of steps) {
+                try { await run(); }
+                catch (e) { console.warn(`Could not pre-warm ${name}:`, e && e.message); }
+            }
+            if (window.MJMReview && MJMReview.syncTicks) MJMReview.syncTicks();
         }
 
         // ── TAB 7: Adjustments & Audit ──────────────────────────────────
@@ -2637,6 +2688,11 @@
                         addTransplantRow();
                         // Pre-warm Audit Trail summary so its tab pie reflects audit progress immediately.
                         syncTab7();
+                        // 1st Culling's allocation reads this and cannot wait for
+                        // somebody to open Transplanting — see loadDtoneNurseryQty.
+                        await loadDtoneNurseryQty(batchIdParam);
+                        // …and every other tab, for the same reason (see prewarmAllTabs).
+                        prewarmAllTabs();
                         // Populate "Last Edit" remark on every editable tab.
                         loadAllEditMeta(batchIdParam);
 
@@ -2802,24 +2858,7 @@
                 } catch(e) { console.warn('Could not load premium/dtone qty:', e.message); }
             }
 
-            // Load this batch's keyed-in "Double Tone Quantity in Nursery".
-            // Stored as a single DTone_Nursery_Qty log row per batch — admin
-            // keys the number directly; nothing is mixed in from other batches.
-            const dtoneQtyInput = document.getElementById('t3-dtone-nursery-qty');
-            if (dtoneQtyInput) dtoneQtyInput.value = '';
-            if (batch && batch !== '—') {
-                try {
-                    const { data: dtRows } = await _supabase.from('shared_inventory_logs')
-                        .select('quantity_change')
-                        .eq('batch_name', batch)
-                        .eq('transaction_type', 'DTone_Nursery_Qty')
-                        .order('created_at', { ascending: false })
-                        .limit(1);
-                    if (dtoneQtyInput && dtRows && dtRows[0] && dtRows[0].quantity_change != null) {
-                        dtoneQtyInput.value = dtRows[0].quantity_change;
-                    }
-                } catch(e) { console.warn('Could not load D-Tone nursery qty:', e.message); }
-            }
+            await loadDtoneNurseryQty(batch);
 
             // Load 1st Culling data per tray for this batch
             window._t3CullByTray = {};
@@ -2947,6 +2986,13 @@
                             }, 50);
                         });
                         tableDiv.classList.remove('hidden');
+
+                        // Sum the Qty column — see the footer's note in the markup.
+                        const savedTotal = txLogs.reduce((s, l) => s + (l.quantity_change || 0), 0);
+                        const setTot = (id, s) => { const el = document.getElementById(id); if (el) el.innerText = s; };
+                        setTot('t3-saved-total-qty',   savedTotal.toLocaleString());
+                        setTot('t3-saved-total-qty-m', savedTotal.toLocaleString());
+                        setTot('t3-saved-total-count', `${txLogs.length} record${txLogs.length === 1 ? '' : 's'}`);
 
                         // Also populate hidden form rows for calcTransplanting
                         const container = document.getElementById('transplant-rows-container');
@@ -3122,6 +3168,41 @@
         // The admin-keyed "Double Tone Quantity in Nursery" (0 when blank).
         // It joins the planted total as the allocation base for the Tab 3
         // and Tab 4 engines: total pool = planted + D-Tone nursery qty.
+        /* This batch's keyed-in "Double Tone Quantity in Nursery".
+
+           Stored as a single DTone_Nursery_Qty log row per batch — an admin
+           keys the number directly; nothing is mixed in from other batches.
+
+           It lives on the Transplanting tab but 1st Culling is the tab that
+           DEPENDS on it: the D-Tone row's tray quantity and the allocation
+           denominator both read it. While it was loaded only by syncTab3(),
+           opening 1st Culling without having opened Transplanting first read
+           an empty input as zero, and the allocation sat short of 100% until
+           you happened to visit the other tab and come back — at which point
+           it silently corrected itself. A figure that is only right if you
+           took a particular route to it is a wrong figure.
+
+           So it is loaded once at page load, before any tab is opened, and
+           re-read by syncTab3 when that tab actually renders. */
+        async function loadDtoneNurseryQty(batch) {
+            const input = document.getElementById('t3-dtone-nursery-qty');
+            if (!input) return;
+            const b = (batch || document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
+            input.value = '';
+            if (!b || b === '—') return;
+            try {
+                const { data: dtRows } = await _supabase.from('shared_inventory_logs')
+                    .select('quantity_change')
+                    .eq('batch_name', b)
+                    .eq('transaction_type', 'DTone_Nursery_Qty')
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+                if (dtRows && dtRows[0] && dtRows[0].quantity_change != null) {
+                    input.value = dtRows[0].quantity_change;
+                }
+            } catch (e) { console.warn('Could not load D-Tone nursery qty:', e.message); }
+        }
+
         function getDtoneNurseryQty() {
             const raw = (document.getElementById('t3-dtone-nursery-qty')?.value ?? '').trim();
             return raw !== '' ? (parseInt(raw.replace(/,/g, ''), 10) || 0) : 0;
@@ -7655,7 +7736,7 @@ Thank you.`;
 
                              Same grid as the open half and the column headings, so folding one
                              row does not shift its neighbours' columns. -->
-                        <div class="t6-pr-view ${folded ? '' : 'hidden'} grid grid-cols-2 lg:grid-cols-[0.9fr_0.5fr_0.55fr_0.65fr_1fr_0.85fr_58px] gap-2 px-4 py-3 items-center t-tidy">
+                        <div class="t6-pr-view ${folded ? '' : 'hidden'} grid grid-cols-2 lg:grid-cols-[1.7fr_0.6fr_0.7fr_0.7fr_0.8fr_0.95fr_58px] gap-3 px-4 py-3 items-center t-tidy">
                             <!-- Folded, the plot still says what went in and what the 2nd cull
                                  took — written out, not abbreviated. "2,812 in · 26 2nd" saved
                                  a line and cost the reader the two words that say which figure
@@ -7678,14 +7759,21 @@ Thank you.`;
                                      centred and the figure under it sat left, which is the
                                      misalignment. Centred as a unit, the label and its figure
                                      line up under the name and under the column heading. -->
-                                <div class="flex items-center justify-center gap-2 mt-0.5">
+                                <!-- whitespace-nowrap on the labels: "TRANSPLANTED" at
+                                     tracking-widest is a long word in a narrow cell, and
+                                     letting it wrap to two lines is what made this column
+                                     look crushed. The track it sits in is the widest of the
+                                     seven for the same reason — it carries a name and two
+                                     labelled figures where every other cell carries one
+                                     number. -->
+                                <div class="flex items-center justify-center gap-3 mt-1">
                                     <div>
-                                        <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest leading-none">${p.isTransferRow ? 'Transferred' : 'Transplanted'}</div>
-                                        <div class="text-sm font-black text-[#a83020] tabular-nums leading-tight">${t6Fmt(p.qty)}</div>
+                                        <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest leading-none whitespace-nowrap">${p.isTransferRow ? 'Transferred' : 'Transplanted'}</div>
+                                        <div class="text-sm font-black ${p.isTransferRow ? 'text-[#a83020]' : 'text-[#8a7a68]'} tabular-nums leading-tight">${t6Fmt(p.qty)}</div>
                                     </div>
-                                    ${p.isTransferRow ? '' : `<div class="w-px h-6 bg-[#e8dcc8]"></div>
+                                    ${p.isTransferRow ? '' : `<div class="w-px h-7 bg-[#e8dcc8]"></div>
                                     <div>
-                                        <div class="text-[8px] font-black text-[#a83020] uppercase tracking-widest leading-none">2nd Culled</div>
+                                        <div class="text-[8px] font-black text-[#a83020] uppercase tracking-widest leading-none whitespace-nowrap">2nd Culled</div>
                                         <div class="text-sm font-black text-[#a83020] tabular-nums leading-tight">${t6Fmt(dead2)}</div>
                                     </div>`}
                                 </div>
@@ -7715,7 +7803,7 @@ Thank you.`;
                         </div>
 
                         <div class="t6-pr-edit ${folded ? 'hidden' : ''}">
-                        <div class="grid grid-cols-1 lg:grid-cols-[0.9fr_0.5fr_0.55fr_0.65fr_1fr_0.85fr_58px] gap-2 p-4 items-start t-tidy">
+                        <div class="grid grid-cols-1 lg:grid-cols-[1.7fr_0.6fr_0.7fr_0.7fr_0.8fr_0.95fr_58px] gap-3 p-4 items-start t-tidy">
 
                             <!-- Plot — Transplanted + 2nd Culled shown compactly here instead of
                                  their own columns. -->
@@ -7737,7 +7825,7 @@ Thank you.`;
                                                     class="t6-dest-qty text-base font-black text-[#a83020] tabular-nums underline decoration-dotted underline-offset-4
                                                            hover:text-[#0891b2] cursor-pointer bg-transparent border-0 p-0 font-[inherit]">${t6Fmt(p.qty)}</button>
                                                <div class="t6-dest-from hidden absolute z-20 left-0 top-full mt-1 min-w-[140px] bg-white border border-[#e8dcc8] rounded-xl shadow-lg p-2 space-y-1"></div>`
-                                            : `<div class="text-base font-black text-[#a83020] tabular-nums">${t6Fmt(p.qty)}</div>`}
+                                            : `<div class="text-base font-black text-[#8a7a68] tabular-nums">${t6Fmt(p.qty)}</div>`}
                                     </div>
                                     ${p.isTransferRow ? '' : `<div class="w-px h-7 bg-[#e8dcc8]"></div>
                                     <div>
@@ -7927,28 +8015,50 @@ Thank you.`;
                    saveTab6() walks to know which plot a movement left. */
                 tdataContainer.insertAdjacentHTML('beforeend', `
                     <div id="${rowId}-tdata" class="hidden border bg-[#fdfaf4] border-[#e8dcc8] rounded-xl p-4">
-                        <div class="flex flex-wrap items-end justify-between gap-3 pb-3 mb-3 border-b border-[#e8dcc8]">
-                            <div>
-                                <div class="text-lg font-black text-[#3d2610] leading-none">${p.plot}</div>
-                                <!-- The balance belongs to the plot, so it sits with the plot
-                                     rather than in a column of its own repeated on every line. -->
-                                <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest mt-1.5 leading-none">Balance</div>
-                                <div class="text-sm font-black text-[#3d2610] tabular-nums leading-tight" id="${rowId}-tdata-balance"
-                                     title="Transplanted less Sales — what this plot has standing and could still send.">—</div>
+                        <!-- Folded, a card says the three things worth knowing about a
+                             sending plot: which plot, what it has left, and how much has
+                             gone. The individual movements — a date, a destination and a
+                             quantity each — are detail, and a plot that has sent four times
+                             was four lines of it before anybody asked.
+
+                             Hovering the total says where it went, the same way hovering a
+                             Sales figure says which delivery notes it came from. -->
+                        <div class="flex flex-wrap items-end justify-between gap-3 pb-3 border-b border-[#e8dcc8]">
+                            <div class="flex items-end gap-5">
+                                <div>
+                                    <div class="text-lg font-black text-[#3d2610] leading-none">${p.plot}</div>
+                                    <!-- The balance belongs to the plot, so it sits with the plot
+                                         rather than in a column of its own repeated on every line. -->
+                                    <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest mt-1.5 leading-none">Balance</div>
+                                    <div class="text-sm font-black text-[#3d2610] tabular-nums leading-tight" id="${rowId}-tdata-balance"
+                                         title="Transplanted less Sales — what this plot has standing and could still send.">—</div>
+                                </div>
+                                <div>
+                                    <div class="text-[8px] font-black text-[#0891b2] uppercase tracking-widest leading-none">Total Transferred</div>
+                                    <div class="text-sm font-black text-[#0891b2] tabular-nums leading-tight cursor-help" id="${rowId}-tdata-total"
+                                         onmouseenter="showT6TransferTip(this, ${i})" onmouseleave="hideT6SalesTip()">—</div>
+                                </div>
                             </div>
-                            <button type="button" onclick="addT6TransferRecord(${i})"
-                                class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e8dcc8]
-                                       bg-white text-[#3a7ab4] text-[10px] font-black uppercase tracking-widest
-                                       hover:bg-[#f4f8fc] hover:border-[#3a7ab4] transition-colors">
-                                <span class="text-sm leading-none">+</span> Another from ${_t6Esc(p.plot)}
-                            </button>
-                        </div>
-                        <div class="hidden sm:block">
-                            <div class="t6-tr-cols px-3 pb-1 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">
-                                <span>Date Transferred</span><span>To Plot</span><span>Quantity</span><span></span>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <button type="button" onclick="addT6TransferRecord(${i})"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e8dcc8]
+                                           bg-white text-[#3a7ab4] text-[10px] font-black uppercase tracking-widest
+                                           hover:bg-[#f4f8fc] hover:border-[#3a7ab4] transition-colors">
+                                    <span class="text-sm leading-none">+</span> Another from ${_t6Esc(p.plot)}
+                                </button>
+                                <button type="button" onclick="toggleT6TransferPanel(${i})" id="${rowId}-tr-toggle"
+                                    class="px-3 py-1.5 rounded-lg border border-[#d8cbb4] bg-white text-[#5b4a33]
+                                           text-[10px] font-black uppercase tracking-widest hover:bg-[#f5efe4]">Show</button>
                             </div>
                         </div>
-                        <div id="${rowId}-transfers" class="flex flex-col gap-2"></div>
+                        <div id="${rowId}-tr-body" class="hidden pt-3">
+                            <div class="hidden sm:block">
+                                <div class="t6-tr-cols px-3 pb-1 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">
+                                    <span>Date Transferred</span><span>To Plot</span><span>Quantity</span><span></span>
+                                </div>
+                            </div>
+                            <div id="${rowId}-transfers" class="flex flex-col gap-2"></div>
+                        </div>
                     </div>`);
             });
 
@@ -8247,7 +8357,24 @@ Thank you.`;
 
             // Read the open half rather than recompute: two sums of the same
             // thing is how a screen ends up disagreeing with itself.
-            put('.t6-v-sales',  txt('.t6-sales-display') || '—');
+            /* Sales carries its delivery notes on the FOLDED figure too, not
+               only the open one. Folded is how this tab is normally read, and
+               "which DOs is that 2,201?" was a question you could only ask by
+               opening the row first — which is the one thing the fold exists
+               to save you. Same hover tip, same click-through modal. */
+            const salesTxt  = txt('.t6-sales-display') || '—';
+            const salesCell = view.querySelector('.t6-v-sales');
+            if (salesCell) {
+                const sIdx = parseInt(String(row.id).replace('t6-row-', ''), 10);
+                const sP   = t6_plotData[sIdx];
+                salesCell.innerHTML = (sP && sP.salesDOs && sP.salesDOs.length)
+                    ? `<button type="button" title="Delivery notes behind this figure"
+                            onmouseenter="showT6SalesTip(this, ${sIdx})" onmouseleave="hideT6SalesTip()"
+                            onclick="hideT6SalesTip(); openT6SalesModal(${sIdx})"
+                            class="font-[inherit] text-[inherit] font-black tabular-nums underline decoration-dotted
+                                   underline-offset-4 hover:text-[#1d5a94] cursor-pointer bg-transparent border-0 p-0">${_t6Esc(salesTxt)}</button>`
+                    : _t6Esc(salesTxt);
+            }
             put('.t6-v-moved',  row.querySelector('.t6-moved-display')?.innerText.trim() || '—');
             const culled = val('.t6-culled-input');
             put('.t6-v-culled', culled === '' ? '—' : t6Fmt(parseInt(culled) || 0));
@@ -8382,8 +8509,13 @@ Thank you.`;
 
             syncT6TransferList();
             recalcT6Transfer(rowIdx);
-            // A movement being keyed now: the date is the first thing to say.
-            if (!rec) el.querySelector('.t6-tr-date')?.focus();
+            if (!rec) {
+                // A movement being keyed now has to be visible to key: open the
+                // list if it is shut, then put the cursor on the first decision.
+                const body = document.getElementById(`t6-row-${rowIdx}-tr-body`);
+                if (body && body.classList.contains('hidden')) toggleT6TransferPanel(rowIdx);
+                el.querySelector('.t6-tr-date')?.focus();
+            }
         }
 
         function removeT6TransferRecord(btn) {
@@ -8409,6 +8541,17 @@ Thank you.`;
                 card.classList.toggle('hidden', n === 0);
                 const bal = document.getElementById(`t6-row-${i}-tdata-balance`);
                 if (bal) bal.innerText = t6Fmt(t6MoveBalance(p));
+                // What has actually gone, added up from this plot's own lines.
+                const tot = document.getElementById(`t6-row-${i}-tdata-total`);
+                if (tot) {
+                    let sent = 0;
+                    host.querySelectorAll('.t6-transfer-rec').forEach(rec => {
+                        const to  = rec.querySelector('.t6-tr-plot')?.value || '';
+                        const qty = parseInt(rec.querySelector('.t6-tr-qty')?.value) || 0;
+                        if (to && qty > 0) sent += qty;
+                    });
+                    tot.innerText = sent ? t6Fmt(sent) : '—';
+                }
             });
             const empty = document.getElementById('t6-transferdata-empty');
             if (empty) empty.classList.toggle('hidden', total > 0);
@@ -8480,12 +8623,56 @@ Thank you.`;
 
         /* Fold a plot's transfer list away. Visual only — the lines stay in the
            DOM, so they keep counting towards the balance and keep saving. */
+        /* Open or shut one plot's list of movements. Visual only — the lines
+           stay in the DOM either way, so they keep counting towards the
+           balance and keep being found by the save. */
         function toggleT6TransferPanel(rowIdx) {
-            const body  = document.getElementById(`t6-row-${rowIdx}-tr-body`);
-            const caret = document.getElementById(`t6-row-${rowIdx}-tr-caret`);
+            const body = document.getElementById(`t6-row-${rowIdx}-tr-body`);
+            const btn  = document.getElementById(`t6-row-${rowIdx}-tr-toggle`);
             if (!body) return;
-            const collapsed = body.classList.toggle('hidden');
-            if (caret) caret.innerText = collapsed ? '▸' : '▾';
+            const shut = body.classList.toggle('hidden');
+            if (btn) btn.innerText = shut ? 'Show' : 'Hide';
+        }
+
+        /* Where a plot's seedlings went, on hover — the same shape of answer
+           the Sales figure gives for its delivery notes, and for the same
+           reason: the total is the number you look at, and "where did it go"
+           is the only question it raises. */
+        function showT6TransferTip(anchorEl, rowIdx) {
+            const host = document.getElementById(`t6-row-${rowIdx}-transfers`);
+            const p = t6_plotData[rowIdx];
+            if (!host || !p) return;
+            const lines = [];
+            host.querySelectorAll('.t6-transfer-rec').forEach(rec => {
+                const to   = rec.querySelector('.t6-tr-plot')?.value || '';
+                const qty  = parseInt(rec.querySelector('.t6-tr-qty')?.value) || 0;
+                const date = rec.querySelector('.t6-tr-date')?.value || '';
+                if (!to || qty <= 0) return;                 // still being filled in
+                lines.push({ to, qty, date });
+            });
+            if (!lines.length) return;
+            const total = lines.reduce((a, l) => a + l.qty, 0);
+            let html = `<div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">` +
+                       `Transferred out of ${_t6Esc(p.plot)} — ${lines.length} movement${lines.length === 1 ? '' : 's'}</div>`;
+            lines.forEach(l => {
+                html += `<div class="flex items-baseline gap-3 text-[11px] py-0.5">
+                            <span class="font-black text-[#0891b2] uppercase">${_t6Esc(l.to)}</span>
+                            <span class="text-[#8a7a68] font-bold">${_t6FmtDate(l.date)}</span>
+                            <span class="ml-auto font-black text-[#0891b2] tabular-nums">${t6Fmt(l.qty)}</span>
+                         </div>`;
+            });
+            html += `<div class="flex items-baseline gap-2 border-t border-[#e8dcc8] mt-1.5 pt-1.5 text-[11px]">
+                        <span class="font-black text-[#3d2610] uppercase tracking-widest text-[9px]">Total</span>
+                        <span class="ml-auto font-black text-[#0891b2] tabular-nums">${t6Fmt(total)}</span>
+                     </div>`;
+            const tip = document.getElementById('t6-sales-tip');
+            tip.innerHTML = html;
+            tip.classList.remove('hidden');
+            const a = anchorEl.getBoundingClientRect();
+            const t = tip.getBoundingClientRect();
+            tip.style.left = Math.min(Math.max(8, a.left), window.innerWidth - t.width - 8) + 'px';
+            tip.style.top  = (a.bottom + 8 + t.height > window.innerHeight - 8
+                                ? Math.max(8, a.top - t.height - 8) : a.bottom + 8) + 'px';
         }
 
         /* Transfers move living seedlings out of this plot, so they change the
