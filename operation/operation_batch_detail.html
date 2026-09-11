@@ -1187,24 +1187,24 @@
                                                              wraps, and without a floor under the short ones its figure
                                                              sat a line lower than its neighbours'. Reserving the second
                                                              line everywhere puts the four percentages on one baseline. -->
-                                                        <div class="text-[11px] font-black text-[#3a7ab4] uppercase tracking-wide leading-tight min-h-[2.2em] flex items-start">Main Plot</div>
-                                                        <div class="text-3xl font-black text-[#3a7ab4] mt-1 tabular-nums leading-none" id="t3-val-main-pct">—</div>
-                                                        <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1" id="t3-val-main">0</div>
+                                                        <div class="text-[11px] font-black text-[#3a7ab4] uppercase tracking-wide leading-tight min-h-[2.2em] flex items-start justify-center text-center">Main Plot</div>
+                                                        <div class="text-3xl font-black text-[#3a7ab4] mt-1 tabular-nums leading-none text-center" id="t3-val-main-pct">—</div>
+                                                        <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1 text-center" id="t3-val-main">0</div>
                                                     </div>
                                                     <div class="bg-[#ecfeff] border border-[#a5f3fc] rounded-xl px-4 py-3">
-                                                        <div class="text-[11px] font-black text-[#0891b2] uppercase tracking-wide leading-tight min-h-[2.2em] flex items-start">Main Plot (D-Tone)</div>
-                                                        <div class="text-3xl font-black text-[#0891b2] mt-1 tabular-nums leading-none" id="t3-val-dtone-main-pct">—</div>
-                                                        <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1" id="t3-val-dtone-main">0</div>
+                                                        <div class="text-[11px] font-black text-[#0891b2] uppercase tracking-wide leading-tight min-h-[2.2em] flex items-start justify-center text-center">Main Plot (D-Tone)</div>
+                                                        <div class="text-3xl font-black text-[#0891b2] mt-1 tabular-nums leading-none text-center" id="t3-val-dtone-main-pct">—</div>
+                                                        <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1 text-center" id="t3-val-dtone-main">0</div>
                                                     </div>
                                                     <div class="bg-[#fff5f5] border border-[#f8d7da] rounded-xl px-4 py-3">
-                                                        <div class="text-[11px] font-black text-[#a83020] uppercase tracking-wide leading-tight min-h-[2.2em] flex items-start">Total 1st Culled</div>
-                                                        <div class="text-3xl font-black text-[#a83020] mt-1 tabular-nums leading-none" id="t3-val-cull-pct">—</div>
-                                                        <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1" id="t3-val-cull">0</div>
+                                                        <div class="text-[11px] font-black text-[#a83020] uppercase tracking-wide leading-tight min-h-[2.2em] flex items-start justify-center text-center">Total 1st Culled</div>
+                                                        <div class="text-3xl font-black text-[#a83020] mt-1 tabular-nums leading-none text-center" id="t3-val-cull-pct">—</div>
+                                                        <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1 text-center" id="t3-val-cull">0</div>
                                                     </div>
                                                     <div class="bg-[#fffaf0] border border-[#fde68a] rounded-xl px-4 py-3">
-                                                        <div class="text-[11px] font-black text-[#c07820] uppercase tracking-wide leading-tight min-h-[2.2em] flex items-start">Pending</div>
-                                                        <div class="text-3xl font-black text-[#c07820] mt-1 tabular-nums leading-none" id="t3-val-pending-pct">—</div>
-                                                        <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1" id="t3-val-untransplanted">0</div>
+                                                        <div class="text-[11px] font-black text-[#c07820] uppercase tracking-wide leading-tight min-h-[2.2em] flex items-start justify-center text-center">Pending</div>
+                                                        <div class="text-3xl font-black text-[#c07820] mt-1 tabular-nums leading-none text-center" id="t3-val-pending-pct">—</div>
+                                                        <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1 text-center" id="t3-val-untransplanted">0</div>
                                                     </div>
                                                 </div>
 
@@ -1518,15 +1518,11 @@
                                             The date is the 14th of the 4th month after the plot was transplanted.
                                         </div>
                                     </div>
-                                    <!-- One press sets every row, REPLACING dates already keyed in —
-                                         the rule is the answer, and a row that disagrees with it is
-                                         the row this button exists for. It says how many it will
-                                         change and to what before it changes anything: the ones it
-                                         overwrites are the only ones that cannot be got back.
-
-                                         Blanks do not need the button. A row with no date at all
-                                         is filled from the same rule the moment it renders, so a
-                                         plot that has just been transplanted arrives correct. -->
+                                    <!-- The rule is applied on load, so this button is normally
+                                         a no-op and says so. It is here for the one case the
+                                         load cannot cover: a date edited by hand this session
+                                         and now wanted back on the rule, without a reload that
+                                         would take every other edit with it. -->
                                     <button type="button" id="t5-fill-dates-btn" onclick="fillAllT5CullDates()"
                                         class="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[#e8dcc8]
                                                bg-white text-[#c07820] text-[10px] font-black uppercase tracking-widest
@@ -1739,7 +1735,7 @@
                                          never again on that line. -->
                                     <div id="t6-tr-ask" class="hidden mx-6 mb-3 p-3 rounded-xl border border-[#bee3f8] bg-[#f0f8ff]">
                                         <div class="flex flex-wrap items-center gap-3">
-                                            <span class="text-[10px] font-black text-[#2b6cb0] uppercase tracking-widest">Which plot did it leave?</span>
+                                            <span class="text-[10px] font-black text-[#2b6cb0] uppercase tracking-widest">Transfer from</span>
                                             <div class="select-wrapper flex-1 min-w-[180px]">
                                                 <select class="input-style !text-sm !py-2 w-full" onchange="onT6TransferSourceChosen(this)"></select>
                                             </div>
@@ -7032,15 +7028,22 @@ Thank you.`;
                             <!-- Date column: shows due date by default; user can override with actual culling date -->
                             <div>
                                 <div class="text-[9px] font-black text-[#c07820] uppercase lg:hidden mb-0.5">Date</div>
-                                <!-- A row with nothing keyed in arrives on the rule's date
-                                     rather than empty: the 14th of the 4th month after this
-                                     plot was transplanted. It is the date the cull is due
-                                     and, on the overwhelming majority of rows, the date it
-                                     happened — an empty box that has to be filled in by
-                                     hand twenty times is how the wrong date gets typed.
-                                     A saved date still wins; this only fills the gap. -->
+                                <!-- THE RULE WINS. Every row arrives on the 14th of the 4th
+                                     month after this plot was transplanted, whatever date is
+                                     saved against it.
+
+                                     Filling only the blanks was not enough: the dates already
+                                     in the database were a single day keyed across every plot
+                                     in one go, and they are the ones that were wrong. A rule
+                                     that leaves them alone leaves the tab looking exactly as
+                                     it did.
+
+                                     So a hand-keyed date is replaced when the tab loads, and
+                                     what makes a correction stick is keying it and pressing
+                                     Save — the box is still a box. A plot with no transplant
+                                     date to count from keeps whatever it has. -->
                                 <input type="date" class="input-style !text-[#3d2610] font-black t5-cull-date text-xs"
-                                    value="${p.savedCullDate || t5CullDateFor(p.transplantDate) || ''}"
+                                    value="${t5CullDateFor(p.transplantDate) || p.savedCullDate || ''}"
                                     placeholder="${due.text}"
                                     data-due-date="${p.transplantDate ? (() => { const d = new Date(p.transplantDate); d.setMonth(d.getMonth()+4); return d.toISOString().split('T')[0]; })() : ''}">
                                 <div class="text-[9px] font-bold ${due.cls} mt-0.5" id="${rowId}-due-status">${due.status}</div>
@@ -7899,38 +7902,20 @@ Thank you.`;
                 const staticBal = t6AutoNumbers(p, 0).bal;
                 // What this plot still has to SEND — see t6MoveBalance.
                 const moveBal   = t6MoveBalance(p);
-                /* A transferred-into plot with nothing standing in it is done:
-                   it was filled by a movement and emptied by sales, so there is
-                   no crop to fly and no cull to date. Only ever true of a "-R"
-                   row — a main plot at zero balance is still part of the cull
-                   arithmetic and keeps its cells. */
-                const soldOut   = !!p.isTransferRow && autoBal === 0;
-                /* Has this "-R" plot been culled? Not stored anywhere: a plot
-                   with a map quantity or a culled date already saved HAS been,
-                   and one with neither has not. Deriving it means there is no
-                   second answer to keep in step with the first. */
-                const rCulled   = !!p.isTransferRow && !soldOut &&
-                                  ((p.savedMapQty !== null && p.savedMapQty !== undefined && p.savedMapQty !== '') ||
-                                   !!p.savedCullDate);
-                /* Every row arrives FOLDED, finished or not.
+                /* "ALL SOLD OUT" has gone from the 3rd Culled cell.
 
-                   It used to open the unfinished ones on the reasoning that an
-                   unfinished row is the work. But the tab is read far more
-                   often than it is keyed — twenty plots' worth of upload zones
-                   and date pickers is what greets you either way, and the one
-                   row you came to change is somewhere inside it. Folded, the
-                   whole tab is twenty lines you can scan, and Edit opens the
-                   one you want.
+                   A "-R" plot whose seedlings were all sold has nothing left
+                   to cull, and the cell said so in words while every other
+                   row in the column said it with a number. That made the one
+                   column you scan down read in two languages, and a plot at
+                   nought looked like a plot that had not been answered. It is
+                   a nought now, in the same face as every other figure, and
+                   the row keeps its map and date boxes like any other — same
+                   format as Main Culling, which is the point.
 
-                   rowDone is still worked out because the progress count and
-                   the tick read it; it just no longer decides what is open. */
-                const rowDone   = soldOut ||
-                                  (p.savedMapQty !== null && p.savedMapQty !== undefined && p.savedMapQty !== '' &&
-                                   !!p.savedCullDate);
-                const folded    = true;
-                // AUTO 3rd culled = 2nd culled + balance — fully calculated,
-                // not editable by hand. A computed 0 (e.g. everything sold) is
-                // real data and shows/saves as 0 rather than blank.
+                   A "-R" plot with nothing standing is still FINISHED — the
+                   completion count works that out from its balance rather than
+                   from a word on the screen, which is where it belongs. */
                 const autoCulled = _n.culled;
                 const cullVal  = autoCulled;
 
@@ -8024,10 +8009,8 @@ Thank you.`;
                             <div>
                                 <div class="text-[9px] font-black text-[#0891b2] uppercase lg:hidden mb-0.5">${p.isTransferRow ? '3rd Culled' : 'Transfer Amount'}</div>
                                 ${p.isTransferRow
-                                    ? (soldOut
-                                        ? `<div class="t6-v-rcull t6-v-soldout"><span class="text-[10px] font-black text-[#4a7a2e] uppercase tracking-widest">All Sold Out</span></div>`
-                                        : `<div class="text-base font-black text-[#a83020] tabular-nums t6-v-rcull t6-rcull-display"
-                                               title="What is standing in this plot after its sales — the quantity to be culled.">${cullVal === '' ? '—' : t6Fmt(cullVal)}</div>`)
+                                    ? `<div class="text-base font-black text-[#a83020] tabular-nums t6-v-rcull t6-rcull-display"
+                                           title="Transferred in less sales — what is standing in this plot and has to be culled.">${cullVal === '' ? '—' : t6Fmt(cullVal)}</div>`
                                     : `<div class="text-base font-black ${moved ? 'text-[#0891b2]' : 'text-[#c9bda8]'} t6-moved-display t6-v-moved tabular-nums"
                                            title="Sent to other plots, from this plot's lines on the Transfer Data tab.">${moved ? t6Fmt(moved) : '—'}</div>`}
                                 <input type="hidden" class="t6-balance" data-transplanted="${p.qty}" value="${autoBal}">
@@ -8065,7 +8048,7 @@ Thank you.`;
                                  nothing is standing, so there is nothing to fly over. -->
                             <div>
                                 <div class="text-[9px] font-black text-[#8a7a68] uppercase lg:hidden mb-0.5">Drone Map</div>
-                                <div class="t6-map-body flex items-center justify-center gap-1.5 ${soldOut ? 'hidden' : ''}"
+                                <div class="t6-map-body flex items-center justify-center gap-1.5"
                                     ondragover="event.preventDefault(); this.classList.add('ring-2','ring-[#c07820]');"
                                     ondragleave="event.preventDefault(); this.classList.remove('ring-2','ring-[#c07820]');"
                                     ondrop="event.preventDefault(); this.classList.remove('ring-2','ring-[#c07820]'); handleT6DocDrop(event,'${rowId}')">
@@ -8086,11 +8069,20 @@ Thank you.`;
                                  3rd_Culling log's remark as CullDate; saveTab6() reads
                                  .t6-cull-date the same way on either tab. Sized for a date
                                  rather than stretched to fill its column. -->
-                            <div class="t6-date-cell ${soldOut ? 'invisible' : ''}">
+                            <div class="t6-date-cell">
                                 <div class="text-[9px] font-black text-[#8a7a68] uppercase lg:hidden mb-0.5">${p.isTransferRow ? 'Culled Date' : 'Date'}</div>
-                                <input type="date" class="input-style t6-cull-date !text-[11px] !py-1.5 !px-2 !text-left w-full max-w-[124px] mx-auto" value="${p.savedCullDate || ''}"
+                                <!-- Centred by a flex parent, not by auto margins. An input is
+                                     inline-level, and a date input sizes itself to its own
+                                     control besides — so w-full, max-w and mx-auto between
+                                     them left it a few pixels right of its column while every
+                                     figure beside it was centred. A flex row with
+                                     justify-center does not care what the box's intrinsic
+                                     width turns out to be. -->
+                                <div class="flex justify-center">
+                                <input type="date" class="input-style t6-cull-date !text-[11px] !py-1.5 !px-2 !text-left w-full max-w-[124px]" value="${p.savedCullDate || ''}"
                                     onchange="calcT6(); t6PaintPlotRow(this.closest('.t6-plot-row'))"
                                     title="Date this plot was culled">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -8123,33 +8115,13 @@ Thank you.`;
 
                              Hovering the total says where it went, the same way hovering a
                              Sales figure says which delivery notes it came from. -->
-                        <div class="flex flex-wrap items-start justify-between gap-4 pb-3 border-b border-[#e8dcc8]">
-                            <!-- Three columns, each under its own heading — Plot, Balance,
-                                 Total Transferred — rather than the plot name with its
-                                 balance tucked beneath it. The balance IS a figure about
-                                 the plot, but reading it meant knowing that the small
-                                 number under the name was a balance; a heading says so.
-
-                                 One grid, two rows: headings across the top, figures under
-                                 them. That is what keeps the three lined up — three
-                                 label-and-figure stacks side by side line up only by
-                                 accident, and stop the moment one figure is wider. -->
-                            <div class="grid gap-x-5 gap-y-1 items-baseline"
-                                 style="grid-template-columns: minmax(72px,auto) minmax(72px,auto) minmax(124px,auto);">
-                                <span class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest leading-none">Plot</span>
-                                <span class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest leading-none">Balance</span>
-                                <span class="text-[8px] font-black text-[#0891b2] uppercase tracking-widest leading-none">Total Transferred</span>
-                                <span class="text-lg font-black text-[#3d2610] leading-none">${p.plot}</span>
-                                <span class="text-lg font-black text-[#3d2610] tabular-nums leading-none" id="${rowId}-tdata-balance"
-                                      title="Transplanted less Sales — what this plot has standing and could still send.">—</span>
-                                <span class="text-lg font-black text-[#0891b2] tabular-nums leading-none cursor-help" id="${rowId}-tdata-total"
-                                      onmouseenter="showT6TransferTip(this, ${i})" onmouseleave="hideT6SalesTip()">—</span>
-                            </div>
-                            <!-- Stacked, not side by side: the two buttons do unrelated
-                                 things and the wide one kept shoving the narrow one about
-                                 as the plot name changed length. Same width, one above the
-                                 other, so Show is always in the same place. -->
-                            <div class="flex flex-col items-stretch gap-2 shrink-0">
+                        <div class="flex flex-wrap items-start gap-4 pb-3 border-b border-[#e8dcc8]">
+                            <!-- The two buttons lead, on the left. Stacked and the same
+                                 width, so Show is always in the same place however long the
+                                 plot name makes the button above it. Pushed to the right
+                                 edge they sat a hand's breadth from the figures they belong
+                                 to, with nothing in between. -->
+                            <div class="flex flex-col items-stretch gap-2 shrink-0 order-first">
                                 <button type="button" onclick="addT6TransferRecord(${i})"
                                     class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e8dcc8]
                                            bg-white text-[#3a7ab4] text-[10px] font-black uppercase tracking-widest
@@ -8159,6 +8131,22 @@ Thank you.`;
                                 <button type="button" onclick="toggleT6TransferPanel(${i})" id="${rowId}-tr-toggle"
                                     class="px-3 py-1.5 rounded-lg border border-[#d8cbb4] bg-white text-[#5b4a33]
                                            text-[10px] font-black uppercase tracking-widest hover:bg-[#f5efe4]">Show</button>
+                            </div>
+                            <!-- Plot, Balance, Total Transferred — one grid, two rows, so
+                                 headings and figures line up in columns. Three
+                                 label-and-figure stacks side by side line up only by
+                                 accident, and stop the moment one figure is wider. Each
+                                 column is centred on its own heading: "Total Transferred"
+                                 is fifteen characters over a figure that is often one. -->
+                            <div class="grid grid-cols-3 gap-x-4 gap-y-1 items-baseline flex-1 min-w-[240px] text-center">
+                                <span class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest leading-none">Plot</span>
+                                <span class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest leading-none">Balance</span>
+                                <span class="text-[8px] font-black text-[#0891b2] uppercase tracking-widest leading-none">Total Transferred</span>
+                                <span class="text-lg font-black text-[#3d2610] leading-none">${p.plot}</span>
+                                <span class="text-lg font-black text-[#3d2610] tabular-nums leading-none" id="${rowId}-tdata-balance"
+                                      title="Transplanted less Sales — what this plot has standing and could still send.">—</span>
+                                <span class="text-lg font-black text-[#0891b2] tabular-nums leading-none cursor-help" id="${rowId}-tdata-total"
+                                      onmouseenter="showT6TransferTip(this, ${i})" onmouseleave="hideT6SalesTip()">—</span>
                             </div>
                         </div>
                         <div id="${rowId}-tr-body" class="hidden pt-3">
@@ -8426,13 +8414,9 @@ Thank you.`;
             const shown  = culled === '' ? '—' : t6Fmt(parseInt(culled) || 0);
             const cd = row.querySelector('.t6-culled-display');
             if (cd) cd.innerText = shown;
-            /* A "-R" row carries its 3rd Culled figure in the third cell —
-               unless that plot is sold out, when the cell carries the words
-               instead. Painting the figure over them turns "All Sold Out"
-               into a nought, which is the same fact stated as if nobody had
-               looked at it yet. */
+            // A "-R" row carries its 3rd Culled figure in the third cell.
             const rd = row.querySelector('.t6-rcull-display');
-            if (rd && !row.querySelector('.t6-v-soldout')) rd.innerText = shown;
+            if (rd) rd.innerText = shown;
 
             t6PaintDocChip(row.id);
         }
@@ -9057,7 +9041,8 @@ Thank you.`;
                    finished by having nothing left to cull. */
                 const mapQtyVal   = row.querySelector('.t6-map-qty')?.value ?? '';
                 const cullDateVal = row.querySelector('.t6-cull-date')?.value ?? '';
-                const soldOutRow  = !!row.querySelector('.t6-v-soldout');
+                const soldOutRow  = !!(p && p.isTransferRow) &&
+                                    (parseInt(row.querySelector('.t6-balance')?.value) || 0) === 0;
                 const mapDone     = soldOutRow || mapQtyVal !== '';
                 const dateDone    = soldOutRow || cullDateVal !== '';
 
