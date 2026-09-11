@@ -1057,7 +1057,11 @@ function isGeneralWorker(r, nurseryNamesTheRole) {
    Compare on letters and digits alone, the same rule every other crossing of
    this boundary uses. And read `nursery` when `section` has not been filled
    in: the register copies one into the other, but a row added since is only
-   guaranteed to have the one the person keying it happened to use. */
+   guaranteed to have the one the person keying it happened to use.
+
+   SHARED RULE. registerNurseryKey in npayroll/npayroll_script.js is the same
+   comparison, resolving the same list so the salary claim prices the workers
+   this sheet actually shows. Change one, change the other. */
 function _registerNurseryKey(r) {
   const key = (x) => String(x == null ? '' : x).replace(/[^a-z0-9]/gi, '').toUpperCase();
   return key(r && r.section) || key(r && r.nursery);

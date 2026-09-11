@@ -68,6 +68,28 @@ const MAINT_ROLE       = /^general\s*worker$|pekerja am|buruh am/i;
    text or blank. */
 const NON_GENERAL_ROLE = /driver|pemandu|conductor|kondektor|konduktor|supervisor|penyelia|mandor|mandur|kepala|kerani|clerk|admin|manager|pengurus|executive|eksekutif|mekanik|mechanic|technician|juruteknik|security|pengawal|jaga|foreman|operator|storekeeper|storeman/i;
 
+/* WHICH SHEET A REGISTER ROW BELONGS TO.
+ 
+   Compared on letters and digits alone, and NOT as an exact string. The two
+   sides have always spelt a nursery differently: the sheets key on UNN1, and
+   the register is filled in by hand and says "UNN 1". An exact match therefore
+   found BNN and PN — which have no space in them — and silently found NOBODY
+   for UNN 1 or UNN 2, so those two nurseries priced an empty claim while
+   looking perfectly normal.
+ 
+   `nursery` answers when `section` has not been filled in: the register copies
+   one into the other, but a row added since is only guaranteed to have the one
+   whoever keyed it happened to use.
+ 
+   SHARED RULE. The same comparison is _registerNurseryKey in
+   nursery_ops/plot_maintenance_script.js, which resolves the very same list
+   for the Worker Record these claims are priced from. Change one, change the
+   other — two spellings of this rule is two different worker lists. */
+function registerNurseryKey(w) {
+  const key = (x) => String(x == null ? '' : x).replace(/[^a-z0-9]/gi, '').toUpperCase();
+  return key(w && w.section) || key(w && w.nursery);
+}
+
 const roleOf = w => String(w.role || w.job_title || '').trim();
 const isKnownRole = r => ROLES.some(x => x.toLowerCase() === String(r).trim().toLowerCase());
 
@@ -86,13 +108,13 @@ function isGeneralWorker(w, nurseryNamesTheRole) {
 }
 /* Does this nursery label its general workers by role? */
 function nurseryNamesRole(n) {
-  return workers.some(w => String(w.section || '').trim().toUpperCase() === n &&
+  return workers.some(w => registerNurseryKey(w) === n &&
                            w.active !== false && MAINT_ROLE.test(roleOf(w)));
 }
 /* Is this worker on the Work Maintenance sheets? Used by the list and the
    worker form, so what is shown is what the sheets actually do. */
 function onMaintSheet(w) {
-  const n = String(w.section || '').trim().toUpperCase();
+  const n = registerNurseryKey(w);
   if (!MAINT_NURSERIES.includes(n)) return false;
   return isGeneralWorker(w, nurseryNamesRole(n));
 }
@@ -102,7 +124,7 @@ function resolveMaintWorkers() {
   MAINT_NURSERIES.forEach(n => {
     const named = nurseryNamesRole(n);
     const linked = [...new Set(workers
-      .filter(w => String(w.section || '').trim().toUpperCase() === n)   // UNE, Driver excluded
+      .filter(w => registerNurseryKey(w) === n)   // UNE, Driver excluded
       .filter(w => isGeneralWorker(w, named))
       .map(w => String(w.full_name || '').trim())
       .filter(Boolean))].sort((a, b) => a.localeCompare(b));
