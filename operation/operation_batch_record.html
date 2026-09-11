@@ -229,7 +229,7 @@
         async function initLedger() {
             try {
                 // Fetch reception logs + every culling-related log type + transplant logs in parallel.
-                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, collectRes] = await Promise.all([
+                const [recRes, plantedRes, damagedRes, dtoneRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, collectRes] = await Promise.all([
                     fetchAllRows(() => _supabase.from('shared_inventory_logs')
                         .select('*')
                         .eq('transaction_type', 'Seeds_Received')
@@ -237,6 +237,16 @@
                         .order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', 'Planted').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', 'Damaged_Seeds').order('id', { ascending: true })),
+                    /* The admin-keyed "Double Tone Quantity in Nursery" (one
+                       row per batch, newest wins). It is part of the pool the
+                       culls are measured against — the allocation engine on
+                       the Transplanting tab has always added it, and this list
+                       had not, so the same batch read two different rates on
+                       two screens. */
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs')
+                        .select('batch_name, quantity_change, created_at')
+                        .eq('transaction_type', 'DTone_Nursery_Qty')
+                        .order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '1st_Culling').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '2nd_Culling').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change, plot_name, remark').eq('transaction_type', '3rd_Culling').order('id', { ascending: true })),
@@ -274,6 +284,14 @@
                     (res.data || []).forEach(r => { m[r.batch_name] = (m[r.batch_name] || 0) + 1; });
                     return m;
                 };
+                /* Newest row per batch, not a sum: the box is keyed and re-keyed,
+                   and every save writes another row. Adding them up would count
+                   the same tray again for every correction. */
+                const dtoneMap = {};
+                (dtoneRes.data || []).forEach(r => {
+                    if (!r.batch_name) return;
+                    dtoneMap[r.batch_name] = Math.abs(Number(r.quantity_change) || 0);
+                });
                 const plantedMap = sumByBatch(plantedRes);
                 const damagedMap = sumByBatch(damagedRes);
                 const cull1Map   = sumByBatch(cull1Res);
@@ -519,28 +537,44 @@
                 // Process logic & simulate stages.
                 masterBatches = dedupedReception.map(b => {
                     const actualPlanted = plantedMap[b.batch_name] || 0;
+                    /* Kept and carried on the batch, though the culling rate
+                       no longer counts it: damage is worth having to hand and
+                       is what the Planting & Damage report shows. */
                     const damaged = damagedMap[b.batch_name] || 0;
                     const cull1   = cull1Map[b.batch_name] || 0;
                     const cull2   = cull2Map[b.batch_name] || 0;
                     const cull3   = cull3Map[b.batch_name] || 0;
                     // Denominator = actual planted qty if available; fall back to D/O+FOC for batches that haven't planted yet.
-                    const denom = actualPlanted || (b.quantity_change || 0);
-                    /* Culled over planted:
-                           (damaged + 1st + 2nd + 3rd culled) / planted * 100
-                       Damaged seeds count as culled — they never became a
-                       seedling either. The denominator is what was actually
-                       PLANTED, falling back to the delivered quantity for a
-                       batch that has not planted yet.
+                    const dtoneNursery = dtoneMap[b.batch_name] || 0;
+                    const denom = (actualPlanted || (b.quantity_change || 0)) + dtoneNursery;
+                    /* CULLING RATE = the three culls over the whole pool.
 
-                       Kept to TWO decimals, because two are shown. It was
-                       rounded to one and then printed with toFixed(2), so
-                       every rate on this page ended in a nought — 20.9% read
-                       as "20.90%", which claims a precision that had been
-                       thrown away one line earlier. */
+                           (1st + 2nd + 3rd culled) / (planted + D-Tone nursery)
+
+                       Two corrections, both from the office:
+
+                       The DENOMINATOR is planted PLUS the admin-keyed D-Tone
+                       nursery quantity. Those seedlings are culled alongside
+                       the rest and the allocation engine has always counted
+                       them; this list had not, so one batch read two rates on
+                       two screens. Batch 225: 10,423 + 280 = 10,703.
+
+                       DAMAGED SEEDS are not in the numerator. Damage at
+                       planting is not culling, and this column is named for
+                       culling. They are still recorded on Planting & Damage
+                       and still shown there; they simply are not a cull.
+
+                       Two decimals kept, because two are shown. It was rounded
+                       to one and printed with toFixed(2), so every rate on
+                       this page ended in a nought — 20.9% read as "20.90%",
+                       claiming a precision thrown away a line earlier. */
                     const cullRate = denom > 0
-                        ? Math.round(((damaged + cull1 + cull2 + cull3) / denom) * 10000) / 100
+                        ? Math.round(((cull1 + cull2 + cull3) / denom) * 10000) / 100
                         : 0;
                     b.actualPlanted = actualPlanted;
+                    b.damagedSeeds  = damaged;
+                    b.dtoneNursery  = dtoneNursery;
+                    b.cullBase      = denom;
                     b.cullRate = cullRate;
                     b.hasTransplant = transplantedBatchNames.has(b.batch_name);
                     b.hasRejection = rejectedBatchNames.has(b.batch_name);
