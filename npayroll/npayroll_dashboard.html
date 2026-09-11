@@ -64,6 +64,11 @@
       <button class="subtab active" data-sub="maint"    onclick="switchSub('maint')">Work Maintenance</button>
       <button class="subtab"        data-sub="transpl"  onclick="switchSub('transpl')">Transplanting</button>
       <button class="subtab"        data-sub="seedling" onclick="switchSub('seedling')">Seedlings Collection</button>
+      <!-- Everything that is paid by the piece and is none of the three above.
+           Its own sheet rather than a fourth guess at what to call it: the
+           Piece Rate screen has always offered "Other" as a Used For, and
+           until now there was nowhere to key the work that rate priced. -->
+      <button class="subtab"        data-sub="other"    onclick="switchSub('other')">Others</button>
       <button class="subtab"        data-sub="monthly"  onclick="switchSub('monthly')">Monthly Payroll</button>
     </nav>
 
@@ -120,6 +125,21 @@
         </div>
       </div>
       <div class="card"><div class="tbl-wrap"><table id="seedling-table"></table></div></div>
+    </div>
+
+    <!-- ── Others ── -->
+    <div id="sub-other" class="subpanel">
+      <div class="bar">
+        <div>
+          <div class="bar-title">Others</div>
+          <div class="bar-sub">Piece work that is none of the three sheets above. The rate comes from Piece Rate — set its Used For to Other.</div>
+        </div>
+        <div class="bar-actions">
+          <select id="other-section" class="sel" onchange="renderEntries('other')"></select>
+          <button class="btn btn-primary" onclick="openEntry('other')">+ Add Entry</button>
+        </div>
+      </div>
+      <div class="card"><div class="tbl-wrap"><table id="other-table"></table></div></div>
     </div>
 
     <!-- ── Monthly Payroll ── -->
@@ -232,7 +252,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=16"></script>
+<script src="npayroll_script.js?v=17"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->
