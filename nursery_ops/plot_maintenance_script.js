@@ -437,8 +437,22 @@ function renderPayroll() {
   const cfg = PAYROLL_TYPES[_payrollView];
   const line = document.getElementById('payroll-form-line');
   if (line) line.textContent = `${t('pay.form')} (${NURSERY_NAMES[n]}) — ${t('pay.month')} ${m}`;
+  /* Where these names came from, said out loud either way.
+     Linked, it names the Worker System so an amendment is made in the right
+     place. NOT linked, it says so — and that is the half that was missing.
+     A nursery whose register read failed, or whose workers are filed under a
+     section this page does not recognise, or none of whom count as general
+     workers, falls back to this module's own old list. The sheet then looks
+     completely normal while showing names the Worker System has never heard
+     of, and every explanation for it is invisible. */
   const hint = document.getElementById('payroll-hint');
-  if (hint) hint.textContent = t('pay.tickHint') + (isLinked(n) ? ' ' + t('pay.linkedNote') : '');
+  if (hint) {
+    hint.textContent = t('pay.tickHint') + ' '
+      + (isLinked(n) ? t('pay.linkedNote')
+                     : t('pay.notLinkedNote', { nursery: NURSERY_NAMES[n] })
+                       + (_linkErr ? ' ' + t('pay.notLinkedWhy', { why: _linkErr }) : ''));
+    hint.classList.toggle('pay-hint-warn', !isLinked(n));
+  }
 
   const wk = workers[n] || [];
   const rows = payrollRows();
@@ -1249,6 +1263,10 @@ const I18N = {
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
     'pay.noWorkers':'No general worker is on the Worker System register for this nursery yet. Add them on the 555 Worker Portal\u2019s Manage page and they will appear here.',
     'pay.linkedNote':'Worker names come from the Worker System on the 555 Worker Portal\u2019s Manage page and follow any change made there.',
+    /* The other half of the same sentence. A sheet on the module's own old
+       list looks exactly like a linked one, so it has to say which it is. */
+    'pay.notLinkedNote':'These names are this module\u2019s own old list \u2014 {nursery} is NOT taking them from the Worker System. Check that its workers are filed under that nursery and counted as general workers on the 555 Worker Portal\u2019s Manage page.',
+    'pay.notLinkedWhy':'The register could not be read: {why}',
     'pay.offRegister':'⚠ Ticked this month but no longer a general worker of this nursery on the register, so their capacity is not counted:',
     'pay.fieldNoColumn':'⚠ The field credited work to these names and they have no column here, so their share of the plot is not counted. Check the spelling against the register, or that they are a general worker of this nursery:',
     'pay.noRows':'No records for this nursery and month yet — tick the schedule, then Sync from Schedule.',
@@ -1337,6 +1355,8 @@ const I18N = {
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
     'pay.noWorkers':'Belum ada pekerja am untuk nurseri ini dalam daftar Worker System. Tambah di halaman Manage Portal 555 FC dan nama akan muncul di sini.',
     'pay.linkedNote':'Nama pekerja diambil daripada Worker System di halaman Manage Portal 555 FC dan mengikut sebarang pindaan di sana.',
+    'pay.notLinkedNote':'Nama ini adalah senarai lama modul ini \u2014 {nursery} TIDAK mengambil daripada Worker System. Pastikan pekerjanya difailkan di bawah nurseri itu dan dikira sebagai pekerja am di halaman Manage Portal 555 FC.',
+    'pay.notLinkedWhy':'Daftar tidak dapat dibaca: {why}',
     'pay.offRegister':'⚠ Ditanda bulan ini tetapi bukan lagi pekerja am nurseri ini dalam daftar, jadi kapasiti mereka tidak dikira:',
     'pay.fieldNoColumn':'⚠ Lapangan mengkreditkan kerja kepada nama ini tetapi tiada lajur di sini, jadi bahagian mereka tidak dikira. Semak ejaan dengan daftar, atau sama ada mereka pekerja am nurseri ini:',
     /* Borang tuntutan gaji (PDF) */
