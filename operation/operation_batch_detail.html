@@ -8271,7 +8271,12 @@ Thank you.`;
                                 <div class="flex items-center justify-center gap-3 mt-1">
                                     <div>
                                         <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest leading-none whitespace-nowrap">${p.isTransferRow ? 'Transferred' : 'Transplanted'}</div>
-                                        <div class="text-sm font-black ${p.isTransferRow ? 'text-[#a83020]' : 'text-[#8a7a68]'} tabular-nums leading-tight">${t6Fmt(p.qty)}</div>
+                                        <!-- On a "-R" plot this figure is the sum of the movements
+                                             INTO it, so resting on it says which plots they came
+                                             from and how many each sent. A main plot's figure is
+                                             its own transplant and has nothing to break down. -->
+                                        <div class="text-sm font-black ${p.isTransferRow ? 'text-[#a83020] cursor-help t6-src-figure' : 'text-[#8a7a68]'} tabular-nums leading-tight"
+                                             ${p.isTransferRow ? `onmouseenter="showT6SourceTip(this, ${i})" onmouseleave="hideT6SalesTip()" title="Where these came from"` : ''}>${t6Fmt(p.qty)}</div>
                                     </div>
                                     ${p.isTransferRow ? '' : `<div class="w-px h-7 bg-[#e8dcc8]"></div>
                                     <div>
@@ -9002,6 +9007,58 @@ Thank you.`;
            the Sales figure gives for its delivery notes, and for the same
            reason: the total is the number you look at, and "where did it go"
            is the only question it raises. */
+        /* The same question asked from the other end: a "-R" plot's figure is
+           the sum of movements INTO it, and hovering it says which plots they
+           came from and how many each sent.
+
+           Walked from the movement records themselves rather than from
+           p.transferFrom, which is a list of names with no quantities against
+           them — so a plot fed by three others said which three and left you
+           to guess the split. Every record lives in its SENDER's container,
+           which is also what saveTab6 reads, so these are the same rows the
+           figure was added up from and the two cannot disagree. */
+        function showT6SourceTip(anchorEl, rowIdx) {
+            const p = t6_plotData[rowIdx];
+            if (!p || !p.isTransferRow) return;
+            const want = _t6PlotKey(p.plot);
+            const lines = [];
+            t6_plotData.forEach((src, i) => {
+                const host = document.getElementById(`t6-row-${i}-transfers`);
+                if (!host) return;
+                host.querySelectorAll('.t6-transfer-rec').forEach(rec => {
+                    const to = rec.querySelector('.t6-tr-plot')?.value || '';
+                    if (_t6PlotKey(to) !== want) return;
+                    const qty  = parseInt(rec.querySelector('.t6-tr-qty')?.value) || 0;
+                    const date = rec.querySelector('.t6-tr-date')?.value || '';
+                    if (qty <= 0) return;                    // still being filled in
+                    lines.push({ from: src.plot, qty, date });
+                });
+            });
+            if (!lines.length) return;
+            const total = lines.reduce((a, l) => a + l.qty, 0);
+            let html = `<div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">` +
+                       `Transferred into ${_t6Esc(p.plot)} — ${lines.length} movement${lines.length === 1 ? '' : 's'}</div>`;
+            lines.forEach(l => {
+                html += `<div class="flex items-baseline gap-3 text-[11px] py-0.5">
+                            <span class="font-black text-[#a83020] uppercase">${_t6Esc(l.from)}</span>
+                            <span class="text-[#8a7a68] font-bold">${_t6FmtDate(l.date)}</span>
+                            <span class="ml-auto font-black text-[#a83020] tabular-nums">${t6Fmt(l.qty)}</span>
+                         </div>`;
+            });
+            html += `<div class="flex items-baseline gap-2 border-t border-[#e8dcc8] mt-1.5 pt-1.5 text-[11px]">
+                        <span class="font-black text-[#3d2610] uppercase tracking-widest text-[9px]">Total</span>
+                        <span class="ml-auto font-black text-[#a83020] tabular-nums">${t6Fmt(total)}</span>
+                     </div>`;
+            const tip = document.getElementById('t6-sales-tip');
+            tip.innerHTML = html;
+            tip.classList.remove('hidden');
+            const a = anchorEl.getBoundingClientRect();
+            const t = tip.getBoundingClientRect();
+            tip.style.left = Math.min(Math.max(8, a.left), window.innerWidth - t.width - 8) + 'px';
+            tip.style.top  = (a.bottom + 8 + t.height > window.innerHeight - 8
+                                ? Math.max(8, a.top - t.height - 8) : a.bottom + 8) + 'px';
+        }
+
         function showT6TransferTip(anchorEl, rowIdx) {
             const host = document.getElementById(`t6-row-${rowIdx}-transfers`);
             const p = t6_plotData[rowIdx];
