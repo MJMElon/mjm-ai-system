@@ -7783,8 +7783,13 @@ Thank you.`;
             // a tab switch back).
             const mainSubpanel = document.getElementById('t6-subpanel-main');
             totalsRow.classList.add('hidden');   // retired — see the markup
-            document.getElementById('t6-plot-count').innerText = t6_plotData.length;
-            const tp6 = document.getElementById('t6-total-plots'); if (tp6) tp6.innerText = t6_plotData.length;
+            /* The batch's own plots, not the rows on screen — the same set
+               calcT6's "N/M Plots Done" counts, so the two cannot disagree.
+               A "-R" row is a transfer destination, not a plot this batch was
+               planted into. */
+            const ownPlots = t6_plotData.filter(p => !p.isTransferRow).length;
+            document.getElementById('t6-plot-count').innerText = ownPlots;
+            const tp6 = document.getElementById('t6-total-plots'); if (tp6) tp6.innerText = ownPlots;
 
             t6_plotData.forEach((p, i) => {
                 const rowId    = `t6-row-${i}`;
@@ -9103,6 +9108,7 @@ Thank you.`;
         function calcT6() {
             let totTransplanted = 0, totBalance = 0, totCulled = 0;
             let rowsDone = 0, totalRows = 0;
+            let culledFilled = 0, docsFilled = 0;
             let balanceFilled = 0;
 
             document.querySelectorAll('.t6-plot-row').forEach((row) => {
@@ -9113,7 +9119,22 @@ Thank you.`;
                 const idx = parseInt(String(row.id).replace('t6-row-', ''), 10);
                 const p   = t6_plotData[idx];
 
-                totalRows++;
+                /* Completion counts the batch's OWN plots — the ones that come
+                   down the chain from Transplanting — and not the "-R" rows.
+
+                   A "-R" row is a destination: seedlings that arrived here from
+                   a plot on this same batch. It is not a plot the batch was
+                   planted into, and counting it made the denominator the number
+                   of ROWS on screen rather than the number of plots there are.
+                   Batch 225 has six plots and read "4/13 Plots Done" — six real
+                   plots plus seven destinations. A batch could never finish
+                   until every transfer destination was also culled, and the
+                   percentage moved when somebody keyed a transfer.
+
+                   The same test as the transplanted total two blocks down,
+                   which has excluded them since the 10,133 double count. */
+                const counts = !(p && p.isTransferRow);
+                if (counts) totalRows++;
                 const transplanted = parseInt(row.querySelector('.t6-balance').dataset.transplanted) || 0;
                 const cullVal      = row.querySelector('.t6-culled-input').value;
                 const culled       = parseInt(cullVal) || 0;
@@ -9135,13 +9156,19 @@ Thank you.`;
                    Balance and Culled are NOT filtered, and must not be: a
                    sending plot's balance already has its transfer deducted, so
                    the seedlings standing in a -R plot are counted once, there. */
-                if (!(p && p.isTransferRow)) totTransplanted += transplanted;
+                if (counts) totTransplanted += transplanted;
                 // Was `+= transplanted`, left over from before sales and
                 // transfers existed, so the totals row repeated the
                 // transplanted figure instead of summing the balances.
                 totBalance      += parseInt(row.querySelector('.t6-balance').value) || 0;
                 if (hasCulled)  { totCulled += culled; }
-                if (hasCulled && hasDoc) rowsDone++;
+                // Both halves of the fraction over the same set of plots, or
+                // a culled "-R" row pushes "done" past the total.
+                if (counts) {
+                    if (hasCulled && hasDoc) rowsDone++;
+                    if (hasCulled) culledFilled++;
+                    if (hasDoc)    docsFilled++;
+                }
             });
 
             // Qty-weighted cull rate so the headline number matches the dashboard
@@ -9174,12 +9201,13 @@ Thank you.`;
             // Done counter
             document.getElementById('t6-done-count').innerText = rowsDone;
 
-            // Progress: 100% only when ALL rows done (culled qty + doc)
-            const culledFilled = Array.from(document.querySelectorAll('.t6-culled-input')).filter(el => el.value !== '').length;
-            // Only count docs belonging to currently-rendered rows (avoid stale keys inflating progress).
-            const docsForExistingRows = Array.from(document.querySelectorAll('.t6-plot-row')).filter((_, i) => !!t6_plotDocs[`t6-row-${i}`]).length;
+            /* Progress: 100% only when every counted plot has both a culled
+               quantity and a drone map. culledFilled and docsFilled are summed
+               in the loop above over the SAME plots totalRows counts — read off
+               the whole document they included the "-R" rows and stale keys,
+               either of which can put the fraction over 1. */
             const totalPts = totalRows * 2;
-            const donePts  = culledFilled + docsForExistingRows;
+            const donePts  = culledFilled + docsFilled;
             let pct = 0;
             if (totalPts > 0) {
                 pct = (rowsDone === totalRows && totalRows > 0)
