@@ -40,6 +40,7 @@ actual AS (
   SELECT UPPER(TRIM(l.plot_name)) AS plot,
          SUM(COALESCE(l.quantity_change, 0))                                 AS culled,
          SUM(COALESCE((SUBSTRING(l.remark FROM 'MapQty:\s*([0-9]+)'))::INT, 0)) AS map_qty,
+         BOOL_OR(l.remark ~ 'Remaining Balance:\s*0(\D|$)')                  AS says_nil,
          BOOL_OR(l.remark ~ 'CullDate:\s*[0-9]{4}-[0-9]{2}-[0-9]{2}')        AS has_cull_date,
          BOOL_OR(l.remark ~ 'DocUrl:\S+')                                    AS has_map_file,
          COUNT(*)                                                            AS records
@@ -56,8 +57,14 @@ verdict AS (
          COALESCE(a.culled, 0) - COALESCE(a.map_qty, 0) AS still_standing,
          COALESCE(a.has_cull_date, FALSE) AS has_cull_date,
          COALESCE(a.has_map_file, FALSE)  AS has_map_file,
+         COALESCE(a.says_nil, FALSE) AS says_nil,
+         /* A nought has to be a REAL nought: a row that says nothing at all
+            also comes to zero. A saved record carries its arithmetic, so
+            "Remaining Balance: 0" is what tells a sold-out plot from one
+            nobody has touched. */
          (COALESCE(a.records, 0) > 0
-          AND COALESCE(a.culled, 0) - COALESCE(a.map_qty, 0) = 0) AS done
+          AND COALESCE(a.culled, 0) - COALESCE(a.map_qty, 0) = 0
+          AND (COALESCE(a.culled, 0) > 0 OR COALESCE(a.says_nil, FALSE))) AS done
   FROM expected e LEFT JOIN actual a ON a.plot = e.plot
 )
 
@@ -81,6 +88,8 @@ SELECT * FROM (
          CASE WHEN v.records = 0 THEN 'BLOCKING - no 3rd Culling record at all'
               WHEN v.done AND v.culled = 0 THEN 'done - nothing left to cull'
               WHEN v.done THEN 'done - the drone map accounts for the cull'
+              WHEN v.culled = 0 AND NOT v.says_nil
+                   THEN 'BLOCKING - the record says nothing: no figures saved for this plot yet'
               WHEN v.map_qty = 0 THEN 'BLOCKING - ' || v.culled || ' to cull, no drone map qty keyed'
               ELSE 'BLOCKING - ' || v.still_standing || ' still standing ('
                    || v.culled || ' culled less ' || v.map_qty || ' on the map)'

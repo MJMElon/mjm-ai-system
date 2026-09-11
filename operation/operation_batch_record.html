@@ -357,6 +357,22 @@
                     const mapM   = r.remark ? r.remark.match(/MapQty:\s*(\d+)/) : null;
                     const mapQty = mapM ? parseInt(mapM[1], 10) : 0;
                     if (culled - mapQty !== 0) return;
+
+                    /* A nought has to be a REAL nought.
+                    
+                       "culled − map = 0" is satisfied just as well by a row
+                       that says nothing at all: no quantity, no map, no
+                       figures. A plot all sold out and a plot nobody has
+                       touched both come to zero, and treating them alike swept
+                       batches into Completed that had barely started.
+                    
+                       So when the cull is nought, the row must SAY it is
+                       nought — a saved 3rd Culling record carries its
+                       arithmetic in the remark ("Remaining Balance: 0"), and
+                       that is what tells a sold-out plot from an empty one. A
+                       cull above nought needs no such proof: the figure is
+                       the proof. */
+                    if (culled === 0 && !(r.remark && /Remaining Balance:\s*0\b/.test(r.remark))) return;
                     const p = _normPlot(r.plot_name);
                     const m = r.remark ? r.remark.match(/DestType:\s*(main|premium|doubletone)/) : null;
                     if (m) {
