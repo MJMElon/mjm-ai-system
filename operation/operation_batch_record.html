@@ -525,8 +525,20 @@
                     const cull3   = cull3Map[b.batch_name] || 0;
                     // Denominator = actual planted qty if available; fall back to D/O+FOC for batches that haven't planted yet.
                     const denom = actualPlanted || (b.quantity_change || 0);
+                    /* Culled over planted:
+                           (damaged + 1st + 2nd + 3rd culled) / planted * 100
+                       Damaged seeds count as culled — they never became a
+                       seedling either. The denominator is what was actually
+                       PLANTED, falling back to the delivered quantity for a
+                       batch that has not planted yet.
+
+                       Kept to TWO decimals, because two are shown. It was
+                       rounded to one and then printed with toFixed(2), so
+                       every rate on this page ended in a nought — 20.9% read
+                       as "20.90%", which claims a precision that had been
+                       thrown away one line earlier. */
                     const cullRate = denom > 0
-                        ? Math.round(((damaged + cull1 + cull2 + cull3) / denom) * 1000) / 10  // → 1 decimal
+                        ? Math.round(((damaged + cull1 + cull2 + cull3) / denom) * 10000) / 100
                         : 0;
                     b.actualPlanted = actualPlanted;
                     b.cullRate = cullRate;
