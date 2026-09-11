@@ -118,7 +118,7 @@
 
             <div class="flex items-center gap-2 bg-white p-2 rounded-2xl border border-[#e8dcc8] shadow-inner mb-6 w-fit overflow-x-auto">
                 <button id="tab-active" class="list-tab-btn list-tab-active" onclick="switchListTab('active')">🟢 Active</button>
-                <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="A batch moves here automatically once every transplanted plot has a 3rd Culling record with its drone-map quantity and culled date keyed in. A partly-filled report keeps the batch in Active.">✅ Completed / In-Active</button>
+                <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="A batch moves here automatically once every plot has nothing left standing in it — 3rd culled less drone map quantity is nought. A plot all sold out is nought either way. Any plot still carrying a balance keeps the batch in Active.">✅ Completed / In-Active</button>
                 <button id="tab-amendment" class="list-tab-btn list-tab-inactive" onclick="switchListTab('amendment')" title="Batches with at least one report tab rejected by HQ — open the batch to see the rejection remark and amend the report">🔴 Amendment Needed</button>
                 <button id="tab-reserved" class="list-tab-btn list-tab-inactive" onclick="switchListTab('reserved')" title="Plots holding seedlings transferred in the 3rd Culling report. A batch's transfers drop off this list once the batch is sold out.">🅿️ Plot Reserved Status</button>
             </div>
@@ -283,6 +283,10 @@
                 const cull3CountMap      = countByBatch(cull3Res);
 
                 // ── Completion rule (ALL batches) ───────────────────────────
+                // A batch is finished when every plot it used has nothing left
+                // standing in it: 3rd culled less drone map qty comes to nought.
+                // See the note on the coverage test below for why that one
+                // subtraction covers the sold-out plots as well.
                 // A batch is Completed ONLY when EVERY transplanted
                 // plot+destination (main / premium / d-tone — matching how
                 // Tab 6 builds its rows) has its own saved 3rd_Culling
@@ -327,17 +331,32 @@
                 const cull3Legacy = {}; // batch → Map(PLOT → row count)
                 (cull3Res.data || []).forEach(r => {
                     if (!r.batch_name) return;
-                    /* Nothing to cull is nothing to do. A plot whose 3rd culled
-                       quantity comes to nought has no standing crop to fly over
-                       and no cull to date — the report shows a dash in both
-                       cells rather than boxes — so requiring a map quantity and
-                       a date of it would keep the batch in Active for a job
-                       nobody can do. Usually a "-R" plot whose seedlings were
-                       all sold. */
-                    const nilCull = Number(r.quantity_change) === 0;
-                    const hasProof = nilCull || !!(r.remark && /MapQty:\s*\d+/.test(r.remark)
-                                                 && /CullDate:\s*\d{4}-\d{2}-\d{2}/.test(r.remark));
-                    if (!hasProof) return;
+                    /* A plot is finished when NOTHING IS LEFT STANDING IN IT.
+
+                           3rd culled  −  drone map qty  =  0
+
+                       That is the whole rule, and it covers both ways a plot
+                       gets there without needing to name them separately:
+
+                         N18-R had 131 to cull, the drone map counted 131,
+                         131 − 131 = 0. Done.
+
+                         A plot whose seedlings were all sold has nothing to
+                         cull, 0 − 0 = 0. Done, with no map to attach and no
+                         date to give — which is why demanding paperwork of it
+                         kept batch 225 in Active for a job nobody could do.
+
+                       A missing map quantity counts as 0, so a plot with 500
+                       to cull and no map is 500 short and holds the batch.
+
+                       Note this asks the FIELD question, not the keying one.
+                       The 3rd Culling tab's own "N/M Plots Done" counts how
+                       much typing is left and still wants a culled date; this
+                       list asks whether the batch is finished on the ground. */
+                    const culled = Number(r.quantity_change) || 0;
+                    const mapM   = r.remark ? r.remark.match(/MapQty:\s*(\d+)/) : null;
+                    const mapQty = mapM ? parseInt(mapM[1], 10) : 0;
+                    if (culled - mapQty !== 0) return;
                     const p = _normPlot(r.plot_name);
                     const m = r.remark ? r.remark.match(/DestType:\s*(main|premium|doubletone)/) : null;
                     if (m) {
