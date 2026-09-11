@@ -8754,12 +8754,26 @@ Thank you.`;
            ARRIVE; offering it as a source invites a movement out of a plot that
            only exists because of a movement in, and the report has no column
            for that. */
+        /* Every plot on the batch can be a source, "-R" plots included.
+
+           They were left out on the reasoning that a destination is where
+           seedlings END UP. In the field they do not: 7 go into B11-R and are
+           moved on from B11-R later, and a plot you cannot name as a source is
+           a movement you cannot record at all. The loader has always hung a
+           movement on whichever row it left, destination or not — it was only
+           this list that refused to offer them.
+
+           Grouped, because a list of twenty reads better in two halves than
+           in one, and because which kind of plot you are sending from is worth
+           knowing before you pick. */
         function t6SourcePlotOptions() {
-            return t6_plotData
-                .map((p, i) => ({ p, i }))
-                .filter(({ p }) => !p.isTransferRow)
-                .map(({ p, i }) => `<option value="${i}">${_t6Esc(p.plot)}</option>`)
-                .join('');
+            const opt = ({ p, i }) => `<option value="${i}">${_t6Esc(p.plot)}</option>`;
+            const rows = t6_plotData.map((p, i) => ({ p, i }));
+            const main = rows.filter(({ p }) => !p.isTransferRow).map(opt).join('');
+            const dest = rows.filter(({ p }) => p.isTransferRow).map(opt).join('');
+            if (!dest) return main;
+            return `<optgroup label="Main plots">${main}</optgroup>` +
+                   `<optgroup label="Transferred-into plots">${dest}</optgroup>`;
         }
 
         /** Which plot's card a record is sitting in, or -1 if it is not in one. */
