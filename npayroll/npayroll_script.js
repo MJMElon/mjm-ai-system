@@ -265,7 +265,7 @@ function applyPageAccess() {
       if (b) b.style.display = 'none';
     }
   });
-  const payrollSubs = ['maint', 'transpl', 'seedling', 'monthly'];
+  const payrollSubs = ['maint', 'transpl', 'seedling', 'other', 'monthly'];
   if (!payrollSubs.some(may)) {
     const b = document.querySelector('.tab[data-tab="payroll"]');
     if (b) b.style.display = 'none';
@@ -298,6 +298,7 @@ function refreshPayrollTab() {
   if (s === 'maint')    renderMaint();
   if (s === 'transpl')  renderEntries('transplanting');
   if (s === 'seedling') renderEntries('seedlings');
+  if (s === 'other')    renderEntries('other');
   if (s === 'monthly')  renderMonthly();
 }
 
@@ -475,7 +476,11 @@ async function removeRate(id) {
 /* ════════════ TRANSPLANTING / SEEDLINGS ════════════ */
 const SHEET = {
   transplanting: { table:'transpl-table',  section:'transpl-section',  title:'Transplanting' },
-  seedlings:     { table:'seedling-table', section:'seedling-section', title:'Seedlings Collection' }
+  seedlings:     { table:'seedling-table', section:'seedling-section', title:'Seedlings Collection' },
+  /* Piece work that is none of the other three. The category value is `other`,
+     which is what the Piece Rate screen's "Used For" has always offered — so a
+     rate keyed against Other now has a sheet to price. */
+  other:         { table:'other-table',    section:'other-section',    title:'Others' }
 };
 
 function renderEntries(category) {
@@ -524,7 +529,11 @@ const fmtDay = d => {
 
 let editEntryId = null, entryCategory = null;
 function openEntry(category, id) {
-  const page = category === 'transplanting' ? 'transpl' : 'seedling';
+  /* Which User Access page decides whether this may be keyed. One per sheet;
+     a sheet answering to another sheet's tick would grant access nobody
+     granted. */
+  const page = { transplanting: 'transpl', seedlings: 'seedling', other: 'other' }[category]
+            || 'seedling';
   if (!mayDo(page, 'manage',
       'You do not have permission to key in this work. Ask an admin to grant it in User Access.')) return;
   if (!_tablesOk) { alert('Set the database up first — see the notice at the top.'); return; }
@@ -733,11 +742,11 @@ function monthlyRows() {
   const monthTxt = maintMonthLabel(month);
 
   // Start from the payroll's own worker list.
-  const rows = new Map();      // key → { name, section, maint, transpl, seedling }
+  const rows = new Map();      // key → { name, section, maint, transpl, seedling, other }
   const keyFor = (name, section) => `${section}${name.toLowerCase()}`;
   const touch = (name, section) => {
     const k = keyFor(name, section);
-    if (!rows.has(k)) rows.set(k, { name, section, maint: 0, transpl: 0, seedling: 0 });
+    if (!rows.has(k)) rows.set(k, { name, section, maint: 0, transpl: 0, seedling: 0, other: 0 });
     return rows.get(k);
   };
 
@@ -780,10 +789,14 @@ function monthlyRows() {
     const row = touch(w.full_name, w.section || '');
     if (e.category === 'transplanting') row.transpl  += Number(e.amount || 0);
     if (e.category === 'seedlings')     row.seedling += Number(e.amount || 0);
+    /* Counted like any other sheet. Leaving it out of the total would be the
+       worst kind of wrong: the Others sheet would show the work priced and the
+       month's pay would quietly not include it. */
+    if (e.category === 'other')         row.other    += Number(e.amount || 0);
   });
 
   return [...rows.values()]
-    .map(r => ({ ...r, total: r.maint + r.transpl + r.seedling }))
+    .map(r => ({ ...r, total: r.maint + r.transpl + r.seedling + r.other }))
     .filter(r => r.total > 0 || !secFilter)
     .sort((a, b) => (a.section || '').localeCompare(b.section || '') || a.name.localeCompare(b.name));
 }
@@ -798,24 +811,27 @@ function renderMonthly() {
       <td>${r.maint    ? money(r.maint)    : '—'}</td>
       <td>${r.transpl  ? money(r.transpl)  : '—'}</td>
       <td>${r.seedling ? money(r.seedling) : '—'}</td>
+      <td>${r.other    ? money(r.other)    : '—'}</td>
       <td class="money">${money(r.total)}</td>
     </tr>`).join('')
-    : `<tr><td colspan="7" class="empty">Nothing earned in ${esc(monthLabel(monthValue()))} yet.</td></tr>`;
+    : `<tr><td colspan="8" class="empty">Nothing earned in ${esc(monthLabel(monthValue()))} yet.</td></tr>`;
 
   const sum = k => list.reduce((s, r) => s + r[k], 0);
   $('monthly-table').innerHTML = `
     <thead><tr>
       <th style="width:44px;">No.</th><th class="l">Worker</th><th style="width:90px;">Section</th>
       <th style="width:140px;">Work Maintenance</th><th style="width:130px;">Transplanting</th>
-      <th style="width:150px;">Seedlings Collection</th><th style="width:130px;">Total</th>
+      <th style="width:150px;">Seedlings Collection</th><th style="width:110px;">Others</th>
+      <th style="width:130px;">Total</th>
     </tr></thead>
     <tbody>${rows}</tbody>
     ${list.length ? `<tfoot><tr><td class="l" colspan="3">GRAND TOTAL — ${esc(monthLabel(monthValue()))}</td>
       <td>${money(sum('maint'))}</td><td>${money(sum('transpl'))}</td>
-      <td>${money(sum('seedling'))}</td><td>${money(sum('total'))}</td></tr></tfoot>` : ''}`;
+      <td>${money(sum('seedling'))}</td><td>${money(sum('other'))}</td>
+      <td>${money(sum('total'))}</td></tr></tfoot>` : ''}`;
 
   $('monthly-note').textContent =
-    'Work Maintenance is read from the Nursery Operation module and matched to a worker by name; Transplanting and Seedlings Collection come from the sheets keyed here.';
+    'Work Maintenance is read from the Nursery Operation module and matched to a worker by name; Transplanting, Seedlings Collection and Others come from the sheets keyed here.';
 }
 
 /* ════════════ PDF ════════════ */
@@ -944,7 +960,10 @@ function downloadMonthlyPDF() {
   if (!list.length) { alert('Nothing earned this month yet.'); return; }
   const sec = $('monthly-section').value;
   const doc = pdfDoc();
-  const COL = [8, 46, 18, 24, 22, 24, 25];       // 167 → fits 160 after trim
+  /* Eight columns now: Others sits between Seedlings Collection and Total.
+     The widths are proportions — they are scaled to 160mm below — so the room
+     for it comes out of the others rather than off the edge of the page. */
+  const COL = [8, 42, 16, 23, 21, 23, 19, 24];   // 176 → fits 160 after trim
   const total = COL.reduce((a, b) => a + b, 0);
   const scale = 160 / total;
   const C = COL.map(w => w * scale);
@@ -954,7 +973,7 @@ function downloadMonthlyPDF() {
   const drawHead = () => {
     let y = pdfTitle(doc, ['MONTHLY PAYROLL', sec ? (SECTION_NAME[sec] || sec) : 'All Sections', `Month ${monthLabel(monthValue())}`]);
     const H = 13;
-    ['No.', 'Worker Name', 'Section', 'Work Maintenance', 'Transplanting', 'Seedlings Collection', 'Total (RM)']
+    ['No.', 'Worker Name', 'Section', 'Work Maintenance', 'Transplanting', 'Seedlings Collection', 'Others', 'Total (RM)']
       .forEach((t, i) => pdfCell(doc, X[i], y, C[i], H, t, { bold: true, size: 7.5, fill: HF }));
     return y + H;
   };
@@ -968,15 +987,17 @@ function downloadMonthlyPDF() {
                    r.maint ? 'RM ' + r.maint.toFixed(2) : '—',
                    r.transpl ? 'RM ' + r.transpl.toFixed(2) : '—',
                    r.seedling ? 'RM ' + r.seedling.toFixed(2) : '—',
+                   r.other ? 'RM ' + r.other.toFixed(2) : '—',
                    'RM ' + r.total.toFixed(2)];
     cells.forEach((t, k) => pdfCell(doc, X[k], y, C[k], RH, t,
-      { size: k === 1 ? 8.5 : 8, bold: k === 6, nowrap: k !== 1, fill: z }));
+      { size: k === 1 ? 8.5 : 8, bold: k === cells.length - 1, nowrap: k !== 1, fill: z }));
     y += RH;
   });
 
   const sum = k => list.reduce((s, r) => s + r[k], 0);
   const foot = ['', 'GRAND TOTAL', '', 'RM ' + sum('maint').toFixed(2), 'RM ' + sum('transpl').toFixed(2),
-                'RM ' + sum('seedling').toFixed(2), 'RM ' + sum('total').toFixed(2)];
+                'RM ' + sum('seedling').toFixed(2), 'RM ' + sum('other').toFixed(2),
+                'RM ' + sum('total').toFixed(2)];
   foot.forEach((t, k) => pdfCell(doc, X[k], y, C[k], RH + 1, t, { bold: true, size: 8, nowrap: k !== 1, fill: TF }));
   y += RH + 1;
   pdfFooterNote(doc, y);
@@ -1103,6 +1124,7 @@ $('global-month').addEventListener('change', async () => {
 
     fillSectionSelect($('transpl-section'),  true, '');
     fillSectionSelect($('seedling-section'), true, '');
+    fillSectionSelect($('other-section'),    true, '');
     fillSectionSelect($('monthly-section'),  true, '');
 
     /* The register first: the dropdown, the headings and which sheets exist
@@ -1125,8 +1147,8 @@ $('global-month').addEventListener('change', async () => {
     try { tab = localStorage.getItem('npayroll_tab') || tab; sub = localStorage.getItem('npayroll_sub') || sub; } catch (_) {}
     // A remembered tab this user may no longer open would leave them on a
     // blank screen, so fall back to the first one they can.
-    if (!may(sub)) sub = firstOpen(['maint', 'transpl', 'seedling', 'monthly']) || sub;
-    const tabOpen = { payroll: !!firstOpen(['maint','transpl','seedling','monthly']),
+    if (!may(sub)) sub = firstOpen(['maint', 'transpl', 'seedling', 'other', 'monthly']) || sub;
+    const tabOpen = { payroll: !!firstOpen(['maint','transpl','seedling','other','monthly']),
                       workers: may('workers'), rates: may('rates') };
     if (!tabOpen[tab]) tab = ['payroll','workers','rates'].find(t => tabOpen[t]) || tab;
     if ($('sub-' + sub)) switchSub(sub);
