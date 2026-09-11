@@ -387,6 +387,9 @@ let _payrollSaveTimer = null;
    that sheet. Filled by applyFieldRecords, shown by renderPayroll. Not saved:
    it is a fact about the last sync, not about the month. */
 let _fieldUnmatched = {};
+/* Same shape, the other failure: verified field records that paired with no
+   office row at all, so nothing of theirs reached the sheet. */
+let _fieldUnpaired = {};
 
 function payrollKey(n, m, type) { return `${n}_${m}_${type}`; }
 
@@ -474,8 +477,10 @@ function renderPayroll() {
        it belongs on the sheet the share was supposed to land on. */
     const nofit = (_fieldUnmatched[`${n}_${m}`] || []).filter((x) => !known.has(x));
     const lines = [];
+    const unpaired = _fieldUnpaired[`${n}_${m}`] || [];
     if (gone.length)  lines.push(`${t('pay.offRegister')} ${gone.join(', ')}`);
     if (nofit.length) lines.push(`${t('pay.fieldNoColumn')} ${nofit.join(', ')}`);
+    if (unpaired.length) lines.push(`${t('pay.unpaired')} ${unpaired.join(', ')}`);
     off.style.display = lines.length ? 'block' : 'none';
     off.textContent = lines.join('\n');
     off.style.whiteSpace = 'pre-line';
@@ -1269,6 +1274,11 @@ const I18N = {
     'pay.notLinkedWhy':'The register could not be read: {why}',
     'pay.offRegister':'⚠ Ticked this month but no longer a general worker of this nursery on the register, so their capacity is not counted:',
     'pay.fieldNoColumn':'⚠ The field credited work to these names and they have no column here, so their share of the plot is not counted. Check the spelling against the register, or that they are a general worker of this nursery:',
+    /* The other half of the same warning: work that never reached the sheet
+       at all, as against work that reached it with a name nobody could
+       place. */
+    'pay.unpaired':'Verified in the field but matched no row on this month\u2019s schedule, so nothing was filled in or ticked:',
+    'pay.roundN':'Round {n}',
     'pay.noRows':'No records for this nursery and month yet — tick the schedule, then Sync from Schedule.',
     'pay.tickHint':'Tick each worker who did the job. Capacity per worker = plot capacity ÷ number of ticks on that row. Pay is worked out from this record in the Nursery Payroll System.',
     /* Salary claim form (PDF) */
@@ -1359,6 +1369,8 @@ const I18N = {
     'pay.notLinkedWhy':'Daftar tidak dapat dibaca: {why}',
     'pay.offRegister':'⚠ Ditanda bulan ini tetapi bukan lagi pekerja am nurseri ini dalam daftar, jadi kapasiti mereka tidak dikira:',
     'pay.fieldNoColumn':'⚠ Lapangan mengkreditkan kerja kepada nama ini tetapi tiada lajur di sini, jadi bahagian mereka tidak dikira. Semak ejaan dengan daftar, atau sama ada mereka pekerja am nurseri ini:',
+    'pay.unpaired':'Disahkan di ladang tetapi tiada baris sepadan pada jadual bulan ini, jadi tiada apa diisi atau ditanda:',
+    'pay.roundN':'Pusingan {n}',
     /* Borang tuntutan gaji (PDF) */
     'pay.no':'Bil.', 'pay.worker':'Nama Pekerja', 'pay.workersRange':'Pekerja', 'pay.ofTotal':'daripada',
     'pay.capBy':'KAPASITI KERJA DISIAPKAN (BIBIT)', 'pay.totalEarn':'Jumlah Pendapatan (RM)',
@@ -2495,10 +2507,17 @@ function applyFieldRecords(nursery, monthLbl) {
     touched.add(type);
   };
 
+  /* Which of the field's groups actually found a row here. Whatever is left
+     over at the end is verified work that reached the office and attached to
+     nothing — no date, no batch, no tick — and used to do so in silence. */
+  const usedKeys = new Set();
+
   records.forEach(r => {
     if (!plots.includes(r.plot) || r.checked) return;
     const week = _recRound(r.racun);
-    const g = week ? idx[_fieldKey(r.jenis, r.plot, week)] : null;
+    const key = week ? _fieldKey(r.jenis, r.plot, week) : null;
+    const g = key ? idx[key] : null;
+    if (g) usedKeys.add(key);
     if (!g) {
       // A cell this sync filled before whose field records have gone —
       // deleted, unverified again, or the month on screen has moved on. Put
@@ -2566,6 +2585,33 @@ function applyFieldRecords(nursery, monthLbl) {
 
      Usually a spelling that differs by more than punctuation, or somebody
      whose register row is not a general worker of this nursery. */
+  /* VERIFIED WORK THAT PAIRED WITH NOTHING.
+     Three things do this, and every one of them was silent:
+
+       · the round disagrees — the office has the job on "Round 2:" and the
+         phone recorded it while its week board showed another week
+       · the office row's chemical carries no "Round N:" at all, so there is
+         nothing to pair with
+       · the office has no row for that job on that plot this month
+
+     A fourth is deliberate and not reported: a row somebody has CHECKED is
+     skipped by the loop above, because Checked means the office has settled
+     it and a later sync must not move it.
+
+     Worth saying out loud, because the symptom is a row that looks exactly
+     like work nobody has done — while a worker has done it, a conductor has
+     signed it off, and neither of them can tell. */
+  const unpaired = [];
+  Object.keys(idx).forEach((k) => {
+    if (usedKeys.has(k)) return;
+    const g = idx[k];
+    const f = (g.list || [])[0];
+    if (!f || !plots.includes(String(f.plot_name || '').trim().toUpperCase())) return;
+    unpaired.push(`${f.plot_name} ${jenisLabel(f.jenis)} `
+      + `(${t('pay.roundN', { n: f.week_no || _weekOfDate(f.work_date) })})`);
+  });
+  _fieldUnpaired[`${nursery}_${monthLbl}`] = [...new Set(unpaired)].sort();
+
   _fieldUnmatched[`${nursery}_${monthLbl}`] = [...unmatched].sort();
   if (unmatched.size) {
     console.warn('[maint] the field credited work to names with no column on '
