@@ -209,9 +209,16 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
    given the width to hold it. Twelve columns do not leave that width, and a
    date that wraps in every row wraps consistently, which is what the rule was
    really protecting. */
-.rec-table tbody td:nth-child(5),
+/* Quantity and Audit only. BATCH CAME OUT of this list: a plot with five
+   batches in it is "252, 253, 254, 257, 259", which at any column width this
+   table can spare is wider than the column — and nowrap does not widen a
+   column, it prints the overflow straight across Quantity. It wraps at the
+   commas now, which is where a person would break it anyway. */
 .rec-table tbody td:nth-child(6),
 .rec-table tbody td:nth-child(9){white-space:nowrap;}
+/* Wrapping at the spaces, NOT mid-number: overflow-wrap:anywhere would split
+   "257" across two lines and invent a batch nobody has. */
+.rec-table tbody td:nth-child(5){white-space:normal;word-break:keep-all;line-height:1.45;}
 /* Free text, and now the date and the buttons too: wrap rather than spill
    over the column beside. */
 .rec-table tbody td:nth-child(1),
@@ -470,8 +477,18 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 
 /* ─── WORK MAINTENANCE LIST — large, readable type ───
    Single source of truth: the row template carries no inline font-size. */
-#recview-list .rec-table thead th{font-size:11px;padding:11px 14px;letter-spacing:.6px;}
-#recview-list .rec-table tbody td{font-size:14px;padding:11px 14px;}
+/* ── THE RULE THAT ACTUALLY WINS ───────────────────────────────────────
+   These two are more specific than the .rec-table rules two hundred lines
+   up AND come later, so they decide the Work Record's font and padding —
+   whatever those say. Setting padding up there and expecting it to apply is
+   a wasted afternoon; it was, once.
+
+   Cut from 14px/14px because the table is twelve columns now. 14px of
+   padding on each side of twelve columns is 336px spent on air, and at a
+   14px font a batch list of five wrapped one batch to a line and made every
+   row four lines tall. */
+#recview-list .rec-table thead th{font-size:10px;padding:8px 7px;letter-spacing:.06em;}
+#recview-list .rec-table tbody td{font-size:12.5px;padding:9px 7px;}
 #recview-list .rec-table .rec-group-cell{font-size:14px;}
 #recview-list .rec-table .rec-group-sub{font-size:12px;}
 #recview-list .rec-table .pill{font-size:12px;padding:5px 12px;max-width:none;}
