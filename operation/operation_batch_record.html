@@ -118,7 +118,7 @@
 
             <div class="flex items-center gap-2 bg-white p-2 rounded-2xl border border-[#e8dcc8] shadow-inner mb-6 w-fit overflow-x-auto">
                 <button id="tab-active" class="list-tab-btn list-tab-active" onclick="switchListTab('active')">🟢 Active</button>
-                <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="Batch is moved here automatically only when every transplanted plot has a 3rd Culling entry saved (partial entries stay in Active)">✅ Completed / In-Active</button>
+                <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="A batch moves here automatically once every transplanted plot has a 3rd Culling record with its drone-map quantity and culled date keyed in. A partly-filled report keeps the batch in Active.">✅ Completed / In-Active</button>
                 <button id="tab-amendment" class="list-tab-btn list-tab-inactive" onclick="switchListTab('amendment')" title="Batches with at least one report tab rejected by HQ — open the batch to see the rejection remark and amend the report">🔴 Amendment Needed</button>
                 <button id="tab-reserved" class="list-tab-btn list-tab-inactive" onclick="switchListTab('reserved')" title="Plots holding seedlings transferred in the 3rd Culling report. A batch's transfers drop off this list once the batch is sold out.">🅿️ Plot Reserved Status</button>
             </div>
@@ -308,15 +308,27 @@
                         .add(p); // per PLOT — Tab 6 merges same-plot rows and saves one record per plot
                 });
 
-                // Actual coverage from 3rd_Culling rows. A row only COUNTS as
-                // covering its plot when its drone map is uploaded (DocUrl)
-                // AND the drone map qty was keyed in (MapQty) — a record
-                // without both keeps the batch in the Active list.
+                /* Actual coverage from 3rd_Culling rows. A row COUNTS as covering
+                   its plot when the drone-map QUANTITY and the CULLED DATE are
+                   both keyed — the same two things the 3rd Culling tab asks for
+                   and counts as done.
+
+                   It used to require an uploaded FILE (DocUrl) instead of the
+                   date. That made this list and the tab disagree: a batch could
+                   read 6/6 Plots Done with every quantity and date in, and sit
+                   in Active because somebody had not attached photographs. It
+                   is what kept batch 225 out of Completed.
+
+                   The file is still worth having and the tab still shows
+                   whether there is one. It is evidence, not the work — and a
+                   batch's place in this list should not turn on it while the
+                   report that owns the question says otherwise. */
                 const cull3Keyed  = {}; // batch → Set(PLOT)
                 const cull3Legacy = {}; // batch → Map(PLOT → row count)
                 (cull3Res.data || []).forEach(r => {
                     if (!r.batch_name) return;
-                    const hasProof = !!(r.remark && /DocUrl:\S+/.test(r.remark) && /MapQty:\s*\d+/.test(r.remark));
+                    const hasProof = !!(r.remark && /MapQty:\s*\d+/.test(r.remark)
+                                                 && /CullDate:\s*\d{4}-\d{2}-\d{2}/.test(r.remark));
                     if (!hasProof) return;
                     const p = _normPlot(r.plot_name);
                     const m = r.remark ? r.remark.match(/DestType:\s*(main|premium|doubletone)/) : null;
