@@ -16,6 +16,14 @@ expected AS (
   WHERE l.batch_name = p.batch
     AND l.transaction_type IN ('Transplanted', 'Transplanted_DoubleTone')
     AND COALESCE(TRIM(l.plot_name), '') <> ''
+  UNION
+  /* …and every plot seedlings were TRANSFERRED INTO. A "-R" plot is culled
+     on the P-R Culling tab like any other, so it has to be covered too. */
+  SELECT DISTINCT UPPER(TRIM(l.plot_name))
+  FROM shared_inventory_logs l, params p
+  WHERE l.batch_name = p.batch
+    AND l.transaction_type = 'Cull3_Transfer'
+    AND COALESCE(TRIM(l.plot_name), '') <> ''
 ),
 
 /* What each plot's 3rd Culling record actually carries. A plot counts as
@@ -23,6 +31,9 @@ expected AS (
    the same two things the 3rd Culling tab asks for. */
 actual AS (
   SELECT UPPER(TRIM(l.plot_name)) AS plot,
+         /* Nothing to cull is nothing to do: a record of nought needs no
+            drone map and no date, and the report shows a dash for both. */
+         BOOL_OR(COALESCE(l.quantity_change, 0) = 0)              AS nil_cull,
          BOOL_OR(l.remark ~ 'MapQty:\s*[0-9]+')                  AS has_map_qty,
          BOOL_OR(l.remark ~ 'CullDate:\s*[0-9]{4}-[0-9]{2}-[0-9]{2}') AS has_cull_date,
          BOOL_OR(l.remark ~ 'DocUrl:\S+')                        AS has_map_file,
@@ -38,7 +49,9 @@ verdict AS (
          COALESCE(a.has_map_qty, FALSE)   AS has_map_qty,
          COALESCE(a.has_cull_date, FALSE) AS has_cull_date,
          COALESCE(a.has_map_file, FALSE)  AS has_map_file,
-         (COALESCE(a.has_map_qty, FALSE) AND COALESCE(a.has_cull_date, FALSE)) AS done
+         COALESCE(a.nil_cull, FALSE)      AS nil_cull,
+         (COALESCE(a.nil_cull, FALSE)
+          OR (COALESCE(a.has_map_qty, FALSE) AND COALESCE(a.has_cull_date, FALSE))) AS done
   FROM expected e LEFT JOIN actual a ON a.plot = e.plot
 )
 
@@ -49,7 +62,7 @@ SELECT * FROM (
          '— SUMMARY —'::TEXT AS plot,
          (SELECT batch FROM params) AS batch,
          CASE WHEN (SELECT COUNT(*) FROM verdict WHERE NOT done) = 0
-              THEN 'COMPLETED: every plot has a map qty and a culled date'
+              THEN 'COMPLETED: every plot is done'
               ELSE 'NOT COMPLETED: ' || (SELECT COUNT(*) FROM verdict WHERE NOT done)
                    || ' of ' || (SELECT COUNT(*) FROM verdict) || ' plot(s) still missing something'
          END AS status,
@@ -60,6 +73,7 @@ SELECT * FROM (
          v.plot,
          (SELECT batch FROM params),
          CASE WHEN v.records = 0        THEN 'BLOCKING — no 3rd Culling record at all'
+              WHEN v.nil_cull           THEN 'done — nothing left to cull'
               WHEN NOT v.has_map_qty
                AND NOT v.has_cull_date  THEN 'BLOCKING — no drone map qty and no culled date'
               WHEN NOT v.has_map_qty    THEN 'BLOCKING — drone map qty not keyed in'
@@ -72,8 +86,9 @@ SELECT * FROM (
 ORDER BY sort_order, plot;
 
 -- WHAT A GOOD RESULT LOOKS LIKE
---   Row 1 reads "COMPLETED: every plot has a map qty and a culled date",
---   and every plot below it says "done".
+--   Row 1 reads "COMPLETED: every plot is done", and every plot below it
+--   says "done" — either because its map qty and culled date are keyed, or
+--   because it has nothing left to cull.
 --
 --   Anything marked BLOCKING is why the batch is still in Active. Open that
 --   batch → 3rd Culling → find that plot → fill in what the row names, then

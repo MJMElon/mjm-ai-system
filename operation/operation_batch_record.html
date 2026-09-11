@@ -327,7 +327,15 @@
                 const cull3Legacy = {}; // batch → Map(PLOT → row count)
                 (cull3Res.data || []).forEach(r => {
                     if (!r.batch_name) return;
-                    const hasProof = !!(r.remark && /MapQty:\s*\d+/.test(r.remark)
+                    /* Nothing to cull is nothing to do. A plot whose 3rd culled
+                       quantity comes to nought has no standing crop to fly over
+                       and no cull to date — the report shows a dash in both
+                       cells rather than boxes — so requiring a map quantity and
+                       a date of it would keep the batch in Active for a job
+                       nobody can do. Usually a "-R" plot whose seedlings were
+                       all sold. */
+                    const nilCull = Number(r.quantity_change) === 0;
+                    const hasProof = nilCull || !!(r.remark && /MapQty:\s*\d+/.test(r.remark)
                                                  && /CullDate:\s*\d{4}-\d{2}-\d{2}/.test(r.remark));
                     if (!hasProof) return;
                     const p = _normPlot(r.plot_name);
@@ -340,13 +348,29 @@
                     }
                 });
 
-                // Any outstanding plot transfer keeps the batch Active — the
-                // transferred plot's culling is still pending by definition.
-                const batchesWithTransfers = new Set((transferRes.data || []).map(r => r.batch_name));
+                /* A transfer used to keep a batch in Active FOREVER — any
+                   Cull3_Transfer row at all and the batch could never be
+                   Completed, however finished its report. That was true when a
+                   transferred-into plot had no way to be culled: its culling
+                   was pending by definition because there was nowhere to
+                   record it.
+
+                   There is now. A "-R" plot is a row on the P-R Culling tab
+                   with its own drone-map quantity and culled date, the same as
+                   any other. So a transfer no longer vetoes the batch — it
+                   adds the plot it landed in to the list of plots that must be
+                   covered, which is what a transfer actually means.
+
+                   This is why batch 225 stayed in Active with its 3rd Culling
+                   report reading 6/6 done. */
+                (transferRes.data || []).forEach(r => {
+                    const dest = _normPlot(r.plot_name);
+                    if (!dest || !r.batch_name) return;
+                    (expectedPlots[r.batch_name] = expectedPlots[r.batch_name] || new Set()).add(dest);
+                });
 
                 const completedBatchNames = new Set();
                 Object.keys(expectedPlots).forEach(batch => {
-                    if (batchesWithTransfers.has(batch)) return; // transfer → stays Active
                     // Every plot must be covered by a proofed record — no exceptions.
                     const need = expectedPlots[batch];
                     if (!need || !need.size) return;
