@@ -1606,24 +1606,16 @@
                             <!-- SECTION 2: Plot-by-Plot Entry Table         -->
                             <!-- ════════════════════════════════════════════ -->
                             <div class="bg-white rounded-2xl border border-[#e8dcc8] shadow-sm mb-6 overflow-hidden">
-                                <div class="flex items-center justify-between gap-3 flex-wrap px-6 py-4 border-b border-[#e8dcc8] bg-[#fdfaf4]">
-                                    <div>
-                                        <h4 class="font-black text-[#3d2610] uppercase tracking-widest text-sm">2nd Culling Records</h4>
-                                        <div class="text-[10px] font-bold text-[#8a7a68] mt-0.5">
-                                            The date is the 14th of the 4th month after the plot was transplanted.
-                                        </div>
+                                <!-- No "fill the dates" button. A transplanted plot HAS a 2nd
+                                     cull date — the 14th of the 4th month after it went in —
+                                     and every row arrives on it. A button to apply a rule that
+                                     has already been applied is a button that does nothing,
+                                     and one nobody presses is one nobody trusts. -->
+                                <div class="px-6 py-4 border-b border-[#e8dcc8] bg-[#fdfaf4]">
+                                    <h4 class="font-black text-[#3d2610] uppercase tracking-widest text-sm">2nd Culling Records</h4>
+                                    <div class="text-[10px] font-bold text-[#8a7a68] mt-0.5">
+                                        The date is the 14th of the 4th month after the plot was transplanted. Change any row by hand if the cull happened on a different day.
                                     </div>
-                                    <!-- The rule is applied on load, so this button is normally
-                                         a no-op and says so. It is here for the one case the
-                                         load cannot cover: a date edited by hand this session
-                                         and now wanted back on the rule, without a reload that
-                                         would take every other edit with it. -->
-                                    <button type="button" id="t5-fill-dates-btn" onclick="fillAllT5CullDates()"
-                                        class="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[#e8dcc8]
-                                               bg-white text-[#c07820] text-[10px] font-black uppercase tracking-widest
-                                               hover:bg-[#fffaf0] hover:border-[#c07820] transition-colors">
-                                        Fill All Cull Dates
-                                    </button>
                                 </div>
 
                                 <!-- Column headers: Date → Plot → Transplanted → Dead → Alive (auto) → Cull% → Map -->
@@ -7448,60 +7440,9 @@ Thank you.`;
             return `${year}-${String(month).padStart(2, '0')}-14`;
         }
 
-        /* The rule applied to every row at once, REPLACING what is there.
-
-           Blank rows are filled as they render, so this button is only ever
-           needed for rows that already carry a date — which is exactly why it
-           says which ones it is about to change, and to what, before it
-           changes them. An overwritten date is the one thing here that cannot
-           be got back by pressing something else.
-
-           Dates only. The Dead quantity is a count somebody made standing in
-           the plot; no rule can reproduce it and nothing here touches it. */
-        function fillAllT5CullDates() {
-            const rows = Array.from(document.querySelectorAll('#t5-plot-rows .t5-plot-row'));
-            const changes = [];
-            let blanks = 0, noDate = 0;
-            rows.forEach((row, i) => {
-                const p = t5_plotData[i];
-                const input = row.querySelector('.t5-cull-date');
-                if (!input || !p) return;
-                const want = t5CullDateFor(p.transplantDate);
-                if (!want) { noDate++; return; }            // no transplant date to count from
-                if (!input.value) { blanks++; return; }     // already handled on render
-                if (input.value !== want) changes.push({ plot: p.plot, from: input.value, to: want });
-            });
-
-            if (!changes.length) {
-                showToast(noDate
-                    ? `Every date already follows the rule. ${noDate} plot(s) have no transplant date to count from.`
-                    : 'Every date already follows the rule — nothing to change.', 'success');
-                return;
-            }
-
-            const list = changes.slice(0, 8)
-                .map(c => `  ${c.plot}:  ${_t5PrettyD(c.from)}  →  ${_t5PrettyD(c.to)}`).join('\n');
-            const more = changes.length > 8 ? `\n  …and ${changes.length - 8} more` : '';
-            if (!confirm(`Replace ${changes.length} cull date(s) that were keyed in by hand?\n\n${list}${more}\n\n` +
-                         `The Dead quantities are not touched. Nothing is saved until you press Save.`)) return;
-
-            rows.forEach((row, i) => {
-                const p = t5_plotData[i];
-                const input = row.querySelector('.t5-cull-date');
-                if (!input || !p) return;
-                const want = t5CullDateFor(p.transplantDate);
-                if (want) input.value = want;
-            });
-            calcT5();
-            showToast(`${changes.length} date(s) replaced. Press Save 2nd Culling Report to keep them.`, 'success');
-        }
-
-        function _t5PrettyD(s) {
-            const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || ''));
-            if (!m) return s || '—';
-            const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-            return `${m[3]} ${MON[parseInt(m[2], 10) - 1]} ${m[1]}`;
-        }
+        /* fillAllT5CullDates and its date formatter have gone with the button.
+           The rule is applied as each row renders, so there was nothing left
+           for them to do. */
 
         function autoFillCullDate(rowId) {
             const row       = document.getElementById(rowId);
