@@ -14,6 +14,8 @@
        the ROUND      the office reads it off the front of its own chemical
                       ("Round 2: Manzate 50gm + Bond 15mL" → 2)
                       the phone sends the week its board was showing
+                   …or, when those two disagree, the CHEMICAL, which is what
+                      the job IS rather than what the office calls it
 
    Pair them and the record fills the row's date, batch and quantity, and
    ticks every worker it credits. Fail to pair and NOTHING happens — no date,
@@ -27,18 +29,25 @@
    One row per verified field record in the month, with the office row it
    would pair with beside it. `verdict` says what happened:
 
-     PAIRED                   it matched — if the tick is still missing, the
+     PAIRED ON ROUND          both agreed. If the tick is still missing, the
                               worker's NAME is the problem, not the pairing;
                               compare `credited` against the Worker Record's
                               column headings
-     ROUND MISMATCH           the office has this job on a different round
-                              than the phone recorded it under. This is the
-                              common one.
+     PAIRED ON CHEMICAL       the rounds disagreed, but the office has this
+                              exact spray on this exact plot, so it pairs on
+                              that instead. Nothing is lost.
      NO OFFICE ROW            the office has no row for that job on that plot
                               at all — the month was never synced from the
-                              schedule, or the plot is not on it
-     OFFICE ROW HAS NO ROUND  the office chemical does not start "Round N:",
-                              so nothing can pair with it
+                              schedule, or the job was never scheduled. THIS
+                              ONE NEEDS A DECISION: either sync the schedule,
+                              or accept that the work was unscheduled and will
+                              not appear.
+     CHEMICAL NOT SCHEDULED   the office has rows for the job on that plot but
+                              none with this chemical, so there is nothing it
+                              can honestly attach to
+     AMBIGUOUS                two office rows on that plot carry the same
+                              chemical, so the chemical cannot say which. Give
+                              them different rounds and it resolves.
 
    Change the two values at the top to the month and nursery you are looking
    at, and run.
@@ -56,6 +65,10 @@ office AS (
   SELECT r->>'jenis'                        AS jenis,
          upper(btrim(r->>'plot'))           AS plot,
          r->>'racun'                        AS racun,
+         /* The same normalising _chemKey does in the page: the round label
+            off the front, then letters and digits only. */
+         upper(regexp_replace(regexp_replace(COALESCE(r->>'racun',''),
+               '^\s*Round\s+\d+\s*:', '', 'i'), '[^a-zA-Z0-9]', '', 'g')) AS chem_key,
          NULLIF((regexp_match(COALESCE(r->>'racun',''),
                  '^\s*Round\s+(\d+)\s*:', 'i'))[1], '')::int AS round
     FROM public.nops_maint_records m
@@ -65,8 +78,10 @@ office AS (
 
 /* What the phone sent, verified only — the office reads nothing else. */
 field AS (
-  SELECT f.id, f.plot_name, f.jenis, f.work_type, f.batch_name,
+  SELECT f.id, f.plot_name, f.jenis, f.work_type, f.batch_name, f.chemical,
          f.work_date, f.week_no, f.schedule_month,
+         upper(regexp_replace(regexp_replace(COALESCE(f.chemical,''),
+               '^\s*Round\s+\d+\s*:', '', 'i'), '[^a-zA-Z0-9]', '', 'g')) AS chem_key,
          COALESCE(NULLIF(btrim(f.worked_by), ''), btrim(f.reported_by)) AS credited,
          /* The same fallback the page uses: no week_no means work it out from
             the date, in seven-day blocks with the 29th on counted as the 4th. */
@@ -82,16 +97,18 @@ field AS (
 SELECT f.work_date,
        f.plot_name          AS plot,
        f.jenis              AS job,
+       f.chemical           AS "chemical recorded",
        f.batch_name         AS batch,
        f.credited,
        f.round_used         AS "phone round",
-       o_same.racun         AS "office row it paired with",
-       o_any.rounds         AS "rounds the office has for this job/plot",
+       COALESCE(o_same.racun, o_chem.racun) AS "office row it pairs with",
+       o_any.racuns         AS "what the office has for this job/plot",
        CASE
-         WHEN o_same.racun IS NOT NULL              THEN 'PAIRED'
-         WHEN o_any.rounds IS NULL                  THEN 'NO OFFICE ROW'
-         WHEN o_any.rounds = '{}'                   THEN 'OFFICE ROW HAS NO ROUND'
-         ELSE 'ROUND MISMATCH'
+         WHEN o_same.racun IS NOT NULL  THEN 'PAIRED ON ROUND'
+         WHEN o_chem.n = 1              THEN 'PAIRED ON CHEMICAL'
+         WHEN o_chem.n > 1              THEN 'AMBIGUOUS'
+         WHEN o_any.racuns IS NULL      THEN 'NO OFFICE ROW'
+         ELSE 'CHEMICAL NOT SCHEDULED'
        END                  AS verdict
   FROM field f
   /* The office row it DID pair with, if any. */
@@ -102,10 +119,20 @@ SELECT f.work_date,
        AND o.round = f.round_used
      LIMIT 1
   ) o_same ON true
-  /* And every round the office has for that job on that plot, so a mismatch
-     shows what it SHOULD have been recorded under. */
+  /* Failing that, the office row carrying the SAME CHEMICAL — and how many
+     of them there are, because two is no answer at all. */
   LEFT JOIN LATERAL (
-    SELECT array_remove(array_agg(o.round ORDER BY o.round), NULL) AS rounds
+    SELECT count(*)::int AS n, min(o.racun) AS racun
+      FROM office o
+     WHERE o.jenis = f.jenis
+       AND o.plot  = upper(btrim(f.plot_name))
+       AND o.chem_key = f.chem_key
+       AND f.chem_key <> ''
+  ) o_chem ON true
+  /* And everything the office has for that job on that plot, so a record that
+     pairs with nothing shows what it was up against. */
+  LEFT JOIN LATERAL (
+    SELECT array_agg(o.racun ORDER BY o.racun) AS racuns
       FROM office o
      WHERE o.jenis = f.jenis
        AND o.plot  = upper(btrim(f.plot_name))

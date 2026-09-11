@@ -2072,7 +2072,7 @@ async function loadFieldRecords() {
        asks to see it (_openTrack). The summary is stored beside the track for
        exactly this reason. */
     let res = await _mvFetchAll(() => _verifiedOnly(_supabase.from('nops_maint_field_records')
-      .select('id, work_date, plot_name, work_type, jenis, batch_name, week_no, schedule_month, qty, worked_by, reported_by, verified_at, gps_lat, gps_lng, gps_points, gps_distance_m'))
+      .select('id, work_date, plot_name, work_type, jenis, chemical, batch_name, week_no, schedule_month, qty, worked_by, reported_by, verified_at, gps_lat, gps_lng, gps_points, gps_distance_m'))
       .order('id', { ascending: true }));
     // batch_name / week_no / schedule_month come from
     // shared/add_maint_field_batch.sql. Until that has been run the field is
@@ -2378,6 +2378,23 @@ function _isoMonthLabel(iso) {
 }
 const _fieldKey = (jenis, plot, week) => `${jenis}||${_mvPlotKey(plot)}||${week}`;
 
+/* A chemical, compared the way a person would compare it: the round label off
+   the front, then letters and digits only.
+
+     "Round 1: Manzate 50gm + Bond 15mL"  →  MANZATE50GMBOND15ML
+     "Manzate 50gm + Bond 15mL"           →  the same
+
+   The round comes off because it is the thing that disagrees — it is what the
+   office calls the job, not what the job IS. */
+function _chemKey(s) {
+  return String(s == null ? '' : s)
+    .replace(/^\s*Round\s+\d+\s*:/i, '')
+    .replace(/[^a-z0-9]/gi, '')
+    .toUpperCase();
+}
+const _fieldChemKey = (jenis, plot, chem) =>
+  `${jenis}||${_mvPlotKey(plot)}||${_chemKey(chem)}`;
+
 /* Who a field record credits the work to.
 
    `worked_by` is the conductor keying a job for somebody whose phone was
@@ -2445,9 +2462,32 @@ function _summariseFieldGroup(list) {
   };
 }
 
-/* The field's answer for each (job, plot, round) of one month. */
+/* The field's answer for each (job, plot, round) of one month — and, beside
+   it, the same records filed by (job, plot, CHEMICAL).
+ 
+   ── Why two indexes ──
+ 
+   The round is the one fact the two sides get from different places. The
+   office reads it off the front of its own chemical ("Round 2: Manzate …");
+   the phone sends the week its board was showing. Those agree only when the
+   office schedules one round per week, and it often does not: a plot with a
+   single P & D round in the month is worked in week two, and the two numbers
+   part company. Verified work then paired with nothing and vanished — no
+   date, no batch, no tick, while a worker had done it and a conductor had
+   signed it off.
+ 
+   So the chemical is the second way in, and it is the better fact: it is what
+   the job IS, where the round is only what the office calls it. Manzate is
+   Manzate whichever week the phone was showing.
+ 
+   It cannot attach work to a job the office did not schedule, which is what
+   makes it safe to fall back on: if the office has no Manzate row for that
+   plot, nothing matches and the record stays unpaired and reported. And the
+   caller only uses it where the chemical picks out ONE office row — see the
+   ambiguity guard there. */
 function fieldRecordIndex(monthLbl) {
   const groups = {};
+  const byChem = {};
   fieldRecords.forEach(f => {
     const jenis = f.jenis || _FIELD_JENIS[f.work_type];
     if (!jenis) return;
@@ -2456,9 +2496,19 @@ function fieldRecordIndex(monthLbl) {
     if (!week) return;
     const k = _fieldKey(jenis, f.plot_name, week);
     (groups[k] || (groups[k] = [])).push(f);
+    /* Only where the phone actually recorded one. A record with no chemical
+       has nothing to be matched on and keeps the round as its only route. */
+    const ck = _chemKey(f.chemical);
+    if (ck) {
+      const c = _fieldChemKey(jenis, f.plot_name, f.chemical);
+      (byChem[c] || (byChem[c] = [])).push(f);
+    }
   });
   const idx = {};
   Object.keys(groups).forEach((k) => { idx[k] = _summariseFieldGroup(groups[k]); });
+  const chem = {};
+  Object.keys(byChem).forEach((k) => { chem[k] = _summariseFieldGroup(byChem[k]); });
+  idx.__byChem = chem;
   return idx;
 }
 
@@ -2512,11 +2562,33 @@ function applyFieldRecords(nursery, monthLbl) {
      nothing — no date, no batch, no tick — and used to do so in silence. */
   const usedKeys = new Set();
 
+  /* How many office rows on this sheet carry each chemical, per job and plot.
+     The chemical fallback below is used ONLY where this says one: two rows
+     with the same chemical on the same plot cannot tell which of them a
+     record belongs to, and guessing would put a worker's capacity on the
+     wrong round. Ambiguous stays unpaired, and unpaired is reported. */
+  const chemRows = {};
+  records.forEach(r => {
+    if (!plots.includes(r.plot)) return;
+    const c = _fieldChemKey(r.jenis, r.plot, r.racun);
+    chemRows[c] = (chemRows[c] || 0) + 1;
+  });
+
   records.forEach(r => {
     if (!plots.includes(r.plot) || r.checked) return;
     const week = _recRound(r.racun);
-    const key = week ? _fieldKey(r.jenis, r.plot, week) : null;
-    const g = key ? idx[key] : null;
+    let key = week ? _fieldKey(r.jenis, r.plot, week) : null;
+    let g = key ? idx[key] : null;
+    /* The round did not find it. Try the chemical — the office scheduled
+       this exact spray on this exact plot, and the only thing the two sides
+       disagree about is what to call the round. */
+    if (!g) {
+      const ck = _fieldChemKey(r.jenis, r.plot, r.racun);
+      if (_chemKey(r.racun) && chemRows[ck] === 1) {
+        const byChem = idx.__byChem || {};
+        if (byChem[ck] && !usedKeys.has(ck)) { g = byChem[ck]; key = ck; }
+      }
+    }
     if (g) usedKeys.add(key);
     if (!g) {
       // A cell this sync filled before whose field records have gone —
@@ -2603,8 +2675,14 @@ function applyFieldRecords(nursery, monthLbl) {
      signed it off, and neither of them can tell. */
   const unpaired = [];
   Object.keys(idx).forEach((k) => {
-    if (usedKeys.has(k)) return;
+    if (k === '__byChem' || usedKeys.has(k)) return;
     const g = idx[k];
+    /* Consumed through the chemical rather than the round: the record DID
+       reach a row, just not by the key it is filed under here. Reporting it
+       as lost would be this page complaining about work it has in hand. */
+    const f0 = (g.list || [])[0];
+    if (f0 && usedKeys.has(_fieldChemKey(f0.jenis || _FIELD_JENIS[f0.work_type],
+                                         f0.plot_name, f0.chemical))) return;
     const f = (g.list || [])[0];
     if (!f || !plots.includes(String(f.plot_name || '').trim().toUpperCase())) return;
     unpaired.push(`${f.plot_name} ${jenisLabel(f.jenis)} `
