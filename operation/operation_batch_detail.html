@@ -312,6 +312,26 @@
          opens the full modal. -->
     <div id="t6-sales-tip" class="hidden fixed z-[9500] pointer-events-none bg-white border border-[#e8dcc8] rounded-2xl shadow-[0_12px_32px_rgba(26,21,13,0.25)] px-4 py-3 max-w-[340px]"></div>
 
+    <!-- Attachments open HERE, over the batch, rather than in a tab of their
+         own — see _openDocViewer. Above the page's own modal (z-10/20) and
+         below the toasts (z-9999), the same band the Sales list sits in.
+         A click on the backdrop closes it; a click on the picture does not. -->
+    <div id="doc-lightbox" class="hidden fixed inset-0 z-[9200] bg-[rgba(26,21,13,0.8)] backdrop-blur-sm overflow-y-auto flex justify-center items-start p-4 md:p-8"
+         onclick="if (event.target === this) closeDocViewer()">
+        <div class="bg-[#f8f4ec] border border-[#e8dcc8] rounded-3xl shadow-[0_30px_60px_rgba(0,0,0,0.45)] w-full max-w-[1000px] overflow-hidden">
+            <div class="flex items-center gap-3 px-5 py-3 border-b border-[#e8dcc8] bg-white">
+                <div class="text-[11px] font-black text-[#3d2610] uppercase tracking-widest truncate" id="doc-lightbox-title">Drone Map</div>
+                <a id="doc-lightbox-download" href="#" download
+                   class="ml-auto shrink-0 px-3 py-1.5 rounded-lg border border-[#e8dcc8] bg-white text-[#3a7ab4]
+                          text-[10px] font-black uppercase tracking-widest hover:bg-[#f4f8fc] hover:border-[#3a7ab4]">Download</a>
+                <button type="button" onclick="closeDocViewer()" title="Close"
+                    class="shrink-0 px-3 py-1.5 rounded-lg border border-[#d8cbb4] bg-white text-[#5b4a33]
+                           text-[10px] font-black uppercase tracking-widest hover:bg-[#f5efe4]">Close</button>
+            </div>
+            <div class="p-4" id="doc-lightbox-body"></div>
+        </div>
+    </div>
+
     <div class="modal-backdrop">
         <div class="modal-window flex flex-col">
             
@@ -3449,7 +3469,7 @@
         }
 
         function viewMap(rowId) {
-            _openDocInNewWindow(rowMaps[rowId]);
+            _openDocViewer(rowMaps[rowId]);
         }
 
         // ── T3 Edit-form drone map handlers ──────────────────────────────────────
@@ -3489,7 +3509,7 @@
         }
 
         function viewT3EditMap(idx) {
-            _openDocInNewWindow(t3EditMaps[idx]);
+            _openDocViewer(t3EditMaps[idx]);
         }
 
         function removeTransplantRow(rowId) {
@@ -4455,7 +4475,7 @@
 
         function viewOpsPhoto(i) {
             const ph = opsPhotos[i];
-            if (ph) _openDocInNewWindow(ph.src);
+            if (ph) _openDocViewer(ph.src);
         }
 
         function removeOpsPhoto(i) {
@@ -4503,7 +4523,7 @@
 
         function viewAuditPhoto(type) {
             if (type === 'ops') return viewOpsPhoto(0);
-            _openDocInNewWindow(auditPhotoBase64);
+            _openDocViewer(auditPhotoBase64);
         }
 
         // ── Photo persistence helpers ──
@@ -5312,17 +5332,47 @@
 
         // Open a remote URL (or data: URL) in a popup. Picks <iframe> for
         // PDFs and <img> for everything else so PDF maps/docs render too.
-        function _openDocInNewWindow(url) {
+        /* A drone map, a photo, a PDF — shown over this page, not in a tab of
+           its own.
+
+           window.open() was losing to pop-up blockers as often as not, and
+           when it did open you came back to a batch you had left: the tab you
+           were keying in is still there behind this, with everything you have
+           typed. Escape or a click outside puts it away.
+
+           Every caller passes a data: URL or a storage URL; the same two
+           shapes as before, an <iframe> for a PDF and an <img> for anything
+           else. Download is still one press away for the rare case somebody
+           needs the file itself. */
+        function _openDocViewer(url, name) {
             if (!url) return;
-            const win = window.open();
-            if (!win) return;
+            const box  = document.getElementById('doc-lightbox');
+            const body = document.getElementById('doc-lightbox-body');
+            const dl   = document.getElementById('doc-lightbox-download');
+            const ttl  = document.getElementById('doc-lightbox-title');
+            if (!box || !body) return;
             const isPdf = /\.pdf(\?|#|$)/i.test(url) || String(url).startsWith('data:application/pdf');
-            if (isPdf) {
-                win.document.write(`<iframe src="${_escAttr(url)}" style="width:100%;height:100vh;border:none;"></iframe>`);
-            } else {
-                win.document.write(`<img src="${_escAttr(url)}" style="max-width:100%;height:auto;display:block;margin:auto;">`);
-            }
+            body.innerHTML = isPdf
+                ? `<iframe src="${_escAttr(url)}" class="w-full h-[78vh] border-0 rounded-xl bg-white"></iframe>`
+                : `<img src="${_escAttr(url)}" alt="${_escAttr(name || 'Attachment')}"
+                        class="max-w-full max-h-[78vh] w-auto h-auto mx-auto block rounded-xl">`;
+            if (ttl) ttl.innerText = name || (isPdf ? 'Document' : 'Drone Map');
+            if (dl)  { dl.href = url; dl.download = name || (isPdf ? 'document.pdf' : 'map.png'); }
+            box.classList.remove('hidden');
+            document.addEventListener('keydown', _docViewerKey);
         }
+
+        function closeDocViewer() {
+            const box  = document.getElementById('doc-lightbox');
+            const body = document.getElementById('doc-lightbox-body');
+            if (box)  box.classList.add('hidden');
+            // Emptied on the way out, so a PDF stops rendering and a large
+            // data: URL is not held open behind a hidden panel.
+            if (body) body.innerHTML = '';
+            document.removeEventListener('keydown', _docViewerKey);
+        }
+
+        function _docViewerKey(e) { if (e.key === 'Escape') closeDocViewer(); }
 
         function renderBagVerify(rowId) {
             const row = document.getElementById(rowId);
@@ -7278,7 +7328,7 @@ Thank you.`;
         }
 
         function viewT5Map(rowId) {
-            _openDocInNewWindow(t5_plotMaps[rowId]);
+            _openDocViewer(t5_plotMaps[rowId]);
         }
 
         async function saveTab5() {
@@ -9278,7 +9328,11 @@ Thank you.`;
         function viewT6Doc(rowId) {
             const doc = t6_plotDocs[rowId];
             if (!doc) return;
-            _openDocInNewWindow(doc.base64);
+            // The plot's name on the viewer, so a map opened from a list of
+            // twenty rows says which row it came from.
+            const idx = parseInt(String(rowId).replace('t6-row-', ''), 10);
+            const p   = t6_plotData[idx];
+            _openDocViewer(doc.base64, doc.name || (p ? `${p.plot} — Drone Map` : null));
         }
 
         // Delete a transferred-plot row: removes its Cull3_Transfer record and
