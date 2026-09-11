@@ -280,8 +280,17 @@
            the same trap as the 3rd Culling row grid, noted near the top of
            this file. The size is set here and only here. */
         .alloc-card   { container-type: inline-size; }
-        .alloc-figure { font-size: clamp(13px, 18cqw, 30px); line-height: 1;
+        /* The percentage is the card. The name above it and the count below
+           are what it is a percentage OF — worth having, not worth reading
+           first — so both are set small and the figure takes the room that
+           frees up. All three scale with the card, so the relationship holds
+           at whatever width the layout hands over. 20cqw is the largest the
+           figure can be and still keep "100.00%" inside the card's padding. */
+        .alloc-figure { font-size: clamp(15px, 20cqw, 32px); line-height: 1;
                         white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .alloc-label  { font-size: clamp(7px, 6.5cqw, 10px); line-height: 1.2; }
+        .alloc-count  { font-size: clamp(7px, 6cqw, 10px); line-height: 1;
+                        font-variant-numeric: tabular-nums; }
 
         .t-tidy > div, .t-tidy > span { text-align: center; min-width: 0; }
         .t-tidy > span { white-space: normal; overflow-wrap: break-word; }
@@ -1206,29 +1215,29 @@
                                                      a pictogram in front of every heading is four
                                                      pictograms, which distinguishes nothing. -->
                                                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                                    <div class="bg-[#eef5fc] border border-[#bee3f8] rounded-xl px-4 py-3 alloc-card">
+                                                    <div class="bg-[#eef5fc] border border-[#bee3f8] rounded-xl px-2.5 py-3 alloc-card">
                                                         <!-- min-h of two lines on all four labels: only the D-Tone one
                                                              wraps, and without a floor under the short ones its figure
                                                              sat a line lower than its neighbours'. Reserving the second
                                                              line everywhere puts the four percentages on one baseline. -->
-                                                        <div class="text-[11px] font-black text-[#3a7ab4] uppercase tracking-wide leading-tight min-h-[2.2em] flex items-start justify-center text-center">Main Plot</div>
+                                                        <div class="alloc-label font-black text-[#3a7ab4] uppercase tracking-wide min-h-[2.2em] flex items-start justify-center text-center">Main Plot</div>
                                                         <div class="font-black text-[#3a7ab4] mt-1 tabular-nums leading-none text-center alloc-figure" id="t3-val-main-pct">—</div>
-                                                        <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1 text-center" id="t3-val-main">0</div>
+                                                        <div class="alloc-count font-black text-[#8a7a68] tabular-nums mt-1 text-center" id="t3-val-main">0</div>
                                                     </div>
-                                                    <div class="bg-[#ecfeff] border border-[#a5f3fc] rounded-xl px-4 py-3 alloc-card">
-                                                        <div class="text-[11px] font-black text-[#0891b2] uppercase tracking-wide leading-tight min-h-[2.2em] flex items-start justify-center text-center">Main Plot (D-Tone)</div>
+                                                    <div class="bg-[#ecfeff] border border-[#a5f3fc] rounded-xl px-2.5 py-3 alloc-card">
+                                                        <div class="alloc-label font-black text-[#0891b2] uppercase tracking-wide min-h-[2.2em] flex items-start justify-center text-center">Main Plot (D-Tone)</div>
                                                         <div class="font-black text-[#0891b2] mt-1 tabular-nums leading-none text-center alloc-figure" id="t3-val-dtone-main-pct">—</div>
-                                                        <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1 text-center" id="t3-val-dtone-main">0</div>
+                                                        <div class="alloc-count font-black text-[#8a7a68] tabular-nums mt-1 text-center" id="t3-val-dtone-main">0</div>
                                                     </div>
-                                                    <div class="bg-[#fff5f5] border border-[#f8d7da] rounded-xl px-4 py-3 alloc-card">
-                                                        <div class="text-[11px] font-black text-[#a83020] uppercase tracking-wide leading-tight min-h-[2.2em] flex items-start justify-center text-center">Total 1st Culled</div>
+                                                    <div class="bg-[#fff5f5] border border-[#f8d7da] rounded-xl px-2.5 py-3 alloc-card">
+                                                        <div class="alloc-label font-black text-[#a83020] uppercase tracking-wide min-h-[2.2em] flex items-start justify-center text-center">Total 1st Culled</div>
                                                         <div class="font-black text-[#a83020] mt-1 tabular-nums leading-none text-center alloc-figure" id="t3-val-cull-pct">—</div>
-                                                        <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1 text-center" id="t3-val-cull">0</div>
+                                                        <div class="alloc-count font-black text-[#8a7a68] tabular-nums mt-1 text-center" id="t3-val-cull">0</div>
                                                     </div>
-                                                    <div class="bg-[#fffaf0] border border-[#fde68a] rounded-xl px-4 py-3 alloc-card">
-                                                        <div class="text-[11px] font-black text-[#c07820] uppercase tracking-wide leading-tight min-h-[2.2em] flex items-start justify-center text-center">Pending</div>
+                                                    <div class="bg-[#fffaf0] border border-[#fde68a] rounded-xl px-2.5 py-3 alloc-card">
+                                                        <div class="alloc-label font-black text-[#c07820] uppercase tracking-wide min-h-[2.2em] flex items-start justify-center text-center">Pending</div>
                                                         <div class="font-black text-[#c07820] mt-1 tabular-nums leading-none text-center alloc-figure" id="t3-val-pending-pct">—</div>
-                                                        <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1 text-center" id="t3-val-untransplanted">0</div>
+                                                        <div class="alloc-count font-black text-[#8a7a68] tabular-nums mt-1 text-center" id="t3-val-untransplanted">0</div>
                                                     </div>
                                                 </div>
 
