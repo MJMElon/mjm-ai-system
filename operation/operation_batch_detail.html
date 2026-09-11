@@ -293,17 +293,19 @@
            than a string of bracketed track sizes that has to be kept in step
            with a heading strip, a harness stub and Tailwind's own escaping.
 
-           Drone Map and Culled Date hold boxes of a fixed size — a quantity,
-           a chip, a date — so a share of the row's width just buys them white
-           space either side. They are sized to what they contain, with a
-           floor so the boxes are never crushed, and the room that frees up
-           goes to the plot. */
+           Drone Map and Culled Date carry a floor so their boxes are never
+           crushed, and a share of the row besides. Pinning them AT the floor
+           and letting the other four soak up the rest is what left the row
+           lopsided — three wide gaps down the middle and the last two columns
+           jammed against the right edge. The six tracks are near-even now,
+           the plot a little wider because it carries a name and two labelled
+           figures where the others carry one number. */
         @media (min-width: 1024px) {
           .t6-plot-row .t6-grid-main {
-            grid-template-columns: 1.3fr 0.75fr 0.9fr 0.85fr minmax(88px, 0.55fr) minmax(116px, 0.62fr);
+            grid-template-columns: 1.2fr 0.85fr 1fr 0.9fr minmax(96px, 0.95fr) minmax(120px, 1fr);
           }
           .t6-plot-row .t6-grid-pr {
-            grid-template-columns: 1.3fr 0.75fr 1fr minmax(88px, 0.55fr) minmax(116px, 0.62fr);
+            grid-template-columns: 1.2fr 0.85fr 1.1fr minmax(96px, 0.95fr) minmax(120px, 1fr);
           }
         }
 
@@ -1766,7 +1768,7 @@
                                     <!-- Column headers: Main Plot (Transplanted + 2nd Culled shown
                                          compactly under the plot name, not their own columns) → Sales →
                                          Balance → 3rd Culled (qty over %) → Drone Map → Date -->
-                                    <div class="hidden lg:grid gap-3 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 1.3fr 0.75fr 0.9fr 0.85fr minmax(88px,0.55fr) minmax(116px,0.62fr);">
+                                    <div class="hidden lg:grid gap-3 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 1.2fr 0.85fr 1fr 0.9fr minmax(96px,0.95fr) minmax(120px,1fr);">
                                         <span>Main Plot</span>
                                         <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch. CAL-… calibration DOs are included; only cancelled DOs are excluded. Click a figure to see the DOs behind it.">Sales</span>
                                         <span class="text-[#0891b2]" title="How many seedlings this plot sent to another plot, added up from its lines on the Transfer Data tab. Keyed there, shown here.">Transfer Amount</span>
@@ -1862,7 +1864,7 @@
                                          were on screen, so now they always are and the answer is
                                          given by filling them in. Sold out is still the exception
                                          — nothing standing means nothing to fly over. -->
-                                    <div class="hidden lg:grid gap-3 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 1.3fr 0.75fr 1fr minmax(88px,0.55fr) minmax(116px,0.62fr);">
+                                    <div class="hidden lg:grid gap-3 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 1.2fr 0.85fr 1.1fr minmax(96px,0.95fr) minmax(120px,1fr);">
                                         <span>Plot Reserved</span>
                                         <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch. CAL-… calibration DOs are included; only cancelled DOs are excluded. Click a figure to see the DOs behind it.">Sales</span>
                                         <span class="text-[#a83020]" title="What is standing in this plot after its sales — the quantity to be culled.">3rd Culled</span>
@@ -2401,6 +2403,24 @@
         function adjustNetFor(report) {
             const v = ADJUST_NET[String(report || '').toLowerCase()];
             return typeof v === 'number' ? v : 0;
+        }
+
+        /* The net of EVERY approved adjustment on the batch.
+
+           An adjustment corrects how many seedlings the batch actually has.
+           The report it names is where the discrepancy was noticed, not who
+           is allowed to use the answer: Transplanting and 1st Culling both
+           measure against the same planted pool, so one seedling found while
+           processing the 2nd cull settles the over-allocation on one tab and
+           the over-by-one on the other. It is the same seedling seen twice.
+
+           Counting only same-named adjustments left 1st Culling over by 1
+           with the explanation approved and showing on the tab before it.
+
+           Per-report totals are still kept — that is what each strip lists,
+           and it is how somebody sees WHERE a correction came from. */
+        function adjustNetTotal() {
+            return Object.keys(ADJUST_NET).reduce((s, k) => s + (ADJUST_NET[k] || 0), 0);
         }
 
         async function syncAdjustmentBars(batchId) {
@@ -3883,9 +3903,11 @@
                explained, with the explanation sitting on the same screen.
 
                Approved only. An adjustment nobody has accepted is a claim, and
-               a claim must not move the figure it is trying to justify. */
-            const allocBase = totalPlantedRaw + getDtoneNurseryQty()
-                            + adjustNetFor('Transplanting');
+               a claim must not move the figure it is trying to justify.
+
+               Every approved adjustment on the batch, whichever report it was
+               raised against — see adjustNetTotal. */
+            const allocBase = totalPlantedRaw + getDtoneNurseryQty() + adjustNetTotal();
             const pendingTotal = Math.max(
                 0,
                 allocBase
@@ -6928,10 +6950,10 @@ Thank you.`;
             // Premium PN and D-Tone PN are still "pending" (haven't reached main plot).
             // The base includes the admin-keyed D-Tone nursery quantity (Tab 3)
             // per spec: balance = planted + D-Tone qty − main − culled.
-            // Adjustments approved against 1st Culling count here for the same
-            // reason they count on Transplanting — see the note on allocBase.
+            // Every approved adjustment on the batch, not only the ones raised
+            // against this report — see adjustNetTotal.
             const total = t4_totalPlanted + (typeof getDtoneNurseryQty === 'function' ? getDtoneNurseryQty() : 0)
-                        + adjustNetFor('1st Culling');
+                        + adjustNetTotal();
             const accounted = t4_totalMain + totalCulled; // only main plot + culled = truly resolved
             const unaccounted = total - accounted;        // pending = tray remainder + premium + d-tone
 
