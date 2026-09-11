@@ -531,6 +531,10 @@
                                 <span class="uppercase tracking-widest">📝 Last Edit:</span>
                                 <span id="t1-edit-meta" class="normal-case font-semibold text-[#3d2610]">—</span>
                             </div>
+                            <!-- Adjustments raised against THIS report. Filled by
+                                 syncAdjustmentBars(); empty and hidden when there are
+                                 none, so a clean report shows nothing at all. -->
+                            <div id="t1-adjust-bar" class="hidden mb-5"></div>
                             <!-- HEADER -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-amber-100 pb-5">
                                 <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Seeds In Report</h3>
@@ -623,6 +627,10 @@
                                 <span class="uppercase tracking-widest">📝 Last Edit:</span>
                                 <span id="t8-edit-meta" class="normal-case font-semibold text-[#3d2610]">—</span>
                             </div>
+                            <!-- Adjustments raised against THIS report. Filled by
+                                 syncAdjustmentBars(); empty and hidden when there are
+                                 none, so a clean report shows nothing at all. -->
+                            <div id="t8-adjust-bar" class="hidden mb-5"></div>
 
                             <!-- HEADER -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-amber-100 pb-5">
@@ -849,6 +857,10 @@
                                 <span class="uppercase tracking-widest">📝 Last Edit:</span>
                                 <span id="t2-edit-meta" class="normal-case font-semibold text-[#3d2610]">—</span>
                             </div>
+                            <!-- Adjustments raised against THIS report. Filled by
+                                 syncAdjustmentBars(); empty and hidden when there are
+                                 none, so a clean report shows nothing at all. -->
+                            <div id="t2-adjust-bar" class="hidden mb-5"></div>
                             <!-- TAB 2 HEADER: title + completion status -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-amber-200 pb-5">
                                 <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Seeds Planting & Damage Report</h3>
@@ -1129,6 +1141,10 @@
                                 <span class="uppercase tracking-widest">📝 Last Edit:</span>
                                 <span id="t3-edit-meta" class="normal-case font-semibold text-[#3d2610]">—</span>
                             </div>
+                            <!-- Adjustments raised against THIS report. Filled by
+                                 syncAdjustmentBars(); empty and hidden when there are
+                                 none, so a clean report shows nothing at all. -->
+                            <div id="t3-adjust-bar" class="hidden mb-5"></div>
                             <!-- ── HEADER ── -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-5 gap-4 border-b-2 border-[#3a7ab4] pb-4">
                                 <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Transplanting Report</h3>
@@ -1362,6 +1378,10 @@
                                 <span class="uppercase tracking-widest">📝 Last Edit:</span>
                                 <span id="t4-edit-meta" class="normal-case font-semibold text-[#3d2610]">—</span>
                             </div>
+                            <!-- Adjustments raised against THIS report. Filled by
+                                 syncAdjustmentBars(); empty and hidden when there are
+                                 none, so a clean report shows nothing at all. -->
+                            <div id="t4-adjust-bar" class="hidden mb-5"></div>
                             <!-- HEADER -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-5 gap-4 border-b-2 border-rose-200 pb-4">
                                 <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">1st Culling Report</h3>
@@ -1516,6 +1536,10 @@
                                 <span class="uppercase tracking-widest">📝 Last Edit:</span>
                                 <span id="t5-edit-meta" class="normal-case font-semibold text-[#3d2610]">—</span>
                             </div>
+                            <!-- Adjustments raised against THIS report. Filled by
+                                 syncAdjustmentBars(); empty and hidden when there are
+                                 none, so a clean report shows nothing at all. -->
+                            <div id="t5-adjust-bar" class="hidden mb-5"></div>
                             <!-- HEADER -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-orange-200 pb-5">
                                 <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">2nd Culling Report</h3>
@@ -1649,6 +1673,10 @@
                                 <span class="uppercase tracking-widest">📝 Last Edit:</span>
                                 <span id="t6-edit-meta" class="normal-case font-semibold text-[#3d2610]">—</span>
                             </div>
+                            <!-- Adjustments raised against THIS report. Filled by
+                                 syncAdjustmentBars(); empty and hidden when there are
+                                 none, so a clean report shows nothing at all. -->
+                            <div id="t6-adjust-bar" class="hidden mb-5"></div>
                             <!-- HEADER -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-purple-200 pb-5">
                                 <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">3rd Culling Report</h3>
@@ -2174,6 +2202,8 @@
 
             // Calibration section loads regardless of audit-record state
             renderCalibrationHistory(batchId);
+            // …and the same rows on the report each was raised against.
+            syncAdjustmentBars(batchId);
 
             if (!batchId) {
                 container.innerHTML = '<div class="text-center p-10 text-[#8a7a68]"><div class="text-3xl mb-2">⏳</div><div class="text-xs font-black uppercase tracking-widest">Save Tab 1 first to assign a batch number — audit records will appear here once auditors record heights.</div></div>';
@@ -2311,6 +2341,118 @@
             }
             sel.innerHTML = opts.join('');
             if (previous && seen.has(previous)) sel.value = previous;
+        }
+
+        /* ── Adjustments, shown on the report they were raised against ──────
+
+           A stock calibration says "this report was out by N, here is why".
+           It was recorded on Adjustments & Audit and read there, which is the
+           one tab nobody opens while they are working — so a report that did
+           not add up looked exactly the same after somebody had explained the
+           difference as before. Batch 225's Transplanting was over-allocated
+           by one seedling, an adjustment of +1 against N19 accounted for it,
+           and Transplanting went on looking wrong.
+
+           So each report carries a strip naming the adjustments raised
+           against it: the plot, how many, and why. Approved ones are settled
+           and read green; ones still waiting read amber, because an
+           unapproved adjustment explains nothing yet.
+
+           Read-only. Adjustments are still raised and approved in one place,
+           Adjustments & Audit, and this is that same row shown where it
+           matters. Two places to key the same thing is how they disagree.
+
+           The strip is hidden when the report has none, so a clean report
+           shows nothing at all rather than an "all clear" nobody asked for. */
+        const ADJUST_TAB_REPORT = { 1: 'Seeds Received', 8: 'Seed Audit', 2: 'Planting',
+                                    3: 'Transplanting', 4: '1st Culling',
+                                    5: '2nd Culling', 6: '3rd Culling' };
+
+        /* One parse of a calibration row, shared with the table on tab 7 so the
+           two cannot read the same remark differently. Remark format:
+           "Report: <r>. Plot: <p>. <reason> [APPROVED by <who> on <when>]" */
+        function _parseCalibration(r) {
+            const approved = r.remark ? r.remark.match(/\[APPROVED by ([^\]]+) on ([^\]]+)\]/) : null;
+            let body = r.remark || '';
+            if (approved) body = body.replace(approved[0], '').trim();
+            const rep  = body.match(/Report:\s*([^.]+?)\s*\.\s*/i);
+            const plot = body.match(/Plot:\s*([^.]+?)\s*\.\s*/i);
+            let reason = body;
+            if (rep)  reason = reason.replace(rep[0], '');
+            if (plot) reason = reason.replace(plot[0], '');
+            return {
+                id: r.id,
+                qty: Number(r.quantity_change) || 0,
+                report: rep  ? rep[1].trim()  : '',
+                plot:   plot ? plot[1].trim() : (r.plot_name || ''),
+                reason: reason.trim(),
+                approved: !!approved,
+                approvedBy: approved ? approved[1].trim() : '',
+                approvedAt: approved ? approved[2].trim() : '',
+                at: r.created_at || null
+            };
+        }
+
+        async function syncAdjustmentBars(batchId) {
+            const batch = (batchId || document.getElementById('f-batchno')?.value || '').trim();
+            const bars = Object.keys(ADJUST_TAB_REPORT);
+            const hideAll = () => bars.forEach(n => {
+                const el = document.getElementById(`t${n}-adjust-bar`);
+                if (el) { el.classList.add('hidden'); el.innerHTML = ''; }
+            });
+            if (!batch) { hideAll(); return; }
+            let rows = [];
+            try {
+                const { data, error } = await _supabase.from('shared_inventory_logs')
+                    .select('id, quantity_change, remark, created_at')
+                    .eq('batch_name', batch)
+                    .eq('transaction_type', 'Stock_Calibration')
+                    .order('created_at', { ascending: false });
+                if (error) throw error;
+                rows = (data || []).map(_parseCalibration);
+            } catch (e) {
+                // A strip that cannot load says nothing rather than saying
+                // "no adjustments", which is a different claim entirely.
+                console.warn('[adjustments] not read:', (e && e.message) || e);
+                hideAll(); return;
+            }
+            const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+            bars.forEach(n => {
+                const el = document.getElementById(`t${n}-adjust-bar`);
+                if (!el) return;
+                const want = ADJUST_TAB_REPORT[n].toLowerCase();
+                const mine = rows.filter(r => r.report.toLowerCase() === want);
+                if (!mine.length) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+                const net = mine.reduce((s, r) => s + r.qty, 0);
+                const open = mine.filter(r => !r.approved).length;
+                const lines = mine.map(r => `
+                    <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-2 border-t border-[#e8dcc8]">
+                        <span class="text-base font-black tabular-nums ${r.qty > 0 ? 'text-[#4a7a2e]' : 'text-[#a83020]'} min-w-[52px]">${r.qty > 0 ? '+' : ''}${r.qty.toLocaleString()}</span>
+                        <span class="text-sm font-black text-[#3d2610] min-w-[64px]">${esc(r.plot) || '—'}</span>
+                        <span class="text-[11px] font-bold text-[#8a7a68] flex-1 min-w-[160px]">${esc(r.reason) || '—'}</span>
+                        ${r.approved
+                            ? `<span class="shrink-0 text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest bg-[#f0f8ec] border border-[#c3e6cb] rounded px-2 py-1">Approved${r.approvedBy ? ' · ' + esc(r.approvedBy) : ''}</span>`
+                            : `<span class="shrink-0 text-[9px] font-black text-[#c07820] uppercase tracking-widest bg-[#fffaf0] border border-[#fde68a] rounded px-2 py-1">Awaiting approval</span>`}
+                    </div>`).join('');
+                const settled = open === 0;
+                el.innerHTML = `
+                    <div class="rounded-2xl border ${settled ? 'border-[#c3e6cb] bg-[#f7fbf4]' : 'border-[#fde68a] bg-[#fffdf5]'} overflow-hidden">
+                        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
+                            <span class="text-[10px] font-black uppercase tracking-widest ${settled ? 'text-[#4a7a2e]' : 'text-[#c07820]'}">
+                                ${mine.length === 1 ? 'Adjustment on this report' : `${mine.length} adjustments on this report`}
+                            </span>
+                            <span class="text-[10px] font-bold text-[#8a7a68]">Net
+                                <strong class="tabular-nums ${net > 0 ? 'text-[#4a7a2e]' : net < 0 ? 'text-[#a83020]' : 'text-[#3d2610]'}">${net > 0 ? '+' : ''}${net.toLocaleString()}</strong>
+                            </span>
+                            ${open ? `<span class="text-[10px] font-black text-[#c07820] uppercase tracking-widest">${open} awaiting approval</span>` : ''}
+                            <button type="button" onclick="switchTab(7)"
+                                class="ml-auto shrink-0 px-3 py-1 rounded-lg border border-[#e8dcc8] bg-white text-[#3d2610]
+                                       text-[9px] font-black uppercase tracking-widest hover:bg-[#f5efe4]">Open Adjustments</button>
+                        </div>
+                        ${lines}
+                    </div>`;
+                el.classList.remove('hidden');
+            });
         }
 
         async function renderCalibrationHistory(batchId) {
@@ -2506,6 +2648,8 @@
             showToast('Calibration deleted.', 'success');
             const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
             renderCalibrationHistory(batchId);
+            // …and the same rows on the report each was raised against.
+            syncAdjustmentBars(batchId);
         }
 
         // Per-row Approve. Appends "[APPROVED by <email> on <ISO>]" to the
@@ -2528,6 +2672,8 @@
                 showToast('This adjustment is already approved.', 'success');
                 const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
                 renderCalibrationHistory(batchId);
+            // …and the same rows on the report each was raised against.
+            syncAdjustmentBars(batchId);
                 return;
             }
             const u = (typeof MJMAccess !== 'undefined' && MJMAccess.user && MJMAccess.user()) || {};
@@ -2542,6 +2688,8 @@
             showToast('Calibration approved and locked.', 'success');
             const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
             renderCalibrationHistory(batchId);
+            // …and the same rows on the report each was raised against.
+            syncAdjustmentBars(batchId);
         }
 
         async function saveCalibration() {
@@ -2602,6 +2750,8 @@
                 ? `Calibration updated: ${qty > 0 ? '+' : ''}${qty}`
                 : `Calibration recorded: ${qty > 0 ? '+' : ''}${qty}`, 'success');
             renderCalibrationHistory(batchId);
+            // …and the same rows on the report each was raised against.
+            syncAdjustmentBars(batchId);
         }
 
         // ── Toast helper ──────────────────────────────────────────
