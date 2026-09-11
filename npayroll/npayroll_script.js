@@ -30,7 +30,20 @@ const SECTIONS = [
   { code:'Driver', name:'Driver'               }
 ];
 const SECTION_NAME = Object.fromEntries(SECTIONS.map(s => [s.code, s.name]));
-const NURSERY_FULL = { PN:'Pre Nursery', BNN:'Batu Niah Nursery', UNN1:'Ulu Niah Nursery 1', UNN2:'Ulu Niah Nursery 2' };
+/* The names shown on the claim and its PDF.
+ 
+   The written-out name wins where there is one. Facility Management stores a
+   nursery's CODE as its name — the cards read "BNN", "UNN 1" — so preferring
+   the register turned "BNN — Batu Niah Nursery" into "BNN — BNN" and told the
+   reader nothing. The register answers for nurseries this module has never
+   heard of, which is the case that needed it: a UNN 3 created there gets
+   "UNN3 — UNN 3" rather than no name at all. */
+const NURSERY_FULL_BUILTIN = { PN:'Pre Nursery', BNN:'Batu Niah Nursery',
+                               UNN1:'Ulu Niah Nursery 1', UNN2:'Ulu Niah Nursery 2' };
+const NURSERY_FULL = new Proxy({}, {
+  get: (_, k) => NURSERY_FULL_BUILTIN[k] || NURSERY_REGISTER[k],
+  has: (_, k) => k in NURSERY_FULL_BUILTIN || k in NURSERY_REGISTER,
+});
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 let workers   = [];    // mjmnpayroll_workers
@@ -48,7 +61,82 @@ let maint = { records: [], ticks: {}, rates: {}, workers: {}, localWorkers: {} }
    same way here, or the salary claim would price a different set of names than
    the sheet it is priced from shows. Kept identical to isGeneralWorker in
    nursery_ops/plot_maintenance_script.js. */
-const MAINT_NURSERIES = ['PN', 'BNN', 'UNN1', 'UNN2'];
+/* WHICH NURSERIES THERE ARE.
+ 
+   The register is Facility Management — Manage Nurseries & Base Maps, which
+   writes operation_nurseries. That is the one place a nursery is created, so
+   it is the one place this list should come from: add UNN 3 there next year
+   and it appears here, on the claim and in its dropdown, without anybody
+   editing a file.
+ 
+   The four below are a FLOOR, not the list. They are what this module has
+   always had, kept so a register that cannot be read — RLS, a dropped
+   connection, a table not created yet — leaves the payroll working on the
+   nurseries it already knew rather than showing an empty dropdown. A nursery
+   in the register is added to them; none is ever taken away by a failed read.
+ 
+   The code is the name with the spaces taken out, which is how the rest of
+   the system keys a nursery: "UNN 1" in the register is UNN1 here, and
+   matches the section on a worker's row. Same rule as registerNurseryKey
+   below. */
+const MAINT_NURSERIES_FLOOR = ['PN', 'BNN', 'UNN1', 'UNN2'];
+let MAINT_NURSERIES = MAINT_NURSERIES_FLOOR.slice();
+
+/* code → the name Facility Management gave it, for headings and the PDF. */
+let NURSERY_REGISTER = {};
+
+const nurseryCode = (name) =>
+  String(name == null ? '' : name).replace(/[^a-z0-9]/gi, '').toUpperCase();
+
+/* Is this one a place maintenance work is done, or the Estate?
+ 
+   The Estate is a section of the payroll register and a location on System
+   Setting, but it is not a nursery sheet — there are no plots on it and no
+   rounds to spray. Decided by shared_worker_locations.js, the file the Team
+   Board and the Location card already use, so all three agree about where a
+   section sits. Without that file loaded, everything in the register counts,
+   which is the old behaviour. */
+function isMaintNursery(code) {
+  const L = window.MJMWorkerLocations;
+  if (!L || typeof L.locationOf !== 'function') return true;
+  const loc = L.locationOf(code);
+  return !!loc && loc.key !== 'estate';
+}
+
+async function loadNurseryRegister() {
+  const res = await _supabase.from('operation_nurseries').select('name, license')
+    .order('name').then(r => r, e => ({ error: e }));
+  if (res.error || !res.data) {
+    console.warn('[npayroll] the nursery register could not be read, so the '
+      + 'built-in list stands:', res.error && res.error.message);
+    return;
+  }
+  const reg = {};
+  res.data.forEach((r) => {
+    const c = nurseryCode(r.name);
+    if (c) reg[c] = String(r.name || '').trim();
+  });
+  NURSERY_REGISTER = reg;
+  /* The floor first, so nothing this module has always offered disappears
+     because somebody has not added it to Facility Management yet. */
+  const all = MAINT_NURSERIES_FLOOR.concat(Object.keys(reg));
+  MAINT_NURSERIES = [...new Set(all)].filter(isMaintNursery);
+  fillMaintNurseries();
+}
+
+/* The claim's nursery dropdown, from the register. Keeps whatever was chosen
+   if that nursery is still there — the read lands after the first paint, and
+   rebuilding the list must not quietly move somebody to another nursery. */
+function fillMaintNurseries() {
+  const el = $('maint-nursery');
+  if (!el) return;
+  const want = el.value;
+  el.innerHTML = MAINT_NURSERIES
+    .map(c => `<option value="${esc(c)}">${esc(c + ' — ' + (NURSERY_FULL[c] || c))}</option>`)
+    .join('');
+  el.value = MAINT_NURSERIES.includes(want) ? want
+           : (MAINT_NURSERIES.includes('BNN') ? 'BNN' : (MAINT_NURSERIES[0] || ''));
+}
 
 /* The roles a worker can hold. One list, offered in every section. */
 const ROLES = [
@@ -1017,6 +1105,9 @@ $('global-month').addEventListener('change', async () => {
     fillSectionSelect($('seedling-section'), true, '');
     fillSectionSelect($('monthly-section'),  true, '');
 
+    /* The register first: the dropdown, the headings and which sheets exist
+       all read it, so everything after this should see the real list. */
+    await loadNurseryRegister();
     await Promise.all([loadWorkers(), loadRates(), loadEntries(), loadMaint()]);
     resolveMaintWorkers();
 
