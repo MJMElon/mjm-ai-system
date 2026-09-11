@@ -229,7 +229,7 @@
         async function initLedger() {
             try {
                 // Fetch reception logs + every culling-related log type + transplant logs in parallel.
-                const [recRes, plantedRes, damagedRes, dtoneRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, collectRes] = await Promise.all([
+                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, collectRes] = await Promise.all([
                     fetchAllRows(() => _supabase.from('shared_inventory_logs')
                         .select('*')
                         .eq('transaction_type', 'Seeds_Received')
@@ -237,16 +237,6 @@
                         .order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', 'Planted').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', 'Damaged_Seeds').order('id', { ascending: true })),
-                    /* The admin-keyed "Double Tone Quantity in Nursery" (one
-                       row per batch, newest wins). It is part of the pool the
-                       culls are measured against — the allocation engine on
-                       the Transplanting tab has always added it, and this list
-                       had not, so the same batch read two different rates on
-                       two screens. */
-                    fetchAllRows(() => _supabase.from('shared_inventory_logs')
-                        .select('batch_name, quantity_change, created_at')
-                        .eq('transaction_type', 'DTone_Nursery_Qty')
-                        .order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '1st_Culling').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '2nd_Culling').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change, plot_name, remark').eq('transaction_type', '3rd_Culling').order('id', { ascending: true })),
@@ -284,13 +274,16 @@
                     (res.data || []).forEach(r => { m[r.batch_name] = (m[r.batch_name] || 0) + 1; });
                     return m;
                 };
-                /* Newest row per batch, not a sum: the box is keyed and re-keyed,
-                   and every save writes another row. Adding them up would count
-                   the same tray again for every correction. */
-                const dtoneMap = {};
-                (dtoneRes.data || []).forEach(r => {
-                    if (!r.batch_name) return;
-                    dtoneMap[r.batch_name] = Math.abs(Number(r.quantity_change) || 0);
+                /* What reached a main plot, per batch. Only 'Transplanted' —
+                   NOT Transplanted_DoubleTone, which is the step that fills the
+                   D-Tone tray. Those seedlings leave the tray later as ordinary
+                   Transplanted rows, so counting both would count them twice.
+                   Premium Care is the same: a holding tray, not a plot. */
+                const transplantedMap = {};
+                (transplantRes.data || []).forEach(r => {
+                    if (!r.batch_name || r.transaction_type !== 'Transplanted') return;
+                    transplantedMap[r.batch_name] =
+                        (transplantedMap[r.batch_name] || 0) + Math.abs(Number(r.quantity_change) || 0);
                 });
                 const plantedMap = sumByBatch(plantedRes);
                 const damagedMap = sumByBatch(damagedRes);
@@ -545,36 +538,50 @@
                     const cull2   = cull2Map[b.batch_name] || 0;
                     const cull3   = cull3Map[b.batch_name] || 0;
                     // Denominator = actual planted qty if available; fall back to D/O+FOC for batches that haven't planted yet.
-                    const dtoneNursery = dtoneMap[b.batch_name] || 0;
-                    const denom = (actualPlanted || (b.quantity_change || 0)) + dtoneNursery;
-                    /* CULLING RATE = the three culls over the whole pool.
+                    const transplanted = transplantedMap[b.batch_name] || 0;
+                    const denom = transplanted > 0
+                        ? transplanted + cull1
+                        : (actualPlanted || (b.quantity_change || 0));
+                    /* CULLING RATE
 
-                           (1st + 2nd + 3rd culled) / (planted + D-Tone nursery)
+                           (1st culled + 3rd culled) / (transplanted + 1st culled)
 
-                       Two corrections, both from the office:
+                       THE 2ND CULL IS NOT ADDED, because it is already in the
+                       3rd. A plot's 3rd culled figure is worked out as
+                       "2nd culled + balance" on the 3rd Culling tab — the
+                       second cull is part of that total by construction — so
+                       adding cull2 here would count those seedlings twice.
 
-                       The DENOMINATOR is planted PLUS the admin-keyed D-Tone
-                       nursery quantity. Those seedlings are culled alongside
-                       the rest and the allocation engine has always counted
-                       them; this list had not, so one batch read two rates on
-                       two screens. Batch 225: 10,423 + 280 = 10,703.
+                       The base is every seedling that came out of the
+                       pre-nursery: the ones that reached a plot, plus the ones
+                       the 1st cull took on the way. Nothing else needs looking
+                       up — no planted figure, no D-Tone box — and it comes to
+                       the same pool by a shorter road.
 
-                       DAMAGED SEEDS are not in the numerator. Damage at
-                       planting is not culling, and this column is named for
-                       culling. They are still recorded on Planting & Damage
-                       and still shown there; they simply are not a cull.
+                       "Transplanted" means what reached a PLOT. The step that
+                       fills the D-Tone tray is not counted; those seedlings
+                       leave the tray later as ordinary transplants and would
+                       otherwise be counted twice.
+
+                       Damaged seeds are not culling and are not in it. They are
+                       still recorded on Planting & Damage.
+
+                       Falls back to planted, then to the delivered quantity,
+                       for a batch that has not transplanted yet — without a
+                       base there is no rate to show.
 
                        Two decimals kept, because two are shown. It was rounded
-                       to one and printed with toFixed(2), so every rate on
-                       this page ended in a nought — 20.9% read as "20.90%",
-                       claiming a precision thrown away a line earlier. */
+                       to one and printed with toFixed(2), so every rate on this
+                       page ended in a nought. */
                     const cullRate = denom > 0
-                        ? Math.round(((cull1 + cull2 + cull3) / denom) * 10000) / 100
+                        ? Math.round(((cull1 + cull3) / denom) * 10000) / 100
                         : 0;
                     b.actualPlanted = actualPlanted;
                     b.damagedSeeds  = damaged;
-                    b.dtoneNursery  = dtoneNursery;
+                    b.transplanted  = transplanted;
                     b.cullBase      = denom;
+                    // cull2 is carried for reference only — it is inside cull3.
+                    b.cull2Only     = cull2;
                     b.cullRate = cullRate;
                     b.hasTransplant = transplantedBatchNames.has(b.batch_name);
                     b.hasRejection = rejectedBatchNames.has(b.batch_name);
