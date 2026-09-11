@@ -133,11 +133,19 @@
 
         /* The tick inside a tab's completion ring. Sized to the ring's hole
            rather than to the text around it, so it reads as part of the ring.
-           Outline while the stage is merely finished; filled once a verifier
-           has signed it, so "done" and "checked" are one glance apart. */
-        .tab-tick { font-size: 11px; font-weight: 900; color: #8fae72; line-height: 1;
+
+           FILLED, always. A tick used to be an outline until a verifier had
+           signed the stage, which meant a finished tab and a half-finished one
+           differed only by how heavy a small green mark was — and on a row of
+           eight, the pale ones read as empty. A tick means done, and done
+           looks the same wherever you find it.
+
+           A signed stage is a deeper green. The difference is there for
+           somebody looking for it; it is no longer the difference between
+           seeing a tick and not. */
+        .tab-tick { font-size: 11px; font-weight: 900; color: #ffffff; line-height: 1;
                     display: inline-flex; align-items: center; justify-content: center;
-                    width: 100%; height: 100%; border-radius: 999px; }
+                    width: 100%; height: 100%; border-radius: 999px; background: #6aa83c; }
         .tab-tick-signed { color: #ffffff; background: #4a7a2e; }
 
         /* Where you were just sent. Rings the row for a couple of seconds after
@@ -4104,8 +4112,14 @@
                maps must be the ONLY thing missing. A stage that does not
                balance is not 100% however many people have signed it, and a
                sign-off never invents allocation that is not there. */
-            const hqVerified = !!(window.MJMReview && typeof MJMReview.isVerified === 'function'
-                                  && MJMReview.isVerified('transplanting'));
+            /* "Verified" means either sign-off: the stage as a whole, or every
+               row on it. A verifier working down the list plot by plot has
+               verified the report just as surely as one who signed the stage,
+               and requiring the stage-level row made the person who had just
+               checked all nine of them look like they had checked none. */
+            const _rv = window.MJMReview || {};
+            const hqVerified = !!((typeof _rv.isVerified === 'function' && _rv.isVerified('transplanting'))
+                               || (typeof _rv.allRowsVerified === 'function' && _rv.allRowsVerified(3)));
             const mapsAreAllThatIsLeft = untransplanted === 0 && !allMapsAttached
                                          && missingMaps > 0 && hqVerified;
 
@@ -10254,16 +10268,20 @@ Thank you.`;
 
       function renderAll() {
         TAB_INDICES.forEach(renderBanner);
-        syncTabTicks();
         /* A tab whose ring depends on who has signed what has to be worked
            out AFTER the sign-offs are known — Transplanting reads its own
-           verification to decide whether an outstanding drone map still
-           holds it at 99%. The review state loads asynchronously and lands
-           here, which is the only moment that answer can change without the
-           tab itself being touched. */
+           verification, stage-level or every row, to decide whether an
+           outstanding drone map still holds it at 99%. The review state loads
+           asynchronously and lands here, which is the only moment that answer
+           can change without the tab itself being touched.
+
+           BEFORE the ticks, not after: syncTabTicks reads the ring this sets,
+           so running it first ticked the tab from the ring as it was one
+           sign-off ago — right on the next render, wrong on this one. */
         if (typeof window.calcTransplanting === 'function') {
           try { window.calcTransplanting(); } catch (e) { console.warn(e); }
         }
+        syncTabTicks();
       }
 
       async function refresh() {
@@ -10579,6 +10597,19 @@ Thank you.`;
         await _clearRejectionRows(batch, mapKey); // verifying resolves the row's rejection
         rowVerifs[mapKey] = { plot_name: mapKey, created_at: new Date().toISOString(), last_edited_at: new Date().toISOString(), last_edited_by: u.email || null };
         decorateRows(tabIdx);
+        _afterRowSignOff(tabIdx);
+      }
+
+      /* A row sign-off can change a whole tab's answer, not just that row's
+         badge: Transplanting reaches 100% once every row is verified, even
+         with a drone map still outstanding. decorateRows repaints the row and
+         nothing else, so verifying the LAST row left the ring and the tick
+         showing the state before it until somebody reloaded. */
+      function _afterRowSignOff(tabIdx) {
+        if (tabIdx === 3 && typeof window.calcTransplanting === 'function') {
+          try { window.calcTransplanting(); } catch (e) { console.warn(e); }
+        }
+        try { syncTabTicks(); } catch (e) { console.warn(e); }
       }
 
       async function rowUnverify(tabIdx, keyEnc) {
@@ -10592,6 +10623,7 @@ Thank you.`;
           .eq('batch_name', batch).eq('transaction_type', 'Row_Verification').eq('plot_name', mapKey);
         delete rowVerifs[mapKey];
         decorateRows(tabIdx);
+        _afterRowSignOff(tabIdx);
       }
 
       async function clearRowRejection(tabIdx, keyEnc) {
@@ -10700,7 +10732,29 @@ Thank you.`;
                            // Has HQ signed this stage off? Read by a tab whose own
                            // completion depends on the answer — see
                            // updateTransplantCompletion.
-                           isVerified: (stage) => !!verifications[stage] };
+                           isVerified: (stage) => !!verifications[stage],
+                           /* Has every ROW on a tab been verified?
+
+                              A stage carries two kinds of sign-off. One is on
+                              the stage itself; the other is on each row, which
+                              is how a verifier actually works through a report
+                              — plot by plot, down the list. A tab where every
+                              row has been signed IS a verified tab, and asking
+                              only the stage-level answer made the person who
+                              had just checked all nine of them look like they
+                              had checked none.
+
+                              False when the tab has no rows: nothing verified
+                              is not everything verified. */
+                           allRowsVerified: (tabIdx) => {
+                             const cfg = ROW_TAB_CONFIG[tabIdx];
+                             const stage = STAGE_BY_TAB[tabIdx];
+                             if (!cfg || !stage) return false;
+                             let rows = [];
+                             try { rows = cfg().filter(r => r && r.key); } catch (e) { return false; }
+                             if (!rows.length) return false;
+                             return rows.every(r => !!rowVerifs[stage + '::' + r.key]);
+                           } };
     })();
     </script>
 
