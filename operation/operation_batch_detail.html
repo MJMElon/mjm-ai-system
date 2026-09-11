@@ -300,10 +300,10 @@
            goes to the plot. */
         @media (min-width: 1024px) {
           .t6-plot-row .t6-grid-main {
-            grid-template-columns: 2fr 0.7fr 0.8fr 0.8fr minmax(112px, 0.7fr) minmax(116px, 0.68fr);
+            grid-template-columns: 1.3fr 0.75fr 0.9fr 0.85fr minmax(88px, 0.55fr) minmax(116px, 0.62fr);
           }
           .t6-plot-row .t6-grid-pr {
-            grid-template-columns: 2fr 0.7fr 0.9fr minmax(112px, 0.7fr) minmax(116px, 0.68fr);
+            grid-template-columns: 1.3fr 0.75fr 1fr minmax(88px, 0.55fr) minmax(116px, 0.62fr);
           }
         }
 
@@ -1766,7 +1766,7 @@
                                     <!-- Column headers: Main Plot (Transplanted + 2nd Culled shown
                                          compactly under the plot name, not their own columns) → Sales →
                                          Balance → 3rd Culled (qty over %) → Drone Map → Date -->
-                                    <div class="hidden lg:grid gap-3 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 2fr 0.7fr 0.8fr 0.8fr minmax(112px,0.7fr) minmax(116px,0.68fr);">
+                                    <div class="hidden lg:grid gap-3 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 1.3fr 0.75fr 0.9fr 0.85fr minmax(88px,0.55fr) minmax(116px,0.62fr);">
                                         <span>Main Plot</span>
                                         <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch. CAL-… calibration DOs are included; only cancelled DOs are excluded. Click a figure to see the DOs behind it.">Sales</span>
                                         <span class="text-[#0891b2]" title="How many seedlings this plot sent to another plot, added up from its lines on the Transfer Data tab. Keyed there, shown here.">Transfer Amount</span>
@@ -1862,7 +1862,7 @@
                                          were on screen, so now they always are and the answer is
                                          given by filling them in. Sold out is still the exception
                                          — nothing standing means nothing to fly over. -->
-                                    <div class="hidden lg:grid gap-3 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 2fr 0.7fr 0.9fr minmax(112px,0.7fr) minmax(116px,0.68fr);">
+                                    <div class="hidden lg:grid gap-3 pl-[41px] pr-[41px] pt-4 pb-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest t-tidy" style="grid-template-columns: 1.3fr 0.75fr 1fr minmax(88px,0.55fr) minmax(116px,0.62fr);">
                                         <span>Plot Reserved</span>
                                         <span class="text-[#3a7ab4]" title="Sold qty from Customer Order Monitoring - Delivery Note (DO) collection details, matched by plot + batch. CAL-… calibration DOs are included; only cancelled DOs are excluded. Click a figure to see the DOs behind it.">Sales</span>
                                         <span class="text-[#a83020]" title="What is standing in this plot after its sales — the quantity to be culled.">3rd Culled</span>
@@ -2393,13 +2393,30 @@
             };
         }
 
+        /* The net of APPROVED adjustments per report, kept where the reports
+           that depend on it can read it synchronously. Empty until
+           syncAdjustmentBars has run, so a page that never loads them behaves
+           exactly as it did: nothing is added to anybody's base. */
+        const ADJUST_NET = {};
+        function adjustNetFor(report) {
+            const v = ADJUST_NET[String(report || '').toLowerCase()];
+            return typeof v === 'number' ? v : 0;
+        }
+
         async function syncAdjustmentBars(batchId) {
             const batch = (batchId || document.getElementById('f-batchno')?.value || '').trim();
             const bars = Object.keys(ADJUST_TAB_REPORT);
-            const hideAll = () => bars.forEach(n => {
-                const el = document.getElementById(`t${n}-adjust-bar`);
-                if (el) { el.classList.add('hidden'); el.innerHTML = ''; }
-            });
+            const hideAll = () => {
+                /* The nets go with the strips. A read that failed must not
+                   leave yesterday's adjustments quietly propping up today's
+                   allocation base — better the base is plainly short than
+                   silently right for a reason nobody can see. */
+                Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
+                bars.forEach(n => {
+                    const el = document.getElementById(`t${n}-adjust-bar`);
+                    if (el) { el.classList.add('hidden'); el.innerHTML = ''; }
+                });
+            };
             if (!batch) { hideAll(); return; }
             let rows = [];
             try {
@@ -2416,6 +2433,22 @@
                 console.warn('[adjustments] not read:', (e && e.message) || e);
                 hideAll(); return;
             }
+            /* Only the approved ones move a figure. The strips below still show
+               the unapproved ones, in amber, because "somebody has claimed
+               this" is worth seeing — it just is not an answer yet. */
+            Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
+            rows.filter(r => r.approved).forEach(r => {
+                const k = r.report.toLowerCase();
+                ADJUST_NET[k] = (ADJUST_NET[k] || 0) + r.qty;
+            });
+            /* The reports that count them have already been worked out by now,
+               against a base that did not include these. Re-run them, or the
+               figure only corrects itself when somebody happens to touch the
+               tab. Each in its own try: one report that cannot recompute must
+               not stop the other, nor the strips below from rendering. */
+            try { if (typeof calcTransplanting === 'function') calcTransplanting(); } catch (e) { console.warn(e); }
+            try { if (typeof calcCulling === 'function') calcCulling(); } catch (e) { console.warn(e); }
+
             const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
             bars.forEach(n => {
                 const el = document.getElementById(`t${n}-adjust-bar`);
@@ -3839,7 +3872,20 @@
             //   balance = (planted + D-Tone nursery qty)
             //             - main transplants (incl. D-Tone-sourced)
             //             - total 1st culled
-            const allocBase = totalPlantedRaw + getDtoneNurseryQty();
+            /* …and PLUS the adjustments approved against this report.
+
+               An approved calibration says the count was out by N and why —
+               "found 1 more seedling when processing the 2nd cull". Once
+               somebody has said that and a verifier has accepted it, the extra
+               seedling is real and the base it is measured against is one
+               larger. Leaving it out is what kept batch 225 reading OVER
+               ALLOCATED by exactly the one seedling that had already been
+               explained, with the explanation sitting on the same screen.
+
+               Approved only. An adjustment nobody has accepted is a claim, and
+               a claim must not move the figure it is trying to justify. */
+            const allocBase = totalPlantedRaw + getDtoneNurseryQty()
+                            + adjustNetFor('Transplanting');
             const pendingTotal = Math.max(
                 0,
                 allocBase
@@ -6882,7 +6928,10 @@ Thank you.`;
             // Premium PN and D-Tone PN are still "pending" (haven't reached main plot).
             // The base includes the admin-keyed D-Tone nursery quantity (Tab 3)
             // per spec: balance = planted + D-Tone qty − main − culled.
-            const total = t4_totalPlanted + (typeof getDtoneNurseryQty === 'function' ? getDtoneNurseryQty() : 0);
+            // Adjustments approved against 1st Culling count here for the same
+            // reason they count on Transplanting — see the note on allocBase.
+            const total = t4_totalPlanted + (typeof getDtoneNurseryQty === 'function' ? getDtoneNurseryQty() : 0)
+                        + adjustNetFor('1st Culling');
             const accounted = t4_totalMain + totalCulled; // only main plot + culled = truly resolved
             const unaccounted = total - accounted;        // pending = tray remainder + premium + d-tone
 
@@ -8281,10 +8330,10 @@ Thank you.`;
                                     ondragover="event.preventDefault(); this.classList.add('ring-2','ring-[#c07820]');"
                                     ondragleave="event.preventDefault(); this.classList.remove('ring-2','ring-[#c07820]');"
                                     ondrop="event.preventDefault(); this.classList.remove('ring-2','ring-[#c07820]'); handleT6DocDrop(event,'${rowId}')">
-                                    <input type="number" min="0" class="input-style t6-map-qty !text-[11px] !py-1.5 !px-1.5 !text-center w-full max-w-[62px]" placeholder="Qty"
+                                    <input type="number" min="0" class="input-style t6-map-qty !text-[11px] !py-1 !px-1 !rounded-lg !text-center w-full max-w-[48px]" placeholder="Qty"
                                         value="${p.savedMapQty ?? ''}"
                                         oninput="calcT6(); t6PaintPlotRow(this.closest('.t6-plot-row'))">
-                                    <button type="button" id="${rowId}-doc-chip" class="t6-doc-chip shrink-0 w-8 h-8 rounded-lg border flex items-center justify-center
+                                    <button type="button" id="${rowId}-doc-chip" class="t6-doc-chip shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center
                                                    bg-white border-[#c07820] text-[#c07820] text-sm bg-cover bg-center hover:bg-[#fdfaf4]"
                                         title="Attach the drone map"
                                         onclick="onT6DocChip('${rowId}')">＋</button>
@@ -8309,7 +8358,7 @@ Thank you.`;
                                      width turns out to be. -->
                                 <div class="t6-nil-dash ${nilCull ? '' : 'hidden'} text-base font-black text-[#c9bda8]">—</div>
                                 <div class="t6-date-body ${nilCull ? 'hidden' : ''} flex justify-center">
-                                <input type="date" class="input-style t6-cull-date !text-[11px] !py-1.5 !px-1.5 !text-left w-full max-w-[112px]" value="${p.savedCullDate || ''}"
+                                <input type="date" class="input-style t6-cull-date !text-[11px] !py-1 !px-1.5 !rounded-lg !text-left w-full max-w-[112px]" value="${p.savedCullDate || ''}"
                                     onchange="calcT6(); t6PaintPlotRow(this.closest('.t6-plot-row'))"
                                     title="Date this plot was culled">
                                 </div>
@@ -8675,13 +8724,13 @@ Thank you.`;
                               String(doc.base64 || '').startsWith('data:application/pdf');
                 chip.style.backgroundImage = (doc.isImg && !isPdf) ? `url("${doc.base64}")` : '';
                 chip.innerText = (doc.isImg && !isPdf) ? '' : (isPdf ? '📋' : '📄');
-                chip.className = 't6-doc-chip shrink-0 w-8 h-8 rounded-lg border flex items-center justify-center ' +
+                chip.className = 't6-doc-chip shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center ' +
                                  'bg-white border-[#4a7a2e] text-[#4a7a2e] text-sm bg-cover bg-center hover:ring-2 hover:ring-[#c3e6cb]';
                 chip.title = `${doc.name || 'Drone map'} — press to view, replace or remove`;
             } else {
                 chip.style.backgroundImage = '';
                 chip.innerText = '＋';
-                chip.className = 't6-doc-chip shrink-0 w-8 h-8 rounded-lg border flex items-center justify-center ' +
+                chip.className = 't6-doc-chip shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center ' +
                                  'bg-white border-[#c07820] text-[#c07820] text-sm bg-cover bg-center hover:bg-[#fdfaf4]';
                 chip.title = 'Attach the drone map';
             }
