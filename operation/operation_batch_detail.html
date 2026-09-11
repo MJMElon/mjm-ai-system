@@ -259,6 +259,30 @@
         /* Tidy report grids (transplant/cull tables): cells centered both ways,
            header text wraps instead of overflowing. */
         .t-tidy { align-items: center !important; }
+        /* The allocation engine's four cards.
+
+           A fixed 30px figure fits a wide card and runs out of a narrow one:
+           "90.25%" in black tabular digits is about four times its own font
+           size across, and the cards get whatever width is left once the
+           status box beside them has taken its share. So the figure is sized
+           against the CARD rather than the page — container-type makes each
+           card its own measuring stick, and 18cqw keeps seven characters
+           inside it at any width the layout hands over. The clamp stops it
+           becoming unreadable when squeezed and from growing past the size it
+           was designed at when there is room.
+
+           nowrap on purpose: a percentage broken across two lines is not a
+           smaller problem than one that overflows.
+
+           text-3xl is deliberately NOT on these elements. Tailwind's CDN
+           appends its stylesheet AFTER this one, so at equal specificity its
+           30px would beat the clamp and the figure would go on overflowing —
+           the same trap as the 3rd Culling row grid, noted near the top of
+           this file. The size is set here and only here. */
+        .alloc-card   { container-type: inline-size; }
+        .alloc-figure { font-size: clamp(13px, 18cqw, 30px); line-height: 1;
+                        white-space: nowrap; font-variant-numeric: tabular-nums; }
+
         .t-tidy > div, .t-tidy > span { text-align: center; min-width: 0; }
         .t-tidy > span { white-space: normal; overflow-wrap: break-word; }
         .t-tidy > div.flex { align-items: center; }
@@ -1182,28 +1206,28 @@
                                                      a pictogram in front of every heading is four
                                                      pictograms, which distinguishes nothing. -->
                                                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                                    <div class="bg-[#eef5fc] border border-[#bee3f8] rounded-xl px-4 py-3">
+                                                    <div class="bg-[#eef5fc] border border-[#bee3f8] rounded-xl px-4 py-3 alloc-card">
                                                         <!-- min-h of two lines on all four labels: only the D-Tone one
                                                              wraps, and without a floor under the short ones its figure
                                                              sat a line lower than its neighbours'. Reserving the second
                                                              line everywhere puts the four percentages on one baseline. -->
                                                         <div class="text-[11px] font-black text-[#3a7ab4] uppercase tracking-wide leading-tight min-h-[2.2em] flex items-start justify-center text-center">Main Plot</div>
-                                                        <div class="text-3xl font-black text-[#3a7ab4] mt-1 tabular-nums leading-none text-center" id="t3-val-main-pct">—</div>
+                                                        <div class="font-black text-[#3a7ab4] mt-1 tabular-nums leading-none text-center alloc-figure" id="t3-val-main-pct">—</div>
                                                         <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1 text-center" id="t3-val-main">0</div>
                                                     </div>
-                                                    <div class="bg-[#ecfeff] border border-[#a5f3fc] rounded-xl px-4 py-3">
+                                                    <div class="bg-[#ecfeff] border border-[#a5f3fc] rounded-xl px-4 py-3 alloc-card">
                                                         <div class="text-[11px] font-black text-[#0891b2] uppercase tracking-wide leading-tight min-h-[2.2em] flex items-start justify-center text-center">Main Plot (D-Tone)</div>
-                                                        <div class="text-3xl font-black text-[#0891b2] mt-1 tabular-nums leading-none text-center" id="t3-val-dtone-main-pct">—</div>
+                                                        <div class="font-black text-[#0891b2] mt-1 tabular-nums leading-none text-center alloc-figure" id="t3-val-dtone-main-pct">—</div>
                                                         <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1 text-center" id="t3-val-dtone-main">0</div>
                                                     </div>
-                                                    <div class="bg-[#fff5f5] border border-[#f8d7da] rounded-xl px-4 py-3">
+                                                    <div class="bg-[#fff5f5] border border-[#f8d7da] rounded-xl px-4 py-3 alloc-card">
                                                         <div class="text-[11px] font-black text-[#a83020] uppercase tracking-wide leading-tight min-h-[2.2em] flex items-start justify-center text-center">Total 1st Culled</div>
-                                                        <div class="text-3xl font-black text-[#a83020] mt-1 tabular-nums leading-none text-center" id="t3-val-cull-pct">—</div>
+                                                        <div class="font-black text-[#a83020] mt-1 tabular-nums leading-none text-center alloc-figure" id="t3-val-cull-pct">—</div>
                                                         <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1 text-center" id="t3-val-cull">0</div>
                                                     </div>
-                                                    <div class="bg-[#fffaf0] border border-[#fde68a] rounded-xl px-4 py-3">
+                                                    <div class="bg-[#fffaf0] border border-[#fde68a] rounded-xl px-4 py-3 alloc-card">
                                                         <div class="text-[11px] font-black text-[#c07820] uppercase tracking-wide leading-tight min-h-[2.2em] flex items-start justify-center text-center">Pending</div>
-                                                        <div class="text-3xl font-black text-[#c07820] mt-1 tabular-nums leading-none text-center" id="t3-val-pending-pct">—</div>
+                                                        <div class="font-black text-[#c07820] mt-1 tabular-nums leading-none text-center alloc-figure" id="t3-val-pending-pct">—</div>
                                                         <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1 text-center" id="t3-val-untransplanted">0</div>
                                                     </div>
                                                 </div>
@@ -7916,6 +7940,11 @@ Thank you.`;
                    A "-R" plot with nothing standing is still FINISHED — the
                    completion count works that out from its balance rather than
                    from a word on the screen, which is where it belongs. */
+                /* Nought to cull — see the dash in the Drone Map and Culled Date
+                   cells below. True of a main plot as readily as a "-R" one:
+                   whatever the route, a plot with nothing standing has nothing
+                   to fly over. */
+                const nilCull = (_n.culled || 0) === 0;
                 const autoCulled = _n.culled;
                 const cullVal  = autoCulled;
 
@@ -8048,7 +8077,16 @@ Thank you.`;
                                  nothing is standing, so there is nothing to fly over. -->
                             <div>
                                 <div class="text-[9px] font-black text-[#8a7a68] uppercase lg:hidden mb-0.5">Drone Map</div>
-                                <div class="t6-map-body flex items-center justify-center gap-1.5"
+                                <!-- Nothing to cull, nothing to fly. When 3rd Culled comes to
+                                     nought there is no standing crop to photograph and no cull
+                                     to date, so both cells say "—" instead of offering boxes
+                                     nobody should fill in. The boxes stay in the document
+                                     behind the dash, because the save and every calculation
+                                     read them by class and a control that is not there reads
+                                     as blank rather than as nothing-to-do. t6PaintNilRow puts
+                                     them back the moment the figure stops being nought. -->
+                                <div class="t6-nil-dash ${nilCull ? '' : 'hidden'} text-base font-black text-[#c9bda8]">—</div>
+                                <div class="t6-map-body ${nilCull ? 'hidden' : ''} flex items-center justify-center gap-1.5"
                                     ondragover="event.preventDefault(); this.classList.add('ring-2','ring-[#c07820]');"
                                     ondragleave="event.preventDefault(); this.classList.remove('ring-2','ring-[#c07820]');"
                                     ondrop="event.preventDefault(); this.classList.remove('ring-2','ring-[#c07820]'); handleT6DocDrop(event,'${rowId}')">
@@ -8078,7 +8116,8 @@ Thank you.`;
                                      figure beside it was centred. A flex row with
                                      justify-center does not care what the box's intrinsic
                                      width turns out to be. -->
-                                <div class="flex justify-center">
+                                <div class="t6-nil-dash ${nilCull ? '' : 'hidden'} text-base font-black text-[#c9bda8]">—</div>
+                                <div class="t6-date-body ${nilCull ? 'hidden' : ''} flex justify-center">
                                 <input type="date" class="input-style t6-cull-date !text-[11px] !py-1.5 !px-2 !text-left w-full max-w-[124px]" value="${p.savedCullDate || ''}"
                                     onchange="calcT6(); t6PaintPlotRow(this.closest('.t6-plot-row'))"
                                     title="Date this plot was culled">
@@ -8419,6 +8458,16 @@ Thank you.`;
             if (rd) rd.innerText = shown;
 
             t6PaintDocChip(row.id);
+
+            /* Nought to cull, nothing to fly: the Drone Map and Culled Date
+               cells show a dash instead of their boxes. Repainted here rather
+               than only at render because the figure moves while you work —
+               key a transfer out of a plot and what is left to cull can fall
+               to nought under you, or a deleted one can put it back. */
+            const nil = (parseInt(culled) || 0) === 0 && culled !== '';
+            row.querySelectorAll('.t6-nil-dash').forEach(el => el.classList.toggle('hidden', !nil));
+            row.querySelector('.t6-map-body')?.classList.toggle('hidden', nil);
+            row.querySelector('.t6-date-body')?.classList.toggle('hidden', nil);
         }
 
         /* The map chip: what it looks like says whether there is a file.
