@@ -4672,22 +4672,41 @@
         }
 
         function updatePlantingCompletion() {
-            let requiredChecks = 0; let filledCount = 0;
-            requiredChecks++; if (document.getElementById('t2-date').value !== "") filledCount++;
-            requiredChecks++; if (document.getElementById('t2-damaged').value !== "") filledCount++;
-            requiredChecks++; if (currentWorkers > 0) filledCount++;
-            requiredChecks++; if (opsPhotoBase64 !== null) filledCount++;
+            /* Every check carries a name, so a report that is short can say WHAT
+               it is short of and not only how short. A ring reading 86% beside a
+               banner reading VERIFIED & LOCKED is a question somebody has to come
+               and ask; the answer was always in here, it was just never said. */
+            const missingData     = [];   // figures the report cannot do without
+            const missingEvidence = [];   // pictures — proof, not figures
+            let requiredChecks = 0, filledCount = 0;
+            const need = (label, ok, isEvidence) => {
+                requiredChecks++;
+                if (ok) filledCount++;
+                else (isEvidence ? missingEvidence : missingData).push(label);
+            };
+
+            need('Planting Date', document.getElementById('t2-date').value !== "");
+            need('Damaged Seeds', document.getElementById('t2-damaged').value !== "");
+            need('Worker Count',  currentWorkers > 0);
+            need('Field Photo',   opsPhotoBase64 !== null, true);
             // Auditor verification photo no longer required — panel removed.
-            
+
             const rows = document.querySelectorAll('.tray-row');
-            rows.forEach(row => {
-                requiredChecks++; 
-                const sel = row.querySelector('.t-select').value;
-                if(sel !== "") filledCount++;
+            rows.forEach((row, i) => {
+                need(`Tray ${i + 1}`, row.querySelector('.t-select').value !== "");
             });
 
-            const percentage = Math.min(100, Math.round((filledCount / requiredChecks) * 100));
-            
+            let percentage = Math.min(100, Math.round((filledCount / requiredChecks) * 100));
+
+            /* The same rule Transplanting carries for drone maps: once HQ has
+               verified the stage and every FIGURE is in, an unattached picture
+               is an outstanding attachment, not an unfinished report. Evidence
+               only — a missing figure still holds the ring down. */
+            const _rv = window.MJMReview || {};
+            const hqVerified = !!(typeof _rv.isVerified === 'function' && _rv.isVerified('planting'));
+            const photosAreAllThatIsLeft = missingData.length === 0 && missingEvidence.length > 0 && hqVerified;
+            if (photosAreAllThatIsLeft) percentage = 100;
+
             document.getElementById('t2-pie-tab').style.setProperty('--percentage', percentage);
             // The tab's tick follows its ring: a stage that stops being full
             // must stop claiming it is finished.
@@ -4699,8 +4718,14 @@
             const saveBtn = document.getElementById('save-planting-btn');
             
             saveBtn.innerText = `Save Planting Report (${percentage}% Complete)`;
-            if(percentage === 100) { desc.innerText = "Report 100% Filled"; desc.className = "text-base font-black uppercase text-[#4a7a2e] mt-1"; } 
-            else if (percentage > 0) { desc.innerText = "In Progress"; desc.className = "text-base font-black uppercase text-[#c07820] mt-1"; } 
+            const short = missingData.concat(missingEvidence);
+            const shortList = short.slice(0, 3).join(', ') + (short.length > 3 ? ` +${short.length - 3}` : '');
+            if (photosAreAllThatIsLeft) {
+                desc.innerText = `100% Verified · ${missingEvidence.join(', ')} Outstanding`;
+                desc.className = "text-base font-black uppercase text-[#4a7a2e] mt-1";
+            }
+            else if(percentage === 100) { desc.innerText = "Report 100% Filled"; desc.className = "text-base font-black uppercase text-[#4a7a2e] mt-1"; }
+            else if (percentage > 0) { desc.innerText = `In Progress · Missing ${shortList}`; desc.className = "text-base font-black uppercase text-[#c07820] mt-1"; }
             else { desc.innerText = "Awaiting Data"; desc.className = "text-base font-black uppercase text-[#3d2610] mt-1"; }
         }
 
@@ -9887,9 +9912,13 @@ Thank you.`;
         3: () => {
                   const rows = Array.from(document.querySelectorAll('#t3-saved-rows-list .t3-saved-row'))
                     .map(el => ({ el, key: (el.dataset.reviewKey || '').trim() }));
-                  // The Double Tone Quantity in Nursery box is verifiable/rejectable too.
+                  /* The Double Tone Quantity in Nursery box is verifiable and
+                     rejectable too, but `optional` — it is a setting rather
+                     than a saved record, usually empty, and requiring its
+                     signature held the whole tab at 99% for a verifier who had
+                     signed every row on it. See allRowsVerified. */
                   const dt = document.getElementById('t3-dtone-nursery-box');
-                  if (dt) rows.push({ el: dt, key: 'DTONE-NURSERY-QTY' });
+                  if (dt) rows.push({ el: dt, key: 'DTONE-NURSERY-QTY', optional: true });
                   return rows;
                 },
         4: () => Array.from(document.querySelectorAll('#cull-rows-container .cull-row'))
@@ -10248,6 +10277,10 @@ Thank you.`;
            sign-off ago — right on the next render, wrong on this one. */
         if (typeof window.calcTransplanting === 'function') {
           try { window.calcTransplanting(); } catch (e) { console.warn(e); }
+        }
+        // Planting reads its own verification the same way, for its field photo.
+        if (typeof window.updatePlantingCompletion === 'function') {
+          try { window.updatePlantingCompletion(); } catch (e) { console.warn(e); }
         }
         syncTabTicks();
       }
@@ -10713,13 +10746,21 @@ Thank you.`;
                               had checked none.
 
                               False when the tab has no rows: nothing verified
-                              is not everything verified. */
+                              is not everything verified.
+
+                              Rows marked `optional` are signable but are not
+                              counted here. The Double Tone box is one: it is a
+                              setting that is usually empty, sits apart from the
+                              list of saved rows, and left Transplanting reading
+                              99% for somebody who had signed every row there
+                              was. A box nobody thinks of as a row must not
+                              decide whether the rows are done. */
                            allRowsVerified: (tabIdx) => {
                              const cfg = ROW_TAB_CONFIG[tabIdx];
                              const stage = STAGE_BY_TAB[tabIdx];
                              if (!cfg || !stage) return false;
                              let rows = [];
-                             try { rows = cfg().filter(r => r && r.key); } catch (e) { return false; }
+                             try { rows = cfg().filter(r => r && r.key && !r.optional); } catch (e) { return false; }
                              if (!rows.length) return false;
                              return rows.every(r => !!rowVerifs[stage + '::' + r.key]);
                            } };
