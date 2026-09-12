@@ -815,6 +815,17 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
   text-transform:uppercase;color:var(--green-text);}
 .ss-count{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;
   color:var(--text-muted);white-space:nowrap;}
+/* This nursery's schedule as a sheet. Small and quiet, beside the week
+   count, because it is a shortcut to the card's own download rather than
+   something to be pressed before the schedule is read. */
+.ss-dl{width:26px;height:26px;padding:0;flex:0 0 auto;line-height:1;
+  font-size:13px;font-family:var(--font);color:var(--green-text);
+  background:var(--bg-white);border:1px solid var(--border);
+  border-radius:6px;cursor:pointer;}
+.ss-dl:hover{background:var(--green,#0d7a47);border-color:var(--green,#0d7a47);color:#fff;}
+/* Top-right of the summary card, against a centred heading. */
+.lst-top .sched-dl{position:absolute;right:0;top:-3px;font-size:12px;}
+@media (max-width:760px){ .lst-top .sched-dl{position:static;} }
 /* Week headers are two lines: which week, then when. They used to be a
    button opening a date box; the dates are set in the Edit popup now,
    beside the chemicals and ticks they belong to. */

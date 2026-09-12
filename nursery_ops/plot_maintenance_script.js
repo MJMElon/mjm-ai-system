@@ -4233,14 +4233,41 @@ function saveRec(){
 /* ════════════════════════════
    PDF DOWNLOAD
 ════════════════════════════ */
-function openPdfModal(){
-  document.getElementById('pdf-nursery').value=getNursery();
+/* The download was orphaned when the four full-width sheets came off the
+   Schedule tab — the toolbar that opened it went with them, and nothing has
+   called this since. The modal, the layout and the arithmetic were all still
+   here; only the way in was missing. It is on the summary card now, and on
+   every nursery's own header.
+
+   The nursery list is filled from the register rather than being the four
+   that were typed into the HTML, for the same reason every other list on
+   this page now is: a nursery added on Facility Management is a nursery
+   somebody will want a schedule for. */
+function openPdfModal(preset){
+  const sel = document.getElementById('pdf-nursery');
+  if (sel) {
+    const keys = capNurseries().map(schedKey).filter(Boolean);
+    const list = keys.length ? keys : Object.keys(NURSERY_PLOTS);
+    sel.innerHTML = list.map(k =>
+      `<option value="${esc(k)}">${esc(NURSERY_LABELS[k] || stockLabel(k))}</option>`).join('');
+    const want = preset && list.includes(preset) ? preset : getNursery();
+    sel.value = list.includes(want) ? want : list[0];
+  }
   document.getElementById('pdf-month').value=monthLabelToInput(getMonth()); _syncMonthButtons();
   document.getElementById('pdf-modal').classList.add('open');
 }
 function closePdfModal(){ document.getElementById('pdf-modal').classList.remove('open'); }
 
 function downloadPDF() {
+  /* jsPDF comes off a CDN. On a nursery office's connection that request is
+     the one most likely to have failed, and destructuring a library that is
+     not there threw into the console and left the button looking broken —
+     pressed, nothing, no reason given. Say so instead. */
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert('The PDF library has not loaded — usually the internet connection.\n\n' +
+          'Reload the page and try again. The schedule itself is saved either way.');
+    return;
+  }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
   const pN = document.getElementById('pdf-nursery').value;
@@ -6270,6 +6297,8 @@ function summaryTable(it, m) {
       <div class="ss-head">
         <div class="ss-name">${esc(label)}</div>
         <div class="ss-count">${blocks.length} week${blocks.length === 1 ? '' : 's'}</div>
+        <button type="button" class="ss-dl" title="Download ${esc(label)}'s schedule"
+          onclick="openPdfModal('${esc(n)}')">&#11015;</button>
       </div>
       <div class="tbl-wrap"><table class="ss-table">
         <thead>${head}</thead><tbody>${rows}</tbody></table></div>
