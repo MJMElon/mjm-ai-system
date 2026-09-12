@@ -8468,6 +8468,10 @@ Thank you.`;
             // it — all of them read the whole list, so they are settled once,
             // after every saved movement is in.
             syncT6TransferList();
+            // Safety net: a saved movement whose destination has no row here
+            // gets one, rather than naming a plot the list below cannot show.
+            // Normally does nothing — injectTransfers has already built them.
+            t6EnsureDestRows();
 
             // Restore previously-uploaded drone maps / docs.
             t6_plotData.forEach((p, i) => {
@@ -8774,8 +8778,13 @@ Thank you.`;
                 <div class="t6-transfer-rec t6-tr-cols items-center rounded-xl border border-[#efe6d6] bg-white px-3 py-2.5">
                     <input type="date" class="input-style t6-tr-date !text-sm !py-2.5"
                         onchange="recalcT6TransferFor(this)">
+                    <!-- Picking the destination is what creates its P-R Culling
+                         row, so the two happen together — see t6EnsureDestRows.
+                         On change, not on every keystroke of the quantity: the
+                         row is rebuilt to make it, and doing that mid-number
+                         would take the cursor out of the box. -->
                     <div class="select-wrapper w-full"><select class="input-style !text-[#0891b2] t6-tr-plot !text-sm !py-2.5 w-full"
-                        onchange="recalcT6TransferFor(this)">${getPlotOptionsHTML()}</select></div>
+                        onchange="recalcT6TransferFor(this); t6EnsureDestRows();">${getPlotOptionsHTML()}</select></div>
                     <input type="number" min="0" class="input-style !text-[#0891b2] font-black t6-tr-qty !text-sm !py-2.5"
                         placeholder="Qty" value="${rec.qty ?? ''}" oninput="recalcT6TransferFor(this)">
                     <div class="flex justify-end">
@@ -8961,6 +8970,88 @@ Thank you.`;
             return by;
         }
 
+        /* WHAT IS ON SCREEN, BACK INTO t6_plotData.
+
+           renderT6PlotRows builds every row and every movement from
+           t6_plotData, so anything keyed since the last load — a culled qty, a
+           balance, a drone-map count, a movement half-written — is thrown away
+           by a re-render unless it is put back first.
+
+           Only what somebody TYPED. Balance and 3rd Culled are worked out from
+           the plot's own figures by t6AutoNumbers every time a row is drawn,
+           so they come back on their own and writing them into the saved
+           fields would only tell the next render they were answers. */
+        function t6HarvestRows() {
+            t6_plotData.forEach((p, i) => {
+                const row = document.getElementById(`t6-row-${i}`);
+                if (row) {
+                    const val = (sel) => {
+                        const el = row.querySelector(sel);
+                        const v = el ? String(el.value ?? '').trim() : '';
+                        return v === '' ? null : v;
+                    };
+                    const map  = val('.t6-map-qty');
+                    p.savedMapQty   = map === null ? null : (parseInt(map) || 0);
+                    p.savedCullDate = val('.t6-cull-date');
+                    const note = t6MismatchNote(i);
+                    if (note) p.savedMismatchNote = note;
+                }
+                const host = document.getElementById(`t6-row-${i}-transfers`);
+                if (!host) return;
+                p.savedTransfers = Array.from(host.querySelectorAll('.t6-transfer-rec')).map(rec => {
+                    const q = (rec.querySelector('.t6-tr-qty')?.value ?? '').trim();
+                    return { target: rec.querySelector('.t6-tr-plot')?.value || '',
+                             qty:    q === '' ? null : (parseInt(q) || 0),
+                             date:   rec.querySelector('.t6-tr-date')?.value || '' };
+                });
+            });
+        }
+
+        /* A MOVEMENT CAN NAME A PLOT THIS BATCH HAS NO ROW FOR.
+
+           N2 sends 306 to N18-R and N18-R has never held any of this batch
+           before. The P-R Culling row for a destination was only ever built at
+           LOAD, out of the Cull3_Transfer records already in the database — so
+           a destination picked today had nowhere to appear until the report
+           had been saved and the page opened again. The plot sat there on the
+           movement, plainly, and not on the list underneath it.
+
+           So the row is made the moment the destination is picked. It stays
+           hidden until a quantity is keyed, which is the rule every other
+           destination row already follows — see syncT6TransferDests.
+
+           Appended, never inserted: main rows must stay ahead of transfer rows
+           in t6_plotData, because .t6-plot-row in document order is matched to
+           it by index. */
+        let _t6MakingDestRows = false;
+        function t6EnsureDestRows() {
+            if (_t6MakingDestRows) return;
+            const want = new Map();
+            document.querySelectorAll('#t6-transferdata-rows .t6-transfer-rec').forEach(rec => {
+                const target = rec.querySelector('.t6-tr-plot')?.value || '';
+                const key = _t6PlotKey(target);
+                if (!key) return;
+                if (t6_plotData.some(p => _t6PlotKey(p.plot) === key)) return;
+                if (!want.has(key)) want.set(key, target);
+            });
+            if (!want.size) return;
+            _t6MakingDestRows = true;
+            try {
+                t6HarvestRows();
+                want.forEach(plot => {
+                    t6_plotData.push({
+                        plot, qty: 0, destType: 'main', transferFrom: '—',
+                        isTransferRow: true, recordCount: 0,
+                        dead2: 0, sales: 0, salesDOs: [],
+                        savedBalance: null, savedCulled: null, savedDocUrl: null,
+                        savedDocName: null, savedMapQty: null,
+                        savedMismatchNote: null, savedCullDate: null
+                    });
+                });
+                renderT6PlotRows();
+            } finally { _t6MakingDestRows = false; }
+        }
+
         function syncT6TransferDests() {
             const dests = t6TransferDests();
             t6_plotData.forEach((p, i) => {
@@ -8975,6 +9066,19 @@ Thank you.`;
                 if (cell && d) {
                     cell.innerText = t6Fmt(d.qty);
                     cell.dataset.from = JSON.stringify(d.from);
+                }
+                /* What arrived is this plot's Transplanted figure, and every
+                   other figure on the row is worked out from it — balance,
+                   3rd culled, the lot. It used to be set once at load out of
+                   the saved records, so a plot fed by a movement keyed today
+                   sat at nought beside a quantity that plainly was not. */
+                if (d && p.qty !== d.qty) {
+                    p.qty = d.qty;
+                    const balEl = row.querySelector('.t6-balance');
+                    if (balEl) balEl.dataset.transplanted = d.qty;
+                    const qtyCell = row.querySelector('.t6-src-figure');
+                    if (qtyCell) qtyCell.innerText = t6Fmt(d.qty);
+                    recalcT6Transfer(i);
                 }
             });
             const empty = document.getElementById('t6-transferplot-empty');
