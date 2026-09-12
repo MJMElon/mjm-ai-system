@@ -1198,6 +1198,11 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 .we-col-l{font-size:10px;font-weight:900;letter-spacing:.6px;margin-bottom:4px;}
 .we-col-d{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:4px;}
 .we-col-d .we-num{width:56px;height:26px;font-size:11.5px;}
+/* The activator under it is the second thing in the tank, not a second
+   column, so it reads quieter and is fenced off by a rule rather than by a
+   gap — a gap alone and the two pairs look like two columns of one. */
+.we-col-l2{margin-top:8px;padding-top:7px;border-top:1px dashed var(--border);
+  font-weight:800;color:var(--text-muted);}
 
 
 /* The plot column is wide now that the tick columns are fixed, which made

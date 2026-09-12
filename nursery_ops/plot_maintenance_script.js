@@ -207,6 +207,12 @@ const chemByName = n => chemicals.find(c => c.name === n) || null;
    always offered "none"; it stays. */
 const chemNames = kind => chemicals.filter(c => c.kind === kind).map(c => c.name).concat('—');
 const taggedNames = tag => chemicals.filter(c => c.tag === tag).map(c => c.name).concat('—');
+/* Which activator an interrow column mixes. Every round used to say the word
+   "Activator" because there was nowhere to choose one — the dose was keyed
+   but the name was a constant in six places. Rounds saved before the picker
+   existed have no `activator` at all, and they still mean what they printed,
+   so the missing answer reads as the old constant rather than as none. */
+const interrowAct = c => (c && c.activator) || 'Activator';
 /* With no usage, every fertiliser — which is what the calculator wants,
    since it is asked about both kinds of work. With one, only the fertilisers
    ticked for it: the Manuring sheet is monthly manuring, and offering a
@@ -300,8 +306,8 @@ function migrateManuringShape(s, plots) {
 function defaultInterrowConfig() {
   // Nested: array of rounds → each round is an array of chemical columns
   return [
-    [{ chem:'Monex', chem_dose:200, chem_unit:'mL', activator_dose:15, activator_unit:'mL' }],
-    [{ chem:'Basta', chem_dose:200, chem_unit:'mL', activator_dose:15, activator_unit:'mL' }],
+    [{ chem:'Monex', chem_dose:200, chem_unit:'mL', activator:'Activator', activator_dose:15, activator_unit:'mL' }],
+    [{ chem:'Basta', chem_dose:200, chem_unit:'mL', activator:'Activator', activator_dose:15, activator_unit:'mL' }],
   ];
 }
 /* Migrate old { R1:{...}, R2:{...} } interrowConfig (and interrow ticks) to nested rounds shape */
@@ -2758,7 +2764,7 @@ function autoSyncRecords() {
     round.forEach((c, ci) => {
       plots.filter(p=>s.interrow[p]?.[ri]?.[ci]).forEach(plot=>{
         newRecs.push({id:id++, tarikh:'-', jenis:'Meracun rumput secara selingan',
-          racun:`Round ${ri+1}: ${c.chem} ${c.chem_dose}${c.chem_unit} + Activator ${c.activator_dose}${c.activator_unit}`,
+          racun:`Round ${ri+1}: ${c.chem} ${c.chem_dose}${c.chem_unit} + ${interrowAct(c)} ${c.activator_dose}${c.activator_unit}`,
           plot, batch:'', qty:null, carlos:0, gaia:0, remark:''});
       });
     });
@@ -3491,7 +3497,29 @@ function updateInterrowChem(ri, ci, v){
   const cfg = getState(getNursery(),getMonth()).interrowConfig[ri][ci];
   cfg.chem = v;
   cfg.chem_unit = getUnitForChem(v);
+  /* Its own dose too, the same rule P&D follows: a dose belongs to the
+     chemical, so leaving the previous one behind makes the column read as
+     the chemical that is no longer in it. */
+  const d = getDoseForChem(v);
+  if (d != null) cfg.chem_dose = d;
   renderInterrow();
+  try { renderSchedSummary(); } catch (_) {}
+  persistStateSoon(getNursery(), getMonth());
+}
+
+/* Which activator goes in the tank with it. Until now there was a dose box
+   and no name — every round printed the word "Activator" whatever was
+   actually mixed. The list is the sticker-tagged chemicals, the same list
+   P&D picks Bond from, because that is what the Setting page holds them as. */
+function updateInterrowAct(ri, ci, v){
+  if(!canEditSchedule) return;
+  const cfg = getState(getNursery(),getMonth()).interrowConfig[ri][ci];
+  cfg.activator = v;
+  cfg.activator_unit = getUnitForChem(v);
+  const d = getDoseForChem(v);
+  if (d != null) cfg.activator_dose = d;
+  renderInterrow();
+  try { renderSchedSummary(); } catch (_) {}
   persistStateSoon(getNursery(), getMonth());
 }
 function updateInterrowDose(ri, ci, f, v){
@@ -3504,7 +3532,7 @@ function addInterrowRound(){
   if(!canEditSchedule) return;
   const s = getState(getNursery(),getMonth());
   if (s.interrowConfig.length >= 6) return;
-  s.interrowConfig.push([{chem:'Basta', chem_dose:200, chem_unit:'mL', activator_dose:15, activator_unit:'mL'}]);
+  s.interrowConfig.push([{chem:'Basta', chem_dose:200, chem_unit:'mL', activator:'Activator', activator_dose:15, activator_unit:'mL'}]);
   NURSERY_PLOTS[getNursery()].forEach(p => {
     if (!s.interrow[p]) s.interrow[p] = [];
     s.interrow[p].push([false]);
@@ -3531,7 +3559,7 @@ function addInterrowCol(ri){
   if(!canEditSchedule) return;
   const s = getState(getNursery(),getMonth());
   if (!s.interrowConfig[ri] || s.interrowConfig[ri].length >= 6) return;
-  s.interrowConfig[ri].push({chem:'Basta', chem_dose:200, chem_unit:'mL', activator_dose:15, activator_unit:'mL'});
+  s.interrowConfig[ri].push({chem:'Basta', chem_dose:200, chem_unit:'mL', activator:'Activator', activator_dose:15, activator_unit:'mL'});
   NURSERY_PLOTS[getNursery()].forEach(p => {
     if (!s.interrow[p]) s.interrow[p] = [];
     if (!s.interrow[p][ri]) s.interrow[p][ri] = [];
@@ -3606,6 +3634,7 @@ function renderInterrow() {
     round.forEach((c, ci) => {
       h+=`<th class="hdr-input-cell sticker-bg">
         <div style="font-size:10px;font-weight:700;color:var(--text-muted);margin-bottom:4px;letter-spacing:0.5px;">${t('hdr.activator')}</div>
+        ${mkSel(taggedNames('sticker'),interrowAct(c),`updateInterrowAct(${ri},${ci},this.value)`)}
         ${mkDose(c.activator_dose,c.activator_unit,`updateInterrowDose(${ri},${ci},'activator_dose',+this.value)`)}
       </th>`;
     });
@@ -3668,7 +3697,7 @@ function renderInterrow() {
   cfg.forEach((round, ri) => {
     round.forEach((c, ci) => {
       const seed = sumSeedlings(n, plots, p => s.interrow[p]?.[ri]?.[ci]);
-      const usage = (!seed || !c.activator_dose) ? '—' : calcMaxChem(seed, 'Activator', c.activator_dose, c.activator_unit, 1);
+      const usage = (!seed || !c.activator_dose) ? '—' : calcMaxChem(seed, interrowAct(c), c.activator_dose, c.activator_unit, 1);
       h+=`<td>${usage}</td>`;
     });
   });
@@ -3794,7 +3823,7 @@ function saveSchedule(nursery, quiet) {
       plots.filter(p => s.interrow[p]?.[ri]?.[ci]).forEach(plot => {
         tasks.push({ id:id++, type:'interrow', plot, round:`Round ${ri+1}`,
           jenis:'Meracun rumput secara selingan',
-          chemical:`${c.chem} ${c.chem_dose}${c.chem_unit} + Activator ${c.activator_dose}${c.activator_unit}`,
+          chemical:`${c.chem} ${c.chem_dose}${c.chem_unit} + ${interrowAct(c)} ${c.activator_dose}${c.activator_unit}`,
           detail:`Interrow Spray Round ${ri+1}` });
       });
     });
@@ -4658,7 +4687,7 @@ function downloadPDF() {
     xCursor = startX + plotColW;
     icfg.forEach(round => {
       round.forEach(c => {
-        cell(xCursor, y, colW, rowH, `Activator ${c.activator_dose}${c.activator_unit}`, {...PALETTE.bondP, style:'bold', size:7});
+        cell(xCursor, y, colW, rowH, `${interrowAct(c)} ${c.activator_dose}${c.activator_unit}`, {...PALETTE.bondP, style:'bold', size:7});
         xCursor += colW;
       });
     });
@@ -4718,7 +4747,7 @@ function downloadPDF() {
     icfg.forEach((round, ri) => {
       round.forEach((c, ci) => {
         const seed = sumSeedlings(pN, plots, p => s.interrow[p]?.[ri]?.[ci]);
-        const usage = (!seed || !c.activator_dose) ? '—' : calcMaxChem(seed, 'Activator', c.activator_dose, c.activator_unit, 1);
+        const usage = (!seed || !c.activator_dose) ? '—' : calcMaxChem(seed, interrowAct(c), c.activator_dose, c.activator_unit, 1);
         cell(xCursor, y, colW, rowH, usage, {...PALETTE.summary, style:'bold', size:8});
         xCursor += colW;
       });
@@ -6490,10 +6519,12 @@ function weNum(val, onch) {
    many as their config holds, one per fertiliser or chemical. Weeding has
    one, and nothing to choose.
 
-   The STICKER is deliberately not here: a sticker goes in every tank
-   whatever else does, so asking about it once a week was a question with
-   one answer. The doses still save and still publish; the Setting page is
-   where a sticker changes. */
+   Both sprays also carry an ACTIVATOR — the sticker that goes in the tank
+   with the chemical. It used to be left off here, on the grounds that a
+   sticker goes in every tank whatever else does. That was wrong twice
+   over: the answer differs between pest and disease and between interrow
+   rounds, and the sheets that used to hold the picker are no longer on
+   the Schedule tab, so there was nowhere left to change it. */
 /* Every week needs a round behind it, in all three configs. addWeek() makes
    one as it goes, but a month can reach the editor with more weeks than
    rounds — carried forward from a shorter month, or saved before addWeek
@@ -6545,11 +6576,19 @@ function weCols(kind, i, n, m) {
       { ci: 0, label: 'Pest', opts: chemNames('pest'), val: c.P,
         onSel: `updatePDChem('${w}','P',this.value);renderWorkEditor()`,
         dose: c.P_dose, unit: c.P_unit,
-        onDose: `updatePDDose('${w}','P_dose',+this.value)` },
+        onDose: `updatePDDose('${w}','P_dose',+this.value)`,
+        label2: 'Activator', opts2: taggedNames('sticker'), val2: c.P_sticker,
+        onSel2: `updatePDChem('${w}','P_sticker',this.value);renderWorkEditor()`,
+        dose2: c.P_sticker_dose, unit2: c.P_sticker_unit,
+        onDose2: `updatePDDose('${w}','P_sticker_dose',+this.value)` },
       { ci: 1, label: 'Disease', opts: chemNames('disease'), val: c.D,
         onSel: `updatePDChem('${w}','D',this.value);renderWorkEditor()`,
         dose: c.D_dose, unit: c.D_unit,
-        onDose: `updatePDDose('${w}','D_dose',+this.value)` }
+        onDose: `updatePDDose('${w}','D_dose',+this.value)`,
+        label2: 'Activator', opts2: taggedNames('sticker'), val2: c.D_sticker,
+        onSel2: `updatePDChem('${w}','D_sticker',this.value);renderWorkEditor()`,
+        dose2: c.D_sticker_dose, unit2: c.D_sticker_unit,
+        onDose2: `updatePDDose('${w}','D_sticker_dose',+this.value)` }
     ];
   }
   if (kind === 'weeding') return [{ ci: 0, label: 'Weeding' }];
@@ -6569,7 +6608,15 @@ function weCols(kind, i, n, m) {
     unit: many ? (c.unit || 'gm') : (c.chem_unit || 'mL'),
     onDose: many
       ? `updateManuringDose(${i},${ci},'dose',+this.value)`
-      : `updateInterrowDose(${i},${ci},'chem_dose',+this.value)`
+      : `updateInterrowDose(${i},${ci},'chem_dose',+this.value)`,
+    /* Manuring is spread dry and mixes nothing with it, so it gets no
+       second control — only the two sprays do. */
+    ...(many ? {} : {
+      label2: 'Activator', opts2: taggedNames('sticker'), val2: interrowAct(c),
+      onSel2: `updateInterrowAct(${i},${ci},this.value);renderWorkEditor()`,
+      dose2: c.activator_dose, unit2: c.activator_unit || 'mL',
+      onDose2: `updateInterrowDose(${i},${ci},'activator_dose',+this.value)`
+    })
   }));
 }
 
@@ -6647,10 +6694,8 @@ function weNum(val, onch) {
   return `<input class="we-num" type="number" min="0" step="0.01" value="${val ?? ''}" oninput="${onch}">`;
 }
 
-/* What this work mixes for one week. The STICKER rows are deliberately not
-   here: a sticker goes in every tank whatever else does, so asking about it
-   once a week was asking a question with one answer. The doses still save,
-   and the Setting page is where a sticker is changed. */
+/* What this work mixes for one week — the chemical, and under it the
+   activator that goes in the tank with it. See weCols() above. */
 function weTicked(kind, i, ci, plot) {
   const s = getState(_we.n, getMonth());
   if (kind === 'pd')      return !!(s.pd['W' + (i + 1)]?.[plot]?.[ci === 0 ? 'P' : 'D']);
@@ -6789,7 +6834,8 @@ const WE_MULTI_COL = { manuring: 'manuringConfig', interrow: 'interrowConfig' };
 function weBlankCol(kind) {
   return kind === 'manuring'
     ? { name: 'Yaramila', dose: 20, unit: 'gm' }
-    : { chem: 'Basta', chem_dose: 200, chem_unit: 'mL', activator_dose: 15, activator_unit: 'mL' };
+    : { chem: 'Basta', chem_dose: 200, chem_unit: 'mL',
+        activator: 'Activator', activator_dose: 15, activator_unit: 'mL' };
 }
 
 function weAddCol(i) {
@@ -6924,12 +6970,23 @@ function renderWorkEditor() {
       dayInput(w.slot, 'from', w.from) + '<span class="we-to">to</span>' + dayInput(w.slot, 'to', w.to) +
     '</th>').join('') + '</tr>';
 
+  /* The second control is the activator that goes in the tank with the
+     first — Bond on a P&D week, the interrow activator on a spray round.
+     It was left off on the grounds that a sticker goes in every tank
+     whatever else does, so asking once a week was a question with one
+     answer. It is not: the answer differs between the two sprays and
+     between rounds, and with no picker here the only place to change it
+     was a sheet the Schedule tab no longer shows. */
   const h3 = '<tr>' + weeks.map((w, i) => cols[i].map((c, k) =>
     `<th class="we-col${k === 0 && i ? ' grp' : ''}">` +
       `<div class="we-col-l">${esc(c.label)}</div>` +
       (c.opts ? weSel(c.opts, c.val, c.onSel) : '') +
       (c.opts ? `<div class="we-col-d">${weNum(c.dose, c.onDose)}` +
                 `<span class="we-cfg-u">${esc(c.unit || '')}</span></div>` : '') +
+      (c.opts2 ? `<div class="we-col-l we-col-l2">${esc(c.label2)}</div>` +
+                 weSel(c.opts2, c.val2, c.onSel2) +
+                 `<div class="we-col-d">${weNum(c.dose2, c.onDose2)}` +
+                 `<span class="we-cfg-u">${esc(c.unit2 || '')}</span></div>` : '') +
       `<button type="button" class="we-all" onclick="weToggleAll('${kind}',${w.slot},${c.ci})" ` +
       `title="Tick or clear every plot in this column">all</button>` +
     '</th>').join('')).join('') + '</tr>';
