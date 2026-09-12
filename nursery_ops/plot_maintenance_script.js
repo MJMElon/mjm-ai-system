@@ -6273,7 +6273,43 @@ function summaryTable(it, m) {
       </div>
       <div class="tbl-wrap"><table class="ss-table">
         <thead>${head}</thead><tbody>${rows}</tbody></table></div>
+      ${totalsBlock(n, m)}
     </div>`;
+}
+
+/* ── How much to draw from the store ───────────────────────────────────
+   The tick grid above says WHERE each work happens. This says what it
+   costs: plots, seedlings, and the chemical and sticker to cover them.
+
+   One table per work rather than one for the nursery, because the figures
+   only mean anything under the chemical they were worked out from, and a
+   work's chemical changes from week to week. A work with no weeks in this
+   month is left out entirely — a table of dashes is not information. */
+function totalsBlock(n, m) {
+  const tables = WORKS.map(work => {
+    const weeks = weeksOf(n, m, work.key);
+    if (!weeks.length) return '';
+    const cols = [];
+    weeks.forEach(w => weCols(work.key, w.slot, n, m)
+      .forEach(c => cols.push({ slot: w.slot, c })));
+    if (!cols.length) return '';
+
+    const per = cols.map(x => weColTotals(work.key, x.slot, x.c.ci, n, m));
+    // Every column of one work asks the same questions, so row 0 names them.
+    const labels = per[0].map(r => r.label);
+    const head = '<tr><th class="st-lbl">' + esc(work.label) + '</th>' +
+      cols.map(x => '<th><span class="st-wk">Week ' + (x.slot + 1) + '</span>' +
+        '<span class="st-what">' + esc(x.c.val || x.c.label) + '</span></th>').join('') +
+      '</tr>';
+    const body = labels.map((lb, r) => '<tr><td class="st-lbl">' + esc(lb) + '</td>' +
+      per.map(p => '<td>' + esc(String(p[r].value)) + '</td>').join('') + '</tr>').join('');
+    return '<div class="tbl-wrap"><table class="st-table">' +
+      '<thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
+  }).filter(Boolean);
+
+  if (!tables.length) return '';
+  return '<div class="ss-tot"><div class="ss-tot-h">Totals for ' + esc(m) + '</div>' +
+    tables.join('') + '</div>';
 }
 
 /* ── What "expand" shows ───────────────────────────────────────────────
@@ -6438,80 +6474,6 @@ function roundColumns(kind, i, n, m) {
   return cfg.map((c, ci) => ({ label: c.name || c.chem || ('Column ' + (ci + 1)), ci }));
 }
 
-function weTicked(kind, i, ci, plot) {
-  const s = getState(_we.n, getMonth());
-  if (kind === 'pd')      return !!(s.pd['W' + (i + 1)]?.[plot]?.[ci === 0 ? 'P' : 'D']);
-  if (kind === 'weeding') return !!(s.weeding[plot]?.['R' + (i + 1)]);
-  return !!((s[kind][plot] || [])[i] || [])[ci];
-}
-
-function weToggle(kind, i, ci, plot, skipRender) {
-  if (!canEditSchedule || !_we) return;
-  const n = _we.n, m = getMonth(), s = getState(n, m);
-  if (kind === 'pd') {
-    const w = 'W' + (i + 1);
-    if (!s.pd[w]) s.pd[w] = {};
-    if (!s.pd[w][plot]) s.pd[w][plot] = { P: false, D: false };
-    const f = ci === 0 ? 'P' : 'D';
-    s.pd[w][plot][f] = !s.pd[w][plot][f];
-  } else if (kind === 'weeding') {
-    if (!s.weeding[plot]) s.weeding[plot] = { R1: false, R2: false };
-    const r = 'R' + (i + 1);
-    s.weeding[plot][r] = !s.weeding[plot][r];
-  } else {
-    if (!s[kind][plot]) s[kind][plot] = [];
-    if (!s[kind][plot][i]) s[kind][plot][i] = [];
-    s[kind][plot][i][ci] = !s[kind][plot][i][ci];
-  }
-  if (skipRender) return;
-  persistStateSoon(n, m);
-  autoSyncRecords();
-  keepingScroll(renderWorkEditor);
-  renderSchedSummary();
-  redrawSheet(kind);
-}
-
-/* One repaint for the whole column, not one per plot — 52 plots through the
-   single-tick path is 52 renders of a table nobody has seen yet. */
-function weToggleAll(kind, i, ci) {
-  if (!canEditSchedule || !_we) return;
-  const n = _we.n, m = getMonth(), plots = NURSERY_PLOTS[n] || [];
-  const all = plots.every(p => weTicked(kind, i, ci, p));
-  plots.forEach(p => { if (weTicked(kind, i, ci, p) === all) weToggle(kind, i, ci, p, true); });
-  persistStateSoon(n, m);
-  autoSyncRecords();
-  keepingScroll(renderWorkEditor);
-  renderSchedSummary();
-  redrawSheet(kind);
-}
-
-/* ── The popup ─────────────────────────────────────────────────────────
-   One block per week: the week's number, its dates, what is being sprayed
-   or fed in it, and every plot with a tick. That is the whole of a week,
-   and it is asked for in the order somebody fills it in — when, with what,
-   where.
-
-   Weeks are made here rather than on the summary. The summary is a reading
-   surface; this is the writing one, and a week made anywhere else would be
-   a week with no dates and no chemicals until somebody came here anyway. */
-
-/* A <select> whose value is not among its options shows the FIRST option
-   instead — silently, and looking exactly like a saved answer. On a screen
-   that says what to spray, that is the wrong kind of wrong, so a saved name
-   the list no longer offers is carried in and marked rather than dropped. */
-function weSel(opts, val, onch) {
-  const missing = val && val !== '\u2014' && !opts.includes(val);
-  const o = (missing ? [{ v: val, t: val + ' \u2014 no longer in the list' }] : [])
-    .concat(opts.map(x => ({ v: x, t: x })));
-  return `<select class="we-sel" onchange="${onch}">` +
-    o.map(x => `<option value="${esc(x.v)}"${x.v === val ? ' selected' : ''}>${esc(x.t)}</option>`).join('') +
-    '</select>';
-}
-
-function weNum(val, onch) {
-  return `<input class="we-num" type="number" min="0" step="0.01" value="${val ?? ''}" oninput="${onch}">`;
-}
-
 /* What one week's column asks for, and what its ticks mean.
 
    P & D asks twice — pest and disease can go on different plots in the
@@ -6620,53 +6582,6 @@ function weCols(kind, i, n, m) {
   }));
 }
 
-function weTicked(kind, i, ci, plot) {
-  const s = getState(_we.n, getMonth());
-  if (kind === 'pd')      return !!(s.pd['W' + (i + 1)]?.[plot]?.[ci === 0 ? 'P' : 'D']);
-  if (kind === 'weeding') return !!(s.weeding[plot]?.['R' + (i + 1)]);
-  return !!((s[kind][plot] || [])[i] || [])[ci];
-}
-
-function weToggle(kind, i, ci, plot, skipRender) {
-  if (!canEditSchedule || !_we) return;
-  const n = _we.n, m = getMonth(), s = getState(n, m);
-  if (kind === 'pd') {
-    const w = 'W' + (i + 1);
-    if (!s.pd[w]) s.pd[w] = {};
-    if (!s.pd[w][plot]) s.pd[w][plot] = { P: false, D: false };
-    const f = ci === 0 ? 'P' : 'D';
-    s.pd[w][plot][f] = !s.pd[w][plot][f];
-  } else if (kind === 'weeding') {
-    if (!s.weeding[plot]) s.weeding[plot] = { R1: false, R2: false };
-    const r = 'R' + (i + 1);
-    s.weeding[plot][r] = !s.weeding[plot][r];
-  } else {
-    if (!s[kind][plot]) s[kind][plot] = [];
-    if (!s[kind][plot][i]) s[kind][plot][i] = [];
-    s[kind][plot][i][ci] = !s[kind][plot][i][ci];
-  }
-  if (skipRender) return;
-  persistStateSoon(n, m);
-  autoSyncRecords();
-  keepingScroll(renderWorkEditor);
-  renderSchedSummary();
-  redrawSheet(kind);
-}
-
-/* One repaint for the whole column, not one per plot — 52 plots through the
-   single-tick path is 52 renders of a table nobody has seen yet. */
-function weToggleAll(kind, i, ci) {
-  if (!canEditSchedule || !_we) return;
-  const n = _we.n, m = getMonth(), plots = NURSERY_PLOTS[n] || [];
-  const all = plots.every(p => weTicked(kind, i, ci, p));
-  plots.forEach(p => { if (weTicked(kind, i, ci, p) === all) weToggle(kind, i, ci, p, true); });
-  persistStateSoon(n, m);
-  autoSyncRecords();
-  keepingScroll(renderWorkEditor);
-  renderSchedSummary();
-  redrawSheet(kind);
-}
-
 /* ── The popup ─────────────────────────────────────────────────────────
    One block per week: the week's number, its dates, what is being sprayed
    or fed in it, and every plot with a tick. That is the whole of a week,
@@ -6694,13 +6609,73 @@ function weNum(val, onch) {
   return `<input class="we-num" type="number" min="0" step="0.01" value="${val ?? ''}" oninput="${onch}">`;
 }
 
-/* What this work mixes for one week — the chemical, and under it the
-   activator that goes in the tank with it. See weCols() above. */
-function weTicked(kind, i, ci, plot) {
-  const s = getState(_we.n, getMonth());
+/* Is this plot ticked in this column? Asked of a state handed in, because
+   the totals below are wanted for nurseries the editor does not have open. */
+function weColTicked(kind, i, ci, plot, s) {
   if (kind === 'pd')      return !!(s.pd['W' + (i + 1)]?.[plot]?.[ci === 0 ? 'P' : 'D']);
   if (kind === 'weeding') return !!(s.weeding[plot]?.['R' + (i + 1)]);
   return !!((s[kind][plot] || [])[i] || [])[ci];
+}
+
+/* What this work mixes for one week — the chemical, and under it the
+   activator that goes in the tank with it. See weCols() above. */
+function weTicked(kind, i, ci, plot) {
+  return weColTicked(kind, i, ci, plot, getState(_we.n, getMonth()));
+}
+
+/* ── The figures a schedule exists to produce ──────────────────────────
+   How many plots, how many seedlings in them, and how much of each thing
+   that goes in the tank it takes to cover them. Every one of the old
+   full-width sheets ended in these four rows, and they are the reason the
+   sheets were printed: a schedule that does not say how much to draw from
+   the store is a schedule somebody does arithmetic on at six in the
+   morning. When the sheets came off the Schedule tab the arithmetic went
+   with them. This puts it back, in both the places it is now wanted —
+   along the bottom of the editor, and under the summary table.
+
+   ONE function for both, because two copies of a calculation are two
+   answers waiting to disagree about how much Bond to sign out. */
+function weColTotals(kind, i, ci, n, m) {
+  const s = getState(n, m), plots = NURSERY_PLOTS[n] || [];
+  const on = p => weColTicked(kind, i, ci, p, s);
+  const nPlots = plots.filter(on).length;
+  const seed = sumSeedlings(n, plots, on);
+  const rows = [
+    { label: t('sum.jumlahPlot'),  value: nPlots || '—' },
+    { label: t('sum.jumlahBibit'), value: seed ? seed.toLocaleString() : '—' }
+  ];
+  // Weeding mixes nothing, so there is nothing to draw from the store.
+  if (kind === 'weeding') return rows;
+
+  if (kind === 'manuring') {
+    const c = ((s.manuringConfig || [])[i] || [])[ci] || {};
+    const u = calcFertUsage(seed, c.name, c.dose, 1);
+    rows.push({ label: t('sum.maxBaja'), value: u.kg });
+    rows.push({ label: t('sum.bags'),    value: u.bags });
+    return rows;
+  }
+
+  if (kind === 'pd') {
+    const c = (s.pdConfig || {})['W' + (i + 1)] || {};
+    const f = ci === 0 ? 'P' : 'D';
+    rows.push({ label: t('sum.maxRacun'),
+                value: calcMaxChem(seed, c[f], c[f + '_dose'], c[f + '_unit'], 1) });
+    /* No chemical means no tank and no sticker means nothing in it. Either
+       way the sticker figure is not zero — it is not asked. */
+    rows.push({ label: t('sum.maxBond'),
+                value: (!seed || c[f] === '—' || c[f + '_sticker'] === '—') ? '—'
+                  : calcMaxChem(seed, c[f + '_sticker'], c[f + '_sticker_dose'],
+                                c[f + '_sticker_unit'], 1) });
+    return rows;
+  }
+
+  const c = ((s.interrowConfig || [])[i] || [])[ci] || {};
+  rows.push({ label: t('sum.maxRacun'),
+              value: calcMaxChem(seed, c.chem, c.chem_dose, c.chem_unit, 1) });
+  rows.push({ label: t('sum.maxActivator'),
+              value: (!seed || !c.activator_dose) ? '—'
+                : calcMaxChem(seed, interrowAct(c), c.activator_dose, c.activator_unit, 1) });
+  return rows;
 }
 
 function weToggle(kind, i, ci, plot, skipRender) {
@@ -7000,6 +6975,33 @@ function renderWorkEditor() {
         `aria-pressed="${on}">${on ? '&#10003;' : ''}</button></td>`;
     }).join('')).join('') + '</tr>').join('');
 
+  /* The totals, along the bottom, in the same columns as the ticks above
+     them — a figure in its own column needs no legend to say which week and
+     which chemical it belongs to. They sit in a <tfoot> pinned to the
+     bottom of the scroll, because on a nursery with fifty-two plots the
+     answer is otherwise fifty rows below the question. */
+  const tot = weeks.map((w, i) => cols[i].map(c => weColTotals(kind, w.slot, c.ci, n, m)));
+  const nTot = (tot[0] && tot[0][0]) ? tot[0][0].length : 0;
+  const foot = nTot
+    ? '<tfoot>' + Array.from({ length: nTot }, (_, r) =>
+        '<tr class="we-tot"><td class="we-plot">' + esc(tot[0][0][r].label) + '</td>' +
+        weeks.map((w, i) => cols[i].map((c, k) =>
+          `<td class="${k === 0 && i ? 'grp' : ''}">${esc(String(tot[i][k][r].value))}</td>`
+        ).join('')).join('') + '</tr>').join('') + '</tfoot>'
+    : '';
+
   body.innerHTML = `<div class="tbl-wrap we-scroll"><table class="we-table">
-      <thead>${h1}${h2}${h3}</thead><tbody>${rows}</tbody></table></div>`;
+      <thead>${h1}${h2}${h3}</thead><tbody>${rows}</tbody>${foot}</table></div>`;
+
+  /* Every sticky row pinned to bottom:0 lands on the same line, and only
+     the last one is visible — four rows of totals showing one. They have to
+     be stacked, and only the browser knows how tall a row came out, so the
+     offsets are measured rather than guessed at in the stylesheet. */
+  const ft = body.querySelectorAll('tfoot tr');
+  let off = 0;
+  for (let r = ft.length - 1; r >= 0; r--) {
+    const h = ft[r].getBoundingClientRect().height;
+    ft[r].querySelectorAll('td').forEach(td => { td.style.bottom = off + 'px'; });
+    off += h;
+  }
 }
