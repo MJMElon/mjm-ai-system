@@ -104,6 +104,18 @@ function getUnitForChem(name){
   return (c && c.unit) || 'gm';
 }
 
+/* The dose the Setting page holds for a chemical, or null when it has none.
+   A chemical's dose is a property OF the chemical — it is what the Setting
+   page exists to hold — so choosing a different one brings its own dose with
+   it, the way its unit already did. Leaving the old number behind is how a
+   week came to read "Destroy 20mL" when Destroy is 30. */
+function getDoseForChem(name){
+  const c = chemByName(name) || fertByName(name);
+  if (!c) return null;
+  const d = c.dose != null ? c.dose : (c.dose_monthly != null ? c.dose_monthly : null);
+  return d == null || d === '' ? null : +d;
+}
+
 function calcMaxChem(seedlings, chemName, dose, unit, decimals = 2){
   if(!seedlings || !chemName || chemName === '—' || !dose) return '—';
   // Formula: (plot capacity / coverage per pump) × dose per pump / 1000.
@@ -3044,12 +3056,28 @@ function updatePDChem(w,f,v){
   if(!canEditSchedule) return;
   const cfg = getState(getNursery(),getMonth()).pdConfig[w];
   cfg[f] = v;
-  // Auto-set unit based on the selected chemical
-  if (f === 'P')         cfg.P_unit         = getUnitForChem(v);
-  else if (f === 'D')    cfg.D_unit         = getUnitForChem(v);
-  else if (f === 'P_sticker') cfg.P_sticker_unit = getUnitForChem(v);
-  else if (f === 'D_sticker') cfg.D_sticker_unit = getUnitForChem(v);
+  /* The chosen chemical's own unit AND its own dose. The unit always
+     followed; the dose did not, so picking Destroy over Becker changed the
+     name and left Becker's 20mL underneath it — the column still read as
+     Becker, which is exactly what it was reported as.
+
+     A dose the Setting page does not hold (an em dash, a chemical since
+     removed) leaves the number alone rather than blanking a figure somebody
+     keyed by hand. */
+  const follow = (base) => {
+    cfg[base + '_unit'] = getUnitForChem(v);
+    const d = getDoseForChem(v);
+    if (d != null) cfg[base + '_dose'] = d;
+  };
+  if (f === 'P')              follow('P');
+  else if (f === 'D')         follow('D');
+  else if (f === 'P_sticker') follow('P_sticker');
+  else if (f === 'D_sticker') follow('D_sticker');
   renderPD();
+  /* The summary table behind the modal is drawn from this same state and was
+     never told. A chemical changed in the editor left the schedule still
+     naming the old one until something else happened to repaint it. */
+  try { renderSchedSummary(); } catch (_) {}
   persistStateSoon(getNursery(), getMonth());
 }
 function updatePDDose(w,f,v){ if(!canEditSchedule) return; getState(getNursery(),getMonth()).pdConfig[w][f]=v; renderPD(); persistStateSoon(getNursery(), getMonth()); }
