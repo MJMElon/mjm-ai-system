@@ -63,10 +63,35 @@ const DEFAULT_PLOT_QTY = {
    Shape: { nursery: { plot: qty } }. See PERSISTENCE LAYER below. */
 let plotQtyOverrides = {};
 function getPlotQtyOverrides(){ return plotQtyOverrides; }
+/* A nursery matched on its letters and digits alone, so "UNN 1" and UNN1 are
+   one nursery. The same rule the payroll register, the worker locations and
+   the Location card all use — see registerNurseryKey in npayroll_script.js.
+   Change one, change the other. */
+const qtyNurseryKey = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+/* The entry for one nursery out of a map keyed by nursery name, under
+   whatever spelling that map happens to use. */
+function aliasBucket(map, n) {
+  if (map && map[n] !== undefined && map[n] !== null) return map[n];
+  const want = qtyNurseryKey(n);
+  const k = Object.keys(map || {}).find(x => qtyNurseryKey(x) === want);
+  return k ? map[k] : null;
+}
+
+/* What one plot holds.
+   The capacity is keyed the way STOCK MANAGEMENT spells the nursery — "UNN 1"
+   with the space — because that is where the Setting page's list comes from
+   and migration_nops_capacity_to_stock.sql moved the rows onto those keys.
+   The schedule asks by its own key, "UNN1". Those are not the same string,
+   so every lookup for UNN 1 and UNN 2 missed and fell through to the
+   hardcoded table below: a capacity typed on the Setting page, saved, shown
+   as saved, and never used by the thing it governs.
+   (BNN was spelt the same both ways and worked, which is how it went unseen.) */
 function getPlotQty(n, p){
-  const ov = plotQtyOverrides;
-  if (ov[n]?.[p] !== undefined && ov[n][p] !== null) return +ov[n][p] || 0;
-  return DEFAULT_PLOT_QTY[n]?.[p] || 0;
+  const ov = aliasBucket(plotQtyOverrides, n);
+  if (ov && ov[p] !== undefined && ov[p] !== null) return +ov[p] || 0;
+  const def = aliasBucket(DEFAULT_PLOT_QTY, n);
+  return (def && +def[p]) || 0;
 }
 function setPlotQty(n, p, v){
   if (!plotQtyOverrides[n]) plotQtyOverrides[n] = {};
@@ -127,8 +152,12 @@ function calcMaxChem(seedlings, chemName, dose, unit, decimals = 2){
   const totalUnits = (seedlings / coverageFor(chemName)) * dose;
   return fmtUsage(totalUnits, unit, decimals);
 }
+/* capacityOf, not getPlotQty: a Pre Nursery plot is counted in TRAYS, and
+   asking it for a polybag figure answered zero for every plot it has. Every
+   PN schedule read "Total Seedlings —" and no chemical usage at all, which
+   is the one nursery where the arithmetic is least obvious by eye. */
 function sumSeedlings(nursery, plots, ticked){
-  return plots.filter(p => ticked(p)).reduce((s,p) => s + getPlotQty(nursery, p), 0);
+  return plots.filter(p => ticked(p)).reduce((s,p) => s + capacityOf(nursery, p), 0);
 }
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -1845,6 +1874,24 @@ function renderPeriodOwner(kind) {
 
 const getNursery = () => document.getElementById('global-nursery').value;
 
+/* ── Which nursery is being EDITED ─────────────────────────────────────
+   Not the same question as getNursery(), and the difference cost a day.
+
+   getNursery() reads the toolbar. On the Schedule tab the toolbar's nursery
+   control is HIDDEN — the summary shows every nursery at once, so there is
+   nothing for it to pick — and it holds whatever was last selected on some
+   other tab. The work editor, though, is opened per nursery from the
+   pencil on a summary row.
+
+   So every chemical chosen in that editor was written into the TOOLBAR's
+   nursery, and the redraw, which reads the editor's nursery, showed the old
+   chemical still sitting there. Choose Destroy, get Becker — and meanwhile
+   a nursery nobody had opened quietly had its schedule changed.
+
+   The editor's nursery wins whenever the editor is open. The old
+   full-width sheets, which do follow the toolbar, still get it. */
+const editNursery = () => (typeof _we !== 'undefined' && _we) ? _we.n : getNursery();
+
 /* ── MONTH/YEAR WHEEL PICKER (Android-style spinner) ──
    Two independently spinnable columns (month + year) with a Cancel/OK
    footer. Writes "YYYY-MM" into the hidden #global-month / #pdf-month
@@ -3072,7 +3119,7 @@ function mkDose(val, unit, onch) {
 ════════════════════════════ */
 function updatePDChem(w,f,v){
   if(!canEditSchedule) return;
-  const cfg = getState(getNursery(),getMonth()).pdConfig[w];
+  const cfg = getState(editNursery(),getMonth()).pdConfig[w];
   cfg[f] = v;
   /* The chosen chemical's own unit AND its own dose. The unit always
      followed; the dose did not, so picking Destroy over Becker changed the
@@ -3096,9 +3143,9 @@ function updatePDChem(w,f,v){
      never told. A chemical changed in the editor left the schedule still
      naming the old one until something else happened to repaint it. */
   try { renderSchedSummary(); } catch (_) {}
-  persistStateSoon(getNursery(), getMonth());
+  persistStateSoon(editNursery(), getMonth());
 }
-function updatePDDose(w,f,v){ if(!canEditSchedule) return; getState(getNursery(),getMonth()).pdConfig[w][f]=v; renderPD(); persistStateSoon(getNursery(), getMonth()); }
+function updatePDDose(w,f,v){ if(!canEditSchedule) return; getState(editNursery(),getMonth()).pdConfig[w][f]=v; renderPD(); persistStateSoon(editNursery(), getMonth()); }
 
 function renderPD() {
   /* The four sheets were removed from the Schedule tab — the summary's
@@ -3231,17 +3278,17 @@ function snapshotPdSaved(s){
 ════════════════════════════ */
 function updateManuringChem(ri, ci, v){
   if(!canEditSchedule) return;
-  const cfg = getState(getNursery(),getMonth()).manuringConfig[ri][ci];
+  const cfg = getState(editNursery(),getMonth()).manuringConfig[ri][ci];
   cfg.name = v;
   cfg.unit = getUnitForChem(v);
   renderManuring();
-  persistStateSoon(getNursery(), getMonth());
+  persistStateSoon(editNursery(), getMonth());
 }
 function updateManuringDose(ri, ci, v){
   if(!canEditSchedule) return;
-  getState(getNursery(),getMonth()).manuringConfig[ri][ci].dose = v;
+  getState(editNursery(),getMonth()).manuringConfig[ri][ci].dose = v;
   renderManuring();
-  persistStateSoon(getNursery(), getMonth());
+  persistStateSoon(editNursery(), getMonth());
 }
 function addManuringRound(){
   if(!canEditSchedule) return;
@@ -3506,7 +3553,7 @@ function toggleAllWeeding(r){
 ════════════════════════════ */
 function updateInterrowChem(ri, ci, v){
   if(!canEditSchedule) return;
-  const cfg = getState(getNursery(),getMonth()).interrowConfig[ri][ci];
+  const cfg = getState(editNursery(),getMonth()).interrowConfig[ri][ci];
   cfg.chem = v;
   cfg.chem_unit = getUnitForChem(v);
   /* Its own dose too, the same rule P&D follows: a dose belongs to the
@@ -3516,7 +3563,7 @@ function updateInterrowChem(ri, ci, v){
   if (d != null) cfg.chem_dose = d;
   renderInterrow();
   try { renderSchedSummary(); } catch (_) {}
-  persistStateSoon(getNursery(), getMonth());
+  persistStateSoon(editNursery(), getMonth());
 }
 
 /* Which activator goes in the tank with it. Until now there was a dose box
@@ -3525,20 +3572,20 @@ function updateInterrowChem(ri, ci, v){
    P&D picks Bond from, because that is what the Setting page holds them as. */
 function updateInterrowAct(ri, ci, v){
   if(!canEditSchedule) return;
-  const cfg = getState(getNursery(),getMonth()).interrowConfig[ri][ci];
+  const cfg = getState(editNursery(),getMonth()).interrowConfig[ri][ci];
   cfg.activator = v;
   cfg.activator_unit = getUnitForChem(v);
   const d = getDoseForChem(v);
   if (d != null) cfg.activator_dose = d;
   renderInterrow();
   try { renderSchedSummary(); } catch (_) {}
-  persistStateSoon(getNursery(), getMonth());
+  persistStateSoon(editNursery(), getMonth());
 }
 function updateInterrowDose(ri, ci, f, v){
   if(!canEditSchedule) return;
-  getState(getNursery(),getMonth()).interrowConfig[ri][ci][f] = v;
+  getState(editNursery(),getMonth()).interrowConfig[ri][ci][f] = v;
   renderInterrow();
-  persistStateSoon(getNursery(), getMonth());
+  persistStateSoon(editNursery(), getMonth());
 }
 function addInterrowRound(){
   if(!canEditSchedule) return;
@@ -5222,12 +5269,14 @@ let capEditing = false;
 let capDraft   = null;   // { nursery: { plots:{plot:number}, perTray:number } }
 
 function trayQty(n, p) {
-  return (plotTrays[n] && plotTrays[n][p] != null) ? +plotTrays[n][p] || 0 : 0;
+  // Keyed however Stock Management spelt the nursery — see getPlotQty.
+  const b = aliasBucket(plotTrays, n);
+  return (b && b[p] != null) ? +b[p] || 0 : 0;
 }
 
 /* What the dosage is worked out from, whichever way the plot is counted. */
 function capacityOf(n, p) {
-  return isPreNursery(n) ? trayQty(n, p) * (traySize[n] || 0) : getPlotQty(n, p);
+  return isPreNursery(n) ? trayQty(n, p) * (+aliasBucket(traySize, n) || 0) : getPlotQty(n, p);
 }
 
 /* The nurseries this block offers, and the plots under each. Both come from
