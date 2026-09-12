@@ -6117,7 +6117,19 @@ function plotsInWeek(kind, i, n, m) {
    asks, because its columns are the month's weeks rather than any one
    work's rounds. */
 function plotsAtSlot(kind, i, n, m) {
-  const s = appState[n]?.[m];
+  /* getState, NOT appState[n]?.[m].
+ 
+     Reading the bare object meant a month that had not been hydrated yet
+     answered "no plots" — and the initial load deliberately empties appState
+     so every month is rebuilt from what the database holds. So a saved
+     schedule drew its week columns (weeksOf goes through getState) and no
+     ticks under them, until something else hydrated the month. That
+     something was the Edit popup, which is why the ticks appeared only after
+     opening it and never before.
+ 
+     getState hydrates from the saved payload, is memoised per nursery and
+     month, and is what every other reader on this page already uses. */
+  const s = getState(n, m);
   if (!s) return [];
   const plots = NURSERY_PLOTS[n] || [];
   const out = [];
