@@ -87,9 +87,26 @@ function aliasBucket(map, n) {
    hardcoded table below: a capacity typed on the Setting page, saved, shown
    as saved, and never used by the thing it governs.
    (BNN was spelt the same both ways and worked, which is how it went unseen.) */
+/* What the SETTING PAGE calls this nursery — the row the office actually
+   types into. migration_nops_capacity_to_stock.sql deletes nothing, so a
+   database can hold two buckets for one nursery: the migrated "UNN 1" and
+   a leftover "UNN1". Matching on letters and digits alone would then pick
+   whichever came first, and picking the leftover means the schedule reads a
+   capacity that is not the one on screen. The one the office can see and
+   edit wins. */
+function qtyStockName(n){
+  try { const k = schedKey(n); return (k && stockLabel(k)) || n; }
+  catch (_) { return n; }
+}
+
 function getPlotQty(n, p){
-  const ov = aliasBucket(plotQtyOverrides, n);
-  if (ov && ov[p] !== undefined && ov[p] !== null) return +ov[p] || 0;
+  const ov = plotQtyOverrides;
+  const stock = qtyStockName(n);
+  for (const key of [stock, n]) {
+    if (key && ov[key] && ov[key][p] !== undefined && ov[key][p] !== null) return +ov[key][p] || 0;
+  }
+  const b = aliasBucket(ov, n);
+  if (b && b[p] !== undefined && b[p] !== null) return +b[p] || 0;
   const def = aliasBucket(DEFAULT_PLOT_QTY, n);
   return (def && +def[p]) || 0;
 }
@@ -5270,13 +5287,23 @@ let capDraft   = null;   // { nursery: { plots:{plot:number}, perTray:number } }
 
 function trayQty(n, p) {
   // Keyed however Stock Management spelt the nursery — see getPlotQty.
+  const stock = qtyStockName(n);
+  for (const key of [stock, n]) {
+    if (key && plotTrays[key] && plotTrays[key][p] != null) return +plotTrays[key][p] || 0;
+  }
   const b = aliasBucket(plotTrays, n);
   return (b && b[p] != null) ? +b[p] || 0 : 0;
 }
 
+function traySizeOf(n) {
+  const stock = qtyStockName(n);
+  for (const key of [stock, n]) if (key && traySize[key] != null) return +traySize[key] || 0;
+  return +aliasBucket(traySize, n) || 0;
+}
+
 /* What the dosage is worked out from, whichever way the plot is counted. */
 function capacityOf(n, p) {
-  return isPreNursery(n) ? trayQty(n, p) * (+aliasBucket(traySize, n) || 0) : getPlotQty(n, p);
+  return isPreNursery(n) ? trayQty(n, p) * traySizeOf(n) : getPlotQty(n, p);
 }
 
 /* The nurseries this block offers, and the plots under each. Both come from
