@@ -117,7 +117,10 @@ function getDoseForChem(name){
 }
 
 function calcMaxChem(seedlings, chemName, dose, unit, decimals = 2){
-  if(!seedlings || !chemName || chemName === '—' || !dose) return '—';
+  // A dose that is not a number cannot make an amount — see calcFertUsage.
+  dose = Number(dose);
+  if(!seedlings || !chemName || chemName === '—' ||
+     !Number.isFinite(dose) || dose <= 0) return '—';
   // Formula: (plot capacity / coverage per pump) × dose per pump / 1000.
   // The chemical's own coverage when it has one, the preset when it does not
   // — the same rule the Setting page shows.
@@ -234,7 +237,16 @@ function fertDoseFor(name, usage) {
 }
 
 function calcFertUsage(seedlings, fertName, doseGm, decimals = 2){
-  if (!seedlings || !fertName || fertName === '—' || !doseGm) return { kg:'—', bags:'—', totalGm:0 };
+  /* A dose that is not a number is not a dose. The old guard let anything
+     truthy through, so a dose keyed with a comma or a unit in it — "1,000",
+     "20g" — multiplied out to NaN and the schedule read "NaN kg · NaN bags",
+     which is worse than saying nothing: it looks like an amount. A figure
+     that cannot be worked out reads as not asked, like every other one on
+     this screen. */
+  const dose = Number(doseGm);
+  if (!seedlings || !fertName || fertName === '—' ||
+      !Number.isFinite(dose) || dose <= 0) return { kg:'—', bags:'—', totalGm:0 };
+  doseGm = dose;
   const f = fertByName(fertName);
   const info = f && f.bag_size_gm ? { bagSizeGm: +f.bag_size_gm, bagLabel: f.bag_label || '' } : null;
   const totalGm = seedlings * doseGm;
@@ -6022,7 +6034,18 @@ function workWeeks(n, m, kind) {
  * is dropped from the view rather than silently eating the earlier one's
  * ticks; addWeek below refuses to make one in the first place. */
 function weeksOf(n, m, kind) {
-  const s = appState[n]?.[m];
+  /* getState, NOT appState directly. The boot deliberately empties appState
+     once the database answers, so a nursery nobody has opened this session
+     has no entry in it — and reading appState answered "no weeks" for a
+     nursery whose schedule was sitting in dbStateCache the whole time.
+
+     On the summary that showed as "0 WEEKS · No weeks set yet" beside a
+     nursery that HAS a schedule, and hid a month carried forward from the
+     last one that was set, which is the whole point of carrying it forward.
+     getState hydrates from the cache and falls back to the carry, which is
+     what every other reader on this page already goes through — the same
+     mistake plotsAtSlot was making. */
+  const s = getState(n, m);
   if (!s) return [];
   const days = daysInMonthLabel(m);
   let list;
@@ -6302,43 +6325,41 @@ function summaryTable(it, m) {
       </div>
       <div class="tbl-wrap"><table class="ss-table">
         <thead>${head}</thead><tbody>${rows}</tbody></table></div>
-      ${totalsBlock(n, m)}
     </div>`;
 }
 
 /* ── How much to draw from the store ───────────────────────────────────
-   The tick grid above says WHERE each work happens. This says what it
-   costs: plots, seedlings, and the chemical and sticker to cover them.
+   The tick grid says WHERE a work happens. This says what it costs: plots,
+   seedlings, and the chemical and sticker to cover them.
 
-   One table per work rather than one for the nursery, because the figures
-   only mean anything under the chemical they were worked out from, and a
-   work's chemical changes from week to week. A work with no weeks in this
-   month is left out entirely — a table of dashes is not information. */
-function totalsBlock(n, m) {
-  const tables = WORKS.map(work => {
-    const weeks = weeksOf(n, m, work.key);
-    if (!weeks.length) return '';
-    const cols = [];
-    weeks.forEach(w => weCols(work.key, w.slot, n, m)
-      .forEach(c => cols.push({ slot: w.slot, c })));
-    if (!cols.length) return '';
+   ONE WORK, not the nursery. The figures only mean anything under the
+   chemical they were worked out from, and a work's chemical changes from
+   week to week — so this is drawn inside that work's own expanded panel,
+   under the plots it counted. It used to sit in a block at the foot of the
+   card, four tables deep and away from the ticks each one was the sum of.
 
-    const per = cols.map(x => weColTotals(work.key, x.slot, x.c.ci, n, m));
-    // Every column of one work asks the same questions, so row 0 names them.
-    const labels = per[0].map(r => r.label);
-    const head = '<tr><th class="st-lbl">' + esc(work.label) + '</th>' +
-      cols.map(x => '<th><span class="st-wk">Week ' + (x.slot + 1) + '</span>' +
-        '<span class="st-what">' + esc(x.c.val || x.c.label) + '</span></th>').join('') +
-      '</tr>';
-    const body = labels.map((lb, r) => '<tr><td class="st-lbl">' + esc(lb) + '</td>' +
-      per.map(p => '<td>' + esc(String(p[r].value)) + '</td>').join('') + '</tr>').join('');
-    return '<div class="tbl-wrap"><table class="st-table">' +
-      '<thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
-  }).filter(Boolean);
+   Empty string when the work has no week in this month: a table of dashes
+   is not information. */
+function workTotalsTable(n, kind, m) {
+  const work = WORKS.find(w => w.key === kind);
+  const weeks = weeksOf(n, m, kind);
+  if (!work || !weeks.length) return '';
+  const cols = [];
+  weeks.forEach(w => weCols(kind, w.slot, n, m)
+    .forEach(c => cols.push({ slot: w.slot, c })));
+  if (!cols.length) return '';
 
-  if (!tables.length) return '';
-  return '<div class="ss-tot"><div class="ss-tot-h">Totals for ' + esc(m) + '</div>' +
-    tables.join('') + '</div>';
+  const per = cols.map(x => weColTotals(kind, x.slot, x.c.ci, n, m));
+  // Every column of one work asks the same questions, so row 0 names them.
+  const labels = per[0].map(r => r.label);
+  const head = '<tr><th class="st-lbl">' + esc(work.label) + '</th>' +
+    cols.map(x => '<th><span class="st-wk">Week ' + (x.slot + 1) + '</span>' +
+      '<span class="st-what">' + esc(x.c.val || x.c.label) + '</span></th>').join('') +
+    '</tr>';
+  const body = labels.map((lb, r) => '<tr><td class="st-lbl">' + esc(lb) + '</td>' +
+    per.map(p => '<td>' + esc(String(p[r].value)) + '</td>').join('') + '</tr>').join('');
+  return '<div class="tbl-wrap st-wrap"><table class="st-table">' +
+    '<thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
 }
 
 /* ── What "expand" shows ───────────────────────────────────────────────
@@ -6392,7 +6413,17 @@ function expandedPlots(n, kind, m, blocks) {
       `<td class="xp-tot">${nOn || ''}</td></tr>`;
   }).join('');
 
-  return head + body;
+  /* And what those ticks come to. It sits at the foot of the plots it
+     counted rather than at the foot of the card, so the answer is beside
+     the question. A nested table in a colspan cell sets its own column
+     widths — which is exactly what is wanted here, since the totals have
+     one column per CHEMICAL and the grid above has one per week. */
+  const tot = workTotalsTable(n, kind, m);
+  const foot = tot
+    ? `<tr class="ss-detail xp-sum"><td colspan="${span}">${tot}</td></tr>`
+    : '';
+
+  return head + body + foot;
 }
 
 function toggleSummaryRow(n, kind) {

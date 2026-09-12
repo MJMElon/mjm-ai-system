@@ -1232,13 +1232,12 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 .we-table tfoot td.we-plot{text-align:left;padding-left:14px;font-weight:900;
   font-size:10.5px;letter-spacing:.3px;text-transform:uppercase;color:var(--text-muted);}
 
-/* ── The same figures under the summary table ──────────────────────────
+/* ── The same figures, inside the work's own expanded panel ────────────
    One table per work, because a figure only means something under the
    chemical it was worked out from, and that changes week to week. */
-.ss-tot{margin:14px 0 4px;padding-top:12px;border-top:1px dashed var(--border);}
-.ss-tot-h{font-size:11px;font-weight:900;letter-spacing:.7px;text-transform:uppercase;
-  color:var(--text-muted);margin-bottom:8px;}
-.st-table{width:100%;border-collapse:collapse;margin-bottom:12px;
+.ss-detail.xp-sum > td{padding:0 0 12px;background:#fbfdfc;}
+.st-wrap{margin:2px 10px 0;padding-top:10px;border-top:1px dashed var(--border);}
+.st-table{width:100%;border-collapse:collapse;
   font-size:12px;background:#fff;}
 .st-table th,.st-table td{border:1px solid var(--border);padding:6px 9px;
   text-align:center;white-space:nowrap;}
