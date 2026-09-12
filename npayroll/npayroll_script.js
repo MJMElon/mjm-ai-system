@@ -30,7 +30,20 @@ const SECTIONS = [
   { code:'Driver', name:'Driver'               }
 ];
 const SECTION_NAME = Object.fromEntries(SECTIONS.map(s => [s.code, s.name]));
-const NURSERY_FULL = { PN:'Pre Nursery', BNN:'Batu Niah Nursery', UNN1:'Ulu Niah Nursery 1', UNN2:'Ulu Niah Nursery 2' };
+/* The names shown on the claim and its PDF.
+ 
+   The written-out name wins where there is one. Facility Management stores a
+   nursery's CODE as its name — the cards read "BNN", "UNN 1" — so preferring
+   the register turned "BNN — Batu Niah Nursery" into "BNN — BNN" and told the
+   reader nothing. The register answers for nurseries this module has never
+   heard of, which is the case that needed it: a UNN 3 created there gets
+   "UNN3 — UNN 3" rather than no name at all. */
+const NURSERY_FULL_BUILTIN = { PN:'Pre Nursery', BNN:'Batu Niah Nursery',
+                               UNN1:'Ulu Niah Nursery 1', UNN2:'Ulu Niah Nursery 2' };
+const NURSERY_FULL = new Proxy({}, {
+  get: (_, k) => NURSERY_FULL_BUILTIN[k] || NURSERY_REGISTER[k],
+  has: (_, k) => k in NURSERY_FULL_BUILTIN || k in NURSERY_REGISTER,
+});
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 let workers   = [];    // mjmnpayroll_workers
@@ -48,7 +61,82 @@ let maint = { records: [], ticks: {}, rates: {}, workers: {}, localWorkers: {} }
    same way here, or the salary claim would price a different set of names than
    the sheet it is priced from shows. Kept identical to isGeneralWorker in
    nursery_ops/plot_maintenance_script.js. */
-const MAINT_NURSERIES = ['PN', 'BNN', 'UNN1', 'UNN2'];
+/* WHICH NURSERIES THERE ARE.
+ 
+   The register is Facility Management — Manage Nurseries & Base Maps, which
+   writes operation_nurseries. That is the one place a nursery is created, so
+   it is the one place this list should come from: add UNN 3 there next year
+   and it appears here, on the claim and in its dropdown, without anybody
+   editing a file.
+ 
+   The four below are a FLOOR, not the list. They are what this module has
+   always had, kept so a register that cannot be read — RLS, a dropped
+   connection, a table not created yet — leaves the payroll working on the
+   nurseries it already knew rather than showing an empty dropdown. A nursery
+   in the register is added to them; none is ever taken away by a failed read.
+ 
+   The code is the name with the spaces taken out, which is how the rest of
+   the system keys a nursery: "UNN 1" in the register is UNN1 here, and
+   matches the section on a worker's row. Same rule as registerNurseryKey
+   below. */
+const MAINT_NURSERIES_FLOOR = ['PN', 'BNN', 'UNN1', 'UNN2'];
+let MAINT_NURSERIES = MAINT_NURSERIES_FLOOR.slice();
+
+/* code → the name Facility Management gave it, for headings and the PDF. */
+let NURSERY_REGISTER = {};
+
+const nurseryCode = (name) =>
+  String(name == null ? '' : name).replace(/[^a-z0-9]/gi, '').toUpperCase();
+
+/* Is this one a place maintenance work is done, or the Estate?
+ 
+   The Estate is a section of the payroll register and a location on System
+   Setting, but it is not a nursery sheet — there are no plots on it and no
+   rounds to spray. Decided by shared_worker_locations.js, the file the Team
+   Board and the Location card already use, so all three agree about where a
+   section sits. Without that file loaded, everything in the register counts,
+   which is the old behaviour. */
+function isMaintNursery(code) {
+  const L = window.MJMWorkerLocations;
+  if (!L || typeof L.locationOf !== 'function') return true;
+  const loc = L.locationOf(code);
+  return !!loc && loc.key !== 'estate';
+}
+
+async function loadNurseryRegister() {
+  const res = await _supabase.from('operation_nurseries').select('name, license')
+    .order('name').then(r => r, e => ({ error: e }));
+  if (res.error || !res.data) {
+    console.warn('[npayroll] the nursery register could not be read, so the '
+      + 'built-in list stands:', res.error && res.error.message);
+    return;
+  }
+  const reg = {};
+  res.data.forEach((r) => {
+    const c = nurseryCode(r.name);
+    if (c) reg[c] = String(r.name || '').trim();
+  });
+  NURSERY_REGISTER = reg;
+  /* The floor first, so nothing this module has always offered disappears
+     because somebody has not added it to Facility Management yet. */
+  const all = MAINT_NURSERIES_FLOOR.concat(Object.keys(reg));
+  MAINT_NURSERIES = [...new Set(all)].filter(isMaintNursery);
+  fillMaintNurseries();
+}
+
+/* The claim's nursery dropdown, from the register. Keeps whatever was chosen
+   if that nursery is still there — the read lands after the first paint, and
+   rebuilding the list must not quietly move somebody to another nursery. */
+function fillMaintNurseries() {
+  const el = $('maint-nursery');
+  if (!el) return;
+  const want = el.value;
+  el.innerHTML = MAINT_NURSERIES
+    .map(c => `<option value="${esc(c)}">${esc(c + ' — ' + (NURSERY_FULL[c] || c))}</option>`)
+    .join('');
+  el.value = MAINT_NURSERIES.includes(want) ? want
+           : (MAINT_NURSERIES.includes('BNN') ? 'BNN' : (MAINT_NURSERIES[0] || ''));
+}
 
 /* The roles a worker can hold. One list, offered in every section. */
 const ROLES = [
@@ -68,6 +156,28 @@ const MAINT_ROLE       = /^general\s*worker$|pekerja am|buruh am/i;
    text or blank. */
 const NON_GENERAL_ROLE = /driver|pemandu|conductor|kondektor|konduktor|supervisor|penyelia|mandor|mandur|kepala|kerani|clerk|admin|manager|pengurus|executive|eksekutif|mekanik|mechanic|technician|juruteknik|security|pengawal|jaga|foreman|operator|storekeeper|storeman/i;
 
+/* WHICH SHEET A REGISTER ROW BELONGS TO.
+ 
+   Compared on letters and digits alone, and NOT as an exact string. The two
+   sides have always spelt a nursery differently: the sheets key on UNN1, and
+   the register is filled in by hand and says "UNN 1". An exact match therefore
+   found BNN and PN — which have no space in them — and silently found NOBODY
+   for UNN 1 or UNN 2, so those two nurseries priced an empty claim while
+   looking perfectly normal.
+ 
+   `nursery` answers when `section` has not been filled in: the register copies
+   one into the other, but a row added since is only guaranteed to have the one
+   whoever keyed it happened to use.
+ 
+   SHARED RULE. The same comparison is _registerNurseryKey in
+   nursery_ops/plot_maintenance_script.js, which resolves the very same list
+   for the Worker Record these claims are priced from. Change one, change the
+   other — two spellings of this rule is two different worker lists. */
+function registerNurseryKey(w) {
+  const key = (x) => String(x == null ? '' : x).replace(/[^a-z0-9]/gi, '').toUpperCase();
+  return key(w && w.section) || key(w && w.nursery);
+}
+
 const roleOf = w => String(w.role || w.job_title || '').trim();
 const isKnownRole = r => ROLES.some(x => x.toLowerCase() === String(r).trim().toLowerCase());
 
@@ -86,13 +196,13 @@ function isGeneralWorker(w, nurseryNamesTheRole) {
 }
 /* Does this nursery label its general workers by role? */
 function nurseryNamesRole(n) {
-  return workers.some(w => String(w.section || '').trim().toUpperCase() === n &&
+  return workers.some(w => registerNurseryKey(w) === n &&
                            w.active !== false && MAINT_ROLE.test(roleOf(w)));
 }
 /* Is this worker on the Work Maintenance sheets? Used by the list and the
    worker form, so what is shown is what the sheets actually do. */
 function onMaintSheet(w) {
-  const n = String(w.section || '').trim().toUpperCase();
+  const n = registerNurseryKey(w);
   if (!MAINT_NURSERIES.includes(n)) return false;
   return isGeneralWorker(w, nurseryNamesRole(n));
 }
@@ -102,7 +212,7 @@ function resolveMaintWorkers() {
   MAINT_NURSERIES.forEach(n => {
     const named = nurseryNamesRole(n);
     const linked = [...new Set(workers
-      .filter(w => String(w.section || '').trim().toUpperCase() === n)   // UNE, Driver excluded
+      .filter(w => registerNurseryKey(w) === n)   // UNE, Driver excluded
       .filter(w => isGeneralWorker(w, named))
       .map(w => String(w.full_name || '').trim())
       .filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -155,7 +265,7 @@ function applyPageAccess() {
       if (b) b.style.display = 'none';
     }
   });
-  const payrollSubs = ['maint', 'transpl', 'seedling', 'monthly'];
+  const payrollSubs = ['maint', 'transpl', 'seedling', 'other', 'monthly'];
   if (!payrollSubs.some(may)) {
     const b = document.querySelector('.tab[data-tab="payroll"]');
     if (b) b.style.display = 'none';
@@ -188,6 +298,7 @@ function refreshPayrollTab() {
   if (s === 'maint')    renderMaint();
   if (s === 'transpl')  renderEntries('transplanting');
   if (s === 'seedling') renderEntries('seedlings');
+  if (s === 'other')    renderEntries('other');
   if (s === 'monthly')  renderMonthly();
 }
 
@@ -365,7 +476,11 @@ async function removeRate(id) {
 /* ════════════ TRANSPLANTING / SEEDLINGS ════════════ */
 const SHEET = {
   transplanting: { table:'transpl-table',  section:'transpl-section',  title:'Transplanting' },
-  seedlings:     { table:'seedling-table', section:'seedling-section', title:'Seedlings Collection' }
+  seedlings:     { table:'seedling-table', section:'seedling-section', title:'Seedlings Collection' },
+  /* Piece work that is none of the other three. The category value is `other`,
+     which is what the Piece Rate screen's "Used For" has always offered — so a
+     rate keyed against Other now has a sheet to price. */
+  other:         { table:'other-table',    section:'other-section',    title:'Others' }
 };
 
 function renderEntries(category) {
@@ -414,7 +529,11 @@ const fmtDay = d => {
 
 let editEntryId = null, entryCategory = null;
 function openEntry(category, id) {
-  const page = category === 'transplanting' ? 'transpl' : 'seedling';
+  /* Which User Access page decides whether this may be keyed. One per sheet;
+     a sheet answering to another sheet's tick would grant access nobody
+     granted. */
+  const page = { transplanting: 'transpl', seedlings: 'seedling', other: 'other' }[category]
+            || 'seedling';
   if (!mayDo(page, 'manage',
       'You do not have permission to key in this work. Ask an admin to grant it in User Access.')) return;
   if (!_tablesOk) { alert('Set the database up first — see the notice at the top.'); return; }
@@ -623,11 +742,11 @@ function monthlyRows() {
   const monthTxt = maintMonthLabel(month);
 
   // Start from the payroll's own worker list.
-  const rows = new Map();      // key → { name, section, maint, transpl, seedling }
+  const rows = new Map();      // key → { name, section, maint, transpl, seedling, other }
   const keyFor = (name, section) => `${section}${name.toLowerCase()}`;
   const touch = (name, section) => {
     const k = keyFor(name, section);
-    if (!rows.has(k)) rows.set(k, { name, section, maint: 0, transpl: 0, seedling: 0 });
+    if (!rows.has(k)) rows.set(k, { name, section, maint: 0, transpl: 0, seedling: 0, other: 0 });
     return rows.get(k);
   };
 
@@ -670,10 +789,14 @@ function monthlyRows() {
     const row = touch(w.full_name, w.section || '');
     if (e.category === 'transplanting') row.transpl  += Number(e.amount || 0);
     if (e.category === 'seedlings')     row.seedling += Number(e.amount || 0);
+    /* Counted like any other sheet. Leaving it out of the total would be the
+       worst kind of wrong: the Others sheet would show the work priced and the
+       month's pay would quietly not include it. */
+    if (e.category === 'other')         row.other    += Number(e.amount || 0);
   });
 
   return [...rows.values()]
-    .map(r => ({ ...r, total: r.maint + r.transpl + r.seedling }))
+    .map(r => ({ ...r, total: r.maint + r.transpl + r.seedling + r.other }))
     .filter(r => r.total > 0 || !secFilter)
     .sort((a, b) => (a.section || '').localeCompare(b.section || '') || a.name.localeCompare(b.name));
 }
@@ -688,24 +811,27 @@ function renderMonthly() {
       <td>${r.maint    ? money(r.maint)    : '—'}</td>
       <td>${r.transpl  ? money(r.transpl)  : '—'}</td>
       <td>${r.seedling ? money(r.seedling) : '—'}</td>
+      <td>${r.other    ? money(r.other)    : '—'}</td>
       <td class="money">${money(r.total)}</td>
     </tr>`).join('')
-    : `<tr><td colspan="7" class="empty">Nothing earned in ${esc(monthLabel(monthValue()))} yet.</td></tr>`;
+    : `<tr><td colspan="8" class="empty">Nothing earned in ${esc(monthLabel(monthValue()))} yet.</td></tr>`;
 
   const sum = k => list.reduce((s, r) => s + r[k], 0);
   $('monthly-table').innerHTML = `
     <thead><tr>
       <th style="width:44px;">No.</th><th class="l">Worker</th><th style="width:90px;">Section</th>
       <th style="width:140px;">Work Maintenance</th><th style="width:130px;">Transplanting</th>
-      <th style="width:150px;">Seedlings Collection</th><th style="width:130px;">Total</th>
+      <th style="width:150px;">Seedlings Collection</th><th style="width:110px;">Others</th>
+      <th style="width:130px;">Total</th>
     </tr></thead>
     <tbody>${rows}</tbody>
     ${list.length ? `<tfoot><tr><td class="l" colspan="3">GRAND TOTAL — ${esc(monthLabel(monthValue()))}</td>
       <td>${money(sum('maint'))}</td><td>${money(sum('transpl'))}</td>
-      <td>${money(sum('seedling'))}</td><td>${money(sum('total'))}</td></tr></tfoot>` : ''}`;
+      <td>${money(sum('seedling'))}</td><td>${money(sum('other'))}</td>
+      <td>${money(sum('total'))}</td></tr></tfoot>` : ''}`;
 
   $('monthly-note').textContent =
-    'Work Maintenance is read from the Nursery Operation module and matched to a worker by name; Transplanting and Seedlings Collection come from the sheets keyed here.';
+    'Work Maintenance is read from the Nursery Operation module and matched to a worker by name; Transplanting, Seedlings Collection and Others come from the sheets keyed here.';
 }
 
 /* ════════════ PDF ════════════ */
@@ -834,7 +960,10 @@ function downloadMonthlyPDF() {
   if (!list.length) { alert('Nothing earned this month yet.'); return; }
   const sec = $('monthly-section').value;
   const doc = pdfDoc();
-  const COL = [8, 46, 18, 24, 22, 24, 25];       // 167 → fits 160 after trim
+  /* Eight columns now: Others sits between Seedlings Collection and Total.
+     The widths are proportions — they are scaled to 160mm below — so the room
+     for it comes out of the others rather than off the edge of the page. */
+  const COL = [8, 42, 16, 23, 21, 23, 19, 24];   // 176 → fits 160 after trim
   const total = COL.reduce((a, b) => a + b, 0);
   const scale = 160 / total;
   const C = COL.map(w => w * scale);
@@ -844,7 +973,7 @@ function downloadMonthlyPDF() {
   const drawHead = () => {
     let y = pdfTitle(doc, ['MONTHLY PAYROLL', sec ? (SECTION_NAME[sec] || sec) : 'All Sections', `Month ${monthLabel(monthValue())}`]);
     const H = 13;
-    ['No.', 'Worker Name', 'Section', 'Work Maintenance', 'Transplanting', 'Seedlings Collection', 'Total (RM)']
+    ['No.', 'Worker Name', 'Section', 'Work Maintenance', 'Transplanting', 'Seedlings Collection', 'Others', 'Total (RM)']
       .forEach((t, i) => pdfCell(doc, X[i], y, C[i], H, t, { bold: true, size: 7.5, fill: HF }));
     return y + H;
   };
@@ -858,15 +987,17 @@ function downloadMonthlyPDF() {
                    r.maint ? 'RM ' + r.maint.toFixed(2) : '—',
                    r.transpl ? 'RM ' + r.transpl.toFixed(2) : '—',
                    r.seedling ? 'RM ' + r.seedling.toFixed(2) : '—',
+                   r.other ? 'RM ' + r.other.toFixed(2) : '—',
                    'RM ' + r.total.toFixed(2)];
     cells.forEach((t, k) => pdfCell(doc, X[k], y, C[k], RH, t,
-      { size: k === 1 ? 8.5 : 8, bold: k === 6, nowrap: k !== 1, fill: z }));
+      { size: k === 1 ? 8.5 : 8, bold: k === cells.length - 1, nowrap: k !== 1, fill: z }));
     y += RH;
   });
 
   const sum = k => list.reduce((s, r) => s + r[k], 0);
   const foot = ['', 'GRAND TOTAL', '', 'RM ' + sum('maint').toFixed(2), 'RM ' + sum('transpl').toFixed(2),
-                'RM ' + sum('seedling').toFixed(2), 'RM ' + sum('total').toFixed(2)];
+                'RM ' + sum('seedling').toFixed(2), 'RM ' + sum('other').toFixed(2),
+                'RM ' + sum('total').toFixed(2)];
   foot.forEach((t, k) => pdfCell(doc, X[k], y, C[k], RH + 1, t, { bold: true, size: 8, nowrap: k !== 1, fill: TF }));
   y += RH + 1;
   pdfFooterNote(doc, y);
@@ -993,8 +1124,12 @@ $('global-month').addEventListener('change', async () => {
 
     fillSectionSelect($('transpl-section'),  true, '');
     fillSectionSelect($('seedling-section'), true, '');
+    fillSectionSelect($('other-section'),    true, '');
     fillSectionSelect($('monthly-section'),  true, '');
 
+    /* The register first: the dropdown, the headings and which sheets exist
+       all read it, so everything after this should see the real list. */
+    await loadNurseryRegister();
     await Promise.all([loadWorkers(), loadRates(), loadEntries(), loadMaint()]);
     resolveMaintWorkers();
 
@@ -1012,8 +1147,8 @@ $('global-month').addEventListener('change', async () => {
     try { tab = localStorage.getItem('npayroll_tab') || tab; sub = localStorage.getItem('npayroll_sub') || sub; } catch (_) {}
     // A remembered tab this user may no longer open would leave them on a
     // blank screen, so fall back to the first one they can.
-    if (!may(sub)) sub = firstOpen(['maint', 'transpl', 'seedling', 'monthly']) || sub;
-    const tabOpen = { payroll: !!firstOpen(['maint','transpl','seedling','monthly']),
+    if (!may(sub)) sub = firstOpen(['maint', 'transpl', 'seedling', 'other', 'monthly']) || sub;
+    const tabOpen = { payroll: !!firstOpen(['maint','transpl','seedling','other','monthly']),
                       workers: may('workers'), rates: may('rates') };
     if (!tabOpen[tab]) tab = ['payroll','workers','rates'].find(t => tabOpen[t]) || tab;
     if ($('sub-' + sub)) switchSub(sub);

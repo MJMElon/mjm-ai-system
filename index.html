@@ -466,16 +466,85 @@
   // the hub never appeared.
   const _isRecoveryLink = _hash.includes('type=recovery');
 
-  // ── Session gate: require fresh login on new window (skip when the URL
-  //    carries a session) ──
-  if (!_hashHasToken && !sessionStorage.getItem('mjm_session_active')) {
-    Object.keys(localStorage).forEach(k => { if (k.startsWith('sb-')) localStorage.removeItem(k); });
-    localStorage.removeItem('mjm_user');
-  }
+  /* ── SIGNED IN IS A STATE YOU STAY IN ─────────────────────────────────
+     There used to be a session gate here: no `mjm_session_active` in
+     sessionStorage and the sign-in was wiped — the Supabase tokens and
+     mjm_user with them.
+
+     sessionStorage dies with the tab. So every closed browser, every new
+     window, every phone that put itself to sleep long enough signed
+     everybody out and asked for a password again. And it did something
+     worse than annoy: it deleted the only thing an offline start could have
+     worked from. A Field Conductor opening the portal in a plot with no
+     signal had no token to read, no permissions to fall back on, and a login
+     screen that cannot be completed without a network. The portal was
+     unusable in exactly the place it is for.
+
+     It is gone. The session now lives until somebody ends it — Sign Out,
+     which clears all of this and revokes the refresh token server-side, or
+     the server revoking the account, which raises SIGNED_OUT and is still
+     honoured below.
+
+     WHAT THIS COSTS, stated plainly: on a SHARED office machine the next
+     person to open the browser arrives inside the last person's session.
+     That was already true for as long as a tab stayed open; it is now true
+     after the tab is closed too. Sign Out is what ends it, and on a shared
+     machine it has to be pressed. */
 
   const SUPABASE_URL = 'https://kibqjztozokohqmhqqqf.supabase.co';
   const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpYnFqenRvem9rb2hxbWhxcXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQzNjIsImV4cCI6MjA4OTgxMDM2Mn0.J7qJUZhWXYf5b9oey4wXJkjdi66jomEMw_NeV9NWF7M';
   const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  /* The session supabase-js has in this browser, read straight out of
+     storage rather than asked for.
+
+     onAuthStateChange hands over a null session for two very different
+     reasons: nobody is signed in, or a token needed refreshing and the
+     refresh could not be made — which is every offline start. Treating the
+     second as "not signed in" puts a login screen in front of somebody who
+     cannot complete one, on a device that has their session in storage.
+
+     An expired token is trusted on purpose: a stale token goes nowhere
+     without a network to carry it, and with one supabase-js refreshes it in
+     the background. A refresh token the server actually REFUSED raises
+     SIGNED_OUT, and that is still obeyed.
+
+     SHARED RULE — the same read is _cachedSession() in
+     shared/shared_access.js and cachedSession() in Barcode_Counter
+     src/context/AuthContext.jsx. Change one, change the others. */
+  function _cachedSession() {
+    try {
+      const key = Object.keys(localStorage).find(k => /^sb-.+-auth-token$/.test(k));
+      if (!key) return null;
+      const raw = JSON.parse(localStorage.getItem(key));
+      const s = (raw && (raw.currentSession || raw)) || null;
+      if (!s || !s.access_token || !s.user || !s.user.id) return null;
+      return s;
+    } catch (e) { return null; }
+  }
+
+  /* The last profile this device was given, per account. Written on every
+     good read, used when the read cannot be made at all.
+
+     Without it an offline hub is a hub with no tiles: applyModuleVisibility
+     is handed null, and a person who is signed in and entitled is shown an
+     empty building. The same key shared/shared_access.js writes, so both
+     doors into this site remember the same thing. */
+  const _LAST_PROFILE = uid => 'mjm_perm_last__' + uid;
+
+  function _lastKnownProfile(uid) {
+    try {
+      const rec = JSON.parse(localStorage.getItem(_LAST_PROFILE(uid)));
+      return (rec && rec.data) || null;
+    } catch (e) { return null; }
+  }
+
+  function _keepProfile(uid, data) {
+    try {
+      if (data) localStorage.setItem(_LAST_PROFILE(uid),
+        JSON.stringify({ ts: Date.now(), data }));
+    } catch (e) { /* private mode / quota — silent */ }
+  }
 
   const _STAFF_MODULE_VALUES = ['admin','normal','view','edit','manage','read','write','full','staff'];
   function hasOpsAccess(profile) {
@@ -630,6 +699,12 @@
     sessionStorage.removeItem('mjm_session_active');
     Object.keys(localStorage).forEach(k => { if (k.startsWith('sb-')) localStorage.removeItem(k); });
     localStorage.removeItem('mjm_user');
+    /* The remembered permissions go too. They are what an offline start
+       draws the hub from, so leaving them behind on a shared office machine
+       would hand the next person the last one's tiles. This is now the ONLY
+       thing that clears them — nothing else may, or the sign-in stops
+       surviving a closed browser, which is the whole point. */
+    Object.keys(localStorage).forEach(k => { if (k.startsWith('mjm_perm_last__')) localStorage.removeItem(k); });
     try { await _supabase.auth.signOut({ scope: 'local' }); } catch(e) {}
     showAuth();
     resetAuthForm();
@@ -756,24 +831,43 @@
       recoveryFields.classList.remove('hidden'); return;
     }
     if (isRecovering) return;
-    if (event === 'SIGNED_OUT' || !session) { showAuth(); return; }
-    if (session) {
+    /* A real sign-out is the event, not the empty session. SIGNED_OUT is
+       raised for a pressed Sign Out and for a refresh token the server
+       refused; a null session on any other event is usually just a refresh
+       that could not be made, and the token is still in storage. */
+    if (event === 'SIGNED_OUT') { showAuth(); return; }
+    const sess = session || _cachedSession();
+    if (!sess) { showAuth(); return; }
+    if (sess) {
       let canEnter = true;
       let profile  = null;
       try {
         const resp = await _supabase
           .from('shared_profiles')
           .select('*')
-          .eq('id', session.user.id)
+          .eq('id', sess.user.id)
           .maybeSingle();
         profile = resp && resp.data;
+        if (profile) _keepProfile(sess.user.id, profile);
         canEnter = hasOpsAccess(profile);
-        console.log('[ops-gate]', { email: session.user.email, canEnter, profile, error: resp && resp.error });
+        console.log('[ops-gate]', { email: sess.user.email, canEnter, profile, error: resp && resp.error });
       } catch (e) {
         console.warn('[ops-gate] profile read threw (failing open):', e);
       }
+      /* Could not be read — no signal, almost always. Fall back to the last
+         answer this device was given rather than to nothing: a null profile
+         draws a hub with only the always-open tiles on it, which is not what
+         this person has, it is what this page failed to find out. */
+      if (!profile) {
+        const last = _lastKnownProfile(sess.user.id);
+        if (last) {
+          profile = last;
+          canEnter = hasOpsAccess(last);
+          console.info('[ops-gate] using the last known profile for this account');
+        }
+      }
       if (!canEnter) {
-        document.getElementById('pending-email').textContent = session.user.email || '—';
+        document.getElementById('pending-email').textContent = sess.user.email || '—';
         authScreen.style.display = 'none';
         hubScreen.style.display = 'none';
         document.getElementById('pending-screen').style.display = 'flex';
@@ -781,7 +875,7 @@
         return;
       }
 
-      welcomeText.innerText = session.user.user_metadata?.full_name || session.user.email;
+      welcomeText.innerText = sess.user.user_metadata?.full_name || sess.user.email;
       sessionStorage.setItem('mjm_session_active', '1');
       /* The profile just read, written out whole.
          This used to store only the email and a hardcoded role of 'staff',
@@ -792,11 +886,11 @@
          by. Same shape the audit login writes, so both doors leave the app
          in the same state. */
       const _fullName = profile?.full_name ||
-                        session.user.user_metadata?.full_name ||
-                        session.user.email;
+                        sess.user.user_metadata?.full_name ||
+                        sess.user.email;
       localStorage.setItem('mjm_user', JSON.stringify({
-        id:          session.user.id,
-        email:       session.user.email,
+        id:          sess.user.id,
+        email:       sess.user.email,
         full_name:   _fullName,
         name:        _fullName,
         role:        profile?.role || 'staff',

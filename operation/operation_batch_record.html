@@ -118,7 +118,7 @@
 
             <div class="flex items-center gap-2 bg-white p-2 rounded-2xl border border-[#e8dcc8] shadow-inner mb-6 w-fit overflow-x-auto">
                 <button id="tab-active" class="list-tab-btn list-tab-active" onclick="switchListTab('active')">🟢 Active</button>
-                <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="Batch is moved here automatically only when every transplanted plot has a 3rd Culling entry saved (partial entries stay in Active)">✅ Completed / In-Active</button>
+                <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="A batch moves here automatically once every plot has nothing left standing in it — 3rd culled less drone map quantity is nought. A plot all sold out is nought either way. Any plot still carrying a balance keeps the batch in Active.">✅ Completed / In-Active</button>
                 <button id="tab-amendment" class="list-tab-btn list-tab-inactive" onclick="switchListTab('amendment')" title="Batches with at least one report tab rejected by HQ — open the batch to see the rejection remark and amend the report">🔴 Amendment Needed</button>
                 <button id="tab-reserved" class="list-tab-btn list-tab-inactive" onclick="switchListTab('reserved')" title="Plots holding seedlings transferred in the 3rd Culling report. A batch's transfers drop off this list once the batch is sold out.">🅿️ Plot Reserved Status</button>
             </div>
@@ -241,7 +241,11 @@
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '2nd_Culling').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change, plot_name, remark').eq('transaction_type', '3rd_Culling').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, plot_name, transaction_type, quantity_change').in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']).order('id', { ascending: true })),
-                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name').eq('transaction_type', 'Review_Rejection').order('id', { ascending: true })),
+                    // plot_name carries WHICH report was rejected — a stage key,
+                    // or `stage::rowKey` for a rejection against one row. Asking
+                    // for it costs nothing and is the difference between "this
+                    // batch needs amendment somewhere" and naming the tab.
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, plot_name').eq('transaction_type', 'Review_Rejection').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, plot_name, quantity_change, remark, created_at').eq('transaction_type', 'Cull3_Transfer').order('id', { ascending: true })),
                     // "How much of a batch has been collected" — the source is
                     // shared_do_records, NOT shared_collection_bookings. Bookings
@@ -270,6 +274,17 @@
                     (res.data || []).forEach(r => { m[r.batch_name] = (m[r.batch_name] || 0) + 1; });
                     return m;
                 };
+                /* What reached a main plot, per batch. Only 'Transplanted' —
+                   NOT Transplanted_DoubleTone, which is the step that fills the
+                   D-Tone tray. Those seedlings leave the tray later as ordinary
+                   Transplanted rows, so counting both would count them twice.
+                   Premium Care is the same: a holding tray, not a plot. */
+                const transplantedMap = {};
+                (transplantRes.data || []).forEach(r => {
+                    if (!r.batch_name || r.transaction_type !== 'Transplanted') return;
+                    transplantedMap[r.batch_name] =
+                        (transplantedMap[r.batch_name] || 0) + Math.abs(Number(r.quantity_change) || 0);
+                });
                 const plantedMap = sumByBatch(plantedRes);
                 const damagedMap = sumByBatch(damagedRes);
                 const cull1Map   = sumByBatch(cull1Res);
@@ -279,6 +294,10 @@
                 const cull3CountMap      = countByBatch(cull3Res);
 
                 // ── Completion rule (ALL batches) ───────────────────────────
+                // A batch is finished when every plot it used has nothing left
+                // standing in it: 3rd culled less drone map qty comes to nought.
+                // See the note on the coverage test below for why that one
+                // subtraction covers the sold-out plots as well.
                 // A batch is Completed ONLY when EVERY transplanted
                 // plot+destination (main / premium / d-tone — matching how
                 // Tab 6 builds its rows) has its own saved 3rd_Culling
@@ -304,16 +323,67 @@
                         .add(p); // per PLOT — Tab 6 merges same-plot rows and saves one record per plot
                 });
 
-                // Actual coverage from 3rd_Culling rows. A row only COUNTS as
-                // covering its plot when its drone map is uploaded (DocUrl)
-                // AND the drone map qty was keyed in (MapQty) — a record
-                // without both keeps the batch in the Active list.
+                /* Actual coverage from 3rd_Culling rows. A row COUNTS as covering
+                   its plot when the drone-map QUANTITY and the CULLED DATE are
+                   both keyed — the same two things the 3rd Culling tab asks for
+                   and counts as done.
+
+                   It used to require an uploaded FILE (DocUrl) instead of the
+                   date. That made this list and the tab disagree: a batch could
+                   read 6/6 Plots Done with every quantity and date in, and sit
+                   in Active because somebody had not attached photographs. It
+                   is what kept batch 225 out of Completed.
+
+                   The file is still worth having and the tab still shows
+                   whether there is one. It is evidence, not the work — and a
+                   batch's place in this list should not turn on it while the
+                   report that owns the question says otherwise. */
                 const cull3Keyed  = {}; // batch → Set(PLOT)
                 const cull3Legacy = {}; // batch → Map(PLOT → row count)
                 (cull3Res.data || []).forEach(r => {
                     if (!r.batch_name) return;
-                    const hasProof = !!(r.remark && /DocUrl:\S+/.test(r.remark) && /MapQty:\s*\d+/.test(r.remark));
-                    if (!hasProof) return;
+                    /* A plot is finished when NOTHING IS LEFT STANDING IN IT.
+
+                           3rd culled  −  drone map qty  =  0
+
+                       That is the whole rule, and it covers both ways a plot
+                       gets there without needing to name them separately:
+
+                         N18-R had 131 to cull, the drone map counted 131,
+                         131 − 131 = 0. Done.
+
+                         A plot whose seedlings were all sold has nothing to
+                         cull, 0 − 0 = 0. Done, with no map to attach and no
+                         date to give — which is why demanding paperwork of it
+                         kept batch 225 in Active for a job nobody could do.
+
+                       A missing map quantity counts as 0, so a plot with 500
+                       to cull and no map is 500 short and holds the batch.
+
+                       Note this asks the FIELD question, not the keying one.
+                       The 3rd Culling tab's own "N/M Plots Done" counts how
+                       much typing is left and still wants a culled date; this
+                       list asks whether the batch is finished on the ground. */
+                    const culled = Number(r.quantity_change) || 0;
+                    const mapM   = r.remark ? r.remark.match(/MapQty:\s*(\d+)/) : null;
+                    const mapQty = mapM ? parseInt(mapM[1], 10) : 0;
+                    if (culled - mapQty !== 0) return;
+
+                    /* A nought has to be a REAL nought.
+                    
+                       "culled − map = 0" is satisfied just as well by a row
+                       that says nothing at all: no quantity, no map, no
+                       figures. A plot all sold out and a plot nobody has
+                       touched both come to zero, and treating them alike swept
+                       batches into Completed that had barely started.
+                    
+                       So when the cull is nought, the row must SAY it is
+                       nought — a saved 3rd Culling record carries its
+                       arithmetic in the remark ("Remaining Balance: 0"), and
+                       that is what tells a sold-out plot from an empty one. A
+                       cull above nought needs no such proof: the figure is
+                       the proof. */
+                    if (culled === 0 && !(r.remark && /Remaining Balance:\s*0\b/.test(r.remark))) return;
                     const p = _normPlot(r.plot_name);
                     const m = r.remark ? r.remark.match(/DestType:\s*(main|premium|doubletone)/) : null;
                     if (m) {
@@ -324,13 +394,29 @@
                     }
                 });
 
-                // Any outstanding plot transfer keeps the batch Active — the
-                // transferred plot's culling is still pending by definition.
-                const batchesWithTransfers = new Set((transferRes.data || []).map(r => r.batch_name));
+                /* A transfer used to keep a batch in Active FOREVER — any
+                   Cull3_Transfer row at all and the batch could never be
+                   Completed, however finished its report. That was true when a
+                   transferred-into plot had no way to be culled: its culling
+                   was pending by definition because there was nowhere to
+                   record it.
+
+                   There is now. A "-R" plot is a row on the P-R Culling tab
+                   with its own drone-map quantity and culled date, the same as
+                   any other. So a transfer no longer vetoes the batch — it
+                   adds the plot it landed in to the list of plots that must be
+                   covered, which is what a transfer actually means.
+
+                   This is why batch 225 stayed in Active with its 3rd Culling
+                   report reading 6/6 done. */
+                (transferRes.data || []).forEach(r => {
+                    const dest = _normPlot(r.plot_name);
+                    if (!dest || !r.batch_name) return;
+                    (expectedPlots[r.batch_name] = expectedPlots[r.batch_name] || new Set()).add(dest);
+                });
 
                 const completedBatchNames = new Set();
                 Object.keys(expectedPlots).forEach(batch => {
-                    if (batchesWithTransfers.has(batch)) return; // transfer → stays Active
                     // Every plot must be covered by a proofed record — no exceptions.
                     const need = expectedPlots[batch];
                     if (!need || !need.size) return;
@@ -352,6 +438,16 @@
                 // in the "Amendment Needed" list tab (in ADDITION to their
                 // normal Active/Completed placement, which is unchanged).
                 const rejectedBatchNames = new Set((rejectRes.data || []).map(r => r.batch_name));
+                /* …and which report each one was rejected on. A row-level
+                   rejection is keyed `stage::rowKey`; only the stage half
+                   names a tab, and two rejected rows on one tab are one tab
+                   to go and fix. */
+                const rejectedStages = {};
+                (rejectRes.data || []).forEach(r => {
+                    const stage = String(r.plot_name || '').split('::')[0];
+                    if (!stage) return;
+                    (rejectedStages[r.batch_name] = rejectedStages[r.batch_name] || new Set()).add(stage);
+                });
 
                 // ── Plot Reserved Status ────────────────────────────────────
                 // 3rd-culling plot transfers: target plot is "reserved" for the
@@ -434,19 +530,62 @@
                 // Process logic & simulate stages.
                 masterBatches = dedupedReception.map(b => {
                     const actualPlanted = plantedMap[b.batch_name] || 0;
+                    /* Kept and carried on the batch, though the culling rate
+                       no longer counts it: damage is worth having to hand and
+                       is what the Planting & Damage report shows. */
                     const damaged = damagedMap[b.batch_name] || 0;
                     const cull1   = cull1Map[b.batch_name] || 0;
                     const cull2   = cull2Map[b.batch_name] || 0;
                     const cull3   = cull3Map[b.batch_name] || 0;
                     // Denominator = actual planted qty if available; fall back to D/O+FOC for batches that haven't planted yet.
-                    const denom = actualPlanted || (b.quantity_change || 0);
+                    const transplanted = transplantedMap[b.batch_name] || 0;
+                    const denom = transplanted > 0
+                        ? transplanted + cull1
+                        : (actualPlanted || (b.quantity_change || 0));
+                    /* CULLING RATE
+
+                           (1st culled + 3rd culled) / (transplanted + 1st culled)
+
+                       THE 2ND CULL IS NOT ADDED, because it is already in the
+                       3rd. A plot's 3rd culled figure is worked out as
+                       "2nd culled + balance" on the 3rd Culling tab — the
+                       second cull is part of that total by construction — so
+                       adding cull2 here would count those seedlings twice.
+
+                       The base is every seedling that came out of the
+                       pre-nursery: the ones that reached a plot, plus the ones
+                       the 1st cull took on the way. Nothing else needs looking
+                       up — no planted figure, no D-Tone box — and it comes to
+                       the same pool by a shorter road.
+
+                       "Transplanted" means what reached a PLOT. The step that
+                       fills the D-Tone tray is not counted; those seedlings
+                       leave the tray later as ordinary transplants and would
+                       otherwise be counted twice.
+
+                       Damaged seeds are not culling and are not in it. They are
+                       still recorded on Planting & Damage.
+
+                       Falls back to planted, then to the delivered quantity,
+                       for a batch that has not transplanted yet — without a
+                       base there is no rate to show.
+
+                       Two decimals kept, because two are shown. It was rounded
+                       to one and printed with toFixed(2), so every rate on this
+                       page ended in a nought. */
                     const cullRate = denom > 0
-                        ? Math.round(((damaged + cull1 + cull2 + cull3) / denom) * 1000) / 10  // → 1 decimal
+                        ? Math.round(((cull1 + cull3) / denom) * 10000) / 100
                         : 0;
                     b.actualPlanted = actualPlanted;
+                    b.damagedSeeds  = damaged;
+                    b.transplanted  = transplanted;
+                    b.cullBase      = denom;
+                    // cull2 is carried for reference only — it is inside cull3.
+                    b.cull2Only     = cull2;
                     b.cullRate = cullRate;
                     b.hasTransplant = transplantedBatchNames.has(b.batch_name);
                     b.hasRejection = rejectedBatchNames.has(b.batch_name);
+                    b.rejectedStages = [...(rejectedStages[b.batch_name] || [])];
                     return processBatchLogic(b, completedBatchNames);
                 });
 
@@ -565,8 +704,17 @@
             const headRow = document.getElementById('ledger-head-row');
             if (headRow) {
                 if (!window._defaultLedgerHead) window._defaultLedgerHead = headRow.innerHTML;
-                headRow.innerHTML = (tabName === 'reserved')
-                    ? '<th>Batch</th><th>Plot Reserved</th><th>Original Plot</th><th>Quantity Transfer</th><th>Date Transfer</th>'
+                /* Amendment Needed answers a different question from the other
+                   tabs, so it asks for different columns. Age, Planted Date and
+                   Planted Qty tell you about a batch's life; on this tab the
+                   only thing anybody wants is WHICH report to go and fix, and
+                   those three were taking the width that answer needed. */
+                headRow.innerHTML =
+                    tabName === 'reserved'
+                        ? '<th>Batch</th><th>Plot Reserved</th><th>Original Plot</th><th>Quantity Transfer</th><th>Date Transfer</th>'
+                    : tabName === 'amendment'
+                        ? '<th>Batch</th><th>Breed</th><th style="min-width: 260px;">Needs Amendment</th>'
+                          + '<th style="min-width: 180px;">Current Stage</th><th>Survival %</th><th>Culling Rate %</th><th>Actions</th>'
                     : window._defaultLedgerHead;
             }
 
@@ -692,9 +840,11 @@
                     <tr class="hover:bg-[#f8f4ec] transition-colors batch-row cursor-pointer" onclick="openBatchDetail('${batchNameEsc}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'){openBatchDetail('${batchNameEsc}')}">
                         <td class="text-[#3d2610] font-black tracking-wider text-base batch-id-cell">${b.batch_name}</td>
                         <td class="breed-cell">${b.breed_name || '—'}</td>
-                        <td class="text-[#8a7a68] text-xs whitespace-nowrap">${age}</td>
+                        ${currentListTab === 'amendment'
+                            ? `<td>${amendmentCell(b)}</td>`
+                            : `<td class="text-[#8a7a68] text-xs whitespace-nowrap">${age}</td>
                         <td class="text-[#8a7a68] text-xs">${datePlanted}</td>
-                        <td class="font-black text-[#1a150d]">${plantedQty}</td>
+                        <td class="font-black text-[#1a150d]">${plantedQty}</td>`}
                         <td>
                             <div class="flex flex-col gap-1.5 w-full max-w-[160px]">
                                 <div class="font-bold text-xs flex items-center"><span class="prog-circle ${b.stageColor} shadow-sm"></span>${b.stageName}</div>
@@ -712,6 +862,29 @@
                     </tr>
                 `);
             });
+        }
+
+
+        /* Which reports on a batch were sent back, named the way the tabs are
+           named. A stage key nobody recognises is printed as it is rather than
+           swallowed — an unknown stage still needs somebody to go and look, and
+           a blank cell would say the opposite. */
+        const AMEND_STAGE_LABEL = {
+            seeds_in: 'Seeds In', seed_audit: 'Seed Audit', planting: 'Planting & Damage',
+            transplanting: 'Transplanting', cull_1: '1st Culling', cull_2: '2nd Culling',
+            cull_3: '3rd Culling', adjustments: 'Adjustments & Audit'
+        };
+
+        function amendmentCell(b) {
+            const stages = b.rejectedStages || [];
+            if (!stages.length) {
+                // Flagged, but the rejection row does not say where. Better to
+                // admit that than to print nothing and look like a clean batch.
+                return '<span class="text-[10px] font-black uppercase tracking-widest text-[#a83020]">Rejected — open to see where</span>';
+            }
+            return '<div class="flex flex-wrap gap-1">' + stages.map(sKey =>
+                `<span class="inline-block px-2 py-1 rounded-lg bg-[#fff5f5] border border-[#f8d7da] text-[#a83020] text-[10px] font-black uppercase tracking-widest">${
+                    AMEND_STAGE_LABEL[sKey] || sKey}</span>`).join('') + '</div>';
         }
 
         // Search now drives a re-render (so the filtered results paginate correctly).
