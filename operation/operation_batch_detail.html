@@ -10232,27 +10232,30 @@ Thank you.`;
       const TAB_PIE = { 8: 't8-pie-tab', 2: 't2-pie-tab', 3: 't3-pie-tab',
                         4: 't4-pie-tab', 5: 't5-pie-tab', 6: 't6-pie-tab' };
 
-      /* A tick means DONE. A row nobody has signed is not done.
+      /* A tick means VERIFIED, not merely filled in.
 
-         3rd Culling could show a full ring and a tick with a plot still
-         sitting there waiting for somebody to look at it — the ring only ever
-         asked whether the figures were keyed, never whether they had been
-         checked. So a tab that carries row-level sign-off ticks only when
-         every row on it is signed.
+         The ring asks whether the figures are keyed. Only a signature says
+         somebody has looked at them, and the tick is what people read from
+         across the tab strip to decide where they still have to go. A tab
+         showing a tick above a banner reading PENDING VERIFICATION was
+         telling them the opposite of the truth.
 
-         Two things this deliberately does NOT do. A tab with no rows keeps
-         the old answer: nothing to sign is not the same as something
-         unsigned. And a stage-level VERIFIED & LOCKED covers the whole tab on
-         its own, because that is one signature over all of it.
+         So: a full ring AND a sign-off. The sign-off is either the
+         stage-level VERIFIED & LOCKED, which is one signature over the whole
+         tab, or — on a tab that is verified row by row — every row on it
+         signed, which is the same statement made in pieces.
+
+         A tab with NO rows therefore needs the stage-level signature: there
+         is nothing else that could stand for it.
 
          Rows marked `optional` are skipped, same as allRowsVerified. */
       function rowsAllSigned(tabIdx) {
         const cfg = ROW_TAB_CONFIG[tabIdx];
         const stage = STAGE_BY_TAB[tabIdx];
-        if (!cfg || !stage) return true;
+        if (!cfg || !stage) return false;
         let rows = [];
-        try { rows = cfg().filter(r => r && r.key && !r.optional); } catch (e) { return true; }
-        if (!rows.length) return true;
+        try { rows = cfg().filter(r => r && r.key && !r.optional); } catch (e) { return false; }
+        if (!rows.length) return false;
         return rows.every(r => !!rowVerifs[stage + '::' + r.key]);
       }
 
@@ -10268,8 +10271,8 @@ Thank you.`;
           const pct = pieId
             ? parseFloat((document.getElementById(pieId) || {}).style?.getPropertyValue('--percentage') || '0')
             : 100;
-          const signed   = !!verifications[stage];
-          const complete = pct >= 100 && (signed || rowsAllSigned(tab));
+          const signed   = !!verifications[stage] || rowsAllSigned(tab);
+          const complete = pct >= 100 && signed;
 
           let tick = cover.querySelector('.tab-tick');
           if (complete && !tick) {
@@ -10280,8 +10283,9 @@ Thank you.`;
             tick = null;
           }
           if (tick) {
-            tick.classList.toggle('tab-tick-signed', signed);
-            tick.title = signed ? 'Complete and verified' : 'Complete — not yet verified';
+            // Every tick that survives the rule above is a verified one.
+            tick.classList.add('tab-tick-signed');
+            tick.title = 'Complete and verified';
             tick.setAttribute('aria-label', tick.title);
           }
         });
@@ -10438,6 +10442,8 @@ Thank you.`;
         verifications[stage] = payload;
         await _clearRejectionRows(batch, stage); // re-verifying after amendment clears the rejection
         renderBanner(tabIdx);
+        // The tab's tick now waits on this signature — ask it again.
+        _afterRowSignOff(tabIdx);
       }
 
       async function unverify(tabIdx) {
@@ -10455,6 +10461,7 @@ Thank you.`;
         if (error) { alert('Failed to unverify: ' + error.message); return; }
         delete verifications[stage];
         renderBanner(tabIdx);
+        _afterRowSignOff(tabIdx);
       }
 
       async function unmark(tabIdx) {
