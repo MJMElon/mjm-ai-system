@@ -327,7 +327,10 @@
         .alloc-figure { font-size: clamp(15px, 20cqw, 32px); line-height: 1;
                         white-space: nowrap; font-variant-numeric: tabular-nums; }
         .alloc-label  { font-size: clamp(7px, 6.5cqw, 10px); line-height: 1.2; }
-        .alloc-count  { font-size: clamp(7px, 6cqw, 10px); line-height: 1;
+        /* The count under each percentage is the figure the percentage is OF,
+           and at 10px it was small print nobody could read across a room. Up a
+           step, and set in the same weight as the name above it. */
+        .alloc-count  { font-size: clamp(10px, 9cqw, 14px); line-height: 1.1;
                         font-variant-numeric: tabular-nums; }
 
         .t-tidy > div, .t-tidy > span { text-align: center; min-width: 0; }
@@ -3134,7 +3137,11 @@
             }
 
             document.getElementById('t3-total-planted').innerText = totalPlantedRaw.toLocaleString();
-            document.getElementById('t3-chart-total').innerText = totalPlantedRaw.toLocaleString();
+            /* NOT the engine's headline figure — that is the allocation BASE
+               and calcTransplanting sets it, because only that function knows
+               it. Setting it to the planted quantity here left the header
+               reading 10,423 while the four percentages beneath it were worked
+               out against 10,704, so the panel disagreed with its own title. */
             document.getElementById('t3-val-cull').innerText = mockCullingTab4.toLocaleString();
 
             // Planted date + Est. maturity date (planted + 3 months)
@@ -3908,6 +3915,12 @@
                Every approved adjustment on the batch, whichever report it was
                raised against — see adjustNetTotal. */
             const allocBase = totalPlantedRaw + getDtoneNurseryQty() + adjustNetTotal();
+            /* The engine's headline figure IS this base — what the four
+               percentages below are each a percentage of. Main plot plus
+               D-Tone plus the 1st cull comes to the same thing from the other
+               side: 9,659 + 230 + 815 = 10,704. */
+            const chartTotalEl = document.getElementById('t3-chart-total');
+            if (chartTotalEl) chartTotalEl.innerText = allocBase.toLocaleString();
             const pendingTotal = Math.max(
                 0,
                 allocBase
