@@ -307,15 +307,33 @@
         
         const _k1 = 'AIzaSyCvSAVEeOa_'; const _k2 = 'PkZxRKDJkYz3hqzdgvbGIyQ'; const GEMINI_API_KEY = _k1 + _k2; 
         
-        async function analyzeImageWithGemini(base64Image, mimeType, prompt) { 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`; 
-            const base64Data = base64Image.split(',')[1]; 
-            const payload = { contents: [{ parts: [ { text: prompt }, { inlineData: { mimeType: mimeType || "image/jpeg", data: base64Data } } ] }], generationConfig: { responseMimeType: "application/json" } }; 
-            const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); 
-            const data = await response.json(); 
-            if (!response.ok) throw new Error(data.error?.message || "Gemini API Error"); 
-            let rawText = data.candidates[0].content.parts[0].text; 
-            return JSON.parse(rawText.replace(/```json/gi, '').replace(/```/g, '').trim()); 
+        async function analyzeImageWithGemini(base64Image, mimeType, prompt) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`;
+            const base64Data = base64Image.split(',')[1];
+            const payload = { contents: [{ parts: [ { text: prompt }, { inlineData: { mimeType: mimeType || "image/jpeg", data: base64Data } } ] }], generationConfig: { responseMimeType: "application/json" } };
+            const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error?.message || "Gemini API Error");
+            // A perfectly clear document can still come back with no candidate at
+            // all — a safety block, the file exceeding the inline-request size
+            // limit, or the model hitting its token limit before finishing. Name
+            // which one instead of throwing a bare "Cannot read properties of
+            // undefined" that reads like a code bug.
+            if (!data.candidates || !data.candidates.length) {
+                const why = data.promptFeedback?.blockReason || 'no result returned';
+                throw new Error(`Gemini returned nothing (${why}) — try a smaller file or fewer pages`);
+            }
+            const cand = data.candidates[0];
+            if (cand.finishReason && cand.finishReason !== 'STOP') {
+                throw new Error(`Gemini stopped early (${cand.finishReason}) — try a smaller file or fewer pages`);
+            }
+            let rawText = cand.content?.parts?.[0]?.text;
+            if (!rawText) throw new Error('Gemini returned an empty response');
+            try {
+                return JSON.parse(rawText.replace(/```json/gi, '').replace(/```/g, '').trim());
+            } catch (e) {
+                throw new Error('Gemini response was not valid JSON — try again or a smaller file');
+            }
         }
 
         function spawnHealingEmoji() { const zone = document.getElementById('title-animation-zone'); if (!zone || document.hidden) return; const el = document.createElement('div'); el.className = 'nature-critter'; const emojis = ["🌿", "🍃", "🌱", "🪴", "🌳", "🌤️", "⛅️", "🦋", "🐌", "🐞", "🐢", "🍓", "🍵", "🌸", "🦦"]; el.innerText = emojis[Math.floor(Math.random() * emojis.length)]; el.style.left = (35 + Math.random() * 30) + '%'; el.style.top = (35 + Math.random() * 30) + '%'; el.style.setProperty('--tx', (Math.random() - 0.5) * 300 + 'px'); el.style.setProperty('--ty', (Math.random() - 0.5) * 150 - 50 + 'px'); zone.appendChild(el); setTimeout(() => { if(zone.contains(el)) zone.removeChild(el); }, 8500); }
@@ -1272,11 +1290,18 @@
                             tbody.insertAdjacentHTML('beforeend', `<tr id="${rowId}" class="border-b border-emerald-100 bg-white"><td class="p-3">${docPreview}</td><td class="p-3"><select id="al_${rowId}" class="input-style text-[10px] p-2 w-full">${alOptions}</select></td><td class="p-3"><input type="text" id="cust_${rowId}" value="${deliv.customerName || ''}" class="input-style text-[10px] p-2 w-full" placeholder="Customer"></td><td class="p-3"><input type="text" id="num_${rowId}" value="${cleanDoNum}" class="input-style text-[10px] p-2 w-full font-bold text-emerald-700" placeholder="DO Number"></td><td class="p-3"><input type="date" id="date_${rowId}" value="${dDate}" class="input-style text-[10px] p-2 w-full"></td><td class="p-3"><div id="items_container_${rowId}" class="flex flex-col gap-1" data-count="${Math.max(1, itemCount)}">${itemHtml}</div><button onclick="addMiniItemRow('${rowId}')" class="text-[9px] font-bold text-emerald-600 mt-1 hover:underline">+ Item</button></td><td class="p-3"><input type="number" id="qty_${rowId}" value="${sumQty}" class="input-style text-[10px] p-2 w-full font-black text-center text-emerald-600" readonly></td><td class="p-3 text-right"><button onclick="document.getElementById('${rowId}').remove(); delete window.extractedBulkDOs['${rowId}'];" class="text-red-400 hover:text-red-600 font-bold">✕</button></td></tr>`); 
                         });
 
-                    } catch (err) { 
-                        document.getElementById(initRowId).innerHTML = `<td class="p-3 text-center text-red-500 font-bold text-[10px]" colspan="8">Scan Failed ${file.name}. Ensure document is clear.</td>`; 
-                    } 
-                }; reader.readAsDataURL(file); 
-            } 
+                    } catch (err) {
+                        // "Ensure document is clear" used to cover every failure here —
+                        // a Gemini API error, a rate limit, a safety block, a truncated/
+                        // malformed JSON response — even when the scan itself was fine.
+                        // Show what actually happened so a genuinely clear document
+                        // doesn't get blamed for a different problem.
+                        console.error('[bulkDO] scan failed for', file.name, err);
+                        const reason = (err && err.message) ? String(err.message).slice(0, 160) : 'Unknown error';
+                        document.getElementById(initRowId).innerHTML = `<td class="p-3 text-center text-red-500 font-bold text-[10px]" colspan="8">Scan Failed ${file.name} — ${reason.replace(/</g,'&lt;')}</td>`;
+                    }
+                }; reader.readAsDataURL(file);
+            }
         }
         
         function generateMiniItemHeader(rowId) {
