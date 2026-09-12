@@ -6849,9 +6849,13 @@ function weAddCol(i) {
   const n = _we.n, m = getMonth(), s = getState(n, m);
   ensureRounds(n, m);
   const round = s[key][i];
-  // Six is the cap the round controls have always used. Past that the header
-  // is wider than the ticks under it are useful.
-  if (!round || round.length >= 6) return;
+  /* As many columns as there are products to put in them — see the cap in
+     renderWorkEditor, which greys + at the same number. Six is the floor,
+     not the rule: it is what this used to be fixed at, and the button must
+     not become stricter than it was while the Setting list is loading. */
+  const stock = (kind === 'manuring' ? fertNames('monthly') : taggedNames('interrow'))
+    .filter(x => x !== '—').length;
+  if (!round || round.length >= Math.max(6, stock)) return;
   round.push(weBlankCol(kind));
   (NURSERY_PLOTS[n] || []).forEach(pl => {
     if (!s[kind][pl]) s[kind][pl] = [];
@@ -6871,9 +6875,13 @@ function weRemoveCol(i) {
   if (!key) return;
   const n = _we.n, m = getMonth(), s = getState(n, m);
   const round = s[key] && s[key][i];
-  // Never to nothing: a week with no column has no chemical and no ticks,
-  // and is a week that should have been removed instead.
-  if (!round || round.length <= 1) return;
+  /* On the LAST column, − removes the week. A week with no column has no
+     chemical and no ticks, so it is not a thing that can exist — which used
+     to mean the button simply went dead at one column and gave no reason.
+     Taking the last product out of a week IS taking the week out: that is
+     what somebody pressing it there means, and removeWeek says exactly what
+     will go before it goes. */
+  if (!round || round.length <= 1) { weRemoveWeek(i); return; }
   const ci = round.length - 1;
   const plots = NURSERY_PLOTS[n] || [];
   /* The last column's ticks go with it. Said out loud when there are any,
@@ -6950,14 +6958,27 @@ function renderWorkEditor() {
      the week, the other takes the week and every tick in it away. Side by
      side they would be three small buttons and one bad afternoon. */
   const colWord = kind === 'manuring' ? 'fertiliser' : 'chemical';
+  /* How many columns a week may hold is not a number somebody chose — it is
+     how many products there are to put in them. Six was an invented cap, and
+     an invented cap on a screen whose whole point is "as many as you mix" is
+     a screen that says no for no reason. The floor keeps it from being
+     STRICTER than six while the Setting list is still loading. */
+  const stock = (kind === 'manuring' ? fertNames('monthly') : taggedNames('interrow'))
+    .filter(x => x !== '—').length;
+  const cap = Math.max(6, stock);
   const colCtrl = (i, slot) => WE_MULTI_COL[kind]
     ? `<span class="we-col-n schedule-edit-ctrl">` +
         `<button type="button" title="Another ${colWord} in this week"` +
         ` aria-label="Add a column to week ${slot + 1}"` +
-        ` onclick="weAddCol(${slot})"${cols[i].length >= 6 ? ' disabled' : ''}>+</button>` +
-        `<button type="button" title="Drop the last ${colWord} from this week"` +
-        ` aria-label="Remove a column from week ${slot + 1}"` +
-        ` onclick="weRemoveCol(${slot})"${cols[i].length <= 1 ? ' disabled' : ''}>&minus;</button>` +
+        ` onclick="weAddCol(${slot})"${cols[i].length >= cap ? ' disabled' : ''}>+</button>` +
+        /* Never dead. On the last column it removes the WEEK, which is what
+           taking the last product out of a week amounts to. */
+        `<button type="button" title="${cols[i].length <= 1
+          ? 'This is the only ' + colWord + ' — remove the whole week'
+          : 'Drop the last ' + colWord + ' from this week'}"` +
+        ` aria-label="${cols[i].length <= 1 ? 'Remove week ' + (slot + 1)
+                                            : 'Remove a column from week ' + (slot + 1)}"` +
+        ` onclick="weRemoveCol(${slot})">&minus;</button>` +
       `</span>`
     : '';
 
