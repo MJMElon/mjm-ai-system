@@ -815,6 +815,17 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
   text-transform:uppercase;color:var(--green-text);}
 .ss-count{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;
   color:var(--text-muted);white-space:nowrap;}
+/* This nursery's schedule as a sheet. Small and quiet, beside the week
+   count, because it is a shortcut to the card's own download rather than
+   something to be pressed before the schedule is read. */
+.ss-dl{width:26px;height:26px;padding:0;flex:0 0 auto;line-height:1;
+  font-size:13px;font-family:var(--font);color:var(--green-text);
+  background:var(--bg-white);border:1px solid var(--border);
+  border-radius:6px;cursor:pointer;}
+.ss-dl:hover{background:var(--green,#0d7a47);border-color:var(--green,#0d7a47);color:#fff;}
+/* Top-right of the summary card, against a centred heading. */
+.lst-top .sched-dl{position:absolute;right:0;top:-3px;font-size:12px;}
+@media (max-width:760px){ .lst-top .sched-dl{position:static;} }
 /* Week headers are two lines: which week, then when. They used to be a
    button opening a date box; the dates are set in the Edit popup now,
    beside the chemicals and ticks they belong to. */
@@ -1159,7 +1170,12 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
    date boxes are wider than the two tick columns under them, and letting
    them share a row would set the column width from the widget rather than
    from the data. */
-.we-scroll{overflow:auto;max-height:56vh;}
+/* The popup is 94vh tall now; 56vh left a third of it empty under the last
+   plot, which on a fifty-two plot nursery is scrolling past space that was
+   not being used for anything. The body it sits in is already a flex child
+   that scrolls, so the cap only has to stop the table from pushing the
+   footer off — it does not have to be the scroller. */
+.we-scroll{overflow:auto;max-height:calc(94vh - 210px);}
 .we-wk{background:var(--green) !important;color:#fff !important;font-size:11.5px !important;
   white-space:nowrap;position:relative;padding:7px 10px !important;}
 .we-wk-n{font-weight:900;letter-spacing:.8px;}
@@ -1198,6 +1214,42 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 .we-col-l{font-size:10px;font-weight:900;letter-spacing:.6px;margin-bottom:4px;}
 .we-col-d{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:4px;}
 .we-col-d .we-num{width:56px;height:26px;font-size:11.5px;}
+/* The activator under it is the second thing in the tank, not a second
+   column, so it reads quieter and is fenced off by a rule rather than by a
+   gap — a gap alone and the two pairs look like two columns of one. */
+.we-col-l2{margin-top:8px;padding-top:7px;border-top:1px dashed var(--border);
+  font-weight:800;color:var(--text-muted);}
+
+/* The totals, along the bottom of the editor. Pinned to the floor of the
+   scroll: on a nursery with fifty-two plots they are otherwise fifty rows
+   below the ticks they are the sum of, which is fifty rows too far to be
+   any use while ticking. */
+.we-table tfoot td{position:sticky;bottom:0;z-index:3;
+  background:#eef6f1;border-top:1px solid var(--border);
+  font-size:11.5px;font-weight:800;color:var(--green-900,#134e32);
+  text-align:center;padding:6px 8px;white-space:nowrap;}
+.we-table tfoot tr:first-child td{border-top:2px solid var(--green,#0d7a47);}
+.we-table tfoot td.we-plot{text-align:left;padding-left:14px;font-weight:900;
+  font-size:10.5px;letter-spacing:.3px;text-transform:uppercase;color:var(--text-muted);}
+
+/* ── The same figures under the summary table ──────────────────────────
+   One table per work, because a figure only means something under the
+   chemical it was worked out from, and that changes week to week. */
+.ss-tot{margin:14px 0 4px;padding-top:12px;border-top:1px dashed var(--border);}
+.ss-tot-h{font-size:11px;font-weight:900;letter-spacing:.7px;text-transform:uppercase;
+  color:var(--text-muted);margin-bottom:8px;}
+.st-table{width:100%;border-collapse:collapse;margin-bottom:12px;
+  font-size:12px;background:#fff;}
+.st-table th,.st-table td{border:1px solid var(--border);padding:6px 9px;
+  text-align:center;white-space:nowrap;}
+.st-table thead th{background:#0d7a47;color:#fff;font-weight:800;line-height:1.35;}
+.st-table thead th.st-lbl{background:#0a6339;text-align:left;}
+.st-table .st-wk{display:block;font-size:9.5px;letter-spacing:.6px;
+  text-transform:uppercase;opacity:.82;}
+.st-table .st-what{display:block;font-size:12px;}
+.st-table td.st-lbl{text-align:left;font-weight:700;background:#f4f8f6;
+  color:var(--text-muted);font-size:11px;}
+.st-table tbody tr:last-child td{font-weight:800;}
 
 
 /* The plot column is wide now that the tick columns are fixed, which made

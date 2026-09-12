@@ -104,6 +104,18 @@ function getUnitForChem(name){
   return (c && c.unit) || 'gm';
 }
 
+/* The dose the Setting page holds for a chemical, or null when it has none.
+   A chemical's dose is a property OF the chemical — it is what the Setting
+   page exists to hold — so choosing a different one brings its own dose with
+   it, the way its unit already did. Leaving the old number behind is how a
+   week came to read "Destroy 20mL" when Destroy is 30. */
+function getDoseForChem(name){
+  const c = chemByName(name) || fertByName(name);
+  if (!c) return null;
+  const d = c.dose != null ? c.dose : (c.dose_monthly != null ? c.dose_monthly : null);
+  return d == null || d === '' ? null : +d;
+}
+
 function calcMaxChem(seedlings, chemName, dose, unit, decimals = 2){
   if(!seedlings || !chemName || chemName === '—' || !dose) return '—';
   // Formula: (plot capacity / coverage per pump) × dose per pump / 1000.
@@ -195,6 +207,12 @@ const chemByName = n => chemicals.find(c => c.name === n) || null;
    always offered "none"; it stays. */
 const chemNames = kind => chemicals.filter(c => c.kind === kind).map(c => c.name).concat('—');
 const taggedNames = tag => chemicals.filter(c => c.tag === tag).map(c => c.name).concat('—');
+/* Which activator an interrow column mixes. Every round used to say the word
+   "Activator" because there was nowhere to choose one — the dose was keyed
+   but the name was a constant in six places. Rounds saved before the picker
+   existed have no `activator` at all, and they still mean what they printed,
+   so the missing answer reads as the old constant rather than as none. */
+const interrowAct = c => (c && c.activator) || 'Activator';
 /* With no usage, every fertiliser — which is what the calculator wants,
    since it is asked about both kinds of work. With one, only the fertilisers
    ticked for it: the Manuring sheet is monthly manuring, and offering a
@@ -288,8 +306,8 @@ function migrateManuringShape(s, plots) {
 function defaultInterrowConfig() {
   // Nested: array of rounds → each round is an array of chemical columns
   return [
-    [{ chem:'Monex', chem_dose:200, chem_unit:'mL', activator_dose:15, activator_unit:'mL' }],
-    [{ chem:'Basta', chem_dose:200, chem_unit:'mL', activator_dose:15, activator_unit:'mL' }],
+    [{ chem:'Monex', chem_dose:200, chem_unit:'mL', activator:'Activator', activator_dose:15, activator_unit:'mL' }],
+    [{ chem:'Basta', chem_dose:200, chem_unit:'mL', activator:'Activator', activator_dose:15, activator_unit:'mL' }],
   ];
 }
 /* Migrate old { R1:{...}, R2:{...} } interrowConfig (and interrow ticks) to nested rounds shape */
@@ -2746,7 +2764,7 @@ function autoSyncRecords() {
     round.forEach((c, ci) => {
       plots.filter(p=>s.interrow[p]?.[ri]?.[ci]).forEach(plot=>{
         newRecs.push({id:id++, tarikh:'-', jenis:'Meracun rumput secara selingan',
-          racun:`Round ${ri+1}: ${c.chem} ${c.chem_dose}${c.chem_unit} + Activator ${c.activator_dose}${c.activator_unit}`,
+          racun:`Round ${ri+1}: ${c.chem} ${c.chem_dose}${c.chem_unit} + ${interrowAct(c)} ${c.activator_dose}${c.activator_unit}`,
           plot, batch:'', qty:null, carlos:0, gaia:0, remark:''});
       });
     });
@@ -3044,12 +3062,28 @@ function updatePDChem(w,f,v){
   if(!canEditSchedule) return;
   const cfg = getState(getNursery(),getMonth()).pdConfig[w];
   cfg[f] = v;
-  // Auto-set unit based on the selected chemical
-  if (f === 'P')         cfg.P_unit         = getUnitForChem(v);
-  else if (f === 'D')    cfg.D_unit         = getUnitForChem(v);
-  else if (f === 'P_sticker') cfg.P_sticker_unit = getUnitForChem(v);
-  else if (f === 'D_sticker') cfg.D_sticker_unit = getUnitForChem(v);
+  /* The chosen chemical's own unit AND its own dose. The unit always
+     followed; the dose did not, so picking Destroy over Becker changed the
+     name and left Becker's 20mL underneath it — the column still read as
+     Becker, which is exactly what it was reported as.
+
+     A dose the Setting page does not hold (an em dash, a chemical since
+     removed) leaves the number alone rather than blanking a figure somebody
+     keyed by hand. */
+  const follow = (base) => {
+    cfg[base + '_unit'] = getUnitForChem(v);
+    const d = getDoseForChem(v);
+    if (d != null) cfg[base + '_dose'] = d;
+  };
+  if (f === 'P')              follow('P');
+  else if (f === 'D')         follow('D');
+  else if (f === 'P_sticker') follow('P_sticker');
+  else if (f === 'D_sticker') follow('D_sticker');
   renderPD();
+  /* The summary table behind the modal is drawn from this same state and was
+     never told. A chemical changed in the editor left the schedule still
+     naming the old one until something else happened to repaint it. */
+  try { renderSchedSummary(); } catch (_) {}
   persistStateSoon(getNursery(), getMonth());
 }
 function updatePDDose(w,f,v){ if(!canEditSchedule) return; getState(getNursery(),getMonth()).pdConfig[w][f]=v; renderPD(); persistStateSoon(getNursery(), getMonth()); }
@@ -3463,7 +3497,29 @@ function updateInterrowChem(ri, ci, v){
   const cfg = getState(getNursery(),getMonth()).interrowConfig[ri][ci];
   cfg.chem = v;
   cfg.chem_unit = getUnitForChem(v);
+  /* Its own dose too, the same rule P&D follows: a dose belongs to the
+     chemical, so leaving the previous one behind makes the column read as
+     the chemical that is no longer in it. */
+  const d = getDoseForChem(v);
+  if (d != null) cfg.chem_dose = d;
   renderInterrow();
+  try { renderSchedSummary(); } catch (_) {}
+  persistStateSoon(getNursery(), getMonth());
+}
+
+/* Which activator goes in the tank with it. Until now there was a dose box
+   and no name — every round printed the word "Activator" whatever was
+   actually mixed. The list is the sticker-tagged chemicals, the same list
+   P&D picks Bond from, because that is what the Setting page holds them as. */
+function updateInterrowAct(ri, ci, v){
+  if(!canEditSchedule) return;
+  const cfg = getState(getNursery(),getMonth()).interrowConfig[ri][ci];
+  cfg.activator = v;
+  cfg.activator_unit = getUnitForChem(v);
+  const d = getDoseForChem(v);
+  if (d != null) cfg.activator_dose = d;
+  renderInterrow();
+  try { renderSchedSummary(); } catch (_) {}
   persistStateSoon(getNursery(), getMonth());
 }
 function updateInterrowDose(ri, ci, f, v){
@@ -3476,7 +3532,7 @@ function addInterrowRound(){
   if(!canEditSchedule) return;
   const s = getState(getNursery(),getMonth());
   if (s.interrowConfig.length >= 6) return;
-  s.interrowConfig.push([{chem:'Basta', chem_dose:200, chem_unit:'mL', activator_dose:15, activator_unit:'mL'}]);
+  s.interrowConfig.push([{chem:'Basta', chem_dose:200, chem_unit:'mL', activator:'Activator', activator_dose:15, activator_unit:'mL'}]);
   NURSERY_PLOTS[getNursery()].forEach(p => {
     if (!s.interrow[p]) s.interrow[p] = [];
     s.interrow[p].push([false]);
@@ -3503,7 +3559,7 @@ function addInterrowCol(ri){
   if(!canEditSchedule) return;
   const s = getState(getNursery(),getMonth());
   if (!s.interrowConfig[ri] || s.interrowConfig[ri].length >= 6) return;
-  s.interrowConfig[ri].push({chem:'Basta', chem_dose:200, chem_unit:'mL', activator_dose:15, activator_unit:'mL'});
+  s.interrowConfig[ri].push({chem:'Basta', chem_dose:200, chem_unit:'mL', activator:'Activator', activator_dose:15, activator_unit:'mL'});
   NURSERY_PLOTS[getNursery()].forEach(p => {
     if (!s.interrow[p]) s.interrow[p] = [];
     if (!s.interrow[p][ri]) s.interrow[p][ri] = [];
@@ -3578,6 +3634,7 @@ function renderInterrow() {
     round.forEach((c, ci) => {
       h+=`<th class="hdr-input-cell sticker-bg">
         <div style="font-size:10px;font-weight:700;color:var(--text-muted);margin-bottom:4px;letter-spacing:0.5px;">${t('hdr.activator')}</div>
+        ${mkSel(taggedNames('sticker'),interrowAct(c),`updateInterrowAct(${ri},${ci},this.value)`)}
         ${mkDose(c.activator_dose,c.activator_unit,`updateInterrowDose(${ri},${ci},'activator_dose',+this.value)`)}
       </th>`;
     });
@@ -3640,7 +3697,7 @@ function renderInterrow() {
   cfg.forEach((round, ri) => {
     round.forEach((c, ci) => {
       const seed = sumSeedlings(n, plots, p => s.interrow[p]?.[ri]?.[ci]);
-      const usage = (!seed || !c.activator_dose) ? '—' : calcMaxChem(seed, 'Activator', c.activator_dose, c.activator_unit, 1);
+      const usage = (!seed || !c.activator_dose) ? '—' : calcMaxChem(seed, interrowAct(c), c.activator_dose, c.activator_unit, 1);
       h+=`<td>${usage}</td>`;
     });
   });
@@ -3766,7 +3823,7 @@ function saveSchedule(nursery, quiet) {
       plots.filter(p => s.interrow[p]?.[ri]?.[ci]).forEach(plot => {
         tasks.push({ id:id++, type:'interrow', plot, round:`Round ${ri+1}`,
           jenis:'Meracun rumput secara selingan',
-          chemical:`${c.chem} ${c.chem_dose}${c.chem_unit} + Activator ${c.activator_dose}${c.activator_unit}`,
+          chemical:`${c.chem} ${c.chem_dose}${c.chem_unit} + ${interrowAct(c)} ${c.activator_dose}${c.activator_unit}`,
           detail:`Interrow Spray Round ${ri+1}` });
       });
     });
@@ -4176,14 +4233,41 @@ function saveRec(){
 /* ════════════════════════════
    PDF DOWNLOAD
 ════════════════════════════ */
-function openPdfModal(){
-  document.getElementById('pdf-nursery').value=getNursery();
+/* The download was orphaned when the four full-width sheets came off the
+   Schedule tab — the toolbar that opened it went with them, and nothing has
+   called this since. The modal, the layout and the arithmetic were all still
+   here; only the way in was missing. It is on the summary card now, and on
+   every nursery's own header.
+
+   The nursery list is filled from the register rather than being the four
+   that were typed into the HTML, for the same reason every other list on
+   this page now is: a nursery added on Facility Management is a nursery
+   somebody will want a schedule for. */
+function openPdfModal(preset){
+  const sel = document.getElementById('pdf-nursery');
+  if (sel) {
+    const keys = capNurseries().map(schedKey).filter(Boolean);
+    const list = keys.length ? keys : Object.keys(NURSERY_PLOTS);
+    sel.innerHTML = list.map(k =>
+      `<option value="${esc(k)}">${esc(NURSERY_LABELS[k] || stockLabel(k))}</option>`).join('');
+    const want = preset && list.includes(preset) ? preset : getNursery();
+    sel.value = list.includes(want) ? want : list[0];
+  }
   document.getElementById('pdf-month').value=monthLabelToInput(getMonth()); _syncMonthButtons();
   document.getElementById('pdf-modal').classList.add('open');
 }
 function closePdfModal(){ document.getElementById('pdf-modal').classList.remove('open'); }
 
 function downloadPDF() {
+  /* jsPDF comes off a CDN. On a nursery office's connection that request is
+     the one most likely to have failed, and destructuring a library that is
+     not there threw into the console and left the button looking broken —
+     pressed, nothing, no reason given. Say so instead. */
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert('The PDF library has not loaded — usually the internet connection.\n\n' +
+          'Reload the page and try again. The schedule itself is saved either way.');
+    return;
+  }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
   const pN = document.getElementById('pdf-nursery').value;
@@ -4630,7 +4714,7 @@ function downloadPDF() {
     xCursor = startX + plotColW;
     icfg.forEach(round => {
       round.forEach(c => {
-        cell(xCursor, y, colW, rowH, `Activator ${c.activator_dose}${c.activator_unit}`, {...PALETTE.bondP, style:'bold', size:7});
+        cell(xCursor, y, colW, rowH, `${interrowAct(c)} ${c.activator_dose}${c.activator_unit}`, {...PALETTE.bondP, style:'bold', size:7});
         xCursor += colW;
       });
     });
@@ -4690,7 +4774,7 @@ function downloadPDF() {
     icfg.forEach((round, ri) => {
       round.forEach((c, ci) => {
         const seed = sumSeedlings(pN, plots, p => s.interrow[p]?.[ri]?.[ci]);
-        const usage = (!seed || !c.activator_dose) ? '—' : calcMaxChem(seed, 'Activator', c.activator_dose, c.activator_unit, 1);
+        const usage = (!seed || !c.activator_dose) ? '—' : calcMaxChem(seed, interrowAct(c), c.activator_dose, c.activator_unit, 1);
         cell(xCursor, y, colW, rowH, usage, {...PALETTE.summary, style:'bold', size:8});
         xCursor += colW;
       });
@@ -6089,7 +6173,19 @@ function plotsInWeek(kind, i, n, m) {
    asks, because its columns are the month's weeks rather than any one
    work's rounds. */
 function plotsAtSlot(kind, i, n, m) {
-  const s = appState[n]?.[m];
+  /* getState, NOT appState[n]?.[m].
+ 
+     Reading the bare object meant a month that had not been hydrated yet
+     answered "no plots" — and the initial load deliberately empties appState
+     so every month is rebuilt from what the database holds. So a saved
+     schedule drew its week columns (weeksOf goes through getState) and no
+     ticks under them, until something else hydrated the month. That
+     something was the Edit popup, which is why the ticks appeared only after
+     opening it and never before.
+ 
+     getState hydrates from the saved payload, is memoised per nursery and
+     month, and is what every other reader on this page already uses. */
+  const s = getState(n, m);
   if (!s) return [];
   const plots = NURSERY_PLOTS[n] || [];
   const out = [];
@@ -6201,10 +6297,48 @@ function summaryTable(it, m) {
       <div class="ss-head">
         <div class="ss-name">${esc(label)}</div>
         <div class="ss-count">${blocks.length} week${blocks.length === 1 ? '' : 's'}</div>
+        <button type="button" class="ss-dl" title="Download ${esc(label)}'s schedule"
+          onclick="openPdfModal('${esc(n)}')">&#11015;</button>
       </div>
       <div class="tbl-wrap"><table class="ss-table">
         <thead>${head}</thead><tbody>${rows}</tbody></table></div>
+      ${totalsBlock(n, m)}
     </div>`;
+}
+
+/* ── How much to draw from the store ───────────────────────────────────
+   The tick grid above says WHERE each work happens. This says what it
+   costs: plots, seedlings, and the chemical and sticker to cover them.
+
+   One table per work rather than one for the nursery, because the figures
+   only mean anything under the chemical they were worked out from, and a
+   work's chemical changes from week to week. A work with no weeks in this
+   month is left out entirely — a table of dashes is not information. */
+function totalsBlock(n, m) {
+  const tables = WORKS.map(work => {
+    const weeks = weeksOf(n, m, work.key);
+    if (!weeks.length) return '';
+    const cols = [];
+    weeks.forEach(w => weCols(work.key, w.slot, n, m)
+      .forEach(c => cols.push({ slot: w.slot, c })));
+    if (!cols.length) return '';
+
+    const per = cols.map(x => weColTotals(work.key, x.slot, x.c.ci, n, m));
+    // Every column of one work asks the same questions, so row 0 names them.
+    const labels = per[0].map(r => r.label);
+    const head = '<tr><th class="st-lbl">' + esc(work.label) + '</th>' +
+      cols.map(x => '<th><span class="st-wk">Week ' + (x.slot + 1) + '</span>' +
+        '<span class="st-what">' + esc(x.c.val || x.c.label) + '</span></th>').join('') +
+      '</tr>';
+    const body = labels.map((lb, r) => '<tr><td class="st-lbl">' + esc(lb) + '</td>' +
+      per.map(p => '<td>' + esc(String(p[r].value)) + '</td>').join('') + '</tr>').join('');
+    return '<div class="tbl-wrap"><table class="st-table">' +
+      '<thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
+  }).filter(Boolean);
+
+  if (!tables.length) return '';
+  return '<div class="ss-tot"><div class="ss-tot-h">Totals for ' + esc(m) + '</div>' +
+    tables.join('') + '</div>';
 }
 
 /* ── What "expand" shows ───────────────────────────────────────────────
@@ -6369,80 +6503,6 @@ function roundColumns(kind, i, n, m) {
   return cfg.map((c, ci) => ({ label: c.name || c.chem || ('Column ' + (ci + 1)), ci }));
 }
 
-function weTicked(kind, i, ci, plot) {
-  const s = getState(_we.n, getMonth());
-  if (kind === 'pd')      return !!(s.pd['W' + (i + 1)]?.[plot]?.[ci === 0 ? 'P' : 'D']);
-  if (kind === 'weeding') return !!(s.weeding[plot]?.['R' + (i + 1)]);
-  return !!((s[kind][plot] || [])[i] || [])[ci];
-}
-
-function weToggle(kind, i, ci, plot, skipRender) {
-  if (!canEditSchedule || !_we) return;
-  const n = _we.n, m = getMonth(), s = getState(n, m);
-  if (kind === 'pd') {
-    const w = 'W' + (i + 1);
-    if (!s.pd[w]) s.pd[w] = {};
-    if (!s.pd[w][plot]) s.pd[w][plot] = { P: false, D: false };
-    const f = ci === 0 ? 'P' : 'D';
-    s.pd[w][plot][f] = !s.pd[w][plot][f];
-  } else if (kind === 'weeding') {
-    if (!s.weeding[plot]) s.weeding[plot] = { R1: false, R2: false };
-    const r = 'R' + (i + 1);
-    s.weeding[plot][r] = !s.weeding[plot][r];
-  } else {
-    if (!s[kind][plot]) s[kind][plot] = [];
-    if (!s[kind][plot][i]) s[kind][plot][i] = [];
-    s[kind][plot][i][ci] = !s[kind][plot][i][ci];
-  }
-  if (skipRender) return;
-  persistStateSoon(n, m);
-  autoSyncRecords();
-  keepingScroll(renderWorkEditor);
-  renderSchedSummary();
-  redrawSheet(kind);
-}
-
-/* One repaint for the whole column, not one per plot — 52 plots through the
-   single-tick path is 52 renders of a table nobody has seen yet. */
-function weToggleAll(kind, i, ci) {
-  if (!canEditSchedule || !_we) return;
-  const n = _we.n, m = getMonth(), plots = NURSERY_PLOTS[n] || [];
-  const all = plots.every(p => weTicked(kind, i, ci, p));
-  plots.forEach(p => { if (weTicked(kind, i, ci, p) === all) weToggle(kind, i, ci, p, true); });
-  persistStateSoon(n, m);
-  autoSyncRecords();
-  keepingScroll(renderWorkEditor);
-  renderSchedSummary();
-  redrawSheet(kind);
-}
-
-/* ── The popup ─────────────────────────────────────────────────────────
-   One block per week: the week's number, its dates, what is being sprayed
-   or fed in it, and every plot with a tick. That is the whole of a week,
-   and it is asked for in the order somebody fills it in — when, with what,
-   where.
-
-   Weeks are made here rather than on the summary. The summary is a reading
-   surface; this is the writing one, and a week made anywhere else would be
-   a week with no dates and no chemicals until somebody came here anyway. */
-
-/* A <select> whose value is not among its options shows the FIRST option
-   instead — silently, and looking exactly like a saved answer. On a screen
-   that says what to spray, that is the wrong kind of wrong, so a saved name
-   the list no longer offers is carried in and marked rather than dropped. */
-function weSel(opts, val, onch) {
-  const missing = val && val !== '\u2014' && !opts.includes(val);
-  const o = (missing ? [{ v: val, t: val + ' \u2014 no longer in the list' }] : [])
-    .concat(opts.map(x => ({ v: x, t: x })));
-  return `<select class="we-sel" onchange="${onch}">` +
-    o.map(x => `<option value="${esc(x.v)}"${x.v === val ? ' selected' : ''}>${esc(x.t)}</option>`).join('') +
-    '</select>';
-}
-
-function weNum(val, onch) {
-  return `<input class="we-num" type="number" min="0" step="0.01" value="${val ?? ''}" oninput="${onch}">`;
-}
-
 /* What one week's column asks for, and what its ticks mean.
 
    P & D asks twice — pest and disease can go on different plots in the
@@ -6450,10 +6510,12 @@ function weNum(val, onch) {
    many as their config holds, one per fertiliser or chemical. Weeding has
    one, and nothing to choose.
 
-   The STICKER is deliberately not here: a sticker goes in every tank
-   whatever else does, so asking about it once a week was a question with
-   one answer. The doses still save and still publish; the Setting page is
-   where a sticker changes. */
+   Both sprays also carry an ACTIVATOR — the sticker that goes in the tank
+   with the chemical. It used to be left off here, on the grounds that a
+   sticker goes in every tank whatever else does. That was wrong twice
+   over: the answer differs between pest and disease and between interrow
+   rounds, and the sheets that used to hold the picker are no longer on
+   the Schedule tab, so there was nowhere left to change it. */
 /* Every week needs a round behind it, in all three configs. addWeek() makes
    one as it goes, but a month can reach the editor with more weeks than
    rounds — carried forward from a shorter month, or saved before addWeek
@@ -6505,11 +6567,19 @@ function weCols(kind, i, n, m) {
       { ci: 0, label: 'Pest', opts: chemNames('pest'), val: c.P,
         onSel: `updatePDChem('${w}','P',this.value);renderWorkEditor()`,
         dose: c.P_dose, unit: c.P_unit,
-        onDose: `updatePDDose('${w}','P_dose',+this.value)` },
+        onDose: `updatePDDose('${w}','P_dose',+this.value)`,
+        label2: 'Activator', opts2: taggedNames('sticker'), val2: c.P_sticker,
+        onSel2: `updatePDChem('${w}','P_sticker',this.value);renderWorkEditor()`,
+        dose2: c.P_sticker_dose, unit2: c.P_sticker_unit,
+        onDose2: `updatePDDose('${w}','P_sticker_dose',+this.value)` },
       { ci: 1, label: 'Disease', opts: chemNames('disease'), val: c.D,
         onSel: `updatePDChem('${w}','D',this.value);renderWorkEditor()`,
         dose: c.D_dose, unit: c.D_unit,
-        onDose: `updatePDDose('${w}','D_dose',+this.value)` }
+        onDose: `updatePDDose('${w}','D_dose',+this.value)`,
+        label2: 'Activator', opts2: taggedNames('sticker'), val2: c.D_sticker,
+        onSel2: `updatePDChem('${w}','D_sticker',this.value);renderWorkEditor()`,
+        dose2: c.D_sticker_dose, unit2: c.D_sticker_unit,
+        onDose2: `updatePDDose('${w}','D_sticker_dose',+this.value)` }
     ];
   }
   if (kind === 'weeding') return [{ ci: 0, label: 'Weeding' }];
@@ -6529,55 +6599,16 @@ function weCols(kind, i, n, m) {
     unit: many ? (c.unit || 'gm') : (c.chem_unit || 'mL'),
     onDose: many
       ? `updateManuringDose(${i},${ci},'dose',+this.value)`
-      : `updateInterrowDose(${i},${ci},'chem_dose',+this.value)`
+      : `updateInterrowDose(${i},${ci},'chem_dose',+this.value)`,
+    /* Manuring is spread dry and mixes nothing with it, so it gets no
+       second control — only the two sprays do. */
+    ...(many ? {} : {
+      label2: 'Activator', opts2: taggedNames('sticker'), val2: interrowAct(c),
+      onSel2: `updateInterrowAct(${i},${ci},this.value);renderWorkEditor()`,
+      dose2: c.activator_dose, unit2: c.activator_unit || 'mL',
+      onDose2: `updateInterrowDose(${i},${ci},'activator_dose',+this.value)`
+    })
   }));
-}
-
-function weTicked(kind, i, ci, plot) {
-  const s = getState(_we.n, getMonth());
-  if (kind === 'pd')      return !!(s.pd['W' + (i + 1)]?.[plot]?.[ci === 0 ? 'P' : 'D']);
-  if (kind === 'weeding') return !!(s.weeding[plot]?.['R' + (i + 1)]);
-  return !!((s[kind][plot] || [])[i] || [])[ci];
-}
-
-function weToggle(kind, i, ci, plot, skipRender) {
-  if (!canEditSchedule || !_we) return;
-  const n = _we.n, m = getMonth(), s = getState(n, m);
-  if (kind === 'pd') {
-    const w = 'W' + (i + 1);
-    if (!s.pd[w]) s.pd[w] = {};
-    if (!s.pd[w][plot]) s.pd[w][plot] = { P: false, D: false };
-    const f = ci === 0 ? 'P' : 'D';
-    s.pd[w][plot][f] = !s.pd[w][plot][f];
-  } else if (kind === 'weeding') {
-    if (!s.weeding[plot]) s.weeding[plot] = { R1: false, R2: false };
-    const r = 'R' + (i + 1);
-    s.weeding[plot][r] = !s.weeding[plot][r];
-  } else {
-    if (!s[kind][plot]) s[kind][plot] = [];
-    if (!s[kind][plot][i]) s[kind][plot][i] = [];
-    s[kind][plot][i][ci] = !s[kind][plot][i][ci];
-  }
-  if (skipRender) return;
-  persistStateSoon(n, m);
-  autoSyncRecords();
-  keepingScroll(renderWorkEditor);
-  renderSchedSummary();
-  redrawSheet(kind);
-}
-
-/* One repaint for the whole column, not one per plot — 52 plots through the
-   single-tick path is 52 renders of a table nobody has seen yet. */
-function weToggleAll(kind, i, ci) {
-  if (!canEditSchedule || !_we) return;
-  const n = _we.n, m = getMonth(), plots = NURSERY_PLOTS[n] || [];
-  const all = plots.every(p => weTicked(kind, i, ci, p));
-  plots.forEach(p => { if (weTicked(kind, i, ci, p) === all) weToggle(kind, i, ci, p, true); });
-  persistStateSoon(n, m);
-  autoSyncRecords();
-  keepingScroll(renderWorkEditor);
-  renderSchedSummary();
-  redrawSheet(kind);
 }
 
 /* ── The popup ─────────────────────────────────────────────────────────
@@ -6607,15 +6638,73 @@ function weNum(val, onch) {
   return `<input class="we-num" type="number" min="0" step="0.01" value="${val ?? ''}" oninput="${onch}">`;
 }
 
-/* What this work mixes for one week. The STICKER rows are deliberately not
-   here: a sticker goes in every tank whatever else does, so asking about it
-   once a week was asking a question with one answer. The doses still save,
-   and the Setting page is where a sticker is changed. */
-function weTicked(kind, i, ci, plot) {
-  const s = getState(_we.n, getMonth());
+/* Is this plot ticked in this column? Asked of a state handed in, because
+   the totals below are wanted for nurseries the editor does not have open. */
+function weColTicked(kind, i, ci, plot, s) {
   if (kind === 'pd')      return !!(s.pd['W' + (i + 1)]?.[plot]?.[ci === 0 ? 'P' : 'D']);
   if (kind === 'weeding') return !!(s.weeding[plot]?.['R' + (i + 1)]);
   return !!((s[kind][plot] || [])[i] || [])[ci];
+}
+
+/* What this work mixes for one week — the chemical, and under it the
+   activator that goes in the tank with it. See weCols() above. */
+function weTicked(kind, i, ci, plot) {
+  return weColTicked(kind, i, ci, plot, getState(_we.n, getMonth()));
+}
+
+/* ── The figures a schedule exists to produce ──────────────────────────
+   How many plots, how many seedlings in them, and how much of each thing
+   that goes in the tank it takes to cover them. Every one of the old
+   full-width sheets ended in these four rows, and they are the reason the
+   sheets were printed: a schedule that does not say how much to draw from
+   the store is a schedule somebody does arithmetic on at six in the
+   morning. When the sheets came off the Schedule tab the arithmetic went
+   with them. This puts it back, in both the places it is now wanted —
+   along the bottom of the editor, and under the summary table.
+
+   ONE function for both, because two copies of a calculation are two
+   answers waiting to disagree about how much Bond to sign out. */
+function weColTotals(kind, i, ci, n, m) {
+  const s = getState(n, m), plots = NURSERY_PLOTS[n] || [];
+  const on = p => weColTicked(kind, i, ci, p, s);
+  const nPlots = plots.filter(on).length;
+  const seed = sumSeedlings(n, plots, on);
+  const rows = [
+    { label: t('sum.jumlahPlot'),  value: nPlots || '—' },
+    { label: t('sum.jumlahBibit'), value: seed ? seed.toLocaleString() : '—' }
+  ];
+  // Weeding mixes nothing, so there is nothing to draw from the store.
+  if (kind === 'weeding') return rows;
+
+  if (kind === 'manuring') {
+    const c = ((s.manuringConfig || [])[i] || [])[ci] || {};
+    const u = calcFertUsage(seed, c.name, c.dose, 1);
+    rows.push({ label: t('sum.maxBaja'), value: u.kg });
+    rows.push({ label: t('sum.bags'),    value: u.bags });
+    return rows;
+  }
+
+  if (kind === 'pd') {
+    const c = (s.pdConfig || {})['W' + (i + 1)] || {};
+    const f = ci === 0 ? 'P' : 'D';
+    rows.push({ label: t('sum.maxRacun'),
+                value: calcMaxChem(seed, c[f], c[f + '_dose'], c[f + '_unit'], 1) });
+    /* No chemical means no tank and no sticker means nothing in it. Either
+       way the sticker figure is not zero — it is not asked. */
+    rows.push({ label: t('sum.maxBond'),
+                value: (!seed || c[f] === '—' || c[f + '_sticker'] === '—') ? '—'
+                  : calcMaxChem(seed, c[f + '_sticker'], c[f + '_sticker_dose'],
+                                c[f + '_sticker_unit'], 1) });
+    return rows;
+  }
+
+  const c = ((s.interrowConfig || [])[i] || [])[ci] || {};
+  rows.push({ label: t('sum.maxRacun'),
+              value: calcMaxChem(seed, c.chem, c.chem_dose, c.chem_unit, 1) });
+  rows.push({ label: t('sum.maxActivator'),
+              value: (!seed || !c.activator_dose) ? '—'
+                : calcMaxChem(seed, interrowAct(c), c.activator_dose, c.activator_unit, 1) });
+  return rows;
 }
 
 function weToggle(kind, i, ci, plot, skipRender) {
@@ -6749,7 +6838,8 @@ const WE_MULTI_COL = { manuring: 'manuringConfig', interrow: 'interrowConfig' };
 function weBlankCol(kind) {
   return kind === 'manuring'
     ? { name: 'Yaramila', dose: 20, unit: 'gm' }
-    : { chem: 'Basta', chem_dose: 200, chem_unit: 'mL', activator_dose: 15, activator_unit: 'mL' };
+    : { chem: 'Basta', chem_dose: 200, chem_unit: 'mL',
+        activator: 'Activator', activator_dose: 15, activator_unit: 'mL' };
 }
 
 function weAddCol(i) {
@@ -6884,12 +6974,23 @@ function renderWorkEditor() {
       dayInput(w.slot, 'from', w.from) + '<span class="we-to">to</span>' + dayInput(w.slot, 'to', w.to) +
     '</th>').join('') + '</tr>';
 
+  /* The second control is the activator that goes in the tank with the
+     first — Bond on a P&D week, the interrow activator on a spray round.
+     It was left off on the grounds that a sticker goes in every tank
+     whatever else does, so asking once a week was a question with one
+     answer. It is not: the answer differs between the two sprays and
+     between rounds, and with no picker here the only place to change it
+     was a sheet the Schedule tab no longer shows. */
   const h3 = '<tr>' + weeks.map((w, i) => cols[i].map((c, k) =>
     `<th class="we-col${k === 0 && i ? ' grp' : ''}">` +
       `<div class="we-col-l">${esc(c.label)}</div>` +
       (c.opts ? weSel(c.opts, c.val, c.onSel) : '') +
       (c.opts ? `<div class="we-col-d">${weNum(c.dose, c.onDose)}` +
                 `<span class="we-cfg-u">${esc(c.unit || '')}</span></div>` : '') +
+      (c.opts2 ? `<div class="we-col-l we-col-l2">${esc(c.label2)}</div>` +
+                 weSel(c.opts2, c.val2, c.onSel2) +
+                 `<div class="we-col-d">${weNum(c.dose2, c.onDose2)}` +
+                 `<span class="we-cfg-u">${esc(c.unit2 || '')}</span></div>` : '') +
       `<button type="button" class="we-all" onclick="weToggleAll('${kind}',${w.slot},${c.ci})" ` +
       `title="Tick or clear every plot in this column">all</button>` +
     '</th>').join('')).join('') + '</tr>';
@@ -6903,6 +7004,33 @@ function renderWorkEditor() {
         `aria-pressed="${on}">${on ? '&#10003;' : ''}</button></td>`;
     }).join('')).join('') + '</tr>').join('');
 
+  /* The totals, along the bottom, in the same columns as the ticks above
+     them — a figure in its own column needs no legend to say which week and
+     which chemical it belongs to. They sit in a <tfoot> pinned to the
+     bottom of the scroll, because on a nursery with fifty-two plots the
+     answer is otherwise fifty rows below the question. */
+  const tot = weeks.map((w, i) => cols[i].map(c => weColTotals(kind, w.slot, c.ci, n, m)));
+  const nTot = (tot[0] && tot[0][0]) ? tot[0][0].length : 0;
+  const foot = nTot
+    ? '<tfoot>' + Array.from({ length: nTot }, (_, r) =>
+        '<tr class="we-tot"><td class="we-plot">' + esc(tot[0][0][r].label) + '</td>' +
+        weeks.map((w, i) => cols[i].map((c, k) =>
+          `<td class="${k === 0 && i ? 'grp' : ''}">${esc(String(tot[i][k][r].value))}</td>`
+        ).join('')).join('') + '</tr>').join('') + '</tfoot>'
+    : '';
+
   body.innerHTML = `<div class="tbl-wrap we-scroll"><table class="we-table">
-      <thead>${h1}${h2}${h3}</thead><tbody>${rows}</tbody></table></div>`;
+      <thead>${h1}${h2}${h3}</thead><tbody>${rows}</tbody>${foot}</table></div>`;
+
+  /* Every sticky row pinned to bottom:0 lands on the same line, and only
+     the last one is visible — four rows of totals showing one. They have to
+     be stacked, and only the browser knows how tall a row came out, so the
+     offsets are measured rather than guessed at in the stylesheet. */
+  const ft = body.querySelectorAll('tfoot tr');
+  let off = 0;
+  for (let r = ft.length - 1; r >= 0; r--) {
+    const h = ft[r].getBoundingClientRect().height;
+    ft[r].querySelectorAll('td').forEach(td => { td.style.bottom = off + 'px'; });
+    off += h;
+  }
 }

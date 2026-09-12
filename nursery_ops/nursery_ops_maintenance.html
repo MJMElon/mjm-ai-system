@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=69">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=74">
 </head>
 <body>
 
@@ -261,6 +261,12 @@
       <div class="card" style="padding:18px;margin-bottom:18px;">
         <div class="lst-top">
           <div class="set-h">This Month at a Glance</div>
+          <!-- The schedule as a sheet somebody can carry into the field.
+               The modal behind this button has been here all along; the
+               toolbar that opened it left with the four full-width sheets,
+               which left the download with no way in. -->
+          <button type="button" class="btn sched-dl" onclick="openPdfModal()"
+                  data-i18n="btn.downloadPdf">&#11015; Download PDF</button>
         </div>
         <div id="sched-summary"></div>
       </div>
@@ -447,7 +453,12 @@
 
 <!-- ═══ ONE WORK, ONE WEEK ═══ -->
 <div class="modal-overlay" id="we-modal">
-  <div class="modal" style="width:1000px;max-width:96vw;">
+  <!-- The work editor is a TABLE — every plot down, every week across — so it
+       wants the screen, not a dialog's worth of it. 1600px wide and 94vh tall
+       means a nursery of fourteen plots over four weeks is read without
+       scrolling in either direction on an office monitor; the max-width and
+       max-height keep it inside a laptop. -->
+  <div class="modal" style="width:1600px;max-width:96vw;height:94vh;max-height:94vh;">
     <div class="modal-top">
       <div>
         <div class="modal-title" id="we-title">Work</div>
@@ -573,7 +584,7 @@
 <script src="../shared/shared_plot_movement.js?v=1"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="plot_maintenance_script.js?v=83"></script>
+<script src="plot_maintenance_script.js?v=87"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->
