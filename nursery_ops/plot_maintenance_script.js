@@ -63,10 +63,52 @@ const DEFAULT_PLOT_QTY = {
    Shape: { nursery: { plot: qty } }. See PERSISTENCE LAYER below. */
 let plotQtyOverrides = {};
 function getPlotQtyOverrides(){ return plotQtyOverrides; }
+/* A nursery matched on its letters and digits alone, so "UNN 1" and UNN1 are
+   one nursery. The same rule the payroll register, the worker locations and
+   the Location card all use — see registerNurseryKey in npayroll_script.js.
+   Change one, change the other. */
+const qtyNurseryKey = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+/* The entry for one nursery out of a map keyed by nursery name, under
+   whatever spelling that map happens to use. */
+function aliasBucket(map, n) {
+  if (map && map[n] !== undefined && map[n] !== null) return map[n];
+  const want = qtyNurseryKey(n);
+  const k = Object.keys(map || {}).find(x => qtyNurseryKey(x) === want);
+  return k ? map[k] : null;
+}
+
+/* What one plot holds.
+   The capacity is keyed the way STOCK MANAGEMENT spells the nursery — "UNN 1"
+   with the space — because that is where the Setting page's list comes from
+   and migration_nops_capacity_to_stock.sql moved the rows onto those keys.
+   The schedule asks by its own key, "UNN1". Those are not the same string,
+   so every lookup for UNN 1 and UNN 2 missed and fell through to the
+   hardcoded table below: a capacity typed on the Setting page, saved, shown
+   as saved, and never used by the thing it governs.
+   (BNN was spelt the same both ways and worked, which is how it went unseen.) */
+/* What the SETTING PAGE calls this nursery — the row the office actually
+   types into. migration_nops_capacity_to_stock.sql deletes nothing, so a
+   database can hold two buckets for one nursery: the migrated "UNN 1" and
+   a leftover "UNN1". Matching on letters and digits alone would then pick
+   whichever came first, and picking the leftover means the schedule reads a
+   capacity that is not the one on screen. The one the office can see and
+   edit wins. */
+function qtyStockName(n){
+  try { const k = schedKey(n); return (k && stockLabel(k)) || n; }
+  catch (_) { return n; }
+}
+
 function getPlotQty(n, p){
   const ov = plotQtyOverrides;
-  if (ov[n]?.[p] !== undefined && ov[n][p] !== null) return +ov[n][p] || 0;
-  return DEFAULT_PLOT_QTY[n]?.[p] || 0;
+  const stock = qtyStockName(n);
+  for (const key of [stock, n]) {
+    if (key && ov[key] && ov[key][p] !== undefined && ov[key][p] !== null) return +ov[key][p] || 0;
+  }
+  const b = aliasBucket(ov, n);
+  if (b && b[p] !== undefined && b[p] !== null) return +b[p] || 0;
+  const def = aliasBucket(DEFAULT_PLOT_QTY, n);
+  return (def && +def[p]) || 0;
 }
 function setPlotQty(n, p, v){
   if (!plotQtyOverrides[n]) plotQtyOverrides[n] = {};
@@ -117,15 +159,22 @@ function getDoseForChem(name){
 }
 
 function calcMaxChem(seedlings, chemName, dose, unit, decimals = 2){
-  if(!seedlings || !chemName || chemName === '—' || !dose) return '—';
+  // A dose that is not a number cannot make an amount — see calcFertUsage.
+  dose = Number(dose);
+  if(!seedlings || !chemName || chemName === '—' ||
+     !Number.isFinite(dose) || dose <= 0) return '—';
   // Formula: (plot capacity / coverage per pump) × dose per pump / 1000.
   // The chemical's own coverage when it has one, the preset when it does not
   // — the same rule the Setting page shows.
   const totalUnits = (seedlings / coverageFor(chemName)) * dose;
   return fmtUsage(totalUnits, unit, decimals);
 }
+/* capacityOf, not getPlotQty: a Pre Nursery plot is counted in TRAYS, and
+   asking it for a polybag figure answered zero for every plot it has. Every
+   PN schedule read "Total Seedlings —" and no chemical usage at all, which
+   is the one nursery where the arithmetic is least obvious by eye. */
 function sumSeedlings(nursery, plots, ticked){
-  return plots.filter(p => ticked(p)).reduce((s,p) => s + getPlotQty(nursery, p), 0);
+  return plots.filter(p => ticked(p)).reduce((s,p) => s + capacityOf(nursery, p), 0);
 }
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -234,7 +283,16 @@ function fertDoseFor(name, usage) {
 }
 
 function calcFertUsage(seedlings, fertName, doseGm, decimals = 2){
-  if (!seedlings || !fertName || fertName === '—' || !doseGm) return { kg:'—', bags:'—', totalGm:0 };
+  /* A dose that is not a number is not a dose. The old guard let anything
+     truthy through, so a dose keyed with a comma or a unit in it — "1,000",
+     "20g" — multiplied out to NaN and the schedule read "NaN kg · NaN bags",
+     which is worse than saying nothing: it looks like an amount. A figure
+     that cannot be worked out reads as not asked, like every other one on
+     this screen. */
+  const dose = Number(doseGm);
+  if (!seedlings || !fertName || fertName === '—' ||
+      !Number.isFinite(dose) || dose <= 0) return { kg:'—', bags:'—', totalGm:0 };
+  doseGm = dose;
   const f = fertByName(fertName);
   const info = f && f.bag_size_gm ? { bagSizeGm: +f.bag_size_gm, bagLabel: f.bag_label || '' } : null;
   const totalGm = seedlings * doseGm;
@@ -1833,6 +1891,24 @@ function renderPeriodOwner(kind) {
 
 const getNursery = () => document.getElementById('global-nursery').value;
 
+/* ── Which nursery is being EDITED ─────────────────────────────────────
+   Not the same question as getNursery(), and the difference cost a day.
+
+   getNursery() reads the toolbar. On the Schedule tab the toolbar's nursery
+   control is HIDDEN — the summary shows every nursery at once, so there is
+   nothing for it to pick — and it holds whatever was last selected on some
+   other tab. The work editor, though, is opened per nursery from the
+   pencil on a summary row.
+
+   So every chemical chosen in that editor was written into the TOOLBAR's
+   nursery, and the redraw, which reads the editor's nursery, showed the old
+   chemical still sitting there. Choose Destroy, get Becker — and meanwhile
+   a nursery nobody had opened quietly had its schedule changed.
+
+   The editor's nursery wins whenever the editor is open. The old
+   full-width sheets, which do follow the toolbar, still get it. */
+const editNursery = () => (typeof _we !== 'undefined' && _we) ? _we.n : getNursery();
+
 /* ── MONTH/YEAR WHEEL PICKER (Android-style spinner) ──
    Two independently spinnable columns (month + year) with a Cancel/OK
    footer. Writes "YYYY-MM" into the hidden #global-month / #pdf-month
@@ -3060,7 +3136,7 @@ function mkDose(val, unit, onch) {
 ════════════════════════════ */
 function updatePDChem(w,f,v){
   if(!canEditSchedule) return;
-  const cfg = getState(getNursery(),getMonth()).pdConfig[w];
+  const cfg = getState(editNursery(),getMonth()).pdConfig[w];
   cfg[f] = v;
   /* The chosen chemical's own unit AND its own dose. The unit always
      followed; the dose did not, so picking Destroy over Becker changed the
@@ -3084,9 +3160,9 @@ function updatePDChem(w,f,v){
      never told. A chemical changed in the editor left the schedule still
      naming the old one until something else happened to repaint it. */
   try { renderSchedSummary(); } catch (_) {}
-  persistStateSoon(getNursery(), getMonth());
+  persistStateSoon(editNursery(), getMonth());
 }
-function updatePDDose(w,f,v){ if(!canEditSchedule) return; getState(getNursery(),getMonth()).pdConfig[w][f]=v; renderPD(); persistStateSoon(getNursery(), getMonth()); }
+function updatePDDose(w,f,v){ if(!canEditSchedule) return; getState(editNursery(),getMonth()).pdConfig[w][f]=v; renderPD(); persistStateSoon(editNursery(), getMonth()); }
 
 function renderPD() {
   /* The four sheets were removed from the Schedule tab — the summary's
@@ -3219,17 +3295,17 @@ function snapshotPdSaved(s){
 ════════════════════════════ */
 function updateManuringChem(ri, ci, v){
   if(!canEditSchedule) return;
-  const cfg = getState(getNursery(),getMonth()).manuringConfig[ri][ci];
+  const cfg = getState(editNursery(),getMonth()).manuringConfig[ri][ci];
   cfg.name = v;
   cfg.unit = getUnitForChem(v);
   renderManuring();
-  persistStateSoon(getNursery(), getMonth());
+  persistStateSoon(editNursery(), getMonth());
 }
 function updateManuringDose(ri, ci, v){
   if(!canEditSchedule) return;
-  getState(getNursery(),getMonth()).manuringConfig[ri][ci].dose = v;
+  getState(editNursery(),getMonth()).manuringConfig[ri][ci].dose = v;
   renderManuring();
-  persistStateSoon(getNursery(), getMonth());
+  persistStateSoon(editNursery(), getMonth());
 }
 function addManuringRound(){
   if(!canEditSchedule) return;
@@ -3494,7 +3570,7 @@ function toggleAllWeeding(r){
 ════════════════════════════ */
 function updateInterrowChem(ri, ci, v){
   if(!canEditSchedule) return;
-  const cfg = getState(getNursery(),getMonth()).interrowConfig[ri][ci];
+  const cfg = getState(editNursery(),getMonth()).interrowConfig[ri][ci];
   cfg.chem = v;
   cfg.chem_unit = getUnitForChem(v);
   /* Its own dose too, the same rule P&D follows: a dose belongs to the
@@ -3504,7 +3580,7 @@ function updateInterrowChem(ri, ci, v){
   if (d != null) cfg.chem_dose = d;
   renderInterrow();
   try { renderSchedSummary(); } catch (_) {}
-  persistStateSoon(getNursery(), getMonth());
+  persistStateSoon(editNursery(), getMonth());
 }
 
 /* Which activator goes in the tank with it. Until now there was a dose box
@@ -3513,20 +3589,20 @@ function updateInterrowChem(ri, ci, v){
    P&D picks Bond from, because that is what the Setting page holds them as. */
 function updateInterrowAct(ri, ci, v){
   if(!canEditSchedule) return;
-  const cfg = getState(getNursery(),getMonth()).interrowConfig[ri][ci];
+  const cfg = getState(editNursery(),getMonth()).interrowConfig[ri][ci];
   cfg.activator = v;
   cfg.activator_unit = getUnitForChem(v);
   const d = getDoseForChem(v);
   if (d != null) cfg.activator_dose = d;
   renderInterrow();
   try { renderSchedSummary(); } catch (_) {}
-  persistStateSoon(getNursery(), getMonth());
+  persistStateSoon(editNursery(), getMonth());
 }
 function updateInterrowDose(ri, ci, f, v){
   if(!canEditSchedule) return;
-  getState(getNursery(),getMonth()).interrowConfig[ri][ci][f] = v;
+  getState(editNursery(),getMonth()).interrowConfig[ri][ci][f] = v;
   renderInterrow();
-  persistStateSoon(getNursery(), getMonth());
+  persistStateSoon(editNursery(), getMonth());
 }
 function addInterrowRound(){
   if(!canEditSchedule) return;
@@ -5210,12 +5286,24 @@ let capEditing = false;
 let capDraft   = null;   // { nursery: { plots:{plot:number}, perTray:number } }
 
 function trayQty(n, p) {
-  return (plotTrays[n] && plotTrays[n][p] != null) ? +plotTrays[n][p] || 0 : 0;
+  // Keyed however Stock Management spelt the nursery — see getPlotQty.
+  const stock = qtyStockName(n);
+  for (const key of [stock, n]) {
+    if (key && plotTrays[key] && plotTrays[key][p] != null) return +plotTrays[key][p] || 0;
+  }
+  const b = aliasBucket(plotTrays, n);
+  return (b && b[p] != null) ? +b[p] || 0 : 0;
+}
+
+function traySizeOf(n) {
+  const stock = qtyStockName(n);
+  for (const key of [stock, n]) if (key && traySize[key] != null) return +traySize[key] || 0;
+  return +aliasBucket(traySize, n) || 0;
 }
 
 /* What the dosage is worked out from, whichever way the plot is counted. */
 function capacityOf(n, p) {
-  return isPreNursery(n) ? trayQty(n, p) * (traySize[n] || 0) : getPlotQty(n, p);
+  return isPreNursery(n) ? trayQty(n, p) * traySizeOf(n) : getPlotQty(n, p);
 }
 
 /* The nurseries this block offers, and the plots under each. Both come from
@@ -6022,7 +6110,18 @@ function workWeeks(n, m, kind) {
  * is dropped from the view rather than silently eating the earlier one's
  * ticks; addWeek below refuses to make one in the first place. */
 function weeksOf(n, m, kind) {
-  const s = appState[n]?.[m];
+  /* getState, NOT appState directly. The boot deliberately empties appState
+     once the database answers, so a nursery nobody has opened this session
+     has no entry in it — and reading appState answered "no weeks" for a
+     nursery whose schedule was sitting in dbStateCache the whole time.
+
+     On the summary that showed as "0 WEEKS · No weeks set yet" beside a
+     nursery that HAS a schedule, and hid a month carried forward from the
+     last one that was set, which is the whole point of carrying it forward.
+     getState hydrates from the cache and falls back to the carry, which is
+     what every other reader on this page already goes through — the same
+     mistake plotsAtSlot was making. */
+  const s = getState(n, m);
   if (!s) return [];
   const days = daysInMonthLabel(m);
   let list;
@@ -6302,43 +6401,41 @@ function summaryTable(it, m) {
       </div>
       <div class="tbl-wrap"><table class="ss-table">
         <thead>${head}</thead><tbody>${rows}</tbody></table></div>
-      ${totalsBlock(n, m)}
     </div>`;
 }
 
 /* ── How much to draw from the store ───────────────────────────────────
-   The tick grid above says WHERE each work happens. This says what it
-   costs: plots, seedlings, and the chemical and sticker to cover them.
+   The tick grid says WHERE a work happens. This says what it costs: plots,
+   seedlings, and the chemical and sticker to cover them.
 
-   One table per work rather than one for the nursery, because the figures
-   only mean anything under the chemical they were worked out from, and a
-   work's chemical changes from week to week. A work with no weeks in this
-   month is left out entirely — a table of dashes is not information. */
-function totalsBlock(n, m) {
-  const tables = WORKS.map(work => {
-    const weeks = weeksOf(n, m, work.key);
-    if (!weeks.length) return '';
-    const cols = [];
-    weeks.forEach(w => weCols(work.key, w.slot, n, m)
-      .forEach(c => cols.push({ slot: w.slot, c })));
-    if (!cols.length) return '';
+   ONE WORK, not the nursery. The figures only mean anything under the
+   chemical they were worked out from, and a work's chemical changes from
+   week to week — so this is drawn inside that work's own expanded panel,
+   under the plots it counted. It used to sit in a block at the foot of the
+   card, four tables deep and away from the ticks each one was the sum of.
 
-    const per = cols.map(x => weColTotals(work.key, x.slot, x.c.ci, n, m));
-    // Every column of one work asks the same questions, so row 0 names them.
-    const labels = per[0].map(r => r.label);
-    const head = '<tr><th class="st-lbl">' + esc(work.label) + '</th>' +
-      cols.map(x => '<th><span class="st-wk">Week ' + (x.slot + 1) + '</span>' +
-        '<span class="st-what">' + esc(x.c.val || x.c.label) + '</span></th>').join('') +
-      '</tr>';
-    const body = labels.map((lb, r) => '<tr><td class="st-lbl">' + esc(lb) + '</td>' +
-      per.map(p => '<td>' + esc(String(p[r].value)) + '</td>').join('') + '</tr>').join('');
-    return '<div class="tbl-wrap"><table class="st-table">' +
-      '<thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
-  }).filter(Boolean);
+   Empty string when the work has no week in this month: a table of dashes
+   is not information. */
+function workTotalsTable(n, kind, m) {
+  const work = WORKS.find(w => w.key === kind);
+  const weeks = weeksOf(n, m, kind);
+  if (!work || !weeks.length) return '';
+  const cols = [];
+  weeks.forEach(w => weCols(kind, w.slot, n, m)
+    .forEach(c => cols.push({ slot: w.slot, c })));
+  if (!cols.length) return '';
 
-  if (!tables.length) return '';
-  return '<div class="ss-tot"><div class="ss-tot-h">Totals for ' + esc(m) + '</div>' +
-    tables.join('') + '</div>';
+  const per = cols.map(x => weColTotals(kind, x.slot, x.c.ci, n, m));
+  // Every column of one work asks the same questions, so row 0 names them.
+  const labels = per[0].map(r => r.label);
+  const head = '<tr><th class="st-lbl">' + esc(work.label) + '</th>' +
+    cols.map(x => '<th><span class="st-wk">Week ' + (x.slot + 1) + '</span>' +
+      '<span class="st-what">' + esc(x.c.val || x.c.label) + '</span></th>').join('') +
+    '</tr>';
+  const body = labels.map((lb, r) => '<tr><td class="st-lbl">' + esc(lb) + '</td>' +
+    per.map(p => '<td>' + esc(String(p[r].value)) + '</td>').join('') + '</tr>').join('');
+  return '<div class="tbl-wrap st-wrap"><table class="st-table">' +
+    '<thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
 }
 
 /* ── What "expand" shows ───────────────────────────────────────────────
@@ -6392,7 +6489,17 @@ function expandedPlots(n, kind, m, blocks) {
       `<td class="xp-tot">${nOn || ''}</td></tr>`;
   }).join('');
 
-  return head + body;
+  /* And what those ticks come to. It sits at the foot of the plots it
+     counted rather than at the foot of the card, so the answer is beside
+     the question. A nested table in a colspan cell sets its own column
+     widths — which is exactly what is wanted here, since the totals have
+     one column per CHEMICAL and the grid above has one per week. */
+  const tot = workTotalsTable(n, kind, m);
+  const foot = tot
+    ? `<tr class="ss-detail xp-sum"><td colspan="${span}">${tot}</td></tr>`
+    : '';
+
+  return head + body + foot;
 }
 
 function toggleSummaryRow(n, kind) {
@@ -6849,9 +6956,13 @@ function weAddCol(i) {
   const n = _we.n, m = getMonth(), s = getState(n, m);
   ensureRounds(n, m);
   const round = s[key][i];
-  // Six is the cap the round controls have always used. Past that the header
-  // is wider than the ticks under it are useful.
-  if (!round || round.length >= 6) return;
+  /* As many columns as there are products to put in them — see the cap in
+     renderWorkEditor, which greys + at the same number. Six is the floor,
+     not the rule: it is what this used to be fixed at, and the button must
+     not become stricter than it was while the Setting list is loading. */
+  const stock = (kind === 'manuring' ? fertNames('monthly') : taggedNames('interrow'))
+    .filter(x => x !== '—').length;
+  if (!round || round.length >= Math.max(6, stock)) return;
   round.push(weBlankCol(kind));
   (NURSERY_PLOTS[n] || []).forEach(pl => {
     if (!s[kind][pl]) s[kind][pl] = [];
@@ -6871,9 +6982,13 @@ function weRemoveCol(i) {
   if (!key) return;
   const n = _we.n, m = getMonth(), s = getState(n, m);
   const round = s[key] && s[key][i];
-  // Never to nothing: a week with no column has no chemical and no ticks,
-  // and is a week that should have been removed instead.
-  if (!round || round.length <= 1) return;
+  /* On the LAST column, − removes the week. A week with no column has no
+     chemical and no ticks, so it is not a thing that can exist — which used
+     to mean the button simply went dead at one column and gave no reason.
+     Taking the last product out of a week IS taking the week out: that is
+     what somebody pressing it there means, and removeWeek says exactly what
+     will go before it goes. */
+  if (!round || round.length <= 1) { weRemoveWeek(i); return; }
   const ci = round.length - 1;
   const plots = NURSERY_PLOTS[n] || [];
   /* The last column's ticks go with it. Said out loud when there are any,
@@ -6950,14 +7065,27 @@ function renderWorkEditor() {
      the week, the other takes the week and every tick in it away. Side by
      side they would be three small buttons and one bad afternoon. */
   const colWord = kind === 'manuring' ? 'fertiliser' : 'chemical';
+  /* How many columns a week may hold is not a number somebody chose — it is
+     how many products there are to put in them. Six was an invented cap, and
+     an invented cap on a screen whose whole point is "as many as you mix" is
+     a screen that says no for no reason. The floor keeps it from being
+     STRICTER than six while the Setting list is still loading. */
+  const stock = (kind === 'manuring' ? fertNames('monthly') : taggedNames('interrow'))
+    .filter(x => x !== '—').length;
+  const cap = Math.max(6, stock);
   const colCtrl = (i, slot) => WE_MULTI_COL[kind]
     ? `<span class="we-col-n schedule-edit-ctrl">` +
         `<button type="button" title="Another ${colWord} in this week"` +
         ` aria-label="Add a column to week ${slot + 1}"` +
-        ` onclick="weAddCol(${slot})"${cols[i].length >= 6 ? ' disabled' : ''}>+</button>` +
-        `<button type="button" title="Drop the last ${colWord} from this week"` +
-        ` aria-label="Remove a column from week ${slot + 1}"` +
-        ` onclick="weRemoveCol(${slot})"${cols[i].length <= 1 ? ' disabled' : ''}>&minus;</button>` +
+        ` onclick="weAddCol(${slot})"${cols[i].length >= cap ? ' disabled' : ''}>+</button>` +
+        /* Never dead. On the last column it removes the WEEK, which is what
+           taking the last product out of a week amounts to. */
+        `<button type="button" title="${cols[i].length <= 1
+          ? 'This is the only ' + colWord + ' — remove the whole week'
+          : 'Drop the last ' + colWord + ' from this week'}"` +
+        ` aria-label="${cols[i].length <= 1 ? 'Remove week ' + (slot + 1)
+                                            : 'Remove a column from week ' + (slot + 1)}"` +
+        ` onclick="weRemoveCol(${slot})">&minus;</button>` +
       `</span>`
     : '';
 
