@@ -7953,6 +7953,17 @@ Thank you.`;
                     // one plot: add the seedlings to the row already there.
                     const existing = t6_plotData.find(p => _t6PlotKey(p.plot) === key);
                     if (existing) {
+                        /* qty is what is STANDING in the plot, which the balance
+                           and the 3rd culled figure are both worked out from, so
+                           seedlings that arrived have to be in it.
+
+                           But the row calls that figure TRANSPLANTED, and they
+                           were not transplanted — N1 was transplanted 2,626 and
+                           had 306 moved into it, and the row said 2,932 under a
+                           word that means something else. So what arrived is
+                           kept apart and shown as its own figure; only the two
+                           together are the qty. */
+                        existing.transferredIn = (existing.transferredIn || 0) + v.qty;
                         existing.qty += v.qty;
                         existing.transferFrom = existing.transferFrom
                             ? `${existing.transferFrom}, ${from}` : from;
@@ -8165,6 +8176,9 @@ Thank you.`;
                 // again as the target's own sales and culled. N18 transferring
                 // 397 to N18-R is the case this fixes.
                 const moved   = (p.savedTransfers || []).reduce((a, t) => a + (t.qty || 0), 0);
+                // What was moved INTO this plot, which is inside p.qty but is
+                // not what the word "Transplanted" means. See injectTransfers.
+                const transferredIn = p.transferredIn || 0;
                 const _n      = t6AutoNumbers(p, moved);
                 const dead2   = _n.dead2;
                 const sales   = _n.sales;
@@ -8266,11 +8280,28 @@ Thank you.`;
                                         <div class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest leading-none whitespace-nowrap">${p.isTransferRow ? 'Transferred' : 'Transplanted'}</div>
                                         <!-- On a "-R" plot this figure is the sum of the movements
                                              INTO it, so resting on it says which plots they came
-                                             from and how many each sent. A main plot's figure is
-                                             its own transplant and has nothing to break down. -->
-                                        <div class="text-sm font-black ${p.isTransferRow ? 'text-[#a83020] cursor-help t6-src-figure' : 'text-[#8a7a68]'} tabular-nums leading-tight"
-                                             ${p.isTransferRow ? `onmouseenter="showT6SourceTip(this, ${i})" onmouseleave="hideT6SalesTip()" title="Where these came from"` : ''}>${t6Fmt(p.qty)}</div>
+                                             from and how many each sent. A main plot shows what it
+                                             was TRANSPLANTED — anything moved into it later is its
+                                             own figure beside this one, not folded into this word. -->
+                                        <div class="text-sm font-black ${p.isTransferRow ? 'text-[#a83020] cursor-help t6-src-figure' : 'text-[#8a7a68] t6-transplanted-figure'} tabular-nums leading-tight"
+                                             ${p.isTransferRow ? `onmouseenter="showT6SourceTip(this, ${i})" onmouseleave="hideT6SalesTip()" title="Where these came from"` : ''}>${t6Fmt(p.isTransferRow ? p.qty : p.qty - transferredIn)}</div>
                                     </div>
+                                    <!-- Always drawn, hidden while nought: a movement keyed now can
+                                         turn this on without rebuilding the row and taking the
+                                         cursor out of the box being typed in.
+
+                                         The divider and the figures are hidden separately rather
+                                         than wrapped in one flex box: hidden and flex on the same
+                                         element is a fight decided by whichever Tailwind emits
+                                         last, and that is a thing to depend on only when there is
+                                         no choice. -->
+                                    ${p.isTransferRow ? '' : `<div class="t6-movedin-cell w-px h-7 bg-[#e8dcc8] ${transferredIn ? '' : 'hidden'}"></div>
+                                    <div class="t6-movedin-cell ${transferredIn ? '' : 'hidden'}">
+                                        <div class="text-[8px] font-black text-[#0891b2] uppercase tracking-widest leading-none whitespace-nowrap">Moved In</div>
+                                        <div class="t6-movedin-figure text-sm font-black text-[#0891b2] cursor-help tabular-nums leading-tight"
+                                             onmouseenter="showT6SourceTip(this, ${i})" onmouseleave="hideT6SalesTip()"
+                                             title="Where these came from">${t6Fmt(transferredIn)}</div>
+                                    </div>`}
                                     ${p.isTransferRow ? '' : `<div class="w-px h-7 bg-[#e8dcc8]"></div>
                                     <div>
                                         <div class="text-[8px] font-black text-[#a83020] uppercase tracking-widest leading-none whitespace-nowrap">2nd Culled</div>
@@ -9055,10 +9086,30 @@ Thank you.`;
         function syncT6TransferDests() {
             const dests = t6TransferDests();
             t6_plotData.forEach((p, i) => {
-                if (!p.isTransferRow) return;
                 const row = document.getElementById(`t6-row-${i}`);
                 if (!row) return;
                 const d = dests.get(_t6PlotKey(p.plot));
+                /* A MAIN plot can be a destination too — seedlings are moved
+                   into a plot this batch was already transplanted into. It
+                   keeps its own row; only the Moved In figure beside its
+                   Transplanted one changes, and qty with it, since qty is what
+                   is standing in the plot. Drawn hidden by the row, so this can
+                   turn it on without a rebuild. */
+                if (!p.isTransferRow) {
+                    const want = d ? d.qty : 0;
+                    if ((p.transferredIn || 0) !== want) {
+                        p.qty = (p.qty || 0) - (p.transferredIn || 0) + want;
+                        p.transferredIn = want;
+                        const balEl = row.querySelector('.t6-balance');
+                        if (balEl) balEl.dataset.transplanted = p.qty;
+                        row.querySelectorAll('.t6-movedin-cell')
+                           .forEach(el => el.classList.toggle('hidden', !want));
+                        const inFig = row.querySelector('.t6-movedin-figure');
+                        if (inFig) inFig.innerText = t6Fmt(want);
+                        recalcT6Transfer(i);
+                    }
+                    return;
+                }
                 // A destination with nothing sent to it yet is not a plot on
                 // this batch. Hidden, not removed — saveTab6() still reads it.
                 row.classList.toggle('hidden', !d);
@@ -9129,8 +9180,11 @@ Thank you.`;
            which is also what saveTab6 reads, so these are the same rows the
            figure was added up from and the two cannot disagree. */
         function showT6SourceTip(anchorEl, rowIdx) {
+            // Asked from a "-R" plot's whole figure, and from a main plot's
+            // Moved In figure — the same question either way, and answered the
+            // same way, so it is not limited to transfer rows.
             const p = t6_plotData[rowIdx];
-            if (!p || !p.isTransferRow) return;
+            if (!p) return;
             const want = _t6PlotKey(p.plot);
             const lines = [];
             t6_plotData.forEach((src, i) => {
@@ -9538,7 +9592,13 @@ Thank you.`;
                    Balance and Culled are NOT filtered, and must not be: a
                    sending plot's balance already has its transfer deducted, so
                    the seedlings standing in a -R plot are counted once, there. */
-                if (counts) totTransplanted += transplanted;
+                /* A MAIN plot that was transferred INTO carries the same
+                   double-count inside one row: its quantity is its transplant
+                   plus what arrived, and what arrived was counted when the
+                   sending plot was transplanted. Taking it off is the same
+                   reasoning as skipping a "-R" row altogether — it is only
+                   that this plot has a transplant of its own to keep. */
+                if (counts) totTransplanted += transplanted - ((p && p.transferredIn) || 0);
                 // Was `+= transplanted`, left over from before sales and
                 // transfers existed, so the totals row repeated the
                 // transplanted figure instead of summing the balances.
