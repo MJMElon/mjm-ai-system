@@ -7571,7 +7571,24 @@ Thank you.`;
             // Only count maps belonging to currently-rendered rows so 100% requires every row to have BOTH dead value and map.
             const required = totalRows * 2;
             const filled   = filledRows + mapsAttachedForExistingRows;
-            const pct = required > 0 ? Math.min(100, Math.round((filled / required) * 100)) : 0;
+            let pct = required > 0 ? Math.min(100, Math.round((filled / required) * 100)) : 0;
+
+            /* The rule Transplanting and Planting already carry: once HQ has
+               signed the stage off and every FIGURE is in, an unattached map is
+               an outstanding attachment, not an unfinished report. Evidence
+               only — a row still missing its dead count holds the ring down,
+               signed or not.
+
+               The signature is either the stage-level VERIFIED & LOCKED or
+               every row on the tab signed, which is the same statement made in
+               pieces. */
+            const _rv5 = window.MJMReview || {};
+            const hqVerified5 = !!((typeof _rv5.isVerified === 'function' && _rv5.isVerified('cull_2'))
+                                || (typeof _rv5.allRowsVerified === 'function' && _rv5.allRowsVerified(5)));
+            const missingMaps5 = totalRows - mapsAttachedForExistingRows;
+            const mapsAreAllThatIsLeft5 = totalRows > 0 && filledRows === totalRows
+                                       && missingMaps5 > 0 && hqVerified5;
+            if (mapsAreAllThatIsLeft5) pct = 100;
 
             document.getElementById('t5-pie-tab').style.setProperty('--percentage', pct);
             // The tab's tick follows its ring: a stage that stops being full
@@ -7583,7 +7600,11 @@ Thank you.`;
             const desc = document.getElementById('t5-status-desc');
             const btn  = document.getElementById('save-t5-btn');
             btn.innerText = `Save 2nd Culling Report (${pct}% Complete)`;
-            if (pct === 100)     { desc.innerText = '100% Complete'; desc.className = 'text-base font-black uppercase text-[#4a7a2e] mt-1'; }
+            if (mapsAreAllThatIsLeft5) {
+                desc.innerText = `100% Verified · ${missingMaps5} Map(s) Outstanding`;
+                desc.className = 'text-base font-black uppercase text-[#4a7a2e] mt-1';
+            }
+            else if (pct === 100){ desc.innerText = '100% Complete'; desc.className = 'text-base font-black uppercase text-[#4a7a2e] mt-1'; }
             else if (pct > 0)    { desc.innerText = 'In Progress';   desc.className = 'text-base font-black uppercase text-[#c07820] mt-1'; }
             else                 { desc.innerText = 'Awaiting Data'; desc.className = 'text-base font-black uppercase text-[#3d2610] mt-1'; }
         }
@@ -10470,9 +10491,13 @@ Thank you.`;
         if (typeof window.calcTransplanting === 'function') {
           try { window.calcTransplanting(); } catch (e) { console.warn(e); }
         }
-        // Planting reads its own verification the same way, for its field photo.
+        // Planting reads its own verification the same way, for its field
+        // photo; 2nd Culling for its drone maps.
         if (typeof window.updatePlantingCompletion === 'function') {
           try { window.updatePlantingCompletion(); } catch (e) { console.warn(e); }
+        }
+        if (typeof window.calcT5 === 'function') {
+          try { window.calcT5(); } catch (e) { console.warn(e); }
         }
         syncTabTicks();
       }
@@ -10807,6 +10832,12 @@ Thank you.`;
       function _afterRowSignOff(tabIdx) {
         if (tabIdx === 3 && typeof window.calcTransplanting === 'function') {
           try { window.calcTransplanting(); } catch (e) { console.warn(e); }
+        }
+        if (tabIdx === 5 && typeof window.calcT5 === 'function') {
+          try { window.calcT5(); } catch (e) { console.warn(e); }
+        }
+        if (tabIdx === 2 && typeof window.updatePlantingCompletion === 'function') {
+          try { window.updatePlantingCompletion(); } catch (e) { console.warn(e); }
         }
         try { syncTabTicks(); } catch (e) { console.warn(e); }
       }
