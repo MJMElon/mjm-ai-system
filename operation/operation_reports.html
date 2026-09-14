@@ -822,11 +822,15 @@ function syncFilterVisibility() {
   const isSalesChart = isSales && _salesViewMode === 'chart';
   const hasRange  = isBatch || isMove || isDTone || isSeedRcv || isSalesTable;
   document.querySelectorAll('.f-range').forEach(el         => el.classList.toggle('hidden', !hasRange));
-  // A movement report (and the day-keyed batch ones) stand AT a date;
-  // only the reports that genuinely cover a span still show a From.
-  document.querySelectorAll('.f-from').forEach(el          => el.classList.toggle('hidden', !hasRange || isPre || isMain));
+  // Main/Pre-Nursery Movement now read like every other period report: the
+  // Culled/Transplanted/Damaged/etc columns are that period's activity only
+  // (From → To), not a running total since the batch began — picking next
+  // month won't still be showing this month's culling. Balance stays a true
+  // running total regardless of From, so it still answers "what's actually
+  // there right now" — see runMovementReport.
+  document.querySelectorAll('.f-from').forEach(el          => el.classList.toggle('hidden', !hasRange));
   const toLabel = document.getElementById('f-to-label');
-  if (toLabel) toLabel.textContent = (isPre || isMain) ? 'As at' : 'To';
+  if (toLabel) toLabel.textContent = 'To';
   document.querySelectorAll('.f-sort').forEach(el          => el.classList.toggle('hidden', !(isPre || isMain)));
   // Only the reports with a plot means to belong to a nursery have Locations
   // to pick between — Pre-Nursery's report is all one place, and neither
@@ -881,7 +885,8 @@ function selectedNurseries() {
 /* Defaults that change with which report is now selected — run once per
    switch, not on every "Run Report" click, so re-running the same report
    never clobbers a range someone deliberately widened. */
-const MONTH_KEYED_REPORTS = new Set(['seed_received', 'transplanting_report', 'sales_listing']);
+const MONTH_KEYED_REPORTS = new Set(['seed_received', 'transplanting_report', 'sales_listing',
+  'pre_nursery_movement', 'main_nursery_movement']);
 function syncReportDefaults() {
   const which = document.getElementById('f-report').value;
   if (MONTH_KEYED_REPORTS.has(which)) {
@@ -1316,7 +1321,9 @@ async function runMovementReport(scope) {
   out.classList.add('hidden');
   loading.classList.remove('hidden');
 
+  const fromStr = document.getElementById('f-from').value;
   const toStr   = document.getElementById('f-to').value;
+  const fromMs  = fromStr ? new Date(fromStr).getTime() : -Infinity;
   const toMs    = toStr ? new Date(toStr).getTime() + 86400000 : Infinity;
   const groupBy = (document.getElementById('f-sort') || {}).value || 'plot';
 
@@ -1481,9 +1488,16 @@ async function runMovementReport(scope) {
     });
   }
 
-  // ── Everything up to the date being stood at ──
+  // ── Two buckets from the same events ──
   const SEP = '';
-  const buc = {}, meta = {};
+  // `buc` is everything up to the To date, unrestricted by From — this is
+  // what Balance/Batch Balance is netted from, because "what's actually
+  // standing in this plot right now" can't correctly ignore months before
+  // the period you happen to be looking at.
+  // `per` is only events inside [From, To] — this is what fills the visible
+  // Culled/Transplanted/Damaged/etc columns, so picking September shows
+  // September's culling, not everything since the batch began.
+  const buc = {}, per = {}, meta = {};
   for (const e of ev) {
     const ts = e.date ? new Date(e.date).getTime() : NaN;
     if (!isFinite(ts) || ts > toMs) continue;
@@ -1491,18 +1505,22 @@ async function runMovementReport(scope) {
     meta[k] = meta[k] || { place: e.place, batch: e.batch };
     if (!buc[k]) buc[k] = emptyRow(scope);
     buc[k][e.col] += e.qty;
+    if (ts >= fromMs) {
+      if (!per[k]) per[k] = emptyRow(scope);
+      per[k][e.col] += e.qty;
+    }
   }
 
   let rows = [];
   for (const k of Object.keys(buc)) {
-    const b = buc[k];
-    const moved = MOVE_COLS[scope].some(c => b[c.key]);
-    if (!moved) continue;
-    const closing = netOfRow(scope, b);
+    const closing = netOfRow(scope, buc[k]);
     // Nothing of this batch left here — culled, sold or moved on. A NEGATIVE
-    // closing is kept: that is a figure to look into, not one to hide.
+    // closing is kept: that is a figure to look into, not one to hide. This
+    // stays based on the true (unrestricted) balance, not the period — a row
+    // that's genuinely empty now doesn't come back just because the period
+    // you picked happened to have activity on it before it emptied out.
     if (closing === 0) continue;
-    rows.push({ ...meta[k], ...b, closing,
+    rows.push({ ...meta[k], ...(per[k] || emptyRow(scope)), closing,
                 age: ageLabel(batchPlantedAt[_mvBatchKey(meta[k].batch)]) });
   }
 
@@ -1602,7 +1620,9 @@ async function runMovementReport(scope) {
     groupRow = `<tr><th colspan="3"></th>${cells.join('')}<th colspan="2"></th></tr>`;
   }
 
-  const rangeLabel = toStr ? `As at ${fmtDate(toStr)}` : 'As at today';
+  const rangeLabel = fromStr && toStr
+    ? `${fmtDate(fromStr)} – ${fmtDate(toStr)} · Balance as at ${fmtDate(toStr)}`
+    : (toStr ? `Balance as at ${fmtDate(toStr)}` : 'Balance as at today');
   const unmatchedHtml = unmatchedSales.length ? `
       <div class="mt-4 rounded-2xl border border-[#f0b429] bg-[#fffbeb] p-4">
         <div class="text-[11px] font-black text-[#7a4a10] uppercase tracking-widest mb-2">
@@ -1657,9 +1677,13 @@ async function runMovementReport(scope) {
         <strong class="text-[#3d2610]">Notes —</strong>
         <em>Age</em> is measured from the batch's own planting date, so it reads the same
         wherever the batch has got to.
-        <em>B/F</em> is the net of everything before the From date for the same row.
-        <em>Batch Balance</em> is that row's closing figure; <em>Balance</em> is the
-        group's, shown once against its first row — the
+        Every other column (Culled, Transplanted, Damaged, Sold, etc.) is that row's movement
+        between From and To only — pick a different month and only that month's activity shows.
+        <em>Batch Balance</em> and <em>Balance</em> are the exception: a true running total of
+        everything since the batch began, unaffected by From, because what's actually standing
+        in a ${scope === 'pre' ? 'tray' : 'plot'} right now can't correctly ignore months before
+        the one you're looking at — <em>Batch Balance</em> is that row's closing figure,
+        <em>Balance</em> is the group's, shown once against its first row — the
         ${scope === 'pre' ? 'tray' : 'plot'}'s when sorted by
         ${scope === 'pre' ? 'tray' : 'plot'}, and the batch's across every
         ${scope === 'pre' ? 'tray' : 'plot'} it sits in when sorted by batch.
