@@ -910,7 +910,7 @@ async function runSeedlingSales() {
 
   const { data: dos, error } = await _supabase
     .from('shared_do_records')
-    .select('delivery_date, total_qty, status, remark')
+    .select('delivery_date, total_qty, status, remark, do_number')
     .order('delivery_date', { ascending: true });
 
   if (error) {
@@ -925,6 +925,10 @@ async function runSeedlingSales() {
   (dos || []).forEach(d => {
     const cancelled = d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'));
     if (cancelled) return;
+    // Same exclusion the Table view uses — a CAL- DO is a stock correction,
+    // not a customer order, and Table/Chart are two views of the same
+    // report so they need to agree on what counts as a sale.
+    if (/^CAL-/i.test(d.do_number || '')) return;
     if (!d.delivery_date) return;
     const dt = new Date(d.delivery_date);
     if (isNaN(dt)) return;
@@ -1707,14 +1711,15 @@ async function runTransplantingReport() {
  * AL (shared_al_orders.price_per_unit — the price the sales website order
  * carried through to the AL).
  *
- * Chart view is unchanged from the old Seedling Sales report — see
- * runSeedlingSales() / _renderSalesChart, reused here rather than rebuilt.
- *
- * Unlike the 3rd Culling Sales figure elsewhere in this system — which
- * deliberately counts CAL- calibration DOs as sales, because it is asking
- * "what is left in the plot" — this is a listing of actual customer orders,
- * the same question operation_stock_sales.js's Order & Collection dashboard
- * asks, so CAL- DOs are excluded here too.
+ * Chart view reuses runSeedlingSales() / _renderSalesChart from the old
+ * Seedling Sales report, with one change: it now excludes CAL- calibration
+ * DOs too, same as the Table view, so the two match — a month's Chart bar
+ * and its Table "Total Sold" used to disagree by whatever CAL- volume fell
+ * in that month, which is the same reason the 3rd Culling Sales figure
+ * elsewhere in this system counts CAL- as a sale ("what is left in the
+ * plot") while this listing doesn't (it's asking what customers actually
+ * ordered, the same question operation_stock_sales.js's Order & Collection
+ * dashboard asks).
  */
 async function runSalesListing() {
   if (_salesViewMode === 'chart') return runSeedlingSales();
