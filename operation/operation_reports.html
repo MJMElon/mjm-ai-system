@@ -21,10 +21,6 @@
   .btn-earth { background:linear-gradient(135deg, #6aa83c, #4a7a2e); color:white; font-weight:900; padding:12px 24px; border-radius:12px; cursor:pointer; text-transform:uppercase; letter-spacing:.1em; box-shadow:0 8px 20px -4px rgba(74, 122, 46, .5); border:none; font-size:12px; }
   .btn-earth:hover { transform:translateY(-2px); }
 
-  .stat-card { background:#fff; border:1px solid #e8dcc8; border-radius:1.5rem; padding:24px; }
-  .stat-num  { font-size:2.5rem; font-weight:900; color:#3d2610; line-height:1; }
-  .stat-label { font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.18em; color:#8a7a68; margin-bottom:8px; }
-
   table.report-table { width:100%; border-collapse:separate; border-spacing:0; }
   .report-table th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#8a7a68; padding:12px 14px; border-bottom:2px solid #e8dcc8; background:#fdfaf4; white-space:nowrap; }
   /* "th.text-right" outranks the plain "th" rule above (two selectors beat
@@ -92,7 +88,7 @@
     body { background:white; }
     .no-print, .glass-panel, header { box-shadow:none !important; border:none !important; }
     .no-print { display:none !important; }
-    .stat-card, table { box-shadow:none !important; }
+    table { box-shadow:none !important; }
   }
 </style>
 </head>
@@ -431,11 +427,6 @@ async function runBatchProduction() {
           </tbody>
         </table>
       </div>
-
-      <div class="text-[10px] font-bold text-[#8a7a68] mt-4 leading-relaxed">
-        <strong class="text-[#3d2610]">Notes —</strong>
-        Survival % = Final&nbsp;Alive ÷ Seeds&nbsp;Received × 100. Final&nbsp;Alive subtracts cull cycles 1, 2, 3 from Transplanted. Damaged seeds at planting are tracked separately in the Planting tab and are not included in the cull totals here.
-      </div>
     </div>
   `;
 }
@@ -498,10 +489,6 @@ async function runBatchDoubleTone() {
   loading.classList.add('hidden');
   out.classList.remove('hidden');
   out.innerHTML = `
-    <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-      <div class="stat-card"><div class="stat-label">Batches</div><div class="stat-num">${fmtNum(rows.length)}</div></div>
-      <div class="stat-card"><div class="stat-label">Double Tone Qty</div><div class="stat-num text-[#7c3aed]">${fmtNum(total)}</div></div>
-    </div>
     <div class="glass-panel p-6 rounded-[2rem]">
       <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
         <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Batch Double Tone</h3>
@@ -617,12 +604,6 @@ async function runSeedReceived() {
   loading.classList.add('hidden');
   out.classList.remove('hidden');
   out.innerHTML = `
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="stat-card"><div class="stat-label">Batches</div><div class="stat-num">${fmtNum(rows.length)}</div></div>
-      <div class="stat-card"><div class="stat-label">Seed Received (D/O)</div><div class="stat-num text-[#c07820]">${fmtNum(totals.doQty)}</div></div>
-      <div class="stat-card"><div class="stat-label">FOC Qty</div><div class="stat-num text-[#7c3aed]">${fmtNum(totals.focQty)}</div></div>
-      <div class="stat-card"><div class="stat-label">Seed Damage</div><div class="stat-num text-[#a83020]">${fmtNum(totals.damaged)}</div></div>
-    </div>
     <div class="glass-panel p-6 rounded-[2rem]">
       <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
         <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Seed Received</h3>
@@ -657,14 +638,6 @@ async function runSeedReceived() {
             <td class="text-right text-[#a83020]">${fmtNum(totals.damaged)}</td>
           </tr></tfoot>` : ''}
         </table>
-      </div>
-      <div class="text-[10px] font-bold text-[#8a7a68] mt-4 leading-relaxed">
-        <strong class="text-[#3d2610]">Notes —</strong>
-        Seed Received (D/O) and FOC % are read from the same intake record Tab 1 (Seeds In) saves them on.
-        FOC Qty is round(D/O qty × FOC%) — the same "Calculated FOC Qty" Tab 1 shows beside the percent — so the
-        Total row can add up (Seed Received + FOC Qty), which a percentage can't.
-        A batch received before the D/O·FOC split existed shows its whole intake as D/O qty, with no FOC% — there
-        was nothing recorded to separate.
       </div>
     </div>
   `;
@@ -1044,12 +1017,6 @@ async function runSeedlingSales() {
     <div class="glass-panel p-6 rounded-[2rem]">
       ${headerHtml}
       ${bodyHtml}
-      <div class="text-[10px] font-bold text-[#8a7a68] mt-4 leading-relaxed">
-        <strong class="text-[#3d2610]">Notes —</strong>
-        Issuance is the sum of <code>total_qty</code> on delivery (DO) records, bucketed by <code>delivery_date</code>.
-        Cancelled DOs are excluded. Each DO can cover multiple plots / batches; the total here counts the DO once.
-        Variance row compares the latest visible year against the one before it (within the current Years selection).
-      </div>
     </div>
   `;
 }
@@ -1608,45 +1575,6 @@ async function runMovementReport(scope) {
       </div>
 
       ${unmatchedHtml}
-
-      <div class="text-[10px] font-bold text-[#8a7a68] mt-4 leading-relaxed">
-        <strong class="text-[#3d2610]">Notes —</strong>
-        <em>Age</em> is measured from the batch's own planting date, so it reads the same
-        wherever the batch has got to.
-        Every other column (Culled, Transplanted, Damaged, Sold, etc.) is that row's movement
-        between From and To only — pick a different month and only that month's activity shows.
-        <em>Batch Balance</em> and <em>Balance</em> are the exception: a true running total of
-        everything since the batch began, unaffected by From, because what's actually standing
-        in a ${scope === 'pre' ? 'tray' : 'plot'} right now can't correctly ignore months before
-        the one you're looking at — <em>Batch Balance</em> is that row's closing figure,
-        <em>Balance</em> is the group's, shown once against its first row — the
-        ${scope === 'pre' ? 'tray' : 'plot'}'s when sorted by
-        ${scope === 'pre' ? 'tray' : 'plot'}, and the batch's across every
-        ${scope === 'pre' ? 'tray' : 'plot'} it sits in when sorted by batch.
-        A row whose balance works out to zero is left off — everything has been
-        ${scope === 'pre' ? 'culled or moved on' : 'culled, sold or moved on'}. A negative
-        balance is still shown, because that is a figure to look into.
-        ${scope === 'pre' ? `
-        Every tray movement names its tray: planting and 1st culling record it directly, and a
-        transplant records the tray it left in its remark, so a tray frees by exactly what left
-        it. <em>Transfer In</em> is what the Premium Care and Double Tone trays receive from
-        other trays. <em>Seed Damage</em> is counted at the batch as it is planted and never
-        enters a tray, so it is shown against the tray the batch was mostly planted into and
-        does <strong>not</strong> reduce that tray's balance.`
-        : `
-        <em>Transplanted from PN</em> is what arrived from the pre-nursery trays.
-        <em>Sold</em> comes from the Customer DO system; cancelled DOs are excluded, and a
-        delivery order can only subtract from a row the batch report already has — it never
-        creates one, so a plot or batch mistyped on a D/O cannot appear here.
-        <em>Transfer In / Out</em> are the 3rd culling's plot-to-plot transfers.`}
-        <em>2nd Culled</em> is shown but only deducted while no 3rd culling has been
-        recorded: the 3rd culling count is keyed against the original transplanted
-        figure, so it already contains the 2nd, and taking both off would subtract
-        the 2nd twice.
-        Dates are the ones keyed into the batch report; where a stage was saved without one,
-        the record's save date is used. Audit, photo and stock-calibration entries are not
-        counted as movements.
-      </div>
     </div>
   `;
 }
@@ -1720,19 +1648,9 @@ async function runTransplantingReport() {
   rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')));
   const total = rows.reduce((s, r) => s + r.qty, 0);
 
-  const roll = {};
-  rows.forEach(r => { roll[r.nursery] = (roll[r.nursery] || 0) + r.qty; });
-  const rollRows = Object.entries(roll).sort((a, b) => nurseryRank(a[0]) - nurseryRank(b[0]));
-
   loading.classList.add('hidden');
   out.classList.remove('hidden');
   out.innerHTML = `
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="stat-card"><div class="stat-label">Transplant Records</div><div class="stat-num">${fmtNum(rows.length)}</div></div>
-      <div class="stat-card"><div class="stat-label">Total Qty</div><div class="stat-num text-[#3a7ab4]">${fmtNum(total)}</div></div>
-      ${rollRows.map(([n, q]) => `
-        <div class="stat-card"><div class="stat-label">${n}</div><div class="stat-num text-[#3a7ab4]">${fmtNum(q)}</div></div>`).join('')}
-    </div>
     <div class="glass-panel p-6 rounded-[2rem]">
       <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
         <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Transplanting Report</h3>
@@ -1760,10 +1678,6 @@ async function runTransplantingReport() {
             <td class="text-right text-[#3a7ab4]">${fmtNum(total)}</td>
           </tr></tfoot>` : ''}
         </table>
-      </div>
-      <div class="text-[10px] font-bold text-[#8a7a68] mt-4 leading-relaxed">
-        <strong class="text-[#3d2610]">Notes —</strong>
-        Maturity Date is 3 months after the Transplanting Date. Transplanting Date is the date keyed on the transplant record itself — its own saved date if one was typed, else when the row was written.
       </div>
     </div>
   `;
@@ -1918,12 +1832,6 @@ async function runSalesListing() {
             ${anyPriced ? `<td class="text-right text-[#4a7a2e]">RM ${grandAmount.toFixed(2)}</td>` : ''}
           </tr></tfoot>
         </table>
-      </div>
-      <div class="text-[10px] font-bold text-[#8a7a68] mt-4 leading-relaxed">
-        <strong class="text-[#3d2610]">Notes —</strong>
-        One row per Delivery Order collection line (a DO can carry up to 5); cancelled and CAL- calibration DOs are excluded.
-        Customer name and Unit Price come from the linked Approval Letter — a DO with no AL link falls back to its own remark for the name, and shows no price.
-        Grouped by customer, ordered by whoever bought the most in this range, with a running subtotal per customer and the grand total at the end.
       </div>
     </div>
   `;
