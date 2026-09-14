@@ -24,7 +24,7 @@
   /* Report picker as a connected tab strip — one bar with dividers between
      tabs and the active one picked out by its own underline, not separate
      pill buttons with gaps between them. */
-  .report-tab-bar { display:flex; flex-wrap:wrap; align-items:flex-end; border:1px solid #e8dcc8; border-radius:12px; overflow:hidden; width:fit-content; max-width:100%; margin:0 auto; }
+  .report-tab-bar { display:flex; flex-wrap:wrap; border:1px solid #e8dcc8; border-radius:12px; overflow:hidden; width:fit-content; max-width:100%; margin:0 auto; }
   .report-tab {
     padding:12px 20px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.08em;
     color:#8a7a68; background:#fdfaf4; border:none; border-right:1px solid #e8dcc8;
@@ -34,18 +34,6 @@
   .report-tab:last-child { border-right:none; }
   .report-tab:hover:not(.active) { color:#4a7a2e; background:#f5f0e4; }
   .report-tab.active { color:#3d2610; background:#fff; border-bottom-color:#4a7a2e; }
-  /* A titled cluster of tabs within the same bar — Pre-Nursery / Main
-     Nursery as the two halves of one Movement Report, not two unrelated
-     tabs. The label sits above its own row of buttons; align-items:flex-end
-     on .report-tab-bar keeps that row's bottom edge level with the lone
-     tabs beside it, so the underline still reads as one baseline. */
-  .report-tab-group { display:flex; flex-direction:column; border-right:1px solid #e8dcc8; }
-  .report-tab-group:last-child { border-right:none; }
-  .report-tab-group-label {
-    font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:.1em; color:#8a7a68;
-    background:#f3ede1; padding:4px 0; text-align:center; border-bottom:1px solid #e8dcc8;
-  }
-  .report-tab-group-row { display:flex; }
 
   table.report-table { width:100%; border-collapse:separate; border-spacing:0; }
   .report-table th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#8a7a68; padding:12px 14px; border-bottom:2px solid #e8dcc8; background:#fdfaf4; white-space:nowrap; }
@@ -686,8 +674,7 @@ const REPORTS = [
   { value: 'batch_production',      label: 'Production Summary', hint: 'Batch Production Summary — the seeds → transplant → cull funnel, per batch' },
   { value: 'batch_double_tone',     label: 'Double Tone',        hint: 'Batch Double Tone — batch, breed, qty' },
   { value: 'seed_received',         label: 'Seed Received',      hint: 'Seed Received — D/O qty, FOC qty, seed damage, per batch' },
-  { value: 'pre_nursery_movement',  label: 'Pre-Nursery',        hint: 'Pre-Nursery Movement Report — by Tray / Batch',  group: 'Movement Report' },
-  { value: 'main_nursery_movement', label: 'Main Nursery',       hint: 'Main Nursery Movement Report — by Plot / Batch', group: 'Movement Report' },
+  { value: 'movement_report',       label: 'Movement Report',    hint: 'Movement Report — pick PN, BNN, UNN 1 and/or UNN 2 under Locations to see that location\'s data' },
   { value: 'transplanting_report',  label: 'Transplanting',      hint: 'Transplanting Report — date, maturity date, location' },
   { value: 'sales_listing',         label: 'Sales Listing',      hint: 'Sales Listing — line items or the year × month chart' },
 ];
@@ -699,33 +686,13 @@ const REPORTS = [
 // it in sync now, instead of a dropdown. Styled as one connected tab strip
 // (.report-tab-bar / .report-tab, see <style>) — dividers between tabs and
 // an underline on the active one, not separate pill buttons with gaps.
-// Adjacent entries sharing the same `group` render as one titled cluster
-// (.report-tab-group) instead of two lone tabs — Pre-Nursery and Main
-// Nursery are the two halves of one Movement Report, so they carry that
-// title as a pair rather than reading as two unrelated reports.
 function renderReportTabs() {
   const rep  = document.getElementById('f-report').value;
   const wrap = document.getElementById('f-report-tabs');
-  const btn  = (o) => `
+  wrap.innerHTML = REPORTS.map(o => `
     <button type="button" onclick="selectReport('${o.value}')" title="${o.hint || ''}"
-      class="report-tab${o.value === rep ? ' active' : ''}">${o.label}</button>`;
-  const html = [];
-  let i = 0;
-  while (i < REPORTS.length) {
-    const o = REPORTS[i];
-    if (!o.group) { html.push(btn(o)); i++; continue; }
-    let j = i;
-    const items = [];
-    while (j < REPORTS.length && REPORTS[j].group === o.group) { items.push(REPORTS[j]); j++; }
-    html.push(`
-      <div class="report-tab-group">
-        <div class="report-tab-group-label">${o.group}</div>
-        <div class="report-tab-group-row">${items.map(btn).join('')}</div>
-      </div>
-    `);
-    i = j;
-  }
-  wrap.innerHTML = html.join('');
+      class="report-tab${o.value === rep ? ' active' : ''}">${o.label}</button>
+  `).join('');
 }
 
 function selectReport(report) {
@@ -760,8 +727,7 @@ async function runReport() {
   if (which === 'batch_production')      return runBatchProduction();
   if (which === 'batch_double_tone')     return runBatchDoubleTone();
   if (which === 'seed_received')         return runSeedReceived();
-  if (which === 'pre_nursery_movement')  return runPreNurseryMovement();
-  if (which === 'main_nursery_movement') return runMainNurseryMovement();
+  if (which === 'movement_report')       return runMovementReportCombined();
   if (which === 'transplanting_report')  return runTransplantingReport();
   if (which === 'sales_listing')         return runSalesListing();
 }
@@ -769,10 +735,8 @@ async function runReport() {
 // ── Filter visibility by report type ─────────────────────────────────────────
 function syncFilterVisibility() {
   const which     = document.getElementById('f-report').value;
-  const isPre     = (which === 'pre_nursery_movement');
-  const isMain    = (which === 'main_nursery_movement');
+  const isMovement = (which === 'movement_report');
   const isTrans   = (which === 'transplanting_report');
-  const isMove    = isPre || isMain || isTrans;
   const isBatch   = (which === 'batch_production');
   const isDTone   = (which === 'batch_double_tone');
   const isSeedRcv = (which === 'seed_received');
@@ -782,23 +746,25 @@ function syncFilterVisibility() {
   // trend the old Seedling Sales report drew) wants a set of years instead.
   const isSalesTable = isSales && _salesViewMode !== 'chart';
   const isSalesChart = isSales && _salesViewMode === 'chart';
-  const hasRange  = isBatch || isMove || isDTone || isSeedRcv || isSalesTable;
+  const hasRange  = isBatch || isMovement || isTrans || isDTone || isSeedRcv || isSalesTable;
   document.querySelectorAll('.f-range').forEach(el         => el.classList.toggle('hidden', !hasRange));
-  // No visible From anywhere — every report is one "As At" date. Main/Pre-
-  // Nursery Movement still shows the Culled/Transplanted/Damaged/etc
-  // columns as that period's activity only, not a running total since the
-  // batch began, but the period is now the As-At date's own calendar month
-  // (derived in runReport(), see monthStartOf()) rather than a second field
-  // to pick. Balance stays a true running total regardless of the period,
-  // so it still answers "what's actually there right now" — see
-  // runMovementReport.
+  // No visible From anywhere — every report is one "As At" date. Movement
+  // Report still shows the Culled/Transplanted/Damaged/etc columns as that
+  // period's activity only, not a running total since the batch began, but
+  // the period is now the As-At date's own calendar month (derived in
+  // runReport(), see monthStartOf()) rather than a second field to pick.
+  // Balance stays a true running total regardless of the period, so it
+  // still answers "what's actually there right now" — see
+  // runMovementReportCombined().
   const toLabel = document.getElementById('f-to-label');
   if (toLabel) toLabel.textContent = 'As At';
-  document.querySelectorAll('.f-sort').forEach(el          => el.classList.toggle('hidden', !(isPre || isMain)));
-  // Only the reports with a plot means to belong to a nursery have Locations
-  // to pick between — Pre-Nursery's report is all one place, and neither
-  // Batch Double Tone nor Seed Received happens at a main-nursery plot.
-  document.querySelectorAll('.f-nursery-inline').forEach(el => el.classList.toggle('hidden', !(isMain || isTrans || isSalesTable)));
+  document.querySelectorAll('.f-sort').forEach(el          => el.classList.toggle('hidden', !isMovement));
+  // Locations (PN / BNN / UNN 1 / UNN 2) drives Movement Report directly now
+  // — which of those are checked decides whether the Pre-Nursery section,
+  // the Main Nursery section, or both, render. Transplanting and Sales
+  // Listing (table view) use the same chips to filter their own rows by
+  // destination nursery.
+  document.querySelectorAll('.f-nursery-inline').forEach(el => el.classList.toggle('hidden', !(isMovement || isTrans || isSalesTable)));
   document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !(isBatch || isDTone || isSeedRcv || isTrans)));
   document.querySelectorAll('.f-sales-mode').forEach(el    => el.classList.toggle('hidden', !isSales));
   document.querySelectorAll('.f-sales-years').forEach(el   => el.classList.toggle('hidden', !isSalesChart));
@@ -854,19 +820,18 @@ function selectedNurseries() {
    switch, not on every "Run Report" click, so re-running the same report
    never clobbers a date someone deliberately picked. */
 const DATE_KEYED_REPORTS = new Set(['batch_production', 'batch_double_tone', 'seed_received',
-  'transplanting_report', 'sales_listing', 'pre_nursery_movement', 'main_nursery_movement']);
+  'transplanting_report', 'sales_listing', 'movement_report']);
 function syncReportDefaults() {
   const which = document.getElementById('f-report').value;
   if (DATE_KEYED_REPORTS.has(which)) {
     // f-from is derived from this in runReport() — nothing to set here.
     document.getElementById('f-to').value = new Date().toISOString().slice(0, 10);
   }
-  // Pre-Nursery reads naturally by Batch (one batch, several trays over its
-  // life); Main Nursery reads naturally by Plot (what's standing where).
-  if (_fSort) {
-    if (which === 'pre_nursery_movement')  _fSort.value = 'batch';
-    else if (which === 'main_nursery_movement') _fSort.value = 'plot';
-  }
+  // Movement Report can show a Pre-Nursery section (reads naturally by
+  // Batch — one batch, several trays over its life) and/or a Main Nursery
+  // section (reads naturally by Plot — what's standing where) depending on
+  // which Locations are ticked; Plot is the more commonly checked default.
+  if (_fSort && which === 'movement_report') _fSort.value = 'plot';
 }
 
 document.getElementById('f-run').addEventListener('click', runReport);
@@ -1193,11 +1158,14 @@ function _mvBatchKey(v) {
 
 
 /* ════════════════════════════════════════════════════════════════════════════
-   MOVEMENT REPORTS
+   MOVEMENT REPORT
 
-   Two reports, not one. The pre-nursery and the main nursery hold different
+   One report, two sections — Pre-Nursery and Main Nursery hold different
    things and move them in different ways, and a single table that tried to
-   serve both left most of its columns empty on every row.
+   serve both left most of its columns empty on every row, so each still
+   gets its own table. Which section(s) actually render is driven by the
+   Locations chips: PN shows Pre-Nursery, any of BNN/UNN1/UNN2 shows Main
+   Nursery, both together show both, stacked.
 
      Pre-nursery   keyed by TRAY · batch. Seeds are planted into a tray, some
                    are culled, and the rest leave — to a main-nursery plot, or
@@ -1205,8 +1173,10 @@ function _mvBatchKey(v) {
      Main nursery  keyed by PLOT · batch. Seedlings arrive from pre-nursery,
                    are culled twice more, sold, or transferred plot to plot.
 
-   Both are built by the same engine below: a column spec says what each
-   column is called, which way it moves the balance, and how it is coloured.
+   runMovementReportCombined() fetches the ledger once and builds the shared
+   lookups once; buildMovementSection(scope, …) is the engine that turns
+   that into one section's table — a column spec says what each column is
+   called, which way it moves the balance, and how it is coloured.
 ════════════════════════════════════════════════════════════════════════════ */
 
 /* Nurseries read in the order the nursery works in, not the order the
@@ -1278,14 +1248,24 @@ function ageLabel(planted) {
   return m + (m === 1 ? ' month' : ' months');
 }
 
-async function runPreNurseryMovement()  { return runMovementReport('pre'); }
-async function runMainNurseryMovement() { return runMovementReport('main'); }
-
-async function runMovementReport(scope) {
+async function runMovementReportCombined() {
   const out = document.getElementById('report-output');
   const loading = document.getElementById('loading');
   out.classList.add('hidden');
   loading.classList.remove('hidden');
+
+  // PN drives the Pre-Nursery section, any of BNN/UNN1/UNN2 drives the Main
+  // Nursery section — one Movement Report tab, the Locations chips decide
+  // which section(s) actually render.
+  const pickedLocs = selectedNurseries();
+  const wantPre  = pickedLocs.includes('PN');
+  const wantMain = pickedLocs.some(l => l !== 'PN');
+  if (!wantPre && !wantMain) {
+    loading.classList.add('hidden');
+    out.classList.remove('hidden');
+    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-[#8a7a68] text-sm">Tick a location under Locations — PN, BNN, UNN 1 or UNN 2 — to see Movement Report data.</div>`;
+    return;
+  }
 
   const fromStr = document.getElementById('f-from').value;
   const toStr   = document.getElementById('f-to').value;
@@ -1330,7 +1310,11 @@ async function runMovementReport(scope) {
   PRE_NURSERY_PLOTS.forEach(p => trayNames.add(p));
   const isTray = (name) => trayNames.has(name);
 
-  const selectedLocs = new Set(selectedNurseries());
+  // BNN/UNN1/UNN2 filter which main-nursery plots pass; PN plays no part in
+  // this check (plotToLoc never returns "PN" — it only ever comes from
+  // shared_plots.nursery_name, a real main-nursery name), so leaving PN in
+  // the checked set is harmless here.
+  const selectedLocs = new Set(pickedLocs);
   const passMain = (plot) => !!plot && !isTray(plot) && selectedLocs.has(plotToLoc[plot] || 'Unassigned');
 
   // ── When each batch was planted, for Age ──
@@ -1344,11 +1328,14 @@ async function runMovementReport(scope) {
     if (!batchPlantedAt[k] || String(d) < String(batchPlantedAt[k])) batchPlantedAt[k] = d;
   });
 
-  // ── Every movement, as (place, batch, column, qty) ──
+  // ── Every movement, as (scope, place, batch, column, qty) — built once
+  //    from one fetch, so both sections come off the same pass over the
+  //    ledger instead of fetching (and re-deriving the lookups above)
+  //    twice. Each section later reads only the events tagged its way. ──
   const ev = [];
   const push = (sc, date, place, batch, col, qty) => {
-    if (sc !== scope || !place || !qty) return;
-    ev.push({ date, place, batch: batch || '—', col, qty });
+    if (!place || !qty) return;
+    ev.push({ sc, date, place, batch: batch || '—', col, qty });
   };
   const srcTrayOf = (l) => {
     const m = (l.remark || '').match(/from tray \[([^\]]+)\]/i);
@@ -1410,10 +1397,11 @@ async function runMovementReport(scope) {
   });
 
   // ── Sales, only against a plot·batch the batch report already has ──
+  // Only worth doing when the Main Nursery section is actually wanted.
   const unmatchedSales = [];
-  if (scope === 'main') {
+  if (wantMain) {
     const realRows = new Map();
-    ev.forEach(e => {
+    ev.filter(e => e.sc === 'main').forEach(e => {
       const pk = _mvPlotKey(e.place), bk = _mvBatchKey(e.batch);
       if (!pk || !bk) return;
       if (!realRows.has(pk)) realRows.set(pk, new Map());
@@ -1433,7 +1421,7 @@ async function runMovementReport(scope) {
         if (!passMain(plot)) continue;
         const hit = (realRows.get(_mvPlotKey(plot)) || new Map()).get(_mvBatchKey(d[`batch_${i}`]));
         if (!hit) { unmatchedSales.push({ plot: plot || '—', batch: d[`batch_${i}`] || '—', qty }); continue; }
-        ev.push({ date: d.delivery_date || null, place: hit.place, batch: hit.batch, col: 'sold', qty });
+        ev.push({ sc: 'main', date: d.delivery_date || null, place: hit.place, batch: hit.batch, col: 'sold', qty });
         _salesTrace.push({
           do: d.do_number || d.id, line: i,
           plot: hit.place, batch: hit.batch,
@@ -1454,8 +1442,27 @@ async function runMovementReport(scope) {
     });
   }
 
+  const ctx = { fromMs, toMs, fromStr, toStr, groupBy, plotToLoc, trayNursery, batchPlantedAt };
+  const sections = [];
+  if (wantPre)  sections.push(buildMovementSection('pre',  ev.filter(e => e.sc === 'pre'),  { ...ctx, unmatchedSales: [] }));
+  if (wantMain) sections.push(buildMovementSection('main', ev.filter(e => e.sc === 'main'), { ...ctx, unmatchedSales }));
+
+  loading.classList.add('hidden');
+  out.classList.remove('hidden');
+  out.innerHTML = sections.join('');
+}
+
+/**
+ * Builds one Movement Report section (Pre-Nursery or Main Nursery) as an
+ * HTML string, from events already filtered to that scope. Split out of
+ * runMovementReportCombined() so both sections come off one fetch and one
+ * pass over the ledger — see there — instead of each fetching (and
+ * re-deriving plotToLoc/trayNursery/batchPlantedAt) on its own.
+ */
+function buildMovementSection(scope, ev, ctx) {
+  const { fromMs, toMs, fromStr, toStr, groupBy, plotToLoc, trayNursery, batchPlantedAt, unmatchedSales } = ctx;
+
   // ── Three buckets from the same events ──
-  const SEP = '';
   // `buc` is everything up to the As-At date, unrestricted by the implicit
   // From — this is what Balance/Batch Balance is netted from, because
   // "what's actually standing in this plot right now" can't correctly
@@ -1473,6 +1480,7 @@ async function runMovementReport(scope) {
   // recorded) is evaluated separately for `buc` and `bf`, each its own
   // honest cumulative total, not a subtraction that could inherit an edge
   // case from the other side of the cut.
+  const SEP = '\x01';
   const buc = {}, per = {}, bf = {}, meta = {};
   for (const e of ev) {
     const ts = e.date ? new Date(e.date).getTime() : NaN;
@@ -1518,9 +1526,6 @@ async function runMovementReport(scope) {
       _natCmp(locOfRow(a), locOfRow(c)) ||
       _natCmp(a.place, c.place) || _natCmp(a.batch, c.batch)));
 
-  loading.classList.add('hidden');
-  out.classList.remove('hidden');
-
   const cols = MOVE_COLS[scope];
   const placeLabel = scope === 'pre' ? 'Tray No' : 'Plot';
   const firstLabel  = groupBy === 'batch' ? 'Batch' : placeLabel;
@@ -1528,9 +1533,8 @@ async function runMovementReport(scope) {
   const title = scope === 'pre' ? 'Pre-Nursery Movement' : 'Main Nursery Movement';
 
   if (!rows.length) {
-    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-[#8a7a68] text-sm">No ${
+    return `<div class="glass-panel p-6 rounded-[2rem] text-[#8a7a68] text-sm">No ${
       scope === 'pre' ? 'pre-nursery' : 'main nursery'} movement found in this period.</div>`;
-    return;
   }
 
   const fmtCell = (n, cls) => `<td class="${cls || ''}">${n ? fmtNum(n) : '0'}</td>`;
@@ -1548,7 +1552,7 @@ async function runMovementReport(scope) {
     else groups.push({ key: keyOf(r), loc: locOfRow(r), list: [r] });
   });
 
-  const totalCols = 6 + cols.length; // +1 over the old 5 for the new B/F column
+  const totalCols = 6 + cols.length; // Place/Batch, Age, B/F, cols, Batch Balance, Balance
   const bodyHtml = [];
   let lastLoc = null;
   let band = false;
@@ -1624,7 +1628,7 @@ async function runMovementReport(scope) {
         </div>
       </div>` : '';
 
-  out.innerHTML = `
+  return `
     <div class="glass-panel p-6 rounded-[2rem]">
       <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
         <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">${title}</h3>
@@ -1670,7 +1674,8 @@ async function runMovementReport(scope) {
  * One row per Transplanted / Transplanted_Premium / Transplanted_DoubleTone
  * log line: when it moved, where to, and — since a seedling is treated as
  * mature roughly 9 months after being put out — when it's due. Nursery-
- * filterable the same way Main Nursery Movement already is.
+ * filterable the same way Movement Report's Main Nursery section already is
+ * — the same Locations chips, PN included (see runMovementReportCombined).
  */
 async function runTransplantingReport() {
   const out = document.getElementById('report-output');
