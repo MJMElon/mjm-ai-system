@@ -1304,48 +1304,63 @@
             }
         }
         
-        // Grouped by nursery via <optgroup> — a flat list of every plot in
-        // the system (BNN, UNN 1, UNN 2 all mixed together, unsorted, each
-        // row repeating "UNN 1 - " on every option) was long enough to
-        // scroll through blind. Nursery becomes the group header instead of
-        // being repeated on every option, and both the nurseries and the
-        // plots within each are sorted, in the same BNN / UNN 1 / UNN 2
-        // order the rest of the system reads them in.
+        // Two cascading selects — Nursery, then Plot — instead of one flat
+        // list of every plot in the system. <optgroup> still lists every
+        // option at once, just with headers; picking a nursery first and
+        // only then seeing its plots is what actually cuts the list down.
+        // The nurseries are sorted in the same BNN / UNN 1 / UNN 2 order
+        // the rest of the system reads them in; plots sort naturally
+        // within a nursery.
         const _PLOT_NURSERY_ORDER = ['BNN', 'UNN 1', 'UNN 2'];
-        function _plotOptionsHtml(defaultPlot) {
-            const rank = (n) => { const i = _PLOT_NURSERY_ORDER.indexOf(n); return i === -1 ? _PLOT_NURSERY_ORDER.length : i; };
-            const byNursery = {};
-            globalPlots.forEach(p => {
-                const n = p.nursery_name || 'Unassigned';
-                (byNursery[n] = byNursery[n] || []).push(p);
-            });
-            const nurseries = Object.keys(byNursery).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
-            let html = '<option value="">Plot</option>';
+        function _nurseryRank(n) { const i = _PLOT_NURSERY_ORDER.indexOf(n); return i === -1 ? _PLOT_NURSERY_ORDER.length : i; }
+        function _nurseryOptionsHtml(defaultNursery) {
+            const nurseries = [...new Set(globalPlots.map(p => p.nursery_name || 'Unassigned'))]
+                .sort((a, b) => _nurseryRank(a) - _nurseryRank(b) || a.localeCompare(b));
+            let html = '<option value="">Nursery</option>';
             nurseries.forEach(n => {
-                const plots = byNursery[n].slice().sort((a, b) =>
-                    a.plot_name.localeCompare(b.plot_name, undefined, { numeric: true, sensitivity: 'base' }));
-                html += `<optgroup label="${n}">`;
-                plots.forEach(p => {
-                    const sel = (defaultPlot && p.plot_name.toLowerCase() === defaultPlot.toLowerCase()) ? 'selected' : '';
-                    html += `<option value="${p.plot_name}" ${sel}>${p.plot_name}</option>`;
-                });
-                html += `</optgroup>`;
+                const sel = (defaultNursery && n === defaultNursery) ? 'selected' : '';
+                html += `<option value="${n}" ${sel}>${n}</option>`;
             });
             return html;
         }
+        function _plotOptionsForNursery(nursery, defaultPlot) {
+            if (!nursery) return '<option value="">Plot</option>';
+            const plots = globalPlots.filter(p => (p.nursery_name || 'Unassigned') === nursery)
+                .slice().sort((a, b) => a.plot_name.localeCompare(b.plot_name, undefined, { numeric: true, sensitivity: 'base' }));
+            let html = '<option value="">Plot</option>';
+            plots.forEach(p => {
+                const sel = (defaultPlot && p.plot_name.toLowerCase() === defaultPlot.toLowerCase()) ? 'selected' : '';
+                html += `<option value="${p.plot_name}" ${sel}>${p.plot_name}</option>`;
+            });
+            return html;
+        }
+        // Fired by the Nursery select's onchange — refills the Plot select
+        // right beside it with just that nursery's plots.
+        function _onItemNurseryChange(sel) {
+            const row = sel.closest('.item-row');
+            const plotSel = row && row.querySelector('.item-plot');
+            if (plotSel) plotSel.innerHTML = _plotOptionsForNursery(sel.value, '');
+        }
+        window._onItemNurseryChange = _onItemNurseryChange;
 
         function generateMiniItemHeader(rowId) {
-            return `<div class="flex gap-1 items-center mb-0 mini-item-header" style="pointer-events:none;"><span class="text-[8px] font-black uppercase tracking-wider text-purple-500 w-32 px-1">Nursery/Plot</span><span class="text-[8px] font-black uppercase tracking-wider text-amber-600 w-24 px-1">Breed</span><span class="text-[8px] font-black uppercase tracking-wider text-slate-500 w-20 px-1">Batch</span><span class="text-[8px] font-black uppercase tracking-wider text-emerald-600 w-12 px-1 text-center">Qty</span><span class="w-3"></span></div>`;
+            return `<div class="flex gap-1 items-center mb-0 mini-item-header" style="pointer-events:none;"><span class="text-[8px] font-black uppercase tracking-wider text-purple-500 w-14 px-1">Nursery</span><span class="text-[8px] font-black uppercase tracking-wider text-purple-500 w-16 px-1">Plot</span><span class="text-[8px] font-black uppercase tracking-wider text-amber-600 w-24 px-1">Breed</span><span class="text-[8px] font-black uppercase tracking-wider text-slate-500 w-20 px-1">Batch</span><span class="text-[8px] font-black uppercase tracking-wider text-emerald-600 w-12 px-1 text-center">Qty</span><span class="w-3"></span></div>`;
         }
 
         function generateMiniItemHtml(rowId, idx, defaultPlot='', defaultBreed='', defaultBatch='', qty='') {
-            let plotOpts = _plotOptionsHtml(defaultPlot);
+            // The DO record only ever stored the plot name — the nursery a
+            // saved row starts on is looked up from it, the same way the
+            // rest of this file resolves a plot's nursery (see line ~589).
+            const defaultPlotRec = defaultPlot ? globalPlots.find(p => p.plot_name.toLowerCase() === defaultPlot.toLowerCase()) : null;
+            const defaultNursery = defaultPlotRec ? (defaultPlotRec.nursery_name || 'Unassigned') : '';
+            let nurseryOpts = _nurseryOptionsHtml(defaultNursery);
+            let plotOpts = _plotOptionsForNursery(defaultNursery, defaultPlot);
             let breedOpts = '<option value="">Breed</option>'; globalBreeds.forEach(b => { let sel = (defaultBreed && b.name.toLowerCase() === defaultBreed.toLowerCase()) ? 'selected' : ''; breedOpts += `<option value="${b.name}" ${sel}>${b.name}</option>`; });
 
             if(globalPlots.length === 0) {
                 return `<div class="flex gap-1 items-center item-row" id="item_${rowId}_${idx}"><input type="text" class="mini-input w-32 item-plot" value="${defaultPlot}" placeholder="Plot"><input type="text" class="mini-input w-24 item-breed" value="${defaultBreed}" placeholder="Breed"><input type="text" list="batch-suggestions" class="mini-input w-20 item-batch" value="${defaultBatch}" placeholder="Batch"><input type="number" class="mini-input w-12 item-qty" value="${qty}" placeholder="Qty" oninput="recalcBulkTotal('${rowId}')"><button onclick="document.getElementById('item_${rowId}_${idx}').remove(); recalcBulkTotal('${rowId}')" class="text-[8px] text-red-400 ml-1">✕</button></div>`;
             }
-            return `<div class="flex gap-1 items-center item-row" id="item_${rowId}_${idx}"><select class="mini-input w-32 item-plot">${plotOpts}</select><select class="mini-input w-24 item-breed" id="breed_${rowId}_${idx}">${breedOpts}</select><input type="text" list="batch-suggestions" class="mini-input w-20 item-batch" value="${defaultBatch}" placeholder="Batch"><input type="number" class="mini-input w-12 item-qty" value="${qty}" placeholder="Qty" oninput="recalcBulkTotal('${rowId}')"><button onclick="document.getElementById('item_${rowId}_${idx}').remove(); recalcBulkTotal('${rowId}')" class="text-[8px] text-red-400 ml-1">✕</button></div>`;
+            return `<div class="flex gap-1 items-center item-row" id="item_${rowId}_${idx}"><select class="mini-input w-14 item-nursery" onchange="_onItemNurseryChange(this)">${nurseryOpts}</select><select class="mini-input w-16 item-plot">${plotOpts}</select><select class="mini-input w-24 item-breed" id="breed_${rowId}_${idx}">${breedOpts}</select><input type="text" list="batch-suggestions" class="mini-input w-20 item-batch" value="${defaultBatch}" placeholder="Batch"><input type="number" class="mini-input w-12 item-qty" value="${qty}" placeholder="Qty" oninput="recalcBulkTotal('${rowId}')"><button onclick="document.getElementById('item_${rowId}_${idx}').remove(); recalcBulkTotal('${rowId}')" class="text-[8px] text-red-400 ml-1">✕</button></div>`;
         }
 
         function addMiniItemRow(rowId) { const container = document.getElementById(`items_container_${rowId}`); let count = parseInt(container.getAttribute('data-count')) || 0; container.insertAdjacentHTML('beforeend', generateMiniItemHtml(rowId, count)); container.setAttribute('data-count', count + 1); }
