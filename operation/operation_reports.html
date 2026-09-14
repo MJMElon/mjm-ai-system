@@ -124,34 +124,18 @@
 
     <!-- Report selector + filters -->
     <div class="glass-panel p-5 rounded-[2rem] no-print">
-      <!-- Category, Report and the date/breed/etc filters all live on the
-           SAME flex row now: pick a Category, its Report tabs appear right
-           beside it, then whichever filters that report needs appear right
-           beside those — reading left to right instead of stacking three
-           mostly-empty rows on top of each other. A hidden filter here just
-           isn't in the flow (no empty slot left behind), so the row is only
-           ever as wide as what's actually showing.
-           f-category / f-report stay as the state the rest of the page reads
-           (syncFilterVisibility, runReport, …) — just hidden inputs now,
-           kept in sync by the tab buttons below instead of by a <select>. -->
-      <input type="hidden" id="f-category" value="batch">
+      <!-- Every report is one flat row of tabs — no Category tier to click
+           through first. f-report stays as the state the rest of the page
+           reads (syncFilterVisibility, runReport, syncReportDefaults, …)
+           exactly the way it read a <select>'s .value before; these
+           buttons just keep it in sync now instead of a dropdown.
+           Whichever filters the picked report needs come on their own row
+           below, centred — most reports only need one or two of them, and
+           centring reads as "here's what's on offer" rather than a row
+           anchored to the left with the rest of its width empty. -->
       <input type="hidden" id="f-report">
-      <div class="flex flex-wrap gap-3 items-end">
-        <div>
-          <label class="label-style !mb-1">Category</label>
-          <div class="flex flex-wrap gap-2" id="f-category-tabs"></div>
-        </div>
-        <div>
-          <label class="label-style !mb-1">Report</label>
-          <!-- Rebuilt by syncCategory() whenever the Category tab changes —
-               see REPORT_CATEGORIES. Labels are kept short; the fuller
-               description (e.g. "by Plot / Batch") is each button's title
-               (hover it). -->
-          <div class="flex flex-wrap gap-2" id="f-report-tabs"></div>
-        </div>
-        <!-- Separates "what to run" (Category/Report) from "how to filter
-             it" (everything after) now that they share a row. -->
-        <div class="hidden md:block self-stretch w-px bg-[#e8dcc8]"></div>
+      <div class="flex flex-wrap gap-2 mb-3" id="f-report-tabs"></div>
+      <div class="flex flex-wrap gap-3 items-end justify-center">
         <div class="f-from w-[9.5rem]">
           <label class="label-style !mb-1">From</label>
           <input id="f-from" type="date" class="input-style">
@@ -686,81 +670,39 @@ async function runSeedReceived() {
   `;
 }
 
-// ── Category → Report menu ───────────────────────────────────────────────────
-// Two levels because six reports in one flat dropdown was a wall of text.
-// "Batch" answers what came IN (seed intake, D-Tone splits); "Movement
-// Report" answers where it stands and what left (trays/plots, transplants,
-// sales) — the same distinction the two existing movement reports already
-// drew, just named as a category now instead of two unrelated dropdown rows.
-// label is what the tab shows; hint is the fuller description it used to
-// show instead — kept as the button's title (a hover tooltip) rather than
-// dropped, so "by Plot / Batch" etc. is still there for whoever wants it.
-const REPORT_CATEGORIES = {
-  batch: [
-    { value: 'batch_production',   label: 'Production Summary', hint: 'Batch Production Summary — the seeds → transplant → cull funnel, per batch' },
-    { value: 'batch_double_tone',  label: 'Double Tone',         hint: 'Batch Double Tone — batch, breed, qty' },
-    { value: 'seed_received',      label: 'Seed Received',       hint: 'Seed Received — D/O qty, FOC qty, seed damage, per batch' },
-  ],
-  movement: [
-    { value: 'pre_nursery_movement',  label: 'Pre-Nursery', hint: 'Pre-Nursery Movement Report — by Tray / Batch' },
-    { value: 'main_nursery_movement', label: 'Main Nursery', hint: 'Main Nursery Movement Report — by Plot / Batch' },
-    { value: 'transplanting_report',  label: 'Transplanting', hint: 'Transplanting Report — date, maturity date, location' },
-    { value: 'sales_listing',         label: 'Sales Listing', hint: 'Sales Listing — line items or the year × month chart' },
-  ],
-};
+// ── Report menu ───────────────────────────────────────────────────────────
+// One flat row — every report is a tab, no Category tier to click through
+// first. label is what the tab shows; hint is the fuller description (e.g.
+// "by Plot / Batch") kept as the button's title (a hover tooltip) instead
+// of dropped.
+const REPORTS = [
+  { value: 'batch_production',      label: 'Production Summary', hint: 'Batch Production Summary — the seeds → transplant → cull funnel, per batch' },
+  { value: 'batch_double_tone',     label: 'Double Tone',        hint: 'Batch Double Tone — batch, breed, qty' },
+  { value: 'seed_received',         label: 'Seed Received',      hint: 'Seed Received — D/O qty, FOC qty, seed damage, per batch' },
+  { value: 'pre_nursery_movement',  label: 'Pre-Nursery',        hint: 'Pre-Nursery Movement Report — by Tray / Batch' },
+  { value: 'main_nursery_movement', label: 'Main Nursery',       hint: 'Main Nursery Movement Report — by Plot / Batch' },
+  { value: 'transplanting_report',  label: 'Transplanting',      hint: 'Transplanting Report — date, maturity date, location' },
+  { value: 'sales_listing',         label: 'Sales Listing',      hint: 'Sales Listing — line items or the year × month chart' },
+];
 
-// ── Category / Report tabs ───────────────────────────────────────────────────
-// f-category and f-report are hidden inputs — the state the rest of the page
-// reads (syncFilterVisibility, runReport, syncReportDefaults, …) exactly the
-// way it read a <select>'s .value before. These tab buttons are just what
-// keeps that state in sync now, instead of a dropdown.
-const REPORT_CATEGORY_LABELS = { batch: 'Batch', movement: 'Movement Report' };
+// ── Report tabs ───────────────────────────────────────────────────────────
+// f-report is a hidden input — the state the rest of the page reads
+// (syncFilterVisibility, runReport, syncReportDefaults, …) exactly the way
+// it read a <select>'s .value before. These tab buttons are just what keeps
+// it in sync now, instead of a dropdown.
 const TAB_BTN_BASE     = 'px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors';
 const TAB_BTN_ACTIVE   = 'bg-[#4a7a2e] border-[#4a7a2e] text-white';
 const TAB_BTN_INACTIVE = 'bg-[#fdfaf4] border-[#e8dcc8] text-[#8a7a68] hover:bg-[#f0f8ec]';
 
-function renderCategoryTabs() {
-  const cat  = document.getElementById('f-category').value;
-  const wrap = document.getElementById('f-category-tabs');
-  wrap.innerHTML = Object.keys(REPORT_CATEGORIES).map(c => `
-    <button type="button" onclick="selectCategory('${c}')"
-      class="${TAB_BTN_BASE} ${c === cat ? TAB_BTN_ACTIVE : TAB_BTN_INACTIVE}">${REPORT_CATEGORY_LABELS[c] || c}</button>
-  `).join('');
-}
-
 function renderReportTabs() {
-  const cat  = document.getElementById('f-category').value;
   const rep  = document.getElementById('f-report').value;
-  const opts = REPORT_CATEGORIES[cat] || [];
   const wrap = document.getElementById('f-report-tabs');
-  wrap.innerHTML = opts.map(o => `
+  wrap.innerHTML = REPORTS.map(o => `
     <button type="button" onclick="selectReport('${o.value}')" title="${o.hint || ''}"
       class="${TAB_BTN_BASE} ${o.value === rep ? TAB_BTN_ACTIVE : TAB_BTN_INACTIVE}">${o.label}</button>
   `).join('');
 }
 
-/* Rebuilds the Report tabs for the chosen Category. Keeps the same report
-   selected across a category switch only if it still belongs to the new
-   category (it never will, since categories don't share report values —
-   this just means "always land on that category's first report"). */
-function syncCategory(preferredReport) {
-  const cat  = document.getElementById('f-category').value;
-  const opts = REPORT_CATEGORIES[cat] || [];
-  const cur  = document.getElementById('f-report').value;
-  const next = (preferredReport && opts.some(o => o.value === preferredReport)) ? preferredReport
-             : (opts.some(o => o.value === cur) ? cur : ((opts[0] && opts[0].value) || ''));
-  document.getElementById('f-report').value = next;
-  renderCategoryTabs();
-  renderReportTabs();
-}
-
-function selectCategory(cat) {
-  document.getElementById('f-category').value = cat;
-  syncCategory();
-  syncReportDefaults();
-  syncFilterVisibility();
-  runReport();
-}
 function selectReport(report) {
   document.getElementById('f-report').value = report;
   renderReportTabs();
@@ -768,17 +710,7 @@ function selectReport(report) {
   syncFilterVisibility();
   runReport();
 }
-window.selectCategory = selectCategory;
-window.selectReport   = selectReport;
-
-/* Which category a report value lives under — used once at boot to pick the
-   Category dropdown's initial value from the Report the page opens on. */
-function categoryOfReport(report) {
-  for (const cat of Object.keys(REPORT_CATEGORIES)) {
-    if (REPORT_CATEGORIES[cat].some(o => o.value === report)) return cat;
-  }
-  return 'batch';
-}
+window.selectReport = selectReport;
 
 /* First and last day of the current calendar month, as YYYY-MM-DD — the
    default range for every report keyed "generate based on month". Reusing
@@ -903,9 +835,9 @@ function syncReportDefaults() {
 }
 
 document.getElementById('f-run').addEventListener('click', runReport);
-// Category/Report tabs call selectCategory()/selectReport() directly on
-// click (see their onclick=), which already does everything the old
-// <select>'s 'change' listeners did here — nothing left to wire up.
+// The Report tabs call selectReport() directly on click (see their
+// onclick=), which already does everything the old <select>'s 'change'
+// listener did here — nothing left to wire up.
 const _fSort = document.getElementById('f-sort');
 if (_fSort) _fSort.addEventListener('change', runReport);
 
@@ -2006,11 +1938,11 @@ async function bootstrap() {
     document.getElementById('forbidden').classList.remove('hidden');
     return;
   }
-  // The Report dropdown's <option>s don't exist until syncCategory() builds
-  // them — do that before anything reads f-report.value.
+  // The Report tabs don't exist until renderReportTabs() builds them — do
+  // that before anything reads f-report.value.
   const DEFAULT_REPORT = 'batch_production';
-  document.getElementById('f-category').value = categoryOfReport(DEFAULT_REPORT);
-  syncCategory(DEFAULT_REPORT);
+  document.getElementById('f-report').value = DEFAULT_REPORT;
+  renderReportTabs();
 
   const { from, to } = defaultRange();
   const todayStr = new Date().toISOString().slice(0, 10);
