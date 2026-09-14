@@ -124,30 +124,34 @@
 
     <!-- Report selector + filters -->
     <div class="glass-panel p-5 rounded-[2rem] no-print">
-      <!-- Category and Report as click-able tabs, same style as the Main
-           Culling / Transfer Data / P-R Culling tabs — a menu you look at and
-           click, not a dropdown you have to open to see the choices.
+      <!-- Category, Report and the date/breed/etc filters all live on the
+           SAME flex row now: pick a Category, its Report tabs appear right
+           beside it, then whichever filters that report needs appear right
+           beside those — reading left to right instead of stacking three
+           mostly-empty rows on top of each other. A hidden filter here just
+           isn't in the flow (no empty slot left behind), so the row is only
+           ever as wide as what's actually showing.
            f-category / f-report stay as the state the rest of the page reads
-           (syncFilterVisibility, runReport, …) — just hidden now, kept in
-           sync by the tab buttons below instead of by a <select>. -->
+           (syncFilterVisibility, runReport, …) — just hidden inputs now,
+           kept in sync by the tab buttons below instead of by a <select>. -->
       <input type="hidden" id="f-category" value="batch">
       <input type="hidden" id="f-report">
-      <div class="mb-2">
-        <label class="label-style !mb-1">Category</label>
-        <div class="flex flex-wrap gap-2" id="f-category-tabs"></div>
-      </div>
-      <div class="mb-3">
-        <label class="label-style !mb-1">Report</label>
-        <!-- Rebuilt by syncCategory() whenever the Category tab changes — see
-             REPORT_CATEGORIES. Labels are kept short; the fuller description
-             (e.g. "by Plot / Batch") is each button's title (hover it). -->
-        <div class="flex flex-wrap gap-2" id="f-report-tabs"></div>
-      </div>
-      <!-- Flex, not a fixed grid — a hidden filter here just isn't in the
-           flow (no empty column left behind), so whichever handful of
-           filters a report actually uses sit close together instead of
-           spread across reserved slots most reports don't fill. -->
       <div class="flex flex-wrap gap-3 items-end">
+        <div>
+          <label class="label-style !mb-1">Category</label>
+          <div class="flex flex-wrap gap-2" id="f-category-tabs"></div>
+        </div>
+        <div>
+          <label class="label-style !mb-1">Report</label>
+          <!-- Rebuilt by syncCategory() whenever the Category tab changes —
+               see REPORT_CATEGORIES. Labels are kept short; the fuller
+               description (e.g. "by Plot / Batch") is each button's title
+               (hover it). -->
+          <div class="flex flex-wrap gap-2" id="f-report-tabs"></div>
+        </div>
+        <!-- Separates "what to run" (Category/Report) from "how to filter
+             it" (everything after) now that they share a row. -->
+        <div class="hidden md:block self-stretch w-px bg-[#e8dcc8]"></div>
         <div class="f-from w-[9.5rem]">
           <label class="label-style !mb-1">From</label>
           <input id="f-from" type="date" class="input-style">
@@ -191,7 +195,11 @@
             <button type="button" id="f-mode-chart" class="px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-[#3d2610]">Chart</button>
           </div>
         </div>
-        <button id="f-run" class="btn-earth ml-auto">Run Report</button>
+        <!-- Normal flow, not pushed to the row's far edge — with Category
+             and Report now sharing this row there's usually something
+             right before it; forcing it to the edge just re-opens the same
+             dead-space gap for reports with few filters. -->
+        <button id="f-run" class="btn-earth">Run Report</button>
         <div class="w-full f-sales-years hidden">
           <div class="flex items-center justify-between mb-1">
             <span class="label-style !mb-0">Years</span>
@@ -375,18 +383,6 @@ async function runBatchProduction() {
     return db - da;
   });
 
-  // ── Aggregate summary ──
-  const summary = rows.reduce((s, r) => ({
-    batches:    s.batches + 1,
-    seeds:      s.seeds   + r.seeds,
-    planted:    s.planted + r.planted,
-    trans:      s.trans   + r.trans,
-    cull:       s.cull    + r.cull1 + r.cull2 + r.cull3,
-    final:      s.final   + r.final_alive
-  }), { batches: 0, seeds: 0, planted: 0, trans: 0, cull: 0, final: 0 });
-
-  const overallSurvival = summary.seeds > 0 ? (summary.final / summary.seeds) * 100 : 0;
-
   // Stash drilldown data on window for the click-through modal below.
   // We only publish rows that survived the filter step so drilldowns
   // reflect exactly what the summary is counting.
@@ -396,36 +392,7 @@ async function runBatchProduction() {
   loading.classList.add('hidden');
   out.classList.remove('hidden');
 
-  const clickable = 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all';
   out.innerHTML = `
-    <!-- Summary cards -->
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-      <div class="stat-card">
-        <div class="stat-label">Batches</div>
-        <div class="stat-num">${fmtNum(summary.batches)}</div>
-      </div>
-      <div class="stat-card ${clickable}" onclick="openBpDrill('seeds')" title="Click to see the seed intake per batch">
-        <div class="stat-label">Seeds Received</div>
-        <div class="stat-num text-[#c07820]">${fmtNum(summary.seeds)}</div>
-        <div class="text-[9px] font-bold text-[#8a7a68] mt-1 uppercase tracking-widest">Click for details</div>
-      </div>
-      <div class="stat-card ${clickable}" onclick="openBpDrill('trans')" title="Click to see the transplant rows per nursery">
-        <div class="stat-label">Transplanted</div>
-        <div class="stat-num text-[#3a7ab4]">${fmtNum(summary.trans)}</div>
-        <div class="text-[9px] font-bold text-[#8a7a68] mt-1 uppercase tracking-widest">Click for details</div>
-      </div>
-      <div class="stat-card ${clickable}" onclick="openBpDrill('cull')" title="Click to see the culled qty per nursery">
-        <div class="stat-label">Culled (1+2+3)</div>
-        <div class="stat-num text-[#a83020]">${fmtNum(summary.cull)}</div>
-        <div class="text-[9px] font-bold text-[#8a7a68] mt-1 uppercase tracking-widest">Click for details</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Final Alive</div>
-        <div class="stat-num text-[#4a7a2e]">${fmtNum(summary.final)}</div>
-        <div class="text-[10px] font-black uppercase tracking-widest text-[#4a7a2e] mt-1">Survival ${fmtPct(overallSurvival)}</div>
-      </div>
-    </div>
-
     <!-- Per-batch table -->
     <div class="glass-panel p-6 rounded-[2rem]">
       <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
