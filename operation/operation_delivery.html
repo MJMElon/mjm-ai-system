@@ -1304,12 +1304,42 @@
             }
         }
         
+        // Grouped by nursery via <optgroup> — a flat list of every plot in
+        // the system (BNN, UNN 1, UNN 2 all mixed together, unsorted, each
+        // row repeating "UNN 1 - " on every option) was long enough to
+        // scroll through blind. Nursery becomes the group header instead of
+        // being repeated on every option, and both the nurseries and the
+        // plots within each are sorted, in the same BNN / UNN 1 / UNN 2
+        // order the rest of the system reads them in.
+        const _PLOT_NURSERY_ORDER = ['BNN', 'UNN 1', 'UNN 2'];
+        function _plotOptionsHtml(defaultPlot) {
+            const rank = (n) => { const i = _PLOT_NURSERY_ORDER.indexOf(n); return i === -1 ? _PLOT_NURSERY_ORDER.length : i; };
+            const byNursery = {};
+            globalPlots.forEach(p => {
+                const n = p.nursery_name || 'Unassigned';
+                (byNursery[n] = byNursery[n] || []).push(p);
+            });
+            const nurseries = Object.keys(byNursery).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+            let html = '<option value="">Plot</option>';
+            nurseries.forEach(n => {
+                const plots = byNursery[n].slice().sort((a, b) =>
+                    a.plot_name.localeCompare(b.plot_name, undefined, { numeric: true, sensitivity: 'base' }));
+                html += `<optgroup label="${n}">`;
+                plots.forEach(p => {
+                    const sel = (defaultPlot && p.plot_name.toLowerCase() === defaultPlot.toLowerCase()) ? 'selected' : '';
+                    html += `<option value="${p.plot_name}" ${sel}>${p.plot_name}</option>`;
+                });
+                html += `</optgroup>`;
+            });
+            return html;
+        }
+
         function generateMiniItemHeader(rowId) {
             return `<div class="flex gap-1 items-center mb-0 mini-item-header" style="pointer-events:none;"><span class="text-[8px] font-black uppercase tracking-wider text-purple-500 w-32 px-1">Nursery/Plot</span><span class="text-[8px] font-black uppercase tracking-wider text-amber-600 w-24 px-1">Breed</span><span class="text-[8px] font-black uppercase tracking-wider text-slate-500 w-20 px-1">Batch</span><span class="text-[8px] font-black uppercase tracking-wider text-emerald-600 w-12 px-1 text-center">Qty</span><span class="w-3"></span></div>`;
         }
 
         function generateMiniItemHtml(rowId, idx, defaultPlot='', defaultBreed='', defaultBatch='', qty='') {
-            let plotOpts = '<option value="">Plot</option>'; globalPlots.forEach(p => { let sel = (defaultPlot && p.plot_name.toLowerCase() === defaultPlot.toLowerCase()) ? 'selected' : ''; plotOpts += `<option value="${p.plot_name}" ${sel}>${p.nursery_name} - ${p.plot_name}</option>`; });
+            let plotOpts = _plotOptionsHtml(defaultPlot);
             let breedOpts = '<option value="">Breed</option>'; globalBreeds.forEach(b => { let sel = (defaultBreed && b.name.toLowerCase() === defaultBreed.toLowerCase()) ? 'selected' : ''; breedOpts += `<option value="${b.name}" ${sel}>${b.name}</option>`; });
 
             if(globalPlots.length === 0) {
