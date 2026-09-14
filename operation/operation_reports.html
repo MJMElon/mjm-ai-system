@@ -24,7 +24,7 @@
   /* Report picker as a connected tab strip — one bar with dividers between
      tabs and the active one picked out by its own underline, not separate
      pill buttons with gaps between them. */
-  .report-tab-bar { display:flex; flex-wrap:wrap; border:1px solid #e8dcc8; border-radius:12px; overflow:hidden; }
+  .report-tab-bar { display:flex; flex-wrap:wrap; border:1px solid #e8dcc8; border-radius:12px; overflow:hidden; width:fit-content; max-width:100%; margin:0 auto; }
   .report-tab {
     padding:12px 20px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.08em;
     color:#8a7a68; background:#fdfaf4; border:none; border-right:1px solid #e8dcc8;
@@ -134,18 +134,17 @@
 
     <!-- Report selector + filters -->
     <div class="glass-panel p-5 rounded-[2rem] no-print">
-      <!-- Every report is one flat row of tabs — no Category tier to click
-           through first. f-report stays as the state the rest of the page
-           reads (syncFilterVisibility, runReport, syncReportDefaults, …)
-           exactly the way it read a <select>'s .value before; these
-           buttons just keep it in sync now instead of a dropdown.
-           Whichever filters the picked report needs come on their own row
-           below, centred — most reports only need one or two of them, and
-           centring reads as "here's what's on offer" rather than a row
-           anchored to the left with the rest of its width empty. -->
+      <!-- Date/filter row first, then the report tabs, then the data below
+           (outside this panel). f-report stays as the state the rest of the
+           page reads (syncFilterVisibility, runReport, syncReportDefaults,
+           …) exactly the way it read a <select>'s .value before; the tabs
+           just keep it in sync now instead of a dropdown. Whichever filters
+           the picked report needs sit centred in their own row — most
+           reports only need one or two of them, and centring reads as
+           "here's what's on offer" rather than a row anchored to the left
+           with the rest of its width empty. -->
       <input type="hidden" id="f-report">
-      <div class="report-tab-bar mb-3" id="f-report-tabs"></div>
-      <div class="flex flex-wrap gap-3 items-end justify-center">
+      <div class="flex flex-wrap gap-3 items-end justify-center mb-3">
         <!-- One date, not a range — every report is "as at" a day now. A
              report that needs a period (Movement's Culled/Transplanted/etc
              columns, "this month's activity") gets it derived from this one
@@ -205,6 +204,11 @@
           <div id="f-year-chips" class="flex flex-wrap gap-2"></div>
         </div>
       </div>
+      <!-- Tab bar after the date/filter row now — pick the date first (it's
+           the one thing every report shares), then which report, then the
+           data appears below. Centred (.report-tab-bar is width:fit-content
+           + margin:auto), not stretched to the panel's full width. -->
+      <div class="report-tab-bar" id="f-report-tabs"></div>
     </div>
 
     <!-- Loading state -->
