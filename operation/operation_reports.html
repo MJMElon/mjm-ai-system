@@ -258,11 +258,12 @@ async function runBatchProduction() {
   out.classList.add('hidden');
   loading.classList.remove('hidden');
 
-  const from  = document.getElementById('f-from').value;
+  // No From — this report is every batch's whole funnel up to a point in
+  // time, not a period, so there's only a To ("as at") to read.
   const to    = document.getElementById('f-to').value;
   const breed = document.getElementById('f-breed').value;
 
-  // Fetch all batches in range — anchor date is Seeds_Received transaction_date.
+  // Fetch all batches up to the To date — anchor date is Seeds_Received transaction_date.
   // plot_name joins us to nursery (main-nursery drilldowns need it).
   const [logsRes, batchesRes, plotsRes] = await Promise.all([
     // Paged — a single request stops at 1000 rows, which quietly dropped the
@@ -335,8 +336,7 @@ async function runBatchProduction() {
     else if (STAGE_TYPES.cull3.includes(t))   { row.cull3 += Math.abs(qty); row.cull3Logs.push(l); }
   });
 
-  // Filter by date range (on Seeds_Received date) and breed.
-  const fromTs = from ? new Date(from).getTime() : -Infinity;
+  // Filter by date (on Seeds_Received date, up to To) and breed.
   const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
 
   let rows = Object.values(byBatch).map(r => {
@@ -355,10 +355,16 @@ async function runBatchProduction() {
 
   rows = rows.filter(r => {
     if (breed && r.breed_name !== breed) return false;
+    // Completed — the batch was transplanted and everything from that
+    // transplant has since been culled away, so there's nothing left for
+    // this funnel to track. A batch that hasn't reached transplanting yet
+    // also computes to 0 here but is very much still active, not
+    // completed, so that's guarded separately (r.trans > 0).
+    if (r.trans > 0 && r.final_alive === 0) return false;
     const anchor = r.seeds_date ? new Date(r.seeds_date).getTime()
                 : (r.batch_created_at ? new Date(r.batch_created_at).getTime() : NaN);
     if (isNaN(anchor)) return true; // keep batches with no anchor date so users see them
-    return anchor >= fromTs && anchor <= toTs;
+    return anchor <= toTs;
   });
 
   rows.sort((a, b) => {
@@ -370,7 +376,7 @@ async function runBatchProduction() {
   // Stash drilldown data on window for the click-through modal below.
   // We only publish rows that survived the filter step so drilldowns
   // reflect exactly what the summary is counting.
-  window._bpDetails = { rows, nurseryOf, filterFrom: from, filterTo: to, breed };
+  window._bpDetails = { rows, nurseryOf, filterTo: to, breed };
 
   // ── Render ──
   loading.classList.add('hidden');
@@ -381,7 +387,7 @@ async function runBatchProduction() {
     <div class="glass-panel p-6 rounded-[2rem]">
       <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
         <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Batch Production Summary</h3>
-        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} batch${rows.length === 1 ? '' : 'es'}${from ? ' · from ' + fmtDate(from) : ''}${to ? ' · to ' + fmtDate(to) : ''}${breed ? ' · ' + breed : ''}</div>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} batch${rows.length === 1 ? '' : 'es'}${to ? ' · as at ' + fmtDate(to) : ''}${breed ? ' · ' + breed : ''}</div>
       </div>
 
       <div class="overflow-x-auto">
@@ -737,7 +743,10 @@ function syncFilterVisibility() {
   // month won't still be showing this month's culling. Balance stays a true
   // running total regardless of From, so it still answers "what's actually
   // there right now" — see runMovementReport.
-  document.querySelectorAll('.f-from').forEach(el          => el.classList.toggle('hidden', !hasRange));
+  // Production Summary is the exception: it's every batch's whole funnel up
+  // to a point in time, not a period — a From would ask "which batches
+  // started in this window", which isn't the question this report answers.
+  document.querySelectorAll('.f-from').forEach(el          => el.classList.toggle('hidden', !hasRange || isBatch));
   const toLabel = document.getElementById('f-to-label');
   if (toLabel) toLabel.textContent = 'To';
   document.querySelectorAll('.f-sort').forEach(el          => el.classList.toggle('hidden', !(isPre || isMain)));
