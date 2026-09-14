@@ -28,7 +28,8 @@
   table.report-table { width:100%; border-collapse:separate; border-spacing:0; }
   .report-table th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#8a7a68; padding:12px 14px; border-bottom:2px solid #e8dcc8; background:#fdfaf4; white-space:nowrap; }
   .report-table td { font-size:13px; font-weight:600; color:#1a150d; padding:14px; border-bottom:1px solid #f3efe6; }
-  .report-table tr:hover td { background:#fdfaf4; }
+  /* No hover-highlight — these rows aren't clickable, so a colour change on
+     pointing at one only implied an interaction that wasn't there. */
   /* Numeric cells across every report use tabular-nums so digits align
      column-for-column and rows read as a clean matrix. */
   .report-table td, .report-table th { font-variant-numeric: tabular-nums; }
@@ -1569,11 +1570,12 @@ async function runMovementReport(scope) {
         class="font-black text-[11px] uppercase tracking-widest text-[#3d2610] py-2">${g.loc}</td></tr>`);
     }
     const bal = g.list.reduce((s, r) => s + r.closing, 0);
-    // Alternating bands, one shade apart, so a group's rows read as a block
-    // without the table turning into a colour chart.
-    band = !band;
-    const zebra = band ? ' style="background:#f0e6d2"' : '';
+    // Alternating band per ROW (not per group) — every line gets its own
+    // dark/light step, so a batch with several tray/plot rows still shows
+    // each one distinctly instead of one solid block of colour.
     g.list.forEach((r, i) => {
+      band = !band;
+      const zebra = band ? ' style="background:#f0e6d2"' : '';
       bodyHtml.push(`<tr${zebra}>
         <td class="font-black text-[#3d2610]">${i === 0 ? g.key : ''}</td>
         <td>${otherOf(r) || '—'}</td>
