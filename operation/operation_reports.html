@@ -218,6 +218,10 @@ const STAGE_TYPES = {
 function fmtNum(n)   { return (n || 0).toLocaleString(); }
 function fmtPct(n)   { return (Math.max(0, Math.min(999, n || 0))).toFixed(2) + '%'; }
 function fmtDate(d)  { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? '—' : x.toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' }); }
+// Same thousand-separator grouping as fmtNum, kept at 2 decimals — a
+// subtotal like RM 33390.00 read as one long unbroken run of digits;
+// toLocaleString groups it the same way fmtNum already groups quantities.
+function fmtMoney(n) { return (n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 function defaultRange() {
   const to = new Date();
@@ -1804,12 +1808,12 @@ async function runSalesListing() {
           <td>${l.plot}</td>
           <td>${l.batch}</td>
           <td class="text-right font-black">${fmtNum(l.qty)}</td>
-          ${anyPriced ? `<td class="text-right">${l.unitPrice != null ? 'RM ' + l.unitPrice.toFixed(2) : '—'}</td>` : ''}
+          ${anyPriced ? `<td class="text-right">${l.unitPrice != null ? 'RM ' + fmtMoney(l.unitPrice) : '—'}</td>` : ''}
         </tr>`).join('')}
       <tr style="background:#fdfaf4">
         <td colspan="5" class="text-right font-black text-[10px] uppercase tracking-widest text-[#8a7a68]">Subtotal — ${cust}</td>
         <td class="text-right font-black text-[#4a7a2e]">${fmtNum(custQty)}</td>
-        ${anyPriced ? `<td class="text-right font-black text-[#4a7a2e]">RM ${custAmt.toFixed(2)}</td>` : ''}
+        ${anyPriced ? `<td class="text-right font-black text-[#4a7a2e]">RM ${fmtMoney(custAmt)}</td>` : ''}
       </tr>`;
   }).join('');
 
@@ -1829,7 +1833,7 @@ async function runSalesListing() {
           <tfoot><tr class="font-black bg-[#fdf3e6]">
             <td colspan="5" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total Sold</td>
             <td class="text-right text-[#4a7a2e]">${fmtNum(grandTotal)}</td>
-            ${anyPriced ? `<td class="text-right text-[#4a7a2e]">RM ${grandAmount.toFixed(2)}</td>` : ''}
+            ${anyPriced ? `<td class="text-right text-[#4a7a2e]">RM ${fmtMoney(grandAmount)}</td>` : ''}
           </tr></tfoot>
         </table>
       </div>
