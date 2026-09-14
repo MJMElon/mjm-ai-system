@@ -27,6 +27,13 @@
 
   table.report-table { width:100%; border-collapse:separate; border-spacing:0; }
   .report-table th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#8a7a68; padding:12px 14px; border-bottom:2px solid #e8dcc8; background:#fdfaf4; white-space:nowrap; }
+  /* "th.text-right" outranks the plain "th" rule above (two selectors beat
+     one), which a bare Tailwind ".text-right" utility on a <th> cannot —
+     equal specificity, same rule wins, so a right-aligned header stayed
+     left-aligned while its numbers underneath (plain <td>, nothing to
+     out-rank) lined up fine. Without this, every right-aligned figure
+     column in every report has a header that doesn't sit over its data. */
+  .report-table th.text-right { text-align:right; }
   .report-table td { font-size:13px; font-weight:600; color:#1a150d; padding:14px; border-bottom:1px solid #f3efe6; }
   /* No hover-highlight — these rows aren't clickable, so a colour change on
      pointing at one only implied an interaction that wasn't there. */
@@ -1927,7 +1934,9 @@ async function runSalesListing() {
   const grandTotal  = lines.reduce((s, l) => s + l.qty, 0);
   const anyPriced   = lines.some(l => l.unitPrice != null);
   const grandAmount = lines.reduce((s, l) => s + (l.unitPrice != null ? l.unitPrice * l.qty : 0), 0);
-  const colCount    = anyPriced ? 8 : 7;
+  // Customer isn't its own column — it's the group-header row above each
+  // customer's lines, so it never needed a column of its own.
+  const colCount    = anyPriced ? 7 : 6;
 
   const rowsHtml = customers.map(cust => {
     const rows = byCustomer[cust].slice().sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
@@ -1938,7 +1947,6 @@ async function runSalesListing() {
       ${rows.map(l => `
         <tr>
           <td>${fmtDate(l.date)}</td>
-          <td></td>
           <td class="font-black text-[#3a7ab4]">${l.doNumber || '—'}</td>
           <td>${l.nursery}</td>
           <td>${l.plot}</td>
@@ -1947,7 +1955,7 @@ async function runSalesListing() {
           ${anyPriced ? `<td class="text-right">${l.unitPrice != null ? 'RM ' + l.unitPrice.toFixed(2) : '—'}</td>` : ''}
         </tr>`).join('')}
       <tr style="background:#fdfaf4">
-        <td colspan="6" class="text-right font-black text-[10px] uppercase tracking-widest text-[#8a7a68]">Subtotal — ${cust}</td>
+        <td colspan="5" class="text-right font-black text-[10px] uppercase tracking-widest text-[#8a7a68]">Subtotal — ${cust}</td>
         <td class="text-right font-black text-[#4a7a2e]">${fmtNum(custQty)}</td>
         ${anyPriced ? `<td class="text-right font-black text-[#4a7a2e]">RM ${custAmt.toFixed(2)}</td>` : ''}
       </tr>`;
@@ -1962,12 +1970,12 @@ async function runSalesListing() {
       <div class="overflow-x-auto">
         <table class="report-table">
           <thead><tr>
-            <th>Collection Date</th><th>Customer</th><th>DO Number</th><th>Nursery</th><th>Plot</th><th>Batch</th>
+            <th>Collection Date</th><th>DO Number</th><th>Nursery</th><th>Plot</th><th>Batch</th>
             <th class="text-right">Sold Qty</th>${anyPriced ? '<th class="text-right">Unit Price</th>' : ''}
           </tr></thead>
           <tbody>${rowsHtml}</tbody>
           <tfoot><tr class="font-black bg-[#fdf3e6]">
-            <td colspan="6" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total Sold</td>
+            <td colspan="5" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total Sold</td>
             <td class="text-right text-[#4a7a2e]">${fmtNum(grandTotal)}</td>
             ${anyPriced ? `<td class="text-right text-[#4a7a2e]">RM ${grandAmount.toFixed(2)}</td>` : ''}
           </tr></tfoot>
