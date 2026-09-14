@@ -1601,7 +1601,7 @@ async function runMovementReport(scope) {
  *
  * One row per Transplanted / Transplanted_Premium / Transplanted_DoubleTone
  * log line: when it moved, where to, and — since a seedling is treated as
- * mature roughly 3 months after being put out — when it's due. Nursery-
+ * mature roughly 9 months after being put out — when it's due. Nursery-
  * filterable the same way Main Nursery Movement already is.
  */
 async function runTransplantingReport() {
@@ -1639,7 +1639,7 @@ async function runTransplantingReport() {
   const maturityOf = (d) => {
     const dt = new Date(d);
     if (isNaN(dt)) return null;
-    dt.setMonth(dt.getMonth() + 3);
+    dt.setMonth(dt.getMonth() + 9);
     return dt.toISOString().slice(0, 10);
   };
 
