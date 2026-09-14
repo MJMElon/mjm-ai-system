@@ -24,7 +24,7 @@
   /* Report picker as a connected tab strip — one bar with dividers between
      tabs and the active one picked out by its own underline, not separate
      pill buttons with gaps between them. */
-  .report-tab-bar { display:flex; flex-wrap:wrap; border:1px solid #e8dcc8; border-radius:12px; overflow:hidden; width:fit-content; max-width:100%; margin:0 auto; }
+  .report-tab-bar { display:flex; flex-wrap:wrap; align-items:flex-end; border:1px solid #e8dcc8; border-radius:12px; overflow:hidden; width:fit-content; max-width:100%; margin:0 auto; }
   .report-tab {
     padding:12px 20px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.08em;
     color:#8a7a68; background:#fdfaf4; border:none; border-right:1px solid #e8dcc8;
@@ -34,6 +34,18 @@
   .report-tab:last-child { border-right:none; }
   .report-tab:hover:not(.active) { color:#4a7a2e; background:#f5f0e4; }
   .report-tab.active { color:#3d2610; background:#fff; border-bottom-color:#4a7a2e; }
+  /* A titled cluster of tabs within the same bar — Pre-Nursery / Main
+     Nursery as the two halves of one Movement Report, not two unrelated
+     tabs. The label sits above its own row of buttons; align-items:flex-end
+     on .report-tab-bar keeps that row's bottom edge level with the lone
+     tabs beside it, so the underline still reads as one baseline. */
+  .report-tab-group { display:flex; flex-direction:column; border-right:1px solid #e8dcc8; }
+  .report-tab-group:last-child { border-right:none; }
+  .report-tab-group-label {
+    font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:.1em; color:#8a7a68;
+    background:#f3ede1; padding:4px 0; text-align:center; border-bottom:1px solid #e8dcc8;
+  }
+  .report-tab-group-row { display:flex; }
 
   table.report-table { width:100%; border-collapse:separate; border-spacing:0; }
   .report-table th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#8a7a68; padding:12px 14px; border-bottom:2px solid #e8dcc8; background:#fdfaf4; white-space:nowrap; }
@@ -674,8 +686,8 @@ const REPORTS = [
   { value: 'batch_production',      label: 'Production Summary', hint: 'Batch Production Summary — the seeds → transplant → cull funnel, per batch' },
   { value: 'batch_double_tone',     label: 'Double Tone',        hint: 'Batch Double Tone — batch, breed, qty' },
   { value: 'seed_received',         label: 'Seed Received',      hint: 'Seed Received — D/O qty, FOC qty, seed damage, per batch' },
-  { value: 'pre_nursery_movement',  label: 'Pre-Nursery',        hint: 'Pre-Nursery Movement Report — by Tray / Batch' },
-  { value: 'main_nursery_movement', label: 'Main Nursery',       hint: 'Main Nursery Movement Report — by Plot / Batch' },
+  { value: 'pre_nursery_movement',  label: 'Pre-Nursery',        hint: 'Pre-Nursery Movement Report — by Tray / Batch',  group: 'Movement Report' },
+  { value: 'main_nursery_movement', label: 'Main Nursery',       hint: 'Main Nursery Movement Report — by Plot / Batch', group: 'Movement Report' },
   { value: 'transplanting_report',  label: 'Transplanting',      hint: 'Transplanting Report — date, maturity date, location' },
   { value: 'sales_listing',         label: 'Sales Listing',      hint: 'Sales Listing — line items or the year × month chart' },
 ];
@@ -687,13 +699,33 @@ const REPORTS = [
 // it in sync now, instead of a dropdown. Styled as one connected tab strip
 // (.report-tab-bar / .report-tab, see <style>) — dividers between tabs and
 // an underline on the active one, not separate pill buttons with gaps.
+// Adjacent entries sharing the same `group` render as one titled cluster
+// (.report-tab-group) instead of two lone tabs — Pre-Nursery and Main
+// Nursery are the two halves of one Movement Report, so they carry that
+// title as a pair rather than reading as two unrelated reports.
 function renderReportTabs() {
   const rep  = document.getElementById('f-report').value;
   const wrap = document.getElementById('f-report-tabs');
-  wrap.innerHTML = REPORTS.map(o => `
+  const btn  = (o) => `
     <button type="button" onclick="selectReport('${o.value}')" title="${o.hint || ''}"
-      class="report-tab${o.value === rep ? ' active' : ''}">${o.label}</button>
-  `).join('');
+      class="report-tab${o.value === rep ? ' active' : ''}">${o.label}</button>`;
+  const html = [];
+  let i = 0;
+  while (i < REPORTS.length) {
+    const o = REPORTS[i];
+    if (!o.group) { html.push(btn(o)); i++; continue; }
+    let j = i;
+    const items = [];
+    while (j < REPORTS.length && REPORTS[j].group === o.group) { items.push(REPORTS[j]); j++; }
+    html.push(`
+      <div class="report-tab-group">
+        <div class="report-tab-group-label">${o.group}</div>
+        <div class="report-tab-group-row">${items.map(btn).join('')}</div>
+      </div>
+    `);
+    i = j;
+  }
+  wrap.innerHTML = html.join('');
 }
 
 function selectReport(report) {
@@ -794,10 +826,15 @@ async function loadNurseryFilter() {
   (data || []).forEach(p => { if (p.nursery_name) names.add(p.nursery_name); });
   const wrap = document.getElementById('f-nursery-chips');
   wrap.innerHTML = '';
-  // In the nursery's own order — BNN, UNN 1, UNN 2 — not the alphabet's.
-  // Pre-Nursery is not offered here: it has a report of its own.
-  [...names]
-    .filter(n => !PRE_NURSERY_PLOTS.includes(n) && n !== 'Pre-Nursery')
+  // In the nursery's own order — PN, BNN, UNN 1, UNN 2 — not the alphabet's.
+  // shared_plots never has a "Pre-Nursery" row (trays, not plots), so PN is
+  // added by hand rather than found in the data — it's what a transplant
+  // landing in a pre-nursery tray (Premium Care / Double Tone) is labelled,
+  // see runTransplantingReport(), and this is how that gets filtered in or
+  // out alongside BNN/UNN1/UNN2.
+  const list = [...names].filter(n => !PRE_NURSERY_PLOTS.includes(n) && n !== 'Pre-Nursery');
+  list.push('PN');
+  list
     .sort((a, b) => nurseryRank(a) - nurseryRank(b) || String(a).localeCompare(String(b)))
     .forEach(n => {
     const safe = String(n).replace(/[<>"'&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]));
@@ -1173,8 +1210,9 @@ function _mvBatchKey(v) {
 ════════════════════════════════════════════════════════════════════════════ */
 
 /* Nurseries read in the order the nursery works in, not the order the
-   alphabet happens to put them in. Anything not named here follows after. */
-const NURSERY_ORDER = ['BNN', 'UNN 1', 'UNN 2'];
+   alphabet happens to put them in. Anything not named here follows after.
+   PN (Pre-Nursery) leads — it's the first stage a batch passes through. */
+const NURSERY_ORDER = ['PN', 'BNN', 'UNN 1', 'UNN 2'];
 function nurseryRank(n) {
   const k = _mvPlotKey(n);
   const i = NURSERY_ORDER.findIndex(x => _mvPlotKey(x) === k);
@@ -1675,9 +1713,15 @@ async function runTransplantingReport() {
 
   let rows = (logsRes.data || []).map(l => {
     const date = _logDate(l);
+    // A transplant can land in a pre-nursery tray (Premium Care / Double
+    // Tone) rather than a main-nursery plot — those trays are never a row
+    // in shared_plots, so plotToLoc[...] would silently fall through to
+    // "Unassigned". PRE_NURSERY_PLOTS is the same list runMovementReport
+    // already uses to recognise them; label them "PN" instead.
+    const nursery = PRE_NURSERY_PLOTS.includes(l.plot_name) ? 'PN' : (plotToLoc[l.plot_name] || 'Unassigned');
     return {
       date, maturity: date ? maturityOf(date) : null,
-      nursery: plotToLoc[l.plot_name] || 'Unassigned',
+      nursery,
       plot: l.plot_name || '—', batch: l.batch_name || '—',
       breed: l.breed_name || batchBreed[l.batch_name] || '—',
       qty: Number(l.quantity_change || 0)
