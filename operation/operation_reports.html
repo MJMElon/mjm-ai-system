@@ -654,16 +654,22 @@ async function runSeedReceived() {
   let rows = Object.values(byBatch).filter(r => !breed || r.breed === breed);
   rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')));
 
+  // Same "Calculated FOC Qty" formula Tab 1 (Seeds In) shows next to the FOC
+  // Percent field it comes from — round(D/O qty × FOC% / 100) — so this
+  // report's number matches the one the batch was actually keyed against.
+  rows.forEach(r => { r.focQty = r.focPct != null ? Math.round(r.doQty * (r.focPct / 100)) : null; });
+
   const totals = rows.reduce((s, r) => ({
-    doQty: s.doQty + r.doQty, damaged: s.damaged + r.damaged
-  }), { doQty: 0, damaged: 0 });
+    doQty: s.doQty + r.doQty, focQty: s.focQty + (r.focQty || 0), damaged: s.damaged + r.damaged
+  }), { doQty: 0, focQty: 0, damaged: 0 });
 
   loading.classList.add('hidden');
   out.classList.remove('hidden');
   out.innerHTML = `
-    <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
       <div class="stat-card"><div class="stat-label">Batches</div><div class="stat-num">${fmtNum(rows.length)}</div></div>
       <div class="stat-card"><div class="stat-label">Seed Received (D/O)</div><div class="stat-num text-[#c07820]">${fmtNum(totals.doQty)}</div></div>
+      <div class="stat-card"><div class="stat-label">FOC Qty</div><div class="stat-num text-[#7c3aed]">${fmtNum(totals.focQty)}</div></div>
       <div class="stat-card"><div class="stat-label">Seed Damage</div><div class="stat-num text-[#a83020]">${fmtNum(totals.damaged)}</div></div>
     </div>
     <div class="glass-panel p-6 rounded-[2rem]">
@@ -676,7 +682,7 @@ async function runSeedReceived() {
           <thead><tr>
             <th>Date</th><th>Batch</th><th>Breed</th>
             <th class="text-right">Seed Received (D/O)</th>
-            <th class="text-right">FOC %</th>
+            <th class="text-right">FOC Qty</th>
             <th class="text-right">Seed Damage</th>
           </tr></thead>
           <tbody>
@@ -686,14 +692,17 @@ async function runSeedReceived() {
                 <td class="font-black text-[#3d2610]">${r.batch_name}</td>
                 <td>${r.breed}</td>
                 <td class="text-right text-[#c07820] font-black">${fmtNum(r.doQty)}</td>
-                <td class="text-right">${r.focPct != null ? r.focPct.toFixed(2) + '%' : '—'}</td>
+                <td class="text-right">${r.focQty != null
+                  ? `<span class="font-black text-[#7c3aed]">${fmtNum(r.focQty)}</span>
+                     <span class="block text-[9px] text-[#8a7a68] font-bold">${r.focPct.toFixed(2)}%</span>`
+                  : '—'}</td>
                 <td class="text-right ${r.damaged ? 'text-[#a83020] font-black' : 'text-[#8a7a68]'}">${r.damaged ? fmtNum(r.damaged) : '—'}</td>
               </tr>`).join('') : `<tr><td colspan="6" class="text-center py-10 text-[#8a7a68]">No seed receipts match the selected filters.</td></tr>`}
           </tbody>
           ${rows.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
             <td colspan="3" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
             <td class="text-right text-[#c07820]">${fmtNum(totals.doQty)}</td>
-            <td></td>
+            <td class="text-right text-[#7c3aed]">${fmtNum(totals.focQty)}</td>
             <td class="text-right text-[#a83020]">${fmtNum(totals.damaged)}</td>
           </tr></tfoot>` : ''}
         </table>
@@ -701,6 +710,8 @@ async function runSeedReceived() {
       <div class="text-[10px] font-bold text-[#8a7a68] mt-4 leading-relaxed">
         <strong class="text-[#3d2610]">Notes —</strong>
         Seed Received (D/O) and FOC % are read from the same intake record Tab 1 (Seeds In) saves them on.
+        FOC Qty is round(D/O qty × FOC%) — the same "Calculated FOC Qty" Tab 1 shows beside the percent — so the
+        Total row can add up (Seed Received + FOC Qty), which a percentage can't.
         A batch received before the D/O·FOC split existed shows its whole intake as D/O qty, with no FOC% — there
         was nothing recorded to separate.
       </div>
@@ -721,7 +732,7 @@ const REPORT_CATEGORIES = {
   batch: [
     { value: 'batch_production',   label: 'Production Summary', hint: 'Batch Production Summary — the seeds → transplant → cull funnel, per batch' },
     { value: 'batch_double_tone',  label: 'Double Tone',         hint: 'Batch Double Tone — batch, breed, qty' },
-    { value: 'seed_received',      label: 'Seed Received',       hint: 'Seed Received — D/O qty, FOC %, seed damage, per batch' },
+    { value: 'seed_received',      label: 'Seed Received',       hint: 'Seed Received — D/O qty, FOC qty, seed damage, per batch' },
   ],
   movement: [
     { value: 'pre_nursery_movement',  label: 'Pre-Nursery', hint: 'Pre-Nursery Movement Report — by Tray / Batch' },
