@@ -1585,13 +1585,17 @@ async function runMovementReport(scope) {
     g.list.forEach((r, i) => {
       band = !band;
       const zebra = band ? ' style="background:#f0e6d2"' : '';
+      // The group key and the group's Balance are shown once per group, not
+      // once per row — a real rowspan cell, vertically centred, instead of
+      // text pinned to the group's first row with blank cells trailing
+      // under it (which read as stuck at the top, not "one merged value").
       bodyHtml.push(`<tr${zebra}>
-        <td class="font-black text-[#3d2610]">${i === 0 ? g.key : ''}</td>
+        ${i === 0 ? `<td rowspan="${g.list.length}" class="font-black text-[#3d2610] text-center align-middle">${g.key}</td>` : ''}
         <td>${otherOf(r) || '—'}</td>
         <td class="text-[#8a7a68] text-xs whitespace-nowrap">${r.age}</td>
         ${cols.map(c => fmtCell(r[c.key], c.cls)).join('')}
         ${fmtCell(r.closing, 'text-[#4a7a2e] font-black')}
-        <td class="font-black text-[#4a7a2e]">${i === 0 ? fmtNum(bal) : ''}</td>
+        ${i === 0 ? `<td rowspan="${g.list.length}" class="font-black text-[#4a7a2e] text-center align-middle">${fmtNum(bal)}</td>` : ''}
       </tr>`);
     });
   });
