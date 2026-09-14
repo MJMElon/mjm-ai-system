@@ -21,6 +21,20 @@
   .btn-earth { background:linear-gradient(135deg, #6aa83c, #4a7a2e); color:white; font-weight:900; padding:12px 24px; border-radius:12px; cursor:pointer; text-transform:uppercase; letter-spacing:.1em; box-shadow:0 8px 20px -4px rgba(74, 122, 46, .5); border:none; font-size:12px; }
   .btn-earth:hover { transform:translateY(-2px); }
 
+  /* Report picker as a connected tab strip — one bar with dividers between
+     tabs and the active one picked out by its own underline, not separate
+     pill buttons with gaps between them. */
+  .report-tab-bar { display:flex; flex-wrap:wrap; border:1px solid #e8dcc8; border-radius:12px; overflow:hidden; }
+  .report-tab {
+    padding:12px 20px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.08em;
+    color:#8a7a68; background:#fdfaf4; border:none; border-right:1px solid #e8dcc8;
+    border-bottom:3px solid transparent; cursor:pointer; transition:color .15s, background .15s, border-color .15s;
+    white-space:nowrap;
+  }
+  .report-tab:last-child { border-right:none; }
+  .report-tab:hover:not(.active) { color:#4a7a2e; background:#f5f0e4; }
+  .report-tab.active { color:#3d2610; background:#fff; border-bottom-color:#4a7a2e; }
+
   table.report-table { width:100%; border-collapse:separate; border-spacing:0; }
   .report-table th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#8a7a68; padding:12px 14px; border-bottom:2px solid #e8dcc8; background:#fdfaf4; white-space:nowrap; }
   /* "th.text-right" outranks the plain "th" rule above (two selectors beat
@@ -130,7 +144,7 @@
            centring reads as "here's what's on offer" rather than a row
            anchored to the left with the rest of its width empty. -->
       <input type="hidden" id="f-report">
-      <div class="flex flex-wrap gap-2 mb-3" id="f-report-tabs"></div>
+      <div class="report-tab-bar mb-3" id="f-report-tabs"></div>
       <div class="flex flex-wrap gap-3 items-end justify-center">
         <!-- One date, not a range — every report is "as at" a day now. A
              report that needs a period (Movement's Culled/Transplanted/etc
@@ -666,17 +680,15 @@ const REPORTS = [
 // f-report is a hidden input — the state the rest of the page reads
 // (syncFilterVisibility, runReport, syncReportDefaults, …) exactly the way
 // it read a <select>'s .value before. These tab buttons are just what keeps
-// it in sync now, instead of a dropdown.
-const TAB_BTN_BASE     = 'px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors';
-const TAB_BTN_ACTIVE   = 'bg-[#4a7a2e] border-[#4a7a2e] text-white';
-const TAB_BTN_INACTIVE = 'bg-[#fdfaf4] border-[#e8dcc8] text-[#8a7a68] hover:bg-[#f0f8ec]';
-
+// it in sync now, instead of a dropdown. Styled as one connected tab strip
+// (.report-tab-bar / .report-tab, see <style>) — dividers between tabs and
+// an underline on the active one, not separate pill buttons with gaps.
 function renderReportTabs() {
   const rep  = document.getElementById('f-report').value;
   const wrap = document.getElementById('f-report-tabs');
   wrap.innerHTML = REPORTS.map(o => `
     <button type="button" onclick="selectReport('${o.value}')" title="${o.hint || ''}"
-      class="${TAB_BTN_BASE} ${o.value === rep ? TAB_BTN_ACTIVE : TAB_BTN_INACTIVE}">${o.label}</button>
+      class="report-tab${o.value === rep ? ' active' : ''}">${o.label}</button>
   `).join('');
 }
 
