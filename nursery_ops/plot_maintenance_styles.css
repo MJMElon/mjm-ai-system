@@ -808,6 +808,16 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 
 .ss-wrap{border:1.5px solid var(--border);border-radius:var(--r-md);
   background:var(--bg-white);overflow:hidden;min-width:0;}
+/* Expanded, it takes the whole row. Two abreast is right for reading four
+   ticks across; it is not enough for a plot list plus a Set column plus the
+   buttons, which pushed Actions past the edge and made closing the panel a
+   horizontal scroll. */
+.ss-wrap.is-wide{grid-column:1 / -1;}
+/* And wherever the table still has to scroll — a narrow window, a month with
+   many weeks — the buttons come with it rather than waiting off-screen. */
+.ss-table th.ss-act,.ss-table td.ss-act{position:sticky;right:0;z-index:2;
+  background:var(--bg-white);box-shadow:-6px 0 6px -6px rgba(0,0,0,.18);}
+.ss-table thead th.ss-act{z-index:3;}
 
 .ss-head{display:flex;align-items:center;gap:10px;padding:9px 13px;
   background:#f2f7f4;border-bottom:1.5px solid var(--border);}
