@@ -116,23 +116,24 @@
 
     <!-- Report selector + filters -->
     <div class="glass-panel p-6 rounded-[2rem] no-print">
+      <!-- Category and Report as click-able tabs, same style as the Main
+           Culling / Transfer Data / P-R Culling tabs — a menu you look at and
+           click, not a dropdown you have to open to see the choices.
+           f-category / f-report stay as the state the rest of the page reads
+           (syncFilterVisibility, runReport, …) — just hidden now, kept in
+           sync by the tab buttons below instead of by a <select>. -->
+      <input type="hidden" id="f-category" value="batch">
+      <input type="hidden" id="f-report">
+      <div class="mb-4">
+        <label class="label-style">Category</label>
+        <div class="flex flex-wrap gap-2" id="f-category-tabs"></div>
+      </div>
+      <div class="mb-5">
+        <label class="label-style">Report</label>
+        <!-- Rebuilt by syncCategory() whenever the Category tab changes — see REPORT_CATEGORIES. -->
+        <div class="flex flex-wrap gap-2" id="f-report-tabs"></div>
+      </div>
       <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-        <div class="md:col-span-3">
-          <label class="label-style">Category</label>
-          <div class="select-wrapper">
-            <select id="f-category" class="input-style">
-              <option value="batch">Batch</option>
-              <option value="movement">Movement Report</option>
-            </select>
-          </div>
-        </div>
-        <div class="md:col-span-4">
-          <label class="label-style">Report</label>
-          <div class="select-wrapper">
-            <!-- Options are (re)built by syncCategory() — see REPORT_CATEGORIES. -->
-            <select id="f-report" class="input-style"></select>
-          </div>
-        </div>
         <div class="md:col-span-2 f-from">
           <label class="label-style">From</label>
           <input id="f-from" type="date" class="input-style">
@@ -716,17 +717,67 @@ const REPORT_CATEGORIES = {
   ],
 };
 
-/* Rebuilds the Report dropdown for the chosen Category. Keeps the same
-   report selected across a category switch only if it still belongs to the
-   new category (it never will, since categories don't share report values —
+// ── Category / Report tabs ───────────────────────────────────────────────────
+// f-category and f-report are hidden inputs — the state the rest of the page
+// reads (syncFilterVisibility, runReport, syncReportDefaults, …) exactly the
+// way it read a <select>'s .value before. These tab buttons are just what
+// keeps that state in sync now, instead of a dropdown.
+const REPORT_CATEGORY_LABELS = { batch: 'Batch', movement: 'Movement Report' };
+const TAB_BTN_BASE     = 'px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors';
+const TAB_BTN_ACTIVE   = 'bg-[#4a7a2e] border-[#4a7a2e] text-white';
+const TAB_BTN_INACTIVE = 'bg-[#fdfaf4] border-[#e8dcc8] text-[#8a7a68] hover:bg-[#f0f8ec]';
+
+function renderCategoryTabs() {
+  const cat  = document.getElementById('f-category').value;
+  const wrap = document.getElementById('f-category-tabs');
+  wrap.innerHTML = Object.keys(REPORT_CATEGORIES).map(c => `
+    <button type="button" onclick="selectCategory('${c}')"
+      class="${TAB_BTN_BASE} ${c === cat ? TAB_BTN_ACTIVE : TAB_BTN_INACTIVE}">${REPORT_CATEGORY_LABELS[c] || c}</button>
+  `).join('');
+}
+
+function renderReportTabs() {
+  const cat  = document.getElementById('f-category').value;
+  const rep  = document.getElementById('f-report').value;
+  const opts = REPORT_CATEGORIES[cat] || [];
+  const wrap = document.getElementById('f-report-tabs');
+  wrap.innerHTML = opts.map(o => `
+    <button type="button" onclick="selectReport('${o.value}')"
+      class="${TAB_BTN_BASE} ${o.value === rep ? TAB_BTN_ACTIVE : TAB_BTN_INACTIVE}">${o.label}</button>
+  `).join('');
+}
+
+/* Rebuilds the Report tabs for the chosen Category. Keeps the same report
+   selected across a category switch only if it still belongs to the new
+   category (it never will, since categories don't share report values —
    this just means "always land on that category's first report"). */
 function syncCategory(preferredReport) {
   const cat  = document.getElementById('f-category').value;
   const opts = REPORT_CATEGORIES[cat] || [];
-  const sel  = document.getElementById('f-report');
-  sel.innerHTML = opts.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
-  if (preferredReport && opts.some(o => o.value === preferredReport)) sel.value = preferredReport;
+  const cur  = document.getElementById('f-report').value;
+  const next = (preferredReport && opts.some(o => o.value === preferredReport)) ? preferredReport
+             : (opts.some(o => o.value === cur) ? cur : ((opts[0] && opts[0].value) || ''));
+  document.getElementById('f-report').value = next;
+  renderCategoryTabs();
+  renderReportTabs();
 }
+
+function selectCategory(cat) {
+  document.getElementById('f-category').value = cat;
+  syncCategory();
+  syncReportDefaults();
+  syncFilterVisibility();
+  runReport();
+}
+function selectReport(report) {
+  document.getElementById('f-report').value = report;
+  renderReportTabs();
+  syncReportDefaults();
+  syncFilterVisibility();
+  runReport();
+}
+window.selectCategory = selectCategory;
+window.selectReport   = selectReport;
 
 /* Which category a report value lives under — used once at boot to pick the
    Category dropdown's initial value from the Report the page opens on. */
@@ -855,17 +906,9 @@ function syncReportDefaults() {
 }
 
 document.getElementById('f-run').addEventListener('click', runReport);
-document.getElementById('f-category').addEventListener('change', () => {
-  syncCategory();
-  syncReportDefaults();
-  syncFilterVisibility();
-  runReport();
-});
-document.getElementById('f-report').addEventListener('change', () => {
-  syncReportDefaults();
-  syncFilterVisibility();
-  runReport();
-});
+// Category/Report tabs call selectCategory()/selectReport() directly on
+// click (see their onclick=), which already does everything the old
+// <select>'s 'change' listeners did here — nothing left to wire up.
 const _fSort = document.getElementById('f-sort');
 if (_fSort) _fSort.addEventListener('change', runReport);
 
