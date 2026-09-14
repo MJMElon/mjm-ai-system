@@ -116,7 +116,7 @@
   <div id="report-area" class="space-y-6">
 
     <!-- Report selector + filters -->
-    <div class="glass-panel p-6 rounded-[2rem] no-print">
+    <div class="glass-panel p-5 rounded-[2rem] no-print">
       <!-- Category and Report as click-able tabs, same style as the Main
            Culling / Transfer Data / P-R Culling tabs — a menu you look at and
            click, not a dropdown you have to open to see the choices.
@@ -125,29 +125,35 @@
            sync by the tab buttons below instead of by a <select>. -->
       <input type="hidden" id="f-category" value="batch">
       <input type="hidden" id="f-report">
-      <div class="mb-4">
-        <label class="label-style">Category</label>
+      <div class="mb-2">
+        <label class="label-style !mb-1">Category</label>
         <div class="flex flex-wrap gap-2" id="f-category-tabs"></div>
       </div>
-      <div class="mb-5">
-        <label class="label-style">Report</label>
-        <!-- Rebuilt by syncCategory() whenever the Category tab changes — see REPORT_CATEGORIES. -->
+      <div class="mb-3">
+        <label class="label-style !mb-1">Report</label>
+        <!-- Rebuilt by syncCategory() whenever the Category tab changes — see
+             REPORT_CATEGORIES. Labels are kept short; the fuller description
+             (e.g. "by Plot / Batch") is each button's title (hover it). -->
         <div class="flex flex-wrap gap-2" id="f-report-tabs"></div>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-        <div class="md:col-span-2 f-from">
-          <label class="label-style">From</label>
+      <!-- Flex, not a fixed grid — a hidden filter here just isn't in the
+           flow (no empty column left behind), so whichever handful of
+           filters a report actually uses sit close together instead of
+           spread across reserved slots most reports don't fill. -->
+      <div class="flex flex-wrap gap-3 items-end">
+        <div class="f-from w-[9.5rem]">
+          <label class="label-style !mb-1">From</label>
           <input id="f-from" type="date" class="input-style">
         </div>
         <!-- The movement reports stand at a date rather than covering a span:
              what is in the plot on the day you ask. Only the reports that
              genuinely cover a period still show a From. -->
-        <div class="md:col-span-2 f-range">
-          <label class="label-style" id="f-to-label">As at</label>
+        <div class="f-range w-[9.5rem]">
+          <label class="label-style !mb-1" id="f-to-label">As at</label>
           <input id="f-to" type="date" class="input-style">
         </div>
-        <div class="md:col-span-2 f-sort hidden">
-          <label class="label-style">Sort by</label>
+        <div class="f-sort hidden w-32">
+          <label class="label-style !mb-1">Sort by</label>
           <div class="select-wrapper">
             <select id="f-sort" class="input-style">
               <option value="plot">Plot</option>
@@ -155,9 +161,8 @@
             </select>
           </div>
         </div>
-        <!-- Beside the rest, not stranded on a line of its own. -->
-        <div class="md:col-span-4 f-nursery-inline hidden">
-          <div class="flex items-center justify-between mb-1">
+        <div class="f-nursery-inline hidden">
+          <div class="flex items-center justify-between mb-1 gap-3">
             <span class="label-style !mb-0">Locations</span>
             <div class="flex gap-3 text-[10px] font-black uppercase tracking-widest">
               <button type="button" id="f-nurs-all" class="text-[#4a7a2e] hover:underline">All</button>
@@ -166,23 +171,21 @@
           </div>
           <div id="f-nursery-chips" class="flex flex-wrap gap-2"></div>
         </div>
-        <div class="md:col-span-2 f-breed">
-          <label class="label-style">Breed</label>
+        <div class="f-breed w-44">
+          <label class="label-style !mb-1">Breed</label>
           <select id="f-breed" class="input-style">
             <option value="">All breeds</option>
           </select>
         </div>
-        <div class="md:col-span-2 f-sales-mode hidden">
-          <label class="label-style">View</label>
+        <div class="f-sales-mode hidden">
+          <label class="label-style !mb-1">View</label>
           <div class="flex bg-white border border-[#e8dcc8] rounded-xl p-1">
-            <button type="button" id="f-mode-table" class="flex-1 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest bg-[#3d2610] text-white">Table</button>
-            <button type="button" id="f-mode-chart" class="flex-1 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-[#3d2610]">Chart</button>
+            <button type="button" id="f-mode-table" class="px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest bg-[#3d2610] text-white">Table</button>
+            <button type="button" id="f-mode-chart" class="px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-[#3d2610]">Chart</button>
           </div>
         </div>
-        <div class="md:col-span-2 flex justify-end">
-          <button id="f-run" class="btn-earth w-full">Run Report</button>
-        </div>
-        <div class="md:col-span-12 f-sales-years hidden">
+        <button id="f-run" class="btn-earth ml-auto">Run Report</button>
+        <div class="w-full f-sales-years hidden">
           <div class="flex items-center justify-between mb-1">
             <span class="label-style !mb-0">Years</span>
             <div class="flex gap-3 text-[10px] font-black uppercase tracking-widest">
@@ -704,17 +707,20 @@ async function runSeedReceived() {
 // Report" answers where it stands and what left (trays/plots, transplants,
 // sales) — the same distinction the two existing movement reports already
 // drew, just named as a category now instead of two unrelated dropdown rows.
+// label is what the tab shows; hint is the fuller description it used to
+// show instead — kept as the button's title (a hover tooltip) rather than
+// dropped, so "by Plot / Batch" etc. is still there for whoever wants it.
 const REPORT_CATEGORIES = {
   batch: [
-    { value: 'batch_production',   label: 'Batch Production Summary' },
-    { value: 'batch_double_tone',  label: 'Batch Double Tone' },
-    { value: 'seed_received',      label: 'Seed Received' },
+    { value: 'batch_production',   label: 'Production Summary', hint: 'Batch Production Summary — the seeds → transplant → cull funnel, per batch' },
+    { value: 'batch_double_tone',  label: 'Double Tone',         hint: 'Batch Double Tone — batch, breed, qty' },
+    { value: 'seed_received',      label: 'Seed Received',       hint: 'Seed Received — D/O qty, FOC %, seed damage, per batch' },
   ],
   movement: [
-    { value: 'pre_nursery_movement',  label: 'Pre-Nursery Movement Report (by Tray / Batch)' },
-    { value: 'main_nursery_movement', label: 'Main Nursery Movement Report (by Plot / Batch)' },
-    { value: 'transplanting_report',  label: 'Transplanting Report' },
-    { value: 'sales_listing',         label: 'Sales Listing' },
+    { value: 'pre_nursery_movement',  label: 'Pre-Nursery', hint: 'Pre-Nursery Movement Report — by Tray / Batch' },
+    { value: 'main_nursery_movement', label: 'Main Nursery', hint: 'Main Nursery Movement Report — by Plot / Batch' },
+    { value: 'transplanting_report',  label: 'Transplanting', hint: 'Transplanting Report — date, maturity date, location' },
+    { value: 'sales_listing',         label: 'Sales Listing', hint: 'Sales Listing — line items or the year × month chart' },
   ],
 };
 
@@ -743,7 +749,7 @@ function renderReportTabs() {
   const opts = REPORT_CATEGORIES[cat] || [];
   const wrap = document.getElementById('f-report-tabs');
   wrap.innerHTML = opts.map(o => `
-    <button type="button" onclick="selectReport('${o.value}')"
+    <button type="button" onclick="selectReport('${o.value}')" title="${o.hint || ''}"
       class="${TAB_BTN_BASE} ${o.value === rep ? TAB_BTN_ACTIVE : TAB_BTN_INACTIVE}">${o.label}</button>
   `).join('');
 }
