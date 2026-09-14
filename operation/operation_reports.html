@@ -132,15 +132,15 @@
       <input type="hidden" id="f-report">
       <div class="flex flex-wrap gap-2 mb-3" id="f-report-tabs"></div>
       <div class="flex flex-wrap gap-3 items-end justify-center">
-        <div class="f-from w-[9.5rem]">
-          <label class="label-style !mb-1">From</label>
-          <input id="f-from" type="date" class="input-style">
-        </div>
-        <!-- The movement reports stand at a date rather than covering a span:
-             what is in the plot on the day you ask. Only the reports that
-             genuinely cover a period still show a From. -->
+        <!-- One date, not a range — every report is "as at" a day now. A
+             report that needs a period (Movement's Culled/Transplanted/etc
+             columns, "this month's activity") gets it derived from this one
+             date's calendar month (monthStartOf()) rather than asking for a
+             second field — see the f-from hidden input below and
+             runReport(). -->
+        <input type="hidden" id="f-from">
         <div class="f-range w-[9.5rem]">
-          <label class="label-style !mb-1" id="f-to-label">As at</label>
+          <label class="label-style !mb-1" id="f-to-label">As At</label>
           <input id="f-to" type="date" class="input-style">
         </div>
         <div class="f-sort hidden w-32">
@@ -222,12 +222,6 @@ function fmtDate(d)  { if (!d) return '—'; const x = new Date(d); return isNaN
 // subtotal like RM 33390.00 read as one long unbroken run of digits;
 // toLocaleString groups it the same way fmtNum already groups quantities.
 function fmtMoney(n) { return (n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-
-function defaultRange() {
-  const to = new Date();
-  const from = new Date(); from.setMonth(from.getMonth() - 12);
-  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
-}
 
 async function loadBreeds() {
   const { data } = await _supabase.from('shared_breeds').select('name').order('name');
@@ -695,20 +689,25 @@ function selectReport(report) {
 }
 window.selectReport = selectReport;
 
-/* First and last day of the current calendar month, as YYYY-MM-DD — the
-   default range for every report keyed "generate based on month". Reusing
-   the existing From/To pickers rather than a separate month+year widget:
-   one date-range control, one thing to learn, and it still lets someone
-   widen the range to cover more than a single month if they want to. */
-function currentMonthRange() {
-  const now   = new Date();
-  const first = new Date(now.getFullYear(), now.getMonth(), 1);
-  const last  = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const iso   = (d) => d.toISOString().slice(0, 10);
-  return { from: iso(first), to: iso(last) };
+/* The first day of the same calendar month as the given YYYY-MM-DD date, in
+   the same format. There's only one visible date control (f-to, "As At")
+   now; a report that wants a period reads this as its implicit From rather
+   than a second field the user has to pick — "as at 15 Sep" means "this
+   month, up to the 15th", not "since the batch began". */
+function monthStartOf(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d)) return '';
+  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
 }
 
 async function runReport() {
+  // f-from is a hidden field now — kept in sync with f-to's own month
+  // right before every run, so every report function below can go on
+  // reading document.getElementById('f-from').value exactly as before.
+  const toEl = document.getElementById('f-to');
+  const fromEl = document.getElementById('f-from');
+  if (toEl && fromEl) fromEl.value = monthStartOf(toEl.value);
   const which = document.getElementById('f-report').value;
   if (which === 'batch_production')      return runBatchProduction();
   if (which === 'batch_double_tone')     return runBatchDoubleTone();
@@ -737,18 +736,16 @@ function syncFilterVisibility() {
   const isSalesChart = isSales && _salesViewMode === 'chart';
   const hasRange  = isBatch || isMove || isDTone || isSeedRcv || isSalesTable;
   document.querySelectorAll('.f-range').forEach(el         => el.classList.toggle('hidden', !hasRange));
-  // Main/Pre-Nursery Movement now read like every other period report: the
-  // Culled/Transplanted/Damaged/etc columns are that period's activity only
-  // (From → To), not a running total since the batch began — picking next
-  // month won't still be showing this month's culling. Balance stays a true
-  // running total regardless of From, so it still answers "what's actually
-  // there right now" — see runMovementReport.
-  // Production Summary is the exception: it's every batch's whole funnel up
-  // to a point in time, not a period — a From would ask "which batches
-  // started in this window", which isn't the question this report answers.
-  document.querySelectorAll('.f-from').forEach(el          => el.classList.toggle('hidden', !hasRange || isBatch));
+  // No visible From anywhere — every report is one "As At" date. Main/Pre-
+  // Nursery Movement still shows the Culled/Transplanted/Damaged/etc
+  // columns as that period's activity only, not a running total since the
+  // batch began, but the period is now the As-At date's own calendar month
+  // (derived in runReport(), see monthStartOf()) rather than a second field
+  // to pick. Balance stays a true running total regardless of the period,
+  // so it still answers "what's actually there right now" — see
+  // runMovementReport.
   const toLabel = document.getElementById('f-to-label');
-  if (toLabel) toLabel.textContent = 'To';
+  if (toLabel) toLabel.textContent = 'As At';
   document.querySelectorAll('.f-sort').forEach(el          => el.classList.toggle('hidden', !(isPre || isMain)));
   // Only the reports with a plot means to belong to a nursery have Locations
   // to pick between — Pre-Nursery's report is all one place, and neither
@@ -802,15 +799,14 @@ function selectedNurseries() {
 
 /* Defaults that change with which report is now selected — run once per
    switch, not on every "Run Report" click, so re-running the same report
-   never clobbers a range someone deliberately widened. */
-const MONTH_KEYED_REPORTS = new Set(['seed_received', 'transplanting_report', 'sales_listing',
-  'pre_nursery_movement', 'main_nursery_movement']);
+   never clobbers a date someone deliberately picked. */
+const DATE_KEYED_REPORTS = new Set(['batch_production', 'batch_double_tone', 'seed_received',
+  'transplanting_report', 'sales_listing', 'pre_nursery_movement', 'main_nursery_movement']);
 function syncReportDefaults() {
   const which = document.getElementById('f-report').value;
-  if (MONTH_KEYED_REPORTS.has(which)) {
-    const { from, to } = currentMonthRange();
-    document.getElementById('f-from').value = from;
-    document.getElementById('f-to').value   = to;
+  if (DATE_KEYED_REPORTS.has(which)) {
+    // f-from is derived from this in runReport() — nothing to set here.
+    document.getElementById('f-to').value = new Date().toISOString().slice(0, 10);
   }
   // Pre-Nursery reads naturally by Batch (one batch, several trays over its
   // life); Main Nursery reads naturally by Plot (what's standing where).
@@ -1404,16 +1400,26 @@ async function runMovementReport(scope) {
     });
   }
 
-  // ── Two buckets from the same events ──
+  // ── Three buckets from the same events ──
   const SEP = '';
-  // `buc` is everything up to the To date, unrestricted by From — this is
-  // what Balance/Batch Balance is netted from, because "what's actually
-  // standing in this plot right now" can't correctly ignore months before
-  // the period you happen to be looking at.
-  // `per` is only events inside [From, To] — this is what fills the visible
-  // Culled/Transplanted/Damaged/etc columns, so picking September shows
-  // September's culling, not everything since the batch began.
-  const buc = {}, per = {}, meta = {};
+  // `buc` is everything up to the As-At date, unrestricted by the implicit
+  // From — this is what Balance/Batch Balance is netted from, because
+  // "what's actually standing in this plot right now" can't correctly
+  // ignore months before the one you happen to be looking at.
+  // `per` is only events inside [month start, As At] — this is what fills
+  // the visible Culled/Transplanted/Damaged/etc columns, so picking a date
+  // in September shows September's culling to date, not everything since
+  // the batch began.
+  // `bf` is everything strictly BEFORE month start — the balance brought
+  // forward into this month, shown in its own B/F column. Computed the same
+  // way as `buc` (netOfRow over a fully cumulative bucket, just cut off
+  // earlier) rather than derived as buc − per, so it's correct on its own
+  // even in the one case where that arithmetic wouldn't cleanly reconcile:
+  // netOfRow's "supersede" rule (a 3rd culling excludes the 2nd once
+  // recorded) is evaluated separately for `buc` and `bf`, each its own
+  // honest cumulative total, not a subtraction that could inherit an edge
+  // case from the other side of the cut.
+  const buc = {}, per = {}, bf = {}, meta = {};
   for (const e of ev) {
     const ts = e.date ? new Date(e.date).getTime() : NaN;
     if (!isFinite(ts) || ts > toMs) continue;
@@ -1424,6 +1430,9 @@ async function runMovementReport(scope) {
     if (ts >= fromMs) {
       if (!per[k]) per[k] = emptyRow(scope);
       per[k][e.col] += e.qty;
+    } else {
+      if (!bf[k]) bf[k] = emptyRow(scope);
+      bf[k][e.col] += e.qty;
     }
   }
 
@@ -1436,7 +1445,8 @@ async function runMovementReport(scope) {
     // that's genuinely empty now doesn't come back just because the period
     // you picked happened to have activity on it before it emptied out.
     if (closing === 0) continue;
-    rows.push({ ...meta[k], ...(per[k] || emptyRow(scope)), closing,
+    const bfClosing = netOfRow(scope, bf[k] || emptyRow(scope));
+    rows.push({ ...meta[k], ...(per[k] || emptyRow(scope)), closing, bf: bfClosing,
                 age: ageLabel(batchPlantedAt[_mvBatchKey(meta[k].batch)]) });
   }
 
@@ -1484,7 +1494,7 @@ async function runMovementReport(scope) {
     else groups.push({ key: keyOf(r), loc: locOfRow(r), list: [r] });
   });
 
-  const totalCols = 5 + cols.length;
+  const totalCols = 6 + cols.length; // +1 over the old 5 for the new B/F column
   const bodyHtml = [];
   let lastLoc = null;
   let band = false;
@@ -1509,6 +1519,7 @@ async function runMovementReport(scope) {
         ${i === 0 ? `<td rowspan="${g.list.length}" class="font-black text-[#3d2610] text-center align-middle">${g.key}</td>` : ''}
         <td>${otherOf(r) || '—'}</td>
         <td class="text-[#8a7a68] text-xs whitespace-nowrap">${r.age}</td>
+        ${fmtCell(r.bf, 'text-[#8a7a68] font-black')}
         ${cols.map(c => fmtCell(r[c.key], c.cls)).join('')}
         ${fmtCell(r.closing, 'text-[#4a7a2e] font-black')}
         ${i === 0 ? `<td rowspan="${g.list.length}" class="font-black text-[#4a7a2e] text-center align-middle">${fmtNum(bal)}</td>` : ''}
@@ -1520,8 +1531,9 @@ async function runMovementReport(scope) {
   const grand = rows.reduce((s, r) => {
     cols.forEach(c => { s[c.key] += r[c.key] || 0; });
     s.closing += r.closing;
+    s.bf += r.bf || 0;
     return s;
-  }, { closing: 0, ...emptyRow(scope) });
+  }, { closing: 0, bf: 0, ...emptyRow(scope) });
 
   // A grouped header row only where two columns belong together.
   const grouped = cols.some(c => c.grp);
@@ -1537,7 +1549,7 @@ async function runMovementReport(scope) {
       cells.push(`<th colspan="${n}" class="text-center text-[#c07820]">${g}</th>`);
       i += n;
     }
-    groupRow = `<tr><th colspan="3"></th>${cells.join('')}<th colspan="2"></th></tr>`;
+    groupRow = `<tr><th colspan="4"></th>${cells.join('')}<th colspan="2"></th></tr>`;
   }
 
   const rangeLabel = fromStr && toStr
@@ -1573,6 +1585,7 @@ async function runMovementReport(scope) {
               <th>${firstLabel}</th>
               <th>${secondLabel}</th>
               <th>Age</th>
+              <th>B/F</th>
               ${cols.map(c => `<th>${c.label}</th>`).join('')}
               <th>Batch Balance</th>
               <th>Balance</th>
@@ -1583,6 +1596,7 @@ async function runMovementReport(scope) {
             <tr style="background:#fdf3e6">
               <td class="font-black text-[#3d2610]">GRAND TOTAL</td>
               <td></td><td></td>
+              ${fmtCell(grand.bf, 'text-[#8a7a68] font-black')}
               ${cols.map(c => fmtCell(grand[c.key], (c.cls || '') + ' font-black')).join('')}
               ${fmtCell(grand.closing, 'text-[#4a7a2e] font-black')}
               ${fmtCell(grand.closing, 'text-[#4a7a2e] font-black')}
@@ -1870,18 +1884,13 @@ async function bootstrap() {
   document.getElementById('f-report').value = DEFAULT_REPORT;
   renderReportTabs();
 
-  const { from, to } = defaultRange();
   const todayStr = new Date().toISOString().slice(0, 10);
-  const fFrom = document.getElementById('f-from');
-  const fTo   = document.getElementById('f-to');
-  fFrom.value = from; fTo.value = to;
+  const fTo = document.getElementById('f-to');
+  fTo.value = todayStr;
   // Reports look at what has actually happened — future dates make no
-  // sense. Cap the "To" picker at today; keep "From" bounded by "To"
-  // so you can't pick From > To either.
-  fFrom.max = todayStr;
-  fTo.max   = todayStr;
-  fTo.addEventListener('input',   () => { fFrom.max = fTo.value || todayStr; });
-  fFrom.addEventListener('input', () => { fTo.min   = fFrom.value || ''; });
+  // sense. f-from is hidden and derived from f-to (see runReport()), so
+  // only f-to needs a bound.
+  fTo.max = todayStr;
   await Promise.all([loadBreeds(), loadNurseryFilter()]);
   _setSalesView('table');
   document.getElementById('f-mode-table').addEventListener('click', () => { _setSalesView('table'); runReport(); });
