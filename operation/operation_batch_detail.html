@@ -394,7 +394,7 @@
          onclick="if (event.target === this) closeDocViewer()">
         <div class="bg-[#f8f4ec] border border-[#e8dcc8] rounded-3xl shadow-[0_30px_60px_rgba(0,0,0,0.45)] w-full max-w-[1000px] overflow-hidden">
             <div class="flex items-center gap-3 px-5 py-3 border-b border-[#e8dcc8] bg-white">
-                <div class="text-[11px] font-black text-[#3d2610] uppercase tracking-widest truncate" id="doc-lightbox-title">Drone Map</div>
+                <div class="text-[11px] font-black text-[#3d2610] uppercase tracking-widest truncate" id="doc-lightbox-title">Attachment</div>
                 <span id="doc-lightbox-rowacts" class="hidden ml-auto shrink-0 flex items-center gap-2" data-row="">
                     <button type="button" onclick="replaceT6Doc(this.parentElement.dataset.row)"
                         class="px-3 py-1.5 rounded-lg border border-[#c07820] bg-white text-[#c07820]
@@ -1490,6 +1490,36 @@
                                             <div class="text-3xl font-black text-[#c07820] mt-1 tabular-nums leading-none" id="t4-val-unaccounted-pct">100%</div>
                                             <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1" id="t4-val-unaccounted">0</div>
                                         </div>
+                                    </div>
+
+                                    <!-- WHERE THE PENDING SEEDLINGS ACTUALLY ARE.
+
+                                         Pending is everything planted that has not reached a main
+                                         plot and has not been culled — which includes the trays
+                                         still holding seedlings AND the two holding nurseries,
+                                         Premium Care and D-Tone. Those two were inside the figure
+                                         with nothing on the screen saying so, and a batch that had
+                                         sent 500 seedlings to Premium Care read "Pending 500" with
+                                         no way to tell that from 500 nobody had touched.
+
+                                         Each part appears only when it has something in it, and
+                                         the line as a whole only when the batch has a holding
+                                         nursery at all — so a batch with neither looks exactly as
+                                         it did. -->
+                                    <div id="t4-pending-breakdown" class="hidden -mt-2 mb-4 px-1 flex flex-wrap items-baseline gap-x-5 gap-y-1">
+                                        <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Pending sits in</span>
+                                        <span id="t4-pend-premium" class="hidden text-[11px] font-black text-[#7a4a10]">
+                                            <span class="uppercase tracking-widest text-[9px]">Premium Care</span>
+                                            <span class="tabular-nums ml-1.5" id="t4-pend-premium-val">0</span>
+                                        </span>
+                                        <span id="t4-pend-dtone" class="hidden text-[11px] font-black text-[#0891b2]">
+                                            <span class="uppercase tracking-widest text-[9px]">D-Tone</span>
+                                            <span class="tabular-nums ml-1.5" id="t4-pend-dtone-val">0</span>
+                                        </span>
+                                        <span id="t4-pend-trays" class="hidden text-[11px] font-black text-[#8a7a68]">
+                                            <span class="uppercase tracking-widest text-[9px]">Still In Trays</span>
+                                            <span class="tabular-nums ml-1.5" id="t4-pend-trays-val">0</span>
+                                        </span>
                                     </div>
 
                                     <!-- Hidden compat ids for existing JS -->
@@ -3783,7 +3813,7 @@
         }
 
         function viewMap(rowId) {
-            _openDocViewer(rowMaps[rowId]);
+            _openDocViewer(rowMaps[rowId], 'Drone Map');
         }
 
         // ── T3 Edit-form drone map handlers ──────────────────────────────────────
@@ -3823,7 +3853,7 @@
         }
 
         function viewT3EditMap(idx) {
-            _openDocViewer(t3EditMaps[idx]);
+            _openDocViewer(t3EditMaps[idx], 'Drone Map');
         }
 
         function removeTransplantRow(rowId) {
@@ -4729,7 +4759,7 @@
             need('Planting Date', document.getElementById('t2-date').value !== "");
             need('Damaged Seeds', document.getElementById('t2-damaged').value !== "");
             need('Worker Count',  currentWorkers > 0);
-            need('Field Photo',   opsPhotoBase64 !== null, true);
+            need('Seed Damaged Photo', opsPhotoBase64 !== null, true);
             // Auditor verification photo no longer required — panel removed.
 
             const rows = document.querySelectorAll('.tray-row');
@@ -4841,7 +4871,9 @@
 
         function viewOpsPhoto(i) {
             const ph = opsPhotos[i];
-            if (ph) _openDocViewer(ph.src);
+            // Seed Planting's photos are the damaged seeds, counted on a
+            // numbered board. Nothing to do with a drone.
+            if (ph) _openDocViewer(ph.src, ph.name || 'Seed Damaged Photo');
         }
 
         function removeOpsPhoto(i) {
@@ -4889,7 +4921,7 @@
 
         function viewAuditPhoto(type) {
             if (type === 'ops') return viewOpsPhoto(0);
-            _openDocViewer(auditPhotoBase64);
+            _openDocViewer(auditPhotoBase64, 'Seed Damaged Photo');
         }
 
         // ── Photo persistence helpers ──
@@ -5722,8 +5754,12 @@
                 ? `<iframe src="${_escAttr(url)}" class="w-full h-[78vh] border-0 rounded-xl bg-white"></iframe>`
                 : `<img src="${_escAttr(url)}" alt="${_escAttr(name || 'Attachment')}"
                         class="max-w-full max-h-[78vh] w-auto h-auto mx-auto block rounded-xl">`;
-            if (ttl) ttl.innerText = name || (isPdf ? 'Document' : 'Drone Map');
-            if (dl)  { dl.href = url; dl.download = name || (isPdf ? 'document.pdf' : 'map.png'); }
+            /* Every caller says what it is opening. The fallback is
+                deliberately neutral: it used to be "Drone Map", so Seed
+                Planting's damaged-seed photographs opened under the heading of
+                a thing they are not. */
+            if (ttl) ttl.innerText = name || (isPdf ? 'Document' : 'Attachment');
+            if (dl)  { dl.href = url; dl.download = name || (isPdf ? 'document.pdf' : 'attachment.png'); }
             /* Replace and Remove appear only when the viewer was opened FROM a
                row — there is nothing for them to act on otherwise, and a button
                that does nothing is worse than no button. */
@@ -7080,6 +7116,31 @@ Thank you.`;
             setPct('t4-val-cull',        't4-val-cull-pct',        totalCulled,              pctCull);
             setPct('t4-val-unaccounted', 't4-val-unaccounted-pct', Math.max(0, unaccounted), pctUnaccounted);
 
+            /* Name the parts of Pending. Premium Care and D-Tone are holding
+               nurseries: the seedlings are in a known place, they just have
+               not reached a main plot, so they count as pending — and now say
+               so by name instead of hiding inside one figure. Whatever is left
+               after them is still sitting in the planting trays. */
+            (function showT4Pending() {
+                const pend  = Math.max(0, unaccounted);
+                const prem  = t4_totalPremium    || 0;
+                const dtone = t4_totalDoubletone || 0;
+                const trays = Math.max(0, pend - prem - dtone);
+                const part = (id, valId, qty) => {
+                    const el = document.getElementById(id); if (!el) return;
+                    el.classList.toggle('hidden', qty <= 0);
+                    const v = document.getElementById(valId);
+                    if (v) v.innerText = qty.toLocaleString();
+                };
+                part('t4-pend-premium', 't4-pend-premium-val', prem);
+                part('t4-pend-dtone',   't4-pend-dtone-val',   dtone);
+                part('t4-pend-trays',   't4-pend-trays-val',   trays);
+                const row = document.getElementById('t4-pending-breakdown');
+                // Only where there is a holding nursery to point at: a batch
+                // with neither has nothing this line could tell it.
+                if (row) row.classList.toggle('hidden', (prem + dtone) <= 0);
+            })();
+
             // Balance status box — simplified wording
             const box = document.getElementById('t4-balance-box');
             const icon = document.getElementById('t4-balance-icon');
@@ -7682,7 +7743,7 @@ Thank you.`;
         }
 
         function viewT5Map(rowId) {
-            _openDocViewer(t5_plotMaps[rowId]);
+            _openDocViewer(t5_plotMaps[rowId], 'Drone Map');
         }
 
         async function saveTab5() {
@@ -9638,6 +9699,17 @@ Thank you.`;
                                     (parseInt(row.querySelector('.t6-balance')?.value) || 0) === 0;
                 const mapDone     = soldOutRow || mapQtyVal !== '';
                 const dateDone    = soldOutRow || cullDateVal !== '';
+                /* …and signed. A row nobody has checked is not a row that is
+                   done, and unverifying one has to be able to take the count
+                   back down — otherwise the tab says 6 / 6 Done and 100% with
+                   its tick already gone, three answers to one question.
+
+                   The whole stage being verified counts for every row on it,
+                   which is the same signature written once. */
+                const _rvT6 = window.MJMReview || {};
+                const rowKey = p ? `${String(p.plot || '').trim().toUpperCase()}|${p.destType || 'main'}` : '';
+                const signedRow = typeof _rvT6.rowVerified === 'function'
+                                ? _rvT6.rowVerified(6, rowKey) : true;
 
                 /* A "-R" plot's quantity is NOT a transplant. It arrived by
                    transfer from a plot on this same batch, which already
@@ -9669,7 +9741,7 @@ Thank you.`;
                 // Both halves of the fraction over the same set of plots, or
                 // a culled "-R" row pushes "done" past the total.
                 if (counts) {
-                    if (mapDone && dateDone) rowsDone++;
+                    if (mapDone && dateDone && signedRow) rowsDone++;
                     if (mapDone)  mapsKeyed++;
                     if (dateDone) datesKeyed++;
                 }
@@ -9729,7 +9801,17 @@ Thank you.`;
             const desc = document.getElementById('t6-status-desc');
             const btn  = document.getElementById('save-t6-btn');
             btn.innerText = `Save 3rd Culling Report (${pct}% Complete)`;
+            // Every figure keyed and a signature still to come is a different
+            // thing from a report with work left in it, and saying "5/6 Plots
+            // Done" over a tab where all six are keyed sends somebody hunting
+            // for the missing one.
+            const awaitingSignOff = totalRows > 0 && donePts === totalPts && rowsDone < totalRows;
             if (pct === 100)  { desc.innerText = '100% Complete';          desc.className = 'text-base font-black uppercase text-[#4a7a2e] mt-1'; }
+            else if (awaitingSignOff) {
+                const n = totalRows - rowsDone;
+                desc.innerText = `${n} Plot${n === 1 ? '' : 's'} Awaiting Verification`;
+                desc.className = 'text-base font-black uppercase text-[#c07820] mt-1';
+            }
             else if (pct > 0) { desc.innerText = `${rowsDone}/${totalRows} Plots Done`; desc.className = 'text-base font-black uppercase text-[#c07820] mt-1'; }
             else              { desc.innerText = 'Awaiting Data';           desc.className = 'text-base font-black uppercase text-[#3d2610] mt-1'; }
         }
@@ -10540,6 +10622,10 @@ Thank you.`;
         if (typeof window.calcT5 === 'function') {
           try { window.calcT5(); } catch (e) { console.warn(e); }
         }
+        // 3rd Culling counts a row as done only once somebody has signed it.
+        if (typeof window.calcT6 === 'function') {
+          try { window.calcT6(); } catch (e) { console.warn(e); }
+        }
         syncTabTicks();
       }
 
@@ -10802,6 +10888,10 @@ Thank you.`;
               .eq('batch_name', batch).eq('transaction_type', 'Row_Verification').eq('plot_name', mapKey);
             delete rowVerifs[mapKey];
           }
+          // …and the tab's own signature, for the same reason an unverify
+          // does: a row sent back for amendment is not a checked row, so the
+          // claim to have checked the whole tab no longer stands.
+          await _dropStageVerification(batch, tabIdx);
         } else if (verifications[stage]) {
           // Tab rejection voids the tab verification — the sign-off no longer stands.
           await _supabase.from('operation_batch_verifications').delete()
@@ -10877,10 +10967,27 @@ Thank you.`;
         if (tabIdx === 5 && typeof window.calcT5 === 'function') {
           try { window.calcT5(); } catch (e) { console.warn(e); }
         }
+        // 3rd Culling counts a row as done only once it is signed, so its
+        // figures have to be worked out again the moment one is.
+        if (tabIdx === 6 && typeof window.calcT6 === 'function') {
+          try { window.calcT6(); } catch (e) { console.warn(e); }
+        }
         if (tabIdx === 2 && typeof window.updatePlantingCompletion === 'function') {
           try { window.updatePlantingCompletion(); } catch (e) { console.warn(e); }
         }
         try { syncTabTicks(); } catch (e) { console.warn(e); }
+      }
+
+      /* Take the tab's own sign-off away, if it has one. Used wherever a
+         single row's sign-off is withdrawn — see rowUnverify. */
+      async function _dropStageVerification(batch, tabIdx) {
+        const stage = STAGE_BY_TAB[tabIdx];
+        if (!stage || !verifications[stage]) return;
+        try {
+          await _supabase.from('operation_batch_verifications').delete()
+            .eq('batch_name', batch).eq('stage', stage);
+        } catch (e) { console.warn(e); }
+        delete verifications[stage];
       }
 
       async function rowUnverify(tabIdx, keyEnc) {
@@ -10890,10 +10997,27 @@ Thank you.`;
         if (!batch || !key) return;
         const mapKey = STAGE_BY_TAB[tabIdx] + '::' + key;
         if (!confirm('Remove the verification on this row?')) return;
-        await _supabase.from('shared_inventory_logs').delete()
+        /* The delete is CHECKED. It used to be fire-and-forget: a delete the
+           database refused left the row showing unverified on this screen
+           while the sign-off stayed on the record — and the batch list, which
+           reads the record, went on calling the batch Complete. A withdrawal
+           that did not happen must not look as if it did. */
+        const { error: delErr } = await _supabase.from('shared_inventory_logs').delete()
           .eq('batch_name', batch).eq('transaction_type', 'Row_Verification').eq('plot_name', mapKey);
+        if (delErr) { alert('Could not remove the verification: ' + delErr.message); return; }
         delete rowVerifs[mapKey];
+        /* A STAGE signature says "I have checked this whole tab", and every
+           row on it counts as signed by it. Withdrawing one row's sign-off
+           contradicts that, so the stage signature goes with it — otherwise
+           the row reads unverified while the tab, the ring and the batch list
+           all go on calling it done, which is exactly the complaint: I
+           unverified it and it is still Complete.
+
+           Re-verifying the tab is one press. Leaving a claim standing that
+           the person has just taken back is not. */
+        await _dropStageVerification(batch, tabIdx);
         decorateRows(tabIdx);
+        renderBanner(tabIdx);
         _afterRowSignOff(tabIdx);
       }
 
@@ -11004,6 +11128,13 @@ Thank you.`;
                            // completion depends on the answer — see
                            // updateTransplantCompletion.
                            isVerified: (stage) => !!verifications[stage],
+                           // Has THIS row been signed off? Read by a tab that
+                           // counts its own finished rows — see calcT6.
+                           rowVerified: (tabIdx, key) => {
+                             const stage = STAGE_BY_TAB[tabIdx];
+                             if (!stage || !key) return false;
+                             return !!verifications[stage] || !!rowVerifs[stage + '::' + key];
+                           },
                            /* Has every ROW on a tab been verified?
 
                               A stage carries two kinds of sign-off. One is on

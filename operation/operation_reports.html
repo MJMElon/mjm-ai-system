@@ -21,24 +21,62 @@
   .btn-earth { background:linear-gradient(135deg, #6aa83c, #4a7a2e); color:white; font-weight:900; padding:12px 24px; border-radius:12px; cursor:pointer; text-transform:uppercase; letter-spacing:.1em; box-shadow:0 8px 20px -4px rgba(74, 122, 46, .5); border:none; font-size:12px; }
   .btn-earth:hover { transform:translateY(-2px); }
 
-  .stat-card { background:#fff; border:1px solid #e8dcc8; border-radius:1.5rem; padding:24px; }
-  .stat-num  { font-size:2.5rem; font-weight:900; color:#3d2610; line-height:1; }
-  .stat-label { font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.18em; color:#8a7a68; margin-bottom:8px; }
+  /* Report picker as a connected tab strip — one bar with dividers between
+     tabs and the active one picked out by its own underline, not separate
+     pill buttons with gaps between them. */
+  .report-tab-bar { display:flex; flex-wrap:wrap; border:1px solid #e8dcc8; border-radius:12px; overflow:hidden; width:fit-content; max-width:100%; margin:0 auto; }
+  .report-tab {
+    padding:12px 20px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.08em;
+    color:#8a7a68; background:#fdfaf4; border:none; border-right:1px solid #e8dcc8;
+    border-bottom:3px solid transparent; cursor:pointer; transition:color .15s, background .15s, border-color .15s;
+    white-space:nowrap;
+  }
+  .report-tab:last-child { border-right:none; }
+  .report-tab:hover:not(.active) { color:#4a7a2e; background:#f5f0e4; }
+  .report-tab.active { color:#3d2610; background:#fff; border-bottom-color:#4a7a2e; }
 
   table.report-table { width:100%; border-collapse:separate; border-spacing:0; }
   .report-table th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#8a7a68; padding:12px 14px; border-bottom:2px solid #e8dcc8; background:#fdfaf4; white-space:nowrap; }
+  /* "th.text-right" outranks the plain "th" rule above (two selectors beat
+     one), which a bare Tailwind ".text-right" utility on a <th> cannot —
+     equal specificity, same rule wins, so a right-aligned header stayed
+     left-aligned while its numbers underneath (plain <td>, nothing to
+     out-rank) lined up fine. Without this, every right-aligned figure
+     column in every report has a header that doesn't sit over its data. */
+  .report-table th.text-right { text-align:right; }
   .report-table td { font-size:13px; font-weight:600; color:#1a150d; padding:14px; border-bottom:1px solid #f3efe6; }
-  .report-table tr:hover td { background:#fdfaf4; }
+  /* No hover-highlight — these rows aren't clickable, so a colour change on
+     pointing at one only implied an interaction that wasn't there. */
   /* Numeric cells across every report use tabular-nums so digits align
      column-for-column and rows read as a clean matrix. */
   .report-table td, .report-table th { font-variant-numeric: tabular-nums; }
   /* The movement reports carry a dozen narrow figure columns. Centring the
      heading over its figures keeps each column reading as one block, and a
      long heading — "Transplanted from PN" — wraps onto a second line instead
-     of stretching its column wide enough to hold it on one. */
+     of stretching its column wide enough to hold it on one. Figures
+     themselves are right-aligned — centring a number doesn't line its digits
+     up the way it does a short heading, and a dozen centred columns of
+     different widths was exactly what read as "hard to see". */
   .movement-table th { text-align:center; white-space:normal; line-height:1.3; max-width:96px; }
-  .movement-table td { text-align:center; }
-  .movement-table th:first-child, .movement-table td:first-child { text-align:left; max-width:none; }
+  .movement-table td { text-align:right; }
+  .movement-table th:first-child, .movement-table td:first-child,
+  .movement-table th:nth-child(2), .movement-table td:nth-child(2),
+  .movement-table th:nth-child(3), .movement-table td:nth-child(3) { text-align:left; max-width:none; }
+  /* A visible rule between every column — a dozen unbroken figure columns
+     otherwise blur into one wide field. */
+  .movement-table th, .movement-table td { border-right:1px solid #efe6d4; }
+  .movement-table th:last-child, .movement-table td:last-child { border-right:none; }
+  /* The header stays put while a long table scrolls past underneath it —
+     wrapped in .movement-scroll below, which is what actually scrolls. */
+  .movement-scroll { max-height:70vh; overflow-y:auto; }
+  /* Only Pre-Nursery ever has a second ("Transfer Out") header row above the
+     column names — Main Nursery's is always one row. Both cases need the
+     LAST header row pinned with the shadow that marks the sticky edge; a
+     first row that isn't also the last (Pre-Nursery's group row) sticks
+     above it without its own shadow, so the two don't draw two edges. */
+  .movement-table thead tr:first-child th { position:sticky; top:0; z-index:2; box-shadow:0 2px 0 #e8dcc8; }
+  .movement-table thead tr:first-child:not(:last-child) th { box-shadow:none; }
+  .movement-table thead tr:last-child:not(:first-child) th { position:sticky; top:33px; z-index:2; box-shadow:0 2px 0 #e8dcc8; }
   /* Seedling Sales grid: 14 columns (Year, 12 months, Total). Fix the
      layout so every month gets the same width regardless of value, and
      the year column stays narrow so it doesn't dominate the row. */
@@ -64,7 +102,7 @@
     body { background:white; }
     .no-print, .glass-panel, header { box-shadow:none !important; border:none !important; }
     .no-print { display:none !important; }
-    .stat-card, table { box-shadow:none !important; }
+    table { box-shadow:none !important; }
   }
 </style>
 </head>
@@ -95,32 +133,31 @@
   <div id="report-area" class="space-y-6">
 
     <!-- Report selector + filters -->
-    <div class="glass-panel p-6 rounded-[2rem] no-print">
-      <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-        <div class="md:col-span-4">
-          <label class="label-style">Report</label>
-          <div class="select-wrapper">
-            <select id="f-report" class="input-style">
-              <option value="batch_production">Batch Production Summary</option>
-              <option value="pre_nursery_movement">Pre-Nursery Movement Report (by Tray / Batch)</option>
-              <option value="main_nursery_movement">Main Nursery Movement Report (by Plot / Batch)</option>
-              <option value="seedling_sales">Seedling Sales Report (Yearly)</option>
-            </select>
-          </div>
-        </div>
-        <div class="md:col-span-2 f-from">
-          <label class="label-style">From</label>
-          <input id="f-from" type="date" class="input-style">
-        </div>
-        <!-- The movement reports stand at a date rather than covering a span:
-             what is in the plot on the day you ask. Only the reports that
-             genuinely cover a period still show a From. -->
-        <div class="md:col-span-2 f-range">
-          <label class="label-style" id="f-to-label">As at</label>
+    <div class="glass-panel p-5 rounded-[2rem] no-print">
+      <!-- Date/filter row first, then the report tabs, then the data below
+           (outside this panel). f-report stays as the state the rest of the
+           page reads (syncFilterVisibility, runReport, syncReportDefaults,
+           …) exactly the way it read a <select>'s .value before; the tabs
+           just keep it in sync now instead of a dropdown. Whichever filters
+           the picked report needs sit centred in their own row — most
+           reports only need one or two of them, and centring reads as
+           "here's what's on offer" rather than a row anchored to the left
+           with the rest of its width empty. -->
+      <input type="hidden" id="f-report">
+      <div class="flex flex-wrap gap-3 items-end justify-center mb-3">
+        <!-- One date, not a range — every report is "as at" a day now. A
+             report that needs a period (Movement's Culled/Transplanted/etc
+             columns, "this month's activity") gets it derived from this one
+             date's calendar month (monthStartOf()) rather than asking for a
+             second field — see the f-from hidden input below and
+             runReport(). -->
+        <input type="hidden" id="f-from">
+        <div class="f-range w-[9.5rem]">
+          <label class="label-style !mb-1" id="f-to-label">As At</label>
           <input id="f-to" type="date" class="input-style">
         </div>
-        <div class="md:col-span-2 f-sort hidden">
-          <label class="label-style">Sort by</label>
+        <div class="f-sort hidden w-32">
+          <label class="label-style !mb-1">Sort by</label>
           <div class="select-wrapper">
             <select id="f-sort" class="input-style">
               <option value="plot">Plot</option>
@@ -128,9 +165,8 @@
             </select>
           </div>
         </div>
-        <!-- Beside the rest, not stranded on a line of its own. -->
-        <div class="md:col-span-4 f-nursery-inline hidden">
-          <div class="flex items-center justify-between mb-1">
+        <div class="f-nursery-inline hidden">
+          <div class="flex items-center justify-between mb-1 gap-3">
             <span class="label-style !mb-0">Locations</span>
             <div class="flex gap-3 text-[10px] font-black uppercase tracking-widest">
               <button type="button" id="f-nurs-all" class="text-[#4a7a2e] hover:underline">All</button>
@@ -139,23 +175,25 @@
           </div>
           <div id="f-nursery-chips" class="flex flex-wrap gap-2"></div>
         </div>
-        <div class="md:col-span-2 f-breed">
-          <label class="label-style">Breed</label>
+        <div class="f-breed w-44">
+          <label class="label-style !mb-1">Breed</label>
           <select id="f-breed" class="input-style">
             <option value="">All breeds</option>
           </select>
         </div>
-        <div class="md:col-span-2 f-sales-mode hidden">
-          <label class="label-style">View</label>
+        <div class="f-sales-mode hidden">
+          <label class="label-style !mb-1">View</label>
           <div class="flex bg-white border border-[#e8dcc8] rounded-xl p-1">
-            <button type="button" id="f-mode-table" class="flex-1 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest bg-[#3d2610] text-white">Table</button>
-            <button type="button" id="f-mode-chart" class="flex-1 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-[#3d2610]">Chart</button>
+            <button type="button" id="f-mode-table" class="px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest bg-[#3d2610] text-white">Table</button>
+            <button type="button" id="f-mode-chart" class="px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-[#3d2610]">Chart</button>
           </div>
         </div>
-        <div class="md:col-span-2 flex justify-end">
-          <button id="f-run" class="btn-earth w-full">Run Report</button>
-        </div>
-        <div class="md:col-span-12 f-sales-years hidden">
+        <!-- Normal flow, not pushed to the row's far edge — with Category
+             and Report now sharing this row there's usually something
+             right before it; forcing it to the edge just re-opens the same
+             dead-space gap for reports with few filters. -->
+        <button id="f-run" class="btn-earth">Run Report</button>
+        <div class="w-full f-sales-years hidden">
           <div class="flex items-center justify-between mb-1">
             <span class="label-style !mb-0">Years</span>
             <div class="flex gap-3 text-[10px] font-black uppercase tracking-widest">
@@ -166,6 +204,11 @@
           <div id="f-year-chips" class="flex flex-wrap gap-2"></div>
         </div>
       </div>
+      <!-- Tab bar after the date/filter row now — pick the date first (it's
+           the one thing every report shares), then which report, then the
+           data appears below. Centred (.report-tab-bar is width:fit-content
+           + margin:auto), not stretched to the panel's full width. -->
+      <div class="report-tab-bar" id="f-report-tabs"></div>
     </div>
 
     <!-- Loading state -->
@@ -193,12 +236,10 @@ const STAGE_TYPES = {
 function fmtNum(n)   { return (n || 0).toLocaleString(); }
 function fmtPct(n)   { return (Math.max(0, Math.min(999, n || 0))).toFixed(2) + '%'; }
 function fmtDate(d)  { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? '—' : x.toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' }); }
-
-function defaultRange() {
-  const to = new Date();
-  const from = new Date(); from.setMonth(from.getMonth() - 12);
-  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
-}
+// Same thousand-separator grouping as fmtNum, kept at 2 decimals — a
+// subtotal like RM 33390.00 read as one long unbroken run of digits;
+// toLocaleString groups it the same way fmtNum already groups quantities.
+function fmtMoney(n) { return (n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 async function loadBreeds() {
   const { data } = await _supabase.from('shared_breeds').select('name').order('name');
@@ -229,11 +270,12 @@ async function runBatchProduction() {
   out.classList.add('hidden');
   loading.classList.remove('hidden');
 
-  const from  = document.getElementById('f-from').value;
+  // No From — this report is every batch's whole funnel up to a point in
+  // time, not a period, so there's only a To ("as at") to read.
   const to    = document.getElementById('f-to').value;
   const breed = document.getElementById('f-breed').value;
 
-  // Fetch all batches in range — anchor date is Seeds_Received transaction_date.
+  // Fetch all batches up to the To date — anchor date is Seeds_Received transaction_date.
   // plot_name joins us to nursery (main-nursery drilldowns need it).
   const [logsRes, batchesRes, plotsRes] = await Promise.all([
     // Paged — a single request stops at 1000 rows, which quietly dropped the
@@ -306,8 +348,7 @@ async function runBatchProduction() {
     else if (STAGE_TYPES.cull3.includes(t))   { row.cull3 += Math.abs(qty); row.cull3Logs.push(l); }
   });
 
-  // Filter by date range (on Seeds_Received date) and breed.
-  const fromTs = from ? new Date(from).getTime() : -Infinity;
+  // Filter by date (on Seeds_Received date, up to To) and breed.
   const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
 
   let rows = Object.values(byBatch).map(r => {
@@ -326,10 +367,16 @@ async function runBatchProduction() {
 
   rows = rows.filter(r => {
     if (breed && r.breed_name !== breed) return false;
+    // Completed — the batch was transplanted and everything from that
+    // transplant has since been culled away, so there's nothing left for
+    // this funnel to track. A batch that hasn't reached transplanting yet
+    // also computes to 0 here but is very much still active, not
+    // completed, so that's guarded separately (r.trans > 0).
+    if (r.trans > 0 && r.final_alive === 0) return false;
     const anchor = r.seeds_date ? new Date(r.seeds_date).getTime()
                 : (r.batch_created_at ? new Date(r.batch_created_at).getTime() : NaN);
     if (isNaN(anchor)) return true; // keep batches with no anchor date so users see them
-    return anchor >= fromTs && anchor <= toTs;
+    return anchor <= toTs;
   });
 
   rows.sort((a, b) => {
@@ -338,62 +385,21 @@ async function runBatchProduction() {
     return db - da;
   });
 
-  // ── Aggregate summary ──
-  const summary = rows.reduce((s, r) => ({
-    batches:    s.batches + 1,
-    seeds:      s.seeds   + r.seeds,
-    planted:    s.planted + r.planted,
-    trans:      s.trans   + r.trans,
-    cull:       s.cull    + r.cull1 + r.cull2 + r.cull3,
-    final:      s.final   + r.final_alive
-  }), { batches: 0, seeds: 0, planted: 0, trans: 0, cull: 0, final: 0 });
-
-  const overallSurvival = summary.seeds > 0 ? (summary.final / summary.seeds) * 100 : 0;
-
   // Stash drilldown data on window for the click-through modal below.
   // We only publish rows that survived the filter step so drilldowns
   // reflect exactly what the summary is counting.
-  window._bpDetails = { rows, nurseryOf, filterFrom: from, filterTo: to, breed };
+  window._bpDetails = { rows, nurseryOf, filterTo: to, breed };
 
   // ── Render ──
   loading.classList.add('hidden');
   out.classList.remove('hidden');
 
-  const clickable = 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all';
   out.innerHTML = `
-    <!-- Summary cards -->
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-      <div class="stat-card">
-        <div class="stat-label">Batches</div>
-        <div class="stat-num">${fmtNum(summary.batches)}</div>
-      </div>
-      <div class="stat-card ${clickable}" onclick="openBpDrill('seeds')" title="Click to see the seed intake per batch">
-        <div class="stat-label">Seeds Received</div>
-        <div class="stat-num text-[#c07820]">${fmtNum(summary.seeds)}</div>
-        <div class="text-[9px] font-bold text-[#8a7a68] mt-1 uppercase tracking-widest">Click for details</div>
-      </div>
-      <div class="stat-card ${clickable}" onclick="openBpDrill('trans')" title="Click to see the transplant rows per nursery">
-        <div class="stat-label">Transplanted</div>
-        <div class="stat-num text-[#3a7ab4]">${fmtNum(summary.trans)}</div>
-        <div class="text-[9px] font-bold text-[#8a7a68] mt-1 uppercase tracking-widest">Click for details</div>
-      </div>
-      <div class="stat-card ${clickable}" onclick="openBpDrill('cull')" title="Click to see the culled qty per nursery">
-        <div class="stat-label">Culled (1+2+3)</div>
-        <div class="stat-num text-[#a83020]">${fmtNum(summary.cull)}</div>
-        <div class="text-[9px] font-bold text-[#8a7a68] mt-1 uppercase tracking-widest">Click for details</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Final Alive</div>
-        <div class="stat-num text-[#4a7a2e]">${fmtNum(summary.final)}</div>
-        <div class="text-[10px] font-black uppercase tracking-widest text-[#4a7a2e] mt-1">Survival ${fmtPct(overallSurvival)}</div>
-      </div>
-    </div>
-
     <!-- Per-batch table -->
     <div class="glass-panel p-6 rounded-[2rem]">
       <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
         <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Batch Production Summary</h3>
-        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} batch${rows.length === 1 ? '' : 'es'}${from ? ' · from ' + fmtDate(from) : ''}${to ? ' · to ' + fmtDate(to) : ''}${breed ? ' · ' + breed : ''}</div>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} batch${rows.length === 1 ? '' : 'es'}${to ? ' · as at ' + fmtDate(to) : ''}${breed ? ' · ' + breed : ''}</div>
       </div>
 
       <div class="overflow-x-auto">
@@ -443,48 +449,330 @@ async function runBatchProduction() {
           </tbody>
         </table>
       </div>
+    </div>
+  `;
+}
 
-      <div class="text-[10px] font-bold text-[#8a7a68] mt-4 leading-relaxed">
-        <strong class="text-[#3d2610]">Notes —</strong>
-        Survival % = Final&nbsp;Alive ÷ Seeds&nbsp;Received × 100. Final&nbsp;Alive subtracts cull cycles 1, 2, 3 from Transplanted. Damaged seeds at planting are tracked separately in the Planting tab and are not included in the cull totals here.
+/**
+ * Batch Double Tone
+ *
+ * Every batch with any Transplanted_DoubleTone qty, keyed to the date it was
+ * keyed into the system (_logDate — the transplant's own "Date:" if one was
+ * typed, else when the row was saved). Batch, Breed, Qty — nothing else, per
+ * the request; this isn't the full funnel Batch Production Summary already
+ * covers.
+ */
+async function runBatchDoubleTone() {
+  const out = document.getElementById('report-output');
+  const loading = document.getElementById('loading');
+  out.classList.add('hidden');
+  loading.classList.remove('hidden');
+
+  const from  = document.getElementById('f-from').value;
+  const to    = document.getElementById('f-to').value;
+  const breed = document.getElementById('f-breed').value;
+
+  const [logsRes, batchesRes] = await Promise.all([
+    fetchAllRows(() => _supabase.from('shared_inventory_logs')
+      .select('batch_name, transaction_date, created_at, remark, quantity_change, breed_name')
+      .eq('transaction_type', 'Transplanted_DoubleTone')
+      .order('id', { ascending: true })),
+    _supabase.from('operation_batches').select('name, breed_name')
+  ]);
+  if (logsRes.error) {
+    loading.classList.add('hidden'); out.classList.remove('hidden');
+    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-red-700 text-sm">Failed to load logs: ${logsRes.error.message}</div>`;
+    return;
+  }
+
+  const batchBreed = {};
+  (batchesRes.data || []).forEach(b => { batchBreed[b.name] = b.breed_name; });
+
+  const fromTs = from ? new Date(from).getTime() : -Infinity;
+  const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
+
+  const byBatch = {};
+  (logsRes.data || []).forEach(l => {
+    const b = l.batch_name; if (!b) return;
+    const d = _logDate(l);
+    const ts = d ? new Date(d).getTime() : NaN;
+    if (isFinite(ts) && (ts < fromTs || ts > toTs)) return;
+    if (!byBatch[b]) byBatch[b] = { batch_name: b, qty: 0, date: d, breed: l.breed_name || batchBreed[b] || '—' };
+    byBatch[b].qty += Number(l.quantity_change || 0);
+    // Earliest keyed date represents the batch, same convention as Seeds In.
+    if (d && (!byBatch[b].date || d < byBatch[b].date)) byBatch[b].date = d;
+    if (!byBatch[b].breed || byBatch[b].breed === '—') byBatch[b].breed = l.breed_name || batchBreed[b] || '—';
+  });
+
+  let rows = Object.values(byBatch).filter(r => !breed || r.breed === breed);
+  rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')));
+  const total = rows.reduce((s, r) => s + r.qty, 0);
+
+  loading.classList.add('hidden');
+  out.classList.remove('hidden');
+  out.innerHTML = `
+    <div class="glass-panel p-6 rounded-[2rem]">
+      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
+        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Batch Double Tone</h3>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} batch${rows.length === 1 ? '' : 'es'}${from ? ' · from ' + fmtDate(from) : ''}${to ? ' · to ' + fmtDate(to) : ''}${breed ? ' · ' + breed : ''}</div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="report-table">
+          <thead><tr><th>Date</th><th>Batch</th><th>Breed</th><th class="text-right">Qty</th></tr></thead>
+          <tbody>
+            ${rows.length ? rows.map(r => `
+              <tr>
+                <td>${fmtDate(r.date)}</td>
+                <td class="font-black text-[#3d2610]">${r.batch_name}</td>
+                <td>${r.breed}</td>
+                <td class="text-right text-[#7c3aed] font-black">${fmtNum(r.qty)}</td>
+              </tr>`).join('') : `<tr><td colspan="4" class="text-center py-10 text-[#8a7a68]">No Double Tone batches match the selected filters.</td></tr>`}
+          </tbody>
+          ${rows.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
+            <td colspan="3" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
+            <td class="text-right text-[#7c3aed]">${fmtNum(total)}</td>
+          </tr></tfoot>` : ''}
+        </table>
       </div>
     </div>
   `;
 }
 
+/**
+ * Seed Received
+ *
+ * Per batch, the D/O quantity and FOC% keyed on Seeds_Received (parsed from
+ * the remark — the same "DO_Qty: N." / "Incl. P% FOC." markers Tab 1 writes,
+ * see operation_batch_detail.html), plus Damaged_Seeds summed the same way
+ * Batch Production Summary already does it. Grouped by month via _logDate on
+ * the Seeds_Received transaction.
+ */
+const _RE_DO_QTY = /DO_Qty:\s*(\d+)/i;
+const _RE_FOC_PCT = /Incl\.\s*([\d.]+)%\s*FOC/i;
+async function runSeedReceived() {
+  const out = document.getElementById('report-output');
+  const loading = document.getElementById('loading');
+  out.classList.add('hidden');
+  loading.classList.remove('hidden');
+
+  const from  = document.getElementById('f-from').value;
+  const to    = document.getElementById('f-to').value;
+  const breed = document.getElementById('f-breed').value;
+
+  const [logsRes, batchesRes] = await Promise.all([
+    fetchAllRows(() => _supabase.from('shared_inventory_logs')
+      .select('batch_name, transaction_type, transaction_date, created_at, remark, quantity_change, breed_name')
+      .in('transaction_type', ['Seeds_Received', 'Damaged_Seeds'])
+      .order('id', { ascending: true })),
+    _supabase.from('operation_batches').select('name, breed_name')
+  ]);
+  if (logsRes.error) {
+    loading.classList.add('hidden'); out.classList.remove('hidden');
+    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-red-700 text-sm">Failed to load logs: ${logsRes.error.message}</div>`;
+    return;
+  }
+
+  const batchBreed = {};
+  (batchesRes.data || []).forEach(b => { batchBreed[b.name] = b.breed_name; });
+
+  const fromTs = from ? new Date(from).getTime() : -Infinity;
+  const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
+
+  const byBatch = {};
+
+  // Pass 1: Seeds_Received — this is what anchors a batch to the report and
+  // to the date filter (a batch belongs to the month it was received in).
+  (logsRes.data || []).forEach(l => {
+    if (l.transaction_type !== 'Seeds_Received') return;
+    const b = l.batch_name; if (!b) return;
+    const d = _logDate(l);
+    const ts = d ? new Date(d).getTime() : NaN;
+    if (isFinite(ts) && (ts < fromTs || ts > toTs)) return;
+
+    const row = byBatch[b] || (byBatch[b] = { batch_name: b, breed: '—', date: null, doQty: 0, focPct: null, damaged: 0 });
+    if (!row.date || (d && d < row.date)) row.date = d;
+    if ((!row.breed || row.breed === '—') && (l.breed_name || batchBreed[b])) row.breed = l.breed_name || batchBreed[b];
+    const doMatch  = (l.remark || '').match(_RE_DO_QTY);
+    const focMatch = (l.remark || '').match(_RE_FOC_PCT);
+    // Legacy rows saved before the D/O·FOC split existed carry no DO_Qty
+    // marker at all — the whole received qty was the D/O qty then, there
+    // being no FOC concept yet to separate it from.
+    row.doQty += doMatch ? parseInt(doMatch[1], 10) : Number(l.quantity_change || 0);
+    if (row.focPct == null && focMatch) row.focPct = parseFloat(focMatch[1]);
+  });
+
+  // Pass 2: Damaged_Seeds — deliberately NOT bounded by the date filter
+  // above, same as Batch Production Summary's own damage total: a batch's
+  // damage can be logged days after intake, and it still belongs to that
+  // batch's one row rather than needing a date of its own to qualify.
+  (logsRes.data || []).forEach(l => {
+    if (l.transaction_type !== 'Damaged_Seeds') return;
+    const row = byBatch[l.batch_name];
+    if (row) row.damaged += Math.abs(Number(l.quantity_change || 0));
+  });
+
+  let rows = Object.values(byBatch).filter(r => !breed || r.breed === breed);
+  rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')));
+
+  // Same "Calculated FOC Qty" formula Tab 1 (Seeds In) shows next to the FOC
+  // Percent field it comes from — round(D/O qty × FOC% / 100) — so this
+  // report's number matches the one the batch was actually keyed against.
+  rows.forEach(r => { r.focQty = r.focPct != null ? Math.round(r.doQty * (r.focPct / 100)) : null; });
+
+  const totals = rows.reduce((s, r) => ({
+    doQty: s.doQty + r.doQty, focQty: s.focQty + (r.focQty || 0), damaged: s.damaged + r.damaged
+  }), { doQty: 0, focQty: 0, damaged: 0 });
+
+  loading.classList.add('hidden');
+  out.classList.remove('hidden');
+  out.innerHTML = `
+    <div class="glass-panel p-6 rounded-[2rem]">
+      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
+        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Seed Received</h3>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} batch${rows.length === 1 ? '' : 'es'}${from ? ' · from ' + fmtDate(from) : ''}${to ? ' · to ' + fmtDate(to) : ''}${breed ? ' · ' + breed : ''}</div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="report-table">
+          <thead><tr>
+            <th>Date</th><th>Batch</th><th>Breed</th>
+            <th class="text-right">Seed Received (D/O)</th>
+            <th class="text-right">FOC Qty</th>
+            <th class="text-right">Seed Damage</th>
+          </tr></thead>
+          <tbody>
+            ${rows.length ? rows.map(r => `
+              <tr>
+                <td>${fmtDate(r.date)}</td>
+                <td class="font-black text-[#3d2610]">${r.batch_name}</td>
+                <td>${r.breed}</td>
+                <td class="text-right text-[#c07820] font-black">${fmtNum(r.doQty)}</td>
+                <td class="text-right">${r.focQty != null
+                  ? `<span class="font-black text-[#7c3aed]">${fmtNum(r.focQty)}</span>
+                     <span class="block text-[9px] text-[#8a7a68] font-bold">${r.focPct.toFixed(2)}%</span>`
+                  : '—'}</td>
+                <td class="text-right ${r.damaged ? 'text-[#a83020] font-black' : 'text-[#8a7a68]'}">${r.damaged ? fmtNum(r.damaged) : '—'}</td>
+              </tr>`).join('') : `<tr><td colspan="6" class="text-center py-10 text-[#8a7a68]">No seed receipts match the selected filters.</td></tr>`}
+          </tbody>
+          ${rows.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
+            <td colspan="3" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
+            <td class="text-right text-[#c07820]">${fmtNum(totals.doQty)}</td>
+            <td class="text-right text-[#7c3aed]">${fmtNum(totals.focQty)}</td>
+            <td class="text-right text-[#a83020]">${fmtNum(totals.damaged)}</td>
+          </tr></tfoot>` : ''}
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ── Report menu ───────────────────────────────────────────────────────────
+// One flat row — every report is a tab, no Category tier to click through
+// first. label is what the tab shows; hint is the fuller description (e.g.
+// "by Plot / Batch") kept as the button's title (a hover tooltip) instead
+// of dropped.
+const REPORTS = [
+  { value: 'batch_production',      label: 'Production Summary', hint: 'Batch Production Summary — the seeds → transplant → cull funnel, per batch' },
+  { value: 'batch_double_tone',     label: 'Double Tone',        hint: 'Batch Double Tone — batch, breed, qty' },
+  { value: 'seed_received',         label: 'Seed Received',      hint: 'Seed Received — D/O qty, FOC qty, seed damage, per batch' },
+  { value: 'movement_report',       label: 'Movement Report',    hint: 'Movement Report — pick PN, BNN, UNN 1 and/or UNN 2 under Locations to see that location\'s data' },
+  { value: 'transplanting_report',  label: 'Transplanting',      hint: 'Transplanting Report — date, maturity date, location' },
+  { value: 'sales_listing',         label: 'Sales Listing',      hint: 'Sales Listing — line items or the year × month chart' },
+];
+
+// ── Report tabs ───────────────────────────────────────────────────────────
+// f-report is a hidden input — the state the rest of the page reads
+// (syncFilterVisibility, runReport, syncReportDefaults, …) exactly the way
+// it read a <select>'s .value before. These tab buttons are just what keeps
+// it in sync now, instead of a dropdown. Styled as one connected tab strip
+// (.report-tab-bar / .report-tab, see <style>) — dividers between tabs and
+// an underline on the active one, not separate pill buttons with gaps.
+function renderReportTabs() {
+  const rep  = document.getElementById('f-report').value;
+  const wrap = document.getElementById('f-report-tabs');
+  wrap.innerHTML = REPORTS.map(o => `
+    <button type="button" onclick="selectReport('${o.value}')" title="${o.hint || ''}"
+      class="report-tab${o.value === rep ? ' active' : ''}">${o.label}</button>
+  `).join('');
+}
+
+function selectReport(report) {
+  document.getElementById('f-report').value = report;
+  renderReportTabs();
+  syncReportDefaults();
+  syncFilterVisibility();
+  runReport();
+}
+window.selectReport = selectReport;
+
+/* The first day of the same calendar month as the given YYYY-MM-DD date, in
+   the same format. There's only one visible date control (f-to, "As At")
+   now; a report that wants a period reads this as its implicit From rather
+   than a second field the user has to pick — "as at 15 Sep" means "this
+   month, up to the 15th", not "since the batch began". */
+function monthStartOf(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d)) return '';
+  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+}
+
 async function runReport() {
+  // f-from is a hidden field now — kept in sync with f-to's own month
+  // right before every run, so every report function below can go on
+  // reading document.getElementById('f-from').value exactly as before.
+  const toEl = document.getElementById('f-to');
+  const fromEl = document.getElementById('f-from');
+  if (toEl && fromEl) fromEl.value = monthStartOf(toEl.value);
   const which = document.getElementById('f-report').value;
-  if (which === 'batch_production')   return runBatchProduction();
-  if (which === 'pre_nursery_movement')  return runPreNurseryMovement();
-  if (which === 'main_nursery_movement') return runMainNurseryMovement();
-  if (which === 'seedling_sales')     return runSeedlingSales();
+  if (which === 'batch_production')      return runBatchProduction();
+  if (which === 'batch_double_tone')     return runBatchDoubleTone();
+  if (which === 'seed_received')         return runSeedReceived();
+  if (which === 'movement_report')       return runMovementReportCombined();
+  if (which === 'transplanting_report')  return runTransplantingReport();
+  if (which === 'sales_listing')         return runSalesListing();
 }
 
 // ── Filter visibility by report type ─────────────────────────────────────────
 function syncFilterVisibility() {
   const which     = document.getElementById('f-report').value;
-  const isPre     = (which === 'pre_nursery_movement');
-  const isMain    = (which === 'main_nursery_movement');
-  const isMove    = isPre || isMain;
+  const isMovement = (which === 'movement_report');
+  const isTrans   = (which === 'transplanting_report');
   const isBatch   = (which === 'batch_production');
-  const isSales   = (which === 'seedling_sales');
-  document.querySelectorAll('.f-range').forEach(el         => el.classList.toggle('hidden', !(isBatch || isMove)));
-  // A movement report stands AT a date; only the batch summary covers a span.
-  document.querySelectorAll('.f-from').forEach(el          => el.classList.toggle('hidden', !isBatch));
+  const isDTone   = (which === 'batch_double_tone');
+  const isSeedRcv = (which === 'seed_received');
+  const isSales   = (which === 'sales_listing');
+  // Sales Listing carries two views that want different filters: the Table
+  // (line items) wants a date range + nurseries, the Chart (the year×month
+  // trend the old Seedling Sales report drew) wants a set of years instead.
+  const isSalesTable = isSales && _salesViewMode !== 'chart';
+  const isSalesChart = isSales && _salesViewMode === 'chart';
+  const hasRange  = isBatch || isMovement || isTrans || isDTone || isSeedRcv || isSalesTable;
+  document.querySelectorAll('.f-range').forEach(el         => el.classList.toggle('hidden', !hasRange));
+  // No visible From anywhere — every report is one "As At" date. Movement
+  // Report still shows the Culled/Transplanted/Damaged/etc columns as that
+  // period's activity only, not a running total since the batch began, but
+  // the period is now the As-At date's own calendar month (derived in
+  // runReport(), see monthStartOf()) rather than a second field to pick.
+  // Balance stays a true running total regardless of the period, so it
+  // still answers "what's actually there right now" — see
+  // runMovementReportCombined().
   const toLabel = document.getElementById('f-to-label');
-  if (toLabel) toLabel.textContent = isMove ? 'As at' : 'To';
-  document.querySelectorAll('.f-sort').forEach(el          => el.classList.toggle('hidden', !isMove));
-  // Group By is gone: each movement report now has its own fixed layout —
-  // tray or plot, then batch — so there was nothing left to choose.
-  // Only the main-nursery report has nurseries to pick between; the
-  // pre-nursery one is all one place.
-  document.querySelectorAll('.f-nursery-inline').forEach(el => el.classList.toggle('hidden', !isMain));
-  document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !isBatch));
+  if (toLabel) toLabel.textContent = 'As At';
+  document.querySelectorAll('.f-sort').forEach(el          => el.classList.toggle('hidden', !isMovement));
+  // Locations (PN / BNN / UNN 1 / UNN 2) drives Movement Report directly now
+  // — which of those are checked decides whether the Pre-Nursery section,
+  // the Main Nursery section, or both, render. Transplanting and Sales
+  // Listing (table view) use the same chips to filter their own rows by
+  // destination nursery.
+  document.querySelectorAll('.f-nursery-inline').forEach(el => el.classList.toggle('hidden', !(isMovement || isTrans || isSalesTable)));
+  document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !(isBatch || isDTone || isSeedRcv || isTrans)));
   document.querySelectorAll('.f-sales-mode').forEach(el    => el.classList.toggle('hidden', !isSales));
-  document.querySelectorAll('.f-sales-years').forEach(el   => el.classList.toggle('hidden', !isSales));
+  document.querySelectorAll('.f-sales-years').forEach(el   => el.classList.toggle('hidden', !isSalesChart));
 }
 
-// View mode (Table vs Chart) for the Seedling Sales report
+// View mode (Table vs Chart) — used by Sales Listing; Table is the detailed
+// line-item listing, Chart is the year×month trend the Seedling Sales report
+// always drew (kept verbatim, see _renderSalesChart).
 let _salesViewMode = 'table';
 function _setSalesView(mode) {
   _salesViewMode = mode;
@@ -494,6 +782,7 @@ function _setSalesView(mode) {
   const inactive = 'text-[#3d2610]';
   t.className = `flex-1 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest ${mode === 'table' ? active : inactive}`;
   c.className = `flex-1 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest ${mode === 'chart' ? active : inactive}`;
+  syncFilterVisibility();
 }
 
 // ── Nursery multi-select ─────────────────────────────────────────────────────
@@ -503,10 +792,15 @@ async function loadNurseryFilter() {
   (data || []).forEach(p => { if (p.nursery_name) names.add(p.nursery_name); });
   const wrap = document.getElementById('f-nursery-chips');
   wrap.innerHTML = '';
-  // In the nursery's own order — BNN, UNN 1, UNN 2 — not the alphabet's.
-  // Pre-Nursery is not offered here: it has a report of its own.
-  [...names]
-    .filter(n => !PRE_NURSERY_PLOTS.includes(n) && n !== 'Pre-Nursery')
+  // In the nursery's own order — PN, BNN, UNN 1, UNN 2 — not the alphabet's.
+  // shared_plots never has a "Pre-Nursery" row (trays, not plots), so PN is
+  // added by hand rather than found in the data — it's what a transplant
+  // landing in a pre-nursery tray (Premium Care / Double Tone) is labelled,
+  // see runTransplantingReport(), and this is how that gets filtered in or
+  // out alongside BNN/UNN1/UNN2.
+  const list = [...names].filter(n => !PRE_NURSERY_PLOTS.includes(n) && n !== 'Pre-Nursery');
+  list.push('PN');
+  list
     .sort((a, b) => nurseryRank(a) - nurseryRank(b) || String(a).localeCompare(String(b)))
     .forEach(n => {
     const safe = String(n).replace(/[<>"'&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]));
@@ -522,8 +816,27 @@ function selectedNurseries() {
   return [...document.querySelectorAll('.f-nurs-cb:checked')].map(cb => cb.value);
 }
 
+/* Defaults that change with which report is now selected — run once per
+   switch, not on every "Run Report" click, so re-running the same report
+   never clobbers a date someone deliberately picked. */
+const DATE_KEYED_REPORTS = new Set(['batch_production', 'batch_double_tone', 'seed_received',
+  'transplanting_report', 'sales_listing', 'movement_report']);
+function syncReportDefaults() {
+  const which = document.getElementById('f-report').value;
+  if (DATE_KEYED_REPORTS.has(which)) {
+    // f-from is derived from this in runReport() — nothing to set here.
+    document.getElementById('f-to').value = new Date().toISOString().slice(0, 10);
+  }
+  // "Sort by" only ever affects the Main Nursery section — Pre-Nursery
+  // always groups by batch regardless (see buildMovementSection). Plot is
+  // Main's more commonly checked default.
+  if (_fSort && which === 'movement_report') _fSort.value = 'plot';
+}
+
 document.getElementById('f-run').addEventListener('click', runReport);
-document.getElementById('f-report').addEventListener('change', () => { syncFilterVisibility(); runReport(); });
+// The Report tabs call selectReport() directly on click (see their
+// onclick=), which already does everything the old <select>'s 'change'
+// listener did here — nothing left to wire up.
 const _fSort = document.getElementById('f-sort');
 if (_fSort) _fSort.addEventListener('change', runReport);
 
@@ -610,7 +923,7 @@ async function runSeedlingSales() {
 
   const { data: dos, error } = await _supabase
     .from('shared_do_records')
-    .select('delivery_date, total_qty, status, remark')
+    .select('delivery_date, total_qty, status, remark, do_number')
     .order('delivery_date', { ascending: true });
 
   if (error) {
@@ -625,6 +938,10 @@ async function runSeedlingSales() {
   (dos || []).forEach(d => {
     const cancelled = d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'));
     if (cancelled) return;
+    // Same exclusion the Table view uses — a CAL- DO is a stock correction,
+    // not a customer order, and Table/Chart are two views of the same
+    // report so they need to agree on what counts as a sale.
+    if (/^CAL-/i.test(d.do_number || '')) return;
     if (!d.delivery_date) return;
     const dt = new Date(d.delivery_date);
     if (isNaN(dt)) return;
@@ -730,12 +1047,6 @@ async function runSeedlingSales() {
     <div class="glass-panel p-6 rounded-[2rem]">
       ${headerHtml}
       ${bodyHtml}
-      <div class="text-[10px] font-bold text-[#8a7a68] mt-4 leading-relaxed">
-        <strong class="text-[#3d2610]">Notes —</strong>
-        Issuance is the sum of <code>total_qty</code> on delivery (DO) records, bucketed by <code>delivery_date</code>.
-        Cancelled DOs are excluded. Each DO can cover multiple plots / batches; the total here counts the DO once.
-        Variance row compares the latest visible year against the one before it (within the current Years selection).
-      </div>
     </div>
   `;
 }
@@ -846,11 +1157,14 @@ function _mvBatchKey(v) {
 
 
 /* ════════════════════════════════════════════════════════════════════════════
-   MOVEMENT REPORTS
+   MOVEMENT REPORT
 
-   Two reports, not one. The pre-nursery and the main nursery hold different
+   One report, two sections — Pre-Nursery and Main Nursery hold different
    things and move them in different ways, and a single table that tried to
-   serve both left most of its columns empty on every row.
+   serve both left most of its columns empty on every row, so each still
+   gets its own table. Which section(s) actually render is driven by the
+   Locations chips: PN shows Pre-Nursery, any of BNN/UNN1/UNN2 shows Main
+   Nursery, both together show both, stacked.
 
      Pre-nursery   keyed by TRAY · batch. Seeds are planted into a tray, some
                    are culled, and the rest leave — to a main-nursery plot, or
@@ -858,13 +1172,16 @@ function _mvBatchKey(v) {
      Main nursery  keyed by PLOT · batch. Seedlings arrive from pre-nursery,
                    are culled twice more, sold, or transferred plot to plot.
 
-   Both are built by the same engine below: a column spec says what each
-   column is called, which way it moves the balance, and how it is coloured.
+   runMovementReportCombined() fetches the ledger once and builds the shared
+   lookups once; buildMovementSection(scope, …) is the engine that turns
+   that into one section's table — a column spec says what each column is
+   called, which way it moves the balance, and how it is coloured.
 ════════════════════════════════════════════════════════════════════════════ */
 
 /* Nurseries read in the order the nursery works in, not the order the
-   alphabet happens to put them in. Anything not named here follows after. */
-const NURSERY_ORDER = ['BNN', 'UNN 1', 'UNN 2'];
+   alphabet happens to put them in. Anything not named here follows after.
+   PN (Pre-Nursery) leads — it's the first stage a batch passes through. */
+const NURSERY_ORDER = ['PN', 'BNN', 'UNN 1', 'UNN 2'];
 function nurseryRank(n) {
   const k = _mvPlotKey(n);
   const i = NURSERY_ORDER.findIndex(x => _mvPlotKey(x) === k);
@@ -930,16 +1247,28 @@ function ageLabel(planted) {
   return m + (m === 1 ? ' month' : ' months');
 }
 
-async function runPreNurseryMovement()  { return runMovementReport('pre'); }
-async function runMainNurseryMovement() { return runMovementReport('main'); }
-
-async function runMovementReport(scope) {
+async function runMovementReportCombined() {
   const out = document.getElementById('report-output');
   const loading = document.getElementById('loading');
   out.classList.add('hidden');
   loading.classList.remove('hidden');
 
+  // PN drives the Pre-Nursery section, any of BNN/UNN1/UNN2 drives the Main
+  // Nursery section — one Movement Report tab, the Locations chips decide
+  // which section(s) actually render.
+  const pickedLocs = selectedNurseries();
+  const wantPre  = pickedLocs.includes('PN');
+  const wantMain = pickedLocs.some(l => l !== 'PN');
+  if (!wantPre && !wantMain) {
+    loading.classList.add('hidden');
+    out.classList.remove('hidden');
+    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-[#8a7a68] text-sm">Tick a location under Locations — PN, BNN, UNN 1 or UNN 2 — to see Movement Report data.</div>`;
+    return;
+  }
+
+  const fromStr = document.getElementById('f-from').value;
   const toStr   = document.getElementById('f-to').value;
+  const fromMs  = fromStr ? new Date(fromStr).getTime() : -Infinity;
   const toMs    = toStr ? new Date(toStr).getTime() + 86400000 : Infinity;
   const groupBy = (document.getElementById('f-sort') || {}).value || 'plot';
 
@@ -980,7 +1309,11 @@ async function runMovementReport(scope) {
   PRE_NURSERY_PLOTS.forEach(p => trayNames.add(p));
   const isTray = (name) => trayNames.has(name);
 
-  const selectedLocs = new Set(selectedNurseries());
+  // BNN/UNN1/UNN2 filter which main-nursery plots pass; PN plays no part in
+  // this check (plotToLoc never returns "PN" — it only ever comes from
+  // shared_plots.nursery_name, a real main-nursery name), so leaving PN in
+  // the checked set is harmless here.
+  const selectedLocs = new Set(pickedLocs);
   const passMain = (plot) => !!plot && !isTray(plot) && selectedLocs.has(plotToLoc[plot] || 'Unassigned');
 
   // ── When each batch was planted, for Age ──
@@ -994,11 +1327,14 @@ async function runMovementReport(scope) {
     if (!batchPlantedAt[k] || String(d) < String(batchPlantedAt[k])) batchPlantedAt[k] = d;
   });
 
-  // ── Every movement, as (place, batch, column, qty) ──
+  // ── Every movement, as (scope, place, batch, column, qty) — built once
+  //    from one fetch, so both sections come off the same pass over the
+  //    ledger instead of fetching (and re-deriving the lookups above)
+  //    twice. Each section later reads only the events tagged its way. ──
   const ev = [];
   const push = (sc, date, place, batch, col, qty) => {
-    if (sc !== scope || !place || !qty) return;
-    ev.push({ date, place, batch: batch || '—', col, qty });
+    if (!place || !qty) return;
+    ev.push({ sc, date, place, batch: batch || '—', col, qty });
   };
   const srcTrayOf = (l) => {
     const m = (l.remark || '').match(/from tray \[([^\]]+)\]/i);
@@ -1060,10 +1396,11 @@ async function runMovementReport(scope) {
   });
 
   // ── Sales, only against a plot·batch the batch report already has ──
+  // Only worth doing when the Main Nursery section is actually wanted.
   const unmatchedSales = [];
-  if (scope === 'main') {
+  if (wantMain) {
     const realRows = new Map();
-    ev.forEach(e => {
+    ev.filter(e => e.sc === 'main').forEach(e => {
       const pk = _mvPlotKey(e.place), bk = _mvBatchKey(e.batch);
       if (!pk || !bk) return;
       if (!realRows.has(pk)) realRows.set(pk, new Map());
@@ -1083,7 +1420,7 @@ async function runMovementReport(scope) {
         if (!passMain(plot)) continue;
         const hit = (realRows.get(_mvPlotKey(plot)) || new Map()).get(_mvBatchKey(d[`batch_${i}`]));
         if (!hit) { unmatchedSales.push({ plot: plot || '—', batch: d[`batch_${i}`] || '—', qty }); continue; }
-        ev.push({ date: d.delivery_date || null, place: hit.place, batch: hit.batch, col: 'sold', qty });
+        ev.push({ sc: 'main', date: d.delivery_date || null, place: hit.place, batch: hit.batch, col: 'sold', qty });
         _salesTrace.push({
           do: d.do_number || d.id, line: i,
           plot: hit.place, batch: hit.batch,
@@ -1104,9 +1441,51 @@ async function runMovementReport(scope) {
     });
   }
 
-  // ── Everything up to the date being stood at ──
-  const SEP = '';
-  const buc = {}, meta = {};
+  const ctx = { fromMs, toMs, fromStr, toStr, groupBy, plotToLoc, trayNursery, batchPlantedAt };
+  const sections = [];
+  if (wantPre)  sections.push(buildMovementSection('pre',  ev.filter(e => e.sc === 'pre'),  { ...ctx, unmatchedSales: [] }));
+  if (wantMain) sections.push(buildMovementSection('main', ev.filter(e => e.sc === 'main'), { ...ctx, unmatchedSales }));
+
+  loading.classList.add('hidden');
+  out.classList.remove('hidden');
+  out.innerHTML = sections.join('');
+}
+
+/**
+ * Builds one Movement Report section (Pre-Nursery or Main Nursery) as an
+ * HTML string, from events already filtered to that scope. Split out of
+ * runMovementReportCombined() so both sections come off one fetch and one
+ * pass over the ledger — see there — instead of each fetching (and
+ * re-deriving plotToLoc/trayNursery/batchPlantedAt) on its own.
+ */
+function buildMovementSection(scope, ev, ctx) {
+  const { fromMs, toMs, fromStr, toStr, plotToLoc, trayNursery, batchPlantedAt, unmatchedSales } = ctx;
+  // Pre-Nursery reads naturally by Batch — one batch, several trays over its
+  // life, and "Sort by" (Plot/Batch) is really a Main Nursery toggle (worth
+  // it there: trace a transferred batch across every plot it now sits in).
+  // Pre-Nursery ignores the shared dropdown and always groups by batch.
+  const groupBy = scope === 'pre' ? 'batch' : ctx.groupBy;
+
+  // ── Three buckets from the same events ──
+  // `buc` is everything up to the As-At date, unrestricted by the implicit
+  // From — this is what Balance/Batch Balance is netted from, because
+  // "what's actually standing in this plot right now" can't correctly
+  // ignore months before the one you happen to be looking at.
+  // `per` is only events inside [month start, As At] — this is what fills
+  // the visible Culled/Transplanted/Damaged/etc columns, so picking a date
+  // in September shows September's culling to date, not everything since
+  // the batch began.
+  // `bf` is everything strictly BEFORE month start — the balance brought
+  // forward into this month, shown in its own B/F column. Computed the same
+  // way as `buc` (netOfRow over a fully cumulative bucket, just cut off
+  // earlier) rather than derived as buc − per, so it's correct on its own
+  // even in the one case where that arithmetic wouldn't cleanly reconcile:
+  // netOfRow's "supersede" rule (a 3rd culling excludes the 2nd once
+  // recorded) is evaluated separately for `buc` and `bf`, each its own
+  // honest cumulative total, not a subtraction that could inherit an edge
+  // case from the other side of the cut.
+  const SEP = '\x01';
+  const buc = {}, per = {}, bf = {}, meta = {};
   for (const e of ev) {
     const ts = e.date ? new Date(e.date).getTime() : NaN;
     if (!isFinite(ts) || ts > toMs) continue;
@@ -1114,18 +1493,26 @@ async function runMovementReport(scope) {
     meta[k] = meta[k] || { place: e.place, batch: e.batch };
     if (!buc[k]) buc[k] = emptyRow(scope);
     buc[k][e.col] += e.qty;
+    if (ts >= fromMs) {
+      if (!per[k]) per[k] = emptyRow(scope);
+      per[k][e.col] += e.qty;
+    } else {
+      if (!bf[k]) bf[k] = emptyRow(scope);
+      bf[k][e.col] += e.qty;
+    }
   }
 
   let rows = [];
   for (const k of Object.keys(buc)) {
-    const b = buc[k];
-    const moved = MOVE_COLS[scope].some(c => b[c.key]);
-    if (!moved) continue;
-    const closing = netOfRow(scope, b);
+    const closing = netOfRow(scope, buc[k]);
     // Nothing of this batch left here — culled, sold or moved on. A NEGATIVE
-    // closing is kept: that is a figure to look into, not one to hide.
+    // closing is kept: that is a figure to look into, not one to hide. This
+    // stays based on the true (unrestricted) balance, not the period — a row
+    // that's genuinely empty now doesn't come back just because the period
+    // you picked happened to have activity on it before it emptied out.
     if (closing === 0) continue;
-    rows.push({ ...meta[k], ...b, closing,
+    const bfClosing = netOfRow(scope, bf[k] || emptyRow(scope));
+    rows.push({ ...meta[k], ...(per[k] || emptyRow(scope)), closing, bf: bfClosing,
                 age: ageLabel(batchPlantedAt[_mvBatchKey(meta[k].batch)]) });
   }
 
@@ -1143,9 +1530,6 @@ async function runMovementReport(scope) {
       _natCmp(locOfRow(a), locOfRow(c)) ||
       _natCmp(a.place, c.place) || _natCmp(a.batch, c.batch)));
 
-  loading.classList.add('hidden');
-  out.classList.remove('hidden');
-
   const cols = MOVE_COLS[scope];
   const placeLabel = scope === 'pre' ? 'Tray No' : 'Plot';
   const firstLabel  = groupBy === 'batch' ? 'Batch' : placeLabel;
@@ -1153,9 +1537,8 @@ async function runMovementReport(scope) {
   const title = scope === 'pre' ? 'Pre-Nursery Movement' : 'Main Nursery Movement';
 
   if (!rows.length) {
-    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-[#8a7a68] text-sm">No ${
+    return `<div class="glass-panel p-6 rounded-[2rem] text-[#8a7a68] text-sm">No ${
       scope === 'pre' ? 'pre-nursery' : 'main nursery'} movement found in this period.</div>`;
-    return;
   }
 
   const fmtCell = (n, cls) => `<td class="${cls || ''}">${n ? fmtNum(n) : '0'}</td>`;
@@ -1173,7 +1556,7 @@ async function runMovementReport(scope) {
     else groups.push({ key: keyOf(r), loc: locOfRow(r), list: [r] });
   });
 
-  const totalCols = 5 + cols.length;
+  const totalCols = 6 + cols.length; // Place/Batch, Age, B/F, cols, Batch Balance, Balance
   const bodyHtml = [];
   let lastLoc = null;
   let band = false;
@@ -1184,18 +1567,24 @@ async function runMovementReport(scope) {
         class="font-black text-[11px] uppercase tracking-widest text-[#3d2610] py-2">${g.loc}</td></tr>`);
     }
     const bal = g.list.reduce((s, r) => s + r.closing, 0);
-    // Alternating bands, one shade apart, so a group's rows read as a block
-    // without the table turning into a colour chart.
-    band = !band;
-    const zebra = band ? ' style="background:#fdfaf4"' : '';
+    // Alternating band per ROW (not per group) — every line gets its own
+    // dark/light step, so a batch with several tray/plot rows still shows
+    // each one distinctly instead of one solid block of colour.
     g.list.forEach((r, i) => {
+      band = !band;
+      const zebra = band ? ' style="background:#f0e6d2"' : '';
+      // The group key and the group's Balance are shown once per group, not
+      // once per row — a real rowspan cell, vertically centred, instead of
+      // text pinned to the group's first row with blank cells trailing
+      // under it (which read as stuck at the top, not "one merged value").
       bodyHtml.push(`<tr${zebra}>
-        <td class="font-black text-[#3d2610]">${i === 0 ? g.key : ''}</td>
+        ${i === 0 ? `<td rowspan="${g.list.length}" class="font-black text-[#3d2610] text-center align-middle">${g.key}</td>` : ''}
         <td>${otherOf(r) || '—'}</td>
         <td class="text-[#8a7a68] text-xs whitespace-nowrap">${r.age}</td>
+        ${fmtCell(r.bf, 'text-[#8a7a68] font-black')}
         ${cols.map(c => fmtCell(r[c.key], c.cls)).join('')}
         ${fmtCell(r.closing, 'text-[#4a7a2e] font-black')}
-        <td class="font-black text-[#4a7a2e]">${i === 0 ? fmtNum(bal) : ''}</td>
+        ${i === 0 ? `<td rowspan="${g.list.length}" class="font-black text-[#4a7a2e] text-center align-middle">${fmtNum(bal)}</td>` : ''}
       </tr>`);
     });
   });
@@ -1204,8 +1593,9 @@ async function runMovementReport(scope) {
   const grand = rows.reduce((s, r) => {
     cols.forEach(c => { s[c.key] += r[c.key] || 0; });
     s.closing += r.closing;
+    s.bf += r.bf || 0;
     return s;
-  }, { closing: 0, ...emptyRow(scope) });
+  }, { closing: 0, bf: 0, ...emptyRow(scope) });
 
   // A grouped header row only where two columns belong together.
   const grouped = cols.some(c => c.grp);
@@ -1221,10 +1611,12 @@ async function runMovementReport(scope) {
       cells.push(`<th colspan="${n}" class="text-center text-[#c07820]">${g}</th>`);
       i += n;
     }
-    groupRow = `<tr><th colspan="3"></th>${cells.join('')}<th colspan="2"></th></tr>`;
+    groupRow = `<tr><th colspan="4"></th>${cells.join('')}<th colspan="2"></th></tr>`;
   }
 
-  const rangeLabel = toStr ? `As at ${fmtDate(toStr)}` : 'As at today';
+  const rangeLabel = fromStr && toStr
+    ? `${fmtDate(fromStr)} – ${fmtDate(toStr)} · Balance as at ${fmtDate(toStr)}`
+    : (toStr ? `Balance as at ${fmtDate(toStr)}` : 'Balance as at today');
   const unmatchedHtml = unmatchedSales.length ? `
       <div class="mt-4 rounded-2xl border border-[#f0b429] bg-[#fffbeb] p-4">
         <div class="text-[11px] font-black text-[#7a4a10] uppercase tracking-widest mb-2">
@@ -1240,14 +1632,14 @@ async function runMovementReport(scope) {
         </div>
       </div>` : '';
 
-  out.innerHTML = `
+  return `
     <div class="glass-panel p-6 rounded-[2rem]">
       <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
         <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">${title}</h3>
         <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${rangeLabel}</div>
       </div>
 
-      <div class="overflow-x-auto">
+      <div class="overflow-x-auto movement-scroll">
         <table class="report-table movement-table">
           <thead>
             ${groupRow}
@@ -1255,6 +1647,7 @@ async function runMovementReport(scope) {
               <th>${firstLabel}</th>
               <th>${secondLabel}</th>
               <th>Age</th>
+              <th>B/F</th>
               ${cols.map(c => `<th>${c.label}</th>`).join('')}
               <th>Batch Balance</th>
               <th>Balance</th>
@@ -1265,6 +1658,7 @@ async function runMovementReport(scope) {
             <tr style="background:#fdf3e6">
               <td class="font-black text-[#3d2610]">GRAND TOTAL</td>
               <td></td><td></td>
+              ${fmtCell(grand.bf, 'text-[#8a7a68] font-black')}
               ${cols.map(c => fmtCell(grand[c.key], (c.cls || '') + ' font-black')).join('')}
               ${fmtCell(grand.closing, 'text-[#4a7a2e] font-black')}
               ${fmtCell(grand.closing, 'text-[#4a7a2e] font-black')}
@@ -1274,40 +1668,271 @@ async function runMovementReport(scope) {
       </div>
 
       ${unmatchedHtml}
+    </div>
+  `;
+}
 
-      <div class="text-[10px] font-bold text-[#8a7a68] mt-4 leading-relaxed">
-        <strong class="text-[#3d2610]">Notes —</strong>
-        <em>Age</em> is measured from the batch's own planting date, so it reads the same
-        wherever the batch has got to.
-        <em>B/F</em> is the net of everything before the From date for the same row.
-        <em>Batch Balance</em> is that row's closing figure; <em>Balance</em> is the
-        group's, shown once against its first row — the
-        ${scope === 'pre' ? 'tray' : 'plot'}'s when sorted by
-        ${scope === 'pre' ? 'tray' : 'plot'}, and the batch's across every
-        ${scope === 'pre' ? 'tray' : 'plot'} it sits in when sorted by batch.
-        A row whose balance works out to zero is left off — everything has been
-        ${scope === 'pre' ? 'culled or moved on' : 'culled, sold or moved on'}. A negative
-        balance is still shown, because that is a figure to look into.
-        ${scope === 'pre' ? `
-        Every tray movement names its tray: planting and 1st culling record it directly, and a
-        transplant records the tray it left in its remark, so a tray frees by exactly what left
-        it. <em>Transfer In</em> is what the Premium Care and Double Tone trays receive from
-        other trays. <em>Seed Damage</em> is counted at the batch as it is planted and never
-        enters a tray, so it is shown against the tray the batch was mostly planted into and
-        does <strong>not</strong> reduce that tray's balance.`
-        : `
-        <em>Transplanted from PN</em> is what arrived from the pre-nursery trays.
-        <em>Sold</em> comes from the Customer DO system; cancelled DOs are excluded, and a
-        delivery order can only subtract from a row the batch report already has — it never
-        creates one, so a plot or batch mistyped on a D/O cannot appear here.
-        <em>Transfer In / Out</em> are the 3rd culling's plot-to-plot transfers.`}
-        <em>2nd Culled</em> is shown but only deducted while no 3rd culling has been
-        recorded: the 3rd culling count is keyed against the original transplanted
-        figure, so it already contains the 2nd, and taking both off would subtract
-        the 2nd twice.
-        Dates are the ones keyed into the batch report; where a stage was saved without one,
-        the record's save date is used. Audit, photo and stock-calibration entries are not
-        counted as movements.
+/**
+ * Transplanting Report
+ *
+ * One row per Transplanted / Transplanted_Premium / Transplanted_DoubleTone
+ * log line: when it moved, where to, and — since a seedling is treated as
+ * mature roughly 9 months after being put out — when it's due. Nursery-
+ * filterable the same way Movement Report's Main Nursery section already is
+ * — the same Locations chips, PN included (see runMovementReportCombined).
+ */
+async function runTransplantingReport() {
+  const out = document.getElementById('report-output');
+  const loading = document.getElementById('loading');
+  out.classList.add('hidden');
+  loading.classList.remove('hidden');
+
+  const from  = document.getElementById('f-from').value;
+  const to    = document.getElementById('f-to').value;
+  const breed = document.getElementById('f-breed').value;
+  const fromTs = from ? new Date(from).getTime() : -Infinity;
+  const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
+  const selectedLocs = new Set(selectedNurseries());
+
+  const [logsRes, plotsRes, batchesRes] = await Promise.all([
+    fetchAllRows(() => _supabase.from('shared_inventory_logs')
+      .select('batch_name, transaction_date, created_at, remark, plot_name, quantity_change, breed_name')
+      .in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone'])
+      .order('id', { ascending: true })),
+    _supabase.from('shared_plots').select('plot_name, nursery_name'),
+    _supabase.from('operation_batches').select('name, breed_name')
+  ]);
+  if (logsRes.error) {
+    loading.classList.add('hidden'); out.classList.remove('hidden');
+    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-red-700 text-sm">Failed to load logs: ${logsRes.error.message}</div>`;
+    return;
+  }
+
+  const plotToLoc = {};
+  (plotsRes.data || []).forEach(p => { plotToLoc[p.plot_name] = p.nursery_name || 'Unassigned'; });
+  const batchBreed = {};
+  (batchesRes.data || []).forEach(b => { batchBreed[b.name] = b.breed_name; });
+
+  const maturityOf = (d) => {
+    const dt = new Date(d);
+    if (isNaN(dt)) return null;
+    dt.setMonth(dt.getMonth() + 9);
+    return dt.toISOString().slice(0, 10);
+  };
+
+  let rows = (logsRes.data || []).map(l => {
+    const date = _logDate(l);
+    // A transplant can land in a pre-nursery tray (Premium Care / Double
+    // Tone) rather than a main-nursery plot — those trays are never a row
+    // in shared_plots, so plotToLoc[...] would silently fall through to
+    // "Unassigned". PRE_NURSERY_PLOTS is the same list runMovementReport
+    // already uses to recognise them; label them "PN" instead.
+    const nursery = PRE_NURSERY_PLOTS.includes(l.plot_name) ? 'PN' : (plotToLoc[l.plot_name] || 'Unassigned');
+    return {
+      date, maturity: date ? maturityOf(date) : null,
+      nursery,
+      plot: l.plot_name || '—', batch: l.batch_name || '—',
+      breed: l.breed_name || batchBreed[l.batch_name] || '—',
+      qty: Number(l.quantity_change || 0)
+    };
+  }).filter(r => {
+    const ts = r.date ? new Date(r.date).getTime() : NaN;
+    // A row with no usable date at all can't be placed within a chosen
+    // range — leave it out rather than guess which month it belongs to.
+    if (from || to) { if (!isFinite(ts) || ts < fromTs || ts > toTs) return false; }
+    if (selectedLocs.size && !selectedLocs.has(r.nursery)) return false;
+    if (breed && r.breed !== breed) return false;
+    return true;
+  });
+
+  rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')));
+  const total = rows.reduce((s, r) => s + r.qty, 0);
+
+  loading.classList.add('hidden');
+  out.classList.remove('hidden');
+  out.innerHTML = `
+    <div class="glass-panel p-6 rounded-[2rem]">
+      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
+        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Transplanting Report</h3>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} record${rows.length === 1 ? '' : 's'}${from ? ' · from ' + fmtDate(from) : ''}${to ? ' · to ' + fmtDate(to) : ''}${breed ? ' · ' + breed : ''}</div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="report-table">
+          <thead><tr>
+            <th>Transplanting Date</th><th>Maturity Date</th><th>Location</th><th>Plot</th><th>Batch</th><th>Breed</th><th class="text-right">Qty</th>
+          </tr></thead>
+          <tbody>
+            ${rows.length ? rows.map(r => `
+              <tr>
+                <td>${fmtDate(r.date)}</td>
+                <td class="text-[#c07820] font-black">${fmtDate(r.maturity)}</td>
+                <td class="font-black text-[#3a7ab4]">${r.nursery}</td>
+                <td>${r.plot}</td>
+                <td class="font-black">${r.batch}</td>
+                <td>${r.breed}</td>
+                <td class="text-right font-black">${fmtNum(r.qty)}</td>
+              </tr>`).join('') : `<tr><td colspan="7" class="text-center py-10 text-[#8a7a68]">No transplant records match the selected filters.</td></tr>`}
+          </tbody>
+          ${rows.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
+            <td colspan="6" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
+            <td class="text-right text-[#3a7ab4]">${fmtNum(total)}</td>
+          </tr></tfoot>` : ''}
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Sales Listing
+ *
+ * Table view: one row per Delivery Order collection line — the same
+ * plot_N / qty_N / batch_N lines the batch report's own Sales figure reads,
+ * with the same single-line-DO qty fallback — grouped by customer (read off
+ * the linked Approval Letter, same as the DO List does it), with a subtotal
+ * per customer and a grand total at the end. Unit Price also comes from the
+ * AL (shared_al_orders.price_per_unit — the price the sales website order
+ * carried through to the AL).
+ *
+ * Chart view reuses runSeedlingSales() / _renderSalesChart from the old
+ * Seedling Sales report, with one change: it now excludes CAL- calibration
+ * DOs too, same as the Table view, so the two match — a month's Chart bar
+ * and its Table "Total Sold" used to disagree by whatever CAL- volume fell
+ * in that month, which is the same reason the 3rd Culling Sales figure
+ * elsewhere in this system counts CAL- as a sale ("what is left in the
+ * plot") while this listing doesn't (it's asking what customers actually
+ * ordered, the same question operation_stock_sales.js's Order & Collection
+ * dashboard asks).
+ */
+async function runSalesListing() {
+  if (_salesViewMode === 'chart') return runSeedlingSales();
+
+  const out = document.getElementById('report-output');
+  const loading = document.getElementById('loading');
+  out.classList.add('hidden');
+  loading.classList.remove('hidden');
+
+  const from = document.getElementById('f-from').value;
+  const to   = document.getElementById('f-to').value;
+  const fromTs = from ? new Date(from).getTime() : -Infinity;
+  const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
+  const selectedLocs = new Set(selectedNurseries());
+
+  const [dosRes, alsRes, plotsRes] = await Promise.all([
+    fetchAllRows(() => _supabase.from('shared_do_records')
+      .select('id, do_number, al_number, delivery_date, total_qty, status, remark, plot_1, qty_1, batch_1, plot_2, qty_2, batch_2, plot_3, qty_3, batch_3, plot_4, qty_4, batch_4, plot_5, qty_5, batch_5')
+      .order('id', { ascending: true })),
+    fetchAllRows(() => _supabase.from('shared_al_orders').select('al_number, customer_name, price_per_unit')),
+    _supabase.from('shared_plots').select('plot_name, nursery_name')
+  ]);
+  if (dosRes.error) {
+    loading.classList.add('hidden'); out.classList.remove('hidden');
+    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-red-700 text-sm">Failed to load delivery records: ${dosRes.error.message}</div>`;
+    return;
+  }
+
+  const alByNumber = {};
+  (alsRes.data || []).forEach(a => { if (a.al_number) alByNumber[a.al_number] = a; });
+  const plotToLoc = {};
+  (plotsRes.data || []).forEach(p => { plotToLoc[p.plot_name] = p.nursery_name || 'Unassigned'; });
+
+  // ── Flatten every DO into its individual collection lines ──
+  const lines = [];
+  (dosRes.data || []).forEach(d => {
+    if (d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'))) return;
+    if (/^CAL-/i.test(d.do_number || '')) return; // a stock correction, not a customer sale
+    const ts = d.delivery_date ? new Date(d.delivery_date).getTime() : NaN;
+    if (from || to) { if (!isFinite(ts) || ts < fromTs || ts > toTs) return; }
+
+    let filled = 0;
+    for (let i = 1; i <= 5; i++) if (String(d[`plot_${i}`] || '').trim()) filled++;
+
+    const al = d.al_number ? alByNumber[d.al_number] : null;
+    const customer   = (al && al.customer_name) || d.remark || 'Unknown';
+    const unitPrice  = al ? Number(al.price_per_unit || 0) : null;
+
+    for (let i = 1; i <= 5; i++) {
+      const plot = d[`plot_${i}`];
+      if (!String(plot || '').trim()) continue;
+      let qty = Number(d[`qty_${i}`] || 0);
+      // Same fallback the batch report's own Sales figure uses: a single-
+      // line DO whose per-line qty was never keyed reads its total instead.
+      const fallback = (!qty && filled === 1);
+      if (fallback) qty = Number(d.total_qty || 0);
+      if (!qty) continue;
+      const loc = plotToLoc[plot] || 'Unassigned';
+      if (selectedLocs.size && !selectedLocs.has(loc)) continue;
+      lines.push({
+        date: d.delivery_date, customer, doNumber: d.do_number,
+        qty, nursery: loc, plot, batch: d[`batch_${i}`] || '—',
+        unitPrice
+      });
+    }
+  });
+
+  loading.classList.add('hidden');
+  out.classList.remove('hidden');
+
+  if (!lines.length) {
+    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-[#8a7a68] text-sm">No sales found for the selected filters.</div>`;
+    return;
+  }
+
+  // ── Group by customer, ordered by whoever sold the most ──
+  const byCustomer = {};
+  lines.forEach(l => { (byCustomer[l.customer] = byCustomer[l.customer] || []).push(l); });
+  const customers = Object.keys(byCustomer).sort((a, b) =>
+    byCustomer[b].reduce((s, l) => s + l.qty, 0) - byCustomer[a].reduce((s, l) => s + l.qty, 0));
+
+  const grandTotal  = lines.reduce((s, l) => s + l.qty, 0);
+  const anyPriced   = lines.some(l => l.unitPrice != null);
+  const grandAmount = lines.reduce((s, l) => s + (l.unitPrice != null ? l.unitPrice * l.qty : 0), 0);
+  // Customer isn't its own column — it's the group-header row above each
+  // customer's lines, so it never needed a column of its own.
+  const colCount    = anyPriced ? 7 : 6;
+
+  const rowsHtml = customers.map(cust => {
+    const rows = byCustomer[cust].slice().sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+    const custQty = rows.reduce((s, l) => s + l.qty, 0);
+    const custAmt = rows.reduce((s, l) => s + (l.unitPrice != null ? l.unitPrice * l.qty : 0), 0);
+    return `
+      <tr style="background:#f3ede1"><td colspan="${colCount}" class="font-black text-[11px] uppercase tracking-widest text-[#3d2610] py-2">${cust}</td></tr>
+      ${rows.map(l => `
+        <tr>
+          <td>${fmtDate(l.date)}</td>
+          <td class="font-black text-[#3a7ab4]">${l.doNumber || '—'}</td>
+          <td>${l.nursery}</td>
+          <td>${l.plot}</td>
+          <td>${l.batch}</td>
+          <td class="text-right font-black">${fmtNum(l.qty)}</td>
+          ${anyPriced ? `<td class="text-right">${l.unitPrice != null ? 'RM ' + fmtMoney(l.unitPrice) : '—'}</td>` : ''}
+        </tr>`).join('')}
+      <tr style="background:#fdfaf4">
+        <td colspan="5" class="text-right font-black text-[10px] uppercase tracking-widest text-[#8a7a68]">Subtotal — ${cust}</td>
+        <td class="text-right font-black text-[#4a7a2e]">${fmtNum(custQty)}</td>
+        ${anyPriced ? `<td class="text-right font-black text-[#4a7a2e]">RM ${fmtMoney(custAmt)}</td>` : ''}
+      </tr>`;
+  }).join('');
+
+  out.innerHTML = `
+    <div class="glass-panel p-6 rounded-[2rem]">
+      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
+        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Sales Listing</h3>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(lines.length)} line${lines.length === 1 ? '' : 's'}${from ? ' · from ' + fmtDate(from) : ''}${to ? ' · to ' + fmtDate(to) : ''}</div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="report-table">
+          <thead><tr>
+            <th>Collection Date</th><th>DO Number</th><th>Nursery</th><th>Plot</th><th>Batch</th>
+            <th class="text-right">Sold Qty</th>${anyPriced ? '<th class="text-right">Unit Price</th>' : ''}
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+          <tfoot><tr class="font-black bg-[#fdf3e6]">
+            <td colspan="5" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total Sold</td>
+            <td class="text-right text-[#4a7a2e]">${fmtNum(grandTotal)}</td>
+            ${anyPriced ? `<td class="text-right text-[#4a7a2e]">RM ${fmtMoney(grandAmount)}</td>` : ''}
+          </tr></tfoot>
+        </table>
       </div>
     </div>
   `;
@@ -1322,18 +1947,19 @@ async function bootstrap() {
     document.getElementById('forbidden').classList.remove('hidden');
     return;
   }
-  const { from, to } = defaultRange();
+  // The Report tabs don't exist until renderReportTabs() builds them — do
+  // that before anything reads f-report.value.
+  const DEFAULT_REPORT = 'batch_production';
+  document.getElementById('f-report').value = DEFAULT_REPORT;
+  renderReportTabs();
+
   const todayStr = new Date().toISOString().slice(0, 10);
-  const fFrom = document.getElementById('f-from');
-  const fTo   = document.getElementById('f-to');
-  fFrom.value = from; fTo.value = to;
+  const fTo = document.getElementById('f-to');
+  fTo.value = todayStr;
   // Reports look at what has actually happened — future dates make no
-  // sense. Cap the "To" picker at today; keep "From" bounded by "To"
-  // so you can't pick From > To either.
-  fFrom.max = todayStr;
-  fTo.max   = todayStr;
-  fTo.addEventListener('input',   () => { fFrom.max = fTo.value || todayStr; });
-  fFrom.addEventListener('input', () => { fTo.min   = fFrom.value || ''; });
+  // sense. f-from is hidden and derived from f-to (see runReport()), so
+  // only f-to needs a bound.
+  fTo.max = todayStr;
   await Promise.all([loadBreeds(), loadNurseryFilter()]);
   _setSalesView('table');
   document.getElementById('f-mode-table').addEventListener('click', () => { _setSalesView('table'); runReport(); });
