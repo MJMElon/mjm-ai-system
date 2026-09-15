@@ -2588,7 +2588,11 @@
                not stop the other, nor the strips below from rendering. */
             try { if (typeof calcTransplanting === 'function') calcTransplanting(); } catch (e) { console.warn(e); }
             try { if (typeof calcCulling === 'function') calcCulling(); } catch (e) { console.warn(e); }
-            // 3rd Culling too — a plot-stock adjustment lands on one of its rows.
+            /* …and both culling tabs, where a plot-stock adjustment lands on
+               one row. Re-RENDERED, not just recalculated: the figure is drawn
+               into the row's markup, so a recalculation alone would leave the
+               old one on screen beside the new arithmetic. */
+            try { if (typeof renderT5PlotRows === 'function' && t5_plotData.length) renderT5PlotRows(); } catch (e) { console.warn(e); }
             try { if (typeof renderT6PlotRows === 'function' && t6_plotData.length) renderT6PlotRows(); } catch (e) { console.warn(e); }
 
             const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -7608,6 +7612,9 @@ Thank you.`;
 
             t5_plotData.forEach((p, i) => {
                 const rowId  = `t5-row-${i}`;
+                // An approved plot-stock adjustment against this plot — the same
+                // per-plot figure 3rd Culling reads. Negative is the usual case.
+                const adj5   = (typeof adjustPlotLoss === 'function') ? adjustPlotLoss(p.plot) : 0;
                 const due    = calcDueDate(p.transplantDate);
                 const deadVal = p.savedDead !== null && p.savedDead !== undefined ? p.savedDead : '';
                 // After _t5MergeByPlot, MAIN and D-TONE for the same plot are
@@ -7657,10 +7664,20 @@ Thank you.`;
                                 <div class="text-[9px] font-bold ${typeLblCls} uppercase tracking-widest">${typeLabel}</div>
                             </div>
 
-                            <!-- Transplanted qty -->
+                            <!-- Transplanted qty, and under it any approved PLOT-STOCK
+                                 adjustment against this plot.
+
+                                 "Missing 1 seedling found during the 2nd culling drone count"
+                                 is one seedling fewer standing in N11. It was transplanted, so
+                                 the transplanted figure keeps it; what it changes is how many
+                                 are alive, and the row has to say so or Alive drops by one
+                                 with nothing on the line accounting for it. Same figure 3rd
+                                 Culling reads — a plot's stock is one fact. -->
                             <div>
                                 <div class="text-[9px] font-black text-[#8a7a68] uppercase lg:hidden mb-0.5">Transplanted</div>
                                 <div class="text-base font-black text-[#3d2610]">${p.qty.toLocaleString()}</div>
+                                ${adj5 ? `<div class="text-[10px] font-black text-[#7a4a10] tabular-nums leading-tight mt-0.5 whitespace-nowrap"
+                                               title="An approved adjustment on this plot — see Adjustments &amp; Audit">Adjustment ${adj5 > 0 ? '+' : ''}${adj5.toLocaleString()}</div>` : ''}
                             </div>
 
                             <!-- Dead input (user enters) -->
@@ -7669,11 +7686,12 @@ Thank you.`;
                                 <input type="number" class="input-style !text-[#a83020] font-black t5-dead text-sm"
                                     min="0" max="${p.qty}" placeholder=""
                                     data-transplanted="${p.qty}"
+                                    data-adjust="${adj5}"
                                     value="${deadVal}"
                                     oninput="autoFillCullDate('${rowId}'); calcT5Row('${rowId}'); calcT5()">
                             </div>
 
-                            <!-- Alive (auto-calculated: transplanted − dead) -->
+                            <!-- Alive (auto-calculated: transplanted − dead + adjustment) -->
                             <div>
                                 <div class="text-[9px] font-black text-[#4a7a2e] uppercase lg:hidden mb-0.5">Alive (auto)</div>
                                 <div class="input-style bg-[#f0f8ec] font-black text-[#4a7a2e] t5-alive-display h-[45px] flex items-center text-sm" id="${rowId}-alive-disp" data-transplanted="${p.qty}">—</div>
@@ -7781,7 +7799,11 @@ Thank you.`;
             const cullCell     = document.getElementById(`${rowId}-cull`);
             const transplanted = parseInt(deadInput.dataset.transplanted) || 0;
             const dead         = parseInt(deadInput.value) || 0;
-            const alive        = Math.max(0, transplanted - dead); // auto-calc
+            // …and any approved plot-stock adjustment. One seedling found
+            // missing is one fewer alive; it was not culled, so Dead is not
+            // where it goes and the cull rate is not moved by it.
+            const adjust       = parseInt(deadInput.dataset.adjust) || 0;
+            const alive        = Math.max(0, transplanted - dead + adjust); // auto-calc
 
             // Sync hidden alive input (used by calcT5 totals)
             if (aliveHidden) { aliveHidden.value = alive; }
@@ -7812,7 +7834,11 @@ Thank you.`;
                 const deadInput    = row.querySelector('.t5-dead');
                 const transplanted = parseInt(deadInput.dataset.transplanted) || 0;
                 const dead         = parseInt(deadInput.value) || 0;
-                const alive        = Math.max(0, transplanted - dead);
+                // Same sum the row itself shows — see calcT5Row. The dashboard
+                // reading one seedling more alive than the row it is a total of
+                // is the thing this is here to stop.
+                const adjust       = parseInt(deadInput.dataset.adjust) || 0;
+                const alive        = Math.max(0, transplanted - dead + adjust);
                 totTransplanted   += transplanted;
                 totDead           += dead;
                 totAlive          += alive;
