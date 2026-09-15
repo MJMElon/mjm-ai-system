@@ -394,7 +394,7 @@
          onclick="if (event.target === this) closeDocViewer()">
         <div class="bg-[#f8f4ec] border border-[#e8dcc8] rounded-3xl shadow-[0_30px_60px_rgba(0,0,0,0.45)] w-full max-w-[1000px] overflow-hidden">
             <div class="flex items-center gap-3 px-5 py-3 border-b border-[#e8dcc8] bg-white">
-                <div class="text-[11px] font-black text-[#3d2610] uppercase tracking-widest truncate" id="doc-lightbox-title">Drone Map</div>
+                <div class="text-[11px] font-black text-[#3d2610] uppercase tracking-widest truncate" id="doc-lightbox-title">Attachment</div>
                 <span id="doc-lightbox-rowacts" class="hidden ml-auto shrink-0 flex items-center gap-2" data-row="">
                     <button type="button" onclick="replaceT6Doc(this.parentElement.dataset.row)"
                         class="px-3 py-1.5 rounded-lg border border-[#c07820] bg-white text-[#c07820]
@@ -3783,7 +3783,7 @@
         }
 
         function viewMap(rowId) {
-            _openDocViewer(rowMaps[rowId]);
+            _openDocViewer(rowMaps[rowId], 'Drone Map');
         }
 
         // ── T3 Edit-form drone map handlers ──────────────────────────────────────
@@ -3823,7 +3823,7 @@
         }
 
         function viewT3EditMap(idx) {
-            _openDocViewer(t3EditMaps[idx]);
+            _openDocViewer(t3EditMaps[idx], 'Drone Map');
         }
 
         function removeTransplantRow(rowId) {
@@ -4729,7 +4729,7 @@
             need('Planting Date', document.getElementById('t2-date').value !== "");
             need('Damaged Seeds', document.getElementById('t2-damaged').value !== "");
             need('Worker Count',  currentWorkers > 0);
-            need('Field Photo',   opsPhotoBase64 !== null, true);
+            need('Seed Damaged Photo', opsPhotoBase64 !== null, true);
             // Auditor verification photo no longer required — panel removed.
 
             const rows = document.querySelectorAll('.tray-row');
@@ -4841,7 +4841,9 @@
 
         function viewOpsPhoto(i) {
             const ph = opsPhotos[i];
-            if (ph) _openDocViewer(ph.src);
+            // Seed Planting's photos are the damaged seeds, counted on a
+            // numbered board. Nothing to do with a drone.
+            if (ph) _openDocViewer(ph.src, ph.name || 'Seed Damaged Photo');
         }
 
         function removeOpsPhoto(i) {
@@ -4889,7 +4891,7 @@
 
         function viewAuditPhoto(type) {
             if (type === 'ops') return viewOpsPhoto(0);
-            _openDocViewer(auditPhotoBase64);
+            _openDocViewer(auditPhotoBase64, 'Seed Damaged Photo');
         }
 
         // ── Photo persistence helpers ──
@@ -5722,8 +5724,12 @@
                 ? `<iframe src="${_escAttr(url)}" class="w-full h-[78vh] border-0 rounded-xl bg-white"></iframe>`
                 : `<img src="${_escAttr(url)}" alt="${_escAttr(name || 'Attachment')}"
                         class="max-w-full max-h-[78vh] w-auto h-auto mx-auto block rounded-xl">`;
-            if (ttl) ttl.innerText = name || (isPdf ? 'Document' : 'Drone Map');
-            if (dl)  { dl.href = url; dl.download = name || (isPdf ? 'document.pdf' : 'map.png'); }
+            /* Every caller says what it is opening. The fallback is
+                deliberately neutral: it used to be "Drone Map", so Seed
+                Planting's damaged-seed photographs opened under the heading of
+                a thing they are not. */
+            if (ttl) ttl.innerText = name || (isPdf ? 'Document' : 'Attachment');
+            if (dl)  { dl.href = url; dl.download = name || (isPdf ? 'document.pdf' : 'attachment.png'); }
             /* Replace and Remove appear only when the viewer was opened FROM a
                row — there is nothing for them to act on otherwise, and a button
                that does nothing is worse than no button. */
@@ -7682,7 +7688,7 @@ Thank you.`;
         }
 
         function viewT5Map(rowId) {
-            _openDocViewer(t5_plotMaps[rowId]);
+            _openDocViewer(t5_plotMaps[rowId], 'Drone Map');
         }
 
         async function saveTab5() {
