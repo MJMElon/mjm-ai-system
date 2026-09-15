@@ -827,10 +827,9 @@ function syncReportDefaults() {
     // f-from is derived from this in runReport() — nothing to set here.
     document.getElementById('f-to').value = new Date().toISOString().slice(0, 10);
   }
-  // Movement Report can show a Pre-Nursery section (reads naturally by
-  // Batch — one batch, several trays over its life) and/or a Main Nursery
-  // section (reads naturally by Plot — what's standing where) depending on
-  // which Locations are ticked; Plot is the more commonly checked default.
+  // "Sort by" only ever affects the Main Nursery section — Pre-Nursery
+  // always groups by batch regardless (see buildMovementSection). Plot is
+  // Main's more commonly checked default.
   if (_fSort && which === 'movement_report') _fSort.value = 'plot';
 }
 
@@ -1460,7 +1459,12 @@ async function runMovementReportCombined() {
  * re-deriving plotToLoc/trayNursery/batchPlantedAt) on its own.
  */
 function buildMovementSection(scope, ev, ctx) {
-  const { fromMs, toMs, fromStr, toStr, groupBy, plotToLoc, trayNursery, batchPlantedAt, unmatchedSales } = ctx;
+  const { fromMs, toMs, fromStr, toStr, plotToLoc, trayNursery, batchPlantedAt, unmatchedSales } = ctx;
+  // Pre-Nursery reads naturally by Batch — one batch, several trays over its
+  // life, and "Sort by" (Plot/Batch) is really a Main Nursery toggle (worth
+  // it there: trace a transferred batch across every plot it now sits in).
+  // Pre-Nursery ignores the shared dropdown and always groups by batch.
+  const groupBy = scope === 'pre' ? 'batch' : ctx.groupBy;
 
   // ── Three buckets from the same events ──
   // `buc` is everything up to the As-At date, unrestricted by the implicit
