@@ -111,6 +111,27 @@ SELECT * FROM (
          NULL::BIGINT AS culled, NULL::BIGINT AS map_qty, NULL::BIGINT AS still_standing,
          NULL::BOOLEAN AS signed, NULL::BOOLEAN AS has_cull_date, NULL::BOOLEAN AS has_map_file
   UNION ALL
+  /* The sign-off rows exactly as the database holds them, so the answer
+     is not only a verdict but the evidence: which plot keys are signed,
+     and whether the whole tab is. */
+  SELECT 3,
+         'signed: ' || COALESCE(SUBSTRING(l.plot_name FROM 'cull_3::(.*)$'), l.plot_name),
+         (SELECT batch FROM params),
+         'row sign-off on record',
+         NULL, NULL, NULL, TRUE, NULL, NULL
+  FROM shared_inventory_logs l, params p
+  WHERE l.batch_name = p.batch
+    AND l.transaction_type = 'Row_Verification'
+    AND l.plot_name LIKE 'cull\_3::%'
+  UNION ALL
+  SELECT 3,
+         'signed: WHOLE TAB',
+         (SELECT batch FROM params),
+         'whole-tab sign-off on record — covers every plot',
+         NULL, NULL, NULL, TRUE, NULL, NULL
+  FROM operation_batch_verifications v, params p
+  WHERE v.batch_name = p.batch AND v.stage = 'cull_3'
+  UNION ALL
   SELECT CASE WHEN done THEN 2 ELSE 1 END,
          v.plot,
          (SELECT batch FROM params),

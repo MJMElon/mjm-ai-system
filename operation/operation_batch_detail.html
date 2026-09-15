@@ -10942,8 +10942,14 @@ Thank you.`;
         if (!batch || !key) return;
         const mapKey = STAGE_BY_TAB[tabIdx] + '::' + key;
         if (!confirm('Remove the verification on this row?')) return;
-        await _supabase.from('shared_inventory_logs').delete()
+        /* The delete is CHECKED. It used to be fire-and-forget: a delete the
+           database refused left the row showing unverified on this screen
+           while the sign-off stayed on the record — and the batch list, which
+           reads the record, went on calling the batch Complete. A withdrawal
+           that did not happen must not look as if it did. */
+        const { error: delErr } = await _supabase.from('shared_inventory_logs').delete()
           .eq('batch_name', batch).eq('transaction_type', 'Row_Verification').eq('plot_name', mapKey);
+        if (delErr) { alert('Could not remove the verification: ' + delErr.message); return; }
         delete rowVerifs[mapKey];
         /* A STAGE signature says "I have checked this whole tab", and every
            row on it counts as signed by it. Withdrawing one row's sign-off
