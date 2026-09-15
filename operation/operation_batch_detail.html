@@ -1388,6 +1388,11 @@
                                             <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Total Transplanted</span>
                                             <span class="text-base font-black text-[#4a7a2e] tabular-nums" id="t3-saved-total-qty-m">0</span>
                                         </div>
+                                        <!-- Which rows above are NOT in that total, and how many
+                                             seedlings they hold. A figure smaller than the column
+                                             it sits under needs to say why, or it reads as a
+                                             mistake. Hidden when the batch has no holding tray. -->
+                                        <div id="t3-saved-held-note" class="hidden px-3 pt-1 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest"></div>
                                     </div>
 
                                     <!-- New form rows -->
@@ -3367,12 +3372,51 @@
                         });
                         tableDiv.classList.remove('hidden');
 
-                        // Sum the Qty column — see the footer's note in the markup.
-                        const savedTotal = txLogs.reduce((s, l) => s + (l.quantity_change || 0), 0);
+                        /* TOTAL TRANSPLANTED COUNTS TRANSPLANTS.
+
+                           Premium Care and D-Tone are holding trays, not
+                           plots. Moving seedlings INTO one of them is not a
+                           transplant — they come out again later and are
+                           transplanted for real, and this list shows both
+                           steps, so adding the first to the second counts the
+                           same seedlings twice. Batch 232's own list has
+                           B6 → PREMIUM CARE 171 and PREMIUM CARE → P11 220 on
+                           it, one above the other.
+
+                           The rest of the system has always read it this way:
+                           the allocation percentage on the Save button counts
+                           only what reached a main plot, and so does the batch
+                           list's culling rate. This footer was the one place
+                           that did not, which is why it could disagree with
+                           the percentage printed directly beneath it.
+
+                           The rows themselves are untouched — every movement
+                           is still listed, and the ones left out of the total
+                           are named under it rather than quietly dropped. */
+                        const counted = txLogs.filter(l => l.transaction_type === 'Transplanted');
+                        const heldRows = txLogs.filter(l => l.transaction_type !== 'Transplanted');
+                        const savedTotal = counted.reduce((s, l) => s + (l.quantity_change || 0), 0);
                         const setTot = (id, s) => { const el = document.getElementById(id); if (el) el.innerText = s; };
                         setTot('t3-saved-total-qty',   savedTotal.toLocaleString());
                         setTot('t3-saved-total-qty-m', savedTotal.toLocaleString());
-                        setTot('t3-saved-total-count', `${txLogs.length} record${txLogs.length === 1 ? '' : 's'}`);
+                        setTot('t3-saved-total-count', `${counted.length} record${counted.length === 1 ? '' : 's'}`);
+
+                        // Say what was left out, and how much of it.
+                        const heldNote = document.getElementById('t3-saved-held-note');
+                        if (heldNote) {
+                            const sumOf = (type) => txLogs
+                                .filter(l => l.transaction_type === type)
+                                .reduce((s, l) => s + (l.quantity_change || 0), 0);
+                            const parts = [];
+                            const prem  = sumOf('Transplanted_Premium');
+                            const dtone = sumOf('Transplanted_DoubleTone');
+                            if (prem)  parts.push(`Premium Care ${prem.toLocaleString()}`);
+                            if (dtone) parts.push(`D-Tone ${dtone.toLocaleString()}`);
+                            heldNote.innerText = parts.length
+                                ? `Not counted — moved into a holding tray, not a plot: ${parts.join(' · ')}`
+                                : '';
+                            heldNote.classList.toggle('hidden', !parts.length || !heldRows.length);
+                        }
 
                         // Also populate hidden form rows for calcTransplanting
                         const container = document.getElementById('transplant-rows-container');
@@ -6911,8 +6955,23 @@ Thank you.`;
             // 2. PREMIUM CARE if any plants were moved there
             // 3. DOUBLE-TONE if any plants were moved there
             const plantedTrays = preNurseryTrayData.filter(t => t.name !== 'PREMIUM CARE' && t.name !== 'DOUBLE-TONE');
-            const premiumEntry = preNurseryTrayData.find(t => t.name === 'PREMIUM CARE');
-            const dtoneEntry   = preNurseryTrayData.find(t => t.name === 'DOUBLE-TONE');
+            /* The two holding nurseries are read from THIS tab's own totals
+               first, and only then from the tray list Transplanting builds.
+
+               t4_totalPremium and t4_totalDoubletone are loaded a few lines
+               up, off the batch's own transplant logs, so 1st Culling knows
+               what is in Premium Care whether or not anybody has opened
+               Transplanting. It used to know only what that tab had left
+               behind: if its load had not run, or had thrown on the way past
+               the premium query — it is inside a try that only warns — the
+               Premium Care row never appeared, and there was no line to key
+               the cull against and no way to balance the report. */
+            const premiumEntry = t4_totalPremium > 0
+                ? { name: 'PREMIUM CARE', initialQty: t4_totalPremium }
+                : preNurseryTrayData.find(t => t.name === 'PREMIUM CARE');
+            const dtoneEntry   = t4_totalDoubletone > 0
+                ? { name: 'DOUBLE-TONE', initialQty: t4_totalDoubletone }
+                : preNurseryTrayData.find(t => t.name === 'DOUBLE-TONE');
 
             // The DOUBLE-TONE culling row's tray quantity is the admin-keyed
             // "Double Tone Quantity in Nursery" (Tab 3) — the full nursery

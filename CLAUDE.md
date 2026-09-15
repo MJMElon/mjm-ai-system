@@ -29,6 +29,27 @@ What that SQL should be:
 If a change needs no SQL, say so plainly. "Nothing to run" is an answer they
 need as much as the SQL is.
 
+## One batch is the example, never the scope
+
+Bugs arrive as a screenshot of one batch, because that is the one somebody
+was looking at. **The fix belongs to every batch**, and so does the answer:
+if batch 232's Premium Care is missing from 1st Culling, so is every other
+batch's, and a fix that names 232 has fixed nothing.
+
+The page code is shared, so a change there is global by construction. The
+trap is the SQL handed over with it: a file with one batch number on line 1
+puts the person back where they started, opening batches one at a time to
+find the rest. **Write the repair to sweep every batch**, with a rule
+precise enough that the batches which are fine are left alone, and have it
+print which ones it touched. `shared/RUN_ME_clear_stale_tab_signoff.sql` is
+the shape: what counts as needing the repair, what was deliberately kept,
+and a second run that finds nothing.
+
+A per-batch query still earns its place as the drill-down once the
+batch-wide one has named a batch — `CHECK_which_batches_completed.sql` and
+`CHECK_batch_not_completed.sql` are that pair. The batch-wide one comes
+first.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the
