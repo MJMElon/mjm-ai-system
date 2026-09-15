@@ -491,7 +491,20 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 #recview-list .rec-table tbody td{font-size:12.5px;padding:9px 7px;}
 #recview-list .rec-table .rec-group-cell{font-size:14px;}
 #recview-list .rec-table .rec-group-sub{font-size:12px;}
-#recview-list .rec-table .pill{font-size:12px;padding:5px 12px;max-width:none;}
+/* The chemical pill WRAPS inside its column.
+
+   `max-width:none` here cancelled the base .pill's cap, and the base rule
+   also says white-space:nowrap — so the pill grew as wide as its text and
+   simply drew over the Plot column beside it. "Round 1: Becker 20mL + Bond
+   15mL" covered the plot the row was about, which is the one thing on the
+   row that says WHERE.
+
+   Ellipsising it instead (what the colgroup comment expected) hides the
+   sticker and the dose, and this column exists to say what went in the tank.
+   So it wraps: never wider than the cell, as many lines as it needs. */
+#recview-list .rec-table .pill{font-size:12px;padding:4px 8px;
+  max-width:100%;white-space:normal;overflow:visible;text-overflow:clip;
+  overflow-wrap:break-word;line-height:1.3;text-align:left;}
 #recview-list .rec-table .chk-btn{font-size:21px;}
 #recview-list .rec-table .btn-sm{font-size:12px;padding:6px 12px;}
 #recview-list .rec-table .rec-checked-badge{font-size:11px;padding:4px 10px;}

@@ -229,7 +229,7 @@
         async function initLedger() {
             try {
                 // Fetch reception logs + every culling-related log type + transplant logs in parallel.
-                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, collectRes] = await Promise.all([
+                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, rowVerifRes, stageVerifRes, calibRes, collectRes] = await Promise.all([
                     fetchAllRows(() => _supabase.from('shared_inventory_logs')
                         .select('*')
                         .eq('transaction_type', 'Seeds_Received')
@@ -247,6 +247,30 @@
                     // batch needs amendment somewhere" and naming the tab.
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, plot_name').eq('transaction_type', 'Review_Rejection').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, plot_name, quantity_change, remark, created_at').eq('transaction_type', 'Cull3_Transfer').order('id', { ascending: true })),
+                    /* WHO HAS SIGNED WHAT. A plot's 3rd Culling can be keyed
+                       and still be waiting for somebody to check it, and this
+                       list said Completed over exactly that — see the coverage
+                       loop below. Row sign-offs live in the log table with a
+                       plot_name of `<stage>::<rowKey>`; the whole stage being
+                       signed lives in its own table and covers every row on it. */
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs')
+                        .select('batch_name, plot_name')
+                        .eq('transaction_type', 'Row_Verification')
+                        .like('plot_name', 'cull_3::%')
+                        .order('id', { ascending: true })),
+                    fetchAllRows(() => _supabase.from('operation_batch_verifications')
+                        .select('batch_name, stage')
+                        .eq('stage', 'cull_3')
+                        .order('id', { ascending: true })),
+                    /* Stock calibrations. A raised one says the count was out
+                       by N and why; an APPROVED one has been ruled on and its
+                       quantity is already inside the figures. One still
+                       waiting is an open question about how many seedlings
+                       there are — see the completion rule below. */
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs')
+                        .select('batch_name, quantity_change, remark')
+                        .eq('transaction_type', 'Stock_Calibration')
+                        .order('id', { ascending: true })),
                     // "How much of a batch has been collected" — the source is
                     // shared_do_records, NOT shared_collection_bookings. Bookings
                     // are scheduled slots keyed by order_number and have no
@@ -415,28 +439,97 @@
                     (expectedPlots[r.batch_name] = expectedPlots[r.batch_name] || new Set()).add(dest);
                 });
 
+                /* …AND SIGNED OFF.
+
+                   A plot whose 3rd Culling is keyed is not therefore finished:
+                   somebody still has to check it. The 3rd Culling tab counts a
+                   row as done only once it is signed, and this list did not —
+                   so unverifying a plot took the tab off 100% and left the
+                   batch sitting in Completed, saying the opposite.
+
+                   A row sign-off is stored against `cull_3::<PLOT>|<dest>`, and
+                   the plot is all that is matched: the tab writes the dest type
+                   it happens to have merged the row under, and which of them it
+                   is has nothing to do with whether the plot was checked.
+
+                   The whole stage being verified is one signature over every
+                   row on the tab, so it covers the batch on its own. */
+                const cull3RowSigned = {};   // batch → Set(PLOT)
+                (rowVerifRes.data || []).forEach(r => {
+                    if (!r.batch_name || !r.plot_name) return;
+                    const m = /^cull_3::(.+)$/.exec(String(r.plot_name));
+                    if (!m) return;
+                    const plot = _normPlot(String(m[1]).split('|')[0]);
+                    if (!plot) return;
+                    (cull3RowSigned[r.batch_name] = cull3RowSigned[r.batch_name] || new Set()).add(plot);
+                });
+                const cull3StageSigned = new Set((stageVerifRes.data || []).map(r => r.batch_name));
+
+                /* AN OPEN QUESTION IS NOT A FINISHED BATCH.
+
+                   Two things in this system mean somebody has raised a problem
+                   that nobody has settled:
+
+                     a REJECTION — HQ sent a report tab back for amendment. The
+                       row is deleted when the rejection is cleared or the tab
+                       re-verified, so a row that is still there is still open.
+
+                     a PENDING CALIBRATION — somebody counted a discrepancy and
+                       said why, and no verifier has ruled on it. An approved
+                       one carries "[APPROVED by … on …]" and its quantity is
+                       already inside the figures; one without that marker is a
+                       claim about how many seedlings there are, still standing.
+
+                   Either way the batch appears in Amendment Needed or on the
+                   Adjustments tab — and could sit in Completed at the same
+                   time, which is the list saying the work is finished while
+                   the screen beside it says it is in dispute. */
+                const openRejection = new Set((rejectRes.data || []).map(r => r.batch_name).filter(Boolean));
+                const pendingCalibration = new Set();
+                (calibRes.data || []).forEach(r => {
+                    if (!r.batch_name) return;
+                    if (r.remark && /\[APPROVED by [^\]]+ on [^\]]+\]/.test(r.remark)) return;
+                    pendingCalibration.add(r.batch_name);
+                });
+
                 const completedBatchNames = new Set();
+                /* Batches finished in the field but held out of Completed by an
+                   open question — so the row can say which, instead of reading
+                   as one that still has counting to do. */
+                const heldByIssue = {};
                 Object.keys(expectedPlots).forEach(batch => {
                     // Every plot must be covered by a proofed record — no exceptions.
                     const need = expectedPlots[batch];
                     if (!need || !need.size) return;
                     const keyed  = cull3Keyed[batch] || new Set();
                     const legacy = new Map(cull3Legacy[batch] || []);
+                    const signed = cull3RowSigned[batch] || new Set();
+                    const wholeStageSigned = cull3StageSigned.has(batch);
                     let allCovered = true;
                     for (const key of need) {
-                        if (keyed.has(key)) continue;
                         const plot = key.split('|')[0];
+                        if (!wholeStageSigned && !signed.has(plot)) { allCovered = false; break; }
+                        if (keyed.has(key)) continue;
                         const n = legacy.get(plot) || 0;
                         if (n > 0) { legacy.set(plot, n - 1); continue; }
                         allCovered = false; break;
                     }
-                    if (allCovered) completedBatchNames.add(batch);
+                    if (!allCovered) return;
+                    // Counted, checked — and still not finished if somebody has
+                    // raised something nobody has settled.
+                    if (openRejection.has(batch))      { heldByIssue[batch] = 'Amendment needed — a report was rejected'; return; }
+                    if (pendingCalibration.has(batch)) { heldByIssue[batch] = 'Adjustment raised, not yet approved'; return; }
+                    completedBatchNames.add(batch);
                 });
                 // A batch is in Main Nursery once any transplant log has been written.
                 const transplantedBatchNames = new Set((transplantRes.data || []).map(r => r.batch_name));
-                // Batches with at least one report tab rejected by HQ — shown
-                // in the "Amendment Needed" list tab (in ADDITION to their
-                // normal Active/Completed placement, which is unchanged).
+                /* Batches with at least one report tab rejected by HQ — shown
+                   in the "Amendment Needed" list tab, and ALSO in Active,
+                   where a batch with an open rejection now stays however
+                   finished its counting is (see heldByIssue above). It used to
+                   be able to sit in Completed at the same time as Amendment
+                   Needed, which is the list calling the work done while the
+                   tab beside it says it is in dispute. */
                 const rejectedBatchNames = new Set((rejectRes.data || []).map(r => r.batch_name));
                 /* …and which report each one was rejected on. A row-level
                    rejection is keyed `stage::rowKey`; only the stage half
@@ -586,6 +679,7 @@
                     b.hasTransplant = transplantedBatchNames.has(b.batch_name);
                     b.hasRejection = rejectedBatchNames.has(b.batch_name);
                     b.rejectedStages = [...(rejectedStages[b.batch_name] || [])];
+                    b.heldByIssue = heldByIssue[b.batch_name] || null;
                     return processBatchLogic(b, completedBatchNames);
                 });
 
@@ -658,6 +752,14 @@
                 b.stageColor = 'bg-[#4a7a2e]'; // Deep green
                 b.progressPct = 100;
                 b.progressText = 'All record tabs done';
+            } else if (b.heldByIssue) {
+                /* Everything counted and checked, and one thing still in
+                   dispute. Saying "Maturing Progress: 100%" here would send
+                   somebody looking for counting that is already done. */
+                b.stageName = 'Held';
+                b.stageColor = 'bg-[#c07820]'; // Amber
+                b.progressPct = 100;
+                b.progressText = b.heldByIssue;
             } else if (b.hasTransplant) {
                 // Main Nursery: 9-month period (months 4–13). Use age within that window for visual progress.
                 b.stageName = 'Main Nursery';

@@ -131,12 +131,64 @@ function resetPlotQty(n){
    the Setting page; a chemical with a coverage of its own overrides both. */
 const COVERAGE_PER_PUMP = 800;
 
-function fmtUsage(totalAmount, unit, decimals = 2){
-  // gm → kg, mL → L; default 2 decimals (no round-up)
-  const big = totalAmount / 1000;
+/* ── Always UP, never to the nearest ───────────────────────────────────
+   These figures are what somebody signs out of the store before walking
+   into the field, and the column they sit under says MAXIMUM. Rounding to
+   the nearest tenth sent a tank out short about half the time — 1.6165 L
+   shown as 1.6 — and being 16mL short in a plot is a second trip.
+
+   Rounding up can only ever leave a little in the drum, which is where it
+   was anyway.
+
+   The `1e9` is not decoration. Ceiling a float that is already exact is how
+   0.1 × 3 becomes 0.4: it is held as 0.30000000000000004, and the ceiling
+   of 3.0000000000000004 is 4. The dust is rounded off first, then the real
+   figure is taken up. */
+function ceilTo(value, decimals){
   const factor = Math.pow(10, decimals);
-  const rounded = Math.round(big * factor) / factor;
-  return rounded + (unit === 'gm' ? ' kg' : ' L');
+  return Math.ceil(Math.round(value * factor * 1e9) / 1e9) / factor;
+}
+
+/* ── The step a single plot is measured out in ─────────────────────────
+   Nobody mixes 58.8 mL. A sprayman fills the tank to a mark, and the mark
+   is every 50 — so one plot's spray is rounded UP to the next 50 of
+   whatever it is measured in, and the week's figure is those per-plot
+   amounts ADDED, not the week's seedlings run through the sum once.
+
+   The difference is real money: thirteen plots each rounded up to the next
+   50 mL comes to more than one round-up at the end, and it is the first
+   figure that matches what actually leaves the store.
+
+   Fertiliser is weighed rather than poured, and goes out in 100 gm steps. */
+const CHEM_STEP = 50;    // mL or gm, per plot, per spray
+const FERT_STEP = 100;   // gm, per plot
+
+/* Up to the next whole step. The 1e9 clears the float dust first, the same
+   reason ceilTo has it: 3 × 0.1 is held as 0.30000000000000004. */
+function ceilStep(value, step){
+  if (!(value > 0)) return 0;
+  return Math.ceil(Math.round((value / step) * 1e9) / 1e9) * step;
+}
+
+/* What each ticked plot holds, one entry per plot. The per-plot figures ARE
+   the calculation now, so they are carried about rather than added up on the
+   way in. A plot with no capacity on record contributes nothing — the same
+   rule as everywhere else: an unknown is not a zero. */
+function plotCaps(nursery, plots, ticked){
+  return (plots || []).filter(p => ticked(p))
+    .map(p => capacityOf(nursery, p))
+    .filter(q => q > 0);
+}
+
+/* The total is a whole number of steps, so it is shown exactly rather than
+   rounded again — 1950 mL is 1.95 L, and calling that 2 L would add half a
+   litre the rule did not ask for. Two decimals is enough for any multiple
+   of 50 mL; trailing zeros go, so 2000 mL reads "2 L" and not "2.00 L". */
+function fmtUsage(totalAmount, unit){
+  const big = totalAmount / 1000;
+  const shown = Math.round(big * 100) / 100;
+  return shown.toLocaleString(undefined, { maximumFractionDigits: 2 })
+       + (unit === 'gm' ? ' kg' : ' L');
 }
 /* Unit per chemical — used to auto-set mL/gm when one is selected. Reads
    the list; a fertiliser answers too, since the manuring sheet asks the same
@@ -158,16 +210,25 @@ function getDoseForChem(name){
   return d == null || d === '' ? null : +d;
 }
 
-function calcMaxChem(seedlings, chemName, dose, unit, decimals = 2){
+/* PLOT BY PLOT, then added.
+     per plot:  ceil50( (that plot's capacity / coverage) × dose )
+     the week:  those amounts added up
+
+   `caps` is the list of ticked plots' capacities — see plotCaps. It used to
+   be one number, the week's seedlings already added together, and the round
+   to a tankful happened once at the end. That answered a different question:
+   nobody mixes one tank for thirteen plots, they mix thirteen, each filled
+   to the next 50 mark, and what leaves the store is the sum of those. */
+function calcMaxChem(caps, chemName, dose, unit){
   // A dose that is not a number cannot make an amount — see calcFertUsage.
   dose = Number(dose);
-  if(!seedlings || !chemName || chemName === '—' ||
+  const list = Array.isArray(caps) ? caps : (caps > 0 ? [caps] : []);
+  if(!list.length || !chemName || chemName === '—' ||
      !Number.isFinite(dose) || dose <= 0) return '—';
-  // Formula: (plot capacity / coverage per pump) × dose per pump / 1000.
-  // The chemical's own coverage when it has one, the preset when it does not
-  // — the same rule the Setting page shows.
-  const totalUnits = (seedlings / coverageFor(chemName)) * dose;
-  return fmtUsage(totalUnits, unit, decimals);
+  const coverage = coverageFor(chemName);
+  const total = list.reduce((sum, cap) =>
+    sum + ceilStep((cap / coverage) * dose, CHEM_STEP), 0);
+  return total > 0 ? fmtUsage(total, unit) : '—';
 }
 /* capacityOf, not getPlotQty: a Pre Nursery plot is counted in TRAYS, and
    asking it for a polybag figure answered zero for every plot it has. Every
@@ -282,7 +343,7 @@ function fertDoseFor(name, usage) {
   return +(first != null ? first : other != null ? other : 0) || 0;
 }
 
-function calcFertUsage(seedlings, fertName, doseGm, decimals = 2){
+function calcFertUsage(caps, fertName, doseGm, decimals = 2){
   /* A dose that is not a number is not a dose. The old guard let anything
      truthy through, so a dose keyed with a comma or a unit in it — "1,000",
      "20g" — multiplied out to NaN and the schedule read "NaN kg · NaN bags",
@@ -290,16 +351,22 @@ function calcFertUsage(seedlings, fertName, doseGm, decimals = 2){
      that cannot be worked out reads as not asked, like every other one on
      this screen. */
   const dose = Number(doseGm);
-  if (!seedlings || !fertName || fertName === '—' ||
+  const list = Array.isArray(caps) ? caps : (caps > 0 ? [caps] : []);
+  if (!list.length || !fertName || fertName === '—' ||
       !Number.isFinite(dose) || dose <= 0) return { kg:'—', bags:'—', totalGm:0 };
-  doseGm = dose;
   const f = fertByName(fertName);
   const info = f && f.bag_size_gm ? { bagSizeGm: +f.bag_size_gm, bagLabel: f.bag_label || '' } : null;
-  const totalGm = seedlings * doseGm;
-  const totalKg = totalGm / 1000;
-  const factor = Math.pow(10, decimals);
-  const kgStr = (Math.round(totalKg * factor) / factor).toLocaleString() + ' kg';
-  const bagsStr = info ? (Math.round((totalGm / info.bagSizeGm) * factor) / factor) + ' ' + t('unit.bags') + ' (' + info.bagLabel + ' ' + t('unit.each') + ')' : '—';
+  /* Plot by plot, each weighed out to the next 100 gm, then added — the same
+     rule as a spray (see calcMaxChem), in the step a scale is read in.
+     Fertiliser has no pump in it: it is dose per seedling. */
+  const totalGm = list.reduce((sum, cap) => sum + ceilStep(cap * dose, FERT_STEP), 0);
+  if (!totalGm) return { kg:'—', bags:'—', totalGm:0 };
+  // A whole number of 100 gm steps, so shown exactly rather than rounded on.
+  const kgStr = (Math.round((totalGm / 1000) * 100) / 100)
+    .toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' kg';
+  // Bags are not a step of anything, so this one still rounds UP: a bag
+  // count rounded down is a lorry going back for one more bag.
+  const bagsStr = info ? ceilTo(totalGm / info.bagSizeGm, decimals) + ' ' + t('unit.bags') + ' (' + info.bagLabel + ' ' + t('unit.each') + ')' : '—';
   return { kg: kgStr, bags: bagsStr, totalGm };
 }
 
@@ -3254,10 +3321,10 @@ function renderPD() {
   h+=`<tr class="jumlah-tr"><td>${t('sum.maxRacun')}</td>`;
   W.forEach(w=>{
     const c = cfg[w];
-    const pSeed = sumSeedlings(n, plots, p => s.pd[w]?.[p]?.P);
-    const dSeed = sumSeedlings(n, plots, p => s.pd[w]?.[p]?.D);
-    h+=`<td>${calcMaxChem(pSeed, c.P, c.P_dose, c.P_unit, 1)}</td>`;
-    h+=`<td>${calcMaxChem(dSeed, c.D, c.D_dose, c.D_unit, 1)}</td>`;
+    const pCaps = plotCaps(n, plots, p => s.pd[w]?.[p]?.P);
+    const dCaps = plotCaps(n, plots, p => s.pd[w]?.[p]?.D);
+    h+=`<td>${calcMaxChem(pCaps, c.P, c.P_dose, c.P_unit)}</td>`;
+    h+=`<td>${calcMaxChem(dCaps, c.D, c.D_dose, c.D_unit)}</td>`;
   });
   h+='</tr>';
 
@@ -3265,12 +3332,12 @@ function renderPD() {
   h+=`<tr class="jumlah-tr"><td>${t('sum.maxBond')}</td>`;
   W.forEach(w=>{
     const c = cfg[w];
-    const pSeed = sumSeedlings(n, plots, p => s.pd[w]?.[p]?.P);
-    const dSeed = sumSeedlings(n, plots, p => s.pd[w]?.[p]?.D);
-    const pBond = (!pSeed || c.P === '—' || c.P_sticker === '—')
-      ? '—' : calcMaxChem(pSeed, c.P_sticker, c.P_sticker_dose, c.P_sticker_unit, 1);
-    const dBond = (!dSeed || c.D === '—' || c.D_sticker === '—')
-      ? '—' : calcMaxChem(dSeed, c.D_sticker, c.D_sticker_dose, c.D_sticker_unit, 1);
+    const pCaps = plotCaps(n, plots, p => s.pd[w]?.[p]?.P);
+    const dCaps = plotCaps(n, plots, p => s.pd[w]?.[p]?.D);
+    const pBond = (!pCaps.length || c.P === '—' || c.P_sticker === '—')
+      ? '—' : calcMaxChem(pCaps, c.P_sticker, c.P_sticker_dose, c.P_sticker_unit);
+    const dBond = (!dCaps.length || c.D === '—' || c.D_sticker === '—')
+      ? '—' : calcMaxChem(dCaps, c.D_sticker, c.D_sticker_dose, c.D_sticker_unit);
     h+=`<td>${pBond}</td><td>${dBond}</td>`;
   });
   h+='</tr></tbody>';
@@ -3478,8 +3545,8 @@ function renderManuring() {
   h+=`<tr class="jumlah-tr"><td>${t('sum.maxBaja')}</td>`;
   cfg.forEach((round, ri) => {
     round.forEach((c, ci) => {
-      const seed = sumSeedlings(n, plots, p => s.manuring[p]?.[ri]?.[ci]);
-      const usage = calcFertUsage(seed, c.name, c.dose, 1);
+      const caps = plotCaps(n, plots, p => s.manuring[p]?.[ri]?.[ci]);
+      const usage = calcFertUsage(caps, c.name, c.dose, 1);
       h+=`<td>${usage.kg}</td>`;
     });
   });
@@ -3489,8 +3556,8 @@ function renderManuring() {
   h+=`<tr class="jumlah-tr"><td>${t('sum.bags')}</td>`;
   cfg.forEach((round, ri) => {
     round.forEach((c, ci) => {
-      const seed = sumSeedlings(n, plots, p => s.manuring[p]?.[ri]?.[ci]);
-      const usage = calcFertUsage(seed, c.name, c.dose, 1);
+      const caps = plotCaps(n, plots, p => s.manuring[p]?.[ri]?.[ci]);
+      const usage = calcFertUsage(caps, c.name, c.dose, 1);
       h+=`<td style="font-size:10px">${usage.bags}</td>`;
     });
   });
@@ -3782,8 +3849,8 @@ function renderInterrow() {
   h+=`<tr class="jumlah-tr"><td>${t('sum.maxRacun')}</td>`;
   cfg.forEach((round, ri) => {
     round.forEach((c, ci) => {
-      const seed = sumSeedlings(n, plots, p => s.interrow[p]?.[ri]?.[ci]);
-      h+=`<td>${calcMaxChem(seed, c.chem, c.chem_dose, c.chem_unit, 1)}</td>`;
+      const caps = plotCaps(n, plots, p => s.interrow[p]?.[ri]?.[ci]);
+      h+=`<td>${calcMaxChem(caps, c.chem, c.chem_dose, c.chem_unit)}</td>`;
     });
   });
   h+='</tr>';
@@ -3792,8 +3859,8 @@ function renderInterrow() {
   h+=`<tr class="jumlah-tr"><td>${t('sum.maxActivator')}</td>`;
   cfg.forEach((round, ri) => {
     round.forEach((c, ci) => {
-      const seed = sumSeedlings(n, plots, p => s.interrow[p]?.[ri]?.[ci]);
-      const usage = (!seed || !c.activator_dose) ? '—' : calcMaxChem(seed, interrowAct(c), c.activator_dose, c.activator_unit, 1);
+      const caps = plotCaps(n, plots, p => s.interrow[p]?.[ri]?.[ci]);
+      const usage = (!caps.length || !c.activator_dose) ? '—' : calcMaxChem(caps, interrowAct(c), c.activator_dose, c.activator_unit);
       h+=`<td>${usage}</td>`;
     });
   });
@@ -4610,10 +4677,10 @@ function downloadPDF() {
     W.forEach((w, wi) => {
       const c = cfg[w];
       const x = startX + plotColW + wi*colW*2;
-      const pSeed = sumSeedlings(pN, plots, p => s.pd[w]?.[p]?.P);
-      const dSeed = sumSeedlings(pN, plots, p => s.pd[w]?.[p]?.D);
-      cell(x, y, colW, rowH, calcMaxChem(pSeed, c.P, c.P_dose, c.P_unit, 1), {...PALETTE.summaryP, style:'bold', size:8});
-      cell(x+colW, y, colW, rowH, calcMaxChem(dSeed, c.D, c.D_dose, c.D_unit, 1), {...PALETTE.summaryD, style:'bold', size:8});
+      const pCaps = plotCaps(pN, plots, p => s.pd[w]?.[p]?.P);
+      const dCaps = plotCaps(pN, plots, p => s.pd[w]?.[p]?.D);
+      cell(x, y, colW, rowH, calcMaxChem(pCaps, c.P, c.P_dose, c.P_unit), {...PALETTE.summaryP, style:'bold', size:8});
+      cell(x+colW, y, colW, rowH, calcMaxChem(dCaps, c.D, c.D_dose, c.D_unit), {...PALETTE.summaryD, style:'bold', size:8});
     });
     y += rowH;
 
@@ -4622,10 +4689,10 @@ function downloadPDF() {
     W.forEach((w, wi) => {
       const c = cfg[w];
       const x = startX + plotColW + wi*colW*2;
-      const pSeed = sumSeedlings(pN, plots, p => s.pd[w]?.[p]?.P);
-      const dSeed = sumSeedlings(pN, plots, p => s.pd[w]?.[p]?.D);
-      const pBond = (!pSeed || c.P === '—' || c.P_sticker === '—') ? '—' : calcMaxChem(pSeed, c.P_sticker, c.P_sticker_dose, c.P_sticker_unit, 1);
-      const dBond = (!dSeed || c.D === '—' || c.D_sticker === '—') ? '—' : calcMaxChem(dSeed, c.D_sticker, c.D_sticker_dose, c.D_sticker_unit, 1);
+      const pCaps = plotCaps(pN, plots, p => s.pd[w]?.[p]?.P);
+      const dCaps = plotCaps(pN, plots, p => s.pd[w]?.[p]?.D);
+      const pBond = (!pCaps.length || c.P === '—' || c.P_sticker === '—') ? '—' : calcMaxChem(pCaps, c.P_sticker, c.P_sticker_dose, c.P_sticker_unit);
+      const dBond = (!dCaps.length || c.D === '—' || c.D_sticker === '—') ? '—' : calcMaxChem(dCaps, c.D_sticker, c.D_sticker_dose, c.D_sticker_unit);
       cell(x, y, colW, rowH, pBond, {...PALETTE.summaryP, style:'bold', size:8});
       cell(x+colW, y, colW, rowH, dBond, {...PALETTE.summaryD, style:'bold', size:8});
     });
@@ -4714,8 +4781,8 @@ function downloadPDF() {
     xCursor = startX + plotColW;
     cfg.forEach((round, ri) => {
       round.forEach((c, ci) => {
-        const seed = sumSeedlings(pN, plots, p => s.manuring[p]?.[ri]?.[ci]);
-        const u = calcFertUsage(seed, c.name, c.dose, 1);
+        const caps = plotCaps(pN, plots, p => s.manuring[p]?.[ri]?.[ci]);
+        const u = calcFertUsage(caps, c.name, c.dose, 1);
         cell(xCursor, y, colW, rowH, u.kg, {...PALETTE.summary, style:'bold', size:8});
         xCursor += colW;
       });
@@ -4726,8 +4793,8 @@ function downloadPDF() {
     xCursor = startX + plotColW;
     cfg.forEach((round, ri) => {
       round.forEach((c, ci) => {
-        const seed = sumSeedlings(pN, plots, p => s.manuring[p]?.[ri]?.[ci]);
-        const u = calcFertUsage(seed, c.name, c.dose, 1);
+        const caps = plotCaps(pN, plots, p => s.manuring[p]?.[ri]?.[ci]);
+        const u = calcFertUsage(caps, c.name, c.dose, 1);
         cell(xCursor, y, colW, rowH, u.bags, {...PALETTE.summary, size:7});
         xCursor += colW;
       });
@@ -4858,8 +4925,8 @@ function downloadPDF() {
     xCursor = startX + plotColW;
     icfg.forEach((round, ri) => {
       round.forEach((c, ci) => {
-        const seed = sumSeedlings(pN, plots, p => s.interrow[p]?.[ri]?.[ci]);
-        cell(xCursor, y, colW, rowH, calcMaxChem(seed, c.chem, c.chem_dose, c.chem_unit, 1), {...PALETTE.summary, style:'bold', size:8});
+        const caps = plotCaps(pN, plots, p => s.interrow[p]?.[ri]?.[ci]);
+        cell(xCursor, y, colW, rowH, calcMaxChem(caps, c.chem, c.chem_dose, c.chem_unit), {...PALETTE.summary, style:'bold', size:8});
         xCursor += colW;
       });
     });
@@ -4869,8 +4936,8 @@ function downloadPDF() {
     xCursor = startX + plotColW;
     icfg.forEach((round, ri) => {
       round.forEach((c, ci) => {
-        const seed = sumSeedlings(pN, plots, p => s.interrow[p]?.[ri]?.[ci]);
-        const usage = (!seed || !c.activator_dose) ? '—' : calcMaxChem(seed, interrowAct(c), c.activator_dose, c.activator_unit, 1);
+        const caps = plotCaps(pN, plots, p => s.interrow[p]?.[ri]?.[ci]);
+        const usage = (!caps.length || !c.activator_dose) ? '—' : calcMaxChem(caps, interrowAct(c), c.activator_dose, c.activator_unit);
         cell(xCursor, y, colW, rowH, usage, {...PALETTE.summary, style:'bold', size:8});
         xCursor += colW;
       });
@@ -6311,9 +6378,20 @@ function plotsAtSlot(kind, i, n, m) {
   plots.forEach(p => {
     let on = false;
     if (kind === 'pd') {
-      const cell = (s.pd || {})['W' + (i + 1)];
+      /* A side ticked with NO chemical behind it is not work, and counting
+         it here was the summary disagreeing with the rest of the system.
+         autoSyncRecords already refuses to write a record for it (c.P!=='—'),
+         and both portals already drop it — so the office promised four weeks
+         of spraying and the field was shown one, with nothing on any screen
+         saying why. The tick stays in the editor, where it can be seen and
+         given a chemical; it simply is not counted as a job until it has
+         one. Same rule in Barcode_Counter's weekTasks. */
+      const w = 'W' + (i + 1);
+      const cfg = (s.pdConfig || {})[w] || {};
+      const named = (side) => !!cfg[side] && cfg[side] !== '—';
+      const cell = (s.pd || {})[w];
       const v = cell && cell[p];
-      on = !!(v && (v.P || v.D));
+      on = !!(v && ((v.P && named('P')) || (v.D && named('D'))));
     } else if (kind === 'weeding') {
       on = !!((s.weeding || {})[p] || {})['R' + (i + 1)];
     } else {
@@ -6808,6 +6886,9 @@ function weColTotals(kind, i, ci, n, m) {
   const s = getState(n, m), plots = NURSERY_PLOTS[n] || [];
   const on = p => weColTicked(kind, i, ci, p, s);
   const nPlots = plots.filter(on).length;
+  /* Both are wanted: the seedling count for its own row, and the per-plot
+     list for the usage, which is a sum of per-plot amounts now. */
+  const caps = plotCaps(n, plots, on);
   const seed = sumSeedlings(n, plots, on);
   const rows = [
     { label: t('sum.jumlahPlot'),  value: nPlots || '—' },
@@ -6818,7 +6899,7 @@ function weColTotals(kind, i, ci, n, m) {
 
   if (kind === 'manuring') {
     const c = ((s.manuringConfig || [])[i] || [])[ci] || {};
-    const u = calcFertUsage(seed, c.name, c.dose, 1);
+    const u = calcFertUsage(caps, c.name, c.dose, 1);
     rows.push({ label: t('sum.maxBaja'), value: u.kg });
     rows.push({ label: t('sum.bags'),    value: u.bags });
     return rows;
@@ -6828,22 +6909,22 @@ function weColTotals(kind, i, ci, n, m) {
     const c = (s.pdConfig || {})['W' + (i + 1)] || {};
     const f = ci === 0 ? 'P' : 'D';
     rows.push({ label: t('sum.maxRacun'),
-                value: calcMaxChem(seed, c[f], c[f + '_dose'], c[f + '_unit'], 1) });
+                value: calcMaxChem(caps, c[f], c[f + '_dose'], c[f + '_unit']) });
     /* No chemical means no tank and no sticker means nothing in it. Either
        way the sticker figure is not zero — it is not asked. */
     rows.push({ label: t('sum.maxBond'),
-                value: (!seed || c[f] === '—' || c[f + '_sticker'] === '—') ? '—'
-                  : calcMaxChem(seed, c[f + '_sticker'], c[f + '_sticker_dose'],
-                                c[f + '_sticker_unit'], 1) });
+                value: (!caps.length || c[f] === '—' || c[f + '_sticker'] === '—') ? '—'
+                  : calcMaxChem(caps, c[f + '_sticker'], c[f + '_sticker_dose'],
+                                c[f + '_sticker_unit']) });
     return rows;
   }
 
   const c = ((s.interrowConfig || [])[i] || [])[ci] || {};
   rows.push({ label: t('sum.maxRacun'),
-              value: calcMaxChem(seed, c.chem, c.chem_dose, c.chem_unit, 1) });
+              value: calcMaxChem(caps, c.chem, c.chem_dose, c.chem_unit) });
   rows.push({ label: t('sum.maxActivator'),
-              value: (!seed || !c.activator_dose) ? '—'
-                : calcMaxChem(seed, interrowAct(c), c.activator_dose, c.activator_unit, 1) });
+              value: (!caps.length || !c.activator_dose) ? '—'
+                : calcMaxChem(caps, interrowAct(c), c.activator_dose, c.activator_unit) });
   return rows;
 }
 

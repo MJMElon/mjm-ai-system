@@ -769,9 +769,20 @@
     // qty_N) are the official record of stock leaving a plot. Names are read
     // forgivingly, same as Batch Detail Tab 6 and the Summary report:
     //   • batch "239." / " 239" → 239 (punctuation & spaces dropped)
+    //   • batch "232 (B13)" → 232      (origin-plot suffix dropped)
     //   • plot  "U15 (UPB PREMIER HYBRID)" → U15 (label/breed suffix dropped)
     //   • qty blank on the ONLY filled line → fall back to the DO's total qty
-    const _normBatchKey = v => String(v == null ? '' : v).replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+    /* A batch key is the batch NUMBER and stops there. A collection line names
+       the plot the seedlings came from in brackets — "232 (B13)" — and keeping
+       it made the key "232B13", which matches no row: the quantity was never
+       deducted and the line landed in doUnmatchedLines instead.
+
+       SHARED RULE — the same normaliser lives in
+       operation/operation_batch_detail.html (Tab 6's Sales). Change one,
+       change the other. */
+    const _normBatchKey = v => String(v == null ? '' : v).trim().toUpperCase()
+                              .replace(/^BATCH\s*:?\s*/, '')   // drop a "Batch: " prefix
+                              .split(/[\s(,\[]/)[0].replace(/[^0-9A-Z]/g, '');
     const _normPlotKey  = v => String(v == null ? '' : v).trim().toUpperCase()
                                   .replace(/^PLOT\s*:?\s*/, '')
                                   .split(/[\s(,\[]/)[0].replace(/[^0-9A-Z\-]/g, '');

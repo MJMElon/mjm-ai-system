@@ -394,7 +394,7 @@
          onclick="if (event.target === this) closeDocViewer()">
         <div class="bg-[#f8f4ec] border border-[#e8dcc8] rounded-3xl shadow-[0_30px_60px_rgba(0,0,0,0.45)] w-full max-w-[1000px] overflow-hidden">
             <div class="flex items-center gap-3 px-5 py-3 border-b border-[#e8dcc8] bg-white">
-                <div class="text-[11px] font-black text-[#3d2610] uppercase tracking-widest truncate" id="doc-lightbox-title">Drone Map</div>
+                <div class="text-[11px] font-black text-[#3d2610] uppercase tracking-widest truncate" id="doc-lightbox-title">Attachment</div>
                 <span id="doc-lightbox-rowacts" class="hidden ml-auto shrink-0 flex items-center gap-2" data-row="">
                     <button type="button" onclick="replaceT6Doc(this.parentElement.dataset.row)"
                         class="px-3 py-1.5 rounded-lg border border-[#c07820] bg-white text-[#c07820]
@@ -1388,6 +1388,11 @@
                                             <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Total Transplanted</span>
                                             <span class="text-base font-black text-[#4a7a2e] tabular-nums" id="t3-saved-total-qty-m">0</span>
                                         </div>
+                                        <!-- Which rows above are NOT in that total, and how many
+                                             seedlings they hold. A figure smaller than the column
+                                             it sits under needs to say why, or it reads as a
+                                             mistake. Hidden when the batch has no holding tray. -->
+                                        <div id="t3-saved-held-note" class="hidden px-3 pt-1 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest"></div>
                                     </div>
 
                                     <!-- New form rows -->
@@ -1490,6 +1495,36 @@
                                             <div class="text-3xl font-black text-[#c07820] mt-1 tabular-nums leading-none" id="t4-val-unaccounted-pct">100%</div>
                                             <div class="text-[11px] font-black text-[#8a7a68] tabular-nums mt-1" id="t4-val-unaccounted">0</div>
                                         </div>
+                                    </div>
+
+                                    <!-- WHERE THE PENDING SEEDLINGS ACTUALLY ARE.
+
+                                         Pending is everything planted that has not reached a main
+                                         plot and has not been culled — which includes the trays
+                                         still holding seedlings AND the two holding nurseries,
+                                         Premium Care and D-Tone. Those two were inside the figure
+                                         with nothing on the screen saying so, and a batch that had
+                                         sent 500 seedlings to Premium Care read "Pending 500" with
+                                         no way to tell that from 500 nobody had touched.
+
+                                         Each part appears only when it has something in it, and
+                                         the line as a whole only when the batch has a holding
+                                         nursery at all — so a batch with neither looks exactly as
+                                         it did. -->
+                                    <div id="t4-pending-breakdown" class="hidden -mt-2 mb-4 px-1 flex flex-wrap items-baseline gap-x-5 gap-y-1">
+                                        <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Pending sits in</span>
+                                        <span id="t4-pend-premium" class="hidden text-[11px] font-black text-[#7a4a10]">
+                                            <span class="uppercase tracking-widest text-[9px]">Premium Care</span>
+                                            <span class="tabular-nums ml-1.5" id="t4-pend-premium-val">0</span>
+                                        </span>
+                                        <span id="t4-pend-dtone" class="hidden text-[11px] font-black text-[#0891b2]">
+                                            <span class="uppercase tracking-widest text-[9px]">D-Tone</span>
+                                            <span class="tabular-nums ml-1.5" id="t4-pend-dtone-val">0</span>
+                                        </span>
+                                        <span id="t4-pend-trays" class="hidden text-[11px] font-black text-[#8a7a68]">
+                                            <span class="uppercase tracking-widest text-[9px]">Still In Trays</span>
+                                            <span class="tabular-nums ml-1.5" id="t4-pend-trays-val">0</span>
+                                        </span>
                                     </div>
 
                                     <!-- Hidden compat ids for existing JS -->
@@ -1975,14 +2010,41 @@
                                     </div>
 
                                     <div id="t7-cal-edit-banner" class="hidden mb-2 px-3 py-2 rounded-lg bg-[#fff5f5] border border-[#f8d7da] text-[11px] font-bold text-[#a83020] flex items-center justify-between gap-3">
-                                        <span>✏️ Editing an existing adjustment. Saving will update the record in place.</span>
+                                        <span id="t7-cal-edit-msg">✏️ Editing an existing adjustment. Saving will update the record in place.</span>
                                         <button type="button" onclick="cancelEditCalibration()" class="px-3 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[10px] font-black uppercase tracking-widest rounded hover:bg-[#fff5f5]">Cancel</button>
                                     </div>
 
-                                    <div class="grid grid-cols-1 md:grid-cols-[180px_180px_1fr_1fr_auto] gap-3 items-end pt-2">
+                                    <div class="grid grid-cols-1 md:grid-cols-[180px_180px_190px_1fr_1fr_auto] gap-3 items-end pt-2">
                                         <div>
                                             <label class="label-style">Adjustment Qty (+/-)</label>
                                             <input type="number" id="t7-cal-qty" class="input-style" placeholder="e.g. 50 or -20" step="1">
+                                        </div>
+                                        <!-- WHICH COUNT WAS WRONG.
+
+                                             A discrepancy is one of two quite different things, and
+                                             only the person who found it knows which:
+
+                                               the SEED count was wrong — there were never that many.
+                                               The total the whole batch is measured against changes.
+
+                                               the PLOT stock was wrong — there were, they reached a
+                                               plot, and then they left it: stolen, died, miscounted
+                                               on the ground. The total does not change; what is
+                                               standing in that plot does.
+
+                                             Guessing is what made batch 234 read OVER ALLOCATED:
+                                             53 seedlings stolen out of B14 after transplanting were
+                                             taken off the batch total, while the transplant record
+                                             still counted them into the plot — so more was allocated
+                                             than there was to allocate, by exactly 53. -->
+                                        <div>
+                                            <label class="label-style">Which count was wrong</label>
+                                            <div class="select-wrapper">
+                                                <select id="t7-cal-side" class="input-style">
+                                                    <option value="seed">Seed count — changes the batch total</option>
+                                                    <option value="plot">Plot stock — lost after transplanting</option>
+                                                </select>
+                                            </div>
                                         </div>
                                         <div>
                                             <label class="label-style">Report</label>
@@ -2398,14 +2460,23 @@
             if (approved) body = body.replace(approved[0], '').trim();
             const rep  = body.match(/Report:\s*([^.]+?)\s*\.\s*/i);
             const plot = body.match(/Plot:\s*([^.]+?)\s*\.\s*/i);
+            /* WHICH COUNT WAS WRONG — see the form on tab 7.
+
+               Absent means "seed": every row written before the question was
+               asked meant the batch total, because that is the only thing an
+               adjustment could move then. Reading a missing marker as "plot"
+               would silently restate what those rows said. */
+            const side = body.match(/Side:\s*(seed|plot)\s*\.\s*/i);
             let reason = body;
             if (rep)  reason = reason.replace(rep[0], '');
             if (plot) reason = reason.replace(plot[0], '');
+            if (side) reason = reason.replace(side[0], '');
             return {
                 id: r.id,
                 qty: Number(r.quantity_change) || 0,
                 report: rep  ? rep[1].trim()  : '',
                 plot:   plot ? plot[1].trim() : (r.plot_name || ''),
+                side:   side ? side[1].trim().toLowerCase() : 'seed',
                 reason: reason.trim(),
                 approved: !!approved,
                 approvedBy: approved ? approved[1].trim() : '',
@@ -2438,8 +2509,31 @@
 
            Per-report totals are still kept — that is what each strip lists,
            and it is how somebody sees WHERE a correction came from. */
+        /* ONLY THE ONES THAT MOVE THE BATCH TOTAL.
+
+           A seed-count adjustment says there were never that many: the pool
+           every report measures against is different, so it belongs in the
+           allocation base. A plot-stock one says there were, they reached a
+           plot, and then they left it — stolen, dead, miscounted on the
+           ground. The batch still had them to allocate and still allocated
+           them, so the base and the allocation are BOTH unchanged; what
+           changed is how many are standing in that one plot, which is 3rd
+           Culling's business and is applied there, per plot.
+
+           Putting a plot-stock loss in the base is what made batch 234 read
+           OVER ALLOCATED: 53 came off the total while the transplant record
+           still counted them into B14, so 53 more was allocated than there
+           was to allocate. */
+        const ADJUST_PLOT_LOSS = {};   // PLOT → net of approved plot-stock adjustments
+        /* Named Total rather than Base because that is what every caller已 says;
+           only seed-count adjustments reach ADJUST_NET now, so the two are the
+           same figure. */
         function adjustNetTotal() {
             return Object.keys(ADJUST_NET).reduce((s, k) => s + (ADJUST_NET[k] || 0), 0);
+        }
+        function adjustPlotLoss(plot) {
+            const v = ADJUST_PLOT_LOSS[_t6PlotKey(plot)];
+            return typeof v === 'number' ? v : 0;
         }
 
         async function syncAdjustmentBars(batchId) {
@@ -2476,7 +2570,14 @@
                the unapproved ones, in amber, because "somebody has claimed
                this" is worth seeing — it just is not an answer yet. */
             Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
+            Object.keys(ADJUST_PLOT_LOSS).forEach(k => delete ADJUST_PLOT_LOSS[k]);
             rows.filter(r => r.approved).forEach(r => {
+                if (r.side === 'plot') {
+                    // Belongs to the plot it names, not to the batch total.
+                    const pk = _t6PlotKey(r.plot);
+                    if (pk) ADJUST_PLOT_LOSS[pk] = (ADJUST_PLOT_LOSS[pk] || 0) + r.qty;
+                    return;
+                }
                 const k = r.report.toLowerCase();
                 ADJUST_NET[k] = (ADJUST_NET[k] || 0) + r.qty;
             });
@@ -2487,6 +2588,8 @@
                not stop the other, nor the strips below from rendering. */
             try { if (typeof calcTransplanting === 'function') calcTransplanting(); } catch (e) { console.warn(e); }
             try { if (typeof calcCulling === 'function') calcCulling(); } catch (e) { console.warn(e); }
+            // 3rd Culling too — a plot-stock adjustment lands on one of its rows.
+            try { if (typeof renderT6PlotRows === 'function' && t6_plotData.length) renderT6PlotRows(); } catch (e) { console.warn(e); }
 
             const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
             bars.forEach(n => {
@@ -2572,23 +2675,21 @@
                 const q = Number(r.quantity_change) || 0;
                 const sign = q > 0 ? '+' : '';
                 const cls = q > 0 ? 'text-emerald-700' : 'text-rose-700';
-                // Remark format: "Report: <r>. Plot: <p>. <reason>" — pull each
-                // labelled field out so the table can show them in their own
-                // columns. Legacy rows (no labelled fields) fall back to "—".
-                const approvedMatch = r.remark ? r.remark.match(/\[APPROVED by ([^\]]+) on ([^\]]+)\]/) : null;
-                const isApproved    = !!approvedMatch;
-                const approvedBy    = approvedMatch ? approvedMatch[1].trim() : '';
-                const approvedAt    = approvedMatch ? approvedMatch[2].trim() : '';
-                let remarkBody = r.remark || '';
-                if (approvedMatch) remarkBody = remarkBody.replace(approvedMatch[0], '').trim();
-                const reportMatch = remarkBody.match(/Report:\s*([^.]+?)\s*\.\s*/i);
-                const plotMatch   = remarkBody.match(/Plot:\s*([^.]+?)\s*\.\s*/i);
-                const reportTxt   = reportMatch ? reportMatch[1].trim() : '';
-                const plotTxt     = plotMatch   ? plotMatch[1].trim()   : (r.plot_name || '');
-                let reasonTxt = remarkBody;
-                if (reportMatch) reasonTxt = reasonTxt.replace(reportMatch[0], '');
-                if (plotMatch)   reasonTxt = reasonTxt.replace(plotMatch[0], '');
-                reasonTxt = reasonTxt.trim();
+                /* ONE parse, shared with every other reader of these rows.
+
+                   This table used to pull the labelled fields out of the
+                   remark itself, which is two readers of one string: the day a
+                   field was added here, the copy that did not know about it
+                   put the new label into the Reason column. _parseCalibration
+                   is the one that knows the format. */
+                const cal = _parseCalibration(r);
+                const isApproved = cal.approved;
+                const approvedBy = cal.approvedBy;
+                const approvedAt = cal.approvedAt;
+                const reportTxt  = cal.report;
+                const plotTxt    = cal.plot;
+                const reasonTxt  = cal.reason;
+                const sideTxt    = cal.side === 'plot' ? 'Plot stock' : 'Seed count';
                 // Lock column:
                 //   Approved (any user)              → green ✓ Approved pill
                 //   Not approved + admin             → Edit | Del | Approve
@@ -2597,21 +2698,37 @@
                 if (isApproved) {
                     const whoTxt = approvedBy ? ` <span class="text-[#4a7a2e]">${esc(approvedBy)}</span>` : '';
                     const whenTxt = approvedAt ? ` · ${esc(formatAuditDate(approvedAt) || approvedAt)}` : '';
-                    actionsCell = `<td class="px-3 py-2 whitespace-nowrap"><span class="inline-flex items-center gap-1 px-2 py-1 bg-[#f0f8ec] border border-[#c3e6cb] text-[#3d4f1e] text-[9px] font-black uppercase tracking-wider rounded" title="Locked${approvedBy ? ' by ' + approvedBy : ''}${approvedAt ? ' on ' + approvedAt : ''}">🔒 Approved${whoTxt}${whenTxt}</span></td>`;
+                    /* An admin can still edit an approved adjustment — it is
+                       how a row raised against the wrong half of the sum gets
+                       put right, and the alternative was deleting the record
+                       and its history with it.
+
+                       Editing RETURNS IT TO PENDING: the saved remark is
+                       rebuilt from the form and carries no approval suffix, so
+                       the figures stop moving until somebody approves it
+                       again. A signature has to belong to the numbers it was
+                       given for, and an admin quietly changing -53 to -500
+                       under somebody else's approval is exactly what that
+                       rule is for. */
+                    const editBtn = adminActions
+                        ? `<button type="button" onclick="editCalibration('${esc(r.id)}', ${q}, '${esc(reportTxt)}', '${esc(plotTxt)}', '${esc(reasonTxt)}', '${esc(cal.side)}', true)" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[9px] font-black uppercase rounded hover:bg-[#f0f8ff] ml-1" title="Edit this approved adjustment — it returns to pending and needs approving again">Edit</button>`
+                        : '';
+                    actionsCell = `<td class="px-3 py-2 whitespace-nowrap"><span class="inline-flex items-center gap-1 px-2 py-1 bg-[#f0f8ec] border border-[#c3e6cb] text-[#3d4f1e] text-[9px] font-black uppercase tracking-wider rounded" title="Approved${approvedBy ? ' by ' + approvedBy : ''}${approvedAt ? ' on ' + approvedAt : ''}">🔒 Approved${whoTxt}${whenTxt}</span>${editBtn}</td>`;
                 } else if (adminActions) {
                     actionsCell = `<td class="px-3 py-2 whitespace-nowrap">
-                        <button type="button" onclick="editCalibration('${esc(r.id)}', ${q}, '${esc(reportTxt)}', '${esc(plotTxt)}', '${esc(reasonTxt)}')" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[9px] font-black uppercase rounded hover:bg-[#f0f8ff] mr-1">Edit</button>
+                        <button type="button" onclick="editCalibration('${esc(r.id)}', ${q}, '${esc(reportTxt)}', '${esc(plotTxt)}', '${esc(reasonTxt)}', '${esc(cal.side)}')" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[9px] font-black uppercase rounded hover:bg-[#f0f8ff] mr-1">Edit</button>
                         <button type="button" onclick="deleteCalibration('${esc(r.id)}')" class="px-2 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[9px] font-black uppercase rounded hover:bg-[#fff5f5] mr-1">Del</button>
                         <button type="button" onclick="approveCalibration('${esc(r.id)}')" class="px-2 py-1 bg-[#4a7a2e] text-white text-[9px] font-black uppercase rounded hover:bg-[#3d6624]">Approve</button>
                     </td>`;
                 } else {
                     actionsCell = `<td class="px-3 py-2 text-[10px] text-[#8a7a68]">🔒</td>`;
                 }
-                return `<tr class="border-t border-[#e8dcc8]">
+                return `<tr class="border-t border-[#e8dcc8]" data-cal-id="${esc(r.id)}" data-cal-approved="${isApproved ? '1' : '0'}">
                     <td class="px-3 py-2 text-[11px] font-bold text-[#3d2610]">${formatAuditDate(r.created_at)}</td>
                     <td class="px-3 py-2 text-sm font-black ${cls}">${sign}${q.toLocaleString()}</td>
                     <td class="px-3 py-2 text-[11px] text-[#3a7ab4] font-bold">${esc(reportTxt) || '—'}</td>
                     <td class="px-3 py-2 text-[11px] text-[#4a7a2e] font-bold">${esc(plotTxt) || '—'}</td>
+                    <td class="px-3 py-2 text-[10px] font-black uppercase tracking-wider ${cal.side === 'plot' ? 'text-[#a83020]' : 'text-[#8a7a68]'}">${sideTxt}</td>
                     <td class="px-3 py-2 text-[11px] text-[#3d2610]">${esc(reasonTxt) || '—'}</td>
                     <td class="px-3 py-2 text-[10px] text-[#8a7a68]">${esc(mjmWho(r.last_edited_by) || '—')}</td>
                     ${actionsCell}
@@ -2623,6 +2740,7 @@
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Qty</th>
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Report</th>
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Plot / Tray</th>
+                    <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Which count</th>
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Reason</th>
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">By</th>
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">${adminActions ? 'Actions' : 'Lock'}</th>
@@ -2652,38 +2770,50 @@
             } catch (_) { return false; }
         }
 
-        // Returns true when the row referenced by id carries the approval
-        // suffix in its remark. Reads the cached value from the rendered
-        // history table so we don't have to round-trip to the DB.
+        /* Does the row referenced by id carry the approval suffix?
+
+           Read off the row itself, which knows. It used to be inferred — "no
+           Edit button rendered for this id, so it must be approved" — and that
+           inference quietly inverted the day approved rows grew an Edit button
+           of their own, which would have unlocked Delete on every approved
+           adjustment without anybody asking for it.
+
+           Unknown id answers true: refusing to delete a row this table cannot
+           account for is the safe way to be wrong. */
         function _t7IsRowApproved(id) {
-            const btn = document.querySelector(`#t7-cal-history button[onclick*="'${id}'"]`);
-            // If the only button rendered for this id is gone, the row is
-            // already approved (the lock pill replaces the action buttons).
-            if (!btn) return true;
-            return false;
+            const tr = document.querySelector(`#t7-cal-history tr[data-cal-id="${id}"]`);
+            if (!tr) return true;
+            return tr.dataset.calApproved === '1';
         }
 
-        function editCalibration(id, qty, report, plot, reason) {
+        /* `wasApproved` comes from the row that drew the button, not from
+           guessing at the DOM: the old check read "no Edit button rendered" as
+           "approved", which stopped being true the moment approved rows grew
+           an Edit button of their own. */
+        function editCalibration(id, qty, report, plot, reason, side, wasApproved) {
             if (!_t7IsAdmin()) {
                 showToast('Only admins can edit calibration entries.', 'error');
-                return;
-            }
-            if (_t7IsRowApproved(id)) {
-                showToast('This calibration is approved and cannot be edited.', 'error');
                 return;
             }
             _t7EditingId = id;
             const qtyEl    = document.getElementById('t7-cal-qty');
             const reportEl = document.getElementById('t7-cal-report');
             const plotEl   = document.getElementById('t7-cal-plot');
+            const sideEl   = document.getElementById('t7-cal-side');
             const reasonEl = document.getElementById('t7-cal-reason');
             const btn      = document.getElementById('t7-cal-save-btn');
             const banner   = document.getElementById('t7-cal-edit-banner');
             if (qtyEl)    qtyEl.value    = qty;
             if (reportEl) reportEl.value = report || '';
             if (plotEl)   plotEl.value   = plot   || '';
+            if (sideEl)   sideEl.value   = side   || 'seed';
             if (reasonEl) reasonEl.value = reason || '';
             if (btn)      btn.innerText  = 'Update Adjustment';
+            const msg = document.getElementById('t7-cal-edit-msg');
+            if (msg) msg.innerText = wasApproved
+                ? '✏️ Editing an APPROVED adjustment. Saving returns it to pending — '
+                  + 'it stops moving any figure until somebody approves it again.'
+                : '✏️ Editing an existing adjustment. Saving will update the record in place.';
             if (banner)   banner.classList.remove('hidden');
             qtyEl?.focus();
             qtyEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2694,14 +2824,18 @@
             const qtyEl    = document.getElementById('t7-cal-qty');
             const reportEl = document.getElementById('t7-cal-report');
             const plotEl   = document.getElementById('t7-cal-plot');
+            const sideEl   = document.getElementById('t7-cal-side');
             const reasonEl = document.getElementById('t7-cal-reason');
             const btn      = document.getElementById('t7-cal-save-btn');
             const banner   = document.getElementById('t7-cal-edit-banner');
             if (qtyEl)    qtyEl.value    = '';
             if (reportEl) reportEl.value = '';
             if (plotEl)   plotEl.value   = '';
+            if (sideEl)   sideEl.value   = 'seed';
             if (reasonEl) reasonEl.value = '';
             if (btn)      btn.innerText  = 'Save Adjustment';
+            const msg = document.getElementById('t7-cal-edit-msg');
+            if (msg) msg.innerText = '✏️ Editing an existing adjustment. Saving will update the record in place.';
             if (banner)   banner.classList.add('hidden');
         }
 
@@ -2710,8 +2844,12 @@
                 showToast('Only admins can delete calibration entries.', 'error');
                 return;
             }
+            /* Deleting an approved one is still refused. An admin can EDIT it
+               — that keeps the record and its history and sends it back for
+               approval — but a figure somebody signed for should not be able
+               to vanish. Edit it to nought if it was raised in error. */
             if (_t7IsRowApproved(id)) {
-                showToast('This calibration is approved and cannot be deleted.', 'error');
+                showToast('This adjustment is approved. Edit it instead — it returns to pending and can be approved again.', 'error');
                 return;
             }
             if (!confirm('Delete this calibration adjustment? This cannot be undone.')) return;
@@ -2770,11 +2908,13 @@
             const qtyEl    = document.getElementById('t7-cal-qty');
             const reportEl = document.getElementById('t7-cal-report');
             const plotEl   = document.getElementById('t7-cal-plot');
+            const sideEl   = document.getElementById('t7-cal-side');
             const reasonEl = document.getElementById('t7-cal-reason');
             const btn      = document.getElementById('t7-cal-save-btn');
             const qty      = parseInt(qtyEl.value, 10);
             const report   = (reportEl?.value || '').trim();
             const plot     = (plotEl?.value   || '').trim();
+            const side     = (sideEl?.value   || 'seed').trim().toLowerCase() === 'plot' ? 'plot' : 'seed';
             const reason   = (reasonEl.value  || '').trim();
             if (isNaN(qty) || qty === 0) { showToast('Enter a non-zero adjustment quantity (use a negative value to subtract).', 'error'); qtyEl.focus(); return; }
             if (!report) { showToast('Select which report this calibration relates to.', 'error'); reportEl.focus(); return; }
@@ -2792,7 +2932,16 @@
                 transaction_type: 'Stock_Calibration',
                 plot_name: plot,
                 quantity_change: qty,
-                remark: `Report: ${report}. Plot: ${plot}. ${reason}`
+                /* Side: is read back by _parseCalibration. A row without it is
+                   a seed-count adjustment, which is what every row written
+                   before this existed meant.
+
+                   Rebuilt from the form, which is also what RETURNS AN EDITED
+                   ROW TO PENDING: any "[APPROVED by … on …]" the old remark
+                   carried is not copied across, so the adjustment stops moving
+                   figures until it is approved again. Deliberate — see the
+                   Edit button on approved rows. */
+                remark: `Report: ${report}. Plot: ${plot}. Side: ${side}. ${reason}`
             });
 
             let error;
@@ -3337,12 +3486,51 @@
                         });
                         tableDiv.classList.remove('hidden');
 
-                        // Sum the Qty column — see the footer's note in the markup.
-                        const savedTotal = txLogs.reduce((s, l) => s + (l.quantity_change || 0), 0);
+                        /* TOTAL TRANSPLANTED COUNTS TRANSPLANTS.
+
+                           Premium Care and D-Tone are holding trays, not
+                           plots. Moving seedlings INTO one of them is not a
+                           transplant — they come out again later and are
+                           transplanted for real, and this list shows both
+                           steps, so adding the first to the second counts the
+                           same seedlings twice. Batch 232's own list has
+                           B6 → PREMIUM CARE 171 and PREMIUM CARE → P11 220 on
+                           it, one above the other.
+
+                           The rest of the system has always read it this way:
+                           the allocation percentage on the Save button counts
+                           only what reached a main plot, and so does the batch
+                           list's culling rate. This footer was the one place
+                           that did not, which is why it could disagree with
+                           the percentage printed directly beneath it.
+
+                           The rows themselves are untouched — every movement
+                           is still listed, and the ones left out of the total
+                           are named under it rather than quietly dropped. */
+                        const counted = txLogs.filter(l => l.transaction_type === 'Transplanted');
+                        const heldRows = txLogs.filter(l => l.transaction_type !== 'Transplanted');
+                        const savedTotal = counted.reduce((s, l) => s + (l.quantity_change || 0), 0);
                         const setTot = (id, s) => { const el = document.getElementById(id); if (el) el.innerText = s; };
                         setTot('t3-saved-total-qty',   savedTotal.toLocaleString());
                         setTot('t3-saved-total-qty-m', savedTotal.toLocaleString());
-                        setTot('t3-saved-total-count', `${txLogs.length} record${txLogs.length === 1 ? '' : 's'}`);
+                        setTot('t3-saved-total-count', `${counted.length} record${counted.length === 1 ? '' : 's'}`);
+
+                        // Say what was left out, and how much of it.
+                        const heldNote = document.getElementById('t3-saved-held-note');
+                        if (heldNote) {
+                            const sumOf = (type) => txLogs
+                                .filter(l => l.transaction_type === type)
+                                .reduce((s, l) => s + (l.quantity_change || 0), 0);
+                            const parts = [];
+                            const prem  = sumOf('Transplanted_Premium');
+                            const dtone = sumOf('Transplanted_DoubleTone');
+                            if (prem)  parts.push(`Premium Care ${prem.toLocaleString()}`);
+                            if (dtone) parts.push(`D-Tone ${dtone.toLocaleString()}`);
+                            heldNote.innerText = parts.length
+                                ? `Not counted — moved into a holding tray, not a plot: ${parts.join(' · ')}`
+                                : '';
+                            heldNote.classList.toggle('hidden', !parts.length || !heldRows.length);
+                        }
 
                         // Also populate hidden form rows for calcTransplanting
                         const container = document.getElementById('transplant-rows-container');
@@ -3783,7 +3971,7 @@
         }
 
         function viewMap(rowId) {
-            _openDocViewer(rowMaps[rowId]);
+            _openDocViewer(rowMaps[rowId], 'Drone Map');
         }
 
         // ── T3 Edit-form drone map handlers ──────────────────────────────────────
@@ -3823,7 +4011,7 @@
         }
 
         function viewT3EditMap(idx) {
-            _openDocViewer(t3EditMaps[idx]);
+            _openDocViewer(t3EditMaps[idx], 'Drone Map');
         }
 
         function removeTransplantRow(rowId) {
@@ -4729,7 +4917,7 @@
             need('Planting Date', document.getElementById('t2-date').value !== "");
             need('Damaged Seeds', document.getElementById('t2-damaged').value !== "");
             need('Worker Count',  currentWorkers > 0);
-            need('Field Photo',   opsPhotoBase64 !== null, true);
+            need('Seed Damaged Photo', opsPhotoBase64 !== null, true);
             // Auditor verification photo no longer required — panel removed.
 
             const rows = document.querySelectorAll('.tray-row');
@@ -4841,7 +5029,9 @@
 
         function viewOpsPhoto(i) {
             const ph = opsPhotos[i];
-            if (ph) _openDocViewer(ph.src);
+            // Seed Planting's photos are the damaged seeds, counted on a
+            // numbered board. Nothing to do with a drone.
+            if (ph) _openDocViewer(ph.src, ph.name || 'Seed Damaged Photo');
         }
 
         function removeOpsPhoto(i) {
@@ -4889,7 +5079,7 @@
 
         function viewAuditPhoto(type) {
             if (type === 'ops') return viewOpsPhoto(0);
-            _openDocViewer(auditPhotoBase64);
+            _openDocViewer(auditPhotoBase64, 'Seed Damaged Photo');
         }
 
         // ── Photo persistence helpers ──
@@ -5722,8 +5912,12 @@
                 ? `<iframe src="${_escAttr(url)}" class="w-full h-[78vh] border-0 rounded-xl bg-white"></iframe>`
                 : `<img src="${_escAttr(url)}" alt="${_escAttr(name || 'Attachment')}"
                         class="max-w-full max-h-[78vh] w-auto h-auto mx-auto block rounded-xl">`;
-            if (ttl) ttl.innerText = name || (isPdf ? 'Document' : 'Drone Map');
-            if (dl)  { dl.href = url; dl.download = name || (isPdf ? 'document.pdf' : 'map.png'); }
+            /* Every caller says what it is opening. The fallback is
+                deliberately neutral: it used to be "Drone Map", so Seed
+                Planting's damaged-seed photographs opened under the heading of
+                a thing they are not. */
+            if (ttl) ttl.innerText = name || (isPdf ? 'Document' : 'Attachment');
+            if (dl)  { dl.href = url; dl.download = name || (isPdf ? 'document.pdf' : 'attachment.png'); }
             /* Replace and Remove appear only when the viewer was opened FROM a
                row — there is nothing for them to act on otherwise, and a button
                that does nothing is worse than no button. */
@@ -6875,8 +7069,23 @@ Thank you.`;
             // 2. PREMIUM CARE if any plants were moved there
             // 3. DOUBLE-TONE if any plants were moved there
             const plantedTrays = preNurseryTrayData.filter(t => t.name !== 'PREMIUM CARE' && t.name !== 'DOUBLE-TONE');
-            const premiumEntry = preNurseryTrayData.find(t => t.name === 'PREMIUM CARE');
-            const dtoneEntry   = preNurseryTrayData.find(t => t.name === 'DOUBLE-TONE');
+            /* The two holding nurseries are read from THIS tab's own totals
+               first, and only then from the tray list Transplanting builds.
+
+               t4_totalPremium and t4_totalDoubletone are loaded a few lines
+               up, off the batch's own transplant logs, so 1st Culling knows
+               what is in Premium Care whether or not anybody has opened
+               Transplanting. It used to know only what that tab had left
+               behind: if its load had not run, or had thrown on the way past
+               the premium query — it is inside a try that only warns — the
+               Premium Care row never appeared, and there was no line to key
+               the cull against and no way to balance the report. */
+            const premiumEntry = t4_totalPremium > 0
+                ? { name: 'PREMIUM CARE', initialQty: t4_totalPremium }
+                : preNurseryTrayData.find(t => t.name === 'PREMIUM CARE');
+            const dtoneEntry   = t4_totalDoubletone > 0
+                ? { name: 'DOUBLE-TONE', initialQty: t4_totalDoubletone }
+                : preNurseryTrayData.find(t => t.name === 'DOUBLE-TONE');
 
             // The DOUBLE-TONE culling row's tray quantity is the admin-keyed
             // "Double Tone Quantity in Nursery" (Tab 3) — the full nursery
@@ -7079,6 +7288,31 @@ Thank you.`;
             setPct('t4-val-doubletone',  't4-val-doubletone-pct',  t4_totalDoubletone,       0);
             setPct('t4-val-cull',        't4-val-cull-pct',        totalCulled,              pctCull);
             setPct('t4-val-unaccounted', 't4-val-unaccounted-pct', Math.max(0, unaccounted), pctUnaccounted);
+
+            /* Name the parts of Pending. Premium Care and D-Tone are holding
+               nurseries: the seedlings are in a known place, they just have
+               not reached a main plot, so they count as pending — and now say
+               so by name instead of hiding inside one figure. Whatever is left
+               after them is still sitting in the planting trays. */
+            (function showT4Pending() {
+                const pend  = Math.max(0, unaccounted);
+                const prem  = t4_totalPremium    || 0;
+                const dtone = t4_totalDoubletone || 0;
+                const trays = Math.max(0, pend - prem - dtone);
+                const part = (id, valId, qty) => {
+                    const el = document.getElementById(id); if (!el) return;
+                    el.classList.toggle('hidden', qty <= 0);
+                    const v = document.getElementById(valId);
+                    if (v) v.innerText = qty.toLocaleString();
+                };
+                part('t4-pend-premium', 't4-pend-premium-val', prem);
+                part('t4-pend-dtone',   't4-pend-dtone-val',   dtone);
+                part('t4-pend-trays',   't4-pend-trays-val',   trays);
+                const row = document.getElementById('t4-pending-breakdown');
+                // Only where there is a holding nursery to point at: a batch
+                // with neither has nothing this line could tell it.
+                if (row) row.classList.toggle('hidden', (prem + dtone) <= 0);
+            })();
 
             // Balance status box — simplified wording
             const box = document.getElementById('t4-balance-box');
@@ -7682,7 +7916,7 @@ Thank you.`;
         }
 
         function viewT5Map(rowId) {
-            _openDocViewer(t5_plotMaps[rowId]);
+            _openDocViewer(t5_plotMaps[rowId], 'Drone Map');
         }
 
         async function saveTab5() {
@@ -7890,11 +8124,32 @@ Thank you.`;
                 // Read the DO collection details forgivingly, so a line keyed in
                 // slightly untidily still matches this batch's plot rows:
                 //   • batch  "239." / " 239" / "239 " → 239   (punctuation & spaces dropped)
+                //   • batch  "232 (B13)" → 232               (origin-plot suffix dropped)
                 //   • plot   "U15 (UPB PREMIER HYBRID)" → U15 (label/breed suffix dropped)
                 //   • qty    blank on the ONLY filled line → fall back to the DO's
                 //            total qty (what the DO modal itself displays)
                 // DO 03410 was invisible before for exactly these reasons.
-                const _normBatchKey = v => String(v == null ? '' : v).replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+                /* A BATCH KEY IS THE BATCH NUMBER, AND STOPS THERE.
+
+                   A collection line names the batch and, in brackets, the plot
+                   the seedlings originally came from: "232 (B13)". Stripping
+                   punctuation and keeping the rest turned that into "232B13",
+                   which matches no batch, so the whole line was skipped — the
+                   sale never reached the plot's Sales figure and the DO looked
+                   unlinked. Batch 232's B14-R read 5 sold with a DO for 30
+                   sitting against it.
+
+                   Cut at the first space or bracket, exactly as _normPlotKey
+                   already does for "U15 (UPB PREMIER HYBRID)". The old
+                   forgiveness is unchanged: "239." / " 239" / "239 " all still
+                   come out as 239.
+
+                   SHARED RULE — the same normaliser lives in
+                   operation/operation_stock_sales.js. Change one, change the
+                   other. */
+                const _normBatchKey = v => String(v == null ? '' : v).trim().toUpperCase()
+                                  .replace(/^BATCH\s*:?\s*/, '')   // drop a "Batch: " prefix
+                                  .split(/[\s(,\[]/)[0].replace(/[^0-9A-Z]/g, '');
                 const _normPlotKey  = v => String(v == null ? '' : v).trim().toUpperCase()
                                               .replace(/^PLOT\s*:?\s*/, '')   // drop a "Plot " prefix
                                               .split(/[\s(,\[]/)[0].replace(/[^0-9A-Z\-]/g, '');
@@ -8242,6 +8497,10 @@ Thank you.`;
                 // not what the word "Transplanted" means. See injectTransfers.
                 const transferredIn = p.transferredIn || 0;
                 const _n      = t6AutoNumbers(p, moved);
+                // An approved plot-stock adjustment against this plot. Negative
+                // is the usual case (stolen, dead); shown as a positive count
+                // under a word that says which way it went.
+                const lostHere = _n.lost || 0;
                 const dead2   = _n.dead2;
                 const sales   = _n.sales;
                 const autoBal = _n.bal;
@@ -8364,6 +8623,36 @@ Thank you.`;
                                              onmouseenter="showT6SourceTip(this, ${i})" onmouseleave="hideT6SalesTip()"
                                              title="Where these came from">${t6Fmt(transferredIn)}</div>
                                     </div>`}
+                                    <!-- A "-R" PLOT SENDS SEEDLINGS ON TOO.
+
+                                         P-R Culling has no Transfer Amount column — a main plot's
+                                         goes where this row keeps its 3rd Culled figure — so a
+                                         "-R" plot that moved seedlings elsewhere showed nothing
+                                         about it at all. The quantity was always deducted from
+                                         the balance, which is why B14-R read 44 in, 5 sold and
+                                         30 to cull with 9 unexplained on the face of it.
+
+                                         Beside the figure it belongs to, like Moved In on a main
+                                         row, and resting on it says where they went. Always
+                                         drawn, hidden while nought, so keying a movement can
+                                         turn it on without rebuilding the row. -->
+                                    ${!p.isTransferRow ? '' : `<div class="t6-movedout-cell w-px h-7 bg-[#e8dcc8] ${moved ? '' : 'hidden'}"></div>
+                                    <div class="t6-movedout-cell ${moved ? '' : 'hidden'}">
+                                        <div class="text-[8px] font-black text-[#0891b2] uppercase tracking-widest leading-none whitespace-nowrap">Moved Out</div>
+                                        <div class="t6-moved-display text-sm font-black text-[#0891b2] cursor-help tabular-nums leading-tight"
+                                             onmouseenter="showT6TransferTip(this, ${i})" onmouseleave="hideT6SalesTip()"
+                                             title="Where these went">${t6Fmt(moved)}</div>
+                                    </div>`}
+                                    <!-- An approved adjustment that took seedlings OUT of this
+                                         plot after they were transplanted into it. Shown because
+                                         the balance would otherwise drop with nothing on the row
+                                         accounting for it. Always drawn, hidden at nought. -->
+                                    <div class="t6-lost-cell w-px h-7 bg-[#e8dcc8] ${lostHere ? '' : 'hidden'}"></div>
+                                    <div class="t6-lost-cell ${lostHere ? '' : 'hidden'}">
+                                        <div class="text-[8px] font-black text-[#7a4a10] uppercase tracking-widest leading-none whitespace-nowrap">${lostHere < 0 ? 'Lost' : 'Found'}</div>
+                                        <div class="t6-lost-figure text-sm font-black text-[#7a4a10] tabular-nums leading-tight"
+                                             title="An approved adjustment on this plot — see Adjustments &amp; Audit">${t6Fmt(Math.abs(lostHere))}</div>
+                                    </div>
                                     ${p.isTransferRow ? '' : `<div class="w-px h-7 bg-[#e8dcc8]"></div>
                                     <div>
                                         <div class="text-[8px] font-black text-[#a83020] uppercase tracking-widest leading-none whitespace-nowrap">2nd Culled</div>
@@ -8615,11 +8904,21 @@ Thank you.`;
             return String(v == null ? '' : v).trim().toUpperCase();
         }
 
+        /* What is standing in a plot, and therefore what is left to cull.
+
+           `lost` is an approved PLOT-STOCK adjustment against this plot: the
+           seedlings were transplanted here and then left — stolen, dead,
+           miscounted on the ground. They are not a transplant that never
+           happened, so p.qty keeps them and the batch's allocation is
+           untouched; they are simply not standing here any more, and you
+           cannot cull what is not there. A positive adjustment (more found
+           than the book said) works the same way in the other direction. */
         function t6AutoNumbers(p, moved) {
             const dead2 = p.dead2 || 0;
             const sales = p.sales || 0;
-            const bal   = Math.max(0, (p.qty || 0) - dead2 - sales - (moved || 0));
-            return { dead2, sales, bal, culled: dead2 + bal };
+            const lost  = (typeof adjustPlotLoss === 'function') ? adjustPlotLoss(p.plot) : 0;
+            const bal   = Math.max(0, (p.qty || 0) - dead2 - sales - (moved || 0) + lost);
+            return { dead2, sales, bal, lost, culled: dead2 + bal };
         }
 
         /* What a plot has left to MOVE, as opposed to what it has left to cull.
@@ -9357,10 +9656,16 @@ Thank you.`;
 
             const movedDisp = rowEl.querySelector('.t6-moved-display');
             if (movedDisp) {
-                movedDisp.innerText = moved ? t6Fmt(moved) : '—';
-                movedDisp.classList.toggle('text-[#0891b2]', moved > 0);
-                movedDisp.classList.toggle('text-[#c9bda8]', moved === 0);
+                /* A "-R" row shows this beside its name and hides it at nought;
+                   a main row shows it in its own column and dashes it. Same
+                   class either way, so the figure stays live on both. */
+                const isR = !!(t6_plotData[rowIdx] && t6_plotData[rowIdx].isTransferRow);
+                movedDisp.innerText = moved ? t6Fmt(moved) : (isR ? '0' : '—');
+                movedDisp.classList.toggle('text-[#0891b2]', moved > 0 || isR);
+                movedDisp.classList.toggle('text-[#c9bda8]', moved === 0 && !isR);
             }
+            rowEl.querySelectorAll('.t6-movedout-cell')
+                 .forEach(el => el.classList.toggle('hidden', !moved));
             // The Transfer Data tab's own Balance is deliberately NOT touched
             // here — it's a fixed reference (Transplanted − 2nd Culled − Sales,
             // no transfer deduction) and isn't linked to Main Culling's Balance,
@@ -9638,6 +9943,17 @@ Thank you.`;
                                     (parseInt(row.querySelector('.t6-balance')?.value) || 0) === 0;
                 const mapDone     = soldOutRow || mapQtyVal !== '';
                 const dateDone    = soldOutRow || cullDateVal !== '';
+                /* …and signed. A row nobody has checked is not a row that is
+                   done, and unverifying one has to be able to take the count
+                   back down — otherwise the tab says 6 / 6 Done and 100% with
+                   its tick already gone, three answers to one question.
+
+                   The whole stage being verified counts for every row on it,
+                   which is the same signature written once. */
+                const _rvT6 = window.MJMReview || {};
+                const rowKey = p ? `${String(p.plot || '').trim().toUpperCase()}|${p.destType || 'main'}` : '';
+                const signedRow = typeof _rvT6.rowVerified === 'function'
+                                ? _rvT6.rowVerified(6, rowKey) : true;
 
                 /* A "-R" plot's quantity is NOT a transplant. It arrived by
                    transfer from a plot on this same batch, which already
@@ -9669,7 +9985,7 @@ Thank you.`;
                 // Both halves of the fraction over the same set of plots, or
                 // a culled "-R" row pushes "done" past the total.
                 if (counts) {
-                    if (mapDone && dateDone) rowsDone++;
+                    if (mapDone && dateDone && signedRow) rowsDone++;
                     if (mapDone)  mapsKeyed++;
                     if (dateDone) datesKeyed++;
                 }
@@ -9729,7 +10045,17 @@ Thank you.`;
             const desc = document.getElementById('t6-status-desc');
             const btn  = document.getElementById('save-t6-btn');
             btn.innerText = `Save 3rd Culling Report (${pct}% Complete)`;
+            // Every figure keyed and a signature still to come is a different
+            // thing from a report with work left in it, and saying "5/6 Plots
+            // Done" over a tab where all six are keyed sends somebody hunting
+            // for the missing one.
+            const awaitingSignOff = totalRows > 0 && donePts === totalPts && rowsDone < totalRows;
             if (pct === 100)  { desc.innerText = '100% Complete';          desc.className = 'text-base font-black uppercase text-[#4a7a2e] mt-1'; }
+            else if (awaitingSignOff) {
+                const n = totalRows - rowsDone;
+                desc.innerText = `${n} Plot${n === 1 ? '' : 's'} Awaiting Verification`;
+                desc.className = 'text-base font-black uppercase text-[#c07820] mt-1';
+            }
             else if (pct > 0) { desc.innerText = `${rowsDone}/${totalRows} Plots Done`; desc.className = 'text-base font-black uppercase text-[#c07820] mt-1'; }
             else              { desc.innerText = 'Awaiting Data';           desc.className = 'text-base font-black uppercase text-[#3d2610] mt-1'; }
         }
@@ -10540,6 +10866,10 @@ Thank you.`;
         if (typeof window.calcT5 === 'function') {
           try { window.calcT5(); } catch (e) { console.warn(e); }
         }
+        // 3rd Culling counts a row as done only once somebody has signed it.
+        if (typeof window.calcT6 === 'function') {
+          try { window.calcT6(); } catch (e) { console.warn(e); }
+        }
         syncTabTicks();
       }
 
@@ -10802,6 +11132,10 @@ Thank you.`;
               .eq('batch_name', batch).eq('transaction_type', 'Row_Verification').eq('plot_name', mapKey);
             delete rowVerifs[mapKey];
           }
+          // …and the tab's own signature, for the same reason an unverify
+          // does: a row sent back for amendment is not a checked row, so the
+          // claim to have checked the whole tab no longer stands.
+          await _dropStageVerification(batch, tabIdx);
         } else if (verifications[stage]) {
           // Tab rejection voids the tab verification — the sign-off no longer stands.
           await _supabase.from('operation_batch_verifications').delete()
@@ -10877,10 +11211,27 @@ Thank you.`;
         if (tabIdx === 5 && typeof window.calcT5 === 'function') {
           try { window.calcT5(); } catch (e) { console.warn(e); }
         }
+        // 3rd Culling counts a row as done only once it is signed, so its
+        // figures have to be worked out again the moment one is.
+        if (tabIdx === 6 && typeof window.calcT6 === 'function') {
+          try { window.calcT6(); } catch (e) { console.warn(e); }
+        }
         if (tabIdx === 2 && typeof window.updatePlantingCompletion === 'function') {
           try { window.updatePlantingCompletion(); } catch (e) { console.warn(e); }
         }
         try { syncTabTicks(); } catch (e) { console.warn(e); }
+      }
+
+      /* Take the tab's own sign-off away, if it has one. Used wherever a
+         single row's sign-off is withdrawn — see rowUnverify. */
+      async function _dropStageVerification(batch, tabIdx) {
+        const stage = STAGE_BY_TAB[tabIdx];
+        if (!stage || !verifications[stage]) return;
+        try {
+          await _supabase.from('operation_batch_verifications').delete()
+            .eq('batch_name', batch).eq('stage', stage);
+        } catch (e) { console.warn(e); }
+        delete verifications[stage];
       }
 
       async function rowUnverify(tabIdx, keyEnc) {
@@ -10890,10 +11241,27 @@ Thank you.`;
         if (!batch || !key) return;
         const mapKey = STAGE_BY_TAB[tabIdx] + '::' + key;
         if (!confirm('Remove the verification on this row?')) return;
-        await _supabase.from('shared_inventory_logs').delete()
+        /* The delete is CHECKED. It used to be fire-and-forget: a delete the
+           database refused left the row showing unverified on this screen
+           while the sign-off stayed on the record — and the batch list, which
+           reads the record, went on calling the batch Complete. A withdrawal
+           that did not happen must not look as if it did. */
+        const { error: delErr } = await _supabase.from('shared_inventory_logs').delete()
           .eq('batch_name', batch).eq('transaction_type', 'Row_Verification').eq('plot_name', mapKey);
+        if (delErr) { alert('Could not remove the verification: ' + delErr.message); return; }
         delete rowVerifs[mapKey];
+        /* A STAGE signature says "I have checked this whole tab", and every
+           row on it counts as signed by it. Withdrawing one row's sign-off
+           contradicts that, so the stage signature goes with it — otherwise
+           the row reads unverified while the tab, the ring and the batch list
+           all go on calling it done, which is exactly the complaint: I
+           unverified it and it is still Complete.
+
+           Re-verifying the tab is one press. Leaving a claim standing that
+           the person has just taken back is not. */
+        await _dropStageVerification(batch, tabIdx);
         decorateRows(tabIdx);
+        renderBanner(tabIdx);
         _afterRowSignOff(tabIdx);
       }
 
@@ -11004,6 +11372,13 @@ Thank you.`;
                            // completion depends on the answer — see
                            // updateTransplantCompletion.
                            isVerified: (stage) => !!verifications[stage],
+                           // Has THIS row been signed off? Read by a tab that
+                           // counts its own finished rows — see calcT6.
+                           rowVerified: (tabIdx, key) => {
+                             const stage = STAGE_BY_TAB[tabIdx];
+                             if (!stage || !key) return false;
+                             return !!verifications[stage] || !!rowVerifs[stage + '::' + key];
+                           },
                            /* Has every ROW on a tab been verified?
 
                               A stage carries two kinds of sign-off. One is on
