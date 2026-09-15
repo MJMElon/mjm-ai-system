@@ -6911,8 +6911,23 @@ Thank you.`;
             // 2. PREMIUM CARE if any plants were moved there
             // 3. DOUBLE-TONE if any plants were moved there
             const plantedTrays = preNurseryTrayData.filter(t => t.name !== 'PREMIUM CARE' && t.name !== 'DOUBLE-TONE');
-            const premiumEntry = preNurseryTrayData.find(t => t.name === 'PREMIUM CARE');
-            const dtoneEntry   = preNurseryTrayData.find(t => t.name === 'DOUBLE-TONE');
+            /* The two holding nurseries are read from THIS tab's own totals
+               first, and only then from the tray list Transplanting builds.
+
+               t4_totalPremium and t4_totalDoubletone are loaded a few lines
+               up, off the batch's own transplant logs, so 1st Culling knows
+               what is in Premium Care whether or not anybody has opened
+               Transplanting. It used to know only what that tab had left
+               behind: if its load had not run, or had thrown on the way past
+               the premium query — it is inside a try that only warns — the
+               Premium Care row never appeared, and there was no line to key
+               the cull against and no way to balance the report. */
+            const premiumEntry = t4_totalPremium > 0
+                ? { name: 'PREMIUM CARE', initialQty: t4_totalPremium }
+                : preNurseryTrayData.find(t => t.name === 'PREMIUM CARE');
+            const dtoneEntry   = t4_totalDoubletone > 0
+                ? { name: 'DOUBLE-TONE', initialQty: t4_totalDoubletone }
+                : preNurseryTrayData.find(t => t.name === 'DOUBLE-TONE');
 
             // The DOUBLE-TONE culling row's tray quantity is the admin-keyed
             // "Double Tone Quantity in Nursery" (Tab 3) — the full nursery
