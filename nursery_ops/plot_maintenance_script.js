@@ -131,12 +131,27 @@ function resetPlotQty(n){
    the Setting page; a chemical with a coverage of its own overrides both. */
 const COVERAGE_PER_PUMP = 800;
 
-function fmtUsage(totalAmount, unit, decimals = 2){
-  // gm → kg, mL → L; default 2 decimals (no round-up)
-  const big = totalAmount / 1000;
+/* ── Always UP, never to the nearest ───────────────────────────────────
+   These figures are what somebody signs out of the store before walking
+   into the field, and the column they sit under says MAXIMUM. Rounding to
+   the nearest tenth sent a tank out short about half the time — 1.6165 L
+   shown as 1.6 — and being 16mL short in a plot is a second trip.
+
+   Rounding up can only ever leave a little in the drum, which is where it
+   was anyway.
+
+   The `1e9` is not decoration. Ceiling a float that is already exact is how
+   0.1 × 3 becomes 0.4: it is held as 0.30000000000000004, and the ceiling
+   of 3.0000000000000004 is 4. The dust is rounded off first, then the real
+   figure is taken up. */
+function ceilTo(value, decimals){
   const factor = Math.pow(10, decimals);
-  const rounded = Math.round(big * factor) / factor;
-  return rounded + (unit === 'gm' ? ' kg' : ' L');
+  return Math.ceil(Math.round(value * factor * 1e9) / 1e9) / factor;
+}
+
+function fmtUsage(totalAmount, unit, decimals = 2){
+  // gm → kg, mL → L, rounded UP so the figure is never short.
+  return ceilTo(totalAmount / 1000, decimals) + (unit === 'gm' ? ' kg' : ' L');
 }
 /* Unit per chemical — used to auto-set mL/gm when one is selected. Reads
    the list; a fertiliser answers too, since the manuring sheet asks the same
@@ -297,9 +312,10 @@ function calcFertUsage(seedlings, fertName, doseGm, decimals = 2){
   const info = f && f.bag_size_gm ? { bagSizeGm: +f.bag_size_gm, bagLabel: f.bag_label || '' } : null;
   const totalGm = seedlings * doseGm;
   const totalKg = totalGm / 1000;
-  const factor = Math.pow(10, decimals);
-  const kgStr = (Math.round(totalKg * factor) / factor).toLocaleString() + ' kg';
-  const bagsStr = info ? (Math.round((totalGm / info.bagSizeGm) * factor) / factor) + ' ' + t('unit.bags') + ' (' + info.bagLabel + ' ' + t('unit.each') + ')' : '—';
+  // UP, like every other figure on this screen — see ceilTo. A bag count
+  // rounded down is a lorry going back for one more bag.
+  const kgStr = ceilTo(totalKg, decimals).toLocaleString() + ' kg';
+  const bagsStr = info ? ceilTo(totalGm / info.bagSizeGm, decimals) + ' ' + t('unit.bags') + ' (' + info.bagLabel + ' ' + t('unit.each') + ')' : '—';
   return { kg: kgStr, bags: bagsStr, totalGm };
 }
 
