@@ -8010,11 +8010,32 @@ Thank you.`;
                 // Read the DO collection details forgivingly, so a line keyed in
                 // slightly untidily still matches this batch's plot rows:
                 //   • batch  "239." / " 239" / "239 " → 239   (punctuation & spaces dropped)
+                //   • batch  "232 (B13)" → 232               (origin-plot suffix dropped)
                 //   • plot   "U15 (UPB PREMIER HYBRID)" → U15 (label/breed suffix dropped)
                 //   • qty    blank on the ONLY filled line → fall back to the DO's
                 //            total qty (what the DO modal itself displays)
                 // DO 03410 was invisible before for exactly these reasons.
-                const _normBatchKey = v => String(v == null ? '' : v).replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+                /* A BATCH KEY IS THE BATCH NUMBER, AND STOPS THERE.
+
+                   A collection line names the batch and, in brackets, the plot
+                   the seedlings originally came from: "232 (B13)". Stripping
+                   punctuation and keeping the rest turned that into "232B13",
+                   which matches no batch, so the whole line was skipped — the
+                   sale never reached the plot's Sales figure and the DO looked
+                   unlinked. Batch 232's B14-R read 5 sold with a DO for 30
+                   sitting against it.
+
+                   Cut at the first space or bracket, exactly as _normPlotKey
+                   already does for "U15 (UPB PREMIER HYBRID)". The old
+                   forgiveness is unchanged: "239." / " 239" / "239 " all still
+                   come out as 239.
+
+                   SHARED RULE — the same normaliser lives in
+                   operation/operation_stock_sales.js. Change one, change the
+                   other. */
+                const _normBatchKey = v => String(v == null ? '' : v).trim().toUpperCase()
+                                  .replace(/^BATCH\s*:?\s*/, '')   // drop a "Batch: " prefix
+                                  .split(/[\s(,\[]/)[0].replace(/[^0-9A-Z]/g, '');
                 const _normPlotKey  = v => String(v == null ? '' : v).trim().toUpperCase()
                                               .replace(/^PLOT\s*:?\s*/, '')   // drop a "Plot " prefix
                                               .split(/[\s(,\[]/)[0].replace(/[^0-9A-Z\-]/g, '');
@@ -8483,6 +8504,26 @@ Thank you.`;
                                         <div class="t6-movedin-figure text-sm font-black text-[#0891b2] cursor-help tabular-nums leading-tight"
                                              onmouseenter="showT6SourceTip(this, ${i})" onmouseleave="hideT6SalesTip()"
                                              title="Where these came from">${t6Fmt(transferredIn)}</div>
+                                    </div>`}
+                                    <!-- A "-R" PLOT SENDS SEEDLINGS ON TOO.
+
+                                         P-R Culling has no Transfer Amount column — a main plot's
+                                         goes where this row keeps its 3rd Culled figure — so a
+                                         "-R" plot that moved seedlings elsewhere showed nothing
+                                         about it at all. The quantity was always deducted from
+                                         the balance, which is why B14-R read 44 in, 5 sold and
+                                         30 to cull with 9 unexplained on the face of it.
+
+                                         Beside the figure it belongs to, like Moved In on a main
+                                         row, and resting on it says where they went. Always
+                                         drawn, hidden while nought, so keying a movement can
+                                         turn it on without rebuilding the row. -->
+                                    ${!p.isTransferRow ? '' : `<div class="t6-movedout-cell w-px h-7 bg-[#e8dcc8] ${moved ? '' : 'hidden'}"></div>
+                                    <div class="t6-movedout-cell ${moved ? '' : 'hidden'}">
+                                        <div class="text-[8px] font-black text-[#0891b2] uppercase tracking-widest leading-none whitespace-nowrap">Moved Out</div>
+                                        <div class="t6-moved-display text-sm font-black text-[#0891b2] cursor-help tabular-nums leading-tight"
+                                             onmouseenter="showT6TransferTip(this, ${i})" onmouseleave="hideT6SalesTip()"
+                                             title="Where these went">${t6Fmt(moved)}</div>
                                     </div>`}
                                     ${p.isTransferRow ? '' : `<div class="w-px h-7 bg-[#e8dcc8]"></div>
                                     <div>
@@ -9477,10 +9518,16 @@ Thank you.`;
 
             const movedDisp = rowEl.querySelector('.t6-moved-display');
             if (movedDisp) {
-                movedDisp.innerText = moved ? t6Fmt(moved) : '—';
-                movedDisp.classList.toggle('text-[#0891b2]', moved > 0);
-                movedDisp.classList.toggle('text-[#c9bda8]', moved === 0);
+                /* A "-R" row shows this beside its name and hides it at nought;
+                   a main row shows it in its own column and dashes it. Same
+                   class either way, so the figure stays live on both. */
+                const isR = !!(t6_plotData[rowIdx] && t6_plotData[rowIdx].isTransferRow);
+                movedDisp.innerText = moved ? t6Fmt(moved) : (isR ? '0' : '—');
+                movedDisp.classList.toggle('text-[#0891b2]', moved > 0 || isR);
+                movedDisp.classList.toggle('text-[#c9bda8]', moved === 0 && !isR);
             }
+            rowEl.querySelectorAll('.t6-movedout-cell')
+                 .forEach(el => el.classList.toggle('hidden', !moved));
             // The Transfer Data tab's own Balance is deliberately NOT touched
             // here — it's a fixed reference (Transplanted − 2nd Culled − Sales,
             // no transfer deduction) and isn't linked to Main Culling's Balance,
