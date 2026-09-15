@@ -6378,9 +6378,20 @@ function plotsAtSlot(kind, i, n, m) {
   plots.forEach(p => {
     let on = false;
     if (kind === 'pd') {
-      const cell = (s.pd || {})['W' + (i + 1)];
+      /* A side ticked with NO chemical behind it is not work, and counting
+         it here was the summary disagreeing with the rest of the system.
+         autoSyncRecords already refuses to write a record for it (c.P!=='—'),
+         and both portals already drop it — so the office promised four weeks
+         of spraying and the field was shown one, with nothing on any screen
+         saying why. The tick stays in the editor, where it can be seen and
+         given a chemical; it simply is not counted as a job until it has
+         one. Same rule in Barcode_Counter's weekTasks. */
+      const w = 'W' + (i + 1);
+      const cfg = (s.pdConfig || {})[w] || {};
+      const named = (side) => !!cfg[side] && cfg[side] !== '—';
+      const cell = (s.pd || {})[w];
       const v = cell && cell[p];
-      on = !!(v && (v.P || v.D));
+      on = !!(v && ((v.P && named('P')) || (v.D && named('D'))));
     } else if (kind === 'weeding') {
       on = !!((s.weeding || {})[p] || {})['R' + (i + 1)];
     } else {

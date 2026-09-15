@@ -98,15 +98,15 @@
                 <table class="w-full text-left border-collapse min-w-[1200px]">
                     <thead>
                         <tr class="text-[10px] uppercase tracking-[0.2em] text-slate-400 border-b-2 border-slate-100 pb-2">
-                            <th class="p-4 font-black cursor-pointer hover:text-blue-600 select-none" onclick="setSort('order_date')"><span data-sort-key="order_date">Date</span></th>
-                            <th class="p-4 font-black cursor-pointer hover:text-blue-600 select-none" onclick="setSort('al_number')"><span data-sort-key="al_number">AL No.</span></th>
-                            <th class="p-4 font-black cursor-pointer hover:text-blue-600 select-none" onclick="setSort('order_number')"><span data-sort-key="order_number">Order #</span></th>
+                            <th class="p-4 font-black cursor-pointer hover:text-blue-600 select-none whitespace-nowrap" onclick="setSort('order_date')"><span data-sort-key="order_date">Date</span></th>
+                            <!-- AL No. and Order # are always the same value on every AL, so one
+                                 column shows it once instead of repeating it — see renderTable(). -->
+                            <th class="p-4 font-black cursor-pointer hover:text-blue-600 select-none" onclick="setSort('al_number')"><span data-sort-key="al_number">AL / Order #</span></th>
                             <th class="p-4 font-black cursor-pointer hover:text-blue-600 select-none" onclick="setSort('customer_name')"><span data-sort-key="customer_name">Customer</span></th>
                             <th class="p-4 font-black text-center cursor-pointer hover:text-blue-600 select-none" onclick="setSort('quantity_ordered')"><span data-sort-key="quantity_ordered">Order Qty</span></th>
                             <th class="p-4 font-black text-center text-indigo-500 cursor-pointer hover:text-blue-600 select-none" onclick="setSort('_cumul')"><span data-sort-key="_cumul">Cumul. Collect</span></th>
                             <th class="p-4 font-black text-center text-rose-500 cursor-pointer hover:text-blue-600 select-none" onclick="setSort('_calc_balance')"><span data-sort-key="_calc_balance">Balance</span></th>
                             <th class="p-4 font-black text-center cursor-pointer hover:text-blue-600 select-none" onclick="setSort('status')"><span data-sort-key="status">Status</span></th>
-                            <th class="p-4 font-black text-right">Action</th>
                         </tr>
                     </thead>
                     <tbody id="al-orders-tbody" class="text-sm font-semibold text-slate-700"></tbody>
@@ -367,6 +367,18 @@
             return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         }
 
+        // The Sales Web system writes its own long, sentence-style remark
+        // straight onto shared_al_orders.remark when it auto-cancels an AL
+        // because the linked order was cancelled over there — that text
+        // isn't generated in this codebase, so it can't be shortened at the
+        // source. This just shortens it for display, leaving anything else
+        // (a manually-typed cancel reason, say) exactly as written.
+        function shortRemark(remark) {
+            if (!remark) return '';
+            const m = remark.match(/Auto-cancelled when Sales Web Order\s+(\S+)\s+was cancelled/i);
+            return m ? `Sales Web order ${m[1]} cancelled` : remark;
+        }
+
         async function fetchData() {
             const [alRes, doRes] = await Promise.all([
                 _supabase.from('shared_al_orders').select('id,al_number,order_number,order_date,customer_name,product_name,quantity_ordered,balance_quantity,price_per_unit,status,remark,created_at').order('created_at', { ascending: false }),
@@ -380,7 +392,7 @@
                 console.error('AL list load failed:', { alError: alRes.error, doError: doRes.error });
                 const tbody = document.getElementById('al-orders-tbody');
                 if (tbody) {
-                    tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-rose-600 font-bold text-xs">' +
+                    tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-rose-600 font-bold text-xs">' +
                         '⚠️ Could not load Approval Letters — ' + (loadErr.message || 'database error') +
                         ' (check RLS / table policies on shared_al_orders &amp; shared_do_records; see browser console)</td></tr>';
                 }
@@ -500,7 +512,7 @@
             const pageRows = filtered.slice(startIdx, startIdx + _AL_PAGE_SIZE);
 
             if (!pageRows.length) {
-                tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-slate-400 italic font-bold uppercase tracking-widest text-xs">No Approval Letters match the current filters.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400 italic font-bold uppercase tracking-widest text-xs">No Approval Letters match the current filters.</td></tr>';
             }
 
             pageRows.forEach(order => {
@@ -513,19 +525,19 @@
                 if (stat === 'Verified') statColor = 'bg-blue-100 text-blue-700';
                 if (isCancelled) statColor = 'bg-red-600 text-white';
                 
-                const rowClass = isCancelled ? 'bg-red-50/70 border-b border-red-200' : 'border-b border-slate-100 hover:bg-slate-50 transition-colors';
-                
+                // Row itself opens Manage/View now — no separate Action
+                // column/button to click.
+                const rowClass = (isCancelled ? 'bg-red-50/70 border-b border-red-200' : 'border-b border-slate-100 hover:bg-slate-50 transition-colors') + ' cursor-pointer';
+
                 tbody.insertAdjacentHTML('beforeend', `
-                    <tr class="${rowClass}">
-                        <td class="p-4 ${isCancelled ? 'text-red-500 font-bold' : 'text-slate-500'}">${displayDate}</td>
-                        <td class="p-4 ${isCancelled ? 'text-red-700' : 'text-blue-700'} font-bold">${isAlLocked(order.remark) ? '<span title="Locked — only admins can edit" class="mr-1">&#128274;</span>' : ''}${order.al_number}</td>
-                        <td class="p-4 ${isCancelled ? 'text-red-500 line-through' : ''}">${order.order_number || '-'}</td>
-                        <td class="p-4 uppercase font-bold ${isCancelled ? 'text-red-800' : 'text-slate-800'}">${order.customer_name || 'Unknown'} ${isCancelled ? `<br><span class="text-[10px] text-red-500 font-black tracking-widest">${order.remark || ''}</span>` : ''}</td>
+                    <tr class="${rowClass}" onclick="openManageModal('${order.id}')">
+                        <td class="p-4 whitespace-nowrap ${isCancelled ? 'text-red-500 font-bold' : 'text-slate-500'}">${displayDate}</td>
+                        <td class="p-4 font-bold ${isCancelled ? 'text-red-700 line-through' : 'text-blue-700'}">${isAlLocked(order.remark) ? '<span title="Locked — only admins can edit" class="mr-1">&#128274;</span>' : ''}${order.al_number}</td>
+                        <td class="p-4 uppercase font-bold ${isCancelled ? 'text-red-800' : 'text-slate-800'}">${order.customer_name || 'Unknown'} ${isCancelled ? `<br><span class="text-[10px] text-red-500 font-black tracking-widest">${shortRemark(order.remark)}</span>` : ''}</td>
                         <td class="p-4 text-center font-bold ${isCancelled ? 'text-red-500' : 'text-slate-600'}">${(Number(order.quantity_ordered) || 0).toLocaleString()}</td>
                         <td class="p-4 text-center font-bold ${isCancelled ? 'text-red-400' : 'text-indigo-500'}">${(Number(order._cumul) || 0).toLocaleString()}</td>
                         <td class="p-4 text-center font-black ${isCancelled ? 'text-red-400' : (order._calc_balance > 0 ? 'text-rose-500' : 'text-emerald-500')}">${(Number(order._calc_balance) || 0).toLocaleString()}</td>
                         <td class="p-4 text-center"><span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${statColor}">${isCancelled ? 'Cancelled' : stat}</span></td>
-                        <td class="p-4 text-right"><button onclick="openManageModal('${order.id}')" class="text-blue-700 uppercase text-[10px] font-bold px-4 py-2 bg-blue-100 rounded-lg hover:bg-blue-200 transition-colors relative z-40">Manage / View</button></td>
                     </tr>
                 `);
             });
