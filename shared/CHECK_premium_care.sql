@@ -1,85 +1,100 @@
 -- =====================================================================
---  WHERE DID THIS BATCH'S SEEDLINGS GO, AND IS PREMIUM CARE AMONG THEM?
+--  PREMIUM CARE ACROSS EVERY BATCH
 --  Paste into the Supabase SQL Editor and press Run. Read-only: it
 --  changes nothing, so it is safe to run as often as you like.
 --
---  1st Culling shows a Premium Care row when the batch has a
---  Transplanted_Premium log with a quantity above nought. If the row is
---  not on the screen, this says why: the log is missing, or it was saved
---  under another transaction type, or its quantity is nought.
+--  1st Culling shows a Premium Care row when a batch has a
+--  Transplanted_Premium log with a quantity above nought. That row is
+--  where the cull is keyed, and keying it is what balances the report.
 --
---  Change the batch number on the next line if you want a different one.
+--  This lists EVERY batch that has anything to do with Premium Care —
+--  the ones that are fine, and the ones where the seedlings are in the
+--  nursery but filed under a transaction type the report cannot read,
+--  which is the one case that needs a person.
 -- =====================================================================
-WITH params AS (SELECT '232'::TEXT AS batch),
+WITH
 
-/* Every movement out of the trays, by the type it was saved under. The
-   type is what decides which figure on 1st Culling a quantity lands in:
-     Transplanted             -> Transplanted (accounted)
-     Transplanted_Premium     -> Pending, and a Premium Care culling row
-     Transplanted_DoubleTone  -> Pending, and a D-Tone culling row        */
-moves AS (
-  SELECT l.transaction_type AS kind,
-         COUNT(*)                          AS records,
-         SUM(COALESCE(l.quantity_change, 0)) AS qty,
-         LEFT(STRING_AGG(DISTINCT COALESCE(NULLIF(TRIM(l.plot_name), ''), '(no plot)'), ', '), 90) AS plots
-  FROM shared_inventory_logs l, params p
-  WHERE l.batch_name = p.batch
-    AND l.transaction_type IN ('Planted', 'Transplanted',
-                               'Transplanted_Premium', 'Transplanted_DoubleTone',
-                               '1st_Culling')
+premium AS (
+  SELECT batch_name,
+         SUM(COALESCE(quantity_change, 0)) AS qty,
+         COUNT(*)                          AS records
+  FROM shared_inventory_logs
+  WHERE transaction_type = 'Transplanted_Premium'
   GROUP BY 1
 ),
 
-/* A plot named PREMIUM CARE saved under some OTHER type is the mistake
-   worth catching by name: the seedlings are in the nursery, the report
-   cannot see them there, and nothing on the screen says so. */
+/* A plot named PREMIUM CARE saved under some OTHER type. The seedlings
+   are in the nursery, the report cannot see them there, and nothing on
+   the screen says so — the one mistake worth catching by name.
+
+   Movements OUT of Premium Care are not this: those are saved as an
+   ordinary Transplanted with a real plot as their destination, and the
+   tray is named in the remark, not in plot_name.
+
+   The 1st Culling record against the Premium Care row is not this
+   either — it is the whole point of the row, and it is saved with
+   PREMIUM CARE as its plot. Counting it as misfiled turned every batch
+   that had finished the job into one that needed fixing. */
 misfiled AS (
-  SELECT l.transaction_type AS kind,
+  SELECT batch_name,
+         SUM(COALESCE(quantity_change, 0)) AS qty,
          COUNT(*)                          AS records,
-         SUM(COALESCE(l.quantity_change, 0)) AS qty
-  FROM shared_inventory_logs l, params p
-  WHERE l.batch_name = p.batch
-    AND UPPER(TRIM(l.plot_name)) IN ('PREMIUM CARE', 'PREMIUM-CARE', 'PREMIUMCARE')
-    AND l.transaction_type <> 'Transplanted_Premium'
+         LEFT(STRING_AGG(DISTINCT transaction_type, ', '), 60) AS kinds
+  FROM shared_inventory_logs
+  WHERE UPPER(TRIM(plot_name)) IN ('PREMIUM CARE', 'PREMIUM-CARE', 'PREMIUMCARE')
+    AND transaction_type NOT IN ('Transplanted_Premium', '1st_Culling')
   GROUP BY 1
+),
+
+/* What each batch has already culled against the Premium Care row, so a
+   batch that is finished with it can be told from one that has not
+   started. */
+culled AS (
+  SELECT batch_name, SUM(COALESCE(quantity_change, 0)) AS qty
+  FROM shared_inventory_logs
+  WHERE transaction_type = '1st_Culling'
+    AND UPPER(TRIM(plot_name)) = 'PREMIUM CARE'
+  GROUP BY 1
+),
+
+every_batch AS (
+  SELECT batch_name FROM premium
+  UNION
+  SELECT batch_name FROM misfiled
 )
 
-/* ONE result set — the SQL Editor only shows the last statement's. */
-SELECT * FROM (
-  SELECT 0 AS sort_order,
-         '-- VERDICT --'::TEXT AS line,
-         CASE
-           WHEN (SELECT COALESCE(SUM(qty), 0) FROM moves WHERE kind = 'Transplanted_Premium') > 0
-             THEN 'Premium Care HAS ' ||
-                  (SELECT SUM(qty) FROM moves WHERE kind = 'Transplanted_Premium')::TEXT ||
-                  ' seedlings on record. 1st Culling should be showing a PREMIUM CARE row ' ||
-                  'with that quantity — if it is not, the page is stale: reload it hard.'
-           WHEN (SELECT COUNT(*) FROM misfiled) > 0
-             THEN 'A PREMIUM CARE plot is saved under the WRONG transaction type (see the ' ||
-                  'misfiled line below), so the report cannot see it as Premium Care. ' ||
-                  'Re-save that movement on the Transplanting tab with Premium Care PN ' ||
-                  'as its destination.'
-           ELSE 'This batch has NO Premium Care transplant on record at all. Nothing was ' ||
-                'ever moved to that nursery, so there is no row for 1st Culling to show. ' ||
-                'Key it on the Transplanting tab first.'
-         END AS detail,
-         NULL::BIGINT AS records, NULL::BIGINT AS qty, NULL::TEXT AS plots
-  UNION ALL
-  SELECT 1, kind, 'saved movements of this kind', records, qty, plots FROM moves
-  UNION ALL
-  SELECT 2, 'misfiled: ' || kind,
-            'a PREMIUM CARE plot saved under this type instead', records, qty, NULL
-  FROM misfiled
-) x
-ORDER BY sort_order, line;
+/* ONE result set — the SQL Editor only shows the last statement's.
+   The batches that need a person sort to the top. */
+SELECT b.batch_name                        AS batch,
+       COALESCE(p.qty, 0)                  AS in_premium_care,
+       COALESCE(c.qty, 0)                  AS culled_against_it,
+       COALESCE(m.qty, 0)                  AS misfiled_qty,
+       COALESCE(m.kinds, '')               AS misfiled_as,
+       CASE
+         WHEN m.batch_name IS NOT NULL
+           THEN 'NEEDS FIXING - a PREMIUM CARE plot is saved under ' || m.kinds
+                || ', so 1st Culling cannot see those seedlings as Premium Care. '
+                || 'Open the batch -> Transplanting -> edit that movement and set '
+                || 'its destination to Premium Care PN, then save.'
+         WHEN COALESCE(p.qty, 0) <= 0
+           THEN 'nothing in Premium Care on this batch'
+         WHEN COALESCE(c.qty, 0) > 0
+           THEN 'ok - ' || p.qty || ' in the nursery, ' || c.qty || ' already culled against it'
+         ELSE 'ok - ' || p.qty || ' in the nursery; 1st Culling shows a PREMIUM CARE '
+              || 'row with that quantity, waiting for its cull to be keyed'
+       END                                 AS status
+FROM every_batch b
+LEFT JOIN premium  p ON p.batch_name = b.batch_name
+LEFT JOIN misfiled m ON m.batch_name = b.batch_name
+LEFT JOIN culled   c ON c.batch_name = b.batch_name
+ORDER BY (m.batch_name IS NOT NULL) DESC, b.batch_name DESC;
 
 -- WHAT A GOOD RESULT LOOKS LIKE
---   Row 1 is the verdict, in plain words. Below it, one line per kind of
---   movement the batch has, with how many records and how many seedlings.
+--   Every row says "ok". Anything starting NEEDS FIXING is at the top,
+--   and its text says which batch and what to do about it.
 --
---   Transplanted_Premium with a quantity above nought is what puts the
---   Premium Care row on 1st Culling. Its quantity is what that row's
---   tray figure shows, and what you cull against.
+--   in_premium_care is what the 1st Culling PREMIUM CARE row shows as its
+--   tray quantity. culled_against_it is what has been keyed there so far.
 --
---   Any "misfiled:" line means a movement into Premium Care was saved
---   under the wrong type — those seedlings are counted somewhere else.
+--   A batch with no Premium Care at all does not appear here, and has no
+--   Premium Care row on 1st Culling — which is correct, not a fault.
