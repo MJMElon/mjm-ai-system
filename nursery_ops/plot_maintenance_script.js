@@ -360,6 +360,26 @@ function migrateManuringShape(s, plots) {
       }
     });
   }
+
+  /* ── Repair a dose the editor stored as the word "dose" ──
+     weCols called updateManuringDose with a field name it does not take, so
+     the number went into a fourth argument that is nowhere and the string
+     'dose' was saved instead. Every manuring dose keyed in the editor before
+     that was fixed is a literal "dose" in a saved month, and it prints as
+     "Yaramila dosegm" on the work record and as a dash in the totals.
+
+     A dose is a number or it is nothing, so anything that is not one falls
+     back to the fertiliser's own figure from the Setting page — which is
+     what choosing that fertiliser would have put there anyway. */
+  s.manuringConfig.forEach(round => {
+    if (!Array.isArray(round)) return;
+    round.forEach(c => {
+      if (!c || c.dose === undefined || c.dose === null || c.dose === '') return;
+      if (Number.isFinite(Number(c.dose))) return;
+      const own = getDoseForChem(c.name);
+      c.dose = own == null ? '' : own;
+    });
+  });
 }
 function defaultInterrowConfig() {
   // Nested: array of rounds → each round is an array of chemical columns
@@ -6392,7 +6412,14 @@ function summaryTable(it, m) {
     return r;
   }).join('');
 
-  return `<div class="ss-wrap">
+  /* An expanded nursery takes the whole row. Two cards abreast is right for
+     reading four ticks across; it is not enough for a plot list with four
+     weeks, a Set column and the buttons, which pushed Actions off the edge
+     and made closing the panel a horizontal scroll. Opening one is the
+     moment there is more to show, so that is the moment it gets the room. */
+  const anyOpen = WORKS.some(w => _expanded[n + '|' + w.key]);
+
+  return `<div class="ss-wrap${anyOpen ? ' is-wide' : ''}">
       <div class="ss-head">
         <div class="ss-name">${esc(label)}</div>
         <div class="ss-count">${blocks.length} week${blocks.length === 1 ? '' : 's'}</div>
@@ -6705,7 +6732,13 @@ function weCols(kind, i, n, m) {
     dose: many ? c.dose : c.chem_dose,
     unit: many ? (c.unit || 'gm') : (c.chem_unit || 'mL'),
     onDose: many
-      ? `updateManuringDose(${i},${ci},'dose',+this.value)`
+      /* THREE arguments. updateManuringDose(ri, ci, v) does not take a field
+         name — Interrow's does, and this was written to match it. The dose
+         then arrived as the fourth argument, which is nowhere, and the
+         string 'dose' was stored as the dose. A number input cannot show
+         "dose", so the box went blank at the next repaint: type 45, tick a
+         plot, watch the 45 vanish. */
+      ? `updateManuringDose(${i},${ci},+this.value)`
       : `updateInterrowDose(${i},${ci},'chem_dose',+this.value)`,
     /* Manuring is spread dry and mixes nothing with it, so it gets no
        second control — only the two sprays do. */
@@ -6963,11 +6996,16 @@ function weAddCol(i) {
   const stock = (kind === 'manuring' ? fertNames('monthly') : taggedNames('interrow'))
     .filter(x => x !== '—').length;
   if (!round || round.length >= Math.max(6, stock)) return;
+  /* The index the new column takes, fixed BEFORE the push. A plot's ticks
+     are not guaranteed to be as long as the column list — see weRemoveCol —
+     and pushing onto a short array puts the new column's tick under an
+     earlier column's number. Write it at its own index instead. */
+  const ci = round.length;
   round.push(weBlankCol(kind));
   (NURSERY_PLOTS[n] || []).forEach(pl => {
     if (!s[kind][pl]) s[kind][pl] = [];
-    if (!s[kind][pl][i]) s[kind][pl][i] = [];
-    s[kind][pl][i].push(false);
+    if (!Array.isArray(s[kind][pl][i])) s[kind][pl][i] = [];
+    s[kind][pl][i][ci] = false;
   });
   persistStateSoon(n, m);
   autoSyncRecords();
@@ -6999,7 +7037,18 @@ function weRemoveCol(i) {
       `Remove the last column of week ${i + 1}? ${ticked} plot${ticked === 1 ? '' : 's'} `
       + 'ticked in it will lose that tick.')) return;
   round.pop();
-  plots.forEach(pl => { if (s[kind][pl] && s[kind][pl][i]) s[kind][pl][i].pop(); });
+  /* Remove the tick belonging to the COLUMN that went, by its index — not
+     whatever happens to be last in the array.
+
+     A plot's tick list is not the same length as the column list. A month
+     carried forward can arrive with one entry against three columns, and a
+     seeded one with three against one. pop() on the short case took the
+     entry at the END, which was the FIRST column's tick: add a fertiliser,
+     drop it again, and the ticks you had made vanished with it. */
+  plots.forEach(pl => {
+    const arr = s[kind][pl] && s[kind][pl][i];
+    if (Array.isArray(arr) && arr.length > ci) arr.splice(ci, 1);
+  });
   persistStateSoon(n, m);
   autoSyncRecords();
   renderWorkEditor();

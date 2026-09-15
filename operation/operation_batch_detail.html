@@ -1336,9 +1336,25 @@
                                             <div class="text-[10px] font-black text-[#0891b2] uppercase tracking-widest">🎯 Double Tone Quantity in Nursery</div>
                                             <div class="text-[9px] font-bold text-[#8a7a68] mt-0.5">Key in this batch's D-Tone quantity — used as the balance when source tray is DOUBLE-TONE, and added to the allocation total.</div>
                                         </div>
-                                        <input type="number" id="t3-dtone-nursery-qty" min="0" placeholder="0"
-                                            class="input-style !text-[#0891b2] font-black text-lg md:w-48"
-                                            oninput="calcTransplanting(); calcCulling();" onchange="saveT3DtoneQty()">
+                                        <!-- WHEN the quantity was counted, beside the quantity
+                                             itself. Every other record on this tab carries its
+                                             date and this one did not, so a figure keyed in
+                                             March and a figure keyed yesterday read the same
+                                             on a report somebody is signing. -->
+                                        <div class="flex flex-wrap items-end gap-3">
+                                            <label class="flex flex-col gap-1 flex-1 min-w-[8.5rem] md:flex-none">
+                                                <span class="text-[9px] font-black text-[#0891b2] uppercase tracking-widest">Date Counted</span>
+                                                <input type="date" id="t3-dtone-nursery-date"
+                                                    class="input-style !text-[#0891b2] font-bold w-full md:w-40"
+                                                    onchange="saveT3DtoneQty()">
+                                            </label>
+                                            <label class="flex flex-col gap-1 flex-1 min-w-[7rem] md:flex-none">
+                                                <span class="text-[9px] font-black text-[#0891b2] uppercase tracking-widest">Quantity</span>
+                                                <input type="number" id="t3-dtone-nursery-qty" min="0" placeholder="0"
+                                                    class="input-style !text-[#0891b2] font-black text-lg w-full md:w-48"
+                                                    oninput="calcTransplanting(); calcCulling();" onchange="saveT3DtoneQty()">
+                                            </label>
+                                        </div>
                                     </div>
 
                                     <!-- Saved records table -->
@@ -3520,19 +3536,35 @@
            re-read by syncTab3 when that tab actually renders. */
         async function loadDtoneNurseryQty(batch) {
             const input = document.getElementById('t3-dtone-nursery-qty');
+            const dateEl = document.getElementById('t3-dtone-nursery-date');
             if (!input) return;
             const b = (batch || document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
             input.value = '';
+            if (dateEl) dateEl.value = '';
             if (!b || b === '—') return;
             try {
                 const { data: dtRows } = await _supabase.from('shared_inventory_logs')
-                    .select('quantity_change')
+                    .select('quantity_change, transaction_date, created_at')
                     .eq('batch_name', b)
                     .eq('transaction_type', 'DTone_Nursery_Qty')
                     .order('created_at', { ascending: false })
                     .limit(1);
                 if (dtRows && dtRows[0] && dtRows[0].quantity_change != null) {
                     input.value = dtRows[0].quantity_change;
+                    /* The day it was counted. A row saved before this box
+                       existed has no transaction_date, so the day the row was
+                       written stands in — it is the closest thing on record to
+                       when somebody keyed the figure, and leaving the box empty
+                       beside a saved quantity reads as "never dated" when what
+                       is true is "dated by when it was entered". */
+                    if (dateEl) {
+                        dateEl.value = dtRows[0].transaction_date
+                            || (dtRows[0].created_at ? String(dtRows[0].created_at).split('T')[0] : '');
+                    }
+                } else if (dateEl) {
+                    // Nothing keyed yet: offer today, which is what somebody
+                    // counting now would put, and which they can change.
+                    dateEl.value = new Date().toISOString().split('T')[0];
                 }
             } catch (e) { console.warn('Could not load D-Tone nursery qty:', e.message); }
         }
@@ -3550,6 +3582,13 @@
             const raw = (document.getElementById('t3-dtone-nursery-qty')?.value ?? '').trim();
             if (raw === '') return; // blank = not keyed; leave any stored value untouched
             const qty = Math.max(0, parseInt(raw) || 0);
+            /* The date beside it. Blank means the box was cleared, and today
+               is the honest answer for a figure being keyed right now — but
+               it is written into the box first, so what saves is what the
+               person can see, not a different number chosen behind them. */
+            const dateEl = document.getElementById('t3-dtone-nursery-date');
+            if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().split('T')[0];
+            const dtDate = dateEl ? dateEl.value : '';
             try {
                 const { data: rows } = await _supabase.from('shared_inventory_logs')
                     .select('id')
@@ -3561,7 +3600,9 @@
                     batch_name: batch,
                     plot_name: 'D-Tone',
                     quantity_change: qty,
+                    transaction_date: dtDate || null,
                     remark: `Double Tone quantity in nursery (admin keyed): ${qty}`
+                                + (dtDate ? ` on ${dtDate}` : '')
                 });
                 let error;
                 if (rows && rows[0]) {
