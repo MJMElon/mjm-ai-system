@@ -2010,7 +2010,7 @@
                                     </div>
 
                                     <div id="t7-cal-edit-banner" class="hidden mb-2 px-3 py-2 rounded-lg bg-[#fff5f5] border border-[#f8d7da] text-[11px] font-bold text-[#a83020] flex items-center justify-between gap-3">
-                                        <span>✏️ Editing an existing adjustment. Saving will update the record in place.</span>
+                                        <span id="t7-cal-edit-msg">✏️ Editing an existing adjustment. Saving will update the record in place.</span>
                                         <button type="button" onclick="cancelEditCalibration()" class="px-3 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[10px] font-black uppercase tracking-widest rounded hover:bg-[#fff5f5]">Cancel</button>
                                     </div>
 
@@ -2698,7 +2698,22 @@
                 if (isApproved) {
                     const whoTxt = approvedBy ? ` <span class="text-[#4a7a2e]">${esc(approvedBy)}</span>` : '';
                     const whenTxt = approvedAt ? ` · ${esc(formatAuditDate(approvedAt) || approvedAt)}` : '';
-                    actionsCell = `<td class="px-3 py-2 whitespace-nowrap"><span class="inline-flex items-center gap-1 px-2 py-1 bg-[#f0f8ec] border border-[#c3e6cb] text-[#3d4f1e] text-[9px] font-black uppercase tracking-wider rounded" title="Locked${approvedBy ? ' by ' + approvedBy : ''}${approvedAt ? ' on ' + approvedAt : ''}">🔒 Approved${whoTxt}${whenTxt}</span></td>`;
+                    /* An admin can still edit an approved adjustment — it is
+                       how a row raised against the wrong half of the sum gets
+                       put right, and the alternative was deleting the record
+                       and its history with it.
+
+                       Editing RETURNS IT TO PENDING: the saved remark is
+                       rebuilt from the form and carries no approval suffix, so
+                       the figures stop moving until somebody approves it
+                       again. A signature has to belong to the numbers it was
+                       given for, and an admin quietly changing -53 to -500
+                       under somebody else's approval is exactly what that
+                       rule is for. */
+                    const editBtn = adminActions
+                        ? `<button type="button" onclick="editCalibration('${esc(r.id)}', ${q}, '${esc(reportTxt)}', '${esc(plotTxt)}', '${esc(reasonTxt)}', '${esc(cal.side)}', true)" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[9px] font-black uppercase rounded hover:bg-[#f0f8ff] ml-1" title="Edit this approved adjustment — it returns to pending and needs approving again">Edit</button>`
+                        : '';
+                    actionsCell = `<td class="px-3 py-2 whitespace-nowrap"><span class="inline-flex items-center gap-1 px-2 py-1 bg-[#f0f8ec] border border-[#c3e6cb] text-[#3d4f1e] text-[9px] font-black uppercase tracking-wider rounded" title="Approved${approvedBy ? ' by ' + approvedBy : ''}${approvedAt ? ' on ' + approvedAt : ''}">🔒 Approved${whoTxt}${whenTxt}</span>${editBtn}</td>`;
                 } else if (adminActions) {
                     actionsCell = `<td class="px-3 py-2 whitespace-nowrap">
                         <button type="button" onclick="editCalibration('${esc(r.id)}', ${q}, '${esc(reportTxt)}', '${esc(plotTxt)}', '${esc(reasonTxt)}', '${esc(cal.side)}')" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[9px] font-black uppercase rounded hover:bg-[#f0f8ff] mr-1">Edit</button>
@@ -2708,7 +2723,7 @@
                 } else {
                     actionsCell = `<td class="px-3 py-2 text-[10px] text-[#8a7a68]">🔒</td>`;
                 }
-                return `<tr class="border-t border-[#e8dcc8]">
+                return `<tr class="border-t border-[#e8dcc8]" data-cal-id="${esc(r.id)}" data-cal-approved="${isApproved ? '1' : '0'}">
                     <td class="px-3 py-2 text-[11px] font-bold text-[#3d2610]">${formatAuditDate(r.created_at)}</td>
                     <td class="px-3 py-2 text-sm font-black ${cls}">${sign}${q.toLocaleString()}</td>
                     <td class="px-3 py-2 text-[11px] text-[#3a7ab4] font-bold">${esc(reportTxt) || '—'}</td>
@@ -2755,24 +2770,29 @@
             } catch (_) { return false; }
         }
 
-        // Returns true when the row referenced by id carries the approval
-        // suffix in its remark. Reads the cached value from the rendered
-        // history table so we don't have to round-trip to the DB.
+        /* Does the row referenced by id carry the approval suffix?
+
+           Read off the row itself, which knows. It used to be inferred — "no
+           Edit button rendered for this id, so it must be approved" — and that
+           inference quietly inverted the day approved rows grew an Edit button
+           of their own, which would have unlocked Delete on every approved
+           adjustment without anybody asking for it.
+
+           Unknown id answers true: refusing to delete a row this table cannot
+           account for is the safe way to be wrong. */
         function _t7IsRowApproved(id) {
-            const btn = document.querySelector(`#t7-cal-history button[onclick*="'${id}'"]`);
-            // If the only button rendered for this id is gone, the row is
-            // already approved (the lock pill replaces the action buttons).
-            if (!btn) return true;
-            return false;
+            const tr = document.querySelector(`#t7-cal-history tr[data-cal-id="${id}"]`);
+            if (!tr) return true;
+            return tr.dataset.calApproved === '1';
         }
 
-        function editCalibration(id, qty, report, plot, reason, side) {
+        /* `wasApproved` comes from the row that drew the button, not from
+           guessing at the DOM: the old check read "no Edit button rendered" as
+           "approved", which stopped being true the moment approved rows grew
+           an Edit button of their own. */
+        function editCalibration(id, qty, report, plot, reason, side, wasApproved) {
             if (!_t7IsAdmin()) {
                 showToast('Only admins can edit calibration entries.', 'error');
-                return;
-            }
-            if (_t7IsRowApproved(id)) {
-                showToast('This calibration is approved and cannot be edited.', 'error');
                 return;
             }
             _t7EditingId = id;
@@ -2789,6 +2809,11 @@
             if (sideEl)   sideEl.value   = side   || 'seed';
             if (reasonEl) reasonEl.value = reason || '';
             if (btn)      btn.innerText  = 'Update Adjustment';
+            const msg = document.getElementById('t7-cal-edit-msg');
+            if (msg) msg.innerText = wasApproved
+                ? '✏️ Editing an APPROVED adjustment. Saving returns it to pending — '
+                  + 'it stops moving any figure until somebody approves it again.'
+                : '✏️ Editing an existing adjustment. Saving will update the record in place.';
             if (banner)   banner.classList.remove('hidden');
             qtyEl?.focus();
             qtyEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2809,6 +2834,8 @@
             if (sideEl)   sideEl.value   = 'seed';
             if (reasonEl) reasonEl.value = '';
             if (btn)      btn.innerText  = 'Save Adjustment';
+            const msg = document.getElementById('t7-cal-edit-msg');
+            if (msg) msg.innerText = '✏️ Editing an existing adjustment. Saving will update the record in place.';
             if (banner)   banner.classList.add('hidden');
         }
 
@@ -2817,8 +2844,12 @@
                 showToast('Only admins can delete calibration entries.', 'error');
                 return;
             }
+            /* Deleting an approved one is still refused. An admin can EDIT it
+               — that keeps the record and its history and sends it back for
+               approval — but a figure somebody signed for should not be able
+               to vanish. Edit it to nought if it was raised in error. */
             if (_t7IsRowApproved(id)) {
-                showToast('This calibration is approved and cannot be deleted.', 'error');
+                showToast('This adjustment is approved. Edit it instead — it returns to pending and can be approved again.', 'error');
                 return;
             }
             if (!confirm('Delete this calibration adjustment? This cannot be undone.')) return;
@@ -2901,9 +2932,15 @@
                 transaction_type: 'Stock_Calibration',
                 plot_name: plot,
                 quantity_change: qty,
-                // Side: is read back by _parseCalibration. A row without it is
-                // a seed-count adjustment, which is what every row written
-                // before this existed meant.
+                /* Side: is read back by _parseCalibration. A row without it is
+                   a seed-count adjustment, which is what every row written
+                   before this existed meant.
+
+                   Rebuilt from the form, which is also what RETURNS AN EDITED
+                   ROW TO PENDING: any "[APPROVED by … on …]" the old remark
+                   carried is not copied across, so the adjustment stops moving
+                   figures until it is approved again. Deliberate — see the
+                   Edit button on approved rows. */
                 remark: `Report: ${report}. Plot: ${plot}. Side: ${side}. ${reason}`
             });
 
