@@ -1492,6 +1492,36 @@
                                         </div>
                                     </div>
 
+                                    <!-- WHERE THE PENDING SEEDLINGS ACTUALLY ARE.
+
+                                         Pending is everything planted that has not reached a main
+                                         plot and has not been culled — which includes the trays
+                                         still holding seedlings AND the two holding nurseries,
+                                         Premium Care and D-Tone. Those two were inside the figure
+                                         with nothing on the screen saying so, and a batch that had
+                                         sent 500 seedlings to Premium Care read "Pending 500" with
+                                         no way to tell that from 500 nobody had touched.
+
+                                         Each part appears only when it has something in it, and
+                                         the line as a whole only when the batch has a holding
+                                         nursery at all — so a batch with neither looks exactly as
+                                         it did. -->
+                                    <div id="t4-pending-breakdown" class="hidden -mt-2 mb-4 px-1 flex flex-wrap items-baseline gap-x-5 gap-y-1">
+                                        <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Pending sits in</span>
+                                        <span id="t4-pend-premium" class="hidden text-[11px] font-black text-[#7a4a10]">
+                                            <span class="uppercase tracking-widest text-[9px]">Premium Care</span>
+                                            <span class="tabular-nums ml-1.5" id="t4-pend-premium-val">0</span>
+                                        </span>
+                                        <span id="t4-pend-dtone" class="hidden text-[11px] font-black text-[#0891b2]">
+                                            <span class="uppercase tracking-widest text-[9px]">D-Tone</span>
+                                            <span class="tabular-nums ml-1.5" id="t4-pend-dtone-val">0</span>
+                                        </span>
+                                        <span id="t4-pend-trays" class="hidden text-[11px] font-black text-[#8a7a68]">
+                                            <span class="uppercase tracking-widest text-[9px]">Still In Trays</span>
+                                            <span class="tabular-nums ml-1.5" id="t4-pend-trays-val">0</span>
+                                        </span>
+                                    </div>
+
                                     <!-- Hidden compat ids for existing JS -->
                                     <span id="t4-val-premium" class="hidden">0</span>
                                     <span id="t4-val-premium-pct" class="hidden">0%</span>
@@ -7085,6 +7115,31 @@ Thank you.`;
             setPct('t4-val-doubletone',  't4-val-doubletone-pct',  t4_totalDoubletone,       0);
             setPct('t4-val-cull',        't4-val-cull-pct',        totalCulled,              pctCull);
             setPct('t4-val-unaccounted', 't4-val-unaccounted-pct', Math.max(0, unaccounted), pctUnaccounted);
+
+            /* Name the parts of Pending. Premium Care and D-Tone are holding
+               nurseries: the seedlings are in a known place, they just have
+               not reached a main plot, so they count as pending — and now say
+               so by name instead of hiding inside one figure. Whatever is left
+               after them is still sitting in the planting trays. */
+            (function showT4Pending() {
+                const pend  = Math.max(0, unaccounted);
+                const prem  = t4_totalPremium    || 0;
+                const dtone = t4_totalDoubletone || 0;
+                const trays = Math.max(0, pend - prem - dtone);
+                const part = (id, valId, qty) => {
+                    const el = document.getElementById(id); if (!el) return;
+                    el.classList.toggle('hidden', qty <= 0);
+                    const v = document.getElementById(valId);
+                    if (v) v.innerText = qty.toLocaleString();
+                };
+                part('t4-pend-premium', 't4-pend-premium-val', prem);
+                part('t4-pend-dtone',   't4-pend-dtone-val',   dtone);
+                part('t4-pend-trays',   't4-pend-trays-val',   trays);
+                const row = document.getElementById('t4-pending-breakdown');
+                // Only where there is a holding nursery to point at: a batch
+                // with neither has nothing this line could tell it.
+                if (row) row.classList.toggle('hidden', (prem + dtone) <= 0);
+            })();
 
             // Balance status box — simplified wording
             const box = document.getElementById('t4-balance-box');
