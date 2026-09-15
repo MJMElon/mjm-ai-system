@@ -229,7 +229,7 @@
         async function initLedger() {
             try {
                 // Fetch reception logs + every culling-related log type + transplant logs in parallel.
-                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, rowVerifRes, stageVerifRes, calibRes, collectRes] = await Promise.all([
+                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, rowVerifRes, stageVerifRes, collectRes] = await Promise.all([
                     fetchAllRows(() => _supabase.from('shared_inventory_logs')
                         .select('*')
                         .eq('transaction_type', 'Seeds_Received')
@@ -261,15 +261,6 @@
                     fetchAllRows(() => _supabase.from('operation_batch_verifications')
                         .select('batch_name, stage')
                         .eq('stage', 'cull_3')
-                        .order('id', { ascending: true })),
-                    /* Stock calibrations. A raised one says the count was out
-                       by N and why; an APPROVED one has been ruled on and its
-                       quantity is already inside the figures. One still
-                       waiting is an open question about how many seedlings
-                       there are — see the completion rule below. */
-                    fetchAllRows(() => _supabase.from('shared_inventory_logs')
-                        .select('batch_name, quantity_change, remark')
-                        .eq('transaction_type', 'Stock_Calibration')
                         .order('id', { ascending: true })),
                     // "How much of a batch has been collected" — the source is
                     // shared_do_records, NOT shared_collection_bookings. Bookings
@@ -465,32 +456,29 @@
                 });
                 const cull3StageSigned = new Set((stageVerifRes.data || []).map(r => r.batch_name));
 
-                /* AN OPEN QUESTION IS NOT A FINISHED BATCH.
+                /* AN OPEN REJECTION IS NOT A FINISHED BATCH.
 
-                   Two things in this system mean somebody has raised a problem
-                   that nobody has settled:
+                   HQ sent a report tab back for amendment. The row is deleted
+                   when the rejection is cleared or the tab re-verified, so a
+                   row that is still there is still open — and the batch could
+                   otherwise sit in Completed and in Amendment Needed at once,
+                   the list calling the work finished while the tab beside it
+                   says it is in dispute.
 
-                     a REJECTION — HQ sent a report tab back for amendment. The
-                       row is deleted when the rejection is cleared or the tab
-                       re-verified, so a row that is still there is still open.
+                   A PENDING ADJUSTMENT does NOT hold a batch, and held every
+                   finished one for a while. An adjustment nobody has approved
+                   moves no figure — that is the rule everywhere else — so a
+                   batch whose plots all reconcile reconciles with or without
+                   it. The claim is worth seeing on the Adjustments tab; it is
+                   not a variance by itself.
 
-                     a PENDING CALIBRATION — somebody counted a discrepancy and
-                       said why, and no verifier has ruled on it. An approved
-                       one carries "[APPROVED by … on …]" and its quantity is
-                       already inside the figures; one without that marker is a
-                       claim about how many seedlings there are, still standing.
-
-                   Either way the batch appears in Amendment Needed or on the
-                   Adjustments tab — and could sit in Completed at the same
-                   time, which is the list saying the work is finished while
-                   the screen beside it says it is in dispute. */
+                   A VARIANCE still holds the batch, and is caught where it
+                   shows: the coverage test below needs every plot's 3rd culled
+                   to equal its drone-map count. A plot that does not tally is
+                   not covered, so the batch stays Active until somebody
+                   settles it — whether or not an adjustment was ever raised
+                   about it. */
                 const openRejection = new Set((rejectRes.data || []).map(r => r.batch_name).filter(Boolean));
-                const pendingCalibration = new Set();
-                (calibRes.data || []).forEach(r => {
-                    if (!r.batch_name) return;
-                    if (r.remark && /\[APPROVED by [^\]]+ on [^\]]+\]/.test(r.remark)) return;
-                    pendingCalibration.add(r.batch_name);
-                });
 
                 const completedBatchNames = new Set();
                 /* Batches finished in the field but held out of Completed by an
@@ -517,8 +505,7 @@
                     if (!allCovered) return;
                     // Counted, checked — and still not finished if somebody has
                     // raised something nobody has settled.
-                    if (openRejection.has(batch))      { heldByIssue[batch] = 'Amendment needed — a report was rejected'; return; }
-                    if (pendingCalibration.has(batch)) { heldByIssue[batch] = 'Adjustment raised, not yet approved'; return; }
+                    if (openRejection.has(batch)) { heldByIssue[batch] = 'Amendment needed — a report was rejected'; return; }
                     completedBatchNames.add(batch);
                 });
                 // A batch is in Main Nursery once any transplant log has been written.
