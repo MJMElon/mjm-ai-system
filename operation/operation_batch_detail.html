@@ -1698,7 +1698,16 @@
                                     <div class="hidden lg:grid gap-2 items-center text-sm font-black" style="grid-template-columns: 1fr 1.1fr 0.8fr 0.8fr 0.8fr 0.8fr 1.4fr;">
                                         <div></div>
                                         <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">TOTALS</div>
-                                        <div class="text-[#3d2610]" id="t5-tot-transplanted">0</div>
+                                        <!-- The total is what the report is accounting for, so it
+                                             already has any approved plot-stock adjustment in it —
+                                             otherwise Transplanted less Dead would not come to the
+                                             Alive beside it. The line under it says so, because a
+                                             total that is not the plain sum of its column has to
+                                             account for itself. -->
+                                        <div>
+                                            <div class="text-[#3d2610]" id="t5-tot-transplanted">0</div>
+                                            <div id="t5-tot-adjust-note" class="hidden text-[9px] font-black text-[#7a4a10] uppercase tracking-wider leading-tight mt-0.5 whitespace-nowrap"></div>
+                                        </div>
                                         <div class="text-[#a83020]" id="t5-tot-dead">0</div>
                                         <div class="text-[#4a7a2e]" id="t5-tot-alive">0</div>
                                         <div class="text-[#a83020]" id="t5-tot-cull-rate" title="2nd Culled %">—</div>
@@ -1706,7 +1715,8 @@
                                     </div>
                                     <!-- Mobile totals -->
                                     <div class="flex flex-wrap gap-4 lg:hidden text-sm font-black">
-                                        <div><span class="text-[9px] text-[#8a7a68] uppercase block">Transplanted</span><span class="text-[#3d2610]" id="t5-tot-transplanted-m">0</span></div>
+                                        <div><span class="text-[9px] text-[#8a7a68] uppercase block">Transplanted</span><span class="text-[#3d2610]" id="t5-tot-transplanted-m">0</span>
+                                            <span id="t5-tot-adjust-note-m" class="hidden text-[9px] font-black text-[#7a4a10] uppercase tracking-wider block leading-tight"></span></div>
                                         <div><span class="text-[9px] text-[#8a7a68] uppercase block">Dead</span><span class="text-[#a83020]" id="t5-tot-dead-m">0</span></div>
                                         <div><span class="text-[9px] text-[#8a7a68] uppercase block">Alive</span><span class="text-[#4a7a2e]" id="t5-tot-alive-m">0</span></div>
                                     </div>
@@ -7814,8 +7824,19 @@ Thank you.`;
                 aliveDisp.innerText = deadInput.value !== '' ? alive.toLocaleString() : '—';
             }
 
-            if (transplanted > 0 && deadInput.value !== '') {
-                const cullPct = ((dead / transplanted) * 100).toFixed(2);
+            /* The rate divides by what the row is ACCOUNTING FOR, which is the
+               same figure Alive is worked out from — transplanted, less
+               anything an approved adjustment says is not there.
+
+               I had this as dead over the raw transplanted, on the reasoning
+               that a seedling nobody could find was not culled. True, and
+               beside the point: it is not available to be culled either, so
+               leaving it in the denominator understates the rate — and left
+               one row reading 4.00% under a totals line reading 8.51% for the
+               same four seedlings. One rule, and every line adds up. */
+            const netTransplanted = Math.max(0, transplanted + adjust);
+            if (netTransplanted > 0 && deadInput.value !== '') {
+                const cullPct = ((dead / netTransplanted) * 100).toFixed(2);
                 cullCell.innerText = cullPct + '%';
                 cullCell.className = 'text-sm font-black text-[#a83020] t5-cull-cell';
             } else {
@@ -7825,7 +7846,7 @@ Thank you.`;
         }
 
         function calcT5() {
-            let totTransplanted = 0, totAlive = 0, totDead = 0;
+            let totTransplanted = 0, totAlive = 0, totDead = 0, totAdjust = 0;
             let filledRows = 0, totalRows = 0;
             let mapsAttachedForExistingRows = 0;
 
@@ -7840,33 +7861,61 @@ Thank you.`;
                 const adjust       = parseInt(deadInput.dataset.adjust) || 0;
                 const alive        = Math.max(0, transplanted - dead + adjust);
                 totTransplanted   += transplanted;
+                totAdjust         += adjust;
                 totDead           += dead;
                 totAlive          += alive;
                 if (deadInput.value !== '') filledRows++;
                 if (t5_plotMaps[row.id]) mapsAttachedForExistingRows++;
             });
 
+            /* THE TOTAL IS WHAT THIS REPORT IS ACCOUNTING FOR.
+
+               A row keeps the seedling it was transplanted, because it was —
+               and says underneath how many of them are not there any more. The
+               TOTAL has no room for that second line and no reason to want
+               one: it is the figure the reader subtracts Dead from, so it has
+               to be the number the report is actually working with.
+
+               Left at the raw sum it did not reconcile with its own row:
+               13,510 transplanted less 24 dead is 13,486, beside an Alive
+               total of 13,485. One of those two figures had to move, and it is
+               not the one that is right. */
+            const totTransplantedNet = totTransplanted + totAdjust;
+
             // Dashboard
             const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
-            setEl('t5-from-transplanted', totTransplanted.toLocaleString());
+            setEl('t5-from-transplanted', totTransplantedNet.toLocaleString());
             setEl('t5-total-alive',       totAlive.toLocaleString());
             setEl('t5-total-dead',        totDead.toLocaleString());
 
-            const cullRateTxt = totTransplanted > 0 && totDead > 0
-                ? ((totDead / totTransplanted) * 100).toFixed(2) + '%' : '—';
+            const cullRateTxt = totTransplantedNet > 0 && totDead > 0
+                ? ((totDead / totTransplantedNet) * 100).toFixed(2) + '%' : '—';
             setEl('t5-cull-rate', cullRateTxt);
 
             const avgDeadEl = document.getElementById('t5-avg-dead');
             if (avgDeadEl) avgDeadEl.innerText = cullRateTxt;
 
             // Totals footer
-            setEl('t5-tot-transplanted',   totTransplanted.toLocaleString());
+            setEl('t5-tot-transplanted',   totTransplantedNet.toLocaleString());
             setEl('t5-tot-dead',           totDead.toLocaleString());
             setEl('t5-tot-alive',          totAlive.toLocaleString());
-            setEl('t5-tot-transplanted-m', totTransplanted.toLocaleString());
+            setEl('t5-tot-transplanted-m', totTransplantedNet.toLocaleString());
             setEl('t5-tot-dead-m',         totDead.toLocaleString());
             setEl('t5-tot-alive-m',        totAlive.toLocaleString());
             setEl('t5-tot-cull-rate', cullRateTxt);
+
+            /* …and says where the difference went, because a total that is not
+               the sum of the column above it has to account for itself. Shown
+               only when there is an adjustment; a batch with none reads exactly
+               as it did. */
+            const adjNote = (n) => {
+                const el = document.getElementById(n);
+                if (!el) return;
+                el.innerText = totAdjust ? `Incl. adjustment ${totAdjust > 0 ? '+' : ''}${totAdjust.toLocaleString()}` : '';
+                el.classList.toggle('hidden', !totAdjust);
+            };
+            adjNote('t5-tot-adjust-note');
+            adjNote('t5-tot-adjust-note-m');
 
             // Completion %: dead filled + map attached per row.
             // Only count maps belonging to currently-rendered rows so 100% requires every row to have BOTH dead value and map.
