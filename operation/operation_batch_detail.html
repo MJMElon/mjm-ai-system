@@ -9597,6 +9597,17 @@ Thank you.`;
                                     (parseInt(row.querySelector('.t6-balance')?.value) || 0) === 0;
                 const mapDone     = soldOutRow || mapQtyVal !== '';
                 const dateDone    = soldOutRow || cullDateVal !== '';
+                /* …and signed. A row nobody has checked is not a row that is
+                   done, and unverifying one has to be able to take the count
+                   back down — otherwise the tab says 6 / 6 Done and 100% with
+                   its tick already gone, three answers to one question.
+
+                   The whole stage being verified counts for every row on it,
+                   which is the same signature written once. */
+                const _rvT6 = window.MJMReview || {};
+                const rowKey = p ? `${String(p.plot || '').trim().toUpperCase()}|${p.destType || 'main'}` : '';
+                const signedRow = typeof _rvT6.rowVerified === 'function'
+                                ? _rvT6.rowVerified(6, rowKey) : true;
 
                 /* A "-R" plot's quantity is NOT a transplant. It arrived by
                    transfer from a plot on this same batch, which already
@@ -9628,7 +9639,7 @@ Thank you.`;
                 // Both halves of the fraction over the same set of plots, or
                 // a culled "-R" row pushes "done" past the total.
                 if (counts) {
-                    if (mapDone && dateDone) rowsDone++;
+                    if (mapDone && dateDone && signedRow) rowsDone++;
                     if (mapDone)  mapsKeyed++;
                     if (dateDone) datesKeyed++;
                 }
@@ -9688,7 +9699,17 @@ Thank you.`;
             const desc = document.getElementById('t6-status-desc');
             const btn  = document.getElementById('save-t6-btn');
             btn.innerText = `Save 3rd Culling Report (${pct}% Complete)`;
+            // Every figure keyed and a signature still to come is a different
+            // thing from a report with work left in it, and saying "5/6 Plots
+            // Done" over a tab where all six are keyed sends somebody hunting
+            // for the missing one.
+            const awaitingSignOff = totalRows > 0 && donePts === totalPts && rowsDone < totalRows;
             if (pct === 100)  { desc.innerText = '100% Complete';          desc.className = 'text-base font-black uppercase text-[#4a7a2e] mt-1'; }
+            else if (awaitingSignOff) {
+                const n = totalRows - rowsDone;
+                desc.innerText = `${n} Plot${n === 1 ? '' : 's'} Awaiting Verification`;
+                desc.className = 'text-base font-black uppercase text-[#c07820] mt-1';
+            }
             else if (pct > 0) { desc.innerText = `${rowsDone}/${totalRows} Plots Done`; desc.className = 'text-base font-black uppercase text-[#c07820] mt-1'; }
             else              { desc.innerText = 'Awaiting Data';           desc.className = 'text-base font-black uppercase text-[#3d2610] mt-1'; }
         }
@@ -10499,6 +10520,10 @@ Thank you.`;
         if (typeof window.calcT5 === 'function') {
           try { window.calcT5(); } catch (e) { console.warn(e); }
         }
+        // 3rd Culling counts a row as done only once somebody has signed it.
+        if (typeof window.calcT6 === 'function') {
+          try { window.calcT6(); } catch (e) { console.warn(e); }
+        }
         syncTabTicks();
       }
 
@@ -10836,6 +10861,11 @@ Thank you.`;
         if (tabIdx === 5 && typeof window.calcT5 === 'function') {
           try { window.calcT5(); } catch (e) { console.warn(e); }
         }
+        // 3rd Culling counts a row as done only once it is signed, so its
+        // figures have to be worked out again the moment one is.
+        if (tabIdx === 6 && typeof window.calcT6 === 'function') {
+          try { window.calcT6(); } catch (e) { console.warn(e); }
+        }
         if (tabIdx === 2 && typeof window.updatePlantingCompletion === 'function') {
           try { window.updatePlantingCompletion(); } catch (e) { console.warn(e); }
         }
@@ -10963,6 +10993,13 @@ Thank you.`;
                            // completion depends on the answer — see
                            // updateTransplantCompletion.
                            isVerified: (stage) => !!verifications[stage],
+                           // Has THIS row been signed off? Read by a tab that
+                           // counts its own finished rows — see calcT6.
+                           rowVerified: (tabIdx, key) => {
+                             const stage = STAGE_BY_TAB[tabIdx];
+                             if (!stage || !key) return false;
+                             return !!verifications[stage] || !!rowVerifs[stage + '::' + key];
+                           },
                            /* Has every ROW on a tab been verified?
 
                               A stage carries two kinds of sign-off. One is on
