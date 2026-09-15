@@ -2014,10 +2014,37 @@
                                         <button type="button" onclick="cancelEditCalibration()" class="px-3 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[10px] font-black uppercase tracking-widest rounded hover:bg-[#fff5f5]">Cancel</button>
                                     </div>
 
-                                    <div class="grid grid-cols-1 md:grid-cols-[180px_180px_1fr_1fr_auto] gap-3 items-end pt-2">
+                                    <div class="grid grid-cols-1 md:grid-cols-[180px_180px_190px_1fr_1fr_auto] gap-3 items-end pt-2">
                                         <div>
                                             <label class="label-style">Adjustment Qty (+/-)</label>
                                             <input type="number" id="t7-cal-qty" class="input-style" placeholder="e.g. 50 or -20" step="1">
+                                        </div>
+                                        <!-- WHICH COUNT WAS WRONG.
+
+                                             A discrepancy is one of two quite different things, and
+                                             only the person who found it knows which:
+
+                                               the SEED count was wrong — there were never that many.
+                                               The total the whole batch is measured against changes.
+
+                                               the PLOT stock was wrong — there were, they reached a
+                                               plot, and then they left it: stolen, died, miscounted
+                                               on the ground. The total does not change; what is
+                                               standing in that plot does.
+
+                                             Guessing is what made batch 234 read OVER ALLOCATED:
+                                             53 seedlings stolen out of B14 after transplanting were
+                                             taken off the batch total, while the transplant record
+                                             still counted them into the plot — so more was allocated
+                                             than there was to allocate, by exactly 53. -->
+                                        <div>
+                                            <label class="label-style">Which count was wrong</label>
+                                            <div class="select-wrapper">
+                                                <select id="t7-cal-side" class="input-style">
+                                                    <option value="seed">Seed count — changes the batch total</option>
+                                                    <option value="plot">Plot stock — lost after transplanting</option>
+                                                </select>
+                                            </div>
                                         </div>
                                         <div>
                                             <label class="label-style">Report</label>
@@ -2433,14 +2460,23 @@
             if (approved) body = body.replace(approved[0], '').trim();
             const rep  = body.match(/Report:\s*([^.]+?)\s*\.\s*/i);
             const plot = body.match(/Plot:\s*([^.]+?)\s*\.\s*/i);
+            /* WHICH COUNT WAS WRONG — see the form on tab 7.
+
+               Absent means "seed": every row written before the question was
+               asked meant the batch total, because that is the only thing an
+               adjustment could move then. Reading a missing marker as "plot"
+               would silently restate what those rows said. */
+            const side = body.match(/Side:\s*(seed|plot)\s*\.\s*/i);
             let reason = body;
             if (rep)  reason = reason.replace(rep[0], '');
             if (plot) reason = reason.replace(plot[0], '');
+            if (side) reason = reason.replace(side[0], '');
             return {
                 id: r.id,
                 qty: Number(r.quantity_change) || 0,
                 report: rep  ? rep[1].trim()  : '',
                 plot:   plot ? plot[1].trim() : (r.plot_name || ''),
+                side:   side ? side[1].trim().toLowerCase() : 'seed',
                 reason: reason.trim(),
                 approved: !!approved,
                 approvedBy: approved ? approved[1].trim() : '',
@@ -2473,8 +2509,31 @@
 
            Per-report totals are still kept — that is what each strip lists,
            and it is how somebody sees WHERE a correction came from. */
+        /* ONLY THE ONES THAT MOVE THE BATCH TOTAL.
+
+           A seed-count adjustment says there were never that many: the pool
+           every report measures against is different, so it belongs in the
+           allocation base. A plot-stock one says there were, they reached a
+           plot, and then they left it — stolen, dead, miscounted on the
+           ground. The batch still had them to allocate and still allocated
+           them, so the base and the allocation are BOTH unchanged; what
+           changed is how many are standing in that one plot, which is 3rd
+           Culling's business and is applied there, per plot.
+
+           Putting a plot-stock loss in the base is what made batch 234 read
+           OVER ALLOCATED: 53 came off the total while the transplant record
+           still counted them into B14, so 53 more was allocated than there
+           was to allocate. */
+        const ADJUST_PLOT_LOSS = {};   // PLOT → net of approved plot-stock adjustments
+        /* Named Total rather than Base because that is what every caller已 says;
+           only seed-count adjustments reach ADJUST_NET now, so the two are the
+           same figure. */
         function adjustNetTotal() {
             return Object.keys(ADJUST_NET).reduce((s, k) => s + (ADJUST_NET[k] || 0), 0);
+        }
+        function adjustPlotLoss(plot) {
+            const v = ADJUST_PLOT_LOSS[_t6PlotKey(plot)];
+            return typeof v === 'number' ? v : 0;
         }
 
         async function syncAdjustmentBars(batchId) {
@@ -2511,7 +2570,14 @@
                the unapproved ones, in amber, because "somebody has claimed
                this" is worth seeing — it just is not an answer yet. */
             Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
+            Object.keys(ADJUST_PLOT_LOSS).forEach(k => delete ADJUST_PLOT_LOSS[k]);
             rows.filter(r => r.approved).forEach(r => {
+                if (r.side === 'plot') {
+                    // Belongs to the plot it names, not to the batch total.
+                    const pk = _t6PlotKey(r.plot);
+                    if (pk) ADJUST_PLOT_LOSS[pk] = (ADJUST_PLOT_LOSS[pk] || 0) + r.qty;
+                    return;
+                }
                 const k = r.report.toLowerCase();
                 ADJUST_NET[k] = (ADJUST_NET[k] || 0) + r.qty;
             });
@@ -2522,6 +2588,8 @@
                not stop the other, nor the strips below from rendering. */
             try { if (typeof calcTransplanting === 'function') calcTransplanting(); } catch (e) { console.warn(e); }
             try { if (typeof calcCulling === 'function') calcCulling(); } catch (e) { console.warn(e); }
+            // 3rd Culling too — a plot-stock adjustment lands on one of its rows.
+            try { if (typeof renderT6PlotRows === 'function' && t6_plotData.length) renderT6PlotRows(); } catch (e) { console.warn(e); }
 
             const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
             bars.forEach(n => {
@@ -2607,23 +2675,21 @@
                 const q = Number(r.quantity_change) || 0;
                 const sign = q > 0 ? '+' : '';
                 const cls = q > 0 ? 'text-emerald-700' : 'text-rose-700';
-                // Remark format: "Report: <r>. Plot: <p>. <reason>" — pull each
-                // labelled field out so the table can show them in their own
-                // columns. Legacy rows (no labelled fields) fall back to "—".
-                const approvedMatch = r.remark ? r.remark.match(/\[APPROVED by ([^\]]+) on ([^\]]+)\]/) : null;
-                const isApproved    = !!approvedMatch;
-                const approvedBy    = approvedMatch ? approvedMatch[1].trim() : '';
-                const approvedAt    = approvedMatch ? approvedMatch[2].trim() : '';
-                let remarkBody = r.remark || '';
-                if (approvedMatch) remarkBody = remarkBody.replace(approvedMatch[0], '').trim();
-                const reportMatch = remarkBody.match(/Report:\s*([^.]+?)\s*\.\s*/i);
-                const plotMatch   = remarkBody.match(/Plot:\s*([^.]+?)\s*\.\s*/i);
-                const reportTxt   = reportMatch ? reportMatch[1].trim() : '';
-                const plotTxt     = plotMatch   ? plotMatch[1].trim()   : (r.plot_name || '');
-                let reasonTxt = remarkBody;
-                if (reportMatch) reasonTxt = reasonTxt.replace(reportMatch[0], '');
-                if (plotMatch)   reasonTxt = reasonTxt.replace(plotMatch[0], '');
-                reasonTxt = reasonTxt.trim();
+                /* ONE parse, shared with every other reader of these rows.
+
+                   This table used to pull the labelled fields out of the
+                   remark itself, which is two readers of one string: the day a
+                   field was added here, the copy that did not know about it
+                   put the new label into the Reason column. _parseCalibration
+                   is the one that knows the format. */
+                const cal = _parseCalibration(r);
+                const isApproved = cal.approved;
+                const approvedBy = cal.approvedBy;
+                const approvedAt = cal.approvedAt;
+                const reportTxt  = cal.report;
+                const plotTxt    = cal.plot;
+                const reasonTxt  = cal.reason;
+                const sideTxt    = cal.side === 'plot' ? 'Plot stock' : 'Seed count';
                 // Lock column:
                 //   Approved (any user)              → green ✓ Approved pill
                 //   Not approved + admin             → Edit | Del | Approve
@@ -2635,7 +2701,7 @@
                     actionsCell = `<td class="px-3 py-2 whitespace-nowrap"><span class="inline-flex items-center gap-1 px-2 py-1 bg-[#f0f8ec] border border-[#c3e6cb] text-[#3d4f1e] text-[9px] font-black uppercase tracking-wider rounded" title="Locked${approvedBy ? ' by ' + approvedBy : ''}${approvedAt ? ' on ' + approvedAt : ''}">🔒 Approved${whoTxt}${whenTxt}</span></td>`;
                 } else if (adminActions) {
                     actionsCell = `<td class="px-3 py-2 whitespace-nowrap">
-                        <button type="button" onclick="editCalibration('${esc(r.id)}', ${q}, '${esc(reportTxt)}', '${esc(plotTxt)}', '${esc(reasonTxt)}')" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[9px] font-black uppercase rounded hover:bg-[#f0f8ff] mr-1">Edit</button>
+                        <button type="button" onclick="editCalibration('${esc(r.id)}', ${q}, '${esc(reportTxt)}', '${esc(plotTxt)}', '${esc(reasonTxt)}', '${esc(cal.side)}')" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[9px] font-black uppercase rounded hover:bg-[#f0f8ff] mr-1">Edit</button>
                         <button type="button" onclick="deleteCalibration('${esc(r.id)}')" class="px-2 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[9px] font-black uppercase rounded hover:bg-[#fff5f5] mr-1">Del</button>
                         <button type="button" onclick="approveCalibration('${esc(r.id)}')" class="px-2 py-1 bg-[#4a7a2e] text-white text-[9px] font-black uppercase rounded hover:bg-[#3d6624]">Approve</button>
                     </td>`;
@@ -2647,6 +2713,7 @@
                     <td class="px-3 py-2 text-sm font-black ${cls}">${sign}${q.toLocaleString()}</td>
                     <td class="px-3 py-2 text-[11px] text-[#3a7ab4] font-bold">${esc(reportTxt) || '—'}</td>
                     <td class="px-3 py-2 text-[11px] text-[#4a7a2e] font-bold">${esc(plotTxt) || '—'}</td>
+                    <td class="px-3 py-2 text-[10px] font-black uppercase tracking-wider ${cal.side === 'plot' ? 'text-[#a83020]' : 'text-[#8a7a68]'}">${sideTxt}</td>
                     <td class="px-3 py-2 text-[11px] text-[#3d2610]">${esc(reasonTxt) || '—'}</td>
                     <td class="px-3 py-2 text-[10px] text-[#8a7a68]">${esc(mjmWho(r.last_edited_by) || '—')}</td>
                     ${actionsCell}
@@ -2658,6 +2725,7 @@
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Qty</th>
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Report</th>
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Plot / Tray</th>
+                    <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Which count</th>
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Reason</th>
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">By</th>
                     <th class="px-3 py-2 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">${adminActions ? 'Actions' : 'Lock'}</th>
@@ -2698,7 +2766,7 @@
             return false;
         }
 
-        function editCalibration(id, qty, report, plot, reason) {
+        function editCalibration(id, qty, report, plot, reason, side) {
             if (!_t7IsAdmin()) {
                 showToast('Only admins can edit calibration entries.', 'error');
                 return;
@@ -2711,12 +2779,14 @@
             const qtyEl    = document.getElementById('t7-cal-qty');
             const reportEl = document.getElementById('t7-cal-report');
             const plotEl   = document.getElementById('t7-cal-plot');
+            const sideEl   = document.getElementById('t7-cal-side');
             const reasonEl = document.getElementById('t7-cal-reason');
             const btn      = document.getElementById('t7-cal-save-btn');
             const banner   = document.getElementById('t7-cal-edit-banner');
             if (qtyEl)    qtyEl.value    = qty;
             if (reportEl) reportEl.value = report || '';
             if (plotEl)   plotEl.value   = plot   || '';
+            if (sideEl)   sideEl.value   = side   || 'seed';
             if (reasonEl) reasonEl.value = reason || '';
             if (btn)      btn.innerText  = 'Update Adjustment';
             if (banner)   banner.classList.remove('hidden');
@@ -2729,12 +2799,14 @@
             const qtyEl    = document.getElementById('t7-cal-qty');
             const reportEl = document.getElementById('t7-cal-report');
             const plotEl   = document.getElementById('t7-cal-plot');
+            const sideEl   = document.getElementById('t7-cal-side');
             const reasonEl = document.getElementById('t7-cal-reason');
             const btn      = document.getElementById('t7-cal-save-btn');
             const banner   = document.getElementById('t7-cal-edit-banner');
             if (qtyEl)    qtyEl.value    = '';
             if (reportEl) reportEl.value = '';
             if (plotEl)   plotEl.value   = '';
+            if (sideEl)   sideEl.value   = 'seed';
             if (reasonEl) reasonEl.value = '';
             if (btn)      btn.innerText  = 'Save Adjustment';
             if (banner)   banner.classList.add('hidden');
@@ -2805,11 +2877,13 @@
             const qtyEl    = document.getElementById('t7-cal-qty');
             const reportEl = document.getElementById('t7-cal-report');
             const plotEl   = document.getElementById('t7-cal-plot');
+            const sideEl   = document.getElementById('t7-cal-side');
             const reasonEl = document.getElementById('t7-cal-reason');
             const btn      = document.getElementById('t7-cal-save-btn');
             const qty      = parseInt(qtyEl.value, 10);
             const report   = (reportEl?.value || '').trim();
             const plot     = (plotEl?.value   || '').trim();
+            const side     = (sideEl?.value   || 'seed').trim().toLowerCase() === 'plot' ? 'plot' : 'seed';
             const reason   = (reasonEl.value  || '').trim();
             if (isNaN(qty) || qty === 0) { showToast('Enter a non-zero adjustment quantity (use a negative value to subtract).', 'error'); qtyEl.focus(); return; }
             if (!report) { showToast('Select which report this calibration relates to.', 'error'); reportEl.focus(); return; }
@@ -2827,7 +2901,10 @@
                 transaction_type: 'Stock_Calibration',
                 plot_name: plot,
                 quantity_change: qty,
-                remark: `Report: ${report}. Plot: ${plot}. ${reason}`
+                // Side: is read back by _parseCalibration. A row without it is
+                // a seed-count adjustment, which is what every row written
+                // before this existed meant.
+                remark: `Report: ${report}. Plot: ${plot}. Side: ${side}. ${reason}`
             });
 
             let error;
@@ -8383,6 +8460,10 @@ Thank you.`;
                 // not what the word "Transplanted" means. See injectTransfers.
                 const transferredIn = p.transferredIn || 0;
                 const _n      = t6AutoNumbers(p, moved);
+                // An approved plot-stock adjustment against this plot. Negative
+                // is the usual case (stolen, dead); shown as a positive count
+                // under a word that says which way it went.
+                const lostHere = _n.lost || 0;
                 const dead2   = _n.dead2;
                 const sales   = _n.sales;
                 const autoBal = _n.bal;
@@ -8525,6 +8606,16 @@ Thank you.`;
                                              onmouseenter="showT6TransferTip(this, ${i})" onmouseleave="hideT6SalesTip()"
                                              title="Where these went">${t6Fmt(moved)}</div>
                                     </div>`}
+                                    <!-- An approved adjustment that took seedlings OUT of this
+                                         plot after they were transplanted into it. Shown because
+                                         the balance would otherwise drop with nothing on the row
+                                         accounting for it. Always drawn, hidden at nought. -->
+                                    <div class="t6-lost-cell w-px h-7 bg-[#e8dcc8] ${lostHere ? '' : 'hidden'}"></div>
+                                    <div class="t6-lost-cell ${lostHere ? '' : 'hidden'}">
+                                        <div class="text-[8px] font-black text-[#7a4a10] uppercase tracking-widest leading-none whitespace-nowrap">${lostHere < 0 ? 'Lost' : 'Found'}</div>
+                                        <div class="t6-lost-figure text-sm font-black text-[#7a4a10] tabular-nums leading-tight"
+                                             title="An approved adjustment on this plot — see Adjustments &amp; Audit">${t6Fmt(Math.abs(lostHere))}</div>
+                                    </div>
                                     ${p.isTransferRow ? '' : `<div class="w-px h-7 bg-[#e8dcc8]"></div>
                                     <div>
                                         <div class="text-[8px] font-black text-[#a83020] uppercase tracking-widest leading-none whitespace-nowrap">2nd Culled</div>
@@ -8776,11 +8867,21 @@ Thank you.`;
             return String(v == null ? '' : v).trim().toUpperCase();
         }
 
+        /* What is standing in a plot, and therefore what is left to cull.
+
+           `lost` is an approved PLOT-STOCK adjustment against this plot: the
+           seedlings were transplanted here and then left — stolen, dead,
+           miscounted on the ground. They are not a transplant that never
+           happened, so p.qty keeps them and the batch's allocation is
+           untouched; they are simply not standing here any more, and you
+           cannot cull what is not there. A positive adjustment (more found
+           than the book said) works the same way in the other direction. */
         function t6AutoNumbers(p, moved) {
             const dead2 = p.dead2 || 0;
             const sales = p.sales || 0;
-            const bal   = Math.max(0, (p.qty || 0) - dead2 - sales - (moved || 0));
-            return { dead2, sales, bal, culled: dead2 + bal };
+            const lost  = (typeof adjustPlotLoss === 'function') ? adjustPlotLoss(p.plot) : 0;
+            const bal   = Math.max(0, (p.qty || 0) - dead2 - sales - (moved || 0) + lost);
+            return { dead2, sales, bal, lost, culled: dead2 + bal };
         }
 
         /* What a plot has left to MOVE, as opposed to what it has left to cull.
