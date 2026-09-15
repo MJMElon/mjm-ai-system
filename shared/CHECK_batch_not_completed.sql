@@ -99,6 +99,10 @@ SELECT * FROM (
          '-- SUMMARY --'::TEXT AS plot,
          (SELECT batch FROM params) AS batch,
          CASE WHEN (SELECT COUNT(*) FROM verdict WHERE NOT done) = 0
+                   AND (SELECT all_signed FROM stage_signed)
+              THEN 'COMPLETED: nothing left standing, and the WHOLE 3rd Culling tab is verified '
+                   || '(that one signature covers every plot, whatever any single row shows)'
+              WHEN (SELECT COUNT(*) FROM verdict WHERE NOT done) = 0
               THEN 'COMPLETED: nothing left standing in any plot'
               ELSE 'NOT COMPLETED: ' || (SELECT COUNT(*) FROM verdict WHERE NOT done)
                    || ' of ' || (SELECT COUNT(*) FROM verdict) || ' plot(s) not done, of which '

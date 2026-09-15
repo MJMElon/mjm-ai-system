@@ -10833,6 +10833,10 @@ Thank you.`;
               .eq('batch_name', batch).eq('transaction_type', 'Row_Verification').eq('plot_name', mapKey);
             delete rowVerifs[mapKey];
           }
+          // …and the tab's own signature, for the same reason an unverify
+          // does: a row sent back for amendment is not a checked row, so the
+          // claim to have checked the whole tab no longer stands.
+          await _dropStageVerification(batch, tabIdx);
         } else if (verifications[stage]) {
           // Tab rejection voids the tab verification — the sign-off no longer stands.
           await _supabase.from('operation_batch_verifications').delete()
@@ -10919,6 +10923,18 @@ Thank you.`;
         try { syncTabTicks(); } catch (e) { console.warn(e); }
       }
 
+      /* Take the tab's own sign-off away, if it has one. Used wherever a
+         single row's sign-off is withdrawn — see rowUnverify. */
+      async function _dropStageVerification(batch, tabIdx) {
+        const stage = STAGE_BY_TAB[tabIdx];
+        if (!stage || !verifications[stage]) return;
+        try {
+          await _supabase.from('operation_batch_verifications').delete()
+            .eq('batch_name', batch).eq('stage', stage);
+        } catch (e) { console.warn(e); }
+        delete verifications[stage];
+      }
+
       async function rowUnverify(tabIdx, keyEnc) {
         if (!isVerifier && !isAdmin) return;
         const key   = decodeURIComponent(keyEnc);
@@ -10929,7 +10945,18 @@ Thank you.`;
         await _supabase.from('shared_inventory_logs').delete()
           .eq('batch_name', batch).eq('transaction_type', 'Row_Verification').eq('plot_name', mapKey);
         delete rowVerifs[mapKey];
+        /* A STAGE signature says "I have checked this whole tab", and every
+           row on it counts as signed by it. Withdrawing one row's sign-off
+           contradicts that, so the stage signature goes with it — otherwise
+           the row reads unverified while the tab, the ring and the batch list
+           all go on calling it done, which is exactly the complaint: I
+           unverified it and it is still Complete.
+
+           Re-verifying the tab is one press. Leaving a claim standing that
+           the person has just taken back is not. */
+        await _dropStageVerification(batch, tabIdx);
         decorateRows(tabIdx);
+        renderBanner(tabIdx);
         _afterRowSignOff(tabIdx);
       }
 
