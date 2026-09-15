@@ -1802,23 +1802,6 @@
                                      reasoning that a movement and its destination are one story. They
                                      are — but it left Transfer Data two tables deep, and the one you
                                      came to key was always the second. -->
-                                <!-- SALES THIS TAB COULD NOT PUT ANYWHERE.
-
-                                     A plot's Sales figure is made of DO collection lines, and
-                                     Balance and 3rd Culled are both worked out FROM Sales — so a
-                                     line the tab cannot match is a sale that never happened as far
-                                     as every figure below it is concerned, and the plot reads as
-                                     still holding seedlings that were sold weeks ago.
-
-                                     It used to fail silently: a line naming another batch was
-                                     skipped by a bare `continue`, and a line with no quantity
-                                     warned to a console nobody has open. The only symptom was a
-                                     figure that looked wrong, with nothing to say why.
-
-                                     Only lines naming a plot THIS batch has are listed — those are
-                                     the ones somebody meant for this report. -->
-                                <div id="t6-unlinked-sales" class="hidden mx-6 mt-4 rounded-xl border border-[#fde68a] bg-[#fffaf0] px-4 py-3"></div>
-
                                 <div class="flex flex-wrap gap-2 px-6 pt-4">
                                     <button type="button" id="t6-subtab-btn-main" onclick="switchT6SubTab('main')"
                                         class="t6-subtab-btn px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors bg-[#4a7a2e] border-[#4a7a2e] text-white">
@@ -7899,9 +7882,6 @@ Thank you.`;
         // ═══════════════════════════════════════════════════════
         let t6_plotDocs = {};   // { rowId: { name, base64 } }
         let t6_plotData = [];   // [{ plot, qty, destType, salesDOs: [...] }]
-        /* DO collection lines this tab could not put anywhere — see the banner
-           above the sub-tabs, and t6RenderUnlinkedSales. */
-        let t6_unlinkedSales = [];
 
         // Supabase caps one request at 1000 rows. shared_do_records is long
         // past that, so a plain .select() silently drops every DO after the
@@ -8078,7 +8058,6 @@ Thank you.`;
                 // customers collect", this one answers "what is left standing
                 // in the plot". Only cancelled DOs are skipped.
                 const _salesTrace = [];
-                t6_unlinkedSales = [];
                 (doRows || []).forEach(d => {
                     if (d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'))) return;
                     // How many collection lines does this DO actually carry?
@@ -8087,30 +8066,11 @@ Thank you.`;
                     for (let i = 1; i <= 5; i++) {
                         const plotKey = _normPlotKey(d[`plot_${i}`]);
                         if (!plotKey) continue;
+                        if (_normBatchKey(d[`batch_${i}`]) !== _bt) continue; // this batch only
                         let qty = Number(d[`qty_${i}`] || 0);
                         const fallback = (!qty && filled === 1);
                         if (fallback) qty = Number(d.total_qty || 0); // single-line DO
-                        /* Remembered, not dropped. Which of this batch's plots
-                           the line names is not known here — t6_plotData is
-                           built later — so every skipped line is kept and the
-                           list is narrowed to this batch's plots once they
-                           exist. See t6RenderUnlinkedSales. */
-                        if (_normBatchKey(d[`batch_${i}`]) !== _bt) {
-                            t6_unlinkedSales.push({
-                                plotKey, qty, doNumber: d.do_number, date: d.delivery_date,
-                                reason: 'batch',
-                                keyed: String(d[`batch_${i}`] ?? '').trim() || '(blank)'
-                            });
-                            continue;                                  // this batch only
-                        }
-                        if (!qty) {
-                            console.warn('[t6:sales] DO', d.do_number, 'line', i, 'has no qty — skipped');
-                            t6_unlinkedSales.push({
-                                plotKey, qty: 0, doNumber: d.do_number, date: d.delivery_date,
-                                reason: 'qty', keyed: ''
-                            });
-                            continue;
-                        }
+                        if (!qty) { console.warn('[t6:sales] DO', d.do_number, 'line', i, 'has no qty — skipped'); continue; }
                         salesMap[plotKey] = (salesMap[plotKey] || 0) + qty;
                         // Same rows the console trace logs, kept for the
                         // click-through modal so the office can see WHICH
@@ -8345,46 +8305,6 @@ Thank you.`;
             });
             injectTransfers();
             renderT6PlotRows();
-        }
-
-        /* WHICH SALES DID NOT REACH A PLOT ON THIS REPORT.
-
-           Narrowed to plots this batch actually has: a DO line naming some
-           other nursery's plot is not this report's business, and listing it
-           would bury the one line that is.
-
-           A quantity here is a sale the tab cannot see, so that plot's Balance
-           and 3rd Culled are both higher than the field by it. Naming the DO
-           and what the batch was keyed as is enough to go and correct it in
-           Customer Order Monitoring. */
-        function t6RenderUnlinkedSales() {
-            const box = document.getElementById('t6-unlinked-sales');
-            if (!box) return;
-            const mine = new Set(t6_plotData.map(p => _t6PlotKey(p.plot)).filter(Boolean));
-            const lines = (t6_unlinkedSales || []).filter(l => mine.has(_t6PlotKey(l.plotKey)));
-            box.classList.toggle('hidden', lines.length === 0);
-            if (!lines.length) { box.innerHTML = ''; return; }
-            const total = lines.reduce((a, l) => a + (l.qty || 0), 0);
-            box.innerHTML =
-                `<div class="text-[10px] font-black text-[#7a4a10] uppercase tracking-widest mb-2">` +
-                `${lines.length} sale${lines.length === 1 ? '' : 's'} not counted` +
-                `${total ? ` — ${t6Fmt(total)} seedling${total === 1 ? '' : 's'}` : ''}` +
-                `</div>` +
-                lines.map(l => `
-                    <div class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px] py-0.5">
-                        <span class="font-black text-[#3d2610] uppercase">${_t6Esc(l.plotKey)}</span>
-                        <span class="font-bold text-[#8a7a68]">DO ${_t6Esc(l.doNumber || '—')}</span>
-                        <span class="font-bold text-[#8a7a68]">${_t6FmtDate(l.date)}</span>
-                        <span class="font-black text-[#a83020] tabular-nums">${l.qty ? t6Fmt(l.qty) : '—'}</span>
-                        <span class="text-[#7a4a10] font-bold">${
-                            l.reason === 'batch'
-                                ? `keyed to batch ${_t6Esc(l.keyed)} on the DO, not this one`
-                                : 'no quantity keyed on the DO line'
-                        }</span>
-                    </div>`).join('') +
-                `<div class="text-[9px] font-bold text-[#7a4a10] mt-2 leading-snug">` +
-                `Until this is corrected on the DO in Customer Order Monitoring, those plots' ` +
-                `Balance and 3rd Culled read higher than the field by that quantity.</div>`;
         }
 
         function renderT6PlotRows() {
@@ -8806,8 +8726,6 @@ Thank you.`;
             // gets one, rather than naming a plot the list below cannot show.
             // Normally does nothing — injectTransfers has already built them.
             t6EnsureDestRows();
-            // Now that the plots are known, say which sales failed to reach one.
-            t6RenderUnlinkedSales();
 
             // Restore previously-uploaded drone maps / docs.
             t6_plotData.forEach((p, i) => {
