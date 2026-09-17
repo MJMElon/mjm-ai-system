@@ -2605,6 +2605,27 @@
            was to allocate. */
         const ADJUST_PLOT_LOSS = {};   // PLOT → net of approved plot-stock adjustments
 
+        /* …EXCEPT THE ONES A CULLING COUNT HAS ALREADY SETTLED.
+
+           The 2nd Culling and the 3rd Culling each count the plot, months
+           apart. An adjustment raised against one of those counts was
+           noticed AT it and settled there — by the time the next count is
+           made, on the ground and by the drone, it is history. Taking it off
+           again at the later report subtracts one loss twice, and the report
+           then disagrees with a drone map that was right all along.
+
+           N11 on batch 235: one seedling adjusted away during the 2nd
+           culling, and the 3rd Culling row read 76 against a drone map of
+           77. There were 77 to cull.
+
+           Anything raised anywhere else — Transplanting, 1st Culling, the
+           seed count — is a correction to what REACHED the plot, which both
+           culling reports are still carrying. Those stay above, and come off
+           both. B14 on batch 234 is that one: 53 stolen after transplanting,
+           and the 3rd cull is 53 fewer because of it. */
+        const ADJUST_PLOT_LOSS_STAGE = {};   // '2nd culling' | '3rd culling' → PLOT → net
+        const ADJUST_STAGE_REPORTS = ['2nd culling', '3rd culling'];
+
         /* Every adjustment on the batch as last read, approved or not.
 
            Kept because a figure that is NOT moving a report is as much a fact
@@ -2612,15 +2633,31 @@
            nobody has approved — or that was filed against the seed count — are
            the same 53, and the screen had both and said neither. */
         let ADJUST_ROWS = [];
-        /* Named Total rather than Base because that is what every caller已 says;
+        /* Named Total rather than Base because that is what every caller says;
            only seed-count adjustments reach ADJUST_NET now, so the two are the
            same figure. */
         function adjustNetTotal() {
             return Object.keys(ADJUST_NET).reduce((s, k) => s + (ADJUST_NET[k] || 0), 0);
         }
-        function adjustPlotLoss(plot) {
-            const v = ADJUST_PLOT_LOSS[_t6PlotKey(plot)];
-            return typeof v === 'number' ? v : 0;
+
+        /* What comes off this plot ON THIS REPORT: everything raised before
+           either culling counted it, plus whatever was raised against this
+           report's own count. `report` is '2nd Culling' or '3rd Culling'. */
+        function adjustPlotLoss(plot, report) {
+            const pk = _t6PlotKey(plot);
+            if (!pk) return 0;
+            let v = typeof ADJUST_PLOT_LOSS[pk] === 'number' ? ADJUST_PLOT_LOSS[pk] : 0;
+            const mine = ADJUST_PLOT_LOSS_STAGE[String(report || '').toLowerCase()];
+            if (mine && typeof mine[pk] === 'number') v += mine[pk];
+            return v;
+        }
+
+        /* Would settling this adjustment move the 3rd Culling row? Used by the
+           drone-map panel, which must not offer an explanation that would not
+           actually change the figure it is standing next to. */
+        function _adjCouldMoveCull3(r) {
+            if (!r || r.report.toLowerCase() === '2nd culling') return false;
+            return !(r.approved && r.side === 'plot');
         }
 
         async function syncAdjustmentBars(batchId) {
@@ -2632,6 +2669,8 @@
                    allocation base — better the base is plainly short than
                    silently right for a reason nobody can see. */
                 Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
+                Object.keys(ADJUST_PLOT_LOSS).forEach(k => delete ADJUST_PLOT_LOSS[k]);
+                Object.keys(ADJUST_PLOT_LOSS_STAGE).forEach(k => delete ADJUST_PLOT_LOSS_STAGE[k]);
                 ADJUST_ROWS = [];
                 bars.forEach(n => {
                     const el = document.getElementById(`t${n}-adjust-bar`);
@@ -2660,11 +2699,21 @@
                this" is worth seeing — it just is not an answer yet. */
             Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
             Object.keys(ADJUST_PLOT_LOSS).forEach(k => delete ADJUST_PLOT_LOSS[k]);
+            Object.keys(ADJUST_PLOT_LOSS_STAGE).forEach(k => delete ADJUST_PLOT_LOSS_STAGE[k]);
             rows.filter(r => r.approved).forEach(r => {
                 if (r.side === 'plot') {
-                    // Belongs to the plot it names, not to the batch total.
+                    // Belongs to the plot it names, not to the batch total —
+                    // and, when it was raised against a culling count, to that
+                    // report alone. See ADJUST_PLOT_LOSS_STAGE.
                     const pk = _t6PlotKey(r.plot);
-                    if (pk) ADJUST_PLOT_LOSS[pk] = (ADJUST_PLOT_LOSS[pk] || 0) + r.qty;
+                    if (!pk) return;
+                    const rep = r.report.toLowerCase();
+                    if (ADJUST_STAGE_REPORTS.indexOf(rep) >= 0) {
+                        const m = ADJUST_PLOT_LOSS_STAGE[rep] = ADJUST_PLOT_LOSS_STAGE[rep] || {};
+                        m[pk] = (m[pk] || 0) + r.qty;
+                    } else {
+                        ADJUST_PLOT_LOSS[pk] = (ADJUST_PLOT_LOSS[pk] || 0) + r.qty;
+                    }
                     return;
                 }
                 const k = r.report.toLowerCase();
@@ -8015,7 +8064,7 @@ Thank you.`;
                 const rowId  = `t5-row-${i}`;
                 // An approved plot-stock adjustment against this plot — the same
                 // per-plot figure 3rd Culling reads. Negative is the usual case.
-                const adj5   = (typeof adjustPlotLoss === 'function') ? adjustPlotLoss(p.plot) : 0;
+                const adj5   = (typeof adjustPlotLoss === 'function') ? adjustPlotLoss(p.plot, '2nd Culling') : 0;
                 const due    = calcDueDate(p.transplantDate);
                 const deadVal = p.savedDead !== null && p.savedDead !== undefined ? p.savedDead : '';
                 // After _t5MergeByPlot, MAIN and D-TONE for the same plot are
@@ -9382,7 +9431,7 @@ Thank you.`;
         function t6AutoNumbers(p, moved) {
             const dead2 = p.dead2 || 0;
             const sales = p.sales || 0;
-            const lost  = (typeof adjustPlotLoss === 'function') ? adjustPlotLoss(p.plot) : 0;
+            const lost  = (typeof adjustPlotLoss === 'function') ? adjustPlotLoss(p.plot, '3rd Culling') : 0;
             const bal   = Math.max(0, (p.qty || 0) - dead2 - sales - (moved || 0) + lost);
             return { dead2, sales, bal, lost, culled: dead2 + bal };
         }
@@ -10299,8 +10348,7 @@ Thank you.`;
             if (!diff || !Array.isArray(ADJUST_ROWS) || !ADJUST_ROWS.length) return null;
             const key = _t6PlotKey(plot);
             if (!key) return null;
-            const mine = ADJUST_ROWS.filter(r => _t6PlotKey(r.plot) === key
-                                              && !(r.approved && r.side === 'plot'));
+            const mine = ADJUST_ROWS.filter(r => _t6PlotKey(r.plot) === key && _adjCouldMoveCull3(r));
             if (!mine.length) return null;
             if (mine.reduce((s, r) => s + (r.qty || 0), 0) !== diff) return null;
             const pending  = mine.filter(r => !r.approved);

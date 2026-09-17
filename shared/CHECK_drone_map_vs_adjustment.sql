@@ -52,6 +52,7 @@ adj AS (
                              l.plot_name, ''))) AS plot,
          LOWER(COALESCE((REGEXP_MATCH(COALESCE(l.remark, ''), 'Side:\s*(seed|plot)\s*\.', 'i'))[1],
                         'seed'))                AS side,
+         LOWER(TRIM(COALESCE((REGEXP_MATCH(COALESCE(l.remark, ''), 'Report:\s*([^.]+?)\s*\.'))[1], ''))) AS report,
          COALESCE(l.remark, '') LIKE '%[APPROVED by %' AS approved,
          /* The reason is what is left once the markers and the approval
             stamp are taken out — the same three deletions _parseCalibration
@@ -70,15 +71,23 @@ adj AS (
 ),
 
 /* What that plot's adjustments come to, split by whether they are already
-   inside the plot's figures. */
+   inside the plot's figures.
+
+   An adjustment raised against the 2ND CULLING is not, and never will be:
+   that count settled it months before the drone flew for the 3rd, and
+   taking it off again here would subtract one loss twice. It is counted
+   separately below so the answer can say so rather than say nothing. */
 per_plot AS (
   SELECT m.batch_name, m.plot,
          SUM(a.qty)                                                          AS all_qty,
-         SUM(a.qty) FILTER (WHERE a.approved AND a.side = 'plot')            AS applied_qty,
-         SUM(a.qty) FILTER (WHERE NOT (a.approved AND a.side = 'plot'))      AS waiting_qty,
-         COUNT(*)   FILTER (WHERE NOT a.approved)                            AS pending_n,
-         COUNT(*)   FILTER (WHERE a.approved AND a.side = 'seed')            AS seed_n,
-         COUNT(*)   FILTER (WHERE a.approved AND a.side = 'plot')            AS plot_n,
+         SUM(a.qty) FILTER (WHERE a.report = '2nd culling')                  AS cull2_qty,
+         SUM(a.qty) FILTER (WHERE a.report <> '2nd culling'
+                              AND a.approved AND a.side = 'plot')            AS applied_qty,
+         SUM(a.qty) FILTER (WHERE a.report <> '2nd culling'
+                              AND NOT (a.approved AND a.side = 'plot'))      AS waiting_qty,
+         COUNT(*)   FILTER (WHERE a.report <> '2nd culling' AND NOT a.approved)                 AS pending_n,
+         COUNT(*)   FILTER (WHERE a.report <> '2nd culling' AND a.approved AND a.side = 'seed') AS seed_n,
+         COUNT(*)   FILTER (WHERE a.report <> '2nd culling' AND a.approved AND a.side = 'plot') AS plot_n,
          LEFT(STRING_AGG(a.reason, '; ') FILTER (WHERE a.reason <> ''), 80)  AS reasons
   FROM mismatch m
   JOIN adj a ON a.batch_name = m.batch_name AND a.plot = m.plot
@@ -112,6 +121,19 @@ SELECT m.batch_name                                  AS batch,
            THEN 'RE-SAVE IT: the adjustment is approved as plot stock, so the SCREEN already shows '
                 || 'this plot tallying — but the saved record still carries the old figure. Open '
                 || 'the batch, go to 3rd Culling and press Save.'
+         /* The saved record was written when the 2nd culling's adjustment
+            was still being taken off the 3rd cull as well. It is not any
+            more, so the SCREEN already tallies — the record is what is
+            behind, and the batch list reads the record. */
+         WHEN COALESCE(p.cull2_qty, 0) <> 0 AND m.culled - p.cull2_qty = m.map_qty
+           THEN 'RE-SAVE IT: an adjustment of ' || p.cull2_qty || ' on this plot was raised against '
+                || 'the 2ND CULLING count, and is no longer taken off the 3rd cull as well — so the '
+                || 'screen now reads ' || m.map_qty || ' and tallies. Open the batch, go to 3rd '
+                || 'Culling and press Save so the saved record says the same.'
+         WHEN COALESCE(p.cull2_qty, 0) = m.difference AND COALESCE(p.cull2_qty, 0) <> 0
+           THEN 'NOT THAT ONE: this plot has an adjustment of ' || p.cull2_qty || ' raised against '
+                || 'the 2ND CULLING count, which settled it there — it is deliberately not taken '
+                || 'off the 3rd cull as well. This difference still needs its own reason.'
          WHEN m.has_reason
            THEN 'explained — a reason is written against this plot, which is all this needs'
          ELSE 'NEEDS A PERSON: nothing on this plot accounts for the difference. Write the reason '
