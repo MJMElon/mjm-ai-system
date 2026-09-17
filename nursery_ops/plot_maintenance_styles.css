@@ -185,24 +185,49 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
    min-width is what keeps that promise on a narrow screen: below it the
    wrapper scrolls (.tbl-wrap is overflow-x:auto) rather than the columns
    quietly collapsing back into whatever fits. */
-.rec-table{table-layout:fixed;width:100%;min-width:1373px;}
-.rec-table thead th{background:#f2f7f4;color:var(--text-muted);font-weight:700;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:11px 14px;border-bottom:2px solid var(--border-strong);white-space:nowrap;}
+/* 1134px is the twelve columns added up. It was 1373 for ten wider ones,
+   which no longer fits beside the menu — see the colgroup, where the widths
+   and the reason for each of them live. */
+.rec-table{table-layout:fixed;width:100%;min-width:1134px;}
+/* The headings WRAP. They were nowrap, which in a 58px column does not make
+   the column wider — it makes "Nelos Case" and "Done Repair" print straight
+   through each other. Two short lines is what a narrow column of a wide table
+   looks like. The padding comes in with them: 14px each side of twelve
+   columns is 336px spent on air. */
+.rec-table thead th{background:#f2f7f4;color:var(--text-muted);font-weight:700;font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:9px 8px;border-bottom:2px solid var(--border-strong);white-space:normal;line-height:1.3;vertical-align:bottom;}
 .rec-table thead th.th-left{text-align:left;}
-.rec-table tbody td{padding:10px 14px;border-bottom:1px solid #eaf1ed;vertical-align:middle;}
+.rec-table tbody td{padding:9px 8px;border-bottom:1px solid #eaf1ed;vertical-align:middle;}
 /* The date is one line, always. It is the column that gave the game away —
    "07 Aug 2026" over two lines in one nursery and one in another — and the
    fixed width above is chosen to hold it, so saying so here means a future
    change to that width fails loudly (an overflow) instead of quietly
    re-wrapping. Batch, Quantity and Audit are short and fixed-shape for the
    same reason. */
-.rec-table tbody td:nth-child(1),
-.rec-table tbody td:nth-child(5),
+/* Batch, Quantity and Audit are short and fixed-shape, and stay on one line.
+   THE DATE NO LONGER DOES. It used to be the column that gave the game away —
+   "07 Aug 2026" over two lines in one nursery and one in another — and it was
+   given the width to hold it. Twelve columns do not leave that width, and a
+   date that wraps in every row wraps consistently, which is what the rule was
+   really protecting. */
+/* Quantity and Audit only. BATCH CAME OUT of this list: a plot with five
+   batches in it is "252, 253, 254, 257, 259", which at any column width this
+   table can spare is wider than the column — and nowrap does not widen a
+   column, it prints the overflow straight across Quantity. It wraps at the
+   commas now, which is where a person would break it anyway. */
 .rec-table tbody td:nth-child(6),
 .rec-table tbody td:nth-child(9){white-space:nowrap;}
-/* Work type and remark are free text and may run long: wrap them rather
-   than letting them spill over the column beside them. */
+/* Wrapping at the spaces, NOT mid-number: overflow-wrap:anywhere would split
+   "257" across two lines and invent a batch nobody has. */
+.rec-table tbody td:nth-child(5){white-space:normal;word-break:keep-all;line-height:1.45;}
+/* Free text, and now the date and the buttons too: wrap rather than spill
+   over the column beside. */
+.rec-table tbody td:nth-child(1),
 .rec-table tbody td:nth-child(2),
 .rec-table tbody td:nth-child(8){overflow-wrap:anywhere;}
+/* The row's buttons take two lines rather than one long one. `nowrap` on the
+   cell is what held the table 60px wider than it needed to be. */
+.rec-table tbody td:last-child{white-space:normal !important;}
+.rec-table tbody td:last-child .btn{margin:1px 1px 0 0;}
 /* A job worked over more than one day carries them all. The column is sized
    for "01 & 02 Jul 2026" on one line; a rarer three-day job is allowed the
    second line rather than being cut off, which is why this one opts back out
@@ -239,10 +264,27 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 .mc-value.a{color:#d97706;}
 .mc-value.r{color:var(--red);}
 .mc-value.b{color:var(--blue);}
+/* The rate under the number. A count on its own does not say whether it is
+   most of the month or a corner of it, which is the thing being read. */
+.mc-sub{font-size:11px;font-weight:700;color:var(--text-muted);margin-top:6px;letter-spacing:.02em;}
 .chk-btn{font-size:18px;cursor:pointer;transition:transform 0.1s;display:inline-block;text-align:center;width:100%;}
 .chk-btn:hover{transform:scale(1.25);}
 .chk-on{color:var(--green);}
 .chk-off{color:#c8dbd2;}
+/* A tick that does not apply yet — no verdict, or no case to close. A dot
+   rather than an empty cell, because an empty cell reads as a missing value
+   and this is a question that has not been reached. Not a button: it carries
+   its reason in the tooltip and nothing happens when it is pressed. */
+.chk-na{color:#dbe5e0;cursor:default;}
+.chk-na:hover{transform:none;}
+/* One walk, one button. Several on a row when several people worked the
+   job — they stack rather than squeezing onto one line. */
+.trk-btn{display:block;width:100%;margin:1px 0;padding:3px 6px;border-radius:8px;
+  border:1px solid #ccfbf1;background:#f0fdfa;color:#0f766e;
+  font-family:var(--font);font-size:10.5px;font-weight:800;line-height:1.3;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;
+  transition:background .15s,border-color .15s;}
+.trk-btn:hover{background:#ccfbf1;border-color:#5eead4;}
 
 /* ─── CHARTS ─── */
 .chart-block{background:var(--bg-white);border:1.5px solid var(--border);border-radius:var(--r-md);padding:16px 8px;margin-bottom:16px;box-shadow:var(--shadow-sm);}
@@ -435,11 +477,34 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 
 /* ─── WORK MAINTENANCE LIST — large, readable type ───
    Single source of truth: the row template carries no inline font-size. */
-#recview-list .rec-table thead th{font-size:11px;padding:11px 14px;letter-spacing:.6px;}
-#recview-list .rec-table tbody td{font-size:14px;padding:11px 14px;}
+/* ── THE RULE THAT ACTUALLY WINS ───────────────────────────────────────
+   These two are more specific than the .rec-table rules two hundred lines
+   up AND come later, so they decide the Work Record's font and padding —
+   whatever those say. Setting padding up there and expecting it to apply is
+   a wasted afternoon; it was, once.
+
+   Cut from 14px/14px because the table is twelve columns now. 14px of
+   padding on each side of twelve columns is 336px spent on air, and at a
+   14px font a batch list of five wrapped one batch to a line and made every
+   row four lines tall. */
+#recview-list .rec-table thead th{font-size:10px;padding:8px 7px;letter-spacing:.06em;}
+#recview-list .rec-table tbody td{font-size:12.5px;padding:9px 7px;}
 #recview-list .rec-table .rec-group-cell{font-size:14px;}
 #recview-list .rec-table .rec-group-sub{font-size:12px;}
-#recview-list .rec-table .pill{font-size:12px;padding:5px 12px;max-width:none;}
+/* The chemical pill WRAPS inside its column.
+
+   `max-width:none` here cancelled the base .pill's cap, and the base rule
+   also says white-space:nowrap — so the pill grew as wide as its text and
+   simply drew over the Plot column beside it. "Round 1: Becker 20mL + Bond
+   15mL" covered the plot the row was about, which is the one thing on the
+   row that says WHERE.
+
+   Ellipsising it instead (what the colgroup comment expected) hides the
+   sticker and the dose, and this column exists to say what went in the tank.
+   So it wraps: never wider than the cell, as many lines as it needs. */
+#recview-list .rec-table .pill{font-size:12px;padding:4px 8px;
+  max-width:100%;white-space:normal;overflow:visible;text-overflow:clip;
+  overflow-wrap:break-word;line-height:1.3;text-align:left;}
 #recview-list .rec-table .chk-btn{font-size:21px;}
 #recview-list .rec-table .btn-sm{font-size:12px;padding:6px 12px;}
 #recview-list .rec-table .rec-checked-badge{font-size:11px;padding:4px 10px;}
@@ -756,6 +821,16 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 
 .ss-wrap{border:1.5px solid var(--border);border-radius:var(--r-md);
   background:var(--bg-white);overflow:hidden;min-width:0;}
+/* Expanded, it takes the whole row. Two abreast is right for reading four
+   ticks across; it is not enough for a plot list plus a Set column plus the
+   buttons, which pushed Actions past the edge and made closing the panel a
+   horizontal scroll. */
+.ss-wrap.is-wide{grid-column:1 / -1;}
+/* And wherever the table still has to scroll — a narrow window, a month with
+   many weeks — the buttons come with it rather than waiting off-screen. */
+.ss-table th.ss-act,.ss-table td.ss-act{position:sticky;right:0;z-index:2;
+  background:var(--bg-white);box-shadow:-6px 0 6px -6px rgba(0,0,0,.18);}
+.ss-table thead th.ss-act{z-index:3;}
 
 .ss-head{display:flex;align-items:center;gap:10px;padding:9px 13px;
   background:#f2f7f4;border-bottom:1.5px solid var(--border);}
@@ -763,6 +838,17 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
   text-transform:uppercase;color:var(--green-text);}
 .ss-count{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;
   color:var(--text-muted);white-space:nowrap;}
+/* This nursery's schedule as a sheet. Small and quiet, beside the week
+   count, because it is a shortcut to the card's own download rather than
+   something to be pressed before the schedule is read. */
+.ss-dl{width:26px;height:26px;padding:0;flex:0 0 auto;line-height:1;
+  font-size:13px;font-family:var(--font);color:var(--green-text);
+  background:var(--bg-white);border:1px solid var(--border);
+  border-radius:6px;cursor:pointer;}
+.ss-dl:hover{background:var(--green,#0d7a47);border-color:var(--green,#0d7a47);color:#fff;}
+/* Top-right of the summary card, against a centred heading. */
+.lst-top .sched-dl{position:absolute;right:0;top:-3px;font-size:12px;}
+@media (max-width:760px){ .lst-top .sched-dl{position:static;} }
 /* Week headers are two lines: which week, then when. They used to be a
    button opening a date box; the dates are set in the Edit popup now,
    beside the chemicals and ticks they belong to. */
@@ -791,8 +877,11 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 
 /* The work's name is the row's label, so it reads left and heavier than the
    cells it is labelling. */
-th.ss-work,td.ss-work{text-align:left;font-size:12.5px;font-weight:800;
-  color:var(--text-head);white-space:nowrap;padding-left:13px;}
+/* Centred, like every other column. The left padding goes with it — it was
+   there to hold the text off the card's edge, and a centred cell does not
+   need holding off anything. */
+th.ss-work,td.ss-work{text-align:center;font-size:12.5px;font-weight:800;
+  color:var(--text-head);white-space:nowrap;}
 th.ss-act,td.ss-act{width:1%;white-space:nowrap;padding-right:11px;}
 
 .ss-cell{color:var(--border-strong);font-size:15px;}
@@ -816,27 +905,45 @@ th.ss-act,td.ss-act{width:1%;white-space:nowrap;padding-right:11px;}
    and gave no way to see a plot had been MISSED. The week columns are
    numbered; the dates are two rows up in the summary's own header, and
    repeating them here would cost the width the plot names need. */
-.ss-detail td{padding:10px 13px 14px;background:#f7fbf9;
-  border-bottom:1px solid #eaf1ed;vertical-align:top;text-align:left;}
-.xp-wrap{max-height:420px;overflow:auto;}
-.xp-table{width:100%;border-collapse:collapse;}
-.xp-table thead th{position:sticky;top:0;z-index:1;background:#f7fbf9;
-  font-size:9.5px;font-weight:800;letter-spacing:.5px;color:var(--text-muted);
-  text-transform:uppercase;padding:0 6px 6px;border-bottom:1px solid var(--border);
-  text-align:center;}
-.xp-table th.xp-plot{text-align:left;padding-left:0;}
-.xp-table tbody td{padding:3px 6px;font-size:12px;text-align:center;
-  line-height:1.5;border:none;}
-.xp-table td.xp-plot{text-align:left;padding-left:0;font-weight:700;
+/* The expanded plots are ROWS OF THE SUMMARY TABLE, not a table of their
+   own inside a colspan cell. That is the whole reason they line up: a
+   nested table sets its own column widths, so the plot ticks sat left of
+   the week they belonged to however the padding was tuned.
+
+   Everything below therefore styles cells of .ss-table, and must not set a
+   width — the columns are shared with the rows above and the widest cell in
+   each wins for all of them. */
+.ss-detail td{background:#f7fbf9;border-bottom:1px solid #eaf1ed;
+  text-align:center;vertical-align:middle;}
+.xp-head td{font-size:9.5px;font-weight:800;letter-spacing:.5px;
+  color:var(--text-muted);text-transform:uppercase;
+  padding:9px 6px 6px;border-bottom:1px solid var(--border);line-height:1.35;}
+.xp-wk{font-size:9.5px;font-weight:800;letter-spacing:.5px;}
+/* The dates the header row used to carry, now under the week they describe
+   and beside the ticks they govern. Not uppercase — "1st–7th" in capitals
+   reads as a code rather than a date. */
+.xp-wk-d{font-size:9px;font-weight:700;color:var(--text-muted);
+  text-transform:none;letter-spacing:0;margin-top:2px;white-space:nowrap;}
+.xp-row td{padding:3px 6px;font-size:12px;line-height:1.5;}
+/* And the plot names under them, so the whole first column reads down one
+   line rather than stepping in and out at the header. */
+.ss-detail td.xp-plot{text-align:center;font-weight:700;
   color:var(--text-head);white-space:nowrap;}
 .xp-on{color:var(--green);font-weight:800;}
 /* An empty cell needs a mark of its own or the row reads as ragged; a faint
    dot says "asked and not set" where blank says only "nothing here". */
 .xp-off::after{content:"\00b7";color:var(--border-strong);}
+/* A week this work does not run in at all. No dot: there was nothing to
+   ask, so there is nothing to answer. */
+.xp-none{background:#f2f7f4;}
 /* A plot with nothing set anywhere this month is the one worth spotting. */
 .xp-blank td.xp-plot{color:var(--text-muted);font-weight:600;}
-.xp-tot{font-size:11px;font-weight:800;color:var(--green-text);width:1%;
-  padding-left:10px;}
+.xp-tot{font-size:11px;font-weight:800;color:var(--green-text);
+  padding-right:11px;}
+/* The week columns keep their width from the ticks in them now that the
+   header is empty, so they are given a floor — four bare columns would
+   otherwise collapse towards the Work name. */
+.ss-table th.ss-wkcol{min-width:74px;}
 .ss-none{color:var(--border-strong);font-size:13px;}
 
 
@@ -962,6 +1069,27 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 @media(min-width:768px){
   .sm-frame{display:grid;grid-template-columns:212px minmax(0,1fr);
     gap:24px;align-items:start;}
+  /* Pulled back to a rail. The bar itself stays — it keeps its background,
+     its border and its handle, and only the tabs go. A menu that vanishes
+     leaves a button floating in an empty column with nothing to say what it
+     opens, which is what the first attempt at this did. */
+  .sm-frame.nav-hid{grid-template-columns:46px minmax(0,1fr);gap:14px;}
+  .sm-frame.nav-hid #sm-nav nav{display:none;}
+}
+
+/* The handle, at the top of the bar it belongs to.
+   NOT a sibling in a grid row of its own: that row pushed the whole bar 160
+   pixels down the page, which is the gap this replaces. */
+.sm-nav-toggle{display:none;}
+@media(min-width:768px){
+  .sm-nav-toggle{display:grid;place-items:center;margin:0 0 10px auto;padding:0;
+    width:26px;height:28px;
+    border:1px solid #ccfbf1;border-radius:9px;background:#f0fdfa;
+    color:#0f766e;font-size:11px;line-height:1;cursor:pointer;
+    transition:background .15s,color .15s;}
+  .sm-nav-toggle:hover{background:#ccfbf1;color:#115e59;}
+  /* On the rail it is the only thing there, so it sits in the middle. */
+  .nav-hid .sm-nav-toggle{margin:0 auto;}
 }
 
 #sm-nav{display:block;}
@@ -983,8 +1111,21 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 #sm-nav .pn-tab:hover{background:#ccfbf1;}
 #sm-nav .pn-tab.is-on{background:#0f766e;color:#fff;}
 #sm-nav .pn-tab.is-on:hover{background:#115e59;}
-/* 84px clears the ribbon, which is sticky. */
-@media(min-width:768px){#sm-nav{position:sticky;top:84px;align-self:start;}}
+/* Stays put while the records scroll past it. 84px clears the ribbon, which
+   is sticky itself.
+
+   The height cap and its own scrollbar are what make "sticky" true rather
+   than nearly true: a bar taller than the window cannot stick — the browser
+   scrolls it until its bottom edge arrives, so the top of it walks off the
+   screen and the menu is gone exactly when somebody scrolling wants it. The
+   rail keeps its ground and paints itself, so it reads as a narrowed menu
+   rather than as a strip of page. */
+@media(min-width:768px){
+  #sm-nav{position:sticky;top:84px;align-self:start;
+    max-height:calc(100vh - 104px);overflow-y:auto;overflow-x:hidden;
+    padding:10px;border:1px solid #e6f4f0;border-radius:14px;
+    background:var(--bg-white);}
+}
 /* Phone: the column becomes a row above the content — a 212px column
    beside a table on a 412px screen leaves neither of them usable. */
 @media(max-width:767px){
@@ -1052,7 +1193,12 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
    date boxes are wider than the two tick columns under them, and letting
    them share a row would set the column width from the widget rather than
    from the data. */
-.we-scroll{overflow:auto;max-height:56vh;}
+/* The popup is 94vh tall now; 56vh left a third of it empty under the last
+   plot, which on a fifty-two plot nursery is scrolling past space that was
+   not being used for anything. The body it sits in is already a flex child
+   that scrolls, so the cap only has to stop the table from pushing the
+   footer off — it does not have to be the scroller. */
+.we-scroll{overflow:auto;max-height:calc(94vh - 210px);}
 .we-wk{background:var(--green) !important;color:#fff !important;font-size:11.5px !important;
   white-space:nowrap;position:relative;padding:7px 10px !important;}
 .we-wk-n{font-weight:900;letter-spacing:.8px;}
@@ -1091,6 +1237,41 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 .we-col-l{font-size:10px;font-weight:900;letter-spacing:.6px;margin-bottom:4px;}
 .we-col-d{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:4px;}
 .we-col-d .we-num{width:56px;height:26px;font-size:11.5px;}
+/* The activator under it is the second thing in the tank, not a second
+   column, so it reads quieter and is fenced off by a rule rather than by a
+   gap — a gap alone and the two pairs look like two columns of one. */
+.we-col-l2{margin-top:8px;padding-top:7px;border-top:1px dashed var(--border);
+  font-weight:800;color:var(--text-muted);}
+
+/* The totals, along the bottom of the editor. Pinned to the floor of the
+   scroll: on a nursery with fifty-two plots they are otherwise fifty rows
+   below the ticks they are the sum of, which is fifty rows too far to be
+   any use while ticking. */
+.we-table tfoot td{position:sticky;bottom:0;z-index:3;
+  background:#eef6f1;border-top:1px solid var(--border);
+  font-size:11.5px;font-weight:800;color:var(--green-900,#134e32);
+  text-align:center;padding:6px 8px;white-space:nowrap;}
+.we-table tfoot tr:first-child td{border-top:2px solid var(--green,#0d7a47);}
+.we-table tfoot td.we-plot{text-align:left;padding-left:14px;font-weight:900;
+  font-size:10.5px;letter-spacing:.3px;text-transform:uppercase;color:var(--text-muted);}
+
+/* ── The same figures, inside the work's own expanded panel ────────────
+   One table per work, because a figure only means something under the
+   chemical it was worked out from, and that changes week to week. */
+.ss-detail.xp-sum > td{padding:0 0 12px;background:#fbfdfc;}
+.st-wrap{margin:2px 10px 0;padding-top:10px;border-top:1px dashed var(--border);}
+.st-table{width:100%;border-collapse:collapse;
+  font-size:12px;background:#fff;}
+.st-table th,.st-table td{border:1px solid var(--border);padding:6px 9px;
+  text-align:center;white-space:nowrap;}
+.st-table thead th{background:#0d7a47;color:#fff;font-weight:800;line-height:1.35;}
+.st-table thead th.st-lbl{background:#0a6339;text-align:left;}
+.st-table .st-wk{display:block;font-size:9.5px;letter-spacing:.6px;
+  text-transform:uppercase;opacity:.82;}
+.st-table .st-what{display:block;font-size:12px;}
+.st-table td.st-lbl{text-align:left;font-weight:700;background:#f4f8f6;
+  color:var(--text-muted);font-size:11px;}
+.st-table tbody tr:last-child td{font-weight:800;}
 
 
 /* The plot column is wide now that the tick columns are fixed, which made
@@ -1099,3 +1280,10 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
    half a table. Said again at a specificity that wins. */
 .we-table thead th.we-plot,
 .we-table tbody td.we-plot{text-align:left;padding-left:14px;}
+
+/* The Worker Record's hint line, when the sheet is NOT taking its names from
+   the Worker System. Amber rather than red: nothing is broken, the sheet
+   works — it is just answering from this module's own old list, and the one
+   thing that must not happen is for that to look identical to being linked. */
+#payroll-hint.pay-hint-warn{color:#92400e;background:#fffbeb;
+  border:1px solid #fde68a;border-radius:10px;padding:8px 11px;line-height:1.55;}

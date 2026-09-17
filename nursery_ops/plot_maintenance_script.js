@@ -63,10 +63,52 @@ const DEFAULT_PLOT_QTY = {
    Shape: { nursery: { plot: qty } }. See PERSISTENCE LAYER below. */
 let plotQtyOverrides = {};
 function getPlotQtyOverrides(){ return plotQtyOverrides; }
+/* A nursery matched on its letters and digits alone, so "UNN 1" and UNN1 are
+   one nursery. The same rule the payroll register, the worker locations and
+   the Location card all use — see registerNurseryKey in npayroll_script.js.
+   Change one, change the other. */
+const qtyNurseryKey = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+/* The entry for one nursery out of a map keyed by nursery name, under
+   whatever spelling that map happens to use. */
+function aliasBucket(map, n) {
+  if (map && map[n] !== undefined && map[n] !== null) return map[n];
+  const want = qtyNurseryKey(n);
+  const k = Object.keys(map || {}).find(x => qtyNurseryKey(x) === want);
+  return k ? map[k] : null;
+}
+
+/* What one plot holds.
+   The capacity is keyed the way STOCK MANAGEMENT spells the nursery — "UNN 1"
+   with the space — because that is where the Setting page's list comes from
+   and migration_nops_capacity_to_stock.sql moved the rows onto those keys.
+   The schedule asks by its own key, "UNN1". Those are not the same string,
+   so every lookup for UNN 1 and UNN 2 missed and fell through to the
+   hardcoded table below: a capacity typed on the Setting page, saved, shown
+   as saved, and never used by the thing it governs.
+   (BNN was spelt the same both ways and worked, which is how it went unseen.) */
+/* What the SETTING PAGE calls this nursery — the row the office actually
+   types into. migration_nops_capacity_to_stock.sql deletes nothing, so a
+   database can hold two buckets for one nursery: the migrated "UNN 1" and
+   a leftover "UNN1". Matching on letters and digits alone would then pick
+   whichever came first, and picking the leftover means the schedule reads a
+   capacity that is not the one on screen. The one the office can see and
+   edit wins. */
+function qtyStockName(n){
+  try { const k = schedKey(n); return (k && stockLabel(k)) || n; }
+  catch (_) { return n; }
+}
+
 function getPlotQty(n, p){
   const ov = plotQtyOverrides;
-  if (ov[n]?.[p] !== undefined && ov[n][p] !== null) return +ov[n][p] || 0;
-  return DEFAULT_PLOT_QTY[n]?.[p] || 0;
+  const stock = qtyStockName(n);
+  for (const key of [stock, n]) {
+    if (key && ov[key] && ov[key][p] !== undefined && ov[key][p] !== null) return +ov[key][p] || 0;
+  }
+  const b = aliasBucket(ov, n);
+  if (b && b[p] !== undefined && b[p] !== null) return +b[p] || 0;
+  const def = aliasBucket(DEFAULT_PLOT_QTY, n);
+  return (def && +def[p]) || 0;
 }
 function setPlotQty(n, p, v){
   if (!plotQtyOverrides[n]) plotQtyOverrides[n] = {};
@@ -89,12 +131,64 @@ function resetPlotQty(n){
    the Setting page; a chemical with a coverage of its own overrides both. */
 const COVERAGE_PER_PUMP = 800;
 
-function fmtUsage(totalAmount, unit, decimals = 2){
-  // gm → kg, mL → L; default 2 decimals (no round-up)
-  const big = totalAmount / 1000;
+/* ── Always UP, never to the nearest ───────────────────────────────────
+   These figures are what somebody signs out of the store before walking
+   into the field, and the column they sit under says MAXIMUM. Rounding to
+   the nearest tenth sent a tank out short about half the time — 1.6165 L
+   shown as 1.6 — and being 16mL short in a plot is a second trip.
+
+   Rounding up can only ever leave a little in the drum, which is where it
+   was anyway.
+
+   The `1e9` is not decoration. Ceiling a float that is already exact is how
+   0.1 × 3 becomes 0.4: it is held as 0.30000000000000004, and the ceiling
+   of 3.0000000000000004 is 4. The dust is rounded off first, then the real
+   figure is taken up. */
+function ceilTo(value, decimals){
   const factor = Math.pow(10, decimals);
-  const rounded = Math.round(big * factor) / factor;
-  return rounded + (unit === 'gm' ? ' kg' : ' L');
+  return Math.ceil(Math.round(value * factor * 1e9) / 1e9) / factor;
+}
+
+/* ── The step a single plot is measured out in ─────────────────────────
+   Nobody mixes 58.8 mL. A sprayman fills the tank to a mark, and the mark
+   is every 50 — so one plot's spray is rounded UP to the next 50 of
+   whatever it is measured in, and the week's figure is those per-plot
+   amounts ADDED, not the week's seedlings run through the sum once.
+
+   The difference is real money: thirteen plots each rounded up to the next
+   50 mL comes to more than one round-up at the end, and it is the first
+   figure that matches what actually leaves the store.
+
+   Fertiliser is weighed rather than poured, and goes out in 100 gm steps. */
+const CHEM_STEP = 50;    // mL or gm, per plot, per spray
+const FERT_STEP = 100;   // gm, per plot
+
+/* Up to the next whole step. The 1e9 clears the float dust first, the same
+   reason ceilTo has it: 3 × 0.1 is held as 0.30000000000000004. */
+function ceilStep(value, step){
+  if (!(value > 0)) return 0;
+  return Math.ceil(Math.round((value / step) * 1e9) / 1e9) * step;
+}
+
+/* What each ticked plot holds, one entry per plot. The per-plot figures ARE
+   the calculation now, so they are carried about rather than added up on the
+   way in. A plot with no capacity on record contributes nothing — the same
+   rule as everywhere else: an unknown is not a zero. */
+function plotCaps(nursery, plots, ticked){
+  return (plots || []).filter(p => ticked(p))
+    .map(p => capacityOf(nursery, p))
+    .filter(q => q > 0);
+}
+
+/* The total is a whole number of steps, so it is shown exactly rather than
+   rounded again — 1950 mL is 1.95 L, and calling that 2 L would add half a
+   litre the rule did not ask for. Two decimals is enough for any multiple
+   of 50 mL; trailing zeros go, so 2000 mL reads "2 L" and not "2.00 L". */
+function fmtUsage(totalAmount, unit){
+  const big = totalAmount / 1000;
+  const shown = Math.round(big * 100) / 100;
+  return shown.toLocaleString(undefined, { maximumFractionDigits: 2 })
+       + (unit === 'gm' ? ' kg' : ' L');
 }
 /* Unit per chemical — used to auto-set mL/gm when one is selected. Reads
    the list; a fertiliser answers too, since the manuring sheet asks the same
@@ -104,16 +198,44 @@ function getUnitForChem(name){
   return (c && c.unit) || 'gm';
 }
 
-function calcMaxChem(seedlings, chemName, dose, unit, decimals = 2){
-  if(!seedlings || !chemName || chemName === '—' || !dose) return '—';
-  // Formula: (plot capacity / coverage per pump) × dose per pump / 1000.
-  // The chemical's own coverage when it has one, the preset when it does not
-  // — the same rule the Setting page shows.
-  const totalUnits = (seedlings / coverageFor(chemName)) * dose;
-  return fmtUsage(totalUnits, unit, decimals);
+/* The dose the Setting page holds for a chemical, or null when it has none.
+   A chemical's dose is a property OF the chemical — it is what the Setting
+   page exists to hold — so choosing a different one brings its own dose with
+   it, the way its unit already did. Leaving the old number behind is how a
+   week came to read "Destroy 20mL" when Destroy is 30. */
+function getDoseForChem(name){
+  const c = chemByName(name) || fertByName(name);
+  if (!c) return null;
+  const d = c.dose != null ? c.dose : (c.dose_monthly != null ? c.dose_monthly : null);
+  return d == null || d === '' ? null : +d;
 }
+
+/* PLOT BY PLOT, then added.
+     per plot:  ceil50( (that plot's capacity / coverage) × dose )
+     the week:  those amounts added up
+
+   `caps` is the list of ticked plots' capacities — see plotCaps. It used to
+   be one number, the week's seedlings already added together, and the round
+   to a tankful happened once at the end. That answered a different question:
+   nobody mixes one tank for thirteen plots, they mix thirteen, each filled
+   to the next 50 mark, and what leaves the store is the sum of those. */
+function calcMaxChem(caps, chemName, dose, unit){
+  // A dose that is not a number cannot make an amount — see calcFertUsage.
+  dose = Number(dose);
+  const list = Array.isArray(caps) ? caps : (caps > 0 ? [caps] : []);
+  if(!list.length || !chemName || chemName === '—' ||
+     !Number.isFinite(dose) || dose <= 0) return '—';
+  const coverage = coverageFor(chemName);
+  const total = list.reduce((sum, cap) =>
+    sum + ceilStep((cap / coverage) * dose, CHEM_STEP), 0);
+  return total > 0 ? fmtUsage(total, unit) : '—';
+}
+/* capacityOf, not getPlotQty: a Pre Nursery plot is counted in TRAYS, and
+   asking it for a polybag figure answered zero for every plot it has. Every
+   PN schedule read "Total Seedlings —" and no chemical usage at all, which
+   is the one nursery where the arithmetic is least obvious by eye. */
 function sumSeedlings(nursery, plots, ticked){
-  return plots.filter(p => ticked(p)).reduce((s,p) => s + getPlotQty(nursery, p), 0);
+  return plots.filter(p => ticked(p)).reduce((s,p) => s + capacityOf(nursery, p), 0);
 }
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -145,6 +267,13 @@ const WORKS = [
   { key:'weeding',  label:'Weeding'        },
   { key:'interrow', label:'Interrow Spray' }
 ];
+/* Up here with WORKS and _expanded, and for the same reason they are:
+   renderAll() reaches the summary while this script is still evaluating, so
+   a `const` declared beside the week code halfway down is still in the
+   temporal dead zone when the first render asks for it — "Cannot access
+   WEEK_BLOCKS before initialization", and a blank page. */
+const WEEK_BLOCKS = 4;                                   // weeks in a month
+const WORK_KEYS = ['pd', 'manuring', 'weeding', 'interrow'];
 let _expanded = {};      // { "nursery|kind": true } — which summary rows are open
 let _we       = null;    // the work editor: { n, kind, week, round }
 let _weekPick = null;    // the week-dates popover: { n, k }
@@ -188,6 +317,12 @@ const chemByName = n => chemicals.find(c => c.name === n) || null;
    always offered "none"; it stays. */
 const chemNames = kind => chemicals.filter(c => c.kind === kind).map(c => c.name).concat('—');
 const taggedNames = tag => chemicals.filter(c => c.tag === tag).map(c => c.name).concat('—');
+/* Which activator an interrow column mixes. Every round used to say the word
+   "Activator" because there was nowhere to choose one — the dose was keyed
+   but the name was a constant in six places. Rounds saved before the picker
+   existed have no `activator` at all, and they still mean what they printed,
+   so the missing answer reads as the old constant rather than as none. */
+const interrowAct = c => (c && c.activator) || 'Activator';
 /* With no usage, every fertiliser — which is what the calculator wants,
    since it is asked about both kinds of work. With one, only the fertilisers
    ticked for it: the Manuring sheet is monthly manuring, and offering a
@@ -208,15 +343,30 @@ function fertDoseFor(name, usage) {
   return +(first != null ? first : other != null ? other : 0) || 0;
 }
 
-function calcFertUsage(seedlings, fertName, doseGm, decimals = 2){
-  if (!seedlings || !fertName || fertName === '—' || !doseGm) return { kg:'—', bags:'—', totalGm:0 };
+function calcFertUsage(caps, fertName, doseGm, decimals = 2){
+  /* A dose that is not a number is not a dose. The old guard let anything
+     truthy through, so a dose keyed with a comma or a unit in it — "1,000",
+     "20g" — multiplied out to NaN and the schedule read "NaN kg · NaN bags",
+     which is worse than saying nothing: it looks like an amount. A figure
+     that cannot be worked out reads as not asked, like every other one on
+     this screen. */
+  const dose = Number(doseGm);
+  const list = Array.isArray(caps) ? caps : (caps > 0 ? [caps] : []);
+  if (!list.length || !fertName || fertName === '—' ||
+      !Number.isFinite(dose) || dose <= 0) return { kg:'—', bags:'—', totalGm:0 };
   const f = fertByName(fertName);
   const info = f && f.bag_size_gm ? { bagSizeGm: +f.bag_size_gm, bagLabel: f.bag_label || '' } : null;
-  const totalGm = seedlings * doseGm;
-  const totalKg = totalGm / 1000;
-  const factor = Math.pow(10, decimals);
-  const kgStr = (Math.round(totalKg * factor) / factor).toLocaleString() + ' kg';
-  const bagsStr = info ? (Math.round((totalGm / info.bagSizeGm) * factor) / factor) + ' ' + t('unit.bags') + ' (' + info.bagLabel + ' ' + t('unit.each') + ')' : '—';
+  /* Plot by plot, each weighed out to the next 100 gm, then added — the same
+     rule as a spray (see calcMaxChem), in the step a scale is read in.
+     Fertiliser has no pump in it: it is dose per seedling. */
+  const totalGm = list.reduce((sum, cap) => sum + ceilStep(cap * dose, FERT_STEP), 0);
+  if (!totalGm) return { kg:'—', bags:'—', totalGm:0 };
+  // A whole number of 100 gm steps, so shown exactly rather than rounded on.
+  const kgStr = (Math.round((totalGm / 1000) * 100) / 100)
+    .toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' kg';
+  // Bags are not a step of anything, so this one still rounds UP: a bag
+  // count rounded down is a lorry going back for one more bag.
+  const bagsStr = info ? ceilTo(totalGm / info.bagSizeGm, decimals) + ' ' + t('unit.bags') + ' (' + info.bagLabel + ' ' + t('unit.each') + ')' : '—';
   return { kg: kgStr, bags: bagsStr, totalGm };
 }
 
@@ -277,12 +427,32 @@ function migrateManuringShape(s, plots) {
       }
     });
   }
+
+  /* ── Repair a dose the editor stored as the word "dose" ──
+     weCols called updateManuringDose with a field name it does not take, so
+     the number went into a fourth argument that is nowhere and the string
+     'dose' was saved instead. Every manuring dose keyed in the editor before
+     that was fixed is a literal "dose" in a saved month, and it prints as
+     "Yaramila dosegm" on the work record and as a dash in the totals.
+
+     A dose is a number or it is nothing, so anything that is not one falls
+     back to the fertiliser's own figure from the Setting page — which is
+     what choosing that fertiliser would have put there anyway. */
+  s.manuringConfig.forEach(round => {
+    if (!Array.isArray(round)) return;
+    round.forEach(c => {
+      if (!c || c.dose === undefined || c.dose === null || c.dose === '') return;
+      if (Number.isFinite(Number(c.dose))) return;
+      const own = getDoseForChem(c.name);
+      c.dose = own == null ? '' : own;
+    });
+  });
 }
 function defaultInterrowConfig() {
   // Nested: array of rounds → each round is an array of chemical columns
   return [
-    [{ chem:'Monex', chem_dose:200, chem_unit:'mL', activator_dose:15, activator_unit:'mL' }],
-    [{ chem:'Basta', chem_dose:200, chem_unit:'mL', activator_dose:15, activator_unit:'mL' }],
+    [{ chem:'Monex', chem_dose:200, chem_unit:'mL', activator:'Activator', activator_dose:15, activator_unit:'mL' }],
+    [{ chem:'Basta', chem_dose:200, chem_unit:'mL', activator:'Activator', activator_dose:15, activator_unit:'mL' }],
   ];
 }
 /* Migrate old { R1:{...}, R2:{...} } interrowConfig (and interrow ticks) to nested rounds shape */
@@ -294,6 +464,91 @@ function migrateInterrowShape(s, plots) {
     const v = s.interrow?.[p];
     if (v && !Array.isArray(v)) s.interrow[p] = keys.map(k => [!!v[k]]);
   });
+}
+
+/* ── A round's POSITION and the WEEK its dates name ─────────────────────
+   These are two different things and old payloads have them apart.
+
+   The full-width sheets' "Add Round" pushed onto the end of the array, so
+   round 2 sat at index 1 whatever its dates said. The editor since files a
+   round under the BLOCK its from-date falls in — round 2 dated the 15th is
+   index 2 — and everything that READS a schedule now goes by the block:
+   plotsAtSlot here, weekTasks on both phones.
+
+   So a month built the old way draws its week columns from the dates (1 and
+   3) and finds its ticks by the block (1 and 2). The office showed one thing
+   and the field was sent another, with both sides certain they were right.
+
+   This puts the data where the dates say, once, as a month is read. Only
+   where the evidence is unambiguous: the round is at its position, the block
+   it belongs to is empty, and the two differ. A month already filed by block
+   is left exactly as it is.                                              */
+function alignRoundsToWeeks(s, plots) {
+  if (!s) return;
+  const filled = (x) => (Array.isArray(x) ? x.length > 0 : !!x);
+  const slotOf = (from) =>
+    Math.min(WEEK_BLOCKS, Math.max(1, Math.ceil((+from || 1) / 7))) - 1;
+  const weeksFor = (kind) => {
+    const own = s.weeksByWork && Array.isArray(s.weeksByWork[kind])
+      ? s.weeksByWork[kind] : null;
+    return (own || (Array.isArray(s.weeks) ? s.weeks : []))
+      .slice().sort((a, b) => (+a.from || 0) - (+b.from || 0));
+  };
+  const setOf = (xs) => new Set(xs);
+  const same = (a, b) => a.size === b.size && [...a].every(x => b.has(x));
+
+  /* Is this work filed by POSITION or by BLOCK? Asked once, of the whole
+     work, rather than round by round — a per-round guess moves data that
+     was already in the right place.
+
+     Positional means: every block holding data is one of the POSITIONS
+     0..n-1, and that is not the same set as the blocks the dates name. If
+     the data already sits on the dates' blocks, or on anything else, it is
+     left alone. Nothing is moved on a maybe. */
+  const movesFor = (weeks, hasData) => {
+    if (!weeks.length) return [];
+    const slots = weeks.map(w => slotOf(w.from));
+    const positions = weeks.map((_, i) => i);
+    if (same(setOf(slots), setOf(positions))) return [];
+    const data = setOf([...Array(WEEK_BLOCKS).keys()].filter(hasData));
+    if (!data.size || !same(data, setOf(positions))) return [];
+    return weeks.map((w, pos) => [pos, slotOf(w.from)]).filter(([p, q]) => p !== q);
+  };
+
+  [['manuring', 'manuringConfig'], ['interrow', 'interrowConfig']].forEach(([kind, key]) => {
+    const cfg = s[key];
+    if (!Array.isArray(cfg)) return;
+    const moves = movesFor(weeksFor(kind), b => filled(cfg[b]));
+    if (!moves.length) return;
+    const isDest = (i) => moves.some(([, to]) => to === i);
+    const shift = (arr) => {
+      const next = arr.slice();
+      moves.forEach(([from, to]) => { next[to] = arr[from]; });
+      moves.forEach(([from]) => { if (!isDest(from)) next[from] = []; });
+      for (let b = 0; b < WEEK_BLOCKS; b++) if (!Array.isArray(next[b])) next[b] = [];
+      return next;
+    };
+    s[key] = shift(cfg);
+    (plots || []).forEach(p => {
+      if (Array.isArray(s[kind] && s[kind][p])) s[kind][p] = shift(s[kind][p]);
+    });
+  });
+
+  // Weeding keeps a key per block — R1 to R4 — rather than an array.
+  const wKey = (b) => 'R' + (b + 1);
+  const wMoves = movesFor(weeksFor('weeding'),
+    b => (plots || []).some(p => (s.weeding || {})[p] && s.weeding[p][wKey(b)]));
+  if (wMoves.length) {
+    const isDest = (i) => wMoves.some(([, to]) => to === i);
+    (plots || []).forEach(p => {
+      const row = (s.weeding || {})[p];
+      if (!row) return;
+      const next = { ...row };
+      wMoves.forEach(([from, to]) => { next[wKey(to)] = row[wKey(from)]; });
+      wMoves.forEach(([from]) => { if (!isDest(from)) next[wKey(from)] = false; });
+      s.weeding[p] = next;
+    });
+  }
 }
 
 /* ════════════════════════════
@@ -380,6 +635,9 @@ let _payrollSaveTimer = null;
    that sheet. Filled by applyFieldRecords, shown by renderPayroll. Not saved:
    it is a fact about the last sync, not about the month. */
 let _fieldUnmatched = {};
+/* Same shape, the other failure: verified field records that paired with no
+   office row at all, so nothing of theirs reached the sheet. */
+let _fieldUnpaired = {};
 
 function payrollKey(n, m, type) { return `${n}_${m}_${type}`; }
 
@@ -430,8 +688,22 @@ function renderPayroll() {
   const cfg = PAYROLL_TYPES[_payrollView];
   const line = document.getElementById('payroll-form-line');
   if (line) line.textContent = `${t('pay.form')} (${NURSERY_NAMES[n]}) — ${t('pay.month')} ${m}`;
+  /* Where these names came from, said out loud either way.
+     Linked, it names the Worker System so an amendment is made in the right
+     place. NOT linked, it says so — and that is the half that was missing.
+     A nursery whose register read failed, or whose workers are filed under a
+     section this page does not recognise, or none of whom count as general
+     workers, falls back to this module's own old list. The sheet then looks
+     completely normal while showing names the Worker System has never heard
+     of, and every explanation for it is invisible. */
   const hint = document.getElementById('payroll-hint');
-  if (hint) hint.textContent = t('pay.tickHint') + (isLinked(n) ? ' ' + t('pay.linkedNote') : '');
+  if (hint) {
+    hint.textContent = t('pay.tickHint') + ' '
+      + (isLinked(n) ? t('pay.linkedNote')
+                     : t('pay.notLinkedNote', { nursery: NURSERY_NAMES[n] })
+                       + (_linkErr ? ' ' + t('pay.notLinkedWhy', { why: _linkErr }) : ''));
+    hint.classList.toggle('pay-hint-warn', !isLinked(n));
+  }
 
   const wk = workers[n] || [];
   const rows = payrollRows();
@@ -453,8 +725,10 @@ function renderPayroll() {
        it belongs on the sheet the share was supposed to land on. */
     const nofit = (_fieldUnmatched[`${n}_${m}`] || []).filter((x) => !known.has(x));
     const lines = [];
+    const unpaired = _fieldUnpaired[`${n}_${m}`] || [];
     if (gone.length)  lines.push(`${t('pay.offRegister')} ${gone.join(', ')}`);
     if (nofit.length) lines.push(`${t('pay.fieldNoColumn')} ${nofit.join(', ')}`);
+    if (unpaired.length) lines.push(`${t('pay.unpaired')} ${unpaired.join(', ')}`);
     off.style.display = lines.length ? 'block' : 'none';
     off.textContent = lines.join('\n');
     off.style.whiteSpace = 'pre-line';
@@ -1031,7 +1305,11 @@ function isGeneralWorker(r, nurseryNamesTheRole) {
    Compare on letters and digits alone, the same rule every other crossing of
    this boundary uses. And read `nursery` when `section` has not been filled
    in: the register copies one into the other, but a row added since is only
-   guaranteed to have the one the person keying it happened to use. */
+   guaranteed to have the one the person keying it happened to use.
+
+   SHARED RULE. registerNurseryKey in npayroll/npayroll_script.js is the same
+   comparison, resolving the same list so the salary claim prices the workers
+   this sheet actually shows. Change one, change the other. */
 function _registerNurseryKey(r) {
   const key = (x) => String(x == null ? '' : x).replace(/[^a-z0-9]/gi, '').toUpperCase();
   return key(r && r.section) || key(r && r.nursery);
@@ -1151,7 +1429,12 @@ function persistState(n, m) {
     weeding:        s.weeding,
     interrow:       s.interrow,
     periods:        s.periods,
-    weeks:          s.weeks,      // the summary's shared columns
+    /* `weeks` is the OLD shared list, still written so an office running a
+       half-deployed build reads a month it can understand rather than an
+       empty one. `weeksByWork` is what this page reads now — each work's own
+       rounds. Dropping it here was the whole change not surviving a save. */
+    weeks:          s.weeks,
+    weeksByWork:    s.weeksByWork,
     _savedPd:       s._savedPd,
   };
   dbStateCache[stateKey(n, m)] = JSON.parse(JSON.stringify(_payload));
@@ -1237,8 +1520,17 @@ const I18N = {
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
     'pay.noWorkers':'No general worker is on the Worker System register for this nursery yet. Add them on the 555 Worker Portal\u2019s Manage page and they will appear here.',
     'pay.linkedNote':'Worker names come from the Worker System on the 555 Worker Portal\u2019s Manage page and follow any change made there.',
+    /* The other half of the same sentence. A sheet on the module's own old
+       list looks exactly like a linked one, so it has to say which it is. */
+    'pay.notLinkedNote':'These names are this module\u2019s own old list \u2014 {nursery} is NOT taking them from the Worker System. Check that its workers are filed under that nursery and counted as general workers on the 555 Worker Portal\u2019s Manage page.',
+    'pay.notLinkedWhy':'The register could not be read: {why}',
     'pay.offRegister':'⚠ Ticked this month but no longer a general worker of this nursery on the register, so their capacity is not counted:',
     'pay.fieldNoColumn':'⚠ The field credited work to these names and they have no column here, so their share of the plot is not counted. Check the spelling against the register, or that they are a general worker of this nursery:',
+    /* The other half of the same warning: work that never reached the sheet
+       at all, as against work that reached it with a name nobody could
+       place. */
+    'pay.unpaired':'Verified in the field but matched no row on this month\u2019s schedule, so nothing was filled in or ticked:',
+    'pay.roundN':'Round {n}',
     'pay.noRows':'No records for this nursery and month yet — tick the schedule, then Sync from Schedule.',
     'pay.tickHint':'Tick each worker who did the job. Capacity per worker = plot capacity ÷ number of ticks on that row. Pay is worked out from this record in the Nursery Payroll System.',
     /* Salary claim form (PDF) */
@@ -1275,6 +1567,12 @@ const I18N = {
     'rec.auditBadTip':'The auditor checked this job and did not pass it',
     'rec.allJenis':'All Work Types', 'rec.allPlot':'All Plots', 'rec.filterDate':'Filter by date…',
     'rec.totalTasks':'Total Tasks', 'rec.gaiaDone':'Gaia Done', 'rec.gaiaPending':'Gaia Pending',
+    'rec.pendingTask':'Pending Task', 'rec.repairCase':'Total Repair Case',
+    'rec.doneOf':'{n} done \u00b7 {pct}%', 'rec.repairedOf':'{n} repaired \u00b7 {pct}%',
+    'rec.track':'Track Record', 'rec.trackView':'View track', 'rec.trackNone':'No walk was recorded for this job.',
+    'rec.nelos':'Nelos Case', 'rec.repaired':'Done Repair',
+    'rec.nelosNa':'A case is raised on Nelos when the auditor marks a job Unsatisfied. This one has not been.',
+    'rec.repairedNa':'Closed by the Field Conductor once the repair is done — after a case has been opened.',
     'rec.donePct':'Done %', 'rec.none':'No records found.',
     'jenis.pd':'P & D Spraying', 'jenis.interrow':'Interrow Spraying',
     'jenis.weeding':'Weeding', 'jenis.manuring':'Manuring',
@@ -1319,8 +1617,12 @@ const I18N = {
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
     'pay.noWorkers':'Belum ada pekerja am untuk nurseri ini dalam daftar Worker System. Tambah di halaman Manage Portal 555 FC dan nama akan muncul di sini.',
     'pay.linkedNote':'Nama pekerja diambil daripada Worker System di halaman Manage Portal 555 FC dan mengikut sebarang pindaan di sana.',
+    'pay.notLinkedNote':'Nama ini adalah senarai lama modul ini \u2014 {nursery} TIDAK mengambil daripada Worker System. Pastikan pekerjanya difailkan di bawah nurseri itu dan dikira sebagai pekerja am di halaman Manage Portal 555 FC.',
+    'pay.notLinkedWhy':'Daftar tidak dapat dibaca: {why}',
     'pay.offRegister':'⚠ Ditanda bulan ini tetapi bukan lagi pekerja am nurseri ini dalam daftar, jadi kapasiti mereka tidak dikira:',
     'pay.fieldNoColumn':'⚠ Lapangan mengkreditkan kerja kepada nama ini tetapi tiada lajur di sini, jadi bahagian mereka tidak dikira. Semak ejaan dengan daftar, atau sama ada mereka pekerja am nurseri ini:',
+    'pay.unpaired':'Disahkan di ladang tetapi tiada baris sepadan pada jadual bulan ini, jadi tiada apa diisi atau ditanda:',
+    'pay.roundN':'Pusingan {n}',
     /* Borang tuntutan gaji (PDF) */
     'pay.no':'Bil.', 'pay.worker':'Nama Pekerja', 'pay.workersRange':'Pekerja', 'pay.ofTotal':'daripada',
     'pay.capBy':'KAPASITI KERJA DISIAPKAN (BIBIT)', 'pay.totalEarn':'Jumlah Pendapatan (RM)',
@@ -1357,6 +1659,12 @@ const I18N = {
     'rec.auditBadTip':'Juruaudit telah memeriksa kerja ini dan tidak meluluskannya',
     'rec.allJenis':'Semua Jenis Kerja', 'rec.allPlot':'Semua Plot', 'rec.filterDate':'Tapis ikut tarikh…',
     'rec.totalTasks':'Jumlah Tugasan', 'rec.gaiaDone':'Gaia Selesai', 'rec.gaiaPending':'Gaia Belum',
+    'rec.pendingTask':'Tugasan Belum Siap', 'rec.repairCase':'Jumlah Kes Pembaikan',
+    'rec.doneOf':'{n} siap \u00b7 {pct}%', 'rec.repairedOf':'{n} dibaiki \u00b7 {pct}%',
+    'rec.track':'Rekod Laluan', 'rec.trackView':'Lihat laluan', 'rec.trackNone':'Tiada laluan direkodkan untuk kerja ini.',
+    'rec.nelos':'Kes Nelos', 'rec.repaired':'Pembaikan Selesai',
+    'rec.nelosNa':'Kes dibuka di Nelos apabila juruaudit menanda kerja Tidak Memuaskan. Kerja ini belum ditanda.',
+    'rec.repairedNa':'Ditutup oleh Field Conductor selepas pembaikan siap \u2014 selepas kes dibuka.',
     'rec.donePct':'% Selesai', 'rec.none':'Tiada rekod dijumpai.',
     'jenis.pd':'Penyemburan racun kulat dan serangga', 'jenis.interrow':'Meracun rumput secara selingan',
     'jenis.weeding':'Merumput', 'jenis.manuring':'Membaja',
@@ -1390,8 +1698,15 @@ const I18N = {
   },
 };
 let currentLang = localStorage.getItem('mjm_lang') || 'en';
-function t(key){
-  return (I18N[currentLang] && I18N[currentLang][key]) || I18N.en[key] || key;
+/* `vars` fills {name} placeholders, so a sentence with a number in it stays
+   ONE string per language and keeps its word order. Building it by
+   concatenation instead puts the English order into the Malay — and the two
+   do not agree about where a count goes. Optional: every existing caller
+   passes nothing and gets exactly what it always did. */
+function t(key, vars){
+  const s = (I18N[currentLang] && I18N[currentLang][key]) || I18N.en[key] || key;
+  if (!vars) return s;
+  return s.replace(/\{(\w+)\}/g, (m, k) => (vars[k] == null ? m : String(vars[k])));
 }
 /* Canonical BM jenis value → its translation key (for display only; stored value stays BM) */
 function jenisKey(j){
@@ -1438,6 +1753,7 @@ function getState(nursery, month) {
     if (persisted) {
       migrateManuringShape(persisted, NURSERY_PLOTS[nursery]);
       migrateInterrowShape(persisted, NURSERY_PLOTS[nursery]);
+      alignRoundsToWeeks(persisted, NURSERY_PLOTS[nursery]);
       appState[nursery][month] = persisted;
       return appState[nursery][month];
     }
@@ -1451,6 +1767,7 @@ function getState(nursery, month) {
       if (inherited) {
         migrateManuringShape(inherited, NURSERY_PLOTS[nursery]);
         migrateInterrowShape(inherited, NURSERY_PLOTS[nursery]);
+        alignRoundsToWeeks(inherited, NURSERY_PLOTS[nursery]);
         // Snapshot what was carried in, so nothing shows as "modified" until
         // this month is actually changed.
         inherited._savedPd = JSON.parse(JSON.stringify(inherited.pd || {}));
@@ -1748,6 +2065,24 @@ function renderPeriodOwner(kind) {
 
 const getNursery = () => document.getElementById('global-nursery').value;
 
+/* ── Which nursery is being EDITED ─────────────────────────────────────
+   Not the same question as getNursery(), and the difference cost a day.
+
+   getNursery() reads the toolbar. On the Schedule tab the toolbar's nursery
+   control is HIDDEN — the summary shows every nursery at once, so there is
+   nothing for it to pick — and it holds whatever was last selected on some
+   other tab. The work editor, though, is opened per nursery from the
+   pencil on a summary row.
+
+   So every chemical chosen in that editor was written into the TOOLBAR's
+   nursery, and the redraw, which reads the editor's nursery, showed the old
+   chemical still sitting there. Choose Destroy, get Becker — and meanwhile
+   a nursery nobody had opened quietly had its schedule changed.
+
+   The editor's nursery wins whenever the editor is open. The old
+   full-width sheets, which do follow the toolbar, still get it. */
+const editNursery = () => (typeof _we !== 'undefined' && _we) ? _we.n : getNursery();
+
 /* ── MONTH/YEAR WHEEL PICKER (Android-style spinner) ──
    Two independently spinnable columns (month + year) with a Cancel/OK
    footer. Writes "YYYY-MM" into the hidden #global-month / #pdf-month
@@ -1872,6 +2207,63 @@ function onNurseryChange() {
   renderAll();
   autoSyncRecords();
 }
+/* ── Ticking a box must not move the page ──────────────────────────────
+   Every tick re-renders its whole panel — deliberately, because a tick can
+   change another cell's "modified" mark and a surgical update would have to
+   know which. The cost is that the reader loses their place: in the work
+   editor, which is one long block per week, somebody ticking plots in week
+   4 was thrown back to week 1 after every single tick.
+
+   TWO KINDS OF BOX, and the second is the one that matters here.
+
+   A box that SURVIVES the render — only its contents replaced — can be put
+   back through the element itself. But renderWorkEditor() replaces
+   #we-body's innerHTML, which destroys the scrolling div inside it and
+   builds a new one; the old reference is detached and setting scrollTop on
+   it does nothing at all. So the offsets are also remembered against a
+   SELECTOR, and re-applied to whatever took the old element's place. That
+   is the whole reason the first attempt at this looked right and did
+   nothing.
+
+   Put back twice: the synchronous call covers the ordinary case, and the
+   rAF covers the one where the new markup is briefly shorter than the old —
+   the browser clamps the offset to the shorter content, and only once
+   layout has settled is the original reachable again. */
+const SCROLL_BOXES = ['.we-scroll', '.tbl-wrap', '.ss-wrap', '#we-modal .modal-body'];
+
+function keepingScroll(fn) {
+  const x = window.scrollX, y = window.scrollY;
+
+  // Boxes that will still be here afterwards, held by reference.
+  const live = [];
+  document.querySelectorAll('*').forEach(el => {
+    if (el.scrollTop || el.scrollLeft) live.push([el, el.scrollLeft, el.scrollTop]);
+  });
+  // And the same offsets held by selector, for the ones about to be rebuilt.
+  const bySel = [];
+  SCROLL_BOXES.forEach(sel => {
+    const el = document.querySelector(sel);
+    if (el && (el.scrollTop || el.scrollLeft)) bySel.push([sel, el.scrollLeft, el.scrollTop]);
+  });
+
+  fn();
+
+  const put = () => {
+    window.scrollTo(x, y);
+    live.forEach(([el, l, t]) => {
+      if (!el.isConnected) return;
+      el.scrollLeft = l; el.scrollTop = t;
+    });
+    bySel.forEach(([sel, l, t]) => {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      el.scrollLeft = l; el.scrollTop = t;
+    });
+  };
+  put();
+  requestAnimationFrame(put);
+}
+
 function renderAll() {
   const m=getMonth(), n=getNursery(), lbl=NURSERY_LABELS[n];
   syncNurseryCircles();
@@ -1946,8 +2338,13 @@ async function loadFieldRecords() {
     // Paged: the field writes roughly one row per plot per job per week, so
     // this table passes Supabase's 1000-row cap within a couple of months —
     // and a short read does not fail, it just quietly loses the newest work.
+    /* The GPS SUMMARY — how far, how many fixes, where it started — and never
+       gps_track itself. This reads a whole month of records, and a walk is a
+       thousand points; the line is fetched one record at a time when somebody
+       asks to see it (_openTrack). The summary is stored beside the track for
+       exactly this reason. */
     let res = await _mvFetchAll(() => _verifiedOnly(_supabase.from('nops_maint_field_records')
-      .select('id, work_date, plot_name, work_type, jenis, batch_name, week_no, schedule_month, qty, worked_by, reported_by, verified_at'))
+      .select('id, work_date, plot_name, work_type, jenis, chemical, batch_name, week_no, schedule_month, qty, worked_by, reported_by, verified_at, gps_lat, gps_lng, gps_points, gps_distance_m'))
       .order('id', { ascending: true }));
     // batch_name / week_no / schedule_month come from
     // shared/add_maint_field_batch.sql. Until that has been run the field is
@@ -2052,6 +2449,167 @@ function _auditCell(r) {
   return '<span style="color:var(--text-faint);">—</span>';
 }
 
+/* ══════════════════════════════════════════════════════════════
+   OPENING ONE WALK
+
+   Leaflet is a third of a megabyte and most people reading a month of records
+   never press this, so it arrives on the first press and not with the page.
+   Pinned and with the same integrity hashes operation_settings.html uses —
+   one version of Leaflet in this office, verified the same way.
+
+   The LINE is fetched here too, for the one record asked for. The month's
+   read deliberately carries only the summary; see loadFieldRecords.
+══════════════════════════════════════════════════════════════ */
+const LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+const LEAFLET_JS  = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+const LEAFLET_CSS_SRI = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
+const LEAFLET_JS_SRI  = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+
+let _leafletReady = null;
+function loadLeaflet() {
+  if (window.L) return Promise.resolve(window.L);
+  if (_leafletReady) return _leafletReady;
+  _leafletReady = new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet'; css.href = LEAFLET_CSS;
+    css.integrity = LEAFLET_CSS_SRI; css.crossOrigin = '';
+    document.head.appendChild(css);
+    const js = document.createElement('script');
+    js.src = LEAFLET_JS; js.integrity = LEAFLET_JS_SRI; js.crossOrigin = '';
+    js.onload = () => resolve(window.L);
+    js.onerror = () => reject(new Error('Leaflet could not be loaded'));
+    document.head.appendChild(js);
+  });
+  return _leafletReady;
+}
+
+let _trkMap = null;
+
+function closeTrack() {
+  const box = document.getElementById('trk-modal');
+  if (box) box.classList.remove('open');
+  /* Destroyed, not hidden. Leaflet keeps listeners on a container it still
+     owns, and re-opening onto a live map draws the second track over the
+     first. */
+  if (_trkMap) { try { _trkMap.remove(); } catch (_) {} _trkMap = null; }
+}
+
+async function openTrack(id) {
+  const box = document.getElementById('trk-modal');
+  const body = document.getElementById('trk-body');
+  const note = document.getElementById('trk-note');
+  if (!box || !body) return;
+  closeTrack();
+  box.classList.add('open');
+  body.innerHTML = '';
+  if (note) note.textContent = t('common.loading') === 'common.loading' ? 'Loading…' : t('common.loading');
+
+  let row = null;
+  try {
+    const res = await _supabase.from('nops_maint_field_records')
+      .select('gps_track, gps_distance_m, gps_points, gps_started_at, gps_ended_at')
+      .eq('id', id).single();
+    if (res.error) throw res.error;
+    row = res.data;
+  } catch (e) {
+    if (note) note.textContent = 'Could not read the track — ' + (e.message || e);
+    return;
+  }
+
+  const pts = Array.isArray(row && row.gps_track) ? row.gps_track : [];
+  if (!pts.length) { if (note) note.textContent = t('rec.trackNone'); return; }
+
+  let L;
+  try { L = await loadLeaflet(); } catch (e) {
+    if (note) note.textContent = 'The map could not be loaded. ' + (e.message || '');
+    return;
+  }
+
+  const far = row.gps_distance_m != null
+    ? (row.gps_distance_m >= 1000 ? (row.gps_distance_m / 1000).toFixed(2) + ' km'
+                                  : Math.round(row.gps_distance_m) + ' m')
+    : '';
+  if (note) note.textContent = [far, row.gps_points ? row.gps_points + ' fixes' : '']
+    .filter(Boolean).join(' · ');
+
+  /* Stored as [lng, lat] — the order the phone writes and every other reader
+     of this column expects. Leaflet wants them the other way round. */
+  const latlngs = pts.map((p) => [p[1], p[0]]);
+  const map = L.map(body, { attributionControl: false });
+  _trkMap = map;
+  L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+    { maxZoom: 19, maxNativeZoom: 19 }).addTo(map);
+  const line = L.polyline(latlngs, { color: '#f43f5e', weight: 5, opacity: .95 }).addTo(map);
+  /* On the track, not on the country. Capped at the imagery's own limit
+     because a walk round one plot is small, and a track of a single fix has
+     no extent at all — without the cap fitBounds answers that with the
+     tightest zoom there is. Same rule as the phone's viewer. */
+  map.fitBounds(line.getBounds(), { padding: [28, 28], maxZoom: 19 });
+  setTimeout(() => map.invalidateSize(), 60);
+}
+
+/* Did the auditor fail this job? The one question three other things depend
+   on — the repair count on the summary, and both ticks at the end of the row.
+   Kept beside _auditCell so the two cannot come to different conclusions. */
+function _auditFailed(r) {
+  const ids = Array.isArray(r._fieldIds) && r._fieldIds.length ? r._fieldIds : [];
+  let found = ids.map((i) => maintAudits[String(i)]).filter(Boolean);
+  if (!found.length) found = [maintAudits[String(r.id)]].filter(Boolean);
+  return found.includes('Unsatisfactory');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   THE WALK, ON THE RECORDS THE CONDUCTOR HAS SIGNED
+
+   loadFieldRecords reads verified records only, so a track reaching this
+   column has already been through both hands the request names: the worker
+   who walked it and the Field Conductor who checked the work. An unverified
+   record is not evidence of anything and never gets here.
+
+   The cell offers a walk per record, because one job can be three workers
+   with three tracks and choosing one of them to show would be this page
+   deciding which man's morning counts.
+══════════════════════════════════════════════════════════════ */
+function _trackCell(r) {
+  const tr = Array.isArray(r._fieldTracks) ? r._fieldTracks : [];
+  if (!tr.length) return '<span style="color:var(--text-faint);">—</span>';
+  return tr.map((x) => {
+    const far = x.m != null ? (x.m >= 1000 ? (x.m / 1000).toFixed(2) + ' km'
+                                           : Math.round(x.m) + ' m') : '';
+    const tip = [x.who, far, x.n ? x.n + ' fixes' : ''].filter(Boolean).join(' · ');
+    return `<button type="button" class="trk-btn" onclick="openTrack(${x.id})"
+             title="${esc(tip || t('rec.trackView'))}">🛰️ ${esc(far || t('rec.trackView'))}</button>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   AFTER AN UNSATISFIED VERDICT
+
+   Two ticks, in the order the work actually happens: the auditor opens a case
+   on Nelos, then the Field Conductor repairs the job and closes it.
+
+   They are kept HERE, on the maintenance row, and not read back from Nelos.
+   A Nelos case knows its plot and its subject; it does not know which of a
+   month's four rounds of spraying on that plot it was opened against, and
+   guessing would put a closed case against the wrong week's work. The tick is
+   the link, made by the person who made the case.
+
+   Neither is offered where it would mean nothing. Nelos Case only opens on a
+   job the auditor failed — there is no case to raise on work that passed —
+   and Done Repair only once a case exists, because closing a case nobody
+   opened is not a state this system should be able to record. Both say why
+   they are shut rather than being greyed out in silence.
+══════════════════════════════════════════════════════════════ */
+function _flagCell(r, field, on, why) {
+  if (!on) {
+    return `<span class="chk-btn chk-na" title="${esc(why)}">·</span>`;
+  }
+  const locked = _recLocked(r);
+  return `<span class="chk-btn ${r[field] ? 'chk-on' : 'chk-off'}${locked ? ' chk-locked' : ''}"
+           ${locked ? 'title="Checked — only an admin can change this"'
+                    : `onclick="togRec(${r.id},'${field}')"`}>${r[field] ? '☑' : '☐'}</span>`;
+}
+
 /* "Round 2: Daconil 50gm" → 2 */
 /* Which of the four Worker Record sheets a job belongs on. PAYROLL_TYPES
    already says it the other way round; this is that map inverted, built once
@@ -2091,6 +2649,23 @@ function _isoMonthLabel(iso) {
   return m ? `${_MONTHS_SHORT[parseInt(m[2], 10) - 1]} ${m[1]}` : '';
 }
 const _fieldKey = (jenis, plot, week) => `${jenis}||${_mvPlotKey(plot)}||${week}`;
+
+/* A chemical, compared the way a person would compare it: the round label off
+   the front, then letters and digits only.
+
+     "Round 1: Manzate 50gm + Bond 15mL"  →  MANZATE50GMBOND15ML
+     "Manzate 50gm + Bond 15mL"           →  the same
+
+   The round comes off because it is the thing that disagrees — it is what the
+   office calls the job, not what the job IS. */
+function _chemKey(s) {
+  return String(s == null ? '' : s)
+    .replace(/^\s*Round\s+\d+\s*:/i, '')
+    .replace(/[^a-z0-9]/gi, '')
+    .toUpperCase();
+}
+const _fieldChemKey = (jenis, plot, chem) =>
+  `${jenis}||${_mvPlotKey(plot)}||${_chemKey(chem)}`;
 
 /* Who a field record credits the work to.
 
@@ -2146,12 +2721,45 @@ function _summariseFieldGroup(list) {
     batches: uniq(list.flatMap((f) => String(f.batch_name || '').split(',').map((x) => x.trim()))),
     workers: uniq(list.flatMap(_fieldCredits)),
     qty:     newest ? newest.qty : null,
+    /* The records in this group that carry a walk, newest first — one job can
+       be three workers and three tracks, and the Track Record cell offers
+       each of them rather than picking one and calling it the answer. The
+       LINE is not here: only the summary is read for the whole month, and the
+       thousand points of a walk are fetched for the one record somebody
+       opens. See _openTrack. */
+    tracks:  list.filter((f) => f.gps_points > 0 || f.gps_distance_m != null)
+                 .sort((a, b) => (b.id || 0) - (a.id || 0))
+                 .map((f) => ({ id: f.id, m: f.gps_distance_m, n: f.gps_points,
+                                who: (_fieldCredits(f) || [])[0] || '' })),
   };
 }
 
-/* The field's answer for each (job, plot, round) of one month. */
+/* The field's answer for each (job, plot, round) of one month — and, beside
+   it, the same records filed by (job, plot, CHEMICAL).
+ 
+   ── Why two indexes ──
+ 
+   The round is the one fact the two sides get from different places. The
+   office reads it off the front of its own chemical ("Round 2: Manzate …");
+   the phone sends the week its board was showing. Those agree only when the
+   office schedules one round per week, and it often does not: a plot with a
+   single P & D round in the month is worked in week two, and the two numbers
+   part company. Verified work then paired with nothing and vanished — no
+   date, no batch, no tick, while a worker had done it and a conductor had
+   signed it off.
+ 
+   So the chemical is the second way in, and it is the better fact: it is what
+   the job IS, where the round is only what the office calls it. Manzate is
+   Manzate whichever week the phone was showing.
+ 
+   It cannot attach work to a job the office did not schedule, which is what
+   makes it safe to fall back on: if the office has no Manzate row for that
+   plot, nothing matches and the record stays unpaired and reported. And the
+   caller only uses it where the chemical picks out ONE office row — see the
+   ambiguity guard there. */
 function fieldRecordIndex(monthLbl) {
   const groups = {};
+  const byChem = {};
   fieldRecords.forEach(f => {
     const jenis = f.jenis || _FIELD_JENIS[f.work_type];
     if (!jenis) return;
@@ -2160,9 +2768,19 @@ function fieldRecordIndex(monthLbl) {
     if (!week) return;
     const k = _fieldKey(jenis, f.plot_name, week);
     (groups[k] || (groups[k] = [])).push(f);
+    /* Only where the phone actually recorded one. A record with no chemical
+       has nothing to be matched on and keeps the round as its only route. */
+    const ck = _chemKey(f.chemical);
+    if (ck) {
+      const c = _fieldChemKey(jenis, f.plot_name, f.chemical);
+      (byChem[c] || (byChem[c] = [])).push(f);
+    }
   });
   const idx = {};
   Object.keys(groups).forEach((k) => { idx[k] = _summariseFieldGroup(groups[k]); });
+  const chem = {};
+  Object.keys(byChem).forEach((k) => { chem[k] = _summariseFieldGroup(byChem[k]); });
+  idx.__byChem = chem;
   return idx;
 }
 
@@ -2211,10 +2829,39 @@ function applyFieldRecords(nursery, monthLbl) {
     touched.add(type);
   };
 
+  /* Which of the field's groups actually found a row here. Whatever is left
+     over at the end is verified work that reached the office and attached to
+     nothing — no date, no batch, no tick — and used to do so in silence. */
+  const usedKeys = new Set();
+
+  /* How many office rows on this sheet carry each chemical, per job and plot.
+     The chemical fallback below is used ONLY where this says one: two rows
+     with the same chemical on the same plot cannot tell which of them a
+     record belongs to, and guessing would put a worker's capacity on the
+     wrong round. Ambiguous stays unpaired, and unpaired is reported. */
+  const chemRows = {};
+  records.forEach(r => {
+    if (!plots.includes(r.plot)) return;
+    const c = _fieldChemKey(r.jenis, r.plot, r.racun);
+    chemRows[c] = (chemRows[c] || 0) + 1;
+  });
+
   records.forEach(r => {
     if (!plots.includes(r.plot) || r.checked) return;
     const week = _recRound(r.racun);
-    const g = week ? idx[_fieldKey(r.jenis, r.plot, week)] : null;
+    let key = week ? _fieldKey(r.jenis, r.plot, week) : null;
+    let g = key ? idx[key] : null;
+    /* The round did not find it. Try the chemical — the office scheduled
+       this exact spray on this exact plot, and the only thing the two sides
+       disagree about is what to call the round. */
+    if (!g) {
+      const ck = _fieldChemKey(r.jenis, r.plot, r.racun);
+      if (_chemKey(r.racun) && chemRows[ck] === 1) {
+        const byChem = idx.__byChem || {};
+        if (byChem[ck] && !usedKeys.has(ck)) { g = byChem[ck]; key = ck; }
+      }
+    }
+    if (g) usedKeys.add(key);
     if (!g) {
       // A cell this sync filled before whose field records have gone —
       // deleted, unverified again, or the month on screen has moved on. Put
@@ -2225,6 +2872,7 @@ function applyFieldRecords(nursery, monthLbl) {
       if (r._fromFieldQty)   { r.qty    = null; delete r._fromFieldQty; }
       delete r._fieldDates;
       delete r._fieldIds;
+      delete r._fieldTracks;
       syncTicks(r, null);
       return;
     }
@@ -2234,6 +2882,8 @@ function applyFieldRecords(nursery, monthLbl) {
        link goes, so an unverified or deleted record cannot leave a verdict
        pointing at nothing. */
     r._fieldIds = g.ids.slice();
+    // The walks on those records, for the Track Record column.
+    r._fieldTracks = (g.tracks || []).slice();
     if (!r.tarikh || r.tarikh === '-' || r._fromFieldDate) {
       /* tarikh stays ONE date — the earliest. Everything downstream reads it
          as a date and would choke on a list: the month timeline, the Worker
@@ -2279,6 +2929,39 @@ function applyFieldRecords(nursery, monthLbl) {
 
      Usually a spelling that differs by more than punctuation, or somebody
      whose register row is not a general worker of this nursery. */
+  /* VERIFIED WORK THAT PAIRED WITH NOTHING.
+     Three things do this, and every one of them was silent:
+
+       · the round disagrees — the office has the job on "Round 2:" and the
+         phone recorded it while its week board showed another week
+       · the office row's chemical carries no "Round N:" at all, so there is
+         nothing to pair with
+       · the office has no row for that job on that plot this month
+
+     A fourth is deliberate and not reported: a row somebody has CHECKED is
+     skipped by the loop above, because Checked means the office has settled
+     it and a later sync must not move it.
+
+     Worth saying out loud, because the symptom is a row that looks exactly
+     like work nobody has done — while a worker has done it, a conductor has
+     signed it off, and neither of them can tell. */
+  const unpaired = [];
+  Object.keys(idx).forEach((k) => {
+    if (k === '__byChem' || usedKeys.has(k)) return;
+    const g = idx[k];
+    /* Consumed through the chemical rather than the round: the record DID
+       reach a row, just not by the key it is filed under here. Reporting it
+       as lost would be this page complaining about work it has in hand. */
+    const f0 = (g.list || [])[0];
+    if (f0 && usedKeys.has(_fieldChemKey(f0.jenis || _FIELD_JENIS[f0.work_type],
+                                         f0.plot_name, f0.chemical))) return;
+    const f = (g.list || [])[0];
+    if (!f || !plots.includes(String(f.plot_name || '').trim().toUpperCase())) return;
+    unpaired.push(`${f.plot_name} ${jenisLabel(f.jenis)} `
+      + `(${t('pay.roundN', { n: f.week_no || _weekOfDate(f.work_date) })})`);
+  });
+  _fieldUnpaired[`${nursery}_${monthLbl}`] = [...new Set(unpaired)].sort();
+
   _fieldUnmatched[`${nursery}_${monthLbl}`] = [...unmatched].sort();
   if (unmatched.size) {
     console.warn('[maint] the field credited work to names with no column on '
@@ -2331,7 +3014,7 @@ function autoSyncRecords() {
     round.forEach((c, ci) => {
       plots.filter(p=>s.interrow[p]?.[ri]?.[ci]).forEach(plot=>{
         newRecs.push({id:id++, tarikh:'-', jenis:'Meracun rumput secara selingan',
-          racun:`Round ${ri+1}: ${c.chem} ${c.chem_dose}${c.chem_unit} + Activator ${c.activator_dose}${c.activator_unit}`,
+          racun:`Round ${ri+1}: ${c.chem} ${c.chem_dose}${c.chem_unit} + ${interrowAct(c)} ${c.activator_dose}${c.activator_unit}`,
           plot, batch:'', qty:null, carlos:0, gaia:0, remark:''});
       });
     });
@@ -2381,6 +3064,47 @@ function applyNopsAdminUI() {
    nothing has to keep a parallel list of which button is which. */
 function navTabFor(name) {
   return document.querySelector(`#sm-nav .pn-tab[onclick*="'${name}'"]`);
+}
+
+/* ── Pulling the side bar out of the way ──────────────────────────────
+   The Work Record table is twelve columns wide, and two hundred pixels of
+   navigation nobody is reading while going through a month of records is two
+   hundred pixels the records could have had.
+
+   Collapsed the bar keeps its place in the grid and only loses its width and
+   its visibility — never display:none. switchTab and applyNopsAdminUI both
+   reach for those buttons by id, and a bar that is not in the DOM is a page
+   that throws the first time somebody hides it and then switches panel.
+
+   Remembered per browser. Somebody who works with it closed opens it closed
+   tomorrow, which is the whole point of a preference. */
+const NAV_HIDDEN_KEY = 'mjm_maint_nav_hidden';
+
+function applyNav() {
+  const frame = document.querySelector('.sm-frame');
+  const btn = document.getElementById('sm-nav-toggle');
+  if (!frame) return;
+  let hidden = false;
+  try { hidden = localStorage.getItem(NAV_HIDDEN_KEY) === '1'; } catch (_) {}
+  frame.classList.toggle('nav-hid', hidden);
+  if (btn) {
+    btn.setAttribute('aria-expanded', hidden ? 'false' : 'true');
+    btn.title = hidden ? 'Show the menu' : 'Hide the menu';
+    const ico = document.getElementById('sm-nav-toggle-ico');
+    if (ico) ico.innerHTML = hidden ? '&#10095;' : '&#10094;';
+  }
+}
+
+function toggleNav() {
+  let hidden = false;
+  try { hidden = localStorage.getItem(NAV_HIDDEN_KEY) === '1'; } catch (_) {}
+  /* A browser with storage switched off still gets the toggle — it simply
+     forgets between visits, which is better than a button that does nothing
+     because it could not write down what it did. */
+  try { localStorage.setItem(NAV_HIDDEN_KEY, hidden ? '0' : '1'); } catch (_) {}
+  const frame = document.querySelector('.sm-frame');
+  if (frame) frame.classList.toggle('nav-hid', !hidden);
+  applyNav();
 }
 
 function switchTab(name, btn) {
@@ -2586,17 +3310,33 @@ function mkDose(val, unit, onch) {
 ════════════════════════════ */
 function updatePDChem(w,f,v){
   if(!canEditSchedule) return;
-  const cfg = getState(getNursery(),getMonth()).pdConfig[w];
+  const cfg = getState(editNursery(),getMonth()).pdConfig[w];
   cfg[f] = v;
-  // Auto-set unit based on the selected chemical
-  if (f === 'P')         cfg.P_unit         = getUnitForChem(v);
-  else if (f === 'D')    cfg.D_unit         = getUnitForChem(v);
-  else if (f === 'P_sticker') cfg.P_sticker_unit = getUnitForChem(v);
-  else if (f === 'D_sticker') cfg.D_sticker_unit = getUnitForChem(v);
+  /* The chosen chemical's own unit AND its own dose. The unit always
+     followed; the dose did not, so picking Destroy over Becker changed the
+     name and left Becker's 20mL underneath it — the column still read as
+     Becker, which is exactly what it was reported as.
+
+     A dose the Setting page does not hold (an em dash, a chemical since
+     removed) leaves the number alone rather than blanking a figure somebody
+     keyed by hand. */
+  const follow = (base) => {
+    cfg[base + '_unit'] = getUnitForChem(v);
+    const d = getDoseForChem(v);
+    if (d != null) cfg[base + '_dose'] = d;
+  };
+  if (f === 'P')              follow('P');
+  else if (f === 'D')         follow('D');
+  else if (f === 'P_sticker') follow('P_sticker');
+  else if (f === 'D_sticker') follow('D_sticker');
   renderPD();
-  persistStateSoon(getNursery(), getMonth());
+  /* The summary table behind the modal is drawn from this same state and was
+     never told. A chemical changed in the editor left the schedule still
+     naming the old one until something else happened to repaint it. */
+  try { renderSchedSummary(); } catch (_) {}
+  persistStateSoon(editNursery(), getMonth());
 }
-function updatePDDose(w,f,v){ if(!canEditSchedule) return; getState(getNursery(),getMonth()).pdConfig[w][f]=v; renderPD(); persistStateSoon(getNursery(), getMonth()); }
+function updatePDDose(w,f,v){ if(!canEditSchedule) return; getState(editNursery(),getMonth()).pdConfig[w][f]=v; renderPD(); persistStateSoon(editNursery(), getMonth()); }
 
 function renderPD() {
   /* The four sheets were removed from the Schedule tab — the summary's
@@ -2668,10 +3408,10 @@ function renderPD() {
   h+=`<tr class="jumlah-tr"><td>${t('sum.maxRacun')}</td>`;
   W.forEach(w=>{
     const c = cfg[w];
-    const pSeed = sumSeedlings(n, plots, p => s.pd[w]?.[p]?.P);
-    const dSeed = sumSeedlings(n, plots, p => s.pd[w]?.[p]?.D);
-    h+=`<td>${calcMaxChem(pSeed, c.P, c.P_dose, c.P_unit, 1)}</td>`;
-    h+=`<td>${calcMaxChem(dSeed, c.D, c.D_dose, c.D_unit, 1)}</td>`;
+    const pCaps = plotCaps(n, plots, p => s.pd[w]?.[p]?.P);
+    const dCaps = plotCaps(n, plots, p => s.pd[w]?.[p]?.D);
+    h+=`<td>${calcMaxChem(pCaps, c.P, c.P_dose, c.P_unit)}</td>`;
+    h+=`<td>${calcMaxChem(dCaps, c.D, c.D_dose, c.D_unit)}</td>`;
   });
   h+='</tr>';
 
@@ -2679,12 +3419,12 @@ function renderPD() {
   h+=`<tr class="jumlah-tr"><td>${t('sum.maxBond')}</td>`;
   W.forEach(w=>{
     const c = cfg[w];
-    const pSeed = sumSeedlings(n, plots, p => s.pd[w]?.[p]?.P);
-    const dSeed = sumSeedlings(n, plots, p => s.pd[w]?.[p]?.D);
-    const pBond = (!pSeed || c.P === '—' || c.P_sticker === '—')
-      ? '—' : calcMaxChem(pSeed, c.P_sticker, c.P_sticker_dose, c.P_sticker_unit, 1);
-    const dBond = (!dSeed || c.D === '—' || c.D_sticker === '—')
-      ? '—' : calcMaxChem(dSeed, c.D_sticker, c.D_sticker_dose, c.D_sticker_unit, 1);
+    const pCaps = plotCaps(n, plots, p => s.pd[w]?.[p]?.P);
+    const dCaps = plotCaps(n, plots, p => s.pd[w]?.[p]?.D);
+    const pBond = (!pCaps.length || c.P === '—' || c.P_sticker === '—')
+      ? '—' : calcMaxChem(pCaps, c.P_sticker, c.P_sticker_dose, c.P_sticker_unit);
+    const dBond = (!dCaps.length || c.D === '—' || c.D_sticker === '—')
+      ? '—' : calcMaxChem(dCaps, c.D_sticker, c.D_sticker_dose, c.D_sticker_unit);
     h+=`<td>${pBond}</td><td>${dBond}</td>`;
   });
   h+='</tr></tbody>';
@@ -2729,17 +3469,17 @@ function snapshotPdSaved(s){
 ════════════════════════════ */
 function updateManuringChem(ri, ci, v){
   if(!canEditSchedule) return;
-  const cfg = getState(getNursery(),getMonth()).manuringConfig[ri][ci];
+  const cfg = getState(editNursery(),getMonth()).manuringConfig[ri][ci];
   cfg.name = v;
   cfg.unit = getUnitForChem(v);
   renderManuring();
-  persistStateSoon(getNursery(), getMonth());
+  persistStateSoon(editNursery(), getMonth());
 }
 function updateManuringDose(ri, ci, v){
   if(!canEditSchedule) return;
-  getState(getNursery(),getMonth()).manuringConfig[ri][ci].dose = v;
+  getState(editNursery(),getMonth()).manuringConfig[ri][ci].dose = v;
   renderManuring();
-  persistStateSoon(getNursery(), getMonth());
+  persistStateSoon(editNursery(), getMonth());
 }
 function addManuringRound(){
   if(!canEditSchedule) return;
@@ -2892,8 +3632,8 @@ function renderManuring() {
   h+=`<tr class="jumlah-tr"><td>${t('sum.maxBaja')}</td>`;
   cfg.forEach((round, ri) => {
     round.forEach((c, ci) => {
-      const seed = sumSeedlings(n, plots, p => s.manuring[p]?.[ri]?.[ci]);
-      const usage = calcFertUsage(seed, c.name, c.dose, 1);
+      const caps = plotCaps(n, plots, p => s.manuring[p]?.[ri]?.[ci]);
+      const usage = calcFertUsage(caps, c.name, c.dose, 1);
       h+=`<td>${usage.kg}</td>`;
     });
   });
@@ -2903,8 +3643,8 @@ function renderManuring() {
   h+=`<tr class="jumlah-tr"><td>${t('sum.bags')}</td>`;
   cfg.forEach((round, ri) => {
     round.forEach((c, ci) => {
-      const seed = sumSeedlings(n, plots, p => s.manuring[p]?.[ri]?.[ci]);
-      const usage = calcFertUsage(seed, c.name, c.dose, 1);
+      const caps = plotCaps(n, plots, p => s.manuring[p]?.[ri]?.[ci]);
+      const usage = calcFertUsage(caps, c.name, c.dose, 1);
       h+=`<td style="font-size:10px">${usage.bags}</td>`;
     });
   });
@@ -3004,23 +3744,45 @@ function toggleAllWeeding(r){
 ════════════════════════════ */
 function updateInterrowChem(ri, ci, v){
   if(!canEditSchedule) return;
-  const cfg = getState(getNursery(),getMonth()).interrowConfig[ri][ci];
+  const cfg = getState(editNursery(),getMonth()).interrowConfig[ri][ci];
   cfg.chem = v;
   cfg.chem_unit = getUnitForChem(v);
+  /* Its own dose too, the same rule P&D follows: a dose belongs to the
+     chemical, so leaving the previous one behind makes the column read as
+     the chemical that is no longer in it. */
+  const d = getDoseForChem(v);
+  if (d != null) cfg.chem_dose = d;
   renderInterrow();
-  persistStateSoon(getNursery(), getMonth());
+  try { renderSchedSummary(); } catch (_) {}
+  persistStateSoon(editNursery(), getMonth());
+}
+
+/* Which activator goes in the tank with it. Until now there was a dose box
+   and no name — every round printed the word "Activator" whatever was
+   actually mixed. The list is the sticker-tagged chemicals, the same list
+   P&D picks Bond from, because that is what the Setting page holds them as. */
+function updateInterrowAct(ri, ci, v){
+  if(!canEditSchedule) return;
+  const cfg = getState(editNursery(),getMonth()).interrowConfig[ri][ci];
+  cfg.activator = v;
+  cfg.activator_unit = getUnitForChem(v);
+  const d = getDoseForChem(v);
+  if (d != null) cfg.activator_dose = d;
+  renderInterrow();
+  try { renderSchedSummary(); } catch (_) {}
+  persistStateSoon(editNursery(), getMonth());
 }
 function updateInterrowDose(ri, ci, f, v){
   if(!canEditSchedule) return;
-  getState(getNursery(),getMonth()).interrowConfig[ri][ci][f] = v;
+  getState(editNursery(),getMonth()).interrowConfig[ri][ci][f] = v;
   renderInterrow();
-  persistStateSoon(getNursery(), getMonth());
+  persistStateSoon(editNursery(), getMonth());
 }
 function addInterrowRound(){
   if(!canEditSchedule) return;
   const s = getState(getNursery(),getMonth());
   if (s.interrowConfig.length >= 6) return;
-  s.interrowConfig.push([{chem:'Basta', chem_dose:200, chem_unit:'mL', activator_dose:15, activator_unit:'mL'}]);
+  s.interrowConfig.push([{chem:'Basta', chem_dose:200, chem_unit:'mL', activator:'Activator', activator_dose:15, activator_unit:'mL'}]);
   NURSERY_PLOTS[getNursery()].forEach(p => {
     if (!s.interrow[p]) s.interrow[p] = [];
     s.interrow[p].push([false]);
@@ -3047,7 +3809,7 @@ function addInterrowCol(ri){
   if(!canEditSchedule) return;
   const s = getState(getNursery(),getMonth());
   if (!s.interrowConfig[ri] || s.interrowConfig[ri].length >= 6) return;
-  s.interrowConfig[ri].push({chem:'Basta', chem_dose:200, chem_unit:'mL', activator_dose:15, activator_unit:'mL'});
+  s.interrowConfig[ri].push({chem:'Basta', chem_dose:200, chem_unit:'mL', activator:'Activator', activator_dose:15, activator_unit:'mL'});
   NURSERY_PLOTS[getNursery()].forEach(p => {
     if (!s.interrow[p]) s.interrow[p] = [];
     if (!s.interrow[p][ri]) s.interrow[p][ri] = [];
@@ -3122,6 +3884,7 @@ function renderInterrow() {
     round.forEach((c, ci) => {
       h+=`<th class="hdr-input-cell sticker-bg">
         <div style="font-size:10px;font-weight:700;color:var(--text-muted);margin-bottom:4px;letter-spacing:0.5px;">${t('hdr.activator')}</div>
+        ${mkSel(taggedNames('sticker'),interrowAct(c),`updateInterrowAct(${ri},${ci},this.value)`)}
         ${mkDose(c.activator_dose,c.activator_unit,`updateInterrowDose(${ri},${ci},'activator_dose',+this.value)`)}
       </th>`;
     });
@@ -3173,8 +3936,8 @@ function renderInterrow() {
   h+=`<tr class="jumlah-tr"><td>${t('sum.maxRacun')}</td>`;
   cfg.forEach((round, ri) => {
     round.forEach((c, ci) => {
-      const seed = sumSeedlings(n, plots, p => s.interrow[p]?.[ri]?.[ci]);
-      h+=`<td>${calcMaxChem(seed, c.chem, c.chem_dose, c.chem_unit, 1)}</td>`;
+      const caps = plotCaps(n, plots, p => s.interrow[p]?.[ri]?.[ci]);
+      h+=`<td>${calcMaxChem(caps, c.chem, c.chem_dose, c.chem_unit)}</td>`;
     });
   });
   h+='</tr>';
@@ -3183,8 +3946,8 @@ function renderInterrow() {
   h+=`<tr class="jumlah-tr"><td>${t('sum.maxActivator')}</td>`;
   cfg.forEach((round, ri) => {
     round.forEach((c, ci) => {
-      const seed = sumSeedlings(n, plots, p => s.interrow[p]?.[ri]?.[ci]);
-      const usage = (!seed || !c.activator_dose) ? '—' : calcMaxChem(seed, 'Activator', c.activator_dose, c.activator_unit, 1);
+      const caps = plotCaps(n, plots, p => s.interrow[p]?.[ri]?.[ci]);
+      const usage = (!caps.length || !c.activator_dose) ? '—' : calcMaxChem(caps, interrowAct(c), c.activator_dose, c.activator_unit);
       h+=`<td>${usage}</td>`;
     });
   });
@@ -3248,10 +4011,12 @@ function saveAllSchedules() {
    invented its own weeks and wrong the moment weeks became something you
    add — a fifth week's ticks would have saved and never published. */
 function weekKeys(n, m, prefix) {
-  const out = [];
-  const len = weeksOf(n, m).length;
-  for (let i = 0; i < len; i++) out.push(prefix + (i + 1));
-  return out;
+  /* The BLOCKS this work has rounds in — W3 for a round starting on the
+     15th, whether or not there is a W2. These keys are what the phone
+     reads, and it looks up W3 when it is in week 3, so a round published
+     under the wrong key is a job the worker never sees. */
+  const kind = prefix === 'R' ? 'weeding' : 'pd';
+  return weeksOf(n, m, kind).map(w => prefix + (w.slot + 1));
 }
 
 function saveSchedule(nursery, quiet) {
@@ -3264,6 +4029,10 @@ function saveSchedule(nursery, quiet) {
   const cfg = s.pdConfig;
   weekKeys(n, m, 'W').forEach(w => {
     const c = cfg[w];
+    /* A block with no chemicals behind it publishes nothing rather than
+       throwing on c.P. ensureRounds() fills these in, but it runs when the
+       editor opens and this can be reached without opening it. */
+    if (!c) return;
     plots.forEach(plot => {
       if (s.pd[w]?.[plot]?.P && c.P !== '—') {
         const pStick = c.P_sticker && c.P_sticker !== '—' ? ` + ${c.P_sticker} ${c.P_sticker_dose}${c.P_sticker_unit}` : '';
@@ -3304,7 +4073,7 @@ function saveSchedule(nursery, quiet) {
       plots.filter(p => s.interrow[p]?.[ri]?.[ci]).forEach(plot => {
         tasks.push({ id:id++, type:'interrow', plot, round:`Round ${ri+1}`,
           jenis:'Meracun rumput secara selingan',
-          chemical:`${c.chem} ${c.chem_dose}${c.chem_unit} + Activator ${c.activator_dose}${c.activator_unit}`,
+          chemical:`${c.chem} ${c.chem_dose}${c.chem_unit} + ${interrowAct(c)} ${c.activator_dose}${c.activator_unit}`,
           detail:`Interrow Spray Round ${ri+1}` });
       });
     });
@@ -3513,16 +4282,35 @@ function renderRecords() {
   // Metrics count only current nursery records
   const nurseryRecs = records.filter(r => nurseryPlots.includes(r.plot));
   const total  = nurseryRecs.length;
-  const gDone  = nurseryRecs.filter(r=>r.gaia).length;
-  const gPend  = total - gDone;
-  const pct    = total ? Math.round(gDone/total*100) : 0;
+  /* DONE means the field did it and the conductor signed it off.
+     _fieldIds is only ever set from loadFieldRecords, which reads verified
+     records and nothing else — so a linked row is work that has been through
+     both hands. The old Gaia tick still counts where somebody set it: it was
+     the only way to say "done" before the portal existed, and rows carrying
+     one are rows somebody answered. Nothing is taken away by reading it. */
+  const done   = nurseryRecs.filter(r => (Array.isArray(r._fieldIds) && r._fieldIds.length) || r.gaia).length;
+  const pend   = total - done;
+  const pct    = (n) => (total ? Math.round(n / total * 100) : 0);
+  /* A REPAIR CASE is a job the auditor failed. That is the whole of it: the
+     Nelos tick beside it records that somebody raised the case, and the
+     repair tick that it was closed, but the CASE exists the moment the
+     verdict does — counting the ticks instead would report a failure nobody
+     had got round to filing yet as no failure at all. */
+  const repair = nurseryRecs.filter(_auditFailed).length;
+  const fixed  = nurseryRecs.filter((r) => _auditFailed(r) && r.repaired).length;
 
   const _recMx = document.getElementById('rec-metrics');
   if (_recMx) _recMx.innerHTML=`
-    <div class="metric-card mc-blue" ><div class="mc-label">${t('rec.totalTasks')}</div><div class="mc-value b">${total}</div></div>
-    <div class="metric-card mc-green"><div class="mc-label">${t('rec.gaiaDone')}</div><div class="mc-value g">${gDone}</div></div>
-    <div class="metric-card mc-amber"><div class="mc-label">${t('rec.gaiaPending')}</div><div class="mc-value a">${gPend}</div></div>
-    <div class="metric-card mc-amber"><div class="mc-label">${t('rec.donePct')}</div><div class="mc-value a">${pct}%</div></div>
+    <div class="metric-card mc-blue"><div class="mc-label">${t('rec.totalTasks')}</div>
+      <div class="mc-value b">${total}</div>
+      <div class="mc-sub">${t('rec.doneOf', { n: done, pct: pct(done) })}</div></div>
+    <div class="metric-card mc-amber"><div class="mc-label">${t('rec.pendingTask')}</div>
+      <div class="mc-value a">${pend}</div>
+      <div class="mc-sub">${pct(pend)}%</div></div>
+    <div class="metric-card mc-red"><div class="mc-label">${t('rec.repairCase')}</div>
+      <div class="mc-value r">${repair}</div>
+      <div class="mc-sub">${repair ? t('rec.repairedOf', { n: fixed, pct: Math.round(fixed / repair * 100) })
+                                   : pct(repair) + '%'}</div></div>
   `;
 
   // Repopulate plot filter — only plots from current nursery that have records
@@ -3534,7 +4322,7 @@ function renderRecords() {
 
   const tbody = document.getElementById('rec-body');
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:2.5rem;color:var(--text-faint);">${t('rec.none')}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:2.5rem;color:var(--text-faint);">${t('rec.none')}</td></tr>`;
     return;
   }
 
@@ -3552,13 +4340,13 @@ function renderRecords() {
   sortedPlots.forEach(plot => {
     const recs = plotGroups[plot];
     html += `<tr class="plot-group-row">
-      <td colspan="10" class="rec-group-cell" style="padding:12px 14px 9px;font-weight:700;letter-spacing:1px;
+      <td colspan="12" class="rec-group-cell" style="padding:12px 14px 9px;font-weight:700;letter-spacing:1px;
         text-transform:uppercase;color:var(--green-text);background:var(--green-light);
         border-top:2px solid var(--green-mid);border-bottom:1px solid var(--green-mid);">
         📍 Plot ${plot}
         <span class="rec-group-sub" style="font-weight:400;color:var(--text-muted);margin-left:8px;">
           ${recs.length} task${recs.length>1?'s':''} &nbsp;·&nbsp;
-          ${recs.filter(r=>r.gaia).length} Gaia ✓
+          ${recs.filter(r=>(Array.isArray(r._fieldIds)&&r._fieldIds.length)||r.gaia).length} done
         </span>
       </td>
     </tr>`;
@@ -3570,10 +4358,12 @@ function renderRecords() {
         <td style="text-align:center;font-weight:700;color:var(--green-text);">${r.plot}</td>
         <td style="text-align:center;color:var(--text-muted);">${r.batch||'—'}</td>
         <td style="text-align:center;font-weight:700;color:var(--text-head);">${_qtyCell(r)}</td>
-        <td style="text-align:center;"><span class="chk-btn ${r.gaia?'chk-on':'chk-off'}${(r.checked && !isNopsAdmin)?' chk-locked':''}" ${(r.checked && !isNopsAdmin)?'title="Checked — only an admin can change this"':`onclick="togRec(${r.id},'gaia')"`}>${r.gaia?'☑':'☐'}</span></td>
+        <td style="text-align:center;">${_trackCell(r)}</td>
         <td style="color:var(--text-muted);">${r.remark||'—'}</td>
         <td style="text-align:center;">${_auditCell(r)}</td>
-        <td style="white-space:nowrap;">
+        <td style="text-align:center;">${_flagCell(r, 'nelos', _auditFailed(r), t('rec.nelosNa'))}</td>
+        <td style="text-align:center;">${_flagCell(r, 'repaired', !!r.nelos, t('rec.repairedNa'))}</td>
+        <td>
           ${r.checked
             ? `<span class="rec-checked-badge" title="Checked — locked for normal users">✓ Checked</span>` +
               (isNopsAdmin
@@ -3693,14 +4483,41 @@ function saveRec(){
 /* ════════════════════════════
    PDF DOWNLOAD
 ════════════════════════════ */
-function openPdfModal(){
-  document.getElementById('pdf-nursery').value=getNursery();
+/* The download was orphaned when the four full-width sheets came off the
+   Schedule tab — the toolbar that opened it went with them, and nothing has
+   called this since. The modal, the layout and the arithmetic were all still
+   here; only the way in was missing. It is on the summary card now, and on
+   every nursery's own header.
+
+   The nursery list is filled from the register rather than being the four
+   that were typed into the HTML, for the same reason every other list on
+   this page now is: a nursery added on Facility Management is a nursery
+   somebody will want a schedule for. */
+function openPdfModal(preset){
+  const sel = document.getElementById('pdf-nursery');
+  if (sel) {
+    const keys = capNurseries().map(schedKey).filter(Boolean);
+    const list = keys.length ? keys : Object.keys(NURSERY_PLOTS);
+    sel.innerHTML = list.map(k =>
+      `<option value="${esc(k)}">${esc(NURSERY_LABELS[k] || stockLabel(k))}</option>`).join('');
+    const want = preset && list.includes(preset) ? preset : getNursery();
+    sel.value = list.includes(want) ? want : list[0];
+  }
   document.getElementById('pdf-month').value=monthLabelToInput(getMonth()); _syncMonthButtons();
   document.getElementById('pdf-modal').classList.add('open');
 }
 function closePdfModal(){ document.getElementById('pdf-modal').classList.remove('open'); }
 
 function downloadPDF() {
+  /* jsPDF comes off a CDN. On a nursery office's connection that request is
+     the one most likely to have failed, and destructuring a library that is
+     not there threw into the console and left the button looking broken —
+     pressed, nothing, no reason given. Say so instead. */
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert('The PDF library has not loaded — usually the internet connection.\n\n' +
+          'Reload the page and try again. The schedule itself is saved either way.');
+    return;
+  }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
   const pN = document.getElementById('pdf-nursery').value;
@@ -3947,10 +4764,10 @@ function downloadPDF() {
     W.forEach((w, wi) => {
       const c = cfg[w];
       const x = startX + plotColW + wi*colW*2;
-      const pSeed = sumSeedlings(pN, plots, p => s.pd[w]?.[p]?.P);
-      const dSeed = sumSeedlings(pN, plots, p => s.pd[w]?.[p]?.D);
-      cell(x, y, colW, rowH, calcMaxChem(pSeed, c.P, c.P_dose, c.P_unit, 1), {...PALETTE.summaryP, style:'bold', size:8});
-      cell(x+colW, y, colW, rowH, calcMaxChem(dSeed, c.D, c.D_dose, c.D_unit, 1), {...PALETTE.summaryD, style:'bold', size:8});
+      const pCaps = plotCaps(pN, plots, p => s.pd[w]?.[p]?.P);
+      const dCaps = plotCaps(pN, plots, p => s.pd[w]?.[p]?.D);
+      cell(x, y, colW, rowH, calcMaxChem(pCaps, c.P, c.P_dose, c.P_unit), {...PALETTE.summaryP, style:'bold', size:8});
+      cell(x+colW, y, colW, rowH, calcMaxChem(dCaps, c.D, c.D_dose, c.D_unit), {...PALETTE.summaryD, style:'bold', size:8});
     });
     y += rowH;
 
@@ -3959,10 +4776,10 @@ function downloadPDF() {
     W.forEach((w, wi) => {
       const c = cfg[w];
       const x = startX + plotColW + wi*colW*2;
-      const pSeed = sumSeedlings(pN, plots, p => s.pd[w]?.[p]?.P);
-      const dSeed = sumSeedlings(pN, plots, p => s.pd[w]?.[p]?.D);
-      const pBond = (!pSeed || c.P === '—' || c.P_sticker === '—') ? '—' : calcMaxChem(pSeed, c.P_sticker, c.P_sticker_dose, c.P_sticker_unit, 1);
-      const dBond = (!dSeed || c.D === '—' || c.D_sticker === '—') ? '—' : calcMaxChem(dSeed, c.D_sticker, c.D_sticker_dose, c.D_sticker_unit, 1);
+      const pCaps = plotCaps(pN, plots, p => s.pd[w]?.[p]?.P);
+      const dCaps = plotCaps(pN, plots, p => s.pd[w]?.[p]?.D);
+      const pBond = (!pCaps.length || c.P === '—' || c.P_sticker === '—') ? '—' : calcMaxChem(pCaps, c.P_sticker, c.P_sticker_dose, c.P_sticker_unit);
+      const dBond = (!dCaps.length || c.D === '—' || c.D_sticker === '—') ? '—' : calcMaxChem(dCaps, c.D_sticker, c.D_sticker_dose, c.D_sticker_unit);
       cell(x, y, colW, rowH, pBond, {...PALETTE.summaryP, style:'bold', size:8});
       cell(x+colW, y, colW, rowH, dBond, {...PALETTE.summaryD, style:'bold', size:8});
     });
@@ -4051,8 +4868,8 @@ function downloadPDF() {
     xCursor = startX + plotColW;
     cfg.forEach((round, ri) => {
       round.forEach((c, ci) => {
-        const seed = sumSeedlings(pN, plots, p => s.manuring[p]?.[ri]?.[ci]);
-        const u = calcFertUsage(seed, c.name, c.dose, 1);
+        const caps = plotCaps(pN, plots, p => s.manuring[p]?.[ri]?.[ci]);
+        const u = calcFertUsage(caps, c.name, c.dose, 1);
         cell(xCursor, y, colW, rowH, u.kg, {...PALETTE.summary, style:'bold', size:8});
         xCursor += colW;
       });
@@ -4063,8 +4880,8 @@ function downloadPDF() {
     xCursor = startX + plotColW;
     cfg.forEach((round, ri) => {
       round.forEach((c, ci) => {
-        const seed = sumSeedlings(pN, plots, p => s.manuring[p]?.[ri]?.[ci]);
-        const u = calcFertUsage(seed, c.name, c.dose, 1);
+        const caps = plotCaps(pN, plots, p => s.manuring[p]?.[ri]?.[ci]);
+        const u = calcFertUsage(caps, c.name, c.dose, 1);
         cell(xCursor, y, colW, rowH, u.bags, {...PALETTE.summary, size:7});
         xCursor += colW;
       });
@@ -4147,7 +4964,7 @@ function downloadPDF() {
     xCursor = startX + plotColW;
     icfg.forEach(round => {
       round.forEach(c => {
-        cell(xCursor, y, colW, rowH, `Activator ${c.activator_dose}${c.activator_unit}`, {...PALETTE.bondP, style:'bold', size:7});
+        cell(xCursor, y, colW, rowH, `${interrowAct(c)} ${c.activator_dose}${c.activator_unit}`, {...PALETTE.bondP, style:'bold', size:7});
         xCursor += colW;
       });
     });
@@ -4195,8 +5012,8 @@ function downloadPDF() {
     xCursor = startX + plotColW;
     icfg.forEach((round, ri) => {
       round.forEach((c, ci) => {
-        const seed = sumSeedlings(pN, plots, p => s.interrow[p]?.[ri]?.[ci]);
-        cell(xCursor, y, colW, rowH, calcMaxChem(seed, c.chem, c.chem_dose, c.chem_unit, 1), {...PALETTE.summary, style:'bold', size:8});
+        const caps = plotCaps(pN, plots, p => s.interrow[p]?.[ri]?.[ci]);
+        cell(xCursor, y, colW, rowH, calcMaxChem(caps, c.chem, c.chem_dose, c.chem_unit), {...PALETTE.summary, style:'bold', size:8});
         xCursor += colW;
       });
     });
@@ -4206,8 +5023,8 @@ function downloadPDF() {
     xCursor = startX + plotColW;
     icfg.forEach((round, ri) => {
       round.forEach((c, ci) => {
-        const seed = sumSeedlings(pN, plots, p => s.interrow[p]?.[ri]?.[ci]);
-        const usage = (!seed || !c.activator_dose) ? '—' : calcMaxChem(seed, 'Activator', c.activator_dose, c.activator_unit, 1);
+        const caps = plotCaps(pN, plots, p => s.interrow[p]?.[ri]?.[ci]);
+        const usage = (!caps.length || !c.activator_dose) ? '—' : calcMaxChem(caps, interrowAct(c), c.activator_dose, c.activator_unit);
         cell(xCursor, y, colW, rowH, usage, {...PALETTE.summary, style:'bold', size:8});
         xCursor += colW;
       });
@@ -4508,6 +5325,8 @@ async function initDb() {
     const key = landing && landing.id.replace(/^tab-/, '');
     if (key) switchTab(key, navTabFor(key));
   } catch (_) {}
+  // Whichever way the bar was left last time.
+  try { applyNav(); } catch (_) {}
   /* The schedules build their dropdowns from `chemicals` and `fertilisers`,
      neither of which existed at first paint. */
   renderAll();
@@ -4641,12 +5460,24 @@ let capEditing = false;
 let capDraft   = null;   // { nursery: { plots:{plot:number}, perTray:number } }
 
 function trayQty(n, p) {
-  return (plotTrays[n] && plotTrays[n][p] != null) ? +plotTrays[n][p] || 0 : 0;
+  // Keyed however Stock Management spelt the nursery — see getPlotQty.
+  const stock = qtyStockName(n);
+  for (const key of [stock, n]) {
+    if (key && plotTrays[key] && plotTrays[key][p] != null) return +plotTrays[key][p] || 0;
+  }
+  const b = aliasBucket(plotTrays, n);
+  return (b && b[p] != null) ? +b[p] || 0 : 0;
+}
+
+function traySizeOf(n) {
+  const stock = qtyStockName(n);
+  for (const key of [stock, n]) if (key && traySize[key] != null) return +traySize[key] || 0;
+  return +aliasBucket(traySize, n) || 0;
 }
 
 /* What the dosage is worked out from, whichever way the plot is counted. */
 function capacityOf(n, p) {
-  return isPreNursery(n) ? trayQty(n, p) * (traySize[n] || 0) : getPlotQty(n, p);
+  return isPreNursery(n) ? trayQty(n, p) * traySizeOf(n) : getPlotQty(n, p);
 }
 
 /* The nurseries this block offers, and the plots under each. Both come from
@@ -5372,125 +6203,282 @@ async function saveFertEdit() {
    renderAll() reaches this summary while the script is still evaluating, so a
    declaration here would still be in the temporal dead zone. */
 
-/* ── A week is a round ─────────────────────────────────────────────────
-   Weeks used to be five seven-day blocks this file invented for every
-   month whether anybody wanted them or not, and rounds were a separate
-   thing placed INTO them by date. Two ideas for one fact, and the summary
-   headed six columns for a month nobody had scheduled anything in.
+/* ── A week is a DATE BLOCK, and each work keeps its own rounds ────────
 
-   A week is now something somebody makes. None exist until Add Week is
-   pressed, and each one IS a round of every work: week 2 of P & D is the
-   second spraying, week 2 of Manuring is the second feed. So the week
-   carries the dates, the chemicals and the ticks together, which is how
-   the popup asks for them and how the field reads them.
+   Two things were wrong here and they were the same thing twice.
 
-   Nothing is migrated. A saved month keeps its ticks; a month that has
-   never had weeks set simply starts with none, which is the truth. */
-function weeksOf(n, m) {
-  const s = appState[n]?.[m];
-  if (!s || !Array.isArray(s.weeks)) return [];
-  /* A schedule carried forward brings last month's weeks with it, and last
-     month may have been longer — so a 31-day August into a 30-day September
-     would head a column "29th – 31st" for days September has not got.
-     Clamped on the way out, not on the way in: the saved figure is still
-     somebody's decision, and a 31-day month gets it back. */
-  const days = daysInMonthLabel(m);
-  return s.weeks.filter(x => +x.from <= days)
-                .map(x => ({ from: +x.from, to: Math.min(+x.to, days) }));
+   The week NUMBER was the column's position. Make weeks for the 1st–7th
+   and the 15th–21st, or delete the middle one, and the second column
+   called itself Week 2 — while the phone, which works the number out from
+   the date (Math.ceil(day/7)), sent the worker out in week 2 for a job the
+   office had planned for week 3. Two systems, two answers, one of them
+   silently wrong in the field.
+
+   And the weeks were SHARED by all four works: one s.weeks for the
+   nursery. Removing manuring's second round removed P & D's, weeding's and
+   inter-row's with it, because they were the same row of the same array.
+   Weeding twice a month and spraying four times could not be expressed at
+   all.
+
+   So a month has FOUR fixed blocks — 1st–7th, 8th–14th, 15th–21st,
+   22nd–end — and each work has its own rounds, each sitting in the block
+   its start day falls in. The block IS the week number, which is what the
+   phone has always thought, so the two now agree by construction rather
+   than by luck.
+
+   That is also where the ticks live. s.pd.W3 is the third BLOCK, not the
+   third column somebody made; manuringConfig[2] likewise. For the ordinary
+   month — four contiguous weeks in order — the slot and the position are
+   the same number and nothing moves. Only the months that were already
+   wrong change meaning, and they change to right.
+
+   THE WEEK RULE IS SHARED WITH THE PHONE. weekOfDate() in Barcode_Counter
+   src/modules/maintenance/schedule.js is the same arithmetic. Change one,
+   change the other. */
+function weekNoOfDay(day) {
+  const d = +day || 1;
+  return Math.min(WEEK_BLOCKS, Math.max(1, Math.ceil(d / 7)));
 }
 
-/* Where a NEW week starts: the day after the last one ends, a seven-day
-   run from there. The first week of a month starts on the 1st. Only a
-   suggestion — the popup's from/to is the answer. */
-function nextWeekRange(n, m) {
+/** The dates of block b (1-based) in this month. */
+function blockRange(b, m) {
   const days = daysInMonthLabel(m);
-  const w = weeksOf(n, m);
-  const from = w.length ? Math.min(w[w.length - 1].to + 1, days) : 1;
-  return { from, to: Math.min(from + 6, days) };
+  const from = (b - 1) * 7 + 1;
+  return { from, to: b === WEEK_BLOCKS ? days : Math.min(b * 7, days) };
 }
 
-/* Adding a week adds a ROUND to every work, so each has somewhere to put
-   its chemicals for it. Without this the new column would be a column of
-   ticks with nothing saying what is being sprayed in it. */
-function addWeek(n, m) {
-  if (!canEditSchedule) return -1;
+/* A work's own week list, ready to be written to.
+ *
+ * Migration happens here and nowhere else, once, the first time anybody
+ * changes anything: the old shared s.weeks is copied to all four works, so
+ * a month somebody planned last week opens showing exactly what it showed
+ * before. s.weeks is left where it is — an older build of this page reads
+ * it, and a half-deployed office should not lose a month's planning. */
+function workWeeks(n, m, kind) {
+  /* A missing kind would file a round under weeksByWork[undefined] — saved,
+     carried forward, and belonging to no work on any screen. Cheaper to
+     refuse it here than to find it in a month nobody can explain. */
+  if (!WORK_KEYS.includes(kind)) {
+    console.warn('[maint] workWeeks needs a work key, got:', kind);
+    return [];
+  }
   const s = getState(n, m);
-  if (!Array.isArray(s.weeks)) s.weeks = [];
+  if (!s.weeksByWork || typeof s.weeksByWork !== 'object') s.weeksByWork = {};
+  if (!Array.isArray(s.weeksByWork[kind])) {
+    const shared = Array.isArray(s.weeks) ? s.weeks : [];
+    s.weeksByWork[kind] = shared.map(w => ({ from: +w.from, to: +w.to }));
+  }
+  return s.weeksByWork[kind];
+}
+
+/* What to SHOW for a work: its rounds, in date order, each carrying the
+   block it belongs to.
+ *
+ * Clamped to the month on the way out, not on the way in — a schedule
+ * carried forward from a 31-day August into a 30-day September would
+ * otherwise head a column for days September has not got, and the saved
+ * figure is still somebody's decision that a 31-day month gets back.
+ *
+ * Two rounds of the same work in one block cannot both be kept: they would
+ * share a tick slot and the second would overwrite the first. The later one
+ * is dropped from the view rather than silently eating the earlier one's
+ * ticks; addWeek below refuses to make one in the first place. */
+function weeksOf(n, m, kind) {
+  /* getState, NOT appState directly. The boot deliberately empties appState
+     once the database answers, so a nursery nobody has opened this session
+     has no entry in it — and reading appState answered "no weeks" for a
+     nursery whose schedule was sitting in dbStateCache the whole time.
+
+     On the summary that showed as "0 WEEKS · No weeks set yet" beside a
+     nursery that HAS a schedule, and hid a month carried forward from the
+     last one that was set, which is the whole point of carrying it forward.
+     getState hydrates from the cache and falls back to the carry, which is
+     what every other reader on this page already goes through — the same
+     mistake plotsAtSlot was making. */
+  const s = getState(n, m);
+  if (!s) return [];
   const days = daysInMonthLabel(m);
-  if (s.weeks.length && s.weeks[s.weeks.length - 1].to >= days) {
-    alert('The month is already covered to the last day.\n\n' +
-          'Change an existing week\'s dates instead, or shorten the last one first.');
+  let list;
+  if (kind && s.weeksByWork && Array.isArray(s.weeksByWork[kind])) {
+    list = s.weeksByWork[kind];
+  } else {
+    list = Array.isArray(s.weeks) ? s.weeks : [];
+  }
+  const seen = new Set();
+  return list
+    .filter(x => +x.from <= days)
+    .map(x => ({ from: +x.from, to: Math.min(+x.to, days) }))
+    .sort((p, q) => p.from - q.from)
+    .map(x => ({ ...x, slot: weekNoOfDay(x.from) - 1 }))
+    .filter(x => { if (seen.has(x.slot)) return false; seen.add(x.slot); return true; });
+}
+
+/* Every block any work has a round in — what the summary heads its columns
+   with, so the four rows line up under one set of weeks even though each
+   keeps its own. */
+function blocksUsed(n, m) {
+  const out = new Set();
+  WORK_KEYS.forEach(k => weeksOf(n, m, k).forEach(w => out.add(w.slot)));
+  return [...out].sort((a, b) => a - b);
+}
+
+/* Where a NEW round goes: the first block this work has not used yet. */
+function nextWeekRange(n, m, kind) {
+  const used = new Set(weeksOf(n, m, kind).map(w => w.slot));
+  for (let b = 1; b <= WEEK_BLOCKS; b++) if (!used.has(b - 1)) return blockRange(b, m);
+  return null;
+}
+
+/* Adding a round adds it to THIS work only. Four blocks is the ceiling —
+   a fifth would have nowhere to put its ticks, because the phone counts
+   four weeks in a month and always has. */
+function addWeek(n, m, kind) {
+  if (!canEditSchedule) return -1;
+  if (!WORK_KEYS.includes(kind)) return -1;   // a round belongs to one work
+  const r = nextWeekRange(n, m, kind);
+  if (!r) {
+    alert('All four weeks of the month already have a round of this work.\n\n' +
+          'Change an existing week\'s dates instead, or remove one first.');
     return -1;
   }
-  s.weeks.push(nextWeekRange(n, m));
-  ensureRounds(n, m);          // the new week gets a round in all three configs
+  workWeeks(n, m, kind).push(r);
+  ensureRounds(n, m);
   persistStateSoon(n, m);
-  return s.weeks.length - 1;
+  return weeksOf(n, m, kind).findIndex(w => w.from === r.from);
 }
 
-/* Removing a week removes the ROUND with it — its dates, its chemicals and
-   its ticks — and shifts every later round down one. A week that only
-   vanished from the header would leave its ticks behind under the next
-   week's dates, which is worse than not being able to remove it. */
-function removeWeek(n, m, k) {
+/* Removing a round removes it from THIS work — its dates, its chemicals and
+   its ticks — and leaves the other three alone. It used to take all four
+   with it, because they shared one list.
+ *
+ * Nothing is renumbered afterwards, and that is the point of slots: a round
+ * sits in the block its dates put it in, so taking week 2 away leaves week
+ * 3 in week 3 rather than sliding it up into week 2's ticks. */
+function removeWeek(n, m, kind, k) {
   if (!canEditSchedule) return;
   const s = getState(n, m);
-  const weeks = weeksOf(n, m);
-  if (!weeks[k]) return;
+  const weeks = weeksOf(n, m, kind);
+  const w = weeks[k];
+  if (!w) return;
+  const work = WORKS.find(x => x.key === kind);
   const plots = NURSERY_PLOTS[n] || [];
-  if (!confirm(`Remove week ${k + 1} (${ordinalDay(weeks[k].from)}\u2013${ordinalDay(weeks[k].to)})?\n\n` +
-               'Everything ticked in it goes with it, for all four works.')) return;
+  if (!confirm(`Remove week ${w.slot + 1} of ${work ? work.label : kind} ` +
+               `(${ordinalDay(w.from)}–${ordinalDay(w.to)})?\n\n` +
+               'Everything ticked in it for this work goes with it. ' +
+               'The other works are not touched.')) return;
 
-  s.weeks.splice(k, 1);
-  const n2 = s.weeks.length;
-
-  // P & D: object keys, so the tail has to be renumbered by hand.
-  ['pd', 'pdConfig'].forEach(key => {
-    const src = s[key] || {};
-    const out = {};
-    for (let i = 0; i < n2 + 1; i++) {
-      const from = i < k ? i : i + 1;
-      if (src['W' + (from + 1)] !== undefined && i < n2) out['W' + (i + 1)] = src['W' + (from + 1)];
-    }
-    s[key] = out;
-  });
-  // Weeding: R-keys, per plot.
-  plots.forEach(p => {
-    const src = s.weeding[p] || {};
-    const out = {};
-    for (let i = 0; i < n2; i++) {
-      const from = i < k ? i : i + 1;
-      out['R' + (i + 1)] = !!src['R' + (from + 1)];
-    }
-    s.weeding[p] = out;
-  });
-  // Manuring and Interrow: arrays, both the config and the per-plot ticks.
-  ['manuring', 'interrow'].forEach(kind => {
-    const cfg = s[kind + 'Config'];
-    if (Array.isArray(cfg) && cfg.length > k) cfg.splice(k, 1);
-    plots.forEach(p => {
-      if (Array.isArray(s[kind][p]) && s[kind][p].length > k) s[kind][p].splice(k, 1);
-    });
-  });
+  const list = workWeeks(n, m, kind);
+  const at = list.findIndex(x => +x.from === w.from && +x.to >= w.to);
+  if (at >= 0) list.splice(at, 1);
+  clearSlot(n, m, kind, w.slot);
 
   persistState(n, m);
   autoSyncRecords();
 }
 
+/* Wipe one work's ticks and chemicals in one block. */
+function clearSlot(n, m, kind, slot) {
+  const s = getState(n, m);
+  const plots = NURSERY_PLOTS[n] || [];
+  if (kind === 'pd') {
+    delete (s.pd || {})['W' + (slot + 1)];
+    delete (s.pdConfig || {})['W' + (slot + 1)];
+  } else if (kind === 'weeding') {
+    plots.forEach(p => { if (s.weeding && s.weeding[p]) delete s.weeding[p]['R' + (slot + 1)]; });
+  } else {
+    const cfg = s[kind + 'Config'];
+    /* An empty round, not a null. The config is an array of rounds and each
+       round is an array of columns, so [] is a shape every reader already
+       copes with — autoSyncRecords does round.forEach on it, and a null
+       there takes the whole page down. */
+    if (Array.isArray(cfg) && cfg[slot]) cfg[slot] = [];
+    plots.forEach(p => { if (Array.isArray(s[kind]?.[p])) s[kind][p][slot] = []; });
+  }
+}
+
+/* Carry one work's ticks and chemicals from one block to another, for when
+   somebody edits a round's dates across a block boundary. Without this the
+   ticks stay in the old block and the round appears empty in its new one —
+   which is the same class of bug as the numbering, one level down. */
+function moveSlot(n, m, kind, from, to) {
+  if (from === to) return;
+  const s = getState(n, m);
+  const plots = NURSERY_PLOTS[n] || [];
+  if (kind === 'pd') {
+    const a = 'W' + (from + 1), b = 'W' + (to + 1);
+    if (s.pd && s.pd[a] !== undefined) { s.pd[b] = s.pd[a]; delete s.pd[a]; }
+    if (s.pdConfig && s.pdConfig[a] !== undefined) { s.pdConfig[b] = s.pdConfig[a]; delete s.pdConfig[a]; }
+  } else if (kind === 'weeding') {
+    const a = 'R' + (from + 1), b = 'R' + (to + 1);
+    plots.forEach(p => {
+      const row = s.weeding && s.weeding[p];
+      if (!row) return;
+      if (row[a] !== undefined) { row[b] = row[a]; delete row[a]; }
+    });
+  } else {
+    const cfg = s[kind + 'Config'];
+    if (Array.isArray(cfg)) {
+      while (cfg.length <= Math.max(from, to)) cfg.push([]);
+      cfg[to] = cfg[from]; cfg[from] = [];
+    }
+    plots.forEach(p => {
+      const row = s[kind] && s[kind][p];
+      if (!Array.isArray(row)) return;
+      while (row.length <= Math.max(from, to)) row.push([]);
+      row[to] = row[from]; row[from] = [];
+    });
+  }
+}
+
+
 /* The plots this work is set on in one week. Week k IS round k now, so
    there is no placing-by-date left to do — one list, whatever shape the
    work keeps its ticks in, which is still four different shapes. */
 function plotsInWeek(kind, i, n, m) {
-  const s = appState[n]?.[m];
-  if (!s || !weeksOf(n, m)[i]) return [];
+  /* `i` is a position in THIS work's list of rounds; the ticks are filed
+     under the BLOCK that round falls in, and the two are only the same
+     number in a month whose weeks run 1,2,3,4 in order. */
+  const wk = weeksOf(n, m, kind)[i];
+  return wk ? plotsAtSlot(kind, wk.slot, n, m) : [];
+}
+
+/* The plots this work is set on in one BLOCK of the month. What the summary
+   asks, because its columns are the month's weeks rather than any one
+   work's rounds. */
+function plotsAtSlot(kind, i, n, m) {
+  /* getState, NOT appState[n]?.[m].
+ 
+     Reading the bare object meant a month that had not been hydrated yet
+     answered "no plots" — and the initial load deliberately empties appState
+     so every month is rebuilt from what the database holds. So a saved
+     schedule drew its week columns (weeksOf goes through getState) and no
+     ticks under them, until something else hydrated the month. That
+     something was the Edit popup, which is why the ticks appeared only after
+     opening it and never before.
+ 
+     getState hydrates from the saved payload, is memoised per nursery and
+     month, and is what every other reader on this page already uses. */
+  const s = getState(n, m);
+  if (!s) return [];
   const plots = NURSERY_PLOTS[n] || [];
   const out = [];
   plots.forEach(p => {
     let on = false;
     if (kind === 'pd') {
-      const cell = (s.pd || {})['W' + (i + 1)];
+      /* A side ticked with NO chemical behind it is not work, and counting
+         it here was the summary disagreeing with the rest of the system.
+         autoSyncRecords already refuses to write a record for it (c.P!=='—'),
+         and both portals already drop it — so the office promised four weeks
+         of spraying and the field was shown one, with nothing on any screen
+         saying why. The tick stays in the editor, where it can be seen and
+         given a chemical; it simply is not counted as a job until it has
+         one. Same rule in Barcode_Counter's weekTasks. */
+      const w = 'W' + (i + 1);
+      const cfg = (s.pdConfig || {})[w] || {};
+      const named = (side) => !!cfg[side] && cfg[side] !== '—';
+      const cell = (s.pd || {})[w];
       const v = cell && cell[p];
-      on = !!(v && (v.P || v.D));
+      on = !!(v && ((v.P && named('P')) || (v.D && named('D'))));
     } else if (kind === 'weeding') {
       on = !!((s.weeding || {})[p] || {})['R' + (i + 1)];
     } else {
@@ -5549,21 +6537,26 @@ function summaryTable(it, m) {
       <div class="set-empty" style="padding:16px;">This nursery is in Seedling Stock but not on
         the maintenance schedule yet, so there is nothing to summarise.</div></div>`;
   }
-  const weeks = weeksOf(n, m);
+  /* The columns are the MONTH'S weeks now, not one work's rounds — because
+     the four works no longer share a week list, and four rows each with its
+     own columns is not a table. A work simply has no tick in a week it does
+     not run in, which is the truth and reads as one. */
+  const blocks = blocksUsed(n, m);
   /* A plain label, not a button. Dates are set inside the Edit popup, with
      the chemicals and the ticks they belong to — a header that opened its
      own little date box was a second place to do one thing. */
   const head = '<tr>' +
     '<th class="ss-work">Work</th>' +
-    weeks.map((w, k) =>
-      `<th><div class="ss-wk">Week ${k + 1}</div>` +
-      `<div class="ss-wk-d">${ordinalDay(w.from)}\u2013${ordinalDay(w.to)}</div></th>`).join('') +
-    (weeks.length ? '' : '<th class="ss-none-th">No weeks set yet</th>') +
+    /* The week and its dates used to be here AND again on the plot rows
+       below, misaligned against each other. They are stated once now, on the
+       expanded rows, next to the ticks they describe. */
+    blocks.map(() => '<th class="ss-wkcol"></th>').join('') +
+    (blocks.length ? '' : '<th class="ss-none-th">No weeks set yet</th>') +
     '<th class="ss-act">Actions</th></tr>';
 
   const rows = WORKS.map(work => {
-    const on = weeks.map((_, k) => plotsInWeek(work.key, k, n, m).length);
-    const gap = weeks.length ? '' :
+    const on = blocks.map(b => plotsAtSlot(work.key, b, n, m).length);
+    const gap = blocks.length ? '' :
       '<td class="ss-cell ss-empty-cell">Open Edit to add one</td>';
     const open = _expanded[n + '|' + work.key];
     let r = `<tr class="ss-row${open ? ' is-open' : ''}">` +
@@ -5579,20 +6572,62 @@ function summaryTable(it, m) {
       `</td></tr>`;
 
     if (open) {
-      r += `<tr class="ss-detail"><td colspan="${weeks.length + (weeks.length ? 2 : 3)}">` +
-        expandedPlots(n, work.key, m) + '</td></tr>';
+      r += expandedPlots(n, work.key, m, blocks);
     }
     return r;
   }).join('');
 
-  return `<div class="ss-wrap">
+  /* An expanded nursery takes the whole row. Two cards abreast is right for
+     reading four ticks across; it is not enough for a plot list with four
+     weeks, a Set column and the buttons, which pushed Actions off the edge
+     and made closing the panel a horizontal scroll. Opening one is the
+     moment there is more to show, so that is the moment it gets the room. */
+  const anyOpen = WORKS.some(w => _expanded[n + '|' + w.key]);
+
+  return `<div class="ss-wrap${anyOpen ? ' is-wide' : ''}">
       <div class="ss-head">
         <div class="ss-name">${esc(label)}</div>
-        <div class="ss-count">${weeks.length} week${weeks.length === 1 ? '' : 's'}</div>
+        <div class="ss-count">${blocks.length} week${blocks.length === 1 ? '' : 's'}</div>
+        <button type="button" class="ss-dl" title="Download ${esc(label)}'s schedule"
+          onclick="openPdfModal('${esc(n)}')">&#11015;</button>
       </div>
       <div class="tbl-wrap"><table class="ss-table">
         <thead>${head}</thead><tbody>${rows}</tbody></table></div>
     </div>`;
+}
+
+/* ── How much to draw from the store ───────────────────────────────────
+   The tick grid says WHERE a work happens. This says what it costs: plots,
+   seedlings, and the chemical and sticker to cover them.
+
+   ONE WORK, not the nursery. The figures only mean anything under the
+   chemical they were worked out from, and a work's chemical changes from
+   week to week — so this is drawn inside that work's own expanded panel,
+   under the plots it counted. It used to sit in a block at the foot of the
+   card, four tables deep and away from the ticks each one was the sum of.
+
+   Empty string when the work has no week in this month: a table of dashes
+   is not information. */
+function workTotalsTable(n, kind, m) {
+  const work = WORKS.find(w => w.key === kind);
+  const weeks = weeksOf(n, m, kind);
+  if (!work || !weeks.length) return '';
+  const cols = [];
+  weeks.forEach(w => weCols(kind, w.slot, n, m)
+    .forEach(c => cols.push({ slot: w.slot, c })));
+  if (!cols.length) return '';
+
+  const per = cols.map(x => weColTotals(kind, x.slot, x.c.ci, n, m));
+  // Every column of one work asks the same questions, so row 0 names them.
+  const labels = per[0].map(r => r.label);
+  const head = '<tr><th class="st-lbl">' + esc(work.label) + '</th>' +
+    cols.map(x => '<th><span class="st-wk">Week ' + (x.slot + 1) + '</span>' +
+      '<span class="st-what">' + esc(x.c.val || x.c.label) + '</span></th>').join('') +
+    '</tr>';
+  const body = labels.map((lb, r) => '<tr><td class="st-lbl">' + esc(lb) + '</td>' +
+    per.map(p => '<td>' + esc(String(p[r].value)) + '</td>').join('') + '</tr>').join('');
+  return '<div class="tbl-wrap st-wrap"><table class="st-table">' +
+    '<thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
 }
 
 /* ── What "expand" shows ───────────────────────────────────────────────
@@ -5606,25 +6641,57 @@ function summaryTable(it, m) {
    week header beside itself, and two "PLOT 1 2 3 4 5" headers side by side
    read as ten weeks at a glance. One column of plots cannot be misread, and
    the panel is a table, which is what it always was pretending to be. */
-function expandedPlots(n, kind, m) {
-  const weeks = weeksOf(n, m);
+function expandedPlots(n, kind, m, blocks) {
+  const weeks = weeksOf(n, m, kind);
   const plots = NURSERY_PLOTS[n] || [];
-  if (!plots.length) return '<div class="ss-none">No plots in this nursery.</div>';
+  const span = blocks.length + 2;
+  if (!plots.length) {
+    return `<tr class="ss-detail"><td colspan="${span}" class="ss-none">` +
+           'No plots in this nursery.</td></tr>';
+  }
 
-  const set = weeks.map((_, k) => new Set(plotsInWeek(kind, k, n, m)));
-  const head = '<tr><th class="xp-plot">Plot</th>' +
-    weeks.map((w, k) =>
-      `<th title="${ordinalDay(w.from)} \u2013 ${ordinalDay(w.to)}">Wk ${k + 1}</th>`).join('') +
-    '<th class="xp-tot">Set</th></tr>';
+  /* One cell per COLUMN OF THE TABLE ABOVE, not per round of this work.
+     These are rows of the summary table itself now — a nested table inside a
+     colspan cell sets its own column widths, which is why the plot ticks
+     never lined up under the week they belonged to however the padding was
+     tuned. A work with no round in a block gets an empty cell there, which
+     is also the honest thing to show. */
+  const at = {};
+  weeks.forEach((w, k) => { at[w.slot] = new Set(plotsInWeek(kind, k, n, m)); });
+
+  const head = `<tr class="ss-detail xp-head"><td class="xp-plot">Plot</td>` +
+    blocks.map(b => {
+      if (!at[b]) return '<td class="xp-none"></td>';
+      const r = blockRange(b + 1, m);
+      /* The dates live here now, under the week they describe and beside
+         the ticks they govern. */
+      return `<td><div class="xp-wk">Wk ${b + 1}</div>` +
+             `<div class="xp-wk-d">${ordinalDay(r.from)}\u2013${ordinalDay(r.to)}</div></td>`;
+    }).join('') +
+    '<td class="xp-tot">Set</td></tr>';
+
   const body = plots.map(pl => {
-    const hits = weeks.map((_, k) => set[k].has(pl));
+    const hits = blocks.map(b => (at[b] ? at[b].has(pl) : null));
     const nOn = hits.filter(Boolean).length;
-    return `<tr class="${nOn ? '' : 'xp-blank'}"><td class="xp-plot">${esc(pl)}</td>` +
-      hits.map(on => on ? '<td class="xp-on">&#10003;</td>' : '<td class="xp-off"></td>').join('') +
+    return `<tr class="ss-detail xp-row${nOn ? '' : ' xp-blank'}">` +
+      `<td class="xp-plot">${esc(pl)}</td>` +
+      hits.map(on => on === null ? '<td class="xp-none"></td>'
+                   : on ? '<td class="xp-on">&#10003;</td>'
+                        : '<td class="xp-off"></td>').join('') +
       `<td class="xp-tot">${nOn || ''}</td></tr>`;
   }).join('');
-  return `<div class="xp-wrap"><table class="xp-table">
-    <thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+
+  /* And what those ticks come to. It sits at the foot of the plots it
+     counted rather than at the foot of the card, so the answer is beside
+     the question. A nested table in a colspan cell sets its own column
+     widths — which is exactly what is wanted here, since the totals have
+     one column per CHEMICAL and the grid above has one per week. */
+  const tot = workTotalsTable(n, kind, m);
+  const foot = tot
+    ? `<tr class="ss-detail xp-sum"><td colspan="${span}">${tot}</td></tr>`
+    : '';
+
+  return head + body + foot;
 }
 
 function toggleSummaryRow(n, kind) {
@@ -5735,80 +6802,6 @@ function roundColumns(kind, i, n, m) {
   return cfg.map((c, ci) => ({ label: c.name || c.chem || ('Column ' + (ci + 1)), ci }));
 }
 
-function weTicked(kind, i, ci, plot) {
-  const s = getState(_we.n, getMonth());
-  if (kind === 'pd')      return !!(s.pd['W' + (i + 1)]?.[plot]?.[ci === 0 ? 'P' : 'D']);
-  if (kind === 'weeding') return !!(s.weeding[plot]?.['R' + (i + 1)]);
-  return !!((s[kind][plot] || [])[i] || [])[ci];
-}
-
-function weToggle(kind, i, ci, plot, skipRender) {
-  if (!canEditSchedule || !_we) return;
-  const n = _we.n, m = getMonth(), s = getState(n, m);
-  if (kind === 'pd') {
-    const w = 'W' + (i + 1);
-    if (!s.pd[w]) s.pd[w] = {};
-    if (!s.pd[w][plot]) s.pd[w][plot] = { P: false, D: false };
-    const f = ci === 0 ? 'P' : 'D';
-    s.pd[w][plot][f] = !s.pd[w][plot][f];
-  } else if (kind === 'weeding') {
-    if (!s.weeding[plot]) s.weeding[plot] = { R1: false, R2: false };
-    const r = 'R' + (i + 1);
-    s.weeding[plot][r] = !s.weeding[plot][r];
-  } else {
-    if (!s[kind][plot]) s[kind][plot] = [];
-    if (!s[kind][plot][i]) s[kind][plot][i] = [];
-    s[kind][plot][i][ci] = !s[kind][plot][i][ci];
-  }
-  if (skipRender) return;
-  persistStateSoon(n, m);
-  autoSyncRecords();
-  renderWorkEditor();
-  renderSchedSummary();
-  redrawSheet(kind);
-}
-
-/* One repaint for the whole column, not one per plot — 52 plots through the
-   single-tick path is 52 renders of a table nobody has seen yet. */
-function weToggleAll(kind, i, ci) {
-  if (!canEditSchedule || !_we) return;
-  const n = _we.n, m = getMonth(), plots = NURSERY_PLOTS[n] || [];
-  const all = plots.every(p => weTicked(kind, i, ci, p));
-  plots.forEach(p => { if (weTicked(kind, i, ci, p) === all) weToggle(kind, i, ci, p, true); });
-  persistStateSoon(n, m);
-  autoSyncRecords();
-  renderWorkEditor();
-  renderSchedSummary();
-  redrawSheet(kind);
-}
-
-/* ── The popup ─────────────────────────────────────────────────────────
-   One block per week: the week's number, its dates, what is being sprayed
-   or fed in it, and every plot with a tick. That is the whole of a week,
-   and it is asked for in the order somebody fills it in — when, with what,
-   where.
-
-   Weeks are made here rather than on the summary. The summary is a reading
-   surface; this is the writing one, and a week made anywhere else would be
-   a week with no dates and no chemicals until somebody came here anyway. */
-
-/* A <select> whose value is not among its options shows the FIRST option
-   instead — silently, and looking exactly like a saved answer. On a screen
-   that says what to spray, that is the wrong kind of wrong, so a saved name
-   the list no longer offers is carried in and marked rather than dropped. */
-function weSel(opts, val, onch) {
-  const missing = val && val !== '\u2014' && !opts.includes(val);
-  const o = (missing ? [{ v: val, t: val + ' \u2014 no longer in the list' }] : [])
-    .concat(opts.map(x => ({ v: x, t: x })));
-  return `<select class="we-sel" onchange="${onch}">` +
-    o.map(x => `<option value="${esc(x.v)}"${x.v === val ? ' selected' : ''}>${esc(x.t)}</option>`).join('') +
-    '</select>';
-}
-
-function weNum(val, onch) {
-  return `<input class="we-num" type="number" min="0" step="0.01" value="${val ?? ''}" oninput="${onch}">`;
-}
-
 /* What one week's column asks for, and what its ticks mean.
 
    P & D asks twice — pest and disease can go on different plots in the
@@ -5816,34 +6809,50 @@ function weNum(val, onch) {
    many as their config holds, one per fertiliser or chemical. Weeding has
    one, and nothing to choose.
 
-   The STICKER is deliberately not here: a sticker goes in every tank
-   whatever else does, so asking about it once a week was a question with
-   one answer. The doses still save and still publish; the Setting page is
-   where a sticker changes. */
+   Both sprays also carry an ACTIVATOR — the sticker that goes in the tank
+   with the chemical. It used to be left off here, on the grounds that a
+   sticker goes in every tank whatever else does. That was wrong twice
+   over: the answer differs between pest and disease and between interrow
+   rounds, and the sheets that used to hold the picker are no longer on
+   the Schedule tab, so there was nowhere left to change it. */
 /* Every week needs a round behind it, in all three configs. addWeek() makes
    one as it goes, but a month can reach the editor with more weeks than
    rounds — carried forward from a shorter month, or saved before addWeek
    existed. That left weCols() returning [], which became colspan="0"; a
    browser reads that as "to the end of the column group", which is why
    Manuring drew a white band where weeks 3 and 4 should have been. */
+/* A round with no chemicals behind it is a column of ticks that says
+   nothing about what is being sprayed or fed in it. Every block a work
+   actually uses gets a config; the blocks it does not use are left alone,
+   so an empty slot stays empty rather than being filled with a copy of
+   somebody else's week. */
 function ensureRounds(n, m) {
   const s = getState(n, m);
-  const want = weeksOf(n, m).length;
   if (!s.pdConfig) s.pdConfig = {};
-  for (let i = 0; i < want; i++) {
-    const w = 'W' + (i + 1);
+  weeksOf(n, m, 'pd').forEach(wk => {
+    const w = 'W' + (wk.slot + 1);
     if (!s.pdConfig[w]) {
-      const prev = s.pdConfig['W' + i];
+      // The nearest earlier week is the best guess at what this one sprays.
+      let prev = null;
+      for (let b = wk.slot; b >= 1 && !prev; b--) prev = s.pdConfig['W' + b];
       s.pdConfig[w] = prev ? JSON.parse(JSON.stringify(prev)) : defaultPDConfig().W1;
     }
-  }
-  [['manuringConfig', defaultManuringConfig], ['interrowConfig', defaultInterrowConfig]]
-    .forEach(([key, mk]) => {
-      if (!Array.isArray(s[key]) || !s[key].length) s[key] = mk();
-      while (s[key].length < want) {
-        const prev = s[key][s[key].length - 1];
-        s[key].push(JSON.parse(JSON.stringify(prev || mk()[0])));
-      }
+  });
+  [['manuring', 'manuringConfig', defaultManuringConfig],
+   ['interrow', 'interrowConfig', defaultInterrowConfig]]
+    .forEach(([kind, key, mk]) => {
+      if (!Array.isArray(s[key])) s[key] = mk();
+      /* Blocks this work does not use still need to BE something: the array
+         is read straight through by autoSyncRecords and the PDF. */
+      for (let b = 0; b < WEEK_BLOCKS; b++) if (!Array.isArray(s[key][b])) s[key][b] = [];
+      weeksOf(n, m, kind).forEach(wk => {
+        while (s[key].length <= wk.slot) s[key].push([]);
+        if (!s[key][wk.slot] || !s[key][wk.slot].length) {
+          let prev = null;
+          for (let b = wk.slot - 1; b >= 0 && !prev; b--) prev = s[key][b];
+          s[key][wk.slot] = JSON.parse(JSON.stringify(prev || mk()[0]));
+        }
+      });
     });
 }
 
@@ -5857,11 +6866,19 @@ function weCols(kind, i, n, m) {
       { ci: 0, label: 'Pest', opts: chemNames('pest'), val: c.P,
         onSel: `updatePDChem('${w}','P',this.value);renderWorkEditor()`,
         dose: c.P_dose, unit: c.P_unit,
-        onDose: `updatePDDose('${w}','P_dose',+this.value)` },
+        onDose: `updatePDDose('${w}','P_dose',+this.value)`,
+        label2: 'Activator', opts2: taggedNames('sticker'), val2: c.P_sticker,
+        onSel2: `updatePDChem('${w}','P_sticker',this.value);renderWorkEditor()`,
+        dose2: c.P_sticker_dose, unit2: c.P_sticker_unit,
+        onDose2: `updatePDDose('${w}','P_sticker_dose',+this.value)` },
       { ci: 1, label: 'Disease', opts: chemNames('disease'), val: c.D,
         onSel: `updatePDChem('${w}','D',this.value);renderWorkEditor()`,
         dose: c.D_dose, unit: c.D_unit,
-        onDose: `updatePDDose('${w}','D_dose',+this.value)` }
+        onDose: `updatePDDose('${w}','D_dose',+this.value)`,
+        label2: 'Activator', opts2: taggedNames('sticker'), val2: c.D_sticker,
+        onSel2: `updatePDChem('${w}','D_sticker',this.value);renderWorkEditor()`,
+        dose2: c.D_sticker_dose, unit2: c.D_sticker_unit,
+        onDose2: `updatePDDose('${w}','D_sticker_dose',+this.value)` }
     ];
   }
   if (kind === 'weeding') return [{ ci: 0, label: 'Weeding' }];
@@ -5880,56 +6897,23 @@ function weCols(kind, i, n, m) {
     dose: many ? c.dose : c.chem_dose,
     unit: many ? (c.unit || 'gm') : (c.chem_unit || 'mL'),
     onDose: many
-      ? `updateManuringDose(${i},${ci},'dose',+this.value)`
-      : `updateInterrowDose(${i},${ci},'chem_dose',+this.value)`
+      /* THREE arguments. updateManuringDose(ri, ci, v) does not take a field
+         name — Interrow's does, and this was written to match it. The dose
+         then arrived as the fourth argument, which is nowhere, and the
+         string 'dose' was stored as the dose. A number input cannot show
+         "dose", so the box went blank at the next repaint: type 45, tick a
+         plot, watch the 45 vanish. */
+      ? `updateManuringDose(${i},${ci},+this.value)`
+      : `updateInterrowDose(${i},${ci},'chem_dose',+this.value)`,
+    /* Manuring is spread dry and mixes nothing with it, so it gets no
+       second control — only the two sprays do. */
+    ...(many ? {} : {
+      label2: 'Activator', opts2: taggedNames('sticker'), val2: interrowAct(c),
+      onSel2: `updateInterrowAct(${i},${ci},this.value);renderWorkEditor()`,
+      dose2: c.activator_dose, unit2: c.activator_unit || 'mL',
+      onDose2: `updateInterrowDose(${i},${ci},'activator_dose',+this.value)`
+    })
   }));
-}
-
-function weTicked(kind, i, ci, plot) {
-  const s = getState(_we.n, getMonth());
-  if (kind === 'pd')      return !!(s.pd['W' + (i + 1)]?.[plot]?.[ci === 0 ? 'P' : 'D']);
-  if (kind === 'weeding') return !!(s.weeding[plot]?.['R' + (i + 1)]);
-  return !!((s[kind][plot] || [])[i] || [])[ci];
-}
-
-function weToggle(kind, i, ci, plot, skipRender) {
-  if (!canEditSchedule || !_we) return;
-  const n = _we.n, m = getMonth(), s = getState(n, m);
-  if (kind === 'pd') {
-    const w = 'W' + (i + 1);
-    if (!s.pd[w]) s.pd[w] = {};
-    if (!s.pd[w][plot]) s.pd[w][plot] = { P: false, D: false };
-    const f = ci === 0 ? 'P' : 'D';
-    s.pd[w][plot][f] = !s.pd[w][plot][f];
-  } else if (kind === 'weeding') {
-    if (!s.weeding[plot]) s.weeding[plot] = { R1: false, R2: false };
-    const r = 'R' + (i + 1);
-    s.weeding[plot][r] = !s.weeding[plot][r];
-  } else {
-    if (!s[kind][plot]) s[kind][plot] = [];
-    if (!s[kind][plot][i]) s[kind][plot][i] = [];
-    s[kind][plot][i][ci] = !s[kind][plot][i][ci];
-  }
-  if (skipRender) return;
-  persistStateSoon(n, m);
-  autoSyncRecords();
-  renderWorkEditor();
-  renderSchedSummary();
-  redrawSheet(kind);
-}
-
-/* One repaint for the whole column, not one per plot — 52 plots through the
-   single-tick path is 52 renders of a table nobody has seen yet. */
-function weToggleAll(kind, i, ci) {
-  if (!canEditSchedule || !_we) return;
-  const n = _we.n, m = getMonth(), plots = NURSERY_PLOTS[n] || [];
-  const all = plots.every(p => weTicked(kind, i, ci, p));
-  plots.forEach(p => { if (weTicked(kind, i, ci, p) === all) weToggle(kind, i, ci, p, true); });
-  persistStateSoon(n, m);
-  autoSyncRecords();
-  renderWorkEditor();
-  renderSchedSummary();
-  redrawSheet(kind);
 }
 
 /* ── The popup ─────────────────────────────────────────────────────────
@@ -5959,15 +6943,76 @@ function weNum(val, onch) {
   return `<input class="we-num" type="number" min="0" step="0.01" value="${val ?? ''}" oninput="${onch}">`;
 }
 
-/* What this work mixes for one week. The STICKER rows are deliberately not
-   here: a sticker goes in every tank whatever else does, so asking about it
-   once a week was asking a question with one answer. The doses still save,
-   and the Setting page is where a sticker is changed. */
-function weTicked(kind, i, ci, plot) {
-  const s = getState(_we.n, getMonth());
+/* Is this plot ticked in this column? Asked of a state handed in, because
+   the totals below are wanted for nurseries the editor does not have open. */
+function weColTicked(kind, i, ci, plot, s) {
   if (kind === 'pd')      return !!(s.pd['W' + (i + 1)]?.[plot]?.[ci === 0 ? 'P' : 'D']);
   if (kind === 'weeding') return !!(s.weeding[plot]?.['R' + (i + 1)]);
   return !!((s[kind][plot] || [])[i] || [])[ci];
+}
+
+/* What this work mixes for one week — the chemical, and under it the
+   activator that goes in the tank with it. See weCols() above. */
+function weTicked(kind, i, ci, plot) {
+  return weColTicked(kind, i, ci, plot, getState(_we.n, getMonth()));
+}
+
+/* ── The figures a schedule exists to produce ──────────────────────────
+   How many plots, how many seedlings in them, and how much of each thing
+   that goes in the tank it takes to cover them. Every one of the old
+   full-width sheets ended in these four rows, and they are the reason the
+   sheets were printed: a schedule that does not say how much to draw from
+   the store is a schedule somebody does arithmetic on at six in the
+   morning. When the sheets came off the Schedule tab the arithmetic went
+   with them. This puts it back, in both the places it is now wanted —
+   along the bottom of the editor, and under the summary table.
+
+   ONE function for both, because two copies of a calculation are two
+   answers waiting to disagree about how much Bond to sign out. */
+function weColTotals(kind, i, ci, n, m) {
+  const s = getState(n, m), plots = NURSERY_PLOTS[n] || [];
+  const on = p => weColTicked(kind, i, ci, p, s);
+  const nPlots = plots.filter(on).length;
+  /* Both are wanted: the seedling count for its own row, and the per-plot
+     list for the usage, which is a sum of per-plot amounts now. */
+  const caps = plotCaps(n, plots, on);
+  const seed = sumSeedlings(n, plots, on);
+  const rows = [
+    { label: t('sum.jumlahPlot'),  value: nPlots || '—' },
+    { label: t('sum.jumlahBibit'), value: seed ? seed.toLocaleString() : '—' }
+  ];
+  // Weeding mixes nothing, so there is nothing to draw from the store.
+  if (kind === 'weeding') return rows;
+
+  if (kind === 'manuring') {
+    const c = ((s.manuringConfig || [])[i] || [])[ci] || {};
+    const u = calcFertUsage(caps, c.name, c.dose, 1);
+    rows.push({ label: t('sum.maxBaja'), value: u.kg });
+    rows.push({ label: t('sum.bags'),    value: u.bags });
+    return rows;
+  }
+
+  if (kind === 'pd') {
+    const c = (s.pdConfig || {})['W' + (i + 1)] || {};
+    const f = ci === 0 ? 'P' : 'D';
+    rows.push({ label: t('sum.maxRacun'),
+                value: calcMaxChem(caps, c[f], c[f + '_dose'], c[f + '_unit']) });
+    /* No chemical means no tank and no sticker means nothing in it. Either
+       way the sticker figure is not zero — it is not asked. */
+    rows.push({ label: t('sum.maxBond'),
+                value: (!caps.length || c[f] === '—' || c[f + '_sticker'] === '—') ? '—'
+                  : calcMaxChem(caps, c[f + '_sticker'], c[f + '_sticker_dose'],
+                                c[f + '_sticker_unit']) });
+    return rows;
+  }
+
+  const c = ((s.interrowConfig || [])[i] || [])[ci] || {};
+  rows.push({ label: t('sum.maxRacun'),
+              value: calcMaxChem(caps, c.chem, c.chem_dose, c.chem_unit) });
+  rows.push({ label: t('sum.maxActivator'),
+              value: (!caps.length || !c.activator_dose) ? '—'
+                : calcMaxChem(caps, interrowAct(c), c.activator_dose, c.activator_unit) });
+  return rows;
 }
 
 function weToggle(kind, i, ci, plot, skipRender) {
@@ -5991,7 +7036,7 @@ function weToggle(kind, i, ci, plot, skipRender) {
   if (skipRender) return;
   persistStateSoon(n, m);
   autoSyncRecords();
-  renderWorkEditor();
+  keepingScroll(renderWorkEditor);
   renderSchedSummary();
   redrawSheet(kind);
 }
@@ -6005,7 +7050,7 @@ function weToggleAll(kind, i, ci) {
   plots.forEach(p => { if (weTicked(kind, i, ci, p) === all) weToggle(kind, i, ci, p, true); });
   persistStateSoon(n, m);
   autoSyncRecords();
-  renderWorkEditor();
+  keepingScroll(renderWorkEditor);
   renderSchedSummary();
   redrawSheet(kind);
 }
@@ -6013,16 +7058,48 @@ function weToggleAll(kind, i, ci) {
 /* The week's dates. Written straight through like the ticks, because the
    popup's Cancel already puts the whole work back — and s.weeks is in that
    snapshot, so a date changed and cancelled goes back with everything else. */
+/* Changing a round's dates can move it into another week of the month, and
+   its ticks and chemicals have to go with it — they are filed under the
+   block, not under the row. Without the move, dragging a round from the 8th
+   to the 15th leaves everything ticked in week 2 and shows an empty week 3,
+   which is the numbering bug again one level down.
+ *
+ * A move onto a block this work already uses is refused rather than allowed
+ * to overwrite it: two rounds cannot share one set of ticks, and silently
+ * eating the other one's plots is the worst of the three things that could
+ * happen here. */
 function weSetDate(i, which, value) {
   if (!canEditSchedule || !_we) return;
-  const n = _we.n, m = getMonth(), s = getState(n, m);
+  const n = _we.n, m = getMonth(), kind = _we.kind;
   const day = +String(value || '').slice(-2);
   const days = daysInMonthLabel(m);
   if (!day || day < 1 || day > days) return;
-  const w = s.weeks && s.weeks[i];
+
+  const shown = weeksOf(n, m, kind);
+  const wk = shown.find(x => x.slot === i);   // `i` is the block, not the row
+  if (!wk) return;
+  const list = workWeeks(n, m, kind);
+  const at = list.findIndex(x => +x.from === wk.from);
+  const w = list[at];
   if (!w) return;
+
+  const wasSlot = weekNoOfDay(w.from) - 1;
+  const from = which === 'from' ? day : Math.min(+w.from, day);
+  const nowSlot = weekNoOfDay(from) - 1;
+
+  if (nowSlot !== wasSlot &&
+      shown.some(x => x.slot === nowSlot && x.from !== wk.from)) {
+    alert(`This work already has a round in week ${nowSlot + 1}.\n\n` +
+          'Two rounds of the same work cannot share a week — move or remove ' +
+          'the other one first.');
+    renderWorkEditor();
+    return;
+  }
+
   if (which === 'from') { w.from = day; if (+w.to < day) w.to = day; }
   else                  { w.to = day;   if (+w.from > day) w.from = day; }
+  if (nowSlot !== wasSlot) moveSlot(n, m, kind, wasSlot, nowSlot);
+
   persistStateSoon(n, m);
   renderWorkEditor();
   renderSchedSummary();
@@ -6030,7 +7107,7 @@ function weSetDate(i, which, value) {
 
 function weAddWeek() {
   if (!_we) return;
-  const i = addWeek(_we.n, getMonth());
+  const i = addWeek(_we.n, getMonth(), _we.kind);
   if (i < 0) return;
   renderWorkEditor();
   renderSchedSummary();
@@ -6041,9 +7118,11 @@ function weAddWeek() {
   if (box) box.scrollTo({ left: box.scrollWidth, behavior: 'smooth' });
 }
 
-function weRemoveWeek(i) {
+function weRemoveWeek(slot) {
   if (!_we) return;
-  removeWeek(_we.n, getMonth(), i);
+  const at = weeksOf(_we.n, getMonth(), _we.kind).findIndex(w => w.slot === slot);
+  if (at < 0) return;
+  removeWeek(_we.n, getMonth(), _we.kind, at);
   renderWorkEditor();
   renderSchedSummary();
 }
@@ -6067,7 +7146,8 @@ const WE_MULTI_COL = { manuring: 'manuringConfig', interrow: 'interrowConfig' };
 function weBlankCol(kind) {
   return kind === 'manuring'
     ? { name: 'Yaramila', dose: 20, unit: 'gm' }
-    : { chem: 'Basta', chem_dose: 200, chem_unit: 'mL', activator_dose: 15, activator_unit: 'mL' };
+    : { chem: 'Basta', chem_dose: 200, chem_unit: 'mL',
+        activator: 'Activator', activator_dose: 15, activator_unit: 'mL' };
 }
 
 function weAddCol(i) {
@@ -6077,14 +7157,23 @@ function weAddCol(i) {
   const n = _we.n, m = getMonth(), s = getState(n, m);
   ensureRounds(n, m);
   const round = s[key][i];
-  // Six is the cap the round controls have always used. Past that the header
-  // is wider than the ticks under it are useful.
-  if (!round || round.length >= 6) return;
+  /* As many columns as there are products to put in them — see the cap in
+     renderWorkEditor, which greys + at the same number. Six is the floor,
+     not the rule: it is what this used to be fixed at, and the button must
+     not become stricter than it was while the Setting list is loading. */
+  const stock = (kind === 'manuring' ? fertNames('monthly') : taggedNames('interrow'))
+    .filter(x => x !== '—').length;
+  if (!round || round.length >= Math.max(6, stock)) return;
+  /* The index the new column takes, fixed BEFORE the push. A plot's ticks
+     are not guaranteed to be as long as the column list — see weRemoveCol —
+     and pushing onto a short array puts the new column's tick under an
+     earlier column's number. Write it at its own index instead. */
+  const ci = round.length;
   round.push(weBlankCol(kind));
   (NURSERY_PLOTS[n] || []).forEach(pl => {
     if (!s[kind][pl]) s[kind][pl] = [];
-    if (!s[kind][pl][i]) s[kind][pl][i] = [];
-    s[kind][pl][i].push(false);
+    if (!Array.isArray(s[kind][pl][i])) s[kind][pl][i] = [];
+    s[kind][pl][i][ci] = false;
   });
   persistStateSoon(n, m);
   autoSyncRecords();
@@ -6099,9 +7188,13 @@ function weRemoveCol(i) {
   if (!key) return;
   const n = _we.n, m = getMonth(), s = getState(n, m);
   const round = s[key] && s[key][i];
-  // Never to nothing: a week with no column has no chemical and no ticks,
-  // and is a week that should have been removed instead.
-  if (!round || round.length <= 1) return;
+  /* On the LAST column, − removes the week. A week with no column has no
+     chemical and no ticks, so it is not a thing that can exist — which used
+     to mean the button simply went dead at one column and gave no reason.
+     Taking the last product out of a week IS taking the week out: that is
+     what somebody pressing it there means, and removeWeek says exactly what
+     will go before it goes. */
+  if (!round || round.length <= 1) { weRemoveWeek(i); return; }
   const ci = round.length - 1;
   const plots = NURSERY_PLOTS[n] || [];
   /* The last column's ticks go with it. Said out loud when there are any,
@@ -6112,7 +7205,18 @@ function weRemoveCol(i) {
       `Remove the last column of week ${i + 1}? ${ticked} plot${ticked === 1 ? '' : 's'} `
       + 'ticked in it will lose that tick.')) return;
   round.pop();
-  plots.forEach(pl => { if (s[kind][pl] && s[kind][pl][i]) s[kind][pl][i].pop(); });
+  /* Remove the tick belonging to the COLUMN that went, by its index — not
+     whatever happens to be last in the array.
+
+     A plot's tick list is not the same length as the column list. A month
+     carried forward can arrive with one entry against three columns, and a
+     seeded one with three against one. pop() on the short case took the
+     entry at the END, which was the FIRST column's tick: add a fertiliser,
+     drop it again, and the ticks you had made vanished with it. */
+  plots.forEach(pl => {
+    const arr = s[kind][pl] && s[kind][pl][i];
+    if (Array.isArray(arr) && arr.length > ci) arr.splice(ci, 1);
+  });
   persistStateSoon(n, m);
   autoSyncRecords();
   renderWorkEditor();
@@ -6134,7 +7238,7 @@ function renderWorkEditor() {
   const { n, kind } = _we;
   const m = getMonth(), iso = monthISO(m), days = daysInMonthLabel(m);
   const work = WORKS.find(w => w.key === kind);
-  const weeks = weeksOf(n, m);
+  const weeks = weeksOf(n, m, kind);
   const plots = NURSERY_PLOTS[n] || [];
   ensureRounds(n, m);   // no week without a round behind it
 
@@ -6151,8 +7255,13 @@ function renderWorkEditor() {
     return;
   }
 
-  const cols = weeks.map((_, i) => {
-    const c = weCols(kind, i, n, m);
+  /* Everything below addresses a week by its BLOCK (w.slot), not by its
+     position in this list. The ticks, the chemicals and the configs are all
+     filed under the block, and in a month whose rounds are not 1,2,3,4 in
+     order the two numbers are different — passing the position is how a
+     tick lands in the wrong week. */
+  const cols = weeks.map((w) => {
+    const c = weCols(kind, w.slot, n, m);
     /* colspan="0" means "to the end of the column group" to a browser, not
        "no columns" — the bug that put a white band where Manuring's later
        weeks should have been. ensureRounds() above should make this
@@ -6173,49 +7282,100 @@ function renderWorkEditor() {
      the week, the other takes the week and every tick in it away. Side by
      side they would be three small buttons and one bad afternoon. */
   const colWord = kind === 'manuring' ? 'fertiliser' : 'chemical';
-  const colCtrl = (i) => WE_MULTI_COL[kind]
+  /* How many columns a week may hold is not a number somebody chose — it is
+     how many products there are to put in them. Six was an invented cap, and
+     an invented cap on a screen whose whole point is "as many as you mix" is
+     a screen that says no for no reason. The floor keeps it from being
+     STRICTER than six while the Setting list is still loading. */
+  const stock = (kind === 'manuring' ? fertNames('monthly') : taggedNames('interrow'))
+    .filter(x => x !== '—').length;
+  const cap = Math.max(6, stock);
+  const colCtrl = (i, slot) => WE_MULTI_COL[kind]
     ? `<span class="we-col-n schedule-edit-ctrl">` +
         `<button type="button" title="Another ${colWord} in this week"` +
-        ` aria-label="Add a column to week ${i + 1}"` +
-        ` onclick="weAddCol(${i})"${cols[i].length >= 6 ? ' disabled' : ''}>+</button>` +
-        `<button type="button" title="Drop the last ${colWord} from this week"` +
-        ` aria-label="Remove a column from week ${i + 1}"` +
-        ` onclick="weRemoveCol(${i})"${cols[i].length <= 1 ? ' disabled' : ''}>&minus;</button>` +
+        ` aria-label="Add a column to week ${slot + 1}"` +
+        ` onclick="weAddCol(${slot})"${cols[i].length >= cap ? ' disabled' : ''}>+</button>` +
+        /* Never dead. On the last column it removes the WEEK, which is what
+           taking the last product out of a week amounts to. */
+        `<button type="button" title="${cols[i].length <= 1
+          ? 'This is the only ' + colWord + ' — remove the whole week'
+          : 'Drop the last ' + colWord + ' from this week'}"` +
+        ` aria-label="${cols[i].length <= 1 ? 'Remove week ' + (slot + 1)
+                                            : 'Remove a column from week ' + (slot + 1)}"` +
+        ` onclick="weRemoveCol(${slot})">&minus;</button>` +
       `</span>`
     : '';
 
   const h1 = '<tr><th class="we-plot" rowspan="3">Plot</th>' +
     weeks.map((w, i) =>
       `<th colspan="${cols[i].length}" class="we-wk">` +
-        colCtrl(i) +
-        `<span class="we-wk-n">Week ${i + 1}</span>` +
+        colCtrl(i, w.slot) +
+        `<span class="we-wk-n">Week ${w.slot + 1}</span>` +
         `<button type="button" class="we-week-x schedule-edit-ctrl" title="Remove this week"` +
-        ` onclick="weRemoveWeek(${i})">&times;</button></th>`).join('') + '</tr>';
+        ` onclick="weRemoveWeek(${w.slot})">&times;</button></th>`).join('') + '</tr>';
 
   const h2 = '<tr>' + weeks.map((w, i) =>
     `<th colspan="${cols[i].length}" class="we-wk-d">` +
-      dayInput(i, 'from', w.from) + '<span class="we-to">to</span>' + dayInput(i, 'to', w.to) +
+      dayInput(w.slot, 'from', w.from) + '<span class="we-to">to</span>' + dayInput(w.slot, 'to', w.to) +
     '</th>').join('') + '</tr>';
 
+  /* The second control is the activator that goes in the tank with the
+     first — Bond on a P&D week, the interrow activator on a spray round.
+     It was left off on the grounds that a sticker goes in every tank
+     whatever else does, so asking once a week was a question with one
+     answer. It is not: the answer differs between the two sprays and
+     between rounds, and with no picker here the only place to change it
+     was a sheet the Schedule tab no longer shows. */
   const h3 = '<tr>' + weeks.map((w, i) => cols[i].map((c, k) =>
     `<th class="we-col${k === 0 && i ? ' grp' : ''}">` +
       `<div class="we-col-l">${esc(c.label)}</div>` +
       (c.opts ? weSel(c.opts, c.val, c.onSel) : '') +
       (c.opts ? `<div class="we-col-d">${weNum(c.dose, c.onDose)}` +
                 `<span class="we-cfg-u">${esc(c.unit || '')}</span></div>` : '') +
-      `<button type="button" class="we-all" onclick="weToggleAll('${kind}',${i},${c.ci})" ` +
+      (c.opts2 ? `<div class="we-col-l we-col-l2">${esc(c.label2)}</div>` +
+                 weSel(c.opts2, c.val2, c.onSel2) +
+                 `<div class="we-col-d">${weNum(c.dose2, c.onDose2)}` +
+                 `<span class="we-cfg-u">${esc(c.unit2 || '')}</span></div>` : '') +
+      `<button type="button" class="we-all" onclick="weToggleAll('${kind}',${w.slot},${c.ci})" ` +
       `title="Tick or clear every plot in this column">all</button>` +
     '</th>').join('')).join('') + '</tr>';
 
   const rows = plots.map(pl => '<tr><td class="we-plot">' + esc(pl) + '</td>' +
     weeks.map((w, i) => cols[i].map((c, k) => {
-      const on = weTicked(kind, i, c.ci, pl);
+      const on = weTicked(kind, w.slot, c.ci, pl);
       return `<td class="${k === 0 && i ? 'grp' : ''}"><button type="button" ` +
         `class="we-tick${on ? ' on' : ''}" ` +
-        `onclick="weToggle('${kind}',${i},${c.ci},'${esc(pl)}')" ` +
+        `onclick="weToggle('${kind}',${w.slot},${c.ci},'${esc(pl)}')" ` +
         `aria-pressed="${on}">${on ? '&#10003;' : ''}</button></td>`;
     }).join('')).join('') + '</tr>').join('');
 
+  /* The totals, along the bottom, in the same columns as the ticks above
+     them — a figure in its own column needs no legend to say which week and
+     which chemical it belongs to. They sit in a <tfoot> pinned to the
+     bottom of the scroll, because on a nursery with fifty-two plots the
+     answer is otherwise fifty rows below the question. */
+  const tot = weeks.map((w, i) => cols[i].map(c => weColTotals(kind, w.slot, c.ci, n, m)));
+  const nTot = (tot[0] && tot[0][0]) ? tot[0][0].length : 0;
+  const foot = nTot
+    ? '<tfoot>' + Array.from({ length: nTot }, (_, r) =>
+        '<tr class="we-tot"><td class="we-plot">' + esc(tot[0][0][r].label) + '</td>' +
+        weeks.map((w, i) => cols[i].map((c, k) =>
+          `<td class="${k === 0 && i ? 'grp' : ''}">${esc(String(tot[i][k][r].value))}</td>`
+        ).join('')).join('') + '</tr>').join('') + '</tfoot>'
+    : '';
+
   body.innerHTML = `<div class="tbl-wrap we-scroll"><table class="we-table">
-      <thead>${h1}${h2}${h3}</thead><tbody>${rows}</tbody></table></div>`;
+      <thead>${h1}${h2}${h3}</thead><tbody>${rows}</tbody>${foot}</table></div>`;
+
+  /* Every sticky row pinned to bottom:0 lands on the same line, and only
+     the last one is visible — four rows of totals showing one. They have to
+     be stacked, and only the browser knows how tall a row came out, so the
+     offsets are measured rather than guessed at in the stylesheet. */
+  const ft = body.querySelectorAll('tfoot tr');
+  let off = 0;
+  for (let r = ft.length - 1; r >= 0; r--) {
+    const h = ft[r].getBoundingClientRect().height;
+    ft[r].querySelectorAll('td').forEach(td => { td.style.bottom = off + 'px'; });
+    off += h;
+  }
 }
