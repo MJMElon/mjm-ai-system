@@ -2604,6 +2604,14 @@
            still counted them into B14, so 53 more was allocated than there
            was to allocate. */
         const ADJUST_PLOT_LOSS = {};   // PLOT → net of approved plot-stock adjustments
+
+        /* Every adjustment on the batch as last read, approved or not.
+
+           Kept because a figure that is NOT moving a report is as much a fact
+           as one that is: a drone map short by 53 and an adjustment of 53 that
+           nobody has approved — or that was filed against the seed count — are
+           the same 53, and the screen had both and said neither. */
+        let ADJUST_ROWS = [];
         /* Named Total rather than Base because that is what every caller已 says;
            only seed-count adjustments reach ADJUST_NET now, so the two are the
            same figure. */
@@ -2624,6 +2632,7 @@
                    allocation base — better the base is plainly short than
                    silently right for a reason nobody can see. */
                 Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
+                ADJUST_ROWS = [];
                 bars.forEach(n => {
                     const el = document.getElementById(`t${n}-adjust-bar`);
                     if (el) { el.classList.add('hidden'); el.innerHTML = ''; }
@@ -2639,6 +2648,7 @@
                     .order('created_at', { ascending: false });
                 if (error) throw error;
                 rows = (data || []).map(_parseCalibration);
+                ADJUST_ROWS = rows;
             } catch (e) {
                 // A strip that cannot load says nothing rather than saying
                 // "no adjustments", which is a different claim entirely.
@@ -10269,6 +10279,70 @@ Thank you.`;
             setTimeout(() => row.classList.remove('t6-row-flash'), 2200);
         }
 
+        /* IS THE DIFFERENCE ALREADY EXPLAINED SOMEWHERE ELSE ON THIS PAGE?
+
+           A drone map 53 short of the 3rd cull, and an adjustment of −53
+           against that same plot sitting on the Adjustments tab, are the same
+           53 seedlings. The row only moves when that adjustment is APPROVED
+           and filed as PLOT STOCK; until then it is a claim about the batch's
+           seed count, or a claim nobody has ruled on, and the plot goes on
+           reading the figure it was counted at.
+
+           That is a correct rule and a terrible thing to work out by eye. So
+           where the adjustments this plot has — the ones not already in its
+           arithmetic — come to exactly the difference, the panel says so, and
+           says which of the two things is in the way.
+
+           Exactly. A near-match is a coincidence, and a panel that guessed at
+           one would teach people to press the button without reading. */
+        function t6MismatchAdjustment(plot, diff) {
+            if (!diff || !Array.isArray(ADJUST_ROWS) || !ADJUST_ROWS.length) return null;
+            const key = _t6PlotKey(plot);
+            if (!key) return null;
+            const mine = ADJUST_ROWS.filter(r => _t6PlotKey(r.plot) === key
+                                              && !(r.approved && r.side === 'plot'));
+            if (!mine.length) return null;
+            if (mine.reduce((s, r) => s + (r.qty || 0), 0) !== diff) return null;
+            const pending  = mine.filter(r => !r.approved);
+            const misfiled = mine.filter(r => r.approved && r.side !== 'plot');
+            const one = mine.length === 1 ? mine[0] : null;
+            let why;
+            if (pending.length && !misfiled.length) {
+                why = mine.length === 1
+                    ? 'It is waiting for approval — an adjustment nobody has ruled on moves no figure. Approve it and this plot tallies.'
+                    : 'They are waiting for approval — an adjustment nobody has ruled on moves no figure. Approve them and this plot tallies.';
+            } else if (misfiled.length && !pending.length) {
+                why = 'It is filed against the SEED COUNT, so it corrected how many the batch started with instead of how many are standing here. '
+                    + 'Seedlings stolen, dead or miscounted after they reached the plot are PLOT STOCK — change it to that and this plot tallies.';
+            } else {
+                why = 'Some of it is waiting for approval and some is filed against the seed count. Settle both on the Adjustments tab and this plot tallies.';
+            }
+            return {
+                qty: diff,
+                count: mine.length,
+                id: one ? one.id : null,
+                reason: one ? one.reason : '',
+                why
+            };
+        }
+
+        /* Take me to it. The adjustment is on another tab in a table of its
+           own, and hunting for it is the same walk this panel's plot button
+           already saves in the other direction. */
+        function goToAdjustment(id) {
+            switchTab(7);
+            setTimeout(() => {
+                const tr = id ? document.querySelector(`#t7-cal-history tr[data-cal-id="${id}"]`) : null;
+                const el = tr || document.getElementById('t7-cal-history');
+                if (!el) return;
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (tr) {
+                    tr.classList.add('t6-row-flash');
+                    setTimeout(() => tr.classList.remove('t6-row-flash'), 2200);
+                }
+            }, 120);
+        }
+
         function syncT6Mismatch() {
             const panel = document.getElementById('t6-mismatch-panel');
             const host  = document.getElementById('t6-mismatch-rows');
@@ -10316,6 +10390,24 @@ Thank you.`;
                                 <div class="text-base font-black ${diff > 0 ? 'text-[#c07820]' : 'text-[#a83020]'}">${diff > 0 ? '+' : ''}${diff.toLocaleString()}</div>
                             </div>
                         </div>
+                        ${(() => {
+                            const a = t6MismatchAdjustment(m.plot, diff);
+                            if (!a) return '';
+                            const head = a.count === 1
+                                ? `There is an adjustment of ${a.qty > 0 ? '+' : ''}${a.qty.toLocaleString()} on ${_t6Esc(m.plot)}`
+                                : `${a.count} adjustments on ${_t6Esc(m.plot)} come to ${a.qty > 0 ? '+' : ''}${a.qty.toLocaleString()}`;
+                            return `
+                            <div class="mb-3 rounded-xl border border-[#bee3f8] bg-[#f0f8ff] px-4 py-3">
+                                <div class="text-[10px] font-black text-[#2b6cb0] uppercase tracking-widest mb-1">This difference is already accounted for</div>
+                                <div class="text-[12px] font-bold text-[#3d2610] leading-snug">
+                                    ${head}${a.reason ? ` — “${_t6Esc(a.reason)}”` : ''}. ${a.why}
+                                </div>
+                                <button type="button" onclick="goToAdjustment(${a.id ? `'${_escAttr(String(a.id))}'` : 'null'})"
+                                    class="mt-2 text-[10px] font-black text-[#2b6cb0] uppercase tracking-widest underline underline-offset-4 hover:text-[#1a4a80] bg-transparent border-0 p-0 cursor-pointer">
+                                    Open it on Adjustments →
+                                </button>
+                            </div>`;
+                        })()}
                         <label class="label-style !text-[#7a4a10]">Reason &amp; how to avoid it in future</label>
                         <textarea rows="2" data-idx="${m.idx}" id="t6-mm-note-${m.idx}"
                             class="input-style t6-mm-note w-full !text-sm"
