@@ -76,6 +76,8 @@
     <script src="../shared/shared_supabase.js"></script>
     <script src="../shared/shared_access.js"></script>
     <script src="../shared/shared_nelos.js"></script>
+    <!-- Tray occupancy — the same rule the batch list's Tray Status tab uses. -->
+    <script src="../shared/shared_tray_stock.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         /* Earthy Theme Colors */
@@ -2275,14 +2277,12 @@
         let trayCapMap = {};      // { tray_name: 2560 } — the tray's size when empty, from Settings
         let trayOccupiedMap = {}; // { tray_name: { batch, qty } } — whose seedlings are in it
 
-        // A tray holds what Settings says it holds. Before that field existed every
-        // tray was assumed to be 2,560, so a tray with no size keeps that figure
-        // rather than reading as having no room at all.
-        const TRAY_CAP_DEFAULT = 2560;
-        function trayCapacity(tray) {
-            const n = Number(tray && tray.total_vacant);
-            return Number.isFinite(n) && n > 0 ? n : TRAY_CAP_DEFAULT;
-        }
+        /* A tray holds what Settings says it holds, and what is standing in it
+           is worked out in shared/shared_tray_stock.js — the same rule the
+           batch list's Tray Status tab reads, so the two screens cannot drift
+           apart about how full a tray is. */
+        const TRAY_CAP_DEFAULT = MJMTrayStock.DEFAULT_CAPACITY;
+        const trayCapacity = MJMTrayStock.capacityOf;
 
         /* How much may still be planted into a tray on THIS batch's form.
            Another batch's seedlings take up room; this batch's own do not, or
@@ -3084,81 +3084,20 @@
                 masterBatchesList = batchRes.data || [];
                 globalTrays = trayRes.data || [];
 
-                // Build per-batch totals so we can tell which batches have fully emptied their
-                // pre-nursery trays (planted − transplanted − 1st_culling ≤ 0). Trays from
-                // emptied batches are considered free for the next batch to reuse.
-                const plantedByBatch = {}, transplantedByBatch = {}, cull1ByBatch = {};
-                (usedTrayRes.data || []).forEach(l => {
-                    plantedByBatch[l.batch_name] = (plantedByBatch[l.batch_name] || 0) + (l.quantity_change || 0);
+                /* What is standing in each tray — one rule, shared with the
+                   batch list's Tray Status tab. Planted goes in, 1st Culling
+                   and transplants-out come out, and premium care / double-tone
+                   transplants land in a tray of their own. */
+                const trayStock = MJMTrayStock.compute({
+                    trays:        globalTrays,
+                    planted:      usedTrayRes.data || [],
+                    transplanted: transplantedRes.data || [],
+                    cull1:        cull1Res.data || []
                 });
-                (transplantedRes.data || []).forEach(l => {
-                    transplantedByBatch[l.batch_name] = (transplantedByBatch[l.batch_name] || 0) + Math.abs(l.quantity_change || 0);
-                });
-                (cull1Res.data || []).forEach(l => {
-                    cull1ByBatch[l.batch_name] = (cull1ByBatch[l.batch_name] || 0) + Math.abs(l.quantity_change || 0);
-                });
-                const batchPnEmptied = (b) => {
-                    const planted = plantedByBatch[b] || 0;
-                    if (planted <= 0) return false; // never planted, leave behavior unchanged
-                    const remaining = planted - (transplantedByBatch[b] || 0) - (cull1ByBatch[b] || 0);
-                    return remaining <= 0;
-                };
-
-                // Build tray-usage map: which batch is each tray planted in?
-                // Skip trays whose batch's pre-nursery is already emptied so the tray frees up.
-                trayUsageMap = {};
-                const plantedByTrayBatch = {}; // { tray: { batch: qty } }
-                (usedTrayRes.data || []).forEach(log => {
-                    if (!plantedByTrayBatch[log.plot_name]) plantedByTrayBatch[log.plot_name] = {};
-                    plantedByTrayBatch[log.plot_name][log.batch_name] =
-                        (plantedByTrayBatch[log.plot_name][log.batch_name] || 0) + (log.quantity_change || 0);
-                    if (batchPnEmptied(log.batch_name)) return;
-                    trayUsageMap[log.plot_name] = log.batch_name;
-                });
-
-                /* ── What is standing in each tray, counted tray by tray ──
-                   Every movement names its tray, so none of this has to be
-                   estimated:
-                     Planted            plot_name IS the tray  → in
-                     1st_Culling        plot_name IS the tray  → out
-                     Transplanted*      remark says "from tray [X]"  → out of X,
-                                        and plot_name is where they went — which
-                                        for premium care and double-tone is itself
-                                        a tray, so those receive.
-                   Transplant a hundred out of P4 and P4 frees exactly a hundred. */
-                const trayNames = new Set(globalTrays.map(t => t.tray_name));
-                const inTray = {}, outTray = {};
-                const addIn  = (tray, q) => { if (trayNames.has(tray)) inTray[tray]  = (inTray[tray]  || 0) + q; };
-                const addOut = (tray, q) => { if (trayNames.has(tray)) outTray[tray] = (outTray[tray] || 0) + q; };
-
-                (usedTrayRes.data || []).forEach(l => addIn(l.plot_name, Math.abs(l.quantity_change || 0)));
-                (cull1Res.data   || []).forEach(l => addOut(l.plot_name, Math.abs(l.quantity_change || 0)));
-                (transplantedRes.data || []).forEach(l => {
-                    const qty = Math.abs(l.quantity_change || 0);
-                    const src = (l.remark || '').match(/from tray \[([^\]]+)\]/i);
-                    if (src) addOut(src[1].trim(), qty);
-                    addIn(l.plot_name, qty);   // only lands if the destination is a tray
-                });
-
-                trayVacantMap = {};
-                trayCapMap = {};
-                trayOccupiedMap = {};
-                globalTrays.forEach(t => {
-                    const cap = trayCapacity(t);
-                    trayCapMap[t.tray_name] = cap;
-                    const occupier = trayUsageMap[t.tray_name];
-                    let inUse = Math.max(0, (inTray[t.tray_name] || 0) - (outTray[t.tray_name] || 0));
-                    // Safety net for anything logged before the source tray was
-                    // written into the remark: if no live batch is holding the tray,
-                    // it is free whatever the per-tray sums come to.
-                    if (!occupier) inUse = 0;
-                    inUse = Math.min(cap, inUse);
-                    // Remembered per batch so that re-opening a batch does not see its
-                    // OWN seedlings as somebody else's occupancy and refuse the figures
-                    // already keyed in.
-                    trayOccupiedMap[t.tray_name] = { batch: occupier, qty: inUse };
-                    trayVacantMap[t.tray_name] = Math.max(0, cap - inUse);
-                });
+                trayUsageMap    = trayStock.usage;
+                trayCapMap      = trayStock.capacity;
+                trayOccupiedMap = trayStock.occupied;
+                trayVacantMap   = trayStock.vacant;
                 
                 // NATURAL ALPHANUMERIC SORTING FOR PLOTS (B2 comes before B10)
                 globalPlots = plotRes.data || [];

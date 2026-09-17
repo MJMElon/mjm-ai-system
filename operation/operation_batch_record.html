@@ -8,6 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../shared/shared_access.js"></script>
+    <!-- Tray occupancy — the same rule the batch report's tray dropdown uses. -->
+    <script src="../shared/shared_tray_stock.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         /* Earthy Theme Colors */
@@ -121,6 +123,7 @@
                 <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="A batch moves here automatically once every plot has nothing left standing in it — 3rd culled less drone map quantity is nought. A plot all sold out is nought either way. Any plot still carrying a balance keeps the batch in Active.">✅ Completed / In-Active</button>
                 <button id="tab-amendment" class="list-tab-btn list-tab-inactive" onclick="switchListTab('amendment')" title="Batches with at least one report tab rejected by HQ — open the batch to see the rejection remark and amend the report">🔴 Amendment Needed</button>
                 <button id="tab-reserved" class="list-tab-btn list-tab-inactive" onclick="switchListTab('reserved')" title="Plots holding seedlings transferred in the 3rd Culling report. A batch's transfers drop off this list once the batch is sold out.">🅿️ Plot Reserved Status</button>
+                <button id="tab-tray" class="list-tab-btn list-tab-inactive" onclick="switchListTab('tray')" title="Every pre-nursery tray: how many holes are free, and which batch is taking up the rest. A tray frees up as its seedlings are culled or transplanted out.">🧺 Tray Status</button>
             </div>
             
             <div class="bg-white rounded-2xl border border-[#e8dcc8] overflow-hidden shadow-inner">
@@ -171,6 +174,7 @@
 
         let masterBatches = [];
         let plotReserves  = []; // 3rd-culling plot transfers → "Plot Reserved Status" tab
+        let trayStatus    = []; // one row per pre-nursery tray → "Tray Status" tab
         let currentListTab = 'active';
         let currentPage = 1;
         const PAGE_SIZE = 15;
@@ -229,18 +233,24 @@
         async function initLedger() {
             try {
                 // Fetch reception logs + every culling-related log type + transplant logs in parallel.
-                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, rowVerifRes, stageVerifRes, collectRes] = await Promise.all([
+                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, rowVerifRes, stageVerifRes, collectRes, trayRes] = await Promise.all([
                     fetchAllRows(() => _supabase.from('shared_inventory_logs')
                         .select('*')
                         .eq('transaction_type', 'Seeds_Received')
                         .order('created_at', { ascending: false })
                         .order('id', { ascending: true })),
-                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', 'Planted').order('id', { ascending: true })),
+                    // plot_name IS the tray on a Planted log — the Tray Status
+                    // tab is built from it.
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change, plot_name').eq('transaction_type', 'Planted').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', 'Damaged_Seeds').order('id', { ascending: true })),
-                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '1st_Culling').order('id', { ascending: true })),
+                    // 1st culling names its tray directly in plot_name.
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change, plot_name').eq('transaction_type', '1st_Culling').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '2nd_Culling').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change, plot_name, remark').eq('transaction_type', '3rd_Culling').order('id', { ascending: true })),
-                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, plot_name, transaction_type, quantity_change').in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']).order('id', { ascending: true })),
+                    // remark carries which tray the seedlings LEFT ("from tray
+                    // [P4]") — without it the Tray Status tab cannot empty a
+                    // tray as its seedlings go out to the field.
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, plot_name, transaction_type, quantity_change, remark').in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']).order('id', { ascending: true })),
                     // plot_name carries WHICH report was rejected — a stage key,
                     // or `stage::rowKey` for a rejection against one row. Asking
                     // for it costs nothing and is the difference between "this
@@ -271,7 +281,12 @@
                     // Cancelled DOs are excluded below; CAL- calibration DOs count.
                     fetchAllRows(() => _supabase.from('shared_do_records')
                         .select('do_number,status,batch_1,qty_1,batch_2,qty_2,batch_3,qty_3,batch_4,qty_4,batch_5,qty_5')
-                        .order('id', { ascending: true }))
+                        .order('id', { ascending: true })),
+                    // Every tray Settings knows about, with the size it holds
+                    // when empty → the Tray Status tab.
+                    fetchAllRows(() => _supabase.from('operation_trays')
+                        .select('tray_name, nursery_name, total_vacant')
+                        .order('tray_name', { ascending: true }))
                 ]);
                 if (recRes.error) throw recRes.error;
 
@@ -529,6 +544,19 @@
                     (rejectedStages[r.batch_name] = rejectedStages[r.batch_name] || new Set()).add(stage);
                 });
 
+                /* ── Tray Status ────────────────────────────────────────────
+                   How full every pre-nursery tray is, and whose seedlings are
+                   in it. The arithmetic is shared/shared_tray_stock.js — the
+                   very rule the batch report obeys when it decides how much
+                   may still be planted into a tray, so a tray that reads 1,200
+                   vacant here offers 1,200 there. */
+                trayStatus = MJMTrayStock.compute({
+                    trays:        trayRes.data || [],
+                    planted:      plantedRes.data || [],
+                    transplanted: transplantRes.data || [],
+                    cull1:        cull1Res.data || []
+                }).rows;
+
                 // ── Plot Reserved Status ────────────────────────────────────
                 // 3rd-culling plot transfers: target plot is "reserved" for the
                 // batch. A batch's transfers drop off once it is SOLD OUT:
@@ -784,7 +812,7 @@
             currentPage = 1;
 
             // Update Button Styles
-            ['active', 'completed', 'amendment', 'reserved'].forEach(name => {
+            ['active', 'completed', 'amendment', 'reserved', 'tray'].forEach(name => {
                 const el = document.getElementById('tab-' + name);
                 if (el) el.className = 'list-tab-btn ' + (tabName === name ? 'list-tab-active' : 'list-tab-inactive');
             });
@@ -801,6 +829,9 @@
                 headRow.innerHTML =
                     tabName === 'reserved'
                         ? '<th>Batch</th><th>Plot Reserved</th><th>Original Plot</th><th>Quantity Transfer</th><th>Date Transfer</th>'
+                    : tabName === 'tray'
+                        ? '<th>Tray</th><th>Nursery</th><th>Total Holes</th><th>Occupied</th><th>Vacant</th>'
+                          + '<th style="min-width: 200px;">Occupied By</th><th style="min-width: 160px;">Usage</th>'
                     : tabName === 'amendment'
                         ? '<th>Batch</th><th>Breed</th><th style="min-width: 260px;">Needs Amendment</th>'
                           + '<th style="min-width: 180px;">Current Stage</th><th>Survival %</th><th>Culling Rate %</th><th>Actions</th>'
@@ -862,6 +893,60 @@
                             <td class="font-bold text-[#8a7a68]">${r.from}</td>
                             <td class="font-black text-[#3d2610]">${(r.qty || 0).toLocaleString()}</td>
                             <td class="font-bold text-[#3d2610]">${dateStr}</td>
+                        </tr>`);
+                });
+                return;
+            }
+            /* Tray Status — one row per tray, not per batch. What somebody
+               standing in front of the pre-nursery wants to know: which trays
+               have room, how much, and whose seedlings are taking up the rest.
+               A tray with two live batches in it names both rather than the
+               last one keyed, because that is what is actually in there. */
+            if (currentListTab === 'tray') {
+                const filtered = query
+                    ? trayStatus.filter(r =>
+                        (r.tray    || '').toLowerCase().includes(query) ||
+                        (r.nursery || '').toLowerCase().includes(query) ||
+                        (r.batches || []).some(x => (x.batch || '').toLowerCase().includes(query)))
+                    : trayStatus;
+                const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+                if (currentPage > totalPages) currentPage = totalPages;
+                if (currentPage < 1) currentPage = 1;
+                updatePagination(filtered.length, totalPages);
+                if (filtered.length === 0) {
+                    body.innerHTML = `<tr><td colspan="7" class="text-center p-16 text-[#8a7a68] font-bold">${
+                        query ? `No trays matching "${query}".`
+                              : 'No trays set up yet — add them in Settings → Trays.'}</td></tr>`;
+                    return;
+                }
+                const start = (currentPage - 1) * PAGE_SIZE;
+                filtered.slice(start, start + PAGE_SIZE).forEach(r => {
+                    const cap  = r.capacity || 0;
+                    const pct  = cap > 0 ? Math.round((r.occupied / cap) * 100) : 0;
+                    const full = r.vacant <= 0;
+                    const barColor = full ? '#c0392b' : pct >= 80 ? '#c07820' : '#6aa83c';
+                    const who = (r.batches && r.batches.length)
+                        ? r.batches.map(x =>
+                            `<button onclick="openBatchDetail('${String(x.batch).replace(/'/g, "\\'")}')"
+                                     class="font-black text-[#3a7ab4] hover:underline">${x.batch}</button>
+                             <span class="text-[#8a7a68] font-bold">(${(x.qty || 0).toLocaleString()})</span>`).join('<br>')
+                        : '<span class="text-[#8a7a68] font-bold">— empty —</span>';
+                    body.insertAdjacentHTML('beforeend', `
+                        <tr>
+                            <td class="text-[#3d2610] font-black tracking-wider text-base">🧺 ${r.tray}</td>
+                            <td class="font-bold text-[#8a7a68]">${r.nursery || '—'}</td>
+                            <td class="font-bold text-[#3d2610]">${cap.toLocaleString()}</td>
+                            <td class="font-black text-[#3d2610]">${(r.occupied || 0).toLocaleString()}</td>
+                            <td class="font-black ${full ? 'text-[#c0392b]' : 'text-[#4a7a2e]'}">${(r.vacant || 0).toLocaleString()}</td>
+                            <td class="text-sm leading-relaxed">${who}</td>
+                            <td>
+                                <div class="w-full h-2 rounded-full bg-[#e8dcc8] overflow-hidden">
+                                    <div style="width:${Math.min(100, pct)}%; background-color:${barColor};" class="h-full"></div>
+                                </div>
+                                <div class="text-[10px] font-black uppercase tracking-widest mt-1" style="color:${barColor};">
+                                    ${full ? 'Full' : pct + '% used'}
+                                </div>
+                            </td>
                         </tr>`);
                 });
                 return;
