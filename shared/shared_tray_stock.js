@@ -29,9 +29,17 @@
     }
 
     /* Which tray a transplant log LEFT. The destination is plot_name; the
-       source is written into the remark when the movement is saved. */
+       source is written into the remark when the movement is saved.
+
+       This is the SAME pattern the batch report's saved-transplant table
+       parses for its Source Tray column (operation_batch_detail.html —
+       change one, change the other). It used to ask for "from tray [X]",
+       the exact wording today's save writes, and older logs word it
+       differently: the screen showed P6 in the Source Tray column while
+       this read nothing at all, so P6's holes never came back. Whatever
+       the table can read, this reads. */
     function sourceTrayOf(log) {
-        const m = String((log && log.remark) || '').match(/from tray \[([^\]]+)\]/i);
+        const m = String((log && log.remark) || '').match(/tray \[([^\]]+)\]/i);
         return m ? m[1].trim() : '';
     }
 
@@ -51,110 +59,120 @@
         const transplanted = (input && input.transplanted) || [];
         const cull1        = (input && input.cull1)        || [];
 
-        /* Which batches have emptied their pre-nursery altogether
-           (planted − transplanted − 1st culling ≤ 0). Their trays are free
-           for the next batch, whatever the per-tray arithmetic comes to. */
-        const plantedByBatch = {}, transplantedByBatch = {}, cull1ByBatch = {};
-        planted.forEach(l => {
-            plantedByBatch[l.batch_name] = (plantedByBatch[l.batch_name] || 0) + (l.quantity_change || 0);
-        });
-        transplanted.forEach(l => {
-            transplantedByBatch[l.batch_name] = (transplantedByBatch[l.batch_name] || 0) + Math.abs(l.quantity_change || 0);
-        });
-        cull1.forEach(l => {
-            cull1ByBatch[l.batch_name] = (cull1ByBatch[l.batch_name] || 0) + Math.abs(l.quantity_change || 0);
-        });
-        function batchPnEmptied(b) {
-            const p = plantedByBatch[b] || 0;
-            if (p <= 0) return false;   // never planted — leave behaviour unchanged
-            return p - (transplantedByBatch[b] || 0) - (cull1ByBatch[b] || 0) <= 0;
-        }
-
-        // Which batch is holding each tray. A tray whose batch has emptied
-        // its pre-nursery is nobody's.
-        const usage = {};
-        planted.forEach(log => {
-            if (batchPnEmptied(log.batch_name)) return;
-            usage[log.plot_name] = log.batch_name;
-        });
-
-        /* ── What is standing in each tray, counted tray by tray ──
-           Every movement names its tray, so none of this is estimated:
-             Planted        plot_name IS the tray            → in
-             1st_Culling    plot_name IS the tray            → out
-             Transplanted*  remark says "from tray [X]"      → out of X,
-                            and plot_name is where they went — which for
-                            premium care and double-tone is itself a tray,
-                            so those receive.
-           Transplant a hundred out of P4 and P4 frees exactly a hundred. */
         const trayNames = new Set(trays.map(t => t.tray_name));
-        const inTray = {}, outTray = {};
-        // …and the same sums kept per batch, so a tray shared by two live
-        // batches can say who has what rather than naming only the last one.
-        const inByBatch = {}, outByBatch = {};
-        const bump = (map, tray, qty) => { if (trayNames.has(tray)) map[tray] = (map[tray] || 0) + qty; };
-        const bumpBatch = (map, tray, batch, qty) => {
-            if (!trayNames.has(tray) || !batch) return;
-            (map[tray] = map[tray] || {})[batch] = (map[tray][batch] || 0) + qty;
-        };
-        const addIn = (tray, batch, qty) => { bump(inTray, tray, qty);  bumpBatch(inByBatch,  tray, batch, qty); };
-        const addOut = (tray, batch, qty) => { bump(outTray, tray, qty); bumpBatch(outByBatch, tray, batch, qty); };
 
-        planted.forEach(l => addIn(l.plot_name, l.batch_name, Math.abs(l.quantity_change || 0)));
-        cull1.forEach(l => addOut(l.plot_name, l.batch_name, Math.abs(l.quantity_change || 0)));
+        /* ── What went in and what came out ──────────────────────────────
+           Every movement is counted twice: once against the BATCH, which
+           is the authority on how many seedlings it still has standing in
+           pre-nursery, and once against the TRAY, which says where they
+           are standing. The two are kept apart on purpose — see below. */
+        const insByBatch = {};          // batch → total that entered a tray
+        const outsByBatch = {};         // batch → total that left pre-nursery
+        const netByTrayBatch = {};      // tray → batch → in − out, trays we know
+
+        const addBatch = (map, batch, qty) => { if (batch) map[batch] = (map[batch] || 0) + qty; };
+        const addTray = (tray, batch, qty) => {
+            if (!trayNames.has(tray) || !batch) return;
+            (netByTrayBatch[tray] = netByTrayBatch[tray] || {})[batch] =
+                (netByTrayBatch[tray][batch] || 0) + qty;
+        };
+
+        // Planted — plot_name IS the tray.
+        planted.forEach(l => {
+            const qty = Math.abs(l.quantity_change || 0);
+            if (!trayNames.has(l.plot_name)) return;
+            addBatch(insByBatch, l.batch_name, qty);
+            addTray(l.plot_name, l.batch_name, qty);
+        });
+
+        // 1st Culling — plot_name IS the tray, and they leave for good.
+        cull1.forEach(l => {
+            const qty = Math.abs(l.quantity_change || 0);
+            addBatch(outsByBatch, l.batch_name, qty);
+            addTray(l.plot_name, l.batch_name, -qty);
+        });
+
+        /* Transplanting — the seedlings leave a tray whatever the remark
+           says. The remark names WHICH tray; the row itself proves that
+           they went. Premium Care and Double-Tone are trays of their own,
+           so a movement into one of those arrives in a tray. */
         transplanted.forEach(l => {
             const qty = Math.abs(l.quantity_change || 0);
+            addBatch(outsByBatch, l.batch_name, qty);
             const src = sourceTrayOf(l);
-            if (src) addOut(src, l.batch_name, qty);
-            addIn(l.plot_name, l.batch_name, qty);   // only lands if the destination is a tray
+            if (src) addTray(src, l.batch_name, -qty);
+            if (trayNames.has(l.plot_name)) {
+                addBatch(insByBatch, l.batch_name, qty);
+                addTray(l.plot_name, l.batch_name, qty);
+            }
         });
 
-        const capacity = {}, occupied = {}, vacant = {}, byBatch = {};
+        /* ── A TRAY HOLDS NO MORE THAN THE BATCH STILL HAS ───────────────
+           Transplant 2,727 out of P6 and P6 gives back 2,727 the moment
+           the record is saved. It did not, and trays P4–P7 sat occupied on
+           a batch that had been emptied into the field a year earlier,
+           because the only thing emptying a tray was a remark worded the
+           way today's save words it. Older rows say it differently, and
+           some say nothing at all.
+
+           So the batch's own arithmetic decides, not the wording:
+
+               standing = everything that entered its trays
+                        − everything that left pre-nursery
+
+           A batch that has moved it all out is standing at nought and
+           holds no tray, whatever any remark does or does not say. The
+           remark only decides WHICH of its trays the remainder is in — and
+           where it cannot, the shortfall comes off its trays anyway, so
+           the nursery's free holes are right even when one tray's share of
+           them is a guess. */
+        const held = {};   // tray → batch → seedlings actually standing there
+        const batches = new Set(Object.keys(insByBatch).concat(Object.keys(outsByBatch)));
+        batches.forEach(batch => {
+            const standing = Math.max(0, (insByBatch[batch] || 0) - (outsByBatch[batch] || 0));
+            const mine = [];
+            Object.keys(netByTrayBatch).forEach(tray => {
+                const n = netByTrayBatch[tray][batch] || 0;
+                if (n > 0) mine.push({ tray: tray, qty: n });
+            });
+            let sum = mine.reduce((s, r) => s + r.qty, 0);
+            if (sum > standing) {
+                // Take the difference off, largest tray first, so the parts
+                // add up to the whole the batch says it has.
+                let over = sum - standing;
+                mine.sort((a, b) => b.qty - a.qty);
+                for (const r of mine) {
+                    if (over <= 0) break;
+                    const cut = Math.min(r.qty, over);
+                    r.qty -= cut; over -= cut;
+                }
+            }
+            mine.forEach(r => {
+                if (r.qty <= 0) return;
+                (held[r.tray] = held[r.tray] || {})[batch] = r.qty;
+            });
+        });
+
+        const capacity = {}, occupied = {}, vacant = {}, usage = {}, byBatch = {};
         const rows = [];
         trays.forEach(t => {
             const name = t.tray_name;
             const cap = capacityOf(t);
             capacity[name] = cap;
 
-            const occupier = usage[name];
-            let inUse = Math.max(0, (inTray[name] || 0) - (outTray[name] || 0));
-            // Safety net for anything logged before the source tray was written
-            // into the remark: if no live batch is holding the tray, it is free
-            // whatever the per-tray sums come to.
-            if (!occupier) inUse = 0;
-            inUse = Math.min(cap, inUse);
+            const split = Object.keys(held[name] || {})
+                .map(b => ({ batch: b, qty: held[name][b] }))
+                .sort((a, b) => b.qty - a.qty || String(a.batch).localeCompare(String(b.batch)));
+            let inUse = Math.min(cap, split.reduce((s, r) => s + r.qty, 0));
 
-            // Remembered per batch so that re-opening a batch does not see its
-            // OWN seedlings as somebody else's occupancy and refuse the figures
-            // already keyed in.
-            occupied[name] = { batch: occupier, qty: inUse };
-            vacant[name]   = Math.max(0, cap - inUse);
+            // Whoever has the most in it is "the" batch holding the tray, for
+            // the screens that can only name one.
+            const occupier = split.length ? split[0].batch : '';
 
-            /* Whose seedlings, batch by batch — for display only. The
-               occupancy figure above is what the form obeys, so the split
-               is scaled to it rather than allowed to disagree with it. */
-            let split = [];
-            if (inUse > 0) {
-                const ins = inByBatch[name] || {};
-                const outs = outByBatch[name] || {};
-                split = Object.keys(ins)
-                    .map(b => ({ batch: b, qty: Math.max(0, (ins[b] || 0) - (outs[b] || 0)) }))
-                    .filter(r => r.qty > 0 && !batchPnEmptied(r.batch))
-                    .sort((a, b) => b.qty - a.qty);
-                const sum = split.reduce((s, r) => s + r.qty, 0);
-                if (!split.length) split = [{ batch: occupier, qty: inUse }];
-                else if (sum !== inUse && sum > 0) {
-                    // The tray-wide figure is capped and floored; keep the parts
-                    // adding up to the whole so a reader can check the row.
-                    let left = inUse;
-                    split = split.map((r, i) => {
-                        const q = i === split.length - 1 ? left : Math.round(r.qty * inUse / sum);
-                        left -= q;
-                        return { batch: r.batch, qty: Math.max(0, q) };
-                    }).filter(r => r.qty > 0);
-                }
-            }
-            byBatch[name] = split;
+            byBatch[name]   = split;
+            usage[name]     = occupier;
+            occupied[name]  = { batch: occupier, qty: inUse };
+            vacant[name]    = Math.max(0, cap - inUse);
 
             rows.push({
                 tray: name,
@@ -162,7 +180,7 @@
                 capacity: cap,
                 occupied: inUse,
                 vacant: vacant[name],
-                batch: occupier || '',
+                batch: occupier,
                 batches: split
             });
         });

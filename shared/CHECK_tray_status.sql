@@ -3,21 +3,28 @@
 --  Paste into the Supabase SQL Editor and press Run. Read-only: it
 --  changes nothing, so it is safe to run as often as you like.
 --
---  The batch list's new Tray Status tab answers "how many holes are free
---  in this tray, and whose seedlings are in the rest". This asks the
+--  The batch list's Tray Status tab answers "how many holes are free in
+--  this tray, and whose seedlings are in the rest". This asks the
 --  database the same question with the same arithmetic, so the screen
 --  can be checked against the table behind it rather than trusted.
 --
 --  THE RULE (shared/shared_tray_stock.js — change one, change the other)
---    Planted        plot_name IS the tray            -> in
---    1st_Culling    plot_name IS the tray            -> out
---    Transplanted*  remark says "from tray [X]"      -> out of X, and
---                   plot_name is where they went, which for Premium Care
---                   and Double-Tone is itself a tray -> in
---  A batch that has emptied its pre-nursery altogether (planted less
---  transplanted less 1st culling at or below nought) holds no tray at
---  all, whatever the per-tray sums come to — that is the safety net for
---  movements logged before the source tray was written into the remark.
+--
+--  A tray holds no more than the batch still has standing:
+--
+--      standing = everything that entered that batch's trays
+--               − everything that left its pre-nursery
+--
+--  Planted and Transplanted_Premium / _DoubleTone put seedlings INTO a
+--  tray. 1st Culling and every transplant take them OUT. The remark says
+--  WHICH tray a transplant came from ("tray [P6]"), and where it does
+--  not, the seedlings are gone all the same — so the shortfall still
+--  comes off that batch's trays, largest first.
+--
+--  That is the fix for trays P4–P7 on batch 227: the field emptied them
+--  in May 2025, and they read as occupied for a year because the only
+--  thing that could empty a tray was a remark worded the way today's
+--  save words it.
 -- =====================================================================
 WITH
 
@@ -32,70 +39,92 @@ trays AS (
 ),
 
 planted AS (
-  SELECT batch_name, TRIM(plot_name) AS tray, ABS(COALESCE(quantity_change, 0)) AS qty
-  FROM shared_inventory_logs
-  WHERE transaction_type = 'Planted'
+  SELECT l.batch_name, TRIM(l.plot_name) AS tray, ABS(COALESCE(l.quantity_change, 0)) AS qty
+  FROM shared_inventory_logs l
+  WHERE l.transaction_type = 'Planted'
 ),
 cull1 AS (
-  SELECT batch_name, TRIM(plot_name) AS tray, ABS(COALESCE(quantity_change, 0)) AS qty
-  FROM shared_inventory_logs
-  WHERE transaction_type = '1st_Culling'
+  SELECT l.batch_name, TRIM(l.plot_name) AS tray, ABS(COALESCE(l.quantity_change, 0)) AS qty
+  FROM shared_inventory_logs l
+  WHERE l.transaction_type = '1st_Culling'
 ),
 moved AS (
-  SELECT batch_name,
-         TRIM(plot_name)                                                   AS dest,
-         NULLIF(TRIM((REGEXP_MATCH(COALESCE(remark, ''),
-                'from tray \[([^\]]+)\]', 'i'))[1]), '')                   AS src,
-         ABS(COALESCE(quantity_change, 0))                                 AS qty
-  FROM shared_inventory_logs
-  WHERE transaction_type IN ('Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone')
+  SELECT l.batch_name,
+         TRIM(l.plot_name)                                                  AS dest,
+         -- The same loose pattern the batch report's Source Tray column
+         -- reads. Asking for the exact phrase today's save writes is what
+         -- left the older rows unable to give their tray back.
+         NULLIF(TRIM((REGEXP_MATCH(COALESCE(l.remark, ''),
+                'tray \[([^\]]+)\]', 'i'))[1]), '')                         AS src,
+         ABS(COALESCE(l.quantity_change, 0))                                AS qty
+  FROM shared_inventory_logs l
+  WHERE l.transaction_type IN ('Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone')
 ),
 
-/* Which batches have finished with their pre-nursery entirely. */
-per_batch AS (
-  SELECT b.batch_name,
-         COALESCE(SUM(p.qty), 0) AS planted_qty,
-         COALESCE(MAX(m.moved_qty), 0) AS moved_qty,
-         COALESCE(MAX(c.cull_qty), 0)  AS cull_qty
-  FROM (SELECT DISTINCT batch_name FROM planted) b
-  LEFT JOIN planted p ON p.batch_name = b.batch_name
-  LEFT JOIN (SELECT batch_name, SUM(qty) AS moved_qty FROM moved GROUP BY 1) m ON m.batch_name = b.batch_name
-  LEFT JOIN (SELECT batch_name, SUM(qty) AS cull_qty  FROM cull1 GROUP BY 1) c ON c.batch_name = b.batch_name
-  GROUP BY 1
+/* What each batch still has standing in pre-nursery, wording aside. */
+ins AS (
+  SELECT batch_name, SUM(qty) AS qty FROM (
+    SELECT p.batch_name, p.qty FROM planted p JOIN trays t ON t.tray_name = p.tray
+    UNION ALL
+    SELECT m.batch_name, m.qty FROM moved m JOIN trays t ON t.tray_name = m.dest
+  ) x GROUP BY 1
 ),
-emptied AS (
-  SELECT batch_name
-  FROM per_batch
-  WHERE planted_qty > 0 AND planted_qty - moved_qty - cull_qty <= 0
+outs AS (
+  SELECT batch_name, SUM(qty) AS qty FROM (
+    SELECT batch_name, qty FROM cull1
+    UNION ALL
+    SELECT batch_name, qty FROM moved
+  ) y GROUP BY 1
+),
+standing AS (
+  SELECT COALESCE(i.batch_name, o.batch_name)                       AS batch_name,
+         GREATEST(0, COALESCE(i.qty, 0) - COALESCE(o.qty, 0))       AS qty
+  FROM ins i FULL JOIN outs o ON o.batch_name = i.batch_name
 ),
 
-/* In and out, tray by tray AND batch by batch. */
-flows AS (
-  SELECT batch_name, tray, qty            AS delta FROM planted
-  UNION ALL
-  SELECT batch_name, tray, -qty           FROM cull1
-  UNION ALL
-  SELECT batch_name, src,  -qty           FROM moved WHERE src IS NOT NULL
-  UNION ALL
-  SELECT batch_name, dest, qty            FROM moved
-),
-live AS (
-  SELECT f.tray, f.batch_name, SUM(f.delta) AS net
-  FROM flows f
-  JOIN trays t ON t.tray_name = f.tray          -- only real trays; plots drop out here
-  WHERE f.batch_name NOT IN (SELECT batch_name FROM emptied)
+/* And where it is standing, as far as the remarks can say. */
+net AS (
+  SELECT f.tray, f.batch_name, SUM(f.delta) AS qty
+  FROM (
+    SELECT batch_name, tray, qty  AS delta FROM planted
+    UNION ALL
+    SELECT batch_name, tray, -qty          FROM cull1
+    UNION ALL
+    SELECT batch_name, src,  -qty          FROM moved WHERE src IS NOT NULL
+    UNION ALL
+    SELECT batch_name, dest, qty           FROM moved
+  ) f
+  JOIN trays t ON t.tray_name = f.tray      -- only real trays; plots drop out here
   GROUP BY 1, 2
   HAVING SUM(f.delta) > 0
+),
+
+/* Where the two disagree, the batch's own total wins and the difference
+   comes off its biggest tray first — the same order the page takes it in,
+   so the two answers are the same answer. */
+ranked AS (
+  SELECT n.tray, n.batch_name, n.qty,
+         SUM(n.qty) OVER (PARTITION BY n.batch_name)                                 AS batch_net,
+         COALESCE(SUM(n.qty) OVER (PARTITION BY n.batch_name
+                                   ORDER BY n.qty DESC, n.tray
+                                   ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS bigger_trays
+  FROM net n
+),
+allotted AS (
+  SELECT r.tray, r.batch_name,
+         r.qty - LEAST(GREATEST(r.batch_net - COALESCE(s.qty, 0) - r.bigger_trays, 0), r.qty) AS qty
+  FROM ranked r
+  LEFT JOIN standing s ON s.batch_name = r.batch_name
 ),
 
 filled AS (
   SELECT t.tray_name,
          t.nursery_name,
          t.capacity,
-         LEAST(t.capacity, COALESCE(SUM(l.net), 0)) AS occupied,
-         STRING_AGG(l.batch_name || ' (' || l.net || ')', ', ' ORDER BY l.net DESC) AS held_by
+         LEAST(t.capacity, COALESCE(SUM(a.qty), 0)) AS occupied,
+         STRING_AGG(a.batch_name || ' (' || a.qty || ')', ', ' ORDER BY a.qty DESC) AS held_by
   FROM trays t
-  LEFT JOIN live l ON l.tray = t.tray_name
+  LEFT JOIN allotted a ON a.tray = t.tray_name AND a.qty > 0
   GROUP BY 1, 2, 3
 )
 
@@ -121,12 +150,16 @@ ORDER BY (capacity - occupied) ASC, nursery_name, tray_name;
 --   tab on the batch list exactly — tray for tray, number for number.
 --   That is the whole point of running it.
 --
---   occupied_by names every live batch with seedlings in the tray and how
---   many each has. A tray listing two batches is not a fault: two batches
---   can share a tray, and the tab says so too.
+--   A tray whose batch has moved everything to the field reads "empty —
+--   ready to plant" with nobody named, however long ago that was and
+--   however the transplant's remark was worded.
 --
---   A tray reading FULL with nothing planted in it lately is worth a
---   look: it means seedlings left it without the movement saying which
---   tray they came from, so the holes never came back. Those movements
---   are the ones saved before "from tray [X]" was written into the
---   remark — re-saving that transplant row on the batch report fixes it.
+--   occupied_by names every batch with seedlings still standing in the
+--   tray and how many each has. A tray listing two batches is not a
+--   fault: two batches can share a tray, and the tab says so too.
+--
+--   If a tray still reads occupied and the field says it is empty, the
+--   batch named beside it has seedlings unaccounted for somewhere else:
+--   its Transplanting report is short of what was actually moved out, or
+--   its 1st Culling was never keyed. Open that batch and the figures will
+--   not add up either — which is the real thing to fix.

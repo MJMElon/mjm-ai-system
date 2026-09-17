@@ -2276,6 +2276,7 @@
         let trayVacantMap = {};   // { tray_name: 1234 } — holes free in each tray right now
         let trayCapMap = {};      // { tray_name: 2560 } — the tray's size when empty, from Settings
         let trayOccupiedMap = {}; // { tray_name: { batch, qty } } — whose seedlings are in it
+        let trayByBatchMap = {};  // { tray_name: [{ batch, qty }] } — the same, batch by batch
 
         /* A tray holds what Settings says it holds, and what is standing in it
            is worked out in shared/shared_tray_stock.js — the same rule the
@@ -2286,13 +2287,22 @@
 
         /* How much may still be planted into a tray on THIS batch's form.
            Another batch's seedlings take up room; this batch's own do not, or
-           re-opening a saved batch would refuse the quantities already in it. */
+           re-opening a saved batch would refuse the quantities already in it.
+
+           Both halves of that are read per batch, so a tray shared by two
+           batches offers each of them the room the OTHER one is not using.
+           It used to offer the whole tray to whichever batch was named as
+           holding it and nothing to anybody else. */
         function trayVacantForBatch(trayName, batchName) {
             const cap = trayCapMap[trayName] != null ? trayCapMap[trayName] : TRAY_CAP_DEFAULT;
             const held = trayOccupiedMap[trayName];
-            if (!held || !held.qty) return cap;
-            if (batchName && String(held.batch) === String(batchName)) return cap;
-            return Math.max(0, cap - held.qty);
+            let taken = (held && held.qty) || 0;
+            if (batchName) {
+                const mine = (trayByBatchMap[trayName] || [])
+                    .find(r => String(r.batch) === String(batchName));
+                if (mine) taken -= mine.qty;
+            }
+            return Math.max(0, cap - Math.max(0, taken));
         }
 
         function switchTab(tabIndex) {
@@ -3098,6 +3108,7 @@
                 trayCapMap      = trayStock.capacity;
                 trayOccupiedMap = trayStock.occupied;
                 trayVacantMap   = trayStock.vacant;
+                trayByBatchMap  = trayStock.byBatch;
                 
                 // NATURAL ALPHANUMERIC SORTING FOR PLOTS (B2 comes before B10)
                 globalPlots = plotRes.data || [];
