@@ -76,6 +76,8 @@
     <script src="../shared/shared_supabase.js"></script>
     <script src="../shared/shared_access.js"></script>
     <script src="../shared/shared_nelos.js"></script>
+    <!-- Tray occupancy — the same rule the batch list's Tray Status tab uses. -->
+    <script src="../shared/shared_tray_stock.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         /* Earthy Theme Colors */
@@ -870,6 +872,27 @@
                                 <span class="uppercase tracking-widest">📝 Last Edit:</span>
                                 <span id="t2-edit-meta" class="normal-case font-semibold text-[#3d2610]">—</span>
                             </div>
+
+                            <!-- Sub-tabs: Seed Planting & Damage / Empty Hole.
+
+                                 The report asks how many holes came up empty; the second
+                                 tab is where that number comes FROM — one record per hole,
+                                 naming the tray, the row and the position in it. Three
+                                 records is three empty holes, and a case raised to Nelos
+                                 can say exactly which three to go and look at, which a
+                                 number on its own never could. -->
+                            <div class="flex flex-wrap gap-2 mb-5">
+                                <button type="button" id="t2-subtab-btn-report" onclick="switchT2SubTab('report')"
+                                    class="t2-subtab-btn px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors bg-[#4a7a2e] border-[#4a7a2e] text-white">
+                                    Seed Planting &amp; Damage
+                                </button>
+                                <button type="button" id="t2-subtab-btn-empty" onclick="switchT2SubTab('empty')"
+                                    class="t2-subtab-btn px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors bg-[#fdfaf4] border-[#e8dcc8] text-[#8a7a68]">
+                                    Empty Hole <span id="t2-subtab-empty-count" class="ml-1 tabular-nums"></span>
+                                </button>
+                            </div>
+
+                            <div id="t2-subpanel-report" class="t2-subpanel">
                             <!-- Adjustments raised against THIS report. Filled by
                                  syncAdjustmentBars(); empty and hidden when there are
                                  none, so a clean report shows nothing at all. -->
@@ -1144,6 +1167,44 @@
                             <!-- Save Button -->
                             <div class="flex justify-end">
                                 <button type="button" id="save-planting-btn" class="btn-earth px-12" onclick="savePlantingTab()">Save Planting Report (0% Complete)</button>
+                            </div>
+                            </div><!-- /t2-subpanel-report -->
+
+                            <!-- ── SUB-TAB: Empty Hole ────────────────────────────────
+                                 One card per tray the batch was planted into — read from
+                                 the trays on the report beside this one, never keyed
+                                 twice — and under each, one record per empty hole. -->
+                            <div id="t2-subpanel-empty" class="t2-subpanel hidden">
+
+                                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-amber-200 pb-5">
+                                    <div>
+                                        <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Empty Hole Records</h3>
+                                        <p class="text-[10px] font-bold text-[#8a7a68] mt-1 leading-tight">One record per empty hole: which row of the tray, and which position in that row. The count is what the planting report reads as Empty Holes.</p>
+                                    </div>
+                                    <div class="p-3.5 px-6 rounded-2xl bg-white flex items-center gap-4 shadow-sm border border-[#e8dcc8]">
+                                        <div>
+                                            <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest leading-none">Total Empty Holes</div>
+                                            <div class="text-2xl font-black text-[#a83020] tabular-nums mt-1" id="t2-eh-total">0</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="t2-eh-no-trays" class="hidden text-center py-10 text-[#8a7a68] text-sm font-bold">
+                                    Key the planted trays on Seed Planting &amp; Damage first — they appear here on their own.
+                                </div>
+
+                                <div id="t2-eh-trays" class="space-y-4"></div>
+
+                                <div class="flex flex-wrap justify-end gap-3 mt-6">
+                                    <!-- Raising the case is deliberately separate from saving.
+                                         A case is somebody's job to go and do; it is not a
+                                         side effect of writing down what was counted. -->
+                                    <button type="button" id="t2-eh-nelos-btn" onclick="raiseEmptyHoleCase()"
+                                        class="px-6 py-3 rounded-xl border-2 border-[#3d2610] bg-white text-[#3d2610] text-[11px] font-black uppercase tracking-widest hover:bg-[#fdfaf4] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                                        🐛 Open Nelos Case
+                                    </button>
+                                    <button type="button" id="t2-eh-save-btn" onclick="saveEmptyHoles()" class="btn-earth px-12">Save Empty Hole Records</button>
+                                </div>
                             </div>
 
                         </div>
@@ -2215,25 +2276,33 @@
         let trayVacantMap = {};   // { tray_name: 1234 } — holes free in each tray right now
         let trayCapMap = {};      // { tray_name: 2560 } — the tray's size when empty, from Settings
         let trayOccupiedMap = {}; // { tray_name: { batch, qty } } — whose seedlings are in it
+        let trayByBatchMap = {};  // { tray_name: [{ batch, qty }] } — the same, batch by batch
 
-        // A tray holds what Settings says it holds. Before that field existed every
-        // tray was assumed to be 2,560, so a tray with no size keeps that figure
-        // rather than reading as having no room at all.
-        const TRAY_CAP_DEFAULT = 2560;
-        function trayCapacity(tray) {
-            const n = Number(tray && tray.total_vacant);
-            return Number.isFinite(n) && n > 0 ? n : TRAY_CAP_DEFAULT;
-        }
+        /* A tray holds what Settings says it holds, and what is standing in it
+           is worked out in shared/shared_tray_stock.js — the same rule the
+           batch list's Tray Status tab reads, so the two screens cannot drift
+           apart about how full a tray is. */
+        const TRAY_CAP_DEFAULT = MJMTrayStock.DEFAULT_CAPACITY;
+        const trayCapacity = MJMTrayStock.capacityOf;
 
         /* How much may still be planted into a tray on THIS batch's form.
            Another batch's seedlings take up room; this batch's own do not, or
-           re-opening a saved batch would refuse the quantities already in it. */
+           re-opening a saved batch would refuse the quantities already in it.
+
+           Both halves of that are read per batch, so a tray shared by two
+           batches offers each of them the room the OTHER one is not using.
+           It used to offer the whole tray to whichever batch was named as
+           holding it and nothing to anybody else. */
         function trayVacantForBatch(trayName, batchName) {
             const cap = trayCapMap[trayName] != null ? trayCapMap[trayName] : TRAY_CAP_DEFAULT;
             const held = trayOccupiedMap[trayName];
-            if (!held || !held.qty) return cap;
-            if (batchName && String(held.batch) === String(batchName)) return cap;
-            return Math.max(0, cap - held.qty);
+            let taken = (held && held.qty) || 0;
+            if (batchName) {
+                const mine = (trayByBatchMap[trayName] || [])
+                    .find(r => String(r.batch) === String(batchName));
+                if (mine) taken -= mine.qty;
+            }
+            return Math.max(0, cap - Math.max(0, taken));
         }
 
         function switchTab(tabIndex) {
@@ -3025,81 +3094,21 @@
                 masterBatchesList = batchRes.data || [];
                 globalTrays = trayRes.data || [];
 
-                // Build per-batch totals so we can tell which batches have fully emptied their
-                // pre-nursery trays (planted − transplanted − 1st_culling ≤ 0). Trays from
-                // emptied batches are considered free for the next batch to reuse.
-                const plantedByBatch = {}, transplantedByBatch = {}, cull1ByBatch = {};
-                (usedTrayRes.data || []).forEach(l => {
-                    plantedByBatch[l.batch_name] = (plantedByBatch[l.batch_name] || 0) + (l.quantity_change || 0);
+                /* What is standing in each tray — one rule, shared with the
+                   batch list's Tray Status tab. Planted goes in, 1st Culling
+                   and transplants-out come out, and premium care / double-tone
+                   transplants land in a tray of their own. */
+                const trayStock = MJMTrayStock.compute({
+                    trays:        globalTrays,
+                    planted:      usedTrayRes.data || [],
+                    transplanted: transplantedRes.data || [],
+                    cull1:        cull1Res.data || []
                 });
-                (transplantedRes.data || []).forEach(l => {
-                    transplantedByBatch[l.batch_name] = (transplantedByBatch[l.batch_name] || 0) + Math.abs(l.quantity_change || 0);
-                });
-                (cull1Res.data || []).forEach(l => {
-                    cull1ByBatch[l.batch_name] = (cull1ByBatch[l.batch_name] || 0) + Math.abs(l.quantity_change || 0);
-                });
-                const batchPnEmptied = (b) => {
-                    const planted = plantedByBatch[b] || 0;
-                    if (planted <= 0) return false; // never planted, leave behavior unchanged
-                    const remaining = planted - (transplantedByBatch[b] || 0) - (cull1ByBatch[b] || 0);
-                    return remaining <= 0;
-                };
-
-                // Build tray-usage map: which batch is each tray planted in?
-                // Skip trays whose batch's pre-nursery is already emptied so the tray frees up.
-                trayUsageMap = {};
-                const plantedByTrayBatch = {}; // { tray: { batch: qty } }
-                (usedTrayRes.data || []).forEach(log => {
-                    if (!plantedByTrayBatch[log.plot_name]) plantedByTrayBatch[log.plot_name] = {};
-                    plantedByTrayBatch[log.plot_name][log.batch_name] =
-                        (plantedByTrayBatch[log.plot_name][log.batch_name] || 0) + (log.quantity_change || 0);
-                    if (batchPnEmptied(log.batch_name)) return;
-                    trayUsageMap[log.plot_name] = log.batch_name;
-                });
-
-                /* ── What is standing in each tray, counted tray by tray ──
-                   Every movement names its tray, so none of this has to be
-                   estimated:
-                     Planted            plot_name IS the tray  → in
-                     1st_Culling        plot_name IS the tray  → out
-                     Transplanted*      remark says "from tray [X]"  → out of X,
-                                        and plot_name is where they went — which
-                                        for premium care and double-tone is itself
-                                        a tray, so those receive.
-                   Transplant a hundred out of P4 and P4 frees exactly a hundred. */
-                const trayNames = new Set(globalTrays.map(t => t.tray_name));
-                const inTray = {}, outTray = {};
-                const addIn  = (tray, q) => { if (trayNames.has(tray)) inTray[tray]  = (inTray[tray]  || 0) + q; };
-                const addOut = (tray, q) => { if (trayNames.has(tray)) outTray[tray] = (outTray[tray] || 0) + q; };
-
-                (usedTrayRes.data || []).forEach(l => addIn(l.plot_name, Math.abs(l.quantity_change || 0)));
-                (cull1Res.data   || []).forEach(l => addOut(l.plot_name, Math.abs(l.quantity_change || 0)));
-                (transplantedRes.data || []).forEach(l => {
-                    const qty = Math.abs(l.quantity_change || 0);
-                    const src = (l.remark || '').match(/from tray \[([^\]]+)\]/i);
-                    if (src) addOut(src[1].trim(), qty);
-                    addIn(l.plot_name, qty);   // only lands if the destination is a tray
-                });
-
-                trayVacantMap = {};
-                trayCapMap = {};
-                trayOccupiedMap = {};
-                globalTrays.forEach(t => {
-                    const cap = trayCapacity(t);
-                    trayCapMap[t.tray_name] = cap;
-                    const occupier = trayUsageMap[t.tray_name];
-                    let inUse = Math.max(0, (inTray[t.tray_name] || 0) - (outTray[t.tray_name] || 0));
-                    // Safety net for anything logged before the source tray was
-                    // written into the remark: if no live batch is holding the tray,
-                    // it is free whatever the per-tray sums come to.
-                    if (!occupier) inUse = 0;
-                    inUse = Math.min(cap, inUse);
-                    // Remembered per batch so that re-opening a batch does not see its
-                    // OWN seedlings as somebody else's occupancy and refuse the figures
-                    // already keyed in.
-                    trayOccupiedMap[t.tray_name] = { batch: occupier, qty: inUse };
-                    trayVacantMap[t.tray_name] = Math.max(0, cap - inUse);
-                });
+                trayUsageMap    = trayStock.usage;
+                trayCapMap      = trayStock.capacity;
+                trayOccupiedMap = trayStock.occupied;
+                trayVacantMap   = trayStock.vacant;
+                trayByBatchMap  = trayStock.byBatch;
                 
                 // NATURAL ALPHANUMERIC SORTING FOR PLOTS (B2 comes before B10)
                 globalPlots = plotRes.data || [];
@@ -3193,6 +3202,9 @@
                         updateTracker(1); // default: Received done, Pre-Nursery active
 
                         await loadSavedPlantingData(batchIdParam);
+                        // The planting report's Empty Holes figure is counted from
+                        // these, so they have to be in before it is worked out.
+                        await loadEmptyHoles(batchIdParam);
                         await loadSeedAuditData(batchIdParam);
                         addTransplantRow();
                         // Pre-warm Audit Trail summary so its tab pie reflects audit progress immediately.
@@ -4649,7 +4661,7 @@
                 <div id="${rowId}" class="tray-row grid grid-cols-1 xl:grid-cols-[2fr_1fr_1fr_1fr_40px] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end relative">
                     <div>
                         <label class="label-style">Preset Tray *</label>
-                        <div class="select-wrapper"><select class="input-style !text-[#3d2610] t-select" required onchange="updatePlantingCompletion(); checkTrayInUse('${rowId}'); calcTrayRow('${rowId}')">${options}</select></div>
+                        <div class="select-wrapper"><select class="input-style !text-[#3d2610] t-select" required onchange="updatePlantingCompletion(); checkTrayInUse('${rowId}'); calcTrayRow('${rowId}'); renderEmptyHoles()">${options}</select></div>
                         <div id="${rowId}-warn" class="hidden mt-1 text-[9px] font-black text-[#a83020] flex items-center gap-1">⚠️ <span></span></div>
                     </div>
                     <div>
@@ -4659,7 +4671,13 @@
                     </div>
                     <div>
                         <label class="label-style !text-[#a83020]">Empty Holes</label>
+                        <!-- Locked and counted from the Empty Hole tab wherever that
+                             tab has records for this tray — see syncEmptyHolesToPlanting.
+                             Left keyable where it has none, because a batch counted
+                             before that tab existed has a real figure and no records
+                             behind it. -->
                         <input type="text" inputmode="numeric" class="input-style t-empty !text-[#a83020]" oninput="formatNumericInput(this); calcTrayRow('${rowId}')">
+                        <div class="t-empty-hint hidden mt-1 text-[9px] font-black text-[#3a7ab4] uppercase tracking-wider"></div>
                     </div>
                     <div>
                         <label class="label-style !text-[#4a7a2e]">Actual Planted</label>
@@ -4670,6 +4688,326 @@
             `;
             container.insertAdjacentHTML('beforeend', html);
             updatePlantingCompletion();
+        }
+
+        /* ═══════════════════════════════════════════════════════
+           EMPTY HOLE — the second half of the Planting report
+           ═══════════════════════════════════════════════════════
+
+           The report asks how many holes came up empty. This is where that
+           number comes from: one record per hole, naming the tray, the row
+           and the position in that row. Three records is three empty holes,
+           and the Nelos case raised from here can say which three to go and
+           look at — which a number on its own never could.
+
+           Stored as one 'Empty_Hole' log per record, the same shape every
+           other fact on this page uses: plot_name is the tray, and the remark
+           carries the position. quantity_change is 1 because each record IS
+           one hole; a count is then a count of rows, not a sum nobody can
+           take apart again.
+
+           Remark: "Empty hole. Row: <r>. Hole: <h>. <note>" */
+        let t2_emptyHoles = {};      // TRAY → [{ row, hole, note }]
+        let _t2EhLoadedFor = null;   // the batch these belong to
+
+        function _ehKey(tray) { return String(tray || '').trim().toUpperCase(); }
+
+        /* The trays to show, read off the planting report beside this one.
+           Never keyed twice: a tray exists here because it was planted, and
+           that is the report that says so. */
+        function t2EhTrays() {
+            const out = [];
+            document.querySelectorAll('.tray-row').forEach(row => {
+                const name = (row.querySelector('.t-select')?.value || '').trim();
+                if (name) out.push(name);
+            });
+            return out;
+        }
+
+        function t2EhCountFor(tray) {
+            return (t2_emptyHoles[_ehKey(tray)] || []).length;
+        }
+
+        function t2EhTotal() {
+            return Object.keys(t2_emptyHoles).reduce((s, k) => s + t2_emptyHoles[k].length, 0);
+        }
+
+        function switchT2SubTab(which) {
+            ['report', 'empty'].forEach(n => {
+                const panel = document.getElementById(`t2-subpanel-${n}`);
+                if (panel) panel.classList.toggle('hidden', n !== which);
+                const btn = document.getElementById(`t2-subtab-btn-${n}`);
+                if (btn) {
+                    btn.className = 't2-subtab-btn px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors ' +
+                        (n === which ? 'bg-[#4a7a2e] border-[#4a7a2e] text-white'
+                                     : 'bg-[#fdfaf4] border-[#e8dcc8] text-[#8a7a68]');
+                }
+            });
+            if (which === 'empty') renderEmptyHoles();
+        }
+
+        async function loadEmptyHoles(batchId) {
+            const batch = (batchId || document.getElementById('f-batchno')?.value || '').trim();
+            t2_emptyHoles = {};
+            _t2EhLoadedFor = batch || null;
+            if (!batch) { renderEmptyHoles(); return; }
+            try {
+                const { data, error } = await _supabase.from('shared_inventory_logs')
+                    .select('plot_name, remark, created_at')
+                    .eq('batch_name', batch)
+                    .eq('transaction_type', 'Empty_Hole')
+                    .order('created_at', { ascending: true });
+                if (error) throw error;
+                (data || []).forEach(r => {
+                    const k = _ehKey(r.plot_name);
+                    if (!k) return;
+                    const rowM  = r.remark ? r.remark.match(/Row:\s*([^.]+?)\s*\.\s*/i)  : null;
+                    const holeM = r.remark ? r.remark.match(/Hole:\s*([^.]+?)\s*\.\s*/i) : null;
+                    let note = r.remark || '';
+                    if (rowM)  note = note.replace(rowM[0], '');
+                    if (holeM) note = note.replace(holeM[0], '');
+                    note = note.replace(/^Empty hole\.\s*/i, '').trim();
+                    (t2_emptyHoles[k] = t2_emptyHoles[k] || []).push({
+                        row:  rowM  ? rowM[1].trim()  : '',
+                        hole: holeM ? holeM[1].trim() : '',
+                        note
+                    });
+                });
+            } catch (e) {
+                /* A read that failed must not look like "no empty holes" —
+                   that is a different claim, and the planting report would
+                   quietly take it as nought. */
+                console.warn('[empty holes] not read:', (e && e.message) || e);
+                _t2EhLoadedFor = null;
+            }
+            renderEmptyHoles();
+        }
+
+        function renderEmptyHoles() {
+            const host = document.getElementById('t2-eh-trays');
+            const none = document.getElementById('t2-eh-no-trays');
+            if (!host) return;
+            const trays = t2EhTrays();
+            if (none) none.classList.toggle('hidden', trays.length > 0);
+
+            host.innerHTML = trays.map((tray, ti) => {
+                const k = _ehKey(tray);
+                const recs = t2_emptyHoles[k] || [];
+                const lines = recs.map((r, ri) => `
+                    <div class="grid grid-cols-[1fr_1fr_2fr_40px] gap-3 items-end bg-white border border-[#efe6d6] rounded-xl px-3 py-2.5">
+                        <div>
+                            <label class="label-style">Row *</label>
+                            <input type="text" inputmode="numeric" class="input-style !py-2.5 !text-sm t2-eh-row"
+                                value="${_escAttr(r.row)}" placeholder="e.g. 4"
+                                oninput="updateEmptyHoleField(${ti}, ${ri}, 'row', this.value)">
+                        </div>
+                        <div>
+                            <label class="label-style">Hole no. *</label>
+                            <input type="text" inputmode="numeric" class="input-style !py-2.5 !text-sm t2-eh-hole"
+                                value="${_escAttr(r.hole)}" placeholder="e.g. 12"
+                                oninput="updateEmptyHoleField(${ti}, ${ri}, 'hole', this.value)">
+                        </div>
+                        <div>
+                            <label class="label-style">Remark</label>
+                            <input type="text" class="input-style !py-2.5 !text-sm t2-eh-note"
+                                value="${_escAttr(r.note)}" placeholder="optional"
+                                oninput="updateEmptyHoleField(${ti}, ${ri}, 'note', this.value)">
+                        </div>
+                        <div class="flex justify-end">
+                            <button type="button" title="Remove this record"
+                                class="w-8 h-8 bg-[#fff5f5] border border-[#f8d7da] text-[#a83020] rounded-lg hover:bg-[#f8d7da] text-sm font-black flex items-center justify-center"
+                                onclick="removeEmptyHole(${ti}, ${ri})">✕</button>
+                        </div>
+                    </div>`).join('');
+                return `
+                    <div class="border border-[#e8dcc8] rounded-2xl bg-[#fdfaf4] overflow-hidden">
+                        <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-[#e8dcc8] bg-white">
+                            <div class="flex items-baseline gap-4">
+                                <span class="text-base font-black text-[#3d2610]">${_t6Esc(tray)}</span>
+                                <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Empty Holes</span>
+                                <span class="text-lg font-black text-[#a83020] tabular-nums">${recs.length}</span>
+                            </div>
+                            <button type="button" onclick="addEmptyHole(${ti})"
+                                class="px-3 py-1.5 rounded-lg border border-[#d8cbb4] bg-white text-[#3a7ab4] text-[10px] font-black uppercase tracking-widest hover:bg-[#f4f8fc] hover:border-[#3a7ab4] transition-colors">
+                                + Add Record
+                            </button>
+                        </div>
+                        <div class="p-4 space-y-2">
+                            ${lines || '<div class="text-[11px] font-bold text-[#8a7a68] py-2">No empty hole recorded in this tray.</div>'}
+                        </div>
+                    </div>`;
+            }).join('');
+
+            const tot = t2EhTotal();
+            const totEl = document.getElementById('t2-eh-total');
+            if (totEl) totEl.innerText = tot.toLocaleString();
+            const chip = document.getElementById('t2-subtab-empty-count');
+            if (chip) chip.innerText = tot ? `· ${tot}` : '';
+            const nelos = document.getElementById('t2-eh-nelos-btn');
+            if (nelos) nelos.disabled = tot === 0;
+
+            syncEmptyHolesToPlanting();
+        }
+
+        /* THE REPORT READS THE RECORDS.
+
+           Empty Holes on a tray row is the count of that tray's records, and
+           the box is locked so the two cannot drift apart.
+
+           Only where records exist. A batch keyed before this tab did has a
+           figure and no records behind it, and driving that to nought would
+           throw away a real count on the next save — the detail simply is not
+           known for those, which is not the same as there being none. */
+        function syncEmptyHolesToPlanting() {
+            if (_t2EhLoadedFor === null) return;   // nothing read; leave well alone
+            document.querySelectorAll('.tray-row').forEach(row => {
+                const tray = (row.querySelector('.t-select')?.value || '').trim();
+                const box  = row.querySelector('.t-empty');
+                if (!box) return;
+                const n = t2EhCountFor(tray);
+                const hint = row.querySelector('.t-empty-hint');
+                if (n > 0) {
+                    box.value = n.toLocaleString();
+                    box.readOnly = true;
+                    box.classList.add('bg-[#f8f4ec]', 'cursor-not-allowed');
+                    box.title = 'Counted from the Empty Hole tab — add or remove a record there';
+                    if (hint) { hint.innerText = `${n} record${n === 1 ? '' : 's'} on Empty Hole`; hint.classList.remove('hidden'); }
+                } else {
+                    box.readOnly = false;
+                    box.classList.remove('bg-[#f8f4ec]', 'cursor-not-allowed');
+                    box.title = '';
+                    if (hint) hint.classList.add('hidden');
+                }
+                calcTrayRow(row.id);
+            });
+        }
+
+        function addEmptyHole(trayIdx) {
+            const tray = t2EhTrays()[trayIdx];
+            if (!tray) return;
+            const k = _ehKey(tray);
+            (t2_emptyHoles[k] = t2_emptyHoles[k] || []).push({ row: '', hole: '', note: '' });
+            renderEmptyHoles();
+            // Put the cursor on the first thing to answer.
+            const cards = document.querySelectorAll('#t2-eh-trays > div');
+            cards[trayIdx]?.querySelectorAll('.t2-eh-row')?.[t2_emptyHoles[k].length - 1]?.focus();
+        }
+
+        function removeEmptyHole(trayIdx, recIdx) {
+            const tray = t2EhTrays()[trayIdx];
+            if (!tray) return;
+            const list = t2_emptyHoles[_ehKey(tray)];
+            if (!list) return;
+            list.splice(recIdx, 1);
+            renderEmptyHoles();
+        }
+
+        /* Typed straight into the record, without a re-render: redrawing on
+           every keystroke takes the cursor out of the box being typed in. The
+           count only changes when a record is added or removed, and both of
+           those redraw. */
+        function updateEmptyHoleField(trayIdx, recIdx, field, value) {
+            const tray = t2EhTrays()[trayIdx];
+            if (!tray) return;
+            const rec = (t2_emptyHoles[_ehKey(tray)] || [])[recIdx];
+            if (rec) rec[field] = value;
+        }
+
+        async function saveEmptyHoles() {
+            const btn = document.getElementById('t2-eh-save-btn');
+            const batch = (document.getElementById('f-batchno')?.value || '').trim();
+            if (!batch) { showToast('Save Tab 1 first to assign a batch number.', 'error'); return; }
+            const breed = document.getElementById('f-brand')?.value || null;
+
+            const rows = [];
+            let incomplete = 0;
+            t2EhTrays().forEach(tray => {
+                (t2_emptyHoles[_ehKey(tray)] || []).forEach(r => {
+                    const rowNo  = String(r.row  || '').trim();
+                    const holeNo = String(r.hole || '').trim();
+                    // A record that does not say WHERE is the whole point
+                    // missed — it would count towards the total and tell
+                    // nobody anything.
+                    if (!rowNo || !holeNo) { incomplete++; return; }
+                    rows.push(withEditMeta({
+                        transaction_type: 'Empty_Hole',
+                        batch_name: batch,
+                        breed_name: breed,
+                        plot_name: tray,
+                        quantity_change: 1,
+                        remark: `Empty hole. Row: ${rowNo}. Hole: ${holeNo}. ${String(r.note || '').trim()}`.trim()
+                    }));
+                });
+            });
+            if (incomplete) {
+                showToast(`${incomplete} record${incomplete === 1 ? '' : 's'} still missing a row or hole number.`, 'error');
+                return;
+            }
+
+            const original = btn ? btn.innerText : '';
+            if (btn) { btn.disabled = true; btn.innerText = 'Saving…'; }
+            try {
+                /* Replace, not append: this tab is the whole truth about the
+                   batch's empty holes, and a save that only added would
+                   double them every time somebody pressed it. */
+                const { error: delErr } = await _supabase.from('shared_inventory_logs').delete()
+                    .eq('batch_name', batch).eq('transaction_type', 'Empty_Hole');
+                if (delErr) throw delErr;
+                if (rows.length) {
+                    const { error } = await safeInsertLogs(rows);
+                    if (error) throw error;
+                }
+                showToast(`Saved ${rows.length} empty hole record${rows.length === 1 ? '' : 's'}.`, 'success');
+                await loadEmptyHoles(batch);
+                // The planting report's figure comes from these, so its
+                // completion and its own save both have to see them.
+                calcPlanting();
+            } catch (e) {
+                showToast('Failed to save empty holes: ' + ((e && e.message) || e), 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerText = original || 'Save Empty Hole Records'; }
+            }
+        }
+
+        /* One case, listing every empty hole by tray, row and position.
+
+           Deduped: a case raised twice for the same batch is one job, and
+           this button is pressed by whoever happens to be looking. */
+        async function raiseEmptyHoleCase() {
+            const batch = (document.getElementById('f-batchno')?.value || '').trim();
+            if (!batch) { showToast('Save Tab 1 first to assign a batch number.', 'error'); return; }
+            const total = t2EhTotal();
+            if (!total) { showToast('No empty hole recorded yet.', 'error'); return; }
+            if (typeof MJMNelos === 'undefined' || !MJMNelos.raise) {
+                showToast('Nelos is not loaded on this page.', 'error'); return;
+            }
+
+            const trays = t2EhTrays().filter(t => t2EhCountFor(t) > 0);
+            const detail = trays.map(tray => {
+                const recs = t2_emptyHoles[_ehKey(tray)];
+                const where = recs.map(r => `Row ${r.row} · Hole ${r.hole}${r.note ? ` (${r.note})` : ''}`).join('\n    ');
+                return `${tray} — ${recs.length} empty hole${recs.length === 1 ? '' : 's'}\n    ${where}`;
+            }).join('\n\n');
+
+            const btn = document.getElementById('t2-eh-nelos-btn');
+            const original = btn ? btn.innerText : '';
+            if (btn) { btn.disabled = true; btn.innerText = 'Opening…'; }
+            const { data, error, deduped } = await MJMNelos.raise({
+                title: `Batch ${batch}: ${total} empty hole${total === 1 ? '' : 's'} to refill`,
+                description: `Recorded on the Planting report's Empty Hole tab.\n\n${detail}`,
+                category: 'Empty Hole',
+                priority: 'normal',
+                source: 'operation',
+                sourceRef: `../operation/operation_batch_detail.html?id=${encodeURIComponent(batch)}`,
+                batch,
+                // One tray named on the case itself; the rest are in the
+                // description, which is where a list belongs.
+                plot: trays.length === 1 ? trays[0] : null,
+                dedupe: true
+            });
+            if (btn) { btn.disabled = false; btn.innerText = original || '🐛 Open Nelos Case'; }
+            if (error) { showToast('Could not open the case: ' + error.message, 'error'); return; }
+            showToast(deduped ? 'An open case for this batch already exists.' : 'Nelos case opened.', 'success');
         }
 
         function removeTrayRow(rowId) {
