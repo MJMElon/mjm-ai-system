@@ -881,7 +881,7 @@
                                  records is three empty holes, and a case raised to Nelos
                                  can say exactly which three to go and look at, which a
                                  number on its own never could. -->
-                            <div class="flex flex-wrap gap-2 mb-5">
+                            <div id="t2-subtab-bar" class="flex flex-wrap gap-2 mb-5">
                                 <button type="button" id="t2-subtab-btn-report" onclick="switchT2SubTab('report')"
                                     class="t2-subtab-btn px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors bg-[#4a7a2e] border-[#4a7a2e] text-white">
                                     Seed Planting &amp; Damage
@@ -4618,6 +4618,9 @@
             const expectedRaw = document.getElementById('display-total-qty').dataset.raw || 0;
             document.getElementById('t2-breed').innerText = breed;
             document.getElementById('t2-expected-qty').innerText = parseInt(expectedRaw).toLocaleString();
+            // The batch number arrives after the page does on a new batch, and
+            // it is what decides whether this report has an Empty Hole tab.
+            applyEmptyHoleVisibility();
             calcPlanting();
         }
 
@@ -4710,6 +4713,37 @@
         let t2_emptyHoles = {};      // TRAY → [{ row, hole, note }]
         let _t2EhLoadedFor = null;   // the batch these belong to
 
+        /* WHERE THIS APPLIES — batch 276 onwards, and nowhere before it.
+
+           Counting hole by hole is a change to how the work is done in the
+           field, and it starts with the batches planted after it was asked
+           for. The batches already in the ground were counted the old way:
+           one figure for the tray, keyed by the person who counted it. For
+           those the tab does not appear at all and that box stays theirs to
+           key — which is what they had before this existed.
+
+           A batch whose name carries no number at all is a new one under
+           some other naming, so it gets the tab. */
+        const EMPTY_HOLE_FROM_BATCH = 276;
+        function emptyHoleEnabled(batchName) {
+            const name = String(batchName == null ? '' : batchName).trim()
+                || (document.getElementById('f-batchno')?.value || '').trim()
+                || String(batchIdParam || '');
+            const m = name.match(/\d+/);
+            if (!m) return true;
+            return parseInt(m[0], 10) >= EMPTY_HOLE_FROM_BATCH;
+        }
+
+        /* Show or hide the sub-tabs to match. Hidden, the planting report is
+           the whole of Tab 2 again, exactly as it was. */
+        function applyEmptyHoleVisibility() {
+            const on = emptyHoleEnabled();
+            const bar = document.getElementById('t2-subtab-bar');
+            if (bar) bar.classList.toggle('hidden', !on);
+            if (!on) switchT2SubTab('report');
+            return on;
+        }
+
         function _ehKey(tray) { return String(tray || '').trim().toUpperCase(); }
 
         /* The trays to show, read off the planting report beside this one.
@@ -4733,6 +4767,8 @@
         }
 
         function switchT2SubTab(which) {
+            // Nothing before batch 276 has an Empty Hole tab to switch to.
+            if (which === 'empty' && !emptyHoleEnabled()) which = 'report';
             ['report', 'empty'].forEach(n => {
                 const panel = document.getElementById(`t2-subpanel-${n}`);
                 if (panel) panel.classList.toggle('hidden', n !== which);
@@ -4750,6 +4786,11 @@
             const batch = (batchId || document.getElementById('f-batchno')?.value || '').trim();
             t2_emptyHoles = {};
             _t2EhLoadedFor = batch || null;
+            /* Before batch 276 there are no records to read and none to be
+               made. _t2EhLoadedFor stays null so the planting report is left
+               entirely alone — an empty answer here is "this batch does not
+               work that way", not "no holes were empty". */
+            if (!applyEmptyHoleVisibility()) { _t2EhLoadedFor = null; renderEmptyHoles(); return; }
             if (!batch) { renderEmptyHoles(); return; }
             try {
                 const { data, error } = await _supabase.from('shared_inventory_logs')
@@ -4787,6 +4828,8 @@
             const host = document.getElementById('t2-eh-trays');
             const none = document.getElementById('t2-eh-no-trays');
             if (!host) return;
+            // Older batches do not have this tab — see EMPTY_HOLE_FROM_BATCH.
+            if (!applyEmptyHoleVisibility()) { host.innerHTML = ''; return; }
             const trays = t2EhTrays();
             if (none) none.classList.toggle('hidden', trays.length > 0);
 

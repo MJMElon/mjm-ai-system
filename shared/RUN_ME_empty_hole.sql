@@ -17,6 +17,14 @@
 --                                    is a count of rows, not a sum)
 --      remark            'Empty hole. Row: <r>. Hole: <h>. <note>'
 --
+--  FROM BATCH 276 ONWARDS, AND NOWHERE BEFORE IT
+--  Counting hole by hole is a change to how the field works, so it starts
+--  with the batches planted after it was asked for. Open batch 275 or
+--  anything older and there are no sub-tabs at all: the planting report is
+--  the whole of that page, and its Empty Holes box is keyed by the person
+--  who counted, exactly as it was. The cut-off is EMPTY_HOLE_FROM_BATCH in
+--  operation/operation_batch_detail.html.
+--
 --  So there is nothing to migrate. This file exists to PROVE that before
 --  somebody keys a day's counting into a screen that cannot save it: if
 --  transaction_type carries a CHECK constraint listing the allowed
