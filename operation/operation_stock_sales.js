@@ -716,15 +716,14 @@
                     // +9-months offset. "Maturity Date" for one of these rows
                     // reads as the date it arrived in the reserve plot.
                     const matureDate = tag === 'pr' ? t : (() => { const m = new Date(t); m.setMonth(m.getMonth() + 9); return m; })();
-                    // A fresh transplant row estimates what a plot has left
-                    // after culling (no report exists yet to read from). A
-                    // P-R row's culling already happened and is on file — its
-                    // "After 10% Culling" reads what's actually still
-                    // standing: transferred in, less what Batch Detail's own
-                    // 3rd Culling report already culled or moved on.
-                    const afterCulling = tag === 'pr'
-                        ? g.qty - (culledByKey[k] || 0) - (movedOutByKey[k] || 0)
-                        : Math.round(g.qty * 0.9);
+                    // The 10% estimate is for a fresh transplant with no
+                    // culling report yet. A P-R row skips it — "After 10%
+                    // Culling" carries the qty transferred straight through
+                    // unreduced, and everything that actually left the plot
+                    // (culled, moved on, or sold) comes off in DO Deducted
+                    // below instead, so Plot Balance still nets against the
+                    // real qty transferred, not an estimate.
+                    const afterCulling = tag === 'pr' ? g.qty : Math.round(g.qty * 0.9);
                     return {
                         key: k,
                         batch: g.batch,
@@ -748,6 +747,16 @@
             allMatGroups  = matRows.concat(prRows);
 
             applyDoDeductions(allMatGroups, doRes?.data || []);
+
+            // A P-R row's DO Deducted isn't only actual DOs — it's everything
+            // that has left the reserve plot: what was sold (the DO match
+            // above), what was culled, and what moved on to another plot.
+            // All three come off the same qty-transferred figure, so they
+            // all land in the one deduction column Plot Balance already
+            // subtracts.
+            prRows.forEach(g => {
+                g.doDeducted += (culledByKey[g.key] || 0) + (movedOutByKey[g.key] || 0);
+            });
 
             plotAllocations = {};
             (allocRes?.data || []).forEach(a => {
