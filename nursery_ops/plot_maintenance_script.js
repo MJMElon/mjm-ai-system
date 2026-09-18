@@ -466,6 +466,91 @@ function migrateInterrowShape(s, plots) {
   });
 }
 
+/* ── A round's POSITION and the WEEK its dates name ─────────────────────
+   These are two different things and old payloads have them apart.
+
+   The full-width sheets' "Add Round" pushed onto the end of the array, so
+   round 2 sat at index 1 whatever its dates said. The editor since files a
+   round under the BLOCK its from-date falls in — round 2 dated the 15th is
+   index 2 — and everything that READS a schedule now goes by the block:
+   plotsAtSlot here, weekTasks on both phones.
+
+   So a month built the old way draws its week columns from the dates (1 and
+   3) and finds its ticks by the block (1 and 2). The office showed one thing
+   and the field was sent another, with both sides certain they were right.
+
+   This puts the data where the dates say, once, as a month is read. Only
+   where the evidence is unambiguous: the round is at its position, the block
+   it belongs to is empty, and the two differ. A month already filed by block
+   is left exactly as it is.                                              */
+function alignRoundsToWeeks(s, plots) {
+  if (!s) return;
+  const filled = (x) => (Array.isArray(x) ? x.length > 0 : !!x);
+  const slotOf = (from) =>
+    Math.min(WEEK_BLOCKS, Math.max(1, Math.ceil((+from || 1) / 7))) - 1;
+  const weeksFor = (kind) => {
+    const own = s.weeksByWork && Array.isArray(s.weeksByWork[kind])
+      ? s.weeksByWork[kind] : null;
+    return (own || (Array.isArray(s.weeks) ? s.weeks : []))
+      .slice().sort((a, b) => (+a.from || 0) - (+b.from || 0));
+  };
+  const setOf = (xs) => new Set(xs);
+  const same = (a, b) => a.size === b.size && [...a].every(x => b.has(x));
+
+  /* Is this work filed by POSITION or by BLOCK? Asked once, of the whole
+     work, rather than round by round — a per-round guess moves data that
+     was already in the right place.
+
+     Positional means: every block holding data is one of the POSITIONS
+     0..n-1, and that is not the same set as the blocks the dates name. If
+     the data already sits on the dates' blocks, or on anything else, it is
+     left alone. Nothing is moved on a maybe. */
+  const movesFor = (weeks, hasData) => {
+    if (!weeks.length) return [];
+    const slots = weeks.map(w => slotOf(w.from));
+    const positions = weeks.map((_, i) => i);
+    if (same(setOf(slots), setOf(positions))) return [];
+    const data = setOf([...Array(WEEK_BLOCKS).keys()].filter(hasData));
+    if (!data.size || !same(data, setOf(positions))) return [];
+    return weeks.map((w, pos) => [pos, slotOf(w.from)]).filter(([p, q]) => p !== q);
+  };
+
+  [['manuring', 'manuringConfig'], ['interrow', 'interrowConfig']].forEach(([kind, key]) => {
+    const cfg = s[key];
+    if (!Array.isArray(cfg)) return;
+    const moves = movesFor(weeksFor(kind), b => filled(cfg[b]));
+    if (!moves.length) return;
+    const isDest = (i) => moves.some(([, to]) => to === i);
+    const shift = (arr) => {
+      const next = arr.slice();
+      moves.forEach(([from, to]) => { next[to] = arr[from]; });
+      moves.forEach(([from]) => { if (!isDest(from)) next[from] = []; });
+      for (let b = 0; b < WEEK_BLOCKS; b++) if (!Array.isArray(next[b])) next[b] = [];
+      return next;
+    };
+    s[key] = shift(cfg);
+    (plots || []).forEach(p => {
+      if (Array.isArray(s[kind] && s[kind][p])) s[kind][p] = shift(s[kind][p]);
+    });
+  });
+
+  // Weeding keeps a key per block — R1 to R4 — rather than an array.
+  const wKey = (b) => 'R' + (b + 1);
+  const wMoves = movesFor(weeksFor('weeding'),
+    b => (plots || []).some(p => (s.weeding || {})[p] && s.weeding[p][wKey(b)]));
+  if (wMoves.length) {
+    const isDest = (i) => wMoves.some(([, to]) => to === i);
+    (plots || []).forEach(p => {
+      const row = (s.weeding || {})[p];
+      if (!row) return;
+      const next = { ...row };
+      wMoves.forEach(([from, to]) => { next[wKey(to)] = row[wKey(from)]; });
+      wMoves.forEach(([from]) => { if (!isDest(from)) next[wKey(from)] = false; });
+      s.weeding[p] = next;
+    });
+  }
+}
+
 /* ════════════════════════════
    STATE
 ════════════════════════════ */
@@ -1668,6 +1753,7 @@ function getState(nursery, month) {
     if (persisted) {
       migrateManuringShape(persisted, NURSERY_PLOTS[nursery]);
       migrateInterrowShape(persisted, NURSERY_PLOTS[nursery]);
+      alignRoundsToWeeks(persisted, NURSERY_PLOTS[nursery]);
       appState[nursery][month] = persisted;
       return appState[nursery][month];
     }
@@ -1681,6 +1767,7 @@ function getState(nursery, month) {
       if (inherited) {
         migrateManuringShape(inherited, NURSERY_PLOTS[nursery]);
         migrateInterrowShape(inherited, NURSERY_PLOTS[nursery]);
+        alignRoundsToWeeks(inherited, NURSERY_PLOTS[nursery]);
         // Snapshot what was carried in, so nothing shows as "modified" until
         // this month is actually changed.
         inherited._savedPd = JSON.parse(JSON.stringify(inherited.pd || {}));

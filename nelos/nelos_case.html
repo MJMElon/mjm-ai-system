@@ -119,6 +119,15 @@
            style="width:100%;max-height:340px;object-fit:cover;border-radius:12px;border:1.5px solid #ede9fe;">
     </a>
 
+    <!-- The document the case was raised with, if there is one. Opened
+         rather than looked at, so a link and not a frame. -->
+    <a id="c-doc-link" class="hidden mt-3" target="_blank" rel="noopener"
+       style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1.5px solid #ede9fe;
+              border-radius:12px;background:#faf8ff;font-size:12.5px;font-weight:800;color:#4c1d95;
+              text-decoration:none;overflow-wrap:anywhere;">
+      <span aria-hidden="true">📄</span><span id="c-doc-label">Open the document</span>
+    </a>
+
     <div class="grid grid-cols-3 gap-3 mt-4 p-3.5 bg-slate-50 border border-slate-100 rounded-xl">
       <div class="min-w-0"><span class="lbl">Nursery (Plot)</span><span class="val" id="c-where"></span></div>
       <div class="min-w-0"><span class="lbl">Assigned to</span><span class="val" id="c-queue"></span></div>
@@ -154,7 +163,11 @@
       <label id="c-shot-pick" class="shot">
         <span aria-hidden="true">&#128247;</span>
         <span>Take or attach a photo</span>
-        <input id="c-shot" type="file" accept="image/*" capture="environment" hidden>
+        <!-- No capture= attribute: on Android it sends the chooser straight
+             to the camera and takes the gallery away, so a photo already
+             taken while the work was done could not be attached at all.
+             Same rule as shared/shared_nelos_dock.js. -->
+        <input id="c-shot" type="file" accept="image/*" hidden>
       </label>
       <div id="c-shot-prev" class="shot-prev hidden">
         <img id="c-shot-img" alt="Photo of the fix">
@@ -244,6 +257,16 @@ function renderCase() {
     $('c-photo-link').classList.remove('hidden');
   } else {
     $('c-photo-link').classList.add('hidden');
+  }
+
+  /* doc_url arrives with RUN_ME_nelos_case_document.sql; a case raised
+     before it, or on a database without it, simply has none. */
+  if (c.doc_url) {
+    $('c-doc-link').href = c.doc_url;
+    $('c-doc-label').textContent = c.doc_name || 'Open the document';
+    $('c-doc-link').classList.remove('hidden');
+  } else {
+    $('c-doc-link').classList.add('hidden');
   }
 
   const pending = c.status === 'open' || c.status === 'in_progress';
@@ -433,13 +456,26 @@ $('c-shot-x').addEventListener('click', () => {
   $('c-shot-pick').classList.remove('hidden');
 });
 
+/* Hands back the URL, or the REASON there is not one — a photo that went
+   nowhere used to be indistinguishable from no photo at all.
+
+   Shrunk to 1600px on the way, by the same helper the dock uses
+   (window.MJMPhoto, defined in shared/shared_nelos_dock.js, which this
+   page already loads). An Android camera photo comes off the phone at
+   several megabytes and is what the field reported as "cannot upload". */
 async function uploadShot(caseId, file) {
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const pic = window.MJMPhoto
+    ? await window.MJMPhoto.forUpload(file)
+    : { body: file, name: file.name || 'photo.jpg', type: file.type || 'application/octet-stream' };
+  const ext = (pic.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
   const path = `solve/${caseId}-${Date.now()}.${ext || 'jpg'}`;
   const { error } = await _supabase.storage.from('nelos-photos')
-    .upload(path, file, { contentType: file.type || 'application/octet-stream' });
-  if (error) return null;
-  return _supabase.storage.from('nelos-photos').getPublicUrl(path).data?.publicUrl || null;
+    .upload(path, pic.body, { contentType: pic.type || 'application/octet-stream' });
+  if (error) return { url: null, why: error.message || 'the photo store refused it' };
+  return {
+    url: _supabase.storage.from('nelos-photos').getPublicUrl(path).data?.publicUrl || null,
+    why: ''
+  };
 }
 
 $('confirm-resolve').addEventListener('click', async () => {
@@ -450,7 +486,16 @@ $('confirm-resolve').addEventListener('click', async () => {
      whereas patching first would mark work solved and then lose the picture
      of it. The column is written only when there IS a photo, so a database
      without migration_nelos_solve_photo.sql still resolves cases. */
-  const url = _shot ? await uploadShot(theCase.id, _shot) : null;
+  const shot = _shot ? await uploadShot(theCase.id, _shot) : { url: null, why: '' };
+  /* A photo that did not go stops the solve. Carrying on would mark the
+     work solved with no picture and say nothing about it, which is what
+     the field reported. Nothing is lost: the remark is still in the box,
+     and the ✕ on the photo solves without it. */
+  if (_shot && !shot.url) {
+    toast(`The photo did not upload — ${shot.why}. Try again, or remove the photo to solve without it.`, false);
+    return;
+  }
+  const url = shot.url;
   const fields = {
     status: 'resolved', resolution: text,
     resolved_by: me.name, resolved_at: new Date().toISOString()

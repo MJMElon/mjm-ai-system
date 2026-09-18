@@ -76,6 +76,8 @@
     <script src="../shared/shared_supabase.js"></script>
     <script src="../shared/shared_access.js"></script>
     <script src="../shared/shared_nelos.js"></script>
+    <!-- Tray occupancy — the same rule the batch list's Tray Status tab uses. -->
+    <script src="../shared/shared_tray_stock.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         /* Earthy Theme Colors */
@@ -870,6 +872,27 @@
                                 <span class="uppercase tracking-widest">📝 Last Edit:</span>
                                 <span id="t2-edit-meta" class="normal-case font-semibold text-[#3d2610]">—</span>
                             </div>
+
+                            <!-- Sub-tabs: Seed Planting & Damage / Empty Hole.
+
+                                 The report asks how many holes came up empty; the second
+                                 tab is where that number comes FROM — one record per hole,
+                                 naming the tray, the row and the position in it. Three
+                                 records is three empty holes, and a case raised to Nelos
+                                 can say exactly which three to go and look at, which a
+                                 number on its own never could. -->
+                            <div id="t2-subtab-bar" class="flex flex-wrap gap-2 mb-5">
+                                <button type="button" id="t2-subtab-btn-report" onclick="switchT2SubTab('report')"
+                                    class="t2-subtab-btn px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors bg-[#4a7a2e] border-[#4a7a2e] text-white">
+                                    Seed Planting &amp; Damage
+                                </button>
+                                <button type="button" id="t2-subtab-btn-empty" onclick="switchT2SubTab('empty')"
+                                    class="t2-subtab-btn px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors bg-[#fdfaf4] border-[#e8dcc8] text-[#8a7a68]">
+                                    Empty Hole <span id="t2-subtab-empty-count" class="ml-1 tabular-nums"></span>
+                                </button>
+                            </div>
+
+                            <div id="t2-subpanel-report" class="t2-subpanel">
                             <!-- Adjustments raised against THIS report. Filled by
                                  syncAdjustmentBars(); empty and hidden when there are
                                  none, so a clean report shows nothing at all. -->
@@ -1144,6 +1167,44 @@
                             <!-- Save Button -->
                             <div class="flex justify-end">
                                 <button type="button" id="save-planting-btn" class="btn-earth px-12" onclick="savePlantingTab()">Save Planting Report (0% Complete)</button>
+                            </div>
+                            </div><!-- /t2-subpanel-report -->
+
+                            <!-- ── SUB-TAB: Empty Hole ────────────────────────────────
+                                 One card per tray the batch was planted into — read from
+                                 the trays on the report beside this one, never keyed
+                                 twice — and under each, one record per empty hole. -->
+                            <div id="t2-subpanel-empty" class="t2-subpanel hidden">
+
+                                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b-2 border-amber-200 pb-5">
+                                    <div>
+                                        <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Empty Hole Records</h3>
+                                        <p class="text-[10px] font-bold text-[#8a7a68] mt-1 leading-tight">One record per empty hole: which row of the tray, and which position in that row. The count is what the planting report reads as Empty Holes.</p>
+                                    </div>
+                                    <div class="p-3.5 px-6 rounded-2xl bg-white flex items-center gap-4 shadow-sm border border-[#e8dcc8]">
+                                        <div>
+                                            <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest leading-none">Total Empty Holes</div>
+                                            <div class="text-2xl font-black text-[#a83020] tabular-nums mt-1" id="t2-eh-total">0</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="t2-eh-no-trays" class="hidden text-center py-10 text-[#8a7a68] text-sm font-bold">
+                                    Key the planted trays on Seed Planting &amp; Damage first — they appear here on their own.
+                                </div>
+
+                                <div id="t2-eh-trays" class="space-y-4"></div>
+
+                                <div class="flex flex-wrap justify-end gap-3 mt-6">
+                                    <!-- Raising the case is deliberately separate from saving.
+                                         A case is somebody's job to go and do; it is not a
+                                         side effect of writing down what was counted. -->
+                                    <button type="button" id="t2-eh-nelos-btn" onclick="raiseEmptyHoleCase()"
+                                        class="px-6 py-3 rounded-xl border-2 border-[#3d2610] bg-white text-[#3d2610] text-[11px] font-black uppercase tracking-widest hover:bg-[#fdfaf4] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                                        🐛 Open Nelos Case
+                                    </button>
+                                    <button type="button" id="t2-eh-save-btn" onclick="saveEmptyHoles()" class="btn-earth px-12">Save Empty Hole Records</button>
+                                </div>
                             </div>
 
                         </div>
@@ -1698,7 +1759,16 @@
                                     <div class="hidden lg:grid gap-2 items-center text-sm font-black" style="grid-template-columns: 1fr 1.1fr 0.8fr 0.8fr 0.8fr 0.8fr 1.4fr;">
                                         <div></div>
                                         <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">TOTALS</div>
-                                        <div class="text-[#3d2610]" id="t5-tot-transplanted">0</div>
+                                        <!-- The total is what the report is accounting for, so it
+                                             already has any approved plot-stock adjustment in it —
+                                             otherwise Transplanted less Dead would not come to the
+                                             Alive beside it. The line under it says so, because a
+                                             total that is not the plain sum of its column has to
+                                             account for itself. -->
+                                        <div>
+                                            <div class="text-[#3d2610]" id="t5-tot-transplanted">0</div>
+                                            <div id="t5-tot-adjust-note" class="hidden text-[9px] font-black text-[#7a4a10] uppercase tracking-wider leading-tight mt-0.5 whitespace-nowrap"></div>
+                                        </div>
                                         <div class="text-[#a83020]" id="t5-tot-dead">0</div>
                                         <div class="text-[#4a7a2e]" id="t5-tot-alive">0</div>
                                         <div class="text-[#a83020]" id="t5-tot-cull-rate" title="2nd Culled %">—</div>
@@ -1706,7 +1776,8 @@
                                     </div>
                                     <!-- Mobile totals -->
                                     <div class="flex flex-wrap gap-4 lg:hidden text-sm font-black">
-                                        <div><span class="text-[9px] text-[#8a7a68] uppercase block">Transplanted</span><span class="text-[#3d2610]" id="t5-tot-transplanted-m">0</span></div>
+                                        <div><span class="text-[9px] text-[#8a7a68] uppercase block">Transplanted</span><span class="text-[#3d2610]" id="t5-tot-transplanted-m">0</span>
+                                            <span id="t5-tot-adjust-note-m" class="hidden text-[9px] font-black text-[#7a4a10] uppercase tracking-wider block leading-tight"></span></div>
                                         <div><span class="text-[9px] text-[#8a7a68] uppercase block">Dead</span><span class="text-[#a83020]" id="t5-tot-dead-m">0</span></div>
                                         <div><span class="text-[9px] text-[#8a7a68] uppercase block">Alive</span><span class="text-[#4a7a2e]" id="t5-tot-alive-m">0</span></div>
                                     </div>
@@ -1977,6 +2048,32 @@
                                 <div id="t6-mismatch-rows" class="p-4 sm:p-6 space-y-3"></div>
                             </div>
 
+                            <!-- Sales on THIS batch's delivery notes that reached no plot.
+                                 Sales is what Balance and 3rd Culled are worked out from,
+                                 so a collection line the report cannot place is a sale
+                                 that never happened as far as this whole tab is
+                                 concerned — and it used to fail in silence, into a
+                                 console warning nobody opens.
+
+                                 Only lines whose OWN batch number is this batch are
+                                 listed. Matching on the plot name instead would drag in
+                                 every other batch's ordinary sale off a plot this batch
+                                 happens to share, which is a list of a hundred wrong
+                                 rows and was tried once. -->
+                            <div id="t6-sales-gap-panel" class="hidden mb-6 bg-white rounded-3xl border-2 border-[#3a7ab4] shadow-lg overflow-hidden">
+                                <div class="px-6 py-4 bg-[#f0f8ff] border-b-2 border-[#3a7ab4] flex items-center justify-between gap-3 flex-wrap">
+                                    <div class="flex items-center gap-3">
+                                        <span class="w-10 h-10 rounded-xl bg-[#e0f0ff] border border-[#3a7ab4] flex items-center justify-center text-xl shrink-0">🚚</span>
+                                        <div>
+                                            <div class="text-sm font-black text-[#1a4a80] uppercase tracking-widest">Sales On This Batch That Reached No Plot</div>
+                                            <div class="text-[11px] font-bold text-[#8a7a68]">These delivery notes name this batch, and the report cannot place them. Every one is seedlings <strong>missing from a plot’s Sales</strong> — so its Balance and 3rd Culled read high by that many. Fix the line in Customer Order Monitoring.</div>
+                                        </div>
+                                    </div>
+                                    <span class="text-[11px] font-black text-[#1a4a80] uppercase tracking-widest bg-[#e0f0ff] border border-[#3a7ab4] rounded-lg px-3 py-1.5 whitespace-nowrap" id="t6-sales-gap-count">0 lines</span>
+                                </div>
+                                <div id="t6-sales-gap-rows" class="p-4 sm:p-6 space-y-3"></div>
+                            </div>
+
                             <!-- Save button -->
                             <div class="flex justify-end">
                                 <button type="button" id="save-t6-btn" class="btn-earth !bg-gradient-to-r !from-[#6d28d9] !to-[#4c1d95] !shadow-[0_8px_20px_-4px_rgba(109,40,217,0.4)] px-12" onclick="saveTab6()">Save 3rd Culling Report (0% Complete)</button>
@@ -2205,25 +2302,33 @@
         let trayVacantMap = {};   // { tray_name: 1234 } — holes free in each tray right now
         let trayCapMap = {};      // { tray_name: 2560 } — the tray's size when empty, from Settings
         let trayOccupiedMap = {}; // { tray_name: { batch, qty } } — whose seedlings are in it
+        let trayByBatchMap = {};  // { tray_name: [{ batch, qty }] } — the same, batch by batch
 
-        // A tray holds what Settings says it holds. Before that field existed every
-        // tray was assumed to be 2,560, so a tray with no size keeps that figure
-        // rather than reading as having no room at all.
-        const TRAY_CAP_DEFAULT = 2560;
-        function trayCapacity(tray) {
-            const n = Number(tray && tray.total_vacant);
-            return Number.isFinite(n) && n > 0 ? n : TRAY_CAP_DEFAULT;
-        }
+        /* A tray holds what Settings says it holds, and what is standing in it
+           is worked out in shared/shared_tray_stock.js — the same rule the
+           batch list's Tray Status tab reads, so the two screens cannot drift
+           apart about how full a tray is. */
+        const TRAY_CAP_DEFAULT = MJMTrayStock.DEFAULT_CAPACITY;
+        const trayCapacity = MJMTrayStock.capacityOf;
 
         /* How much may still be planted into a tray on THIS batch's form.
            Another batch's seedlings take up room; this batch's own do not, or
-           re-opening a saved batch would refuse the quantities already in it. */
+           re-opening a saved batch would refuse the quantities already in it.
+
+           Both halves of that are read per batch, so a tray shared by two
+           batches offers each of them the room the OTHER one is not using.
+           It used to offer the whole tray to whichever batch was named as
+           holding it and nothing to anybody else. */
         function trayVacantForBatch(trayName, batchName) {
             const cap = trayCapMap[trayName] != null ? trayCapMap[trayName] : TRAY_CAP_DEFAULT;
             const held = trayOccupiedMap[trayName];
-            if (!held || !held.qty) return cap;
-            if (batchName && String(held.batch) === String(batchName)) return cap;
-            return Math.max(0, cap - held.qty);
+            let taken = (held && held.qty) || 0;
+            if (batchName) {
+                const mine = (trayByBatchMap[trayName] || [])
+                    .find(r => String(r.batch) === String(batchName));
+                if (mine) taken -= mine.qty;
+            }
+            return Math.max(0, cap - Math.max(0, taken));
         }
 
         function switchTab(tabIndex) {
@@ -2525,15 +2630,60 @@
            still counted them into B14, so 53 more was allocated than there
            was to allocate. */
         const ADJUST_PLOT_LOSS = {};   // PLOT → net of approved plot-stock adjustments
-        /* Named Total rather than Base because that is what every caller已 says;
+
+        /* …EXCEPT THE ONES A CULLING COUNT HAS ALREADY SETTLED.
+
+           The 2nd Culling and the 3rd Culling each count the plot, months
+           apart. An adjustment raised against one of those counts was
+           noticed AT it and settled there — by the time the next count is
+           made, on the ground and by the drone, it is history. Taking it off
+           again at the later report subtracts one loss twice, and the report
+           then disagrees with a drone map that was right all along.
+
+           N11 on batch 235: one seedling adjusted away during the 2nd
+           culling, and the 3rd Culling row read 76 against a drone map of
+           77. There were 77 to cull.
+
+           Anything raised anywhere else — Transplanting, 1st Culling, the
+           seed count — is a correction to what REACHED the plot, which both
+           culling reports are still carrying. Those stay above, and come off
+           both. B14 on batch 234 is that one: 53 stolen after transplanting,
+           and the 3rd cull is 53 fewer because of it. */
+        const ADJUST_PLOT_LOSS_STAGE = {};   // '2nd culling' | '3rd culling' → PLOT → net
+        const ADJUST_STAGE_REPORTS = ['2nd culling', '3rd culling'];
+
+        /* Every adjustment on the batch as last read, approved or not.
+
+           Kept because a figure that is NOT moving a report is as much a fact
+           as one that is: a drone map short by 53 and an adjustment of 53 that
+           nobody has approved — or that was filed against the seed count — are
+           the same 53, and the screen had both and said neither. */
+        let ADJUST_ROWS = [];
+        /* Named Total rather than Base because that is what every caller says;
            only seed-count adjustments reach ADJUST_NET now, so the two are the
            same figure. */
         function adjustNetTotal() {
             return Object.keys(ADJUST_NET).reduce((s, k) => s + (ADJUST_NET[k] || 0), 0);
         }
-        function adjustPlotLoss(plot) {
-            const v = ADJUST_PLOT_LOSS[_t6PlotKey(plot)];
-            return typeof v === 'number' ? v : 0;
+
+        /* What comes off this plot ON THIS REPORT: everything raised before
+           either culling counted it, plus whatever was raised against this
+           report's own count. `report` is '2nd Culling' or '3rd Culling'. */
+        function adjustPlotLoss(plot, report) {
+            const pk = _t6PlotKey(plot);
+            if (!pk) return 0;
+            let v = typeof ADJUST_PLOT_LOSS[pk] === 'number' ? ADJUST_PLOT_LOSS[pk] : 0;
+            const mine = ADJUST_PLOT_LOSS_STAGE[String(report || '').toLowerCase()];
+            if (mine && typeof mine[pk] === 'number') v += mine[pk];
+            return v;
+        }
+
+        /* Would settling this adjustment move the 3rd Culling row? Used by the
+           drone-map panel, which must not offer an explanation that would not
+           actually change the figure it is standing next to. */
+        function _adjCouldMoveCull3(r) {
+            if (!r || r.report.toLowerCase() === '2nd culling') return false;
+            return !(r.approved && r.side === 'plot');
         }
 
         async function syncAdjustmentBars(batchId) {
@@ -2545,6 +2695,9 @@
                    allocation base — better the base is plainly short than
                    silently right for a reason nobody can see. */
                 Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
+                Object.keys(ADJUST_PLOT_LOSS).forEach(k => delete ADJUST_PLOT_LOSS[k]);
+                Object.keys(ADJUST_PLOT_LOSS_STAGE).forEach(k => delete ADJUST_PLOT_LOSS_STAGE[k]);
+                ADJUST_ROWS = [];
                 bars.forEach(n => {
                     const el = document.getElementById(`t${n}-adjust-bar`);
                     if (el) { el.classList.add('hidden'); el.innerHTML = ''; }
@@ -2560,6 +2713,7 @@
                     .order('created_at', { ascending: false });
                 if (error) throw error;
                 rows = (data || []).map(_parseCalibration);
+                ADJUST_ROWS = rows;
             } catch (e) {
                 // A strip that cannot load says nothing rather than saying
                 // "no adjustments", which is a different claim entirely.
@@ -2571,11 +2725,21 @@
                this" is worth seeing — it just is not an answer yet. */
             Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
             Object.keys(ADJUST_PLOT_LOSS).forEach(k => delete ADJUST_PLOT_LOSS[k]);
+            Object.keys(ADJUST_PLOT_LOSS_STAGE).forEach(k => delete ADJUST_PLOT_LOSS_STAGE[k]);
             rows.filter(r => r.approved).forEach(r => {
                 if (r.side === 'plot') {
-                    // Belongs to the plot it names, not to the batch total.
+                    // Belongs to the plot it names, not to the batch total —
+                    // and, when it was raised against a culling count, to that
+                    // report alone. See ADJUST_PLOT_LOSS_STAGE.
                     const pk = _t6PlotKey(r.plot);
-                    if (pk) ADJUST_PLOT_LOSS[pk] = (ADJUST_PLOT_LOSS[pk] || 0) + r.qty;
+                    if (!pk) return;
+                    const rep = r.report.toLowerCase();
+                    if (ADJUST_STAGE_REPORTS.indexOf(rep) >= 0) {
+                        const m = ADJUST_PLOT_LOSS_STAGE[rep] = ADJUST_PLOT_LOSS_STAGE[rep] || {};
+                        m[pk] = (m[pk] || 0) + r.qty;
+                    } else {
+                        ADJUST_PLOT_LOSS[pk] = (ADJUST_PLOT_LOSS[pk] || 0) + r.qty;
+                    }
                     return;
                 }
                 const k = r.report.toLowerCase();
@@ -2588,7 +2752,11 @@
                not stop the other, nor the strips below from rendering. */
             try { if (typeof calcTransplanting === 'function') calcTransplanting(); } catch (e) { console.warn(e); }
             try { if (typeof calcCulling === 'function') calcCulling(); } catch (e) { console.warn(e); }
-            // 3rd Culling too — a plot-stock adjustment lands on one of its rows.
+            /* …and both culling tabs, where a plot-stock adjustment lands on
+               one row. Re-RENDERED, not just recalculated: the figure is drawn
+               into the row's markup, so a recalculation alone would leave the
+               old one on screen beside the new arithmetic. */
+            try { if (typeof renderT5PlotRows === 'function' && t5_plotData.length) renderT5PlotRows(); } catch (e) { console.warn(e); }
             try { if (typeof renderT6PlotRows === 'function' && t6_plotData.length) renderT6PlotRows(); } catch (e) { console.warn(e); }
 
             const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -3011,81 +3179,21 @@
                 masterBatchesList = batchRes.data || [];
                 globalTrays = trayRes.data || [];
 
-                // Build per-batch totals so we can tell which batches have fully emptied their
-                // pre-nursery trays (planted − transplanted − 1st_culling ≤ 0). Trays from
-                // emptied batches are considered free for the next batch to reuse.
-                const plantedByBatch = {}, transplantedByBatch = {}, cull1ByBatch = {};
-                (usedTrayRes.data || []).forEach(l => {
-                    plantedByBatch[l.batch_name] = (plantedByBatch[l.batch_name] || 0) + (l.quantity_change || 0);
+                /* What is standing in each tray — one rule, shared with the
+                   batch list's Tray Status tab. Planted goes in, 1st Culling
+                   and transplants-out come out, and premium care / double-tone
+                   transplants land in a tray of their own. */
+                const trayStock = MJMTrayStock.compute({
+                    trays:        globalTrays,
+                    planted:      usedTrayRes.data || [],
+                    transplanted: transplantedRes.data || [],
+                    cull1:        cull1Res.data || []
                 });
-                (transplantedRes.data || []).forEach(l => {
-                    transplantedByBatch[l.batch_name] = (transplantedByBatch[l.batch_name] || 0) + Math.abs(l.quantity_change || 0);
-                });
-                (cull1Res.data || []).forEach(l => {
-                    cull1ByBatch[l.batch_name] = (cull1ByBatch[l.batch_name] || 0) + Math.abs(l.quantity_change || 0);
-                });
-                const batchPnEmptied = (b) => {
-                    const planted = plantedByBatch[b] || 0;
-                    if (planted <= 0) return false; // never planted, leave behavior unchanged
-                    const remaining = planted - (transplantedByBatch[b] || 0) - (cull1ByBatch[b] || 0);
-                    return remaining <= 0;
-                };
-
-                // Build tray-usage map: which batch is each tray planted in?
-                // Skip trays whose batch's pre-nursery is already emptied so the tray frees up.
-                trayUsageMap = {};
-                const plantedByTrayBatch = {}; // { tray: { batch: qty } }
-                (usedTrayRes.data || []).forEach(log => {
-                    if (!plantedByTrayBatch[log.plot_name]) plantedByTrayBatch[log.plot_name] = {};
-                    plantedByTrayBatch[log.plot_name][log.batch_name] =
-                        (plantedByTrayBatch[log.plot_name][log.batch_name] || 0) + (log.quantity_change || 0);
-                    if (batchPnEmptied(log.batch_name)) return;
-                    trayUsageMap[log.plot_name] = log.batch_name;
-                });
-
-                /* ── What is standing in each tray, counted tray by tray ──
-                   Every movement names its tray, so none of this has to be
-                   estimated:
-                     Planted            plot_name IS the tray  → in
-                     1st_Culling        plot_name IS the tray  → out
-                     Transplanted*      remark says "from tray [X]"  → out of X,
-                                        and plot_name is where they went — which
-                                        for premium care and double-tone is itself
-                                        a tray, so those receive.
-                   Transplant a hundred out of P4 and P4 frees exactly a hundred. */
-                const trayNames = new Set(globalTrays.map(t => t.tray_name));
-                const inTray = {}, outTray = {};
-                const addIn  = (tray, q) => { if (trayNames.has(tray)) inTray[tray]  = (inTray[tray]  || 0) + q; };
-                const addOut = (tray, q) => { if (trayNames.has(tray)) outTray[tray] = (outTray[tray] || 0) + q; };
-
-                (usedTrayRes.data || []).forEach(l => addIn(l.plot_name, Math.abs(l.quantity_change || 0)));
-                (cull1Res.data   || []).forEach(l => addOut(l.plot_name, Math.abs(l.quantity_change || 0)));
-                (transplantedRes.data || []).forEach(l => {
-                    const qty = Math.abs(l.quantity_change || 0);
-                    const src = (l.remark || '').match(/from tray \[([^\]]+)\]/i);
-                    if (src) addOut(src[1].trim(), qty);
-                    addIn(l.plot_name, qty);   // only lands if the destination is a tray
-                });
-
-                trayVacantMap = {};
-                trayCapMap = {};
-                trayOccupiedMap = {};
-                globalTrays.forEach(t => {
-                    const cap = trayCapacity(t);
-                    trayCapMap[t.tray_name] = cap;
-                    const occupier = trayUsageMap[t.tray_name];
-                    let inUse = Math.max(0, (inTray[t.tray_name] || 0) - (outTray[t.tray_name] || 0));
-                    // Safety net for anything logged before the source tray was
-                    // written into the remark: if no live batch is holding the tray,
-                    // it is free whatever the per-tray sums come to.
-                    if (!occupier) inUse = 0;
-                    inUse = Math.min(cap, inUse);
-                    // Remembered per batch so that re-opening a batch does not see its
-                    // OWN seedlings as somebody else's occupancy and refuse the figures
-                    // already keyed in.
-                    trayOccupiedMap[t.tray_name] = { batch: occupier, qty: inUse };
-                    trayVacantMap[t.tray_name] = Math.max(0, cap - inUse);
-                });
+                trayUsageMap    = trayStock.usage;
+                trayCapMap      = trayStock.capacity;
+                trayOccupiedMap = trayStock.occupied;
+                trayVacantMap   = trayStock.vacant;
+                trayByBatchMap  = trayStock.byBatch;
                 
                 // NATURAL ALPHANUMERIC SORTING FOR PLOTS (B2 comes before B10)
                 globalPlots = plotRes.data || [];
@@ -3179,6 +3287,9 @@
                         updateTracker(1); // default: Received done, Pre-Nursery active
 
                         await loadSavedPlantingData(batchIdParam);
+                        // The planting report's Empty Holes figure is counted from
+                        // these, so they have to be in before it is worked out.
+                        await loadEmptyHoles(batchIdParam);
                         await loadSeedAuditData(batchIdParam);
                         addTransplantRow();
                         // Pre-warm Audit Trail summary so its tab pie reflects audit progress immediately.
@@ -3399,6 +3510,32 @@
                             const trayStr = trayMatch ? trayMatch[1] : '—';
                             const editId  = `t3-edit-form-${idx}`;
                             const reviewKey = `${log.plot_name || ''}|${destType}|${trayStr}|${dateStr}`.replace(/"/g, '');
+                            /* THE MAP, WHERE THE MAP COLUMN IS.
+
+                               This cell was the string "—" whatever had been
+                               uploaded. The map was on the record, restored
+                               into the edit form and openable from there — so
+                               the only way to see whether a row even HAD one
+                               was to press Edit on it, row by row. A column
+                               called Map that never says anything is worse
+                               than no column.
+
+                               An image shows as itself; a PDF cannot be a
+                               thumbnail, so it says so with an icon. Either
+                               opens in the viewer every other attachment on
+                               this page opens in. */
+                            const rowMapMatch = log.remark ? log.remark.match(/MapUrl:(\S+)/) : null;
+                            const rowMapUrl   = rowMapMatch ? rowMapMatch[1] : '';
+                            const rowMapIsPdf = /\.pdf(\?|$)/i.test(rowMapUrl);
+                            const rowMapCell  = rowMapUrl
+                                ? `<button type="button" title="View drone map"
+                                        onclick="_openDocViewer('${_escAttr(rowMapUrl)}', '${_escAttr('Drone Map — ' + (log.plot_name || ''))}')"
+                                        class="flex items-center gap-1.5 bg-transparent border-0 p-0 cursor-pointer group">
+                                       <span class="w-9 h-9 rounded-lg border border-[#e8dcc8] bg-cover bg-center shrink-0 flex items-center justify-center text-sm bg-white group-hover:border-[#c07820] transition-colors"
+                                             ${rowMapIsPdf ? '' : `style="background-image:url('${rowMapUrl}')"`}>${rowMapIsPdf ? '📄' : ''}</span>
+                                       <span class="text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest group-hover:text-[#c07820] transition-colors">View</span>
+                                   </button>`
+                                : `<div class="text-sm text-[#8a7a68]">—</div>`;
                             tableList.insertAdjacentHTML('beforeend', `
                                 <div class="t3-saved-row" data-review-key="${reviewKey}">
                                     <!-- Compact row -->
@@ -3407,7 +3544,7 @@
                                         <div class="text-sm font-bold text-[#3d2610]">${dateStr}</div>
                                         <div class="text-sm font-bold text-[#c07820] truncate">${trayStr}</div>
                                         <div class="text-sm font-black text-[#4a7a2e]">${log.quantity_change.toLocaleString()}</div>
-                                        <div class="text-sm text-[#8a7a68]">—</div>
+                                        <div>${rowMapCell}</div>
                                         <div class="flex gap-1">
                                             <button type="button" onclick="toggleT3EditRow(${idx})" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[8px] font-black uppercase rounded hover:bg-[#f0f8ff] transition-colors">Edit</button>
                                             <button type="button" onclick="deleteT3Row(${idx})" class="px-2 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[8px] font-black uppercase rounded hover:bg-[#fff5f5] transition-colors">Del</button>
@@ -4592,6 +4729,9 @@
             const expectedRaw = document.getElementById('display-total-qty').dataset.raw || 0;
             document.getElementById('t2-breed').innerText = breed;
             document.getElementById('t2-expected-qty').innerText = parseInt(expectedRaw).toLocaleString();
+            // The batch number arrives after the page does on a new batch, and
+            // it is what decides whether this report has an Empty Hole tab.
+            applyEmptyHoleVisibility();
             calcPlanting();
         }
 
@@ -4635,7 +4775,7 @@
                 <div id="${rowId}" class="tray-row grid grid-cols-1 xl:grid-cols-[2fr_1fr_1fr_1fr_40px] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end relative">
                     <div>
                         <label class="label-style">Preset Tray *</label>
-                        <div class="select-wrapper"><select class="input-style !text-[#3d2610] t-select" required onchange="updatePlantingCompletion(); checkTrayInUse('${rowId}'); calcTrayRow('${rowId}')">${options}</select></div>
+                        <div class="select-wrapper"><select class="input-style !text-[#3d2610] t-select" required onchange="updatePlantingCompletion(); checkTrayInUse('${rowId}'); calcTrayRow('${rowId}'); renderEmptyHoles()">${options}</select></div>
                         <div id="${rowId}-warn" class="hidden mt-1 text-[9px] font-black text-[#a83020] flex items-center gap-1">⚠️ <span></span></div>
                     </div>
                     <div>
@@ -4645,7 +4785,13 @@
                     </div>
                     <div>
                         <label class="label-style !text-[#a83020]">Empty Holes</label>
+                        <!-- Locked and counted from the Empty Hole tab wherever that
+                             tab has records for this tray — see syncEmptyHolesToPlanting.
+                             Left keyable where it has none, because a batch counted
+                             before that tab existed has a real figure and no records
+                             behind it. -->
                         <input type="text" inputmode="numeric" class="input-style t-empty !text-[#a83020]" oninput="formatNumericInput(this); calcTrayRow('${rowId}')">
+                        <div class="t-empty-hint hidden mt-1 text-[9px] font-black text-[#3a7ab4] uppercase tracking-wider"></div>
                     </div>
                     <div>
                         <label class="label-style !text-[#4a7a2e]">Actual Planted</label>
@@ -4656,6 +4802,366 @@
             `;
             container.insertAdjacentHTML('beforeend', html);
             updatePlantingCompletion();
+        }
+
+        /* ═══════════════════════════════════════════════════════
+           EMPTY HOLE — the second half of the Planting report
+           ═══════════════════════════════════════════════════════
+
+           The report asks how many holes came up empty. This is where that
+           number comes from: one record per hole, naming the tray, the row
+           and the position in that row. Three records is three empty holes,
+           and the Nelos case raised from here can say which three to go and
+           look at — which a number on its own never could.
+
+           Stored as one 'Empty_Hole' log per record, the same shape every
+           other fact on this page uses: plot_name is the tray, and the remark
+           carries the position. quantity_change is 1 because each record IS
+           one hole; a count is then a count of rows, not a sum nobody can
+           take apart again.
+
+           Remark: "Empty hole. Row: <r>. Hole: <h>. <note>" */
+        let t2_emptyHoles = {};      // TRAY → [{ row, hole, note }]
+        let _t2EhLoadedFor = null;   // the batch these belong to
+
+        /* WHERE THIS APPLIES — batch 276 onwards, and nowhere before it.
+
+           Counting hole by hole is a change to how the work is done in the
+           field, and it starts with the batches planted after it was asked
+           for. The batches already in the ground were counted the old way:
+           one figure for the tray, keyed by the person who counted it. For
+           those the tab does not appear at all and that box stays theirs to
+           key — which is what they had before this existed.
+
+           A batch whose name carries no number at all is a new one under
+           some other naming, so it gets the tab. */
+        const EMPTY_HOLE_FROM_BATCH = 276;
+        function emptyHoleEnabled(batchName) {
+            const name = String(batchName == null ? '' : batchName).trim()
+                || (document.getElementById('f-batchno')?.value || '').trim()
+                || String(batchIdParam || '');
+            const m = name.match(/\d+/);
+            if (!m) return true;
+            return parseInt(m[0], 10) >= EMPTY_HOLE_FROM_BATCH;
+        }
+
+        /* Show or hide the sub-tabs to match. Hidden, the planting report is
+           the whole of Tab 2 again, exactly as it was. */
+        function applyEmptyHoleVisibility() {
+            const on = emptyHoleEnabled();
+            const bar = document.getElementById('t2-subtab-bar');
+            if (bar) bar.classList.toggle('hidden', !on);
+            if (!on) switchT2SubTab('report');
+            return on;
+        }
+
+        function _ehKey(tray) { return String(tray || '').trim().toUpperCase(); }
+
+        /* The trays to show, read off the planting report beside this one.
+           Never keyed twice: a tray exists here because it was planted, and
+           that is the report that says so. */
+        function t2EhTrays() {
+            const out = [];
+            document.querySelectorAll('.tray-row').forEach(row => {
+                const name = (row.querySelector('.t-select')?.value || '').trim();
+                if (name) out.push(name);
+            });
+            return out;
+        }
+
+        function t2EhCountFor(tray) {
+            return (t2_emptyHoles[_ehKey(tray)] || []).length;
+        }
+
+        function t2EhTotal() {
+            return Object.keys(t2_emptyHoles).reduce((s, k) => s + t2_emptyHoles[k].length, 0);
+        }
+
+        function switchT2SubTab(which) {
+            // Nothing before batch 276 has an Empty Hole tab to switch to.
+            if (which === 'empty' && !emptyHoleEnabled()) which = 'report';
+            ['report', 'empty'].forEach(n => {
+                const panel = document.getElementById(`t2-subpanel-${n}`);
+                if (panel) panel.classList.toggle('hidden', n !== which);
+                const btn = document.getElementById(`t2-subtab-btn-${n}`);
+                if (btn) {
+                    btn.className = 't2-subtab-btn px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest border transition-colors ' +
+                        (n === which ? 'bg-[#4a7a2e] border-[#4a7a2e] text-white'
+                                     : 'bg-[#fdfaf4] border-[#e8dcc8] text-[#8a7a68]');
+                }
+            });
+            if (which === 'empty') renderEmptyHoles();
+        }
+
+        async function loadEmptyHoles(batchId) {
+            const batch = (batchId || document.getElementById('f-batchno')?.value || '').trim();
+            t2_emptyHoles = {};
+            _t2EhLoadedFor = batch || null;
+            /* Before batch 276 there are no records to read and none to be
+               made. _t2EhLoadedFor stays null so the planting report is left
+               entirely alone — an empty answer here is "this batch does not
+               work that way", not "no holes were empty". */
+            if (!applyEmptyHoleVisibility()) { _t2EhLoadedFor = null; renderEmptyHoles(); return; }
+            if (!batch) { renderEmptyHoles(); return; }
+            try {
+                const { data, error } = await _supabase.from('shared_inventory_logs')
+                    .select('plot_name, remark, created_at')
+                    .eq('batch_name', batch)
+                    .eq('transaction_type', 'Empty_Hole')
+                    .order('created_at', { ascending: true });
+                if (error) throw error;
+                (data || []).forEach(r => {
+                    const k = _ehKey(r.plot_name);
+                    if (!k) return;
+                    const rowM  = r.remark ? r.remark.match(/Row:\s*([^.]+?)\s*\.\s*/i)  : null;
+                    const holeM = r.remark ? r.remark.match(/Hole:\s*([^.]+?)\s*\.\s*/i) : null;
+                    let note = r.remark || '';
+                    if (rowM)  note = note.replace(rowM[0], '');
+                    if (holeM) note = note.replace(holeM[0], '');
+                    note = note.replace(/^Empty hole\.\s*/i, '').trim();
+                    (t2_emptyHoles[k] = t2_emptyHoles[k] || []).push({
+                        row:  rowM  ? rowM[1].trim()  : '',
+                        hole: holeM ? holeM[1].trim() : '',
+                        note
+                    });
+                });
+            } catch (e) {
+                /* A read that failed must not look like "no empty holes" —
+                   that is a different claim, and the planting report would
+                   quietly take it as nought. */
+                console.warn('[empty holes] not read:', (e && e.message) || e);
+                _t2EhLoadedFor = null;
+            }
+            renderEmptyHoles();
+        }
+
+        function renderEmptyHoles() {
+            const host = document.getElementById('t2-eh-trays');
+            const none = document.getElementById('t2-eh-no-trays');
+            if (!host) return;
+            // Older batches do not have this tab — see EMPTY_HOLE_FROM_BATCH.
+            if (!applyEmptyHoleVisibility()) { host.innerHTML = ''; return; }
+            const trays = t2EhTrays();
+            if (none) none.classList.toggle('hidden', trays.length > 0);
+
+            host.innerHTML = trays.map((tray, ti) => {
+                const k = _ehKey(tray);
+                const recs = t2_emptyHoles[k] || [];
+                const lines = recs.map((r, ri) => `
+                    <div class="grid grid-cols-[1fr_1fr_2fr_40px] gap-3 items-end bg-white border border-[#efe6d6] rounded-xl px-3 py-2.5">
+                        <div>
+                            <label class="label-style">Row *</label>
+                            <input type="text" inputmode="numeric" class="input-style !py-2.5 !text-sm t2-eh-row"
+                                value="${_escAttr(r.row)}" placeholder="e.g. 4"
+                                oninput="updateEmptyHoleField(${ti}, ${ri}, 'row', this.value)">
+                        </div>
+                        <div>
+                            <label class="label-style">Hole no. *</label>
+                            <input type="text" inputmode="numeric" class="input-style !py-2.5 !text-sm t2-eh-hole"
+                                value="${_escAttr(r.hole)}" placeholder="e.g. 12"
+                                oninput="updateEmptyHoleField(${ti}, ${ri}, 'hole', this.value)">
+                        </div>
+                        <div>
+                            <label class="label-style">Remark</label>
+                            <input type="text" class="input-style !py-2.5 !text-sm t2-eh-note"
+                                value="${_escAttr(r.note)}" placeholder="optional"
+                                oninput="updateEmptyHoleField(${ti}, ${ri}, 'note', this.value)">
+                        </div>
+                        <div class="flex justify-end">
+                            <button type="button" title="Remove this record"
+                                class="w-8 h-8 bg-[#fff5f5] border border-[#f8d7da] text-[#a83020] rounded-lg hover:bg-[#f8d7da] text-sm font-black flex items-center justify-center"
+                                onclick="removeEmptyHole(${ti}, ${ri})">✕</button>
+                        </div>
+                    </div>`).join('');
+                return `
+                    <div class="border border-[#e8dcc8] rounded-2xl bg-[#fdfaf4] overflow-hidden">
+                        <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-[#e8dcc8] bg-white">
+                            <div class="flex items-baseline gap-4">
+                                <span class="text-base font-black text-[#3d2610]">${_t6Esc(tray)}</span>
+                                <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Empty Holes</span>
+                                <span class="text-lg font-black text-[#a83020] tabular-nums">${recs.length}</span>
+                            </div>
+                            <button type="button" onclick="addEmptyHole(${ti})"
+                                class="px-3 py-1.5 rounded-lg border border-[#d8cbb4] bg-white text-[#3a7ab4] text-[10px] font-black uppercase tracking-widest hover:bg-[#f4f8fc] hover:border-[#3a7ab4] transition-colors">
+                                + Add Record
+                            </button>
+                        </div>
+                        <div class="p-4 space-y-2">
+                            ${lines || '<div class="text-[11px] font-bold text-[#8a7a68] py-2">No empty hole recorded in this tray.</div>'}
+                        </div>
+                    </div>`;
+            }).join('');
+
+            const tot = t2EhTotal();
+            const totEl = document.getElementById('t2-eh-total');
+            if (totEl) totEl.innerText = tot.toLocaleString();
+            const chip = document.getElementById('t2-subtab-empty-count');
+            if (chip) chip.innerText = tot ? `· ${tot}` : '';
+            const nelos = document.getElementById('t2-eh-nelos-btn');
+            if (nelos) nelos.disabled = tot === 0;
+
+            syncEmptyHolesToPlanting();
+        }
+
+        /* THE REPORT READS THE RECORDS.
+
+           Empty Holes on a tray row is the count of that tray's records, and
+           the box is locked so the two cannot drift apart.
+
+           Only where records exist. A batch keyed before this tab did has a
+           figure and no records behind it, and driving that to nought would
+           throw away a real count on the next save — the detail simply is not
+           known for those, which is not the same as there being none. */
+        function syncEmptyHolesToPlanting() {
+            if (_t2EhLoadedFor === null) return;   // nothing read; leave well alone
+            document.querySelectorAll('.tray-row').forEach(row => {
+                const tray = (row.querySelector('.t-select')?.value || '').trim();
+                const box  = row.querySelector('.t-empty');
+                if (!box) return;
+                const n = t2EhCountFor(tray);
+                const hint = row.querySelector('.t-empty-hint');
+                if (n > 0) {
+                    box.value = n.toLocaleString();
+                    box.readOnly = true;
+                    box.classList.add('bg-[#f8f4ec]', 'cursor-not-allowed');
+                    box.title = 'Counted from the Empty Hole tab — add or remove a record there';
+                    if (hint) { hint.innerText = `${n} record${n === 1 ? '' : 's'} on Empty Hole`; hint.classList.remove('hidden'); }
+                } else {
+                    box.readOnly = false;
+                    box.classList.remove('bg-[#f8f4ec]', 'cursor-not-allowed');
+                    box.title = '';
+                    if (hint) hint.classList.add('hidden');
+                }
+                calcTrayRow(row.id);
+            });
+        }
+
+        function addEmptyHole(trayIdx) {
+            const tray = t2EhTrays()[trayIdx];
+            if (!tray) return;
+            const k = _ehKey(tray);
+            (t2_emptyHoles[k] = t2_emptyHoles[k] || []).push({ row: '', hole: '', note: '' });
+            renderEmptyHoles();
+            // Put the cursor on the first thing to answer.
+            const cards = document.querySelectorAll('#t2-eh-trays > div');
+            cards[trayIdx]?.querySelectorAll('.t2-eh-row')?.[t2_emptyHoles[k].length - 1]?.focus();
+        }
+
+        function removeEmptyHole(trayIdx, recIdx) {
+            const tray = t2EhTrays()[trayIdx];
+            if (!tray) return;
+            const list = t2_emptyHoles[_ehKey(tray)];
+            if (!list) return;
+            list.splice(recIdx, 1);
+            renderEmptyHoles();
+        }
+
+        /* Typed straight into the record, without a re-render: redrawing on
+           every keystroke takes the cursor out of the box being typed in. The
+           count only changes when a record is added or removed, and both of
+           those redraw. */
+        function updateEmptyHoleField(trayIdx, recIdx, field, value) {
+            const tray = t2EhTrays()[trayIdx];
+            if (!tray) return;
+            const rec = (t2_emptyHoles[_ehKey(tray)] || [])[recIdx];
+            if (rec) rec[field] = value;
+        }
+
+        async function saveEmptyHoles() {
+            const btn = document.getElementById('t2-eh-save-btn');
+            const batch = (document.getElementById('f-batchno')?.value || '').trim();
+            if (!batch) { showToast('Save Tab 1 first to assign a batch number.', 'error'); return; }
+            const breed = document.getElementById('f-brand')?.value || null;
+
+            const rows = [];
+            let incomplete = 0;
+            t2EhTrays().forEach(tray => {
+                (t2_emptyHoles[_ehKey(tray)] || []).forEach(r => {
+                    const rowNo  = String(r.row  || '').trim();
+                    const holeNo = String(r.hole || '').trim();
+                    // A record that does not say WHERE is the whole point
+                    // missed — it would count towards the total and tell
+                    // nobody anything.
+                    if (!rowNo || !holeNo) { incomplete++; return; }
+                    rows.push(withEditMeta({
+                        transaction_type: 'Empty_Hole',
+                        batch_name: batch,
+                        breed_name: breed,
+                        plot_name: tray,
+                        quantity_change: 1,
+                        remark: `Empty hole. Row: ${rowNo}. Hole: ${holeNo}. ${String(r.note || '').trim()}`.trim()
+                    }));
+                });
+            });
+            if (incomplete) {
+                showToast(`${incomplete} record${incomplete === 1 ? '' : 's'} still missing a row or hole number.`, 'error');
+                return;
+            }
+
+            const original = btn ? btn.innerText : '';
+            if (btn) { btn.disabled = true; btn.innerText = 'Saving…'; }
+            try {
+                /* Replace, not append: this tab is the whole truth about the
+                   batch's empty holes, and a save that only added would
+                   double them every time somebody pressed it. */
+                const { error: delErr } = await _supabase.from('shared_inventory_logs').delete()
+                    .eq('batch_name', batch).eq('transaction_type', 'Empty_Hole');
+                if (delErr) throw delErr;
+                if (rows.length) {
+                    const { error } = await safeInsertLogs(rows);
+                    if (error) throw error;
+                }
+                showToast(`Saved ${rows.length} empty hole record${rows.length === 1 ? '' : 's'}.`, 'success');
+                await loadEmptyHoles(batch);
+                // The planting report's figure comes from these, so its
+                // completion and its own save both have to see them.
+                calcPlanting();
+            } catch (e) {
+                showToast('Failed to save empty holes: ' + ((e && e.message) || e), 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerText = original || 'Save Empty Hole Records'; }
+            }
+        }
+
+        /* One case, listing every empty hole by tray, row and position.
+
+           Deduped: a case raised twice for the same batch is one job, and
+           this button is pressed by whoever happens to be looking. */
+        async function raiseEmptyHoleCase() {
+            const batch = (document.getElementById('f-batchno')?.value || '').trim();
+            if (!batch) { showToast('Save Tab 1 first to assign a batch number.', 'error'); return; }
+            const total = t2EhTotal();
+            if (!total) { showToast('No empty hole recorded yet.', 'error'); return; }
+            if (typeof MJMNelos === 'undefined' || !MJMNelos.raise) {
+                showToast('Nelos is not loaded on this page.', 'error'); return;
+            }
+
+            const trays = t2EhTrays().filter(t => t2EhCountFor(t) > 0);
+            const detail = trays.map(tray => {
+                const recs = t2_emptyHoles[_ehKey(tray)];
+                const where = recs.map(r => `Row ${r.row} · Hole ${r.hole}${r.note ? ` (${r.note})` : ''}`).join('\n    ');
+                return `${tray} — ${recs.length} empty hole${recs.length === 1 ? '' : 's'}\n    ${where}`;
+            }).join('\n\n');
+
+            const btn = document.getElementById('t2-eh-nelos-btn');
+            const original = btn ? btn.innerText : '';
+            if (btn) { btn.disabled = true; btn.innerText = 'Opening…'; }
+            const { data, error, deduped } = await MJMNelos.raise({
+                title: `Batch ${batch}: ${total} empty hole${total === 1 ? '' : 's'} to refill`,
+                description: `Recorded on the Planting report's Empty Hole tab.\n\n${detail}`,
+                category: 'Empty Hole',
+                priority: 'normal',
+                source: 'operation',
+                sourceRef: `../operation/operation_batch_detail.html?id=${encodeURIComponent(batch)}`,
+                batch,
+                // One tray named on the case itself; the rest are in the
+                // description, which is where a list belongs.
+                plot: trays.length === 1 ? trays[0] : null,
+                dedupe: true
+            });
+            if (btn) { btn.disabled = false; btn.innerText = original || '🐛 Open Nelos Case'; }
+            if (error) { showToast('Could not open the case: ' + error.message, 'error'); return; }
+            showToast(deduped ? 'An open case for this batch already exists.' : 'Nelos case opened.', 'success');
         }
 
         function removeTrayRow(rowId) {
@@ -7608,6 +8114,9 @@ Thank you.`;
 
             t5_plotData.forEach((p, i) => {
                 const rowId  = `t5-row-${i}`;
+                // An approved plot-stock adjustment against this plot — the same
+                // per-plot figure 3rd Culling reads. Negative is the usual case.
+                const adj5   = (typeof adjustPlotLoss === 'function') ? adjustPlotLoss(p.plot, '2nd Culling') : 0;
                 const due    = calcDueDate(p.transplantDate);
                 const deadVal = p.savedDead !== null && p.savedDead !== undefined ? p.savedDead : '';
                 // After _t5MergeByPlot, MAIN and D-TONE for the same plot are
@@ -7657,10 +8166,20 @@ Thank you.`;
                                 <div class="text-[9px] font-bold ${typeLblCls} uppercase tracking-widest">${typeLabel}</div>
                             </div>
 
-                            <!-- Transplanted qty -->
+                            <!-- Transplanted qty, and under it any approved PLOT-STOCK
+                                 adjustment against this plot.
+
+                                 "Missing 1 seedling found during the 2nd culling drone count"
+                                 is one seedling fewer standing in N11. It was transplanted, so
+                                 the transplanted figure keeps it; what it changes is how many
+                                 are alive, and the row has to say so or Alive drops by one
+                                 with nothing on the line accounting for it. Same figure 3rd
+                                 Culling reads — a plot's stock is one fact. -->
                             <div>
                                 <div class="text-[9px] font-black text-[#8a7a68] uppercase lg:hidden mb-0.5">Transplanted</div>
                                 <div class="text-base font-black text-[#3d2610]">${p.qty.toLocaleString()}</div>
+                                ${adj5 ? `<div class="text-[10px] font-black text-[#7a4a10] tabular-nums leading-tight mt-0.5 whitespace-nowrap"
+                                               title="An approved adjustment on this plot — see Adjustments &amp; Audit">Adjustment ${adj5 > 0 ? '+' : ''}${adj5.toLocaleString()}</div>` : ''}
                             </div>
 
                             <!-- Dead input (user enters) -->
@@ -7669,11 +8188,12 @@ Thank you.`;
                                 <input type="number" class="input-style !text-[#a83020] font-black t5-dead text-sm"
                                     min="0" max="${p.qty}" placeholder=""
                                     data-transplanted="${p.qty}"
+                                    data-adjust="${adj5}"
                                     value="${deadVal}"
                                     oninput="autoFillCullDate('${rowId}'); calcT5Row('${rowId}'); calcT5()">
                             </div>
 
-                            <!-- Alive (auto-calculated: transplanted − dead) -->
+                            <!-- Alive (auto-calculated: transplanted − dead + adjustment) -->
                             <div>
                                 <div class="text-[9px] font-black text-[#4a7a2e] uppercase lg:hidden mb-0.5">Alive (auto)</div>
                                 <div class="input-style bg-[#f0f8ec] font-black text-[#4a7a2e] t5-alive-display h-[45px] flex items-center text-sm" id="${rowId}-alive-disp" data-transplanted="${p.qty}">—</div>
@@ -7781,7 +8301,11 @@ Thank you.`;
             const cullCell     = document.getElementById(`${rowId}-cull`);
             const transplanted = parseInt(deadInput.dataset.transplanted) || 0;
             const dead         = parseInt(deadInput.value) || 0;
-            const alive        = Math.max(0, transplanted - dead); // auto-calc
+            // …and any approved plot-stock adjustment. One seedling found
+            // missing is one fewer alive; it was not culled, so Dead is not
+            // where it goes and the cull rate is not moved by it.
+            const adjust       = parseInt(deadInput.dataset.adjust) || 0;
+            const alive        = Math.max(0, transplanted - dead + adjust); // auto-calc
 
             // Sync hidden alive input (used by calcT5 totals)
             if (aliveHidden) { aliveHidden.value = alive; }
@@ -7792,8 +8316,19 @@ Thank you.`;
                 aliveDisp.innerText = deadInput.value !== '' ? alive.toLocaleString() : '—';
             }
 
-            if (transplanted > 0 && deadInput.value !== '') {
-                const cullPct = ((dead / transplanted) * 100).toFixed(2);
+            /* The rate divides by what the row is ACCOUNTING FOR, which is the
+               same figure Alive is worked out from — transplanted, less
+               anything an approved adjustment says is not there.
+
+               I had this as dead over the raw transplanted, on the reasoning
+               that a seedling nobody could find was not culled. True, and
+               beside the point: it is not available to be culled either, so
+               leaving it in the denominator understates the rate — and left
+               one row reading 4.00% under a totals line reading 8.51% for the
+               same four seedlings. One rule, and every line adds up. */
+            const netTransplanted = Math.max(0, transplanted + adjust);
+            if (netTransplanted > 0 && deadInput.value !== '') {
+                const cullPct = ((dead / netTransplanted) * 100).toFixed(2);
                 cullCell.innerText = cullPct + '%';
                 cullCell.className = 'text-sm font-black text-[#a83020] t5-cull-cell';
             } else {
@@ -7803,7 +8338,7 @@ Thank you.`;
         }
 
         function calcT5() {
-            let totTransplanted = 0, totAlive = 0, totDead = 0;
+            let totTransplanted = 0, totAlive = 0, totDead = 0, totAdjust = 0;
             let filledRows = 0, totalRows = 0;
             let mapsAttachedForExistingRows = 0;
 
@@ -7812,35 +8347,67 @@ Thank you.`;
                 const deadInput    = row.querySelector('.t5-dead');
                 const transplanted = parseInt(deadInput.dataset.transplanted) || 0;
                 const dead         = parseInt(deadInput.value) || 0;
-                const alive        = Math.max(0, transplanted - dead);
+                // Same sum the row itself shows — see calcT5Row. The dashboard
+                // reading one seedling more alive than the row it is a total of
+                // is the thing this is here to stop.
+                const adjust       = parseInt(deadInput.dataset.adjust) || 0;
+                const alive        = Math.max(0, transplanted - dead + adjust);
                 totTransplanted   += transplanted;
+                totAdjust         += adjust;
                 totDead           += dead;
                 totAlive          += alive;
                 if (deadInput.value !== '') filledRows++;
                 if (t5_plotMaps[row.id]) mapsAttachedForExistingRows++;
             });
 
+            /* THE TOTAL IS WHAT THIS REPORT IS ACCOUNTING FOR.
+
+               A row keeps the seedling it was transplanted, because it was —
+               and says underneath how many of them are not there any more. The
+               TOTAL has no room for that second line and no reason to want
+               one: it is the figure the reader subtracts Dead from, so it has
+               to be the number the report is actually working with.
+
+               Left at the raw sum it did not reconcile with its own row:
+               13,510 transplanted less 24 dead is 13,486, beside an Alive
+               total of 13,485. One of those two figures had to move, and it is
+               not the one that is right. */
+            const totTransplantedNet = totTransplanted + totAdjust;
+
             // Dashboard
             const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
-            setEl('t5-from-transplanted', totTransplanted.toLocaleString());
+            setEl('t5-from-transplanted', totTransplantedNet.toLocaleString());
             setEl('t5-total-alive',       totAlive.toLocaleString());
             setEl('t5-total-dead',        totDead.toLocaleString());
 
-            const cullRateTxt = totTransplanted > 0 && totDead > 0
-                ? ((totDead / totTransplanted) * 100).toFixed(2) + '%' : '—';
+            const cullRateTxt = totTransplantedNet > 0 && totDead > 0
+                ? ((totDead / totTransplantedNet) * 100).toFixed(2) + '%' : '—';
             setEl('t5-cull-rate', cullRateTxt);
 
             const avgDeadEl = document.getElementById('t5-avg-dead');
             if (avgDeadEl) avgDeadEl.innerText = cullRateTxt;
 
             // Totals footer
-            setEl('t5-tot-transplanted',   totTransplanted.toLocaleString());
+            setEl('t5-tot-transplanted',   totTransplantedNet.toLocaleString());
             setEl('t5-tot-dead',           totDead.toLocaleString());
             setEl('t5-tot-alive',          totAlive.toLocaleString());
-            setEl('t5-tot-transplanted-m', totTransplanted.toLocaleString());
+            setEl('t5-tot-transplanted-m', totTransplantedNet.toLocaleString());
             setEl('t5-tot-dead-m',         totDead.toLocaleString());
             setEl('t5-tot-alive-m',        totAlive.toLocaleString());
             setEl('t5-tot-cull-rate', cullRateTxt);
+
+            /* …and says where the difference went, because a total that is not
+               the sum of the column above it has to account for itself. Shown
+               only when there is an adjustment; a batch with none reads exactly
+               as it did. */
+            const adjNote = (n) => {
+                const el = document.getElementById(n);
+                if (!el) return;
+                el.innerText = totAdjust ? `Incl. adjustment ${totAdjust > 0 ? '+' : ''}${totAdjust.toLocaleString()}` : '';
+                el.classList.toggle('hidden', !totAdjust);
+            };
+            adjNote('t5-tot-adjust-note');
+            adjNote('t5-tot-adjust-note-m');
 
             // Completion %: dead filled + map attached per row.
             // Only count maps belonging to currently-rendered rows so 100% requires every row to have BOTH dead value and map.
@@ -8065,6 +8632,20 @@ Thank you.`;
                     // The date this plot was actually culled — keyed in via the
                     // 📅 toggle next to 3rd Culled on the Main sub-tab.
                     const cullDateMatch = log.remark ? log.remark.match(/CullDate:(\d{4}-\d{2}-\d{2})/) : null;
+                    /* A PLOT IS SOMETIMES CULLED MORE THAN ONCE.
+
+                       Two gangs, two days, one plot — the record has to say
+                       how many came out on each, not just a date and a total.
+                       Written as CullSessions:<date>x<qty>;<date>x<qty>,
+                       beside the CullDate every other reader of this remark
+                       still finds where it always was (it is the first
+                       session's date). A plot culled in one go writes no
+                       sessions at all and reads exactly as it did. */
+                    const sessMatch = log.remark ? log.remark.match(/CullSessions:(\S+)/) : null;
+                    const cullSessions = sessMatch ? String(sessMatch[1]).split(';').map(part => {
+                        const m = part.match(/^(\d{4}-\d{2}-\d{2})?x(\d+)$/);
+                        return m ? { date: m[1] || '', qty: parseInt(m[2], 10) } : null;
+                    }).filter(Boolean) : [];
                     const entry = {
                         culled:  log.quantity_change,
                         balance: balMatch  ? parseInt(balMatch[1]) : null,
@@ -8072,7 +8653,8 @@ Thank you.`;
                         docName: docName || null,
                         mapQty:  mapQtyMatch ? parseInt(mapQtyMatch[1]) : null,
                         mismatchNote: mismatchNote || null,
-                        cullDate: cullDateMatch ? cullDateMatch[1] : null
+                        cullDate: cullDateMatch ? cullDateMatch[1] : null,
+                        cullSessions
                     };
                     if (destMatch) {
                         savedCull3Map[`${log.plot_name}|${destMatch[1]}`] = entry;
@@ -8150,9 +8732,21 @@ Thank you.`;
                 const _normBatchKey = v => String(v == null ? '' : v).trim().toUpperCase()
                                   .replace(/^BATCH\s*:?\s*/, '')   // drop a "Batch: " prefix
                                   .split(/[\s(,\[]/)[0].replace(/[^0-9A-Z]/g, '');
+                /* A PLOT KEY FOR MATCHING A SALE, and punctuation is not part
+                   of it. A reserved plot is written "U15-R" in Settings and
+                   "U15R" by whoever was keying the delivery note, and the
+                   report used to treat those as two different places: 15 sold
+                   seedlings on batch 233's U15-R reached nothing and read as
+                   15 still standing, waiting to be culled.
+
+                   Dropping the hyphen does NOT blur the distinction that
+                   matters — "U15" and "U15-R" are still different keys, which
+                   is the whole point of the suffix. Everything after the first
+                   space or bracket still goes, so "U15 (UPB PREMIER HYBRID)"
+                   is U15 as before. */
                 const _normPlotKey  = v => String(v == null ? '' : v).trim().toUpperCase()
                                               .replace(/^PLOT\s*:?\s*/, '')   // drop a "Plot " prefix
-                                              .split(/[\s(,\[]/)[0].replace(/[^0-9A-Z\-]/g, '');
+                                              .split(/[\s(,\[]/)[0].replace(/[^0-9A-Z]/g, '');
                 const _bt = _normBatchKey(batchId);
                 // Diagnostic: every DO line that contributed to this batch's
                 // sales gets logged. Open DevTools > Console and grep for
@@ -8172,6 +8766,15 @@ Thank you.`;
                 // customers collect", this one answers "what is left standing
                 // in the plot". Only cancelled DOs are skipped.
                 const _salesTrace = [];
+                /* EVERY LINE THIS BATCH OWNS, placed or not.
+
+                   A line is dropped when its plot matches no row on the report
+                   or when it carries no quantity, and both used to go to a
+                   console warning — which is to say nowhere. Sales is what
+                   Balance and 3rd Culled are computed from, so a dropped line
+                   is a plot reading high by that many for good. Kept here and
+                   listed on the tab by syncT6SalesGap. */
+                t6_salesLines = [];
                 (doRows || []).forEach(d => {
                     if (d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'))) return;
                     // How many collection lines does this DO actually carry?
@@ -8184,6 +8787,13 @@ Thank you.`;
                         let qty = Number(d[`qty_${i}`] || 0);
                         const fallback = (!qty && filled === 1);
                         if (fallback) qty = Number(d.total_qty || 0); // single-line DO
+                        t6_salesLines.push({
+                            doId: d.id, doNumber: d.do_number, line: i,
+                            plotKey, plotRaw: String(d[`plot_${i}`] || '').trim(),
+                            date: d.delivery_date,
+                            customer: custByAl[d.al_number] || '',
+                            qty: qty || 0
+                        });
                         if (!qty) { console.warn('[t6:sales] DO', d.do_number, 'line', i, 'has no qty — skipped'); continue; }
                         salesMap[plotKey] = (salesMap[plotKey] || 0) + qty;
                         // Same rows the console trace logs, kept for the
@@ -8301,15 +8911,16 @@ Thank you.`;
                         isTransferRow: true,
                         recordCount:   v.records,
                         dead2:         dead2Map[key] || 0,
-                        sales:         salesMap[key] || 0,
-                        salesDOs:      salesDOsByPlot[key] || [],
+                        sales:         salesMap[_t6SalesKey(v.plot)] || 0,
+                        salesDOs:      salesDOsByPlot[_t6SalesKey(v.plot)] || [],
                         savedBalance:  saved.balance ?? null,
                         savedCulled:   saved.culled  ?? null,
                         savedDocUrl:   saved.docUrl  ?? null,
                         savedDocName:  saved.docName ?? null,
                         savedMapQty:   saved.mapQty  ?? null,
                         savedMismatchNote: saved.mismatchNote ?? null,
-                        savedCullDate: saved.cullDate ?? null
+                        savedCullDate: saved.cullDate ?? null,
+                        savedCullSessions: saved.cullSessions || []
                     });
                 });
 
@@ -8364,7 +8975,7 @@ Thank you.`;
                         // DestType keys + legacy queue) — merged rows carry the
                         // summed culled qty and the first doc/map values found.
                         let culled = null, balance = null, docUrl = null, docName = null, mapQty = null;
-                        let mismatchNote = null, cullDate = null;
+                        let mismatchNote = null, cullDate = null, cullSessions = [];
                         ['main', 'doubletone'].forEach(d => {   // premium excluded from this report
                             const e = savedCull3Map[`${v.plot}|${d}`];
                             if (!e) return;
@@ -8374,6 +8985,7 @@ Thank you.`;
                             if (mapQty == null)  mapQty = e.mapQty ?? null;
                             if (!mismatchNote)   mismatchNote = e.mismatchNote || null;
                             if (!cullDate)       cullDate = e.cullDate || null;
+                            if (!cullSessions.length && (e.cullSessions || []).length) cullSessions = e.cullSessions;
                         });
                         const q = legacyCull3Queue[v.plot];
                         while (q && q.length) {
@@ -8383,6 +8995,7 @@ Thank you.`;
                             if (!docUrl)         { docUrl = e.docUrl; docName = e.docName; }
                             if (!mismatchNote)   mismatchNote = e.mismatchNote || null;
                             if (!cullDate)       cullDate = e.cullDate || null;
+                            if (!cullSessions.length && (e.cullSessions || []).length) cullSessions = e.cullSessions;
                         }
                         t6_plotData.push({
                             plot:         v.plot,
@@ -8390,15 +9003,16 @@ Thank you.`;
                             destType:     (v.destTypes.has('main') || v.destTypes.size > 1) ? 'main' : Array.from(v.destTypes)[0],
                             destTypes:    Array.from(v.destTypes),
                             dead2:        dead2Map[key] || 0,
-                            sales:        salesMap[key] || 0,
-                            salesDOs:     salesDOsByPlot[key] || [],
+                            sales:        salesMap[_t6SalesKey(v.plot)] || 0,
+                            salesDOs:     salesDOsByPlot[_t6SalesKey(v.plot)] || [],
                             savedBalance: balance,
                             savedCulled:  culled,
                             savedDocUrl:  docUrl,
                             savedDocName: docName,
                             savedMapQty:  mapQty,
                             savedMismatchNote: mismatchNote,
-                            savedCullDate: cullDate
+                            savedCullDate: cullDate,
+                            savedCullSessions: cullSessions
                         });
                     });
                     injectTransfers();
@@ -8759,10 +9373,23 @@ Thank you.`;
                                      justify-center does not care what the box's intrinsic
                                      width turns out to be. -->
                                 <div class="t6-nil-dash ${nilCull ? '' : 'hidden'} text-base font-black text-[#c9bda8]">—</div>
-                                <div class="t6-date-body ${nilCull ? 'hidden' : ''} flex justify-center">
+                                <div class="t6-date-body ${nilCull ? 'hidden' : ''} flex flex-col items-center gap-0.5">
+                                <div class="flex justify-center w-full">
                                 <input type="date" class="input-style t6-cull-date !text-[11px] !py-1 !px-1.5 !rounded-lg !text-left w-full max-w-[112px]" value="${p.savedCullDate || ''}"
-                                    onchange="calcT6(); t6PaintPlotRow(this.closest('.t6-plot-row'))"
+                                    onchange="onT6CullDateChange(${i}); calcT6(); t6PaintPlotRow(this.closest('.t6-plot-row'))"
                                     title="Date this plot was culled">
+                                </div>
+                                <div id="${rowId}-sessions" class="w-full"></div>
+                                <!-- A plot is sometimes culled over two days or more.
+                                     This splits the cull into dated parts, each with its
+                                     own quantity — see renderCullSessions. It sits UNDER
+                                     the date box rather than beside it: a button on the
+                                     line pushes the date off the centre of its own
+                                     column, and that column is one people scan down. -->
+                                <button type="button" id="${rowId}-add-session"
+                                    onclick="addCullSession(${i})"
+                                    title="Culled on more than one day? Add a date and how many came out on it"
+                                    class="text-[9px] font-black text-[#3a7ab4] uppercase tracking-widest hover:underline bg-transparent border-0 p-0 cursor-pointer">＋ Split over days</button>
                                 </div>
                             </div>
                         </div>
@@ -8855,6 +9482,17 @@ Thank you.`;
             // Normally does nothing — injectTransfers has already built them.
             t6EnsureDestRows();
 
+            /* Restore a plot that was culled over more than one day. Two or
+               more parts is a split; one is the ordinary row it already
+               looks like, so it is left alone. */
+            t6_cullSessions = {};
+            t6_plotData.forEach((p, i) => {
+                const ss = (p.savedCullSessions || []).filter(r => r && (r.date || r.qty !== ''));
+                if (ss.length < 2) return;
+                t6_cullSessions[i] = ss.map(r => ({ date: r.date || '', qty: r.qty === '' ? '' : Number(r.qty) }));
+                renderCullSessions(i);
+            });
+
             // Restore previously-uploaded drone maps / docs.
             t6_plotData.forEach((p, i) => {
                 if (!p.savedDocUrl) return;
@@ -8904,6 +9542,17 @@ Thank you.`;
             return String(v == null ? '' : v).trim().toUpperCase();
         }
 
+        /* The same plot, however whoever keyed it punctuated it. A delivery
+           note written "U15R" names the plot Settings calls "U15-R", and
+           treating those as two places lost the sale. "U15" is still its own
+           key — the R is the distinction, the hyphen is not.
+
+           SHARED RULE — _normPlotKey in the sales loader above builds the
+           other half of this. Change one, change the other. */
+        function _t6SalesKey(v) {
+            return _t6PlotKey(v).replace(/[^0-9A-Z]/g, '');
+        }
+
         /* What is standing in a plot, and therefore what is left to cull.
 
            `lost` is an approved PLOT-STOCK adjustment against this plot: the
@@ -8916,7 +9565,7 @@ Thank you.`;
         function t6AutoNumbers(p, moved) {
             const dead2 = p.dead2 || 0;
             const sales = p.sales || 0;
-            const lost  = (typeof adjustPlotLoss === 'function') ? adjustPlotLoss(p.plot) : 0;
+            const lost  = (typeof adjustPlotLoss === 'function') ? adjustPlotLoss(p.plot, '3rd Culling') : 0;
             const bal   = Math.max(0, (p.qty || 0) - dead2 - sales - (moved || 0) + lost);
             return { dead2, sales, bal, lost, culled: dead2 + bal };
         }
@@ -9800,6 +10449,182 @@ Thank you.`;
            .modal-backdrop, which is the element that actually scrolls, and
            scrollIntoView on a row inside it moves the page behind instead if
            you let the browser choose. */
+        /* ══════════════════════════════════════════════════════════
+           CULLED ON MORE THAN ONE DAY
+           ══════════════════════════════════════════════════════════
+
+           A plot is not always cleared in one go: two gangs, two days, and
+           the record has to say how many came out on each. The row keeps its
+           single date for the ordinary case — most plots are culled once and
+           nothing about them changes — and the ＋ beside it splits the cull
+           into dated parts.
+
+           The parts are the answer only when they ADD UP: the 3rd Culled
+           figure is worked out from what is standing in the plot and is not
+           up for negotiation, so a plot whose dates come to less than that is
+           not finished being keyed. The row says how far off it is and does
+           not count as done until it tallies.
+
+           Stored in the 3rd_Culling remark as
+               CullSessions:<date>x<qty>;<date>x<qty>
+           with CullDate left exactly where it was — the first session's date
+           — so the batch list, the review and every other reader of that
+           remark go on finding what they always found. */
+        let t6_cullSessions = {};   // row index → [{ date, qty }], first included
+
+        function t6Sessions(idx) {
+            return Array.isArray(t6_cullSessions[idx]) ? t6_cullSessions[idx] : [];
+        }
+        function t6SessionTotal(idx) {
+            return t6Sessions(idx).reduce((s, r) => s + (Number(r.qty) || 0), 0);
+        }
+        /* What the row says was culled, which the parts have to come to. */
+        function t6RowCulled(idx) {
+            const el = document.querySelector(`#t6-row-${idx} .t6-culled-input`);
+            const n = parseInt(el && el.value, 10);
+            return Number.isFinite(n) ? n : 0;
+        }
+        /* Split, and adding up. Both have to be true for the dates to be an
+           answer; a row with no split at all is not "not tallying", it is an
+           ordinary row and says nothing. */
+        function t6SessionsTally(idx) {
+            const ss = t6Sessions(idx);
+            if (ss.length < 2) return true;
+            if (ss.some(r => !r.date || !(Number(r.qty) > 0))) return false;
+            return t6SessionTotal(idx) === t6RowCulled(idx);
+        }
+
+        function onT6CullDateChange(idx) {
+            /* The first part's date IS the row's date box — one field, not two
+               saying different things. Written straight into the part and into
+               the part's own box; redrawing the list from here would take the
+               caret out of the field being typed in. */
+            const ss = t6Sessions(idx);
+            if (!ss.length) return;
+            const el = document.querySelector(`#t6-row-${idx} .t6-cull-date`);
+            ss[0].date = el ? el.value : '';
+            const partEl = document.getElementById(`t6-s-${idx}-0-d`);
+            if (partEl) partEl.value = ss[0].date;
+            syncCullSessionNote(idx);
+        }
+
+        function addCullSession(idx) {
+            const ss = t6Sessions(idx);
+            if (!ss.length) {
+                // First press: the row's own date becomes part one, carrying
+                // everything culled so far, and part two starts empty. Nothing
+                // is invented — the figures already on the row are simply
+                // written down as the first day's.
+                const el = document.querySelector(`#t6-row-${idx} .t6-cull-date`);
+                ss.push({ date: el ? el.value : '', qty: t6RowCulled(idx) });
+            }
+            ss.push({ date: '', qty: '' });
+            t6_cullSessions[idx] = ss;
+            renderCullSessions(idx, true);
+            calcT6();
+        }
+
+        function removeCullSession(idx, i) {
+            const ss = t6Sessions(idx);
+            ss.splice(i, 1);
+            // One part left is no split at all: fold it back into the row's
+            // own date box and leave the plot looking like every other one.
+            if (ss.length === 1) {
+                const el = document.querySelector(`#t6-row-${idx} .t6-cull-date`);
+                if (el && ss[0].date) el.value = ss[0].date;
+                ss.length = 0;
+            }
+            t6_cullSessions[idx] = ss;
+            renderCullSessions(idx);
+            calcT6();
+        }
+
+        /* KEYING A PART CHANGES THE FIGURES, NOT THE BOXES.
+
+           This used to redraw the whole list on every keystroke and put the
+           caret back where it found it. On a number box that meant typing 588
+           came out 885 — each digit landing in front of the last — and on a
+           date box the year sent the cursor back to the day segment, so the
+           field could not be filled at all.
+
+           Nothing structural happens while somebody types: the part is
+           already on screen, so only what it ADDS UP TO needs redrawing.
+           Adding and removing a part still rebuilds the list, which is the
+           one time it has to. */
+        function updateCullSession(idx, i, field, value) {
+            const ss = t6Sessions(idx);
+            if (!ss[i]) return;
+            ss[i][field] = field === 'qty' ? (value === '' ? '' : Math.max(0, parseInt(value, 10) || 0)) : value;
+            if (i === 0 && field === 'date') {
+                const el = document.querySelector(`#t6-row-${idx} .t6-cull-date`);
+                if (el) el.value = ss[0].date || '';
+            }
+            syncCullSessionNote(idx);
+            calcT6();
+        }
+
+        /* Just the line under the parts: what they come to, and how far that
+           is from what was culled. */
+        function syncCullSessionNote(idx) {
+            const note = document.getElementById(`t6-row-${idx}-sessions-note`);
+            if (!note) return;
+            const culled = t6RowCulled(idx);
+            const total  = t6SessionTotal(idx);
+            const short  = culled - total;
+            note.className = `text-[9px] font-black uppercase tracking-widest leading-tight text-center ${short === 0 ? 'text-[#4a7a2e]' : 'text-[#a83020]'}`;
+            note.innerText = short === 0
+                ? `✓ ${total.toLocaleString()} of ${culled.toLocaleString()}`
+                : short > 0
+                    ? `${total.toLocaleString()} of ${culled.toLocaleString()} — ${short.toLocaleString()} still to date`
+                    : `${total.toLocaleString()} of ${culled.toLocaleString()} — ${Math.abs(short).toLocaleString()} too many`;
+        }
+
+        function renderCullSessions(idx, focusLast) {
+            const host = document.getElementById(`t6-row-${idx}-sessions`);
+            if (!host) return;
+            const ss = t6Sessions(idx);
+            const addBtn = document.getElementById(`t6-row-${idx}-add-session`);
+            if (addBtn) addBtn.classList.toggle('hidden', ss.length >= 2);
+            if (ss.length < 2) { host.innerHTML = ''; return; }
+
+            /* A part gets two lines, not one. Three boxes abreast in a column
+               sized for a date left the date about eighty pixels wide, which
+               shows "06/07" and no year and cannot be typed into. The date
+               has the width of the column to itself and the quantity sits
+               under it. */
+            host.innerHTML = `
+                <div class="mt-1 space-y-1.5">
+                    ${ss.map((r, i) => `
+                        <div class="flex flex-col gap-0.5 ${i ? 'pt-1.5 border-t border-[#efe6d6]' : ''}">
+                            <input type="date" id="t6-s-${idx}-${i}-d" value="${r.date || ''}"
+                                onchange="updateCullSession(${idx}, ${i}, 'date', this.value)"
+                                class="input-style t6-cull-part-date !text-[10px] !py-1 !px-1.5 !rounded-lg !text-left w-full"
+                                title="Date this part of the plot was culled">
+                            <div class="flex items-center gap-1">
+                                <input type="number" min="0" id="t6-s-${idx}-${i}-q" value="${r.qty === '' ? '' : r.qty}"
+                                    oninput="updateCullSession(${idx}, ${i}, 'qty', this.value)"
+                                    placeholder="Qty"
+                                    class="input-style t6-cull-part-qty !text-[10px] !py-1 !px-1.5 !rounded-lg !text-center flex-1 min-w-0"
+                                    title="How many came out on that day">
+                                ${i === 0 ? '<span class="w-5 shrink-0"></span>'
+                                          : `<button type="button" onclick="removeCullSession(${idx}, ${i})"
+                                                class="w-5 h-5 shrink-0 rounded border border-[#f8d7da] bg-white text-[#a83020] text-[10px] font-black flex items-center justify-center hover:bg-[#fff5f5]"
+                                                title="Remove this date">✕</button>`}
+                            </div>
+                        </div>`).join('')}
+                    <button type="button" onclick="addCullSession(${idx})"
+                        class="text-[9px] font-black text-[#3a7ab4] uppercase tracking-widest hover:underline bg-transparent border-0 p-0 cursor-pointer">＋ Add date</button>
+                    <div id="t6-row-${idx}-sessions-note"></div>
+                </div>`;
+            syncCullSessionNote(idx);
+            // Straight into the day just added, so a second date is typed
+            // rather than hunted for.
+            if (focusLast) {
+                const el = document.getElementById(`t6-s-${idx}-${ss.length - 1}-d`);
+                if (el) el.focus();
+            }
+        }
+
         function goToT6Plot(idx) {
             const row = document.getElementById(`t6-row-${idx}`);
             if (!row) return;
@@ -9811,6 +10636,148 @@ Thank you.`;
             row.scrollIntoView({ behavior: 'smooth', block: 'center' });
             row.classList.add('t6-row-flash');
             setTimeout(() => row.classList.remove('t6-row-flash'), 2200);
+        }
+
+        /* IS THE DIFFERENCE ALREADY EXPLAINED SOMEWHERE ELSE ON THIS PAGE?
+
+           A drone map 53 short of the 3rd cull, and an adjustment of −53
+           against that same plot sitting on the Adjustments tab, are the same
+           53 seedlings. The row only moves when that adjustment is APPROVED
+           and filed as PLOT STOCK; until then it is a claim about the batch's
+           seed count, or a claim nobody has ruled on, and the plot goes on
+           reading the figure it was counted at.
+
+           That is a correct rule and a terrible thing to work out by eye. So
+           where the adjustments this plot has — the ones not already in its
+           arithmetic — come to exactly the difference, the panel says so, and
+           says which of the two things is in the way.
+
+           Exactly. A near-match is a coincidence, and a panel that guessed at
+           one would teach people to press the button without reading. */
+        function t6MismatchAdjustment(plot, diff) {
+            if (!diff || !Array.isArray(ADJUST_ROWS) || !ADJUST_ROWS.length) return null;
+            const key = _t6PlotKey(plot);
+            if (!key) return null;
+            const mine = ADJUST_ROWS.filter(r => _t6PlotKey(r.plot) === key && _adjCouldMoveCull3(r));
+            if (!mine.length) return null;
+            if (mine.reduce((s, r) => s + (r.qty || 0), 0) !== diff) return null;
+            const pending  = mine.filter(r => !r.approved);
+            const misfiled = mine.filter(r => r.approved && r.side !== 'plot');
+            const one = mine.length === 1 ? mine[0] : null;
+            let why;
+            if (pending.length && !misfiled.length) {
+                why = mine.length === 1
+                    ? 'It is waiting for approval — an adjustment nobody has ruled on moves no figure. Approve it and this plot tallies.'
+                    : 'They are waiting for approval — an adjustment nobody has ruled on moves no figure. Approve them and this plot tallies.';
+            } else if (misfiled.length && !pending.length) {
+                why = 'It is filed against the SEED COUNT, so it corrected how many the batch started with instead of how many are standing here. '
+                    + 'Seedlings stolen, dead or miscounted after they reached the plot are PLOT STOCK — change it to that and this plot tallies.';
+            } else {
+                why = 'Some of it is waiting for approval and some is filed against the seed count. Settle both on the Adjustments tab and this plot tallies.';
+            }
+            return {
+                qty: diff,
+                count: mine.length,
+                id: one ? one.id : null,
+                reason: one ? one.reason : '',
+                why
+            };
+        }
+
+        /* Take me to it. The adjustment is on another tab in a table of its
+           own, and hunting for it is the same walk this panel's plot button
+           already saves in the other direction. */
+        function goToAdjustment(id) {
+            switchTab(7);
+            setTimeout(() => {
+                const tr = id ? document.querySelector(`#t7-cal-history tr[data-cal-id="${id}"]`) : null;
+                const el = tr || document.getElementById('t7-cal-history');
+                if (!el) return;
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (tr) {
+                    tr.classList.add('t6-row-flash');
+                    setTimeout(() => tr.classList.remove('t6-row-flash'), 2200);
+                }
+            }, 120);
+        }
+
+        /* SALES THAT REACHED NO PLOT.
+
+           Every collection line whose OWN batch number is this batch, checked
+           against the rows the report actually has. Two ways one goes missing,
+           and both used to be a console warning:
+
+             • the plot on the line matches no row here — keyed as a plot this
+               batch never had, or as a plot whose seedlings were transferred
+               into a "-R" row that the line does not name;
+             • the line has no quantity, and the DO carries more than one line
+               so there is no total to fall back on.
+
+           Either way the seedlings are sold and the report does not know it,
+           so that plot's Balance and 3rd Culled are high by exactly that many
+           — which is how a plot comes to be "culled" while the lorry has
+           already taken it.
+
+           Scoped to lines that NAME this batch, and nothing else. Matching on
+           the plot name instead lists every other batch's ordinary sale off a
+           plot this one happens to share: 120 rows and 15,567 seedlings of
+           noise, which is what that looked like when it was tried. */
+        let t6_salesLines = [];
+
+        function t6SalesGaps() {
+            if (!Array.isArray(t6_salesLines) || !t6_salesLines.length) return [];
+            const have = new Set((t6_plotData || []).map(p => _t6SalesKey(p.plot)));
+            return t6_salesLines.filter(l => !l.qty || !have.has(_t6SalesKey(l.plotKey)));
+        }
+
+        function syncT6SalesGap() {
+            const panel = document.getElementById('t6-sales-gap-panel');
+            const host  = document.getElementById('t6-sales-gap-rows');
+            const count = document.getElementById('t6-sales-gap-count');
+            if (!panel || !host) return [];
+
+            const gaps = t6SalesGaps();
+            if (!gaps.length) { panel.classList.add('hidden'); host.innerHTML = ''; return gaps; }
+
+            panel.classList.remove('hidden');
+            const total = gaps.reduce((s, g) => s + (g.qty || 0), 0);
+            if (count) count.innerText = `${gaps.length} line${gaps.length === 1 ? '' : 's'}`
+                                       + (total ? ` · ${total.toLocaleString()} seedlings` : '');
+            host.innerHTML = gaps.map(g => {
+                const why = !g.qty
+                    ? 'This line has no quantity, and the delivery note carries more than one line — so there is no total to read it from. Key the quantity on the line.'
+                    : `The report has no plot ${_t6Esc(g.plotKey)} on this batch. Either the plot is keyed differently on the delivery note, or the seedlings were moved to another plot before they went — put the plot they actually left from on the line.`;
+                const dateStr = g.date
+                    ? new Date(g.date).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' })
+                    : '—';
+                return `
+                    <div class="border border-[#e8dcc8] rounded-2xl p-4 bg-[#fdfaf4]">
+                        <div class="flex flex-wrap items-center gap-x-6 gap-y-2 mb-2">
+                            <div>
+                                <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Delivery Note</div>
+                                <div class="text-base font-black text-[#3d2610]">${_t6Esc(g.doNumber || '—')}<span class="text-[11px] font-bold text-[#8a7a68]"> · line ${g.line}</span></div>
+                            </div>
+                            <div>
+                                <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Plot As Keyed</div>
+                                <div class="text-base font-black text-[#a83020]">${_t6Esc(g.plotRaw || g.plotKey || '—')}</div>
+                            </div>
+                            <div>
+                                <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Qty</div>
+                                <div class="text-base font-black text-[#3d2610]">${g.qty ? g.qty.toLocaleString() : '— none keyed —'}</div>
+                            </div>
+                            <div>
+                                <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Delivered</div>
+                                <div class="text-base font-black text-[#3d2610]">${dateStr}</div>
+                            </div>
+                            ${g.customer ? `<div>
+                                <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Customer</div>
+                                <div class="text-sm font-bold text-[#8a7a68]">${_t6Esc(g.customer)}</div>
+                            </div>` : ''}
+                        </div>
+                        <div class="text-[12px] font-bold text-[#3d2610] leading-snug">${why}</div>
+                    </div>`;
+            }).join('');
+            return gaps;
         }
 
         function syncT6Mismatch() {
@@ -9860,6 +10827,24 @@ Thank you.`;
                                 <div class="text-base font-black ${diff > 0 ? 'text-[#c07820]' : 'text-[#a83020]'}">${diff > 0 ? '+' : ''}${diff.toLocaleString()}</div>
                             </div>
                         </div>
+                        ${(() => {
+                            const a = t6MismatchAdjustment(m.plot, diff);
+                            if (!a) return '';
+                            const head = a.count === 1
+                                ? `There is an adjustment of ${a.qty > 0 ? '+' : ''}${a.qty.toLocaleString()} on ${_t6Esc(m.plot)}`
+                                : `${a.count} adjustments on ${_t6Esc(m.plot)} come to ${a.qty > 0 ? '+' : ''}${a.qty.toLocaleString()}`;
+                            return `
+                            <div class="mb-3 rounded-xl border border-[#bee3f8] bg-[#f0f8ff] px-4 py-3">
+                                <div class="text-[10px] font-black text-[#2b6cb0] uppercase tracking-widest mb-1">This difference is already accounted for</div>
+                                <div class="text-[12px] font-bold text-[#3d2610] leading-snug">
+                                    ${head}${a.reason ? ` — “${_t6Esc(a.reason)}”` : ''}. ${a.why}
+                                </div>
+                                <button type="button" onclick="goToAdjustment(${a.id ? `'${_escAttr(String(a.id))}'` : 'null'})"
+                                    class="mt-2 text-[10px] font-black text-[#2b6cb0] uppercase tracking-widest underline underline-offset-4 hover:text-[#1a4a80] bg-transparent border-0 p-0 cursor-pointer">
+                                    Open it on Adjustments →
+                                </button>
+                            </div>`;
+                        })()}
                         <label class="label-style !text-[#7a4a10]">Reason &amp; how to avoid it in future</label>
                         <textarea rows="2" data-idx="${m.idx}" id="t6-mm-note-${m.idx}"
                             class="input-style t6-mm-note w-full !text-sm"
@@ -9942,7 +10927,11 @@ Thank you.`;
                 const soldOutRow  = !!(p && p.isTransferRow) &&
                                     (parseInt(row.querySelector('.t6-balance')?.value) || 0) === 0;
                 const mapDone     = soldOutRow || mapQtyVal !== '';
-                const dateDone    = soldOutRow || cullDateVal !== '';
+                /* A plot culled over several days is dated when EVERY day is
+                   dated and they add up to what was culled. Half a split is
+                   not a date, it is a plot somebody is halfway through
+                   keying. */
+                const dateDone    = soldOutRow || (cullDateVal !== '' && t6SessionsTally(idx));
                 /* …and signed. A row nobody has checked is not a row that is
                    done, and unverifying one has to be able to take the count
                    back down — otherwise the tab says 6 / 6 Done and 100% with
@@ -10017,6 +11006,9 @@ Thank you.`;
             // The plots whose drone map disagrees with the culled qty, listed
             // under the totals for a reason to be written against each.
             syncT6Mismatch();
+            // …and the sales on this batch's delivery notes that reached no
+            // plot at all, which is the other way a figure here goes wrong.
+            syncT6SalesGap();
 
             // Done counter
             document.getElementById('t6-done-count').innerText = rowsDone;
@@ -10306,6 +11298,19 @@ Thank you.`;
                     // Drone Map on P-R Culling.
                     const cullDateVal = row.querySelector('.t6-cull-date')?.value || '';
                     const cullDatePart = cullDateVal ? ` CullDate:${cullDateVal}` : '';
+                    /* …and the days it was culled over, when it was culled on
+                       more than one. CullDate stays exactly where it was — the
+                       first of them — so everything that reads this remark for
+                       a date goes on finding one. */
+                    /* Off the row's OWN id, not its place in the list —
+                       main rows and "-R" rows render into two containers, so
+                       document order matching t6_plotData order is a
+                       coincidence, not a guarantee. */
+                    const rowIdx = parseInt(String(row.id).replace('t6-row-', ''), 10);
+                    const sessions = t6Sessions(rowIdx).filter(r => r.date || r.qty !== '');
+                    const cullSessionsPart = sessions.length > 1
+                        ? ` CullSessions:${sessions.map(r => `${r.date || ''}x${Number(r.qty) || 0}`).join(';')}`
+                        : '';
 
                     // Upload the drone map / proof doc (if any) so it survives a refresh.
                     let docUrl = '', docNamePart = '';
@@ -10335,7 +11340,7 @@ Thank you.`;
                         // DestType is critical: the same plot (e.g. B10) can appear under
                         // both MAIN and D-TONE; the load uses (plot_name, destType) to
                         // distinguish them so values don't overwrite each other.
-                        remark: `3rd Culling. Transplanted: ${transplanted}, Remaining Balance: ${balance}, Culled: ${culled}, Cull Rate: ${cullPct}%${dead2Part}, DestType: ${destType}${mapQtyPart}${mismatchNote}${cullDatePart}${docSuffix}`
+                        remark: `3rd Culling. Transplanted: ${transplanted}, Remaining Balance: ${balance}, Culled: ${culled}, Cull Rate: ${cullPct}%${dead2Part}, DestType: ${destType}${mapQtyPart}${mismatchNote}${cullDatePart}${cullSessionsPart}${docSuffix}`
                     }));
                 }
 

@@ -783,9 +783,19 @@
     const _normBatchKey = v => String(v == null ? '' : v).trim().toUpperCase()
                               .replace(/^BATCH\s*:?\s*/, '')   // drop a "Batch: " prefix
                               .split(/[\s(,\[]/)[0].replace(/[^0-9A-Z]/g, '');
+    /* …and a plot key carries no punctuation either. A reserved plot is
+       "U15-R" in Settings and "U15R" on the delivery note somebody keyed in a
+       hurry, and treating those as two places lost the sale off the plot it
+       actually left. "U15" is still its own key — the R is the distinction,
+       the hyphen is not. Both sides of the match run through this, so they
+       cannot disagree about it.
+
+       SHARED RULE — the same normaliser lives in
+       operation/operation_batch_detail.html (Tab 6's Sales). Change one,
+       change the other. */
     const _normPlotKey  = v => String(v == null ? '' : v).trim().toUpperCase()
                                   .replace(/^PLOT\s*:?\s*/, '')
-                                  .split(/[\s(,\[]/)[0].replace(/[^0-9A-Z\-]/g, '');
+                                  .split(/[\s(,\[]/)[0].replace(/[^0-9A-Z]/g, '');
 
     // Mutates each group: g.doDeducted = qty issued via DOs for that batch+plot.
     // DO lines that match no row are collected into doUnmatchedLines so no

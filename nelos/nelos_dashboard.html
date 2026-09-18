@@ -325,6 +325,11 @@
   /* Room to breathe above "Created by" — it used to sit almost flush
      against the last detail row (1px), reading as one more row of the
      grid rather than the signature at the foot of it. */
+  .s-case-doc { display:flex; align-items:center; gap:7px; margin:9px 0 2px; padding:9px 11px;
+                border:1.5px solid #ede9fe; border-radius:11px; background:#faf8ff;
+                font-size:12px; font-weight:800; color:#4c1d95; text-decoration:none;
+                overflow-wrap:anywhere; }
+  .s-case-doc:hover { border-color:#c4b5fd; background:#f5f3ff; }
   .s-case-by { font-size:10.5px; font-weight:600; color:#a3adbb; margin-top:10px; }
   .s-case-by b { font-weight:800; color:#8792a3; }
   .s-case-g { margin-top:9px; display:grid; grid-template-columns:auto 1fr; gap:4px 12px;
@@ -693,6 +698,31 @@
         </div>
       </div>
 
+      <!-- A photo is not always the thing to attach: a delivery order, a
+           lab result, a supplier's letter, a spreadsheet of counts. One
+           document per case, alongside the photo rather than instead of
+           it. Hidden until the database has the columns for it — see
+           shared/RUN_ME_nelos_case_document.sql. -->
+      <div class="m-sec hidden" id="step-doc">
+        <div class="m-sec-h">Attach document</div>
+        <label class="s-shot" for="c-doc">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 3v5h5"/></svg>
+          <span id="c-doc-t">Choose a file — PDF, Word, Excel, anything</span>
+        </label>
+        <input id="c-doc" class="s-shot-file" type="file"
+               accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,image/*">
+        <div id="c-doc-now" class="hidden" style="margin-top:12px;display:flex;align-items:center;gap:11px;">
+          <span aria-hidden="true" style="width:40px;height:40px;border-radius:10px;border:1.5px solid #ede9fe;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;">📄</span>
+          <a id="c-doc-name" href="#" target="_blank" rel="noopener"
+             style="font-size:11.5px;font-weight:700;color:#4c1d95;overflow-wrap:anywhere;flex:1;text-decoration:underline;"></a>
+          <button type="button" id="c-doc-drop"
+                  style="font-size:10px;font-weight:900;letter-spacing:.07em;text-transform:uppercase;color:#b91c1c;background:none;border:none;cursor:pointer;flex-shrink:0;">
+            Remove</button>
+        </div>
+      </div>
+
       <div class="m-sec" id="step-desc">
         <div class="m-sec-h">New case remark</div>
         <textarea id="c-desc" class="inp"></textarea>
@@ -716,6 +746,7 @@ let allCases = [];      // everything we are allowed to see, loaded once
 let categories = [];    // nelos_categories — the problems, per system
 let modules = [];       // nelos_modules — the linked systems
 let plots = [];         // shared_plots — { plot_name, nursery_name }
+let nurseries = [];     // operation_nurseries — the master list of nursery names
 let handlers = [];      // nelos_handlers — who works in which system
 let routes = [];        // nelos_routes — where a system's cases go
 let me = { id: null, name: null };
@@ -729,6 +760,12 @@ let rights = { is_admin: false, may_solve: true, may_edit: false, may_delete: fa
 
 let editingId = null;   // case being edited, or null when raising a new one
 let photoUrl  = null;   // the photo on the case in the drawer, once uploaded
+let docUrl    = null;   // …and the document, which is a link rather than a picture
+let docName   = null;
+/* Whether this database has the two columns a document needs. Asked once,
+   on the first load: without them the picker would take a file, upload it
+   and lose it at the insert, which is worse than not offering it. */
+let docsOn    = false;
 
 /* The system a case is raised FROM. The form no longer asks — a case
    raised here is a Nelos case — but a deep link still says so
@@ -1262,7 +1299,16 @@ function caseBlockHtml(c) {
     ? `<img class="s-prev s-case-shot" src="${esc(c.photo_url)}" alt="Photo on the case" loading="lazy">`
     : '';
 
-  return `<div class="s-case-t">${esc(c.title || '')}</div>` + shot +
+  /* …and the document, which is opened rather than looked at. Beside the
+     photo for the same reason the photo is here: the moment somebody
+     decides whether a case is solved is the moment the attachment matters
+     most, and it used to be visible on none of these dialogs. */
+  const doc = c.doc_url
+    ? `<a class="s-case-doc" href="${esc(c.doc_url)}" target="_blank" rel="noopener">📄 ${
+         esc(c.doc_name || 'Open the document')}</a>`
+    : '';
+
+  return `<div class="s-case-t">${esc(c.title || '')}</div>` + shot + doc +
     `<div class="s-case-g">` +
       bits.map(([k, v]) => `<div class="s-case-k">${esc(k)}</div><div class="s-case-v">${esc(v)}</div>`).join('') +
     `</div>` +
@@ -1514,18 +1560,51 @@ function problemName() {
    Both are stored and matched by NAME across this codebase, not by id, so
    the option values are the names themselves. */
 
+/* THE NURSERIES A CASE CAN NAME.
+
+   The list used to be whatever nursery names the PLOTS happened to carry,
+   and that left two gaps:
+
+     PRE NURSERY is counted in TRAYS, not plots, so shared_plots has no row
+       naming it and it could not be chosen at all — on a system whose
+       whole first stage happens there.
+
+     ALL NURSERY is not in any table and never will be. Some cases are
+       about every nursery at once — a rule, a form, a piece of equipment
+       that travels — and they were being filed against whichever nursery
+       the person happened to pick, or not raised at all.
+
+   So the master list (operation_nurseries) and the plots' own names are
+   merged, Pre Nursery is guaranteed a place whether or not anything else
+   mentions it, and All Nursery leads. */
+const NURSERY_ALL = 'All Nursery';
+const NURSERY_PRE = 'Pre Nursery';
+const _isPre = n => /pre\s*-?\s*nursery/i.test(n) || /^pn\b/i.test(String(n).trim());
+
 function fillNurseries() {
-  const names = [...new Set(plots.map(p => p.nursery_name).filter(Boolean))].sort();
+  const names = [...new Set([
+    ...nurseries.map(n => n.name).filter(Boolean),
+    ...plots.map(p => p.nursery_name).filter(Boolean)
+  ])].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+  // …and the pre nursery, under whatever name it already goes by here.
+  if (!names.some(_isPre)) names.unshift(NURSERY_PRE);
+
+  const keep = $('c-nursery').value;
   $('c-nursery').innerHTML = '<option value="">— choose a nursery —</option>' +
+    `<option value="${esc(NURSERY_ALL)}">${esc(NURSERY_ALL)}</option>` +
     names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  if (keep && [...$('c-nursery').options].some(o => o.value === keep)) $('c-nursery').value = keep;
 }
 
 /* Plot names run B1, B2 … B10, so they sort numerically or B10 lands
    before B2 — the same comparison every other picker in the portal uses. */
 function fillPlots() {
   const nursery = $('c-nursery').value;
+  // A case about every nursery is not about one plot, but nothing is gained
+  // by refusing to name one either — so all of them are offered.
+  const anywhere = !nursery || nursery === NURSERY_ALL;
   const mine = plots
-    .filter(p => p.plot_name && (!nursery || p.nursery_name === nursery))
+    .filter(p => p.plot_name && (anywhere || p.nursery_name === nursery))
     .map(p => p.plot_name)
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
@@ -1534,9 +1613,15 @@ function fillPlots() {
 }
 
 async function loadPlaces() {
-  const { data } = await _supabase.from('shared_plots').select('plot_name,nursery_name')
-    .then(r => r, () => ({ data: [] }));
-  plots = data || [];
+  /* Two reads, each failing on its own terms: no plots leaves the nursery
+     list to the master table, no master table leaves it to the plots. The
+     pre nursery is added by fillNurseries either way. */
+  const [plotRes, nursRes] = await Promise.all([
+    _supabase.from('shared_plots').select('plot_name,nursery_name').then(r => r, () => ({ data: [] })),
+    _supabase.from('operation_nurseries').select('name').then(r => r, () => ({ data: [] }))
+  ]);
+  plots     = plotRes.data || [];
+  nurseries = nursRes.data || [];
   fillNurseries();
   fillPlots();
 }
@@ -1632,10 +1717,12 @@ function clearDrawer() {
   $('c-problem').value = '';
   $('c-pic').value = '';
   $('c-photo').value = '';
+  $('c-doc').value = '';
   newSource = 'nelos';
   quiet = { priority: 'normal', dueDate: null, batch: null };
   destTouched = false;
   setPhoto(null);
+  setDoc(null);
   syncOther();
 }
 
@@ -1650,6 +1737,60 @@ function setPhoto(url, name) {
     $('c-photo-thumb').src = photoUrl;
     $('c-photo-name').textContent = name || 'Photo attached';
   }
+}
+
+const DOC_IDLE = 'Choose a file — PDF, Word, Excel, anything';
+
+/* Shows (or clears) the document currently attached to whatever is in the
+   drawer. docUrl is what Save will write; the name is what to call the
+   link. */
+function setDoc(url, name) {
+  docUrl  = url || null;
+  docName = name || null;
+  $('c-doc-now').classList.toggle('hidden', !docUrl);
+  $('c-doc-t').textContent = docUrl ? 'Document attached — tap to change' : DOC_IDLE;
+  if (docUrl) {
+    const a = $('c-doc-name');
+    a.textContent = docName || 'Document attached';
+    a.href = docUrl;
+  }
+}
+
+/* Does this database know about doc_url / doc_name? A blank select of the
+   two columns is the cheapest way to ask, and PostgREST answers 400 when
+   it has never heard of them — the same test the dock's column tiers use.
+   Asked once; the picker stays hidden until the answer is yes, because a
+   picker that takes a file and loses it is worse than none. */
+async function checkDocsColumn() {
+  const { error } = await _supabase.from('nelos_cases').select('doc_url,doc_name').limit(1);
+  docsOn = !error;
+  $('step-doc').classList.toggle('hidden', !docsOn);
+  if (!docsOn) {
+    console.warn('[nelos] nelos_cases has no doc_url — run shared/RUN_ME_nelos_case_document.sql ' +
+                 'to let a case carry a document.');
+  }
+}
+
+/* Uploads whatever is in the document box and returns its public URL, or
+   undefined if nothing was chosen. Throws with a readable message so the
+   Save handler can show it and leave the drawer open — the same contract
+   as uploadPhoto. NOT shrunk: a document is not a picture, and 1600px of
+   a PDF is a ruined PDF. */
+async function uploadDoc() {
+  const file = $('c-doc').files && $('c-doc').files[0];
+  if (!file) return undefined;
+  if (file.size > 25 * 1024 * 1024) throw new Error('That file is over 25 MB — send a smaller one.');
+
+  const safe = (file.name || 'document').replace(/[^A-Za-z0-9._-]+/g, '_').slice(-80);
+  const path = `${new Date().toISOString().slice(0, 10)}/${Math.random().toString(36).slice(2)}-${safe}`;
+  const { error } = await _supabase.storage.from('nelos-docs')
+    .upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+  if (error) {
+    throw new Error(/not found|bucket/i.test(error.message || '')
+      ? 'the nelos-docs bucket is missing — run shared/RUN_ME_nelos_case_document.sql'
+      : 'File upload failed — ' + error.message);
+  }
+  return _supabase.storage.from('nelos-docs').getPublicUrl(path).data.publicUrl;
 }
 
 /* The house settings a category carries, now that neither is a field.
@@ -1803,6 +1944,14 @@ $('c-photo').addEventListener('change', () => {
 });
 $('c-photo-drop').addEventListener('click', () => { $('c-photo').value = ''; setPhoto(null); });
 
+$('c-doc').addEventListener('change', () => {
+  const f = $('c-doc').files && $('c-doc').files[0];
+  // Named straight away, before it is uploaded, so the drawer confirms
+  // what was picked rather than waiting for Save.
+  if (f) setDoc(URL.createObjectURL(f), f.name);
+});
+$('c-doc-drop').addEventListener('click', () => { $('c-doc').value = ''; setDoc(null); });
+
 $('c-save').addEventListener('click', async () => {
   const problem = problemName();
   if (!problem) {
@@ -1817,9 +1966,10 @@ $('c-save').addEventListener('click', async () => {
   const wording = editingId ? 'Save Changes' : 'Add New Case';
   btn.disabled = true; btn.textContent = editingId ? 'Saving…' : 'Adding…';
 
-  let uploaded;
+  let uploaded, uploadedDoc;
   try {
-    uploaded = await uploadPhoto();
+    uploaded    = await uploadPhoto();
+    uploadedDoc = docsOn ? await uploadDoc() : undefined;
   } catch (e) {
     btn.disabled = false; btn.textContent = wording;
     toast(e.message, false);
@@ -1853,6 +2003,16 @@ $('c-save').addEventListener('click', async () => {
     // leave whatever is there — including on a database with no such column.
     if (uploaded) row.photo_url = uploaded;
     else if (photoUrl === null) row.photo_url = null;
+    // The document follows the same three-way rule: a new one, a cleared
+    // one, or leave what is there.
+    if (docsOn) {
+      if (uploadedDoc) {
+        row.doc_url = uploadedDoc;
+        row.doc_name = ($('c-doc').files[0] && $('c-doc').files[0].name) || 'Document';
+      } else if (docUrl === null) {
+        row.doc_url = null; row.doc_name = null;
+      }
+    }
 
     const { error } = await _supabase.from('nelos_cases').update(row).eq('id', editingId);
     btn.disabled = false; btn.textContent = wording;
@@ -1866,6 +2026,10 @@ $('c-save').addEventListener('click', async () => {
 
   const { data, error } = await MJMNelos.raise({
     photoUrl:    uploaded || null,
+    docUrl:      uploadedDoc || null,
+    docName:     uploadedDoc
+      ? (($('c-doc').files[0] && $('c-doc').files[0].name) || 'Document')
+      : null,
     title:       problem,
     description: $('c-desc').value.trim() || null,
     category:    listed ? problem : null,
@@ -2111,7 +2275,8 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && openFBtn) 
     // list all read from it, so the drawer's steps have nothing to draw
     // until it is in.
     await loadModules();
-    await Promise.all([loadCases(), loadCategories(), loadHandlers(), loadPlaces()]);
+    await Promise.all([loadCases(), loadCategories(), loadHandlers(), loadPlaces(),
+                       checkDocsColumn()]);
     $('loading').classList.add('hidden');
     $('main').classList.remove('hidden');
 
