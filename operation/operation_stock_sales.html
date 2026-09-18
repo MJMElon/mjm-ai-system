@@ -167,12 +167,14 @@
         .cf-btn.open{border-color:#1d4ed8;box-shadow:0 0 0 3px rgba(29,78,216,.12);}
         .cf-chevron{width:11px;height:11px;color:#94a3b8;transition:transform .15s;flex-shrink:0;}
         .cf-btn.open .cf-chevron{transform:rotate(180deg);}
-        .cf-menu{position:absolute;right:0;top:calc(100% + 6px);min-width:196px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 12px 28px -8px rgba(15,23,42,.2),0 2px 6px rgba(15,23,42,.06);padding:6px;z-index:30;}
-        .cf-opt{display:flex;align-items:center;gap:8px;width:100%;text-align:left;font-size:11px;font-weight:700;color:#334155;background:none;border:none;border-radius:8px;padding:8px 10px;cursor:pointer;transition:background .12s,color .12s;font-family:inherit;}
-        .cf-opt:hover{background:#f1f5f9;}
-        .cf-opt.active{color:#1d4ed8;font-weight:900;background:#eff6ff;}
-        .cf-tick{width:13px;font-size:12px;font-weight:900;color:#1d4ed8;opacity:0;flex-shrink:0;}
-        .cf-opt.active .cf-tick{opacity:1;}
+        .cf-menu{position:absolute;right:0;top:calc(100% + 6px);min-width:220px;max-height:280px;overflow-y:auto;background:#fff;border:1px solid #e5e9f0;border-radius:14px;box-shadow:0 16px 32px -10px rgba(15,23,42,.18),0 4px 10px rgba(15,23,42,.06);padding:4px 0;z-index:30;}
+        .cf-menu::-webkit-scrollbar{width:6px;}
+        .cf-menu::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
+        .cf-opt{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left;font-size:13px;font-weight:700;color:#0f172a;background:#fff;border:none;border-bottom:1px solid #f1f5f9;padding:11px 16px;cursor:pointer;transition:background .12s,color .12s;font-family:inherit;}
+        .cf-opt:last-child{border-bottom:none;}
+        .cf-opt:hover{background:#f8fafc;}
+        .cf-opt.active{color:#1d4ed8;}
+        .cf-opt.active::after{content:'✓';font-size:13px;font-weight:900;color:#1d4ed8;flex-shrink:0;}
 
         .pill-status{display:inline-block;padding:2px 7px;border-radius:999px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1px solid;white-space:nowrap;}
         .pill-paid     { background:#dcfce7;color:#15803d;border-color:#86efac;}
@@ -673,10 +675,10 @@
                             <svg class="cf-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 7l5 5 5-5"/></svg>
                         </button>
                         <div id="cust-filter-menu" class="cf-menu hidden">
-                            <button type="button" class="cf-opt active" data-value="all" onclick="selectCustFilter('all')"><span class="cf-tick">✓</span>All Orders</button>
-                            <button type="button" class="cf-opt" data-value="outstanding" onclick="selectCustFilter('outstanding')"><span class="cf-tick">✓</span>Outstanding Balance</button>
-                            <button type="button" class="cf-opt" data-value="cancelled" onclick="selectCustFilter('cancelled')"><span class="cf-tick">✓</span>Cancelled Orders</button>
-                            <button type="button" class="cf-opt" data-value="completed" onclick="selectCustFilter('completed')"><span class="cf-tick">✓</span>Completed Orders</button>
+                            <button type="button" class="cf-opt active" data-value="all" onclick="selectCustFilter('all')">All Orders</button>
+                            <button type="button" class="cf-opt" data-value="outstanding" onclick="selectCustFilter('outstanding')">Outstanding Balance</button>
+                            <button type="button" class="cf-opt" data-value="cancelled" onclick="selectCustFilter('cancelled')">Cancelled Orders</button>
+                            <button type="button" class="cf-opt" data-value="completed" onclick="selectCustFilter('completed')">Completed Orders</button>
                         </div>
                     </div>
                 </div>
