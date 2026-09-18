@@ -604,7 +604,7 @@
 
     async function loadMaturity() {
         try {
-            const [transRes, prRes, plotsRes, allocRes, doRes] = await Promise.all([
+            const [transRes, prRes, cull3Res, plotsRes, allocRes, doRes] = await Promise.all([
                 // 'Transplanted' only — Premium Care and D-Tone are holding
                 // trays, not plots (same distinction operation_batch_detail.html's
                 // own transplanted total and operation_reports.html's
@@ -623,8 +623,18 @@
                 // figure is this same sum, grouped by the reserve plot it
                 // landed in). Fed into the P-R tab below, not the month tabs.
                 _supabase.from('shared_inventory_logs')
-                    .select('batch_name,plot_name,breed_name,quantity_change,created_at,transaction_date')
+                    .select('batch_name,plot_name,breed_name,quantity_change,created_at,transaction_date,remark')
                     .eq('transaction_type', 'Cull3_Transfer'),
+                // What Batch Detail's P-R Culling tab has actually culled off
+                // each reserve plot — read, not recomputed: a plot's real
+                // remaining balance is what's left standing (a batch report
+                // question), not the flat 10%-culling estimate a fresh
+                // transplant row uses below. Without this, a plot the batch
+                // report already has at nought (fully culled, moved on, or
+                // sold) kept showing a stale positive balance here.
+                _supabase.from('shared_inventory_logs')
+                    .select('batch_name,plot_name,quantity_change')
+                    .eq('transaction_type', '3rd_Culling'),
                 _supabase.from('shared_plots').select('plot_name,nursery_name'),
                 _supabase.from('shared_plot_allocations').select('*').then(r => r, e => ({ data: [], error: e })),
                 // Issued DOs are the official stock deduction: each carries up to
@@ -637,6 +647,29 @@
             const trans   = transRes.data || [];
             const prTrans = prRes.data || [];
             const plots   = plotsRes.data || [];
+
+            // Culled qty per reserve plot, straight off Batch Detail's own
+            // 3rd_Culling records — same batch+plot key as everything else
+            // here (see groupRows below).
+            const culledByKey = {};
+            (cull3Res?.data || []).forEach(r => {
+                const k = (r.batch_name||'') + '||' + (r.plot_name||'');
+                culledByKey[k] = (culledByKey[k] || 0) + (r.quantity_change || 0);
+            });
+            // Qty a reserve plot sent on to yet another plot — the reverse
+            // of "Transferred". Batch Detail's Cull3_Transfer remark names
+            // the source plot it left: "...From: [<plot>|<destType>] To:...".
+            // A plot's OWN inbound rows (prTrans, grouped below) don't carry
+            // this; only an outbound move naming it as the source does.
+            const movedOutByKey = {};
+            (prTrans || []).forEach(r => {
+                const m = r.remark ? r.remark.match(/From:\s*\[([^|\]]+)\|/) : null;
+                if (!m) return;
+                const sourcePlot = m[1].trim();
+                if (!sourcePlot) return;
+                const k = (r.batch_name||'') + '||' + sourcePlot;
+                movedOutByKey[k] = (movedOutByKey[k] || 0) + (r.quantity_change || 0);
+            });
 
             const plotNurseryMap = {};
             const prefixNurseryMap = {};
@@ -683,6 +716,15 @@
                     // +9-months offset. "Maturity Date" for one of these rows
                     // reads as the date it arrived in the reserve plot.
                     const matureDate = tag === 'pr' ? t : (() => { const m = new Date(t); m.setMonth(m.getMonth() + 9); return m; })();
+                    // A fresh transplant row estimates what a plot has left
+                    // after culling (no report exists yet to read from). A
+                    // P-R row's culling already happened and is on file — its
+                    // "After 10% Culling" reads what's actually still
+                    // standing: transferred in, less what Batch Detail's own
+                    // 3rd Culling report already culled or moved on.
+                    const afterCulling = tag === 'pr'
+                        ? g.qty - (culledByKey[k] || 0) - (movedOutByKey[k] || 0)
+                        : Math.round(g.qty * 0.9);
                     return {
                         key: k,
                         batch: g.batch,
@@ -690,7 +732,7 @@
                         breed: g.breed || '—',
                         location: resolveLocation(g.plot),
                         qty: g.qty,
-                        afterCulling: Math.round(g.qty * 0.9),
+                        afterCulling,
                         doDeducted: 0,
                         transplantDate: t,
                         matureDate,
