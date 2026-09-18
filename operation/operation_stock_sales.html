@@ -228,6 +228,11 @@
         .pickup-modal-body{padding:18px 22px;overflow-y:auto;}
         .ph-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;}
         .ph-table thead th{background:#f8fafc;color:#475569;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0;}
+        /* .ph-table thead th's own text-align:left otherwise outranks the
+           .text-right utility class on specificity, so Qty's header stays
+           left-aligned over right-aligned numbers — same fix already used
+           on .cust-table tfoot td.text-right below. */
+        .ph-table thead th.text-right{text-align:right;}
         .ph-table tbody td{padding:8px 10px;border-bottom:1px solid #f1f5f9;color:#1e293b;font-weight:600;}
         .ph-tabs{display:flex;gap:6px;border-bottom:1px solid #e2e8f0;margin-bottom:14px;}
         .ph-tab{padding:8px 14px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;margin-bottom:-1px;}
