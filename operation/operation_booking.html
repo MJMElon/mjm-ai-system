@@ -30,6 +30,26 @@
            so each title stays centered/left exactly above its data column. */
         [data-sort-key] { position: relative; display: inline-block; }
         .sort-arrow { position: absolute; left: 100%; top: 0; margin-left: 4px; font-size: 11px; opacity: 0.5; white-space: nowrap; pointer-events: none; }
+
+        /* AL status filter — a custom dropdown in place of the native
+           <select> (which renders the OS's own highlight, not this one),
+           with a checkmark against only the active option. Same design as
+           Customer Order Management's filter in operation_stock_sales.html —
+           change one, change the other. */
+        .cf-wrap{position:relative;}
+        .cf-btn{display:flex;align-items:center;gap:6px;justify-content:center;text-transform:uppercase;letter-spacing:.06em;font-size:10px;font-weight:900;color:#334155;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:10px 14px;cursor:pointer;transition:border-color .15s,box-shadow .15s;box-shadow:0 2px 4px rgba(0,0,0,.02);}
+        .cf-btn:hover{border-color:#94a3b8;}
+        .cf-btn.open{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.12);}
+        .cf-chevron{width:11px;height:11px;color:#94a3b8;transition:transform .15s;flex-shrink:0;}
+        .cf-btn.open .cf-chevron{transform:rotate(180deg);}
+        .cf-menu{position:absolute;right:0;top:calc(100% + 6px);min-width:220px;max-height:280px;overflow-y:auto;background:#fff;border:1px solid #e5e9f0;border-radius:14px;box-shadow:0 16px 32px -10px rgba(15,23,42,.18),0 4px 10px rgba(15,23,42,.06);padding:4px 0;z-index:40;}
+        .cf-menu::-webkit-scrollbar{width:6px;}
+        .cf-menu::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
+        .cf-opt{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left;font-size:13px;font-weight:700;color:#0f172a;background:#fff;border:none;border-bottom:1px solid #f1f5f9;padding:11px 16px;cursor:pointer;transition:background .12s,color .12s;font-family:inherit;}
+        .cf-opt:last-child{border-bottom:none;}
+        .cf-opt:hover{background:#f8fafc;}
+        .cf-opt.active{color:#1d4ed8;}
+        .cf-opt.active::after{content:'✓';font-size:13px;font-weight:900;color:#1d4ed8;flex-shrink:0;}
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8 relative">
@@ -82,13 +102,19 @@
                         <label class="text-[10px] uppercase tracking-widest text-slate-500 font-black">To</label>
                         <input type="date" id="f-to-date" onchange="onFiltersChanged()" class="filter-input text-[11px]" style="width:140px;padding:8px 10px;" title="Filter to date">
                     </div>
-                    <select id="f-status" onchange="onFiltersChanged()" class="filter-input md:w-48 text-center text-slate-600 font-bold uppercase tracking-wider text-[10px]">
-                        <option value="">All Status</option>
-                        <option value="__active">Active (Hide Cancelled)</option>
-                        <option value="Verified">Verified</option>
-                        <option value="Unverified">Unverified</option>
-                        <option value="Cancelled">Cancelled</option>
-                    </select>
+                    <div class="cf-wrap" id="al-filter-wrap">
+                        <button type="button" id="al-filter-btn" class="cf-btn md:w-48" onclick="toggleAlFilterMenu(event)">
+                            <span id="al-filter-label">All</span>
+                            <svg class="cf-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 7l5 5 5-5"/></svg>
+                        </button>
+                        <div id="al-filter-menu" class="cf-menu hidden">
+                            <button type="button" class="cf-opt active" data-value="all" onclick="selectAlFilter('all')">All</button>
+                            <button type="button" class="cf-opt" data-value="active" onclick="selectAlFilter('active')">Active AL (Hide Cancelled)</button>
+                            <button type="button" class="cf-opt" data-value="outstanding" onclick="selectAlFilter('outstanding')">Outstanding Balance</button>
+                            <button type="button" class="cf-opt" data-value="cancelled" onclick="selectAlFilter('cancelled')">Cancelled AL</button>
+                            <button type="button" class="cf-opt" data-value="completed" onclick="selectAlFilter('completed')">Completed AL</button>
+                        </div>
+                    </div>
                     <button onclick="clearALFilters()" class="filter-input text-[10px] uppercase tracking-widest text-slate-500 font-black hover:bg-slate-100" title="Clear all filters">Clear</button>
                 </div>
             </div>
@@ -425,13 +451,43 @@
         let _alPage = 1;
         const _AL_PAGE_SIZE = 100;
 
+        // AL status filter — a custom dropdown (see .cf-* above) in place
+        // of the state a native <select> would otherwise hold.
+        let _alFilter = 'all';
+        const AL_FILTER_LABELS = { all: 'All', active: 'Active AL (Hide Cancelled)', outstanding: 'Outstanding Balance', cancelled: 'Cancelled AL', completed: 'Completed AL' };
+
+        function toggleAlFilterMenu(e) {
+            e && e.stopPropagation();
+            const menu = document.getElementById('al-filter-menu');
+            const btn  = document.getElementById('al-filter-btn');
+            const opening = menu.classList.contains('hidden');
+            menu.classList.toggle('hidden', !opening);
+            btn.classList.toggle('open', opening);
+        }
+
+        function selectAlFilter(value) {
+            _alFilter = value;
+            document.getElementById('al-filter-label').textContent = AL_FILTER_LABELS[value] || 'All';
+            document.querySelectorAll('#al-filter-menu .cf-opt').forEach(el => el.classList.toggle('active', el.dataset.value === value));
+            document.getElementById('al-filter-menu').classList.add('hidden');
+            document.getElementById('al-filter-btn').classList.remove('open');
+            onFiltersChanged();
+        }
+
+        document.addEventListener('click', (e) => {
+            const wrap = document.getElementById('al-filter-wrap');
+            if (wrap && !wrap.contains(e.target)) {
+                document.getElementById('al-filter-menu')?.classList.add('hidden');
+                document.getElementById('al-filter-btn')?.classList.remove('open');
+            }
+        });
+
         function onFiltersChanged() { _alPage = 1; renderTable(); }
         function clearALFilters() {
             const g = document.getElementById('f-global'); if (g) g.value = '';
             const f = document.getElementById('f-from-date'); if (f) f.value = '';
             const t = document.getElementById('f-to-date'); if (t) t.value = '';
-            const s = document.getElementById('f-status'); if (s) s.value = '';
-            onFiltersChanged();
+            selectAlFilter('all');
         }
         function setSort(key) {
             if (_alSort.key === key) _alSort.dir = (_alSort.dir === 'asc' ? 'desc' : 'asc');
@@ -475,7 +531,6 @@
 
         function renderTable() {
             const search = (document.getElementById('f-global').value || '').toLowerCase();
-            const fStatus = document.getElementById('f-status').value;
             const fFrom = (document.getElementById('f-from-date') || {}).value || '';
             const fTo = (document.getElementById('f-to-date') || {}).value || '';
             const tbody = document.getElementById('al-orders-tbody');
@@ -486,9 +541,18 @@
 
             const filtered = globalALs.filter(o => {
                 if (search && !((o.al_number||'').toLowerCase().includes(search) || (o.order_number||'').toLowerCase().includes(search) || (o.customer_name||'').toLowerCase().includes(search))) return false;
-                const effStatus = (o.status || 'Unverified');
-                if (fStatus === '__active') { if (effStatus === 'Cancelled') return false; }
-                else if (fStatus && effStatus !== fStatus) return false;
+                // Same combined cancellation check the row rendering below
+                // and Customer Order Management both use — status column
+                // OR a "[CANCELLED]" remark (the auto-cancel-on-salesweb-
+                // cancel path writes the remark without touching status).
+                const isCancelled = o.status === 'Cancelled' || (o.remark && o.remark.includes('[CANCELLED]'));
+                if (_alFilter === 'cancelled') { if (!isCancelled) return false; }
+                else if (_alFilter !== 'all') {
+                    if (isCancelled) return false;
+                    const balance = Number(o._calc_balance) || 0;
+                    if (_alFilter === 'outstanding' && !(balance > 0)) return false;
+                    if (_alFilter === 'completed' && !(balance <= 0 && Number(o.quantity_ordered) > 0)) return false;
+                }
                 if (fromTs != null || toTs != null) {
                     const od = o.order_date ? new Date(o.order_date).getTime() : null;
                     if (od == null) return false;
