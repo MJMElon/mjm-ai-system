@@ -2276,9 +2276,15 @@
         modal.classList.add('open');
 
         try {
+            // Scoped to this one order, not every order this customer name
+            // happens to have — two different orders sharing a customer
+            // name (e.g. "Lunai Wan" placing two separate orders) must not
+            // merge their AL numbers, and therefore their DO lines, into
+            // one modal. customer_name is only the fallback for the rare
+            // row with no order_number at all.
             const filters = [];
-            if (customerName) filters.push('customer_name.eq.' + customerName);
-            if (orderNumber)  filters.push('order_number.eq.'  + orderNumber);
+            if (orderNumber)       filters.push('order_number.eq.' + orderNumber);
+            else if (customerName) filters.push('customer_name.eq.' + customerName);
             const orFilter = filters.join(',');
 
             const [bookingsRes, alRes] = await Promise.all([
