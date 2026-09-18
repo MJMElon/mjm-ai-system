@@ -216,6 +216,11 @@
         .ph-summary-card .ph-num{font-size:18px;font-weight:900;color:#1e293b;font-variant-numeric:tabular-nums;}
         .cust-link{color:#1d4ed8;cursor:pointer;text-decoration:underline dotted;}
         .cust-link:hover{color:#1e40af;}
+        /* An actual button, not just clickable text — sits next to Total
+           Collected so "see the collection by month" doesn't depend on
+           spotting the dotted-underline customer name. */
+        .ph-month-btn{margin-left:6px;padding:1px 5px;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;cursor:pointer;font-size:11px;line-height:1.4;vertical-align:middle;}
+        .ph-month-btn:hover{background:#eff6ff;border-color:#bfdbfe;}
 
         /* ── Allocation drawer (drag customer orders onto batch rows) ── */
         .alloc-fab{position:fixed;right:20px;bottom:24px;z-index:90;display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:999px;background:linear-gradient(135deg,#1d4ed8,#1e40af);color:white;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;border:none;cursor:pointer;box-shadow:0 16px 40px rgba(30,64,175,.45);transition:transform .15s,box-shadow .15s;font-family:'Outfit',sans-serif;}
@@ -838,6 +843,10 @@
         </div>
         <div class="pickup-modal-body">
             <div class="ph-summary" id="pickup-summary"></div>
+            <!-- Collection totals grouped by month — what "collected" adds up
+                 to as a timeline, since the raw event list below answers a
+                 different question (what happened, one pickup at a time). -->
+            <div id="pickup-months-wrap"></div>
             <div id="pickup-table-wrap"></div>
         </div>
     </div>

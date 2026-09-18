@@ -1761,7 +1761,7 @@
                     <td><span class="pill-status ${pillCls}">${escapeHtml(pillTxt)}</span></td>
                     <td class="font-black" ${cancelStrike}>${r.totalQty.toLocaleString()}</td>
                     ${cellsHtml}
-                    <td class="t-tot" ${cancelStrike}>${r.totalCollected.toLocaleString()}</td>
+                    <td class="t-tot" ${cancelStrike}>${r.totalCollected.toLocaleString()}${r.totalCollected ? `<button type="button" class="ph-month-btn" data-pickup data-cust="${escapeHtml(r.customer || '')}" data-order="${escapeHtml(r.orderNumber || '')}" title="Collection by month">📅</button>` : ''}</td>
                     <td class="t-tot${r.balance < 0 ? ' text-red-600' : r.balance === 0 ? ' text-emerald-700' : ''}" ${cancelStrike}>${r.balance.toLocaleString()}</td>
                     <td class="t-tot" ${cancelStrike}>${fmtRM(r.totalAmount)}</td>
                 </tr>`;
@@ -2041,6 +2041,7 @@
         title.textContent = customerName || '—';
         sub.textContent   = orderNumber ? 'Order: ' + orderNumber : '';
         summ.innerHTML    = '';
+        document.getElementById('pickup-months-wrap').innerHTML = '';
         wrap.innerHTML    = `<div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading history…</div>`;
         modal.classList.add('open');
 
@@ -2082,6 +2083,32 @@
                 <div class="ph-summary-card"><div class="ph-label">Seedlings collected</div><div class="ph-num">${totalCollected.toLocaleString()}</div></div>
                 <div class="ph-summary-card"><div class="ph-label">Order value (sum)</div><div class="ph-num">${fmtRM(totalOrdered)}</div></div>
             `;
+
+            // Same source the row's "Total Collected" figure sums, grouped
+            // by the month each pickup actually happened in — this is what
+            // "collection by month" means: an actual timeline, not the
+            // Customer Order Management grid's forward-looking booked
+            // months, and not the raw event-by-event list below either.
+            const monthsWrap = document.getElementById('pickup-months-wrap');
+            const collSource = collections.length
+                ? collections
+                : orders.filter(o => o.collected_qty && o.collected_at).map(o => ({ collected_qty: o.collected_qty, collected_at: o.collected_at }));
+            const byMonth = {};
+            collSource.forEach(c => {
+                if (!c.collected_at) return;
+                const k = monthKey(new Date(c.collected_at));
+                byMonth[k] = (byMonth[k] || 0) + (c.collected_qty || 0);
+            });
+            const monthRows = Object.keys(byMonth).sort().map(k => {
+                const [y, m] = k.split('-').map(Number);
+                return { label: new Date(y, m - 1, 1).toLocaleString('en-MY', { month: 'short', year: 'numeric' }), qty: byMonth[k] };
+            });
+            monthsWrap.innerHTML = monthRows.length ? `
+                <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 mt-1">Collection by month</div>
+                <div class="flex flex-wrap gap-2 mb-4">
+                    ${monthRows.map(r => `<div class="ph-summary-card" style="min-width:96px;"><div class="ph-label">${r.label}</div><div class="ph-num">${r.qty.toLocaleString()}</div></div>`).join('')}
+                </div>
+            ` : '';
 
             const events = [];
             bookings.forEach(b => events.push({
