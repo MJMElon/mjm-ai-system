@@ -3510,6 +3510,32 @@
                             const trayStr = trayMatch ? trayMatch[1] : '—';
                             const editId  = `t3-edit-form-${idx}`;
                             const reviewKey = `${log.plot_name || ''}|${destType}|${trayStr}|${dateStr}`.replace(/"/g, '');
+                            /* THE MAP, WHERE THE MAP COLUMN IS.
+
+                               This cell was the string "—" whatever had been
+                               uploaded. The map was on the record, restored
+                               into the edit form and openable from there — so
+                               the only way to see whether a row even HAD one
+                               was to press Edit on it, row by row. A column
+                               called Map that never says anything is worse
+                               than no column.
+
+                               An image shows as itself; a PDF cannot be a
+                               thumbnail, so it says so with an icon. Either
+                               opens in the viewer every other attachment on
+                               this page opens in. */
+                            const rowMapMatch = log.remark ? log.remark.match(/MapUrl:(\S+)/) : null;
+                            const rowMapUrl   = rowMapMatch ? rowMapMatch[1] : '';
+                            const rowMapIsPdf = /\.pdf(\?|$)/i.test(rowMapUrl);
+                            const rowMapCell  = rowMapUrl
+                                ? `<button type="button" title="View drone map"
+                                        onclick="_openDocViewer('${_escAttr(rowMapUrl)}', '${_escAttr('Drone Map — ' + (log.plot_name || ''))}')"
+                                        class="flex items-center gap-1.5 bg-transparent border-0 p-0 cursor-pointer group">
+                                       <span class="w-9 h-9 rounded-lg border border-[#e8dcc8] bg-cover bg-center shrink-0 flex items-center justify-center text-sm bg-white group-hover:border-[#c07820] transition-colors"
+                                             ${rowMapIsPdf ? '' : `style="background-image:url('${rowMapUrl}')"`}>${rowMapIsPdf ? '📄' : ''}</span>
+                                       <span class="text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest group-hover:text-[#c07820] transition-colors">View</span>
+                                   </button>`
+                                : `<div class="text-sm text-[#8a7a68]">—</div>`;
                             tableList.insertAdjacentHTML('beforeend', `
                                 <div class="t3-saved-row" data-review-key="${reviewKey}">
                                     <!-- Compact row -->
@@ -3518,7 +3544,7 @@
                                         <div class="text-sm font-bold text-[#3d2610]">${dateStr}</div>
                                         <div class="text-sm font-bold text-[#c07820] truncate">${trayStr}</div>
                                         <div class="text-sm font-black text-[#4a7a2e]">${log.quantity_change.toLocaleString()}</div>
-                                        <div class="text-sm text-[#8a7a68]">—</div>
+                                        <div>${rowMapCell}</div>
                                         <div class="flex gap-1">
                                             <button type="button" onclick="toggleT3EditRow(${idx})" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[8px] font-black uppercase rounded hover:bg-[#f0f8ff] transition-colors">Edit</button>
                                             <button type="button" onclick="deleteT3Row(${idx})" class="px-2 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[8px] font-black uppercase rounded hover:bg-[#fff5f5] transition-colors">Del</button>
@@ -8606,6 +8632,20 @@ Thank you.`;
                     // The date this plot was actually culled — keyed in via the
                     // 📅 toggle next to 3rd Culled on the Main sub-tab.
                     const cullDateMatch = log.remark ? log.remark.match(/CullDate:(\d{4}-\d{2}-\d{2})/) : null;
+                    /* A PLOT IS SOMETIMES CULLED MORE THAN ONCE.
+
+                       Two gangs, two days, one plot — the record has to say
+                       how many came out on each, not just a date and a total.
+                       Written as CullSessions:<date>x<qty>;<date>x<qty>,
+                       beside the CullDate every other reader of this remark
+                       still finds where it always was (it is the first
+                       session's date). A plot culled in one go writes no
+                       sessions at all and reads exactly as it did. */
+                    const sessMatch = log.remark ? log.remark.match(/CullSessions:(\S+)/) : null;
+                    const cullSessions = sessMatch ? String(sessMatch[1]).split(';').map(part => {
+                        const m = part.match(/^(\d{4}-\d{2}-\d{2})?x(\d+)$/);
+                        return m ? { date: m[1] || '', qty: parseInt(m[2], 10) } : null;
+                    }).filter(Boolean) : [];
                     const entry = {
                         culled:  log.quantity_change,
                         balance: balMatch  ? parseInt(balMatch[1]) : null,
@@ -8613,7 +8653,8 @@ Thank you.`;
                         docName: docName || null,
                         mapQty:  mapQtyMatch ? parseInt(mapQtyMatch[1]) : null,
                         mismatchNote: mismatchNote || null,
-                        cullDate: cullDateMatch ? cullDateMatch[1] : null
+                        cullDate: cullDateMatch ? cullDateMatch[1] : null,
+                        cullSessions
                     };
                     if (destMatch) {
                         savedCull3Map[`${log.plot_name}|${destMatch[1]}`] = entry;
@@ -8878,7 +8919,8 @@ Thank you.`;
                         savedDocName:  saved.docName ?? null,
                         savedMapQty:   saved.mapQty  ?? null,
                         savedMismatchNote: saved.mismatchNote ?? null,
-                        savedCullDate: saved.cullDate ?? null
+                        savedCullDate: saved.cullDate ?? null,
+                        savedCullSessions: saved.cullSessions || []
                     });
                 });
 
@@ -8933,7 +8975,7 @@ Thank you.`;
                         // DestType keys + legacy queue) — merged rows carry the
                         // summed culled qty and the first doc/map values found.
                         let culled = null, balance = null, docUrl = null, docName = null, mapQty = null;
-                        let mismatchNote = null, cullDate = null;
+                        let mismatchNote = null, cullDate = null, cullSessions = [];
                         ['main', 'doubletone'].forEach(d => {   // premium excluded from this report
                             const e = savedCull3Map[`${v.plot}|${d}`];
                             if (!e) return;
@@ -8943,6 +8985,7 @@ Thank you.`;
                             if (mapQty == null)  mapQty = e.mapQty ?? null;
                             if (!mismatchNote)   mismatchNote = e.mismatchNote || null;
                             if (!cullDate)       cullDate = e.cullDate || null;
+                            if (!cullSessions.length && (e.cullSessions || []).length) cullSessions = e.cullSessions;
                         });
                         const q = legacyCull3Queue[v.plot];
                         while (q && q.length) {
@@ -8952,6 +8995,7 @@ Thank you.`;
                             if (!docUrl)         { docUrl = e.docUrl; docName = e.docName; }
                             if (!mismatchNote)   mismatchNote = e.mismatchNote || null;
                             if (!cullDate)       cullDate = e.cullDate || null;
+                            if (!cullSessions.length && (e.cullSessions || []).length) cullSessions = e.cullSessions;
                         }
                         t6_plotData.push({
                             plot:         v.plot,
@@ -8967,7 +9011,8 @@ Thank you.`;
                             savedDocName: docName,
                             savedMapQty:  mapQty,
                             savedMismatchNote: mismatchNote,
-                            savedCullDate: cullDate
+                            savedCullDate: cullDate,
+                            savedCullSessions: cullSessions
                         });
                     });
                     injectTransfers();
@@ -9328,10 +9373,23 @@ Thank you.`;
                                      justify-center does not care what the box's intrinsic
                                      width turns out to be. -->
                                 <div class="t6-nil-dash ${nilCull ? '' : 'hidden'} text-base font-black text-[#c9bda8]">—</div>
-                                <div class="t6-date-body ${nilCull ? 'hidden' : ''} flex justify-center">
+                                <div class="t6-date-body ${nilCull ? 'hidden' : ''} flex flex-col items-center gap-0.5">
+                                <div class="flex justify-center w-full">
                                 <input type="date" class="input-style t6-cull-date !text-[11px] !py-1 !px-1.5 !rounded-lg !text-left w-full max-w-[112px]" value="${p.savedCullDate || ''}"
-                                    onchange="calcT6(); t6PaintPlotRow(this.closest('.t6-plot-row'))"
+                                    onchange="onT6CullDateChange(${i}); calcT6(); t6PaintPlotRow(this.closest('.t6-plot-row'))"
                                     title="Date this plot was culled">
+                                </div>
+                                <div id="${rowId}-sessions" class="w-full"></div>
+                                <!-- A plot is sometimes culled over two days or more.
+                                     This splits the cull into dated parts, each with its
+                                     own quantity — see renderCullSessions. It sits UNDER
+                                     the date box rather than beside it: a button on the
+                                     line pushes the date off the centre of its own
+                                     column, and that column is one people scan down. -->
+                                <button type="button" id="${rowId}-add-session"
+                                    onclick="addCullSession(${i})"
+                                    title="Culled on more than one day? Add a date and how many came out on it"
+                                    class="text-[9px] font-black text-[#3a7ab4] uppercase tracking-widest hover:underline bg-transparent border-0 p-0 cursor-pointer">＋ Split over days</button>
                                 </div>
                             </div>
                         </div>
@@ -9423,6 +9481,17 @@ Thank you.`;
             // gets one, rather than naming a plot the list below cannot show.
             // Normally does nothing — injectTransfers has already built them.
             t6EnsureDestRows();
+
+            /* Restore a plot that was culled over more than one day. Two or
+               more parts is a split; one is the ordinary row it already
+               looks like, so it is left alone. */
+            t6_cullSessions = {};
+            t6_plotData.forEach((p, i) => {
+                const ss = (p.savedCullSessions || []).filter(r => r && (r.date || r.qty !== ''));
+                if (ss.length < 2) return;
+                t6_cullSessions[i] = ss.map(r => ({ date: r.date || '', qty: r.qty === '' ? '' : Number(r.qty) }));
+                renderCullSessions(i);
+            });
 
             // Restore previously-uploaded drone maps / docs.
             t6_plotData.forEach((p, i) => {
@@ -10380,6 +10449,148 @@ Thank you.`;
            .modal-backdrop, which is the element that actually scrolls, and
            scrollIntoView on a row inside it moves the page behind instead if
            you let the browser choose. */
+        /* ══════════════════════════════════════════════════════════
+           CULLED ON MORE THAN ONE DAY
+           ══════════════════════════════════════════════════════════
+
+           A plot is not always cleared in one go: two gangs, two days, and
+           the record has to say how many came out on each. The row keeps its
+           single date for the ordinary case — most plots are culled once and
+           nothing about them changes — and the ＋ beside it splits the cull
+           into dated parts.
+
+           The parts are the answer only when they ADD UP: the 3rd Culled
+           figure is worked out from what is standing in the plot and is not
+           up for negotiation, so a plot whose dates come to less than that is
+           not finished being keyed. The row says how far off it is and does
+           not count as done until it tallies.
+
+           Stored in the 3rd_Culling remark as
+               CullSessions:<date>x<qty>;<date>x<qty>
+           with CullDate left exactly where it was — the first session's date
+           — so the batch list, the review and every other reader of that
+           remark go on finding what they always found. */
+        let t6_cullSessions = {};   // row index → [{ date, qty }], first included
+
+        function t6Sessions(idx) {
+            return Array.isArray(t6_cullSessions[idx]) ? t6_cullSessions[idx] : [];
+        }
+        function t6SessionTotal(idx) {
+            return t6Sessions(idx).reduce((s, r) => s + (Number(r.qty) || 0), 0);
+        }
+        /* What the row says was culled, which the parts have to come to. */
+        function t6RowCulled(idx) {
+            const el = document.querySelector(`#t6-row-${idx} .t6-culled-input`);
+            const n = parseInt(el && el.value, 10);
+            return Number.isFinite(n) ? n : 0;
+        }
+        /* Split, and adding up. Both have to be true for the dates to be an
+           answer; a row with no split at all is not "not tallying", it is an
+           ordinary row and says nothing. */
+        function t6SessionsTally(idx) {
+            const ss = t6Sessions(idx);
+            if (ss.length < 2) return true;
+            if (ss.some(r => !r.date || !(Number(r.qty) > 0))) return false;
+            return t6SessionTotal(idx) === t6RowCulled(idx);
+        }
+
+        function onT6CullDateChange(idx) {
+            // The first part's date IS the row's date box — one field, not two
+            // saying different things.
+            const ss = t6Sessions(idx);
+            if (!ss.length) return;
+            const el = document.querySelector(`#t6-row-${idx} .t6-cull-date`);
+            ss[0].date = el ? el.value : '';
+            renderCullSessions(idx);
+        }
+
+        function addCullSession(idx) {
+            const ss = t6Sessions(idx);
+            if (!ss.length) {
+                // First press: the row's own date becomes part one, carrying
+                // everything culled so far, and part two starts empty. Nothing
+                // is invented — the figures already on the row are simply
+                // written down as the first day's.
+                const el = document.querySelector(`#t6-row-${idx} .t6-cull-date`);
+                ss.push({ date: el ? el.value : '', qty: t6RowCulled(idx) });
+            }
+            ss.push({ date: '', qty: '' });
+            t6_cullSessions[idx] = ss;
+            renderCullSessions(idx);
+            calcT6();
+        }
+
+        function removeCullSession(idx, i) {
+            const ss = t6Sessions(idx);
+            ss.splice(i, 1);
+            // One part left is no split at all: fold it back into the row's
+            // own date box and leave the plot looking like every other one.
+            if (ss.length === 1) {
+                const el = document.querySelector(`#t6-row-${idx} .t6-cull-date`);
+                if (el && ss[0].date) el.value = ss[0].date;
+                ss.length = 0;
+            }
+            t6_cullSessions[idx] = ss;
+            renderCullSessions(idx);
+            calcT6();
+        }
+
+        function updateCullSession(idx, i, field, value) {
+            const ss = t6Sessions(idx);
+            if (!ss[i]) return;
+            ss[i][field] = field === 'qty' ? (value === '' ? '' : Math.max(0, parseInt(value, 10) || 0)) : value;
+            if (i === 0 && field === 'date') {
+                const el = document.querySelector(`#t6-row-${idx} .t6-cull-date`);
+                if (el) el.value = ss[0].date || '';
+            }
+            renderCullSessions(idx, true);
+            calcT6();
+        }
+
+        function renderCullSessions(idx, keepFocus) {
+            const host = document.getElementById(`t6-row-${idx}-sessions`);
+            if (!host) return;
+            const ss = t6Sessions(idx);
+            const addBtn = document.getElementById(`t6-row-${idx}-add-session`);
+            if (addBtn) addBtn.classList.toggle('hidden', ss.length >= 2);
+            if (ss.length < 2) { host.innerHTML = ''; return; }
+
+            const culled = t6RowCulled(idx);
+            const total  = t6SessionTotal(idx);
+            const short  = culled - total;
+            const active = keepFocus && document.activeElement ? document.activeElement.id : '';
+
+            host.innerHTML = `
+                <div class="mt-1 space-y-1">
+                    ${ss.map((r, i) => `
+                        <div class="flex items-center gap-1">
+                            <input type="date" id="t6-s-${idx}-${i}-d" value="${r.date || ''}"
+                                onchange="updateCullSession(${idx}, ${i}, 'date', this.value)"
+                                class="input-style !text-[10px] !py-1 !px-1.5 !rounded-lg !text-left flex-1 min-w-0 max-w-[112px]"
+                                title="Date this part of the plot was culled">
+                            <input type="number" min="0" id="t6-s-${idx}-${i}-q" value="${r.qty === '' ? '' : r.qty}"
+                                oninput="updateCullSession(${idx}, ${i}, 'qty', this.value)"
+                                placeholder="Qty"
+                                class="input-style !text-[10px] !py-1 !px-1 !rounded-lg !text-center w-[52px] shrink-0"
+                                title="How many came out on that day">
+                            ${i === 0 ? '<span class="w-5 shrink-0"></span>'
+                                      : `<button type="button" onclick="removeCullSession(${idx}, ${i})"
+                                            class="w-5 h-5 shrink-0 rounded border border-[#f8d7da] bg-white text-[#a83020] text-[10px] font-black flex items-center justify-center hover:bg-[#fff5f5]"
+                                            title="Remove this date">✕</button>`}
+                        </div>`).join('')}
+                    <button type="button" onclick="addCullSession(${idx})"
+                        class="text-[9px] font-black text-[#3a7ab4] uppercase tracking-widest hover:underline bg-transparent border-0 p-0 cursor-pointer">＋ Add date</button>
+                    <div class="text-[9px] font-black uppercase tracking-widest leading-tight ${short === 0 ? 'text-[#4a7a2e]' : 'text-[#a83020]'}">
+                        ${short === 0
+                            ? `✓ ${total.toLocaleString()} of ${culled.toLocaleString()}`
+                            : short > 0
+                                ? `${total.toLocaleString()} of ${culled.toLocaleString()} — ${short.toLocaleString()} still to date`
+                                : `${total.toLocaleString()} of ${culled.toLocaleString()} — ${Math.abs(short).toLocaleString()} too many`}
+                    </div>
+                </div>`;
+            if (active) { const el = document.getElementById(active); if (el) { el.focus(); try { el.setSelectionRange(el.value.length, el.value.length); } catch (_) {} } }
+        }
+
         function goToT6Plot(idx) {
             const row = document.getElementById(`t6-row-${idx}`);
             if (!row) return;
@@ -10682,7 +10893,11 @@ Thank you.`;
                 const soldOutRow  = !!(p && p.isTransferRow) &&
                                     (parseInt(row.querySelector('.t6-balance')?.value) || 0) === 0;
                 const mapDone     = soldOutRow || mapQtyVal !== '';
-                const dateDone    = soldOutRow || cullDateVal !== '';
+                /* A plot culled over several days is dated when EVERY day is
+                   dated and they add up to what was culled. Half a split is
+                   not a date, it is a plot somebody is halfway through
+                   keying. */
+                const dateDone    = soldOutRow || (cullDateVal !== '' && t6SessionsTally(idx));
                 /* …and signed. A row nobody has checked is not a row that is
                    done, and unverifying one has to be able to take the count
                    back down — otherwise the tab says 6 / 6 Done and 100% with
@@ -11049,6 +11264,19 @@ Thank you.`;
                     // Drone Map on P-R Culling.
                     const cullDateVal = row.querySelector('.t6-cull-date')?.value || '';
                     const cullDatePart = cullDateVal ? ` CullDate:${cullDateVal}` : '';
+                    /* …and the days it was culled over, when it was culled on
+                       more than one. CullDate stays exactly where it was — the
+                       first of them — so everything that reads this remark for
+                       a date goes on finding one. */
+                    /* Off the row's OWN id, not its place in the list —
+                       main rows and "-R" rows render into two containers, so
+                       document order matching t6_plotData order is a
+                       coincidence, not a guarantee. */
+                    const rowIdx = parseInt(String(row.id).replace('t6-row-', ''), 10);
+                    const sessions = t6Sessions(rowIdx).filter(r => r.date || r.qty !== '');
+                    const cullSessionsPart = sessions.length > 1
+                        ? ` CullSessions:${sessions.map(r => `${r.date || ''}x${Number(r.qty) || 0}`).join(';')}`
+                        : '';
 
                     // Upload the drone map / proof doc (if any) so it survives a refresh.
                     let docUrl = '', docNamePart = '';
@@ -11078,7 +11306,7 @@ Thank you.`;
                         // DestType is critical: the same plot (e.g. B10) can appear under
                         // both MAIN and D-TONE; the load uses (plot_name, destType) to
                         // distinguish them so values don't overwrite each other.
-                        remark: `3rd Culling. Transplanted: ${transplanted}, Remaining Balance: ${balance}, Culled: ${culled}, Cull Rate: ${cullPct}%${dead2Part}, DestType: ${destType}${mapQtyPart}${mismatchNote}${cullDatePart}${docSuffix}`
+                        remark: `3rd Culling. Transplanted: ${transplanted}, Remaining Balance: ${balance}, Culled: ${culled}, Cull Rate: ${cullPct}%${dead2Part}, DestType: ${destType}${mapQtyPart}${mismatchNote}${cullDatePart}${cullSessionsPart}${docSuffix}`
                     }));
                 }
 
