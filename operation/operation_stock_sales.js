@@ -1244,6 +1244,23 @@
     function _isCalibrationDo(d) {
         return /^CAL-/i.test(String((d && d.do_number) || ''));
     }
+    // AL numbers whose order is cancelled (status, or a "[CANCELLED]"
+    // remark — the pattern the auto-cancel-on-salesweb-cancel path writes).
+    // A DO still on file against one of these isn't a real collection any
+    // more than the order is, so anything reading allDoRecords for a
+    // "collected this month" figure excludes them the same way Customer
+    // Order Management's own row filters do — otherwise a cancelled
+    // order's DO quietly keeps a dashboard total above what the order
+    // list itself shows for the same month.
+    function _cancelledAlSet() {
+        const set = new Set();
+        (allAls || []).forEach(a => {
+            if (a.status === 'Cancelled' || /\[CANCELLED\]/i.test(String(a.remark || ''))) {
+                if (a.al_number) set.add(a.al_number);
+            }
+        });
+        return set;
+    }
 
     function renderMonitoringDashboard() {
         const cardsEl = document.getElementById('mon-dash-cards');
@@ -1287,11 +1304,15 @@
         // card in lock-step with the chart's current-month bar.
         //
         // Excludes calibration DOs (`CAL-…`) so a bulk stock calibration
-        // never inflates the month's real collection figure. Those DOs
-        // land in the chart's separate Calibration bar instead.
+        // never inflates the month's real collection figure, and DOs still
+        // on file against a cancelled AL — same rule as the chart and as
+        // Customer Order Management's own row filters — so a cancelled
+        // order's DO doesn't inflate this card either.
+        const cancelledAlSetForMonth = _cancelledAlSet();
         monthCollected = (allDoRecords || []).reduce((s, d) => {
             if (!d.delivery_date) return s;
             if (_isCalibrationDo(d)) return s;
+            if (cancelledAlSetForMonth.has(d.al_number)) return s;
             return String(d.delivery_date).slice(0, 7) === monthKeyNow
                 ? s + Number(d.total_qty || 0)
                 : s;
@@ -1383,13 +1404,14 @@
             const k = String(ds).slice(0, 7);
             orderByMonth[k] = (orderByMonth[k] || 0) + Number(a.quantity_ordered || 0);
         });
+        const cancelledAlSet = _cancelledAlSet();
         (allDoRecords || []).forEach(d => {
             if (!d.delivery_date) return;
             const k   = String(d.delivery_date).slice(0, 7);
             const qty = Number(d.total_qty || 0);
             if (_isCalibrationDo(d)) {
                 calibrationByMonth[k] = (calibrationByMonth[k] || 0) + qty;
-            } else {
+            } else if (!cancelledAlSet.has(d.al_number)) {
                 collectionByMonth[k] = (collectionByMonth[k] || 0) + qty;
             }
         });
