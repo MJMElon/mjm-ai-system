@@ -2048,6 +2048,32 @@
                                 <div id="t6-mismatch-rows" class="p-4 sm:p-6 space-y-3"></div>
                             </div>
 
+                            <!-- Sales on THIS batch's delivery notes that reached no plot.
+                                 Sales is what Balance and 3rd Culled are worked out from,
+                                 so a collection line the report cannot place is a sale
+                                 that never happened as far as this whole tab is
+                                 concerned — and it used to fail in silence, into a
+                                 console warning nobody opens.
+
+                                 Only lines whose OWN batch number is this batch are
+                                 listed. Matching on the plot name instead would drag in
+                                 every other batch's ordinary sale off a plot this batch
+                                 happens to share, which is a list of a hundred wrong
+                                 rows and was tried once. -->
+                            <div id="t6-sales-gap-panel" class="hidden mb-6 bg-white rounded-3xl border-2 border-[#3a7ab4] shadow-lg overflow-hidden">
+                                <div class="px-6 py-4 bg-[#f0f8ff] border-b-2 border-[#3a7ab4] flex items-center justify-between gap-3 flex-wrap">
+                                    <div class="flex items-center gap-3">
+                                        <span class="w-10 h-10 rounded-xl bg-[#e0f0ff] border border-[#3a7ab4] flex items-center justify-center text-xl shrink-0">🚚</span>
+                                        <div>
+                                            <div class="text-sm font-black text-[#1a4a80] uppercase tracking-widest">Sales On This Batch That Reached No Plot</div>
+                                            <div class="text-[11px] font-bold text-[#8a7a68]">These delivery notes name this batch, and the report cannot place them. Every one is seedlings <strong>missing from a plot’s Sales</strong> — so its Balance and 3rd Culled read high by that many. Fix the line in Customer Order Monitoring.</div>
+                                        </div>
+                                    </div>
+                                    <span class="text-[11px] font-black text-[#1a4a80] uppercase tracking-widest bg-[#e0f0ff] border border-[#3a7ab4] rounded-lg px-3 py-1.5 whitespace-nowrap" id="t6-sales-gap-count">0 lines</span>
+                                </div>
+                                <div id="t6-sales-gap-rows" class="p-4 sm:p-6 space-y-3"></div>
+                            </div>
+
                             <!-- Save button -->
                             <div class="flex justify-end">
                                 <button type="button" id="save-t6-btn" class="btn-earth !bg-gradient-to-r !from-[#6d28d9] !to-[#4c1d95] !shadow-[0_8px_20px_-4px_rgba(109,40,217,0.4)] px-12" onclick="saveTab6()">Save 3rd Culling Report (0% Complete)</button>
@@ -8665,9 +8691,21 @@ Thank you.`;
                 const _normBatchKey = v => String(v == null ? '' : v).trim().toUpperCase()
                                   .replace(/^BATCH\s*:?\s*/, '')   // drop a "Batch: " prefix
                                   .split(/[\s(,\[]/)[0].replace(/[^0-9A-Z]/g, '');
+                /* A PLOT KEY FOR MATCHING A SALE, and punctuation is not part
+                   of it. A reserved plot is written "U15-R" in Settings and
+                   "U15R" by whoever was keying the delivery note, and the
+                   report used to treat those as two different places: 15 sold
+                   seedlings on batch 233's U15-R reached nothing and read as
+                   15 still standing, waiting to be culled.
+
+                   Dropping the hyphen does NOT blur the distinction that
+                   matters — "U15" and "U15-R" are still different keys, which
+                   is the whole point of the suffix. Everything after the first
+                   space or bracket still goes, so "U15 (UPB PREMIER HYBRID)"
+                   is U15 as before. */
                 const _normPlotKey  = v => String(v == null ? '' : v).trim().toUpperCase()
                                               .replace(/^PLOT\s*:?\s*/, '')   // drop a "Plot " prefix
-                                              .split(/[\s(,\[]/)[0].replace(/[^0-9A-Z\-]/g, '');
+                                              .split(/[\s(,\[]/)[0].replace(/[^0-9A-Z]/g, '');
                 const _bt = _normBatchKey(batchId);
                 // Diagnostic: every DO line that contributed to this batch's
                 // sales gets logged. Open DevTools > Console and grep for
@@ -8687,6 +8725,15 @@ Thank you.`;
                 // customers collect", this one answers "what is left standing
                 // in the plot". Only cancelled DOs are skipped.
                 const _salesTrace = [];
+                /* EVERY LINE THIS BATCH OWNS, placed or not.
+
+                   A line is dropped when its plot matches no row on the report
+                   or when it carries no quantity, and both used to go to a
+                   console warning — which is to say nowhere. Sales is what
+                   Balance and 3rd Culled are computed from, so a dropped line
+                   is a plot reading high by that many for good. Kept here and
+                   listed on the tab by syncT6SalesGap. */
+                t6_salesLines = [];
                 (doRows || []).forEach(d => {
                     if (d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'))) return;
                     // How many collection lines does this DO actually carry?
@@ -8699,6 +8746,13 @@ Thank you.`;
                         let qty = Number(d[`qty_${i}`] || 0);
                         const fallback = (!qty && filled === 1);
                         if (fallback) qty = Number(d.total_qty || 0); // single-line DO
+                        t6_salesLines.push({
+                            doId: d.id, doNumber: d.do_number, line: i,
+                            plotKey, plotRaw: String(d[`plot_${i}`] || '').trim(),
+                            date: d.delivery_date,
+                            customer: custByAl[d.al_number] || '',
+                            qty: qty || 0
+                        });
                         if (!qty) { console.warn('[t6:sales] DO', d.do_number, 'line', i, 'has no qty — skipped'); continue; }
                         salesMap[plotKey] = (salesMap[plotKey] || 0) + qty;
                         // Same rows the console trace logs, kept for the
@@ -8816,8 +8870,8 @@ Thank you.`;
                         isTransferRow: true,
                         recordCount:   v.records,
                         dead2:         dead2Map[key] || 0,
-                        sales:         salesMap[key] || 0,
-                        salesDOs:      salesDOsByPlot[key] || [],
+                        sales:         salesMap[_t6SalesKey(v.plot)] || 0,
+                        salesDOs:      salesDOsByPlot[_t6SalesKey(v.plot)] || [],
                         savedBalance:  saved.balance ?? null,
                         savedCulled:   saved.culled  ?? null,
                         savedDocUrl:   saved.docUrl  ?? null,
@@ -8905,8 +8959,8 @@ Thank you.`;
                             destType:     (v.destTypes.has('main') || v.destTypes.size > 1) ? 'main' : Array.from(v.destTypes)[0],
                             destTypes:    Array.from(v.destTypes),
                             dead2:        dead2Map[key] || 0,
-                            sales:        salesMap[key] || 0,
-                            salesDOs:     salesDOsByPlot[key] || [],
+                            sales:        salesMap[_t6SalesKey(v.plot)] || 0,
+                            salesDOs:     salesDOsByPlot[_t6SalesKey(v.plot)] || [],
                             savedBalance: balance,
                             savedCulled:  culled,
                             savedDocUrl:  docUrl,
@@ -9417,6 +9471,17 @@ Thank you.`;
            plot written "n1" on one record and "N1 " on another is the same row. */
         function _t6PlotKey(v) {
             return String(v == null ? '' : v).trim().toUpperCase();
+        }
+
+        /* The same plot, however whoever keyed it punctuated it. A delivery
+           note written "U15R" names the plot Settings calls "U15-R", and
+           treating those as two places lost the sale. "U15" is still its own
+           key — the R is the distinction, the hyphen is not.
+
+           SHARED RULE — _normPlotKey in the sales loader above builds the
+           other half of this. Change one, change the other. */
+        function _t6SalesKey(v) {
+            return _t6PlotKey(v).replace(/[^0-9A-Z]/g, '');
         }
 
         /* What is standing in a plot, and therefore what is left to cull.
@@ -10391,6 +10456,85 @@ Thank you.`;
             }, 120);
         }
 
+        /* SALES THAT REACHED NO PLOT.
+
+           Every collection line whose OWN batch number is this batch, checked
+           against the rows the report actually has. Two ways one goes missing,
+           and both used to be a console warning:
+
+             • the plot on the line matches no row here — keyed as a plot this
+               batch never had, or as a plot whose seedlings were transferred
+               into a "-R" row that the line does not name;
+             • the line has no quantity, and the DO carries more than one line
+               so there is no total to fall back on.
+
+           Either way the seedlings are sold and the report does not know it,
+           so that plot's Balance and 3rd Culled are high by exactly that many
+           — which is how a plot comes to be "culled" while the lorry has
+           already taken it.
+
+           Scoped to lines that NAME this batch, and nothing else. Matching on
+           the plot name instead lists every other batch's ordinary sale off a
+           plot this one happens to share: 120 rows and 15,567 seedlings of
+           noise, which is what that looked like when it was tried. */
+        let t6_salesLines = [];
+
+        function t6SalesGaps() {
+            if (!Array.isArray(t6_salesLines) || !t6_salesLines.length) return [];
+            const have = new Set((t6_plotData || []).map(p => _t6SalesKey(p.plot)));
+            return t6_salesLines.filter(l => !l.qty || !have.has(_t6SalesKey(l.plotKey)));
+        }
+
+        function syncT6SalesGap() {
+            const panel = document.getElementById('t6-sales-gap-panel');
+            const host  = document.getElementById('t6-sales-gap-rows');
+            const count = document.getElementById('t6-sales-gap-count');
+            if (!panel || !host) return [];
+
+            const gaps = t6SalesGaps();
+            if (!gaps.length) { panel.classList.add('hidden'); host.innerHTML = ''; return gaps; }
+
+            panel.classList.remove('hidden');
+            const total = gaps.reduce((s, g) => s + (g.qty || 0), 0);
+            if (count) count.innerText = `${gaps.length} line${gaps.length === 1 ? '' : 's'}`
+                                       + (total ? ` · ${total.toLocaleString()} seedlings` : '');
+            host.innerHTML = gaps.map(g => {
+                const why = !g.qty
+                    ? 'This line has no quantity, and the delivery note carries more than one line — so there is no total to read it from. Key the quantity on the line.'
+                    : `The report has no plot ${_t6Esc(g.plotKey)} on this batch. Either the plot is keyed differently on the delivery note, or the seedlings were moved to another plot before they went — put the plot they actually left from on the line.`;
+                const dateStr = g.date
+                    ? new Date(g.date).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' })
+                    : '—';
+                return `
+                    <div class="border border-[#e8dcc8] rounded-2xl p-4 bg-[#fdfaf4]">
+                        <div class="flex flex-wrap items-center gap-x-6 gap-y-2 mb-2">
+                            <div>
+                                <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Delivery Note</div>
+                                <div class="text-base font-black text-[#3d2610]">${_t6Esc(g.doNumber || '—')}<span class="text-[11px] font-bold text-[#8a7a68]"> · line ${g.line}</span></div>
+                            </div>
+                            <div>
+                                <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Plot As Keyed</div>
+                                <div class="text-base font-black text-[#a83020]">${_t6Esc(g.plotRaw || g.plotKey || '—')}</div>
+                            </div>
+                            <div>
+                                <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Qty</div>
+                                <div class="text-base font-black text-[#3d2610]">${g.qty ? g.qty.toLocaleString() : '— none keyed —'}</div>
+                            </div>
+                            <div>
+                                <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Delivered</div>
+                                <div class="text-base font-black text-[#3d2610]">${dateStr}</div>
+                            </div>
+                            ${g.customer ? `<div>
+                                <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Customer</div>
+                                <div class="text-sm font-bold text-[#8a7a68]">${_t6Esc(g.customer)}</div>
+                            </div>` : ''}
+                        </div>
+                        <div class="text-[12px] font-bold text-[#3d2610] leading-snug">${why}</div>
+                    </div>`;
+            }).join('');
+            return gaps;
+        }
+
         function syncT6Mismatch() {
             const panel = document.getElementById('t6-mismatch-panel');
             const host  = document.getElementById('t6-mismatch-rows');
@@ -10613,6 +10757,9 @@ Thank you.`;
             // The plots whose drone map disagrees with the culled qty, listed
             // under the totals for a reason to be written against each.
             syncT6Mismatch();
+            // …and the sales on this batch's delivery notes that reached no
+            // plot at all, which is the other way a figure here goes wrong.
+            syncT6SalesGap();
 
             // Done counter
             document.getElementById('t6-done-count').innerText = rowsDone;
