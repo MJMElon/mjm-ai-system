@@ -2217,12 +2217,10 @@
         const modal = document.getElementById('pickup-modal');
         const title = document.getElementById('pickup-modal-title');
         const sub   = document.getElementById('pickup-modal-sub');
-        const summ  = document.getElementById('pickup-summary');
         const wrap  = document.getElementById('pickup-table-wrap');
 
         title.textContent = customerName || '—';
         sub.textContent   = orderNumber ? 'Order: ' + orderNumber : '';
-        summ.innerHTML    = '';
         document.getElementById('pickup-month-detail').innerHTML = '';
         _phDoByMonth = {};
         // Reopens on Booking by default, not wherever the last customer's
@@ -2238,48 +2236,18 @@
             if (orderNumber)  filters.push('order_number.eq.'  + orderNumber);
             const orFilter = filters.join(',');
 
-            const [bookingsRes, ordersRes, alRes] = await Promise.all([
+            const [bookingsRes, alRes] = await Promise.all([
                 _supabase.from('shared_collection_bookings').select('*').or(orFilter).order('booking_date', { ascending: false }),
-                _supabase.from('salesweb_customer_orders').select('id,order_number,customer_name,billing_name,total_amount,balance_amount,status,created_at,collected_qty,collected_at').or(orFilter).order('created_at', { ascending: false }),
                 // AL number is the only link from a sales-web order to its
                 // DO lines — shared_do_records has no order_number of its own.
                 _supabase.from('shared_al_orders').select('al_number,order_number,customer_name').or(orFilter)
             ]);
 
             const bookings = bookingsRes.data || [];
-            const orders   = ordersRes.data   || [];
 
-            let collections = [];
-            try {
-                const orderIds = orders.map(o => o.id).filter(Boolean);
-                if (orderIds.length) {
-                    const { data } = await _supabase
-                        .from('salesweb_order_collections')
-                        .select('order_id,collected_qty,collected_at,al_number')
-                        .in('order_id', orderIds);
-                    collections = data || [];
-                }
-            } catch(e) { collections = []; }
-
-            const totalOrdered    = orders.reduce((s,o)=> s + (o.total_amount || 0), 0);
-            const totalCollected  = (collections.length
-                ? collections.reduce((s,c)=> s + (c.collected_qty || 0), 0)
-                : orders.reduce((s,o)=> s + (o.collected_qty || 0), 0));
-            const totalBookings   = bookings.length;
-            const fmtRM = n => 'RM ' + (Number(n)||0).toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
-
-            summ.innerHTML = `
-                <div class="ph-summary-card"><div class="ph-label">Total bookings</div><div class="ph-num">${totalBookings}</div></div>
-                <div class="ph-summary-card"><div class="ph-label">Seedlings collected</div><div class="ph-num">${totalCollected.toLocaleString()}</div></div>
-                <div class="ph-summary-card"><div class="ph-label">Order value (sum)</div><div class="ph-num">${fmtRM(totalOrdered)}</div></div>
-            `;
-
-            // ── Collection tab: month cards built from shared_do_records ──
-            // Not salesweb_order_collections (the "Seedlings collected" card
-            // above still reads that) — a DO is what "Delivery Date / DO
-            // Number / Qty" means when a card is clicked, and building the
-            // card's own number from the same table it expands into is what
-            // guarantees the two can never disagree.
+            // ── Collection tab: DO lines built from shared_do_records — a
+            // DO is what "Delivery Date / DO Number / Qty" means, so it's
+            // the same table the drilldown below expands into. ──
             const alNumbers = [...new Set((alRes.data || []).map(a => a.al_number).filter(Boolean))];
             let doRecords = [];
             if (alNumbers.length) {
