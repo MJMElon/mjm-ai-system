@@ -1854,7 +1854,7 @@
             const cellsHtml = months.map(m => {
                 const booked = r.bookingsByMonth[m.key] || 0;
                 const cls = ['t-mo', booked ? 'has-booked' : '', m.key === nowKey ? 'is-now' : ''].filter(Boolean).join(' ');
-                const inner = booked ? `${booked.toLocaleString()}<span class="booked-tag">booked</span>` : '';
+                const inner = booked ? booked.toLocaleString() : '';
                 return `<td class="${cls}">${inner}</td>`;
             }).join('');
             return `
@@ -1869,7 +1869,7 @@
         }).join('');
 
         const monthFootCells = months.map((m, i) => colBookTotals[i]
-            ? `<td class="t-tot">${colBookTotals[i].toLocaleString()}<span class="booked-tag">booked</span></td>`
+            ? `<td class="t-tot">${colBookTotals[i].toLocaleString()}</td>`
             : `<td class="t-tot">—</td>`
         ).join('');
 
