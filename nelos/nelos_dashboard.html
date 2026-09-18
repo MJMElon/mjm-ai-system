@@ -1763,9 +1763,15 @@ function setDoc(url, name) {
    picker that takes a file and loses it is worse than none. */
 async function checkDocsColumn() {
   const { error } = await _supabase.from('nelos_cases').select('doc_url,doc_name').limit(1);
-  docsOn = !error;
+  /* ONLY a missing column turns the picker off. Any other error — a rule
+     that refused the read, a connection that dropped — is not an answer
+     to "does this table have these columns", and treating it as one
+     would hide a box that works. Fails open, the way access does. */
+  const missing = !!error && (error.code === '42703' ||
+                              /column .* does not exist|doc_url|doc_name/i.test(error.message || ''));
+  docsOn = !missing;
   $('step-doc').classList.toggle('hidden', !docsOn);
-  if (!docsOn) {
+  if (missing) {
     console.warn('[nelos] nelos_cases has no doc_url — run shared/RUN_ME_nelos_case_document.sql ' +
                  'to let a case carry a document.');
   }
