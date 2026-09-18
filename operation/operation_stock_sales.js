@@ -750,8 +750,8 @@
         const prBtn = document.createElement('button');
         prBtn.type = 'button';
         prBtn.className = 'month-tab' + (activeMonthKey === PR_TAB_KEY ? ' active' : '');
-        prBtn.innerText = 'P-R';
-        prBtn.title = 'Reserve ("-R") plots from Batch Detail’s P-R Culling';
+        prBtn.innerText = 'Plot-R';
+        prBtn.title = 'Reserve ("-R") plots from Batch Detail’s P-R Culling, with balance still to allocate';
         prBtn.onclick = () => { activeMonthKey = PR_TAB_KEY; closeHistoryMenu(); renderMonthTabs(); renderMaturityTable(); renderActiveBanner(); };
         tabsEl.appendChild(prBtn);
 
@@ -784,7 +784,7 @@
         const banner = document.getElementById('active-month-banner');
         if (activeMonthKey === PR_TAB_KEY) {
             banner.classList.remove('hidden');
-            banner.innerHTML = `🪴 Viewing <span class="font-black uppercase tracking-widest">P-R</span> — reserve plots from Batch Detail's P-R Culling, not bucketed by month`;
+            banner.innerHTML = `🪴 Viewing <span class="font-black uppercase tracking-widest">Plot-R</span> — reserve plots from Batch Detail's P-R Culling with balance still to allocate, not bucketed by month`;
         } else if (historyMonthKeys.includes(activeMonthKey)) {
             banner.classList.remove('hidden');
             banner.innerHTML = `🕘 Viewing <span class="font-black uppercase tracking-widest">history</span> — ${monthLabel(activeMonthKey)} (already matured & past)`;
@@ -920,11 +920,17 @@
         const tfoot = document.getElementById('maturity-foot');
 
         const rows = allMatGroups
-            .filter(g => activeMonthKey === PR_TAB_KEY ? g.isPR : (!g.isPR && monthKey(g.matureDate) === activeMonthKey))
+            .filter(g => {
+                if (activeMonthKey !== PR_TAB_KEY) return !g.isPR && monthKey(g.matureDate) === activeMonthKey;
+                // Sold-out reserve plots have nothing left to allocate — the
+                // Plot-R tab is a picking list for what's still standing, so
+                // a plot already at/under zero balance has no reason to be on it.
+                return g.isPR && (g.afterCulling - (g.doDeducted || 0)) > 0;
+            })
             .sort((a, b) => a.matureDate - b.matureDate);
 
         if (!rows.length) {
-            const emptyMsg = activeMonthKey === PR_TAB_KEY ? 'No reserve (P-R) plots' : 'No maturity allocations for this month';
+            const emptyMsg = activeMonthKey === PR_TAB_KEY ? 'No reserve (Plot-R) plots with balance' : 'No maturity allocations for this month';
             tbody.innerHTML = `<tr><td colspan="13" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">${emptyMsg}</div></td></tr>`;
             tfoot.innerHTML = '';
             renderDoUnmatched();
