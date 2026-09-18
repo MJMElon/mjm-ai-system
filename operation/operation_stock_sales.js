@@ -1659,7 +1659,6 @@
 
         const months = customerActiveMonths();
         const nowKey = monthKey(new Date());
-        const fmtRM  = n => 'RM ' + (Number(n) || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
         thead.innerHTML = `
             <tr>
@@ -1667,11 +1666,8 @@
                 <th class="h-cust" style="min-width:200px;">Customer</th>
                 <th>Order Month</th>
                 <th>Status</th>
-                <th>Ordered Qty</th>
-                ${months.map(m => `<th class="h-mo${m.key===nowKey?' is-now':''}">${m.label.replace(' ','<br>')}</th>`).join('')}
-                <th class="h-tot">Total<br>Collected</th>
                 <th class="h-tot">Balance</th>
-                <th class="h-tot">Order Total</th>
+                ${months.map(m => `<th class="h-mo${m.key===nowKey?' is-now':''}">${m.label.replace(' ','<br>')}</th>`).join('')}
             </tr>`;
 
         let allRows = allCustomerOrders.filter(r => {
@@ -1704,7 +1700,7 @@
             return tb - ta;
         });
 
-        const colsTotal = 5 + months.length + 3;
+        const colsTotal = 5 + months.length;
 
         if (!allRows.length) {
             tbody.innerHTML = `<tr><td colspan="${colsTotal}" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">📋</div><div class="text-[10px] font-bold uppercase tracking-widest">No customer orders match the filter</div></td></tr>`;
@@ -1725,14 +1721,11 @@
         // Totals reflect the full filtered dataset (every page), not just
         // the visible 10 rows — otherwise the footer line would shrink
         // every time the user paged.
-        let totQty = 0, totColl = 0, totBalance = 0, totAmt = 0;
-        const colCollTotals = months.map(() => 0);
+        let totBalance = 0;
         const colBookTotals = months.map(() => 0);
         allRows.forEach(r => {
-            totQty += r.totalQty; totColl += r.totalCollected;
-            totBalance += r.balance; totAmt += (r.totalAmount || 0);
+            totBalance += r.balance;
             months.forEach((m, i) => {
-                colCollTotals[i] += (r.collectionsByMonth[m.key] || 0);
                 colBookTotals[i] += (r.bookingsByMonth[m.key] || 0);
             });
         });
@@ -1746,21 +1739,10 @@
             const rowCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
             const rowStyle = rowCancelled ? 'style="background:#fef2f2"' : '';
             const cancelStrike = rowCancelled ? 'style="text-decoration:line-through;color:#a83020"' : '';
-            const cellsHtml = months.map((m, i) => {
-                const collected = r.collectionsByMonth[m.key] || 0;
-                const booked    = r.bookingsByMonth[m.key]    || 0;
-
-                const cls = [
-                    't-mo',
-                    collected ? 'has-qty' : '',
-                    !collected && booked ? 'has-booked' : '',
-                    m.key === nowKey ? 'is-now' : ''
-                ].filter(Boolean).join(' ');
-
-                let inner = '';
-                if (collected && booked)      inner = `${collected.toLocaleString()}<span class="booked-tag">+${booked.toLocaleString()} booked</span>`;
-                else if (collected)           inner = collected.toLocaleString();
-                else if (booked)              inner = `${booked.toLocaleString()}<span class="booked-tag">booked</span>`;
+            const cellsHtml = months.map(m => {
+                const booked = r.bookingsByMonth[m.key] || 0;
+                const cls = ['t-mo', booked ? 'has-booked' : '', m.key === nowKey ? 'is-now' : ''].filter(Boolean).join(' ');
+                const inner = booked ? `${booked.toLocaleString()}<span class="booked-tag">booked</span>` : '';
                 return `<td class="${cls}">${inner}</td>`;
             }).join('');
             return `
@@ -1769,21 +1751,15 @@
                     <td class="t-cust"><span class="cust-link" ${cancelStrike} data-pickup data-cust="${escapeHtml(r.customer || '')}" data-order="${escapeHtml(r.orderNumber || '')}">${escapeHtml(r.customer || '—')}</span><div class="t-sub" ${cancelStrike}>${escapeHtml(r.orderNumber || '')}${r.alNumber ? ' · <span style="color:#1d4ed8;font-weight:900;">AL ' + escapeHtml(r.alNumber) + '</span>' : ''}</div></td>
                     <td ${cancelStrike}>${orderMonth}</td>
                     <td><span class="pill-status ${pillCls}">${escapeHtml(pillTxt)}</span></td>
-                    <td class="font-black" ${cancelStrike}>${r.totalQty.toLocaleString()}</td>
-                    ${cellsHtml}
-                    <td class="t-tot" ${cancelStrike}>${r.totalCollected.toLocaleString()}</td>
                     <td class="t-tot${r.balance < 0 ? ' text-red-600' : r.balance === 0 ? ' text-emerald-700' : ''}" ${cancelStrike}>${r.balance.toLocaleString()}</td>
-                    <td class="t-tot" ${cancelStrike}>${fmtRM(r.totalAmount)}</td>
+                    ${cellsHtml}
                 </tr>`;
         }).join('');
 
-        const monthFootCells = months.map((m, i) => {
-            const c = colCollTotals[i], b = colBookTotals[i];
-            if (c && b) return `<td class="t-tot">${c.toLocaleString()}<span class="booked-tag">+${b.toLocaleString()} booked</span></td>`;
-            if (c)      return `<td class="t-tot">${c.toLocaleString()}</td>`;
-            if (b)      return `<td class="t-tot">${b.toLocaleString()}<span class="booked-tag">booked</span></td>`;
-            return       `<td class="t-tot">—</td>`;
-        }).join('');
+        const monthFootCells = months.map((m, i) => colBookTotals[i]
+            ? `<td class="t-tot">${colBookTotals[i].toLocaleString()}<span class="booked-tag">booked</span></td>`
+            : `<td class="t-tot">—</td>`
+        ).join('');
 
         // Build a compact page-number row: «  1  2  3 … 215  »
         const pages = (() => {
@@ -1808,11 +1784,8 @@
         tfoot.innerHTML = `
             <tr class="bg-slate-50 font-black">
                 <td colspan="4" class="text-right text-[10px] uppercase tracking-widest text-slate-500" style="padding:8px;">Totals (${totalRows} orders)</td>
-                <td class="t-tot">${totQty.toLocaleString()}</td>
-                ${monthFootCells}
-                <td class="t-tot">${totColl.toLocaleString()}</td>
                 <td class="t-tot">${totBalance.toLocaleString()}</td>
-                <td class="t-tot">${fmtRM(totAmt)}</td>
+                ${monthFootCells}
             </tr>
             <tr>
                 <td colspan="${colsTotal}" class="bg-white" style="padding:10px 12px;">
@@ -1861,6 +1834,7 @@
         }
 
         const doByAl = _doByAlAndMonth();
+        const fmtRM  = n => 'RM ' + (Number(n) || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
         // Same visibility/search/sort rule as the Booking tab — same list
         // of orders, just a different breakdown of each.
@@ -1899,11 +1873,14 @@
                 <th class="h-cust" style="min-width:200px;">Customer</th>
                 <th>Order Month</th>
                 <th>Status</th>
+                <th>Ordered Qty</th>
                 ${months.map(m => `<th class="h-mo${m.key===nowKey?' is-now':''}">${m.label.replace(' ','<br>')}</th>`).join('')}
                 <th class="h-tot">Total<br>Collected</th>
+                <th class="h-tot">Balance</th>
+                <th class="h-tot">Order Total</th>
             </tr>`;
 
-        const colsTotal = 4 + months.length + 1;
+        const colsTotal = 5 + months.length + 3;
         if (!allRows.length) {
             tbody.innerHTML = `<tr><td colspan="${colsTotal}" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">📥</div><div class="text-[10px] font-bold uppercase tracking-widest">No customer orders match the filter</div></td></tr>`;
             tfoot.innerHTML = '';
@@ -1918,9 +1895,10 @@
         const endIdx   = Math.min(startIdx + CUST_PAGE_SIZE, totalRows);
         const rows     = allRows.slice(startIdx, endIdx);
 
-        let totDoAll = 0;
+        let totQty = 0, totDoAll = 0, totBalance = 0, totAmt = 0;
         const colTotals = months.map(() => 0);
         allRows.forEach(r => {
+            totQty += r.totalQty; totBalance += r.balance; totAmt += (r.totalAmount || 0);
             const byMonth = doByAl[r.alNumber] || {};
             months.forEach((m, i) => {
                 const q = byMonth[m.key] || 0;
@@ -1953,8 +1931,11 @@
                     <td class="t-cust"><span class="cust-link" ${cancelStrike} data-pickup data-cust="${escapeHtml(r.customer || '')}" data-order="${escapeHtml(r.orderNumber || '')}">${escapeHtml(r.customer || '—')}</span><div class="t-sub" ${cancelStrike}>${escapeHtml(r.orderNumber || '')}${r.alNumber ? ' · <span style="color:#1d4ed8;font-weight:900;">AL ' + escapeHtml(r.alNumber) + '</span>' : ''}</div></td>
                     <td ${cancelStrike}>${orderMonth}</td>
                     <td><span class="pill-status ${pillCls}">${escapeHtml(pillTxt)}</span></td>
+                    <td class="font-black" ${cancelStrike}>${r.totalQty.toLocaleString()}</td>
                     ${cellsHtml}
                     <td class="t-tot" ${cancelStrike}>${rowTotal.toLocaleString()}</td>
+                    <td class="t-tot${r.balance < 0 ? ' text-red-600' : r.balance === 0 ? ' text-emerald-700' : ''}" ${cancelStrike}>${r.balance.toLocaleString()}</td>
+                    <td class="t-tot" ${cancelStrike}>${fmtRM(r.totalAmount)}</td>
                 </tr>`;
         }).join('');
 
@@ -1981,8 +1962,11 @@
         tfoot.innerHTML = `
             <tr class="bg-slate-50 font-black">
                 <td colspan="4" class="text-right text-[10px] uppercase tracking-widest text-slate-500" style="padding:8px;">Totals (${totalRows} orders)</td>
+                <td class="t-tot">${totQty.toLocaleString()}</td>
                 ${monthFootCells}
                 <td class="t-tot">${totDoAll.toLocaleString()}</td>
+                <td class="t-tot">${totBalance.toLocaleString()}</td>
+                <td class="t-tot">${fmtRM(totAmt)}</td>
             </tr>
             <tr>
                 <td colspan="${colsTotal}" class="bg-white" style="padding:10px 12px;">
@@ -2239,7 +2223,6 @@
         title.textContent = customerName || '—';
         sub.textContent   = orderNumber ? 'Order: ' + orderNumber : '';
         summ.innerHTML    = '';
-        document.getElementById('pickup-months-wrap').innerHTML = '';
         document.getElementById('pickup-month-detail').innerHTML = '';
         _phDoByMonth = {};
         // Reopens on Booking by default, not wherever the last customer's
@@ -2315,27 +2298,16 @@
                 const k = String(d.delivery_date).slice(0, 7);
                 (_phDoByMonth[k] = _phDoByMonth[k] || []).push(d);
             });
-            const monthsWrap = document.getElementById('pickup-months-wrap');
-            const collMonthRows = Object.keys(_phDoByMonth).sort().map(k => {
-                const [y, m] = k.split('-').map(Number);
-                const qty = _phDoByMonth[k].reduce((s, d) => s + (Number(d.total_qty) || 0), 0);
-                return { key: k, label: new Date(y, m - 1, 1).toLocaleString('en-MY', { month: 'short', year: 'numeric' }), qty };
-            });
-            monthsWrap.innerHTML = collMonthRows.length ? `
-                <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Collection by month — click a month for its DO lines</div>
-                <div class="flex flex-wrap gap-2 mb-4">
-                    ${collMonthRows.map(r => `
-                        <button type="button" class="ph-summary-card ph-month-card" style="min-width:96px;" data-month="${r.key}" onclick="showPickupMonthDoLines('${r.key}')">
-                            <div class="ph-label">${r.label}</div><div class="ph-num">${r.qty.toLocaleString()}</div>
-                        </button>`).join('')}
-                </div>
-            ` : `<div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest">No DO-recorded collections for this customer</div>`;
-
             // Jumped here from a Collection-tab cell for a specific month —
-            // open its DO lines immediately instead of making them click
-            // the card again for what they already clicked once.
-            if (opts.tab === 'collection' && opts.month && _phDoByMonth[opts.month]) {
+            // show just that month's DO lines. Opened plainly (click
+            // customer name, no month in mind) — show the full history in
+            // one flat table; the page's own Collection tab is now where
+            // you pick a month, so there's no need for this modal to make
+            // you pick one again on the way to seeing it.
+            if (opts.month && _phDoByMonth[opts.month]) {
                 showPickupMonthDoLines(opts.month);
+            } else {
+                renderDoLinesTable(doRecords);
             }
 
             // ── Booking tab: bookings only — collection now lives in its own tab ──
@@ -2377,19 +2349,22 @@
         }
     }
 
-    // Renders the DO lines behind one month's Collection card — Delivery
-    // Date, DO Number, Qty — exactly what was asked to appear on click.
-    function showPickupMonthDoLines(key) {
-        document.querySelectorAll('.ph-month-card').forEach(el => el.classList.toggle('active', el.dataset.month === key));
-        const rows = (_phDoByMonth[key] || []).slice().sort((a, b) => String(a.delivery_date).localeCompare(String(b.delivery_date)));
+    // Delivery Date / DO Number / Qty, for whatever set of DO lines it's
+    // handed — one month's worth (showPickupMonthDoLines) or the customer's
+    // whole history (openPickupHistory's plain "click customer name" path).
+    function renderDoLinesTable(rows) {
         const detail = document.getElementById('pickup-month-detail');
-        if (!rows.length) { detail.innerHTML = ''; return; }
-        const total = rows.reduce((s, d) => s + (Number(d.total_qty) || 0), 0);
+        if (!rows.length) {
+            detail.innerHTML = `<div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest">No DO-recorded collections for this customer</div>`;
+            return;
+        }
+        const sorted = rows.slice().sort((a, b) => String(a.delivery_date).localeCompare(String(b.delivery_date)));
+        const total = sorted.reduce((s, d) => s + (Number(d.total_qty) || 0), 0);
         detail.innerHTML = `
             <table class="ph-table">
                 <thead><tr><th>Delivery Date</th><th>DO Number</th><th class="text-right">Qty</th></tr></thead>
                 <tbody>
-                    ${rows.map(d => `
+                    ${sorted.map(d => `
                         <tr>
                             <td>${String(d.delivery_date).slice(0, 10)}</td>
                             <td class="font-mono text-[11px]">${escapeHtml(d.do_number || '—')}</td>
@@ -2401,6 +2376,10 @@
                     <td class="text-right">${total.toLocaleString()}</td>
                 </tr></tfoot>
             </table>`;
+    }
+
+    function showPickupMonthDoLines(key) {
+        renderDoLinesTable(_phDoByMonth[key] || []);
     }
     window.showPickupMonthDoLines = showPickupMonthDoLines;
 
