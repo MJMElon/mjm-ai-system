@@ -1570,11 +1570,20 @@
         const present = new Set([startKey]);
 
         (allCustomerOrders || []).forEach(r => {
+            // Bookings stay future-only — a booking for a month already gone
+            // wouldn't make sense, and shared_collection_bookings is only
+            // ever fetched from the current month forward anyway.
             Object.entries(r.bookingsByMonth || {}).forEach(([k, v]) => {
                 if (v && k >= startKey) present.add(k);
             });
+            // Collections show every month they actually happened in, past
+            // included — salesweb_order_collections is fetched with no date
+            // floor, so the history is already in memory; this is what
+            // surfaces it as its own column instead of only ever folding it
+            // into "Total Collected". Scroll right past the current month to
+            // see it.
             Object.entries(r.collectionsByMonth || {}).forEach(([k, v]) => {
-                if (v && k >= startKey) present.add(k);
+                if (v) present.add(k);
             });
         });
 
