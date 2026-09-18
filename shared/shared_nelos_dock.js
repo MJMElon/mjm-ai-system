@@ -767,6 +767,10 @@
   .nd-shot-prev { position:relative; flex:1; min-height:64px; border-radius:11px;
                   overflow:hidden; background:#f1f5f9; }
   .nd-shot-prev img { width:100%; height:100%; object-fit:cover; display:block; }
+  .nd-solve-err { margin-top:7px; padding:8px 10px; border-radius:9px; font-size:11.5px;
+                  font-weight:700; line-height:1.35; color:#7f1d1d;
+                  background:#fef2f2; border:1px solid #fecaca; }
+  .nd-solve-err[hidden] { display:none; }
   .nd-shot-x { position:absolute; top:4px; right:4px; width:22px; height:22px; border:none;
                border-radius:50%; background:rgba(15,23,42,.62); color:#fff; cursor:pointer;
                font-size:13px; line-height:1; display:flex; align-items:center;
@@ -1051,11 +1055,18 @@
           '</div>' +
           '<div class="nd-fld">' +
             '<span class="nd-lbl">Photo</span>' +
-            /* capture="environment" opens the camera straight onto the back
+            /* No capture= attribute. It used to say capture="environment",
+               which on Android sends the chooser STRAIGHT to the camera and
+               takes the gallery away — so a photo already taken while the
+               work was being done could not be attached at all. Without it
+               Android offers Camera and Files side by side, and iOS offers
+               the same three it always did.
+
+               The old note, kept for why it was ever there: it opens the camera straight onto the back
                lens on a phone and is ignored on a desktop, where the same
                control is a file picker. One control, both jobs. */
             '<label class="nd-photo-pick"><input type="file" id="nd-f-photo" ' +
-                   'accept="image/*" capture="environment" hidden>' +
+                   'accept="image/*" hidden>' +
               '<span>&#128247; Take or upload a photo</span></label>' +
             '<div class="nd-photo" hidden><img alt=""><button type="button" ' +
                  'class="nd-photo-x" aria-label="Remove photo">&#10005;</button></div>' +
@@ -1476,6 +1487,12 @@
     PN:   pad('P', 52), BNN: pad('B', 14), UNN1: pad('U', 18), UNN2: pad('N', 20)
   };
   var NURSERY_LABEL = { PN: 'Pre Nursery', BNN: 'BNN', UNN1: 'UNN1', UNN2: 'UNN2' };
+  /* …and one that is in no table and never will be. Some cases are about
+     every nursery at once — a rule, a form, a piece of equipment that
+     travels — and they were being filed against whichever nursery the
+     person happened to pick. Stored as the words, because it has no code:
+     nursery_name is printed as it is saved everywhere it is shown. */
+  var NURSERY_ALL = 'All Nursery';
   function pad(letter, n) {
     var out = [];
     for (var i = 1; i <= n; i++) out.push(letter + (i < 10 ? '0' + i : String(i)));
@@ -1726,27 +1743,120 @@
     } catch (_) { return iso; }
   }
 
+  /* ── PHOTOS OFF A PHONE ──────────────────────────────────────────
+     A photo taken on an Android phone is routinely 4–12 MB; the same
+     scene off an iPhone arrives as a HEIC a fraction of that. So the
+     upload that worked all day for one person failed for the next, and
+     on the solve form it failed IN SILENCE — the case was marked solved,
+     the picture went nowhere, and nothing on the screen said so.
+
+     Every photo is therefore shrunk here before it is sent: long edge
+     1600px, JPEG, which is far more than enough to see a pest, a gap or
+     a broken bag, and turns eight megabytes into a few hundred kilobytes.
+     A file that cannot be decoded (an odd format, a browser without
+     canvas) is sent exactly as it came — shrinking is an improvement on
+     the upload, not a condition of it.
+
+     Exported as window.MJMPhoto so nelos/nelos_case.html, which loads
+     this file for the dock, solves cases through the same rule rather
+     than a second copy of it. */
+  var MAX_EDGE   = 1600;
+  var JPEG_Q     = 0.82;
+  var EASY_BYTES = 1.5 * 1024 * 1024;   // small enough to leave alone
+
+  function decodeImage(file) {
+    if (window.createImageBitmap) {
+      return window.createImageBitmap(file, { imageOrientation: 'from-image' })
+        .catch(function () { return window.createImageBitmap(file); });
+    }
+    return new Promise(function (res, rej) {
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload  = function () { URL.revokeObjectURL(url); res(img); };
+      img.onerror = function () { URL.revokeObjectURL(url); rej(new Error('cannot decode')); };
+      img.src = url;
+    });
+  }
+
+  /* What to send, and under what name. Always resolves — never throws —
+     because a photo that will not shrink is still a photo worth having. */
+  async function photoForUpload(file) {
+    var plain = { body: file, name: file && file.name || 'photo.jpg',
+                  type: (file && file.type) || 'image/jpeg', bytes: file && file.size || 0,
+                  shrunk: false };
+    if (!file || !/^image\//i.test(file.type || '')) return plain;
+    try {
+      var img = await decodeImage(file);
+      var w = img.width, h = img.height;
+      if (!w || !h) return plain;
+      /* Already small enough in both senses? Send it exactly as it came.
+         Re-encoding a photo that is fine costs a little quality and saves
+         nobody anything — shrinking is for the ones that need it. */
+      if (Math.max(w, h) <= MAX_EDGE && file.size <= EASY_BYTES) {
+        if (img.close) { try { img.close(); } catch (_) {} }
+        return plain;
+      }
+      var scale = Math.min(1, MAX_EDGE / Math.max(w, h));
+      var cw = Math.max(1, Math.round(w * scale));
+      var ch = Math.max(1, Math.round(h * scale));
+      var canvas = document.createElement('canvas');
+      canvas.width = cw; canvas.height = ch;
+      var ctx = canvas.getContext('2d');
+      if (!ctx) return plain;
+      ctx.drawImage(img, 0, 0, cw, ch);
+      if (img.close) { try { img.close(); } catch (_) {} }
+      var blob = await new Promise(function (res) {
+        if (canvas.toBlob) canvas.toBlob(res, 'image/jpeg', JPEG_Q);
+        else res(null);
+      });
+      // No good turn done: an already-small photo can come out bigger as a
+      // re-encoded JPEG, and then the original is the better thing to send.
+      if (!blob || blob.size >= file.size) return plain;
+      var name = String(file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg';
+      var body = blob;
+      try { body = new File([blob], name, { type: 'image/jpeg' }); } catch (_) {}
+      return { body: body, name: name, type: 'image/jpeg', bytes: blob.size, shrunk: true };
+    } catch (_) {
+      return plain;
+    }
+  }
+
+  window.MJMPhoto = window.MJMPhoto || { forUpload: photoForUpload, MAX_EDGE: MAX_EDGE };
+
   /* ── SOLVING ─────────────────────────────────────────────────────
      Upload first, then patch. That order matters: a failed upload
      leaves the case exactly as it was, whereas patching first would
      mark work solved and then lose the picture of it. */
   var _shot = null;                    // the File chosen for this case
 
+  /* Hands back the URL, or the REASON there is not one. It used to hand
+     back null for every kind of failure and the caller had nothing to
+     tell anybody — which is how "I solved it and the photo never went"
+     looked from the field. */
   async function uploadShot(caseId, file) {
     var token = await accessToken();
-    if (!token) return null;
-    var ext  = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!token) return { url: null, why: 'you are signed out — sign in and try again' };
+    var pic  = await photoForUpload(file);
+    var ext  = (pic.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
     var path = 'solve/' + caseId + '-' + Date.now() + '.' + (ext || 'jpg');
     try {
       var res = await fetch(CFG.url + '/storage/v1/object/nelos-photos/' + path, {
         method: 'POST',
         headers: { apikey: CFG.key, Authorization: 'Bearer ' + token,
-                   'Content-Type': file.type || 'application/octet-stream' },
-        body: file
+                   'Content-Type': pic.type || 'application/octet-stream' },
+        body: pic.body
       });
-      if (!res.ok) return null;
-      return CFG.url + '/storage/v1/object/public/nelos-photos/' + path;
-    } catch (_) { return null; }
+      if (!res.ok) {
+        var why = res.status === 413 ? 'the photo is too big for the store'
+                : res.status === 403 || res.status === 401 ? 'you are not allowed to add photos'
+                : res.status === 404 ? 'the nelos-photos bucket is missing'
+                : 'the photo store answered ' + res.status;
+        return { url: null, why: why };
+      }
+      return { url: CFG.url + '/storage/v1/object/public/nelos-photos/' + path, why: '' };
+    } catch (_) {
+      return { url: null, why: 'no connection to the photo store' };
+    }
   }
 
   async function patchCase(id, body) {
@@ -1776,7 +1886,31 @@
     _solving = true;
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
 
-    var url = _shot ? await uploadShot(id, _shot) : null;
+    var err = detailEl.querySelector('.nd-solve-err');
+    var say = function (msg) {
+      if (!err) return;
+      err.textContent = msg || '';
+      err.hidden = !msg;
+    };
+    say('');
+
+    var shot = _shot ? await uploadShot(id, _shot) : { url: null, why: '' };
+    /* A PHOTO THAT DID NOT GO STOPS THE SOLVE.
+
+       It used to carry on and save the remark, leaving the case marked
+       solved with no picture and nothing said — which is exactly what the
+       field reported as "cannot upload photo". Nothing is lost by
+       stopping: the remark is still in the box, and the person can try
+       again or take the photo off with the ✕ and solve without it. That
+       is their call to make, not ours to make quietly. */
+    if (_shot && !shot.url) {
+      _solving = false;
+      if (btn) { btn.disabled = false; btn.textContent = 'Save & Solve'; }
+      say('The photo did not upload — ' + (shot.why || 'unknown reason') +
+          '. Try Save & Solve again, or press ✕ on the photo to solve without it.');
+      return;
+    }
+    var url = shot.url;
     var body = {
       status: 'resolved',
       resolution: text,
@@ -1816,7 +1950,7 @@
                '<label>' +
                  '<svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>' +
                  '<span>Take or attach a photo</span>' +
-                 '<input type="file" accept="image/*" capture="environment" class="nd-shot-in">' +
+                 '<input type="file" accept="image/*" class="nd-shot-in">' +
                '</label>' +
              '</div>' +
              /* Labelled rather than prompted from inside the box: a
@@ -1825,6 +1959,7 @@
                 when they start filling it in. */
              '<div class="nd-solve-lab">Solve Case Remark</div>' +
              '<textarea class="nd-solve-note" maxlength="2000"></textarea>' +
+             '<div class="nd-solve-err" hidden></div>' +
            '</div>';
   }
 
@@ -1989,7 +2124,7 @@
 
     var nurs = formEl.querySelector('#nd-f-nursery');
     if (nurs.options.length <= 1) {
-      nurs.innerHTML = opt('', '— none —') +
+      nurs.innerHTML = opt('', '— none —') + opt(NURSERY_ALL, NURSERY_ALL) +
         Object.keys(NURSERY_PLOTS).map(function (n) { return opt(n, NURSERY_LABEL[n]); }).join('');
     }
 
@@ -2072,8 +2207,14 @@
     var n = formEl.querySelector('#nd-f-nursery').value;
     var plot = formEl.querySelector('#nd-f-plot');
     plot.disabled = !n;
+    /* A case about every nursery is not about one plot, but nothing is
+       gained by refusing to name one either — so all of them are offered,
+       in nursery order. */
+    var list = n === NURSERY_ALL
+      ? Object.keys(NURSERY_PLOTS).reduce(function (all, k) { return all.concat(NURSERY_PLOTS[k]); }, [])
+      : (NURSERY_PLOTS[n] || []);
     plot.innerHTML = opt('', n ? '— none —' : 'Nursery first') +
-      (NURSERY_PLOTS[n] || []).map(function (p) { return opt(p, p); }).join('');
+      list.map(function (p) { return opt(p, p); }).join('');
   }
 
   /* The due date the chosen work normally gets, counted from today. No
@@ -2098,15 +2239,20 @@
     var input = formEl.querySelector('#nd-f-photo');
     var file = input && input.files && input.files[0];
     if (!file) return undefined;
-    if (file.size > MAX_PHOTO) throw new Error('that photo is over 8 MB — take a smaller one');
+    /* Shrunk first, THEN weighed. An Android camera photo is routinely
+       over the limit as it comes off the phone and was refused outright;
+       at 1600px it is a few hundred kilobytes and goes through. The
+       limit stays for the file that will not shrink at all. */
+    var pic = await photoForUpload(file);
+    if (pic.bytes > MAX_PHOTO) throw new Error('that photo is over 8 MB — take a smaller one');
 
-    var ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+    var ext = (pic.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
     var path = new Date().toISOString().slice(0, 10) + '/' +
                Math.random().toString(36).slice(2) + '.' + ext;
     var res = await fetch(CFG.url + '/storage/v1/object/nelos-photos/' + path, {
       method: 'POST',
-      headers: Object.assign({ 'Content-Type': file.type || 'image/jpeg' }, authHeaders(token)),
-      body: file
+      headers: Object.assign({ 'Content-Type': pic.type || 'image/jpeg' }, authHeaders(token)),
+      body: pic.body
     });
     if (!res.ok) {
       var detail = '';
@@ -2292,7 +2438,10 @@
       var box = formEl.querySelector('.nd-photo');
       var pick = formEl.querySelector('.nd-photo-pick');
       if (!f) return;
-      if (f.size > MAX_PHOTO) { this.value = ''; return formError('That photo is over 8 MB — take a smaller one.'); }
+      /* No size refusal here any more: the upload shrinks the photo to
+         1600px first, so the megabytes a phone hands over are not what
+         gets sent. A file that still will not fit is caught there, with
+         the case in front of the person rather than the picker. */
       formError('');
       var img = box.querySelector('img');
       if (img.src.indexOf('blob:') === 0) URL.revokeObjectURL(img.src);
@@ -2355,7 +2504,7 @@
       var wrap = detailEl.querySelector('.nd-shot');
       if (wrap) wrap.innerHTML =
         '<label><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>' +
-        '<span>Add photo</span><input type="file" accept="image/*" capture="environment" class="nd-shot-in"></label>';
+        '<span>Add photo</span><input type="file" accept="image/*" class="nd-shot-in"></label>';
     });
     /* Delegated: the list is repainted on every refresh. */
     listEl.addEventListener('click', function (e) {

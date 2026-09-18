@@ -716,6 +716,7 @@ let allCases = [];      // everything we are allowed to see, loaded once
 let categories = [];    // nelos_categories — the problems, per system
 let modules = [];       // nelos_modules — the linked systems
 let plots = [];         // shared_plots — { plot_name, nursery_name }
+let nurseries = [];     // operation_nurseries — the master list of nursery names
 let handlers = [];      // nelos_handlers — who works in which system
 let routes = [];        // nelos_routes — where a system's cases go
 let me = { id: null, name: null };
@@ -1514,18 +1515,51 @@ function problemName() {
    Both are stored and matched by NAME across this codebase, not by id, so
    the option values are the names themselves. */
 
+/* THE NURSERIES A CASE CAN NAME.
+
+   The list used to be whatever nursery names the PLOTS happened to carry,
+   and that left two gaps:
+
+     PRE NURSERY is counted in TRAYS, not plots, so shared_plots has no row
+       naming it and it could not be chosen at all — on a system whose
+       whole first stage happens there.
+
+     ALL NURSERY is not in any table and never will be. Some cases are
+       about every nursery at once — a rule, a form, a piece of equipment
+       that travels — and they were being filed against whichever nursery
+       the person happened to pick, or not raised at all.
+
+   So the master list (operation_nurseries) and the plots' own names are
+   merged, Pre Nursery is guaranteed a place whether or not anything else
+   mentions it, and All Nursery leads. */
+const NURSERY_ALL = 'All Nursery';
+const NURSERY_PRE = 'Pre Nursery';
+const _isPre = n => /pre\s*-?\s*nursery/i.test(n) || /^pn\b/i.test(String(n).trim());
+
 function fillNurseries() {
-  const names = [...new Set(plots.map(p => p.nursery_name).filter(Boolean))].sort();
+  const names = [...new Set([
+    ...nurseries.map(n => n.name).filter(Boolean),
+    ...plots.map(p => p.nursery_name).filter(Boolean)
+  ])].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+  // …and the pre nursery, under whatever name it already goes by here.
+  if (!names.some(_isPre)) names.unshift(NURSERY_PRE);
+
+  const keep = $('c-nursery').value;
   $('c-nursery').innerHTML = '<option value="">— choose a nursery —</option>' +
+    `<option value="${esc(NURSERY_ALL)}">${esc(NURSERY_ALL)}</option>` +
     names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  if (keep && [...$('c-nursery').options].some(o => o.value === keep)) $('c-nursery').value = keep;
 }
 
 /* Plot names run B1, B2 … B10, so they sort numerically or B10 lands
    before B2 — the same comparison every other picker in the portal uses. */
 function fillPlots() {
   const nursery = $('c-nursery').value;
+  // A case about every nursery is not about one plot, but nothing is gained
+  // by refusing to name one either — so all of them are offered.
+  const anywhere = !nursery || nursery === NURSERY_ALL;
   const mine = plots
-    .filter(p => p.plot_name && (!nursery || p.nursery_name === nursery))
+    .filter(p => p.plot_name && (anywhere || p.nursery_name === nursery))
     .map(p => p.plot_name)
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
@@ -1534,9 +1568,15 @@ function fillPlots() {
 }
 
 async function loadPlaces() {
-  const { data } = await _supabase.from('shared_plots').select('plot_name,nursery_name')
-    .then(r => r, () => ({ data: [] }));
-  plots = data || [];
+  /* Two reads, each failing on its own terms: no plots leaves the nursery
+     list to the master table, no master table leaves it to the plots. The
+     pre nursery is added by fillNurseries either way. */
+  const [plotRes, nursRes] = await Promise.all([
+    _supabase.from('shared_plots').select('plot_name,nursery_name').then(r => r, () => ({ data: [] })),
+    _supabase.from('operation_nurseries').select('name').then(r => r, () => ({ data: [] }))
+  ]);
+  plots     = plotRes.data || [];
+  nurseries = nursRes.data || [];
   fillNurseries();
   fillPlots();
 }
