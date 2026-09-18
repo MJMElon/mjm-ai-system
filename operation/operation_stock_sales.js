@@ -2031,6 +2031,20 @@
         meta.textContent = totalOverdue + ' overdue · ' + totalQty.toLocaleString() + ' seedlings pending';
     }
 
+    // DO lines for the currently-open pickup-history customer, grouped by
+    // month — set once per openPickupHistory() call, read by
+    // showPickupMonthDoLines() when a month card in the Collection tab is
+    // clicked. Module-level because those are two separate calls (a click
+    // happens well after the fetch that built this).
+    let _phDoByMonth = {};
+
+    function selectPickupTab(tab) {
+        document.querySelectorAll('#pickup-tabs .ph-tab').forEach(b => b.classList.toggle('active', b.dataset.phTab === tab));
+        document.getElementById('pickup-tab-booking').classList.toggle('hidden', tab !== 'booking');
+        document.getElementById('pickup-tab-collection').classList.toggle('hidden', tab !== 'collection');
+    }
+    window.selectPickupTab = selectPickupTab;
+
     async function openPickupHistory(customerName, orderNumber) {
         const modal = document.getElementById('pickup-modal');
         const title = document.getElementById('pickup-modal-title');
@@ -2042,6 +2056,9 @@
         sub.textContent   = orderNumber ? 'Order: ' + orderNumber : '';
         summ.innerHTML    = '';
         document.getElementById('pickup-months-wrap').innerHTML = '';
+        document.getElementById('pickup-month-detail').innerHTML = '';
+        _phDoByMonth = {};
+        selectPickupTab('booking'); // always reopen on Booking, not wherever the last customer's view was left
         wrap.innerHTML    = `<div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading history…</div>`;
         modal.classList.add('open');
 
@@ -2051,9 +2068,12 @@
             if (orderNumber)  filters.push('order_number.eq.'  + orderNumber);
             const orFilter = filters.join(',');
 
-            const [bookingsRes, ordersRes] = await Promise.all([
+            const [bookingsRes, ordersRes, alRes] = await Promise.all([
                 _supabase.from('shared_collection_bookings').select('*').or(orFilter).order('booking_date', { ascending: false }),
-                _supabase.from('salesweb_customer_orders').select('id,order_number,customer_name,billing_name,total_amount,balance_amount,status,created_at,collected_qty,collected_at').or(orFilter).order('created_at', { ascending: false })
+                _supabase.from('salesweb_customer_orders').select('id,order_number,customer_name,billing_name,total_amount,balance_amount,status,created_at,collected_qty,collected_at').or(orFilter).order('created_at', { ascending: false }),
+                // AL number is the only link from a sales-web order to its
+                // DO lines — shared_do_records has no order_number of its own.
+                _supabase.from('shared_al_orders').select('al_number,order_number,customer_name').or(orFilter)
             ]);
 
             const bookings = bookingsRes.data || [];
@@ -2084,53 +2104,57 @@
                 <div class="ph-summary-card"><div class="ph-label">Order value (sum)</div><div class="ph-num">${fmtRM(totalOrdered)}</div></div>
             `;
 
-            // Same source the row's "Total Collected" figure sums, grouped
-            // by the month each pickup actually happened in — this is what
-            // "collection by month" means: an actual timeline, not the
-            // Customer Order Management grid's forward-looking booked
-            // months, and not the raw event-by-event list below either.
+            // ── Collection tab: month cards built from shared_do_records ──
+            // Not salesweb_order_collections (the "Seedlings collected" card
+            // above still reads that) — a DO is what "Delivery Date / DO
+            // Number / Qty" means when a card is clicked, and building the
+            // card's own number from the same table it expands into is what
+            // guarantees the two can never disagree.
+            const alNumbers = [...new Set((alRes.data || []).map(a => a.al_number).filter(Boolean))];
+            let doRecords = [];
+            if (alNumbers.length) {
+                const { data } = await _supabase.from('shared_do_records')
+                    .select('do_number,al_number,delivery_date,total_qty,status,remark')
+                    .in('al_number', alNumbers);
+                doRecords = (data || []).filter(d => {
+                    if (!d.delivery_date) return false;
+                    if (d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'))) return false;
+                    if (_isCalibrationDo(d)) return false; // a stock correction, not a customer collection
+                    return true;
+                });
+            }
+            _phDoByMonth = {};
+            doRecords.forEach(d => {
+                const k = String(d.delivery_date).slice(0, 7);
+                (_phDoByMonth[k] = _phDoByMonth[k] || []).push(d);
+            });
             const monthsWrap = document.getElementById('pickup-months-wrap');
-            const collSource = collections.length
-                ? collections
-                : orders.filter(o => o.collected_qty && o.collected_at).map(o => ({ collected_qty: o.collected_qty, collected_at: o.collected_at }));
-            const byMonth = {};
-            collSource.forEach(c => {
-                if (!c.collected_at) return;
-                const k = monthKey(new Date(c.collected_at));
-                byMonth[k] = (byMonth[k] || 0) + (c.collected_qty || 0);
-            });
-            const monthRows = Object.keys(byMonth).sort().map(k => {
+            const collMonthRows = Object.keys(_phDoByMonth).sort().map(k => {
                 const [y, m] = k.split('-').map(Number);
-                return { label: new Date(y, m - 1, 1).toLocaleString('en-MY', { month: 'short', year: 'numeric' }), qty: byMonth[k] };
+                const qty = _phDoByMonth[k].reduce((s, d) => s + (Number(d.total_qty) || 0), 0);
+                return { key: k, label: new Date(y, m - 1, 1).toLocaleString('en-MY', { month: 'short', year: 'numeric' }), qty };
             });
-            monthsWrap.innerHTML = monthRows.length ? `
-                <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 mt-1">Collection by month</div>
+            monthsWrap.innerHTML = collMonthRows.length ? `
+                <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Collection by month — click a month for its DO lines</div>
                 <div class="flex flex-wrap gap-2 mb-4">
-                    ${monthRows.map(r => `<div class="ph-summary-card" style="min-width:96px;"><div class="ph-label">${r.label}</div><div class="ph-num">${r.qty.toLocaleString()}</div></div>`).join('')}
+                    ${collMonthRows.map(r => `
+                        <button type="button" class="ph-summary-card ph-month-card" style="min-width:96px;" data-month="${r.key}" onclick="showPickupMonthDoLines('${r.key}')">
+                            <div class="ph-label">${r.label}</div><div class="ph-num">${r.qty.toLocaleString()}</div>
+                        </button>`).join('')}
                 </div>
-            ` : '';
+            ` : `<div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest">No DO-recorded collections for this customer</div>`;
 
-            const events = [];
-            bookings.forEach(b => events.push({
-                kind: 'booking',
+            // ── Booking tab: bookings only — collection now lives in its own tab ──
+            const events = bookings.map(b => ({
                 date: b.booking_date,
                 detail: 'Booked ' + (b.start_time||'').substring(0,5) + ' · ' + (b.collection_qty || 0) + ' pcs',
                 ref:   b.al_number || b.order_number || '',
                 place: [b.nursery_name, b.plot_name].filter(Boolean).join(' / ') || '—',
                 status: b.status || 'booked',
-            }));
-            collections.forEach(c => events.push({
-                kind: 'collection',
-                date: (c.collected_at || '').slice(0,10),
-                detail: 'Collected ' + (c.collected_qty || 0) + ' pcs',
-                ref:   c.al_number || '',
-                place: '—',
-                status: 'collected',
-            }));
-            events.sort((a,b)=> (b.date || '').localeCompare(a.date || ''));
+            })).sort((a,b)=> (b.date || '').localeCompare(a.date || ''));
 
             if (!events.length) {
-                wrap.innerHTML = `<div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest">No history found for this customer</div>`;
+                wrap.innerHTML = `<div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest">No bookings found for this customer</div>`;
                 return;
             }
 
@@ -2138,14 +2162,13 @@
                 <table class="ph-table">
                     <thead>
                         <tr>
-                            <th>Date</th><th>Type</th><th>Detail</th><th>Ref</th><th>Nursery / Plot</th><th>Status</th>
+                            <th>Date</th><th>Detail</th><th>Ref</th><th>Nursery / Plot</th><th>Status</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${events.map(e => `
                             <tr>
                                 <td>${e.date || '—'}</td>
-                                <td><span class="pill-status ${e.kind==='collection'?'pill-completed':'pill-paid'}">${e.kind}</span></td>
                                 <td>${escapeHtml(e.detail)}</td>
                                 <td class="font-mono text-[11px]">${escapeHtml(e.ref || '')}</td>
                                 <td>${escapeHtml(e.place || '—')}</td>
@@ -2159,6 +2182,33 @@
             wrap.innerHTML = `<div class="text-center py-8 text-[10px] text-red-500 font-bold uppercase tracking-widest">Unable to load history</div>`;
         }
     }
+
+    // Renders the DO lines behind one month's Collection card — Delivery
+    // Date, DO Number, Qty — exactly what was asked to appear on click.
+    function showPickupMonthDoLines(key) {
+        document.querySelectorAll('.ph-month-card').forEach(el => el.classList.toggle('active', el.dataset.month === key));
+        const rows = (_phDoByMonth[key] || []).slice().sort((a, b) => String(a.delivery_date).localeCompare(String(b.delivery_date)));
+        const detail = document.getElementById('pickup-month-detail');
+        if (!rows.length) { detail.innerHTML = ''; return; }
+        const total = rows.reduce((s, d) => s + (Number(d.total_qty) || 0), 0);
+        detail.innerHTML = `
+            <table class="ph-table">
+                <thead><tr><th>Delivery Date</th><th>DO Number</th><th class="text-right">Qty</th></tr></thead>
+                <tbody>
+                    ${rows.map(d => `
+                        <tr>
+                            <td>${String(d.delivery_date).slice(0, 10)}</td>
+                            <td class="font-mono text-[11px]">${escapeHtml(d.do_number || '—')}</td>
+                            <td class="text-right font-black">${(Number(d.total_qty) || 0).toLocaleString()}</td>
+                        </tr>`).join('')}
+                </tbody>
+                <tfoot><tr class="font-black">
+                    <td colspan="2" class="text-right text-[10px] uppercase tracking-widest text-slate-500">Total</td>
+                    <td class="text-right">${total.toLocaleString()}</td>
+                </tr></tfoot>
+            </table>`;
+    }
+    window.showPickupMonthDoLines = showPickupMonthDoLines;
 
     function closePickupHistory() {
         document.getElementById('pickup-modal').classList.remove('open');
