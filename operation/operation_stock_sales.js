@@ -1761,7 +1761,7 @@
                     <td><span class="pill-status ${pillCls}">${escapeHtml(pillTxt)}</span></td>
                     <td class="font-black" ${cancelStrike}>${r.totalQty.toLocaleString()}</td>
                     ${cellsHtml}
-                    <td class="t-tot" ${cancelStrike}>${r.totalCollected.toLocaleString()}${r.totalCollected ? `<button type="button" class="ph-month-btn" data-pickup data-cust="${escapeHtml(r.customer || '')}" data-order="${escapeHtml(r.orderNumber || '')}" title="Collection by month">📅</button>` : ''}</td>
+                    <td class="t-tot" ${cancelStrike}>${r.totalCollected.toLocaleString()}</td>
                     <td class="t-tot${r.balance < 0 ? ' text-red-600' : r.balance === 0 ? ' text-emerald-700' : ''}" ${cancelStrike}>${r.balance.toLocaleString()}</td>
                     <td class="t-tot" ${cancelStrike}>${fmtRM(r.totalAmount)}</td>
                 </tr>`;
