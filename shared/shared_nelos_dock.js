@@ -250,12 +250,16 @@
                     'created_at,resolution,resolved_by,resolved_at';
   var ROUTED_COLS = BASE_COLS + ',assigned_module,assigned_seat_no';
   var FULL_COLS   = ROUTED_COLS + ',photo_url,raised_by';
+  /* The document a case can carry arrives with
+     RUN_ME_nelos_case_document.sql — the newest tier, and the first one
+     asked for. */
+  var DOC_COLS    = FULL_COLS + ',doc_url,doc_name';
 
   /* Asked for in this order, dropping to the next on a 400 — two different
      migrations add the columns above the base set, and a database may have
      run either, both or neither. Once dropped it stays dropped for the
      session; there is no point asking again every thirty seconds. */
-  var COL_TIERS = [FULL_COLS, ROUTED_COLS, BASE_COLS];
+  var COL_TIERS = [DOC_COLS, FULL_COLS, ROUTED_COLS, BASE_COLS];
   var _tier = 0;
   var _cols = COL_TIERS[0];
 
@@ -500,6 +504,8 @@
         _cols = COL_TIERS[_tier];
         warn('nelos_cases is missing columns from a migration — falling back. ' +
              (_tier === 1
+               ? 'No doc_url: run shared/RUN_ME_nelos_case_document.sql.'
+               : _tier === 2
                ? 'No photo_url: run shared/migration_nelos_case_tools.sql.'
                : 'No routing columns: run shared/migration_nelos_routing.sql and ' +
                  'shared/migration_nelos_seats.sql.'));
@@ -767,6 +773,18 @@
   .nd-shot-prev { position:relative; flex:1; min-height:64px; border-radius:11px;
                   overflow:hidden; background:#f1f5f9; }
   .nd-shot-prev img { width:100%; height:100%; object-fit:cover; display:block; }
+  .nd-d-doc { display:flex; align-items:center; gap:7px; margin:9px 0 2px; padding:9px 11px;
+              border:1px solid #ede9fe; border-radius:11px; background:#faf8ff;
+              font-size:12px; font-weight:800; color:#4c1d95; text-decoration:none;
+              overflow-wrap:anywhere; }
+  .nd-d-doc:hover { border-color:#c4b5fd; background:#f5f3ff; }
+  .nd-doc { display:flex; align-items:center; gap:8px; padding:9px 11px; margin-top:6px;
+            border:1px solid #ede9fe; border-radius:11px; background:#faf8ff; }
+  .nd-doc[hidden] { display:none; }
+  .nd-doc-name { flex:1; font-size:11.5px; font-weight:700; color:#4c1d95;
+                 overflow-wrap:anywhere; }
+  .nd-doc-x { width:24px; height:24px; border-radius:999px; border:1px solid #e9d5ff;
+              background:#fff; color:#7c3aed; font-size:12px; cursor:pointer; flex-shrink:0; }
   .nd-solve-err { margin-top:7px; padding:8px 10px; border-radius:9px; font-size:11.5px;
                   font-weight:700; line-height:1.35; color:#7f1d1d;
                   background:#fef2f2; border:1px solid #fecaca; }
@@ -1070,6 +1088,20 @@
               '<span>&#128247; Take or upload a photo</span></label>' +
             '<div class="nd-photo" hidden><img alt=""><button type="button" ' +
                  'class="nd-photo-x" aria-label="Remove photo">&#10005;</button></div>' +
+          '</div>' +
+          /* …and one DOCUMENT. A photo is not always the thing to attach:
+             a delivery order, a lab result, a supplier's letter. Hidden
+             until the database has the columns for it — see
+             shared/RUN_ME_nelos_case_document.sql. */
+          '<div class="nd-fld nd-doc-fld" hidden>' +
+            '<label class="nd-lbl" for="nd-f-doc">Document</label>' +
+            '<label class="nd-photo-pick"><input type="file" id="nd-f-doc" ' +
+                   'accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,image/*" hidden>' +
+              '<span>&#128196; Attach a file</span></label>' +
+            '<div class="nd-doc" hidden>' +
+              '<span class="nd-doc-name"></span>' +
+              '<button type="button" class="nd-doc-x" aria-label="Remove document">&#10005;</button>' +
+            '</div>' +
           '</div>' +
           '<div class="nd-fld">' +
             '<label class="nd-lbl" for="nd-f-desc">New Case Remark</label>' +
@@ -1707,6 +1739,12 @@
        nothing, so the one screen where the picture decides the answer was
        the one screen without it. From `f`, so it is there whether it came
        down with the list or only with the full read. */
+    /* The document, which is opened rather than looked at. Beside the
+       photo, for the same reason the photo is here. */
+    var docLink = f.doc_url
+      ? '<a class="nd-d-doc" href="' + esc(f.doc_url) + '" target="_blank" rel="noopener">' +
+        '\uD83D\uDCC4 ' + esc(f.doc_name || 'Open the document') + '</a>'
+      : '';
     var shot = f.photo_url
       ? '<img class="nd-d-shot" src="' + esc(f.photo_url) + '" alt="Photo on the case" loading="lazy">'
       : '';
@@ -1721,7 +1759,7 @@
     return '<div class="nd-d-sec">' + head + '</div>' +
            '<div class="nd-d-title">' + esc(c.title || 'Case') + '</div>' +
            (meta ? '<div class="nd-d-meta">' + meta + '</div>' : '') +
-           shot +
+           shot + docLink +
            '<div class="nd-d-facts">' +
              fact('Nursery (Plot)', where) +
              fact('Assigned to', esc(SOURCE_LABEL[f.assigned_module || f.source_module] ||
@@ -2122,6 +2160,15 @@
         { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     formEl.scrollTop = 0;
 
+    /* The document picker, where this database can keep one. Asked once
+       and remembered, so opening the form again costs nothing. */
+    accessToken().then(function (t) {
+      return t ? docsAvailable(t) : false;
+    }).then(function (on) {
+      var fld = formEl.querySelector('.nd-doc-fld');
+      if (fld) fld.hidden = !on;
+    });
+
     var nurs = formEl.querySelector('#nd-f-nursery');
     if (nurs.options.length <= 1) {
       nurs.innerHTML = opt('', '— none —') + opt(NURSERY_ALL, NURSERY_ALL) +
@@ -2235,7 +2282,51 @@
      the save handler can show it and leave the form filled in — better
      than a case that quietly lost its photo. */
   var MAX_PHOTO = 8 * 1024 * 1024;
-  async function uploadPhoto(token) {
+    /* Does this database know about doc_url / doc_name? Asked once, by
+     selecting the two columns and seeing whether PostgREST has heard of
+     them — the same test the column tiers above use. The picker stays
+     hidden until the answer is yes: one that takes a file and loses it at
+     the insert is worse than none. */
+  var _docsOn = null;
+  async function docsAvailable(token) {
+    if (_docsOn !== null) return _docsOn;
+    try {
+      var res = await fetch(CFG.url + '/rest/v1/nelos_cases?select=doc_url,doc_name&limit=1',
+                            { headers: authHeaders(token) });
+      _docsOn = res.ok;
+      if (!res.ok) warn('nelos_cases has no doc_url — run ' +
+                        'shared/RUN_ME_nelos_case_document.sql to let a case carry a document.');
+    } catch (_) { _docsOn = false; }
+    return _docsOn;
+  }
+
+  /* The document, as it came. NOT shrunk — a document is not a picture,
+     and 1600px of a PDF is a ruined PDF. */
+  var MAX_DOC = 25 * 1024 * 1024;
+  async function uploadDoc(token) {
+    var input = formEl.querySelector('#nd-f-doc');
+    var file = input && input.files && input.files[0];
+    if (!file) return undefined;
+    if (file.size > MAX_DOC) throw new Error('that file is over 25 MB — send a smaller one');
+
+    var safe = String(file.name || 'document').replace(/[^A-Za-z0-9._-]+/g, '_').slice(-80);
+    var path = new Date().toISOString().slice(0, 10) + '/' +
+               Math.random().toString(36).slice(2) + '-' + safe;
+    var res = await fetch(CFG.url + '/storage/v1/object/nelos-docs/' + path, {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': file.type || 'application/octet-stream' },
+                             authHeaders(token)),
+      body: file
+    });
+    if (!res.ok) {
+      throw new Error(res.status === 404
+        ? 'the nelos-docs bucket is missing — run shared/RUN_ME_nelos_case_document.sql'
+        : 'the file store answered ' + res.status);
+    }
+    return CFG.url + '/storage/v1/object/public/nelos-docs/' + path;
+  }
+
+async function uploadPhoto(token) {
     var input = formEl.querySelector('#nd-f-photo');
     var file = input && input.files && input.files[0];
     if (!file) return undefined;
@@ -2315,6 +2406,19 @@
       reset();
       return formError('Could not add the photo — ' + (e && e.message ? e.message : 'try again') + '.');
     }
+    var docUrl, docName;
+    try {
+      if (await docsAvailable(token)) {
+        docUrl = await uploadDoc(token);
+        if (docUrl) {
+          var df = formEl.querySelector('#nd-f-doc').files[0];
+          docName = (df && df.name) || 'Document';
+        }
+      }
+    } catch (e) {
+      reset();
+      return formError('Could not add the file — ' + (e && e.message ? e.message : 'try again') + '.');
+    }
 
     var picSel = formEl.querySelector('#nd-f-pic');
     var picId  = picSel.value || null;
@@ -2348,6 +2452,7 @@
     // column when there is a photo, so a database without it still takes
     // the insert.
     if (photoUrl) row.photo_url = photoUrl;
+    if (docUrl) { row.doc_url = docUrl; row.doc_name = docName; }
 
     /* An edit changes what the case IS, never what it has become. Status,
        who raised it and where from are its history; a person fixing a typo
@@ -2360,6 +2465,7 @@
       delete row.raised_by;
       delete row.raised_by_id;
       if (!photoUrl) delete row.photo_url;
+      if (!docUrl) { delete row.doc_url; delete row.doc_name; }
       row.updated_by = u.name;
       row.updated_at = new Date().toISOString();
     }
@@ -2449,6 +2555,23 @@
       box.hidden = false;
       pick.hidden = true;
     });
+    var docIn = formEl.querySelector('#nd-f-doc');
+    docIn.addEventListener('change', function () {
+      var f = this.files && this.files[0];
+      var box = formEl.querySelector('.nd-doc');
+      var pickD = formEl.querySelector('.nd-doc-fld .nd-photo-pick');
+      if (!f) return;
+      formError('');
+      box.querySelector('.nd-doc-name').textContent = f.name || 'Document';
+      box.hidden = false;
+      pickD.hidden = true;
+    });
+    formEl.querySelector('.nd-doc-x').addEventListener('click', function () {
+      formEl.querySelector('.nd-doc').hidden = true;
+      formEl.querySelector('.nd-doc-fld .nd-photo-pick').hidden = false;
+      docIn.value = '';
+    });
+
     formEl.querySelector('.nd-photo-x').addEventListener('click', function () {
       var box = formEl.querySelector('.nd-photo');
       var img = box.querySelector('img');
