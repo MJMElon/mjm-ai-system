@@ -157,6 +157,25 @@
         .cust-table tfoot td{padding:8px 6px;text-align:center;font-variant-numeric:tabular-nums;border-top:2px solid #e2e8f0;color:#1e293b;font-weight:900;font-size:11px;background:#f8fafc;}
         .cust-table tfoot td.t-tot{background:#fef9c3;color:#854d0e;}
         .cust-table tfoot td.text-right{text-align:right;}
+
+        /* Order-status filter — a custom dropdown (native <select> menus
+           can't be styled, so the OS renders its own ugly highlight) with
+           a checkmark against the active option instead. */
+        .cf-wrap{position:relative;}
+        .cf-btn{display:flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.06em;font-size:10px;font-weight:900;color:#334155;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;cursor:pointer;transition:border-color .15s,box-shadow .15s;}
+        .cf-btn:hover{border-color:#cbd5e1;}
+        .cf-btn.open{border-color:#1d4ed8;box-shadow:0 0 0 3px rgba(29,78,216,.12);}
+        .cf-chevron{width:11px;height:11px;color:#94a3b8;transition:transform .15s;flex-shrink:0;}
+        .cf-btn.open .cf-chevron{transform:rotate(180deg);}
+        .cf-menu{position:absolute;right:0;top:calc(100% + 6px);min-width:220px;max-height:280px;overflow-y:auto;background:#fff;border:1px solid #e5e9f0;border-radius:14px;box-shadow:0 16px 32px -10px rgba(15,23,42,.18),0 4px 10px rgba(15,23,42,.06);padding:4px 0;z-index:30;}
+        .cf-menu::-webkit-scrollbar{width:6px;}
+        .cf-menu::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
+        .cf-opt{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left;font-size:13px;font-weight:700;color:#0f172a;background:#fff;border:none;border-bottom:1px solid #f1f5f9;padding:11px 16px;cursor:pointer;transition:background .12s,color .12s;font-family:inherit;}
+        .cf-opt:last-child{border-bottom:none;}
+        .cf-opt:hover{background:#f8fafc;}
+        .cf-opt.active{color:#1d4ed8;}
+        .cf-opt.active::after{content:'✓';font-size:13px;font-weight:900;color:#1d4ed8;flex-shrink:0;}
+
         .pill-status{display:inline-block;padding:2px 7px;border-radius:999px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border:1px solid;white-space:nowrap;}
         .pill-paid     { background:#dcfce7;color:#15803d;border-color:#86efac;}
         .pill-partial  { background:#fef3c7;color:#a16207;border-color:#fcd34d;}
@@ -210,10 +229,10 @@
         .ph-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;}
         .ph-table thead th{background:#f8fafc;color:#475569;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0;}
         .ph-table tbody td{padding:8px 10px;border-bottom:1px solid #f1f5f9;color:#1e293b;font-weight:600;}
-        .ph-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
-        .ph-summary-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;}
-        .ph-summary-card .ph-label{font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;}
-        .ph-summary-card .ph-num{font-size:18px;font-weight:900;color:#1e293b;font-variant-numeric:tabular-nums;}
+        .ph-tabs{display:flex;gap:6px;border-bottom:1px solid #e2e8f0;margin-bottom:14px;}
+        .ph-tab{padding:8px 14px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;margin-bottom:-1px;}
+        .ph-tab:hover{color:#475569;}
+        .ph-tab.active{color:#1d4ed8;border-bottom-color:#1d4ed8;}
         .cust-link{color:#1d4ed8;cursor:pointer;text-decoration:underline dotted;}
         .cust-link:hover{color:#1e40af;}
 
@@ -648,30 +667,60 @@
             <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
                 <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">📋 Customer Order Management</h2>
                 <div class="flex items-center gap-2">
-                    <input id="cust-search" type="text" placeholder="Search customer / order #" oninput="renderCustomerGrid()"
+                    <input id="cust-search" type="text" placeholder="Search customer / order #" oninput="renderActiveCustView()"
                         class="text-[11px] font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-500 w-56">
-                    <select id="cust-filter" onchange="renderCustomerGrid()"
-                        class="text-[10px] font-black uppercase tracking-widest text-slate-700 bg-white border border-slate-200 rounded-lg px-2 py-1.5">
-                        <option value="active">Active orders only</option>
-                        <option value="outstanding">Outstanding balance</option>
-                        <option value="completed">Completed</option>
-                        <option value="all">All (incl. cancelled)</option>
-                    </select>
+                    <div class="cf-wrap" id="cust-filter-wrap">
+                        <button type="button" id="cust-filter-btn" class="cf-btn" onclick="toggleCustFilterMenu(event)">
+                            <span id="cust-filter-label">All Orders</span>
+                            <svg class="cf-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 7l5 5 5-5"/></svg>
+                        </button>
+                        <div id="cust-filter-menu" class="cf-menu hidden">
+                            <button type="button" class="cf-opt active" data-value="all" onclick="selectCustFilter('all')">All Orders</button>
+                            <button type="button" class="cf-opt" data-value="outstanding" onclick="selectCustFilter('outstanding')">Outstanding Balance</button>
+                            <button type="button" class="cf-opt" data-value="cancelled" onclick="selectCustFilter('cancelled')">Cancelled Orders</button>
+                            <button type="button" class="cf-opt" data-value="completed" onclick="selectCustFilter('completed')">Completed Orders</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="dash-card scroll-x-fade">
-                <table class="cust-table min-w-[1400px]">
-                    <thead id="cust-thead"></thead>
-                    <tbody id="cust-tbody">
-                        <tr><td colspan="20" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading customer orders…</td></tr>
-                    </tbody>
-                    <tfoot id="cust-tfoot"></tfoot>
-                </table>
+            <!-- Booking asks "what's coming"; Collection asks "what's already
+                 left, by month" — two different questions on the same list
+                 of orders, so a tab each instead of one table trying to
+                 answer both (which is what "scroll right" used to be). -->
+            <div class="ph-tabs" id="cust-main-tabs">
+                <button type="button" class="ph-tab active" data-main-tab="booking" onclick="selectCustMainTab('booking')">📦 Booking</button>
+                <button type="button" class="ph-tab" data-main-tab="collection" onclick="selectCustMainTab('collection')">📥 Collection</button>
             </div>
 
-            <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
-                <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Scroll right for every past month with an actual collection, plus the current month; a future month only appears when a customer has a booking in it. <span class="inline-block px-1 rounded" style="background:#dbeafe;color:#1d4ed8;font-weight:900;">blue</span> = qty collected (<span class="font-mono">salesweb_order_collections</span>) · <span class="inline-block px-1 rounded" style="background:#fef3c7;color:#a16207;font-weight:900;border:1px dashed #fcd34d;">amber</span> = qty booked for collection (<span class="font-mono">shared_collection_bookings</span>). Click a customer name for the full pickup history.
+            <div id="cust-view-booking">
+                <div class="dash-card scroll-x-fade">
+                    <table class="cust-table min-w-[1400px]">
+                        <thead id="cust-thead"></thead>
+                        <tbody id="cust-tbody">
+                            <tr><td colspan="20" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading customer orders…</td></tr>
+                        </tbody>
+                        <tfoot id="cust-tfoot"></tfoot>
+                    </table>
+                </div>
+                <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
+                    <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — The current month plus any future month a customer has a booking in. <span class="inline-block px-1 rounded" style="background:#fef3c7;color:#a16207;font-weight:900;border:1px dashed #fcd34d;">amber</span> = qty booked for collection (<span class="font-mono">shared_collection_bookings</span>). Click a customer name for the full pickup history.
+                </div>
+            </div>
+
+            <div id="cust-view-collection" class="hidden">
+                <div class="dash-card scroll-x-fade">
+                    <table class="cust-table min-w-[1400px]">
+                        <thead id="coll-thead"></thead>
+                        <tbody id="coll-tbody">
+                            <tr><td colspan="20" class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading collections…</td></tr>
+                        </tbody>
+                        <tfoot id="coll-tfoot"></tfoot>
+                    </table>
+                </div>
+                <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
+                    <span class="font-black uppercase tracking-wider text-slate-700">Note</span> — Every month with an actual collection, built from <span class="font-mono">shared_do_records</span> (cancelled and CAL- calibration DOs excluded). Click a month's qty for its Delivery Date / DO Number breakdown.
+                </div>
             </div>
         </div>
 
@@ -837,8 +886,24 @@
             <button onclick="closePickupHistory()" class="w-8 h-8 rounded-lg bg-white/15 hover:bg-white/25 text-white font-black text-base flex items-center justify-center transition-colors shrink-0">×</button>
         </div>
         <div class="pickup-modal-body">
-            <div class="ph-summary" id="pickup-summary"></div>
-            <div id="pickup-table-wrap"></div>
+            <!-- Booking and Collection answer different questions — what's
+                 scheduled to come off a plot, versus what a DO already
+                 proves left it — so they're two tabs, not one mixed list. -->
+            <div class="ph-tabs" id="pickup-tabs">
+                <button type="button" class="ph-tab active" data-ph-tab="booking" onclick="selectPickupTab('booking')">Booking</button>
+                <button type="button" class="ph-tab" data-ph-tab="collection" onclick="selectPickupTab('collection')">Collection</button>
+            </div>
+            <div id="pickup-tab-booking">
+                <div id="pickup-table-wrap"></div>
+            </div>
+            <div id="pickup-tab-collection" class="hidden">
+                <!-- Delivery Date / DO Number / Qty, built from
+                     shared_do_records — one month's worth if opened from a
+                     Collection-tab cell, this customer's whole history
+                     otherwise. Picking a month happens on the page's own
+                     Collection tab now, not here. -->
+                <div id="pickup-month-detail"></div>
+            </div>
         </div>
     </div>
 </div>

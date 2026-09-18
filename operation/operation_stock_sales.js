@@ -1201,7 +1201,7 @@
                 };
             });
 
-            renderCustomerGrid();
+            renderActiveCustView();
             renderMonitoringDashboard();
             // renderPaymentStatusSummary removed — Customer Payment Status block deleted from UI.
         } catch(e) {
@@ -1579,21 +1579,13 @@
         const startKey = monthKey(now);
         const present = new Set([startKey]);
 
+        // Booking tab is forward-looking only — current month plus any
+        // future month with a booking. Past collection history moved to
+        // its own Collection tab (renderCollectionGrid()), which isn't
+        // bounded to "now onward" the way this one deliberately is.
         (allCustomerOrders || []).forEach(r => {
-            // Bookings stay future-only — a booking for a month already gone
-            // wouldn't make sense, and shared_collection_bookings is only
-            // ever fetched from the current month forward anyway.
             Object.entries(r.bookingsByMonth || {}).forEach(([k, v]) => {
                 if (v && k >= startKey) present.add(k);
-            });
-            // Collections show every month they actually happened in, past
-            // included — salesweb_order_collections is fetched with no date
-            // floor, so the history is already in memory; this is what
-            // surfaces it as its own column instead of only ever folding it
-            // into "Total Collected". Scroll right past the current month to
-            // see it.
-            Object.entries(r.collectionsByMonth || {}).forEach(([k, v]) => {
-                if (v) present.add(k);
             });
         });
 
@@ -1626,18 +1618,69 @@
     }
 
     // Pagination state for the customer grid. Page resets to 1 whenever
-    // the search input or filter dropdown changes (handled below).
+    // the search input or filter dropdown changes (handled below). Shared
+    // between the Booking and Collection tabs — they page through the same
+    // list of orders, just showing different columns for each.
     const CUST_PAGE_SIZE = 10;
     let _custPage = 1;
     let _custSearchLast = '';
     let _custFilterLast = '';
+    let _custMainTab = 'booking';
+
+    // Order-status filter — a custom dropdown (see .cf-* in the HTML) in
+    // place of the state a native <select> would otherwise hold.
+    let _custFilter = 'all';
+    const CUST_FILTER_LABELS = { all: 'All Orders', outstanding: 'Outstanding Balance', cancelled: 'Cancelled Orders', completed: 'Completed Orders' };
+
+    function toggleCustFilterMenu(e) {
+        e && e.stopPropagation();
+        const menu = document.getElementById('cust-filter-menu');
+        const btn  = document.getElementById('cust-filter-btn');
+        const opening = menu.classList.contains('hidden');
+        menu.classList.toggle('hidden', !opening);
+        btn.classList.toggle('open', opening);
+    }
+    window.toggleCustFilterMenu = toggleCustFilterMenu;
+
+    function selectCustFilter(value) {
+        _custFilter = value;
+        document.getElementById('cust-filter-label').textContent = CUST_FILTER_LABELS[value] || 'All Orders';
+        document.querySelectorAll('#cust-filter-menu .cf-opt').forEach(el => el.classList.toggle('active', el.dataset.value === value));
+        document.getElementById('cust-filter-menu').classList.add('hidden');
+        document.getElementById('cust-filter-btn').classList.remove('open');
+        renderActiveCustView();
+    }
+    window.selectCustFilter = selectCustFilter;
+
+    document.addEventListener('click', (e) => {
+        const wrap = document.getElementById('cust-filter-wrap');
+        if (wrap && !wrap.contains(e.target)) {
+            document.getElementById('cust-filter-menu')?.classList.add('hidden');
+            document.getElementById('cust-filter-btn')?.classList.remove('open');
+        }
+    });
+
+    function selectCustMainTab(tab) {
+        _custMainTab = (tab === 'collection') ? 'collection' : 'booking';
+        document.querySelectorAll('#cust-main-tabs .ph-tab').forEach(b => b.classList.toggle('active', b.dataset.mainTab === _custMainTab));
+        document.getElementById('cust-view-booking').classList.toggle('hidden', _custMainTab !== 'booking');
+        document.getElementById('cust-view-collection').classList.toggle('hidden', _custMainTab !== 'collection');
+        renderActiveCustView();
+    }
+    window.selectCustMainTab = selectCustMainTab;
+
+    function renderActiveCustView() {
+        if (_custMainTab === 'collection') renderCollectionGrid();
+        else renderCustomerGrid();
+    }
+    window.renderActiveCustView = renderActiveCustView;
 
     function renderCustomerGrid() {
         const thead  = document.getElementById('cust-thead');
         const tbody  = document.getElementById('cust-tbody');
         const tfoot  = document.getElementById('cust-tfoot');
         const search = (document.getElementById('cust-search')?.value || '').toLowerCase().trim();
-        const filter = document.getElementById('cust-filter')?.value || 'active';
+        const filter = _custFilter;
 
         // Reset to page 1 if the user changed the search or filter (so
         // they don't land on an empty page 5 of a fresh result set).
@@ -1649,7 +1692,6 @@
 
         const months = customerActiveMonths();
         const nowKey = monthKey(new Date());
-        const fmtRM  = n => 'RM ' + (Number(n) || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
         thead.innerHTML = `
             <tr>
@@ -1657,11 +1699,8 @@
                 <th class="h-cust" style="min-width:200px;">Customer</th>
                 <th>Order Month</th>
                 <th>Status</th>
-                <th>Ordered Qty</th>
-                ${months.map(m => `<th class="h-mo${m.key===nowKey?' is-now':''}">${m.label.replace(' ','<br>')}</th>`).join('')}
-                <th class="h-tot">Total<br>Collected</th>
                 <th class="h-tot">Balance</th>
-                <th class="h-tot">Order Total</th>
+                ${months.map(m => `<th class="h-mo${m.key===nowKey?' is-now':''}">${m.label.replace(' ','<br>')}</th>`).join('')}
             </tr>`;
 
         let allRows = allCustomerOrders.filter(r => {
@@ -1674,13 +1713,12 @@
             if (isCash && isUnpaid) return false;
 
             if (search && !(r.orderNumber || '').toLowerCase().includes(search) && !(r.customer || '').toLowerCase().includes(search)) return false;
-            // A cancelled AL kills the order for every non-`all` view — the
-            // grid's Active / Outstanding / Completed lists all treat it the
-            // same as a raw `rawStatus === 'Cancelled'` row so nothing
-            // dead-ends in "pending to collect".
+            // A cancelled AL kills the order the same as a raw
+            // `rawStatus === 'Cancelled'` row — both read as "cancelled"
+            // for every filter below, Cancelled Orders included.
             const isCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
-            if (filter === 'all') return true;
-            if (filter === 'active')      return !isCancelled;
+            if (filter === 'all')         return true;
+            if (filter === 'cancelled')   return isCancelled;
             if (filter === 'outstanding') return !isCancelled && r.balance > 0;
             if (filter === 'completed')   return !isCancelled && r.totalCollected >= r.totalQty && r.totalQty > 0;
             return true;
@@ -1694,7 +1732,7 @@
             return tb - ta;
         });
 
-        const colsTotal = 5 + months.length + 3;
+        const colsTotal = 5 + months.length;
 
         if (!allRows.length) {
             tbody.innerHTML = `<tr><td colspan="${colsTotal}" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">📋</div><div class="text-[10px] font-bold uppercase tracking-widest">No customer orders match the filter</div></td></tr>`;
@@ -1715,14 +1753,11 @@
         // Totals reflect the full filtered dataset (every page), not just
         // the visible 10 rows — otherwise the footer line would shrink
         // every time the user paged.
-        let totQty = 0, totColl = 0, totBalance = 0, totAmt = 0;
-        const colCollTotals = months.map(() => 0);
+        let totBalance = 0;
         const colBookTotals = months.map(() => 0);
         allRows.forEach(r => {
-            totQty += r.totalQty; totColl += r.totalCollected;
-            totBalance += r.balance; totAmt += (r.totalAmount || 0);
+            totBalance += r.balance;
             months.forEach((m, i) => {
-                colCollTotals[i] += (r.collectionsByMonth[m.key] || 0);
                 colBookTotals[i] += (r.bookingsByMonth[m.key] || 0);
             });
         });
@@ -1736,21 +1771,10 @@
             const rowCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
             const rowStyle = rowCancelled ? 'style="background:#fef2f2"' : '';
             const cancelStrike = rowCancelled ? 'style="text-decoration:line-through;color:#a83020"' : '';
-            const cellsHtml = months.map((m, i) => {
-                const collected = r.collectionsByMonth[m.key] || 0;
-                const booked    = r.bookingsByMonth[m.key]    || 0;
-
-                const cls = [
-                    't-mo',
-                    collected ? 'has-qty' : '',
-                    !collected && booked ? 'has-booked' : '',
-                    m.key === nowKey ? 'is-now' : ''
-                ].filter(Boolean).join(' ');
-
-                let inner = '';
-                if (collected && booked)      inner = `${collected.toLocaleString()}<span class="booked-tag">+${booked.toLocaleString()} booked</span>`;
-                else if (collected)           inner = collected.toLocaleString();
-                else if (booked)              inner = `${booked.toLocaleString()}<span class="booked-tag">booked</span>`;
+            const cellsHtml = months.map(m => {
+                const booked = r.bookingsByMonth[m.key] || 0;
+                const cls = ['t-mo', booked ? 'has-booked' : '', m.key === nowKey ? 'is-now' : ''].filter(Boolean).join(' ');
+                const inner = booked ? `${booked.toLocaleString()}<span class="booked-tag">booked</span>` : '';
                 return `<td class="${cls}">${inner}</td>`;
             }).join('');
             return `
@@ -1759,21 +1783,15 @@
                     <td class="t-cust"><span class="cust-link" ${cancelStrike} data-pickup data-cust="${escapeHtml(r.customer || '')}" data-order="${escapeHtml(r.orderNumber || '')}">${escapeHtml(r.customer || '—')}</span><div class="t-sub" ${cancelStrike}>${escapeHtml(r.orderNumber || '')}${r.alNumber ? ' · <span style="color:#1d4ed8;font-weight:900;">AL ' + escapeHtml(r.alNumber) + '</span>' : ''}</div></td>
                     <td ${cancelStrike}>${orderMonth}</td>
                     <td><span class="pill-status ${pillCls}">${escapeHtml(pillTxt)}</span></td>
-                    <td class="font-black" ${cancelStrike}>${r.totalQty.toLocaleString()}</td>
-                    ${cellsHtml}
-                    <td class="t-tot" ${cancelStrike}>${r.totalCollected.toLocaleString()}</td>
                     <td class="t-tot${r.balance < 0 ? ' text-red-600' : r.balance === 0 ? ' text-emerald-700' : ''}" ${cancelStrike}>${r.balance.toLocaleString()}</td>
-                    <td class="t-tot" ${cancelStrike}>${fmtRM(r.totalAmount)}</td>
+                    ${cellsHtml}
                 </tr>`;
         }).join('');
 
-        const monthFootCells = months.map((m, i) => {
-            const c = colCollTotals[i], b = colBookTotals[i];
-            if (c && b) return `<td class="t-tot">${c.toLocaleString()}<span class="booked-tag">+${b.toLocaleString()} booked</span></td>`;
-            if (c)      return `<td class="t-tot">${c.toLocaleString()}</td>`;
-            if (b)      return `<td class="t-tot">${b.toLocaleString()}<span class="booked-tag">booked</span></td>`;
-            return       `<td class="t-tot">—</td>`;
-        }).join('');
+        const monthFootCells = months.map((m, i) => colBookTotals[i]
+            ? `<td class="t-tot">${colBookTotals[i].toLocaleString()}<span class="booked-tag">booked</span></td>`
+            : `<td class="t-tot">—</td>`
+        ).join('');
 
         // Build a compact page-number row: «  1  2  3 … 215  »
         const pages = (() => {
@@ -1798,9 +1816,187 @@
         tfoot.innerHTML = `
             <tr class="bg-slate-50 font-black">
                 <td colspan="4" class="text-right text-[10px] uppercase tracking-widest text-slate-500" style="padding:8px;">Totals (${totalRows} orders)</td>
+                <td class="t-tot">${totBalance.toLocaleString()}</td>
+                ${monthFootCells}
+            </tr>
+            <tr>
+                <td colspan="${colsTotal}" class="bg-white" style="padding:10px 12px;">
+                    <div class="flex items-center justify-between gap-3 flex-wrap text-[10px] font-bold text-slate-600">
+                        <div>Showing <span class="font-black text-slate-800">${startIdx + 1}</span> to <span class="font-black text-slate-800">${endIdx}</span> of <span class="font-black text-slate-800">${totalRows.toLocaleString()}</span> entries</div>
+                        <div class="flex items-center gap-1">
+                            <button type="button" class="px-2.5 py-1 rounded bg-white text-slate-700 border border-slate-200 text-[10px] font-black ${prevDisabled}" onclick="goCustPage(${Math.max(1, _custPage - 1)})">‹ Prev</button>
+                            ${pageBtns}
+                            <button type="button" class="px-2.5 py-1 rounded bg-white text-slate-700 border border-slate-200 text-[10px] font-black ${nextDisabled}" onclick="goCustPage(${Math.min(totalPages, _custPage + 1)})">Next ›</button>
+                        </div>
+                    </div>
+                </td>
+            </tr>`;
+    }
+
+    // DO lines grouped by al_number, then by the month they were delivered
+    // in — built fresh off allDoRecords (already fetched, no new query) on
+    // every render, the same cancelled/CAL- exclusions the rest of this
+    // file already applies to a DO-based total.
+    function _doByAlAndMonth() {
+        const map = {};
+        (allDoRecords || []).forEach(d => {
+            if (!d.al_number || !d.delivery_date) return;
+            if (_isCalibrationDo(d)) return;
+            if (!map[d.al_number]) map[d.al_number] = {};
+            const k = String(d.delivery_date).slice(0, 7);
+            map[d.al_number][k] = (map[d.al_number][k] || 0) + (Number(d.total_qty) || 0);
+        });
+        return map;
+    }
+
+    // ── Collection tab: same list of orders as Booking, DO-based month
+    // columns instead of booked ones, and every month covered (not just
+    // current-month-onward) since this is the history view. ──
+    function renderCollectionGrid() {
+        const thead  = document.getElementById('coll-thead');
+        const tbody  = document.getElementById('coll-tbody');
+        const tfoot  = document.getElementById('coll-tfoot');
+        const search = (document.getElementById('cust-search')?.value || '').toLowerCase().trim();
+        const filter = _custFilter;
+
+        if (search !== _custSearchLast || filter !== _custFilterLast) {
+            _custPage = 1;
+            _custSearchLast = search;
+            _custFilterLast = filter;
+        }
+
+        const doByAl = _doByAlAndMonth();
+        const fmtRM  = n => 'RM ' + (Number(n) || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        // Same visibility/search/sort rule as the Booking tab — same list
+        // of orders, just a different breakdown of each.
+        let allRows = allCustomerOrders.filter(r => {
+            const isCash    = (r.paymentMethod || 'cash') === 'cash';
+            const isUnpaid  = r.rawStatus === 'Pending Payment' || r.derivedStatus === 'Pending Payment';
+            if (isCash && isUnpaid) return false;
+            if (search && !(r.orderNumber || '').toLowerCase().includes(search) && !(r.customer || '').toLowerCase().includes(search)) return false;
+            const isCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
+            if (filter === 'all')         return true;
+            if (filter === 'cancelled')   return isCancelled;
+            if (filter === 'outstanding') return !isCancelled && r.balance > 0;
+            if (filter === 'completed')   return !isCancelled && r.totalCollected >= r.totalQty && r.totalQty > 0;
+            return true;
+        });
+        allRows.sort((a, b) => {
+            const ta = a.orderDate instanceof Date ? a.orderDate.getTime() : 0;
+            const tb = b.orderDate instanceof Date ? b.orderDate.getTime() : 0;
+            return tb - ta;
+        });
+
+        // Months come from the DO history of exactly these rows, not the
+        // whole table — a filtered-out order's collection months don't
+        // widen the table for everyone else.
+        const monthSet = new Set();
+        allRows.forEach(r => { Object.keys(doByAl[r.alNumber] || {}).forEach(k => monthSet.add(k)); });
+        const months = Array.from(monthSet).sort().map(k => {
+            const [y, m] = k.split('-').map(Number);
+            return { key: k, label: new Date(y, m - 1, 1).toLocaleString('en-MY', { month: 'short', year: 'numeric' }) };
+        });
+        const nowKey = monthKey(new Date());
+
+        thead.innerHTML = `
+            <tr>
+                <th class="h-cust" style="width:38px;">#</th>
+                <th class="h-cust" style="min-width:200px;">Customer</th>
+                <th>Order Month</th>
+                <th>Status</th>
+                <th>Ordered Qty</th>
+                ${months.map(m => `<th class="h-mo${m.key===nowKey?' is-now':''}">${m.label.replace(' ','<br>')}</th>`).join('')}
+                <th class="h-tot">Total<br>Collected</th>
+                <th class="h-tot">Balance</th>
+                <th class="h-tot">Order Total</th>
+            </tr>`;
+
+        const colsTotal = 5 + months.length + 3;
+        if (!allRows.length) {
+            tbody.innerHTML = `<tr><td colspan="${colsTotal}" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">📥</div><div class="text-[10px] font-bold uppercase tracking-widest">No customer orders match the filter</div></td></tr>`;
+            tfoot.innerHTML = '';
+            return;
+        }
+
+        const totalRows  = allRows.length;
+        const totalPages = Math.max(1, Math.ceil(totalRows / CUST_PAGE_SIZE));
+        if (_custPage > totalPages) _custPage = totalPages;
+        if (_custPage < 1)          _custPage = 1;
+        const startIdx = (_custPage - 1) * CUST_PAGE_SIZE;
+        const endIdx   = Math.min(startIdx + CUST_PAGE_SIZE, totalRows);
+        const rows     = allRows.slice(startIdx, endIdx);
+
+        let totQty = 0, totDoAll = 0, totBalance = 0, totAmt = 0;
+        const colTotals = months.map(() => 0);
+        allRows.forEach(r => {
+            totQty += r.totalQty; totBalance += r.balance; totAmt += (r.totalAmount || 0);
+            const byMonth = doByAl[r.alNumber] || {};
+            months.forEach((m, i) => {
+                const q = byMonth[m.key] || 0;
+                colTotals[i] += q;
+                totDoAll += q;
+            });
+        });
+
+        tbody.innerHTML = rows.map((r, pageIdx) => {
+            const idx = startIdx + pageIdx;
+            const orderMonth = r.orderDate ? r.orderDate.toLocaleString('en-MY',{month:'short',year:'numeric'}) : '—';
+            const [pillCls, pillTxt] = pillFor(r.derivedStatus, r.paymentMethod);
+            const rowCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
+            const rowStyle = rowCancelled ? 'style="background:#fef2f2"' : '';
+            const cancelStrike = rowCancelled ? 'style="text-decoration:line-through;color:#a83020"' : '';
+            const byMonth = doByAl[r.alNumber] || {};
+            let rowTotal = 0;
+            const cellsHtml = months.map(m => {
+                const qty = byMonth[m.key] || 0;
+                rowTotal += qty;
+                const cls = ['t-mo', qty ? 'has-qty' : '', m.key === nowKey ? 'is-now' : ''].filter(Boolean).join(' ');
+                const inner = qty
+                    ? `<span class="cust-link" onclick="openCollectionDrilldown('${escapeHtml(r.customer||'').replace(/'/g,"\\'")}','${escapeHtml(r.orderNumber||'').replace(/'/g,"\\'")}','${m.key}')" title="Delivery Date / DO Number for ${m.label}">${qty.toLocaleString()}</span>`
+                    : '';
+                return `<td class="${cls}">${inner}</td>`;
+            }).join('');
+            return `
+                <tr ${rowStyle}>
+                    <td class="t-cust">${idx + 1}</td>
+                    <td class="t-cust"><span class="cust-link" ${cancelStrike} data-pickup data-cust="${escapeHtml(r.customer || '')}" data-order="${escapeHtml(r.orderNumber || '')}">${escapeHtml(r.customer || '—')}</span><div class="t-sub" ${cancelStrike}>${escapeHtml(r.orderNumber || '')}${r.alNumber ? ' · <span style="color:#1d4ed8;font-weight:900;">AL ' + escapeHtml(r.alNumber) + '</span>' : ''}</div></td>
+                    <td ${cancelStrike}>${orderMonth}</td>
+                    <td><span class="pill-status ${pillCls}">${escapeHtml(pillTxt)}</span></td>
+                    <td class="font-black" ${cancelStrike}>${r.totalQty.toLocaleString()}</td>
+                    ${cellsHtml}
+                    <td class="t-tot" ${cancelStrike}>${rowTotal.toLocaleString()}</td>
+                    <td class="t-tot${r.balance < 0 ? ' text-red-600' : r.balance === 0 ? ' text-emerald-700' : ''}" ${cancelStrike}>${r.balance.toLocaleString()}</td>
+                    <td class="t-tot" ${cancelStrike}>${fmtRM(r.totalAmount)}</td>
+                </tr>`;
+        }).join('');
+
+        const monthFootCells = months.map((m, i) => `<td class="t-tot">${colTotals[i] ? colTotals[i].toLocaleString() : '—'}</td>`).join('');
+
+        const pages = (() => {
+            const out = new Set([1, totalPages, _custPage]);
+            for (let d = 1; d <= 2; d++) {
+                if (_custPage - d > 1)          out.add(_custPage - d);
+                if (_custPage + d < totalPages) out.add(_custPage + d);
+            }
+            return Array.from(out).sort((a, b) => a - b);
+        })();
+        const pageBtns = pages.map((p, i) => {
+            const gap = i > 0 && pages[i] - pages[i - 1] > 1 ? `<span class="px-1 text-slate-400">…</span>` : '';
+            const active = p === _custPage
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200';
+            return `${gap}<button type="button" class="px-2.5 py-1 rounded text-[10px] font-black ${active}" onclick="goCustPage(${p})">${p}</button>`;
+        }).join('');
+        const prevDisabled = _custPage <= 1          ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-100';
+        const nextDisabled = _custPage >= totalPages ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-100';
+
+        tfoot.innerHTML = `
+            <tr class="bg-slate-50 font-black">
+                <td colspan="4" class="text-right text-[10px] uppercase tracking-widest text-slate-500" style="padding:8px;">Totals (${totalRows} orders)</td>
                 <td class="t-tot">${totQty.toLocaleString()}</td>
                 ${monthFootCells}
-                <td class="t-tot">${totColl.toLocaleString()}</td>
+                <td class="t-tot">${totDoAll.toLocaleString()}</td>
                 <td class="t-tot">${totBalance.toLocaleString()}</td>
                 <td class="t-tot">${fmtRM(totAmt)}</td>
             </tr>
@@ -1822,7 +2018,7 @@
         const n = Number(p);
         if (!Number.isFinite(n)) return;
         _custPage = Math.max(1, Math.floor(n));
-        renderCustomerGrid();
+        renderActiveCustView();
     }
     window.goCustPage = goCustPage;
 
@@ -2031,16 +2227,38 @@
         meta.textContent = totalOverdue + ' overdue · ' + totalQty.toLocaleString() + ' seedlings pending';
     }
 
-    async function openPickupHistory(customerName, orderNumber) {
+    // DO lines for the currently-open pickup-history customer, grouped by
+    // month — set once per openPickupHistory() call, read by
+    // showPickupMonthDoLines() when a month card in the Collection tab is
+    // clicked. Module-level because those are two separate calls (a click
+    // happens well after the fetch that built this).
+    let _phDoByMonth = {};
+
+    function selectPickupTab(tab) {
+        document.querySelectorAll('#pickup-tabs .ph-tab').forEach(b => b.classList.toggle('active', b.dataset.phTab === tab));
+        document.getElementById('pickup-tab-booking').classList.toggle('hidden', tab !== 'booking');
+        document.getElementById('pickup-tab-collection').classList.toggle('hidden', tab !== 'collection');
+    }
+    window.selectPickupTab = selectPickupTab;
+
+    // opts.tab / opts.month let a Collection-tab month cell jump straight to
+    // that month's DO lines instead of always reopening on Booking — see
+    // openCollectionDrilldown().
+    async function openPickupHistory(customerName, orderNumber, opts) {
+        opts = opts || {};
         const modal = document.getElementById('pickup-modal');
         const title = document.getElementById('pickup-modal-title');
         const sub   = document.getElementById('pickup-modal-sub');
-        const summ  = document.getElementById('pickup-summary');
         const wrap  = document.getElementById('pickup-table-wrap');
 
         title.textContent = customerName || '—';
         sub.textContent   = orderNumber ? 'Order: ' + orderNumber : '';
-        summ.innerHTML    = '';
+        document.getElementById('pickup-month-detail').innerHTML = '';
+        _phDoByMonth = {};
+        // Reopens on Booking by default, not wherever the last customer's
+        // view was left — unless the caller (a Collection-tab cell) asked
+        // to land straight on Collection.
+        selectPickupTab(opts.tab === 'collection' ? 'collection' : 'booking');
         wrap.innerHTML    = `<div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading history…</div>`;
         modal.classList.add('open');
 
@@ -2050,60 +2268,59 @@
             if (orderNumber)  filters.push('order_number.eq.'  + orderNumber);
             const orFilter = filters.join(',');
 
-            const [bookingsRes, ordersRes] = await Promise.all([
+            const [bookingsRes, alRes] = await Promise.all([
                 _supabase.from('shared_collection_bookings').select('*').or(orFilter).order('booking_date', { ascending: false }),
-                _supabase.from('salesweb_customer_orders').select('id,order_number,customer_name,billing_name,total_amount,balance_amount,status,created_at,collected_qty,collected_at').or(orFilter).order('created_at', { ascending: false })
+                // AL number is the only link from a sales-web order to its
+                // DO lines — shared_do_records has no order_number of its own.
+                _supabase.from('shared_al_orders').select('al_number,order_number,customer_name').or(orFilter)
             ]);
 
             const bookings = bookingsRes.data || [];
-            const orders   = ordersRes.data   || [];
 
-            let collections = [];
-            try {
-                const orderIds = orders.map(o => o.id).filter(Boolean);
-                if (orderIds.length) {
-                    const { data } = await _supabase
-                        .from('salesweb_order_collections')
-                        .select('order_id,collected_qty,collected_at,al_number')
-                        .in('order_id', orderIds);
-                    collections = data || [];
-                }
-            } catch(e) { collections = []; }
+            // ── Collection tab: DO lines built from shared_do_records — a
+            // DO is what "Delivery Date / DO Number / Qty" means, so it's
+            // the same table the drilldown below expands into. ──
+            const alNumbers = [...new Set((alRes.data || []).map(a => a.al_number).filter(Boolean))];
+            let doRecords = [];
+            if (alNumbers.length) {
+                const { data } = await _supabase.from('shared_do_records')
+                    .select('do_number,al_number,delivery_date,total_qty,status,remark')
+                    .in('al_number', alNumbers);
+                doRecords = (data || []).filter(d => {
+                    if (!d.delivery_date) return false;
+                    if (d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'))) return false;
+                    if (_isCalibrationDo(d)) return false; // a stock correction, not a customer collection
+                    return true;
+                });
+            }
+            _phDoByMonth = {};
+            doRecords.forEach(d => {
+                const k = String(d.delivery_date).slice(0, 7);
+                (_phDoByMonth[k] = _phDoByMonth[k] || []).push(d);
+            });
+            // Jumped here from a Collection-tab cell for a specific month —
+            // show just that month's DO lines. Opened plainly (click
+            // customer name, no month in mind) — show the full history in
+            // one flat table; the page's own Collection tab is now where
+            // you pick a month, so there's no need for this modal to make
+            // you pick one again on the way to seeing it.
+            if (opts.month && _phDoByMonth[opts.month]) {
+                showPickupMonthDoLines(opts.month);
+            } else {
+                renderDoLinesTable(doRecords);
+            }
 
-            const totalOrdered    = orders.reduce((s,o)=> s + (o.total_amount || 0), 0);
-            const totalCollected  = (collections.length
-                ? collections.reduce((s,c)=> s + (c.collected_qty || 0), 0)
-                : orders.reduce((s,o)=> s + (o.collected_qty || 0), 0));
-            const totalBookings   = bookings.length;
-            const fmtRM = n => 'RM ' + (Number(n)||0).toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
-
-            summ.innerHTML = `
-                <div class="ph-summary-card"><div class="ph-label">Total bookings</div><div class="ph-num">${totalBookings}</div></div>
-                <div class="ph-summary-card"><div class="ph-label">Seedlings collected</div><div class="ph-num">${totalCollected.toLocaleString()}</div></div>
-                <div class="ph-summary-card"><div class="ph-label">Order value (sum)</div><div class="ph-num">${fmtRM(totalOrdered)}</div></div>
-            `;
-
-            const events = [];
-            bookings.forEach(b => events.push({
-                kind: 'booking',
+            // ── Booking tab: bookings only — collection now lives in its own tab ──
+            const events = bookings.map(b => ({
                 date: b.booking_date,
                 detail: 'Booked ' + (b.start_time||'').substring(0,5) + ' · ' + (b.collection_qty || 0) + ' pcs',
                 ref:   b.al_number || b.order_number || '',
                 place: [b.nursery_name, b.plot_name].filter(Boolean).join(' / ') || '—',
                 status: b.status || 'booked',
-            }));
-            collections.forEach(c => events.push({
-                kind: 'collection',
-                date: (c.collected_at || '').slice(0,10),
-                detail: 'Collected ' + (c.collected_qty || 0) + ' pcs',
-                ref:   c.al_number || '',
-                place: '—',
-                status: 'collected',
-            }));
-            events.sort((a,b)=> (b.date || '').localeCompare(a.date || ''));
+            })).sort((a,b)=> (b.date || '').localeCompare(a.date || ''));
 
             if (!events.length) {
-                wrap.innerHTML = `<div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest">No history found for this customer</div>`;
+                wrap.innerHTML = `<div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest">No bookings found for this customer</div>`;
                 return;
             }
 
@@ -2111,14 +2328,13 @@
                 <table class="ph-table">
                     <thead>
                         <tr>
-                            <th>Date</th><th>Type</th><th>Detail</th><th>Ref</th><th>Nursery / Plot</th><th>Status</th>
+                            <th>Date</th><th>Detail</th><th>Ref</th><th>Nursery / Plot</th><th>Status</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${events.map(e => `
                             <tr>
                                 <td>${e.date || '—'}</td>
-                                <td><span class="pill-status ${e.kind==='collection'?'pill-completed':'pill-paid'}">${e.kind}</span></td>
                                 <td>${escapeHtml(e.detail)}</td>
                                 <td class="font-mono text-[11px]">${escapeHtml(e.ref || '')}</td>
                                 <td>${escapeHtml(e.place || '—')}</td>
@@ -2132,6 +2348,48 @@
             wrap.innerHTML = `<div class="text-center py-8 text-[10px] text-red-500 font-bold uppercase tracking-widest">Unable to load history</div>`;
         }
     }
+
+    // Delivery Date / DO Number / Qty, for whatever set of DO lines it's
+    // handed — one month's worth (showPickupMonthDoLines) or the customer's
+    // whole history (openPickupHistory's plain "click customer name" path).
+    function renderDoLinesTable(rows) {
+        const detail = document.getElementById('pickup-month-detail');
+        if (!rows.length) {
+            detail.innerHTML = `<div class="text-center py-8 text-[10px] text-slate-400 font-bold uppercase tracking-widest">No DO-recorded collections for this customer</div>`;
+            return;
+        }
+        const sorted = rows.slice().sort((a, b) => String(a.delivery_date).localeCompare(String(b.delivery_date)));
+        const total = sorted.reduce((s, d) => s + (Number(d.total_qty) || 0), 0);
+        detail.innerHTML = `
+            <table class="ph-table">
+                <thead><tr><th>Delivery Date</th><th>DO Number</th><th class="text-right">Qty</th></tr></thead>
+                <tbody>
+                    ${sorted.map(d => `
+                        <tr>
+                            <td>${String(d.delivery_date).slice(0, 10)}</td>
+                            <td class="font-mono text-[11px]">${escapeHtml(d.do_number || '—')}</td>
+                            <td class="text-right font-black">${(Number(d.total_qty) || 0).toLocaleString()}</td>
+                        </tr>`).join('')}
+                </tbody>
+                <tfoot><tr class="font-black">
+                    <td colspan="2" class="text-right text-[10px] uppercase tracking-widest text-slate-500">Total</td>
+                    <td class="text-right">${total.toLocaleString()}</td>
+                </tr></tfoot>
+            </table>`;
+    }
+
+    function showPickupMonthDoLines(key) {
+        renderDoLinesTable(_phDoByMonth[key] || []);
+    }
+    window.showPickupMonthDoLines = showPickupMonthDoLines;
+
+    // A Collection-tab month cell's click target — opens the same pickup
+    // history modal, landing straight on the Collection tab with that
+    // month's DO lines already showing.
+    function openCollectionDrilldown(customerName, orderNumber, monthKeyStr) {
+        openPickupHistory(customerName, orderNumber, { tab: 'collection', month: monthKeyStr });
+    }
+    window.openCollectionDrilldown = openCollectionDrilldown;
 
     function closePickupHistory() {
         document.getElementById('pickup-modal').classList.remove('open');
