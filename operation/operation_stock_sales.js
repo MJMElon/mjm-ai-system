@@ -602,9 +602,19 @@
     async function loadMaturity() {
         try {
             const [transRes, plotsRes, allocRes, doRes] = await Promise.all([
+                // 'Transplanted' only — Premium Care and D-Tone are holding
+                // trays, not plots (same distinction operation_batch_detail.html's
+                // own transplanted total and operation_reports.html's
+                // transplantedMap already make). Pulling in
+                // 'Transplanted_Premium'/'Transplanted_DoubleTone' here turned
+                // every batch's Premium Care inflow into its own fake maturity
+                // row — plot "PREMIUM CARE", a bogus 9-months-later maturity
+                // date, a Plot Status dropdown and a customer-allocation slot
+                // for a tray — and double-counted the qty once more when the
+                // same seedlings later left the tray for a real plot.
                 _supabase.from('shared_inventory_logs')
                     .select('batch_name,plot_name,breed_name,quantity_change,created_at,transaction_date')
-                    .in('transaction_type', ['Transplanted','Transplanted_Premium','Transplanted_DoubleTone']),
+                    .eq('transaction_type', 'Transplanted'),
                 _supabase.from('shared_plots').select('plot_name,nursery_name'),
                 _supabase.from('shared_plot_allocations').select('*').then(r => r, e => ({ data: [], error: e })),
                 // Issued DOs are the official stock deduction: each carries up to
@@ -1714,13 +1724,15 @@
 
             if (search && !(r.orderNumber || '').toLowerCase().includes(search) && !(r.customer || '').toLowerCase().includes(search)) return false;
             // A cancelled AL kills the order the same as a raw
-            // `rawStatus === 'Cancelled'` row — both read as "cancelled"
-            // for every filter below, Cancelled Orders included.
+            // `rawStatus === 'Cancelled'` row — both read as "cancelled".
+            // All Orders excludes them too; Cancelled Orders is the only
+            // place they're visible.
             const isCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
-            if (filter === 'all')         return true;
             if (filter === 'cancelled')   return isCancelled;
-            if (filter === 'outstanding') return !isCancelled && r.balance > 0;
-            if (filter === 'completed')   return !isCancelled && r.totalCollected >= r.totalQty && r.totalQty > 0;
+            if (isCancelled) return false;
+            if (filter === 'all')         return true;
+            if (filter === 'outstanding') return r.balance > 0;
+            if (filter === 'completed')   return r.totalCollected >= r.totalQty && r.totalQty > 0;
             return true;
         });
 
@@ -1876,10 +1888,11 @@
             if (isCash && isUnpaid) return false;
             if (search && !(r.orderNumber || '').toLowerCase().includes(search) && !(r.customer || '').toLowerCase().includes(search)) return false;
             const isCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
-            if (filter === 'all')         return true;
             if (filter === 'cancelled')   return isCancelled;
-            if (filter === 'outstanding') return !isCancelled && r.balance > 0;
-            if (filter === 'completed')   return !isCancelled && r.totalCollected >= r.totalQty && r.totalQty > 0;
+            if (isCancelled) return false;
+            if (filter === 'all')         return true;
+            if (filter === 'outstanding') return r.balance > 0;
+            if (filter === 'completed')   return r.totalCollected >= r.totalQty && r.totalQty > 0;
             return true;
         });
         allRows.sort((a, b) => {
