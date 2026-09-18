@@ -1627,6 +1627,39 @@
     let _custFilterLast = '';
     let _custMainTab = 'booking';
 
+    // Order-status filter — a custom dropdown (see .cf-* in the HTML) in
+    // place of the state a native <select> would otherwise hold.
+    let _custFilter = 'all';
+    const CUST_FILTER_LABELS = { all: 'All Orders', outstanding: 'Outstanding Balance', cancelled: 'Cancelled Orders', completed: 'Completed Orders' };
+
+    function toggleCustFilterMenu(e) {
+        e && e.stopPropagation();
+        const menu = document.getElementById('cust-filter-menu');
+        const btn  = document.getElementById('cust-filter-btn');
+        const opening = menu.classList.contains('hidden');
+        menu.classList.toggle('hidden', !opening);
+        btn.classList.toggle('open', opening);
+    }
+    window.toggleCustFilterMenu = toggleCustFilterMenu;
+
+    function selectCustFilter(value) {
+        _custFilter = value;
+        document.getElementById('cust-filter-label').textContent = CUST_FILTER_LABELS[value] || 'All Orders';
+        document.querySelectorAll('#cust-filter-menu .cf-opt').forEach(el => el.classList.toggle('active', el.dataset.value === value));
+        document.getElementById('cust-filter-menu').classList.add('hidden');
+        document.getElementById('cust-filter-btn').classList.remove('open');
+        renderActiveCustView();
+    }
+    window.selectCustFilter = selectCustFilter;
+
+    document.addEventListener('click', (e) => {
+        const wrap = document.getElementById('cust-filter-wrap');
+        if (wrap && !wrap.contains(e.target)) {
+            document.getElementById('cust-filter-menu')?.classList.add('hidden');
+            document.getElementById('cust-filter-btn')?.classList.remove('open');
+        }
+    });
+
     function selectCustMainTab(tab) {
         _custMainTab = (tab === 'collection') ? 'collection' : 'booking';
         document.querySelectorAll('#cust-main-tabs .ph-tab').forEach(b => b.classList.toggle('active', b.dataset.mainTab === _custMainTab));
@@ -1647,7 +1680,7 @@
         const tbody  = document.getElementById('cust-tbody');
         const tfoot  = document.getElementById('cust-tfoot');
         const search = (document.getElementById('cust-search')?.value || '').toLowerCase().trim();
-        const filter = document.getElementById('cust-filter')?.value || 'active';
+        const filter = _custFilter;
 
         // Reset to page 1 if the user changed the search or filter (so
         // they don't land on an empty page 5 of a fresh result set).
@@ -1680,13 +1713,12 @@
             if (isCash && isUnpaid) return false;
 
             if (search && !(r.orderNumber || '').toLowerCase().includes(search) && !(r.customer || '').toLowerCase().includes(search)) return false;
-            // A cancelled AL kills the order for every non-`all` view — the
-            // grid's Active / Outstanding / Completed lists all treat it the
-            // same as a raw `rawStatus === 'Cancelled'` row so nothing
-            // dead-ends in "pending to collect".
+            // A cancelled AL kills the order the same as a raw
+            // `rawStatus === 'Cancelled'` row — both read as "cancelled"
+            // for every filter below, Cancelled Orders included.
             const isCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
-            if (filter === 'all') return true;
-            if (filter === 'active')      return !isCancelled;
+            if (filter === 'all')         return true;
+            if (filter === 'cancelled')   return isCancelled;
             if (filter === 'outstanding') return !isCancelled && r.balance > 0;
             if (filter === 'completed')   return !isCancelled && r.totalCollected >= r.totalQty && r.totalQty > 0;
             return true;
@@ -1825,7 +1857,7 @@
         const tbody  = document.getElementById('coll-tbody');
         const tfoot  = document.getElementById('coll-tfoot');
         const search = (document.getElementById('cust-search')?.value || '').toLowerCase().trim();
-        const filter = document.getElementById('cust-filter')?.value || 'active';
+        const filter = _custFilter;
 
         if (search !== _custSearchLast || filter !== _custFilterLast) {
             _custPage = 1;
@@ -1844,8 +1876,8 @@
             if (isCash && isUnpaid) return false;
             if (search && !(r.orderNumber || '').toLowerCase().includes(search) && !(r.customer || '').toLowerCase().includes(search)) return false;
             const isCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
-            if (filter === 'all') return true;
-            if (filter === 'active')      return !isCancelled;
+            if (filter === 'all')         return true;
+            if (filter === 'cancelled')   return isCancelled;
             if (filter === 'outstanding') return !isCancelled && r.balance > 0;
             if (filter === 'completed')   return !isCancelled && r.totalCollected >= r.totalQty && r.totalQty > 0;
             return true;
