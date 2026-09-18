@@ -592,6 +592,9 @@
     let activeMonthKey = null;
     let activeMonthKeys = [];
     let historyMonthKeys = [];
+    // A tab before every month tab, not bucketed by month at all — see
+    // loadMaturity()'s prGroups and renderMaturityTable()'s filter.
+    const PR_TAB_KEY = '__pr__';
 
     function monthKey(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); }
     function monthLabel(k) {
@@ -601,7 +604,7 @@
 
     async function loadMaturity() {
         try {
-            const [transRes, plotsRes, allocRes, doRes] = await Promise.all([
+            const [transRes, prRes, plotsRes, allocRes, doRes] = await Promise.all([
                 // 'Transplanted' only — Premium Care and D-Tone are holding
                 // trays, not plots (same distinction operation_batch_detail.html's
                 // own transplanted total and operation_reports.html's
@@ -615,6 +618,13 @@
                 _supabase.from('shared_inventory_logs')
                     .select('batch_name,plot_name,breed_name,quantity_change,created_at,transaction_date')
                     .eq('transaction_type', 'Transplanted'),
+                // P-R (reserve) plots — a Cull3_Transfer log is what actually
+                // creates one (Batch Detail Tab 6's P-R Culling "Transferred"
+                // figure is this same sum, grouped by the reserve plot it
+                // landed in). Fed into the P-R tab below, not the month tabs.
+                _supabase.from('shared_inventory_logs')
+                    .select('batch_name,plot_name,breed_name,quantity_change,created_at,transaction_date')
+                    .eq('transaction_type', 'Cull3_Transfer'),
                 _supabase.from('shared_plots').select('plot_name,nursery_name'),
                 _supabase.from('shared_plot_allocations').select('*').then(r => r, e => ({ data: [], error: e })),
                 // Issued DOs are the official stock deduction: each carries up to
@@ -624,8 +634,9 @@
                     .then(r => r, e => ({ data: [], error: e }))
             ]);
 
-            const trans = transRes.data || [];
-            const plots = plotsRes.data || [];
+            const trans   = transRes.data || [];
+            const prTrans = prRes.data || [];
+            const plots   = plotsRes.data || [];
 
             const plotNurseryMap = {};
             const prefixNurseryMap = {};
@@ -644,37 +655,55 @@
                 return prefix && prefixNurseryMap[prefix] ? prefixNurseryMap[prefix] : '—';
             };
 
-            const groups = {};
-            trans.forEach(l => {
-                // Real transplant date keyed in the Batch Record; created_at is
-                // only the fallback for very old rows saved without a date.
-                const effDate = l.transaction_date || l.created_at;
-                const k = (l.batch_name||'') + '||' + (l.plot_name||'');
-                if (!groups[k]) groups[k] = {
-                    batch: l.batch_name, plot: l.plot_name, breed: l.breed_name,
-                    qty: 0, firstDate: effDate
-                };
-                groups[k].qty += (l.quantity_change || 0);
-                if (effDate < groups[k].firstDate) groups[k].firstDate = effDate;
-                if (!groups[k].breed && l.breed_name) groups[k].breed = l.breed_name;
-            });
+            // Groups by the batch+plot key shared_plot_allocations itself is
+            // keyed and upserted on ('batch_name,plot_name') — so a P-R row
+            // below reuses the exact same Plot Status / DO Deducted /
+            // Customer Allocation machinery as a real transplant row with no
+            // extra plumbing, as long as it groups the same way. A "-R" plot
+            // is never a Transplanted destination (see prGroups below), so
+            // the two never collide on the same key.
+            const groupRows = (list, tag) => {
+                const groups = {};
+                list.forEach(l => {
+                    const effDate = l.transaction_date || l.created_at;
+                    const k = (l.batch_name||'') + '||' + (l.plot_name||'');
+                    if (!groups[k]) groups[k] = {
+                        batch: l.batch_name, plot: l.plot_name, breed: l.breed_name,
+                        qty: 0, firstDate: effDate
+                    };
+                    groups[k].qty += (l.quantity_change || 0);
+                    if (effDate < groups[k].firstDate) groups[k].firstDate = effDate;
+                    if (!groups[k].breed && l.breed_name) groups[k].breed = l.breed_name;
+                });
+                return Object.entries(groups).map(([k, g]) => {
+                    const t = new Date(g.firstDate);
+                    // A P-R row is stock that already went through 2nd/3rd
+                    // culling — it isn't still growing toward a forecast
+                    // maturity date, so unlike a fresh transplant it gets no
+                    // +9-months offset. "Maturity Date" for one of these rows
+                    // reads as the date it arrived in the reserve plot.
+                    const matureDate = tag === 'pr' ? t : (() => { const m = new Date(t); m.setMonth(m.getMonth() + 9); return m; })();
+                    return {
+                        key: k,
+                        batch: g.batch,
+                        plot: g.plot,
+                        breed: g.breed || '—',
+                        location: resolveLocation(g.plot),
+                        qty: g.qty,
+                        afterCulling: Math.round(g.qty * 0.9),
+                        doDeducted: 0,
+                        transplantDate: t,
+                        matureDate,
+                        isPR: tag === 'pr'
+                    };
+                });
+            };
 
-            allMatGroups = Object.entries(groups).map(([k, g]) => {
-                const t = new Date(g.firstDate);
-                const matureDate = new Date(t); matureDate.setMonth(matureDate.getMonth() + 9);
-                return {
-                    key: k,
-                    batch: g.batch,
-                    plot: g.plot,
-                    breed: g.breed || '—',
-                    location: resolveLocation(g.plot),
-                    qty: g.qty,
-                    afterCulling: Math.round(g.qty * 0.9),
-                    doDeducted: 0,
-                    transplantDate: t,
-                    matureDate
-                };
-            });
+            // Real transplant date keyed in the Batch Record; created_at is
+            // only the fallback for very old rows saved without a date.
+            const matRows = groupRows(trans, 'main');
+            const prRows  = groupRows(prTrans, 'pr');
+            allMatGroups  = matRows.concat(prRows);
 
             applyDoDeductions(allMatGroups, doRes?.data || []);
 
@@ -691,7 +720,9 @@
 
             const now = new Date();
             const curKey = monthKey(now);
-            const monthsWithData = new Set(allMatGroups.map(g => monthKey(g.matureDate)));
+            // matRows only — a P-R row's matureDate is a transfer date, not a
+            // forecast, and doesn't belong bucketed into a month tab.
+            const monthsWithData = new Set(matRows.map(g => monthKey(g.matureDate)));
 
             activeMonthKeys = [...monthsWithData].filter(k => k >= curKey).sort();
             historyMonthKeys = [...monthsWithData].filter(k => k < curKey).sort().reverse();
@@ -713,6 +744,17 @@
         const curKey = monthKey(now);
         const tabsEl = document.getElementById('month-tabs');
         tabsEl.innerHTML = '';
+
+        // Before every month tab — reserve plots (Batch Detail's P-R
+        // Culling), not bucketed by month.
+        const prBtn = document.createElement('button');
+        prBtn.type = 'button';
+        prBtn.className = 'month-tab' + (activeMonthKey === PR_TAB_KEY ? ' active' : '');
+        prBtn.innerText = 'P-R';
+        prBtn.title = 'Reserve ("-R") plots from Batch Detail’s P-R Culling';
+        prBtn.onclick = () => { activeMonthKey = PR_TAB_KEY; closeHistoryMenu(); renderMonthTabs(); renderMaturityTable(); renderActiveBanner(); };
+        tabsEl.appendChild(prBtn);
+
         activeMonthKeys.forEach(k => {
             const isCurrent = k === curKey;
             const btn = document.createElement('button');
@@ -740,7 +782,10 @@
 
     function renderActiveBanner() {
         const banner = document.getElementById('active-month-banner');
-        if (historyMonthKeys.includes(activeMonthKey)) {
+        if (activeMonthKey === PR_TAB_KEY) {
+            banner.classList.remove('hidden');
+            banner.innerHTML = `🪴 Viewing <span class="font-black uppercase tracking-widest">P-R</span> — reserve plots from Batch Detail's P-R Culling, not bucketed by month`;
+        } else if (historyMonthKeys.includes(activeMonthKey)) {
             banner.classList.remove('hidden');
             banner.innerHTML = `🕘 Viewing <span class="font-black uppercase tracking-widest">history</span> — ${monthLabel(activeMonthKey)} (already matured & past)`;
         } else {
@@ -875,11 +920,12 @@
         const tfoot = document.getElementById('maturity-foot');
 
         const rows = allMatGroups
-            .filter(g => monthKey(g.matureDate) === activeMonthKey)
+            .filter(g => activeMonthKey === PR_TAB_KEY ? g.isPR : (!g.isPR && monthKey(g.matureDate) === activeMonthKey))
             .sort((a, b) => a.matureDate - b.matureDate);
 
         if (!rows.length) {
-            tbody.innerHTML = `<tr><td colspan="13" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">No maturity allocations for this month</div></td></tr>`;
+            const emptyMsg = activeMonthKey === PR_TAB_KEY ? 'No reserve (P-R) plots' : 'No maturity allocations for this month';
+            tbody.innerHTML = `<tr><td colspan="13" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">${emptyMsg}</div></td></tr>`;
             tfoot.innerHTML = '';
             renderDoUnmatched();
             return;
