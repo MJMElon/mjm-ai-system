@@ -9348,12 +9348,18 @@ Thank you.`;
                                     ondrop="event.preventDefault(); this.classList.remove('ring-2','ring-[#c07820]'); handleT6DocDrop(event,'${rowId}')">
                                     <input type="number" min="0" class="input-style t6-map-qty !text-[11px] !py-1 !px-1 !rounded-lg !text-center w-full max-w-[48px]" placeholder="Qty"
                                         value="${p.savedMapQty ?? ''}"
-                                        oninput="calcT6(); t6PaintPlotRow(this.closest('.t6-plot-row'))">
+                                        oninput="onT6MapQtyInput(${i}); calcT6(); t6PaintPlotRow(this.closest('.t6-plot-row'))">
                                     <button type="button" id="${rowId}-doc-chip" class="t6-doc-chip shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center
                                                    bg-white border-[#c07820] text-[#c07820] text-sm bg-cover bg-center hover:bg-[#fdfaf4]"
                                         title="Attach the drone map"
                                         onclick="onT6DocChip('${rowId}')">＋</button>
                                 </div>
+                                <!-- A plot culled over more than one day gets a quantity
+                                     PER DAY, here beside the day it belongs to, and the
+                                     total under them — see renderCullSessions. Quantities
+                                     under the DATES is what made this column read as a
+                                     list of nothing and the other as a list of both. -->
+                                <div id="${rowId}-mapparts" class="${nilCull ? 'hidden' : ''} w-full"></div>
                                 <input type="file" id="${rowId}-doc-input" class="hidden"
                                     accept="image/*,.pdf,.heic,.heif,.avif,.webp,.tif,.tiff,.bmp,.svg,.jfif,.jpe"
                                     onchange="handleT6DocUpload(this,'${rowId}')">
@@ -9379,7 +9385,7 @@ Thank you.`;
                                     onchange="onT6CullDateChange(${i}); calcT6(); t6PaintPlotRow(this.closest('.t6-plot-row'))"
                                     title="Date this plot was culled">
                                 </div>
-                                <div id="${rowId}-sessions" class="w-full"></div>
+                                <div id="${rowId}-sessions" class="w-full"></div>   <!-- extra DATES only; their quantities are in the Drone Map column -->
                                 <!-- A plot is sometimes culled over two days or more.
                                      This splits the cull into dated parts, each with its
                                      own quantity — see renderCullSessions. It sits UNDER
@@ -9490,6 +9496,14 @@ Thank you.`;
                 const ss = (p.savedCullSessions || []).filter(r => r && (r.date || r.qty !== ''));
                 if (ss.length < 2) return;
                 t6_cullSessions[i] = ss.map(r => ({ date: r.date || '', qty: r.qty === '' ? '' : Number(r.qty) }));
+                /* Day one is the row's own two boxes, so it is put back into
+                   them rather than drawn again underneath — the repeated
+                   date was the first thing anybody noticed about this. The
+                   saved MapQty is the TOTAL, which is not day one's figure. */
+                const d = document.querySelector(`#t6-row-${i} .t6-cull-date`);
+                const q = document.querySelector(`#t6-row-${i} .t6-map-qty`);
+                if (d) d.value = ss[0].date || '';
+                if (q) q.value = ss[0].qty === '' ? '' : ss[0].qty;
                 renderCullSessions(i);
             });
 
@@ -10420,10 +10434,15 @@ Thank you.`;
             document.querySelectorAll('.t6-plot-row').forEach((row, i) => {
                 const p = t6_plotData[i];
                 if (!p) return;
-                const mapRaw = (row.querySelector('.t6-map-qty')?.value ?? '').trim();
+                /* Split over days, the drone-map figure is the days added
+                   up — see t6MapQtyFor. One box or several, the question
+                   here is the same: does what the map counted agree with
+                   what the report says was culled. */
+                const rowIdx = parseInt(String(row.id).replace('t6-row-', ''), 10);
+                const mapNum = t6MapQtyFor(rowIdx);
                 const cullRaw = row.querySelector('.t6-culled-input')?.value ?? '';
-                if (mapRaw === '' || cullRaw === '') return;
-                const mapQty = parseInt(mapRaw) || 0;
+                if (mapNum === null || cullRaw === '') return;
+                const mapQty = mapNum;
                 const culled = parseInt(cullRaw) || 0;
                 if (mapQty === culled) return;
                 out.push({ idx: i, rowId: `t6-row-${i}`, plot: p.plot, culled, mapQty });
@@ -10470,7 +10489,7 @@ Thank you.`;
            with CullDate left exactly where it was — the first session's date
            — so the batch list, the review and every other reader of that
            remark go on finding what they always found. */
-        let t6_cullSessions = {};   // row index → [{ date, qty }], first included
+        let t6_cullSessions = {};   // row index → [{ date, qty }], the first one included
 
         function t6Sessions(idx) {
             return Array.isArray(t6_cullSessions[idx]) ? t6_cullSessions[idx] : [];
@@ -10478,45 +10497,62 @@ Thank you.`;
         function t6SessionTotal(idx) {
             return t6Sessions(idx).reduce((s, r) => s + (Number(r.qty) || 0), 0);
         }
-        /* What the row says was culled, which the parts have to come to. */
+        /* THE DRONE MAP FIGURE FOR THE ROW.
+
+           Split over days, it is the days added up — that is the whole
+           point of splitting it, and it is what the reconciliation against
+           3rd Culled compares. Not split, it is the one box, as always. */
+        function t6MapQtyFor(idx) {
+            const ss = t6Sessions(idx);
+            if (ss.length >= 2) return t6SessionTotal(idx);
+            const el = document.querySelector(`#t6-row-${idx} .t6-map-qty`);
+            const v = (el && el.value !== '') ? parseInt(el.value, 10) : null;
+            return Number.isFinite(v) ? v : null;
+        }
+        /* Has the split been finished? Every day needs a date AND a
+           quantity; half a split is a plot somebody is partway through
+           keying, not a plot with a date on it. Whether the total agrees
+           with 3rd Culled is a different question, and the drone-map panel
+           under the totals is where it is asked and answered. */
+        function t6SessionsTally(idx) {
+            const ss = t6Sessions(idx);
+            if (ss.length < 2) return true;
+            return ss.every(r => r.date && Number(r.qty) > 0);
+        }
         function t6RowCulled(idx) {
             const el = document.querySelector(`#t6-row-${idx} .t6-culled-input`);
             const n = parseInt(el && el.value, 10);
             return Number.isFinite(n) ? n : 0;
         }
-        /* Split, and adding up. Both have to be true for the dates to be an
-           answer; a row with no split at all is not "not tallying", it is an
-           ordinary row and says nothing. */
-        function t6SessionsTally(idx) {
-            const ss = t6Sessions(idx);
-            if (ss.length < 2) return true;
-            if (ss.some(r => !r.date || !(Number(r.qty) > 0))) return false;
-            return t6SessionTotal(idx) === t6RowCulled(idx);
-        }
 
+        /* The row's own two boxes ARE the first day — one field each, not
+           two saying different things. Written straight into the part and
+           nothing redrawn, so the caret stays where it is being typed. */
         function onT6CullDateChange(idx) {
-            /* The first part's date IS the row's date box — one field, not two
-               saying different things. Written straight into the part and into
-               the part's own box; redrawing the list from here would take the
-               caret out of the field being typed in. */
             const ss = t6Sessions(idx);
             if (!ss.length) return;
             const el = document.querySelector(`#t6-row-${idx} .t6-cull-date`);
             ss[0].date = el ? el.value : '';
-            const partEl = document.getElementById(`t6-s-${idx}-0-d`);
-            if (partEl) partEl.value = ss[0].date;
-            syncCullSessionNote(idx);
+        }
+        function onT6MapQtyInput(idx) {
+            const ss = t6Sessions(idx);
+            if (!ss.length) return;
+            const el = document.querySelector(`#t6-row-${idx} .t6-map-qty`);
+            ss[0].qty = el && el.value !== '' ? Math.max(0, parseInt(el.value, 10) || 0) : '';
+            syncCullSessionTotal(idx);
         }
 
         function addCullSession(idx) {
             const ss = t6Sessions(idx);
             if (!ss.length) {
-                // First press: the row's own date becomes part one, carrying
-                // everything culled so far, and part two starts empty. Nothing
-                // is invented — the figures already on the row are simply
-                // written down as the first day's.
-                const el = document.querySelector(`#t6-row-${idx} .t6-cull-date`);
-                ss.push({ date: el ? el.value : '', qty: t6RowCulled(idx) });
+                /* First press: the row's date and its drone-map quantity
+                   become day one, and day two starts empty. Nothing is
+                   invented — what is already on the row is written down as
+                   the first day's. */
+                const d = document.querySelector(`#t6-row-${idx} .t6-cull-date`);
+                const q = document.querySelector(`#t6-row-${idx} .t6-map-qty`);
+                ss.push({ date: d ? d.value : '',
+                          qty: q && q.value !== '' ? Math.max(0, parseInt(q.value, 10) || 0) : '' });
             }
             ss.push({ date: '', qty: '' });
             t6_cullSessions[idx] = ss;
@@ -10526,12 +10562,15 @@ Thank you.`;
 
         function removeCullSession(idx, i) {
             const ss = t6Sessions(idx);
+            if (i === 0) return;              // day one is the row's own boxes
             ss.splice(i, 1);
-            // One part left is no split at all: fold it back into the row's
-            // own date box and leave the plot looking like every other one.
+            // One day left is no split at all: fold it back into the row's
+            // own boxes and leave the plot looking like every other one.
             if (ss.length === 1) {
-                const el = document.querySelector(`#t6-row-${idx} .t6-cull-date`);
-                if (el && ss[0].date) el.value = ss[0].date;
+                const d = document.querySelector(`#t6-row-${idx} .t6-cull-date`);
+                const q = document.querySelector(`#t6-row-${idx} .t6-map-qty`);
+                if (d && ss[0].date) d.value = ss[0].date;
+                if (q) q.value = ss[0].qty === '' ? '' : ss[0].qty;
                 ss.length = 0;
             }
             t6_cullSessions[idx] = ss;
@@ -10539,86 +10578,86 @@ Thank you.`;
             calcT6();
         }
 
-        /* KEYING A PART CHANGES THE FIGURES, NOT THE BOXES.
-
-           This used to redraw the whole list on every keystroke and put the
-           caret back where it found it. On a number box that meant typing 588
-           came out 885 — each digit landing in front of the last — and on a
-           date box the year sent the cursor back to the day segment, so the
-           field could not be filled at all.
-
-           Nothing structural happens while somebody types: the part is
-           already on screen, so only what it ADDS UP TO needs redrawing.
-           Adding and removing a part still rebuilds the list, which is the
-           one time it has to. */
         function updateCullSession(idx, i, field, value) {
             const ss = t6Sessions(idx);
             if (!ss[i]) return;
             ss[i][field] = field === 'qty' ? (value === '' ? '' : Math.max(0, parseInt(value, 10) || 0)) : value;
-            if (i === 0 && field === 'date') {
-                const el = document.querySelector(`#t6-row-${idx} .t6-cull-date`);
-                if (el) el.value = ss[0].date || '';
+            if (i === 0) {
+                const el = document.querySelector(
+                    `#t6-row-${idx} ${field === 'date' ? '.t6-cull-date' : '.t6-map-qty'}`);
+                if (el) el.value = ss[0][field] === '' ? '' : ss[0][field];
             }
-            syncCullSessionNote(idx);
+            syncCullSessionTotal(idx);
             calcT6();
         }
 
-        /* Just the line under the parts: what they come to, and how far that
-           is from what was culled. */
-        function syncCullSessionNote(idx) {
-            const note = document.getElementById(`t6-row-${idx}-sessions-note`);
-            if (!note) return;
-            const culled = t6RowCulled(idx);
-            const total  = t6SessionTotal(idx);
-            const short  = culled - total;
-            note.className = `text-[9px] font-black uppercase tracking-widest leading-tight text-center ${short === 0 ? 'text-[#4a7a2e]' : 'text-[#a83020]'}`;
-            note.innerText = short === 0
-                ? `✓ ${total.toLocaleString()} of ${culled.toLocaleString()}`
-                : short > 0
-                    ? `${total.toLocaleString()} of ${culled.toLocaleString()} — ${short.toLocaleString()} still to date`
-                    : `${total.toLocaleString()} of ${culled.toLocaleString()} — ${Math.abs(short).toLocaleString()} too many`;
+        /* Just the total under the quantities. Redrawn on every keystroke;
+           the boxes are not, which is what keeping the caret in place
+           depends on. */
+        function syncCullSessionTotal(idx) {
+            const el = document.getElementById(`t6-row-${idx}-sessions-total`);
+            if (!el) return;
+            const ss = t6Sessions(idx);
+            const total = t6SessionTotal(idx);
+            const all = ss.every(r => Number(r.qty) > 0);
+            el.innerHTML = `<span class="text-[8px] font-black text-[#8a7a68] uppercase tracking-widest block leading-none mb-0.5">Total</span>` +
+                           `<span class="tabular-nums">${total.toLocaleString()}</span>` +
+                           (all ? '' : `<span class="block text-[8px] font-black text-[#a83020] uppercase tracking-widest leading-none mt-0.5">Fill every day</span>`);
         }
 
-        function renderCullSessions(idx, focusLast) {
-            const host = document.getElementById(`t6-row-${idx}-sessions`);
-            if (!host) return;
-            const ss = t6Sessions(idx);
-            const addBtn = document.getElementById(`t6-row-${idx}-add-session`);
-            if (addBtn) addBtn.classList.toggle('hidden', ss.length >= 2);
-            if (ss.length < 2) { host.innerHTML = ''; return; }
+        /* ONE DAY PER LINE, and the day's quantity beside it.
 
-            /* A part gets two lines, not one. Three boxes abreast in a column
-               sized for a date left the date about eighty pixels wide, which
-               shows "06/07" and no year and cannot be typed into. The date
-               has the width of the column to itself and the quantity sits
-               under it. */
-            host.innerHTML = `
-                <div class="mt-1 space-y-1.5">
-                    ${ss.map((r, i) => `
-                        <div class="flex flex-col gap-0.5 ${i ? 'pt-1.5 border-t border-[#efe6d6]' : ''}">
-                            <input type="date" id="t6-s-${idx}-${i}-d" value="${r.date || ''}"
-                                onchange="updateCullSession(${idx}, ${i}, 'date', this.value)"
-                                class="input-style t6-cull-part-date !text-[10px] !py-1 !px-1.5 !rounded-lg !text-left w-full"
-                                title="Date this part of the plot was culled">
-                            <div class="flex items-center gap-1">
-                                <input type="number" min="0" id="t6-s-${idx}-${i}-q" value="${r.qty === '' ? '' : r.qty}"
-                                    oninput="updateCullSession(${idx}, ${i}, 'qty', this.value)"
-                                    placeholder="Qty"
-                                    class="input-style t6-cull-part-qty !text-[10px] !py-1 !px-1.5 !rounded-lg !text-center flex-1 min-w-0"
-                                    title="How many came out on that day">
-                                ${i === 0 ? '<span class="w-5 shrink-0"></span>'
-                                          : `<button type="button" onclick="removeCullSession(${idx}, ${i})"
-                                                class="w-5 h-5 shrink-0 rounded border border-[#f8d7da] bg-white text-[#a83020] text-[10px] font-black flex items-center justify-center hover:bg-[#fff5f5]"
-                                                title="Remove this date">✕</button>`}
-                            </div>
-                        </div>`).join('')}
+           The dates live in the Culled Date column and the quantities in
+           the Drone Map column — the column that has always been where a
+           quantity is typed. They used to be stacked together under the
+           dates, which left one column reading as a list of both and the
+           other as a list of nothing, and repeated the row's own date as
+           the first line of its own list.
+
+           Day one IS the row's two boxes. So only days two and up are
+           drawn here, under each of them, and the totals line goes beneath
+           the quantities where the figure it sums is. */
+        function renderCullSessions(idx, focusLast) {
+            const dateHost = document.getElementById(`t6-row-${idx}-sessions`);
+            const mapHost  = document.getElementById(`t6-row-${idx}-mapparts`);
+            const addBtn   = document.getElementById(`t6-row-${idx}-add-session`);
+            if (!dateHost || !mapHost) return;
+            const ss = t6Sessions(idx);
+            if (addBtn) addBtn.classList.toggle('hidden', ss.length >= 2);
+            if (ss.length < 2) { dateHost.innerHTML = ''; mapHost.innerHTML = ''; return; }
+
+            const extra = ss.slice(1);
+            dateHost.innerHTML = `
+                <div class="mt-1 flex flex-col items-center gap-1">
+                    ${extra.map((r, n) => `
+                        <input type="date" id="t6-s-${idx}-${n + 1}-d" value="${r.date || ''}"
+                            onchange="updateCullSession(${idx}, ${n + 1}, 'date', this.value)"
+                            class="input-style t6-cull-part-date !text-[11px] !py-1 !px-1.5 !rounded-lg !text-left w-full max-w-[112px]"
+                            title="Another day this plot was culled">`).join('')}
                     <button type="button" onclick="addCullSession(${idx})"
                         class="text-[9px] font-black text-[#3a7ab4] uppercase tracking-widest hover:underline bg-transparent border-0 p-0 cursor-pointer">＋ Add date</button>
-                    <div id="t6-row-${idx}-sessions-note"></div>
                 </div>`;
-            syncCullSessionNote(idx);
-            // Straight into the day just added, so a second date is typed
-            // rather than hunted for.
+
+            mapHost.innerHTML = `
+                <div class="mt-1 flex flex-col items-center gap-1">
+                    ${extra.map((r, n) => `
+                        <div class="flex items-center justify-center gap-1.5">
+                            <input type="number" min="0" id="t6-s-${idx}-${n + 1}-q" value="${r.qty === '' ? '' : r.qty}"
+                                oninput="updateCullSession(${idx}, ${n + 1}, 'qty', this.value)"
+                                placeholder="Qty"
+                                class="input-style t6-cull-part-qty !text-[11px] !py-1 !px-1 !rounded-lg !text-center w-full max-w-[48px]"
+                                title="How many came out on that day">
+                            <button type="button" onclick="removeCullSession(${idx}, ${n + 1})"
+                                class="shrink-0 w-7 h-7 rounded-lg border border-[#f8d7da] bg-white text-[#a83020] text-xs font-black flex items-center justify-center hover:bg-[#fff5f5]"
+                                title="Remove this day">✕</button>
+                        </div>`).join('')}
+                    <!-- Bigger than the boxes above it and in the plot's own
+                         colour, so the figure that MATTERS on this column
+                         reads as the answer rather than as another entry. -->
+                    <div id="t6-row-${idx}-sessions-total"
+                         class="mt-0.5 pt-1 border-t border-[#e8dcc8] w-full text-center text-[15px] font-black text-[#a83020] leading-none"></div>
+                </div>`;
+            syncCullSessionTotal(idx);
             if (focusLast) {
                 const el = document.getElementById(`t6-s-${idx}-${ss.length - 1}-d`);
                 if (el) el.focus();
@@ -10922,7 +10961,7 @@ Thank you.`;
                    whether there is one. It is evidence, not the work. A plot
                    sold out has neither a map nor a date to give, and is
                    finished by having nothing left to cull. */
-                const mapQtyVal   = row.querySelector('.t6-map-qty')?.value ?? '';
+                const mapQtyVal   = t6MapQtyFor(idx) === null ? '' : String(t6MapQtyFor(idx));
                 const cullDateVal = row.querySelector('.t6-cull-date')?.value ?? '';
                 const soldOutRow  = !!(p && p.isTransferRow) &&
                                     (parseInt(row.querySelector('.t6-balance')?.value) || 0) === 0;
@@ -11282,8 +11321,17 @@ Thank you.`;
                     // batch stays in HQ's Amendment Needed list until one is
                     // written. Blocking the save used to mean a day's counting
                     // sat unsaved because of a figure nobody could resolve yet.
-                    const mapQtyRaw = (row.querySelector('.t6-map-qty')?.value ?? '').trim();
-                    const mapQty    = mapQtyRaw !== '' ? (parseInt(mapQtyRaw) || 0) : null;
+                    /* Off the row's OWN id, not its place in the list —
+                       main rows and "-R" rows render into two containers, so
+                       document order matching t6_plotData order is a
+                       coincidence, not a guarantee. */
+                    const rowIdx = parseInt(String(row.id).replace('t6-row-', ''), 10);
+                    /* The drone-map figure, which for a plot culled over
+                       several days is the days added up. Saved as one
+                       MapQty, the way every reader of this remark already
+                       expects — the days themselves go in CullSessions
+                       beside it. */
+                    const mapQty    = t6MapQtyFor(rowIdx);
                     let mismatchNote = '';
                     if (mapQty !== null && mapQty !== culled) {
                         const note = t6MismatchNote(i);
@@ -11302,11 +11350,6 @@ Thank you.`;
                        more than one. CullDate stays exactly where it was — the
                        first of them — so everything that reads this remark for
                        a date goes on finding one. */
-                    /* Off the row's OWN id, not its place in the list —
-                       main rows and "-R" rows render into two containers, so
-                       document order matching t6_plotData order is a
-                       coincidence, not a guarantee. */
-                    const rowIdx = parseInt(String(row.id).replace('t6-row-', ''), 10);
                     const sessions = t6Sessions(rowIdx).filter(r => r.date || r.qty !== '');
                     const cullSessionsPart = sessions.length > 1
                         ? ` CullSessions:${sessions.map(r => `${r.date || ''}x${Number(r.qty) || 0}`).join(';')}`
