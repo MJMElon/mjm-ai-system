@@ -10963,8 +10963,26 @@ Thank you.`;
                    finished by having nothing left to cull. */
                 const mapQtyVal   = t6MapQtyFor(idx) === null ? '' : String(t6MapQtyFor(idx));
                 const cullDateVal = row.querySelector('.t6-cull-date')?.value ?? '';
-                const soldOutRow  = !!(p && p.isTransferRow) &&
-                                    (parseInt(row.querySelector('.t6-balance')?.value) || 0) === 0;
+                /* NOTHING TO CULL IS FINISHED, on any row.
+
+                   A plot with nothing standing in it has no map to fly and
+                   no cull to date — which is why both cells show a dash
+                   rather than a box. The Done count did not know that
+                   unless the plot was a "-R" one, so a MAIN plot whose
+                   seedlings were all sold could never be finished: batch
+                   237 read 6 of 7 with every plot on it done, held there
+                   by U17, sold out to the last seedling.
+
+                   Same test as the dashes — 3rd Culled at nought. The old
+                   "-R" test stays beside it rather than being replaced by
+                   it: a transfer row with nothing left is finished whether
+                   or not part of it was culled, and taking that away would
+                   move batches OUT of Completed to fix a count. */
+                const culledNow   = parseInt(row.querySelector('.t6-culled-input')?.value, 10);
+                const nothingToCull = Number.isFinite(culledNow) && culledNow === 0;
+                const soldOutRow  = nothingToCull ||
+                                    (!!(p && p.isTransferRow) &&
+                                     (parseInt(row.querySelector('.t6-balance')?.value) || 0) === 0);
                 const mapDone     = soldOutRow || mapQtyVal !== '';
                 /* A plot culled over several days is dated when EVERY day is
                    dated and they add up to what was culled. Half a split is
