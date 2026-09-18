@@ -10495,13 +10495,17 @@ Thank you.`;
         }
 
         function onT6CullDateChange(idx) {
-            // The first part's date IS the row's date box — one field, not two
-            // saying different things.
+            /* The first part's date IS the row's date box — one field, not two
+               saying different things. Written straight into the part and into
+               the part's own box; redrawing the list from here would take the
+               caret out of the field being typed in. */
             const ss = t6Sessions(idx);
             if (!ss.length) return;
             const el = document.querySelector(`#t6-row-${idx} .t6-cull-date`);
             ss[0].date = el ? el.value : '';
-            renderCullSessions(idx);
+            const partEl = document.getElementById(`t6-s-${idx}-0-d`);
+            if (partEl) partEl.value = ss[0].date;
+            syncCullSessionNote(idx);
         }
 
         function addCullSession(idx) {
@@ -10516,7 +10520,7 @@ Thank you.`;
             }
             ss.push({ date: '', qty: '' });
             t6_cullSessions[idx] = ss;
-            renderCullSessions(idx);
+            renderCullSessions(idx, true);
             calcT6();
         }
 
@@ -10535,6 +10539,18 @@ Thank you.`;
             calcT6();
         }
 
+        /* KEYING A PART CHANGES THE FIGURES, NOT THE BOXES.
+
+           This used to redraw the whole list on every keystroke and put the
+           caret back where it found it. On a number box that meant typing 588
+           came out 885 — each digit landing in front of the last — and on a
+           date box the year sent the cursor back to the day segment, so the
+           field could not be filled at all.
+
+           Nothing structural happens while somebody types: the part is
+           already on screen, so only what it ADDS UP TO needs redrawing.
+           Adding and removing a part still rebuilds the list, which is the
+           one time it has to. */
         function updateCullSession(idx, i, field, value) {
             const ss = t6Sessions(idx);
             if (!ss[i]) return;
@@ -10543,11 +10559,27 @@ Thank you.`;
                 const el = document.querySelector(`#t6-row-${idx} .t6-cull-date`);
                 if (el) el.value = ss[0].date || '';
             }
-            renderCullSessions(idx, true);
+            syncCullSessionNote(idx);
             calcT6();
         }
 
-        function renderCullSessions(idx, keepFocus) {
+        /* Just the line under the parts: what they come to, and how far that
+           is from what was culled. */
+        function syncCullSessionNote(idx) {
+            const note = document.getElementById(`t6-row-${idx}-sessions-note`);
+            if (!note) return;
+            const culled = t6RowCulled(idx);
+            const total  = t6SessionTotal(idx);
+            const short  = culled - total;
+            note.className = `text-[9px] font-black uppercase tracking-widest leading-tight text-center ${short === 0 ? 'text-[#4a7a2e]' : 'text-[#a83020]'}`;
+            note.innerText = short === 0
+                ? `✓ ${total.toLocaleString()} of ${culled.toLocaleString()}`
+                : short > 0
+                    ? `${total.toLocaleString()} of ${culled.toLocaleString()} — ${short.toLocaleString()} still to date`
+                    : `${total.toLocaleString()} of ${culled.toLocaleString()} — ${Math.abs(short).toLocaleString()} too many`;
+        }
+
+        function renderCullSessions(idx, focusLast) {
             const host = document.getElementById(`t6-row-${idx}-sessions`);
             if (!host) return;
             const ss = t6Sessions(idx);
@@ -10555,40 +10587,42 @@ Thank you.`;
             if (addBtn) addBtn.classList.toggle('hidden', ss.length >= 2);
             if (ss.length < 2) { host.innerHTML = ''; return; }
 
-            const culled = t6RowCulled(idx);
-            const total  = t6SessionTotal(idx);
-            const short  = culled - total;
-            const active = keepFocus && document.activeElement ? document.activeElement.id : '';
-
+            /* A part gets two lines, not one. Three boxes abreast in a column
+               sized for a date left the date about eighty pixels wide, which
+               shows "06/07" and no year and cannot be typed into. The date
+               has the width of the column to itself and the quantity sits
+               under it. */
             host.innerHTML = `
-                <div class="mt-1 space-y-1">
+                <div class="mt-1 space-y-1.5">
                     ${ss.map((r, i) => `
-                        <div class="flex items-center gap-1">
+                        <div class="flex flex-col gap-0.5 ${i ? 'pt-1.5 border-t border-[#efe6d6]' : ''}">
                             <input type="date" id="t6-s-${idx}-${i}-d" value="${r.date || ''}"
                                 onchange="updateCullSession(${idx}, ${i}, 'date', this.value)"
-                                class="input-style !text-[10px] !py-1 !px-1.5 !rounded-lg !text-left flex-1 min-w-0 max-w-[112px]"
+                                class="input-style t6-cull-part-date !text-[10px] !py-1 !px-1.5 !rounded-lg !text-left w-full"
                                 title="Date this part of the plot was culled">
-                            <input type="number" min="0" id="t6-s-${idx}-${i}-q" value="${r.qty === '' ? '' : r.qty}"
-                                oninput="updateCullSession(${idx}, ${i}, 'qty', this.value)"
-                                placeholder="Qty"
-                                class="input-style !text-[10px] !py-1 !px-1 !rounded-lg !text-center w-[52px] shrink-0"
-                                title="How many came out on that day">
-                            ${i === 0 ? '<span class="w-5 shrink-0"></span>'
-                                      : `<button type="button" onclick="removeCullSession(${idx}, ${i})"
-                                            class="w-5 h-5 shrink-0 rounded border border-[#f8d7da] bg-white text-[#a83020] text-[10px] font-black flex items-center justify-center hover:bg-[#fff5f5]"
-                                            title="Remove this date">✕</button>`}
+                            <div class="flex items-center gap-1">
+                                <input type="number" min="0" id="t6-s-${idx}-${i}-q" value="${r.qty === '' ? '' : r.qty}"
+                                    oninput="updateCullSession(${idx}, ${i}, 'qty', this.value)"
+                                    placeholder="Qty"
+                                    class="input-style t6-cull-part-qty !text-[10px] !py-1 !px-1.5 !rounded-lg !text-center flex-1 min-w-0"
+                                    title="How many came out on that day">
+                                ${i === 0 ? '<span class="w-5 shrink-0"></span>'
+                                          : `<button type="button" onclick="removeCullSession(${idx}, ${i})"
+                                                class="w-5 h-5 shrink-0 rounded border border-[#f8d7da] bg-white text-[#a83020] text-[10px] font-black flex items-center justify-center hover:bg-[#fff5f5]"
+                                                title="Remove this date">✕</button>`}
+                            </div>
                         </div>`).join('')}
                     <button type="button" onclick="addCullSession(${idx})"
                         class="text-[9px] font-black text-[#3a7ab4] uppercase tracking-widest hover:underline bg-transparent border-0 p-0 cursor-pointer">＋ Add date</button>
-                    <div class="text-[9px] font-black uppercase tracking-widest leading-tight ${short === 0 ? 'text-[#4a7a2e]' : 'text-[#a83020]'}">
-                        ${short === 0
-                            ? `✓ ${total.toLocaleString()} of ${culled.toLocaleString()}`
-                            : short > 0
-                                ? `${total.toLocaleString()} of ${culled.toLocaleString()} — ${short.toLocaleString()} still to date`
-                                : `${total.toLocaleString()} of ${culled.toLocaleString()} — ${Math.abs(short).toLocaleString()} too many`}
-                    </div>
+                    <div id="t6-row-${idx}-sessions-note"></div>
                 </div>`;
-            if (active) { const el = document.getElementById(active); if (el) { el.focus(); try { el.setSelectionRange(el.value.length, el.value.length); } catch (_) {} } }
+            syncCullSessionNote(idx);
+            // Straight into the day just added, so a second date is typed
+            // rather than hunted for.
+            if (focusLast) {
+                const el = document.getElementById(`t6-s-${idx}-${ss.length - 1}-d`);
+                if (el) el.focus();
+            }
         }
 
         function goToT6Plot(idx) {
