@@ -1411,9 +1411,16 @@
                                             </label>
                                             <label class="flex flex-col gap-1 flex-1 min-w-[7rem] md:flex-none">
                                                 <span class="text-[9px] font-black text-[#0891b2] uppercase tracking-widest">Quantity</span>
+                                                <!-- Saved when the keying STOPS, not on every digit
+                                                     and every press of the spinner. onchange on a number
+                                                     box fires per step, so nudging 582 to 588 wrote six
+                                                     rows and threw six toasts up the screen. The figures
+                                                     on the tab still follow every keystroke; only the
+                                                     save waits. -->
                                                 <input type="number" id="t3-dtone-nursery-qty" min="0" placeholder="0"
                                                     class="input-style !text-[#0891b2] font-black text-lg w-full md:w-48"
-                                                    oninput="calcTransplanting(); calcCulling();" onchange="saveT3DtoneQty()">
+                                                    oninput="calcTransplanting(); calcCulling(); queueT3DtoneQty();"
+                                                    onblur="saveT3DtoneQty()">
                                             </label>
                                         </div>
                                     </div>
@@ -3891,6 +3898,10 @@
                     // counting now would put, and which they can change.
                     dateEl.value = new Date().toISOString().split('T')[0];
                 }
+                /* What is on screen IS what is stored, so tabbing through the
+                   box writes nothing. Only a figure somebody actually changed
+                   is a figure worth saving. */
+                _dtoneSaved = _dtoneSignature();
             } catch (e) { console.warn('Could not load D-Tone nursery qty:', e.message); }
         }
 
@@ -3899,13 +3910,41 @@
             return raw !== '' ? (parseInt(raw.replace(/,/g, ''), 10) || 0) : 0;
         }
 
+        /* ONE SAVE PER FIGURE, not one per digit.
+
+           This box used to save on `change`, which a number input fires on
+           every press of its spinner and every arrow key — so moving 582 to
+           588 wrote six rows and stacked six toasts up the screen. The save
+           now waits until the keying stops (or the box is left), and does
+           nothing at all when the figure and the date are what was last
+           written. The numbers on the tab still follow every keystroke;
+           only the trip to the database waits. */
+        let _dtoneTimer = null;
+        let _dtoneSaved = null;   // "<batch>|<qty>|<date>" as last written or loaded
+
+        function _dtoneSignature() {
+            const batch = (document.getElementById('f-batchno')?.value || '').trim();
+            const raw = (document.getElementById('t3-dtone-nursery-qty')?.value ?? '').trim();
+            const date = document.getElementById('t3-dtone-nursery-date')?.value || '';
+            return batch + '|' + raw + '|' + date;
+        }
+
+        function queueT3DtoneQty() {
+            clearTimeout(_dtoneTimer);
+            _dtoneTimer = setTimeout(() => saveT3DtoneQty(), 1200);
+        }
+
         // Persist the admin-keyed "Double Tone Quantity in Nursery" for THIS
         // batch (one DTone_Nursery_Qty row per batch, updated in place by id).
         async function saveT3DtoneQty() {
+            clearTimeout(_dtoneTimer);
             const batch = document.getElementById('f-batchno').value.trim();
             if (!batch) return;
             const raw = (document.getElementById('t3-dtone-nursery-qty')?.value ?? '').trim();
             if (raw === '') return; // blank = not keyed; leave any stored value untouched
+            // Already written, exactly as it stands: leaving the box, or coming
+            // back to the tab, is not a new figure.
+            if (_dtoneSignature() === _dtoneSaved) return;
             const qty = Math.max(0, parseInt(raw) || 0);
             /* The date beside it. Blank means the box was cleared, and today
                is the honest answer for a figure being keyed right now — but
@@ -3939,7 +3978,10 @@
                     ({ error } = await safeInsertLogs([payload]));
                 }
                 if (error) showToast('D-Tone qty not saved: ' + error.message, 'error');
-                else showToast('🎯 D-Tone nursery quantity saved.', 'success');
+                else {
+                    _dtoneSaved = _dtoneSignature();
+                    showToast('🎯 D-Tone nursery quantity saved.', 'success');
+                }
             } catch (e) {
                 showToast('D-Tone qty not saved: ' + (e.message || e), 'error');
             }
