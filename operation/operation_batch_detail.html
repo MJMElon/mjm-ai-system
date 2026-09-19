@@ -7576,7 +7576,16 @@ Thank you.`;
                 setEditMetaUI(1, ledgerPayload.last_edited_at || new Date().toISOString(), ledgerPayload.last_edited_by || window.currentUserEmail);
                 showToast('Seeds In record saved successfully.', 'success');
                 saveBtn.innerText = 'Save'; saveBtn.disabled = false;
-                setTimeout(() => switchTab(8), 600);
+                /* STAY WHERE THE PERSON IS. Saving used to walk them onto
+                   Seed Audit half a second later — so a figure corrected and
+                   saved took them off the report they were correcting, and
+                   going back meant finding the tab again. Saving is not a
+                   request to go somewhere else; the toast says it worked and
+                   the tab bar is right there for when they mean it.
+
+                   Seed Audit still needs the new figures, so it is brought
+                   up to date without being opened. */
+                try { syncTab8(); } catch (e) { console.warn(e); }
             } catch (err) { saveBtn.innerText = 'Save'; saveBtn.disabled = false; }
         });
 
