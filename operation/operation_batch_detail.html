@@ -621,11 +621,30 @@
                                         <label class="label-style">Calculated FOC Qty</label>
                                         <div class="input-style bg-[#f8f4ec] text-[#8a7a68]" id="display-foc-qty" data-raw="0">0</div>
                                     </div>
+                                    <!-- SEEDS MADE GOOD FROM AN EARLIER BATCH.
+
+                                         A supplier who short-delivered once sends the
+                                         missing seeds with the NEXT batch. They are not
+                                         FOC — nobody gave them for nothing, they were
+                                         already paid for — and folding them into the FOC
+                                         percentage is how batch 267 came to read 9.06%
+                                         when the agreement is 7%: 206 replacement seeds
+                                         dressed up as a percentage nobody can check
+                                         against the contract.
+
+                                         So they are counted where they belong: their own
+                                         box, their own figure, inside the total. -->
+                                    <div>
+                                        <label class="label-style !text-[#c07820]">Replacement Seeds</label>
+                                        <input type="text" inputmode="numeric" id="f-replacement-qty" class="input-style font-black text-[#1a150d]" placeholder="0"
+                                            oninput="formatNumericInput(this); calculateTotalSeeds(); updateT1Completion()">
+                                        <div class="text-[9px] font-bold text-[#8a7a68] mt-1 leading-tight">Seeds the supplier owed from an earlier batch and sent with this one. Not FOC — leave the FOC percent at what was agreed.</div>
+                                    </div>
                                 </div>
 
                                 <div class="pt-6 mt-2 border-t border-[#e8dcc8] flex flex-col md:flex-row items-center justify-between gap-6">
                                     <div class="flex items-center gap-4">
-                                        <label class="label-style !text-[#3d2610] !text-xs !mb-0">Total Seeds In (D/O + FOC Qty):</label>
+                                        <label class="label-style !text-[#3d2610] !text-xs !mb-0">Total Seeds In (D/O + FOC + Replacement):</label>
                                         <div class="text-2xl font-black text-[#4a7a2e]" id="display-total-qty" data-raw="0">0</div>
                                     </div>
                                     <button type="submit" id="save-btn" class="w-full md:w-auto btn-earth px-12">Save</button>
@@ -666,7 +685,7 @@
                                  frozen header now, on every tab. -->
                             <div class="p-5 bg-white border border-[#e8dcc8] rounded-xl mb-6 shadow-sm">
                                 <span id="t8-breed" class="hidden">—</span>
-                                <label class="label-style">Total Seed Expected (D/O + FOC)</label>
+                                <label class="label-style">Total Seed Expected (D/O + FOC + Replacement)</label>
                                 <div class="text-base font-black text-[#c07820]" id="t8-expected-qty">0</div>
                             </div>
 
@@ -676,7 +695,7 @@
                             <div class="bg-white rounded-2xl border border-[#e8dcc8] shadow-sm mb-6 overflow-hidden">
                                 <div class="flex items-center justify-between px-6 py-4 border-b border-[#e8dcc8] bg-[#fdfaf4]">
                                     <div class="flex items-center gap-3">
-                                        <h4 class="font-black text-[#3d2610] uppercase tracking-widest text-sm">Receive (D/O + FOC) &amp; Audit Analysis</h4>
+                                        <h4 class="font-black text-[#3d2610] uppercase tracking-widest text-sm">Receive (D/O + FOC + Replacement) &amp; Audit Analysis</h4>
                                     </div>
                                     <div id="t8-followup-warning" class="hidden px-3 py-1 bg-[#fff5f5] border border-[#f8d7da] text-[#a83020] rounded-lg text-[9px] font-black uppercase tracking-widest animate-pulse">⚠️ Shortage: Email supplier</div>
                                 </div>
@@ -825,7 +844,7 @@
                                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-6 py-4 border-b border-[#f8d7da] bg-[#fff5f5]">
                                     <div>
                                         <h4 class="font-black text-[#a83020] uppercase tracking-widest text-sm">⚠️ Shortage Detected — Notify Supplier</h4>
-                                        <p class="text-[10px] font-bold text-[#a83020] uppercase tracking-widest mt-1">Audited quantity is below the supplier packing list (D/O + FOC). Draft an email — or log any other action you took (phone, WhatsApp, in-person, etc.).</p>
+                                        <p class="text-[10px] font-bold text-[#a83020] uppercase tracking-widest mt-1">Audited quantity is below the supplier packing list (D/O + FOC + replacement). Draft an email — or log any other action you took (phone, WhatsApp, in-person, etc.).</p>
                                     </div>
                                     <div class="flex flex-col sm:flex-row gap-2 self-start md:self-auto">
                                         <button type="button" id="t8-email-btn" onclick="draftSupplierEmail()" class="px-5 py-3 bg-[#a83020] text-white text-[11px] font-black uppercase tracking-widest rounded-lg hover:bg-[#7f1d1d] transition-colors shadow flex items-center gap-2 whitespace-nowrap">
@@ -913,7 +932,7 @@
                                  frozen header now, on every tab. -->
                             <div class="p-5 bg-white border border-[#e8dcc8] rounded-xl mb-6 shadow-sm">
                                 <span id="t2-breed" class="hidden">—</span>
-                                <label class="label-style">Total Seeds Expected (D/O + FOC)</label>
+                                <label class="label-style">Total Seeds Expected (D/O + FOC + Replacement)</label>
                                 <div class="text-base font-black text-[#c07820]" id="t2-expected-qty">0</div>
                             </div>
 
@@ -3276,6 +3295,8 @@
                             }
                             const doMatch = data.remark.match(/D\/O:\s*([^.]+)/); if(doMatch) document.getElementById('f-dono').value = doMatch[1].trim();
                             const focMatch = data.remark.match(/Incl\.\s*([\d.]+)%\s*FOC/); if(focMatch) document.getElementById('f-foc-percent').value = focMatch[1].trim();
+                            const repMatch = data.remark.match(/Replacement:\s*(\d+)/);
+                            setNumericInput('f-replacement-qty', repMatch ? repMatch[1] : '');
                             const doQtyMatch = data.remark.match(/DO_Qty:\s*(\d+)/);
                             if(doQtyMatch) { setNumericInput('f-do-qty', doQtyMatch[1]); }
                             else {
@@ -7142,7 +7163,7 @@ Thank you.`;
             doc.text('Supplier:  ', margin, y); doc.setFont('times', 'bold'); doc.text(supplier, margin + 60, y);
             doc.setFont('times', 'normal'); doc.text('Seed Breed Variety:  ', margin + 280, y); doc.setFont('times', 'bold'); doc.text(breed, margin + 380, y);
             y += 14;
-            doc.setFont('times', 'normal'); doc.text('Total Seed Expected (D/O + FOC):  ', margin, y);
+            doc.setFont('times', 'normal'); doc.text('Total Seed Expected (D/O + FOC + Repl.):  ', margin, y);
             doc.setFont('times', 'bold'); doc.text(expectedRaw.toLocaleString() + ' seeds', margin + 200, y);
             y += 8;
 
@@ -7212,7 +7233,7 @@ Thank you.`;
             const shortagePct = baseline > 0 ? (shortage / baseline) * 100 : 0;
             const auditPct = expectedRaw > 0 ? (totalAudited / expectedRaw) * 100 : 0;
             doc.setFont('times', 'bold'); doc.setFontSize(9); setText(OLIVE);
-            doc.text('RECEIVE (D/O + FOC) & AUDIT ANALYSIS', margin, y); y += 14;
+            doc.text('RECEIVE (D/O + FOC + REPLACEMENT) & AUDIT ANALYSIS', margin, y); y += 14;
             doc.setFont('times', 'normal'); doc.setFontSize(10); setText(INK);
             doc.text('Seeds Audited (vs Target):  ', margin, y);
             doc.setFont('times', 'bold'); doc.text(auditPct.toFixed(2) + '%', margin + 160, y);
@@ -7313,9 +7334,14 @@ Thank you.`;
         function calculateTotalSeeds() {
             const doQty = readNumericInput('f-do-qty');
             const focPercent = parseFloat(document.getElementById('f-foc-percent').value) || 0;
+            /* Seeds the supplier owed from an earlier batch. Part of the
+               total — they are here and they will be planted — but NOT part
+               of the FOC percentage, which is an agreement about this
+               delivery and has to stay comparable to the contract. */
+            const replacementQty = readNumericInput('f-replacement-qty');
             if (doQty > 0) {
                 const focQty = Math.round(doQty * (focPercent / 100));
-                const totalQty = doQty + focQty;
+                const totalQty = doQty + focQty + replacementQty;
                 document.getElementById('display-foc-qty').innerText = focQty.toLocaleString();
                 document.getElementById('display-total-qty').innerText = totalQty.toLocaleString();
                 document.getElementById('display-total-qty').dataset.raw = totalQty;
@@ -7492,8 +7518,8 @@ Thank you.`;
             if (isEditing && batchData && batchData.batch_name) {
                 document.getElementById('f-batchno').value = String(batchData.batch_name);
             }
-            const dateReceived = document.getElementById('f-datereceived').value; const batch = document.getElementById('f-batchno').value.trim(); const breed = document.getElementById('f-brand').value; const supplier = document.getElementById('f-supplier').value; const mpob = document.getElementById('f-mpob').value; const dono = document.getElementById('f-dono').value; const focPercent = parseFloat(document.getElementById('f-foc-percent').value) || 0; const totalQtyRaw = document.getElementById('display-total-qty').dataset.raw || 0; const doQty = readNumericInput('f-do-qty');
-            let remarkStr = `Seeds received.`; if (supplier) remarkStr += ` Supplier: ${supplier}.`; if (mpob) remarkStr += ` MPOB: ${mpob}.`; if (dono) remarkStr += ` D/O: ${dono}.`; remarkStr += ` DO_Qty: ${doQty}.`; if (focPercent > 0) remarkStr += ` Incl. ${focPercent}% FOC.`;
+            const dateReceived = document.getElementById('f-datereceived').value; const batch = document.getElementById('f-batchno').value.trim(); const breed = document.getElementById('f-brand').value; const supplier = document.getElementById('f-supplier').value; const mpob = document.getElementById('f-mpob').value; const dono = document.getElementById('f-dono').value; const focPercent = parseFloat(document.getElementById('f-foc-percent').value) || 0; const totalQtyRaw = document.getElementById('display-total-qty').dataset.raw || 0; const doQty = readNumericInput('f-do-qty'); const replacementQty = readNumericInput('f-replacement-qty');
+            let remarkStr = `Seeds received.`; if (supplier) remarkStr += ` Supplier: ${supplier}.`; if (mpob) remarkStr += ` MPOB: ${mpob}.`; if (dono) remarkStr += ` D/O: ${dono}.`; remarkStr += ` DO_Qty: ${doQty}.`; if (focPercent > 0) remarkStr += ` Incl. ${focPercent}% FOC.`; if (replacementQty > 0) remarkStr += ` Replacement: ${replacementQty}.`;
             const ledgerPayload = withEditMeta({ transaction_type: 'Seeds_Received', batch_name: batch, breed_name: breed, quantity_change: parseInt(totalQtyRaw), plot_name: 'Pre-Nursery', transaction_date: dateReceived, remark: remarkStr });
             try {
                 if(!isEditing) {
@@ -7666,17 +7692,41 @@ Thank you.`;
                 }
             }
 
+            /* WHAT IS ON SCREEN SURVIVES THE REBUILD.
+
+               This tab rebuilds its rows from the database every time it is
+               opened, and every switch to another tab and back opened it
+               again — so a cull date keyed and not yet saved was gone by the
+               time you came back to it. Whatever a person has typed is the
+               truest thing about that row, and the only thing that should
+               take it away is the ✕.
+
+               So the rows are read BEFORE they are thrown away, and a box
+               with something in it keeps what it has. An empty box falls
+               back to the database, which is what makes the first render
+               show the saved figures at all. */
+            const typedCull = {};
+            document.querySelectorAll('#cull-rows-container .cull-row').forEach(r => {
+                const name = r.querySelector('.cull-tray-name')?.value || '';
+                if (!name) return;
+                typedCull[name] = {
+                    date: r.querySelector('.cull-date')?.value || '',
+                    qty:  r.querySelector('.cull-qty')?.value ?? ''
+                };
+            });
+
             // Clear and rebuild cull rows from the tray list
             document.getElementById('cull-rows-container').innerHTML = '';
             cullRowCount = 0;
             if (cullTrayList.length > 0) {
                 cullTrayList.forEach(tray => {
                     const saved = savedCullMap[tray.name];
+                    const keyed = typedCull[tray.name];
                     addCullRow(
                         tray.name,
                         tray.initialQty || tray.currentQty || 0,
-                        saved ? saved.date : null,
-                        saved ? saved.qty : null
+                        (keyed && keyed.date) || (saved ? saved.date : null),
+                        (keyed && keyed.qty !== '') ? keyed.qty : (saved ? saved.qty : null)
                     );
                 });
             } else {
@@ -7972,6 +8022,22 @@ Thank you.`;
 
         async function syncTab5() {
             const batchId = document.getElementById('f-batchno').value.trim();
+            /* WHAT IS ON SCREEN SURVIVES THE REBUILD — see the same note in
+               syncTab4. This tab rebuilds its rows from the database every
+               time it is opened, and a Dead count or a culled date keyed and
+               not yet saved used to go with them. Read first, put back
+               after; the ✕ is the only thing that should take a figure
+               away. */
+            const typedT5 = {};
+            document.querySelectorAll('#t5-plot-rows .t5-plot-row').forEach((r, i) => {
+                const p = t5_plotData[i];
+                const key = p ? _t6PlotKey(p.plot) : '';
+                if (!key) return;
+                typedT5[key] = {
+                    dead: r.querySelector('.t5-dead')?.value ?? '',
+                    date: r.querySelector('.t5-cull-date')?.value || ''
+                };
+            });
             t5_plotData = [];
 
             // Build saved 2nd_Culling map keyed by (plot, destType) so the same
@@ -8044,6 +8110,7 @@ Thank you.`;
                     // so DB-loaded transplant rows kept appearing as two
                     // entries — e.g. U1 with 427 and 20 instead of 447.)
                     t5_plotData = _t5MergeByPlot(t5_plotData);
+                    _t5RestoreTyped(typedT5);
                     renderT5PlotRows();
                     return;
                 }
@@ -8063,8 +8130,22 @@ Thank you.`;
 
             // Same merge for the DOM-scrape fallback path.
             t5_plotData = _t5MergeByPlot(t5_plotData);
+            _t5RestoreTyped(typedT5);
 
             renderT5PlotRows();
+        }
+
+        /* A box with something in it keeps what it has; an empty one falls
+           back to the database, which is what makes the first render show
+           the saved figures at all. */
+        function _t5RestoreTyped(typed) {
+            if (!typed) return;
+            t5_plotData.forEach(p => {
+                const keyed = typed[_t6PlotKey(p.plot)];
+                if (!keyed) return;
+                if (keyed.dead !== '') p.savedDead = parseInt(keyed.dead, 10);
+                if (keyed.date)       p.savedCullDate = keyed.date;
+            });
         }
 
         // Group t5_plotData rows by plot_name, summing transplant qty and
