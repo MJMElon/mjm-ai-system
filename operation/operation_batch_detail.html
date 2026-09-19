@@ -122,6 +122,11 @@
         @media (min-width: 640px) {
             .t6-tr-cols { grid-template-columns: 1.1fr 1.1fr 0.8fr 40px; }
         }
+        /* What a half-keyed movement is still waiting for, on its own line
+           under the fields rather than squeezed into one of them. Spanned here
+           rather than with Tailwind's col-span-full, so it reads the same
+           whether or not that stylesheet has loaded. */
+        .t6-tr-cols > .t6-tr-todo { grid-column: 1 / -1; }
 
         /* NOTE — do not move the 3rd Culling row grid into this stylesheet.
            It was tried: one .t6-grid rule for the heading strips and both
@@ -8724,7 +8729,49 @@ Thank you.`;
 
         async function syncTab6() {
             const batchId = document.getElementById('f-batchno').value.trim();
+
+            /* WHAT WAS TYPED AND NOT YET SAVED, ACROSS A RE-SYNC.
+
+               switchTab() runs this loader EVERY time the 3rd Culling tab is
+               opened, and it rebuilds every row out of what is in the
+               database. So a drone-map count and a culled date keyed in, then
+               left to go and check something on Transplanting, came back blank
+               and the tab read 0 Done over figures somebody had plainly
+               entered. Same fault the 1st and 2nd Culling tabs had, same
+               answer: carry what was typed over the rebuild.
+
+               Only what somebody TYPED. Balance and 3rd Culled are worked out
+               from the plot's own figures on every render, so they come back
+               on their own. Keyed by PLOT, not by index — the array is rebuilt
+               and the indices with it. */
+            const typedT6 = {};
+            document.querySelectorAll('.t6-plot-row').forEach(row => {
+                const idx = parseInt(String(row.id).replace('t6-row-', ''), 10);
+                const p   = t6_plotData[idx];
+                if (!p) return;
+                const map  = String(row.querySelector('.t6-map-qty')?.value ?? '').trim();
+                const date = String(row.querySelector('.t6-cull-date')?.value ?? '').trim();
+                const ss   = t6Sessions(idx).filter(r => r && (r.date || r.qty !== ''));
+                if (!map && !date && ss.length < 2) return;
+                typedT6[`${_t6PlotKey(p.plot)}|${p.destType || 'main'}`] =
+                    { map, date, sessions: ss.map(r => ({ date: r.date, qty: r.qty })) };
+            });
+            /* Put it back on the rebuilt rows. Typed beats stored: the stored
+               figure is what the typed one is on its way to replacing. */
+            const restoreTypedT6 = () => {
+                t6_plotData.forEach(p => {
+                    const t = typedT6[`${_t6PlotKey(p.plot)}|${p.destType || 'main'}`];
+                    if (!t) return;
+                    if (t.map)  p.savedMapQty   = parseInt(t.map, 10) || 0;
+                    if (t.date) p.savedCullDate = t.date;
+                    if (t.sessions.length > 1) p.savedCullSessions = t.sessions;
+                });
+            };
+
             t6_plotData = [];
+            // A fresh load of the tab starts with every movement list shut —
+            // see t6RestoreTransferPanels for why the set is remembered at all.
+            _t6OpenTransfers = new Set();
 
             // Load saved 3rd_Culling map for pre-filling balance & culled.
             //
@@ -8788,11 +8835,23 @@ Thank you.`;
                         cullDate: cullDateMatch ? cullDateMatch[1] : null,
                         cullSessions
                     };
+                    /* Keyed by the plot the same way the transplants are
+                       merged — trimmed and upper-cased — and NOT by the raw
+                       name off the record.
+
+                       The rows are built from the Transplanted logs, so the
+                       lookup below asks for the plot as THAT record spells it.
+                       A plot keyed "U17" when it was transplanted and "u17 "
+                       when it was culled is one plot in the field and was two
+                       keys here: the culling record matched nothing, and the
+                       report came back with its drone-map count and its culled
+                       date empty over a batch somebody had saved. */
+                    const plotKey = _t6PlotKey(log.plot_name);
                     if (destMatch) {
-                        savedCull3Map[`${log.plot_name}|${destMatch[1]}`] = entry;
+                        savedCull3Map[`${plotKey}|${destMatch[1]}`] = entry;
                     } else {
-                        if (!legacyCull3Queue[log.plot_name]) legacyCull3Queue[log.plot_name] = [];
-                        legacyCull3Queue[log.plot_name].push(entry);
+                        if (!legacyCull3Queue[plotKey]) legacyCull3Queue[plotKey] = [];
+                        legacyCull3Queue[plotKey].push(entry);
                     }
                 });
             }
@@ -9028,9 +9087,9 @@ Thank you.`;
                             ? `${existing.transferFrom}, ${from}` : from;
                         return;
                     }
-                    let saved = savedCull3Map[`${v.plot}|main`];
+                    let saved = savedCull3Map[`${_t6PlotKey(v.plot)}|main`];
                     if (!saved) {
-                        const q = legacyCull3Queue[v.plot];
+                        const q = legacyCull3Queue[_t6PlotKey(v.plot)];
                         saved = (q && q.length) ? q.shift() : {};
                     }
                     t6_plotData.push({
@@ -9109,7 +9168,7 @@ Thank you.`;
                         let culled = null, balance = null, docUrl = null, docName = null, mapQty = null;
                         let mismatchNote = null, cullDate = null, cullSessions = [];
                         ['main', 'doubletone'].forEach(d => {   // premium excluded from this report
-                            const e = savedCull3Map[`${v.plot}|${d}`];
+                            const e = savedCull3Map[`${_t6PlotKey(v.plot)}|${d}`];
                             if (!e) return;
                             culled = (culled || 0) + (e.culled || 0);
                             if (balance == null) balance = e.balance;
@@ -9119,7 +9178,7 @@ Thank you.`;
                             if (!cullDate)       cullDate = e.cullDate || null;
                             if (!cullSessions.length && (e.cullSessions || []).length) cullSessions = e.cullSessions;
                         });
-                        const q = legacyCull3Queue[v.plot];
+                        const q = legacyCull3Queue[_t6PlotKey(v.plot)];
                         while (q && q.length) {
                             const e = q.shift();
                             culled = (culled || 0) + (e.culled || 0);
@@ -9148,6 +9207,7 @@ Thank you.`;
                         });
                     });
                     injectTransfers();
+                    restoreTypedT6();
                     renderT6PlotRows();
                     return;
                 }
@@ -9164,6 +9224,7 @@ Thank you.`;
                 }
             });
             injectTransfers();
+            restoreTypedT6();
             renderT6PlotRows();
         }
 
@@ -9619,6 +9680,9 @@ Thank you.`;
             // gets one, rather than naming a plot the list below cannot show.
             // Normally does nothing — injectTransfers has already built them.
             t6EnsureDestRows();
+            // Lists that were open stay open, and one holding a movement still
+            // being keyed is opened whether it was or not.
+            t6RestoreTransferPanels();
 
             /* Restore a plot that was culled over more than one day. Two or
                more parts is a split; one is the ordinary row it already
@@ -10118,15 +10182,15 @@ Thank you.`;
                 if (tot) {
                     let sent = 0;
                     host.querySelectorAll('.t6-transfer-rec').forEach(rec => {
-                        const to  = rec.querySelector('.t6-tr-plot')?.value || '';
-                        const qty = parseInt(rec.querySelector('.t6-tr-qty')?.value) || 0;
-                        if (to && qty > 0) sent += qty;
+                        if (!t6TransferRecComplete(rec)) return;
+                        sent += parseInt(rec.querySelector('.t6-tr-qty')?.value) || 0;
                     });
                     tot.innerText = sent ? t6Fmt(sent) : '—';
                 }
             });
             const empty = document.getElementById('t6-transferdata-empty');
             if (empty) empty.classList.toggle('hidden', total > 0);
+            t6PaintTransferRecs();
             syncT6TransferDests();
         }
 
@@ -10147,7 +10211,9 @@ Thank you.`;
                 const target = rec.querySelector('.t6-tr-plot')?.value || '';
                 const qty    = parseInt(rec.querySelector('.t6-tr-qty')?.value) || 0;
                 const owner  = t6RecOwner(rec);
-                if (!target || qty <= 0 || owner < 0) return;      // still being filled in
+                // Still being filled in — a movement is a date, a plot AND a
+                // quantity, and two of the three is not one yet.
+                if (owner < 0 || !t6TransferRecComplete(rec)) return;
                 const key = _t6PlotKey(target);
                 const cur = by.get(key) || { plot: target, qty: 0, from: [] };
                 cur.qty += qty;
@@ -10224,6 +10290,10 @@ Thank you.`;
             if (!want.size) return;
             _t6MakingDestRows = true;
             try {
+                // Rebuilding the rows draws every movement list shut. Note
+                // which were open first, so keying a movement does not fold
+                // away the very line being keyed.
+                t6RememberTransferPanels();
                 t6HarvestRows();
                 want.forEach(plot => {
                     t6_plotData.push({
@@ -10319,6 +10389,93 @@ Thank you.`;
             if (!body) return;
             const shut = body.classList.toggle('hidden');
             if (btn) btn.innerText = shut ? 'Show' : 'Hide';
+            const key = _t6PlotKey((t6_plotData[rowIdx] || {}).plot);
+            if (key) { if (shut) _t6OpenTransfers.delete(key); else _t6OpenTransfers.add(key); }
+        }
+
+        /* A MOVEMENT COUNTS WHEN IT SAYS ALL THREE THINGS: when it happened,
+           where it went, and how many. Two of the three is a line somebody is
+           still keying — it has moved nothing yet, so it adds to no total, it
+           feeds no destination and it takes nothing off the balance.
+
+           Date included, which it was not before: picking the destination was
+           enough to make a line count, and a movement with no day on it is not
+           a record of anything. */
+        function t6TransferRecComplete(rec) {
+            if (!rec) return false;
+            const date = rec.querySelector('.t6-tr-date')?.value || '';
+            const to   = rec.querySelector('.t6-tr-plot')?.value || '';
+            const qty  = parseInt(rec.querySelector('.t6-tr-qty')?.value, 10) || 0;
+            return !!(date && to && qty > 0);
+        }
+
+        /* WHICH MOVEMENT LISTS ARE OPEN, ACROSS A REBUILD.
+
+           renderT6PlotRows draws every list shut, which is right when a report
+           is opened and wrong in the middle of keying one. Picking a
+           destination this batch has no row for rebuilds every row to make it
+           (see t6EnsureDestRows) — so the half-written movement went out of
+           sight the instant the plot was chosen, which reads as the app having
+           taken it and finished with it.
+
+           Remembered by PLOT rather than by index: t6EnsureDestRows appends
+           rows, and a plot's list is that plot's however the array is ordered
+           afterwards. */
+        let _t6OpenTransfers = new Set();
+
+        function t6RememberTransferPanels() {
+            _t6OpenTransfers = new Set();
+            t6_plotData.forEach((p, i) => {
+                const body = document.getElementById(`t6-row-${i}-tr-body`);
+                if (body && !body.classList.contains('hidden')) {
+                    const key = _t6PlotKey(p.plot);
+                    if (key) _t6OpenTransfers.add(key);
+                }
+            });
+        }
+
+        /* Put those lists back — and open any list holding a movement that is
+           still being keyed, whether or not it was open before. An unfinished
+           line is never allowed to be out of sight. */
+        function t6RestoreTransferPanels() {
+            t6_plotData.forEach((p, i) => {
+                const host = document.getElementById(`t6-row-${i}-transfers`);
+                const body = document.getElementById(`t6-row-${i}-tr-body`);
+                if (!host || !body) return;
+                const unfinished = Array.from(host.querySelectorAll('.t6-transfer-rec'))
+                                        .some(rec => !t6TransferRecComplete(rec));
+                const open = unfinished || _t6OpenTransfers.has(_t6PlotKey(p.plot));
+                body.classList.toggle('hidden', !open);
+                const btn = document.getElementById(`t6-row-${i}-tr-toggle`);
+                if (btn) btn.innerText = open ? 'Hide' : 'Show';
+            });
+        }
+
+        /* Say so on the line itself. The panel staying open answers "where did
+           it go"; this answers "what is it waiting for", which is the next
+           question and was nowhere on screen. */
+        function t6PaintTransferRecs() {
+            document.querySelectorAll('#t6-transferdata-rows .t6-transfer-rec').forEach(rec => {
+                const done = t6TransferRecComplete(rec);
+                rec.classList.toggle('border-[#efe6d6]', done);
+                rec.classList.toggle('border-[#e8b84b]', !done);
+                rec.classList.toggle('bg-white', done);
+                rec.classList.toggle('bg-[#fffaf0]', !done);
+                let note = rec.querySelector('.t6-tr-todo');
+                if (done) { if (note) note.remove(); return; }
+                const want = ['date', 'plot', 'quantity'].filter((_, n) => {
+                    const v = [rec.querySelector('.t6-tr-date')?.value || '',
+                               rec.querySelector('.t6-tr-plot')?.value || '',
+                               parseInt(rec.querySelector('.t6-tr-qty')?.value, 10) || 0][n];
+                    return !v;
+                });
+                if (!note) {
+                    rec.insertAdjacentHTML('beforeend',
+                        `<div class="t6-tr-todo text-[9px] font-black text-[#a8742a] uppercase tracking-widest pt-1"></div>`);
+                    note = rec.querySelector('.t6-tr-todo');
+                }
+                note.innerText = `Not counted yet — needs ${want.join(' + ')}`;
+            });
         }
 
         /* Where a plot's seedlings went, on hover — the same shape of answer
@@ -10433,9 +10590,8 @@ Thank you.`;
             // saveTab6() finds it, not by searching inside rowEl.
             let moved = 0;
             document.querySelectorAll(`#t6-row-${rowIdx}-transfers .t6-transfer-rec`).forEach(rec => {
-                const plot = rec.querySelector('.t6-tr-plot');
-                const qty  = rec.querySelector('.t6-tr-qty');
-                if (plot && plot.value) moved += parseInt(qty && qty.value) || 0;
+                if (!t6TransferRecComplete(rec)) return;
+                moved += parseInt(rec.querySelector('.t6-tr-qty')?.value) || 0;
             });
             const n = t6AutoNumbers(p, moved);
 
@@ -10563,21 +10719,24 @@ Thank you.`;
            disagreement — only a number that is actually there can differ. */
         function t6Mismatches() {
             const out = [];
-            document.querySelectorAll('.t6-plot-row').forEach((row, i) => {
-                const p = t6_plotData[i];
+            document.querySelectorAll('.t6-plot-row').forEach(row => {
+                /* Off the row's OWN id, not its place in the list — main rows
+                   and "-R" rows render into two containers, so document order
+                   matching t6_plotData order is a coincidence. */
+                const rowIdx = parseInt(String(row.id).replace('t6-row-', ''), 10);
+                const p = t6_plotData[rowIdx];
                 if (!p) return;
                 /* Split over days, the drone-map figure is the days added
                    up — see t6MapQtyFor. One box or several, the question
                    here is the same: does what the map counted agree with
                    what the report says was culled. */
-                const rowIdx = parseInt(String(row.id).replace('t6-row-', ''), 10);
                 const mapNum = t6MapQtyFor(rowIdx);
                 const cullRaw = row.querySelector('.t6-culled-input')?.value ?? '';
                 if (mapNum === null || cullRaw === '') return;
                 const mapQty = mapNum;
                 const culled = parseInt(cullRaw) || 0;
                 if (mapQty === culled) return;
-                out.push({ idx: i, rowId: `t6-row-${i}`, plot: p.plot, culled, mapQty });
+                out.push({ idx: rowIdx, rowId: `t6-row-${rowIdx}`, plot: p.plot, culled, mapQty });
             });
             return out;
         }
@@ -11424,10 +11583,18 @@ Thank you.`;
                 let mismatchPlots = [];
                 let unexplained = 0;
                 const t6Rows = Array.from(document.querySelectorAll('.t6-plot-row'));
+                let undatedMovements = 0;
                 for (let i = 0; i < t6Rows.length; i++) {
                     const row = t6Rows[i];
-                    const plotName     = t6_plotData[i]?.plot || '?';
-                    const destType     = t6_plotData[i]?.destType || 'main';
+                    /* Off the row's OWN id, not its place in the list. Main
+                       rows and "-R" rows render into two containers, so
+                       document order matching t6_plotData order is a
+                       coincidence of how the array happens to be built, not a
+                       guarantee — and every figure below is read out of
+                       t6_plotData by this number. */
+                    const rowIdx       = parseInt(String(row.id).replace('t6-row-', ''), 10);
+                    const plotName     = t6_plotData[rowIdx]?.plot || '?';
+                    const destType     = t6_plotData[rowIdx]?.destType || 'main';
                     const transplanted = parseInt(row.querySelector('.t6-balance').dataset.transplanted) || 0;
                     const balVal       = row.querySelector('.t6-balance').value;
                     const cullVal      = row.querySelector('.t6-culled-input').value;
@@ -11438,11 +11605,19 @@ Thank you.`;
                     // two different days keeps both, each with its own date.
                     // The transfer list renders on the Transfer Data tab now, not
                     // nested inside this row — found by the list's own id.
-                    document.querySelectorAll(`#t6-row-${i}-transfers .t6-transfer-rec`).forEach(rec => {
+                    document.querySelectorAll(`#t6-row-${rowIdx}-transfers .t6-transfer-rec`).forEach(rec => {
                         const trPlot = rec.querySelector('.t6-tr-plot')?.value || '';
                         const trQty  = parseInt(rec.querySelector('.t6-tr-qty')?.value) || 0;
                         const trDate = rec.querySelector('.t6-tr-date')?.value || '';
                         if (!trPlot || trQty <= 0) return;
+                        /* A movement with no day on it is still SAVED — a
+                           quantity somebody keyed is never thrown away over a
+                           box they have not reached yet. It is dated as of the
+                           save, which is what the load falls back to, and the
+                           toast at the end says how many were. The screen has
+                           not counted it until then (t6TransferRecComplete), so
+                           this is the one thing the save is louder about. */
+                        if (!trDate) undatedMovements++;
                         const log = withEditMeta({
                             transaction_type: 'Cull3_Transfer',
                             batch_name:       batchId,
@@ -11471,11 +11646,6 @@ Thank you.`;
                     // batch stays in HQ's Amendment Needed list until one is
                     // written. Blocking the save used to mean a day's counting
                     // sat unsaved because of a figure nobody could resolve yet.
-                    /* Off the row's OWN id, not its place in the list —
-                       main rows and "-R" rows render into two containers, so
-                       document order matching t6_plotData order is a
-                       coincidence, not a guarantee. */
-                    const rowIdx = parseInt(String(row.id).replace('t6-row-', ''), 10);
                     /* The drone-map figure, which for a plot culled over
                        several days is the days added up. Saved as one
                        MapQty, the way every reader of this remark already
@@ -11484,12 +11654,12 @@ Thank you.`;
                     const mapQty    = t6MapQtyFor(rowIdx);
                     let mismatchNote = '';
                     if (mapQty !== null && mapQty !== culled) {
-                        const note = t6MismatchNote(i);
+                        const note = t6MismatchNote(rowIdx);
                         if (note) mismatchNote = ` MismatchNote:${encodeURIComponent(note)}`;
                         unexplained += note ? 0 : 1;
                         mismatchPlots.push({ plot: plotName, culled, mapQty, note });
                     }
-                    const dead2Part = `, 2ndCulled: ${t6_plotData[i]?.dead2 || 0}, Sales: ${t6_plotData[i]?.sales || 0}`;
+                    const dead2Part = `, 2ndCulled: ${t6_plotData[rowIdx]?.dead2 || 0}, Sales: ${t6_plotData[rowIdx]?.sales || 0}`;
                     const mapQtyPart = mapQty !== null ? ` MapQty: ${mapQty}` : '';
                     // Culled date — the same .t6-cull-date field on every row,
                     // just positioned differently: first on Main Culling, after
@@ -11590,6 +11760,10 @@ Thank you.`;
                     showToast(`⚠️ ${uploadFailures} doc(s) failed to upload: ${window._mjmLastUploadError || 'storage error'}. Rows saved without doc. Fix bucket and re-save.`, 'error');
                 }
                 const savedMsg = `3rd Culling report saved — ${logsToInsert.length} plot record(s)${transferLogs.length ? `, ${transferLogs.length} transfer(s)` : ''} logged.`;
+                if (undatedMovements > 0) {
+                    showToast(`${undatedMovements} transfer(s) had no date and were saved as of today. ` +
+                              `Key the day they actually happened and save again.`, 'error');
+                }
                 if (unexplained > 0) {
                     showToast(`${savedMsg} ${unexplained} plot(s) still need a drone map reason — this batch stays in Amendment Needed until they have one.`, 'error');
                 } else {
