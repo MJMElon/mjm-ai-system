@@ -592,6 +592,9 @@
     let activeMonthKey = null;
     let activeMonthKeys = [];
     let historyMonthKeys = [];
+    // A tab before every month tab, not bucketed by month at all — see
+    // loadMaturity()'s prGroups and renderMaturityTable()'s filter.
+    const PR_TAB_KEY = '__pr__';
 
     function monthKey(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); }
     function monthLabel(k) {
@@ -601,10 +604,37 @@
 
     async function loadMaturity() {
         try {
-            const [transRes, plotsRes, allocRes, doRes] = await Promise.all([
+            const [transRes, prRes, cull3Res, plotsRes, allocRes, doRes] = await Promise.all([
+                // 'Transplanted' only — Premium Care and D-Tone are holding
+                // trays, not plots (same distinction operation_batch_detail.html's
+                // own transplanted total and operation_reports.html's
+                // transplantedMap already make). Pulling in
+                // 'Transplanted_Premium'/'Transplanted_DoubleTone' here turned
+                // every batch's Premium Care inflow into its own fake maturity
+                // row — plot "PREMIUM CARE", a bogus 9-months-later maturity
+                // date, a Plot Status dropdown and a customer-allocation slot
+                // for a tray — and double-counted the qty once more when the
+                // same seedlings later left the tray for a real plot.
                 _supabase.from('shared_inventory_logs')
                     .select('batch_name,plot_name,breed_name,quantity_change,created_at,transaction_date')
-                    .in('transaction_type', ['Transplanted','Transplanted_Premium','Transplanted_DoubleTone']),
+                    .eq('transaction_type', 'Transplanted'),
+                // P-R (reserve) plots — a Cull3_Transfer log is what actually
+                // creates one (Batch Detail Tab 6's P-R Culling "Transferred"
+                // figure is this same sum, grouped by the reserve plot it
+                // landed in). Fed into the P-R tab below, not the month tabs.
+                _supabase.from('shared_inventory_logs')
+                    .select('batch_name,plot_name,breed_name,quantity_change,created_at,transaction_date,remark')
+                    .eq('transaction_type', 'Cull3_Transfer'),
+                // What Batch Detail's P-R Culling tab has actually culled off
+                // each reserve plot — read, not recomputed: a plot's real
+                // remaining balance is what's left standing (a batch report
+                // question), not the flat 10%-culling estimate a fresh
+                // transplant row uses below. Without this, a plot the batch
+                // report already has at nought (fully culled, moved on, or
+                // sold) kept showing a stale positive balance here.
+                _supabase.from('shared_inventory_logs')
+                    .select('batch_name,plot_name,quantity_change')
+                    .eq('transaction_type', '3rd_Culling'),
                 _supabase.from('shared_plots').select('plot_name,nursery_name'),
                 _supabase.from('shared_plot_allocations').select('*').then(r => r, e => ({ data: [], error: e })),
                 // Issued DOs are the official stock deduction: each carries up to
@@ -614,8 +644,32 @@
                     .then(r => r, e => ({ data: [], error: e }))
             ]);
 
-            const trans = transRes.data || [];
-            const plots = plotsRes.data || [];
+            const trans   = transRes.data || [];
+            const prTrans = prRes.data || [];
+            const plots   = plotsRes.data || [];
+
+            // Culled qty per reserve plot, straight off Batch Detail's own
+            // 3rd_Culling records — same batch+plot key as everything else
+            // here (see groupRows below).
+            const culledByKey = {};
+            (cull3Res?.data || []).forEach(r => {
+                const k = (r.batch_name||'') + '||' + (r.plot_name||'');
+                culledByKey[k] = (culledByKey[k] || 0) + (r.quantity_change || 0);
+            });
+            // Qty a reserve plot sent on to yet another plot — the reverse
+            // of "Transferred". Batch Detail's Cull3_Transfer remark names
+            // the source plot it left: "...From: [<plot>|<destType>] To:...".
+            // A plot's OWN inbound rows (prTrans, grouped below) don't carry
+            // this; only an outbound move naming it as the source does.
+            const movedOutByKey = {};
+            (prTrans || []).forEach(r => {
+                const m = r.remark ? r.remark.match(/From:\s*\[([^|\]]+)\|/) : null;
+                if (!m) return;
+                const sourcePlot = m[1].trim();
+                if (!sourcePlot) return;
+                const k = (r.batch_name||'') + '||' + sourcePlot;
+                movedOutByKey[k] = (movedOutByKey[k] || 0) + (r.quantity_change || 0);
+            });
 
             const plotNurseryMap = {};
             const prefixNurseryMap = {};
@@ -634,39 +688,75 @@
                 return prefix && prefixNurseryMap[prefix] ? prefixNurseryMap[prefix] : '—';
             };
 
-            const groups = {};
-            trans.forEach(l => {
-                // Real transplant date keyed in the Batch Record; created_at is
-                // only the fallback for very old rows saved without a date.
-                const effDate = l.transaction_date || l.created_at;
-                const k = (l.batch_name||'') + '||' + (l.plot_name||'');
-                if (!groups[k]) groups[k] = {
-                    batch: l.batch_name, plot: l.plot_name, breed: l.breed_name,
-                    qty: 0, firstDate: effDate
-                };
-                groups[k].qty += (l.quantity_change || 0);
-                if (effDate < groups[k].firstDate) groups[k].firstDate = effDate;
-                if (!groups[k].breed && l.breed_name) groups[k].breed = l.breed_name;
-            });
+            // Groups by the batch+plot key shared_plot_allocations itself is
+            // keyed and upserted on ('batch_name,plot_name') — so a P-R row
+            // below reuses the exact same Plot Status / DO Deducted /
+            // Customer Allocation machinery as a real transplant row with no
+            // extra plumbing, as long as it groups the same way. A "-R" plot
+            // is never a Transplanted destination (see prGroups below), so
+            // the two never collide on the same key.
+            const groupRows = (list, tag) => {
+                const groups = {};
+                list.forEach(l => {
+                    const effDate = l.transaction_date || l.created_at;
+                    const k = (l.batch_name||'') + '||' + (l.plot_name||'');
+                    if (!groups[k]) groups[k] = {
+                        batch: l.batch_name, plot: l.plot_name, breed: l.breed_name,
+                        qty: 0, firstDate: effDate
+                    };
+                    groups[k].qty += (l.quantity_change || 0);
+                    if (effDate < groups[k].firstDate) groups[k].firstDate = effDate;
+                    if (!groups[k].breed && l.breed_name) groups[k].breed = l.breed_name;
+                });
+                return Object.entries(groups).map(([k, g]) => {
+                    const t = new Date(g.firstDate);
+                    // A P-R row is stock that already went through 2nd/3rd
+                    // culling — it isn't still growing toward a forecast
+                    // maturity date, so unlike a fresh transplant it gets no
+                    // +9-months offset. "Maturity Date" for one of these rows
+                    // reads as the date it arrived in the reserve plot.
+                    const matureDate = tag === 'pr' ? t : (() => { const m = new Date(t); m.setMonth(m.getMonth() + 9); return m; })();
+                    // The 10% estimate is for a fresh transplant with no
+                    // culling report yet. A P-R row skips it — "After 10%
+                    // Culling" carries the qty transferred straight through
+                    // unreduced, and everything that actually left the plot
+                    // (culled, moved on, or sold) comes off in DO Deducted
+                    // below instead, so Plot Balance still nets against the
+                    // real qty transferred, not an estimate.
+                    const afterCulling = tag === 'pr' ? g.qty : Math.round(g.qty * 0.9);
+                    return {
+                        key: k,
+                        batch: g.batch,
+                        plot: g.plot,
+                        breed: g.breed || '—',
+                        location: resolveLocation(g.plot),
+                        qty: g.qty,
+                        afterCulling,
+                        doDeducted: 0,
+                        transplantDate: t,
+                        matureDate,
+                        isPR: tag === 'pr'
+                    };
+                });
+            };
 
-            allMatGroups = Object.entries(groups).map(([k, g]) => {
-                const t = new Date(g.firstDate);
-                const matureDate = new Date(t); matureDate.setMonth(matureDate.getMonth() + 9);
-                return {
-                    key: k,
-                    batch: g.batch,
-                    plot: g.plot,
-                    breed: g.breed || '—',
-                    location: resolveLocation(g.plot),
-                    qty: g.qty,
-                    afterCulling: Math.round(g.qty * 0.9),
-                    doDeducted: 0,
-                    transplantDate: t,
-                    matureDate
-                };
-            });
+            // Real transplant date keyed in the Batch Record; created_at is
+            // only the fallback for very old rows saved without a date.
+            const matRows = groupRows(trans, 'main');
+            const prRows  = groupRows(prTrans, 'pr');
+            allMatGroups  = matRows.concat(prRows);
 
             applyDoDeductions(allMatGroups, doRes?.data || []);
+
+            // A P-R row's DO Deducted isn't only actual DOs — it's everything
+            // that has left the reserve plot: what was sold (the DO match
+            // above), what was culled, and what moved on to another plot.
+            // All three come off the same qty-transferred figure, so they
+            // all land in the one deduction column Plot Balance already
+            // subtracts.
+            prRows.forEach(g => {
+                g.doDeducted += (culledByKey[g.key] || 0) + (movedOutByKey[g.key] || 0);
+            });
 
             plotAllocations = {};
             (allocRes?.data || []).forEach(a => {
@@ -681,7 +771,9 @@
 
             const now = new Date();
             const curKey = monthKey(now);
-            const monthsWithData = new Set(allMatGroups.map(g => monthKey(g.matureDate)));
+            // matRows only — a P-R row's matureDate is a transfer date, not a
+            // forecast, and doesn't belong bucketed into a month tab.
+            const monthsWithData = new Set(matRows.map(g => monthKey(g.matureDate)));
 
             activeMonthKeys = [...monthsWithData].filter(k => k >= curKey).sort();
             historyMonthKeys = [...monthsWithData].filter(k => k < curKey).sort().reverse();
@@ -703,6 +795,17 @@
         const curKey = monthKey(now);
         const tabsEl = document.getElementById('month-tabs');
         tabsEl.innerHTML = '';
+
+        // Before every month tab — reserve plots (Batch Detail's P-R
+        // Culling), not bucketed by month.
+        const prBtn = document.createElement('button');
+        prBtn.type = 'button';
+        prBtn.className = 'month-tab' + (activeMonthKey === PR_TAB_KEY ? ' active' : '');
+        prBtn.innerText = 'Plot-R';
+        prBtn.title = 'Reserve ("-R") plots from Batch Detail’s P-R Culling, with balance still to allocate';
+        prBtn.onclick = () => { activeMonthKey = PR_TAB_KEY; closeHistoryMenu(); renderMonthTabs(); renderMaturityTable(); renderActiveBanner(); };
+        tabsEl.appendChild(prBtn);
+
         activeMonthKeys.forEach(k => {
             const isCurrent = k === curKey;
             const btn = document.createElement('button');
@@ -730,7 +833,10 @@
 
     function renderActiveBanner() {
         const banner = document.getElementById('active-month-banner');
-        if (historyMonthKeys.includes(activeMonthKey)) {
+        if (activeMonthKey === PR_TAB_KEY) {
+            banner.classList.remove('hidden');
+            banner.innerHTML = `🪴 Viewing <span class="font-black uppercase tracking-widest">Plot-R</span> — reserve plots from Batch Detail's P-R Culling with balance still to allocate, not bucketed by month`;
+        } else if (historyMonthKeys.includes(activeMonthKey)) {
             banner.classList.remove('hidden');
             banner.innerHTML = `🕘 Viewing <span class="font-black uppercase tracking-widest">history</span> — ${monthLabel(activeMonthKey)} (already matured & past)`;
         } else {
@@ -865,11 +971,18 @@
         const tfoot = document.getElementById('maturity-foot');
 
         const rows = allMatGroups
-            .filter(g => monthKey(g.matureDate) === activeMonthKey)
+            .filter(g => {
+                if (activeMonthKey !== PR_TAB_KEY) return !g.isPR && monthKey(g.matureDate) === activeMonthKey;
+                // Sold-out reserve plots have nothing left to allocate — the
+                // Plot-R tab is a picking list for what's still standing, so
+                // a plot already at/under zero balance has no reason to be on it.
+                return g.isPR && (g.afterCulling - (g.doDeducted || 0)) > 0;
+            })
             .sort((a, b) => a.matureDate - b.matureDate);
 
         if (!rows.length) {
-            tbody.innerHTML = `<tr><td colspan="13" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">No maturity allocations for this month</div></td></tr>`;
+            const emptyMsg = activeMonthKey === PR_TAB_KEY ? 'No reserve (Plot-R) plots with balance' : 'No maturity allocations for this month';
+            tbody.innerHTML = `<tr><td colspan="13" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">${emptyMsg}</div></td></tr>`;
             tfoot.innerHTML = '';
             renderDoUnmatched();
             return;
@@ -1234,6 +1347,23 @@
     function _isCalibrationDo(d) {
         return /^CAL-/i.test(String((d && d.do_number) || ''));
     }
+    // AL numbers whose order is cancelled (status, or a "[CANCELLED]"
+    // remark — the pattern the auto-cancel-on-salesweb-cancel path writes).
+    // A DO still on file against one of these isn't a real collection any
+    // more than the order is, so anything reading allDoRecords for a
+    // "collected this month" figure excludes them the same way Customer
+    // Order Management's own row filters do — otherwise a cancelled
+    // order's DO quietly keeps a dashboard total above what the order
+    // list itself shows for the same month.
+    function _cancelledAlSet() {
+        const set = new Set();
+        (allAls || []).forEach(a => {
+            if (a.status === 'Cancelled' || /\[CANCELLED\]/i.test(String(a.remark || ''))) {
+                if (a.al_number) set.add(a.al_number);
+            }
+        });
+        return set;
+    }
 
     function renderMonitoringDashboard() {
         const cardsEl = document.getElementById('mon-dash-cards');
@@ -1277,11 +1407,15 @@
         // card in lock-step with the chart's current-month bar.
         //
         // Excludes calibration DOs (`CAL-…`) so a bulk stock calibration
-        // never inflates the month's real collection figure. Those DOs
-        // land in the chart's separate Calibration bar instead.
+        // never inflates the month's real collection figure, and DOs still
+        // on file against a cancelled AL — same rule as the chart and as
+        // Customer Order Management's own row filters — so a cancelled
+        // order's DO doesn't inflate this card either.
+        const cancelledAlSetForMonth = _cancelledAlSet();
         monthCollected = (allDoRecords || []).reduce((s, d) => {
             if (!d.delivery_date) return s;
             if (_isCalibrationDo(d)) return s;
+            if (cancelledAlSetForMonth.has(d.al_number)) return s;
             return String(d.delivery_date).slice(0, 7) === monthKeyNow
                 ? s + Number(d.total_qty || 0)
                 : s;
@@ -1373,13 +1507,14 @@
             const k = String(ds).slice(0, 7);
             orderByMonth[k] = (orderByMonth[k] || 0) + Number(a.quantity_ordered || 0);
         });
+        const cancelledAlSet = _cancelledAlSet();
         (allDoRecords || []).forEach(d => {
             if (!d.delivery_date) return;
             const k   = String(d.delivery_date).slice(0, 7);
             const qty = Number(d.total_qty || 0);
             if (_isCalibrationDo(d)) {
                 calibrationByMonth[k] = (calibrationByMonth[k] || 0) + qty;
-            } else {
+            } else if (!cancelledAlSet.has(d.al_number)) {
                 collectionByMonth[k] = (collectionByMonth[k] || 0) + qty;
             }
         });
@@ -1714,13 +1849,15 @@
 
             if (search && !(r.orderNumber || '').toLowerCase().includes(search) && !(r.customer || '').toLowerCase().includes(search)) return false;
             // A cancelled AL kills the order the same as a raw
-            // `rawStatus === 'Cancelled'` row — both read as "cancelled"
-            // for every filter below, Cancelled Orders included.
+            // `rawStatus === 'Cancelled'` row — both read as "cancelled".
+            // All Orders excludes them too; Cancelled Orders is the only
+            // place they're visible.
             const isCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
-            if (filter === 'all')         return true;
             if (filter === 'cancelled')   return isCancelled;
-            if (filter === 'outstanding') return !isCancelled && r.balance > 0;
-            if (filter === 'completed')   return !isCancelled && r.totalCollected >= r.totalQty && r.totalQty > 0;
+            if (isCancelled) return false;
+            if (filter === 'all')         return true;
+            if (filter === 'outstanding') return r.balance > 0;
+            if (filter === 'completed')   return r.totalCollected >= r.totalQty && r.totalQty > 0;
             return true;
         });
 
@@ -1774,13 +1911,13 @@
             const cellsHtml = months.map(m => {
                 const booked = r.bookingsByMonth[m.key] || 0;
                 const cls = ['t-mo', booked ? 'has-booked' : '', m.key === nowKey ? 'is-now' : ''].filter(Boolean).join(' ');
-                const inner = booked ? `${booked.toLocaleString()}<span class="booked-tag">booked</span>` : '';
+                const inner = booked ? booked.toLocaleString() : '';
                 return `<td class="${cls}">${inner}</td>`;
             }).join('');
             return `
                 <tr ${rowStyle}>
                     <td class="t-cust">${idx + 1}</td>
-                    <td class="t-cust"><span class="cust-link" ${cancelStrike} data-pickup data-cust="${escapeHtml(r.customer || '')}" data-order="${escapeHtml(r.orderNumber || '')}">${escapeHtml(r.customer || '—')}</span><div class="t-sub" ${cancelStrike}>${escapeHtml(r.orderNumber || '')}${r.alNumber ? ' · <span style="color:#1d4ed8;font-weight:900;">AL ' + escapeHtml(r.alNumber) + '</span>' : ''}</div></td>
+                    <td class="t-cust"><span class="cust-plain" ${cancelStrike}>${escapeHtml(r.customer || '—')}</span><div class="t-sub" ${cancelStrike}>${escapeHtml(r.orderNumber || '')}${r.alNumber ? ' · <span style="color:#1d4ed8;font-weight:900;">AL ' + escapeHtml(r.alNumber) + '</span>' : ''}</div></td>
                     <td ${cancelStrike}>${orderMonth}</td>
                     <td><span class="pill-status ${pillCls}">${escapeHtml(pillTxt)}</span></td>
                     <td class="t-tot${r.balance < 0 ? ' text-red-600' : r.balance === 0 ? ' text-emerald-700' : ''}" ${cancelStrike}>${r.balance.toLocaleString()}</td>
@@ -1789,7 +1926,7 @@
         }).join('');
 
         const monthFootCells = months.map((m, i) => colBookTotals[i]
-            ? `<td class="t-tot">${colBookTotals[i].toLocaleString()}<span class="booked-tag">booked</span></td>`
+            ? `<td class="t-tot">${colBookTotals[i].toLocaleString()}</td>`
             : `<td class="t-tot">—</td>`
         ).join('');
 
@@ -1876,10 +2013,11 @@
             if (isCash && isUnpaid) return false;
             if (search && !(r.orderNumber || '').toLowerCase().includes(search) && !(r.customer || '').toLowerCase().includes(search)) return false;
             const isCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
-            if (filter === 'all')         return true;
             if (filter === 'cancelled')   return isCancelled;
-            if (filter === 'outstanding') return !isCancelled && r.balance > 0;
-            if (filter === 'completed')   return !isCancelled && r.totalCollected >= r.totalQty && r.totalQty > 0;
+            if (isCancelled) return false;
+            if (filter === 'all')         return true;
+            if (filter === 'outstanding') return r.balance > 0;
+            if (filter === 'completed')   return r.totalCollected >= r.totalQty && r.totalQty > 0;
             return true;
         });
         allRows.sort((a, b) => {
@@ -2263,9 +2401,15 @@
         modal.classList.add('open');
 
         try {
+            // Scoped to this one order, not every order this customer name
+            // happens to have — two different orders sharing a customer
+            // name (e.g. "Lunai Wan" placing two separate orders) must not
+            // merge their AL numbers, and therefore their DO lines, into
+            // one modal. customer_name is only the fallback for the rare
+            // row with no order_number at all.
             const filters = [];
-            if (customerName) filters.push('customer_name.eq.' + customerName);
-            if (orderNumber)  filters.push('order_number.eq.'  + orderNumber);
+            if (orderNumber)       filters.push('order_number.eq.' + orderNumber);
+            else if (customerName) filters.push('customer_name.eq.' + customerName);
             const orFilter = filters.join(',');
 
             const [bookingsRes, alRes] = await Promise.all([
