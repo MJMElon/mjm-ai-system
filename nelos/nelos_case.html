@@ -167,12 +167,12 @@
              to the camera and takes the gallery away, so a photo already
              taken while the work was done could not be attached at all.
              Same rule as shared/shared_nelos_dock.js. -->
-        <input id="c-shot" type="file" accept="image/*" hidden>
+        <input id="c-shot" type="file" accept="image/*" multiple hidden>
       </label>
-      <div id="c-shot-prev" class="shot-prev hidden">
-        <img id="c-shot-img" alt="Photo of the fix">
-        <button type="button" id="c-shot-x" aria-label="Remove photo">&#10005;</button>
-      </div>
+      <!-- One photo was rarely the job: the gap before and the planting
+           after, three trays that needed the same fix. Each one shows with
+           its own Remove, and picking again ADDS rather than replaces. -->
+      <div id="c-shot-prevs" class="hidden" style="display:flex;flex-wrap:wrap;gap:7px;margin-top:10px;"></div>
       <!-- Labelled rather than prompted from inside the box: a placeholder is
            gone the moment anybody types, so the one thing saying what the box
            is for disappears as they start filling it in. -->
@@ -188,8 +188,7 @@
     <div id="c-resolution-text" class="text-[13.5px] font-semibold text-slate-700 whitespace-pre-wrap"></div>
     <!-- The photo of the fix. It has been uploaded and stored since the
          solve sheet gained a camera, and read by nothing on this page. -->
-    <img id="c-res-photo" class="hidden w-full rounded-lg mt-2 border border-emerald-200"
-         style="max-height:260px;object-fit:cover;" alt="Photo of the fix">
+    <div id="c-res-photos" class="hidden" style="display:flex;flex-wrap:wrap;gap:7px;margin-top:8px;"></div>
     <div id="c-resolved-meta" class="text-[10.5px] font-bold text-emerald-700 mt-2"></div>
   </div>
 
@@ -304,12 +303,24 @@ function renderCase() {
   /* A case can be solved with a photo and no words, so the card shows on
      either — keying it on the text alone hid the picture of the fix
      whenever nobody wrote one. */
-  if (c.resolution || c.resolution_photo_url) {
+  /* Every photo of the fix: resolution_photo_urls where there is one, the
+     single column where the case was solved before that column existed. */
+  let resShots = c.resolution_photo_urls;
+  if (typeof resShots === 'string') { try { resShots = JSON.parse(resShots); } catch (_) { resShots = null; } }
+  resShots = Array.isArray(resShots) && resShots.length
+    ? resShots.filter(Boolean)
+    : (c.resolution_photo_url ? [c.resolution_photo_url] : []);
+
+  if (c.resolution || resShots.length) {
     $('resolution-card').classList.remove('hidden');
     $('c-resolution-text').textContent = c.resolution || '';
-    const rp = $('c-res-photo');
-    rp.classList.toggle('hidden', !c.resolution_photo_url);
-    if (c.resolution_photo_url) rp.src = c.resolution_photo_url; else rp.removeAttribute('src');
+    const rp = $('c-res-photos');
+    rp.classList.toggle('hidden', !resShots.length);
+    rp.style.display = resShots.length ? 'flex' : 'none';
+    rp.innerHTML = resShots.map(u =>
+      `<a href="${u}" target="_blank" rel="noopener" style="flex:1 1 120px;min-width:120px;max-width:220px;">
+         <img src="${u}" alt="Photo of the fix" loading="lazy"
+              style="width:100%;border-radius:10px;display:block;border:1px solid #bbf7d0;"></a>`).join('');
     $('c-resolved-meta').textContent =
       `Resolved by ${c.resolved_by || 'unknown'} · ${fmtStamp(c.resolved_at)}`;
   } else {
@@ -439,21 +450,42 @@ async function onAction(act) {
    Into the same bucket and path shape the dock uses
    (shared/shared_nelos_dock.js -> uploadShot), so one case's picture is in
    the same place whichever surface solved it. */
-let _shot = null;
+let _shots = [];
 
+function paintShots() {
+  const host = $('c-shot-prevs');
+  host.classList.toggle('hidden', !_shots.length);
+  host.style.display = _shots.length ? 'flex' : 'none';
+  host.innerHTML = _shots.map((f, i) => `
+    <figure style="position:relative;flex:1 1 104px;min-width:104px;max-width:190px;margin:0;">
+      <img src="${URL.createObjectURL(f)}" alt="Photo of the fix"
+           style="width:100%;border-radius:11px;display:block;border:1.5px solid #ede9fe;">
+      <button type="button" data-i="${i}" aria-label="Remove this photo"
+        style="position:absolute;top:5px;right:5px;width:24px;height:24px;border-radius:999px;border:none;
+               background:rgba(15,23,42,.72);color:#fff;font-size:13px;font-weight:900;cursor:pointer;line-height:1;">
+        &times;</button>
+    </figure>`).join('');
+  const pick = $('c-shot-pick').querySelector('span');
+  if (pick) pick.textContent = _shots.length
+    ? (_shots.length === 1 ? '1 photo attached — add more' : `${_shots.length} photos attached — add more`)
+    : 'Take or attach photos';
+}
+
+/* Picking ADDS to what is already there — a phone's picker often only
+   takes a few at a time, and "choose again" should not throw away what
+   was chosen first. */
 $('c-shot').addEventListener('change', (e) => {
-  _shot = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-  if (!_shot) return;
-  $('c-shot-img').src = URL.createObjectURL(_shot);
-  $('c-shot-pick').classList.add('hidden');
-  $('c-shot-prev').classList.remove('hidden');
+  const picked = [...(e.target.files || [])];
+  if (picked.length) _shots.push(...picked);
+  e.target.value = '';
+  paintShots();
 });
 
-$('c-shot-x').addEventListener('click', () => {
-  _shot = null;
-  $('c-shot').value = '';
-  $('c-shot-prev').classList.add('hidden');
-  $('c-shot-pick').classList.remove('hidden');
+$('c-shot-prevs').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-i]');
+  if (!b) return;
+  _shots.splice(Number(b.dataset.i), 1);
+  paintShots();
 });
 
 /* Hands back the URL, or the REASON there is not one — a photo that went
@@ -486,12 +518,19 @@ $('confirm-resolve').addEventListener('click', async () => {
      whereas patching first would mark work solved and then lose the picture
      of it. The column is written only when there IS a photo, so a database
      without migration_nelos_solve_photo.sql still resolves cases. */
-  const shot = _shot ? await uploadShot(theCase.id, _shot) : { url: null, why: '' };
+  const urls = [];
+  let shot = { url: null, why: '' };
+  for (let i = 0; i < _shots.length; i++) {
+    const one = await uploadShot(theCase.id, _shots[i]);
+    if (!one.url) { shot = { url: null, why: (_shots.length > 1 ? `photo ${i + 1}: ` : '') + one.why }; break; }
+    urls.push(one.url);
+  }
+  if (urls.length) shot = { url: urls[0], why: '' };
   /* A photo that did not go stops the solve. Carrying on would mark the
      work solved with no picture and say nothing about it, which is what
      the field reported. Nothing is lost: the remark is still in the box,
      and the ✕ on the photo solves without it. */
-  if (_shot && !shot.url) {
+  if (_shots.length && urls.length !== _shots.length) {
     toast(`The photo did not upload — ${shot.why}. Try again, or remove the photo to solve without it.`, false);
     return;
   }
@@ -501,12 +540,13 @@ $('confirm-resolve').addEventListener('click', async () => {
     resolved_by: me.name, resolved_at: new Date().toISOString()
   };
   if (url) fields.resolution_photo_url = url;
+  if (urls.length) fields.resolution_photo_urls = urls;
 
   const ok = await patch(fields, `Resolved — ${me.name}`);
   if (ok) {
     $('resolve-box').classList.add('hidden');
     $('c-resolution').value = '';
-    $('c-shot-x').click();
+    _shots = []; paintShots();
     toast('Case resolved.');
   }
 });

@@ -347,6 +347,13 @@
   .s-shot svg { width:22px; height:22px; flex-shrink:0; fill:none; stroke:currentColor;
                 stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
   .s-shot-file { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+  .s-shots { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
+  .s-shots.hidden { display:none; }
+  .s-shots figure { position:relative; flex:1 1 104px; min-width:104px; max-width:190px; margin:0; }
+  .s-shots img { width:100%; border-radius:11px; display:block; border:1.5px solid #ede9fe; }
+  .s-shots button { position:absolute; top:5px; right:5px; width:24px; height:24px; border-radius:999px;
+                    border:none; background:rgba(15,23,42,.72); color:#fff; font-size:13px;
+                    font-weight:900; cursor:pointer; line-height:1; }
   /* Each half of the section says what it is. Lighter than the section
      heading above them, so "Solve Case Details" still reads as the roof
      and these two as what is under it. */
@@ -556,8 +563,13 @@
             <circle cx="12" cy="13" r="3.6"/></svg>
           <span id="s-shot-t">Take a photo or choose from album</span>
         </label>
-        <input id="s-photo" class="s-shot-file" type="file" accept="image/*">
-        <img id="s-photo-prev" class="s-prev hidden" alt="Photo of the fix">
+        <input id="s-photo" class="s-shot-file" type="file" accept="image/*" multiple>
+        <!-- One photo was rarely the job: the gap before and the planting
+             after, three trays that needed the same fix, a wide shot and
+             the close-up. Each one picked shows here with its own Remove,
+             and picking again ADDS rather than replaces — a phone's picker
+             often only takes a few at a time. -->
+        <div id="s-photo-prevs" class="s-shots hidden"></div>
         <div class="s-lab s-lab-2">What was done</div>
         <textarea id="s-remark" class="inp" rows="3"></textarea>
       </div>
@@ -569,7 +581,7 @@
       <div class="m-sec hidden" id="s-solved">
         <div class="m-sec-h">Solved Details</div>
         <div id="s-solved-remark" class="s-case-v"></div>
-        <img id="s-solved-photo" class="s-prev hidden" alt="Photo of the fix">
+        <div id="s-solved-photos" class="s-shots hidden"></div>
         <div id="s-solved-by" class="s-case-by"></div>
       </div>
 
@@ -613,7 +625,7 @@
       <div class="m-sec hidden" id="v-solved">
         <div class="m-sec-h">How it was solved</div>
         <div id="v-res" class="s-case-v"></div>
-        <img id="v-res-photo" class="s-prev hidden" alt="Photo of the fix">
+        <div id="v-res-photos" class="s-shots hidden"></div>
       </div>
 
       <!-- Only on a case somebody has closed. The solver's word and the
@@ -1236,9 +1248,8 @@ function openSolve(c) {
      left to solve. */
   $('s-remark').value = '';
   $('s-photo').value = '';
-  $('s-shot-t').textContent = SHOT_IDLE;
-  $('s-photo-prev').classList.add('hidden');
-  $('s-photo-prev').removeAttribute('src');
+  solveShots = [];
+  paintSolveShots();
   $('s-close-remark').value = '';
 
   $('s-case').innerHTML = caseBlockHtml(c);
@@ -1258,9 +1269,14 @@ function openSolve(c) {
 
   if (done) {
     $('s-solved-remark').textContent = c.resolution || 'Solved, with nothing written about it.';
-    const rp = $('s-solved-photo');
-    rp.classList.toggle('hidden', !c.resolution_photo_url);
-    if (c.resolution_photo_url) rp.src = c.resolution_photo_url; else rp.removeAttribute('src');
+    /* Every photo the solver left, not just the first — the close sheet
+       is where somebody decides whether the work was done. */
+    const sShots = shotsOf(c);
+    const rp = $('s-solved-photos');
+    rp.classList.toggle('hidden', !sShots.length);
+    rp.innerHTML = sShots.map(u =>
+      `<figure><a href="${esc(u)}" target="_blank" rel="noopener">
+         <img src="${esc(u)}" alt="Photo of the fix" loading="lazy"></a></figure>`).join('');
     const by = [c.resolved_by, c.resolved_at && fmtDate(String(c.resolved_at).slice(0, 10))]
       .filter(Boolean).join(' · ');
     $('s-solved-by').textContent = by ? 'Solved by ' + by : '';
@@ -1342,9 +1358,12 @@ function openView(c) {
     $('v-res').innerHTML =
       esc(c.resolution || 'Solved, with nothing written about it.') +
       (by ? `<div class="s-case-by" style="margin-top:5px">${esc(by)}</div>` : '');
-    const rp = $('v-res-photo');
-    rp.classList.toggle('hidden', !c.resolution_photo_url);
-    if (c.resolution_photo_url) rp.src = c.resolution_photo_url; else rp.removeAttribute('src');
+    const shots = shotsOf(c);
+    const rp = $('v-res-photos');
+    rp.classList.toggle('hidden', !shots.length);
+    rp.innerHTML = shots.map(u =>
+      `<figure><a href="${esc(u)}" target="_blank" rel="noopener">
+         <img src="${esc(u)}" alt="Photo of the fix" loading="lazy"></a></figure>`).join('');
   }
 
   /* close_remark, closed_by and closed_at have been WRITTEN by the close
@@ -1371,16 +1390,61 @@ function closeView() { $('view-scrim').classList.add('hidden'); }
 /* Uploads whatever is in the solve sheet's file box. Separate from
    uploadPhoto() because that one reads the new-case drawer's box, and
    both sheets can be filled in the same session. */
-async function uploadSolvePhoto() {
-  const file = $('s-photo').files && $('s-photo').files[0];
-  if (!file) return undefined;
-  if (file.size > 8 * 1024 * 1024) throw new Error('That photo is over 8 MB — take a smaller one.');
-  const ext  = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const path = `solve/${new Date().toISOString().slice(0, 10)}/${Math.random().toString(36).slice(2)}.${ext}`;
-  const { error } = await _supabase.storage.from('nelos-photos')
-    .upload(path, file, { contentType: file.type, upsert: false });
-  if (error) throw new Error('Photo upload failed — ' + error.message);
-  return _supabase.storage.from('nelos-photos').getPublicUrl(path).data.publicUrl;
+/* THE PHOTOS OF THE FIX, plural. The first still goes into
+   resolution_photo_url so everything that reads one photo finds one; all
+   of them go into resolution_photo_urls — see
+   shared/RUN_ME_nelos_solve_photos.sql. */
+let solveShots = [];
+
+function paintSolveShots() {
+  const host = $('s-photo-prevs');
+  host.classList.toggle('hidden', !solveShots.length);
+  $('s-shot-t').textContent = solveShots.length
+    ? (solveShots.length === 1 ? '1 photo attached — tap to add more'
+                               : `${solveShots.length} photos attached — tap to add more`)
+    : SHOT_IDLE;
+  host.innerHTML = solveShots.map((f, i) => `
+    <figure>
+      <img src="${URL.createObjectURL(f)}" alt="Photo of the fix">
+      <button type="button" data-i="${i}" aria-label="Remove this photo">&times;</button>
+    </figure>`).join('');
+}
+
+$('s-photo-prevs').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-i]');
+  if (!b) return;
+  solveShots.splice(Number(b.dataset.i), 1);
+  paintSolveShots();
+});
+
+/* Uploads everything in the solve sheet and hands back the URLs in the
+   order they were picked. Separate from uploadPhoto() because that one
+   reads the new-case drawer's box, and both sheets can be filled in the
+   same session. */
+async function uploadSolvePhotos() {
+  const urls = [];
+  for (let i = 0; i < solveShots.length; i++) {
+    const file = solveShots[i];
+    if (file.size > 8 * 1024 * 1024) {
+      throw new Error(`Photo ${i + 1} is over 8 MB — take a smaller one.`);
+    }
+    const ext  = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const path = `solve/${new Date().toISOString().slice(0, 10)}/${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await _supabase.storage.from('nelos-photos')
+      .upload(path, file, { contentType: file.type, upsert: false });
+    if (error) throw new Error(`Photo ${i + 1} did not upload — ${error.message}`);
+    urls.push(_supabase.storage.from('nelos-photos').getPublicUrl(path).data.publicUrl);
+  }
+  return urls;
+}
+
+/* Every photo of a solved case: the list where there is one, the single
+   column where the case was solved before that column existed. */
+function shotsOf(c) {
+  let list = c && c.resolution_photo_urls;
+  if (typeof list === 'string') { try { list = JSON.parse(list); } catch (_) { list = null; } }
+  if (Array.isArray(list) && list.length) return list.filter(Boolean);
+  return c && c.resolution_photo_url ? [c.resolution_photo_url] : [];
 }
 
 async function saveSolve() {
@@ -1390,9 +1454,10 @@ async function saveSolve() {
 
   const btn = $('s-save');
   btn.disabled = true; sErr('');
-  let url;
-  try { url = await uploadSolvePhoto(); }
+  let urls;
+  try { urls = await uploadSolvePhotos(); }
   catch (e) { btn.disabled = false; sErr(e.message); return; }
+  const url = urls[0];
 
   const patch = {
     status: 'resolved',
@@ -1403,11 +1468,21 @@ async function saveSolve() {
     updated_at: new Date().toISOString()
   };
   if (url) patch.resolution_photo_url = url;
+  if (urls.length) patch.resolution_photo_urls = urls;
 
   let { error } = await _supabase.from('nelos_cases').update(patch).eq('id', solving.id);
-  /* No resolution_photo_url column → this database has not run
-     shared/migration_nelos_solve_photo.sql. The remark and the status
-     matter more than the picture, so save them. */
+  /* No resolution_photo_urls column → this database has not run
+     shared/RUN_ME_nelos_solve_photos.sql. Keep the first photo, in the
+     column that has been there all along, and say so. */
+  if (error && urls.length && /resolution_photo_urls/.test(error.message || '')) {
+    delete patch.resolution_photo_urls;
+    ({ error } = await _supabase.from('nelos_cases').update(patch).eq('id', solving.id));
+    if (!error && urls.length > 1) {
+      toast('Solved — run RUN_ME_nelos_solve_photos.sql to keep more than one photo.', false);
+    }
+  }
+  /* …and no resolution_photo_url either → an older database still. The
+     remark and the status matter more than the picture, so save them. */
   if (error && url && /resolution_photo_url/.test(error.message || '')) {
     delete patch.resolution_photo_url;
     ({ error } = await _supabase.from('nelos_cases').update(patch).eq('id', solving.id));
@@ -2088,13 +2163,14 @@ $('solve-scrim').addEventListener('click', e => {
 });
 /* Show the picture before it is sent, so a thumb over the lens is
    caught here rather than by whoever closes the case. */
+/* Picking ADDS to what is already there, and each one can be taken off
+   on its own. Shown before anything is sent, so a thumb over the lens is
+   caught here rather than by whoever closes the case. */
 $('s-photo').addEventListener('change', function () {
-  const f = this.files && this.files[0];
-  const img = $('s-photo-prev');
-  $('s-shot-t').textContent = f ? 'Photo attached — tap to change' : SHOT_IDLE;
-  if (!f) { img.classList.add('hidden'); return; }
-  img.src = URL.createObjectURL(f);
-  img.classList.remove('hidden');
+  const picked = [...(this.files || [])];
+  if (picked.length) solveShots.push(...picked);
+  this.value = '';
+  paintSolveShots();
 });
 $('new-scrim').addEventListener('click', e => { if (e.target === $('new-scrim')) closeNew(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeNew(); });
