@@ -9015,7 +9015,7 @@ Thank you.`;
             if (batchId) {
                 const { data: trLogs } = await _supabase
                     .from('shared_inventory_logs')
-                    .select('plot_name, quantity_change, remark, transaction_date, created_at')
+                    .select('plot_name, quantity_change, remark, transaction_date, created_at, breed_name')
                     .eq('batch_name', batchId)
                     .eq('transaction_type', 'Cull3_Transfer')
                     .order('created_at', { ascending: true });
@@ -9030,7 +9030,12 @@ Thank you.`;
                         date:       log.transaction_date ||
                                     (log.created_at ? String(log.created_at).slice(0, 10) : ''),
                         source:     fromMatch ? fromMatch[1] : null,
-                        sourceDest: fromMatch ? fromMatch[2] : 'main'
+                        sourceDest: fromMatch ? fromMatch[2] : 'main',
+                        // Kept whole so a movement this page cannot place can
+                        // still be written back byte for byte by the save,
+                        // rather than being deleted for not being understood.
+                        remark:     log.remark || '',
+                        breed:      log.breed_name || null
                     });
                 });
                 // Oldest movement first, by the date it happened rather than
@@ -9122,10 +9127,29 @@ Thank you.`;
                 // plot name alone (rows are one per plot) rather than also on
                 // dest type, or a D-Tone plot's transfers would find no home
                 // and be dropped by the next save.
+                /* …AND KEEP THE ONES IT CANNOT PLACE.
+
+                   A movement whose remark carries no "From: [PLOT|type]", or
+                   whose source plot is not a row on this batch, used to be
+                   dropped here — silently, and completely. That is worse than
+                   it sounds, because the tab SAVES BY REPLACEMENT: saving 3rd
+                   Culling deletes every Cull3_Transfer row on the batch and
+                   writes back what the form is holding. A movement dropped at
+                   load was therefore deleted from the database by the next
+                   save of the tab, and the destination rows it had built went
+                   with it — Transfer Data and P-R Culling both empty on a
+                   batch that plainly had both.
+
+                   So they are kept. They show in their own card with a box to
+                   say which plot they left, they still feed their destination,
+                   and the save writes them back exactly as they are until
+                   somebody places them. */
+                t6_unplacedTransfers = [];
                 savedTransfers.forEach(t => {
-                    if (!t.source) return;
-                    const src = t6_plotData.find(p => _t6PlotKey(p.plot) === _t6PlotKey(t.source));
-                    if (!src) return;
+                    const src = t.source
+                        ? t6_plotData.find(p => _t6PlotKey(p.plot) === _t6PlotKey(t.source))
+                        : null;
+                    if (!src) { t6_unplacedTransfers.push(t); return; }
                     (src.savedTransfers = src.savedTransfers || [])
                         .push({ target: t.target, qty: t.qty, date: t.date });
                 });
@@ -9665,6 +9689,13 @@ Thank you.`;
                     </div>`);
             });
 
+            /* Movements whose sending plot is not recorded, at the top of the
+               list where they cannot be missed. Built after the plot cards so
+               its source picker can offer every plot, inserted before them
+               because it is the thing that needs a person. */
+            const unplacedHtml = t6UnplacedCardHtml();
+            if (unplacedHtml) tdataContainer.insertAdjacentHTML('afterbegin', unplacedHtml);
+
             // Restore saved transfer selections (select options exist only
             // after insertion, so values are set here rather than inline).
             t6_plotData.forEach((p, i) => {
@@ -10189,7 +10220,10 @@ Thank you.`;
                 }
             });
             const empty = document.getElementById('t6-transferdata-empty');
-            if (empty) empty.classList.toggle('hidden', total > 0);
+            // "No transfer record" is only true when there is none of either
+            // kind — an unplaced movement is a transfer record, and saying
+            // otherwise over the card listing them reads as a contradiction.
+            if (empty) empty.classList.toggle('hidden', total > 0 || t6_unplacedTransfers.length > 0);
             t6PaintTransferRecs();
             syncT6TransferDests();
         }
@@ -10218,6 +10252,19 @@ Thank you.`;
                 const cur = by.get(key) || { plot: target, qty: 0, from: [] };
                 cur.qty += qty;
                 cur.from.push({ plot: (t6_plotData[owner] || {}).plot || '—', qty });
+                by.set(key, cur);
+            });
+            /* A saved movement nobody can place still ARRIVED somewhere, and
+               its destination row has to show it. Left out, the "-R" rows
+               built from these movements were hidden for having no movement
+               pointing at them, so P-R Culling came up empty on a batch whose
+               transfers were all in the database. */
+            t6_unplacedTransfers.forEach(t => {
+                const key = _t6PlotKey(t.target);
+                if (!key || !(t.qty > 0)) return;
+                const cur = by.get(key) || { plot: t.target, qty: 0, from: [] };
+                cur.qty += t.qty;
+                cur.from.push({ plot: t.source || '— not recorded —', qty: t.qty });
                 by.set(key, cur);
             });
             return by;
@@ -10391,6 +10438,64 @@ Thank you.`;
             if (btn) btn.innerText = shut ? 'Show' : 'Hide';
             const key = _t6PlotKey((t6_plotData[rowIdx] || {}).plot);
             if (key) { if (shut) _t6OpenTransfers.delete(key); else _t6OpenTransfers.add(key); }
+        }
+
+        /* MOVEMENTS THIS REPORT CANNOT PLACE.
+
+           A Cull3_Transfer record says where seedlings WENT in its plot_name
+           and where they LEFT in its remark. When the remark does not say, or
+           says a plot this batch has no row for, the movement has no card to
+           sit in — and was thrown away at load, which then had the save delete
+           it outright, since 3rd Culling saves its transfers by replacement.
+
+           They are held here instead: shown, counted towards their
+           destination, written back unchanged by the save, and waiting for
+           somebody to say which plot they left. */
+        let t6_unplacedTransfers = [];
+
+        function t6UnplacedCardHtml() {
+            if (!t6_unplacedTransfers.length) return '';
+            const lines = t6_unplacedTransfers.map((t, n) => `
+                <div class="t6-unplaced-rec t6-tr-cols items-center rounded-xl border border-[#e8b84b] bg-[#fffaf0] px-3 py-2.5">
+                    <div class="text-[11px] font-black text-[#5b4a33] tabular-nums">${_t6FmtDate(t.date)}</div>
+                    <div class="select-wrapper w-full"><select class="input-style !text-[#a83020] t6-unplaced-src !text-sm !py-2.5 w-full"
+                        onchange="placeT6Transfer(${n}, this.value)">
+                        <option value="">Which plot did it leave?</option>
+                        ${t6SourcePlotOptions()}
+                    </select></div>
+                    <div class="text-[11px] font-black text-[#0891b2] uppercase">→ ${_t6Esc(t.target)}</div>
+                    <div class="text-sm font-black text-[#0891b2] tabular-nums text-right">${t6Fmt(t.qty)}</div>
+                </div>`).join('');
+            return `
+                <div id="t6-unplaced-card" class="border bg-[#fffaf0] border-[#e8b84b] rounded-xl p-4">
+                    <div class="pb-3 border-b border-[#f0dcae]">
+                        <div class="text-[10px] font-black text-[#a8742a] uppercase tracking-widest">Source not recorded</div>
+                        <div class="text-[11px] text-[#8a7a68] font-bold mt-1 leading-snug">
+                            ${t6_unplacedTransfers.length} saved movement${t6_unplacedTransfers.length === 1 ? '' : 's'}
+                            whose record does not say which plot ${t6_unplacedTransfers.length === 1 ? 'it' : 'they'} left.
+                            The seedlings and the destination are right; only the sending plot is missing.
+                            Say which it was and the movement joins that plot's list.
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-2 pt-3">${lines}</div>
+                </div>`;
+        }
+
+        /* Somebody says which plot it left: the movement becomes an ordinary
+           line on that plot's card, and stops being unplaced. */
+        function placeT6Transfer(n, sourceIdx) {
+            const t = t6_unplacedTransfers[n];
+            const idx = sourceIdx === '' ? -1 : parseInt(sourceIdx, 10);
+            if (!t || idx < 0 || !t6_plotData[idx]) return;
+            t6HarvestRows();
+            (t6_plotData[idx].savedTransfers = t6_plotData[idx].savedTransfers || [])
+                .push({ target: t.target, qty: t.qty, date: t.date });
+            t6_unplacedTransfers.splice(n, 1);
+            t6RememberTransferPanels();
+            _t6OpenTransfers.add(_t6PlotKey(t6_plotData[idx].plot));
+            renderT6PlotRows();
+            showToast(`Movement of ${t6Fmt(t.qty)} to ${t.target} placed on ${t6_plotData[idx].plot}. ` +
+                      `Save the tab to record it.`, 'success');
         }
 
         /* A MOVEMENT COUNTS WHEN IT SAYS ALL THREE THINGS: when it happened,
@@ -11712,6 +11817,27 @@ Thank you.`;
                     const { error } = await safeReplaceLogs(batchId, ['3rd_Culling'], logsToInsert);
                     if (error) throw error;
                 }
+                /* A MOVEMENT THE FORM COULD NOT PLACE IS STILL A MOVEMENT.
+
+                   Transfers replace as a set every save: every Cull3_Transfer
+                   row on the batch is deleted and what the form holds is
+                   written back. So anything the loader could not show was
+                   deleted by the next save — which is how a batch with
+                   transfers ended up with none. These are written back exactly
+                   as they were found, so a save can never be the thing that
+                   loses them. */
+                t6_unplacedTransfers.forEach(t => {
+                    const log = withEditMeta({
+                        transaction_type: 'Cull3_Transfer',
+                        batch_name:       batchId,
+                        breed_name:       t.breed || breed,
+                        plot_name:        t.target,
+                        quantity_change:  t.qty,
+                        remark:           t.remark || `3rd Culling transfer. To: [${t.target}] Qty: ${t.qty}.`
+                    });
+                    if (t.date) log.transaction_date = t.date;
+                    transferLogs.push(log);
+                });
                 // Transfers replace as a set every save — rows re-emit their
                 // (pre-filled) transfer values, so removing one in the form
                 // removes it from the DB too.
