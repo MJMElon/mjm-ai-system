@@ -11510,6 +11510,25 @@ Thank you.`;
       // Tab 7 (Adjustments & Audit) has no top banner — Approve/Edit live
       // per-row in the Stock Calibration history table instead.
       const STAGE_BY_TAB = { 1: 'seeds_in', 2: 'planting', 3: 'transplanting', 4: 'cull_1', 5: 'cull_2', 6: 'cull_3', 8: 'seed_audit' };
+
+      /* WHY A SIGN-OFF WAS REFUSED, in words somebody can act on.
+
+         operation_batch_verifications carries a CHECK listing the stages
+         it accepts, written when the report had six tabs. A tab added
+         since — Seed Audit — signs off under a name the list has never
+         heard of, and the database answers with its own constraint name
+         and nothing else. Saying which file fixes it is the difference
+         between a morning lost and two minutes. */
+      function _verifyErrorText(error, stage) {
+        const msg = (error && error.message) || String(error);
+        if (/stage_check/i.test(msg)) {
+          return 'This tab cannot be signed off yet: the database has not been told that "' +
+                 stage + '" is a stage.\n\nRun shared/RUN_ME_seed_audit_signoff.sql in the ' +
+                 'Supabase SQL Editor — it widens that list and nothing else. Everything ' +
+                 'already signed off stays signed off.';
+        }
+        return 'Failed to verify: ' + msg;
+      }
       const TAB_INDICES = [1, 2, 3, 4, 5, 6, 8];
 
       const reviews       = {}; // stage → { reviewed_by, reviewer_name, reviewer_email, reviewed_at }
@@ -12064,7 +12083,7 @@ Thank you.`;
         const { error } = await _supabase
           .from('operation_batch_verifications')
           .upsert(payload, { onConflict: 'batch_name,stage' });
-        if (error) { alert('Failed to verify: ' + error.message); return; }
+        if (error) { alert(_verifyErrorText(error, stage)); return; }
         verifications[stage] = payload;
         await _clearRejectionRows(batch, stage); // re-verifying after amendment clears the rejection
         renderBanner(tabIdx);

@@ -123,9 +123,13 @@ CREATE TABLE IF NOT EXISTS operation_batch_reviews (
   id            UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   batch_name    TEXT NOT NULL,
   stage         TEXT NOT NULL
+                /* Seed Audit signs off like any other tab — see the
+                   note in migration_batch_verifications.sql, and
+                   shared/RUN_ME_seed_audit_signoff.sql for a database
+                   that already exists. */
                 CHECK (stage IN (
                   'seeds_in', 'planting', 'transplanting',
-                  'cull_1', 'cull_2', 'cull_3'
+                  'cull_1', 'cull_2', 'cull_3', 'seed_audit'
                 )),
   reviewed_by   UUID REFERENCES auth.users(id),
   reviewer_email TEXT,

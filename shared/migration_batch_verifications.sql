@@ -24,9 +24,15 @@ CREATE TABLE IF NOT EXISTS operation_batch_verifications (
   id               UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   batch_name       TEXT NOT NULL,
   stage            TEXT NOT NULL
+                   /* Seed Audit signs off like any other tab. It came
+                      after this list was written, and a database created
+                      from an older copy of this file refuses it with
+                      "violates check constraint ..._stage_check" — see
+                      shared/RUN_ME_seed_audit_signoff.sql, which widens
+                      the list on a database that already exists. */
                    CHECK (stage IN (
                      'seeds_in', 'planting', 'transplanting',
-                     'cull_1', 'cull_2', 'cull_3'
+                     'cull_1', 'cull_2', 'cull_3', 'seed_audit'
                    )),
   verified_by      UUID REFERENCES auth.users(id),
   verifier_email   TEXT,
