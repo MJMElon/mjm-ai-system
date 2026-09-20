@@ -1894,9 +1894,15 @@
         const colBookTotals = months.map(() => 0);
         allRows.forEach(r => {
             totBalance += r.balance;
-            months.forEach((m, i) => {
-                colBookTotals[i] += (r.bookingsByMonth[m.key] || 0);
-            });
+            // A booking only means anything while there's still a balance
+            // left to collect against — an order already settled (balance
+            // <= 0) has nothing outstanding, so its booked figure shouldn't
+            // still be showing as if it were.
+            if (r.balance > 0) {
+                months.forEach((m, i) => {
+                    colBookTotals[i] += (r.bookingsByMonth[m.key] || 0);
+                });
+            }
         });
 
         tbody.innerHTML = rows.map((r, pageIdx) => {
@@ -1909,7 +1915,7 @@
             const rowStyle = rowCancelled ? 'style="background:#fef2f2"' : '';
             const cancelStrike = rowCancelled ? 'style="text-decoration:line-through;color:#a83020"' : '';
             const cellsHtml = months.map(m => {
-                const booked = r.bookingsByMonth[m.key] || 0;
+                const booked = r.balance > 0 ? (r.bookingsByMonth[m.key] || 0) : 0;
                 const cls = ['t-mo', booked ? 'has-booked' : '', m.key === nowKey ? 'is-now' : ''].filter(Boolean).join(' ');
                 const inner = booked ? booked.toLocaleString() : '';
                 return `<td class="${cls}">${inner}</td>`;
