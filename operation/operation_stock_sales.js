@@ -1310,6 +1310,7 @@
                     paymentMethod: o.payment_terms || 'cash',
                     collectionsByMonth: colByMonth,
                     bookingsByMonth: bookByMonth,
+                    bookingsByDay: bookByOrderNumberByDay[o.order_number] || {},
                     totalCollected,
                     balance
                 };
@@ -1387,6 +1388,7 @@
 
         const now = new Date();
         const monthKeyNow = now.toISOString().slice(0, 7);
+        const todayKey    = _monDateKey(now);
 
         const asof = document.getElementById('mon-dash-asof');
         if (asof) asof.textContent = now.toLocaleString('en-MY', { month: 'long', year: 'numeric' });
@@ -1410,10 +1412,14 @@
 
             // A booking only counts as "pending pickup" while its order
             // still has a balance left to collect — same rule Weekly
-            // Collection (Remain) and the Booking tab apply.
+            // Collection and the Booking tab apply. Also today onward
+            // only, not the whole month — a booking dated earlier in the
+            // month already had its pickup day come and go.
             if ((Number(o.balance) || 0) > 0) {
                 pendingCollection += Number(o.balance) || 0;
-                monthSched        += Number(o.bookingsByMonth && o.bookingsByMonth[monthKeyNow] || 0);
+                Object.entries(o.bookingsByDay || {}).forEach(([dayK, qty]) => {
+                    if (dayK.slice(0, 7) === monthKeyNow && dayK >= todayKey) monthSched += Number(qty || 0);
+                });
             }
         });
 
