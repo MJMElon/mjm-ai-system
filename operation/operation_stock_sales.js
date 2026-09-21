@@ -1400,7 +1400,7 @@
         const weekEndKey   = _monDateKey(weekEnd);
 
         // Per-order aggregates
-        let monthSched = 0, monthCollected = 0;
+        let monthSched = 0, monthCollected = 0, pendingPickup = 0;
         let pendingCollection = 0;
 
         (allCustomerOrders || []).forEach(o => {
@@ -1412,13 +1412,19 @@
 
             // A booking only counts as "pending pickup" while its order
             // still has a balance left to collect — same rule Weekly
-            // Collection and the Booking tab apply. Also today onward
-            // only, not the whole month — a booking dated earlier in the
-            // month already had its pickup day come and go.
+            // Collection and the Booking tab apply.
             if ((Number(o.balance) || 0) > 0) {
                 pendingCollection += Number(o.balance) || 0;
                 Object.entries(o.bookingsByDay || {}).forEach(([dayK, qty]) => {
-                    if (dayK.slice(0, 7) === monthKeyNow && dayK >= todayKey) monthSched += Number(qty || 0);
+                    if (dayK < todayKey) return;
+                    const q = Number(qty || 0);
+                    // Pending Pickup: today onward, no month boundary — a
+                    // booking due next month is just as pending as one due
+                    // this week. monthSched stays month-bound; it only
+                    // feeds the Collection card's "% of month activity"
+                    // below, a different question than what's still due.
+                    pendingPickup += q;
+                    if (dayK.slice(0, 7) === monthKeyNow) monthSched += q;
                 });
             }
         });
@@ -1460,7 +1466,7 @@
         const monthLbl = now.toLocaleString('en-MY', { month: 'long', year: 'numeric' });
         const cards = [
             { label: 'Weekly Collection',          value: weekSched,         accent: 'blue',    sub: `${dayMon(weekStart)} – ${dayMon(weekEnd)}` },
-            { label: `${monthLbl} Scheduled`,       value: monthSched,        accent: 'indigo',  sub: 'Bookings pending pickup' },
+            { label: 'Pending Pickup',              value: pendingPickup,     accent: 'indigo',  sub: 'Bookings from today onwards' },
             { label: `${monthLbl} Collection`,      value: monthCollected,    accent: 'emerald', sub: monthCollected ? `${monthAttainment}% of month activity` : 'No pickups recorded yet' },
             { label: 'Pending Collection',          value: pendingCollection, accent: 'amber',   sub: 'Balance across active orders' }
         ];
