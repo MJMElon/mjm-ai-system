@@ -1315,7 +1315,7 @@
                 };
             });
 
-            // Weekly Collection (Remain) — only a booking belonging to an
+            // Weekly Collection — only a booking belonging to an
             // order that still has balance left to collect counts, same
             // rule the Booking tab and the month "pending pickup" card
             // below apply. Built after allCustomerOrders so each day's
@@ -1453,7 +1453,7 @@
         // dashboard always names the live month it's reporting on.
         const monthLbl = now.toLocaleString('en-MY', { month: 'long', year: 'numeric' });
         const cards = [
-            { label: 'Weekly Collection (Remain)', value: weekSched,         accent: 'blue',    sub: `${dayMon(weekStart)} – ${dayMon(weekEnd)}` },
+            { label: 'Weekly Collection',          value: weekSched,         accent: 'blue',    sub: `${dayMon(weekStart)} – ${dayMon(weekEnd)}` },
             { label: `${monthLbl} Scheduled`,       value: monthSched,        accent: 'indigo',  sub: 'Bookings pending pickup' },
             { label: `${monthLbl} Collection`,      value: monthCollected,    accent: 'emerald', sub: monthCollected ? `${monthAttainment}% of month activity` : 'No pickups recorded yet' },
             { label: 'Pending Collection',          value: pendingCollection, accent: 'amber',   sub: 'Balance across active orders' }
