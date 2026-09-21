@@ -1232,7 +1232,7 @@
             }
 
             const bookByOrderNumber = {};
-            allBookingsByDate = {};
+            const bookByOrderNumberByDay = {};
             bookings.forEach(b => {
                 if (!b.order_number || !b.booking_date) return;
                 const monthK = b.booking_date.slice(0, 7);
@@ -1240,7 +1240,8 @@
                 const qty    = Number(b.collection_qty || 0);
                 if (!bookByOrderNumber[b.order_number]) bookByOrderNumber[b.order_number] = {};
                 bookByOrderNumber[b.order_number][monthK] = (bookByOrderNumber[b.order_number][monthK] || 0) + qty;
-                allBookingsByDate[dayK] = (allBookingsByDate[dayK] || 0) + qty;
+                if (!bookByOrderNumberByDay[b.order_number]) bookByOrderNumberByDay[b.order_number] = {};
+                bookByOrderNumberByDay[b.order_number][dayK] = (bookByOrderNumberByDay[b.order_number][dayK] || 0) + qty;
             });
 
             allCustomerOrders = orders.map(o => {
@@ -1314,6 +1315,21 @@
                 };
             });
 
+            // Weekly Collection (Remain) — only a booking belonging to an
+            // order that still has balance left to collect counts, same
+            // rule the Booking tab and the month "pending pickup" card
+            // below apply. Built after allCustomerOrders so each day's
+            // booked qty can be checked against its order's balance.
+            allBookingsByDate = {};
+            allCustomerOrders.forEach(o => {
+                if ((Number(o.balance) || 0) <= 0) return;
+                const days = bookByOrderNumberByDay[o.orderNumber];
+                if (!days) return;
+                Object.entries(days).forEach(([dayK, qty]) => {
+                    allBookingsByDate[dayK] = (allBookingsByDate[dayK] || 0) + qty;
+                });
+            });
+
             renderActiveCustView();
             renderMonitoringDashboard();
             // renderPaymentStatusSummary removed — Customer Payment Status block deleted from UI.
@@ -1384,21 +1400,21 @@
         // Per-order aggregates
         let monthSched = 0, monthCollected = 0;
         let pendingCollection = 0;
-        let activeOrders = 0;
-        let unpaidCash = 0;
 
         (allCustomerOrders || []).forEach(o => {
             const isCash   = (o.paymentMethod || 'cash') === 'cash';
             const isUnpaid = o.rawStatus === 'Pending Payment' || o.derivedStatus === 'Pending Payment';
 
-            if (isCash && isUnpaid) { unpaidCash++; return; }
+            if (isCash && isUnpaid) return;
             if (o.rawStatus === 'Cancelled') return;
 
+            // A booking only counts as "pending pickup" while its order
+            // still has a balance left to collect — same rule Weekly
+            // Collection (Remain) and the Booking tab apply.
             if ((Number(o.balance) || 0) > 0) {
-                activeOrders++;
                 pendingCollection += Number(o.balance) || 0;
+                monthSched        += Number(o.bookingsByMonth && o.bookingsByMonth[monthKeyNow] || 0);
             }
-            monthSched     += Number(o.bookingsByMonth    && o.bookingsByMonth[monthKeyNow]    || 0);
         });
 
         // `monthCollected` now sources from the same DO records the
@@ -1437,20 +1453,16 @@
         // dashboard always names the live month it's reporting on.
         const monthLbl = now.toLocaleString('en-MY', { month: 'long', year: 'numeric' });
         const cards = [
-            { label: 'Weekly Scheduled',         value: weekSched,         accent: 'blue',    sub: `${dayMon(weekStart)} – ${dayMon(weekEnd)}` },
-            { label: `${monthLbl} Scheduled`,    value: monthSched,        accent: 'indigo',  sub: 'Bookings pending pickup' },
-            { label: `${monthLbl} Collection`,   value: monthCollected,    accent: 'emerald', sub: monthCollected ? `${monthAttainment}% of month activity` : 'No pickups recorded yet' },
-            { label: 'Pending Collection',       value: pendingCollection, accent: 'amber',   sub: 'Balance across active orders' },
-            { label: 'Active Orders',            value: activeOrders,      accent: 'slate',   sub: 'With outstanding balance' },
-            { label: 'Unpaid Orders',            value: unpaidCash,        accent: 'rose',    sub: 'Awaiting customer payment' }
+            { label: 'Weekly Collection (Remain)', value: weekSched,         accent: 'blue',    sub: `${dayMon(weekStart)} – ${dayMon(weekEnd)}` },
+            { label: `${monthLbl} Scheduled`,       value: monthSched,        accent: 'indigo',  sub: 'Bookings pending pickup' },
+            { label: `${monthLbl} Collection`,      value: monthCollected,    accent: 'emerald', sub: monthCollected ? `${monthAttainment}% of month activity` : 'No pickups recorded yet' },
+            { label: 'Pending Collection',          value: pendingCollection, accent: 'amber',   sub: 'Balance across active orders' }
         ];
         const accents = {
             blue:    { bg: 'bg-blue-50',    text: 'text-blue-700',    label: 'text-blue-500'    },
             indigo:  { bg: 'bg-indigo-50',  text: 'text-indigo-700',  label: 'text-indigo-500'  },
             emerald: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'text-emerald-600' },
-            amber:   { bg: 'bg-amber-50',   text: 'text-amber-700',   label: 'text-amber-600'   },
-            slate:   { bg: 'bg-slate-50',   text: 'text-slate-700',   label: 'text-slate-500'   },
-            rose:    { bg: 'bg-rose-50',    text: 'text-rose-700',    label: 'text-rose-500'    }
+            amber:   { bg: 'bg-amber-50',   text: 'text-amber-700',   label: 'text-amber-600'   }
         };
         cardsEl.innerHTML = cards.map(c => {
             const a = accents[c.accent];
