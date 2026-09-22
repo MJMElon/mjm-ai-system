@@ -955,16 +955,63 @@
         el.classList.remove('hidden');
     }
 
-    function plotStatusPill(status) {
-        const map = {
-            no_status: { label: 'No Status', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
-            open:      { label: 'Open',      cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-            sisa:      { label: 'Sisa',      cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-            finished:  { label: 'Finished',  cls: 'bg-slate-200 text-slate-700 border-slate-300' }
-        };
-        const m = map[status] || map.no_status;
-        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${m.cls}">${m.label}</span>`;
+    const MAT_STATUS_MAP = {
+        no_status: { label: 'No Status', dot: 'bg-slate-400' },
+        open:      { label: 'Open',      dot: 'bg-emerald-500' },
+        sisa:      { label: 'Sisa',      dot: 'bg-amber-500' },
+        finished:  { label: 'Finished',  dot: 'bg-slate-500' }
+    };
+
+    // One dropdown in place of the status pill + native <select> combo —
+    // same button/menu pattern as the History control above the table
+    // (#history-btn / #history-menu), not the OS's own <select> list.
+    function matStatusControl(key, status) {
+        const m = MAT_STATUS_MAP[status] || MAT_STATUS_MAP.no_status;
+        const opts = Object.entries(MAT_STATUS_MAP).map(([value, o]) => `
+            <button type="button" onclick="selectMatStatus(this,'${value}')" class="w-full text-left text-[11px] font-bold text-slate-700 hover:bg-slate-50 rounded-lg px-3 py-2 flex items-center gap-2 ${value === status ? 'bg-amber-50 text-amber-800' : ''}">
+                <span class="w-2 h-2 rounded-full ${o.dot} shrink-0"></span><span>${o.label}</span>
+            </button>`).join('');
+        return `
+            <div class="relative mat-status-wrap" data-allockey="${key}">
+                <button type="button" onclick="toggleMatStatusMenu(this)" class="text-[9px] font-black text-slate-600 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 transition-colors flex items-center gap-1.5 shadow-sm uppercase tracking-widest">
+                    <span class="w-2 h-2 rounded-full ${m.dot} shrink-0"></span>
+                    <span>${m.label}</span>
+                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <div class="mat-status-menu hidden w-36 bg-white rounded-xl border border-slate-200 shadow-xl z-30 p-1.5">${opts}</div>
+            </div>`;
     }
+
+    // Positioned fixed off the button's own rect, not absolute off the row —
+    // the table body scrolls horizontally (.scroll-x-fade), and an
+    // overflow-x:auto ancestor clips an absolutely-positioned descendant on
+    // the y-axis too (setting one overflow axis computes the other to
+    // 'auto' as well), which cut the menu off against the row below it.
+    function toggleMatStatusMenu(btn) {
+        const menu = btn.nextElementSibling;
+        const opening = menu.classList.contains('hidden');
+        document.querySelectorAll('.mat-status-menu').forEach(m => { if (m !== menu) m.classList.add('hidden'); });
+        if (opening) {
+            const rect = btn.getBoundingClientRect();
+            menu.style.position = 'fixed';
+            menu.style.left = rect.left + 'px';
+            menu.style.top  = (rect.bottom + 4) + 'px';
+        }
+        menu.classList.toggle('hidden', !opening);
+    }
+    window.toggleMatStatusMenu = toggleMatStatusMenu;
+
+    function selectMatStatus(optBtn, value) {
+        const wrap = optBtn.closest('.mat-status-wrap');
+        wrap.querySelector('.mat-status-menu').classList.add('hidden');
+        updateAllocation({ dataset: { allockey: wrap.dataset.allockey, allocfield: 'plot_status' }, value });
+    }
+    window.selectMatStatus = selectMatStatus;
+
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('.mat-status-wrap')) return;
+        document.querySelectorAll('.mat-status-menu').forEach(m => m.classList.add('hidden'));
+    });
 
     function renderMaturityTable() {
         const tbody = document.getElementById('maturity-rows');
@@ -1024,16 +1071,7 @@
                     <td class="col-prod num">${r.qty.toLocaleString()}</td>
                     <td class="col-prod num text-emerald-700 mat-sep-r">${r.afterCulling.toLocaleString()}</td>
                     <td class="col-plot">
-                        <div class="flex items-center gap-2">
-                            ${plotStatusPill(status)}
-                            <select data-allockey="${r.key}" data-allocfield="plot_status" onchange="updateAllocation(this)"
-                                class="text-[9px] font-black uppercase tracking-wider rounded-md border border-slate-200 px-1.5 py-0.5 bg-white">
-                                <option value="no_status" ${status === 'no_status' ? 'selected' : ''}>No Status</option>
-                                <option value="open"      ${status === 'open'      ? 'selected' : ''}>Open</option>
-                                <option value="sisa"      ${status === 'sisa'      ? 'selected' : ''}>Sisa</option>
-                                <option value="finished"  ${status === 'finished'  ? 'selected' : ''}>Finished</option>
-                            </select>
-                        </div>
+                        ${matStatusControl(r.key, status)}
                     </td>
                     <td class="col-plot num text-blue-700">${collected.toLocaleString()}</td>
                     <td class="col-plot num font-black mat-sep-r ${plotBalance <= 0 ? 'text-red-600' : 'text-slate-800'}">${plotBalance.toLocaleString()}${plotBalance <= 0 ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-red-600 text-white align-middle">Sold Out</span>' : ''}</td>
