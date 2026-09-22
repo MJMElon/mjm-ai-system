@@ -3233,6 +3233,7 @@
         nurseries: [],
         plots: [],
         plotBatches: {},      // plot -> [{batch, breed, full, collected, balance}]
+        hiddenComplete: {},   // plot -> how many batches are finished with it
         heights: {},          // canonical plot|batch -> {avg, date, samples:[cm], n}
         breedToPlots: {},     // breed -> Set of plot_names
         breedTotals: {},      // breed -> {full, collected, balance, batches: Set, plots: Set}
@@ -3301,10 +3302,50 @@
         return out;
     }
 
+    /* A BATCH THAT IS FINISHED WITH THIS PLOT.
+
+       The Inventory Map is about what is still standing and still to come
+       out. A batch whose 3rd Culling is done on a plot is finished there, and
+       leaving it on the list put 8,514 over a plot with 5,302 in it.
+
+       Done means what the batch report's 3rd Culling tab means by Done, read
+       off the same record it writes:
+
+         · HQ has keyed the DRONE MAP QUANTITY — `MapQty: N` in the remark.
+           That is the count HQ signs the plot off on.
+         · or there was NOTHING TO CULL — the record's quantity_change is 0,
+           which is how a plot with nothing standing in it is recorded.
+
+       SHARED RULE — this is the mapDone / soldOutRow pair in
+       operation/operation_batch_detail.html's calcT6. Change one, change the
+       other.
+
+       EVERY record for the pair has to be done, not any: a plot can carry a
+       MAIN row and a D-TONE row for one batch, and half a plot signed off is
+       not a plot to take off the map. */
+    function _invmapCull3Done(log) {
+        if (!log) return false;
+        if (/MapQty:\s*\d+/.test(String(log.remark || ''))) return true;
+        return Number(log.quantity_change) === 0;
+    }
+    function _buildInvmapCompleted(rows) {
+        const byKey = {};
+        (rows || []).forEach(r => {
+            if (!r.plot_name || !r.batch_name) return;
+            const k = String(r.plot_name).trim().toUpperCase() + '|' + String(r.batch_name).trim().toUpperCase();
+            (byKey[k] || (byKey[k] = [])).push(r);
+        });
+        const done = {};
+        Object.entries(byKey).forEach(([k, logs]) => {
+            if (logs.length && logs.every(_invmapCull3Done)) done[k] = true;
+        });
+        return done;
+    }
+
     async function loadInventoryMap() {
         const tabBar = document.getElementById('invmap-nursery-tabs');
         try {
-            const [nursRes, plotsRes, transRes, bookRes, heightRes] = await Promise.all([
+            const [nursRes, plotsRes, transRes, bookRes, heightRes, cull3Res] = await Promise.all([
                 _supabase.from('operation_nurseries').select('*').order('name'),
                 _supabase.from('shared_plots').select('*'),
                 _supabase.from('shared_inventory_logs')
@@ -3317,13 +3358,22 @@
                 // down — a plot's stock is worth showing with no heights beside
                 // it, and the tile says "not measured" either way.
                 _supabase.from('audit_height_records')
-                    .select('plot,batch,sample_1,sample_2,sample_3,date')
+                    .select('plot,batch,sample_1,sample_2,sample_3,date'),
+                // 3rd Culling, to know which batches are finished with which
+                // plot. This one failing must FAIL OPEN — showing a finished
+                // batch is untidy, hiding a live one is stock nobody can find.
+                _supabase.from('shared_inventory_logs')
+                    .select('batch_name,plot_name,quantity_change,remark')
+                    .eq('transaction_type', '3rd_Culling')
             ]);
 
             _invmap.nurseries = nursRes.data || [];
             _invmap.plots     = plotsRes.data || [];
             _invmap.heights   = _buildInvmapHeights(heightRes && heightRes.data);
             if (heightRes && heightRes.error) console.warn('[invmap] heights not loaded:', heightRes.error);
+            const completed = (cull3Res && cull3Res.error)
+                ? (console.warn('[invmap] 3rd Culling not loaded — showing every batch:', cull3Res.error), {})
+                : _buildInvmapCompleted(cull3Res && cull3Res.data);
 
             // Aggregate full qty + breed per (plot, batch).
             const fullByPlotBatch = {};
@@ -3348,8 +3398,16 @@
             });
 
             const plotBatches = {};
+            /* …and the ones left out, counted per plot. A figure that quietly
+               drops is a figure somebody chases; the modal says how many
+               finished batches are not on the list. */
+            const hiddenComplete = {};
             Object.keys(fullByPlotBatch).forEach(key => {
                 const [plot, batch] = key.split('|');
+                if (completed[String(plot).trim().toUpperCase() + '|' + String(batch).trim().toUpperCase()]) {
+                    hiddenComplete[plot] = (hiddenComplete[plot] || 0) + 1;
+                    return;
+                }
                 if (!plotBatches[plot]) plotBatches[plot] = [];
                 plotBatches[plot].push({
                     batch,
@@ -3375,6 +3433,7 @@
                 list.sort((a, b) => b.balance - a.balance);
             });
             _invmap.plotBatches = plotBatches;
+            _invmap.hiddenComplete = hiddenComplete;
 
             // Build breed indexes for the By Breed sidebar.
             const breedToPlots = {};
@@ -3802,8 +3861,17 @@
         titleEl.innerText = plotName;
         let batches = _invmap.plotBatches[plotName] || [];
         if (_invmap.selectedBreed) batches = batches.filter(b => b.breed === _invmap.selectedBreed);
+        /* Batches this plot is finished with are off the list — see
+           _buildInvmapCompleted. Said out loud, because a plot whose figures
+           dropped without explanation is a plot somebody goes looking for. */
+        const doneCount = (_invmap.hiddenComplete || {})[plotName] || 0;
+        const doneNote = doneCount
+            ? `<div class="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">
+                   ${doneCount} batch${doneCount === 1 ? '' : 'es'} finished with this plot — 3rd Culling signed off, not listed
+               </div>` : '';
         if (!batches.length) {
-            body.innerHTML = '<div class="text-center py-8 text-slate-400 text-xs font-bold uppercase tracking-widest">No batches in scope for this plot.</div>';
+            body.innerHTML = doneNote +
+                '<div class="text-center py-8 text-slate-400 text-xs font-bold uppercase tracking-widest">No batches in scope for this plot.</div>';
         } else {
             const totFull = batches.reduce((s,b)=>s+b.full,0);
             const totColl = batches.reduce((s,b)=>s+b.collected,0);
@@ -3827,6 +3895,7 @@
             const hFmt = v => (Math.round(v * 10) / 10).toFixed(1);
 
             body.innerHTML = `
+                ${doneNote}
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
                     <div class="bg-slate-50 rounded-lg p-3 text-center"><div class="text-[9px] font-bold text-slate-400 uppercase">Full</div><div class="text-xl font-black text-slate-800">${fmt(totFull)}</div></div>
                     <div class="bg-blue-50 rounded-lg p-3 text-center"><div class="text-[9px] font-bold text-blue-400 uppercase">Collected</div><div class="text-xl font-black text-blue-700">${fmt(totColl)}</div></div>
