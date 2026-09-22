@@ -223,17 +223,17 @@ const ROWS = {
     ['the rows shown are only those two', b8.rows.length === 2],
     ['Full counts what is listed, not what was', /5,442/.test(full)],
     ['and so does Balance', /5,442/.test(bal)],
-    // ── said out loud
-    ['the modal says how many were left out', /2 batches finished with this plot/i.test(b8.note)],
-    ['and why', /3rd culling signed off/i.test(b8.note)],
+    // ── and nothing said about them
+    ['the modal says nothing about the ones left out', b8.note === ''],
+    ['no stray line above the tiles either', /^Full/.test(b8.whole.trim())],
     // ── half signed off is not signed off
     ['a plot with one of its two rows signed off keeps the batch',
       JSON.stringify(state.b9) === JSON.stringify(['300'])],
     ['and still lists it', b9.rows.length === 1],
     // ── a plot with nothing left
     ['a plot whose every batch is finished has none', JSON.stringify(state.b7) === JSON.stringify([])],
-    ['and says so rather than going blank',
-      /1 batch finished with this plot/i.test(b7.whole) && /no batches in scope/i.test(b7.whole)],
+    ['and reads as a plot with nothing in it',
+      /^no batches in scope/i.test(b7.whole.trim()) && !/finished with this plot/i.test(b7.whole)],
     ['however the plot name was keyed on the culling record',
       (state.hidden || {})['B7'] === 1],
     ['no page errors', errs.length === 0],

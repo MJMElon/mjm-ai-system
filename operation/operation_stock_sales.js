@@ -3862,16 +3862,12 @@
         let batches = _invmap.plotBatches[plotName] || [];
         if (_invmap.selectedBreed) batches = batches.filter(b => b.breed === _invmap.selectedBreed);
         /* Batches this plot is finished with are off the list — see
-           _buildInvmapCompleted. Said out loud, because a plot whose figures
-           dropped without explanation is a plot somebody goes looking for. */
-        const doneCount = (_invmap.hiddenComplete || {})[plotName] || 0;
-        const doneNote = doneCount
-            ? `<div class="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">
-                   ${doneCount} batch${doneCount === 1 ? '' : 'es'} finished with this plot — 3rd Culling signed off, not listed
-               </div>` : '';
+           _buildInvmapCompleted. Nothing is said about them: the modal is a
+           list of what is still standing, and a line about what is not is
+           noise on a screen read all day. _invmap.hiddenComplete still holds
+           the count if anything ever wants it. */
         if (!batches.length) {
-            body.innerHTML = doneNote +
-                '<div class="text-center py-8 text-slate-400 text-xs font-bold uppercase tracking-widest">No batches in scope for this plot.</div>';
+            body.innerHTML = '<div class="text-center py-8 text-slate-400 text-xs font-bold uppercase tracking-widest">No batches in scope for this plot.</div>';
         } else {
             const totFull = batches.reduce((s,b)=>s+b.full,0);
             const totColl = batches.reduce((s,b)=>s+b.collected,0);
@@ -3895,7 +3891,6 @@
             const hFmt = v => (Math.round(v * 10) / 10).toFixed(1);
 
             body.innerHTML = `
-                ${doneNote}
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
                     <div class="bg-slate-50 rounded-lg p-3 text-center"><div class="text-[9px] font-bold text-slate-400 uppercase">Full</div><div class="text-xl font-black text-slate-800">${fmt(totFull)}</div></div>
                     <div class="bg-blue-50 rounded-lg p-3 text-center"><div class="text-[9px] font-bold text-blue-400 uppercase">Collected</div><div class="text-xl font-black text-blue-700">${fmt(totColl)}</div></div>
