@@ -3271,6 +3271,8 @@
         nurseries: [],
         plots: [],
         plotBatches: {},      // plot -> [{batch, breed, full, collected, balance}]
+        hiddenComplete: {},   // plot -> how many batches are finished with it
+        heights: {},          // canonical plot|batch -> {avg, date, samples:[cm], n}
         breedToPlots: {},     // breed -> Set of plot_names
         breedTotals: {},      // breed -> {full, collected, balance, batches: Set, plots: Set}
         active: 'all',        // 'all' or nursery name
@@ -3278,10 +3280,110 @@
         batchSearch: ''        // lowercase substring to match batch numbers
     };
 
+    /* ONE PLOT, HOWEVER THE TWO SYSTEMS SPELL IT.
+
+       The height audit's plot list is zero-padded — B01…B14, P01, N20 — and
+       the transplant ledger's is not: the map calls the same plot B1. Joining
+       on the string matches nothing at all for every plot numbered under ten.
+
+       SHARED RULE — this is _canonicalPlot in audit/audit_height_script.js.
+       Change one, change the other. */
+    function _invHeightPlotKey(raw) {
+        const s = String(raw == null ? '' : raw).trim().toUpperCase();
+        const m = s.match(/^([A-Z]+)(\d+)(-R)?$/);
+        if (!m) return s;
+        return m[1] + m[2].padStart(2, '0') + (m[3] || '');
+    }
+    function _invHeightKey(plot, batch) {
+        return _invHeightPlotKey(plot) + '|' + String(batch == null ? '' : batch).trim().toUpperCase();
+    }
+
+    /* THE LATEST HEIGHT OF EVERY BATCH, PLOT BY PLOT.
+
+       A height audit measures a few seedlings at a time — audit_height_records
+       holds up to three per row — so one batch measured on one day is usually
+       several rows. The batch's height is the average of every seedling
+       measured on its LATEST day: four seedlings on one batch and five on the
+       one beside it are each averaged over their own count, not pooled.
+
+       An earlier day's rows are left out rather than averaged in. "How tall is
+       it" is a question about now, and a batch measured in June and again in
+       September is 63cm, not the mean of 40 and 63.
+
+       A declined audit ("No Audit Required") writes no samples at all, so it
+       falls out here without needing to be recognised. */
+    function _buildInvmapHeights(rows) {
+        const latest = {};                       // key -> ISO date string
+        (rows || []).forEach(r => {
+            if (!r.plot || !r.batch) return;     // a per-plot audit names no batch
+            const d = String(r.date || '');
+            if (!d) return;
+            const k = _invHeightKey(r.plot, r.batch);
+            if (!latest[k] || d > latest[k]) latest[k] = d;
+        });
+        const out = {};
+        (rows || []).forEach(r => {
+            if (!r.plot || !r.batch) return;
+            const k = _invHeightKey(r.plot, r.batch);
+            if (!latest[k] || String(r.date || '') !== latest[k]) return;
+            const cur = out[k] || (out[k] = { date: latest[k], samples: [], avg: null, n: 0 });
+            [r.sample_1, r.sample_2, r.sample_3].forEach(v => {
+                const n = Number(v);
+                if (Number.isFinite(n) && n > 0) cur.samples.push(n);
+            });
+        });
+        Object.values(out).forEach(h => {
+            h.n = h.samples.length;
+            h.samples.sort((a, b) => a - b);
+            h.avg = h.n ? h.samples.reduce((s, v) => s + v, 0) / h.n : null;
+        });
+        return out;
+    }
+
+    /* A BATCH THAT IS FINISHED WITH THIS PLOT.
+
+       The Inventory Map is about what is still standing and still to come
+       out. A batch whose 3rd Culling is done on a plot is finished there, and
+       leaving it on the list put 8,514 over a plot with 5,302 in it.
+
+       Done means what the batch report's 3rd Culling tab means by Done, read
+       off the same record it writes:
+
+         · HQ has keyed the DRONE MAP QUANTITY — `MapQty: N` in the remark.
+           That is the count HQ signs the plot off on.
+         · or there was NOTHING TO CULL — the record's quantity_change is 0,
+           which is how a plot with nothing standing in it is recorded.
+
+       SHARED RULE — this is the mapDone / soldOutRow pair in
+       operation/operation_batch_detail.html's calcT6. Change one, change the
+       other.
+
+       EVERY record for the pair has to be done, not any: a plot can carry a
+       MAIN row and a D-TONE row for one batch, and half a plot signed off is
+       not a plot to take off the map. */
+    function _invmapCull3Done(log) {
+        if (!log) return false;
+        if (/MapQty:\s*\d+/.test(String(log.remark || ''))) return true;
+        return Number(log.quantity_change) === 0;
+    }
+    function _buildInvmapCompleted(rows) {
+        const byKey = {};
+        (rows || []).forEach(r => {
+            if (!r.plot_name || !r.batch_name) return;
+            const k = String(r.plot_name).trim().toUpperCase() + '|' + String(r.batch_name).trim().toUpperCase();
+            (byKey[k] || (byKey[k] = [])).push(r);
+        });
+        const done = {};
+        Object.entries(byKey).forEach(([k, logs]) => {
+            if (logs.length && logs.every(_invmapCull3Done)) done[k] = true;
+        });
+        return done;
+    }
+
     async function loadInventoryMap() {
         const tabBar = document.getElementById('invmap-nursery-tabs');
         try {
-            const [nursRes, plotsRes, transRes, bookRes] = await Promise.all([
+            const [nursRes, plotsRes, transRes, bookRes, heightRes, cull3Res] = await Promise.all([
                 _supabase.from('operation_nurseries').select('*').order('name'),
                 _supabase.from('shared_plots').select('*'),
                 _supabase.from('shared_inventory_logs')
@@ -3289,11 +3391,27 @@
                     .in('transaction_type', ['Transplanted','Transplanted_Premium','Transplanted_DoubleTone']),
                 _supabase.from('shared_collection_bookings')
                     .select('plot_name,nursery_name,batch_name,collection_qty,status')
-                    .eq('status', 'completed')
+                    .eq('status', 'completed'),
+                // Seedling Height Audit. Its own failure must not take the map
+                // down — a plot's stock is worth showing with no heights beside
+                // it, and the tile says "not measured" either way.
+                _supabase.from('audit_height_records')
+                    .select('plot,batch,sample_1,sample_2,sample_3,date'),
+                // 3rd Culling, to know which batches are finished with which
+                // plot. This one failing must FAIL OPEN — showing a finished
+                // batch is untidy, hiding a live one is stock nobody can find.
+                _supabase.from('shared_inventory_logs')
+                    .select('batch_name,plot_name,quantity_change,remark')
+                    .eq('transaction_type', '3rd_Culling')
             ]);
 
             _invmap.nurseries = nursRes.data || [];
             _invmap.plots     = plotsRes.data || [];
+            _invmap.heights   = _buildInvmapHeights(heightRes && heightRes.data);
+            if (heightRes && heightRes.error) console.warn('[invmap] heights not loaded:', heightRes.error);
+            const completed = (cull3Res && cull3Res.error)
+                ? (console.warn('[invmap] 3rd Culling not loaded — showing every batch:', cull3Res.error), {})
+                : _buildInvmapCompleted(cull3Res && cull3Res.data);
 
             // Aggregate full qty + breed per (plot, batch).
             const fullByPlotBatch = {};
@@ -3318,8 +3436,16 @@
             });
 
             const plotBatches = {};
+            /* …and the ones left out, counted per plot. A figure that quietly
+               drops is a figure somebody chases; the modal says how many
+               finished batches are not on the list. */
+            const hiddenComplete = {};
             Object.keys(fullByPlotBatch).forEach(key => {
                 const [plot, batch] = key.split('|');
+                if (completed[String(plot).trim().toUpperCase() + '|' + String(batch).trim().toUpperCase()]) {
+                    hiddenComplete[plot] = (hiddenComplete[plot] || 0) + 1;
+                    return;
+                }
                 if (!plotBatches[plot]) plotBatches[plot] = [];
                 plotBatches[plot].push({
                     batch,
@@ -3345,6 +3471,7 @@
                 list.sort((a, b) => b.balance - a.balance);
             });
             _invmap.plotBatches = plotBatches;
+            _invmap.hiddenComplete = hiddenComplete;
 
             // Build breed indexes for the By Breed sidebar.
             const breedToPlots = {};
@@ -3772,39 +3899,146 @@
         titleEl.innerText = plotName;
         let batches = _invmap.plotBatches[plotName] || [];
         if (_invmap.selectedBreed) batches = batches.filter(b => b.breed === _invmap.selectedBreed);
+        /* Batches this plot is finished with are off the list — see
+           _buildInvmapCompleted. Nothing is said about them: the modal is a
+           list of what is still standing, and a line about what is not is
+           noise on a screen read all day. _invmap.hiddenComplete still holds
+           the count if anything ever wants it. */
         if (!batches.length) {
             body.innerHTML = '<div class="text-center py-8 text-slate-400 text-xs font-bold uppercase tracking-widest">No batches in scope for this plot.</div>';
         } else {
             const totFull = batches.reduce((s,b)=>s+b.full,0);
             const totColl = batches.reduce((s,b)=>s+b.collected,0);
             const totBal  = batches.reduce((s,b)=>s+b.balance,0);
+
+            /* HOW TALL IS WHAT IS STANDING HERE.
+
+               One reading per batch — its own seedlings averaged over its own
+               count — and the tile is the mean of those, so a batch of 1,365
+               does not drown out the one of 67 beside it. The question the
+               tile answers is "how tall is this plot", and every batch in it
+               is one answer.
+
+               Counted over the batches that HAVE a reading; the ones that do
+               not are listed underneath saying so, which is the only honest
+               way to show a plot that is half measured. */
+            const withH = batches.map(b => ({ b, h: _invmap.heights[_invHeightKey(plotName, b.batch)] || null }));
+            const measured = withH.filter(x => x.h && x.h.avg != null);
+            const plotAvg = measured.length
+                ? measured.reduce((s, x) => s + x.h.avg, 0) / measured.length : null;
+            const hFmt = v => (Math.round(v * 10) / 10).toFixed(1);
+
             body.innerHTML = `
-                <div class="grid grid-cols-3 gap-2 mb-4">
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
                     <div class="bg-slate-50 rounded-lg p-3 text-center"><div class="text-[9px] font-bold text-slate-400 uppercase">Full</div><div class="text-xl font-black text-slate-800">${fmt(totFull)}</div></div>
                     <div class="bg-blue-50 rounded-lg p-3 text-center"><div class="text-[9px] font-bold text-blue-400 uppercase">Collected</div><div class="text-xl font-black text-blue-700">${fmt(totColl)}</div></div>
                     <div class="bg-emerald-50 rounded-lg p-3 text-center"><div class="text-[9px] font-bold text-emerald-500 uppercase">Balance</div><div class="text-xl font-black text-emerald-700">${fmt(totBal)}</div></div>
+                    <button type="button" id="invmap-height-tile" onclick="toggleInvmapHeight()"
+                        title="Press for every batch's latest height and the day it was measured"
+                        class="bg-amber-50 rounded-lg p-3 text-center border border-amber-200 hover:bg-amber-100 hover:border-amber-400 transition-colors cursor-pointer">
+                        <div class="text-[9px] font-bold text-amber-500 uppercase">Height</div>
+                        <div class="text-xl font-black text-amber-700 leading-tight">${plotAvg == null ? '—' : hFmt(plotAvg) + '<span class="text-xs"> cm</span>'}</div>
+                        <div class="text-[8px] font-bold text-amber-500 uppercase tracking-widest leading-none mt-0.5">${measured.length} / ${batches.length} measured</div>
+                    </button>
                 </div>
-                <table class="w-full text-left">
-                    <thead><tr class="border-b border-slate-200">
-                        <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Batch</th>
-                        <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Breed</th>
-                        <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Full</th>
-                        <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Collected</th>
-                        <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Balance</th>
-                    </tr></thead>
-                    <tbody>${batches.map(b => `
-                        <tr class="border-b border-slate-50">
-                            <td class="py-2 text-sm font-black text-slate-800">#${b.batch}</td>
-                            <td class="py-2 text-[11px] text-slate-500">${b.breed}</td>
-                            <td class="py-2 text-sm text-right tabular-nums">${fmt(b.full)}</td>
-                            <td class="py-2 text-sm text-right tabular-nums text-blue-700">${fmt(b.collected)}</td>
-                            <td class="py-2 text-sm text-right tabular-nums font-black ${b.balance > 0 ? 'text-emerald-700' : 'text-slate-400'}">${fmt(b.balance)}</td>
-                        </tr>`).join('')}
-                    </tbody>
-                </table>`;
+                <div id="invmap-modal-stock">
+                    <table class="w-full text-left">
+                        <thead><tr class="border-b border-slate-200">
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Batch</th>
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Breed</th>
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Full</th>
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Collected</th>
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Balance</th>
+                        </tr></thead>
+                        <tbody>${batches.map(b => `
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-sm font-black text-slate-800">#${b.batch}</td>
+                                <td class="py-2 text-[11px] text-slate-500">${b.breed}</td>
+                                <td class="py-2 text-sm text-right tabular-nums">${fmt(b.full)}</td>
+                                <td class="py-2 text-sm text-right tabular-nums text-blue-700">${fmt(b.collected)}</td>
+                                <td class="py-2 text-sm text-right tabular-nums font-black ${b.balance > 0 ? 'text-emerald-700' : 'text-slate-400'}">${fmt(b.balance)}</td>
+                            </tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <div id="invmap-modal-height" class="hidden">
+                    <div class="flex items-baseline justify-between mb-2">
+                        <div class="text-[9px] font-bold text-amber-500 uppercase tracking-widest">Seedling Height — latest audit per batch</div>
+                        <button type="button" onclick="toggleInvmapHeight()"
+                            class="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-700 bg-transparent border-0 p-0 cursor-pointer">← Stock</button>
+                    </div>
+                    <table class="w-full text-left">
+                        <thead><tr class="border-b border-slate-200">
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Batch</th>
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Breed</th>
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Measured</th>
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Seedlings</th>
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Avg height</th>
+                        </tr></thead>
+                        <tbody>${withH.map(({ b, h }, i) => (h && h.avg != null) ? `
+                            <tr class="border-b border-slate-50 invmap-h-row">
+                                <td class="py-2 text-sm font-black text-slate-800">#${b.batch}</td>
+                                <td class="py-2 text-[11px] text-slate-500">${b.breed}</td>
+                                <td class="py-2 text-[11px] text-right tabular-nums text-slate-500">${_invFmtDate(h.date)}</td>
+                                <td class="py-2 text-[11px] text-right tabular-nums text-slate-500">${h.n}</td>
+                                <td class="py-2 text-right">
+                                    <button type="button" onclick="toggleInvmapSamples(${i})"
+                                        title="Press to see each seedling"
+                                        class="text-sm font-black text-amber-700 tabular-nums bg-transparent border-0 p-0 cursor-pointer hover:underline">${hFmt(h.avg)} cm</button>
+                                </td>
+                            </tr>
+                            <tr id="invmap-h-samples-${i}" class="hidden"><td colspan="5" class="pb-2">
+                                <div class="bg-amber-50 rounded-lg px-3 py-2 flex flex-wrap gap-x-4 gap-y-1">
+                                    ${h.samples.map((v, n) => `<span class="text-[11px] font-bold text-amber-700 tabular-nums">Seedling ${n + 1} · ${hFmt(v)} cm</span>`).join('')}
+                                </div>
+                            </td></tr>` : `
+                            <tr class="border-b border-slate-50 invmap-h-row">
+                                <td class="py-2 text-sm font-black text-slate-400">#${b.batch}</td>
+                                <td class="py-2 text-[11px] text-slate-400">${b.breed}</td>
+                                <td class="py-2 text-[11px] text-right text-slate-300">—</td>
+                                <td class="py-2 text-[11px] text-right text-slate-300">—</td>
+                                <td class="py-2 text-[10px] text-right font-bold text-slate-400 uppercase tracking-widest">Not measured</td>
+                            </tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
         }
         modal.classList.remove('hidden');
         modal.classList.add('flex');
+    }
+
+    /* 19 Sep 2026 — the same shape of date the rest of the office reads. */
+    function _invFmtDate(v) {
+        if (!v) return '—';
+        const d = new Date(v);
+        if (isNaN(d.getTime())) return String(v);
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
+    /* The tile swaps the list underneath it between stock and height. Two
+       lists rather than one wide table: the modal is read on a phone, and
+       eight columns across 500px is a table nobody can read either half of. */
+    function toggleInvmapHeight() {
+        const stock  = document.getElementById('invmap-modal-stock');
+        const height = document.getElementById('invmap-modal-height');
+        const tile   = document.getElementById('invmap-height-tile');
+        if (!stock || !height) return;
+        const showHeight = height.classList.contains('hidden');
+        height.classList.toggle('hidden', !showHeight);
+        stock.classList.toggle('hidden', showHeight);
+        if (tile) {
+            tile.classList.toggle('bg-amber-100', showHeight);
+            tile.classList.toggle('bg-amber-50', !showHeight);
+            tile.classList.toggle('border-amber-400', showHeight);
+            tile.classList.toggle('border-amber-200', !showHeight);
+        }
+    }
+
+    /* Pressing an average opens the seedlings it was worked out from — the
+       same answer a Sales figure gives for its delivery notes. */
+    function toggleInvmapSamples(i) {
+        const row = document.getElementById(`invmap-h-samples-${i}`);
+        if (row) row.classList.toggle('hidden');
     }
 
     function closeInvmapModal() {
@@ -3817,6 +4051,8 @@
     window.selectInvmapBreed   = selectInvmapBreed;
     window.clearInvmapBreed    = clearInvmapBreed;
     window.openInvmapModal     = openInvmapModal;
+    window.toggleInvmapHeight  = toggleInvmapHeight;
+    window.toggleInvmapSamples = toggleInvmapSamples;
     window.closeInvmapModal    = closeInvmapModal;
     window.invmapZoom          = invmapZoom;
     window.invmapResetZoom     = invmapResetZoom;
