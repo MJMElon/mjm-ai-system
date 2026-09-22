@@ -3233,6 +3233,7 @@
         nurseries: [],
         plots: [],
         plotBatches: {},      // plot -> [{batch, breed, full, collected, balance}]
+        heights: {},          // canonical plot|batch -> {avg, date, samples:[cm], n}
         breedToPlots: {},     // breed -> Set of plot_names
         breedTotals: {},      // breed -> {full, collected, balance, batches: Set, plots: Set}
         active: 'all',        // 'all' or nursery name
@@ -3240,10 +3241,70 @@
         batchSearch: ''        // lowercase substring to match batch numbers
     };
 
+    /* ONE PLOT, HOWEVER THE TWO SYSTEMS SPELL IT.
+
+       The height audit's plot list is zero-padded — B01…B14, P01, N20 — and
+       the transplant ledger's is not: the map calls the same plot B1. Joining
+       on the string matches nothing at all for every plot numbered under ten.
+
+       SHARED RULE — this is _canonicalPlot in audit/audit_height_script.js.
+       Change one, change the other. */
+    function _invHeightPlotKey(raw) {
+        const s = String(raw == null ? '' : raw).trim().toUpperCase();
+        const m = s.match(/^([A-Z]+)(\d+)(-R)?$/);
+        if (!m) return s;
+        return m[1] + m[2].padStart(2, '0') + (m[3] || '');
+    }
+    function _invHeightKey(plot, batch) {
+        return _invHeightPlotKey(plot) + '|' + String(batch == null ? '' : batch).trim().toUpperCase();
+    }
+
+    /* THE LATEST HEIGHT OF EVERY BATCH, PLOT BY PLOT.
+
+       A height audit measures a few seedlings at a time — audit_height_records
+       holds up to three per row — so one batch measured on one day is usually
+       several rows. The batch's height is the average of every seedling
+       measured on its LATEST day: four seedlings on one batch and five on the
+       one beside it are each averaged over their own count, not pooled.
+
+       An earlier day's rows are left out rather than averaged in. "How tall is
+       it" is a question about now, and a batch measured in June and again in
+       September is 63cm, not the mean of 40 and 63.
+
+       A declined audit ("No Audit Required") writes no samples at all, so it
+       falls out here without needing to be recognised. */
+    function _buildInvmapHeights(rows) {
+        const latest = {};                       // key -> ISO date string
+        (rows || []).forEach(r => {
+            if (!r.plot || !r.batch) return;     // a per-plot audit names no batch
+            const d = String(r.date || '');
+            if (!d) return;
+            const k = _invHeightKey(r.plot, r.batch);
+            if (!latest[k] || d > latest[k]) latest[k] = d;
+        });
+        const out = {};
+        (rows || []).forEach(r => {
+            if (!r.plot || !r.batch) return;
+            const k = _invHeightKey(r.plot, r.batch);
+            if (!latest[k] || String(r.date || '') !== latest[k]) return;
+            const cur = out[k] || (out[k] = { date: latest[k], samples: [], avg: null, n: 0 });
+            [r.sample_1, r.sample_2, r.sample_3].forEach(v => {
+                const n = Number(v);
+                if (Number.isFinite(n) && n > 0) cur.samples.push(n);
+            });
+        });
+        Object.values(out).forEach(h => {
+            h.n = h.samples.length;
+            h.samples.sort((a, b) => a - b);
+            h.avg = h.n ? h.samples.reduce((s, v) => s + v, 0) / h.n : null;
+        });
+        return out;
+    }
+
     async function loadInventoryMap() {
         const tabBar = document.getElementById('invmap-nursery-tabs');
         try {
-            const [nursRes, plotsRes, transRes, bookRes] = await Promise.all([
+            const [nursRes, plotsRes, transRes, bookRes, heightRes] = await Promise.all([
                 _supabase.from('operation_nurseries').select('*').order('name'),
                 _supabase.from('shared_plots').select('*'),
                 _supabase.from('shared_inventory_logs')
@@ -3251,11 +3312,18 @@
                     .in('transaction_type', ['Transplanted','Transplanted_Premium','Transplanted_DoubleTone']),
                 _supabase.from('shared_collection_bookings')
                     .select('plot_name,nursery_name,batch_name,collection_qty,status')
-                    .eq('status', 'completed')
+                    .eq('status', 'completed'),
+                // Seedling Height Audit. Its own failure must not take the map
+                // down — a plot's stock is worth showing with no heights beside
+                // it, and the tile says "not measured" either way.
+                _supabase.from('audit_height_records')
+                    .select('plot,batch,sample_1,sample_2,sample_3,date')
             ]);
 
             _invmap.nurseries = nursRes.data || [];
             _invmap.plots     = plotsRes.data || [];
+            _invmap.heights   = _buildInvmapHeights(heightRes && heightRes.data);
+            if (heightRes && heightRes.error) console.warn('[invmap] heights not loaded:', heightRes.error);
 
             // Aggregate full qty + breed per (plot, batch).
             const fullByPlotBatch = {};
@@ -3740,33 +3808,135 @@
             const totFull = batches.reduce((s,b)=>s+b.full,0);
             const totColl = batches.reduce((s,b)=>s+b.collected,0);
             const totBal  = batches.reduce((s,b)=>s+b.balance,0);
+
+            /* HOW TALL IS WHAT IS STANDING HERE.
+
+               One reading per batch — its own seedlings averaged over its own
+               count — and the tile is the mean of those, so a batch of 1,365
+               does not drown out the one of 67 beside it. The question the
+               tile answers is "how tall is this plot", and every batch in it
+               is one answer.
+
+               Counted over the batches that HAVE a reading; the ones that do
+               not are listed underneath saying so, which is the only honest
+               way to show a plot that is half measured. */
+            const withH = batches.map(b => ({ b, h: _invmap.heights[_invHeightKey(plotName, b.batch)] || null }));
+            const measured = withH.filter(x => x.h && x.h.avg != null);
+            const plotAvg = measured.length
+                ? measured.reduce((s, x) => s + x.h.avg, 0) / measured.length : null;
+            const hFmt = v => (Math.round(v * 10) / 10).toFixed(1);
+
             body.innerHTML = `
-                <div class="grid grid-cols-3 gap-2 mb-4">
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
                     <div class="bg-slate-50 rounded-lg p-3 text-center"><div class="text-[9px] font-bold text-slate-400 uppercase">Full</div><div class="text-xl font-black text-slate-800">${fmt(totFull)}</div></div>
                     <div class="bg-blue-50 rounded-lg p-3 text-center"><div class="text-[9px] font-bold text-blue-400 uppercase">Collected</div><div class="text-xl font-black text-blue-700">${fmt(totColl)}</div></div>
                     <div class="bg-emerald-50 rounded-lg p-3 text-center"><div class="text-[9px] font-bold text-emerald-500 uppercase">Balance</div><div class="text-xl font-black text-emerald-700">${fmt(totBal)}</div></div>
+                    <button type="button" id="invmap-height-tile" onclick="toggleInvmapHeight()"
+                        title="Press for every batch's latest height and the day it was measured"
+                        class="bg-amber-50 rounded-lg p-3 text-center border border-amber-200 hover:bg-amber-100 hover:border-amber-400 transition-colors cursor-pointer">
+                        <div class="text-[9px] font-bold text-amber-500 uppercase">Height</div>
+                        <div class="text-xl font-black text-amber-700 leading-tight">${plotAvg == null ? '—' : hFmt(plotAvg) + '<span class="text-xs"> cm</span>'}</div>
+                        <div class="text-[8px] font-bold text-amber-500 uppercase tracking-widest leading-none mt-0.5">${measured.length} / ${batches.length} measured</div>
+                    </button>
                 </div>
-                <table class="w-full text-left">
-                    <thead><tr class="border-b border-slate-200">
-                        <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Batch</th>
-                        <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Breed</th>
-                        <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Full</th>
-                        <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Collected</th>
-                        <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Balance</th>
-                    </tr></thead>
-                    <tbody>${batches.map(b => `
-                        <tr class="border-b border-slate-50">
-                            <td class="py-2 text-sm font-black text-slate-800">#${b.batch}</td>
-                            <td class="py-2 text-[11px] text-slate-500">${b.breed}</td>
-                            <td class="py-2 text-sm text-right tabular-nums">${fmt(b.full)}</td>
-                            <td class="py-2 text-sm text-right tabular-nums text-blue-700">${fmt(b.collected)}</td>
-                            <td class="py-2 text-sm text-right tabular-nums font-black ${b.balance > 0 ? 'text-emerald-700' : 'text-slate-400'}">${fmt(b.balance)}</td>
-                        </tr>`).join('')}
-                    </tbody>
-                </table>`;
+                <div id="invmap-modal-stock">
+                    <table class="w-full text-left">
+                        <thead><tr class="border-b border-slate-200">
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Batch</th>
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Breed</th>
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Full</th>
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Collected</th>
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Balance</th>
+                        </tr></thead>
+                        <tbody>${batches.map(b => `
+                            <tr class="border-b border-slate-50">
+                                <td class="py-2 text-sm font-black text-slate-800">#${b.batch}</td>
+                                <td class="py-2 text-[11px] text-slate-500">${b.breed}</td>
+                                <td class="py-2 text-sm text-right tabular-nums">${fmt(b.full)}</td>
+                                <td class="py-2 text-sm text-right tabular-nums text-blue-700">${fmt(b.collected)}</td>
+                                <td class="py-2 text-sm text-right tabular-nums font-black ${b.balance > 0 ? 'text-emerald-700' : 'text-slate-400'}">${fmt(b.balance)}</td>
+                            </tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <div id="invmap-modal-height" class="hidden">
+                    <div class="flex items-baseline justify-between mb-2">
+                        <div class="text-[9px] font-bold text-amber-500 uppercase tracking-widest">Seedling Height — latest audit per batch</div>
+                        <button type="button" onclick="toggleInvmapHeight()"
+                            class="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-700 bg-transparent border-0 p-0 cursor-pointer">← Stock</button>
+                    </div>
+                    <table class="w-full text-left">
+                        <thead><tr class="border-b border-slate-200">
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Batch</th>
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Breed</th>
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Measured</th>
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Seedlings</th>
+                            <th class="py-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right">Avg height</th>
+                        </tr></thead>
+                        <tbody>${withH.map(({ b, h }, i) => (h && h.avg != null) ? `
+                            <tr class="border-b border-slate-50 invmap-h-row">
+                                <td class="py-2 text-sm font-black text-slate-800">#${b.batch}</td>
+                                <td class="py-2 text-[11px] text-slate-500">${b.breed}</td>
+                                <td class="py-2 text-[11px] text-right tabular-nums text-slate-500">${_invFmtDate(h.date)}</td>
+                                <td class="py-2 text-[11px] text-right tabular-nums text-slate-500">${h.n}</td>
+                                <td class="py-2 text-right">
+                                    <button type="button" onclick="toggleInvmapSamples(${i})"
+                                        title="Press to see each seedling"
+                                        class="text-sm font-black text-amber-700 tabular-nums bg-transparent border-0 p-0 cursor-pointer hover:underline">${hFmt(h.avg)} cm</button>
+                                </td>
+                            </tr>
+                            <tr id="invmap-h-samples-${i}" class="hidden"><td colspan="5" class="pb-2">
+                                <div class="bg-amber-50 rounded-lg px-3 py-2 flex flex-wrap gap-x-4 gap-y-1">
+                                    ${h.samples.map((v, n) => `<span class="text-[11px] font-bold text-amber-700 tabular-nums">Seedling ${n + 1} · ${hFmt(v)} cm</span>`).join('')}
+                                </div>
+                            </td></tr>` : `
+                            <tr class="border-b border-slate-50 invmap-h-row">
+                                <td class="py-2 text-sm font-black text-slate-400">#${b.batch}</td>
+                                <td class="py-2 text-[11px] text-slate-400">${b.breed}</td>
+                                <td class="py-2 text-[11px] text-right text-slate-300">—</td>
+                                <td class="py-2 text-[11px] text-right text-slate-300">—</td>
+                                <td class="py-2 text-[10px] text-right font-bold text-slate-400 uppercase tracking-widest">Not measured</td>
+                            </tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
         }
         modal.classList.remove('hidden');
         modal.classList.add('flex');
+    }
+
+    /* 19 Sep 2026 — the same shape of date the rest of the office reads. */
+    function _invFmtDate(v) {
+        if (!v) return '—';
+        const d = new Date(v);
+        if (isNaN(d.getTime())) return String(v);
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
+    /* The tile swaps the list underneath it between stock and height. Two
+       lists rather than one wide table: the modal is read on a phone, and
+       eight columns across 500px is a table nobody can read either half of. */
+    function toggleInvmapHeight() {
+        const stock  = document.getElementById('invmap-modal-stock');
+        const height = document.getElementById('invmap-modal-height');
+        const tile   = document.getElementById('invmap-height-tile');
+        if (!stock || !height) return;
+        const showHeight = height.classList.contains('hidden');
+        height.classList.toggle('hidden', !showHeight);
+        stock.classList.toggle('hidden', showHeight);
+        if (tile) {
+            tile.classList.toggle('bg-amber-100', showHeight);
+            tile.classList.toggle('bg-amber-50', !showHeight);
+            tile.classList.toggle('border-amber-400', showHeight);
+            tile.classList.toggle('border-amber-200', !showHeight);
+        }
+    }
+
+    /* Pressing an average opens the seedlings it was worked out from — the
+       same answer a Sales figure gives for its delivery notes. */
+    function toggleInvmapSamples(i) {
+        const row = document.getElementById(`invmap-h-samples-${i}`);
+        if (row) row.classList.toggle('hidden');
     }
 
     function closeInvmapModal() {
@@ -3779,6 +3949,8 @@
     window.selectInvmapBreed   = selectInvmapBreed;
     window.clearInvmapBreed    = clearInvmapBreed;
     window.openInvmapModal     = openInvmapModal;
+    window.toggleInvmapHeight  = toggleInvmapHeight;
+    window.toggleInvmapSamples = toggleInvmapSamples;
     window.closeInvmapModal    = closeInvmapModal;
     window.invmapZoom          = invmapZoom;
     window.invmapResetZoom     = invmapResetZoom;
