@@ -267,6 +267,7 @@
                 </div>
             </div>
 
+            <div id="manage-al-lock-notice" class="hidden mt-4 p-3 rounded-xl bg-slate-100 border border-slate-300 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">🔒 Locked — dated on or before the DO Entry Lock cutoff (System Settings). Can't be edited, cancelled or restored.</div>
             <div class="flex flex-wrap gap-4 pt-8 mt-6 border-t border-slate-100 relative z-40">
                 <button onclick="closeModal('manage-modal')" class="flex-1 p-4 rounded-2xl bg-slate-100 text-slate-600 font-bold text-xs uppercase tracking-widest hover:bg-slate-200 relative z-40">Close</button>
                 <button id="edit-btn" onclick="enableEditMode()" class="flex-1 p-4 rounded-2xl bg-amber-100 text-amber-700 font-bold text-xs uppercase tracking-widest hover:bg-amber-200 shadow-sm relative z-40">Edit Details</button>
@@ -364,11 +365,26 @@
             }
         }
 
-        let globalALs = []; 
-        let globalDOs = []; 
-        let currentViewImageAL = null; 
-        let currentViewTypeAL = null; 
+        let globalALs = [];
+        let globalDOs = [];
+        let currentViewImageAL = null;
+        let currentViewTypeAL = null;
         window.extractedBulkALs = {};
+        // Same cutoff as Delivery Orders' DO Entry Lock (System Settings) —
+        // one date, both records, and the cutoff date ITSELF is inside the
+        // locked range (<=), not the boundary of it — setting 31/08/2026
+        // locks 31/08/2026's own data too, not just everything before it.
+        // Unlike a DO, a NEW AL dated on/before the cutoff is blocked too,
+        // not just editing/cancelling an existing one: an AL is the order
+        // intake record, and a backdated new one would let someone add a
+        // "historical" order into a closed period the same way a backdated
+        // edit would. null means no lock at all, same "access fails open"
+        // rule this system follows elsewhere.
+        let globalDoLockCutoff = null;
+        function isAlEntryLocked(order) {
+            if (!globalDoLockCutoff || !order || !order.order_date) return false;
+            return String(order.order_date).slice(0, 10) <= globalDoLockCutoff;
+        }
 
         function spawnHealingEmoji() { 
             const zone = document.getElementById('title-animation-zone'); 
@@ -406,10 +422,15 @@
         }
 
         async function fetchData() {
-            const [alRes, doRes] = await Promise.all([
+            const [alRes, doRes, doLockRes] = await Promise.all([
                 _supabase.from('shared_al_orders').select('id,al_number,order_number,order_date,customer_name,product_name,quantity_ordered,balance_quantity,price_per_unit,status,remark,created_at').order('created_at', { ascending: false }),
-                _supabase.from('shared_do_records').select('id,do_number,al_number,total_qty,status,remark,created_at')
+                _supabase.from('shared_do_records').select('id,do_number,al_number,total_qty,status,remark,created_at'),
+                // Tolerates the table not existing yet — see
+                // shared/RUN_ME_do_lock.sql.
+                _supabase.from('shared_do_lock_settings').select('cutoff_date').eq('id', 1).maybeSingle()
+                    .then(r => r, e => ({ data: null, error: e }))
             ]);
+            globalDoLockCutoff = doLockRes?.data?.cutoff_date || null;
             // Surface load errors instead of silently rendering "no entries" —
             // an RLS denial on shared_al_orders / shared_do_records would
             // otherwise look like an empty inbox for days.
@@ -774,6 +795,20 @@
             }
             loadConsentForAL(order.al_number);
             applyLockUIToManageModal(order);
+
+            // DO Entry Lock cutoff (System Settings) — absolute, not
+            // admin-bypassable like the per-AL manual lock above: dated on
+            // or before the cutoff, no editing, cancelling or restoring.
+            if (isAlEntryLocked(order)) {
+                document.getElementById('edit-btn').classList.add('hidden');
+                document.getElementById('lock-btn').classList.add('hidden');
+                document.getElementById('cancel-btn').style.display = 'none';
+                document.getElementById('restore-btn').classList.add('hidden');
+                document.getElementById('manage-al-lock-notice').classList.remove('hidden');
+            } else {
+                document.getElementById('manage-al-lock-notice').classList.add('hidden');
+            }
+
             document.getElementById('manage-modal').classList.remove('hidden');
         }
 
@@ -930,6 +965,7 @@
         }
 
         function enableEditMode() {
+            if (isAlEntryLocked(currentManageAL)) return alert('This AL is dated on or before the DO Entry Lock cutoff and can\'t be edited. Change the cutoff in System Settings if this was locked in error.');
             const locked = currentManageAL && isAlLocked(currentManageAL.remark);
             if (locked && !isOpAdmin()) return alert('This record is locked. Ask an admin to unlock it before editing.');
             document.querySelectorAll('.edit-field').forEach(el => el.disabled = false);
@@ -985,6 +1021,7 @@
         }
         
         async function cancelAL() {
+            if (isAlEntryLocked(currentManageAL)) return alert('This AL is dated on or before the DO Entry Lock cutoff and can\'t be cancelled. Change the cutoff in System Settings if this was locked in error.');
             const pin = prompt("Enter Master PIN to Cancel AL:");
             if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN.");
 
@@ -1062,6 +1099,7 @@
         }
 
         async function restoreAL() {
+            if (isAlEntryLocked(currentManageAL)) return alert('This AL is dated on or before the DO Entry Lock cutoff and can\'t be restored. Change the cutoff in System Settings if this was locked in error.');
             const pin = prompt("Enter Master PIN to Restore AL:");
             if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN.");
             if (!confirm("Restore this cancelled AL back to ACTIVE (Unverified) status?")) return;
@@ -1103,12 +1141,19 @@
         }
         
         async function saveEditAL() {
+            if (isAlEntryLocked(currentManageAL)) return alert('This AL is dated on or before the DO Entry Lock cutoff and can\'t be saved. Change the cutoff in System Settings if this was locked in error.');
             if (currentManageAL && isAlLocked(currentManageAL.remark) && !isOpAdmin()) {
                 return alert('This AL is locked. Ask an admin to unlock it before saving changes.');
             }
             const newQty = parseInt(document.getElementById('edit-qty').value) || 0;
             const orderId = document.getElementById('edit-id').value;
             const order = globalALs.find(o => String(o.id) === String(orderId));
+            const newOrderDate = document.getElementById('edit-date').value;
+            // Also block backdating an otherwise-unlocked AL into the locked
+            // period — the lock closes a date range, not just today's rows.
+            if (globalDoLockCutoff && newOrderDate && newOrderDate <= globalDoLockCutoff) {
+                return alert('The order date entered falls within the DO Entry Lock cutoff (on or before ' + globalDoLockCutoff + '). Choose a later date, or change the cutoff in System Settings.');
+            }
             const cumul = order._cumul || 0;
             const newBalance = newQty - cumul;
             let editPo = document.getElementById('edit-order').value || '';
@@ -1228,9 +1273,18 @@
                 const remark = document.getElementById(`remark_${rId}`).value || ''; 
                 const base64Image = window.extractedBulkALs[rId] || null;
                 
-                if(qty <= 0) continue; 
-                
-                if(poOrder) { 
+                if(qty <= 0) continue;
+
+                // DO Entry Lock cutoff (System Settings) — a new AL dated
+                // on or before it isn't allowed either, same reasoning as
+                // blocking a backdated edit: it's the order intake record.
+                if (globalDoLockCutoff && orderDate <= globalDoLockCutoff) {
+                    alert(`Order dated ${orderDate} falls within the DO Entry Lock cutoff (on or before ${globalDoLockCutoff}). Skipping — change the date or the cutoff in System Settings.`);
+                    row.classList.replace('bg-blue-50/30', 'bg-red-50');
+                    continue;
+                }
+
+                if(poOrder) {
                     const existing = globalALs.find(a => a.order_number === poOrder && a.status !== 'Cancelled'); 
                     if(existing) { alert(`Order Number ${poOrder} already exists! Skipping.`); row.classList.replace('bg-blue-50/30', 'bg-red-50'); continue; } 
                 }

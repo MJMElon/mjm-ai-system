@@ -180,7 +180,7 @@
                     </button>
                 </div>
             </div>
-            <div id="mng-do-lock-notice" class="hidden mt-4 p-3 rounded-xl bg-slate-100 border border-slate-300 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">🔒 Locked — dated before the DO Entry Lock cutoff (System Settings). Can't be edited or deleted.</div>
+            <div id="mng-do-lock-notice" class="hidden mt-4 p-3 rounded-xl bg-slate-100 border border-slate-300 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">🔒 Locked — dated on or before the DO Entry Lock cutoff (System Settings). Can't be edited or deleted.</div>
             <div class="flex gap-4 pt-8 mt-6 border-t border-slate-100 relative z-40">
                 <button onclick="closeModal('manage-do-modal')" class="flex-1 p-4 rounded-2xl bg-slate-100 text-slate-600 font-bold text-xs uppercase tracking-widest hover:bg-slate-200 relative z-40">Close</button>
                 <button onclick="printCurrentDO()" class="flex-1 p-4 rounded-2xl bg-emerald-100 text-emerald-700 font-bold text-xs uppercase tracking-widest hover:bg-emerald-200 shadow-sm relative z-40">🖨️ Print PDF</button>
@@ -364,13 +364,15 @@
 
         let globalALs = []; let globalDOs = []; let globalPlots = []; let globalBreeds = []; let globalNurseries = []; let globalBatches = [];
         let currentViewImage = null; let currentViewType = null; window.extractedBulkDOs = {}; window.localSavedDOs = new Set();
-        // A DO dated before this cutoff can't be edited or deleted — set on
-        // System Settings ("DO Entry Lock"). null means no lock at all,
-        // same "access fails open" rule this system follows elsewhere.
+        // A DO dated on or before this cutoff can't be edited or deleted —
+        // set on System Settings ("DO Entry Lock"). The cutoff date ITSELF
+        // is inside the locked range (<=), not the boundary of it: setting
+        // 31/08/2026 locks 31/08/2026's own DOs too. null means no lock at
+        // all, same "access fails open" rule this system follows elsewhere.
         let globalDoLockCutoff = null;
         function isDoLocked(doRec) {
             if (!globalDoLockCutoff || !doRec || !doRec.delivery_date) return false;
-            return String(doRec.delivery_date).slice(0, 10) < globalDoLockCutoff;
+            return String(doRec.delivery_date).slice(0, 10) <= globalDoLockCutoff;
         }
 
         // HIGH SPEED OPTIMIZED DATA FETCH
@@ -1114,7 +1116,7 @@
         function enableEditDOMode() {
             if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'manage')) return;
             const doRec = globalDOs.find(d => String(d.id) === String(document.getElementById('manage-do-id').value));
-            if (isDoLocked(doRec)) return alert('This DO is dated before the DO Entry Lock cutoff and can\'t be edited. Change the cutoff in System Settings if this was locked in error.');
+            if (isDoLocked(doRec)) return alert('This DO is dated on or before the DO Entry Lock cutoff and can\'t be edited. Change the cutoff in System Settings if this was locked in error.');
             document.querySelectorAll('#manage-do-modal .edit-field').forEach(el => el.disabled = false);
             document.getElementById('items_container_mng').querySelectorAll('input, select, button').forEach(el => el.disabled = false);
             
@@ -1156,10 +1158,10 @@
             const newQty = parseInt(document.getElementById('qty_mng').value) || 0; 
             const newRemark = document.getElementById('mng-do-remark').value;
             const oldDO = globalDOs.find(d => String(d.id) === String(doId));
-            if (isDoLocked(oldDO)) return alert('This DO is dated before the DO Entry Lock cutoff and can\'t be saved. Change the cutoff in System Settings if this was locked in error.');
+            if (isDoLocked(oldDO)) return alert('This DO is dated on or before the DO Entry Lock cutoff and can\'t be saved. Change the cutoff in System Settings if this was locked in error.');
             // Also block backdating an otherwise-unlocked DO into the locked
             // period — the lock closes a date range, not just today's rows.
-            if (globalDoLockCutoff && newDate && newDate < globalDoLockCutoff) return alert('The delivery date entered falls before the DO Entry Lock cutoff (' + globalDoLockCutoff + '). Choose a later date, or change the cutoff in System Settings.');
+            if (globalDoLockCutoff && newDate && newDate <= globalDoLockCutoff) return alert('The delivery date entered falls within the DO Entry Lock cutoff (on or before ' + globalDoLockCutoff + '). Choose a later date, or change the cutoff in System Settings.');
 
             const parentAL = globalALs.find(a => a.al_number === newAl);
             if (parentAL) {
@@ -1212,7 +1214,7 @@
             if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'manage')) return;
             const id = document.getElementById('manage-do-id').value;
             const doRec = globalDOs.find(d => String(d.id) === id);
-            if (isDoLocked(doRec)) return alert('This DO is dated before the DO Entry Lock cutoff and can\'t be deleted. Change the cutoff in System Settings if this was locked in error.');
+            if (isDoLocked(doRec)) return alert('This DO is dated on or before the DO Entry Lock cutoff and can\'t be deleted. Change the cutoff in System Settings if this was locked in error.');
 
             const pin = prompt("Enter Master PIN to delete DO:");
             if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN.");

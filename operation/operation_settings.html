@@ -47,19 +47,19 @@
             <section>
                 <div class="flex items-center gap-3 mb-6 border-b-2 border-rose-200 pb-2">
                     <span class="text-2xl">🔒</span>
-                    <h2 class="text-xl font-black text-rose-800 uppercase tracking-widest">Delivery Order Controls</h2>
+                    <h2 class="text-xl font-black text-rose-800 uppercase tracking-widest">Delivery Order &amp; AL Controls</h2>
                 </div>
 
                 <div class="glass-panel p-8 rounded-[2.5rem] shadow-xl border-l-[8px] border-rose-400">
-                    <h2 class="font-black text-slate-800 uppercase tracking-widest text-lg border-b-2 border-slate-100 pb-4 mb-4">DO Entry Lock</h2>
+                    <h2 class="font-black text-slate-800 uppercase tracking-widest text-lg border-b-2 border-slate-100 pb-4 mb-4">DO &amp; AL Entry Lock</h2>
                     <p class="text-xs text-slate-500 font-semibold mb-4 leading-relaxed">
-                        Delivery Orders dated before this cutoff can no longer be edited or deleted in
-                        <span class="font-black text-slate-700">Delivery Orders</span> — like closing last month's books while this month stays open.
-                        New DOs can still be keyed in regardless of the cutoff. Leave blank to keep every DO editable.
+                        Delivery Orders and Approval Letters dated on or before this cutoff (the cutoff date itself included) can no longer be edited, cancelled/deleted or restored in
+                        <span class="font-black text-slate-700">Delivery Orders</span> or <span class="font-black text-slate-700">AL List</span> — like closing last month's books while this month stays open.
+                        New DOs can still be keyed in regardless of the cutoff; a new AL dated on or before the cutoff is blocked the same as an edit. Leave blank to keep every DO and AL editable.
                     </p>
                     <div class="flex flex-col md:flex-row gap-4 items-end bg-rose-50 p-5 rounded-2xl border border-rose-100">
                         <div class="flex-1 w-full">
-                            <label class="text-[10px] font-bold text-rose-600 uppercase tracking-widest mb-1 block ml-1">Lock DOs dated before</label>
+                            <label class="text-[10px] font-bold text-rose-600 uppercase tracking-widest mb-1 block ml-1">Lock DOs &amp; ALs dated on or before</label>
                             <input type="date" id="do-lock-cutoff" class="input-style text-xs w-full">
                         </div>
                         <button onclick="saveDoLockCutoff()" class="btn-purple !bg-rose-600 !px-8 !py-4 text-xs tracking-widest w-full md:w-auto">Save</button>
@@ -456,8 +456,8 @@
             const cutoff = row && row.cutoff_date;
             input.value = cutoff || '';
             status.textContent = cutoff
-                ? `Locked: DOs dated before ${new Date(cutoff).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' })} can no longer be edited or deleted.`
-                : 'No lock set — every DO is editable.';
+                ? `Locked: DOs and ALs dated on or before ${new Date(cutoff).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' })} can no longer be edited, cancelled/deleted or restored.`
+                : 'No lock set — every DO and AL is editable.';
         }
 
         async function saveDoLockCutoff() {
@@ -466,7 +466,7 @@
             const { error } = await _supabase.from('shared_do_lock_settings')
                 .upsert({ id: 1, cutoff_date: cutoff, updated_at: new Date().toISOString(), updated_by: user?.email || null }, { onConflict: 'id' });
             if (error) return alert('Could not save: ' + error.message + (error.message.includes('does not exist') ? '\n\nRun shared/RUN_ME_do_lock.sql in the Supabase SQL Editor first.' : ''));
-            alert(cutoff ? 'DO lock saved.' : 'DO lock cleared — every DO is editable again.');
+            alert(cutoff ? 'DO & AL lock saved.' : 'DO & AL lock cleared — every DO and AL is editable again.');
             fetchData();
         }
 
