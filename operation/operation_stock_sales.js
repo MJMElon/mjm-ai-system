@@ -1037,7 +1037,15 @@
                 // a plot already at/under zero balance has no reason to be on it.
                 return g.isPR && (g.afterCulling - (g.doDeducted || 0)) > 0;
             })
-            .sort((a, b) => a.matureDate - b.matureDate);
+            .sort((a, b) => {
+                const dateDiff = a.matureDate - b.matureDate;
+                if (dateDiff !== 0) return dateDiff;
+                const plotDiff = String(a.plot || '').localeCompare(String(b.plot || ''));
+                if (plotDiff !== 0) return plotDiff;
+                // Same date, same plot — batch ascending, e.g. U17's 242
+                // before its 243, rather than whatever order they loaded in.
+                return (parseInt(a.batch, 10) || 0) - (parseInt(b.batch, 10) || 0);
+            });
 
         if (!rows.length) {
             const emptyMsg = activeMonthKey === PR_TAB_KEY ? 'No reserve (Plot-R) plots with balance' : 'No maturity allocations for this month';
