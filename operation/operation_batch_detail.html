@@ -949,7 +949,7 @@
                                     <div class="flex items-center gap-3">
                                         <h4 class="font-black text-[#3d2610] uppercase tracking-widest text-sm">Receive & Damage Analysis</h4>
                                     </div>
-                                    <div id="follow-up-warning" class="hidden px-3 py-1 bg-[#fff5f5] border border-[#f8d7da] text-[#a83020] rounded-lg text-[9px] font-black uppercase tracking-widest animate-pulse">⚠️ Discrepancy: Follow-up case will be created</div>
+                                    <div id="follow-up-warning" class="hidden px-3 py-1 bg-[#fff5f5] border border-[#f8d7da] text-[#a83020] rounded-lg text-[9px] font-black uppercase tracking-widest animate-pulse">⚠️ Discrepancy: explain it below</div>
                                 </div>
                                 <div class="p-6">
                                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1050,6 +1050,39 @@
                                             </div>
                                         </div>
 
+                                    </div>
+
+                                    <!-- ════════════════════════════════════
+                                         WHY THE FIGURES DO NOT TALLY.
+
+                                         This used to open a Nelos case from
+                                         the save, which sent the question to
+                                         a queue: whoever keyed the report had
+                                         the answer in their head and was
+                                         asked for it somewhere else, days
+                                         later. It is asked HERE now, on the
+                                         tab where the shortfall is on screen
+                                         and the person who caused it is
+                                         standing.
+
+                                         Same shape as the 3rd Culling
+                                         drone-map panel: the save is never
+                                         blocked, the report is not COMPLETE
+                                         until there is a reason, and the
+                                         reason is stored with the record. -->
+                                    <div id="t2-gap-panel" class="hidden mt-6 rounded-2xl border border-[#e8b84b] bg-[#fffaf0] p-5">
+                                        <div class="flex items-baseline justify-between gap-3 flex-wrap">
+                                            <h5 class="text-[11px] font-black text-[#a8742a] uppercase tracking-widest">Explain the discrepancy</h5>
+                                            <span id="t2-gap-sum" class="text-[10px] font-black text-[#a8742a] tabular-nums"></span>
+                                        </div>
+                                        <div id="t2-gap-why" class="text-[11px] font-bold text-[#8a7a68] mt-1.5 leading-snug"></div>
+                                        <textarea id="t2-gap-note" rows="3" oninput="calcPlanting()"
+                                            placeholder="Where did the difference go? e.g. 212 seeds mouldy in the bag and thrown away before counting; supplier short-delivered and a replacement is on the way."
+                                            class="input-style w-full mt-3 !text-[13px]"></textarea>
+                                        <div class="text-[10px] font-bold text-[#8a7a68] mt-2 leading-snug">
+                                            Saved with the planting report. The report is not complete until this is written,
+                                            and whoever checks the batch reads it here.
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -3370,6 +3403,17 @@
                     }
                     if (log.transaction_type === 'Damaged_Seeds') {
                         setNumericInput('t2-damaged', log.quantity_change);
+                        /* Why the figures did not tally, written when the
+                           report was saved. Back on the tab, or the panel
+                           asks a question somebody has already answered and
+                           the ring drops back below 100%. */
+                        const gapMatch = log.remark ? log.remark.match(/GapNote:(\S+)/) : null;
+                        const gapBox = document.getElementById('t2-gap-note');
+                        if (gapBox) {
+                            let txt = '';
+                            if (gapMatch) { try { txt = decodeURIComponent(gapMatch[1]); } catch (_) { txt = gapMatch[1]; } }
+                            gapBox.value = txt;
+                        }
                     } else if (log.transaction_type === 'Planted') {
                         hasTrays = true;
                         addTrayRow();
@@ -5471,7 +5515,54 @@
             if (isReceiveIssue || isDamageIssue) followUpBanner.classList.remove('hidden');
             else followUpBanner.classList.add('hidden');
 
+            /* THE DISCREPANCY, AND WHY.
+
+               Asked on this tab rather than raised as a Nelos case: the
+               person keying the report has the answer in their head right
+               now, and a case sends the question to a queue to be asked days
+               later by somebody who was not there.
+
+               The panel says WHICH of the two it is and by how much, because
+               "discrepancy" on its own is not a question anybody can answer. */
+            const gapPanel = document.getElementById('t2-gap-panel');
+            if (gapPanel) {
+                const gap = isReceiveIssue || isDamageIssue;
+                gapPanel.classList.toggle('hidden', !gap);
+                if (gap) {
+                    const lines = [];
+                    if (isReceiveIssue) {
+                        const missing = expectedRaw - accountedTotal;
+                        lines.push(`SHORTFALL — ${missing.toLocaleString()} seed(s) unaccounted for. ` +
+                                   `Expected ${expectedRaw.toLocaleString()} (D/O + FOC + Replacement); ` +
+                                   `planted ${totalActualPlanted.toLocaleString()} + damaged ${damaged.toLocaleString()} ` +
+                                   `= ${accountedTotal.toLocaleString()}.`);
+                    }
+                    if (isDamageIssue) {
+                        lines.push(`EXCESS DAMAGE — ${(damaged - focRaw).toLocaleString()} seed(s) over the FOC allowance. ` +
+                                   `Damaged ${damaged.toLocaleString()} against an FOC of ${focRaw.toLocaleString()}.`);
+                    }
+                    document.getElementById('t2-gap-why').innerText = lines.join('  ');
+                    const noted = (document.getElementById('t2-gap-note')?.value || '').trim();
+                    const sum = document.getElementById('t2-gap-sum');
+                    if (sum) {
+                        sum.innerText = noted ? '✓ Explained' : 'Not explained yet';
+                        sum.classList.toggle('text-[#4a7a2e]', !!noted);
+                        sum.classList.toggle('text-[#a8742a]', !noted);
+                    }
+                }
+            }
+
             updatePlantingCompletion();
+        }
+
+        /* Is there a discrepancy on this report, and has anybody explained it?
+           One answer for the panel, the completion ring and the save, so the
+           three cannot disagree about whether the report is finished. */
+        function t2GapState() {
+            const panel = document.getElementById('t2-gap-panel');
+            const open  = !!panel && !panel.classList.contains('hidden');
+            const note  = (document.getElementById('t2-gap-note')?.value || '').trim();
+            return { gap: open, note, explained: !open || !!note };
         }
 
         function updatePlantingCompletion() {
@@ -5498,6 +5589,13 @@
             rows.forEach((row, i) => {
                 need(`Tray ${i + 1}`, row.querySelector('.t-select').value !== "");
             });
+
+            /* A report whose figures do not tally is not a finished report
+               until somebody has said why. Counted only WHEN there is a
+               discrepancy, so a batch that tallies is never asked for an
+               explanation of nothing. */
+            const _gap = t2GapState();
+            if (_gap.gap) need('Discrepancy Explanation', !!_gap.note);
 
             let percentage = Math.min(100, Math.round((filledCount / requiredChecks) * 100));
 
@@ -5785,6 +5883,16 @@
                 const damaged = readNumericInput('t2-damaged');
                 const plantedDate = document.getElementById('t2-date').value || null;
 
+                /* WHY THE FIGURES DO NOT TALLY, kept with the record.
+
+                   On the batch-level Damaged_Seeds row, which is the one
+                   record this tab writes per batch — the Planted rows are
+                   per tray and a batch-wide reason belongs on none of them.
+                   Encoded, because a reason is free text and this remark is
+                   parsed. Read back by loadPlantingTab. */
+                const _gap = t2GapState();
+                const gapPart = _gap.note ? ` GapNote:${encodeURIComponent(_gap.note)}` : '';
+
                 // Collect Tray Data to send to DB
                 let logsToInsert = [];
 
@@ -5814,7 +5922,7 @@
                         breed_name: breed,
                         quantity_change: damaged,
                         transaction_date: plantedDate,
-                        remark: `Damaged seeds recorded during initial planting.`
+                        remark: `Damaged seeds recorded during initial planting.${gapPart}`
                     }));
                 } else {
                     logsToInsert.push(withEditMeta({
@@ -5823,7 +5931,7 @@
                         breed_name: breed,
                         quantity_change: 0,
                         transaction_date: plantedDate,
-                        remark: `No damaged seeds.`
+                        remark: `No damaged seeds.${gapPart}`
                     }));
                 }
 
@@ -5846,31 +5954,31 @@
                 // Check Follow up
                 const followUpBanner = document.getElementById('follow-up-warning');
                 const needsFollowUp = !followUpBanner.classList.contains('hidden');
-                
-                if (needsFollowUp) {
-                    // Raised into Nelos, not the old operation_follow_up_cases —
-                    // that table had no screen, so a case went in and was never
-                    // seen again. A Nelos case lands on the module To-Do lists.
-                    //
-                    // dedupe:true because this runs on every save of the planting
-                    // report: re-saving a batch that still has a discrepancy must
-                    // update nothing rather than file a second identical case.
-                    const { error } = await MJMNelos.raise({
-                        title:       `Planting discrepancy — batch ${batchId}`,
-                        description: `The planted quantities on batch ${batchId} do not reconcile. Raised automatically when the planting report was saved.`,
-                        category:    'Planting Discrepancy',
-                        priority:    'high',
-                        source:      'operation',
-                        sourceRef:   `../operation/operation_batch_detail.html?batch=${encodeURIComponent(batchId)}`,
-                        batch:       batchId,
-                        dedupe:      true
-                    });
-                    if (error) console.warn('Could not raise the Nelos case:', error.message);
-                }
 
+                /* A DISCREPANCY IS EXPLAINED HERE, NOT FILED SOMEWHERE ELSE.
+
+                   This used to raise a Nelos case on every save — which sent
+                   the question to a queue for somebody who was not there to
+                   ask, days later, of a person who had the answer in their
+                   head while they were keying the report. Worse, the case
+                   never closed itself: fixing the figures only stopped a NEW
+                   one being raised, so the queue filled with questions that
+                   had already been answered.
+
+                   The reason is asked on the tab now and saved with the
+                   record. The save is not blocked — the same rule 3rd
+                   Culling follows, because a day's counting sitting unsaved
+                   over a figure nobody can resolve yet is worse than an
+                   unexplained one that is stored — but the report does not
+                   read as complete until the reason is written. */
                 await savePhotosToStorage(batchId);
                 setEditMetaUI(2, new Date().toISOString(), window.currentUserEmail);
-                showToast(`Planting report saved.${needsFollowUp ? ' ⚠️ Follow-up case generated.' : ''}`, 'success');
+                showToast(
+                    needsFollowUp && !_gap.note
+                        ? 'Planting report saved — but the figures do not tally and nobody has said why. ' +
+                          'Write the reason in "Explain the discrepancy" and save again.'
+                        : `Planting report saved.${needsFollowUp ? ' Discrepancy explained.' : ''}`,
+                    needsFollowUp && !_gap.note ? 'error' : 'success');
                 btn.innerText = originalText;
                 btn.disabled = false;
 
