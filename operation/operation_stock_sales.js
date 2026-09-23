@@ -1257,15 +1257,27 @@
             });
 
             // Index ALs by the customer order number they're linked to.
+            // Trimmed/uppercased on both sides of the match below — a
+            // trailing space keyed into shared_al_orders.order_number by
+            // hand (invisible in the UI, real in the string) meant this
+            // exact-match lookup silently missed the AL entirely: no AL
+            // number shown on the row, and the order fell back to
+            // salesweb's own (unset) collected qty instead of the DOs
+            // actually issued against it — reading fully outstanding when
+            // the AL List already had it at zero.
+            //
             // If a single order_number happens to map to multiple ALs (e.g.
             // partial replacements), prefer the row with the highest
             // balance_quantity so the totals stay consistent for the user.
+            const normOrderKey = v => String(v || '').trim().toUpperCase();
             const alByOrderNumber = {};
             alRows.forEach(a => {
                 if (!a.order_number) return;
-                const cur = alByOrderNumber[a.order_number];
+                const k = normOrderKey(a.order_number);
+                if (!k) return;
+                const cur = alByOrderNumber[k];
                 if (!cur || (Number(a.balance_quantity)||0) > (Number(cur.balance_quantity)||0)) {
-                    alByOrderNumber[a.order_number] = a;
+                    alByOrderNumber[k] = a;
                 }
             });
 
@@ -1318,7 +1330,7 @@
                 // and balance_quantity over what the salesweb tables imply.
                 // This keeps Customer Order Management in lock-step with the
                 // AL Manager — any AL amendment is reflected on next reload.
-                const al = alByOrderNumber[o.order_number];
+                const al = alByOrderNumber[normOrderKey(o.order_number)];
                 let totalQty       = it.qty;
                 let totalCollected = monthCollected;
                 let balance        = totalQty - totalCollected;
