@@ -196,6 +196,37 @@ const ROWS = {
     };
   });
 
+  /* ── HQ SIGNED IT OFF WITH THE REASON STILL MISSING ──────────────────
+     A tab showing a part-filled ring beside its own green tick is two
+     answers to one question. Once HQ has verified the stage, an unwritten
+     reason is something still OWED, not a report that is unfinished — the
+     same rule the tab already carries for an unattached photograph.
+
+     Every figure has to be in for that: a missing worker count still holds
+     the ring down, verified or not. */
+  const verified = await page.evaluate(async () => {
+    const note = document.getElementById('t2-gap-note');
+    note.value = '';                                    // the reason goes away again
+    currentWorkers = 4;                                 // every FIGURE now in
+    opsPhotoBase64 = null;                              // …and the photo still owed
+    window.MJMReview = Object.assign({}, window.MJMReview, { isVerified: () => false });
+    calcPlanting();
+    const before = { pct: (document.getElementById('t2-percent-text')?.textContent || '').trim(),
+                     desc: (document.getElementById('t2-status-desc')?.textContent || '').replace(/\s+/g, ' ').trim() };
+    window.MJMReview.isVerified = (stage) => stage === 'planting';
+    calcPlanting();
+    const after = { pct: (document.getElementById('t2-percent-text')?.textContent || '').trim(),
+                    desc: (document.getElementById('t2-status-desc')?.textContent || '').replace(/\s+/g, ' ').trim(),
+                    panel: !document.getElementById('t2-gap-panel').classList.contains('hidden') };
+    // …and a FIGURE still missing is not settled by a signature.
+    currentWorkers = 0;
+    calcPlanting();
+    const withFigureMissing = { pct: (document.getElementById('t2-percent-text')?.textContent || '').trim() };
+    currentWorkers = 4;
+    calcPlanting();
+    return { before, after, withFigureMissing };
+  });
+
   /* Reopening the batch: the reason has to come back, or the panel asks a
      question somebody has already answered and the ring falls off 100%. */
   const reloaded = await page.evaluate(async (remark) => {
@@ -235,6 +266,7 @@ const ROWS = {
   console.log('explained   :', JSON.stringify(explained));
   console.log('saved remark:', JSON.stringify(written.damagedRemark));
   console.log('nelos rows  :', written.nelosInserts, '| toasts:', JSON.stringify(written.toasts));
+  console.log('verified    :', JSON.stringify(verified));
   console.log('reloaded    :', JSON.stringify(reloaded));
   console.log('tallies     :', JSON.stringify(tallies));
   console.log('page errors :', errs.length ? errs.join(' | ') : 'none');
@@ -269,6 +301,17 @@ const ROWS = {
       (written.damagedRemark.match(/GapNote:(\S+)/) || ['', ''])[1] || ''))],
     ['and NO Nelos case is raised', written.nelosInserts === 0],
     ['the save is not blocked', written.toasts.some(t => /saved/i.test(t.m))],
+
+    // ── HQ signed it off anyway
+    ['unverified, a missing reason holds the ring down',
+      verified.before.pct !== '100%' && /discrepancy explanation/i.test(verified.before.desc)],
+    ['once HQ verifies the stage, the tab ticks', verified.after.pct === '100%'],
+    ['and says what is still owed rather than what is missing',
+      /verified/i.test(verified.after.desc) && /outstanding/i.test(verified.after.desc)
+      && /discrepancy explanation/i.test(verified.after.desc)],
+    ['the panel stays open so it can still be written', verified.after.panel === true],
+    ['but a missing FIGURE is not settled by a signature',
+      verified.withFigureMissing.pct !== '100%'],
 
     // ── reopening
     ['the reason comes back on the next load', /mouldy/.test(reloaded.note)],

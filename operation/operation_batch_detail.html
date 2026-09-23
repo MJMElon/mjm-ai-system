@@ -5610,7 +5610,11 @@
                banner reading VERIFIED & LOCKED is a question somebody has to come
                and ask; the answer was always in here, it was just never said. */
             const missingData     = [];   // figures the report cannot do without
-            const missingEvidence = [];   // pictures — proof, not figures
+            /* Everything that is NOT a figure: the photograph, and the reason
+               a discrepancy exists. Both are things somebody still owes, and
+               neither stops the arithmetic being complete — which is why HQ
+               signing the stage off settles them (see below). */
+            const missingEvidence = [];
             let requiredChecks = 0, filledCount = 0;
             const need = (label, ok, isEvidence) => {
                 requiredChecks++;
@@ -5632,20 +5636,27 @@
             /* A report whose figures do not tally is not a finished report
                until somebody has said why. Counted only WHEN there is a
                discrepancy, so a batch that tallies is never asked for an
-               explanation of nothing. */
+               explanation of nothing.
+
+               Carried as EVIDENCE, not as a figure: once HQ has verified the
+               stage, a missing reason is something still owed rather than a
+               report that is unfinished — HQ looked at the shortfall and
+               signed it off. A tab showing a part-filled ring beside its own
+               green tick is two answers to one question, which is what this
+               rule exists to stop. */
             const _gap = t2GapState();
-            if (_gap.gap) need('Discrepancy Explanation', !!_gap.note);
+            if (_gap.gap) need('Discrepancy Explanation', !!_gap.note, true);
 
             let percentage = Math.min(100, Math.round((filledCount / requiredChecks) * 100));
 
             /* The same rule Transplanting carries for drone maps: once HQ has
-               verified the stage and every FIGURE is in, an unattached picture
-               is an outstanding attachment, not an unfinished report. Evidence
-               only — a missing figure still holds the ring down. */
+               verified the stage and every FIGURE is in, what is left is
+               outstanding, not unfinished. Evidence only — a missing figure
+               still holds the ring down, verified or not. */
             const _rv = window.MJMReview || {};
             const hqVerified = !!(typeof _rv.isVerified === 'function' && _rv.isVerified('planting'));
-            const photosAreAllThatIsLeft = missingData.length === 0 && missingEvidence.length > 0 && hqVerified;
-            if (photosAreAllThatIsLeft) percentage = 100;
+            const onlyOutstandingLeft = missingData.length === 0 && missingEvidence.length > 0 && hqVerified;
+            if (onlyOutstandingLeft) percentage = 100;
 
             document.getElementById('t2-pie-tab').style.setProperty('--percentage', percentage);
             // The tab's tick follows its ring: a stage that stops being full
@@ -5660,7 +5671,7 @@
             saveBtn.innerText = `Save Planting Report (${percentage}% Complete)`;
             const short = missingData.concat(missingEvidence);
             const shortList = short.slice(0, 3).join(', ') + (short.length > 3 ? ` +${short.length - 3}` : '');
-            if (photosAreAllThatIsLeft) {
+            if (onlyOutstandingLeft) {
                 desc.innerText = `100% Verified · ${missingEvidence.join(', ')} Outstanding`;
                 desc.className = "text-base font-black uppercase text-[#4a7a2e] mt-1";
             }
