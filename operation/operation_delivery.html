@@ -180,6 +180,7 @@
                     </button>
                 </div>
             </div>
+            <div id="mng-do-lock-notice" class="hidden mt-4 p-3 rounded-xl bg-slate-100 border border-slate-300 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">🔒 Locked — dated before the DO Entry Lock cutoff (System Settings). Can't be edited or deleted.</div>
             <div class="flex gap-4 pt-8 mt-6 border-t border-slate-100 relative z-40">
                 <button onclick="closeModal('manage-do-modal')" class="flex-1 p-4 rounded-2xl bg-slate-100 text-slate-600 font-bold text-xs uppercase tracking-widest hover:bg-slate-200 relative z-40">Close</button>
                 <button onclick="printCurrentDO()" class="flex-1 p-4 rounded-2xl bg-emerald-100 text-emerald-700 font-bold text-xs uppercase tracking-widest hover:bg-emerald-200 shadow-sm relative z-40">🖨️ Print PDF</button>
@@ -363,23 +364,36 @@
 
         let globalALs = []; let globalDOs = []; let globalPlots = []; let globalBreeds = []; let globalNurseries = []; let globalBatches = [];
         let currentViewImage = null; let currentViewType = null; window.extractedBulkDOs = {}; window.localSavedDOs = new Set();
+        // A DO dated before this cutoff can't be edited or deleted — set on
+        // System Settings ("DO Entry Lock"). null means no lock at all,
+        // same "access fails open" rule this system follows elsewhere.
+        let globalDoLockCutoff = null;
+        function isDoLocked(doRec) {
+            if (!globalDoLockCutoff || !doRec || !doRec.delivery_date) return false;
+            return String(doRec.delivery_date).slice(0, 10) < globalDoLockCutoff;
+        }
 
         // HIGH SPEED OPTIMIZED DATA FETCH
         async function fetchData() {
             try {
-                const [resPlots, resBreeds, resNurs, resBatches, alDataRes, doDataRes] = await Promise.all([
+                const [resPlots, resBreeds, resNurs, resBatches, alDataRes, doDataRes, doLockRes] = await Promise.all([
                     _supabase.from('shared_plots').select('plot_name,nursery_name'),
                     _supabase.from('shared_breeds').select('name'),
                     _supabase.from('operation_nurseries').select('name,license'),
                     _supabase.from('operation_batches').select('name'),
                     _supabase.from('shared_al_orders').select('id,al_number,order_number,order_date,customer_name,product_name,quantity_ordered,balance_quantity,price_per_unit,status,remark,created_at').order('created_at', { ascending: false }),
-                    _supabase.from('shared_do_records').select('id,do_number,al_number,delivery_date,total_qty,remark,status,plot_1,breed_1,batch_1,qty_1,plot_2,breed_2,batch_2,qty_2,plot_3,breed_3,batch_3,qty_3,plot_4,breed_4,batch_4,qty_4,plot_5,breed_5,batch_5,qty_5,ba_number,ba_raw_name,ba_raw_qty,created_at').order('created_at', { ascending: false })
+                    _supabase.from('shared_do_records').select('id,do_number,al_number,delivery_date,total_qty,remark,status,plot_1,breed_1,batch_1,qty_1,plot_2,breed_2,batch_2,qty_2,plot_3,breed_3,batch_3,qty_3,plot_4,breed_4,batch_4,qty_4,plot_5,breed_5,batch_5,qty_5,ba_number,ba_raw_name,ba_raw_qty,created_at').order('created_at', { ascending: false }),
+                    // Tolerates the table not existing yet — see
+                    // shared/RUN_ME_do_lock.sql.
+                    _supabase.from('shared_do_lock_settings').select('cutoff_date').eq('id', 1).maybeSingle()
+                        .then(r => r, e => ({ data: null, error: e }))
                 ]);
-                
+
                 if(resPlots.data) globalPlots = resPlots.data;
                 if(resBreeds.data) globalBreeds = resBreeds.data;
                 if(resNurs.data) globalNurseries = resNurs.data;
                 if(resBatches.data) globalBatches = resBatches.data;
+                globalDoLockCutoff = doLockRes?.data?.cutoff_date || null;
                 
                 const dl = document.getElementById('batch-suggestions');
                 if(dl) { dl.innerHTML = ''; globalBatches.forEach(b => dl.insertAdjacentHTML('beforeend', `<option value="${b.name}">`)); }
@@ -992,14 +1006,24 @@
             const isCancelled = doRec.status === 'Cancelled' || (doRec.remark && doRec.remark.includes('[CANCELLED]')); const badge = document.getElementById('manage-do-status-badge');
             if (isCancelled) { badge.innerText = "CANCELLED"; badge.className = "text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full mt-2 inline-block bg-red-600 text-white"; document.getElementById('cancel-do-btn').style.display = 'none'; } else { badge.innerText = doRec.status || "DELIVERED"; let badgeClass = 'bg-emerald-100 text-emerald-700'; if(doRec.status === 'Verified') badgeClass = 'bg-emerald-600 text-white'; badge.className = `text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full mt-2 inline-block ${badgeClass}`; document.getElementById('cancel-do-btn').style.display = 'block'; }
             
-            document.querySelectorAll('#manage-do-modal .edit-field').forEach(el => el.disabled = true); 
+            document.querySelectorAll('#manage-do-modal .edit-field').forEach(el => el.disabled = true);
             document.getElementById('save-edit-do-btn').classList.add('hidden');
-            
+
             // Reset Edit View
             document.getElementById('mng-do-collection-summary').classList.remove('hidden');
             document.getElementById('mng-do-collection-edit').classList.add('hidden');
             document.getElementById('edit-do-btn-trigger').classList.remove('hidden');
-            
+
+            // DO Entry Lock (System Settings) — dated before the cutoff,
+            // no editing or deleting, cancelled or not.
+            if (isDoLocked(doRec)) {
+                document.getElementById('edit-do-btn-trigger').classList.add('hidden');
+                document.getElementById('cancel-do-btn').style.display = 'none';
+                document.getElementById('mng-do-lock-notice').classList.remove('hidden');
+            } else {
+                document.getElementById('mng-do-lock-notice').classList.add('hidden');
+            }
+
             let nurserySummary = {};
             let editItemsHtml = '';
             let itemCount = 0;
@@ -1087,9 +1111,11 @@
         function checkUrlParamsForModal() { const params = new URLSearchParams(window.location.search); const manageDoId = params.get('manageDO'); if (manageDoId && globalDOs.length > 0) { const doRec = globalDOs.find(d => String(d.id) === manageDoId); if (doRec) setTimeout(() => openManageDOModal(doRec.id), 300); } }
         function openDOModal() { document.getElementById('do-modal').classList.remove('hidden'); document.getElementById('bulk-do-tbody').innerHTML = ''; window.extractedBulkDOs = {}; document.getElementById('main-file-input').value = ''; document.getElementById('do-file-input').value = ''; }
         
-        function enableEditDOMode() { 
+        function enableEditDOMode() {
             if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'manage')) return;
-            document.querySelectorAll('#manage-do-modal .edit-field').forEach(el => el.disabled = false); 
+            const doRec = globalDOs.find(d => String(d.id) === String(document.getElementById('manage-do-id').value));
+            if (isDoLocked(doRec)) return alert('This DO is dated before the DO Entry Lock cutoff and can\'t be edited. Change the cutoff in System Settings if this was locked in error.');
+            document.querySelectorAll('#manage-do-modal .edit-field').forEach(el => el.disabled = false);
             document.getElementById('items_container_mng').querySelectorAll('input, select, button').forEach(el => el.disabled = false);
             
             document.getElementById('save-edit-do-btn').classList.remove('hidden'); 
@@ -1128,9 +1154,13 @@
             const newDate = document.getElementById('mng-do-date').value; 
             const newAl = document.getElementById('mng-do-al').value; 
             const newQty = parseInt(document.getElementById('qty_mng').value) || 0; 
-            const newRemark = document.getElementById('mng-do-remark').value; 
-            const oldDO = globalDOs.find(d => String(d.id) === String(doId)); 
-            
+            const newRemark = document.getElementById('mng-do-remark').value;
+            const oldDO = globalDOs.find(d => String(d.id) === String(doId));
+            if (isDoLocked(oldDO)) return alert('This DO is dated before the DO Entry Lock cutoff and can\'t be saved. Change the cutoff in System Settings if this was locked in error.');
+            // Also block backdating an otherwise-unlocked DO into the locked
+            // period — the lock closes a date range, not just today's rows.
+            if (globalDoLockCutoff && newDate && newDate < globalDoLockCutoff) return alert('The delivery date entered falls before the DO Entry Lock cutoff (' + globalDoLockCutoff + '). Choose a later date, or change the cutoff in System Settings.');
+
             const parentAL = globalALs.find(a => a.al_number === newAl);
             if (parentAL) {
                 let theoreticalBalance = parentAL._calc_balance;
@@ -1178,16 +1208,18 @@
         
         function viewAttachedDocument() { if(!currentViewImage) return; openStandaloneDoc(currentViewImage); }
         
-        async function deleteDO() { 
+        async function deleteDO() {
             if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'manage')) return;
+            const id = document.getElementById('manage-do-id').value;
+            const doRec = globalDOs.find(d => String(d.id) === id);
+            if (isDoLocked(doRec)) return alert('This DO is dated before the DO Entry Lock cutoff and can\'t be deleted. Change the cutoff in System Settings if this was locked in error.');
+
             const pin = prompt("Enter Master PIN to delete DO:");
             if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN.");
-            
-            if (!confirm("Are you sure you want to permanently DELETE this DO? This action cannot be undone and will restore the AL balance.")) return; 
-            
-            const id = document.getElementById('manage-do-id').value; 
-            const doRec = globalDOs.find(d => String(d.id) === id); 
-            const parentAL = globalALs.find(a => a.al_number === doRec.al_number); 
+
+            if (!confirm("Are you sure you want to permanently DELETE this DO? This action cannot be undone and will restore the AL balance.")) return;
+
+            const parentAL = globalALs.find(a => a.al_number === doRec.al_number);
             
             const { error: doError } = await _supabase.from('shared_do_records').delete().eq('id', id); 
             if (doError) return alert(doError.message); 

@@ -43,7 +43,32 @@
         </div>
 
         <div class="space-y-12">
-            
+
+            <section>
+                <div class="flex items-center gap-3 mb-6 border-b-2 border-rose-200 pb-2">
+                    <span class="text-2xl">🔒</span>
+                    <h2 class="text-xl font-black text-rose-800 uppercase tracking-widest">Delivery Order Controls</h2>
+                </div>
+
+                <div class="glass-panel p-8 rounded-[2.5rem] shadow-xl border-l-[8px] border-rose-400">
+                    <h2 class="font-black text-slate-800 uppercase tracking-widest text-lg border-b-2 border-slate-100 pb-4 mb-4">DO Entry Lock</h2>
+                    <p class="text-xs text-slate-500 font-semibold mb-4 leading-relaxed">
+                        Delivery Orders dated before this cutoff can no longer be edited or deleted in
+                        <span class="font-black text-slate-700">Delivery Orders</span> — like closing last month's books while this month stays open.
+                        New DOs can still be keyed in regardless of the cutoff. Leave blank to keep every DO editable.
+                    </p>
+                    <div class="flex flex-col md:flex-row gap-4 items-end bg-rose-50 p-5 rounded-2xl border border-rose-100">
+                        <div class="flex-1 w-full">
+                            <label class="text-[10px] font-bold text-rose-600 uppercase tracking-widest mb-1 block ml-1">Lock DOs dated before</label>
+                            <input type="date" id="do-lock-cutoff" class="input-style text-xs w-full">
+                        </div>
+                        <button onclick="saveDoLockCutoff()" class="btn-purple !bg-rose-600 !px-8 !py-4 text-xs tracking-widest w-full md:w-auto">Save</button>
+                        <button onclick="clearDoLockCutoff()" class="text-[10px] font-bold text-slate-500 hover:text-rose-700 uppercase tracking-widest bg-white hover:bg-rose-50 border border-slate-200 px-5 py-3 rounded-xl transition-colors w-full md:w-auto">Remove Lock</button>
+                    </div>
+                    <div id="do-lock-status" class="text-[11px] font-bold text-slate-500 mt-3"></div>
+                </div>
+            </section>
+
             <section>
                 <div class="flex items-center gap-3 mb-6 border-b-2 border-slate-200 pb-2">
                     <span class="text-2xl">🌍</span>
@@ -370,13 +395,18 @@
         // FETCH DATA
         async function fetchData() {
             try {
-                const [breedRes, plotRes, nursRes, batchRes, trayRes, silBatchRes] = await Promise.all([
+                const [breedRes, plotRes, nursRes, batchRes, trayRes, silBatchRes, doLockRes] = await Promise.all([
                     _supabase.from('shared_breeds').select('*').order('name'),
                     _supabase.from('shared_plots').select('*'),
                     _supabase.from('operation_nurseries').select('*').order('name'),
                     _supabase.from('operation_batches').select('*'),
                     _supabase.from('operation_trays').select('*').order('tray_name'),
-                    _supabase.from('shared_inventory_logs').select('batch_name').eq('transaction_type', 'Seeds_Received')
+                    _supabase.from('shared_inventory_logs').select('batch_name').eq('transaction_type', 'Seeds_Received'),
+                    // Tolerates the table not existing yet — see
+                    // shared/RUN_ME_do_lock.sql. Absent means no lock, same
+                    // "access fails open" rule this system follows elsewhere.
+                    _supabase.from('shared_do_lock_settings').select('*').eq('id', 1).maybeSingle()
+                        .then(r => r, e => ({ data: null, error: e }))
                 ]);
 
                 if (breedRes.error) throw breedRes.error;
@@ -409,13 +439,40 @@
                 globalBatches.sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true, sensitivity: 'base' }));
                 globalTrays.sort((a, b) => a.tray_name.localeCompare(b.tray_name, undefined, { numeric: true, sensitivity: 'base' }));
 
-                renderBreeds(); renderBatches(); renderNurseries(); 
-                populateNurseryFilters(); 
+                renderBreeds(); renderBatches(); renderNurseries();
+                populateNurseryFilters();
                 renderFilteredPlots(); renderFilteredTrays();
-            } catch(err) { 
+                renderDoLockSetting(doLockRes?.data || null);
+            } catch(err) {
                 alert("Database Connection Error:\n\n" + err.message + "\n\n(Did you remember to create the 'operation_trays' table in Supabase?)");
-                console.error(err); 
+                console.error(err);
             }
+        }
+
+        // ── DO Entry Lock ────────────────────────────────────────────────
+        function renderDoLockSetting(row) {
+            const input  = document.getElementById('do-lock-cutoff');
+            const status = document.getElementById('do-lock-status');
+            const cutoff = row && row.cutoff_date;
+            input.value = cutoff || '';
+            status.textContent = cutoff
+                ? `Locked: DOs dated before ${new Date(cutoff).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' })} can no longer be edited or deleted.`
+                : 'No lock set — every DO is editable.';
+        }
+
+        async function saveDoLockCutoff() {
+            const cutoff = document.getElementById('do-lock-cutoff').value || null;
+            const { data: { user } } = await _supabase.auth.getUser();
+            const { error } = await _supabase.from('shared_do_lock_settings')
+                .upsert({ id: 1, cutoff_date: cutoff, updated_at: new Date().toISOString(), updated_by: user?.email || null }, { onConflict: 'id' });
+            if (error) return alert('Could not save: ' + error.message + (error.message.includes('does not exist') ? '\n\nRun shared/RUN_ME_do_lock.sql in the Supabase SQL Editor first.' : ''));
+            alert(cutoff ? 'DO lock saved.' : 'DO lock cleared — every DO is editable again.');
+            fetchData();
+        }
+
+        function clearDoLockCutoff() {
+            document.getElementById('do-lock-cutoff').value = '';
+            saveDoLockCutoff();
         }
 
         // --- GLOBAL MAPPER LOGIC WITH PAN, ZOOM & EDIT ---
