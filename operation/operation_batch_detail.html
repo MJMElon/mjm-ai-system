@@ -367,6 +367,32 @@
           opacity: .55;
           filter: grayscale(.25);
         }
+        /* AN EXPLANATION IS NEVER LOCKED.
+
+           Everything else on a verified report is a claim somebody has
+           already signed off, and locking it is the point. A reason why the
+           figures do not tally is the opposite: it is the thing that is still
+           MISSING when a report is locked, and the answer often turns up
+           afterwards — the supplier writes back, somebody finds the count
+           sheet, the person who was there comes in on Monday.
+
+           Locking it meant the only way to record the answer was to unverify
+           the whole report, change nothing, and verify it again. So every
+           explanation box carries .mjm-always-open and stays live however the
+           report around it is locked — by review, by verification, or by the
+           Month Lock Calendar. It has its own Save beside it, because the
+           tab's own Save is locked and a box that cannot be saved is worse
+           than a box that cannot be typed in. */
+        .mjm-locked .mjm-always-open,
+        .mjm-locked .mjm-always-open input,
+        .mjm-locked .mjm-always-open textarea,
+        .mjm-locked .mjm-always-open button,
+        .mjm-locked textarea.mjm-always-open,
+        .mjm-locked button.mjm-always-open {
+          pointer-events: auto !important;
+          opacity: 1;
+          filter: none;
+        }
         /* Upload/drop zones are plain clickable DIVs, not input/select/
            textarea/button, so the rule above never reaches them — a locked
            report could still take a new photo through the dropzone even
@@ -1093,10 +1119,18 @@
                                         <div id="t2-gap-why" class="text-[11px] font-bold text-[#8a7a68] mt-1.5 leading-snug"></div>
                                         <textarea id="t2-gap-note" rows="3" oninput="calcPlanting()"
                                             placeholder="Where did the difference go? e.g. 212 seeds mouldy in the bag and thrown away before counting; supplier short-delivered and a replacement is on the way."
-                                            class="input-style w-full mt-3 !text-[13px]"></textarea>
-                                        <div class="text-[10px] font-bold text-[#8a7a68] mt-2 leading-snug">
-                                            Saved with the planting report. The report is not complete until this is written,
-                                            and whoever checks the batch reads it here.
+                                            class="input-style w-full mt-3 !text-[13px] mjm-always-open"></textarea>
+                                        <div class="flex items-center justify-between gap-3 flex-wrap mt-2">
+                                            <div class="text-[10px] font-bold text-[#8a7a68] leading-snug">
+                                                Saved with the planting report. The report is not complete until this is written,
+                                                and whoever checks the batch reads it here.
+                                            </div>
+                                            <!-- Its own Save: the reason is still writable on a locked
+                                                 report, and the tab's own Save is not. -->
+                                            <button type="button" id="t2-gap-save" onclick="saveT2GapNote()"
+                                                class="mjm-always-open shrink-0 px-3 py-1.5 rounded-lg border border-[#c07820] bg-white
+                                                       text-[#c07820] text-[10px] font-black uppercase tracking-widest
+                                                       hover:bg-[#fdfaf4]">Save explanation</button>
                                         </div>
                                     </div>
                                 </div>
@@ -2125,6 +2159,14 @@
                                     <span class="text-[11px] font-black text-[#7a4a10] uppercase tracking-widest bg-[#fef3c7] border border-[#f0b429] rounded-lg px-3 py-1.5 whitespace-nowrap" id="t6-mismatch-count">0 plots</span>
                                 </div>
                                 <div id="t6-mismatch-rows" class="p-4 sm:p-6 space-y-3"></div>
+                                <!-- Its own Save: a reason stays writable on a locked
+                                     report and the tab's own Save does not. -->
+                                <div class="px-4 sm:px-6 pb-4 sm:pb-6 flex justify-end">
+                                    <button type="button" id="t6-mm-save" onclick="saveT6MismatchNotes()"
+                                        class="mjm-always-open px-3 py-1.5 rounded-lg border border-[#c07820] bg-white
+                                               text-[#c07820] text-[10px] font-black uppercase tracking-widest
+                                               hover:bg-[#fdfaf4]">Save reasons</button>
+                                </div>
                             </div>
 
                             <!-- Sales on THIS batch's delivery notes that reached no plot.
@@ -5602,6 +5644,54 @@
             const open  = !!panel && !panel.classList.contains('hidden');
             const note  = (document.getElementById('t2-gap-note')?.value || '').trim();
             return { gap: open, note, explained: !open || !!note };
+        }
+
+        /* SAVE JUST THE REASON.
+
+           An explanation stays writable on a locked report — see
+           .mjm-always-open — and the tab's own Save does not, so the reason
+           needs a way to reach the database on its own. This rewrites the
+           GapNote on the batch's Damaged_Seeds record and touches nothing
+           else: no quantities, no dates, no sign-offs.
+
+           SHARED SHAPE — saveT6MismatchNotes below does the same job for the
+           3rd Culling reasons. Change one, look at the other. */
+        async function saveT2GapNote() {
+            const btn = document.getElementById('t2-gap-save');
+            const original = btn ? btn.innerText : '';
+            const batchId = (document.getElementById('f-batchno')?.value || '').trim();
+            if (!batchId) { showToast('Save Tab 1 first to assign a batch number.', 'error'); return; }
+            if (btn) { btn.disabled = true; btn.innerText = 'Saving…'; }
+            try {
+                const note = (document.getElementById('t2-gap-note')?.value || '').trim();
+                const { data: rows, error: readErr } = await _supabase
+                    .from('shared_inventory_logs')
+                    .select('id, remark')
+                    .eq('batch_name', batchId)
+                    .eq('transaction_type', 'Damaged_Seeds');
+                if (readErr) throw readErr;
+                if (!rows || !rows.length) {
+                    throw new Error('There is no saved planting report on this batch yet. Save the report once first.');
+                }
+                /* The record's own words are kept; only the GapNote part is
+                   replaced, and removed outright when the box is emptied. */
+                const rewrite = (r) => {
+                    const base = String(r.remark || '').replace(/\s*GapNote:\S+/g, '').trim();
+                    return note ? `${base} GapNote:${encodeURIComponent(note)}` : base;
+                };
+                for (const r of rows) {
+                    const { error } = await _supabase.from('shared_inventory_logs')
+                        .update(withEditMeta({ remark: rewrite(r) }))
+                        .eq('id', r.id);
+                    if (error) throw error;
+                }
+                calcPlanting();
+                showToast(note ? 'Explanation saved.' : 'Explanation cleared.', 'success');
+            } catch (e) {
+                showToast('Could not save the explanation: ' + (e.message || e), 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerText = original || 'Save explanation'; }
+            }
         }
 
         function updatePlantingCompletion() {
@@ -11465,7 +11555,7 @@ Thank you.`;
                         })()}
                         <label class="label-style !text-[#7a4a10]">Reason &amp; how to avoid it in future</label>
                         <textarea rows="2" data-idx="${m.idx}" id="t6-mm-note-${m.idx}"
-                            class="input-style t6-mm-note w-full !text-sm"
+                            class="input-style t6-mm-note w-full !text-sm mjm-always-open"
                             oninput="syncT6MismatchState()"
                             placeholder="e.g. drone flew before the last batch was moved out — recount after transfers close">${_escAttr(note)}</textarea>
                     </div>`;
@@ -11476,6 +11566,93 @@ Thank you.`;
 
         /* Colour the panel by whether anything is still unexplained, so the
            admin can see at a glance what the save will leave behind. */
+        /* SAVE JUST THE REASONS.
+
+           The other half of saveT2GapNote — same job, 3rd Culling's plots.
+           Each reason lives as MismatchNote on that plot's own 3rd_Culling
+           record, so each one is rewritten on its own row and nothing else on
+           the record is touched: not the culled quantity, not the drone map,
+           not the date. A reason stays writable on a locked report and the
+           tab's own Save does not, which is why this exists. */
+        async function saveT6MismatchNotes() {
+            const btn = document.getElementById('t6-mm-save');
+            const original = btn ? btn.innerText : '';
+            const batchId = (document.getElementById('f-batchno')?.value || '').trim();
+            if (!batchId) { showToast('Save Tab 1 first to assign a batch number.', 'error'); return; }
+            if (btn) { btn.disabled = true; btn.innerText = 'Saving…'; }
+            try {
+                const { data: rows, error: readErr } = await _supabase
+                    .from('shared_inventory_logs')
+                    .select('id, plot_name, remark')
+                    .eq('batch_name', batchId)
+                    .eq('transaction_type', '3rd_Culling');
+                if (readErr) throw readErr;
+
+                let written = 0, unplaced = 0;
+                for (const m of t6Mismatches()) {
+                    const p = t6_plotData[m.idx];
+                    if (!p) continue;
+                    const note = t6MismatchNote(m.idx);
+                    const want = _t6PlotKey(p.plot);
+                    const dest = p.destType || 'main';
+                    /* The plot's own record, matched the forgiving way the
+                       loader matches it — trimmed and upper-cased — and on
+                       DestType too, because one plot can carry a MAIN row and
+                       a D-TONE row and they are different answers. */
+                    const mine = (rows || []).filter(r => {
+                        if (_t6PlotKey(r.plot_name) !== want) return false;
+                        const d = String(r.remark || '').match(/DestType:\s*(main|premium|doubletone)/);
+                        return d ? d[1] === dest : true;
+                    });
+                    if (!mine.length) { unplaced++; continue; }
+                    for (const r of mine) {
+                        const base = String(r.remark || '').replace(/\s*MismatchNote:\S+/g, '').trim();
+                        const remark = note ? `${base} MismatchNote:${encodeURIComponent(note)}` : base;
+                        if (remark === String(r.remark || '')) continue;
+                        const { error } = await _supabase.from('shared_inventory_logs')
+                            .update(withEditMeta({ remark })).eq('id', r.id);
+                        if (error) throw error;
+                        written++;
+                    }
+                }
+                syncT6MismatchState();
+                /* A REASON THAT DOES NOT CLEAR THE FLAG IS A REASON NOBODY
+                   ACTED ON. saveTab6 puts this batch on HQ's Amendment Needed
+                   list while any drone map is unexplained and takes it off
+                   when they all are; explaining them from here has to do the
+                   same, or the batch sits on the list over a question that
+                   has been answered. Never allowed to fail the save — the
+                   reasons are already stored by this point. */
+                if (!t6Mismatches().some(m => !t6MismatchNote(m.idx))) {
+                    try {
+                        const { data: flags } = await _supabase.from('shared_inventory_logs')
+                            .select('id')
+                            .eq('batch_name', batchId)
+                            .eq('transaction_type', 'Review_Rejection')
+                            .eq('plot_name', 'cull_3')
+                            .like('remark', '3rd Culling map qty%');
+                        const ids = (flags || []).map(r => r.id).filter(v => v != null);
+                        if (ids.length) await _supabase.from('shared_inventory_logs').delete().in('id', ids);
+                    } catch (flagErr) {
+                        console.warn('[saveT6MismatchNotes] amendment flag not cleared:', flagErr);
+                    }
+                }
+                if (unplaced) {
+                    /* Said out loud rather than counted as saved: a reason
+                       written against a plot with no saved 3rd Culling record
+                       has nowhere to go until the report itself is saved. */
+                    showToast(`${written} reason(s) saved. ${unplaced} plot(s) have no saved 3rd Culling record yet — ` +
+                              `save the report once and their reasons will keep.`, 'error');
+                } else {
+                    showToast(written ? `${written} reason(s) saved.` : 'Nothing to save — the reasons are unchanged.', 'success');
+                }
+            } catch (e) {
+                showToast('Could not save the reasons: ' + (e.message || e), 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerText = original || 'Save reasons'; }
+            }
+        }
+
         function syncT6MismatchState() {
             const panel = document.getElementById('t6-mismatch-panel');
             if (!panel || panel.classList.contains('hidden')) return;

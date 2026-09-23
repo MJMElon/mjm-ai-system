@@ -36,6 +36,7 @@ const UID = '00000000-0000-0000-0000-000000000001';
    something this can actually check rather than assume. */
 const FAKE_SUPABASE = `
 window.__INSERTS = [];
+window.__UPDATES = [];
 window.supabase = { createClient: function () {
   function builder(table) {
     var b = { _t: table, _eq: {}, _in: null, _like: null, _one: false, _from: 0, _to: 1e9 };
@@ -69,7 +70,10 @@ window.supabase = { createClient: function () {
       window.__INSERTS.push({ table: table, rows: [].concat(rows || []) });
       return Promise.resolve({ data: null, error: null });
     };
-    b.update = function () { return b; };
+    b.update = function (payload) {
+      window.__UPDATES.push({ table: table, payload: payload });
+      return b;
+    };
     b.delete = function () { return b; };
     b.upsert = function (rows) {
       window.__INSERTS.push({ table: table, rows: [].concat(rows || []) });
@@ -227,6 +231,52 @@ const ROWS = {
     return { before, after, withFigureMissing };
   });
 
+  /* ── A LOCKED REPORT STILL TAKES THE REASON ─────────────────────────
+     Everything else on a verified report is a claim somebody has signed
+     off, and locking it is the point. A reason why the figures do not
+     tally is the opposite: it is what is still MISSING when the report is
+     locked, and the answer often turns up afterwards. Locked, the only way
+     to record it was to unverify the whole report, change nothing and
+     verify it again.
+
+     So the box stays live — and so does its own Save, because the tab's
+     own Save is locked and a box that cannot be saved is worse than a box
+     that cannot be typed in. */
+  const locked = await page.evaluate(async () => {
+    const tab = document.getElementById('tab-2');
+    tab.classList.add('mjm-locked');
+    await new Promise(r => setTimeout(r, 150));
+    const can = (el) => !!el && getComputedStyle(el).pointerEvents !== 'none';
+    return {
+      note:      can(document.getElementById('t2-gap-note')),
+      itsSave:   can(document.getElementById('t2-gap-save')),
+      // …while the rest of the tab is locked exactly as before.
+      damaged:   can(document.getElementById('t2-damaged')),
+      tabSave:   can(document.getElementById('save-planting-btn'))
+    };
+  });
+
+  /* And it reaches the database on its own: only the GapNote changes, and
+     nothing else on the record moves. */
+  const loneSave = await page.evaluate(async () => {
+    const row = window.__ROWS.shared_inventory_logs.find(r => r.transaction_type === 'Damaged_Seeds');
+    row.remark = 'Damaged seeds recorded during initial planting. GapNote:old%20reason';
+    const before = { remark: row.remark, qty: row.quantity_change, date: row.transaction_date };
+    window.__UPDATES.length = 0;
+    document.getElementById('t2-gap-note').value = 'Supplier wrote back: 712 short-delivered.';
+    const toasts = [];
+    const realToast = window.showToast; window.showToast = (m, k) => toasts.push({ m, k });
+    await saveT2GapNote();
+    window.showToast = realToast;
+    const u = window.__UPDATES.find(x => x.table === 'shared_inventory_logs' && x.payload && 'remark' in x.payload);
+    return {
+      updated: !!u,
+      remark: u ? u.payload.remark : '',
+      touchedOnly: u ? Object.keys(u.payload).filter(k => !/^last_edited/.test(k)) : [],
+      before, toasts
+    };
+  });
+
   /* Reopening the batch: the reason has to come back, or the panel asks a
      question somebody has already answered and the ring falls off 100%. */
   const reloaded = await page.evaluate(async (remark) => {
@@ -267,6 +317,8 @@ const ROWS = {
   console.log('saved remark:', JSON.stringify(written.damagedRemark));
   console.log('nelos rows  :', written.nelosInserts, '| toasts:', JSON.stringify(written.toasts));
   console.log('verified    :', JSON.stringify(verified));
+  console.log('locked      :', JSON.stringify(locked));
+  console.log('lone save   :', JSON.stringify(loneSave));
   console.log('reloaded    :', JSON.stringify(reloaded));
   console.log('tallies     :', JSON.stringify(tallies));
   console.log('page errors :', errs.length ? errs.join(' | ') : 'none');
@@ -312,6 +364,20 @@ const ROWS = {
     ['the panel stays open so it can still be written', verified.after.panel === true],
     ['but a missing FIGURE is not settled by a signature',
       verified.withFigureMissing.pct !== '100%'],
+
+    // ── a locked report
+    ['the explanation box is still live on a locked report', locked.note === true],
+    ['and so is its own Save', locked.itsSave === true],
+    ['while the rest of the tab stays locked',
+      locked.damaged === false && locked.tabSave === false],
+    ['saving it on its own reaches the record', loneSave.updated === true],
+    ['writing the new reason', /Supplier%20wrote%20back/.test(loneSave.remark)],
+    ['replacing the old one rather than stacking a second',
+      (loneSave.remark.match(/GapNote:/g) || []).length === 1 && !/old%20reason/.test(loneSave.remark)],
+    ['keeping the record\'s own words', /Damaged seeds recorded/.test(loneSave.remark)],
+    ['and touching nothing else — no quantity, no date, no sign-off',
+      JSON.stringify(loneSave.touchedOnly) === JSON.stringify(['remark'])],
+    ['it says so', loneSave.toasts.some(t => /explanation saved/i.test(t.m) && t.k === 'success')],
 
     // ── reopening
     ['the reason comes back on the next load', /mouldy/.test(reloaded.note)],
