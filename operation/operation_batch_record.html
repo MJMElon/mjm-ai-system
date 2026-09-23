@@ -123,7 +123,6 @@
                 <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="A batch moves here automatically once every plot has nothing left standing in it — 3rd culled less drone map quantity is nought. A plot all sold out is nought either way. Any plot still carrying a balance keeps the batch in Active.">✅ Completed / In-Active</button>
                 <button id="tab-amendment" class="list-tab-btn list-tab-inactive" onclick="switchListTab('amendment')" title="Batches with at least one report tab rejected by HQ — open the batch to see the rejection remark and amend the report">🔴 Amendment Needed</button>
                 <button id="tab-tocheck" class="list-tab-btn list-tab-inactive" onclick="switchListTab('tocheck')" title="Reports that are filled in and still waiting for somebody to check them: Seeds In, Seed Audit, Planting &amp; Damage, Transplanting and 1st Culling. 2nd and 3rd Culling are not counted here.">📋 To Check List</button>
-                <button id="tab-reserved" class="list-tab-btn list-tab-inactive" onclick="switchListTab('reserved')" title="Plots holding seedlings transferred in the 3rd Culling report. A batch's transfers drop off this list once the batch is sold out.">🅿️ Plot Reserved Status</button>
                 <button id="tab-tray" class="list-tab-btn list-tab-inactive" onclick="switchListTab('tray')" title="Every pre-nursery tray: how many holes are free, and which batch is taking up the rest. A tray frees up as its seedlings are culled or transplanted out.">🧺 Tray Status</button>
             </div>
             
@@ -174,7 +173,6 @@
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let masterBatches = [];
-        let plotReserves  = []; // 3rd-culling plot transfers → "Plot Reserved Status" tab
         let trayStatus    = []; // one row per pre-nursery tray → "Tray Status" tab
         let currentListTab = 'active';
         let currentPage = 1;
@@ -238,7 +236,7 @@
         async function initLedger() {
             try {
                 // Fetch reception logs + every culling-related log type + transplant logs in parallel.
-                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, rowVerifRes, stageVerifRes, collectRes, trayRes, seedAuditRes] = await Promise.all([
+                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, rowVerifRes, stageVerifRes, trayRes, seedAuditRes] = await Promise.all([
                     fetchAllRows(() => _supabase.from('shared_inventory_logs')
                         .select('*')
                         .eq('transaction_type', 'Seeds_Received')
@@ -261,7 +259,13 @@
                     // for it costs nothing and is the difference between "this
                     // batch needs amendment somewhere" and naming the tab.
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, plot_name').eq('transaction_type', 'Review_Rejection').order('id', { ascending: true })),
-                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, plot_name, quantity_change, remark, created_at').eq('transaction_type', 'Cull3_Transfer').order('id', { ascending: true })),
+                    /* 3rd-culling transfers. Only the destination plot is
+                       wanted here — it joins the set of plots the batch's 3rd
+                       Culling must cover before the batch may read Completed.
+                       The quantity, remark and date these rows also carry are
+                       read on Batch Detail's Transfer Data and P-R Culling
+                       tabs, which is where a transfer is looked at. */
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, plot_name').eq('transaction_type', 'Cull3_Transfer').order('id', { ascending: true })),
                     /* WHO HAS SIGNED WHAT. A plot's 3rd Culling can be keyed
                        and still be waiting for somebody to check it, and this
                        list said Completed over exactly that — see the coverage
@@ -275,16 +279,6 @@
                         .order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('operation_batch_verifications')
                         .select('batch_name, stage')
-                        .order('id', { ascending: true })),
-                    // "How much of a batch has been collected" — the source is
-                    // shared_do_records, NOT shared_collection_bookings. Bookings
-                    // are scheduled slots keyed by order_number and have no
-                    // batch_name column (the old query 400'd with
-                    // "column shared_collection_bookings.batch_name does not exist").
-                    // DOs are the actual delivery events and carry batch_N/qty_N.
-                    // Cancelled DOs are excluded below; CAL- calibration DOs count.
-                    fetchAllRows(() => _supabase.from('shared_do_records')
-                        .select('do_number,status,batch_1,qty_1,batch_2,qty_2,batch_3,qty_3,batch_4,qty_4,batch_5,qty_5')
                         .order('id', { ascending: true })),
                     // Every tray Settings knows about, with the size it holds
                     // when empty → the Tray Status tab.
@@ -580,52 +574,6 @@
                     cull1:        cull1Res.data || []
                 }).rows;
 
-                // ── Plot Reserved Status ────────────────────────────────────
-                // 3rd-culling plot transfers: target plot is "reserved" for the
-                // batch. A batch's transfers drop off once it is SOLD OUT:
-                // transplanted − 2nd cull − 3rd cull − collected ≤ 0.
-                plotReserves = (transferRes.data || []).map(r => {
-                    const m = r.remark ? r.remark.match(/From:\s*\[([^\]|]+)\|(main|premium|doubletone)\]/) : null;
-                    return {
-                        batch: r.batch_name,
-                        plot:  r.plot_name,
-                        from:  m ? m[1] : '—',
-                        qty:   r.quantity_change || 0,
-                        date:  r.created_at
-                    };
-                });
-                if (plotReserves.length) {
-                    const transplantQtyMap = {};
-                    (transplantRes.data || []).forEach(r => {
-                        if (r.batch_name) transplantQtyMap[r.batch_name] = (transplantQtyMap[r.batch_name] || 0) + (r.quantity_change || 0);
-                    });
-                    // Walk each DO's five batch/qty slots. Skip cancelled DOs
-                    // only. CAL- calibration DOs COUNT here (asked for in
-                    // Sep 2026) — same rule as Batch Detail Tab 6's Sales
-                    // figure, so "collected" and Sales agree on when a batch
-                    // is sold out. (The Order & Collection chart in
-                    // operation_stock_sales.js still excludes CAL- from its
-                    // customer-collection totals — different question.)
-                    const collectedMap = {};
-                    (collectRes.data || []).forEach(d => {
-                        if (/cancel/i.test(d.status || '')) return;
-                        for (let i = 1; i <= 5; i++) {
-                            const b = d['batch_' + i];
-                            const q = Number(d['qty_' + i] || 0);
-                            if (b && q) collectedMap[b] = (collectedMap[b] || 0) + q;
-                        }
-                    });
-                    const soldOutBatches = new Set();
-                    Object.keys(transplantQtyMap).forEach(b => {
-                        const bal = transplantQtyMap[b]
-                            - Math.abs(cull2Map[b] || 0)
-                            - Math.abs(cull3Map[b] || 0)
-                            - (collectedMap[b] || 0);
-                        if (bal <= 0) soldOutBatches.add(b);
-                    });
-                    plotReserves = plotReserves.filter(r => !soldOutBatches.has(r.batch));
-                }
-
                 // De-dupe Seeds_Received rows: keep only the most-recent log
                 // per batch_name. Repeated saves on Tab 1 can leave multiple
                 // Seeds_Received rows in shared_inventory_logs for the same
@@ -880,12 +828,12 @@
             currentPage = 1;
 
             // Update Button Styles
-            ['active', 'completed', 'amendment', 'tocheck', 'reserved', 'tray'].forEach(name => {
+            ['active', 'completed', 'amendment', 'tocheck', 'tray'].forEach(name => {
                 const el = document.getElementById('tab-' + name);
                 if (el) el.className = 'list-tab-btn ' + (tabName === name ? 'list-tab-active' : 'list-tab-inactive');
             });
 
-            // The Plot Reserved tab shows transfer columns instead of batch columns.
+            // Some tabs ask for different columns from the batch list's own.
             const headRow = document.getElementById('ledger-head-row');
             if (headRow) {
                 if (!window._defaultLedgerHead) window._defaultLedgerHead = headRow.innerHTML;
@@ -895,9 +843,7 @@
                    only thing anybody wants is WHICH report to go and fix, and
                    those three were taking the width that answer needed. */
                 headRow.innerHTML =
-                    tabName === 'reserved'
-                        ? '<th>Batch</th><th>Plot Reserved</th><th>Original Plot</th><th>Quantity Transfer</th><th>Date Transfer</th>'
-                    : tabName === 'tray'
+                    tabName === 'tray'
                         ? '<th>Tray</th><th>Nursery</th><th>Total Holes</th><th>Occupied</th><th>Vacant</th>'
                           + '<th style="min-width: 200px;">Occupied By</th><th style="min-width: 160px;">Usage</th>'
                     : tabName === 'amendment'
@@ -939,38 +885,6 @@
             // Filter by tab, then by search query, then paginate.
             const query = (document.getElementById('search-input')?.value || '').trim().toLowerCase();
 
-            // Plot Reserved Status — its own row format (transfers, not batches).
-            if (currentListTab === 'reserved') {
-                const filtered = query
-                    ? plotReserves.filter(r =>
-                        (r.batch || '').toLowerCase().includes(query) ||
-                        (r.plot  || '').toLowerCase().includes(query) ||
-                        (r.from  || '').toLowerCase().includes(query))
-                    : plotReserves;
-                const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-                if (currentPage > totalPages) currentPage = totalPages;
-                if (currentPage < 1) currentPage = 1;
-                updatePagination(filtered.length, totalPages);
-                if (filtered.length === 0) {
-                    body.innerHTML = `<tr><td colspan="8" class="text-center p-16 text-[#8a7a68] font-bold">${
-                        query ? `No reserved plots matching "${query}".`
-                              : 'No plots reserved — no active 3rd-culling transfers.'}</td></tr>`;
-                    return;
-                }
-                const start = (currentPage - 1) * PAGE_SIZE;
-                filtered.slice(start, start + PAGE_SIZE).forEach(r => {
-                    const dateStr = r.date ? new Date(r.date).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-                    body.insertAdjacentHTML('beforeend', `
-                        <tr>
-                            <td class="text-[#3d2610] font-black tracking-wider text-base">${r.batch}</td>
-                            <td class="font-black text-[#0891b2]">🅿️ ${r.plot}</td>
-                            <td class="font-bold text-[#8a7a68]">${r.from}</td>
-                            <td class="font-black text-[#3d2610]">${(r.qty || 0).toLocaleString()}</td>
-                            <td class="font-bold text-[#3d2610]">${dateStr}</td>
-                        </tr>`);
-                });
-                return;
-            }
             /* Tray Status — one row per tray, not per batch. What somebody
                standing in front of the pre-nursery wants to know: which trays
                have room, how much, and whose seedlings are taking up the rest.
