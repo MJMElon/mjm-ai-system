@@ -367,6 +367,19 @@
           opacity: .55;
           filter: grayscale(.25);
         }
+        /* Upload/drop zones are plain clickable DIVs, not input/select/
+           textarea/button, so the rule above never reaches them — a locked
+           report could still take a new photo through the dropzone even
+           though every button and field around it was greyed out. .mlk-zone
+           marks a zone as one of those, greyed the same way. Actual
+           enforcement (rejecting the file) still happens in JS — this is
+           the visual half so a still-active-looking dropzone doesn't invite
+           a tap that then silently does nothing. */
+        .mjm-locked .mlk-zone {
+          pointer-events: none !important;
+          opacity: .55;
+          filter: grayscale(.25);
+        }
     </style>
 </head>
 <body>
@@ -1170,7 +1183,7 @@
 
                                             <div id="t2-photo-ops-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-3 hidden"></div>
 
-                                            <div id="t2-photo-ops-zone" class="border-2 border-dashed border-[#e8dcc8] bg-white rounded-xl p-6 text-center cursor-pointer hover:bg-[#f3efe6] transition-colors" onclick="triggerPhotoUpload('ops')">
+                                            <div id="t2-photo-ops-zone" class="mlk-zone border-2 border-dashed border-[#e8dcc8] bg-white rounded-xl p-6 text-center cursor-pointer hover:bg-[#f3efe6] transition-colors" onclick="triggerPhotoUpload('ops')">
                                                 <p class="text-xs font-black text-[#8a7a68] uppercase tracking-widest">Ops Site Camera / Upload</p>
                                                 <p class="text-[10px] font-bold text-[#a39584] mt-1" id="t2-photo-ops-count">No photo yet</p>
                                                 <input type="file" id="t2-photo-ops-upload" class="hidden" accept="image/*" multiple capture="environment" onchange="handleAuditPhoto(this, 'ops')">
@@ -3574,7 +3587,7 @@
                             const rowMapCell  = rowMapUrl
                                 ? `<button type="button" title="View drone map"
                                         onclick="_openDocViewer('${_escAttr(rowMapUrl)}', '${_escAttr('Drone Map — ' + (log.plot_name || ''))}')"
-                                        class="flex items-center gap-1.5 bg-transparent border-0 p-0 cursor-pointer group">
+                                        class="mjm-review-allow flex items-center gap-1.5 bg-transparent border-0 p-0 cursor-pointer group">
                                        <span class="w-9 h-9 rounded-lg border border-[#e8dcc8] bg-cover bg-center shrink-0 flex items-center justify-center text-sm bg-white group-hover:border-[#c07820] transition-colors"
                                              ${rowMapIsPdf ? '' : `style="background-image:url('${rowMapUrl}')"`}>${rowMapIsPdf ? '📄' : ''}</span>
                                        <span class="text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest group-hover:text-[#c07820] transition-colors">View</span>
@@ -5609,10 +5622,11 @@
             if (!grid) return;
             grid.innerHTML = opsPhotos.map((ph, i) => `
                 <div class="relative group rounded-xl overflow-hidden border border-[#e8dcc8] bg-white">
-                    <!-- The picture IS the button. -->
-                    <button type="button" onclick="viewOpsPhoto(${i})"
+                    <!-- The picture IS the button. mjm-review-allow — viewing
+                         stays open under a locked report; only the ✕ (delete)
+                         and the dropzone (replace) actually lock. -->
+                    <button type="button" onclick="viewOpsPhoto(${i})" class="mjm-review-allow block w-full aspect-square bg-cover bg-center cursor-zoom-in"
                         title="${_escAttr(ph.name || 'photo')} — tap to view"
-                        class="block w-full aspect-square bg-cover bg-center cursor-zoom-in"
                         style="background-image:url('${_escAttr(ph.src)}')"></button>
                     <button type="button" onclick="removeOpsPhoto(${i})" title="Remove this photo"
                         class="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 border border-[#f8d7da] text-[#a83020] text-xs font-black flex items-center justify-center hover:bg-[#f8d7da]">✕</button>
@@ -5645,6 +5659,7 @@
         function handleAuditPhoto(input, type) {
             if (!input.files || !input.files.length) return;
             if (type === 'ops') {
+                if (document.getElementById('tab-2')?.classList.contains('mjm-locked')) { alert('This report is Reviewed/Verified & Locked and cannot take another photo. Unreview/Unverify it first.'); input.value = ''; return; }
                 // Every file chosen, not just the first — and appended, so a
                 // second visit to the picker adds to the set rather than
                 // replacing it.
@@ -8380,7 +8395,7 @@ Thank you.`;
                             <div class="flex flex-col gap-1.5">
                                 <div class="text-[9px] font-black text-[#8a7a68] uppercase lg:hidden mb-0.5">Drone Map</div>
                                 <div id="${rowId}-map-zone"
-                                    class="border-2 border-dashed border-[#e8dcc8] bg-white rounded-xl h-[45px] flex items-center justify-center cursor-pointer hover:bg-[#f3efe6] hover:border-[#c07820] transition-all"
+                                    class="mlk-zone border-2 border-dashed border-[#e8dcc8] bg-white rounded-xl h-[45px] flex items-center justify-center cursor-pointer hover:bg-[#f3efe6] hover:border-[#c07820] transition-all"
                                     onclick="document.getElementById('${rowId}-map-input').click()"
                                     ondragover="event.preventDefault(); this.classList.add('!border-[#c07820]','!bg-[#fdfaf4]');"
                                     ondragleave="event.preventDefault(); this.classList.remove('!border-[#c07820]','!bg-[#fdfaf4]');"
@@ -8394,7 +8409,7 @@ Thank you.`;
                                         id="${rowId}-map-thumb"
                                         onclick="viewT5Map('${rowId}')" title="View map"></div>
                                     <span class="text-[9px] font-bold text-[#4a7a2e] uppercase flex-1 truncate">✅ Attached</span>
-                                    <button type="button" class="w-6 h-6 bg-[#f0f8ec] text-[#4a7a2e] rounded hover:bg-[#c3e6cb] flex items-center justify-center text-xs shrink-0" onclick="viewT5Map('${rowId}')">👁</button>
+                                    <button type="button" class="mjm-review-allow w-6 h-6 bg-[#f0f8ec] text-[#4a7a2e] rounded hover:bg-[#c3e6cb] flex items-center justify-center text-xs shrink-0" onclick="viewT5Map('${rowId}')">👁</button>
                                     <button type="button" class="w-6 h-6 bg-[#fff5f5] text-[#a83020] rounded hover:bg-[#f8d7da] flex items-center justify-center text-xs shrink-0" onclick="removeT5Map('${rowId}')">✕</button>
                                 </div>
                             </div>
@@ -8631,6 +8646,7 @@ Thank you.`;
         }
 
         function _loadT5Map(file, rowId) {
+            if (document.getElementById(rowId)?.classList.contains('mjm-locked')) { alert('This row is dated in a locked month (Month Lock Calendar, System Settings) and cannot be changed.'); return; }
             const reader = new FileReader();
             reader.onload = function(e) {
                 t5_plotMaps[rowId] = e.target.result;
@@ -8644,6 +8660,7 @@ Thank you.`;
         }
 
         function removeT5Map(rowId) {
+            if (document.getElementById(rowId)?.classList.contains('mjm-locked')) return alert('This row is dated in a locked month (Month Lock Calendar, System Settings) and cannot be changed.');
             delete t5_plotMaps[rowId];
             document.getElementById(`${rowId}-map-input`).value = '';
             const preview = document.getElementById(`${rowId}-map-preview`);
@@ -9533,7 +9550,7 @@ Thank you.`;
                             <div>
                                 <div class="text-[9px] font-black text-[#3a7ab4] uppercase lg:hidden mb-0.5">Sales</div>
                                 ${(p.salesDOs && p.salesDOs.length)
-                                    ? `<button type="button" class="t6-sales-display text-base font-black text-[#3a7ab4] tabular-nums underline decoration-dotted underline-offset-4 hover:text-[#1d5a94] cursor-pointer bg-transparent border-0 p-0 font-[inherit]"
+                                    ? `<button type="button" class="t6-sales-display mjm-review-allow text-base font-black text-[#3a7ab4] tabular-nums underline decoration-dotted underline-offset-4 hover:text-[#1d5a94] cursor-pointer bg-transparent border-0 p-0 font-[inherit]"
                                             onmouseenter="showT6SalesTip(this, ${i})" onmouseleave="hideT6SalesTip()"
                                             onclick="hideT6SalesTip(); openT6SalesModal(${i})">${t6Fmt(sales)}</button>`
                                     : `<div class="t6-sales-display text-base font-black text-[#3a7ab4] tabular-nums">${t6Fmt(sales)}</div>`}
@@ -9602,7 +9619,7 @@ Thank you.`;
                                     <input type="number" min="0" class="input-style t6-map-qty !text-[11px] !py-1 !px-1 !rounded-lg !text-center w-full max-w-[48px]" placeholder="Qty"
                                         value="${p.savedMapQty ?? ''}"
                                         oninput="onT6MapQtyInput(${i}); calcT6(); t6PaintPlotRow(this.closest('.t6-plot-row'))">
-                                    <button type="button" id="${rowId}-doc-chip" class="t6-doc-chip shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center
+                                    <button type="button" id="${rowId}-doc-chip" class="t6-doc-chip mjm-review-allow shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center
                                                    bg-white border-[#c07820] text-[#c07820] text-sm bg-cover bg-center hover:bg-[#fdfaf4]"
                                         title="Attach the drone map"
                                         onclick="onT6DocChip('${rowId}')">＋</button>
@@ -10066,13 +10083,17 @@ Thank you.`;
                               String(doc.base64 || '').startsWith('data:application/pdf');
                 chip.style.backgroundImage = (doc.isImg && !isPdf) ? `url("${doc.base64}")` : '';
                 chip.innerText = (doc.isImg && !isPdf) ? '' : (isPdf ? '📋' : '📄');
-                chip.className = 't6-doc-chip shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center ' +
+                // mjm-review-allow — viewing an already-attached map has to
+                // survive Month Lock same as it survives Reviewed/Verified;
+                // viewT6Doc() is what actually withholds Replace/Remove once
+                // the row is date-locked, by not opening them from the viewer.
+                chip.className = 't6-doc-chip mjm-review-allow shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center ' +
                                  'bg-white border-[#4a7a2e] text-[#4a7a2e] text-sm bg-cover bg-center hover:ring-2 hover:ring-[#c3e6cb]';
                 chip.title = `${doc.name || 'Drone map'} — press to view, replace or remove`;
             } else {
                 chip.style.backgroundImage = '';
                 chip.innerText = '＋';
-                chip.className = 't6-doc-chip shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center ' +
+                chip.className = 't6-doc-chip mjm-review-allow shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center ' +
                                  'bg-white border-[#c07820] text-[#c07820] text-sm bg-cover bg-center hover:bg-[#fdfaf4]';
                 chip.title = 'Attach the drone map';
             }
@@ -10082,8 +10103,9 @@ Thank you.`;
            without one it means "let me pick one", which is the only thing it
            could mean. */
         function onT6DocChip(rowId) {
-            if (t6_plotDocs[rowId]) viewT6Doc(rowId);
-            else document.getElementById(`${rowId}-doc-input`)?.click();
+            if (t6_plotDocs[rowId]) { viewT6Doc(rowId); return; }
+            if (document.getElementById(rowId)?.classList.contains('mjm-locked')) return alert('This row is dated in a locked month (Month Lock Calendar, System Settings) and cannot be changed.');
+            document.getElementById(`${rowId}-doc-input`)?.click();
         }
 
         /* ONE MOVEMENT: when, where to, how many.
@@ -10209,6 +10231,11 @@ Thank you.`;
                     }
                 }
             }
+            // Month Lock Calendar — a movement already saved with a date in a
+            // locked month can't be edited or removed. A blank line being
+            // keyed now (no `rec`, or `rec` with no date yet) stays open,
+            // same as everywhere else this rule applies.
+            if (rec && rec.date && MJMMonthLock.isDateLocked(rec.date)) el.classList.add('mjm-locked');
 
             syncT6TransferList();
             recalcT6Transfer(rowIdx);
@@ -10223,6 +10250,7 @@ Thank you.`;
 
         function removeT6TransferRecord(btn) {
             const rec = btn.closest('.t6-transfer-rec');
+            if (rec && rec.classList.contains('mjm-locked')) return alert('This movement is dated in a locked month (Month Lock Calendar, System Settings) and cannot be removed.');
             const idx = rec ? t6RecOwner(rec) : -1;
             if (rec) rec.remove();
             syncT6TransferList();
@@ -11562,6 +11590,7 @@ Thank you.`;
         }
 
         function processT6Doc(file, rowId) {
+            if (document.getElementById(rowId)?.classList.contains('mjm-locked')) { alert('This row is dated in a locked month (Month Lock Calendar, System Settings) and cannot be changed.'); return; }
             const reader = new FileReader();
             reader.onload = function(e) {
                 const isImg = file.type.startsWith('image/');
@@ -11595,9 +11624,16 @@ Thank you.`;
             // twenty rows says which row it came from — and the row itself, so
             // Replace and Remove know what they are acting on. Replacing a map
             // belongs next to the map you are replacing, not on the row.
+            //
+            // Except when the row is Month-Locked: Replace/Remove only show up
+            // when a rowId is passed, so a locked row's map opens read-only by
+            // simply not passing one — same view-stays-open, edit-doesn't rule
+            // as everywhere else, with no separate guard needed inside the
+            // (shared, generic) viewer itself.
             const idx = parseInt(String(rowId).replace('t6-row-', ''), 10);
             const p   = t6_plotData[idx];
-            _openDocViewer(doc.base64, doc.name || (p ? `${p.plot} — Drone Map` : null), rowId);
+            const locked = document.getElementById(rowId)?.classList.contains('mjm-locked');
+            _openDocViewer(doc.base64, doc.name || (p ? `${p.plot} — Drone Map` : null), locked ? null : rowId);
         }
 
         // Delete a transferred-plot row: removes its Cull3_Transfer record and
