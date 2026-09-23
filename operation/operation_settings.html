@@ -53,15 +53,19 @@
                 <div class="glass-panel p-8 rounded-[2.5rem] shadow-xl border-l-[8px] border-rose-400">
                     <h2 class="font-black text-slate-800 uppercase tracking-widest text-lg border-b-2 border-slate-100 pb-4 mb-4">Month Lock Calendar</h2>
                     <p class="text-xs text-slate-500 font-semibold mb-4 leading-relaxed">
-                        Every month locks itself automatically on its own auto-lock date — the 2nd of the month after by default — closing that
-                        month's Delivery Orders, Approval Letters and Batch Record entries to editing, cancelling/deleting or restoring, like closing
-                        last month's books while this month stays open. Change a month's auto-lock date below, or click its round icon to force it
-                        locked or unlocked by hand — a manual click always wins over the auto-lock date. New Delivery Orders can still be keyed in
-                        regardless; a new AL dated in a locked month is blocked the same as an edit.
+                        Each month auto-locks Delivery Orders, Approval Letters and Batch Record on the day below, next month. Click a month's
+                        round icon to force it locked or unlocked by hand instead.
                     </p>
-                    <div class="flex items-center gap-3 mb-5">
-                        <label class="text-[10px] font-bold text-rose-600 uppercase tracking-widest">Year</label>
-                        <select id="mlk-year" onchange="renderMonthLockGrid()" class="input-style text-xs !w-32 !py-2"></select>
+                    <div class="flex flex-wrap items-center gap-6 mb-5">
+                        <div class="flex items-center gap-3">
+                            <label class="text-[10px] font-bold text-rose-600 uppercase tracking-widest">Year</label>
+                            <select id="mlk-year" onchange="renderMonthLockGrid()" class="input-style text-xs !w-32 !py-2"></select>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <label class="text-[10px] font-bold text-rose-600 uppercase tracking-widest">Lock Day</label>
+                            <select id="mlk-day" onchange="setGlobalLockDay(this.value)" class="input-style text-xs !w-20 !py-2"></select>
+                            <span class="text-[10px] text-slate-400 font-semibold">of the following month — applies from this month onward</span>
+                        </div>
                     </div>
                     <div id="mlk-months" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
                 </div>
@@ -441,6 +445,7 @@
                 populateNurseryFilters();
                 renderFilteredPlots(); renderFilteredTrays();
                 populateMonthLockYears();
+                populateMonthLockDaySelect();
                 renderMonthLockGrid();
             } catch(err) {
                 alert("Database Connection Error:\n\n" + err.message + "\n\n(Did you remember to create the 'operation_trays' table in Supabase?)");
@@ -463,6 +468,18 @@
             }
         }
 
+        function populateMonthLockDaySelect() {
+            const sel = document.getElementById('mlk-day');
+            if (!sel.options.length) {
+                for (let d = 1; d <= 31; d++) {
+                    const opt = document.createElement('option');
+                    opt.value = d; opt.textContent = d;
+                    sel.appendChild(opt);
+                }
+            }
+            sel.value = MJMMonthLock.currentLockDay();
+        }
+
         function renderMonthLockGrid() {
             const year = parseInt(document.getElementById('mlk-year').value, 10);
             const wrap = document.getElementById('mlk-months');
@@ -473,7 +490,6 @@
                 const isManual = row && row.manual_override !== null && row.manual_override !== undefined;
                 const autoDate = MJMMonthLock.autoLockDateFor(year, month);
                 const autoDateStr = autoDate.toISOString().slice(0, 10);
-                const customDate = (row && row.auto_lock_date) ? row.auto_lock_date.slice(0, 10) : '';
                 return `
                     <div class="flex flex-col items-center gap-2 p-3 rounded-2xl border ${locked ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}">
                         <button onclick="toggleMonthLock(${year},${month})" title="${isManual ? 'Manually ' + (locked ? 'locked' : 'unlocked') + ' — click to flip' : 'Click to force ' + (locked ? 'unlocked' : 'locked')}"
@@ -482,8 +498,7 @@
                             <span class="mt-0.5">${name}</span>
                         </button>
                         <div class="text-[9px] font-black uppercase tracking-widest ${isManual ? 'text-purple-600' : 'text-slate-400'}">${isManual ? 'Manual' : 'Auto'}</div>
-                        <input type="date" value="${customDate}" placeholder="${autoDateStr}" onchange="setMonthAutoLockDate(${year},${month},this.value)"
-                            class="input-style text-[9px] w-full !p-1.5 text-center" title="Auto-lock date — defaults to ${autoDateStr} if left blank">
+                        <div class="text-[9px] text-slate-400 font-semibold text-center" title="Auto-locks on this date">${autoDateStr}</div>
                     </div>`;
             }).join('');
         }
@@ -496,10 +511,15 @@
             renderMonthLockGrid();
         }
 
-        async function setMonthAutoLockDate(year, month, dateStr) {
+        async function setGlobalLockDay(dayStr) {
+            const day = parseInt(dayStr, 10);
             const { data: { user } } = await _supabase.auth.getUser();
-            const error = await MJMMonthLock.setAutoLockDate(_supabase, year, month, dateStr, user?.email || null);
-            if (error) return alert('Could not save: ' + error.message + (error.message.includes('does not exist') ? '\n\nRun shared/RUN_ME_month_locks.sql in the Supabase SQL Editor first.' : ''));
+            const error = await MJMMonthLock.setLockDay(_supabase, day, user?.email || null);
+            if (error) {
+                alert('Could not save: ' + error.message + (error.message.includes('does not exist') ? '\n\nRun shared/RUN_ME_month_locks.sql in the Supabase SQL Editor first.' : ''));
+                populateMonthLockDaySelect();
+                return;
+            }
             renderMonthLockGrid();
         }
 
