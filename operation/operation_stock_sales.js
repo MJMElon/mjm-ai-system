@@ -955,16 +955,75 @@
         el.classList.remove('hidden');
     }
 
-    function plotStatusPill(status) {
-        const map = {
-            no_status: { label: 'No Status', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
-            open:      { label: 'Open',      cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-            sisa:      { label: 'Sisa',      cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-            finished:  { label: 'Finished',  cls: 'bg-slate-200 text-slate-700 border-slate-300' }
-        };
-        const m = map[status] || map.no_status;
-        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${m.cls}">${m.label}</span>`;
+    const MAT_STATUS_MAP = {
+        no_status: { label: 'No Status', dot: 'bg-slate-400' },
+        open:      { label: 'Open',      dot: 'bg-emerald-500' },
+        sisa:      { label: 'Sisa',      dot: 'bg-amber-500' },
+        finished:  { label: 'Finished',  dot: 'bg-slate-500' },
+        // Automatic only — never a menu choice. A plot at/under zero
+        // balance reads Sold Out no matter what was picked before, and the
+        // control locks: there's nothing left to allocate, so there's
+        // nothing left to decide.
+        sold_out:  { label: 'Sold Out',  dot: 'bg-white' }
+    };
+
+    // One dropdown in place of the status pill + native <select> combo —
+    // same button/menu pattern as the History control above the table
+    // (#history-btn / #history-menu), not the OS's own <select> list.
+    function matStatusControl(key, status, locked) {
+        const m = MAT_STATUS_MAP[status] || MAT_STATUS_MAP.no_status;
+        if (locked) {
+            return `
+                <span class="inline-flex items-center gap-1.5 text-[9px] font-black text-white bg-red-600 border border-red-600 rounded-lg px-2 py-1 uppercase tracking-widest" title="Balance is sold out — status is automatic, not editable">
+                    <span class="w-2 h-2 rounded-full ${m.dot} shrink-0"></span>
+                    <span>${m.label}</span>
+                </span>`;
+        }
+        const opts = Object.entries(MAT_STATUS_MAP).filter(([value]) => value !== 'sold_out').map(([value, o]) => `
+            <button type="button" onclick="selectMatStatus(this,'${value}')" class="w-full text-left text-[11px] font-bold text-slate-700 hover:bg-slate-50 rounded-lg px-3 py-2 flex items-center gap-2 ${value === status ? 'bg-amber-50 text-amber-800' : ''}">
+                <span class="w-2 h-2 rounded-full ${o.dot} shrink-0"></span><span>${o.label}</span>
+            </button>`).join('');
+        return `
+            <div class="relative mat-status-wrap" data-allockey="${key}">
+                <button type="button" onclick="toggleMatStatusMenu(this)" class="text-[9px] font-black text-slate-600 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 transition-colors flex items-center gap-1.5 shadow-sm uppercase tracking-widest">
+                    <span class="w-2 h-2 rounded-full ${m.dot} shrink-0"></span>
+                    <span>${m.label}</span>
+                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <div class="mat-status-menu hidden w-36 bg-white rounded-xl border border-slate-200 shadow-xl z-30 p-1.5">${opts}</div>
+            </div>`;
     }
+
+    // Positioned fixed off the button's own rect, not absolute off the row —
+    // the table body scrolls horizontally (.scroll-x-fade), and an
+    // overflow-x:auto ancestor clips an absolutely-positioned descendant on
+    // the y-axis too (setting one overflow axis computes the other to
+    // 'auto' as well), which cut the menu off against the row below it.
+    function toggleMatStatusMenu(btn) {
+        const menu = btn.nextElementSibling;
+        const opening = menu.classList.contains('hidden');
+        document.querySelectorAll('.mat-status-menu').forEach(m => { if (m !== menu) m.classList.add('hidden'); });
+        if (opening) {
+            const rect = btn.getBoundingClientRect();
+            menu.style.position = 'fixed';
+            menu.style.left = rect.left + 'px';
+            menu.style.top  = (rect.bottom + 4) + 'px';
+        }
+        menu.classList.toggle('hidden', !opening);
+    }
+    window.toggleMatStatusMenu = toggleMatStatusMenu;
+
+    function selectMatStatus(optBtn, value) {
+        const wrap = optBtn.closest('.mat-status-wrap');
+        wrap.querySelector('.mat-status-menu').classList.add('hidden');
+        updateAllocation({ dataset: { allockey: wrap.dataset.allockey, allocfield: 'plot_status' }, value });
+    }
+    window.selectMatStatus = selectMatStatus;
+
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('.mat-status-wrap')) return;
+        document.querySelectorAll('.mat-status-menu').forEach(m => m.classList.add('hidden'));
+    });
 
     function renderMaturityTable() {
         const tbody = document.getElementById('maturity-rows');
@@ -978,7 +1037,15 @@
                 // a plot already at/under zero balance has no reason to be on it.
                 return g.isPR && (g.afterCulling - (g.doDeducted || 0)) > 0;
             })
-            .sort((a, b) => a.matureDate - b.matureDate);
+            .sort((a, b) => {
+                const dateDiff = a.matureDate - b.matureDate;
+                if (dateDiff !== 0) return dateDiff;
+                const plotDiff = String(a.plot || '').localeCompare(String(b.plot || ''));
+                if (plotDiff !== 0) return plotDiff;
+                // Same date, same plot — batch ascending, e.g. U17's 242
+                // before its 243, rather than whatever order they loaded in.
+                return (parseInt(a.batch, 10) || 0) - (parseInt(b.batch, 10) || 0);
+            });
 
         if (!rows.length) {
             const emptyMsg = activeMonthKey === PR_TAB_KEY ? 'No reserve (Plot-R) plots with balance' : 'No maturity allocations for this month';
@@ -1012,7 +1079,12 @@
                     </div>`).join('')}</div>`
                 : `<div class="reserv-empty"><span class="reserv-empty-emoji">🎯</span><span>Drop card here</span></div>`;
 
-            const status = alloc.plot_status || 'no_status';
+            // Sold Out overrides whatever was picked — it's never written
+            // back to plotAllocations (that stays the person's last real
+            // choice, in case the plot's balance later recovers), only
+            // shown while plotBalance stays at/under zero.
+            const soldOut = plotBalance <= 0;
+            const status  = soldOut ? 'sold_out' : (alloc.plot_status || 'no_status');
 
             return `
                 <tr data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${afterDeductReserve}">
@@ -1024,19 +1096,10 @@
                     <td class="col-prod num">${r.qty.toLocaleString()}</td>
                     <td class="col-prod num text-emerald-700 mat-sep-r">${r.afterCulling.toLocaleString()}</td>
                     <td class="col-plot">
-                        <div class="flex items-center gap-2">
-                            ${plotStatusPill(status)}
-                            <select data-allockey="${r.key}" data-allocfield="plot_status" onchange="updateAllocation(this)"
-                                class="text-[9px] font-black uppercase tracking-wider rounded-md border border-slate-200 px-1.5 py-0.5 bg-white">
-                                <option value="no_status" ${status === 'no_status' ? 'selected' : ''}>No Status</option>
-                                <option value="open"      ${status === 'open'      ? 'selected' : ''}>Open</option>
-                                <option value="sisa"      ${status === 'sisa'      ? 'selected' : ''}>Sisa</option>
-                                <option value="finished"  ${status === 'finished'  ? 'selected' : ''}>Finished</option>
-                            </select>
-                        </div>
+                        ${matStatusControl(r.key, status, soldOut)}
                     </td>
                     <td class="col-plot num text-blue-700">${collected.toLocaleString()}</td>
-                    <td class="col-plot num font-black mat-sep-r ${plotBalance <= 0 ? 'text-red-600' : 'text-slate-800'}">${plotBalance.toLocaleString()}${plotBalance <= 0 ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-red-600 text-white align-middle">Sold Out</span>' : ''}</td>
+                    <td class="col-plot num font-black mat-sep-r ${soldOut ? 'text-red-600' : 'text-slate-800'}">${plotBalance.toLocaleString()}</td>
                     <td class="col-alloc">${reservHtml}</td>
                     <td class="col-alloc num font-black text-slate-700">${allocSum.toLocaleString()}</td>
                     <td class="col-alloc num font-black ${afterDeductReserve < 0 ? 'text-red-600' : afterDeductReserve === 0 ? 'text-slate-400' : 'text-emerald-700'}">${afterDeductReserve.toLocaleString()}</td>
@@ -1194,15 +1257,30 @@
             });
 
             // Index ALs by the customer order number they're linked to.
+            // Punctuation-stripped on both sides of the match below — AL
+            // order_numbers are commonly keyed in with a leading "#"
+            // ("#4EB8U6") that the salesweb order itself never carries, so
+            // an exact-match lookup silently missed the AL entirely: no AL
+            // number shown on the row, and the order fell back to
+            // salesweb's own (unset) collected qty instead of the DOs
+            // actually issued against it — reading fully outstanding when
+            // the AL List already had it at zero. Same normaliser shape as
+            // _normBatchKey/_normPlotKey below, for the same reason: a
+            // human-keyed reference carries formatting that isn't part of
+            // the identity.
+            //
             // If a single order_number happens to map to multiple ALs (e.g.
             // partial replacements), prefer the row with the highest
             // balance_quantity so the totals stay consistent for the user.
+            const normOrderKey = v => String(v || '').trim().toUpperCase().replace(/[^0-9A-Z]/g, '');
             const alByOrderNumber = {};
             alRows.forEach(a => {
                 if (!a.order_number) return;
-                const cur = alByOrderNumber[a.order_number];
+                const k = normOrderKey(a.order_number);
+                if (!k) return;
+                const cur = alByOrderNumber[k];
                 if (!cur || (Number(a.balance_quantity)||0) > (Number(cur.balance_quantity)||0)) {
-                    alByOrderNumber[a.order_number] = a;
+                    alByOrderNumber[k] = a;
                 }
             });
 
@@ -1255,7 +1333,7 @@
                 // and balance_quantity over what the salesweb tables imply.
                 // This keeps Customer Order Management in lock-step with the
                 // AL Manager — any AL amendment is reflected on next reload.
-                const al = alByOrderNumber[o.order_number];
+                const al = alByOrderNumber[normOrderKey(o.order_number)];
                 let totalQty       = it.qty;
                 let totalCollected = monthCollected;
                 let balance        = totalQty - totalCollected;

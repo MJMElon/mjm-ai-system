@@ -78,6 +78,8 @@
     <script src="../shared/shared_nelos.js"></script>
     <!-- Tray occupancy — the same rule the batch list's Tray Status tab uses. -->
     <script src="../shared/shared_tray_stock.js"></script>
+    <!-- Month Lock Calendar — same lock DO/AL use, keyed to each row's own date. -->
+    <script src="../shared/shared_month_lock.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         /* Earthy Theme Colors */
@@ -361,6 +363,19 @@
 
         .mjm-locked input, .mjm-locked select, .mjm-locked textarea,
         .mjm-locked button:not(.mjm-review-allow) {
+          pointer-events: none !important;
+          opacity: .55;
+          filter: grayscale(.25);
+        }
+        /* Upload/drop zones are plain clickable DIVs, not input/select/
+           textarea/button, so the rule above never reaches them — a locked
+           report could still take a new photo through the dropzone even
+           though every button and field around it was greyed out. .mlk-zone
+           marks a zone as one of those, greyed the same way. Actual
+           enforcement (rejecting the file) still happens in JS — this is
+           the visual half so a still-active-looking dropzone doesn't invite
+           a tap that then silently does nothing. */
+        .mjm-locked .mlk-zone {
           pointer-events: none !important;
           opacity: .55;
           filter: grayscale(.25);
@@ -1201,7 +1216,7 @@
 
                                             <div id="t2-photo-ops-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-3 hidden"></div>
 
-                                            <div id="t2-photo-ops-zone" class="border-2 border-dashed border-[#e8dcc8] bg-white rounded-xl p-6 text-center cursor-pointer hover:bg-[#f3efe6] transition-colors" onclick="triggerPhotoUpload('ops')">
+                                            <div id="t2-photo-ops-zone" class="mlk-zone border-2 border-dashed border-[#e8dcc8] bg-white rounded-xl p-6 text-center cursor-pointer hover:bg-[#f3efe6] transition-colors" onclick="triggerPhotoUpload('ops')">
                                                 <p class="text-xs font-black text-[#8a7a68] uppercase tracking-widest">Ops Site Camera / Upload</p>
                                                 <p class="text-[10px] font-bold text-[#a39584] mt-1" id="t2-photo-ops-count">No photo yet</p>
                                                 <input type="file" id="t2-photo-ops-upload" class="hidden" accept="image/*" multiple capture="environment" onchange="handleAuditPhoto(this, 'ops')">
@@ -3237,7 +3252,11 @@
                     // for premium care and double-tone, which tray they arrived in.
                     _supabase.from('shared_inventory_logs').select('plot_name, batch_name, quantity_change, remark').in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']),
                     // 1st culling names its tray directly in plot_name.
-                    _supabase.from('shared_inventory_logs').select('plot_name, batch_name, quantity_change').eq('transaction_type', '1st_Culling')
+                    _supabase.from('shared_inventory_logs').select('plot_name, batch_name, quantity_change').eq('transaction_type', '1st_Culling'),
+                    // Month Lock Calendar — Transplanting/Culling rows lock the
+                    // same way DO/AL do, keyed to each row's own saved date.
+                    // Tolerates the table not existing yet, same as elsewhere.
+                    MJMMonthLock.load(_supabase)
                 ]);
 
                 masterBatchesList = batchRes.data || [];
@@ -3587,6 +3606,11 @@
                             const trayStr = trayMatch ? trayMatch[1] : '—';
                             const editId  = `t3-edit-form-${idx}`;
                             const reviewKey = `${log.plot_name || ''}|${destType}|${trayStr}|${dateStr}`.replace(/"/g, '');
+                            // Month Lock Calendar — a row dated in a locked month can't
+                            // be edited or deleted, same as it can't in DO/AL. Reuses
+                            // the .mjm-locked CSS already covering Reviewed/Verified
+                            // tabs; Edit/Del have no .mjm-review-allow so they grey out.
+                            const rowLocked = dateStr !== '—' && MJMMonthLock.isDateLocked(dateStr);
                             /* THE MAP, WHERE THE MAP COLUMN IS.
 
                                This cell was the string "—" whatever had been
@@ -3607,24 +3631,24 @@
                             const rowMapCell  = rowMapUrl
                                 ? `<button type="button" title="View drone map"
                                         onclick="_openDocViewer('${_escAttr(rowMapUrl)}', '${_escAttr('Drone Map — ' + (log.plot_name || ''))}')"
-                                        class="flex items-center gap-1.5 bg-transparent border-0 p-0 cursor-pointer group">
+                                        class="mjm-review-allow flex items-center gap-1.5 bg-transparent border-0 p-0 cursor-pointer group">
                                        <span class="w-9 h-9 rounded-lg border border-[#e8dcc8] bg-cover bg-center shrink-0 flex items-center justify-center text-sm bg-white group-hover:border-[#c07820] transition-colors"
                                              ${rowMapIsPdf ? '' : `style="background-image:url('${rowMapUrl}')"`}>${rowMapIsPdf ? '📄' : ''}</span>
                                        <span class="text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest group-hover:text-[#c07820] transition-colors">View</span>
                                    </button>`
                                 : `<div class="text-sm text-[#8a7a68]">—</div>`;
                             tableList.insertAdjacentHTML('beforeend', `
-                                <div class="t3-saved-row" data-review-key="${reviewKey}">
+                                <div class="t3-saved-row${rowLocked ? ' mjm-locked' : ''}" data-review-key="${reviewKey}">
                                     <!-- Compact row -->
                                     <div id="t3-row-view-${idx}" class="grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_80px] gap-2 items-center px-3 py-2 rounded-lg bg-[#fdfaf4] border border-[#e8dcc8] hover:bg-white transition-colors t-tidy">
                                         <div class="font-black text-sm ${color}">${icon} ${log.plot_name}</div>
-                                        <div class="text-sm font-bold text-[#3d2610]">${dateStr}</div>
+                                        <div class="text-sm font-bold text-[#3d2610]">${dateStr}${rowLocked ? ' 🔒' : ''}</div>
                                         <div class="text-sm font-bold text-[#c07820] truncate">${trayStr}</div>
                                         <div class="text-sm font-black text-[#4a7a2e]">${log.quantity_change.toLocaleString()}</div>
                                         <div>${rowMapCell}</div>
                                         <div class="flex gap-1">
-                                            <button type="button" onclick="toggleT3EditRow(${idx})" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[8px] font-black uppercase rounded hover:bg-[#f0f8ff] transition-colors">Edit</button>
-                                            <button type="button" onclick="deleteT3Row(${idx})" class="px-2 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[8px] font-black uppercase rounded hover:bg-[#fff5f5] transition-colors">Del</button>
+                                            <button type="button" onclick="toggleT3EditRow(${idx})" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[8px] font-black uppercase rounded hover:bg-[#f0f8ff] transition-colors">Edit</button>
+                                            <button type="button" onclick="deleteT3Row(${idx})" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}" class="px-2 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[8px] font-black uppercase rounded hover:bg-[#fff5f5] transition-colors">Del</button>
                                         </div>
                                     </div>
                                     <!-- Inline edit form (hidden by default) -->
@@ -3799,6 +3823,8 @@
         }
 
         async function deleteT3Row(idx) {
+            const rows = document.querySelectorAll('.t3-saved-row');
+            if (rows[idx] && rows[idx].classList.contains('mjm-locked')) return alert('This record is dated in a locked month (Month Lock Calendar, System Settings) and cannot be deleted.');
             if (!confirm('Delete this transplanting record? This cannot be undone.')) return;
             const batchId = document.getElementById('f-batchno').value.trim();
             try {
@@ -3839,6 +3865,8 @@
             const editId = `t3-edit-form-${idx}`;
             const ef = document.getElementById(editId);
             if (!ef) return;
+            const rows = document.querySelectorAll('.t3-saved-row');
+            if (rows[idx] && rows[idx].classList.contains('mjm-locked')) return alert('This record is dated in a locked month (Month Lock Calendar, System Settings) and cannot be edited.');
             const batchId = document.getElementById('f-batchno').value.trim();
             const breed   = document.getElementById('f-brand').value;
             const dateVal = ef.querySelector('.t3e-date').value;
@@ -3847,6 +3875,7 @@
             const destPlot = ef.querySelector('.t3e-dest-plot').value;
             const qty = parseInt(ef.querySelector('.t3e-qty').value) || 0;
             if (!srcTray || !destPlot || qty <= 0 || !dateVal) { alert('Please fill in all fields.'); return; }
+            if (MJMMonthLock.isDateLocked(dateVal)) return alert('That date falls in a locked month (Month Lock Calendar, System Settings). Choose a date in an unlocked month, or unlock that month first.');
             const txType = destType === 'premium' ? 'Transplanted_Premium' : destType === 'doubletone' ? 'Transplanted_DoubleTone' : 'Transplanted';
 
             // Upload the edited drone map (if any) so it survives a refresh.
@@ -3972,7 +4001,16 @@
                    box writes nothing. Only a figure somebody actually changed
                    is a figure worth saving. */
                 _dtoneSaved = _dtoneSignature();
+                mlkApplyDtoneLock();
             } catch (e) { console.warn('Could not load D-Tone nursery qty:', e.message); }
+        }
+
+        // Month Lock Calendar for the D-Tone box — same .mjm-locked treatment
+        // as a saved Transplanting row, keyed to the box's own Date Counted.
+        function mlkApplyDtoneLock() {
+            const box = document.getElementById('t3-dtone-nursery-box');
+            const d = document.getElementById('t3-dtone-nursery-date')?.value || '';
+            if (box) box.classList.toggle('mjm-locked', !!d && MJMMonthLock.isDateLocked(d));
         }
 
         function getDtoneNurseryQty() {
@@ -4023,6 +4061,7 @@
             const dateEl = document.getElementById('t3-dtone-nursery-date');
             if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().split('T')[0];
             const dtDate = dateEl ? dateEl.value : '';
+            if (dtDate && MJMMonthLock.isDateLocked(dtDate)) return alert('That date falls in a locked month (Month Lock Calendar, System Settings). Choose a date in an unlocked month, or unlock that month first.');
             try {
                 const { data: rows } = await _supabase.from('shared_inventory_logs')
                     .select('id')
@@ -5681,10 +5720,11 @@
             if (!grid) return;
             grid.innerHTML = opsPhotos.map((ph, i) => `
                 <div class="relative group rounded-xl overflow-hidden border border-[#e8dcc8] bg-white">
-                    <!-- The picture IS the button. -->
-                    <button type="button" onclick="viewOpsPhoto(${i})"
+                    <!-- The picture IS the button. mjm-review-allow — viewing
+                         stays open under a locked report; only the ✕ (delete)
+                         and the dropzone (replace) actually lock. -->
+                    <button type="button" onclick="viewOpsPhoto(${i})" class="mjm-review-allow block w-full aspect-square bg-cover bg-center cursor-zoom-in"
                         title="${_escAttr(ph.name || 'photo')} — tap to view"
-                        class="block w-full aspect-square bg-cover bg-center cursor-zoom-in"
                         style="background-image:url('${_escAttr(ph.src)}')"></button>
                     <button type="button" onclick="removeOpsPhoto(${i})" title="Remove this photo"
                         class="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 border border-[#f8d7da] text-[#a83020] text-xs font-black flex items-center justify-center hover:bg-[#f8d7da]">✕</button>
@@ -5717,6 +5757,7 @@
         function handleAuditPhoto(input, type) {
             if (!input.files || !input.files.length) return;
             if (type === 'ops') {
+                if (document.getElementById('tab-2')?.classList.contains('mjm-locked')) { alert('This report is Reviewed/Verified & Locked and cannot take another photo. Unreview/Unverify it first.'); input.value = ''; return; }
                 // Every file chosen, not just the first — and appended, so a
                 // second visit to the picker adds to the set rather than
                 // replacing it.
@@ -7880,13 +7921,17 @@ Thank you.`;
             const isDTone = displayName === 'DOUBLE-TONE';
             const trayIcon = isPremium ? '⭐ ' : isDTone ? '🎯 ' : '';
             const trayColor = isPremium ? 'text-[#9333ea]' : isDTone ? 'text-[#0891b2]' : 'text-[#3d2610]';
+            // Month Lock Calendar — only a tray with an already-SAVED cull
+            // date in a locked month locks; a tray not yet culled (no saved
+            // date) is a new entry and stays open, same as DO/AL.
+            const rowLocked = !!savedDate && MJMMonthLock.isDateLocked(savedDate);
 
             const html = `
-                <div id="${rowId}" class="cull-row grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_1fr_1fr] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end relative t-tidy">
+                <div id="${rowId}" class="cull-row${rowLocked ? ' mjm-locked' : ''} grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_1fr_1fr] gap-3 bg-[#fdfaf4] p-4 rounded-xl border border-[#e8dcc8] items-end relative t-tidy">
                     <input type="hidden" class="cull-tray-name" value="${displayName}">
                     <div>
-                        <label class="label-style md:hidden">Cull Date</label>
-                        <input type="date" class="input-style cull-date" oninput="calcCulling()" value="${savedDate || ''}">
+                        <label class="label-style md:hidden">Cull Date${rowLocked ? ' 🔒' : ''}</label>
+                        <input type="date" class="input-style cull-date" oninput="calcCulling()" value="${savedDate || ''}" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}">
                     </div>
                     <div>
                         <label class="label-style md:hidden !text-[#3d2610]">Tray No.</label>
@@ -8375,14 +8420,17 @@ Thank you.`;
                                 : isDtone ? 'D-Tone'
                                           : '🌿 Main Plot';
                 const typeLblCls = isDtone ? 'text-[#0891b2]' : 'text-[#4a7a2e]';
+                // Month Lock Calendar — only an already-SAVED cull date in a
+                // locked month locks the row; a plot not yet culled stays open.
+                const rowLocked = !!p.savedCullDate && MJMMonthLock.isDateLocked(p.savedCullDate);
 
                 container.insertAdjacentHTML('beforeend', `
-                    <div id="${rowId}" class="t5-plot-row border ${rowBg} rounded-xl overflow-hidden">
+                    <div id="${rowId}" class="t5-plot-row${rowLocked ? ' mjm-locked' : ''} border ${rowBg} rounded-xl overflow-hidden">
                         <div class="grid grid-cols-1 lg:grid-cols-[1fr_1.1fr_0.8fr_0.8fr_0.8fr_0.8fr_1.4fr] gap-2 p-4 items-center t-tidy">
 
                             <!-- Date column: shows due date by default; user can override with actual culling date -->
                             <div>
-                                <div class="text-[9px] font-black text-[#c07820] uppercase lg:hidden mb-0.5">Date</div>
+                                <div class="text-[9px] font-black text-[#c07820] uppercase lg:hidden mb-0.5">Date${rowLocked ? ' 🔒' : ''}</div>
                                 <!-- THE RULE WINS. Every row arrives on the 14th of the 4th
                                      month after this plot was transplanted, whatever date is
                                      saved against it.
@@ -8455,7 +8503,7 @@ Thank you.`;
                             <div class="flex flex-col gap-1.5">
                                 <div class="text-[9px] font-black text-[#8a7a68] uppercase lg:hidden mb-0.5">Drone Map</div>
                                 <div id="${rowId}-map-zone"
-                                    class="border-2 border-dashed border-[#e8dcc8] bg-white rounded-xl h-[45px] flex items-center justify-center cursor-pointer hover:bg-[#f3efe6] hover:border-[#c07820] transition-all"
+                                    class="mlk-zone border-2 border-dashed border-[#e8dcc8] bg-white rounded-xl h-[45px] flex items-center justify-center cursor-pointer hover:bg-[#f3efe6] hover:border-[#c07820] transition-all"
                                     onclick="document.getElementById('${rowId}-map-input').click()"
                                     ondragover="event.preventDefault(); this.classList.add('!border-[#c07820]','!bg-[#fdfaf4]');"
                                     ondragleave="event.preventDefault(); this.classList.remove('!border-[#c07820]','!bg-[#fdfaf4]');"
@@ -8469,7 +8517,7 @@ Thank you.`;
                                         id="${rowId}-map-thumb"
                                         onclick="viewT5Map('${rowId}')" title="View map"></div>
                                     <span class="text-[9px] font-bold text-[#4a7a2e] uppercase flex-1 truncate">✅ Attached</span>
-                                    <button type="button" class="w-6 h-6 bg-[#f0f8ec] text-[#4a7a2e] rounded hover:bg-[#c3e6cb] flex items-center justify-center text-xs shrink-0" onclick="viewT5Map('${rowId}')">👁</button>
+                                    <button type="button" class="mjm-review-allow w-6 h-6 bg-[#f0f8ec] text-[#4a7a2e] rounded hover:bg-[#c3e6cb] flex items-center justify-center text-xs shrink-0" onclick="viewT5Map('${rowId}')">👁</button>
                                     <button type="button" class="w-6 h-6 bg-[#fff5f5] text-[#a83020] rounded hover:bg-[#f8d7da] flex items-center justify-center text-xs shrink-0" onclick="removeT5Map('${rowId}')">✕</button>
                                 </div>
                             </div>
@@ -8706,6 +8754,7 @@ Thank you.`;
         }
 
         function _loadT5Map(file, rowId) {
+            if (document.getElementById(rowId)?.classList.contains('mjm-locked')) { alert('This row is dated in a locked month (Month Lock Calendar, System Settings) and cannot be changed.'); return; }
             const reader = new FileReader();
             reader.onload = function(e) {
                 t5_plotMaps[rowId] = e.target.result;
@@ -8719,6 +8768,7 @@ Thank you.`;
         }
 
         function removeT5Map(rowId) {
+            if (document.getElementById(rowId)?.classList.contains('mjm-locked')) return alert('This row is dated in a locked month (Month Lock Calendar, System Settings) and cannot be changed.');
             delete t5_plotMaps[rowId];
             document.getElementById(`${rowId}-map-input`).value = '';
             const preview = document.getElementById(`${rowId}-map-preview`);
@@ -9424,6 +9474,9 @@ Thank you.`;
                 const rowBg    = p.destType === 'premium'    ? 'bg-[#faf5ff] border-[#e9d5ff]'
                                 : p.destType === 'doubletone' ? 'bg-[#ecfeff] border-[#a5f3fc]'
                                 : 'bg-[#fdfaf4] border-[#e8dcc8]';
+                // Month Lock Calendar — only an already-SAVED cull date in a
+                // locked month locks the row; a plot not yet culled stays open.
+                const rowLocked = !!p.savedCullDate && MJMMonthLock.isDateLocked(p.savedCullDate);
                 // AUTO balance = transplanted − 2nd culled (dead) − sales − transferred out.
                 //
                 // Seedlings moved to another plot are still alive, and the target
@@ -9521,7 +9574,7 @@ Thank you.`;
                    and the date is a date box. With nothing left that only the
                    open half could do, the open half has nothing left to be. */
                 rowContainer.insertAdjacentHTML('beforeend', `
-                    <div id="${rowId}" class="t6-plot-row border ${rowBg} rounded-xl overflow-hidden">
+                    <div id="${rowId}" class="t6-plot-row${rowLocked ? ' mjm-locked' : ''} border ${rowBg} rounded-xl overflow-hidden">
                         <div class="t6-pr-view grid grid-cols-2 ${rowGrid} gap-3 px-4 py-3 items-center t-tidy">
 
                             <!-- The plot, and what it started with. Written out, not
@@ -9605,7 +9658,7 @@ Thank you.`;
                             <div>
                                 <div class="text-[9px] font-black text-[#3a7ab4] uppercase lg:hidden mb-0.5">Sales</div>
                                 ${(p.salesDOs && p.salesDOs.length)
-                                    ? `<button type="button" class="t6-sales-display text-base font-black text-[#3a7ab4] tabular-nums underline decoration-dotted underline-offset-4 hover:text-[#1d5a94] cursor-pointer bg-transparent border-0 p-0 font-[inherit]"
+                                    ? `<button type="button" class="t6-sales-display mjm-review-allow text-base font-black text-[#3a7ab4] tabular-nums underline decoration-dotted underline-offset-4 hover:text-[#1d5a94] cursor-pointer bg-transparent border-0 p-0 font-[inherit]"
                                             onmouseenter="showT6SalesTip(this, ${i})" onmouseleave="hideT6SalesTip()"
                                             onclick="hideT6SalesTip(); openT6SalesModal(${i})">${t6Fmt(sales)}</button>`
                                     : `<div class="t6-sales-display text-base font-black text-[#3a7ab4] tabular-nums">${t6Fmt(sales)}</div>`}
@@ -9674,7 +9727,7 @@ Thank you.`;
                                     <input type="number" min="0" class="input-style t6-map-qty !text-[11px] !py-1 !px-1 !rounded-lg !text-center w-full max-w-[48px]" placeholder="Qty"
                                         value="${p.savedMapQty ?? ''}"
                                         oninput="onT6MapQtyInput(${i}); calcT6(); t6PaintPlotRow(this.closest('.t6-plot-row'))">
-                                    <button type="button" id="${rowId}-doc-chip" class="t6-doc-chip shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center
+                                    <button type="button" id="${rowId}-doc-chip" class="t6-doc-chip mjm-review-allow shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center
                                                    bg-white border-[#c07820] text-[#c07820] text-sm bg-cover bg-center hover:bg-[#fdfaf4]"
                                         title="Attach the drone map"
                                         onclick="onT6DocChip('${rowId}')">＋</button>
@@ -10138,13 +10191,17 @@ Thank you.`;
                               String(doc.base64 || '').startsWith('data:application/pdf');
                 chip.style.backgroundImage = (doc.isImg && !isPdf) ? `url("${doc.base64}")` : '';
                 chip.innerText = (doc.isImg && !isPdf) ? '' : (isPdf ? '📋' : '📄');
-                chip.className = 't6-doc-chip shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center ' +
+                // mjm-review-allow — viewing an already-attached map has to
+                // survive Month Lock same as it survives Reviewed/Verified;
+                // viewT6Doc() is what actually withholds Replace/Remove once
+                // the row is date-locked, by not opening them from the viewer.
+                chip.className = 't6-doc-chip mjm-review-allow shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center ' +
                                  'bg-white border-[#4a7a2e] text-[#4a7a2e] text-sm bg-cover bg-center hover:ring-2 hover:ring-[#c3e6cb]';
                 chip.title = `${doc.name || 'Drone map'} — press to view, replace or remove`;
             } else {
                 chip.style.backgroundImage = '';
                 chip.innerText = '＋';
-                chip.className = 't6-doc-chip shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center ' +
+                chip.className = 't6-doc-chip mjm-review-allow shrink-0 w-7 h-7 rounded-lg border flex items-center justify-center ' +
                                  'bg-white border-[#c07820] text-[#c07820] text-sm bg-cover bg-center hover:bg-[#fdfaf4]';
                 chip.title = 'Attach the drone map';
             }
@@ -10154,8 +10211,9 @@ Thank you.`;
            without one it means "let me pick one", which is the only thing it
            could mean. */
         function onT6DocChip(rowId) {
-            if (t6_plotDocs[rowId]) viewT6Doc(rowId);
-            else document.getElementById(`${rowId}-doc-input`)?.click();
+            if (t6_plotDocs[rowId]) { viewT6Doc(rowId); return; }
+            if (document.getElementById(rowId)?.classList.contains('mjm-locked')) return alert('This row is dated in a locked month (Month Lock Calendar, System Settings) and cannot be changed.');
+            document.getElementById(`${rowId}-doc-input`)?.click();
         }
 
         /* ONE MOVEMENT: when, where to, how many.
@@ -10281,6 +10339,11 @@ Thank you.`;
                     }
                 }
             }
+            // Month Lock Calendar — a movement already saved with a date in a
+            // locked month can't be edited or removed. A blank line being
+            // keyed now (no `rec`, or `rec` with no date yet) stays open,
+            // same as everywhere else this rule applies.
+            if (rec && rec.date && MJMMonthLock.isDateLocked(rec.date)) el.classList.add('mjm-locked');
 
             syncT6TransferList();
             recalcT6Transfer(rowIdx);
@@ -10295,6 +10358,7 @@ Thank you.`;
 
         function removeT6TransferRecord(btn) {
             const rec = btn.closest('.t6-transfer-rec');
+            if (rec && rec.classList.contains('mjm-locked')) return alert('This movement is dated in a locked month (Month Lock Calendar, System Settings) and cannot be removed.');
             const idx = rec ? t6RecOwner(rec) : -1;
             if (rec) rec.remove();
             syncT6TransferList();
@@ -11634,6 +11698,7 @@ Thank you.`;
         }
 
         function processT6Doc(file, rowId) {
+            if (document.getElementById(rowId)?.classList.contains('mjm-locked')) { alert('This row is dated in a locked month (Month Lock Calendar, System Settings) and cannot be changed.'); return; }
             const reader = new FileReader();
             reader.onload = function(e) {
                 const isImg = file.type.startsWith('image/');
@@ -11667,9 +11732,16 @@ Thank you.`;
             // twenty rows says which row it came from — and the row itself, so
             // Replace and Remove know what they are acting on. Replacing a map
             // belongs next to the map you are replacing, not on the row.
+            //
+            // Except when the row is Month-Locked: Replace/Remove only show up
+            // when a rowId is passed, so a locked row's map opens read-only by
+            // simply not passing one — same view-stays-open, edit-doesn't rule
+            // as everywhere else, with no separate guard needed inside the
+            // (shared, generic) viewer itself.
             const idx = parseInt(String(rowId).replace('t6-row-', ''), 10);
             const p   = t6_plotData[idx];
-            _openDocViewer(doc.base64, doc.name || (p ? `${p.plot} — Drone Map` : null), rowId);
+            const locked = document.getElementById(rowId)?.classList.contains('mjm-locked');
+            _openDocViewer(doc.base64, doc.name || (p ? `${p.plot} — Drone Map` : null), locked ? null : rowId);
         }
 
         // Delete a transferred-plot row: removes its Cull3_Transfer record and
@@ -12220,7 +12292,11 @@ Thank you.`;
         }
 
         if (r) {
-          // Reviewed → locked for non-admins.
+          // Reviewed → locked for everyone, admins included. An admin
+          // clicks Unreview (still available — see .mjm-review-allow in
+          // the CSS) to edit again, same as Unverify below; there is no
+          // silent bypass that leaves the banner reading "Locked" while
+          // the fields underneath still take input.
           const whoR = r.reviewer_name || who(r.reviewer_email) || 'a reviewer';
           const whoV = v ? (v.verifier_name || who(v.verifier_email) || 'a verifier') : null;
           banner.className = 'mjm-review-banner mjm-review-locked';
@@ -12237,7 +12313,7 @@ Thank you.`;
                          onclick="MJMReview.unmark(${tabIdx})">Unreview</button>`
               : `<span class="mjm-review-meta">Read-only for your role</span>` }
           `;
-          setTabLock(tab, !isAdmin);
+          setTabLock(tab, true);
           return;
         }
 
@@ -12296,8 +12372,9 @@ Thank you.`;
         }
 
         if (v) {
-          // Verified → locked. No separate "Mark as Reviewed" stage anymore:
-          // verification IS the sign-off, so the data locks for non-admins.
+          // Verified → locked, for everyone including admins — same reasoning
+          // as the Reviewed branch above: Unverify (still available below)
+          // is how an admin gets back in, not a standing bypass.
           const whoV = v.verifier_name || who(v.verifier_email) || 'a verifier';
           banner.className = 'mjm-review-banner mjm-review-locked';
           banner.style.display = '';
@@ -12318,7 +12395,7 @@ Thank you.`;
               !isAdmin && !isVerifier ? '<span class="mjm-review-meta">Read-only for your role</span>' : ''
             }</div>
           `;
-          setTabLock(tab, !isAdmin);
+          setTabLock(tab, true);
           return;
         }
 
@@ -12977,9 +13054,10 @@ Thank you.`;
           if (!tab) return;
           new MutationObserver(() => {
             const stage = STAGE_BY_TAB[idx];
-            // Verified now locks the tab (no separate review stage). Row-tabs
-            // (3-6) don't lock at tab level — they re-decorate their rows.
-            if ((((reviews[stage] || verifications[stage]) && !isAdmin) || !canFill) && !ROW_TAB_CONFIG[idx]) tab.classList.add('mjm-locked');
+            // Verified now locks the tab (no separate review stage) for
+            // everyone, admins included — see renderBanner. Row-tabs (3-6)
+            // don't lock at tab level — they re-decorate their rows.
+            if (((reviews[stage] || verifications[stage]) || !canFill) && !ROW_TAB_CONFIG[idx]) tab.classList.add('mjm-locked');
             if (ROW_TAB_CONFIG[idx]) decorateRows(idx);
           }).observe(tab, { childList: true, subtree: true });
         });

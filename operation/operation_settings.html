@@ -27,6 +27,44 @@
         #mapper-workspace { position: absolute; top: 0; left: 0; display: inline-block; box-shadow: 0 0 30px rgba(0,0,0,0.5); transform-origin: 0 0; }
         #mapper-bg { display: block; max-width: 90vw; max-height: 80vh; pointer-events: none; user-select: none; }
         #mapper-svg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 10; }
+
+        /* Month Lock Calendar's Year / Lock Day pickers — a custom dropdown
+           in place of the native <select> (which renders the OS's own
+           highlight, not this one), with a checkmark against only the
+           active option. Same design as the AL List's status filter in
+           operation_booking.html — change one, change the other. */
+        .cf-wrap{position:relative;}
+        .cf-btn{display:flex;align-items:center;gap:6px;justify-content:center;text-transform:uppercase;letter-spacing:.06em;font-size:11px;font-weight:900;color:#334155;background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:9px 12px;cursor:pointer;transition:border-color .15s,box-shadow .15s;box-shadow:0 2px 4px rgba(0,0,0,.02);}
+        .cf-btn:hover{border-color:#94a3b8;}
+        .cf-btn.open{border-color:#f43f5e;box-shadow:0 0 0 3px rgba(244,63,94,.12);}
+        .cf-chevron{width:11px;height:11px;color:#94a3b8;transition:transform .15s;flex-shrink:0;}
+        .cf-btn.open .cf-chevron{transform:rotate(180deg);}
+        .cf-menu{position:absolute;left:0;top:calc(100% + 6px);min-width:100%;max-height:220px;overflow-y:auto;background:#fff;border:1px solid #e5e9f0;border-radius:14px;box-shadow:0 16px 32px -10px rgba(15,23,42,.18),0 4px 10px rgba(15,23,42,.06);padding:4px 0;z-index:40;}
+        .cf-menu::-webkit-scrollbar{width:6px;}
+        .cf-menu::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
+        .cf-opt{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left;font-size:13px;font-weight:700;color:#0f172a;background:#fff;border:none;border-bottom:1px solid #f1f5f9;padding:9px 16px;cursor:pointer;transition:background .12s,color .12s;font-family:inherit;white-space:nowrap;}
+        .cf-opt:last-child{border-bottom:none;}
+        .cf-opt:hover{background:#f8fafc;}
+        .cf-opt.active{color:#e11d48;}
+        .cf-opt.active::after{content:'✓';font-size:13px;font-weight:900;color:#e11d48;flex-shrink:0;}
+
+        /* Lock Day rolling picker — a 3-row odometer window (previous /
+           current / next) that scrolls with the arrow buttons or the
+           mouse wheel. Nothing is saved until the Save button beside it
+           is clicked. */
+        .mlk-roller{display:flex;align-items:center;gap:2px;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:2px;box-shadow:0 2px 4px rgba(0,0,0,.02);}
+        .mlk-roller-arrow{width:26px;height:66px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;color:#94a3b8;cursor:pointer;border-radius:8px;transition:background .12s,color .12s;flex-shrink:0;}
+        .mlk-roller-arrow svg{width:14px;height:14px;}
+        .mlk-roller-arrow:hover{background:#fdf2f4;color:#e11d48;}
+        .mlk-roller-window{width:44px;height:66px;overflow:hidden;position:relative;}
+        .mlk-roller-window::before,.mlk-roller-window::after{content:'';position:absolute;left:0;right:0;height:14px;z-index:2;pointer-events:none;}
+        .mlk-roller-window::before{top:0;background:linear-gradient(#fff,rgba(255,255,255,0));}
+        .mlk-roller-window::after{bottom:0;background:linear-gradient(rgba(255,255,255,0),#fff);}
+        .mlk-roller-track{position:absolute;left:0;right:0;transition:transform .18s ease;}
+        .mlk-roller-row{height:22px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#cbd5e1;transition:color .18s,font-size .18s,font-weight .18s;}
+        .mlk-roller-row.current{font-size:18px;font-weight:900;color:#e11d48;}
+        #mlk-day-save-btn{transition:opacity .15s;}
+        #mlk-day-save-btn.mlk-clean{opacity:.35;pointer-events:none;}
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8 relative">
@@ -43,7 +81,51 @@
         </div>
 
         <div class="space-y-12">
-            
+
+            <section>
+                <div class="flex items-center gap-3 mb-6 border-b-2 border-rose-200 pb-2">
+                    <span class="text-2xl">🔒</span>
+                    <h2 class="text-xl font-black text-rose-800 uppercase tracking-widest">Lock Controls</h2>
+                </div>
+
+                <div class="glass-panel p-8 rounded-[2.5rem] shadow-xl border-l-[8px] border-rose-400">
+                    <h2 class="font-black text-slate-800 uppercase tracking-widest text-lg border-b-2 border-slate-100 pb-4 mb-4">Month Lock Calendar</h2>
+                    <p class="text-xs text-slate-500 font-semibold mb-4 leading-relaxed">
+                        Each month auto-locks Delivery Orders, Approval Letters and Batch Record on the day below, next month. Click a month's
+                        round icon to force it locked or unlocked by hand instead.
+                    </p>
+                    <div class="flex flex-wrap items-center gap-6 mb-5">
+                        <div class="flex items-center gap-3">
+                            <label class="text-[10px] font-bold text-rose-600 uppercase tracking-widest">Year</label>
+                            <div class="cf-wrap" id="mlk-year-wrap">
+                                <button type="button" id="mlk-year-btn" class="cf-btn !w-28" onclick="toggleMlkMenu(event,'mlk-year-menu')">
+                                    <span id="mlk-year-label"></span>
+                                    <svg class="cf-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 7l5 5 5-5"/></svg>
+                                </button>
+                                <div id="mlk-year-menu" class="cf-menu hidden"></div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <label class="text-[10px] font-bold text-rose-600 uppercase tracking-widest">Lock Day</label>
+                            <div class="mlk-roller">
+                                <button type="button" class="mlk-roller-arrow" onclick="stepMlkLockDay(-1)" title="Previous day">
+                                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5l-5 5 5 5"/></svg>
+                                </button>
+                                <div class="mlk-roller-window" id="mlk-day-window" onwheel="mlkDayWheel(event)" title="Scroll, or use the arrows">
+                                    <div class="mlk-roller-track" id="mlk-day-track"></div>
+                                </div>
+                                <button type="button" class="mlk-roller-arrow" onclick="stepMlkLockDay(1)" title="Next day">
+                                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8 5l5 5-5 5"/></svg>
+                                </button>
+                            </div>
+                            <button type="button" id="mlk-day-save-btn" class="btn-purple !bg-rose-500 !px-5 !py-2.5 text-[10px] tracking-widest" onclick="saveMlkLockDay()">Save</button>
+                            <span class="text-[10px] text-slate-400 font-semibold">of the following month — applies from this month onward</span>
+                        </div>
+                    </div>
+                    <div id="mlk-months" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
+                </div>
+            </section>
+
             <section>
                 <div class="flex items-center gap-3 mb-6 border-b-2 border-slate-200 pb-2">
                     <span class="text-2xl">🌍</span>
@@ -359,8 +441,9 @@
         <div id="lightbox-content" class="w-full h-full max-w-4xl max-h-[90vh] flex justify-center items-center"></div>
     </div>
 
+    <script src="../shared/shared_month_lock.js"></script>
     <script>
-        const SUPABASE_URL = 'https://kibqjztozokohqmhqqqf.supabase.co'; 
+        const SUPABASE_URL = 'https://kibqjztozokohqmhqqqf.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpYnFqenRvem9rb2hxbWhxcXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQzNjIsImV4cCI6MjA4OTgxMDM2Mn0.J7qJUZhWXYf5b9oey4wXJkjdi66jomEMw_NeV9NWF7M';
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -378,6 +461,10 @@
                     _supabase.from('operation_trays').select('*').order('tray_name'),
                     _supabase.from('shared_inventory_logs').select('batch_name').eq('transaction_type', 'Seeds_Received')
                 ]);
+                // Tolerates the table not existing yet — see
+                // shared/RUN_ME_month_locks.sql. Absent means every month
+                // is on its default (2nd-of-next-month auto-lock).
+                await MJMMonthLock.load(_supabase);
 
                 if (breedRes.error) throw breedRes.error;
                 if (plotRes.error) throw plotRes.error;
@@ -409,13 +496,159 @@
                 globalBatches.sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true, sensitivity: 'base' }));
                 globalTrays.sort((a, b) => a.tray_name.localeCompare(b.tray_name, undefined, { numeric: true, sensitivity: 'base' }));
 
-                renderBreeds(); renderBatches(); renderNurseries(); 
-                populateNurseryFilters(); 
+                renderBreeds(); renderBatches(); renderNurseries();
+                populateNurseryFilters();
                 renderFilteredPlots(); renderFilteredTrays();
-            } catch(err) { 
+                populateMonthLockYears();
+                initMlkDayRoller();
+                renderMonthLockGrid();
+            } catch(err) {
                 alert("Database Connection Error:\n\n" + err.message + "\n\n(Did you remember to create the 'operation_trays' table in Supabase?)");
-                console.error(err); 
+                console.error(err);
             }
+        }
+
+        // ── Month Lock Calendar ─────────────────────────────────────────
+        const MLK_MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+        function mlkLockIcon(locked) {
+            const accent = locked ? '#f43f5e' : '#10b981'; // rose-500 / emerald-500, matches the button's own bg
+            const shackle = locked
+                ? '<path d="M8 10V7a4 4 0 018 0v3" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>'
+                : '<path d="M8 10V7a4 4 0 017-2.2" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>';
+            return `
+                <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+                    ${shackle}
+                    <rect x="5" y="10" width="14" height="9" rx="2" fill="white"/>
+                    <circle cx="12" cy="14" r="1.5" fill="${accent}"/>
+                    <rect x="11.15" y="14.8" width="1.7" height="2.6" rx="0.5" fill="${accent}"/>
+                </svg>`;
+        }
+
+        // Year is the same custom cf-* dropdown as the AL List's status
+        // filter (see the .cf-* CSS above). Lock Day is a separate rolling
+        // picker, further down.
+        let _mlkYear = new Date().getFullYear();
+
+        function toggleMlkMenu(e, menuId) {
+            e && e.stopPropagation();
+            const menu = document.getElementById(menuId);
+            const btn = document.getElementById(menuId.replace('-menu', '-btn'));
+            const opening = menu.classList.contains('hidden');
+            menu.classList.toggle('hidden', !opening);
+            btn.classList.toggle('open', opening);
+        }
+
+        document.addEventListener('click', (e) => {
+            const wrap = document.getElementById('mlk-year-wrap');
+            if (wrap && !wrap.contains(e.target)) {
+                wrap.querySelector('.cf-menu')?.classList.add('hidden');
+                wrap.querySelector('.cf-btn')?.classList.remove('open');
+            }
+        });
+
+        function populateMonthLockYears() {
+            const menu = document.getElementById('mlk-year-menu');
+            if (menu.children.length) return; // only needs building once
+            const nowYear = new Date().getFullYear();
+            let html = '';
+            for (let y = nowYear - 3; y <= nowYear + 1; y++) {
+                html += `<button type="button" class="cf-opt${y === nowYear ? ' active' : ''}" data-value="${y}" onclick="selectMlkYear(${y})">${y}</button>`;
+            }
+            menu.innerHTML = html;
+            document.getElementById('mlk-year-label').textContent = _mlkYear;
+        }
+
+        function selectMlkYear(year) {
+            _mlkYear = year;
+            document.getElementById('mlk-year-label').textContent = year;
+            document.querySelectorAll('#mlk-year-menu .cf-opt').forEach(el => el.classList.toggle('active', parseInt(el.dataset.value, 10) === year));
+            document.getElementById('mlk-year-menu').classList.add('hidden');
+            document.getElementById('mlk-year-btn').classList.remove('open');
+            renderMonthLockGrid();
+        }
+
+        // Lock Day rolling picker. _mlkSavedDay is what's actually live
+        // (what MJMMonthLock is computing dates from); _mlkPendingDay is
+        // what the roller is showing right now, which only becomes real
+        // when Save is clicked — scrolling/arrowing it alone changes
+        // nothing on the server.
+        let _mlkSavedDay = 2;
+        let _mlkPendingDay = 2;
+
+        function initMlkDayRoller() {
+            const menu = document.getElementById('mlk-day-track');
+            if (!menu.children.length) {
+                let html = '';
+                for (let d = 1; d <= 31; d++) html += `<div class="mlk-roller-row" data-value="${d}">${d}</div>`;
+                menu.innerHTML = html;
+            }
+            _mlkSavedDay = _mlkPendingDay = MJMMonthLock.currentLockDay();
+            renderMlkDayTrack();
+        }
+
+        function renderMlkDayTrack() {
+            const track = document.getElementById('mlk-day-track');
+            track.style.transform = `translateY(${22 - (_mlkPendingDay - 1) * 22}px)`;
+            track.querySelectorAll('.mlk-roller-row').forEach(el => {
+                el.classList.toggle('current', parseInt(el.dataset.value, 10) === _mlkPendingDay);
+            });
+            document.getElementById('mlk-day-save-btn').classList.toggle('mlk-clean', _mlkPendingDay === _mlkSavedDay);
+        }
+
+        function stepMlkLockDay(delta) {
+            _mlkPendingDay = Math.min(31, Math.max(1, _mlkPendingDay + delta));
+            renderMlkDayTrack();
+        }
+
+        function mlkDayWheel(e) {
+            e.preventDefault();
+            stepMlkLockDay(e.deltaY > 0 ? 1 : -1);
+        }
+
+        function renderMonthLockGrid() {
+            const year = _mlkYear;
+            const wrap = document.getElementById('mlk-months');
+            wrap.innerHTML = MLK_MONTH_NAMES.map((name, i) => {
+                const month = i + 1;
+                const locked = MJMMonthLock.isMonthLocked(year, month);
+                const row = MJMMonthLock.rowFor(year, month);
+                const isManual = row && row.manual_override !== null && row.manual_override !== undefined;
+                const autoDate = MJMMonthLock.autoLockDateFor(year, month);
+                const autoDateStr = autoDate.toISOString().slice(0, 10);
+                return `
+                    <div class="flex flex-col items-center gap-2 p-3 rounded-2xl border ${locked ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}">
+                        <button onclick="toggleMonthLock(${year},${month})" title="${isManual ? 'Manually ' + (locked ? 'locked' : 'unlocked') + ' — click to flip' : 'Click to force ' + (locked ? 'unlocked' : 'locked')}"
+                            class="w-16 h-16 rounded-full flex flex-col items-center justify-center font-black uppercase tracking-widest text-[10px] shadow-sm transition-transform hover:scale-105 ${locked ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white'}">
+                            <span class="leading-none">${mlkLockIcon(locked)}</span>
+                            <span class="mt-0.5">${name}</span>
+                        </button>
+                        <div class="text-[9px] font-black uppercase tracking-widest ${isManual ? 'text-purple-600' : 'text-slate-400'}">${isManual ? 'Manual' : 'Auto'}</div>
+                        <div class="text-[9px] text-slate-400 font-semibold text-center" title="Auto-locks on this date">${autoDateStr}</div>
+                    </div>`;
+            }).join('');
+        }
+
+        async function toggleMonthLock(year, month) {
+            const currentlyLocked = MJMMonthLock.isMonthLocked(year, month);
+            const { data: { user } } = await _supabase.auth.getUser();
+            const error = await MJMMonthLock.setManualOverride(_supabase, year, month, !currentlyLocked, user?.email || null);
+            if (error) return alert('Could not save: ' + error.message + (error.message.includes('does not exist') ? '\n\nRun shared/RUN_ME_month_locks.sql in the Supabase SQL Editor first.' : ''));
+            renderMonthLockGrid();
+        }
+
+        async function saveMlkLockDay() {
+            if (_mlkPendingDay === _mlkSavedDay) return; // nothing changed, Save is disabled anyway
+            const day = _mlkPendingDay;
+            const { data: { user } } = await _supabase.auth.getUser();
+            const error = await MJMMonthLock.setLockDay(_supabase, day, user?.email || null);
+            if (error) {
+                alert('Could not save: ' + error.message + (error.message.includes('does not exist') ? '\n\nRun shared/RUN_ME_month_locks.sql in the Supabase SQL Editor first.' : ''));
+                return;
+            }
+            _mlkSavedDay = day;
+            renderMlkDayTrack();
+            renderMonthLockGrid();
         }
 
         // --- GLOBAL MAPPER LOGIC WITH PAN, ZOOM & EDIT ---
