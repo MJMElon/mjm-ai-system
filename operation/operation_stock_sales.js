@@ -959,15 +959,27 @@
         no_status: { label: 'No Status', dot: 'bg-slate-400' },
         open:      { label: 'Open',      dot: 'bg-emerald-500' },
         sisa:      { label: 'Sisa',      dot: 'bg-amber-500' },
-        finished:  { label: 'Finished',  dot: 'bg-slate-500' }
+        finished:  { label: 'Finished',  dot: 'bg-slate-500' },
+        // Automatic only — never a menu choice. A plot at/under zero
+        // balance reads Sold Out no matter what was picked before, and the
+        // control locks: there's nothing left to allocate, so there's
+        // nothing left to decide.
+        sold_out:  { label: 'Sold Out',  dot: 'bg-white' }
     };
 
     // One dropdown in place of the status pill + native <select> combo —
     // same button/menu pattern as the History control above the table
     // (#history-btn / #history-menu), not the OS's own <select> list.
-    function matStatusControl(key, status) {
+    function matStatusControl(key, status, locked) {
         const m = MAT_STATUS_MAP[status] || MAT_STATUS_MAP.no_status;
-        const opts = Object.entries(MAT_STATUS_MAP).map(([value, o]) => `
+        if (locked) {
+            return `
+                <span class="inline-flex items-center gap-1.5 text-[9px] font-black text-white bg-red-600 border border-red-600 rounded-lg px-2 py-1 uppercase tracking-widest" title="Balance is sold out — status is automatic, not editable">
+                    <span class="w-2 h-2 rounded-full ${m.dot} shrink-0"></span>
+                    <span>${m.label}</span>
+                </span>`;
+        }
+        const opts = Object.entries(MAT_STATUS_MAP).filter(([value]) => value !== 'sold_out').map(([value, o]) => `
             <button type="button" onclick="selectMatStatus(this,'${value}')" class="w-full text-left text-[11px] font-bold text-slate-700 hover:bg-slate-50 rounded-lg px-3 py-2 flex items-center gap-2 ${value === status ? 'bg-amber-50 text-amber-800' : ''}">
                 <span class="w-2 h-2 rounded-full ${o.dot} shrink-0"></span><span>${o.label}</span>
             </button>`).join('');
@@ -1059,7 +1071,12 @@
                     </div>`).join('')}</div>`
                 : `<div class="reserv-empty"><span class="reserv-empty-emoji">🎯</span><span>Drop card here</span></div>`;
 
-            const status = alloc.plot_status || 'no_status';
+            // Sold Out overrides whatever was picked — it's never written
+            // back to plotAllocations (that stays the person's last real
+            // choice, in case the plot's balance later recovers), only
+            // shown while plotBalance stays at/under zero.
+            const soldOut = plotBalance <= 0;
+            const status  = soldOut ? 'sold_out' : (alloc.plot_status || 'no_status');
 
             return `
                 <tr data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${afterDeductReserve}">
@@ -1071,10 +1088,10 @@
                     <td class="col-prod num">${r.qty.toLocaleString()}</td>
                     <td class="col-prod num text-emerald-700 mat-sep-r">${r.afterCulling.toLocaleString()}</td>
                     <td class="col-plot">
-                        ${matStatusControl(r.key, status)}
+                        ${matStatusControl(r.key, status, soldOut)}
                     </td>
                     <td class="col-plot num text-blue-700">${collected.toLocaleString()}</td>
-                    <td class="col-plot num font-black mat-sep-r ${plotBalance <= 0 ? 'text-red-600' : 'text-slate-800'}">${plotBalance.toLocaleString()}${plotBalance <= 0 ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-red-600 text-white align-middle">Sold Out</span>' : ''}</td>
+                    <td class="col-plot num font-black mat-sep-r ${soldOut ? 'text-red-600' : 'text-slate-800'}">${plotBalance.toLocaleString()}</td>
                     <td class="col-alloc">${reservHtml}</td>
                     <td class="col-alloc num font-black text-slate-700">${allocSum.toLocaleString()}</td>
                     <td class="col-alloc num font-black ${afterDeductReserve < 0 ? 'text-red-600' : afterDeductReserve === 0 ? 'text-slate-400' : 'text-emerald-700'}">${afterDeductReserve.toLocaleString()}</td>
