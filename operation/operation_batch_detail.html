@@ -12112,7 +12112,11 @@ Thank you.`;
         }
 
         if (r) {
-          // Reviewed → locked for non-admins.
+          // Reviewed → locked for everyone, admins included. An admin
+          // clicks Unreview (still available — see .mjm-review-allow in
+          // the CSS) to edit again, same as Unverify below; there is no
+          // silent bypass that leaves the banner reading "Locked" while
+          // the fields underneath still take input.
           const whoR = r.reviewer_name || who(r.reviewer_email) || 'a reviewer';
           const whoV = v ? (v.verifier_name || who(v.verifier_email) || 'a verifier') : null;
           banner.className = 'mjm-review-banner mjm-review-locked';
@@ -12129,7 +12133,7 @@ Thank you.`;
                          onclick="MJMReview.unmark(${tabIdx})">Unreview</button>`
               : `<span class="mjm-review-meta">Read-only for your role</span>` }
           `;
-          setTabLock(tab, !isAdmin);
+          setTabLock(tab, true);
           return;
         }
 
@@ -12188,8 +12192,9 @@ Thank you.`;
         }
 
         if (v) {
-          // Verified → locked. No separate "Mark as Reviewed" stage anymore:
-          // verification IS the sign-off, so the data locks for non-admins.
+          // Verified → locked, for everyone including admins — same reasoning
+          // as the Reviewed branch above: Unverify (still available below)
+          // is how an admin gets back in, not a standing bypass.
           const whoV = v.verifier_name || who(v.verifier_email) || 'a verifier';
           banner.className = 'mjm-review-banner mjm-review-locked';
           banner.style.display = '';
@@ -12210,7 +12215,7 @@ Thank you.`;
               !isAdmin && !isVerifier ? '<span class="mjm-review-meta">Read-only for your role</span>' : ''
             }</div>
           `;
-          setTabLock(tab, !isAdmin);
+          setTabLock(tab, true);
           return;
         }
 
@@ -12869,9 +12874,10 @@ Thank you.`;
           if (!tab) return;
           new MutationObserver(() => {
             const stage = STAGE_BY_TAB[idx];
-            // Verified now locks the tab (no separate review stage). Row-tabs
-            // (3-6) don't lock at tab level — they re-decorate their rows.
-            if ((((reviews[stage] || verifications[stage]) && !isAdmin) || !canFill) && !ROW_TAB_CONFIG[idx]) tab.classList.add('mjm-locked');
+            // Verified now locks the tab (no separate review stage) for
+            // everyone, admins included — see renderBanner. Row-tabs (3-6)
+            // don't lock at tab level — they re-decorate their rows.
+            if (((reviews[stage] || verifications[stage]) || !canFill) && !ROW_TAB_CONFIG[idx]) tab.classList.add('mjm-locked');
             if (ROW_TAB_CONFIG[idx]) decorateRows(idx);
           }).observe(tab, { childList: true, subtree: true });
         });
