@@ -27,6 +27,26 @@
         #mapper-workspace { position: absolute; top: 0; left: 0; display: inline-block; box-shadow: 0 0 30px rgba(0,0,0,0.5); transform-origin: 0 0; }
         #mapper-bg { display: block; max-width: 90vw; max-height: 80vh; pointer-events: none; user-select: none; }
         #mapper-svg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 10; }
+
+        /* Month Lock Calendar's Year / Lock Day pickers — a custom dropdown
+           in place of the native <select> (which renders the OS's own
+           highlight, not this one), with a checkmark against only the
+           active option. Same design as the AL List's status filter in
+           operation_booking.html — change one, change the other. */
+        .cf-wrap{position:relative;}
+        .cf-btn{display:flex;align-items:center;gap:6px;justify-content:center;text-transform:uppercase;letter-spacing:.06em;font-size:11px;font-weight:900;color:#334155;background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:9px 12px;cursor:pointer;transition:border-color .15s,box-shadow .15s;box-shadow:0 2px 4px rgba(0,0,0,.02);}
+        .cf-btn:hover{border-color:#94a3b8;}
+        .cf-btn.open{border-color:#f43f5e;box-shadow:0 0 0 3px rgba(244,63,94,.12);}
+        .cf-chevron{width:11px;height:11px;color:#94a3b8;transition:transform .15s;flex-shrink:0;}
+        .cf-btn.open .cf-chevron{transform:rotate(180deg);}
+        .cf-menu{position:absolute;left:0;top:calc(100% + 6px);min-width:100%;max-height:220px;overflow-y:auto;background:#fff;border:1px solid #e5e9f0;border-radius:14px;box-shadow:0 16px 32px -10px rgba(15,23,42,.18),0 4px 10px rgba(15,23,42,.06);padding:4px 0;z-index:40;}
+        .cf-menu::-webkit-scrollbar{width:6px;}
+        .cf-menu::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
+        .cf-opt{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left;font-size:13px;font-weight:700;color:#0f172a;background:#fff;border:none;border-bottom:1px solid #f1f5f9;padding:9px 16px;cursor:pointer;transition:background .12s,color .12s;font-family:inherit;white-space:nowrap;}
+        .cf-opt:last-child{border-bottom:none;}
+        .cf-opt:hover{background:#f8fafc;}
+        .cf-opt.active{color:#e11d48;}
+        .cf-opt.active::after{content:'✓';font-size:13px;font-weight:900;color:#e11d48;flex-shrink:0;}
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8 relative">
@@ -59,11 +79,23 @@
                     <div class="flex flex-wrap items-center gap-6 mb-5">
                         <div class="flex items-center gap-3">
                             <label class="text-[10px] font-bold text-rose-600 uppercase tracking-widest">Year</label>
-                            <select id="mlk-year" onchange="renderMonthLockGrid()" class="input-style text-xs !w-32 !py-2"></select>
+                            <div class="cf-wrap" id="mlk-year-wrap">
+                                <button type="button" id="mlk-year-btn" class="cf-btn !w-28" onclick="toggleMlkMenu(event,'mlk-year-menu')">
+                                    <span id="mlk-year-label"></span>
+                                    <svg class="cf-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 7l5 5 5-5"/></svg>
+                                </button>
+                                <div id="mlk-year-menu" class="cf-menu hidden"></div>
+                            </div>
                         </div>
                         <div class="flex items-center gap-3">
                             <label class="text-[10px] font-bold text-rose-600 uppercase tracking-widest">Lock Day</label>
-                            <select id="mlk-day" onchange="setGlobalLockDay(this.value)" class="input-style text-xs !w-20 !py-2"></select>
+                            <div class="cf-wrap" id="mlk-day-wrap">
+                                <button type="button" id="mlk-day-btn" class="cf-btn !w-20" onclick="toggleMlkMenu(event,'mlk-day-menu')">
+                                    <span id="mlk-day-label"></span>
+                                    <svg class="cf-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 7l5 5 5-5"/></svg>
+                                </button>
+                                <div id="mlk-day-menu" class="cf-menu hidden"></div>
+                            </div>
                             <span class="text-[10px] text-slate-400 font-semibold">of the following month — applies from this month onward</span>
                         </div>
                     </div>
@@ -470,32 +502,67 @@
                 </svg>`;
         }
 
+        // Both pickers are the same custom cf-* dropdown as the AL List's
+        // status filter (see the .cf-* CSS and toggleMlkMenu below).
+        let _mlkYear = new Date().getFullYear();
+
+        function toggleMlkMenu(e, menuId) {
+            e && e.stopPropagation();
+            const menu = document.getElementById(menuId);
+            const btn = document.getElementById(menuId.replace('-menu', '-btn'));
+            const opening = menu.classList.contains('hidden');
+            document.getElementById('mlk-year-menu').classList.add('hidden');
+            document.getElementById('mlk-day-menu').classList.add('hidden');
+            document.querySelectorAll('#mlk-year-btn, #mlk-day-btn').forEach(b => b.classList.remove('open'));
+            menu.classList.toggle('hidden', !opening);
+            btn.classList.toggle('open', opening);
+        }
+
+        document.addEventListener('click', (e) => {
+            ['mlk-year-wrap', 'mlk-day-wrap'].forEach(wrapId => {
+                const wrap = document.getElementById(wrapId);
+                if (wrap && !wrap.contains(e.target)) {
+                    wrap.querySelector('.cf-menu')?.classList.add('hidden');
+                    wrap.querySelector('.cf-btn')?.classList.remove('open');
+                }
+            });
+        });
+
         function populateMonthLockYears() {
-            const sel = document.getElementById('mlk-year');
-            if (sel.options.length) return; // only needs building once
+            const menu = document.getElementById('mlk-year-menu');
+            if (menu.children.length) return; // only needs building once
             const nowYear = new Date().getFullYear();
+            let html = '';
             for (let y = nowYear - 3; y <= nowYear + 1; y++) {
-                const opt = document.createElement('option');
-                opt.value = y; opt.textContent = y;
-                if (y === nowYear) opt.selected = true;
-                sel.appendChild(opt);
+                html += `<button type="button" class="cf-opt${y === nowYear ? ' active' : ''}" data-value="${y}" onclick="selectMlkYear(${y})">${y}</button>`;
             }
+            menu.innerHTML = html;
+            document.getElementById('mlk-year-label').textContent = _mlkYear;
+        }
+
+        function selectMlkYear(year) {
+            _mlkYear = year;
+            document.getElementById('mlk-year-label').textContent = year;
+            document.querySelectorAll('#mlk-year-menu .cf-opt').forEach(el => el.classList.toggle('active', parseInt(el.dataset.value, 10) === year));
+            document.getElementById('mlk-year-menu').classList.add('hidden');
+            document.getElementById('mlk-year-btn').classList.remove('open');
+            renderMonthLockGrid();
         }
 
         function populateMonthLockDaySelect() {
-            const sel = document.getElementById('mlk-day');
-            if (!sel.options.length) {
-                for (let d = 1; d <= 31; d++) {
-                    const opt = document.createElement('option');
-                    opt.value = d; opt.textContent = d;
-                    sel.appendChild(opt);
-                }
+            const menu = document.getElementById('mlk-day-menu');
+            const currentDay = MJMMonthLock.currentLockDay();
+            if (!menu.children.length) {
+                let html = '';
+                for (let d = 1; d <= 31; d++) html += `<button type="button" class="cf-opt" data-value="${d}" onclick="selectMlkLockDay(${d})">${d}</button>`;
+                menu.innerHTML = html;
             }
-            sel.value = MJMMonthLock.currentLockDay();
+            document.querySelectorAll('#mlk-day-menu .cf-opt').forEach(el => el.classList.toggle('active', parseInt(el.dataset.value, 10) === currentDay));
+            document.getElementById('mlk-day-label').textContent = currentDay;
         }
 
         function renderMonthLockGrid() {
-            const year = parseInt(document.getElementById('mlk-year').value, 10);
+            const year = _mlkYear;
             const wrap = document.getElementById('mlk-months');
             wrap.innerHTML = MLK_MONTH_NAMES.map((name, i) => {
                 const month = i + 1;
@@ -525,8 +592,11 @@
             renderMonthLockGrid();
         }
 
-        async function setGlobalLockDay(dayStr) {
-            const day = parseInt(dayStr, 10);
+        async function selectMlkLockDay(day) {
+            document.querySelectorAll('#mlk-day-menu .cf-opt').forEach(el => el.classList.toggle('active', parseInt(el.dataset.value, 10) === day));
+            document.getElementById('mlk-day-label').textContent = day;
+            document.getElementById('mlk-day-menu').classList.add('hidden');
+            document.getElementById('mlk-day-btn').classList.remove('open');
             const { data: { user } } = await _supabase.auth.getUser();
             const error = await MJMMonthLock.setLockDay(_supabase, day, user?.email || null);
             if (error) {
