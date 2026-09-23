@@ -456,6 +456,20 @@
         // ── Month Lock Calendar ─────────────────────────────────────────
         const MLK_MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+        function mlkLockIcon(locked) {
+            const accent = locked ? '#f43f5e' : '#10b981'; // rose-500 / emerald-500, matches the button's own bg
+            const shackle = locked
+                ? '<path d="M8 10V7a4 4 0 018 0v3" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>'
+                : '<path d="M8 10V7a4 4 0 017-2.2" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>';
+            return `
+                <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+                    ${shackle}
+                    <rect x="5" y="10" width="14" height="9" rx="2" fill="white"/>
+                    <circle cx="12" cy="14" r="1.5" fill="${accent}"/>
+                    <rect x="11.15" y="14.8" width="1.7" height="2.6" rx="0.5" fill="${accent}"/>
+                </svg>`;
+        }
+
         function populateMonthLockYears() {
             const sel = document.getElementById('mlk-year');
             if (sel.options.length) return; // only needs building once
@@ -494,7 +508,7 @@
                     <div class="flex flex-col items-center gap-2 p-3 rounded-2xl border ${locked ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}">
                         <button onclick="toggleMonthLock(${year},${month})" title="${isManual ? 'Manually ' + (locked ? 'locked' : 'unlocked') + ' — click to flip' : 'Click to force ' + (locked ? 'unlocked' : 'locked')}"
                             class="w-16 h-16 rounded-full flex flex-col items-center justify-center font-black uppercase tracking-widest text-[10px] shadow-sm transition-transform hover:scale-105 ${locked ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white'}">
-                            <span class="text-xl leading-none">${locked ? '🔒' : '🔓'}</span>
+                            <span class="leading-none">${mlkLockIcon(locked)}</span>
                             <span class="mt-0.5">${name}</span>
                         </button>
                         <div class="text-[9px] font-black uppercase tracking-widest ${isManual ? 'text-purple-600' : 'text-slate-400'}">${isManual ? 'Manual' : 'Auto'}</div>
