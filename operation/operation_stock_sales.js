@@ -1257,19 +1257,22 @@
             });
 
             // Index ALs by the customer order number they're linked to.
-            // Trimmed/uppercased on both sides of the match below — a
-            // trailing space keyed into shared_al_orders.order_number by
-            // hand (invisible in the UI, real in the string) meant this
-            // exact-match lookup silently missed the AL entirely: no AL
+            // Punctuation-stripped on both sides of the match below — AL
+            // order_numbers are commonly keyed in with a leading "#"
+            // ("#4EB8U6") that the salesweb order itself never carries, so
+            // an exact-match lookup silently missed the AL entirely: no AL
             // number shown on the row, and the order fell back to
             // salesweb's own (unset) collected qty instead of the DOs
             // actually issued against it — reading fully outstanding when
-            // the AL List already had it at zero.
+            // the AL List already had it at zero. Same normaliser shape as
+            // _normBatchKey/_normPlotKey below, for the same reason: a
+            // human-keyed reference carries formatting that isn't part of
+            // the identity.
             //
             // If a single order_number happens to map to multiple ALs (e.g.
             // partial replacements), prefer the row with the highest
             // balance_quantity so the totals stay consistent for the user.
-            const normOrderKey = v => String(v || '').trim().toUpperCase();
+            const normOrderKey = v => String(v || '').trim().toUpperCase().replace(/[^0-9A-Z]/g, '');
             const alByOrderNumber = {};
             alRows.forEach(a => {
                 if (!a.order_number) return;
