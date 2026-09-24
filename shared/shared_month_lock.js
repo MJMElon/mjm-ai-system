@@ -106,13 +106,34 @@
     }
 
     // Same as setManualOverride, but all 12 months of `year` in one upsert
-    // instead of 12 round trips — what "Unlock All" / "Lock All" for a year
-    // call.
+    // instead of 12 round trips — what "Unlock All" for a year calls.
     async function setManualOverrideForYear(supabase, year, locked, updatedBy) {
         const now = new Date().toISOString();
         const rowsToWrite = [];
         for (let month = 1; month <= 12; month++) {
             rowsToWrite.push({ year, month, manual_override: locked, updated_at: now, updated_by: updatedBy || null });
+        }
+        const { error } = await supabase.from('shared_month_locks')
+            .upsert(rowsToWrite, { onConflict: 'year,month' });
+        if (!error) await load(supabase);
+        return error;
+    }
+
+    // "Lock All" is NOT setManualOverrideForYear(year, true, …) — that
+    // would freeze every month of the year locked, including ones whose
+    // auto-lock date has not happened yet, which is exactly the "seed
+    // today's default into a saved row" mistake this file's own header
+    // warns against (a January visit would wrongly lock December too).
+    // What "lock up to the date" actually means is: stop overriding —
+    // clear every month back to null (the computed default), which is
+    // already "locked if its own auto-lock date has passed, open if not".
+    // Kept as an upsert of null rather than a DELETE so the write still
+    // carries updated_at/updated_by, same as every other change here.
+    async function clearManualOverrideForYear(supabase, year, updatedBy) {
+        const now = new Date().toISOString();
+        const rowsToWrite = [];
+        for (let month = 1; month <= 12; month++) {
+            rowsToWrite.push({ year, month, manual_override: null, updated_at: now, updated_by: updatedBy || null });
         }
         const { error } = await supabase.from('shared_month_locks')
             .upsert(rowsToWrite, { onConflict: 'year,month' });
@@ -138,6 +159,7 @@
 
     global.MJMMonthLock = {
         load, isMonthLocked, isDateLocked, rowFor, autoLockDateFor, defaultAutoLockDate,
-        autoLockDayFor, currentLockDay, setManualOverride, setManualOverrideForYear, setLockDay
+        autoLockDayFor, currentLockDay, setManualOverride, setManualOverrideForYear,
+        clearManualOverrideForYear, setLockDay
     };
 })(window);
