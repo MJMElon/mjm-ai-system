@@ -1224,7 +1224,6 @@ const MOVE_COLS = {
   main: [
     { key: 'trIn',    label: 'Transfer In',           sign: +1, cls: 'text-[#3a7ab4]' },
     { key: 'transIn', label: 'Transplanted from PN',  sign: +1, cls: 'text-[#3a7ab4]' },
-    { key: 'cull2',   label: '2nd Culled',            sign: -1, cls: 'text-[#a83020]' },
     { key: 'sold',    label: 'Sold',                  sign: -1, cls: 'text-[#a83020]' },
     { key: 'cull3',   label: '3rd Culled',            sign: -1, cls: 'text-[#a83020]' },
     { key: 'trOut',   label: 'Transfer Out',          sign: -1, cls: 'text-[#a83020]' },
@@ -1236,23 +1235,14 @@ const emptyRow = (scope) => MOVE_COLS[scope].reduce((a, c) => { a[c.key] = 0; re
 /**
  * What a row's movements come to.
  *
- * The 3rd culling count is cumulative: it is keyed against the ORIGINAL
- * transplanted figure rather than against what was left by then, so it
- * already contains the 2nd culling. Taking both off subtracts the 2nd
- * culling twice — which is why B1's batch 237 read -2 when 1,182
- * transplanted less 90 culled, 989 sold and 103 transferred away comes to
- * exactly nought.
- *
- * So the 2nd culling counts only while no 3rd culling has been recorded.
- * Before the 3rd it is the live deduction; after it, it is already inside
- * the figure that replaced it.
+ * 2nd Culled never deducts here, B/F included — 2nd Culling is Tab 6's own
+ * live snapshot as a batch works through 3rd Culling, not a separate loss
+ * on top of it, and it doesn't get its own column here either (see
+ * MOVE_COLS.main). 3rd Culled — once evidenced (see the MapQty: check
+ * below) — is the actual, standing deduction.
  */
 function netOfRow(scope, b) {
-  const superseded = scope === 'main' && (b.cull3 || 0) > 0;
-  return MOVE_COLS[scope].reduce((s, c) => {
-    if (superseded && c.key === 'cull2') return s;
-    return s + c.sign * (b[c.key] || 0);
-  }, 0);
+  return MOVE_COLS[scope].reduce((s, c) => s + c.sign * (b[c.key] || 0), 0);
 }
 
 /* "2 months". Age is measured from the batch's own planting date, so it reads
@@ -1384,7 +1374,10 @@ async function runMovementReportCombined() {
 
     if (t === 'Planted')     { push('pre', d, l.plot_name, b, 'planted', q); return; }
     if (t === '1st_Culling') { push('pre', d, l.plot_name, b, 'cull1', q); return; }
-    if (t === '2nd_Culling') { if (passMain(l.plot_name)) push('main', d, l.plot_name, b, 'cull2', q); return; }
+    // 2nd_Culling isn't tracked in Main Nursery Movement at all — it's
+    // Tab 6's own running snapshot toward 3rd Culling, not a separate,
+    // standing deduction (see netOfRow above).
+    if (t === '2nd_Culling') return;
     if (t === '3rd_Culling') {
       // Only counted once a drone map qty has actually been keyed — Tab 6
       // computes and saves a 3rd_Culling figure the moment Alive reaches
@@ -1563,11 +1556,7 @@ function buildMovementSection(scope, ev, ctx) {
       _natCmp(locOfRow(a), locOfRow(c)) ||
       _natCmp(a.place, c.place) || _natCmp(a.batch, c.batch)));
 
-  // 2nd Culled is dropped from the table, not from the maths: netOfRow()
-  // and emptyRow() both read MOVE_COLS[scope] directly (not this `cols`),
-  // so the balance still correctly deducts it for a batch that hasn't
-  // reached 3rd Culling yet — only the column itself stops being shown.
-  const cols = MOVE_COLS[scope].filter(c => !(scope === 'main' && c.key === 'cull2'));
+  const cols = MOVE_COLS[scope];
   const placeLabel = scope === 'pre' ? 'Tray No' : 'Plot';
   const firstLabel  = groupBy === 'batch' ? 'Batch' : placeLabel;
   const secondLabel = groupBy === 'batch' ? placeLabel : 'Batch';
