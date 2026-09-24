@@ -2707,14 +2707,20 @@
            take it off a later count that already missed those seedlings and
            one loss is subtracted twice.
 
-             Transplanting → Transplanting, 2nd + 3rd Culling. Every report
-                 carries its own losses; 1st Culling happened in the tray,
+             Transplanting → Transplanting, 2nd + 3rd Culling. It is not a
+                 COUNT, it is how many went out, and both cullings are still
+                 measuring against it. 1st Culling happened in the tray,
                  before these ever went out, so it alone is untouched.
-             1st Culling   → 1st Culling only. The transplant record written
-                 after it says what actually went to the plots, so nothing
-                 downstream is still carrying the error.
-             2nd Culling   → 2nd + 3rd Culling.
+             1st Culling   → 1st Culling only.
+             2nd Culling   → 2nd Culling only.
              3rd Culling   → 3rd Culling only.
+
+           Every CULLING keeps its own and passes nothing on, and that is
+           the whole rule: a culling is a fresh count of the plot — by hand,
+           and by drone — so whatever was adjusted before it is already
+           absent from the number it produced. Carrying it forward subtracts
+           one loss twice. Only Transplanting travels, because it is not a
+           count of what is there; it is a record of what was sent.
 
            Batch 235's N11 is why the last one matters: one seedling adjusted
            away at the 2nd culling, counted again at the 3rd, and the row read
@@ -2727,7 +2733,7 @@
         const ADJUST_APPLIES_TO = {
             'transplanting': ['transplanting', '2nd culling', '3rd culling'],
             '1st culling':   ['1st culling'],
-            '2nd culling':   ['2nd culling', '3rd culling'],
+            '2nd culling':   ['2nd culling'],
             '3rd culling':   ['3rd culling']
         };
 
