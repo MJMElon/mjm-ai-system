@@ -192,6 +192,37 @@ const ROWS = {
     };
   });
 
+  /* ── A SAVED REASON IS READ-ONLY UNTIL SOMEBODY PRESSES EDIT ─────────
+     Per plot, because each plot's reason is its own record. U3 already has
+     one written against it; U4 does not. */
+  const asRecord = await page.evaluate(async () => {
+    const idxOf = (plot) => t6_plotData.findIndex(p => String(p.plot).trim().toUpperCase() === plot);
+    const read = (plot) => {
+      const i = idxOf(plot);
+      const box = document.getElementById(`t6-mm-note-${i}`);
+      const wrap = box.parentElement;
+      const vis = (sel) => { const e = wrap.querySelector(sel); return !!e && !e.classList.contains('hidden'); };
+      return { readOnly: box.readOnly, value: box.value,
+               edit: vis('.t6-mm-edit'), cancel: vis('.t6-mm-cancel'),
+               meta: (wrap.querySelector('.t6-mm-meta')?.textContent || '').trim() };
+    };
+    t6_plotData[idxOf('U3')].savedMismatchNote = 'Drone flew before the last tray moved out.';
+    document.getElementById(`t6-mm-note-${idxOf('U3')}`).value = 'Drone flew before the last tray moved out.';
+    syncT6MismatchLocks();
+    const u3 = read('U3'), u4 = read('U4');
+
+    editT6MismatchNote(idxOf('U3'));
+    const editing = read('U3');
+    document.getElementById(`t6-mm-note-${idxOf('U3')}`).value = 'typed over by mistake';
+    cancelT6MismatchNote(idxOf('U3'));
+    const cancelled = read('U3');
+    // …and editing one plot must not open the plot beside it.
+    editT6MismatchNote(idxOf('U3'));
+    const u4WhileU3Open = read('U4');
+    cancelT6MismatchNote(idxOf('U3'));
+    return { u3, u4, editing, cancelled, u4WhileU3Open };
+  });
+
   /* Lock the whole tab the way a verified report is locked, then look at
      what is still usable. */
   const locked = await page.evaluate(async () => {
@@ -252,6 +283,7 @@ const ROWS = {
   });
 
   console.log('panel       :', JSON.stringify(panel));
+  console.log('as a record :', JSON.stringify(asRecord, null, 1));
   console.log('locked      :', JSON.stringify(locked));
   console.log('one saved   :', JSON.stringify({ ...landed, toasts: partial.toasts }));
   console.log('last one    :', JSON.stringify(cleared));
@@ -260,6 +292,18 @@ const ROWS = {
   const checks = [
     ['both plots are asked for a reason', panel.shown === true && panel.boxes === 2],
     ['named', panel.mismatches.includes('U3') && panel.mismatches.includes('U4')],
+
+    // ── saved is a record, not a box
+    ['a plot whose reason is saved reads but does not type',
+      asRecord.u3.readOnly === true && /Drone flew/.test(asRecord.u3.value)],
+    ['with an Edit button', asRecord.u3.edit === true && /press edit/i.test(asRecord.u3.meta)],
+    ['a plot with no reason yet is open',
+      asRecord.u4.readOnly === false && asRecord.u4.edit === false],
+    ['pressing Edit opens that plot',
+      asRecord.editing.readOnly === false && asRecord.editing.cancel === true],
+    ['and not the plot beside it', asRecord.u4WhileU3Open.readOnly === false],
+    ['Cancel puts back what the database holds',
+      /Drone flew/.test(asRecord.cancelled.value) && asRecord.cancelled.readOnly === true],
 
     // ── locked
     ['the reason box is still live on a locked report', locked.note === true],

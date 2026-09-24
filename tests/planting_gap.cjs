@@ -231,6 +231,42 @@ const ROWS = {
     return { before, after, withFigureMissing };
   });
 
+  /* ── A SAVED REASON IS READ-ONLY UNTIL SOMEBODY PRESSES EDIT ─────────
+     A reason already written is a record. An open box is not: a cursor
+     resting in it and one keystroke edits what the last person said, with
+     nothing on screen to show it used to say something else. */
+  const asRecord = await page.evaluate(async () => {
+    const read = () => {
+      const box = document.getElementById('t2-gap-note');
+      const vis = (id) => { const e = document.getElementById(id); return !!e && !e.classList.contains('hidden'); };
+      return { readOnly: box.readOnly, value: box.value,
+               edit: vis('t2-gap-edit'), cancel: vis('t2-gap-cancel'), save: vis('t2-gap-save'),
+               meta: (document.getElementById('t2-gap-meta')?.textContent || '').replace(/\s+/g,' ').trim() };
+    };
+    // Nothing saved yet → open, because a blank reason is a question nobody
+    // has answered, not a record to protect.
+    _t2GapSaved = ''; _t2GapEditing = false; _t2GapBy = null;
+    document.getElementById('t2-gap-note').value = '';
+    syncT2GapLock();
+    const blank = read();
+
+    // Saved → locked, and it says so.
+    _t2GapSaved = '712 seeds mouldy in the bag.';
+    _t2GapBy = { by: 'esther@mjmnursery.com', at: '2026-09-19T00:00:00Z' };
+    document.getElementById('t2-gap-note').value = _t2GapSaved;
+    syncT2GapLock();
+    const locked = read();
+
+    editT2GapNote();
+    const editing = read();
+
+    // Typed over, then Cancel → back to what the database holds.
+    document.getElementById('t2-gap-note').value = 'something else entirely';
+    cancelT2GapNote();
+    const cancelled = read();
+    return { blank, locked, editing, cancelled };
+  });
+
   /* ── A LOCKED REPORT STILL TAKES THE REASON ─────────────────────────
      Everything else on a verified report is a claim somebody has signed
      off, and locking it is the point. A reason why the figures do not
@@ -317,6 +353,7 @@ const ROWS = {
   console.log('saved remark:', JSON.stringify(written.damagedRemark));
   console.log('nelos rows  :', written.nelosInserts, '| toasts:', JSON.stringify(written.toasts));
   console.log('verified    :', JSON.stringify(verified));
+  console.log('as a record :', JSON.stringify(asRecord, null, 1));
   console.log('locked      :', JSON.stringify(locked));
   console.log('lone save   :', JSON.stringify(loneSave));
   console.log('reloaded    :', JSON.stringify(reloaded));
@@ -364,6 +401,22 @@ const ROWS = {
     ['the panel stays open so it can still be written', verified.after.panel === true],
     ['but a missing FIGURE is not settled by a signature',
       verified.withFigureMissing.pct !== '100%'],
+
+    // ── saved is a record, not a box
+    ['with nothing saved the box is open',
+      asRecord.blank.readOnly === false && asRecord.blank.edit === false && asRecord.blank.save === true],
+    ['once it is saved it reads but does not type',
+      asRecord.locked.readOnly === true && asRecord.locked.value === '712 seeds mouldy in the bag.'],
+    ['with an Edit button and no Save',
+      asRecord.locked.edit === true && asRecord.locked.save === false],
+    ['saying who saved it and when',
+      /saved by/i.test(asRecord.locked.meta) && /esther/i.test(asRecord.locked.meta)
+      && /19 Sep/i.test(asRecord.locked.meta) && /press edit/i.test(asRecord.locked.meta)],
+    ['pressing Edit opens it', asRecord.editing.readOnly === false],
+    ['swapping Edit for Save and Cancel',
+      asRecord.editing.edit === false && asRecord.editing.save === true && asRecord.editing.cancel === true],
+    ['and Cancel puts back what the database holds',
+      asRecord.cancelled.value === '712 seeds mouldy in the bag.' && asRecord.cancelled.readOnly === true],
 
     // ── a locked report
     ['the explanation box is still live on a locked report', locked.note === true],

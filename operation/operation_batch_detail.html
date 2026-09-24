@@ -1117,20 +1117,35 @@
                                             <span id="t2-gap-sum" class="text-[10px] font-black text-[#a8742a] tabular-nums"></span>
                                         </div>
                                         <div id="t2-gap-why" class="text-[11px] font-bold text-[#8a7a68] mt-1.5 leading-snug"></div>
+                                        <!-- SAVED IS READ-ONLY. A reason somebody has written and
+                                             saved is a record, and a record is not something the next
+                                             person changes by resting a cursor in it: this box was
+                                             open and a keystroke went straight into what the last
+                                             person said. Press Edit to change it on purpose. -->
                                         <textarea id="t2-gap-note" rows="3" oninput="calcPlanting()"
                                             placeholder="Where did the difference go? e.g. 212 seeds mouldy in the bag and thrown away before counting; supplier short-delivered and a replacement is on the way."
                                             class="input-style w-full mt-3 !text-[13px] mjm-always-open"></textarea>
                                         <div class="flex items-center justify-between gap-3 flex-wrap mt-2">
-                                            <div class="text-[10px] font-bold text-[#8a7a68] leading-snug">
+                                            <div id="t2-gap-meta" class="text-[10px] font-bold text-[#8a7a68] leading-snug">
                                                 Saved with the planting report. The report is not complete until this is written,
                                                 and whoever checks the batch reads it here.
                                             </div>
-                                            <!-- Its own Save: the reason is still writable on a locked
-                                                 report, and the tab's own Save is not. -->
-                                            <button type="button" id="t2-gap-save" onclick="saveT2GapNote()"
-                                                class="mjm-always-open shrink-0 px-3 py-1.5 rounded-lg border border-[#c07820] bg-white
-                                                       text-[#c07820] text-[10px] font-black uppercase tracking-widest
-                                                       hover:bg-[#fdfaf4]">Save explanation</button>
+                                            <div class="flex items-center gap-2 shrink-0">
+                                                <!-- Its own Save: the reason is still writable on a locked
+                                                     report, and the tab's own Save is not. -->
+                                                <button type="button" id="t2-gap-edit" onclick="editT2GapNote()"
+                                                    class="mjm-always-open hidden px-3 py-1.5 rounded-lg border border-[#3a7ab4] bg-white
+                                                           text-[#3a7ab4] text-[10px] font-black uppercase tracking-widest
+                                                           hover:bg-[#f4f8fc]">✎ Edit</button>
+                                                <button type="button" id="t2-gap-cancel" onclick="cancelT2GapNote()"
+                                                    class="mjm-always-open hidden px-3 py-1.5 rounded-lg border border-[#d8cbb4] bg-white
+                                                           text-[#5b4a33] text-[10px] font-black uppercase tracking-widest
+                                                           hover:bg-[#f5efe4]">Cancel</button>
+                                                <button type="button" id="t2-gap-save" onclick="saveT2GapNote()"
+                                                    class="mjm-always-open px-3 py-1.5 rounded-lg border border-[#c07820] bg-white
+                                                           text-[#c07820] text-[10px] font-black uppercase tracking-widest
+                                                           hover:bg-[#fdfaf4]">Save explanation</button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -3445,6 +3460,12 @@
         }
 
         async function loadSavedPlantingData(batchId) {
+            /* A different batch: forget the last one's reason, or its lock
+               travels to a batch that has none. */
+            _t2GapSaved = ''; _t2GapEditing = false; _t2GapBy = null;
+            const gapBox0 = document.getElementById('t2-gap-note');
+            if (gapBox0) gapBox0.value = '';
+            syncT2GapLock();
             const { data: logData } = await _supabase.from('shared_inventory_logs')
                 .select('*')
                 .eq('batch_name', batchId)
@@ -3474,6 +3495,15 @@
                             let txt = '';
                             if (gapMatch) { try { txt = decodeURIComponent(gapMatch[1]); } catch (_) { txt = gapMatch[1]; } }
                             gapBox.value = txt;
+                            /* A reason that came back from the database is a
+                               saved one, so the box arrives locked. Who wrote
+                               it comes off the record when the last_edited_*
+                               columns are there, and is simply left out when
+                               they are not. */
+                            _t2GapSaved = txt;
+                            _t2GapEditing = false;
+                            _t2GapBy = txt ? { by: log.last_edited_by || null, at: log.last_edited_at || log.created_at || null } : null;
+                            syncT2GapLock();
                         }
                     } else if (log.transaction_type === 'Planted') {
                         hasTrays = true;
@@ -5646,6 +5676,69 @@
             return { gap: open, note, explained: !open || !!note };
         }
 
+        /* A SAVED REASON IS READ-ONLY UNTIL SOMEBODY ASKS TO CHANGE IT.
+
+           A reason that has been written and saved is a record. An open box
+           is not: a cursor resting in it and one keystroke edits what the
+           last person said, and nothing on screen would have shown that it
+           used to say something else.
+
+           So the box locks the moment it holds a saved reason, says who
+           saved it and when, and offers Edit. Nothing is hidden — the text
+           is fully readable, it just cannot be typed over by accident.
+
+           SHARED SHAPE — the 3rd Culling reasons do the same, per plot. */
+        let _t2GapSaved = '';          // what the database holds
+        let _t2GapBy    = null;        // { by, at } off the record, when the columns exist
+        let _t2GapEditing = false;     // somebody pressed Edit
+
+        function syncT2GapLock() {
+            const box    = document.getElementById('t2-gap-note');
+            const edit   = document.getElementById('t2-gap-edit');
+            const cancel = document.getElementById('t2-gap-cancel');
+            const save   = document.getElementById('t2-gap-save');
+            const meta   = document.getElementById('t2-gap-meta');
+            if (!box) return;
+            /* Locked only when there IS something saved. A blank reason is a
+               question nobody has answered yet, not a record to protect. */
+            const locked = !!_t2GapSaved && !_t2GapEditing;
+            box.readOnly = locked;
+            box.classList.toggle('bg-[#f8f4ec]', locked);
+            box.classList.toggle('cursor-default', locked);
+            box.title = locked ? 'Saved — press Edit to change it' : '';
+            if (edit)   edit.classList.toggle('hidden', !locked);
+            if (cancel) cancel.classList.toggle('hidden', locked || !_t2GapSaved);
+            if (save)   save.classList.toggle('hidden', locked);
+            if (meta) {
+                meta.innerText = locked
+                    ? (_t2GapBy && (_t2GapBy.by || _t2GapBy.at)
+                        ? `Saved by ${mjmWho(_t2GapBy.by) || 'somebody'}${_t2GapBy.at ? ' · ' + _t2FmtWhen(_t2GapBy.at) : ''}. Press Edit to change it.`
+                        : 'Saved. Press Edit to change it.')
+                    : (_t2GapSaved
+                        ? 'Editing. Save to keep the change, or Cancel to put back what was there.'
+                        : 'Saved with the planting report. The report is not complete until this is written, '
+                          + 'and whoever checks the batch reads it here.');
+            }
+        }
+        function _t2FmtWhen(v) {
+            const d = new Date(v);
+            return isNaN(d.getTime()) ? String(v)
+                 : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+        function editT2GapNote() {
+            _t2GapEditing = true;
+            syncT2GapLock();
+            const box = document.getElementById('t2-gap-note');
+            if (box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
+        }
+        function cancelT2GapNote() {
+            _t2GapEditing = false;
+            const box = document.getElementById('t2-gap-note');
+            if (box) box.value = _t2GapSaved;      // back to what the database holds
+            syncT2GapLock();
+            calcPlanting();
+        }
+
         /* SAVE JUST THE REASON.
 
            An explanation stays writable on a locked report — see
@@ -5685,6 +5778,10 @@
                         .eq('id', r.id);
                     if (error) throw error;
                 }
+                _t2GapSaved = note;
+                _t2GapEditing = false;
+                _t2GapBy = note ? { by: window.currentUserEmail || null, at: new Date().toISOString() } : null;
+                syncT2GapLock();
                 calcPlanting();
                 showToast(note ? 'Explanation saved.' : 'Explanation cleared.', 'success');
             } catch (e) {
@@ -6113,6 +6210,13 @@
                    over a figure nobody can resolve yet is worse than an
                    unexplained one that is stored — but the report does not
                    read as complete until the reason is written. */
+                /* The tab's own Save writes the reason too, so it locks here
+                   for the same reason it locks after its own Save. */
+                _t2GapSaved = _gap.note;
+                _t2GapEditing = false;
+                _t2GapBy = _gap.note ? { by: window.currentUserEmail || null, at: new Date().toISOString() } : null;
+                syncT2GapLock();
+
                 await savePhotosToStorage(batchId);
                 setEditMetaUI(2, new Date().toISOString(), window.currentUserEmail);
                 showToast(
@@ -9042,6 +9146,11 @@ Thank you.`;
             };
 
             t6_plotData = [];
+            /* A fresh read from the database starts every reason read-only
+               again. Kept across renderT6PlotRows, which redraws the same
+               data, but not across this, which replaces it — and the indices
+               with it. */
+            if (typeof _t6MmEditing !== 'undefined') _t6MmEditing.clear();
             // A fresh load of the tab starts with every movement list shut —
             // see t6RestoreTransferPanels for why the set is remembered at all.
             _t6OpenTransfers = new Set();
@@ -11625,18 +11734,85 @@ Thank you.`;
                             </div>`;
                         })()}
                         <label class="label-style !text-[#7a4a10]">Reason &amp; how to avoid it in future</label>
+                        <!-- Saved is read-only until somebody presses Edit — see
+                             syncT6MismatchLocks. A reason already written is a
+                             record, not a box the next person types into by
+                             resting a cursor in it. -->
                         <textarea rows="2" data-idx="${m.idx}" id="t6-mm-note-${m.idx}"
                             class="input-style t6-mm-note w-full !text-sm mjm-always-open"
                             oninput="syncT6MismatchState()"
                             placeholder="e.g. drone flew before the last batch was moved out — recount after transfers close">${_escAttr(note)}</textarea>
+                        <div class="flex items-center justify-between gap-2 flex-wrap mt-1.5">
+                            <span class="t6-mm-meta text-[10px] font-bold text-[#8a7a68] leading-snug"></span>
+                            <span class="flex items-center gap-2 shrink-0">
+                                <button type="button" data-idx="${m.idx}" onclick="editT6MismatchNote(${m.idx})"
+                                    class="t6-mm-edit mjm-always-open hidden px-2.5 py-1 rounded-lg border border-[#3a7ab4] bg-white
+                                           text-[#3a7ab4] text-[10px] font-black uppercase tracking-widest
+                                           hover:bg-[#f4f8fc]">✎ Edit</button>
+                                <button type="button" data-idx="${m.idx}" onclick="cancelT6MismatchNote(${m.idx})"
+                                    class="t6-mm-cancel mjm-always-open hidden px-2.5 py-1 rounded-lg border border-[#d8cbb4] bg-white
+                                           text-[#5b4a33] text-[10px] font-black uppercase tracking-widest
+                                           hover:bg-[#f5efe4]">Cancel</button>
+                            </span>
+                        </div>
                     </div>`;
             }).join('');
             syncT6MismatchState();
+            /* Drawn, then locked — the boxes have to exist first, and a row
+               redrawn while somebody is mid-edit keeps its open state because
+               _t6MmEditing outlives the render. */
+            setTimeout(syncT6MismatchLocks, 0);
             return list;
         }
 
         /* Colour the panel by whether anything is still unexplained, so the
            admin can see at a glance what the save will leave behind. */
+        /* A SAVED REASON IS READ-ONLY UNTIL SOMEBODY ASKS TO CHANGE IT.
+
+           Per plot, because each plot's reason is its own record. What
+           counts as saved is t6_plotData[idx].savedMismatchNote — what came
+           back from the database — so a reason typed and not yet saved
+           stays open, and one that has been saved arrives locked.
+
+           SHARED SHAPE — syncT2GapLock does the same for the Planting tab's
+           reason. Change one, look at the other. */
+        const _t6MmEditing = new Set();          // plots somebody pressed Edit on
+
+        function syncT6MismatchLocks() {
+            document.querySelectorAll('#t6-mismatch-rows .t6-mm-note').forEach(box => {
+                const idx  = parseInt(box.dataset.idx, 10);
+                const p    = t6_plotData[idx];
+                const saved = String((p && p.savedMismatchNote) || '').trim();
+                const locked = !!saved && !_t6MmEditing.has(idx);
+                box.readOnly = locked;
+                box.classList.toggle('bg-[#f8f4ec]', locked);
+                box.title = locked ? 'Saved — press Edit to change it' : '';
+                const wrap = box.parentElement;
+                const edit   = wrap && wrap.querySelector('.t6-mm-edit');
+                const cancel = wrap && wrap.querySelector('.t6-mm-cancel');
+                const meta   = wrap && wrap.querySelector('.t6-mm-meta');
+                if (edit)   edit.classList.toggle('hidden', !locked);
+                if (cancel) cancel.classList.toggle('hidden', locked || !saved);
+                if (meta) meta.innerText = locked
+                    ? 'Saved. Press Edit to change it.'
+                    : (saved ? 'Editing. Save reasons to keep it, or Cancel to put back what was there.' : '');
+            });
+        }
+        function editT6MismatchNote(idx) {
+            _t6MmEditing.add(idx);
+            syncT6MismatchLocks();
+            const box = document.getElementById(`t6-mm-note-${idx}`);
+            if (box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
+        }
+        function cancelT6MismatchNote(idx) {
+            _t6MmEditing.delete(idx);
+            const box = document.getElementById(`t6-mm-note-${idx}`);
+            const p = t6_plotData[idx];
+            if (box) box.value = String((p && p.savedMismatchNote) || '');
+            syncT6MismatchLocks();
+            syncT6MismatchState();
+        }
+
         /* SAVE JUST THE REASONS.
 
            The other half of saveT2GapNote — same job, 3rd Culling's plots.
@@ -11685,8 +11861,14 @@ Thank you.`;
                         if (error) throw error;
                         written++;
                     }
+                    /* What is in the database now is the saved reason, so the
+                       box goes back to read-only exactly as it would on a
+                       fresh load. */
+                    p.savedMismatchNote = note || null;
+                    _t6MmEditing.delete(m.idx);
                 }
                 syncT6MismatchState();
+                syncT6MismatchLocks();
                 /* A REASON THAT DOES NOT CLEAR THE FLAG IS A REASON NOBODY
                    ACTED ON. saveTab6 puts this batch on HQ's Amendment Needed
                    list while any drone map is unexplained and takes it off
