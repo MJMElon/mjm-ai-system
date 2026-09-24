@@ -1542,14 +1542,18 @@ function buildMovementSection(scope, ev, ctx) {
   let rows = [];
   for (const k of Object.keys(buc)) {
     const closing = netOfRow(scope, buc[k]);
-    // A batch/plot pair that's fully culled, sold or moved on still shows —
-    // Balance 0, but its Culled/Sold/etc activity for the period stays
-    // visible. Hiding it used to read as "this row was silently deleted"
-    // when a batch happened to finish clearing out during the very period
-    // being looked at (batch 242 in B4, culled AND sold out in the same
-    // September this was run for).
+    const periodRow = per[k] || emptyRow(scope);
+    // A batch/plot pair still shows if there's anything to actually see:
+    // either it has movement THIS period (batch 242 in B4 — culled and
+    // sold out, both in September, Balance ends at 0 but the row still
+    // earns its place), or something's still standing (closing !== 0).
+    // Neither — a batch whose only activity was months ago and has sat at
+    // 0 ever since, with nothing happening as at the date picked — has
+    // nothing to report and stays hidden, same as before.
+    const hasPeriodActivity = MOVE_COLS[scope].some(c => (periodRow[c.key] || 0) !== 0);
+    if (closing === 0 && !hasPeriodActivity) continue;
     const bfClosing = netOfRow(scope, bf[k] || emptyRow(scope));
-    rows.push({ ...meta[k], ...(per[k] || emptyRow(scope)), closing, bf: bfClosing,
+    rows.push({ ...meta[k], ...periodRow, closing, bf: bfClosing,
                 age: ageLabel(batchPlantedAt[_mvBatchKey(meta[k].batch)]) });
   }
 
