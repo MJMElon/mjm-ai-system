@@ -2247,7 +2247,23 @@
                                         <button type="button" onclick="cancelEditCalibration()" class="px-3 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[10px] font-black uppercase tracking-widest rounded hover:bg-[#fff5f5]">Cancel</button>
                                     </div>
 
-                                    <div class="grid grid-cols-1 md:grid-cols-[180px_180px_190px_1fr_1fr_auto] gap-3 items-end pt-2">
+                                    <div class="grid grid-cols-1 md:grid-cols-[160px_170px_180px_190px_1fr_auto] gap-3 items-end pt-2">
+                                        <!-- WHEN IT HAPPENED, not when it was keyed.
+
+                                             Those are different days and the gap can be
+                                             weeks: a miscount found on the ground in March
+                                             gets typed in when somebody next opens the
+                                             batch. It goes into transaction_date, the same
+                                             column every other movement uses, so the
+                                             Movement Report's date filter already picks it
+                                             up through _logDate() with nothing to change
+                                             there. Rows saved before this field existed
+                                             have no date and go on falling back to the day
+                                             they were written. -->
+                                        <div>
+                                            <label class="label-style">Date</label>
+                                            <input type="date" id="t7-cal-date" class="input-style">
+                                        </div>
                                         <div>
                                             <label class="label-style">Adjustment Qty (+/-)</label>
                                             <input type="number" id="t7-cal-qty" class="input-style" placeholder="e.g. 50 or -20" step="1">
@@ -2767,6 +2783,11 @@
                 approved: !!approved,
                 approvedBy: approved ? approved[1].trim() : '',
                 approvedAt: approved ? approved[2].trim() : '',
+                /* The day the adjustment HAPPENED, as keyed on the form.
+                   Empty on every row saved before the field existed — those
+                   fall back to `at`, the day the row was written, which is
+                   the only date they ever had. */
+                date: r.transaction_date ? String(r.transaction_date).slice(0, 10) : '',
                 at: r.created_at || null
             };
         }
@@ -2883,7 +2904,7 @@
             let rows = [];
             try {
                 const { data, error } = await _supabase.from('shared_inventory_logs')
-                    .select('id, quantity_change, remark, created_at')
+                    .select('id, quantity_change, remark, created_at, transaction_date')
                     .eq('batch_name', batch)
                     .eq('transaction_type', 'Stock_Calibration')
                     .order('created_at', { ascending: false });
@@ -2944,6 +2965,7 @@
                     <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-2 border-t border-[#e8dcc8]">
                         <span class="text-base font-black tabular-nums ${r.qty > 0 ? 'text-[#4a7a2e]' : 'text-[#a83020]'} min-w-[52px]">${r.qty > 0 ? '+' : ''}${r.qty.toLocaleString()}</span>
                         <span class="text-sm font-black text-[#3d2610] min-w-[64px]">${esc(r.plot) || '—'}</span>
+                        ${r.date ? `<span class="shrink-0 text-[10px] font-bold text-[#8a7a68] tabular-nums" title="The day this adjustment happened">${esc(formatAuditDate(r.date))}</span>` : ''}
                         <span class="text-[11px] font-bold text-[#8a7a68] flex-1 min-w-[160px]">${esc(r.reason) || '—'}</span>
                         ${r.approved
                             ? `<span class="shrink-0 text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest bg-[#f0f8ec] border border-[#c3e6cb] rounded px-2 py-1">Approved${r.approvedBy ? ' · ' + esc(r.approvedBy) : ''}</span>`
@@ -2975,6 +2997,14 @@
             // and any planted trays for this batch.
             _t7PopulatePlotDropdown();
 
+            /* Start a fresh form on today. Not while an edit is open: editing
+               an old row deliberately leaves the date empty so the save asks
+               for the real one rather than accepting today by default. */
+            const dateEl = document.getElementById('t7-cal-date');
+            if (dateEl && !dateEl.value && !_t7EditingId) {
+                dateEl.value = new Date().toISOString().split('T')[0];
+            }
+
             const histEl = document.getElementById('t7-cal-history');
             const setStat = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
             if (!histEl) return;
@@ -2987,7 +3017,7 @@
             await mjmLoadNames(); // "Edited By" column shows names, not emails
             const { data: rows, error } = await _supabase
                 .from('shared_inventory_logs')
-                .select('id, quantity_change, remark, created_at, last_edited_by, transaction_type')
+                .select('id, quantity_change, remark, created_at, last_edited_by, transaction_type, transaction_date')
                 .eq('batch_name', batchId)
                 .eq('transaction_type', 'Stock_Calibration')
                 .order('created_at', { ascending: false });
@@ -3051,20 +3081,28 @@
                        under somebody else's approval is exactly what that
                        rule is for. */
                     const editBtn = adminActions
-                        ? `<button type="button" onclick="editCalibration('${esc(r.id)}', ${q}, '${esc(reportTxt)}', '${esc(plotTxt)}', '${esc(reasonTxt)}', '${esc(cal.side)}', true)" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[9px] font-black uppercase rounded hover:bg-[#f0f8ff] ml-1" title="Edit this approved adjustment — it returns to pending and needs approving again">Edit</button>`
+                        ? `<button type="button" onclick="editCalibration('${esc(r.id)}', ${q}, '${esc(reportTxt)}', '${esc(plotTxt)}', '${esc(reasonTxt)}', '${esc(cal.side)}', '${esc(cal.date)}', true)" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[9px] font-black uppercase rounded hover:bg-[#f0f8ff] ml-1" title="Edit this approved adjustment — it returns to pending and needs approving again">Edit</button>`
                         : '';
                     actionsCell = `<td class="px-3 py-2 whitespace-nowrap"><span class="inline-flex items-center gap-1 px-2 py-1 bg-[#f0f8ec] border border-[#c3e6cb] text-[#3d4f1e] text-[9px] font-black uppercase tracking-wider rounded" title="Approved${approvedBy ? ' by ' + approvedBy : ''}${approvedAt ? ' on ' + approvedAt : ''}">🔒 Approved${whoTxt}${whenTxt}</span>${editBtn}</td>`;
                 } else if (adminActions) {
                     actionsCell = `<td class="px-3 py-2 whitespace-nowrap">
-                        <button type="button" onclick="editCalibration('${esc(r.id)}', ${q}, '${esc(reportTxt)}', '${esc(plotTxt)}', '${esc(reasonTxt)}', '${esc(cal.side)}')" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[9px] font-black uppercase rounded hover:bg-[#f0f8ff] mr-1">Edit</button>
+                        <button type="button" onclick="editCalibration('${esc(r.id)}', ${q}, '${esc(reportTxt)}', '${esc(plotTxt)}', '${esc(reasonTxt)}', '${esc(cal.side)}', '${esc(cal.date)}')" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[9px] font-black uppercase rounded hover:bg-[#f0f8ff] mr-1">Edit</button>
                         <button type="button" onclick="deleteCalibration('${esc(r.id)}')" class="px-2 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[9px] font-black uppercase rounded hover:bg-[#fff5f5] mr-1">Del</button>
                         <button type="button" onclick="approveCalibration('${esc(r.id)}')" class="px-2 py-1 bg-[#4a7a2e] text-white text-[9px] font-black uppercase rounded hover:bg-[#3d6624]">Approve</button>
                     </td>`;
                 } else {
                     actionsCell = `<td class="px-3 py-2 text-[10px] text-[#8a7a68]">🔒</td>`;
                 }
+                /* The day it HAPPENED, which is the column's job. Rows saved
+                   before the Date field existed have none, so they go on
+                   showing the day they were keyed — marked, so nobody reads a
+                   keyed date as a found-on date. The tooltip carries the other
+                   one either way. */
+                const dateCell = cal.date
+                    ? `<td class="px-3 py-2 text-[11px] font-bold text-[#3d2610] whitespace-nowrap" title="Keyed in on ${esc(formatAuditDate(r.created_at))}">${formatAuditDate(cal.date)}</td>`
+                    : `<td class="px-3 py-2 text-[11px] font-bold text-[#8a7a68] whitespace-nowrap" title="No date was recorded for this adjustment — this is the day it was keyed in. Edit it to set when it actually happened.">${formatAuditDate(r.created_at)} <span class="text-[9px] font-black uppercase tracking-wider text-[#c07820]">keyed</span></td>`;
                 return `<tr class="border-t border-[#e8dcc8]" data-cal-id="${esc(r.id)}" data-cal-approved="${isApproved ? '1' : '0'}">
-                    <td class="px-3 py-2 text-[11px] font-bold text-[#3d2610]">${formatAuditDate(r.created_at)}</td>
+                    ${dateCell}
                     <td class="px-3 py-2 text-sm font-black ${cls}">${sign}${q.toLocaleString()}</td>
                     <td class="px-3 py-2 text-[11px] text-[#3a7ab4] font-bold">${esc(reportTxt) || '—'}</td>
                     <td class="px-3 py-2 text-[11px] text-[#4a7a2e] font-bold">${esc(plotTxt) || '—'}</td>
@@ -3130,7 +3168,7 @@
            guessing at the DOM: the old check read "no Edit button rendered" as
            "approved", which stopped being true the moment approved rows grew
            an Edit button of their own. */
-        function editCalibration(id, qty, report, plot, reason, side, wasApproved) {
+        function editCalibration(id, qty, report, plot, reason, side, date, wasApproved) {
             if (!_t7IsAdmin()) {
                 showToast('Only admins can edit calibration entries.', 'error');
                 return;
@@ -3140,12 +3178,18 @@
             const reportEl = document.getElementById('t7-cal-report');
             const plotEl   = document.getElementById('t7-cal-plot');
             const reasonEl = document.getElementById('t7-cal-reason');
+            const dateEl   = document.getElementById('t7-cal-date');
             const btn      = document.getElementById('t7-cal-save-btn');
             const banner   = document.getElementById('t7-cal-edit-banner');
             if (qtyEl)    qtyEl.value    = qty;
             if (reportEl) reportEl.value = report || '';
             if (plotEl)   plotEl.value   = plot   || '';
             if (reasonEl) reasonEl.value = reason || '';
+            /* An old row has no date. Today is NOT a safe guess for one —
+               saving would stamp a months-old correction with today and it
+               would read as new — so the field is left empty and the save
+               asks for it. */
+            if (dateEl)   dateEl.value   = date   || '';
             if (btn)      btn.innerText  = 'Update Adjustment';
             const msg = document.getElementById('t7-cal-edit-msg');
             if (msg) msg.innerText = wasApproved
@@ -3163,12 +3207,17 @@
             const reportEl = document.getElementById('t7-cal-report');
             const plotEl   = document.getElementById('t7-cal-plot');
             const reasonEl = document.getElementById('t7-cal-reason');
+            const dateEl   = document.getElementById('t7-cal-date');
             const btn      = document.getElementById('t7-cal-save-btn');
             const banner   = document.getElementById('t7-cal-edit-banner');
             if (qtyEl)    qtyEl.value    = '';
             if (reportEl) reportEl.value = '';
             if (plotEl)   plotEl.value   = '';
             if (reasonEl) reasonEl.value = '';
+            // A fresh form starts on today — most adjustments are keyed the
+            // day they are found, and a wrong date is easier to notice sitting
+            // in the box than an empty one is to remember to fill.
+            if (dateEl)   dateEl.value   = new Date().toISOString().split('T')[0];
             if (btn)      btn.innerText  = 'Save Adjustment';
             const msg = document.getElementById('t7-cal-edit-msg');
             if (msg) msg.innerText = '✏️ Editing an existing adjustment. Saving will update the record in place.';
@@ -3245,12 +3294,15 @@
             const reportEl = document.getElementById('t7-cal-report');
             const plotEl   = document.getElementById('t7-cal-plot');
             const reasonEl = document.getElementById('t7-cal-reason');
+            const dateEl   = document.getElementById('t7-cal-date');
             const btn      = document.getElementById('t7-cal-save-btn');
             const qty      = parseInt(qtyEl.value, 10);
             const report   = (reportEl?.value || '').trim();
             const plot     = (plotEl?.value   || '').trim();
             const reason   = (reasonEl.value  || '').trim();
+            const date     = (dateEl?.value   || '').trim();
             if (isNaN(qty) || qty === 0) { showToast('Enter a non-zero adjustment quantity (use a negative value to subtract).', 'error'); qtyEl.focus(); return; }
+            if (!date)   { showToast('Enter the date this adjustment happened — not the day you are keying it in.', 'error'); dateEl?.focus(); return; }
             if (!report) { showToast('Select which report this calibration relates to.', 'error'); reportEl.focus(); return; }
             if (!plot)   { showToast('Select which plot or tray this calibration applies to.', 'error'); plotEl.focus(); return; }
             if (!reason) { showToast('Reason is required for every calibration.', 'error'); reasonEl.focus(); return; }
@@ -3266,6 +3318,12 @@
                 transaction_type: 'Stock_Calibration',
                 plot_name: plot,
                 quantity_change: qty,
+                /* The day it happened. transaction_date is the column every
+                   other movement in this ledger uses for exactly this, so the
+                   Movement Report's _logDate() already reads it and its date
+                   filter puts the adjustment in the month it belongs to
+                   instead of the month it was typed. */
+                transaction_date: date,
                 /* Side: is read back by _parseCalibration. A row without it is
                    a seed-count adjustment, which is what every row written
                    before this existed meant.
