@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NELOS — User Setting</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%237c3aed%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3ENL%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%23efc7e2%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%233b162f%27 text-anchor=%27middle%27%3ENL%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
@@ -13,16 +13,16 @@
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
   * { font-family:'Outfit', system-ui, sans-serif; }
-  body { background:#faf5ff; margin:0; }
+  body { background:#fcf5fa; margin:0; }
   .hidden { display:none !important; }
   /* The way out sits above the title, as a button rather than a link — it
      is pressed as often as anything else on the page. */
   .backlink { display:inline-flex; align-items:center; gap:7px; margin-bottom:14px;
-              padding:9px 16px; border-radius:999px; border:1.5px solid #ddd6fe; background:#fff;
-              color:#6d28d9; font-size:10.5px; font-weight:900; letter-spacing:.08em;
+              padding:9px 16px; border-radius:999px; border:1.5px solid #f2cfe7; background:#fff;
+              color:#913673; font-size:10.5px; font-weight:900; letter-spacing:.08em;
               text-transform:uppercase; text-decoration:none;
-              box-shadow:0 3px 10px rgba(124,58,237,.10); }
-  .backlink:hover { background:#ede9fe; }
+              box-shadow:0 3px 10px rgba(188,73,150,.10); }
+  .backlink:hover { background:#f8e2f1; }
 
   .page-title { font-size:18px; font-weight:900; color:#1e293b; text-align:center; margin:0 0 14px; }
 
@@ -30,37 +30,37 @@
      row read as three things to press; a tab strip reads as one thing with
      three faces, which is what this is. */
   .tabs { display:flex; gap:26px; margin-bottom:18px; flex-wrap:wrap;
-          border-bottom:1.5px solid #ede9fe; justify-content:center; }
+          border-bottom:1.5px solid #f8e2f1; justify-content:center; }
   .tab { padding:0 2px 10px; border:none; background:none; cursor:pointer;
          color:#94a3b8; font-size:12.5px; font-weight:800; letter-spacing:.01em;
          border-bottom:2.5px solid transparent; margin-bottom:-1.5px; }
-  .tab:hover { color:#6d28d9; }
-  .tab.on { color:#4c1d95; font-weight:900; border-bottom-color:#7c3aed; }
+  .tab:hover { color:#913673; }
+  .tab.on { color:#511f41; font-weight:900; border-bottom-color:#bc4996; }
 
-  .card { background:#fff; border:1.5px solid #ede9fe; border-radius:16px; margin-bottom:12px;
-          box-shadow:0 4px 16px rgba(124,58,237,.06); overflow:hidden; }
+  .card { background:#fff; border:1.5px solid #f8e2f1; border-radius:16px; margin-bottom:12px;
+          box-shadow:0 4px 16px rgba(188,73,150,.06); overflow:hidden; }
 
   /* ── Person row ─────────────────────────────────────────────── */
   .person { display:flex; align-items:center; gap:11px; padding:13px 16px; cursor:pointer; }
-  .person:hover { background:#faf5ff; }
-  .av { width:36px; height:36px; border-radius:10px; background:#ede9fe; color:#6d28d9; flex-shrink:0;
+  .person:hover { background:#fcf5fa; }
+  .av { width:36px; height:36px; border-radius:10px; background:#f8e2f1; color:#913673; flex-shrink:0;
         display:flex; align-items:center; justify-content:center; font-weight:900; font-size:12.5px; }
-  .av-admin { background:#7c3aed; color:#fff; }
+  .av-admin { background:#bc4996; color:#fff; }
   .p-name { font-size:13.5px; font-weight:800; color:#1e293b; }
   .p-mail { font-size:11px; font-weight:600; color:#94a3b8; }
   .p-pin  { font-size:10.5px; font-weight:900; letter-spacing:.05em; margin-top:3px; }
-  .pin-set   { color:#6d28d9; }
+  .pin-set   { color:#913673; }
   .pin-unset { color:#b45309; }
   .lvl { font-size:8.5px; font-weight:900; letter-spacing:.09em; text-transform:uppercase;
          padding:2px 7px; border-radius:5px; background:#f1f5f9; color:#64748b; margin-left:6px; }
-  .lvl-admin { background:#ede9fe; color:#6d28d9; }
-  .chev { margin-left:auto; color:#c4b5fd; font-size:17px; flex-shrink:0; }
+  .lvl-admin { background:#f8e2f1; color:#913673; }
+  .chev { margin-left:auto; color:#f2cfe7; font-size:17px; flex-shrink:0; }
 
   /* ── System group ───────────────────────────────────────────── */
   /* Handlers are grouped the way routing is: one closed block per system,
      opened only when somebody in it needs editing. */
-  .grp-body { border-top:1.5px solid #ede9fe; background:#fdfcff; }
-  .person + .person { border-top:1px dashed #ede9fe; }
+  .grp-body { border-top:1.5px solid #f8e2f1; background:#fefbfd; }
+  .person + .person { border-top:1px dashed #f8e2f1; }
   .grp-empty { font-size:12px; font-weight:700; color:#cbd5e1; padding:14px 18px; }
 
   /* ── Pending allocation ─────────────────────────────────────── */
@@ -80,32 +80,32 @@
   .res-mail { font-size:10.5px; font-weight:600; color:#94a3b8; }
   .res-add { margin-left:auto; flex-shrink:0; display:inline-flex; align-items:center; gap:6px;
              padding:7px 14px; border-radius:999px; border:none; cursor:pointer;
-             background:#7c3aed; color:#fff; font-size:9.5px; font-weight:900;
+             background:#bc4996; color:#fff; font-size:9.5px; font-weight:900;
              letter-spacing:.08em; text-transform:uppercase; }
-  .res-add:hover { background:#6d28d9; }
+  .res-add:hover { background:#913673; }
   .res-add:disabled { opacity:.5; cursor:wait; }
   .res-has { margin-left:auto; flex-shrink:0; font-size:9.5px; font-weight:900; letter-spacing:.06em;
              text-transform:uppercase; color:#cbd5e1; }
   .res-msg { padding:12px; font-size:12px; font-weight:700; color:#94a3b8; }
 
   /* The handler's number, standing in for the avatar once they have one. */
-  .seat-no { width:36px; height:36px; border-radius:10px; background:#7c3aed; color:#fff;
+  .seat-no { width:36px; height:36px; border-radius:10px; background:#bc4996; color:#fff;
              flex-shrink:0; display:flex; align-items:center; justify-content:center;
              font-weight:900; font-size:15px; }
 
-  .panel { padding:2px 16px 14px 63px; border-top:1px dashed #ede9fe; background:#fdfcff; }
+  .panel { padding:2px 16px 14px 63px; border-top:1px dashed #f8e2f1; background:#fefbfd; }
   .panel .lbl { margin:14px 0 4px; }
 
   /* The person being edited, ringed. The row and its panel are one block
      so the ring closes round both, and the row keeps its own tint so the
      name stays attached to the settings under it. */
-  .editing { border:1.5px solid #a78bfa; border-radius:14px; overflow:hidden; margin:6px 0;
-             box-shadow:0 6px 20px -8px rgba(124,58,237,.35); }
-  .person-editing { background:#f5f3ff; }
+  .editing { border:1.5px solid #e4a0ce; border-radius:14px; overflow:hidden; margin:6px 0;
+             box-shadow:0 6px 20px -8px rgba(188,73,150,.35); }
+  .person-editing { background:#fcf5fa; }
   .editing-tag { font-size:9px; font-weight:900; letter-spacing:.1em; text-transform:uppercase;
-                 color:#6d28d9; background:#ede9fe; padding:3px 9px; border-radius:999px;
+                 color:#913673; background:#f8e2f1; padding:3px 9px; border-radius:999px;
                  flex-shrink:0; }
-  .editing .panel { border-top:1px solid #ddd6fe; background:#fff; }
+  .editing .panel { border-top:1px solid #f2cfe7; background:#fff; }
 
   /* One thing, one row: a tick box and a name, and no box drawn round
      either. A bordered card per line turned a ten-item form into a wall of
@@ -122,16 +122,16 @@
   .acc-row { display:inline-flex; align-items:center; gap:9px; padding:4px 8px 4px 2px;
              border-radius:7px; border:none; background:none; cursor:pointer;
              font-size:12.5px; font-weight:700; color:#334155; }
-  .acc-row:hover { background:#f5f3ff; color:#1e293b; }
-  .acc-row input { width:15px; height:15px; accent-color:#7c3aed; flex-shrink:0; margin:0; }
+  .acc-row:hover { background:#fcf5fa; color:#1e293b; }
+  .acc-row input { width:15px; height:15px; accent-color:#bc4996; flex-shrink:0; margin:0; }
   .acc-row:has(input:checked) { color:#1e293b; font-weight:800; }
   /* The home queue is Case Handlers' to set, so it is shown, ticked, and
      not editable here. */
   .acc-row-home { cursor:default; color:#94a3b8; }
   .acc-row-home:hover { background:none; color:#94a3b8; }
   /* "All" is a control over the rows under it rather than one of them. */
-  .acc-row-all { font-weight:900; color:#6d28d9; }
-  .acc-row-all:has(input:checked) { color:#6d28d9; }
+  .acc-row-all { font-weight:900; color:#913673; }
+  .acc-row-all:has(input:checked) { color:#913673; }
 
   /* The end of the form, at its end: Cancel then Save, hard right. */
   .panel-acts { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
@@ -140,20 +140,20 @@
          display:block; margin:12px 0 6px; }
   .inp { width:100%; font-size:13px; font-weight:600; color:#1e293b; background:#f8fafc;
          border:1.5px solid #e2e8f0; border-radius:10px; padding:9px 12px; outline:none; box-sizing:border-box; }
-  .inp:focus { border-color:#a78bfa; background:#fff; box-shadow:0 0 0 3px rgba(167,139,250,.18); }
+  .inp:focus { border-color:#e4a0ce; background:#fff; box-shadow:0 0 0 3px rgba(167,139,250,.18); }
 
   /* ── Number ticks ───────────────────────────────────────────── */
   .seat-list { display:flex; flex-direction:column; gap:5px; }
   .seat-row { display:flex; align-items:center; gap:9px; padding:7px 11px; border-radius:10px;
-              border:1.5px solid #e9e3fb; background:#fff; cursor:pointer; }
-  .seat-row:hover { border-color:#c4b5fd; }
-  .seat-row.on { border-color:#7c3aed; background:#f5f3ff; }
+              border:1.5px solid #f8e2f1; background:#fff; cursor:pointer; }
+  .seat-row:hover { border-color:#f2cfe7; }
+  .seat-row.on { border-color:#bc4996; background:#fcf5fa; }
   .seat-row.taken { opacity:.55; cursor:not-allowed; background:#f8fafc; }
-  .seat-row input { width:16px; height:16px; accent-color:#7c3aed; flex-shrink:0; }
-  .seat-badge { width:24px; height:24px; border-radius:7px; background:#ede9fe; color:#6d28d9;
+  .seat-row input { width:16px; height:16px; accent-color:#bc4996; flex-shrink:0; }
+  .seat-badge { width:24px; height:24px; border-radius:7px; background:#f8e2f1; color:#913673;
                 display:flex; align-items:center; justify-content:center;
                 font-size:12px; font-weight:900; flex-shrink:0; }
-  .seat-row.on .seat-badge { background:#7c3aed; color:#fff; }
+  .seat-row.on .seat-badge { background:#bc4996; color:#fff; }
   .seat-who { font-size:12.5px; font-weight:700; color:#475569; }
   /* A plain plus at the button's own weight — the full-width one drew thin
      and pale, and these are the buttons people are looking for. */
@@ -164,10 +164,10 @@
      under whatever the last row happened to be. */
   .seat-add { display:flex; align-items:center; justify-content:center; gap:6px;
               margin:auto 9px 0; padding:8px 10px; border-radius:9px; cursor:pointer;
-              border:1.5px dashed #ddd6fe; background:none; box-sizing:border-box;
-              font-family:inherit; color:#8b5cf6; font-size:11.5px; font-weight:800;
+              border:1.5px dashed #f2cfe7; background:none; box-sizing:border-box;
+              font-family:inherit; color:#cf6eaf; font-size:11.5px; font-weight:800;
               transition:all .15s; }
-  .seat-add:hover { color:#6d28d9; border-color:#a78bfa; background:#faf8ff; }
+  .seat-add:hover { color:#913673; border-color:#e4a0ce; background:#fefafd; }
   .seat-hint { font-size:12px; font-weight:700; color:#cbd5e1; padding:4px 0; }
 
   /* ── One card per system, side by side ──────────────────────── */
@@ -180,28 +180,28 @@
   /* A column, so the add button can be pushed to the floor of the card and
      every card in a row shows it on the same line — a system with one
      handler and one with four end at the same place. */
-  .sys-card { background:#fff; border:1.5px solid #ede9fe; border-radius:13px;
-              box-shadow:0 3px 12px rgba(124,58,237,.05); padding-bottom:9px;
+  .sys-card { background:#fff; border:1.5px solid #f8e2f1; border-radius:13px;
+              box-shadow:0 3px 12px rgba(188,73,150,.05); padding-bottom:9px;
               display:flex; flex-direction:column; }
   .sys-head { display:flex; align-items:baseline; gap:7px; flex-wrap:wrap;
-              padding:12px 13px 9px; border-bottom:1px solid #f3f0fd; }
-  .sys-head .sys-name { font-size:13px; font-weight:900; color:#4c1d95; }
+              padding:12px 13px 9px; border-bottom:1px solid #fcf3f9; }
+  .sys-head .sys-name { font-size:13px; font-weight:900; color:#511f41; }
   /* Where the head count used to sit. "2 people" was the list underneath
      said again as a number; the one thing this corner is worth is the way
      into changing it. */
   .sys-edit { margin-left:auto; flex-shrink:0; min-width:26px; height:24px; padding:0 8px;
               border-radius:7px; border:1.5px solid transparent; background:none;
-              font-family:inherit; font-size:12.5px; font-weight:900; color:#a78bfa;
+              font-family:inherit; font-size:12.5px; font-weight:900; color:#e4a0ce;
               cursor:pointer; transition:all .15s; }
-  .sys-card:hover .sys-edit { color:#7c3aed; border-color:#ede9fe; }
-  .sys-edit:hover { background:#ede9fe; color:#5b21b6; border-color:#ddd6fe; }
+  .sys-card:hover .sys-edit { color:#bc4996; border-color:#f8e2f1; }
+  .sys-edit:hover { background:#f8e2f1; color:#6e2959; border-color:#f2cfe7; }
   .sys-edit.on, .sys-card:hover .sys-edit.on {
-              background:#7c3aed; border-color:#7c3aed; color:#fff;
+              background:#bc4996; border-color:#bc4996; color:#fff;
               font-size:9.5px; letter-spacing:.1em; text-transform:uppercase; }
-  .sys-edit.on:hover { background:#6d28d9; border-color:#6d28d9; }
+  .sys-edit.on:hover { background:#913673; border-color:#913673; }
   /* An open card is ringed, so on a grid of four it is never a question
      which one is being changed. */
-  .sys-card:has(.sys-edit.on) { border-color:#c4b5fd; box-shadow:0 0 0 3px rgba(124,58,237,.10); }
+  .sys-card:has(.sys-edit.on) { border-color:#f2cfe7; box-shadow:0 0 0 3px rgba(188,73,150,.10); }
 
   /* ── A system's numbered slots ──────────────────────────────── */
   /* One row per number, holding a name or empty. Filling one is choosing
@@ -216,13 +216,13 @@
   .slots { display:flex; flex-direction:column; gap:2px; padding:9px 9px 4px; flex:1; }
   .slot { display:flex; align-items:center; gap:7px; padding:5px 6px; border-radius:9px;
           border:1.5px solid transparent; }
-  .slot:hover { background:#faf8ff; }
-  .slot-no { flex-shrink:0; width:20px; font-size:12px; font-weight:900; color:#7c3aed;
+  .slot:hover { background:#fefafd; }
+  .slot-no { flex-shrink:0; width:20px; font-size:12px; font-weight:900; color:#bc4996;
              font-variant-numeric:tabular-nums; }
   .slot-name { flex:1; min-width:0; font-size:12.5px; font-weight:800; color:#1e293b;
                overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .slot-empty .slot-name { font-weight:700; color:#cbd5e1; }
-  .slot-empty .slot-no { color:#ddd6fe; }
+  .slot-empty .slot-no { color:#f2cfe7; }
   .slot-pick { padding:6px 9px; font-size:12.5px; flex:1; min-width:0; }
 
   /* The grip beside the number fades in on the row rather than sitting on
@@ -236,29 +236,29 @@
   .slot-none strong { font-weight:900; }
 
   .grip { flex-shrink:0; width:13px; height:16px; opacity:0; cursor:grab;
-          transition:opacity .15s; color:#c4b5fd; }
+          transition:opacity .15s; color:#f2cfe7; }
   .slot:hover .grip, .slot:focus-within .grip { opacity:1; }
   .grip:active { cursor:grabbing; }
   .grip svg { width:13px; height:16px; fill:currentColor; display:block; }
   .slot-empty .grip { visibility:hidden; }
 
   /* Dragging: the row being carried goes pale, and the row it would land
-     on grows a violet edge on the side it would land — above when it is
+     on grows a pink edge on the side it would land — above when it is
      moving up the list, below when it is moving down. */
   .slot.dragging { opacity:.4; }
-  .slot.over-up   { box-shadow:inset 0 2.5px 0 #7c3aed; background:#f5f3ff; }
-  .slot.over-down { box-shadow:inset 0 -2.5px 0 #7c3aed; background:#f5f3ff; }
+  .slot.over-up   { box-shadow:inset 0 2.5px 0 #bc4996; background:#fcf5fa; }
+  .slot.over-down { box-shadow:inset 0 -2.5px 0 #bc4996; background:#fcf5fa; }
 
   /* The home system on User Access: ticked, and not this screen's to change. */
-  .right-home { background:#f5f3ff; border-color:#ddd6fe; cursor:default; }
-  .right-home:hover { border-color:#ddd6fe; }
+  .right-home { background:#fcf5fa; border-color:#f2cfe7; cursor:default; }
+  .right-home:hover { border-color:#f2cfe7; }
 
   /* ── What they may do to a case ─────────────────────────────── */
   .rights { display:flex; flex-direction:column; gap:5px; }
   .right-row { display:flex; align-items:flex-start; gap:9px; padding:8px 11px; border-radius:10px;
-               border:1.5px solid #e9e3fb; background:#fff; cursor:pointer; }
-  .right-row:hover { border-color:#c4b5fd; }
-  .right-row input { width:16px; height:16px; accent-color:#7c3aed; flex-shrink:0; margin-top:2px; }
+               border:1.5px solid #f8e2f1; background:#fff; cursor:pointer; }
+  .right-row:hover { border-color:#f2cfe7; }
+  .right-row input { width:16px; height:16px; accent-color:#bc4996; flex-shrink:0; margin-top:2px; }
   .right-ico { font-size:14px; flex-shrink:0; }
   .right-name { display:block; font-size:12.5px; font-weight:800; color:#1e293b; }
   .right-note { display:block; font-size:10.5px; font-weight:600; color:#94a3b8; margin-top:1px; line-height:1.45; }
@@ -267,37 +267,37 @@
   .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 17px; border-radius:10px;
          border:none; cursor:pointer; font-size:10px;
          font-weight:900; letter-spacing:.09em; text-transform:uppercase; }
-  .btn-save { background:#7c3aed; color:#fff; } .btn-save:hover { background:#6d28d9; }
-  .btn-ghost { background:#ede9fe; color:#6d28d9; }
+  .btn-save { background:#bc4996; color:#fff; } .btn-save:hover { background:#913673; }
+  .btn-ghost { background:#f8e2f1; color:#913673; }
 
   /* ── Routing ────────────────────────────────────────────────── */
-  .sys-block { border-bottom:1.5px solid #ede9fe; }
+  .sys-block { border-bottom:1.5px solid #f8e2f1; }
   .sys-block:last-child { border-bottom:none; }
   .sys-row { width:100%; display:flex; align-items:center; gap:10px; padding:15px 18px;
              background:#fff; border:none; cursor:pointer; text-align:left; font:inherit; }
-  .sys-row:hover { background:#faf5ff; }
-  .sys-chev { color:#a78bfa; font-size:13px; width:12px; flex-shrink:0; }
+  .sys-row:hover { background:#fcf5fa; }
+  .sys-chev { color:#e4a0ce; font-size:13px; width:12px; flex-shrink:0; }
   .sys-ico { font-size:17px; }
-  .sys-name { font-size:14px; font-weight:900; color:#4c1d95; }
+  .sys-name { font-size:14px; font-weight:900; color:#511f41; }
   .sys-count { margin-left:auto; font-size:10px; font-weight:900; letter-spacing:.07em;
-               text-transform:uppercase; color:#a78bfa; }
+               text-transform:uppercase; color:#e4a0ce; }
   .hq-tag { font-size:9px; font-weight:900; letter-spacing:.08em; text-transform:uppercase;
             padding:2px 8px; border-radius:999px; background:#dcfce7; color:#15803d; }
 
   /* The table inside an open block. Four columns: number, case category,
      destination system, PIC. */
-  .rt { padding:0 18px 16px; background:#fdfcff; }
+  .rt { padding:0 18px 16px; background:#fefbfd; }
   .rt-band, .rt-sub, .rt-row { display:grid; grid-template-columns:38px 1fr 1.05fr 1.05fr; gap:12px;
                                align-items:center; }
   .rt-band { padding:14px 0 8px; }
   .rt-band span:first-child { grid-column:1 / 3; }
   .rt-band span:last-child  { grid-column:3 / 5; }
   .rt-band span { font-size:13px; font-weight:900; letter-spacing:.1em; text-transform:uppercase;
-                  color:#4c1d95; border-bottom:2.5px solid #7c3aed; padding-bottom:6px; }
-  .rt-sub { padding:8px 0; border-bottom:1.5px solid #ede9fe; }
+                  color:#511f41; border-bottom:2.5px solid #bc4996; padding-bottom:6px; }
+  .rt-sub { padding:8px 0; border-bottom:1.5px solid #f8e2f1; }
   .rt-sub span { font-size:10px; font-weight:900; letter-spacing:.1em; text-transform:uppercase;
                  color:#94a3b8; }
-  .rt-row { padding:9px 0; border-bottom:1px dashed #ede9fe; align-items:start; }
+  .rt-row { padding:9px 0; border-bottom:1px dashed #f8e2f1; align-items:start; }
   .rt-row:last-child { border-bottom:none; }
   .rt-row.is-default { background:#f8fafc; }
   /* A staged row, marked on the ROW. The tag used to sit inside the PIC
@@ -306,7 +306,7 @@
      the PIC: it means this row is waiting for Save. */
   .rt-row.is-pend { background:#fffbeb; }
   .rt-row.is-default .rt-cat { font-style:italic; color:#64748b; }
-  .rt-n { font-size:12px; font-weight:900; color:#a78bfa; padding-top:8px;
+  .rt-n { font-size:12px; font-weight:900; color:#e4a0ce; padding-top:8px;
           font-variant-numeric:tabular-nums; }
   .rt-cat { font-size:13px; font-weight:800; color:#1e293b; padding-top:7px; }
   .cell { display:flex; flex-direction:column; gap:4px; }
@@ -316,11 +316,11 @@
   .rt-foot { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:14px 0 2px; }
   .rt-fallback { font-size:11px; font-weight:700; color:#94a3b8; flex:1; min-width:180px; }
   .rt-empty { padding:18px 0 6px; font-size:12.5px; font-weight:700; color:#94a3b8; }
-  .rt-empty a { color:#7c3aed; font-weight:900; }
+  .rt-empty a { color:#bc4996; font-weight:900; }
   /* Case titles used to live on their own page. They belong to the system
      that raises them, so they are added here, in that system's own block. */
   .rt-add { display:flex; gap:8px; align-items:center; flex-wrap:wrap;
-            padding:13px 0 2px; border-top:1.5px dashed #ede9fe; margin-top:4px; }
+            padding:13px 0 2px; border-top:1.5px dashed #f8e2f1; margin-top:4px; }
   .rt-add .inp { flex:1; min-width:170px; padding:7px 10px; font-size:12.5px; }
   .pend-tag { font-size:9px; font-weight:900; letter-spacing:.08em; text-transform:uppercase;
               padding:2px 8px; border-radius:999px; background:#fef3c7; color:#a16207; }
@@ -336,9 +336,9 @@
     .rt-row .cell { grid-column:2; }
   }
 
-  .note { background:#f5f3ff; border:1px solid #ddd6fe; border-radius:12px; padding:13px 15px; margin-bottom:18px; }
-  .note-h { font-size:10px; font-weight:900; letter-spacing:.11em; text-transform:uppercase; color:#a78bfa; margin-bottom:4px; }
-  .note-p { font-size:12px; font-weight:600; color:#4c1d95; line-height:1.6; }
+  .note { background:#fcf5fa; border:1px solid #f2cfe7; border-radius:12px; padding:13px 15px; margin-bottom:18px; }
+  .note-h { font-size:10px; font-weight:900; letter-spacing:.11em; text-transform:uppercase; color:#e4a0ce; margin-bottom:4px; }
+  .note-p { font-size:12px; font-weight:600; color:#511f41; line-height:1.6; }
 
   #toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); z-index:80;
            padding:11px 20px; border-radius:11px; font-size:12px; font-weight:800; color:#fff;
@@ -829,7 +829,7 @@ function panelHtml(p) {
   return `
     <div class="panel" data-panel="${esc(p.id)}">
       ${admin ? `
-        <p class="text-[11.5px] font-bold text-violet-700 mt-3">
+        <p class="text-[11.5px] font-bold text-[#913673] mt-3">
           A Nelos admin uses every system and may do everything, whatever is ticked here.
         </p>` : ''}
 
@@ -872,7 +872,7 @@ function panelHtml(p) {
       ${!hasRights ? '' : `
       <label class="lbl">What they may do to a case</label>
       ${admin
-        ? '<p class="text-[11.5px] font-bold text-violet-700">An admin may do all of these whatever is ticked here.</p>'
+        ? '<p class="text-[11.5px] font-bold text-[#913673]">An admin may do all of these whatever is ticked here.</p>'
         : ''}
       <div class="acc-list acc-list-rights">
         ${liveRights().map(r => `
