@@ -2247,7 +2247,15 @@
                                         <button type="button" onclick="cancelEditCalibration()" class="px-3 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[10px] font-black uppercase tracking-widest rounded hover:bg-[#fff5f5]">Cancel</button>
                                     </div>
 
-                                    <div class="grid grid-cols-1 md:grid-cols-[160px_170px_180px_190px_1fr_auto] gap-3 items-end pt-2">
+                                    <!-- FIXED TRACKS OVERFLOWED THE CARD. 160+170+180+190 is
+                                         700px before the Reason field and the button, and none
+                                         of it could shrink, so on a laptop the Save button hung
+                                         out past the panel below it and "(required)" was clipped
+                                         off the Reason label. Every track is minmax() now: each
+                                         field keeps a floor it stays readable at and gives back
+                                         the rest, and the button sits on its own row on a narrow
+                                         screen rather than squeezing the fields. -->
+                                    <div class="flex flex-wrap gap-3 items-end pt-2" id="t7-cal-form-grid">
                                         <!-- WHEN IT HAPPENED, not when it was keyed.
 
                                              Those are different days and the gap can be
@@ -2260,13 +2268,16 @@
                                              there. Rows saved before this field existed
                                              have no date and go on falling back to the day
                                              they were written. -->
-                                        <div>
+                                        <div class="flex-1 basis-[150px] min-w-[140px] max-w-[180px]">
                                             <label class="label-style">Date</label>
                                             <input type="date" id="t7-cal-date" class="input-style">
                                         </div>
-                                        <div>
+                                        <div class="flex-1 basis-[150px] min-w-[130px] max-w-[180px]">
                                             <label class="label-style">Adjustment Qty (+/-)</label>
-                                            <input type="number" id="t7-cal-qty" class="input-style" placeholder="e.g. 50 or -20" step="1">
+                                            <!-- oninput keeps the Calibration column in step while an
+                                                 existing row is being edited; keying a new one the box
+                                                 is read-only and the column drives IT instead. -->
+                                            <input type="number" id="t7-cal-qty" class="input-style" placeholder="e.g. 50 or -20" step="1" oninput="t7SumTrayAdj()">
                                         </div>
                                         <!-- WHICH COUNT WAS WRONG used to be asked here, and
                                              is not any more: the REPORT already answers it, and a
@@ -2285,7 +2296,7 @@
                                              taken off the batch total while the transplant record
                                              still counted them into the plot. Filed under
                                              Transplanting, that can no longer happen. -->
-                                        <div>
+                                        <div class="flex-1 basis-[170px] min-w-[150px] max-w-[200px]">
                                             <label class="label-style">Report</label>
                                             <div class="select-wrapper">
                                                 <select id="t7-cal-report" class="input-style" onchange="t7SyncTrayPanel()">
@@ -2300,7 +2311,7 @@
                                                 </select>
                                             </div>
                                         </div>
-                                        <div>
+                                        <div class="flex-1 basis-[180px] min-w-[150px] max-w-[210px]">
                                             <label class="label-style">Plot / Tray</label>
                                             <div class="select-wrapper">
                                                 <select id="t7-cal-plot" class="input-style" onchange="t7SyncTrayPanel()">
@@ -2308,11 +2319,11 @@
                                                 </select>
                                             </div>
                                         </div>
-                                        <div>
+                                        <div class="flex-[2] basis-[220px] min-w-[190px]">
                                             <label class="label-style">Reason (required)</label>
                                             <input type="text" id="t7-cal-reason" class="input-style" placeholder="e.g. Manual count: 50 extra seedlings in plot A">
                                         </div>
-                                        <button type="button" id="t7-cal-save-btn" onclick="saveCalibration()" class="px-6 py-3 rounded-xl bg-[#3d2610] text-white font-black uppercase tracking-widest text-xs hover:bg-[#5a3a1a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Save Adjustment</button>
+                                        <button type="button" id="t7-cal-save-btn" onclick="saveCalibration()" class="shrink-0 whitespace-nowrap px-5 py-3 rounded-xl bg-[#3d2610] text-white font-black uppercase tracking-widest text-xs hover:bg-[#5a3a1a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Save Adjustment</button>
                                     </div>
 
                                     <!-- WHERE THE PLOT'S SEEDLINGS CAME FROM.
@@ -3131,7 +3142,10 @@
                 const dateCell = cal.date
                     ? `<td class="px-3 py-2 text-[11px] font-bold text-[#3d2610] whitespace-nowrap" title="Keyed in on ${esc(formatAuditDate(r.created_at))}">${formatAuditDate(cal.date)}</td>`
                     : `<td class="px-3 py-2 text-[11px] font-bold text-[#8a7a68] whitespace-nowrap" title="No date was recorded for this adjustment — this is the day it was keyed in. Edit it to set when it actually happened.">${formatAuditDate(r.created_at)} <span class="text-[9px] font-black uppercase tracking-wider text-[#c07820]">keyed</span></td>`;
-                return `<tr class="border-t border-[#e8dcc8]" data-cal-id="${esc(r.id)}" data-cal-approved="${isApproved ? '1' : '0'}">
+                /* The tray rides on the row rather than through
+                   editCalibration's argument list, which is already seven long
+                   — and _t7IsRowApproved reads the same row the same way. */
+                return `<tr class="border-t border-[#e8dcc8]" data-cal-id="${esc(r.id)}" data-cal-approved="${isApproved ? '1' : '0'}" data-cal-tray="${esc(cal.tray)}">
                     ${dateCell}
                     <td class="px-3 py-2 text-sm font-black ${cls}">${sign}${q.toLocaleString()}</td>
                     <td class="px-3 py-2 text-[11px] text-[#3a7ab4] font-bold">${esc(reportTxt) || '—'}</td>
@@ -3210,6 +3224,7 @@
            list that looks like a failure. */
         let _t7TxLogs = null, _t7TxLogsBatch = '';
         let _t7TrayMode = false;     // is the Qty box being fed by the tray lines?
+        let _t7EditingTray = '';     // which tray the row being edited belongs to
 
         async function _t7LoadTransplants(batchId) {
             if (_t7TxLogs && _t7TxLogsBatch === batchId) return _t7TxLogs;
@@ -3246,25 +3261,110 @@
             return Object.keys(byTray).map(k => byTray[k]).sort((a, b) => b.qty - a.qty);
         }
 
-        // Keep the Qty box showing the sum of the tray lines while they are
-        // the thing being keyed, so the figure that reaches the batch is the
-        // one on screen and not a second number somebody has to agree with.
+        /* FROM · INITIAL AMOUNT · CALIBRATION · FINAL AMOUNT.
+
+           Grid widths are inline rather than Tailwind arbitrary values so the
+           header, every line and the total row are laid out by one string and
+           cannot drift out of alignment with each other. */
+        const T7_TRAY_COLS = 'display:grid;grid-template-columns:minmax(86px,1.5fr) minmax(64px,1fr) minmax(86px,1fr) minmax(64px,1fr);column-gap:12px;align-items:center;';
+
+        /* TOTAL CALIBRATION IS ALWAYS THE ADJUSTMENT QTY, in both directions:
+             keying a new one  → the Qty box is the sum of the column
+             editing an old one → the column is driven by the Qty box
+           so the two can never drift apart and be two different claims about
+           the same adjustment. */
         function t7SumTrayAdj() {
-            const host = document.getElementById('t7-cal-trays');
+            const host  = document.getElementById('t7-cal-trays');
             const qtyEl = document.getElementById('t7-cal-qty');
-            if (!host || !qtyEl || !_t7TrayMode) return;
-            let total = 0, touched = 0;
-            host.querySelectorAll('.t7-tray-adj').forEach(i => {
-                const v = parseInt(i.value, 10);
-                if (!isNaN(v) && v !== 0) { total += v; touched++; }
+            if (!host || !qtyEl || host.classList.contains('hidden')) return;
+            const lines = host.querySelectorAll('.t7-tray-line');
+            if (!lines.length) return;
+
+            const editing  = !!_t7EditingId;
+            const editQty  = editing ? (parseInt(qtyEl.value, 10) || 0) : 0;
+            const editTray = host.getAttribute('data-edit-tray') || '';
+
+            let totInit = 0, totCal = 0, touched = 0;
+            lines.forEach(line => {
+                const sent = Number(line.getAttribute('data-sent')) || 0;
+                const inp  = line.querySelector('.t7-tray-adj');
+                let cal = 0;
+                if (inp) { cal = parseInt(inp.value, 10); if (isNaN(cal)) cal = 0; }
+                else if (editing && line.getAttribute('data-tray') === editTray) cal = editQty;
+                if (cal !== 0) touched++;
+
+                const calEl = line.querySelector('.t7-tray-cal');
+                if (calEl) {
+                    calEl.innerText = cal === 0 ? '—' : (cal > 0 ? '+' : '') + cal.toLocaleString();
+                    calEl.className = 't7-tray-cal text-sm font-black tabular-nums '
+                        + (cal > 0 ? 'text-[#4a7a2e]' : cal < 0 ? 'text-[#a83020]' : 'text-[#8a7a68]');
+                }
+                const finEl = line.querySelector('.t7-tray-final');
+                if (finEl) finEl.innerText = (sent + cal).toLocaleString();
+
+                totInit += sent; totCal += cal;
             });
-            qtyEl.value = total === 0 && touched === 0 ? '' : String(total);
-            const sumEl = document.getElementById('t7-tray-sum');
-            if (sumEl) {
-                sumEl.innerText = touched === 0
-                    ? 'Nothing keyed yet'
-                    : `${touched} tray${touched === 1 ? '' : 's'} · net ${total > 0 ? '+' : ''}${total.toLocaleString()}`;
-            }
+
+            if (_t7TrayMode) qtyEl.value = touched === 0 ? '' : String(totCal);
+
+            const set = (id, txt, cls) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.innerText = txt;
+                if (cls) el.className = cls;
+            };
+            set('t7-tray-tot-init',  totInit.toLocaleString());
+            set('t7-tray-tot-cal',
+                totCal === 0 ? '—' : (totCal > 0 ? '+' : '') + totCal.toLocaleString(),
+                'text-sm font-black tabular-nums text-right '
+                  + (totCal > 0 ? 'text-[#4a7a2e]' : totCal < 0 ? 'text-[#a83020]' : 'text-[#8a7a68]'));
+            set('t7-tray-tot-final', (totInit + totCal).toLocaleString());
+        }
+
+        // One row of the table. `editable` decides whether Calibration is a
+        // box somebody types in or a figure read off the row being edited.
+        function _t7TrayLineHtml(t, editable, esc) {
+            return `<div class="t7-tray-line px-4 py-2 border-t border-[#e8dcc8]"
+                         style="${T7_TRAY_COLS}"
+                         data-tray="${esc(t.tray)}" data-sent="${t.qty}">
+                <div class="min-w-0">
+                    <div class="text-sm font-black text-[#3d2610] leading-tight truncate">${esc(t.tray || '— not recorded —')}</div>
+                    ${t.dates && t.dates.length
+                        ? `<div class="text-[9px] font-bold text-[#8a7a68] leading-tight truncate">${t.dates.map(d => esc(formatAuditDate(d))).join(' · ')}</div>`
+                        : ''}
+                </div>
+                <div class="text-sm font-bold text-[#3d2610] tabular-nums text-right">${t.qty.toLocaleString()}</div>
+                <div class="text-right">${editable
+                    ? `<input type="number" step="1" placeholder="0"
+                             class="t7-tray-adj input-style !py-1.5 !px-2 !text-sm text-right w-full"
+                             oninput="t7SumTrayAdj()" aria-label="Calibration for tray ${esc(t.tray)}">`
+                    : `<span class="t7-tray-cal text-sm font-black tabular-nums text-[#8a7a68]">—</span>`}</div>
+                <div class="t7-tray-final text-sm font-black text-[#3d2610] tabular-nums text-right">${t.qty.toLocaleString()}</div>
+            </div>`;
+        }
+
+        function _t7TrayTableHtml(plot, rows, editable, note, esc, count) {
+            const n = typeof count === 'number' ? count : rows.length;
+            const head = `<div class="px-4 py-2 bg-[#fdf6e8] text-[9px] font-black text-[#8a7a68] uppercase tracking-widest"
+                               style="${T7_TRAY_COLS}">
+                <div>From</div>
+                <div class="text-right">Initial Amount</div>
+                <div class="text-right">Calibration</div>
+                <div class="text-right">Final Amount</div>
+            </div>`;
+            const total = `<div class="px-4 py-2 bg-[#fdf6e8] border-t-2 border-[#e8dcc8]"
+                                style="${T7_TRAY_COLS}">
+                <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">Total</div>
+                <div id="t7-tray-tot-init"  class="text-sm font-black text-[#3d2610] tabular-nums text-right">0</div>
+                <div id="t7-tray-tot-cal"   class="text-sm font-black tabular-nums text-right text-[#8a7a68]">—</div>
+                <div id="t7-tray-tot-final" class="text-sm font-black text-[#3d2610] tabular-nums text-right">0</div>
+            </div>`;
+            return `<div class="rounded-xl border ${editable ? 'border-[#c8d9e8] bg-[#f7fbff]' : 'border-[#e8dcc8] bg-[#fdfaf4]'} overflow-hidden">
+                <div class="px-4 py-2.5 text-[10px] font-black uppercase tracking-widest ${editable ? 'text-[#3a7ab4]' : 'text-[#8a7a68]'}">
+                    ${esc(plot)} was filled from ${n} tray${n === 1 ? '' : 's'}${note}
+                </div>
+                ${head}${rows.map(t => _t7TrayLineHtml(t, editable, esc)).join('')}${total}
+            </div>`;
         }
 
         // The tray lines that were actually keyed. A blank or a zero means
@@ -3314,50 +3414,39 @@
                 </div>`);
             }
 
-            /* EDITING an existing row is left alone. One saved row belongs to
-               one tray; turning it into several on an edit would quietly
-               multiply a figure somebody has already approved. The panel still
-               shows where the plot came from, read-only, because that is the
-               context for deciding whether the row is right. */
+            /* EDITING an existing row is still ONE row. Turning it into several
+               on an edit would quietly multiply a figure somebody has already
+               approved, so the Calibration column is read-only here and is
+               driven by the Qty box instead — which is what keeps the column's
+               total equal to the adjustment quantity in this direction too.
+
+               A row saved before the split existed names no tray, so its
+               figure gets a line of its own saying so rather than being hidden
+               and leaving the total disagreeing with the box. */
             if (_t7EditingId) {
-                const lines = trays.map(t => `
-                    <div class="flex flex-wrap items-baseline gap-x-3 px-4 py-2 border-t border-[#e8dcc8]">
-                        <span class="text-sm font-black text-[#3d2610] min-w-[90px]">${esc(t.tray)}</span>
-                        <span class="text-[11px] font-bold text-[#8a7a68]">sent ${t.qty.toLocaleString()}</span>
-                        <span class="text-[10px] text-[#8a7a68]">${t.dates.map(d => esc(formatAuditDate(d))).join(' · ')}</span>
-                    </div>`).join('');
-                return plain(`<div class="rounded-xl border border-[#e8dcc8] bg-[#fdfaf4] overflow-hidden">
-                    <div class="px-4 py-2 text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">
-                        ${esc(plot)} was filled from ${trays.length} tray${trays.length === 1 ? '' : 's'} — for reference while editing
-                    </div>${lines}</div>`);
+                _t7TrayMode = false;
+                if (qtyEl) { qtyEl.readOnly = false; qtyEl.classList.remove('bg-[#f5efe4]', 'cursor-not-allowed'); }
+                const editTray = _t7EditingTray || '';
+                const shown = editTray && !trays.some(t => t.tray === editTray)
+                    ? trays.concat([{ tray: editTray, qty: 0, dates: [] }])
+                    : trays.slice();
+                if (!editTray) shown.push({ tray: '', qty: 0, dates: [] });
+                host.setAttribute('data-edit-tray', editTray);
+                // trays.length, not shown.length — the heading counts the trays
+                // that really fed the plot, not the placeholder line.
+                host.innerHTML = _t7TrayTableHtml(plot, shown, false,
+                    ' — for reference while editing', esc, trays.length);
+                host.classList.remove('hidden');
+                t7SumTrayAdj();
+                return;
             }
 
             _t7TrayMode = true;
             if (qtyEl) { qtyEl.readOnly = true; qtyEl.classList.add('bg-[#f5efe4]', 'cursor-not-allowed'); }
-
-            const lines = trays.map(t => `
-                <div class="t7-tray-line flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 border-t border-[#e8dcc8]"
-                     data-tray="${esc(t.tray)}" data-sent="${t.qty}">
-                    <span class="text-sm font-black text-[#3d2610] min-w-[90px]">${esc(t.tray)}</span>
-                    <span class="text-[11px] font-bold text-[#8a7a68] min-w-[120px]">sent ${t.qty.toLocaleString()} here</span>
-                    <span class="text-[10px] text-[#8a7a68] flex-1 min-w-[120px]">${t.dates.map(d => esc(formatAuditDate(d))).join(' · ')}</span>
-                    <input type="number" step="1" placeholder="0"
-                           class="t7-tray-adj input-style !w-[120px] !py-2 text-sm"
-                           oninput="t7SumTrayAdj()"
-                           aria-label="Adjustment for tray ${esc(t.tray)}">
-                </div>`).join('');
-
-            host.innerHTML = `<div class="rounded-xl border border-[#c8d9e8] bg-[#f7fbff] overflow-hidden">
-                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
-                    <span class="text-[10px] font-black text-[#3a7ab4] uppercase tracking-widest">
-                        ${esc(plot)} was filled from ${trays.length} tray${trays.length === 1 ? '' : 's'}
-                    </span>
-                    <span class="text-[10px] font-bold text-[#8a7a68]">
-                        Key the difference against the tray it came from — leave a tray blank if its count was right
-                    </span>
-                    <span id="t7-tray-sum" class="ml-auto shrink-0 text-[10px] font-black text-[#3d2610] uppercase tracking-widest">Nothing keyed yet</span>
-                </div>${lines}
-            </div>`;
+            host.setAttribute('data-edit-tray', '');
+            host.innerHTML = _t7TrayTableHtml(plot, trays, true,
+                ' — key the difference against the tray it came from, and leave a tray blank if its count was right',
+                esc);
             host.classList.remove('hidden');
             t7SumTrayAdj();
         }
@@ -3368,6 +3457,8 @@
                 return;
             }
             _t7EditingId = id;
+            _t7EditingTray = document.querySelector(`#t7-cal-history tr[data-cal-id="${id}"]`)
+                                     ?.getAttribute('data-cal-tray') || '';
             const qtyEl    = document.getElementById('t7-cal-qty');
             const reportEl = document.getElementById('t7-cal-report');
             const plotEl   = document.getElementById('t7-cal-plot');
@@ -3399,6 +3490,7 @@
 
         function cancelEditCalibration() {
             _t7EditingId = null;
+            _t7EditingTray = '';
             const qtyEl    = document.getElementById('t7-cal-qty');
             const reportEl = document.getElementById('t7-cal-report');
             const plotEl   = document.getElementById('t7-cal-plot');

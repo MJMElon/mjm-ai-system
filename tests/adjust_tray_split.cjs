@@ -174,8 +174,8 @@ async function setPlot(page, plot) {
     })));
   check('all three trays that fed B14 are listed', trays.map(t => t.tray), ['T1', 'T3', 'T7']);
   check('biggest contributor first', trays.map(t => t.sent), [4800, 1200, 900]);
-  checkTrue('each says what it sent', /sent 4,800 here/.test(trays[0].text));
-  checkTrue('and when it sent it', /06 Mar 2026/.test(trays[2].text));
+  checkTrue('each shows its initial amount, with no "sent"', /4,800/.test(trays[0].text) && !/sent/i.test(trays[0].text));
+  checkTrue('and when it was sent, under the tray name', /06 Mar 2026/.test(trays[2].text));
   checkTrue('the header names the plot and the count',
             /B14 was filled from 3 trays/.test(await page.textContent('#t7-cal-trays')));
   check('each tray has its own adjustment box',
@@ -187,8 +187,21 @@ async function setPlot(page, plot) {
   await page.locator('#t7-cal-trays .t7-tray-line[data-tray="T1"] .t7-tray-adj').fill('-40');
   await page.locator('#t7-cal-trays .t7-tray-line[data-tray="T7"] .t7-tray-adj').fill('-13');
   check('the total follows the lines', await page.inputValue('#t7-cal-qty'), '-53');
-  checkTrue('and is spelled out beside them',
-            /2 trays · net -53/.test(await page.textContent('#t7-tray-sum')));
+  const totals = await page.evaluate(() => ({
+    init:  document.getElementById('t7-tray-tot-init').innerText.trim(),
+    cal:   document.getElementById('t7-tray-tot-cal').innerText.trim(),
+    final: document.getElementById('t7-tray-tot-final').innerText.trim()
+  }));
+  check('Total initial is what the trays sent', totals.init, '6,900');
+  check('Total calibration equals the Adjustment Qty', totals.cal, '-53');
+  check('Total final is initial + calibration', totals.final, '6,847');
+  const perRow = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('#t7-cal-trays .t7-tray-line')).map(l => ({
+      tray:  l.getAttribute('data-tray'),
+      final: l.querySelector('.t7-tray-final').innerText.trim()
+    })));
+  check('each tray final is its own initial + calibration',
+        perRow, [{ tray: 'T1', final: '4,760' }, { tray: 'T3', final: '1,200' }, { tray: 'T7', final: '887' }]);
 
   console.log('\nSaving writes one row per keyed tray');
   await page.fill('#t7-cal-reason', 'Recount on the ground');
@@ -276,6 +289,20 @@ async function setPlot(page, plot) {
   await page.waitForTimeout(350);
   check('the tray boxes are gone while editing',
         await page.locator('#t7-cal-trays .t7-tray-adj').count(), 0);
+  const editTotals = await page.evaluate(() => ({
+    cal: document.getElementById('t7-tray-tot-cal').innerText.trim(),
+    onT1: Array.from(document.querySelectorAll('#t7-cal-trays .t7-tray-line'))
+            .find(l => l.getAttribute('data-tray') === 'T1')
+            .querySelector('.t7-tray-cal').innerText.trim()
+  }));
+  check('the edited row\'s figure shows on its own tray', editTotals.onT1, '-40');
+  check('and Total calibration still equals the Adjustment Qty', editTotals.cal, '-40');
+  await page.fill('#t7-cal-qty', '-45');
+  await page.waitForTimeout(150);
+  check('changing the Qty box moves the column with it',
+        await page.evaluate(() => document.getElementById('t7-tray-tot-cal').innerText.trim()), '-45');
+  await page.fill('#t7-cal-qty', '-40');
+  await page.waitForTimeout(150);
   checkTrue('the trays are still shown, for reference',
             /for reference while editing/i.test(await page.textContent('#t7-cal-trays')));
   check('the Qty box is typable again so the one row can be corrected',
