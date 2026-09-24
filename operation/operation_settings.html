@@ -66,6 +66,7 @@
         #mlk-day-save-btn{transition:opacity .15s;}
         #mlk-day-save-btn.mlk-clean{opacity:.35;pointer-events:none;}
     </style>
+    <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body class="min-h-screen p-4 md:p-8 relative">
     <div class="bg-pattern"></div>
@@ -121,6 +122,21 @@
                             <button type="button" id="mlk-day-save-btn" class="btn-purple !bg-rose-500 !px-5 !py-2.5 text-[10px] tracking-widest" onclick="saveMlkLockDay()">Save</button>
                             <span class="text-[10px] text-slate-400 font-semibold">of the following month — applies from this month onward</span>
                         </div>
+                        <!-- One toggle button for the whole selected Year, instead of clicking all
+                             12 round icons by hand. Its label/action/colour flip depending on the
+                             year's CURRENT state (see renderMonthLockGrid()):
+                               - not all 12 already unlocked → "Unlock All", forces every month open
+                                 (MJMMonthLock.setManualOverrideForYear(year, false, …)).
+                               - all 12 already unlocked → "Lock All", which does NOT force every
+                                 month locked (that would freeze months whose own auto-lock date
+                                 hasn't happened yet). It clears the override back to the computed
+                                 default instead (MJMMonthLock.clearManualOverrideForYear(year, …)) —
+                                 "locked up to the date", i.e. whichever months are already past
+                                 their own auto-lock date. -->
+                        <button type="button" id="mlk-toggle-all-btn" class="text-[10px] font-black uppercase tracking-widest rounded-xl px-4 py-2.5 flex items-center gap-2 transition-colors" onclick="toggleAllMonths()">
+                            <svg id="mlk-toggle-all-icon" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"></svg>
+                            <span id="mlk-toggle-all-label"></span> <span id="mlk-toggle-all-year"></span>
+                        </button>
                     </div>
                     <div id="mlk-months" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
                 </div>
@@ -557,14 +573,77 @@
             }
             menu.innerHTML = html;
             document.getElementById('mlk-year-label').textContent = _mlkYear;
+            document.getElementById('mlk-toggle-all-year').textContent = _mlkYear;
         }
 
         function selectMlkYear(year) {
             _mlkYear = year;
             document.getElementById('mlk-year-label').textContent = year;
+            document.getElementById('mlk-toggle-all-year').textContent = year;
             document.querySelectorAll('#mlk-year-menu .cf-opt').forEach(el => el.classList.toggle('active', parseInt(el.dataset.value, 10) === year));
             document.getElementById('mlk-year-menu').classList.add('hidden');
             document.getElementById('mlk-year-btn').classList.remove('open');
+            renderMonthLockGrid();
+        }
+
+        const MLK_LOCK_ICON_OPEN  = '<path stroke-linecap="round" stroke-linejoin="round" d="M17 11V8a5 5 0 00-9.5-2M7 11h10a1 1 0 011 1v8a1 1 0 01-1 1H7a1 1 0 01-1-1v-8a1 1 0 011-1z"/>';
+        const MLK_LOCK_ICON_SHUT  = '<path stroke-linecap="round" stroke-linejoin="round" d="M7 11V8a5 5 0 0110 0v3M6 11h12a1 1 0 011 1v8a1 1 0 01-1 1H6a1 1 0 01-1-1v-8a1 1 0 011-1z"/>';
+
+        // The button toggles between "Unlock All" and "Lock All" for
+        // whichever Year is selected, based on the year's CURRENT state —
+        // not a remembered "last action" flag, so it reads right after a
+        // page reload too.
+        function renderToggleAllButton(year) {
+            const allUnlocked = MLK_MONTH_NAMES.every((_, i) => !MJMMonthLock.isMonthLocked(year, i + 1));
+            const btn = document.getElementById('mlk-toggle-all-btn');
+            const icon = document.getElementById('mlk-toggle-all-icon');
+            const label = document.getElementById('mlk-toggle-all-label');
+            btn.dataset.action = allUnlocked ? 'lock' : 'unlock';
+            btn.className = 'text-[10px] font-black uppercase tracking-widest rounded-xl px-4 py-2.5 flex items-center gap-2 transition-colors border ' +
+                (allUnlocked ? 'text-rose-700 bg-rose-50 hover:bg-rose-100 border-rose-200' : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200');
+            icon.innerHTML = allUnlocked ? MLK_LOCK_ICON_SHUT : MLK_LOCK_ICON_OPEN;
+            label.textContent = allUnlocked ? 'Lock All' : 'Unlock All';
+        }
+
+        function toggleAllMonths() {
+            const action = document.getElementById('mlk-toggle-all-btn').dataset.action;
+            return action === 'lock' ? lockAllMonths() : unlockAllMonths();
+        }
+
+        // Forces every month of the selected Year open in one write — same
+        // manual_override column toggleMonthLock() writes for one month, all
+        // 12 rows at once (MJMMonthLock.setManualOverrideForYear).
+        async function unlockAllMonths() {
+            const year = _mlkYear;
+            try {
+                const { data: { user } } = await _supabase.auth.getUser();
+                const error = await MJMMonthLock.setManualOverrideForYear(_supabase, year, false, user?.email || null);
+                if (error) throw error;
+            } catch (error) {
+                alert('Could not save: ' + error.message + (String(error.message || '').includes('does not exist') ? '\n\nRun shared/RUN_ME_month_locks.sql in the Supabase SQL Editor first.' : ''));
+                return;
+            }
+            renderMonthLockGrid();
+        }
+
+        // "Lock up to the date" — clears the manual override for every
+        // month of the Year back to null (the computed default) instead of
+        // forcing manual_override:true on all 12. Forcing true would freeze
+        // months whose own auto-lock date hasn't happened yet as locked
+        // regardless — the "seed today's default into a saved row" mistake
+        // this file's header warns about. Clearing back to null just lets
+        // each month's own auto-lock date decide again, which is already
+        // "locked if that date has passed" (see MJMMonthLock.isMonthLocked).
+        async function lockAllMonths() {
+            const year = _mlkYear;
+            try {
+                const { data: { user } } = await _supabase.auth.getUser();
+                const error = await MJMMonthLock.clearManualOverrideForYear(_supabase, year, user?.email || null);
+                if (error) throw error;
+            } catch (error) {
+                alert('Could not save: ' + error.message + (String(error.message || '').includes('does not exist') ? '\n\nRun shared/RUN_ME_month_locks.sql in the Supabase SQL Editor first.' : ''));
+                return;
+            }
             renderMonthLockGrid();
         }
 
@@ -608,6 +687,7 @@
 
         function renderMonthLockGrid() {
             const year = _mlkYear;
+            renderToggleAllButton(year);
             const wrap = document.getElementById('mlk-months');
             wrap.innerHTML = MLK_MONTH_NAMES.map((name, i) => {
                 const month = i + 1;
