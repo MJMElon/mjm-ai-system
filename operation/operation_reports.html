@@ -1273,24 +1273,35 @@ function ageLabel(planted) {
   return m + (m === 1 ? ' month' : ' months');
 }
 
-// Sold cells' hover-tooltip data (Date/DO Number/Customer/Qty), pooled
-// across the whole run and referenced by index from each cell's markup —
-// see fmtSoldCell() in buildMovementSection() and mvShowSalesTip() below.
-let _mvSalesPool = [];
+// Every movement column's hover-tooltip data — Sold (Date/DO
+// Number/Customer/Qty) and Transfer In / Transplanted from PN / 3rd
+// Culled / Transfer Out (Date/label/Qty) — pooled across the whole run
+// and referenced by index from each cell's markup. See fmtDetailCell()
+// in buildMovementSection() and mvShowDetailTip() below.
+let _mvDetailPool = [];
 
-function mvShowSalesTip(anchorEl, idx) {
-  const rows = _mvSalesPool[idx];
-  if (!rows || !rows.length) return;
-  const sorted = rows.slice().sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+function mvShowDetailTip(anchorEl, idx) {
+  const entry = _mvDetailPool[idx];
+  if (!entry || !entry.rows || !entry.rows.length) return;
+  const sorted = entry.rows.slice().sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
   const total = sorted.reduce((s, r) => s + (r.qty || 0), 0);
   const esc = s => String(s == null ? '' : s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
-  let html = `<div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">Sold — ${sorted.length} Delivery Note${sorted.length === 1 ? '' : 's'}</div>`;
+  let html = `<div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">${esc(entry.title)} — ${sorted.length} record${sorted.length === 1 ? '' : 's'}</div>`;
   sorted.forEach(r => {
-    html += `
+    // Sold rows carry doNumber/customer (their own two-colour layout,
+    // matching Tab 6's own Sales tooltip); every other column carries a
+    // plain label instead ("From B13", "Tray PREMIUM CARE", "Drone map
+    // qty 5", "To N18-R").
+    html += (r.doNumber != null) ? `
       <div class="flex items-baseline gap-2 py-0.5 text-[11px] whitespace-nowrap">
         <span class="font-black text-[#3a7ab4]">${esc(r.doNumber)}</span>
         <span class="font-bold text-[#8a7a68]">${fmtDate(r.date)}</span>
         <span class="font-bold text-[#3d2610] uppercase truncate max-w-[140px]">${esc(r.customer)}</span>
+        <span class="ml-auto font-black text-[#3a7ab4]">${fmtNum(r.qty)}</span>
+      </div>` : `
+      <div class="flex items-baseline gap-2 py-0.5 text-[11px] whitespace-nowrap">
+        <span class="font-bold text-[#8a7a68]">${fmtDate(r.date)}</span>
+        <span class="font-bold text-[#3d2610] truncate max-w-[160px]">${esc(r.label || '—')}</span>
         <span class="ml-auto font-black text-[#3a7ab4]">${fmtNum(r.qty)}</span>
       </div>`;
   });
@@ -1312,7 +1323,7 @@ function mvShowSalesTip(anchorEl, idx) {
   tip.style.left = left + 'px';
   tip.style.top  = top + 'px';
 }
-function mvHideSalesTip() {
+function mvHideDetailTip() {
   document.getElementById('mv-sales-tip').classList.add('hidden');
 }
 
@@ -1321,7 +1332,7 @@ async function runMovementReportCombined() {
   const loading = document.getElementById('loading');
   out.classList.add('hidden');
   loading.classList.remove('hidden');
-  _mvSalesPool = [];
+  _mvDetailPool = [];
 
   // PN drives the Pre-Nursery section, any of BNN/UNN1/UNN2 drives the Main
   // Nursery section — one Movement Report tab, the Locations chips decide
@@ -1414,6 +1425,18 @@ async function runMovementReportCombined() {
     return m ? m[1].trim() : null;
   };
 
+  // Records behind Transfer In / Transplanted from PN / 3rd Culled /
+  // Transfer Out, for their own hover tooltips (see mvShowDetailTip()) —
+  // the same idea as saleDetails above, one shared shape: date, qty, and
+  // a short label already worded for the tooltip line. Keyed by
+  // place::batch::col so each column's own figure has its own list.
+  const colDetails = {};
+  const pushDetail = (place, batch, col, date, qty, label) => {
+    if (!place || !qty) return;
+    const dk = place + '::' + (batch || '—') + '::' + col;
+    (colDetails[dk] = colDetails[dk] || []).push({ date, qty, label });
+  };
+
   // Damaged seeds carry no tray: they are counted at the batch as it is
   // planted and never enter one. Shown against the tray the batch was mostly
   // planted into, once, so the column is visible without being invented for
@@ -1448,8 +1471,11 @@ async function runMovementReportCombined() {
       // batch's standing balance here on nothing more than a formula.
       // MapQty: N is written into the remark by saveTab6() only when that
       // box actually has a number in it (see operation_batch_detail.html).
-      const hasMapQty = /MapQty:\s*\d+/.test(l.remark || '');
-      if (hasMapQty && passMain(l.plot_name)) push('main', d, l.plot_name, b, 'cull3', q);
+      const mapQtyMatch = (l.remark || '').match(/MapQty:\s*(\d+)/);
+      if (mapQtyMatch && passMain(l.plot_name)) {
+        push('main', d, l.plot_name, b, 'cull3', q);
+        pushDetail(l.plot_name, b, 'cull3', d, q, `Drone map qty ${mapQtyMatch[1]}`);
+      }
       return;
     }
 
@@ -1462,7 +1488,10 @@ async function runMovementReportCombined() {
     if (t === 'Transplanted') {
       const src = srcTrayOf(l);
       if (src) push('pre', d, src, b, 'transOut', q);
-      if (passMain(l.plot_name)) push('main', d, l.plot_name, b, 'transIn', q);
+      if (passMain(l.plot_name)) {
+        push('main', d, l.plot_name, b, 'transIn', q);
+        pushDetail(l.plot_name, b, 'transIn', d, q, src ? `From tray ${src}` : '');
+      }
       return;
     }
 
@@ -1477,8 +1506,14 @@ async function runMovementReportCombined() {
 
     if (t === 'Cull3_Transfer') {
       const from = (l.remark || '').match(/From:\s*\[([^\]|]+)\|/);
-      if (passMain(l.plot_name)) push('main', d, l.plot_name, b, 'trIn', q);
-      if (from && passMain(from[1])) push('main', d, from[1], b, 'trOut', q);
+      if (passMain(l.plot_name)) {
+        push('main', d, l.plot_name, b, 'trIn', q);
+        pushDetail(l.plot_name, b, 'trIn', d, q, from ? `From ${from[1]}` : '');
+      }
+      if (from && passMain(from[1])) {
+        push('main', d, from[1], b, 'trOut', q);
+        pushDetail(from[1], b, 'trOut', d, q, `To ${l.plot_name}`);
+      }
       return;
     }
   });
@@ -1488,7 +1523,7 @@ async function runMovementReportCombined() {
   const unmatchedSales = [];
   // Every DO line that lands as a Sold event, kept (not just traced) so
   // the Sold column's hover tooltip can show date/DO number/customer/qty
-  // for each — see mvShowSalesTip(). Keyed the same simple way the row
+  // for each — see mvShowDetailTip(). Keyed the same simple way the row
   // itself will be looked up by: place + '::' + batch.
   const saleDetails = {};
   if (wantMain) {
@@ -1541,7 +1576,7 @@ async function runMovementReportCombined() {
     });
   }
 
-  const ctx = { fromMs, toMs, fromStr, toStr, groupBy, plotToLoc, trayNursery, batchPlantedAt, saleDetails };
+  const ctx = { fromMs, toMs, fromStr, toStr, groupBy, plotToLoc, trayNursery, batchPlantedAt, saleDetails, colDetails };
   const sections = [];
   if (wantPre)  sections.push(buildMovementSection('pre',  ev.filter(e => e.sc === 'pre'),  { ...ctx, unmatchedSales: [] }));
   if (wantMain) sections.push(buildMovementSection('main', ev.filter(e => e.sc === 'main'), { ...ctx, unmatchedSales }));
@@ -1559,7 +1594,7 @@ async function runMovementReportCombined() {
  * re-deriving plotToLoc/trayNursery/batchPlantedAt) on its own.
  */
 function buildMovementSection(scope, ev, ctx) {
-  const { fromMs, toMs, fromStr, toStr, plotToLoc, trayNursery, batchPlantedAt, unmatchedSales, saleDetails } = ctx;
+  const { fromMs, toMs, fromStr, toStr, plotToLoc, trayNursery, batchPlantedAt, unmatchedSales, saleDetails, colDetails } = ctx;
   // Pre-Nursery reads naturally by Batch — one batch, several trays over its
   // life, and "Sort by" (Plot/Batch) is really a Main Nursery toggle (worth
   // it there: trace a transferred batch across every plot it now sits in).
@@ -1616,14 +1651,22 @@ function buildMovementSection(scope, ev, ctx) {
     const hasPeriodActivity = MOVE_COLS[scope].some(c => (periodRow[c.key] || 0) !== 0);
     if (closing === 0 && !hasPeriodActivity) continue;
     const bfClosing = netOfRow(scope, bf[k] || emptyRow(scope));
-    // Same window as periodRow's own figures (fromMs..toMs) — the tooltip
-    // has to list exactly what the Sold column's number is made of, not
-    // this batch/plot's whole sales history.
-    const sales = saleDetails ? (saleDetails[meta[k].place + '::' + meta[k].batch] || []).filter(s => {
-      const ts = s.date ? new Date(s.date).getTime() : NaN;
+    // Same window as periodRow's own figures (fromMs..toMs) — every
+    // tooltip has to list exactly what its own column's number is made
+    // of, not this batch/plot's whole history on that column.
+    const inPeriod = (arr) => (arr || []).filter(r => {
+      const ts = r.date ? new Date(r.date).getTime() : NaN;
       return isFinite(ts) && ts >= fromMs && ts <= toMs;
-    }) : [];
-    rows.push({ ...meta[k], ...periodRow, closing, bf: bfClosing, sales,
+    });
+    const sales = saleDetails ? inPeriod(saleDetails[meta[k].place + '::' + meta[k].batch]) : [];
+    const details = {};
+    if (colDetails) {
+      ['trIn', 'transIn', 'cull3', 'trOut'].forEach(col => {
+        const dk = meta[k].place + '::' + meta[k].batch + '::' + col;
+        details[col] = inPeriod(colDetails[dk]);
+      });
+    }
+    rows.push({ ...meta[k], ...periodRow, closing, bf: bfClosing, sales, details,
                 age: ageLabel(batchPlantedAt[_mvBatchKey(meta[k].batch)]) });
   }
 
@@ -1653,16 +1696,23 @@ function buildMovementSection(scope, ev, ctx) {
   }
 
   const fmtCell = (n, cls) => `<td class="${cls || ''}">${n ? fmtNum(n) : '0'}</td>`;
-  // The Sold cell hovers to a Date/DO Number/Customer/Qty tooltip when
+  // A cell hovers to a tooltip listing what its number is made of, when
   // there's something behind it — a plain number otherwise, same as any
-  // other cell. r.sales is pushed into the shared pool and referenced by
-  // index rather than embedding the data in the attribute itself, so a
-  // customer name with a quote in it can't break the markup.
-  const fmtSoldCell = (r, cls) => {
-    if (!r.sold || !r.sales || !r.sales.length) return fmtCell(r.sold, cls);
-    const idx = _mvSalesPool.push(r.sales) - 1;
-    return `<td class="${cls || ''}"><span class="cursor-help border-b border-dotted border-current"
-      onmouseenter="mvShowSalesTip(this, ${idx})" onmouseleave="mvHideSalesTip()">${fmtNum(r.sold)}</span></td>`;
+  // other cell. The rows are pushed into the shared pool and referenced
+  // by index rather than embedding the data in the attribute itself, so
+  // a customer name or a plot name with a quote in it can't break the
+  // markup. Sold reads r.sales (Date/DO Number/Customer/Qty); the other
+  // wired columns read r.details[col] (Date/label/Qty) — see the
+  // pushDetail() calls above and DETAIL_TITLES below.
+  const DETAIL_TITLES = { trIn: 'Transfer In', transIn: 'Transplanted from PN', cull3: '3rd Culled', trOut: 'Transfer Out' };
+  const fmtDetailCell = (r, c) => {
+    const n = r[c.key];
+    const rowsForTip = c.key === 'sold' ? r.sales : (r.details && r.details[c.key]);
+    if (!n || !rowsForTip || !rowsForTip.length) return fmtCell(n, c.cls);
+    const title = c.key === 'sold' ? 'Sold' : DETAIL_TITLES[c.key];
+    const idx = _mvDetailPool.push({ title, rows: rowsForTip }) - 1;
+    return `<td class="${c.cls || ''}"><span class="cursor-help border-b border-dotted border-current"
+      onmouseenter="mvShowDetailTip(this, ${idx})" onmouseleave="mvHideDetailTip()">${fmtNum(n)}</span></td>`;
   };
 
   // ── Body: a section per nursery, a group per tray/plot ──
@@ -1707,7 +1757,7 @@ function buildMovementSection(scope, ev, ctx) {
         <td class="col-label">${otherOf(r) || '—'}</td>
         <td class="col-label text-[#8a7a68] text-xs whitespace-nowrap">${r.age}</td>
         ${fmtCell(r.bf, 'text-[#8a7a68] font-black')}
-        ${cols.map(c => c.key === 'sold' ? fmtSoldCell(r, c.cls) : fmtCell(r[c.key], c.cls)).join('')}
+        ${cols.map(c => fmtDetailCell(r, c)).join('')}
         ${fmtCell(r.closing, 'text-[#4a7a2e] font-black')}
         ${i === 0 ? `<td rowspan="${g.list.length}" class="font-black text-[#8a7a68] align-middle">${fmtNum(bal)}</td>` : ''}
       </tr>`);
