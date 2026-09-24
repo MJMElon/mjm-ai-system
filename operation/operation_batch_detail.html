@@ -6395,14 +6395,28 @@
 
             const oldIds = (oldRows || []).map(r => r.id).filter(v => v !== null && v !== undefined);
             if (oldIds.length) {
-                const { error: delErr } = await _supabase
+                /* .select() so the delete SAYS WHAT IT REMOVED.
+                   Without it a delete that matches rows and is refused —
+                   by a row-level policy, by a trigger — comes back with no
+                   error and no rows gone, and this function reports success.
+                   Every save then adds a fresh copy and clears none, which
+                   is a report that quietly doubles. */
+                const { data: gone, error: delErr } = await _supabase
                     .from('shared_inventory_logs')
                     .delete()
-                    .in('id', oldIds);
+                    .in('id', oldIds)
+                    .select('id');
                 if (delErr) {
                     // New data is saved; old rows linger as duplicates. Surface it
                     // so the user re-saves (which will capture + clear them).
                     return { error: new Error('Saved, but old rows could not be cleared (' + delErr.message + '). Please save once more.') };
+                }
+                const left = oldIds.length - ((gone || []).length);
+                if (left > 0) {
+                    return { error: new Error(
+                        `Saved, but ${left} of the ${oldIds.length} previous row(s) were NOT removed — this batch is now ` +
+                        `showing them twice. Save once more. If it happens again, the delete is being refused and ` +
+                        `somebody needs to look at the table's policies rather than keep saving.`) };
                 }
             }
             return { error: null };
@@ -10832,14 +10846,71 @@ Thank you.`;
         /* Say so on the line itself. The panel staying open answers "where did
            it go"; this answers "what is it waiting for", which is the next
            question and was nowhere on screen. */
+        /* WHAT A MOVEMENT SAYS, AS ONE STRING. Two lines on the same plot with
+           the same day, the same destination and the same quantity are the
+           same movement written twice — the form cannot tell them apart and
+           neither can anybody reading it. */
+        function _t6TrSig(rec) {
+            return [rec.querySelector('.t6-tr-date')?.value || '',
+                    _t6PlotKey(rec.querySelector('.t6-tr-plot')?.value || ''),
+                    parseInt(rec.querySelector('.t6-tr-qty')?.value, 10) || 0].join('|');
+        }
+
+        /* Every movement keyed twice, per sending plot. A real pair — two
+           lorries, same day, same quantity — is possible and rare; a double
+           key-in is neither, and it has been found in the records more than
+           once. So they are not merged and not refused, they are POINTED AT:
+           on the line, and again before the save writes them. */
+        function t6DuplicateTransfers() {
+            const out = [];
+            t6_plotData.forEach((p, i) => {
+                const host = document.getElementById(`t6-row-${i}-transfers`);
+                if (!host) return;
+                const seen = new Map();
+                host.querySelectorAll('.t6-transfer-rec').forEach(rec => {
+                    if (!t6TransferRecComplete(rec)) return;
+                    const sig = _t6TrSig(rec);
+                    if (seen.has(sig)) { seen.get(sig).push(rec); }
+                    else { seen.set(sig, [rec]); }
+                });
+                seen.forEach((recs, sig) => {
+                    if (recs.length < 2) return;
+                    const [date, plot, qty] = sig.split('|');
+                    out.push({ from: p.plot, to: plot, qty: parseInt(qty, 10) || 0,
+                               date, n: recs.length, recs });
+                });
+            });
+            return out;
+        }
+
         function t6PaintTransferRecs() {
+            const dupes = new Set();
+            t6DuplicateTransfers().forEach(d => d.recs.forEach(r => dupes.add(r)));
             document.querySelectorAll('#t6-transferdata-rows .t6-transfer-rec').forEach(rec => {
                 const done = t6TransferRecComplete(rec);
-                rec.classList.toggle('border-[#efe6d6]', done);
+                /* A line that is a copy of another is flagged even though it
+                   is "complete" — complete is not the same as right. */
+                const dupe = dupes.has(rec);
+                rec.classList.toggle('border-[#efe6d6]', done && !dupe);
                 rec.classList.toggle('border-[#e8b84b]', !done);
-                rec.classList.toggle('bg-white', done);
+                rec.classList.toggle('border-[#a83020]', dupe);
+                rec.classList.toggle('bg-white', done && !dupe);
                 rec.classList.toggle('bg-[#fffaf0]', !done);
+                rec.classList.toggle('bg-[#fff5f5]', dupe);
                 let note = rec.querySelector('.t6-tr-todo');
+                if (dupe) {
+                    if (!note) {
+                        rec.insertAdjacentHTML('beforeend',
+                            `<div class="t6-tr-todo text-[9px] font-black uppercase tracking-widest pt-1"></div>`);
+                        note = rec.querySelector('.t6-tr-todo');
+                    }
+                    note.className = 't6-tr-todo text-[9px] font-black text-[#a83020] uppercase tracking-widest pt-1';
+                    note.innerText = 'Keyed twice — same day, same plot, same quantity. Remove one unless it really happened twice.';
+                    return;
+                }
+                if (note && note.classList.contains('text-[#a83020]')) {
+                    note.className = 't6-tr-todo text-[9px] font-black text-[#a8742a] uppercase tracking-widest pt-1';
+                }
                 if (done) { if (note) note.remove(); return; }
                 const want = ['date', 'plot', 'quantity'].filter((_, n) => {
                     const v = [rec.querySelector('.t6-tr-date')?.value || '',
@@ -12055,6 +12126,28 @@ Thank you.`;
                 // still have nobody's explanation against them.
                 let mismatchPlots = [];
                 let unexplained = 0;
+                /* A MOVEMENT KEYED TWICE IS ASKED ABOUT BEFORE IT IS STORED.
+
+                   This has been found in the records more than once —
+                   deleted, and back a few weeks later — and nothing on the
+                   way in ever questioned it. Two lorries on the same day
+                   moving the same quantity to the same plot is possible, so
+                   it is a question and not a refusal; but it is asked HERE,
+                   where somebody can still answer it, rather than found by
+                   whoever reads the report next month. */
+                const dupes = t6DuplicateTransfers();
+                if (dupes.length) {
+                    const lines = dupes.map(d =>
+                        `  ${d.from} → ${d.to}, ${d.qty.toLocaleString()} on ${_t6FmtDate(d.date)} — keyed ${d.n} times`);
+                    if (!confirm(
+                        `${dupes.length} movement(s) are keyed more than once:\n\n${lines.join('\n')}\n\n` +
+                        `Save them as they are?\n\nOK — yes, it really happened that many times.\n` +
+                        `Cancel — go back and remove the extra line(s).`)) {
+                        btn.innerText = originalText; btn.disabled = false;
+                        return;
+                    }
+                }
+
                 const t6Rows = Array.from(document.querySelectorAll('.t6-plot-row'));
                 let undatedMovements = 0;
                 for (let i = 0; i < t6Rows.length; i++) {
