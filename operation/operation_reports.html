@@ -44,9 +44,14 @@
   #mv-report-sidebar {
     position:fixed; top:0; left:0; height:100vh; width:240px; z-index:8999;
     background:#fdfaf4; border-right:1px solid #e8dcc8; box-shadow:8px 0 24px -8px rgba(61, 38, 16, .2);
-    padding:28px 16px; box-sizing:border-box; overflow-y:auto;
+    box-sizing:border-box; display:flex; flex-direction:column;
     transform:translateX(-100%); transition:transform .2s ease;
   }
+  /* Everything except Run Report scrolls in here; the button itself sits
+     outside this scroller as its own flex row below, so it's pinned to the
+     sidebar's bottom edge and always reachable without scrolling however
+     long the filter list above it gets. */
+  #mv-sidebar-scroll { flex:1 1 auto; overflow-y:auto; padding:28px 16px; }
   #mv-sidebar-trigger:hover + #mv-report-sidebar, #mv-report-sidebar:hover { transform:translateX(0); }
   #mv-report-sidebar .report-tab-bar { flex-direction:column; flex-wrap:nowrap; width:100%; margin:0; }
   #mv-report-sidebar .report-tab { border-right:none; border-bottom:1px solid #e8dcc8; text-align:left; }
@@ -70,7 +75,13 @@
      easier to scan and tick in a narrow sidebar than a wrapped cluster. */
   #mv-report-sidebar #f-nursery-chips { flex-direction:column; flex-wrap:nowrap; }
   #mv-report-sidebar #f-nursery-chips .nursery-chip { width:100%; }
-  #mv-report-sidebar #f-run { width:100%; margin-top:4px; }
+  /* Run Report as a pinned footer row, not an inline field — flex-shrink:0
+     keeps it out of #mv-sidebar-scroll's scrolling, and the top border +
+     shadow read as "separate from the list that scrolled past above it". */
+  #mv-report-sidebar > #f-run {
+    flex-shrink:0; width:100%; margin:0; border-radius:0;
+    padding:16px; border-top:1px solid #e8dcc8; box-shadow:0 -8px 16px -8px rgba(61, 38, 16, .18);
+  }
 
   /* Permanently-visible handle — the "there's a sidebar here" cue. Floats
      over the trigger strip (pointer-events:none so hover still reaches the
@@ -180,72 +191,78 @@
      panel stays open while the mouse is over it. -->
 <div id="mv-sidebar-trigger" class="no-print" aria-hidden="true"></div>
 <div id="mv-report-sidebar" class="no-print">
-  <div class="report-tab-bar" id="f-report-tabs"></div>
+  <div id="mv-sidebar-scroll">
+    <div class="report-tab-bar" id="f-report-tabs"></div>
 
-  <!-- Report filters — moved here from the old glass-panel row above the
-       report output so everything about "which report, which data" lives
-       in one place. f-report stays as the state the rest of the page reads
-       (syncFilterVisibility, runReport, syncReportDefaults, …) exactly the
-       way it read a <select>'s .value before. -->
-  <div class="glass-panel no-print">
-    <input type="hidden" id="f-report">
-    <div class="flex flex-wrap gap-3 items-end justify-center mb-3">
-      <!-- One date, not a range — every report is "as at" a day now. A
-           report that needs a period (Movement's Culled/Transplanted/etc
-           columns, "this month's activity") gets it derived from this one
-           date's calendar month (monthStartOf()) rather than asking for a
-           second field — see the f-from hidden input below and
-           runReport(). -->
-      <input type="hidden" id="f-from">
-      <div class="f-range w-[9.5rem]">
-        <label class="label-style !mb-1" id="f-to-label">As At</label>
-        <input id="f-to" type="date" class="input-style">
-      </div>
-      <div class="f-sort hidden w-32">
-        <label class="label-style !mb-1">Sort by</label>
-        <div class="select-wrapper">
-          <select id="f-sort" class="input-style">
-            <option value="plot">Plot</option>
-            <option value="batch">Batch</option>
+    <!-- Report filters — moved here from the old glass-panel row above the
+         report output so everything about "which report, which data" lives
+         in one place. f-report stays as the state the rest of the page reads
+         (syncFilterVisibility, runReport, syncReportDefaults, …) exactly the
+         way it read a <select>'s .value before. -->
+    <div class="glass-panel no-print">
+      <input type="hidden" id="f-report">
+      <div class="flex flex-wrap gap-3 items-end justify-center mb-3">
+        <!-- One date, not a range — every report is "as at" a day now. A
+             report that needs a period (Movement's Culled/Transplanted/etc
+             columns, "this month's activity") gets it derived from this one
+             date's calendar month (monthStartOf()) rather than asking for a
+             second field — see the f-from hidden input below and
+             runReport(). -->
+        <input type="hidden" id="f-from">
+        <div class="f-range w-[9.5rem]">
+          <label class="label-style !mb-1" id="f-to-label">As At</label>
+          <input id="f-to" type="date" class="input-style">
+        </div>
+        <div class="f-sort hidden w-32">
+          <label class="label-style !mb-1">Sort by</label>
+          <div class="select-wrapper">
+            <select id="f-sort" class="input-style">
+              <option value="plot">Plot</option>
+              <option value="batch">Batch</option>
+            </select>
+          </div>
+        </div>
+        <div class="f-nursery-inline hidden">
+          <div class="flex items-center justify-between mb-1 gap-3">
+            <span class="label-style !mb-0">Locations</span>
+            <div class="flex gap-3 text-[10px] font-black uppercase tracking-widest">
+              <button type="button" id="f-nurs-all" class="text-[#4a7a2e] hover:underline">All</button>
+              <button type="button" id="f-nurs-none" class="text-[#a83020] hover:underline">Clear</button>
+            </div>
+          </div>
+          <div id="f-nursery-chips" class="flex flex-wrap gap-2"></div>
+        </div>
+        <div class="f-breed w-44">
+          <label class="label-style !mb-1">Breed</label>
+          <select id="f-breed" class="input-style">
+            <option value="">All breeds</option>
           </select>
         </div>
-      </div>
-      <div class="f-nursery-inline hidden">
-        <div class="flex items-center justify-between mb-1 gap-3">
-          <span class="label-style !mb-0">Locations</span>
-          <div class="flex gap-3 text-[10px] font-black uppercase tracking-widest">
-            <button type="button" id="f-nurs-all" class="text-[#4a7a2e] hover:underline">All</button>
-            <button type="button" id="f-nurs-none" class="text-[#a83020] hover:underline">Clear</button>
+        <div class="f-sales-mode hidden">
+          <label class="label-style !mb-1">View</label>
+          <div class="flex bg-white border border-[#e8dcc8] rounded-xl p-1">
+            <button type="button" id="f-mode-table" class="px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest bg-[#3d2610] text-white">Table</button>
+            <button type="button" id="f-mode-chart" class="px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-[#3d2610]">Chart</button>
           </div>
         </div>
-        <div id="f-nursery-chips" class="flex flex-wrap gap-2"></div>
-      </div>
-      <div class="f-breed w-44">
-        <label class="label-style !mb-1">Breed</label>
-        <select id="f-breed" class="input-style">
-          <option value="">All breeds</option>
-        </select>
-      </div>
-      <div class="f-sales-mode hidden">
-        <label class="label-style !mb-1">View</label>
-        <div class="flex bg-white border border-[#e8dcc8] rounded-xl p-1">
-          <button type="button" id="f-mode-table" class="px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest bg-[#3d2610] text-white">Table</button>
-          <button type="button" id="f-mode-chart" class="px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-[#3d2610]">Chart</button>
-        </div>
-      </div>
-      <button id="f-run" class="btn-earth">Run Report</button>
-      <div class="w-full f-sales-years hidden">
-        <div class="flex items-center justify-between mb-1">
-          <span class="label-style !mb-0">Years</span>
-          <div class="flex gap-3 text-[10px] font-black uppercase tracking-widest">
-            <button type="button" id="f-yr-all" class="text-[#4a7a2e] hover:underline">All</button>
-            <button type="button" id="f-yr-none" class="text-[#a83020] hover:underline">Clear</button>
+        <div class="w-full f-sales-years hidden">
+          <div class="flex items-center justify-between mb-1">
+            <span class="label-style !mb-0">Years</span>
+            <div class="flex gap-3 text-[10px] font-black uppercase tracking-widest">
+              <button type="button" id="f-yr-all" class="text-[#4a7a2e] hover:underline">All</button>
+              <button type="button" id="f-yr-none" class="text-[#a83020] hover:underline">Clear</button>
+            </div>
           </div>
+          <div id="f-year-chips" class="flex flex-wrap gap-2"></div>
         </div>
-        <div id="f-year-chips" class="flex flex-wrap gap-2"></div>
       </div>
     </div>
   </div>
+
+  <!-- Pinned to the sidebar's bottom edge, outside #mv-sidebar-scroll, so
+       Run Report is always reachable without scrolling however long the
+       filter list above it gets. -->
+  <button id="f-run" class="btn-earth">Run Report</button>
 </div>
 <!-- Always-visible handle so the sidebar isn't invisible until you happen
      to brush the left edge — a small tab poking out that says "there's
