@@ -2826,12 +2826,27 @@
                adjustment could move then. Reading a missing marker as "plot"
                would silently restate what those rows said. */
             const side = body.match(/Side:\s*(seed|plot)\s*\.\s*/i);
+            /* An adjustment that is going to become — or has already become —
+               a transplant row on a plot nothing reached. See the panel on
+               tab 7 and approveCalibration().
+
+               TAKEN OUT OF THE BODY FIRST, and that order is load-bearing:
+               "Tray:" is a substring of "TxTray:", so matching the plain one
+               against a remark carrying TxTray:P4 eats the tail of it and
+               leaves "Tx" behind in the Reason column. Remove the longer
+               label, then look for the shorter one in what is left. */
+            const txTray = body.match(/TxTray:\s*([^.]+?)\s*\.\s*/i);
+            const txMap  = body.match(/TxMap:(\S+)/i);
+            const txRow  = body.match(/TxRow:(\S+)/i);
+            let reason = body;
+            if (txTray) reason = reason.replace(txTray[0], '');
+            if (txMap)  reason = reason.replace(txMap[0], '');
+            if (txRow)  reason = reason.replace(txRow[0], '');
             /* WHICH TRAY the plot's share came from, on a Transplanting
                adjustment. Stripped out of the reason like every other labelled
                fragment — a label left in the body is how the Reason column
                ends up reading "Tray: T3. Manual count". */
-            const tray = body.match(/Tray:\s*([^.]+?)\s*\.\s*/i);
-            let reason = body;
+            const tray = reason.match(/Tray:\s*([^.]+?)\s*\.\s*/i);
             if (rep)  reason = reason.replace(rep[0], '');
             if (plot) reason = reason.replace(plot[0], '');
             if (side) reason = reason.replace(side[0], '');
@@ -2842,6 +2857,9 @@
                 report: rep  ? rep[1].trim()  : '',
                 plot:   plot ? plot[1].trim() : (r.plot_name || ''),
                 tray:   tray ? tray[1].trim() : '',
+                txTray: txTray ? txTray[1].trim() : '',
+                txMap:  txMap ? txMap[1] : '',
+                txRow:  txRow ? txRow[1] : '',
                 side:   ADJUST_SIDE_OF(rep ? rep[1].trim() : ''),
                 reason: reason.trim(),
                 approved: !!approved,
@@ -2959,6 +2977,9 @@
             const byPair = {};
             (ADJUST_ROWS || []).forEach(r => {
                 if (!r.approved) return;
+                // Same rule as the maps above: one that became a transplant row
+                // is in the Qty column now, not the Adjustment one.
+                if (r.txRow) return;
                 if (String(r.report || '').toLowerCase() !== 'transplanting') return;
                 const k = _t6PlotKey(r.plot) + '|' + _t3TrayKey(r.tray);
                 byPair[k] = (byPair[k] || 0) + r.qty;
@@ -3087,7 +3108,10 @@
                this" is worth seeing — it just is not an answer yet. */
             Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
             Object.keys(ADJUST_PLOT_LOSS_STAGE).forEach(k => delete ADJUST_PLOT_LOSS_STAGE[k]);
-            rows.filter(r => r.approved).forEach(r => {
+            /* NOT the ones that became a transplant row. Their figure is a
+               recorded movement now — it is in the plot's Qty — so counting it
+               here as well would put the same 140 into B8 twice. */
+            rows.filter(r => r.approved && !r.txRow).forEach(r => {
                 if (r.side === 'plot') {
                     // Belongs to the plot it names, not to the batch total,
                     // and only to the reports still measuring against a figure
@@ -3527,6 +3551,87 @@
             </div>`;
         }
 
+        /* ── An adjustment that puts seedlings into a plot nothing reached ───
+
+           The panel that asks for the two things the form does not already
+           know. Everything else about the transplant row is on screen: the
+           plot, the date and the quantity.
+
+           The map is kept as a data URL until the adjustment is approved,
+           because that is when the row is written — uploading on every
+           keystroke would leave files behind for adjustments nobody ruled on.  */
+        let _t7NewPlotMap = '';          // data URL of the drone map, before upload
+
+        function _t7NewPlotPanelHtml(plot, esc) {
+            return `<div class="rounded-xl border border-[#c8d9e8] bg-[#f7fbff] overflow-hidden">
+                <div class="px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-[#3a7ab4]">
+                    ${esc(plot)} has no transplanting record — this will create one
+                </div>
+                <div class="px-4 pb-3 text-[11px] font-bold text-[#8a7a68]">
+                    Seedlings are standing in ${esc(plot)} that no transplant row accounts for. Approving this
+                    adjustment writes that row: the plot, the date and the quantity come from this form, so the
+                    two things left are which tray they came out of and the drone map.
+                </div>
+                <div class="px-4 pb-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="label-style !text-[#c07820]">Source Tray *</label>
+                        <div class="select-wrapper">
+                            <select id="t7-newplot-tray" class="input-style !text-[#c07820]">${getTab3TrayOptionsHTML({})}</select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="label-style">Drone Map *</label>
+                        <div id="t7-newplot-map-zone"
+                             class="border-2 border-dashed border-[#e8dcc8] bg-white rounded-xl p-3 text-center cursor-pointer hover:bg-[#f3efe6] hover:border-[#c07820] transition-all"
+                             onclick="document.getElementById('t7-newplot-map-file').click()"
+                             ondragover="event.preventDefault(); this.classList.add('!border-[#c07820]');"
+                             ondragleave="event.preventDefault(); this.classList.remove('!border-[#c07820]');"
+                             ondrop="event.preventDefault(); this.classList.remove('!border-[#c07820]'); handleT7NewPlotMapDrop(event)">
+                            <div class="flex items-center justify-center gap-2 pointer-events-none">
+                                <span class="text-base">🗺️</span>
+                                <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">Drag &amp; Drop or Click</div>
+                            </div>
+                        </div>
+                        <input type="file" id="t7-newplot-map-file" class="hidden" accept="image/*,.pdf"
+                               onchange="handleT7NewPlotMapPick(this)">
+                        <div id="t7-newplot-map-done" class="hidden items-center gap-1.5 p-2 border border-[#e8dcc8] rounded-xl bg-white mt-1">
+                            <span class="text-[9px] font-black text-[#4a7a2e] uppercase flex-1 truncate">✅ Map attached</span>
+                            <button type="button" class="w-6 h-6 bg-[#fff5f5] text-[#a83020] rounded hover:bg-[#f8d7da] flex items-center justify-center text-xs"
+                                    onclick="removeT7NewPlotMap()">✕</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function _t7RestoreNewPlotMap() {
+            const done = document.getElementById('t7-newplot-map-done');
+            const zone = document.getElementById('t7-newplot-map-zone');
+            if (!done || !zone) return;
+            done.classList.toggle('hidden', !_t7NewPlotMap);
+            done.classList.toggle('flex',   !!_t7NewPlotMap);
+            zone.classList.toggle('hidden', !!_t7NewPlotMap);
+        }
+        function handleT7NewPlotMapPick(input) {
+            const f = input.files && input.files[0];
+            input.value = '';
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = () => { _t7NewPlotMap = r.result; _t7RestoreNewPlotMap(); };
+            r.readAsDataURL(f);
+        }
+        function handleT7NewPlotMapDrop(e) {
+            const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = () => { _t7NewPlotMap = r.result; _t7RestoreNewPlotMap(); };
+            r.readAsDataURL(f);
+        }
+        function removeT7NewPlotMap() { _t7NewPlotMap = ''; _t7RestoreNewPlotMap(); }
+
+        // Is the form currently asking to create a transplant row?
+        function _t7NewPlotAsking() { return !!document.getElementById('t7-newplot-tray'); }
+
         // The tray lines that were actually keyed. A blank or a zero means
         // "that tray's count was right", not "nothing here to record".
         function _t7CollectTrayAdj() {
@@ -3568,10 +3673,35 @@
             const trays = _t7TraysFeeding(logs, plot);
 
             if (!trays.length) {
-                return plain(`<div class="rounded-xl border border-[#e8dcc8] bg-[#fdfaf4] px-4 py-3 text-[11px] font-bold text-[#8a7a68]">
-                    Nothing has been transplanted into <strong class="text-[#3d2610]">${esc(plot)}</strong> on this batch,
-                    so there is no tray to trace the difference back to. The adjustment is recorded against the plot as a whole.
-                </div>`);
+                /* NOTHING WAS EVER TRANSPLANTED INTO THIS PLOT, and the
+                   adjustment ADDS to it. That is not a correction to a figure
+                   — it is a movement nobody recorded: seedlings are standing
+                   in the plot and no transplant row says how they got there.
+
+                   So instead of filing it as an adjustment against a plot with
+                   nothing on it, the row is written. The date and the quantity
+                   are already on the form; the two things only the person
+                   knows are which tray they came out of and what the drone map
+                   shows, so those are asked for here and the record is created
+                   when the adjustment is approved.
+
+                   Only for a POSITIVE one. Taking seedlings off a plot that
+                   has none recorded is a different thing entirely and stays an
+                   adjustment. */
+                const addsToPlot = (parseInt(qtyEl?.value, 10) || 0) > 0;
+                if (!addsToPlot || _t7EditingId) {
+                    return plain(`<div class="rounded-xl border border-[#e8dcc8] bg-[#fdfaf4] px-4 py-3 text-[11px] font-bold text-[#8a7a68]">
+                        Nothing has been transplanted into <strong class="text-[#3d2610]">${esc(plot)}</strong> on this batch,
+                        so there is no tray to trace the difference back to. The adjustment is recorded against the plot as a whole.
+                    </div>`);
+                }
+                _t7TrayMode = false;
+                if (qtyEl) { qtyEl.readOnly = false; qtyEl.classList.remove('bg-[#f5efe4]', 'cursor-not-allowed'); }
+                host.setAttribute('data-edit-tray', '');
+                host.innerHTML = _t7NewPlotPanelHtml(plot, esc);
+                host.classList.remove('hidden');
+                _t7RestoreNewPlotMap();
+                return;
             }
 
             /* EDITING. The Qty box stays the figure being corrected and the
@@ -3654,6 +3784,7 @@
         function cancelEditCalibration() {
             _t7EditingId = null;
             _t7EditingTray = '';
+            _t7NewPlotMap = '';   // a map picked for a row that is no longer being keyed
             const qtyEl    = document.getElementById('t7-cal-qty');
             const reportEl = document.getElementById('t7-cal-report');
             const plotEl   = document.getElementById('t7-cal-plot');
@@ -3712,7 +3843,7 @@
             if (!confirm('Approve and lock this adjustment? Once approved, no further edits are allowed for this row.')) return;
             const { data: row, error: readErr } = await _supabase
                 .from('shared_inventory_logs')
-                .select('remark')
+                .select('remark, plot_name, quantity_change, transaction_date, batch_name, created_at')
                 .eq('id', id)
                 .maybeSingle();
             if (readErr) { showToast('Failed to read row: ' + readErr.message, 'error'); return; }
@@ -3733,7 +3864,59 @@
                 .update({ remark: newRemark })
                 .eq('id', id);
             if (error) { showToast('Failed to approve: ' + error.message, 'error'); return; }
-            showToast('Calibration approved and locked.', 'success');
+
+            /* THE PLOT GETS ITS RECORD. An adjustment raised on a plot nothing
+               was ever transplanted into was keyed with the tray it came out of
+               and a drone map, and approving it is what turns that into a real
+               Transplanted row — the plot, the date and the quantity off the
+               adjustment, the tray and the map off the answers.
+
+               Written on approval, not on save, because an adjustment nobody
+               has ruled on moves no figure anywhere else either, and that has
+               to include putting seedlings into a plot.
+
+               The adjustment then carries TxRow:<id>, which is what stops it
+               ALSO counting as an adjustment against the plot — its figure is
+               a recorded movement now, and counting it twice is how B8 would
+               read 280 for one lot of 140. See paintT3Adjustments and the maps
+               in syncAdjustmentBars. */
+            const cal = _parseCalibration(Object.assign({ id }, row || {}));
+            if (cal.txTray && !cal.txRow) {
+                const txRemark = `Transplanted from tray [${cal.txTray}] to Main Plot [${cal.plot}]. `
+                    + `Date: ${(row.transaction_date || String(row.created_at || '').slice(0, 10))}`
+                    + (cal.txMap ? ` MapUrl:${cal.txMap}` : '')
+                    + ` FromAdjustment:${id} CalApprovedBy:${who}`;
+                const { data: made, error: txErr } = await _supabase
+                    .from('shared_inventory_logs')
+                    .insert([withEditMeta({
+                        transaction_type: 'Transplanted',
+                        batch_name: row.batch_name,
+                        plot_name: cal.plot,
+                        quantity_change: Math.abs(Number(row.quantity_change) || 0),
+                        transaction_date: row.transaction_date || String(row.created_at || '').slice(0, 10),
+                        remark: txRemark
+                    })])
+                    .select('id');
+                if (txErr || !made || !made.length) {
+                    /* The approval stands — it is already written — but say so
+                       plainly, because the figure is now approved WITHOUT the
+                       record it was supposed to create, and somebody has to
+                       know that rather than find out from a report. */
+                    showToast('Approved, but the transplanting record for ' + cal.plot
+                        + ' was NOT created' + (txErr ? ': ' + txErr.message : '')
+                        + '. Press Edit on the adjustment and save it again to retry.', 'error');
+                } else {
+                    await _supabase.from('shared_inventory_logs')
+                        .update({ remark: newRemark + ` TxRow:${made[0].id}` })
+                        .eq('id', id);
+                    _t7TxLogs = null;   // the plot has a transplant row now
+                    showToast(`Approved. ${cal.plot} now has a transplanting record of `
+                        + `${Math.abs(Number(row.quantity_change) || 0).toLocaleString()} from ${cal.txTray}.`, 'success');
+                }
+            } else {
+                showToast('Calibration approved and locked.', 'success');
+            }
+
             const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
             renderCalibrationHistory(batchId);
             // …and the same rows on the report each was raised against.
@@ -3765,6 +3948,23 @@
                 return;
             }
 
+            /* Creating a transplant row needs both answers. Neither can be
+               guessed and the row is wrong without either, so the save asks
+               rather than writing half a record. */
+            const newPlotAsk = _t7NewPlotAsking();
+            if (newPlotAsk) {
+                const t = (document.getElementById('t7-newplot-tray')?.value || '').trim();
+                if (!t) {
+                    showToast('Which tray did these seedlings come out of? The transplant row needs it.', 'error');
+                    document.getElementById('t7-newplot-tray')?.focus();
+                    return;
+                }
+                if (!_t7NewPlotMap) {
+                    showToast('Attach the drone map — the transplant row this creates has to carry one.', 'error');
+                    return;
+                }
+            }
+
             /* EDITING with the column filled in splits the row. The trays have
                to add up to the quantity being corrected or the split is not the
                same adjustment any more — the total on screen says so as it is
@@ -3786,6 +3986,27 @@
             if (!reason) { showToast('Reason is required for every calibration.', 'error'); reasonEl.focus(); return; }
 
             btn.disabled = true; btn.innerText = _t7EditingId ? 'Updating…' : 'Saving…';
+
+            /* The map is uploaded NOW, not when the adjustment is approved.
+               It is a real thing the person attached, and the page may well be
+               reloaded between keying this and somebody ruling on it — a data
+               URL held in a variable would not survive that. An adjustment
+               that is never approved leaves one unused file behind, which is a
+               much smaller problem than losing the map. */
+            let newPlotSuffix = '';
+            if (newPlotAsk) {
+                btn.innerText = 'Uploading map…';
+                const url = await _uploadBatchDoc('transplant_maps', batchId, `${plot}-from-adjustment`, _t7NewPlotMap);
+                if (!url) {
+                    btn.disabled = false; btn.innerText = 'Save Adjustment';
+                    showToast('The drone map did not upload'
+                        + (window._mjmLastUploadError ? ': ' + window._mjmLastUploadError : '')
+                        + '. Nothing was saved — try again.', 'error');
+                    return;
+                }
+                newPlotSuffix = ` TxTray:${(document.getElementById('t7-newplot-tray')?.value || '').trim()}.`
+                              + ` TxMap:${url}`;
+            }
 
             // plot_name is the right schema column for the location; report
             // and the freeform reason are stored as labelled fragments in the
@@ -3811,7 +4032,12 @@
                    carried is not copied across, so the adjustment stops moving
                    figures until it is approved again. Deliberate — see the
                    Edit button on approved rows. */
-                remark: `Report: ${report}. Plot: ${plot}. ${reason}`
+                /* TxTray / TxMap ride along when this adjustment is going to
+                   become a transplant row. They are read back by
+                   approveCalibration(), which is where the row is actually
+                   written — an adjustment nobody has ruled on moves nothing,
+                   and that has to include putting 140 seedlings into a plot. */
+                remark: `Report: ${report}. Plot: ${plot}. ${reason}${newPlotSuffix}`
             });
 
             /* ONE ROW PER TRAY on a Transplanting adjustment. Each carries the
@@ -4405,6 +4631,28 @@
                                        <span class="text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest group-hover:text-[#c07820] transition-colors">View</span>
                                    </button>`
                                 : `<div class="text-sm text-[#8a7a68]">—</div>`;
+                            /* A ROW THE SYSTEM WROTE, not one somebody keyed.
+
+                               It came from an adjustment on a plot nothing had
+                               been transplanted into, and it exists because
+                               that adjustment was approved — so it is not
+                               verified the usual way and it is not edited or
+                               deleted here either. Changing it by hand would
+                               put it out of step with the adjustment it
+                               mirrors, and there would be nothing to say which
+                               of the two was right. It says whose approval put
+                               it there instead. */
+                            const fromAdjMatch = log.remark ? log.remark.match(/FromAdjustment:(\S+)/) : null;
+                            const calWhoMatch  = log.remark ? log.remark.match(/CalApprovedBy:(\S+)/) : null;
+                            const fromAdjCell = fromAdjMatch
+                                ? `<div class="text-[8px] font-black text-[#4a7a2e] uppercase tracking-wider leading-tight"
+                                        title="Created from an approved stock adjustment — edit the adjustment on Adjustments &amp; Audit, not this row">
+                                       🔒 Calibration<br>approved by<br>${_escAttr(mjmWho(calWhoMatch ? calWhoMatch[1] : '') || '—')}
+                                   </div>`
+                                : `<div class="flex gap-1">
+                                            <button type="button" onclick="toggleT3EditRow(${idx})" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[8px] font-black uppercase rounded hover:bg-[#f0f8ff] transition-colors">Edit</button>
+                                            <button type="button" onclick="deleteT3Row(${idx})" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}" class="px-2 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[8px] font-black uppercase rounded hover:bg-[#fff5f5] transition-colors">Del</button>
+                                        </div>`;
                             tableList.insertAdjacentHTML('beforeend', `
                                 <div class="t3-saved-row${rowLocked ? ' mjm-locked' : ''}" data-review-key="${reviewKey}">
                                     <!-- Compact row -->
@@ -4424,10 +4672,7 @@
                                              data-counted="${log.transaction_type === 'Transplanted' ? '1' : '0'}">—</div>
                                         <div class="t3-final-cell text-sm font-black text-[#4a7a2e] tabular-nums">${log.quantity_change.toLocaleString()}</div>
                                         <div>${rowMapCell}</div>
-                                        <div class="flex gap-1">
-                                            <button type="button" onclick="toggleT3EditRow(${idx})" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[8px] font-black uppercase rounded hover:bg-[#f0f8ff] transition-colors">Edit</button>
-                                            <button type="button" onclick="deleteT3Row(${idx})" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}" class="px-2 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[8px] font-black uppercase rounded hover:bg-[#fff5f5] transition-colors">Del</button>
-                                        </div>
+                                        ${fromAdjCell}
                                     </div>
                                     <!-- Inline edit form (hidden by default) -->
                                     <div id="${editId}" class="hidden mt-1 p-4 bg-white border border-[#3a7ab4] rounded-xl space-y-3">
