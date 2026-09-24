@@ -3563,7 +3563,14 @@
         let _t7NewPlotMap = '';          // data URL of the drone map, before upload
 
         function _t7NewPlotPanelHtml(plot, esc) {
-            return `<div class="rounded-xl border border-[#c8d9e8] bg-[#f7fbff] overflow-hidden">
+            /* NO overflow-hidden ON THIS ONE. The other panels here use it to
+               keep their rows inside the rounded corner, but this one holds the
+               Source Tray dropdown, and the custom select's menu is an
+               absolutely positioned child — an ancestor that clips cuts the
+               menu off at the panel's edge, so the trays are built, are in the
+               select, and cannot be seen. That is exactly how this looked when
+               it was reported. Nothing in here overflows the corner anyway. */
+            return `<div class="rounded-xl border border-[#c8d9e8] bg-[#f7fbff]">
                 <div class="px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-[#3a7ab4]">
                     ${esc(plot)} has no transplanting record — this will create one
                 </div>
@@ -3576,8 +3583,29 @@
                     <div>
                         <label class="label-style !text-[#c07820]">Source Tray *</label>
                         <div class="select-wrapper">
-                            <select id="t7-newplot-tray" class="input-style !text-[#c07820]">${getTab3TrayOptionsHTML({})}</select>
+                            <!-- cf-skip: KEPT NATIVE ON PURPOSE.
+
+                                 This panel sits at the bottom of the Stock
+                                 Calibration card, and that card has
+                                 overflow-hidden holding its gradient header
+                                 inside the rounded corner. The skinned
+                                 dropdown's menu is an absolutely positioned
+                                 element, so it was clipped at the card's edge —
+                                 the trays were built, were in the select, and
+                                 could not be seen. A native popup is drawn by
+                                 the browser and no ancestor can clip it.
+
+                                 shared_cf_select.js documents cf-skip for
+                                 exactly this. The real fix is for that widget
+                                 to render its menu in a layer nothing clips,
+                                 which would need doing in the phone repo's copy
+                                 too — until then every dropdown near the bottom
+                                 of a card like this one has the same problem. -->
+                            <select id="t7-newplot-tray" class="input-style !text-[#c07820] cf-skip">${getTab3TrayOptionsHTML({})}</select>
                         </div>
+                        ${preNurseryTrayData.length ? '' : `<div class="mt-1 text-[10px] font-black text-[#a83020] uppercase tracking-widest">
+                            No planted trays on this batch — save the Planting report first, or there is nothing to pick from
+                        </div>`}
                     </div>
                     <div>
                         <label class="label-style">Drone Map *</label>
@@ -3698,6 +3726,9 @@
                 _t7TrayMode = false;
                 if (qtyEl) { qtyEl.readOnly = false; qtyEl.classList.remove('bg-[#f5efe4]', 'cursor-not-allowed'); }
                 host.setAttribute('data-edit-tray', '');
+                /* The tray list must not depend on whether the planting tab
+                   happens to be rendered — see _ensurePreNurseryTrayData. */
+                await _ensurePreNurseryTrayData(batchId);
                 host.innerHTML = _t7NewPlotPanelHtml(plot, esc);
                 host.classList.remove('hidden');
                 _t7RestoreNewPlotMap();
@@ -4466,6 +4497,35 @@
         let transplantRowCount = 0;
         let preNurseryTrayData = [];
         let mockCullingTab4 = 0; 
+
+        /* THE TRAY LIST, FROM THE DATABASE, WHEREVER IT IS ASKED FOR.
+
+           preNurseryTrayData is what getTab3TrayOptionsHTML() offers, and
+           syncTab3() below rebuilds it by reading tab 2's tray rows OUT OF THE
+           DOM — emptying it first. syncTab3() runs on every switch to
+           Transplanting and after every transplant save, so any screen that
+           asks for the tray list while tab 2's rows are not rendered gets
+           nothing: open a batch, touch Transplanting, go to Adjustments, and
+           the Source Tray dropdown is empty but for the two special trays.
+
+           This fills it from the batch's own Planted rows when it is empty, and
+           anything that needs the list awaits it first rather than hoping the
+           planting tab happens to be on screen. Returns whether it loaded
+           anything, so the one caller that also updates a total still can.  */
+        async function _ensurePreNurseryTrayData(batchId) {
+            if (preNurseryTrayData.length) return false;
+            if (!batchId) return false;
+            const { data: plantedLogs, error } = await _supabase
+                .from('shared_inventory_logs')
+                .select('plot_name, quantity_change')
+                .eq('batch_name', batchId)
+                .eq('transaction_type', 'Planted');
+            // Fail open: no list is what it was before, not a broken screen.
+            if (error) { console.warn('[trays] not read:', error.message); return false; }
+            if (!plantedLogs || !plantedLogs.length) return false;
+            preNurseryTrayData = plantedLogs.map(l => ({ name: l.plot_name, initialQty: l.quantity_change }));
+            return true;
+        }
 
         async function syncTab3() {
             let totalPlantedRaw = 0;
@@ -8967,18 +9027,9 @@ Thank you.`;
                 }
 
                 // Also load planted tray data from DB if preNurseryTrayData is empty
-                if (preNurseryTrayData.length === 0) {
-                    const { data: plantedLogs } = await _supabase
-                        .from('shared_inventory_logs')
-                        .select('plot_name, quantity_change')
-                        .eq('batch_name', batch)
-                        .eq('transaction_type', 'Planted');
-                    if (plantedLogs && plantedLogs.length > 0) {
-                        preNurseryTrayData = plantedLogs.map(l => ({ name: l.plot_name, initialQty: l.quantity_change }));
-                        // Also update t4_totalPlanted
-                        t4_totalPlanted = preNurseryTrayData.reduce((s, t) => s + t.initialQty, 0);
-                        document.getElementById('t3-total-planted').innerText = t4_totalPlanted.toLocaleString();
-                    }
+                if (await _ensurePreNurseryTrayData(batch)) {
+                    t4_totalPlanted = preNurseryTrayData.reduce((s, t) => s + t.initialQty, 0);
+                    document.getElementById('t3-total-planted').innerText = t4_totalPlanted.toLocaleString();
                 }
             } else {
                 t4_totalMain       = parseInt(document.getElementById('t3-val-main').innerText.replace(/,/g, '')) || 0;
