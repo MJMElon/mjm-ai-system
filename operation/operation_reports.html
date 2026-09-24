@@ -69,8 +69,10 @@
      while every other figure in the table was. */
   .movement-table td.col-label { text-align:left; max-width:none; }
   /* A visible rule between every column — a dozen unbroken figure columns
-     otherwise blur into one wide field. */
-  .movement-table th, .movement-table td { border-right:1px solid #efe6d4; }
+     otherwise blur into one wide field. Same problem as the row divider
+     below: #efe6d4 is lighter than the zebra stripe (#f0e6d2) it
+     sometimes sits on, so it disappeared on every other row. Same fix. */
+  .movement-table th, .movement-table td { border-right:1px solid #d9c8a3; }
   .movement-table th:last-child, .movement-table td:last-child { border-right:none; }
   /* The row divider (.report-table td's default border-bottom:1px solid
      #f3efe6) is lighter than the zebra stripe it sometimes sits on
