@@ -1508,11 +1508,11 @@ async function runMovementReportCombined() {
       const from = (l.remark || '').match(/From:\s*\[([^\]|]+)\|/);
       if (passMain(l.plot_name)) {
         push('main', d, l.plot_name, b, 'trIn', q);
-        pushDetail(l.plot_name, b, 'trIn', d, q, from ? `From ${from[1]}` : '');
+        pushDetail(l.plot_name, b, 'trIn', d, q, from ? from[1] : '');
       }
       if (from && passMain(from[1])) {
         push('main', d, from[1], b, 'trOut', q);
-        pushDetail(from[1], b, 'trOut', d, q, `To ${l.plot_name}`);
+        pushDetail(from[1], b, 'trOut', d, q, l.plot_name);
       }
       return;
     }
