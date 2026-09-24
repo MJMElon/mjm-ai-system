@@ -481,7 +481,7 @@
                     <h1 class="text-2xl font-black text-[#3d2610] uppercase tracking-widest leading-none" id="window-title">New Batch Record</h1>
                     <p class="text-[12px] font-black text-[#4a7a2e] uppercase tracking-widest mt-1 truncate" id="window-breed">—</p>
                 </div>
-                <button onclick="window.location.href='operation_batch_record.html'" class="close-btn" title="Close and return">
+                <button onclick="closeBatchRecord()" class="close-btn" title="Close and return">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
@@ -3894,6 +3894,87 @@
             syncAdjustmentBars(batchId);
         }
 
+        /* ── Leaving a tab with something keyed into it ──────────────────────
+
+           Each tab is saved by its own button at the bottom, and the X in the
+           corner navigates away without going near any of them. A morning's
+           counting typed into 3rd Culling and not saved was gone, silently,
+           with one click and nothing asked.
+
+           DIRTY IS PER TAB, and it is what somebody TYPED. The listener only
+           fires on a real `input`/`change` from the field itself, so the many
+           places this page writes a value into a box — restoring a saved row,
+           the calibration total following the tray column, a percentage
+           recalculated — do not make a tab look edited when nobody touched it.
+
+           CLEARED ONLY WHEN THE SAVE ACTUALLY WORKED. Every save on this page
+           reports failure through showToast(…, 'error'), so the wrapper below
+           watches for one while the save runs and leaves the tab dirty if it
+           sees one. Clearing on "the function returned" would drop the warning
+           on exactly the save that did not happen. */
+        const TAB_TITLES = {
+            1: 'Seeds Received', 2: 'Seed Planting', 3: 'Transplanting',
+            4: '1st Culling', 5: '2nd Culling', 6: '3rd Culling',
+            7: 'Adjustments & Audit', 8: 'Seed Audit'
+        };
+        const _tabDirty = {};
+
+        document.addEventListener('input', _markTabDirty, true);
+        document.addEventListener('change', _markTabDirty, true);
+        function _markTabDirty(e) {
+            const el = e.target;
+            if (!el || !el.closest) return;
+            if (!/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
+            if (el.type === 'file') return;          // picking a file is not yet a change to the record
+            const pane = el.closest('.tab-content');
+            if (!pane) return;
+            const n = parseInt(String(pane.id || '').replace('tab-', ''), 10);
+            if (!isNaN(n)) _tabDirty[n] = true;
+        }
+
+        function _dirtyTabNames() {
+            return Object.keys(_tabDirty)
+                .filter(n => _tabDirty[n])
+                .map(n => TAB_TITLES[n] || ('Tab ' + n));
+        }
+
+        /* Runs a tab's save and clears that tab only if nothing reported an
+           error while it ran. Wrapped after the page has defined them all, so
+           the order of declarations here does not matter. */
+        function _trackTabSave(name, tabIdx) {
+            const orig = window[name];
+            if (typeof orig !== 'function') return;
+            window[name] = function () {
+                let sawError = false;
+                const realToast = window.showToast;
+                window.showToast = function (m, t) { if (t === 'error') sawError = true; return realToast.apply(this, arguments); };
+                const done = () => { window.showToast = realToast; if (!sawError) _tabDirty[tabIdx] = false; };
+                let out;
+                try { out = orig.apply(this, arguments); }
+                catch (err) { done(); throw err; }
+                if (out && typeof out.then === 'function') return out.then(
+                    v => { done(); return v; },
+                    e => { done(); throw e; });
+                done();
+                return out;
+            };
+        }
+
+        function closeBatchRecord() {
+            const dirty = _dirtyTabNames();
+            if (dirty.length && !confirm(
+                    `Not saved yet: ${dirty.join(', ')}.\n\n`
+                  + `Closing now loses what has been keyed into `
+                  + `${dirty.length === 1 ? 'that tab' : 'those tabs'} — each one is kept by its own `
+                  + `Save button at the bottom of it.\n\nClose anyway?`)) return;
+            /* The flags are cleared before navigating so the browser's own
+               "Leave site?" prompt does not ask a second time about a question
+               that has just been answered. */
+            Object.keys(_tabDirty).forEach(k => delete _tabDirty[k]);
+            _seedAuditDirty = false;
+            window.location.href = 'operation_batch_record.html';
+        }
+
         // ── Toast helper ──────────────────────────────────────────
         function showToast(message, type = 'success', durationMs = 4000) {
             const container = document.getElementById('toast-container');
@@ -7283,7 +7364,7 @@
         const seedAuditPhotoState = {};
         let _seedAuditDirty = false;
         window.addEventListener('beforeunload', e => {
-            if (_seedAuditDirty) {
+            if (_seedAuditDirty || _dirtyTabNames().length) {
                 e.preventDefault();
                 e.returnValue = ''; // browser shows its own "Leave site?" prompt
             }
@@ -8585,6 +8666,9 @@ Thank you.`;
                 updateT1Completion(); document.getElementById('t1-pie-analysis').style.setProperty('--percentage', 100); document.getElementById('t1-percent-text').innerText = '100%'; document.getElementById('t1-status-desc').innerText = 'Complete'; document.getElementById('t1-status-desc').className = 'text-base font-black uppercase text-[#4a7a2e] mt-1';
                 setEditMetaUI(1, ledgerPayload.last_edited_at || new Date().toISOString(), ledgerPayload.last_edited_by || window.currentUserEmail);
                 showToast('Seeds In record saved successfully.', 'success');
+                // Kept by hand here — tab 1 is a form submit, not one of the
+                // named save functions _trackTabSave() wraps.
+                _tabDirty[1] = false;
                 saveBtn.innerText = 'Save'; saveBtn.disabled = false;
                 /* STAY WHERE THE PERSON IS. Saving used to walk them onto
                    Seed Audit half a second later — so a figure corrected and
@@ -13208,6 +13292,16 @@ Thank you.`;
 
         // Init arrows on load
         window.addEventListener('load', () => setTimeout(updateTabScrollArrows, 100));
+
+        /* Wrap each tab's save so closing knows what has been kept. Done on
+           load, once every one of them exists, rather than beside any single
+           declaration — see _trackTabSave. Tab 1 clears itself; it is a form
+           submit rather than a named function. */
+        window.addEventListener('load', () => {
+            [['savePlantingTab', 2], ['saveTransplantTab', 3], ['saveCullingTab', 4],
+             ['saveTab5', 5], ['saveTab6', 6], ['saveCalibration', 7], ['saveSeedAudit', 8]]
+                .forEach(([fn, tab]) => { try { _trackTabSave(fn, tab); } catch (e) { console.warn('[dirty]', fn, e); } });
+        });
         window.addEventListener('resize', updateTabScrollArrows);
 
         _supabase.auth.getSession().then(({ data: { session } }) => {
