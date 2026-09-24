@@ -1208,14 +1208,18 @@ function nurseryRank(n) {
 /* sign: how the column moves the balance. 0 means shown but not counted —
    see Seed Damage, which never entered a tray to begin with. */
 const MOVE_COLS = {
+  // Premium Care and Double Tone no longer get their own Transfer Out
+  // columns here — a transplant into either is just Transplanted Out
+  // from the source tray, same as any other transplant (see the
+  // Transplanted_Premium/Transplanted_DoubleTone branch below). The
+  // receiving side (a Premium Care/D-Tone tray filling up) already reads
+  // as ordinary Transfer In, with nothing special to call out either.
   pre: [
     { key: 'trIn',     label: 'Transfer In',      sign: +1, cls: 'text-[#3a7ab4]' },
     { key: 'planted',  label: 'Planted',          sign: +1, cls: 'text-[#c07820]' },
     { key: 'damaged',  label: 'Seed Damage',      sign:  0, cls: 'text-[#a83020]' },
     { key: 'cull1',    label: '1st Culled',       sign: -1, cls: 'text-[#a83020]' },
     { key: 'transOut', label: 'Transplanted Out', sign: -1, cls: 'text-[#a83020]' },
-    { key: 'premium',  label: 'Premium Care',     sign: -1, cls: 'text-[#a83020]', grp: 'Transfer Out' },
-    { key: 'dtone',    label: 'Double Tone',      sign: -1, cls: 'text-[#a83020]', grp: 'Transfer Out' },
   ],
   main: [
     { key: 'trIn',    label: 'Transfer In',           sign: +1, cls: 'text-[#3a7ab4]' },
@@ -1397,9 +1401,10 @@ async function runMovementReportCombined() {
     }
 
     if (t === 'Transplanted_Premium' || t === 'Transplanted_DoubleTone') {
+      // The source tray's own loss reads as ordinary Transplanted Out —
+      // no separate Premium Care/Double Tone column for it (see MOVE_COLS.pre).
       const src = srcTrayOf(l);
-      const col = t === 'Transplanted_Premium' ? 'premium' : 'dtone';
-      if (src) push('pre', d, src, b, col, q);
+      if (src) push('pre', d, src, b, 'transOut', q);
       push('pre', d, l.plot_name, b, 'trIn', q);   // the receiving tray
       return;
     }
