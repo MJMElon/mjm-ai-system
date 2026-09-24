@@ -1180,9 +1180,16 @@ function _mvPlotKey(v) {
    with no trailing digits at all ("24D") identifies no batch and returns '',
    so it can never be matched to one. */
 function _mvBatchKey(v) {
-  // Trailing punctuation first — "225." is still batch 225 — then the digits
-  // it ends with.
-  const cleaned = String(v == null ? '' : v).trim().replace(/[^0-9A-Za-z]+$/, '');
+  // A parenthetical (or other) note after the number goes first — "232
+  // (B13)" is batch 232, not batch 13. Left in, the trailing-digits rule
+  // below reads the "13" inside the note instead of the real number,
+  // which is exactly why B14-R's batch 232 sale wasn't matching: the DO
+  // line had "232 (B13)" typed into its batch field. Same split _mvPlotKey
+  // already uses for its own parenthetical notes.
+  const noNote = String(v == null ? '' : v).trim().split(/[\s(,\[]/)[0];
+  // Trailing punctuation next — "225." is still batch 225 — then the
+  // digits it ends with.
+  const cleaned = noNote.replace(/[^0-9A-Za-z]+$/, '');
   const m = /(\d+)$/.exec(cleaned);
   return m ? String(parseInt(m[1], 10)) : '';
 }
