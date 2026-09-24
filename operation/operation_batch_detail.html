@@ -2707,8 +2707,9 @@
            take it off a later count that already missed those seedlings and
            one loss is subtracted twice.
 
-             Transplanting → 2nd + 3rd Culling. 1st Culling happened in the
-                 tray, before these ever went out, so it is untouched.
+             Transplanting → Transplanting, 2nd + 3rd Culling. Every report
+                 carries its own losses; 1st Culling happened in the tray,
+                 before these ever went out, so it alone is untouched.
              1st Culling   → 1st Culling only. The transplant record written
                  after it says what actually went to the plots, so nothing
                  downstream is still carrying the error.
@@ -2724,7 +2725,7 @@
                  ? 'seed' : 'plot';
         }
         const ADJUST_APPLIES_TO = {
-            'transplanting': ['2nd culling', '3rd culling'],
+            'transplanting': ['transplanting', '2nd culling', '3rd culling'],
             '1st culling':   ['1st culling'],
             '2nd culling':   ['2nd culling', '3rd culling'],
             '3rd culling':   ['3rd culling']
@@ -2830,6 +2831,15 @@
             if (!pk) return 0;
             const mine = ADJUST_PLOT_LOSS_STAGE[String(report || '').toLowerCase()];
             return (mine && typeof mine[pk] === 'number') ? mine[pk] : 0;
+        }
+
+        /* The same losses added up across every plot, for a report that shows
+           one figure rather than a row per plot — the Transplanting tab's
+           allocation base is the only one. */
+        function adjustPlotLossTotal(report) {
+            const mine = ADJUST_PLOT_LOSS_STAGE[String(report || '').toLowerCase()];
+            if (!mine) return 0;
+            return Object.keys(mine).reduce((sum, k) => sum + (mine[k] || 0), 0);
         }
 
         /* Would settling this adjustment move the 3rd Culling row? Used by the
@@ -4517,7 +4527,14 @@
 
                Every approved adjustment on the batch, whichever report it was
                raised against — see adjustNetTotal. */
-            const allocBase = totalPlantedRaw + getDtoneNurseryQty() + adjustNetTotal();
+            /* …and LESS what was lost after these went out, where the loss
+               was raised against this report. Those seedlings are not
+               standing anywhere any more, so a base that still counts them
+               leaves the tab looking for stock that is gone. See
+               ADJUST_APPLIES_TO — the same loss comes off the 2nd and 3rd
+               cullings, which are the counts still measuring against it. */
+            const allocBase = totalPlantedRaw + getDtoneNurseryQty() + adjustNetTotal()
+                            + adjustPlotLossTotal('Transplanting');
             /* The engine's headline figure IS this base — what the four
                percentages below are each a percentage of. Main plot plus
                D-Tone plus the 1st cull comes to the same thing from the other

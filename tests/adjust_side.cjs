@@ -15,8 +15,12 @@
    the same question — a loss comes off the reports still measuring against
    a figure that includes it, and off no others:
 
-       Transplanting → 2nd + 3rd      1st Culling → 1st only
-       2nd Culling   → 2nd + 3rd      3rd Culling → 3rd only
+       Transplanting → itself + 2nd + 3rd     1st Culling → 1st only
+       2nd Culling   → itself + 3rd            3rd Culling → 3rd only
+
+   Every report carries its own losses. 1st Culling is the one exception:
+   the transplant record written after it says what actually reached the
+   plots, so nothing downstream is still carrying the error.
 
    Run: NODE_PATH=/opt/node22/lib/node_modules node tests/adjust_side.cjs
 */
@@ -195,7 +199,11 @@ const ROWS = {
       // what the batch total carries: ONLY the initial ones
       total: adjustNetTotal(),
       // …and where each after-the-fact loss lands
+      // what the Transplanting tab's own base carries
+      transplantingTotal: adjustPlotLossTotal('Transplanting'),
       lands: {
+        'U3 @transplanting': adjustPlotLoss('U3', 'Transplanting'),
+        'U4 @transplanting': adjustPlotLoss('U4', 'Transplanting'),
         'U3 @1st': adjustPlotLoss('U3', '1st Culling'),
         'U3 @2nd': adjustPlotLoss('U3', '2nd Culling'),
         'U3 @3rd': adjustPlotLoss('U3', '3rd Culling'),
@@ -214,6 +222,9 @@ const ROWS = {
   console.log('page errors     :', errs.length ? errs.join(' | ') : 'none');
 
   const sideOf = Object.fromEntries(read.side);
+  /* A 1st Culling loss must not reach the Transplanting base either — that
+     base is what went out, and the tray recount happened before it. */
+  const adjustPlotLossTotalIsTrayFree = read.transplantingTotal === -53;
   const L = read.lands;
 
   const checks = [
@@ -231,17 +242,20 @@ const ROWS = {
     // ── only the initial ones move the batch total
     ['the batch total carries the Seeds Received one alone', read.total === -30],
 
-    // ── Transplanting: 2nd and 3rd, never 1st
+    // ── Transplanting: itself, 2nd and 3rd, never 1st
+    ['a Transplanting loss comes off Transplanting itself', L['U3 @transplanting'] === -53],
+    ['and off the tab\'s own allocation base', read.transplantingTotal === -53],
     ['a Transplanting loss reaches the 2nd culling', L['U3 @2nd'] === -53],
     ['and the 3rd', L['U3 @3rd'] === -53 + -4],
     ['and NOT the 1st — those never went out yet', L['U3 @1st'] === 0],
 
     // ── 1st Culling: itself only
     ['a 1st Culling loss stays on the 1st Culling', L['P60 @1st'] === -20],
-    ['and reaches neither culling after it',
-      L['P60 @2nd'] === 0 && L['P60 @3rd'] === 0],
+    ['and reaches neither culling after it, nor the transplanting',
+      L['P60 @2nd'] === 0 && L['P60 @3rd'] === 0 && adjustPlotLossTotalIsTrayFree],
 
-    // ── 2nd Culling: 2nd and 3rd
+    // ── 2nd Culling: itself and the 3rd, never the transplanting before it
+    ['a 2nd Culling loss does not reach back to Transplanting', L['U4 @transplanting'] === 0],
     ['a 2nd Culling loss reaches the 2nd', L['U4 @2nd'] === -7],
     ['and the 3rd', L['U4 @3rd'] === -7 + -6],
 
