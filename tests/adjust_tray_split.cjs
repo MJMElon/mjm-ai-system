@@ -267,7 +267,7 @@ async function setPlot(page, plot) {
   check('and it was an error', refused.type, 'error');
   checkTrue('the message points at the trays', /against the tray it came from/i.test(refused.toast));
 
-  console.log('\nEditing a saved row stays one row');
+  console.log('\nEditing a row that already names a tray');
   await page.evaluate(() => {
     window.__CAL_ROWS = [{
       id: 'cal-1', batch_name: '242', transaction_type: 'Stock_Calibration',
@@ -286,36 +286,105 @@ async function setPlot(page, plot) {
   check('the Reason column holds only the reason', reasonCell.trim(), 'Recount on the ground');
 
   await page.evaluate(() => document.querySelector('#t7-cal-history tr[data-cal-id="cal-1"] button').click());
-  await page.waitForTimeout(350);
-  check('the tray boxes are gone while editing',
-        await page.locator('#t7-cal-trays .t7-tray-adj').count(), 0);
-  const editTotals = await page.evaluate(() => ({
-    cal: document.getElementById('t7-tray-tot-cal').innerText.trim(),
-    onT1: Array.from(document.querySelectorAll('#t7-cal-trays .t7-tray-line'))
-            .find(l => l.getAttribute('data-tray') === 'T1')
-            .querySelector('.t7-tray-cal').innerText.trim()
-  }));
-  check('the edited row\'s figure shows on its own tray', editTotals.onT1, '-40');
-  check('and Total calibration still equals the Adjustment Qty', editTotals.cal, '-40');
-  await page.fill('#t7-cal-qty', '-45');
-  await page.waitForTimeout(150);
-  check('changing the Qty box moves the column with it',
-        await page.evaluate(() => document.getElementById('t7-tray-tot-cal').innerText.trim()), '-45');
-  await page.fill('#t7-cal-qty', '-40');
-  await page.waitForTimeout(150);
-  checkTrue('the trays are still shown, for reference',
-            /for reference while editing/i.test(await page.textContent('#t7-cal-trays')));
-  check('the Qty box is typable again so the one row can be corrected',
+  await page.waitForSelector('#t7-cal-trays .t7-tray-adj', { timeout: 5000 });
+  check('the Calibration column is typable while editing',
+        await page.locator('#t7-cal-trays .t7-tray-adj').count(), 3);
+  check('the row comes back with its own figure in its own tray',
+        await page.evaluate(() =>
+          Array.from(document.querySelectorAll('#t7-cal-trays .t7-tray-line'))
+               .map(l => [l.getAttribute('data-tray'), l.querySelector('.t7-tray-adj').value])),
+        [['T1', '-40'], ['T3', ''], ['T7', '']]);
+  checkTrue('and the verdict says it adds up',
+            /✓ the trays add up to -40/i.test(await page.textContent('#t7-tray-verdict')));
+  check('the Qty box stays typable — it is the figure being corrected',
         await page.getAttribute('#t7-cal-qty', 'readonly'), null);
+
+  console.log('\nThe total is checked against the adjustment quantity');
+  await page.locator('#t7-cal-trays .t7-tray-line[data-tray="T3"] .t7-tray-adj').fill('-20');
+  await page.waitForTimeout(150);
+  const off = await page.textContent('#t7-tray-verdict');
+  checkTrue('a mismatch is called out with the gap', /off by -20/i.test(off));
+  checkTrue('…naming both figures', /add up to -60/i.test(off) && /adjustment is -40/i.test(off));
+  check('the Qty box was NOT dragged along to hide the mismatch',
+        await page.inputValue('#t7-cal-qty'), '-40');
+
+  await page.evaluate(() => { window.__INSERTS = []; window.__UPDATES = []; window.__TOASTS = []; });
+  await page.evaluate(() => window.saveCalibration());
+  const blocked = await page.evaluate(() => ({
+    ins: window.__INSERTS.length, upd: window.__UPDATES.length,
+    toast: (window.__TOASTS.slice(-1)[0] || {}).m || '',
+    type:  (window.__TOASTS.slice(-1)[0] || {}).t || ''
+  }));
+  check('a mismatched split cannot be saved', { ins: blocked.ins, upd: blocked.upd }, { ins: 0, upd: 0 });
+  check('and it is an error', blocked.type, 'error');
+  checkTrue('the message names both figures', /add up to -60/.test(blocked.toast) && /is -40/.test(blocked.toast));
+
+  console.log('\nSplitting an existing row across trays');
+  await page.locator('#t7-cal-trays .t7-tray-line[data-tray="T1"] .t7-tray-adj').fill('-25');
+  await page.locator('#t7-cal-trays .t7-tray-line[data-tray="T3"] .t7-tray-adj').fill('-15');
+  await page.waitForTimeout(150);
+  checkTrue('the verdict turns green once they add up',
+            /✓ the trays add up to -40/i.test(await page.textContent('#t7-tray-verdict')));
+  checkTrue('and says how many rows it will become',
+            /splits this into 2 rows/i.test(await page.textContent('#t7-tray-verdict')));
 
   await page.evaluate(() => { window.__INSERTS = []; window.__UPDATES = []; });
   await page.evaluate(() => window.saveCalibration());
   await page.waitForFunction(() => window.__UPDATES.length > 0, { timeout: 8000 });
-  const after = await page.evaluate(() => ({ ins: window.__INSERTS.length, upd: window.__UPDATES }));
-  check('the edit updated one row and inserted none', { ins: after.ins, upd: after.upd.length }, { ins: 0, upd: 1 });
-  check('against the row being edited', after.upd[0].id, 'cal-1');
+  const split = await page.evaluate(() => ({ ins: window.__INSERTS, upd: window.__UPDATES }));
+  check('the row being edited is updated, not deleted', split.upd.length, 1);
+  check('…and keeps its id', split.upd[0].id, 'cal-1');
+  check('…carrying the first tray\'s share', split.upd[0].row.quantity_change, -25);
+  check('…and naming that tray', (split.upd[0].row.remark.match(/Tray:\s*([^.]+)\./) || [])[1], 'T1');
+  check('the remaining tray is inserted beside it', split.ins.length, 1);
+  check('…with its own share', split.ins[0].quantity_change, -15);
+  check('…and its own tray', (split.ins[0].remark.match(/Tray:\s*([^.]+)\./) || [])[1], 'T3');
+  check('the split still adds up to the adjustment',
+        split.upd[0].row.quantity_change + split.ins[0].quantity_change, -40);
+  check('no row carries an approval across the split',
+        [split.upd[0].row.remark, split.ins[0].remark].some(r => /APPROVED by/.test(r)), false);
+
+  console.log('\nAn edit that touches no tray stays one row');
+  await page.evaluate(() => {
+    window.__CAL_ROWS = [{
+      id: 'cal-old', batch_name: '242', transaction_type: 'Stock_Calibration',
+      plot_name: 'B14', quantity_change: -127, transaction_date: null,
+      created_at: '2026-08-26T02:00:00Z', last_edited_by: null,
+      remark: 'Report: Transplanting. Plot: B14. Stock calibration'
+    }];
+  });
+  await page.evaluate(b => window.renderCalibrationHistory(b), BATCH);
+  await page.waitForSelector('#t7-cal-history tr[data-cal-id="cal-old"]', { state: 'attached', timeout: 5000 });
+  await page.evaluate(() => document.querySelector('#t7-cal-history tr[data-cal-id="cal-old"] button').click());
+  await page.waitForSelector('#t7-cal-trays .t7-tray-adj', { timeout: 5000 });
+  check('a row that names no tray starts with every box empty',
+        await page.evaluate(() =>
+          Array.from(document.querySelectorAll('#t7-cal-trays .t7-tray-adj')).map(i => i.value)),
+        ['', '', '']);
+  checkTrue('and the verdict says it is not split, rather than calling it wrong',
+            /not split by tray/i.test(await page.textContent('#t7-tray-verdict')));
+  checkTrue('…naming the figure that stays on the one record',
+            /-127/.test(await page.textContent('#t7-tray-verdict')));
+
+  await page.fill('#t7-cal-date', '2026-08-26');
+  await page.evaluate(() => { window.__INSERTS = []; window.__UPDATES = []; });
+  await page.evaluate(() => window.saveCalibration());
+  await page.waitForFunction(() => window.__UPDATES.length > 0, { timeout: 8000 });
+  const untouched = await page.evaluate(() => ({ ins: window.__INSERTS.length, upd: window.__UPDATES }));
+  check('it saves as one row, with nothing inserted', untouched.ins, 0);
+  check('…still the whole figure', untouched.upd[0].row.quantity_change, -127);
+  check('…and still naming no tray', /Tray:/.test(untouched.upd[0].row.remark), false);
 
   if (process.env.SHOT) {
+    // the edit view: an old -127 row being split across its trays
+    await page.evaluate(() => document.querySelector('#t7-cal-history tr[data-cal-id="cal-old"] button')?.click());
+    await page.waitForSelector('#t7-cal-trays .t7-tray-adj');
+    await page.locator('#t7-cal-trays .t7-tray-line[data-tray="T1"] .t7-tray-adj').fill('-90');
+    await page.waitForTimeout(150);
+    await page.locator('#t7-cal-trays').screenshot({ path: '/tmp/tray_edit_off.png' });
+    await page.locator('#t7-cal-trays .t7-tray-line[data-tray="T3"] .t7-tray-adj').fill('-37');
+    await page.waitForTimeout(150);
+    await page.locator('#t7-cal-trays').screenshot({ path: '/tmp/tray_edit_ok.png' });
     await page.evaluate(() => window.cancelEditCalibration());
     await page.selectOption('#t7-cal-report', 'Transplanting');
     await setPlot(page, 'B14');
