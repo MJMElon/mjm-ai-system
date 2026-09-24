@@ -226,6 +226,24 @@
 <div class="toast" id="toast"></div>
 
 <script>
+/* "Sept" -> "Sep" everywhere a date is formatted with the short month
+   name — en-MY spells September's short form as four letters, "Sept",
+   the one month that isn't three. This page is self-contained (no
+   shared/*.js include), so the patch is inline here rather than in
+   shared_nelos_dock.js / shared_supabase.js where the rest of the
+   system carries it. */
+(function () {
+  if (Date.prototype._mjmSeptPatched) return;
+  Date.prototype._mjmSeptPatched = true;
+  var _toLocaleDateString = Date.prototype.toLocaleDateString;
+  Date.prototype.toLocaleDateString = function () {
+    return _toLocaleDateString.apply(this, arguments).replace(/Sept\b/g, 'Sep');
+  };
+  var _toLocaleString = Date.prototype.toLocaleString;
+  Date.prototype.toLocaleString = function () {
+    return _toLocaleString.apply(this, arguments).replace(/Sept\b/g, 'Sep');
+  };
+})();
 var SUPABASE_URL='https://kibqjztozokohqmhqqqf.supabase.co';
 var SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpYnFqenRvem9rb2hxbWhxcXFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMzQzNjIsImV4cCI6MjA4OTgxMDM2Mn0.J7qJUZhWXYf5b9oey4wXJkjdi66jomEMw_NeV9NWF7M';
 var _supabase=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);

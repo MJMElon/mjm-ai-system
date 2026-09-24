@@ -69,6 +69,29 @@
    the host page never notices. A floating button is not allowed to
    break a dashboard.
    ================================================================ */
+
+/* "Sept" → "Sep" everywhere a date is formatted with the short month
+   name. en-MY (and most en-* locales) spell September's short form as
+   four letters, "Sept" — every other month is already three (Jan, Feb,
+   ... Dec). Patched once here, since this file loads on almost every
+   page, rather than hunting down every individual
+   toLocaleDateString()/toLocaleString() call across the system.
+   Also patched in shared_supabase.js for the handful of pages that load
+   it but not this dock; the guard below keeps a page loading both from
+   wrapping twice. */
+(function () {
+  if (Date.prototype._mjmSeptPatched) return;
+  Date.prototype._mjmSeptPatched = true;
+  const _toLocaleDateString = Date.prototype.toLocaleDateString;
+  Date.prototype.toLocaleDateString = function (...args) {
+    return _toLocaleDateString.apply(this, args).replace(/Sept\b/g, 'Sep');
+  };
+  const _toLocaleString = Date.prototype.toLocaleString;
+  Date.prototype.toLocaleString = function (...args) {
+    return _toLocaleString.apply(this, args).replace(/Sept\b/g, 'Sep');
+  };
+})();
+
 (function () {
   'use strict';
 
