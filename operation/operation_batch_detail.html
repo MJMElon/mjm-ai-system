@@ -2288,7 +2288,7 @@
                                         <div>
                                             <label class="label-style">Report</label>
                                             <div class="select-wrapper">
-                                                <select id="t7-cal-report" class="input-style">
+                                                <select id="t7-cal-report" class="input-style" onchange="t7SyncTrayPanel()">
                                                     <option value="">— Select report —</option>
                                                     <option value="Seeds Received">Seeds Received</option>
                                                     <option value="Planting">Planting</option>
@@ -2303,7 +2303,7 @@
                                         <div>
                                             <label class="label-style">Plot / Tray</label>
                                             <div class="select-wrapper">
-                                                <select id="t7-cal-plot" class="input-style">
+                                                <select id="t7-cal-plot" class="input-style" onchange="t7SyncTrayPanel()">
                                                     <option value="">— Select plot / tray —</option>
                                                 </select>
                                             </div>
@@ -2314,6 +2314,28 @@
                                         </div>
                                         <button type="button" id="t7-cal-save-btn" onclick="saveCalibration()" class="px-6 py-3 rounded-xl bg-[#3d2610] text-white font-black uppercase tracking-widest text-xs hover:bg-[#5a3a1a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Save Adjustment</button>
                                     </div>
+
+                                    <!-- WHERE THE PLOT'S SEEDLINGS CAME FROM.
+
+                                         A plot is rarely fed by one tray. When the
+                                         Transplanting count for a plot is out, the miscount
+                                         happened while a tray was being emptied into it, and
+                                         "B14 is short by 53" does not say which tray's count
+                                         was wrong — so the correction cannot be traced back
+                                         to the pre-nursery figures it came from.
+
+                                         So on a Transplanting adjustment, picking the plot
+                                         reads back every Transplanted row that fed it and
+                                         lists the trays with what each one sent. The
+                                         adjustment is then keyed per tray and saved as one
+                                         row each, so every tray's share can be approved,
+                                         edited and read on its own. The plot's total is the
+                                         sum, exactly as a single row would have been — this
+                                         splits the record, it does not change the arithmetic.
+
+                                         Only for Transplanting: it is the one report where a
+                                         plot's figure is assembled out of several trays. -->
+                                    <div id="t7-cal-trays" class="hidden pt-1"></div>
 
                                     <div class="pt-2">
                                         <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">Adjustment History</div>
@@ -2769,15 +2791,22 @@
                adjustment could move then. Reading a missing marker as "plot"
                would silently restate what those rows said. */
             const side = body.match(/Side:\s*(seed|plot)\s*\.\s*/i);
+            /* WHICH TRAY the plot's share came from, on a Transplanting
+               adjustment. Stripped out of the reason like every other labelled
+               fragment — a label left in the body is how the Reason column
+               ends up reading "Tray: T3. Manual count". */
+            const tray = body.match(/Tray:\s*([^.]+?)\s*\.\s*/i);
             let reason = body;
             if (rep)  reason = reason.replace(rep[0], '');
             if (plot) reason = reason.replace(plot[0], '');
             if (side) reason = reason.replace(side[0], '');
+            if (tray) reason = reason.replace(tray[0], '');
             return {
                 id: r.id,
                 qty: Number(r.quantity_change) || 0,
                 report: rep  ? rep[1].trim()  : '',
                 plot:   plot ? plot[1].trim() : (r.plot_name || ''),
+                tray:   tray ? tray[1].trim() : '',
                 side:   ADJUST_SIDE_OF(rep ? rep[1].trim() : ''),
                 reason: reason.trim(),
                 approved: !!approved,
@@ -2965,6 +2994,7 @@
                     <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-2 border-t border-[#e8dcc8]">
                         <span class="text-base font-black tabular-nums ${r.qty > 0 ? 'text-[#4a7a2e]' : 'text-[#a83020]'} min-w-[52px]">${r.qty > 0 ? '+' : ''}${r.qty.toLocaleString()}</span>
                         <span class="text-sm font-black text-[#3d2610] min-w-[64px]">${esc(r.plot) || '—'}</span>
+                        ${r.tray ? `<span class="shrink-0 text-[10px] font-bold text-[#8a7a68]" title="The tray this plot's share came from">← ${esc(r.tray)}</span>` : ''}
                         ${r.date ? `<span class="shrink-0 text-[10px] font-bold text-[#8a7a68] tabular-nums" title="The day this adjustment happened">${esc(formatAuditDate(r.date))}</span>` : ''}
                         <span class="text-[11px] font-bold text-[#8a7a68] flex-1 min-w-[160px]">${esc(r.reason) || '—'}</span>
                         ${r.approved
@@ -3105,7 +3135,7 @@
                     ${dateCell}
                     <td class="px-3 py-2 text-sm font-black ${cls}">${sign}${q.toLocaleString()}</td>
                     <td class="px-3 py-2 text-[11px] text-[#3a7ab4] font-bold">${esc(reportTxt) || '—'}</td>
-                    <td class="px-3 py-2 text-[11px] text-[#4a7a2e] font-bold">${esc(plotTxt) || '—'}</td>
+                    <td class="px-3 py-2 text-[11px] text-[#4a7a2e] font-bold whitespace-nowrap">${esc(plotTxt) || '—'}${cal.tray ? `<span class="block text-[10px] font-bold text-[#8a7a68]" title="The tray this plot's share came from">← ${esc(cal.tray)}</span>` : ''}</td>
                     <td class="px-3 py-2 text-[10px] font-black uppercase tracking-wider ${cal.side === 'plot' ? 'text-[#a83020]' : 'text-[#8a7a68]'}">${sideTxt}</td>
                     <td class="px-3 py-2 text-[11px] text-[#3d2610]">${esc(reasonTxt) || '—'}</td>
                     <td class="px-3 py-2 text-[10px] text-[#8a7a68]">${esc(mjmWho(r.last_edited_by) || '—')}</td>
@@ -3168,6 +3198,170 @@
            guessing at the DOM: the old check read "no Edit button rendered" as
            "approved", which stopped being true the moment approved rows grew
            an Edit button of their own. */
+        /* ── Which trays fed this plot ──────────────────────────────────────
+
+           The Transplanted row records its source in the remark, the way
+           tab 3 reads it back: "Transplanted from tray [T3] to Main Plot
+           [B14]". Premium and Double Tone are included because they land in
+           their own named destination and are picked in the same dropdown.
+
+           Read once per batch. A plot that has never been transplanted into
+           has no trays, and the panel says so rather than showing an empty
+           list that looks like a failure. */
+        let _t7TxLogs = null, _t7TxLogsBatch = '';
+        let _t7TrayMode = false;     // is the Qty box being fed by the tray lines?
+
+        async function _t7LoadTransplants(batchId) {
+            if (_t7TxLogs && _t7TxLogsBatch === batchId) return _t7TxLogs;
+            const { data, error } = await _supabase.from('shared_inventory_logs')
+                .select('plot_name, quantity_change, remark, transaction_date, created_at')
+                .eq('batch_name', batchId)
+                .in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']);
+            /* Fail open: if the trays cannot be read, the form goes on working
+               exactly as it did before this panel existed rather than blocking
+               an adjustment somebody is trying to record. */
+            if (error) { console.warn('[t7] transplants not read:', error.message); return null; }
+            _t7TxLogs = data || [];
+            _t7TxLogsBatch = batchId;
+            return _t7TxLogs;
+        }
+
+        function _t7TraysFeeding(logs, plot) {
+            const key = s => String(s == null ? '' : s).trim().toUpperCase();
+            const want = key(plot);
+            if (!want) return [];
+            const byTray = {};
+            (logs || []).forEach(l => {
+                if (key(l.plot_name) !== want) return;
+                const m = l.remark ? String(l.remark).match(/tray \[([^\]]+)\]/i) : null;
+                const tray = m ? m[1].trim() : '';
+                if (!tray) return;
+                const t = byTray[tray] || (byTray[tray] = { tray, qty: 0, dates: [] });
+                t.qty += Number(l.quantity_change) || 0;
+                const d = l.transaction_date
+                       || (l.created_at ? String(l.created_at).slice(0, 10) : '');
+                if (d && t.dates.indexOf(d) < 0) t.dates.push(d);
+            });
+            // Biggest contributor first — it is the one most likely to be out.
+            return Object.keys(byTray).map(k => byTray[k]).sort((a, b) => b.qty - a.qty);
+        }
+
+        // Keep the Qty box showing the sum of the tray lines while they are
+        // the thing being keyed, so the figure that reaches the batch is the
+        // one on screen and not a second number somebody has to agree with.
+        function t7SumTrayAdj() {
+            const host = document.getElementById('t7-cal-trays');
+            const qtyEl = document.getElementById('t7-cal-qty');
+            if (!host || !qtyEl || !_t7TrayMode) return;
+            let total = 0, touched = 0;
+            host.querySelectorAll('.t7-tray-adj').forEach(i => {
+                const v = parseInt(i.value, 10);
+                if (!isNaN(v) && v !== 0) { total += v; touched++; }
+            });
+            qtyEl.value = total === 0 && touched === 0 ? '' : String(total);
+            const sumEl = document.getElementById('t7-tray-sum');
+            if (sumEl) {
+                sumEl.innerText = touched === 0
+                    ? 'Nothing keyed yet'
+                    : `${touched} tray${touched === 1 ? '' : 's'} · net ${total > 0 ? '+' : ''}${total.toLocaleString()}`;
+            }
+        }
+
+        // The tray lines that were actually keyed. A blank or a zero means
+        // "that tray's count was right", not "nothing here to record".
+        function _t7CollectTrayAdj() {
+            const out = [];
+            document.querySelectorAll('#t7-cal-trays .t7-tray-line').forEach(line => {
+                const v = parseInt(line.querySelector('.t7-tray-adj')?.value, 10);
+                if (isNaN(v) || v === 0) return;
+                out.push({ tray: line.getAttribute('data-tray') || '', qty: v });
+            });
+            return out;
+        }
+
+        async function t7SyncTrayPanel() {
+            const host   = document.getElementById('t7-cal-trays');
+            const qtyEl  = document.getElementById('t7-cal-qty');
+            if (!host) return;
+            const report = (document.getElementById('t7-cal-report')?.value || '').trim();
+            const plot   = (document.getElementById('t7-cal-plot')?.value   || '').trim();
+
+            const plain = (note) => {
+                _t7TrayMode = false;
+                if (qtyEl) { qtyEl.readOnly = false; qtyEl.classList.remove('bg-[#f5efe4]', 'cursor-not-allowed'); }
+                if (note) { host.innerHTML = note; host.classList.remove('hidden'); }
+                else { host.innerHTML = ''; host.classList.add('hidden'); }
+            };
+
+            if (report !== 'Transplanting' || !plot) return plain('');
+
+            const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
+            if (!batchId) return plain('');
+            const logs = await _t7LoadTransplants(batchId);
+            if (!logs) return plain('');          // could not read — behave as before
+
+            // The report/plot may have moved on while the read was in flight.
+            if ((document.getElementById('t7-cal-report')?.value || '').trim() !== 'Transplanting'
+             || (document.getElementById('t7-cal-plot')?.value   || '').trim() !== plot) return;
+
+            const esc   = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            const trays = _t7TraysFeeding(logs, plot);
+
+            if (!trays.length) {
+                return plain(`<div class="rounded-xl border border-[#e8dcc8] bg-[#fdfaf4] px-4 py-3 text-[11px] font-bold text-[#8a7a68]">
+                    Nothing has been transplanted into <strong class="text-[#3d2610]">${esc(plot)}</strong> on this batch,
+                    so there is no tray to trace the difference back to. The adjustment is recorded against the plot as a whole.
+                </div>`);
+            }
+
+            /* EDITING an existing row is left alone. One saved row belongs to
+               one tray; turning it into several on an edit would quietly
+               multiply a figure somebody has already approved. The panel still
+               shows where the plot came from, read-only, because that is the
+               context for deciding whether the row is right. */
+            if (_t7EditingId) {
+                const lines = trays.map(t => `
+                    <div class="flex flex-wrap items-baseline gap-x-3 px-4 py-2 border-t border-[#e8dcc8]">
+                        <span class="text-sm font-black text-[#3d2610] min-w-[90px]">${esc(t.tray)}</span>
+                        <span class="text-[11px] font-bold text-[#8a7a68]">sent ${t.qty.toLocaleString()}</span>
+                        <span class="text-[10px] text-[#8a7a68]">${t.dates.map(d => esc(formatAuditDate(d))).join(' · ')}</span>
+                    </div>`).join('');
+                return plain(`<div class="rounded-xl border border-[#e8dcc8] bg-[#fdfaf4] overflow-hidden">
+                    <div class="px-4 py-2 text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">
+                        ${esc(plot)} was filled from ${trays.length} tray${trays.length === 1 ? '' : 's'} — for reference while editing
+                    </div>${lines}</div>`);
+            }
+
+            _t7TrayMode = true;
+            if (qtyEl) { qtyEl.readOnly = true; qtyEl.classList.add('bg-[#f5efe4]', 'cursor-not-allowed'); }
+
+            const lines = trays.map(t => `
+                <div class="t7-tray-line flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 border-t border-[#e8dcc8]"
+                     data-tray="${esc(t.tray)}" data-sent="${t.qty}">
+                    <span class="text-sm font-black text-[#3d2610] min-w-[90px]">${esc(t.tray)}</span>
+                    <span class="text-[11px] font-bold text-[#8a7a68] min-w-[120px]">sent ${t.qty.toLocaleString()} here</span>
+                    <span class="text-[10px] text-[#8a7a68] flex-1 min-w-[120px]">${t.dates.map(d => esc(formatAuditDate(d))).join(' · ')}</span>
+                    <input type="number" step="1" placeholder="0"
+                           class="t7-tray-adj input-style !w-[120px] !py-2 text-sm"
+                           oninput="t7SumTrayAdj()"
+                           aria-label="Adjustment for tray ${esc(t.tray)}">
+                </div>`).join('');
+
+            host.innerHTML = `<div class="rounded-xl border border-[#c8d9e8] bg-[#f7fbff] overflow-hidden">
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
+                    <span class="text-[10px] font-black text-[#3a7ab4] uppercase tracking-widest">
+                        ${esc(plot)} was filled from ${trays.length} tray${trays.length === 1 ? '' : 's'}
+                    </span>
+                    <span class="text-[10px] font-bold text-[#8a7a68]">
+                        Key the difference against the tray it came from — leave a tray blank if its count was right
+                    </span>
+                    <span id="t7-tray-sum" class="ml-auto shrink-0 text-[10px] font-black text-[#3d2610] uppercase tracking-widest">Nothing keyed yet</span>
+                </div>${lines}
+            </div>`;
+            host.classList.remove('hidden');
+            t7SumTrayAdj();
+        }
+
         function editCalibration(id, qty, report, plot, reason, side, date, wasApproved) {
             if (!_t7IsAdmin()) {
                 showToast('Only admins can edit calibration entries.', 'error');
@@ -3197,6 +3391,8 @@
                   + 'it stops moving any figure until somebody approves it again.'
                 : '✏️ Editing an existing adjustment. Saving will update the record in place.';
             if (banner)   banner.classList.remove('hidden');
+            // …and the tray panel drops to read-only context for this row.
+            t7SyncTrayPanel();
             qtyEl?.focus();
             qtyEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -3222,6 +3418,8 @@
             const msg = document.getElementById('t7-cal-edit-msg');
             if (msg) msg.innerText = '✏️ Editing an existing adjustment. Saving will update the record in place.';
             if (banner)   banner.classList.add('hidden');
+            // The plot is cleared, so the tray panel has nothing to show.
+            t7SyncTrayPanel();
         }
 
         async function deleteCalibration(id) {
@@ -3301,6 +3499,16 @@
             const plot     = (plotEl?.value   || '').trim();
             const reason   = (reasonEl.value  || '').trim();
             const date     = (dateEl?.value   || '').trim();
+            /* On a Transplanting adjustment the quantity is keyed per tray and
+               the Qty box is the running sum, so an empty one means no tray
+               has been keyed rather than a forgotten number. Say that instead
+               of pointing at a box the person cannot type into. */
+            const traySplit = _t7TrayMode && !_t7EditingId ? _t7CollectTrayAdj() : null;
+            if (traySplit && !traySplit.length) {
+                showToast('Key the difference against the tray it came from — at least one tray needs a number.', 'error');
+                document.querySelector('#t7-cal-trays .t7-tray-adj')?.focus();
+                return;
+            }
             if (isNaN(qty) || qty === 0) { showToast('Enter a non-zero adjustment quantity (use a negative value to subtract).', 'error'); qtyEl.focus(); return; }
             if (!date)   { showToast('Enter the date this adjustment happened — not the day you are keying it in.', 'error'); dateEl?.focus(); return; }
             if (!report) { showToast('Select which report this calibration relates to.', 'error'); reportEl.focus(); return; }
@@ -3336,18 +3544,35 @@
                 remark: `Report: ${report}. Plot: ${plot}. ${reason}`
             });
 
+            /* ONE ROW PER TRAY on a Transplanting adjustment. Each carries the
+               tray it belongs to and its own share, so it can be approved,
+               edited and read on its own; the plot's total is their sum, which
+               is what a single row would have been. Everything downstream keys
+               off `plot`, so the arithmetic is unchanged. */
+            const payloads = traySplit && traySplit.length
+                ? traySplit.map(t => withEditMeta({
+                    batch_name: batchId,
+                    transaction_type: 'Stock_Calibration',
+                    plot_name: plot,
+                    quantity_change: t.qty,
+                    transaction_date: date,
+                    remark: `Report: ${report}. Plot: ${plot}. Tray: ${t.tray}. ${reason}`
+                  }))
+                : [payload];
+
             let error;
             if (_t7EditingId) {
-                // Edit path — admin updating an existing calibration row.
+                // Edit path — admin updating an existing calibration row. Never
+                // a split: see the read-only tray panel in t7SyncTrayPanel().
                 ({ error } = await _supabase.from('shared_inventory_logs').update(payload).eq('id', _t7EditingId));
                 if (error && isEditMetaColumnError && isEditMetaColumnError(error)) {
                     ({ error } = await _supabase.from('shared_inventory_logs').update(stripEditMeta([payload])[0]).eq('id', _t7EditingId));
                 }
             } else {
-                // Insert path — first save of a new calibration row.
-                ({ error } = await _supabase.from('shared_inventory_logs').insert([payload]));
+                // Insert path — first save, one row or one per tray.
+                ({ error } = await _supabase.from('shared_inventory_logs').insert(payloads));
                 if (error && isEditMetaColumnError && isEditMetaColumnError(error)) {
-                    ({ error } = await _supabase.from('shared_inventory_logs').insert(stripEditMeta([payload])));
+                    ({ error } = await _supabase.from('shared_inventory_logs').insert(stripEditMeta(payloads)));
                 }
             }
 
@@ -3358,10 +3583,13 @@
                 return;
             }
             const wasEditing = !!_t7EditingId;
+            const splitCount = traySplit && traySplit.length ? traySplit.length : 0;
             cancelEditCalibration(); // clears form + resets button + banner
             showToast(wasEditing
                 ? `Calibration updated: ${qty > 0 ? '+' : ''}${qty}`
-                : `Calibration recorded: ${qty > 0 ? '+' : ''}${qty}`, 'success');
+                : splitCount > 1
+                    ? `Calibration recorded across ${splitCount} trays: net ${qty > 0 ? '+' : ''}${qty}`
+                    : `Calibration recorded: ${qty > 0 ? '+' : ''}${qty}`, 'success');
             renderCalibrationHistory(batchId);
             // …and the same rows on the report each was raised against.
             syncAdjustmentBars(batchId);
