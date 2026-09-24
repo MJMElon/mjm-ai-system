@@ -706,8 +706,19 @@ function renderReportTabs() {
   `).join('');
 }
 
+// Which report tab was last open, so a browser refresh comes back to it
+// instead of always landing on Production Summary — see bootstrap().
+const LAST_REPORT_KEY = 'mjm_reports_last_tab';
+function _rememberReport(report) {
+  try { localStorage.setItem(LAST_REPORT_KEY, report); } catch (e) { /* private mode, etc — just don't persist */ }
+}
+
 function selectReport(report) {
   document.getElementById('f-report').value = report;
+  _rememberReport(report);
+  // Movement Report starts with every Location unticked — picked fresh
+  // each time, not left however they were from a previous report/visit.
+  if (report === 'movement_report') document.querySelectorAll('.f-nurs-cb').forEach(cb => cb.checked = false);
   renderReportTabs();
   syncReportDefaults();
   syncFilterVisibility();
@@ -1977,8 +1988,14 @@ async function bootstrap() {
     return;
   }
   // The Report tabs don't exist until renderReportTabs() builds them — do
-  // that before anything reads f-report.value.
-  const DEFAULT_REPORT = 'batch_production';
+  // that before anything reads f-report.value. Reopens whichever tab was
+  // last selected (see selectReport()) — a refresh used to always land
+  // back on Production Summary regardless of what was actually open.
+  let DEFAULT_REPORT = 'batch_production';
+  try {
+    const remembered = localStorage.getItem(LAST_REPORT_KEY);
+    if (remembered && REPORTS.some(r => r.value === remembered)) DEFAULT_REPORT = remembered;
+  } catch (e) { /* private mode, etc — falls back to the plain default */ }
   document.getElementById('f-report').value = DEFAULT_REPORT;
   renderReportTabs();
 
@@ -1990,6 +2007,10 @@ async function bootstrap() {
   // only f-to needs a bound.
   fTo.max = todayStr;
   await Promise.all([loadBreeds(), loadNurseryFilter()]);
+  // Same rule as selectReport() — a refresh landing straight back on
+  // Movement Report still starts with Locations unticked, not whatever
+  // loadNurseryFilter()'s chips default to.
+  if (DEFAULT_REPORT === 'movement_report') document.querySelectorAll('.f-nurs-cb').forEach(cb => cb.checked = false);
   _setSalesView('table');
   document.getElementById('f-mode-table').addEventListener('click', () => { _setSalesView('table'); runReport(); });
   document.getElementById('f-mode-chart').addEventListener('click', () => { _setSalesView('chart'); runReport(); });
