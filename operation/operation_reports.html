@@ -1491,7 +1491,7 @@ async function runMovementReportCombined() {
       if (src) push('pre', d, src, b, 'transOut', q);
       if (passMain(l.plot_name)) {
         push('main', d, l.plot_name, b, 'transIn', q);
-        pushDetail(l.plot_name, b, 'transIn', d, q, src ? `From tray ${src}` : '');
+        pushDetail(l.plot_name, b, 'transIn', d, q, src ? `Tray ${src}` : '');
       }
       return;
     }
