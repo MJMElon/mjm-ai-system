@@ -72,6 +72,11 @@
      otherwise blur into one wide field. */
   .movement-table th, .movement-table td { border-right:1px solid #efe6d4; }
   .movement-table th:last-child, .movement-table td:last-child { border-right:none; }
+  /* The row divider (.report-table td's default border-bottom:1px solid
+     #f3efe6) is lighter than the zebra stripe it sometimes sits on
+     (#f0e6d2) — against that darker band it all but disappears. Darker
+     here, so the line between rows stays visible whichever band it's on. */
+  .movement-table td { border-bottom:1px solid #d9c8a3; }
   /* The header stays put while a long table scrolls past underneath it —
      wrapped in .movement-scroll below, which is what actually scrolls. */
   .movement-scroll { max-height:70vh; overflow-y:auto; }
@@ -1542,7 +1547,11 @@ function buildMovementSection(scope, ev, ctx) {
       _natCmp(locOfRow(a), locOfRow(c)) ||
       _natCmp(a.place, c.place) || _natCmp(a.batch, c.batch)));
 
-  const cols = MOVE_COLS[scope];
+  // 2nd Culled is dropped from the table, not from the maths: netOfRow()
+  // and emptyRow() both read MOVE_COLS[scope] directly (not this `cols`),
+  // so the balance still correctly deducts it for a batch that hasn't
+  // reached 3rd Culling yet — only the column itself stops being shown.
+  const cols = MOVE_COLS[scope].filter(c => !(scope === 'main' && c.key === 'cull2'));
   const placeLabel = scope === 'pre' ? 'Tray No' : 'Plot';
   const firstLabel  = groupBy === 'batch' ? 'Batch' : placeLabel;
   const secondLabel = groupBy === 'batch' ? placeLabel : 'Batch';
