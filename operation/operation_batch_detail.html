@@ -1548,11 +1548,21 @@
 
                                     <!-- Saved records table -->
                                     <div id="t3-saved-rows-table" class="hidden mb-4">
-                                        <div class="hidden md:grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_80px] gap-2 px-3 pb-1 text-[8px] font-black text-[#8a7a68] uppercase tracking-widest border-b border-[#e8dcc8] mb-1 t-tidy">
+                                        <div class="hidden md:grid grid-cols-[1.7fr_1.2fr_1.2fr_0.9fr_1fr_1fr_0.9fr_80px] gap-2 px-3 pb-1 text-[8px] font-black text-[#8a7a68] uppercase tracking-widest border-b border-[#e8dcc8] mb-1 t-tidy">
                                             <span class="text-[#3a7ab4]">Plot / Destination</span>
                                             <span>Date</span>
                                             <span class="text-[#c07820]">Source Tray</span>
                                             <span class="text-[#4a7a2e]">Qty</span>
+                                            <!-- WHAT AN APPROVED ADJUSTMENT TAKES OFF THIS ROW.
+                                                 An adjustment on Transplanting is raised against a
+                                                 plot and split across the trays that filled it, so
+                                                 a row here — one tray into one plot — is exactly
+                                                 what one of those shares is about. Showing it only
+                                                 in the strip at the top of the tab meant the list
+                                                 underneath still read the pre-adjustment figure,
+                                                 and the two disagreed on the same screen. -->
+                                            <span class="text-[#a83020]">Adjustment</span>
+                                            <span class="text-[#4a7a2e]">Final Qty</span>
                                             <span>Map</span>
                                             <span></span>
                                         </div>
@@ -1564,11 +1574,13 @@
                                              is worked out FROM belongs on the screen, under
                                              its own column, not left to be summed by eye.
                                              Same grid as the rows, so it lines up with them. -->
-                                        <div class="hidden md:grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_80px] gap-2 items-center px-3 pt-2 mt-1 border-t-2 border-[#e8dcc8] t-tidy">
+                                        <div class="hidden md:grid grid-cols-[1.7fr_1.2fr_1.2fr_0.9fr_1fr_1fr_0.9fr_80px] gap-2 items-center px-3 pt-2 mt-1 border-t-2 border-[#e8dcc8] t-tidy">
                                             <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Total Transplanted</span>
                                             <span></span>
                                             <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest" id="t3-saved-total-count">—</span>
                                             <span class="text-base font-black text-[#4a7a2e] tabular-nums" id="t3-saved-total-qty">0</span>
+                                            <span class="text-base font-black text-[#8a7a68] tabular-nums" id="t3-saved-total-adj">—</span>
+                                            <span class="text-base font-black text-[#4a7a2e] tabular-nums" id="t3-saved-total-final">0</span>
                                             <span></span>
                                             <span></span>
                                         </div>
@@ -1577,11 +1589,22 @@
                                             <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Total Transplanted</span>
                                             <span class="text-base font-black text-[#4a7a2e] tabular-nums" id="t3-saved-total-qty-m">0</span>
                                         </div>
+                                        <div id="t3-saved-total-adj-row-m" class="hidden md:hidden flex items-baseline justify-between px-3 pt-1">
+                                            <span class="text-[9px] font-black text-[#a83020] uppercase tracking-widest">After adjustments</span>
+                                            <span class="text-base font-black text-[#4a7a2e] tabular-nums" id="t3-saved-total-final-m">0</span>
+                                        </div>
                                         <!-- Which rows above are NOT in that total, and how many
                                              seedlings they hold. A figure smaller than the column
                                              it sits under needs to say why, or it reads as a
                                              mistake. Hidden when the batch has no holding tray. -->
                                         <div id="t3-saved-held-note" class="hidden px-3 pt-1 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest"></div>
+                                        <!-- An approved adjustment that matches no row above:
+                                             raised on a plot before the tray split existed, or on
+                                             a plot/tray pairing that is no longer in the list. It
+                                             still comes off the total, so it is named here rather
+                                             than leaving the total short of the column it is
+                                             under by an amount nothing explains. -->
+                                        <div id="t3-saved-adj-note" class="hidden px-3 pt-1 text-[9px] font-black text-[#a83020] uppercase tracking-widest"></div>
                                     </div>
 
                                     <!-- New form rows -->
@@ -2909,6 +2932,107 @@
             return Object.keys(mine).reduce((sum, k) => sum + (mine[k] || 0), 0);
         }
 
+        /* ── The adjustment, on the row it belongs to ────────────────────────
+
+           A Transplanting adjustment is raised against a plot and split across
+           the trays that filled it, so ONE saved transplant row — one tray into
+           one plot — is exactly what one of those shares is about. Painting it
+           onto the row is what stops the list underneath the strip going on
+           showing the pre-adjustment figure while the strip above says
+           otherwise, on the same screen.
+
+           Painted rather than built into the row's markup: the adjustments are
+           read after the list is drawn, so a figure baked in at render time
+           would be the stale one until somebody happened to reopen the tab.
+
+           Only APPROVED ones, like everywhere else. A pending adjustment has
+           not been ruled on and moves no figure; the strip above still shows it
+           in amber, which is the right place for "somebody has claimed this".  */
+        function _t3TrayKey(v) { return String(v == null ? '' : v).trim().toUpperCase(); }
+
+        function paintT3Adjustments() {
+            const cells = document.querySelectorAll('#t3-saved-rows-list .t3-adj-cell');
+            if (!cells.length) return;
+
+            // plot|tray → net, from the approved Transplanting adjustments.
+            const byPair = {};
+            (ADJUST_ROWS || []).forEach(r => {
+                if (!r.approved) return;
+                if (String(r.report || '').toLowerCase() !== 'transplanting') return;
+                const k = _t6PlotKey(r.plot) + '|' + _t3TrayKey(r.tray);
+                byPair[k] = (byPair[k] || 0) + r.qty;
+            });
+
+            const used = {};
+            let totQty = 0, totAdj = 0, totFinal = 0;
+            cells.forEach(cell => {
+                const k = _t6PlotKey(cell.getAttribute('data-plot')) + '|'
+                        + _t3TrayKey(cell.getAttribute('data-tray'));
+                const adj = byPair[k] || 0;
+                if (adj) used[k] = true;
+                const qty = Number(cell.getAttribute('data-qty')) || 0;
+
+                cell.innerText = adj === 0 ? '—' : (adj > 0 ? '+' : '') + adj.toLocaleString();
+                cell.className = 't3-adj-cell text-sm font-black tabular-nums '
+                    + (adj > 0 ? 'text-[#4a7a2e]' : adj < 0 ? 'text-[#a83020]' : 'text-[#8a7a68]');
+
+                const finEl = cell.parentElement.querySelector('.t3-final-cell');
+                if (finEl) {
+                    finEl.innerText = (qty + adj).toLocaleString();
+                    finEl.className = 't3-final-cell text-sm font-black tabular-nums '
+                        + (adj === 0 ? 'text-[#4a7a2e]' : adj > 0 ? 'text-[#4a7a2e]' : 'text-[#a83020]');
+                }
+
+                /* Only the rows the Total counts. Premium Care and D-Tone are
+                   holding trays, not transplants — the same rule the Total
+                   Transplanted figure above already follows. */
+                if (cell.getAttribute('data-counted') === '1') {
+                    totQty += qty; totAdj += adj; totFinal += qty + adj;
+                }
+            });
+
+            /* Approved adjustments no row matched — raised on a plot before the
+               tray split existed, or on a pairing no longer in the list. They
+               still come off the plot, so they are added to the total and named
+               underneath rather than leaving it short by an unexplained amount. */
+            let orphan = 0;
+            const orphanNames = [];
+            Object.keys(byPair).forEach(k => {
+                if (used[k] || !byPair[k]) return;
+                orphan += byPair[k];
+                const plot = k.split('|')[0], tray = k.split('|')[1];
+                orphanNames.push(tray ? `${plot} ← ${tray}` : plot);
+            });
+            totAdj += orphan; totFinal += orphan;
+
+            const set = (id, txt, cls) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.innerText = txt;
+                if (cls) el.className = cls;
+            };
+            set('t3-saved-total-adj',
+                totAdj === 0 ? '—' : (totAdj > 0 ? '+' : '') + totAdj.toLocaleString(),
+                'text-base font-black tabular-nums '
+                  + (totAdj > 0 ? 'text-[#4a7a2e]' : totAdj < 0 ? 'text-[#a83020]' : 'text-[#8a7a68]'));
+            set('t3-saved-total-final', totFinal.toLocaleString());
+            set('t3-saved-total-final-m', totFinal.toLocaleString());
+
+            const mRow = document.getElementById('t3-saved-total-adj-row-m');
+            if (mRow) mRow.classList.toggle('hidden', totAdj === 0);
+
+            const note = document.getElementById('t3-saved-adj-note');
+            if (note) {
+                if (orphan) {
+                    note.innerText = `Included in the total but not on any row above: `
+                        + `${(orphan > 0 ? '+' : '') + orphan.toLocaleString()} on ${orphanNames.join(', ')}`;
+                    note.classList.remove('hidden');
+                } else {
+                    note.classList.add('hidden');
+                }
+            }
+        }
+
         /* Would settling this adjustment move the 3rd Culling row? Used by the
            drone-map panel, which must not offer an explanation that would not
            actually change the figure it is standing next to. */
@@ -2985,6 +3109,9 @@
                not stop the other, nor the strips below from rendering. */
             try { if (typeof calcTransplanting === 'function') calcTransplanting(); } catch (e) { console.warn(e); }
             try { if (typeof calcCulling === 'function') calcCulling(); } catch (e) { console.warn(e); }
+            // …and the saved transplant list, where each share lands on the
+            // row it was split out of. It is painted, not re-rendered.
+            try { paintT3Adjustments(); } catch (e) { console.warn(e); }
             /* …and both culling tabs, where a plot-stock adjustment lands on
                one row. Re-RENDERED, not just recalculated: the figure is drawn
                into the row's markup, so a recalculation alone would leave the
@@ -4199,11 +4326,21 @@
                             tableList.insertAdjacentHTML('beforeend', `
                                 <div class="t3-saved-row${rowLocked ? ' mjm-locked' : ''}" data-review-key="${reviewKey}">
                                     <!-- Compact row -->
-                                    <div id="t3-row-view-${idx}" class="grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_80px] gap-2 items-center px-3 py-2 rounded-lg bg-[#fdfaf4] border border-[#e8dcc8] hover:bg-white transition-colors t-tidy">
+                                    <div id="t3-row-view-${idx}" class="grid grid-cols-[1.7fr_1.2fr_1.2fr_0.9fr_1fr_1fr_0.9fr_80px] gap-2 items-center px-3 py-2 rounded-lg bg-[#fdfaf4] border border-[#e8dcc8] hover:bg-white transition-colors t-tidy">
                                         <div class="font-black text-sm ${color}">${icon} ${log.plot_name}</div>
                                         <div class="text-sm font-bold text-[#3d2610]">${dateStr}${rowLocked ? ' 🔒' : ''}</div>
                                         <div class="text-sm font-bold text-[#c07820] truncate">${trayStr}</div>
                                         <div class="text-sm font-black text-[#4a7a2e]">${log.quantity_change.toLocaleString()}</div>
+                                        <!-- Filled in by paintT3Adjustments() rather than here:
+                                             the adjustments are read after this list is drawn, so
+                                             a figure baked in now would be a stale one until
+                                             somebody happened to reopen the tab. -->
+                                        <div class="t3-adj-cell text-sm font-black tabular-nums text-[#8a7a68]"
+                                             data-plot="${_escAttr(log.plot_name || '')}"
+                                             data-tray="${_escAttr(trayStr)}"
+                                             data-qty="${log.quantity_change || 0}"
+                                             data-counted="${log.transaction_type === 'Transplanted' ? '1' : '0'}">—</div>
+                                        <div class="t3-final-cell text-sm font-black text-[#4a7a2e] tabular-nums">${log.quantity_change.toLocaleString()}</div>
                                         <div>${rowMapCell}</div>
                                         <div class="flex gap-1">
                                             <button type="button" onclick="toggleT3EditRow(${idx})" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[8px] font-black uppercase rounded hover:bg-[#f0f8ff] transition-colors">Edit</button>
@@ -4311,6 +4448,11 @@
                         setTot('t3-saved-total-qty',   savedTotal.toLocaleString());
                         setTot('t3-saved-total-qty-m', savedTotal.toLocaleString());
                         setTot('t3-saved-total-count', `${counted.length} record${counted.length === 1 ? '' : 's'}`);
+                        /* The Adjustment and Final columns, now the rows exist.
+                           Safe before the adjustments have been read — it just
+                           paints zeroes, and syncAdjustmentBars paints it again
+                           the moment they arrive. */
+                        try { paintT3Adjustments(); } catch (e) { console.warn(e); }
 
                         // Say what was left out, and how much of it.
                         const heldNote = document.getElementById('t3-saved-held-note');
