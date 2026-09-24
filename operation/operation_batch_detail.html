@@ -4706,20 +4706,31 @@
                             /* A ROW THE SYSTEM WROTE, not one somebody keyed.
 
                                It came from an adjustment on a plot nothing had
-                               been transplanted into, and it exists because
-                               that adjustment was approved — so it is not
-                               verified the usual way and it is not edited or
-                               deleted here either. Changing it by hand would
-                               put it out of step with the adjustment it
-                               mirrors, and there would be nothing to say which
-                               of the two was right. It says whose approval put
-                               it there instead. */
+                               been transplanted into, and it exists because that
+                               adjustment was approved — so it is not verified
+                               the usual way, and its plot, date and quantity are
+                               the adjustment's, not this row's. Editing those
+                               here would put the two out of step with nothing to
+                               say which was right.
+
+                               THE TRAY IS THE EXCEPTION, and it has to be. It is
+                               not the adjustment's figure — it is an answer
+                               somebody typed, and an answer can be wrong: B8's
+                               was keyed as "4" when the tray is P4. With the row
+                               locked outright there was no way to correct it
+                               from anywhere, which is worse than the drift the
+                               lock was guarding against. Fix Tray changes it on
+                               BOTH the row and the adjustment, so they stay in
+                               step, and touches nothing else. */
                             const fromAdjMatch = log.remark ? log.remark.match(/FromAdjustment:(\S+)/) : null;
                             const calWhoMatch  = log.remark ? log.remark.match(/CalApprovedBy:(\S+)/) : null;
                             const fromAdjCell = fromAdjMatch
                                 ? `<div class="text-[8px] font-black text-[#4a7a2e] uppercase tracking-wider leading-tight"
-                                        title="Created from an approved stock adjustment — edit the adjustment on Adjustments &amp; Audit, not this row">
+                                        title="Created from an approved stock adjustment — its plot, date and quantity belong to the adjustment on Adjustments &amp; Audit">
                                        🔒 Calibration<br>approved by<br>${_escAttr(mjmWho(calWhoMatch ? calWhoMatch[1] : '') || '—')}
+                                       ${_t7IsAdmin() ? `<button type="button" onclick="toggleT3AdjTray(${idx})"
+                                            class="mt-1 px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[8px] font-black uppercase rounded hover:bg-[#f0f8ff] transition-colors"
+                                            title="Correct the source tray on this row and on the adjustment that wrote it">Fix Tray</button>` : ''}
                                    </div>`
                                 : `<div class="flex gap-1">
                                             <button type="button" onclick="toggleT3EditRow(${idx})" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[8px] font-black uppercase rounded hover:bg-[#f0f8ff] transition-colors">Edit</button>
@@ -4746,6 +4757,26 @@
                                         <div>${rowMapCell}</div>
                                         ${fromAdjCell}
                                     </div>
+                                    ${fromAdjMatch ? `<!-- Fix Tray, for a row an adjustment wrote. cf-skip so the
+                                         menu is not clipped by the card, same as the panel on tab 7. -->
+                                    <div id="t3-adjtray-form-${idx}" class="hidden mt-1 p-4 bg-white border border-[#3a7ab4] rounded-xl"
+                                         data-log-id="${_escAttr(log.id)}" data-cal-id="${_escAttr(fromAdjMatch[1])}">
+                                        <div class="text-[10px] font-black text-[#3a7ab4] uppercase tracking-widest mb-2">
+                                            Which tray did ${_escAttr(log.plot_name || '')}'s seedlings come out of?
+                                        </div>
+                                        <div class="text-[11px] font-bold text-[#8a7a68] mb-3">
+                                            Only the tray changes — the plot, the date, the quantity and the drone map stay
+                                            as they are, and the adjustment that wrote this row is corrected with it.
+                                        </div>
+                                        <div class="flex flex-wrap gap-3 items-end">
+                                            <div class="flex-1 basis-[220px] min-w-[180px]">
+                                                <label class="label-style !text-[#c07820]">Source Tray *</label>
+                                                <select class="input-style !text-[#c07820] cf-skip t3-adjtray-select">${getTab3TrayOptionsHTML({})}</select>
+                                            </div>
+                                            <button type="button" onclick="saveT3AdjTray(${idx})" class="btn-earth text-[10px] px-4 py-2 shrink-0">Save Tray</button>
+                                            <button type="button" onclick="toggleT3AdjTray(${idx})" class="px-4 py-2 bg-white border border-[#e8dcc8] text-[#8a7a68] text-[10px] font-black uppercase rounded-lg hover:bg-[#e8dcc8] shrink-0">Cancel</button>
+                                        </div>
+                                    </div>` : ''}
                                     <!-- Inline edit form (hidden by default) -->
                                     <div id="${editId}" class="hidden mt-1 p-4 bg-white border border-[#3a7ab4] rounded-xl space-y-3">
                                         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -4959,6 +4990,81 @@
                 sel.innerHTML = getPlotOptionsHTML(); sel.disabled = false;
                 sel.className = 'input-style !text-[#3a7ab4] t3e-dest-plot';
             }
+        }
+
+        /* ── Correcting the tray on a row an adjustment wrote ────────────────
+
+           The tray is the one thing on such a row that came from a person
+           rather than from the adjustment, so it is the one thing that can be
+           mistyped — B8's was keyed as "4" when the tray is P4. Everything else
+           is the adjustment's and stays put.
+
+           Both records are rewritten, the row and the adjustment, because they
+           have to agree: paintT3Adjustments pairs them on plot + tray, and a
+           row that says P4 beside an adjustment that says 4 pairs with nothing
+           and the plot goes back to reading as an orphan. */
+        function toggleT3AdjTray(idx) {
+            const form = document.getElementById(`t3-adjtray-form-${idx}`);
+            if (!form) return;
+            const opening = form.classList.contains('hidden');
+            form.classList.toggle('hidden');
+            if (!opening) return;
+            // Start on what it says now, even if that tray is not in the list
+            // any more — otherwise the picker silently proposes a different one.
+            const row = form.previousElementSibling;
+            const shown = row ? (row.children[2]?.innerText || '').trim() : '';
+            const sel = form.querySelector('.t3-adjtray-select');
+            if (sel && shown && shown !== '—') setSelectValuePreserve(sel, shown, shown);
+        }
+
+        async function saveT3AdjTray(idx) {
+            if (!_t7IsAdmin()) { showToast('Only admins can change this.', 'error'); return; }
+            const form = document.getElementById(`t3-adjtray-form-${idx}`);
+            if (!form) return;
+            const logId = form.getAttribute('data-log-id');
+            const calId = form.getAttribute('data-cal-id');
+            const tray  = (form.querySelector('.t3-adjtray-select')?.value || '').trim();
+            if (!tray) { showToast('Pick the tray these seedlings came out of.', 'error'); return; }
+
+            const { data: rowNow, error: readErr } = await _supabase
+                .from('shared_inventory_logs').select('remark').eq('id', logId).maybeSingle();
+            if (readErr || !rowNow) {
+                showToast('Could not read that record' + (readErr ? ': ' + readErr.message : '') + '.', 'error');
+                return;
+            }
+            /* Replace only what is inside the brackets. Everything else on the
+               remark — the date, MapUrl, FromAdjustment, CalApprovedBy — is
+               carried across untouched. */
+            const newRemark = String(rowNow.remark || '').replace(/tray \[[^\]]*\]/i, `tray [${tray}]`);
+            const { error: upErr } = await _supabase.from('shared_inventory_logs')
+                .update({ remark: newRemark }).eq('id', logId);
+            if (upErr) { showToast('Could not save: ' + upErr.message, 'error'); return; }
+
+            // …and the adjustment, so the two go on pairing with each other.
+            if (calId) {
+                const { data: calNow } = await _supabase
+                    .from('shared_inventory_logs').select('remark').eq('id', calId).maybeSingle();
+                if (calNow && calNow.remark) {
+                    const calRemark = /TxTray:/i.test(calNow.remark)
+                        ? calNow.remark.replace(/TxTray:\s*[^.]*\./i, `TxTray:${tray}.`)
+                        : calNow.remark;
+                    if (calRemark !== calNow.remark) {
+                        const { error: calErr } = await _supabase.from('shared_inventory_logs')
+                            .update({ remark: calRemark }).eq('id', calId);
+                        if (calErr) {
+                            showToast('The row was changed to ' + tray + ', but the adjustment still says the old '
+                                + 'tray — they will not line up until that is fixed: ' + calErr.message, 'error');
+                        }
+                    }
+                }
+            }
+
+            showToast('Source tray changed to ' + tray + '.', 'success');
+            toggleT3AdjTray(idx);
+            _t7TxLogs = null;
+            await syncTab3();
+            const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
+            syncAdjustmentBars(batchId);
         }
 
         async function saveT3EditRow(idx, origTxType) {
