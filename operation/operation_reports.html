@@ -1290,8 +1290,9 @@ function mvShowDetailTip(anchorEl, idx) {
   sorted.forEach(r => {
     // Sold rows carry doNumber/customer (their own two-colour layout,
     // matching Tab 6's own Sales tooltip); every other column carries a
-    // plain label instead ("From B13", "Tray PREMIUM CARE", "Drone map
-    // qty 5", "To N18-R").
+    // plain label instead ("B13", "Tray PREMIUM CARE") — or none at all
+    // (3rd Culled: just date and qty), in which case that span is left
+    // out rather than printed empty.
     html += (r.doNumber != null) ? `
       <div class="flex items-baseline gap-2 py-0.5 text-[11px] whitespace-nowrap">
         <span class="font-black text-[#3a7ab4]">${esc(r.doNumber)}</span>
@@ -1301,7 +1302,7 @@ function mvShowDetailTip(anchorEl, idx) {
       </div>` : `
       <div class="flex items-baseline gap-2 py-0.5 text-[11px] whitespace-nowrap">
         <span class="font-bold text-[#8a7a68]">${fmtDate(r.date)}</span>
-        <span class="font-bold text-[#3d2610] truncate max-w-[160px]">${esc(r.label || '—')}</span>
+        ${r.label ? `<span class="font-bold text-[#3d2610] truncate max-w-[160px]">${esc(r.label)}</span>` : ''}
         <span class="ml-auto font-black text-[#3a7ab4]">${fmtNum(r.qty)}</span>
       </div>`;
   });
@@ -1474,7 +1475,7 @@ async function runMovementReportCombined() {
       const mapQtyMatch = (l.remark || '').match(/MapQty:\s*(\d+)/);
       if (mapQtyMatch && passMain(l.plot_name)) {
         push('main', d, l.plot_name, b, 'cull3', q);
-        pushDetail(l.plot_name, b, 'cull3', d, q, `Drone map qty ${mapQtyMatch[1]}`);
+        pushDetail(l.plot_name, b, 'cull3', d, q, '');
       }
       return;
     }
