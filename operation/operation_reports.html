@@ -1249,6 +1249,13 @@ const MOVE_COLS = {
     { key: 'sold',    label: 'Sold',                  sign: -1, cls: 'text-[#a83020]' },
     { key: 'cull3',   label: '3rd Culled',            sign: -1, cls: 'text-[#a83020]' },
     { key: 'trOut',   label: 'Transfer Out',          sign: -1, cls: 'text-[#a83020]' },
+    // Stock_Calibration's own quantity_change is already signed (a Found
+    // is positive, a Stolen/over-allocation is negative) — sign: +1 adds
+    // it exactly as stored, not a fixed direction like every other
+    // column here. Only APPROVED adjustments are ever pushed as an event
+    // to begin with — see the Stock_Calibration branch below — so this
+    // column can never carry a pending, unapproved figure.
+    { key: 'adjust',  label: 'Stock Adjustment',      sign: +1, cls: 'text-[#7a4a10]' },
   ],
 };
 
@@ -1366,7 +1373,8 @@ async function runMovementReportCombined() {
       .select('transaction_type, transaction_date, created_at, remark, plot_name, batch_name, quantity_change')
       .in('transaction_type', ['Seeds_Received', 'Planted', 'Transplanted',
           'Transplanted_Premium', 'Transplanted_DoubleTone', 'Damaged_Seeds',
-          '1st_Culling', '2nd_Culling', '3rd_Culling', 'Cull3_Transfer'])
+          '1st_Culling', '2nd_Culling', '3rd_Culling', 'Cull3_Transfer',
+          'Stock_Calibration'])
       .order('id', { ascending: true })),
     // do_number/al_number added for the Sold column's hover tooltip
     // (date · DO number · customer · qty) — see mvBuildSaleDetails().
@@ -1524,6 +1532,33 @@ async function runMovementReportCombined() {
       }
       return;
     }
+
+    if (t === 'Stock_Calibration') {
+      // Only an APPROVED adjustment ever counts — the same "[APPROVED by
+      // <who> on <when>]" marker operation_batch_detail.html's own
+      // _parseCalibration() reads. A pending one hasn't been ruled on yet
+      // and moves no figure there either; reading it here too would make
+      // this the one place in the system where an unapproved adjustment
+      // silently did.
+      const approved = (l.remark || '').match(/\[APPROVED by [^\]]+ on [^\]]+\]/);
+      if (!approved || !passMain(l.plot_name)) return;
+      // Its own signed value — a Found is positive, a Stolen or
+      // over-allocation is negative — not Math.abs(quantity_change) like
+      // every other branch here, so the direction survives into the
+      // column and the balance exactly as it was approved.
+      const signedQty = Number(l.quantity_change) || 0;
+      if (!signedQty) return;
+      push('main', d, l.plot_name, b, 'adjust', signedQty);
+      // Same reason-extraction as _parseCalibration(): strip the
+      // "Report: X. Plot: Y. Side: Z." prefix pieces and the [APPROVED…]
+      // marker, leaving just the reason someone actually wrote.
+      let reason = (l.remark || '').replace(approved[0], '').trim();
+      reason = reason.replace(/Report:\s*[^.]+?\s*\.\s*/i, '')
+                      .replace(/Plot:\s*[^.]+?\s*\.\s*/i, '')
+                      .replace(/Side:\s*(seed|plot)\s*\.\s*/i, '').trim();
+      pushDetail(l.plot_name, b, 'adjust', d, signedQty, reason);
+      return;
+    }
   });
 
   // ── Sales, only against a plot·batch the batch report already has ──
@@ -1669,7 +1704,7 @@ function buildMovementSection(scope, ev, ctx) {
     const sales = saleDetails ? inPeriod(saleDetails[meta[k].place + '::' + meta[k].batch]) : [];
     const details = {};
     if (colDetails) {
-      ['trIn', 'transIn', 'cull3', 'trOut'].forEach(col => {
+      ['trIn', 'transIn', 'cull3', 'trOut', 'adjust'].forEach(col => {
         const dk = meta[k].place + '::' + meta[k].batch + '::' + col;
         details[col] = inPeriod(colDetails[dk]);
       });
@@ -1712,7 +1747,7 @@ function buildMovementSection(scope, ev, ctx) {
   // markup. Sold reads r.sales (Date/DO Number/Customer/Qty); the other
   // wired columns read r.details[col] (Date/label/Qty) — see the
   // pushDetail() calls above and DETAIL_TITLES below.
-  const DETAIL_TITLES = { trIn: 'Transfer In', transIn: 'Transplanted from PN', cull3: '3rd Culled', trOut: 'Transfer Out' };
+  const DETAIL_TITLES = { trIn: 'Transfer In', transIn: 'Transplanted from PN', cull3: '3rd Culled', trOut: 'Transfer Out', adjust: 'Stock Adjustment' };
   const fmtDetailCell = (r, c) => {
     const n = r[c.key];
     const rowsForTip = c.key === 'sold' ? r.sales : (r.details && r.details[c.key]);
