@@ -294,13 +294,14 @@ async function runBatchProduction() {
 
   // Fetch all batches up to the To date — anchor date is Seeds_Received transaction_date.
   // plot_name joins us to nursery (main-nursery drilldowns need it).
-  const [logsRes, batchesRes, plotsRes] = await Promise.all([
+  const [logsRes, plotsRes] = await Promise.all([
     // Paged — a single request stops at 1000 rows, which quietly dropped the
     // older batches out of the funnel entirely.
     fetchAllRows(() => _supabase.from('shared_inventory_logs')
       // breed_name comes off the log too — bulk-imported batches don't
-      // have an operation_batches mirror row, so we can't rely on that
-      // table alone to name the source.
+      // have an operation_batches mirror row, and that table has no
+      // breed_name column to fall back to anyway, so the log is the only
+      // source that actually names the breed.
       .select('batch_name, transaction_type, quantity_change, transaction_date, created_at, remark, plot_name, breed_name')
       // Only the funnel's types — the aggregation loop ignores everything
       // else anyway, and pulling the full table (photo rows, calibration,
@@ -309,7 +310,6 @@ async function runBatchProduction() {
           'Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone',
           '1st_Culling', '2nd_Culling', '3rd_Culling'])
       .order('id', { ascending: true })),
-    _supabase.from('operation_batches').select('name, breed_name, created_at'),
     _supabase.from('shared_plots').select('plot_name, nursery_name')
   ]);
 
@@ -320,10 +320,6 @@ async function runBatchProduction() {
     out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-red-700 text-sm">Failed to load logs: ${logErr.message}</div>`;
     return;
   }
-
-  const batches = batchesRes.data || [];
-  const meta = {};
-  batches.forEach(b => { meta[b.name] = b; });
 
   // Nursery lookup — Pre-Nursery holding trays map to a virtual "Pre-Nursery"
   // slot; main-nursery plots resolve via shared_plots.nursery_name; anything
@@ -369,12 +365,11 @@ async function runBatchProduction() {
   const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
 
   let rows = Object.values(byBatch).map(r => {
-    const m = meta[r.batch_name] || {};
-    // Prefer the breed captured on the actual log rows — bulk-imported
-    // batches don't have an operation_batches row to consult, but every
-    // Seeds_Received log has breed_name filled in.
-    r.breed_name = r.log_breed || m.breed_name || '—';
-    r.batch_created_at = m.created_at || r.seeds_date;
+    // The breed captured on the actual log rows — every Seeds_Received
+    // log has breed_name filled in (see reception-form save in
+    // operation_batch_detail.html), which is the only reliable source.
+    r.breed_name = r.log_breed || '—';
+    r.batch_created_at = r.seeds_date;
     const finalAlive = Math.max(0, r.trans - r.cull1 - r.cull2 - r.cull3);
     const survival   = r.seeds > 0 ? (finalAlive / r.seeds) * 100 : 0;
     r.final_alive = finalAlive;
@@ -494,7 +489,12 @@ async function runBatchDoubleTone() {
       .select('batch_name, transaction_date, created_at, remark, quantity_change, breed_name')
       .eq('transaction_type', 'Transplanted_DoubleTone')
       .order('id', { ascending: true })),
-    _supabase.from('operation_batches').select('name, breed_name')
+    // operation_batches has no breed_name column. A Transplanted_DoubleTone
+    // row is sometimes saved without its own either, so Seeds_Received —
+    // the batch's own Breed Variety field from Tab 1 — is the fallback.
+    fetchAllRows(() => _supabase.from('shared_inventory_logs')
+      .select('batch_name, breed_name')
+      .eq('transaction_type', 'Seeds_Received'))
   ]);
   if (logsRes.error) {
     loading.classList.add('hidden'); out.classList.remove('hidden');
@@ -503,7 +503,7 @@ async function runBatchDoubleTone() {
   }
 
   const batchBreed = {};
-  (batchesRes.data || []).forEach(b => { batchBreed[b.name] = b.breed_name; });
+  (batchesRes.data || []).forEach(b => { if (b.breed_name) batchBreed[b.batch_name] = b.breed_name; });
 
   const fromTs = from ? new Date(from).getTime() : -Infinity;
   const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
@@ -576,21 +576,20 @@ async function runSeedReceived() {
   const to    = document.getElementById('f-to').value;
   const breed = document.getElementById('f-breed').value;
 
-  const [logsRes, batchesRes] = await Promise.all([
+  const [logsRes] = await Promise.all([
+    // operation_batches has no breed_name column — every Seeds_Received row
+    // already carries its own (see reception-form save in
+    // operation_batch_detail.html), so there's nothing to fall back to here.
     fetchAllRows(() => _supabase.from('shared_inventory_logs')
       .select('batch_name, transaction_type, transaction_date, created_at, remark, quantity_change, breed_name')
       .in('transaction_type', ['Seeds_Received', 'Damaged_Seeds'])
-      .order('id', { ascending: true })),
-    _supabase.from('operation_batches').select('name, breed_name')
+      .order('id', { ascending: true }))
   ]);
   if (logsRes.error) {
     loading.classList.add('hidden'); out.classList.remove('hidden');
     out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-red-700 text-sm">Failed to load logs: ${logsRes.error.message}</div>`;
     return;
   }
-
-  const batchBreed = {};
-  (batchesRes.data || []).forEach(b => { batchBreed[b.name] = b.breed_name; });
 
   const fromTs = from ? new Date(from).getTime() : -Infinity;
   const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
@@ -608,7 +607,7 @@ async function runSeedReceived() {
 
     const row = byBatch[b] || (byBatch[b] = { batch_name: b, breed: '—', date: null, doQty: 0, focPct: null, damaged: 0 });
     if (!row.date || (d && d < row.date)) row.date = d;
-    if ((!row.breed || row.breed === '—') && (l.breed_name || batchBreed[b])) row.breed = l.breed_name || batchBreed[b];
+    if ((!row.breed || row.breed === '—') && l.breed_name) row.breed = l.breed_name;
     const doMatch  = (l.remark || '').match(_RE_DO_QTY);
     const focMatch = (l.remark || '').match(_RE_FOC_PCT);
     // Legacy rows saved before the D/O·FOC split existed carry no DO_Qty
@@ -1929,7 +1928,15 @@ async function runTransplantingReport() {
       .eq('transaction_type', 'Transplanted')
       .order('id', { ascending: true })),
     _supabase.from('shared_plots').select('plot_name, nursery_name'),
-    _supabase.from('operation_batches').select('name, breed_name')
+    // operation_batches has no breed_name column to fall back to (a
+    // Transplanted row is sometimes saved without one of its own — see
+    // batch 260/U4). Seeds_Received is the batch's own "Breed Variety"
+    // field from Tab 1, written once when the batch is first set up
+    // (see operation_batch_detail.html's reception-form save) — the
+    // actual, reliable source of what a batch's breed is.
+    fetchAllRows(() => _supabase.from('shared_inventory_logs')
+      .select('batch_name, breed_name')
+      .eq('transaction_type', 'Seeds_Received'))
   ]);
   if (logsRes.error) {
     loading.classList.add('hidden'); out.classList.remove('hidden');
@@ -1940,7 +1947,7 @@ async function runTransplantingReport() {
   const plotToLoc = {};
   (plotsRes.data || []).forEach(p => { plotToLoc[p.plot_name] = p.nursery_name || 'Unassigned'; });
   const batchBreed = {};
-  (batchesRes.data || []).forEach(b => { batchBreed[b.name] = b.breed_name; });
+  (batchesRes.data || []).forEach(b => { if (b.breed_name) batchBreed[b.batch_name] = b.breed_name; });
 
   const maturityOf = (d) => {
     const dt = new Date(d);
