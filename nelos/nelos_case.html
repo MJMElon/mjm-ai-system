@@ -18,13 +18,13 @@
   /* The same button, worded the same way, as on User Setting. */
   .backbar { max-width:980px; margin:0 auto; padding:16px 20px 0; }
   .backbar a { display:inline-flex; align-items:center; gap:7px; padding:9px 16px; border-radius:999px;
-               border:1.5px solid #eed0f8; background:#fff; color:#7b3f93; font-size:10.5px;
+               border:1.5px solid #f2cfe7; background:#fff; color:#913673; font-size:10.5px;
                font-weight:900; letter-spacing:.08em; text-transform:uppercase; text-decoration:none;
-               box-shadow:0 3px 10px rgba(155,79,189,.10); }
-  .backbar a:hover { background:#f3ddfb; }
+               box-shadow:0 3px 10px rgba(188,73,150,.10); }
+  .backbar a:hover { background:#f8e2f1; }
 
-  .card { background:#fff; border:1.5px solid #f3ddfb; border-radius:16px; padding:18px 20px;
-          box-shadow:0 4px 16px rgba(155,79,189,.06); margin-bottom:14px; }
+  .card { background:#fff; border:1.5px solid #f8e2f1; border-radius:16px; padding:18px 20px;
+          box-shadow:0 4px 16px rgba(188,73,150,.06); margin-bottom:14px; }
   .pill { font-size:9.5px; font-weight:900; letter-spacing:.07em; text-transform:uppercase; padding:3px 8px; border-radius:6px; }
   .pi-urgent { background:#fee2e2; color:#b91c1c; } .pi-high { background:#ffedd5; color:#c2410c; }
   .pi-normal { background:#e0f2fe; color:#0369a1; } .pi-low  { background:#f1f5f9; color:#64748b; }
@@ -32,7 +32,7 @@
   .st-in_progress { background:#dbeafe; color:#1d4ed8; }
   .st-resolved    { background:#dcfce7; color:#15803d; }
   .st-closed      { background:#f1f5f9; color:#64748b; }
-  .src { background:#fcf6fe; color:#7b3f93; }
+  .src { background:#fcf5fa; color:#913673; }
 
   .lbl { font-size:9.5px; font-weight:900; letter-spacing:.11em; text-transform:uppercase; color:#94a3b8;
          display:block; margin-bottom:5px; }
@@ -40,11 +40,11 @@
   /* The heading over each block, and the photo picker. Mirrors the dock's
      .nd-d-sec / .nd-shot — shared/shared_nelos_dock.js. Keep them in step. */
   .sec { font-size:10px; font-weight:900; letter-spacing:.11em; text-transform:uppercase;
-         color:#7b3f93; margin-bottom:7px; }
+         color:#913673; margin-bottom:7px; }
   .shot { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
-          min-height:70px; cursor:pointer; border:1.5px dashed #eed0f8; border-radius:12px;
-          background:#fdfaff; color:#9a4fbd; font-size:11.5px; font-weight:800; }
-  .shot:hover { background:#fcf6fe; border-color:#eec5f6; }
+          min-height:70px; cursor:pointer; border:1.5px dashed #f2cfe7; border-radius:12px;
+          background:#fefafd; color:#bc4996; font-size:11.5px; font-weight:800; }
+  .shot:hover { background:#fcf5fa; border-color:#f2cfe7; }
   .shot-prev { position:relative; border-radius:12px; overflow:hidden; background:#f1f5f9; }
   .shot-prev img { width:100%; max-height:240px; object-fit:cover; display:block; }
   .shot-prev button { position:absolute; top:6px; right:6px; width:24px; height:24px; border:none;
@@ -56,7 +56,7 @@
     .grid.grid-cols-3 { grid-template-columns:repeat(2, minmax(0,1fr)); } }
   .inp { width:100%; font-size:13.5px; font-weight:600; color:#1e293b; background:#f8fafc;
          border:1.5px solid #e2e8f0; border-radius:10px; padding:9px 12px; outline:none; box-sizing:border-box; }
-  .inp:focus { border-color:#d49aea; background:#fff; box-shadow:0 0 0 3px rgba(167,139,250,.18); }
+  .inp:focus { border-color:#e4a0ce; background:#fff; box-shadow:0 0 0 3px rgba(167,139,250,.18); }
   textarea.inp { min-height:76px; resize:vertical; }
 
   .act { padding:10px 17px; border-radius:11px; border:none; cursor:pointer; font-size:10.5px;
@@ -68,9 +68,9 @@
   .act-close   { background:#475569; color:#fff; }
   .act-reopen  { background:#fef3c7; color:#a16207; }
 
-  .thread-item { display:flex; gap:11px; padding:11px 0; border-bottom:1px dashed #f0d6f9; }
+  .thread-item { display:flex; gap:11px; padding:11px 0; border-bottom:1px dashed #f8e2f1; }
   .thread-item:last-child { border-bottom:none; }
-  .av { width:31px; height:31px; border-radius:9px; background:#f3ddfb; color:#7b3f93; flex-shrink:0;
+  .av { width:31px; height:31px; border-radius:9px; background:#f8e2f1; color:#913673; flex-shrink:0;
         display:flex; align-items:center; justify-content:center; font-weight:900; font-size:11.5px; }
   .av-sys { background:#f1f5f9; color:#64748b; }
   .thread-who { font-size:12px; font-weight:900; color:#334155; }
@@ -104,26 +104,26 @@
          here read "Nelos - Normal - Open" on very nearly every case: three
          words of nothing between the case number and the case. -->
     <div class="flex items-center gap-2 flex-wrap mb-2">
-      <span id="c-no" class="text-[11px] font-black tracking-wider text-[#7b3f93]"></span>
+      <span id="c-no" class="text-[11px] font-black tracking-wider text-[#913673]"></span>
     </div>
     <div id="c-sec" class="sec"></div>
     <h1 id="c-title" class="text-[19px] font-black text-slate-800 leading-snug"></h1>
     <div id="c-meta" class="text-[11.5px] font-bold text-slate-400 mt-1"></div>
-    <a id="c-back-link" class="hidden inline-block mt-2.5 text-[10.5px] font-black uppercase tracking-widest text-[#9a4fbd] hover:underline"></a>
+    <a id="c-back-link" class="hidden inline-block mt-2.5 text-[10.5px] font-black uppercase tracking-widest text-[#bc4996] hover:underline"></a>
 
     <!-- The photo the case was raised with, full width — the list shows a
          thumbnail, this is where it is actually looked at. Opens the
          original in a new tab for a closer look. -->
     <a id="c-photo-link" class="hidden block mt-4" target="_blank" rel="noopener">
       <img id="c-photo" alt="Photo attached to this case"
-           style="width:100%;max-height:340px;object-fit:cover;border-radius:12px;border:1.5px solid #f3ddfb;">
+           style="width:100%;max-height:340px;object-fit:cover;border-radius:12px;border:1.5px solid #f8e2f1;">
     </a>
 
     <!-- The document the case was raised with, if there is one. Opened
          rather than looked at, so a link and not a frame. -->
     <a id="c-doc-link" class="hidden mt-3" target="_blank" rel="noopener"
-       style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1.5px solid #f3ddfb;
-              border-radius:12px;background:#fdfaff;font-size:12.5px;font-weight:800;color:#4a2158;
+       style="display:flex;align-items:center;gap:8px;padding:10px 12px;border:1.5px solid #f8e2f1;
+              border-radius:12px;background:#fefafd;font-size:12.5px;font-weight:800;color:#511f41;
               text-decoration:none;overflow-wrap:anywhere;">
       <span aria-hidden="true">📄</span><span id="c-doc-label">Open the document</span>
     </a>
@@ -158,7 +158,7 @@
   <div class="card" id="action-card">
     <span class="lbl">Move this case on</span>
     <div id="c-actions" class="flex flex-wrap gap-2"></div>
-    <div id="resolve-box" class="hidden mt-4 pt-3.5 border-t border-[#f3ddfb]">
+    <div id="resolve-box" class="hidden mt-4 pt-3.5 border-t border-[#f8e2f1]">
       <div class="sec">Solve Case</div>
       <label id="c-shot-pick" class="shot">
         <span aria-hidden="true">&#128247;</span>
@@ -204,7 +204,7 @@
   <div class="card">
     <span class="lbl">History &amp; Comments</span>
     <div id="thread"></div>
-    <div class="mt-3 pt-3 border-t border-dashed border-[#f3ddfb]">
+    <div class="mt-3 pt-3 border-t border-dashed border-[#f8e2f1]">
       <textarea id="new-comment" class="inp" placeholder="Add a comment…"></textarea>
       <button id="send-comment" class="act act-start mt-2">Post Comment</button>
     </div>
@@ -459,7 +459,7 @@ function paintShots() {
   host.innerHTML = _shots.map((f, i) => `
     <figure style="position:relative;flex:1 1 104px;min-width:104px;max-width:190px;margin:0;">
       <img src="${URL.createObjectURL(f)}" alt="Photo of the fix"
-           style="width:100%;border-radius:11px;display:block;border:1.5px solid #f3ddfb;">
+           style="width:100%;border-radius:11px;display:block;border:1.5px solid #f8e2f1;">
       <button type="button" data-i="${i}" aria-label="Remove this photo"
         style="position:absolute;top:5px;right:5px;width:24px;height:24px;border-radius:999px;border:none;
                background:rgba(15,23,42,.72);color:#fff;font-size:13px;font-weight:900;cursor:pointer;line-height:1;">
@@ -610,7 +610,7 @@ async function loadAssignees() {
 
     const { data, error } = await _supabase.from('nelos_cases').select('*').eq('id', caseId).single();
     if (error || !data) {
-      $('loading').innerHTML = 'Case not found. <a href="nelos_dashboard.html" class="text-[#7b3f93] underline">Back to all cases</a>';
+      $('loading').innerHTML = 'Case not found. <a href="nelos_dashboard.html" class="text-[#913673] underline">Back to all cases</a>';
       return;
     }
 
@@ -620,7 +620,7 @@ async function loadAssignees() {
     if (!MJMNelos.inScope(data, await MJMNelos.scope())) {
       $('loading').innerHTML =
         'This case belongs to a module you are not set up for. ' +
-        '<a href="nelos_dashboard.html" class="text-[#7b3f93] underline">Back to your cases</a>';
+        '<a href="nelos_dashboard.html" class="text-[#913673] underline">Back to your cases</a>';
       return;
     }
     theCase = data;
