@@ -579,16 +579,22 @@
 
         // "Unlock All" — same manual_override write toggleMonthLock() does
         // for one month, but all 12 months of the selected Year in one go
-        // (see MJMMonthLock.setManualOverrideForYear). Confirmed first: it
-        // forces every month of the year open — Delivery Orders, Approval
-        // Letters and Batch Record alike — until locked again by hand or
-        // by the next auto-lock date.
+        // (see MJMMonthLock.setManualOverrideForYear). No confirm dialog —
+        // same as the per-month round icon, which has never had one either
+        // (a blocking confirm() is also unreliable in some embedded
+        // webviews, which silently swallowed the click here). Wrapped in
+        // try/catch so any failure surfaces as an alert instead of a
+        // click that just does nothing.
         async function unlockAllMonths() {
             const year = _mlkYear;
-            if (!confirm(`Unlock all 12 months of ${year}?\n\nThis forces every month open — Delivery Orders, Approval Letters and Batch Record — until it's locked again.`)) return;
-            const { data: { user } } = await _supabase.auth.getUser();
-            const error = await MJMMonthLock.setManualOverrideForYear(_supabase, year, false, user?.email || null);
-            if (error) return alert('Could not save: ' + error.message + (error.message.includes('does not exist') ? '\n\nRun shared/RUN_ME_month_locks.sql in the Supabase SQL Editor first.' : ''));
+            try {
+                const { data: { user } } = await _supabase.auth.getUser();
+                const error = await MJMMonthLock.setManualOverrideForYear(_supabase, year, false, user?.email || null);
+                if (error) throw error;
+            } catch (error) {
+                alert('Could not save: ' + error.message + (String(error.message || '').includes('does not exist') ? '\n\nRun shared/RUN_ME_month_locks.sql in the Supabase SQL Editor first.' : ''));
+                return;
+            }
             renderMonthLockGrid();
         }
 
