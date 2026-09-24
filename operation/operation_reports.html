@@ -1920,9 +1920,13 @@ async function runTransplantingReport() {
   const selectedLocs = new Set(selectedNurseries());
 
   const [logsRes, plotsRes, batchesRes] = await Promise.all([
+    // Transplanted only — a move INTO a real main plot. Transplanted_Premium
+    // and Transplanted_DoubleTone are pre-nursery-to-pre-nursery moves (into
+    // the Premium Care / Double-Tone holding tray, not a plot), and don't
+    // belong in a report titled Transplanting.
     fetchAllRows(() => _supabase.from('shared_inventory_logs')
       .select('batch_name, transaction_date, created_at, remark, plot_name, quantity_change, breed_name')
-      .in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone'])
+      .eq('transaction_type', 'Transplanted')
       .order('id', { ascending: true })),
     _supabase.from('shared_plots').select('plot_name, nursery_name'),
     _supabase.from('operation_batches').select('name, breed_name')
