@@ -1385,7 +1385,18 @@ async function runMovementReportCombined() {
     if (t === 'Planted')     { push('pre', d, l.plot_name, b, 'planted', q); return; }
     if (t === '1st_Culling') { push('pre', d, l.plot_name, b, 'cull1', q); return; }
     if (t === '2nd_Culling') { if (passMain(l.plot_name)) push('main', d, l.plot_name, b, 'cull2', q); return; }
-    if (t === '3rd_Culling') { if (passMain(l.plot_name)) push('main', d, l.plot_name, b, 'cull3', q); return; }
+    if (t === '3rd_Culling') {
+      // Only counted once a drone map qty has actually been keyed — Tab 6
+      // computes and saves a 3rd_Culling figure the moment Alive reaches
+      // zero, whether or not anyone has actually counted/photographed it.
+      // An un-evidenced "fully culled" record would otherwise zero out a
+      // batch's standing balance here on nothing more than a formula.
+      // MapQty: N is written into the remark by saveTab6() only when that
+      // box actually has a number in it (see operation_batch_detail.html).
+      const hasMapQty = /MapQty:\s*\d+/.test(l.remark || '');
+      if (hasMapQty && passMain(l.plot_name)) push('main', d, l.plot_name, b, 'cull3', q);
+      return;
+    }
 
     if (t === 'Damaged_Seeds') {
       const home = batchHomeTray[_mvBatchKey(b)];
