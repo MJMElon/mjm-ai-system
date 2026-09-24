@@ -253,9 +253,14 @@ const TX_ROWS = [
   const made = await page.evaluate(() => ({ ins: window.__INSERTS, upd: window.__UPDATES }));
   check('one transplanting row was written', made.ins.length, 1);
   const tx = made.ins[0];
-  check('…of the right kind, plot, quantity and date',
-        { t: tx.transaction_type, p: tx.plot_name, q: tx.quantity_change, d: tx.transaction_date },
-        { t: 'Transplanted', p: 'B8', q: 140, d: '2025-06-20' });
+  check('…of the right kind, plot and date',
+        { t: tx.transaction_type, p: tx.plot_name, d: tx.transaction_date },
+        { t: 'Transplanted', p: 'B8', d: '2025-06-20' });
+  /* NOUGHT, not 140. Nobody keyed a transplant into B8 — that is why it had
+     no record. The 140 is what the ADJUSTMENT put there, so it stays in the
+     adjustment and the row is only where it lands:
+         Qty 0 · Adjustment +140 · Final 140 */
+  check('…with a quantity of nought', tx.quantity_change, 0);
   checkTrue('…naming the tray the way tab 3 reads it',
             /Transplanted from tray \[P4\] to Main Plot \[B8\]\./.test(tx.remark));
   checkTrue('…carrying the drone map', /MapUrl:https:\/\/files\.test\//.test(tx.remark));
@@ -266,24 +271,29 @@ const TX_ROWS = [
   checkTrue('the adjustment is marked approved', approvalUpd.some(u => /APPROVED by/.test(u.row.remark || '')));
   checkTrue('…and linked to the row it created', approvalUpd.some(u => /TxRow:new-/.test(u.row.remark || '')));
 
-  console.log('\nAnd it stops counting as an adjustment — or the 140 is in B8 twice');
+  console.log('\nThe adjustment goes on counting — the row does not take it over');
   const counted = await page.evaluate(() => {
-    const withRow = window._parseCalibration({ id: 'a', quantity_change: 140,
+    const r = window._parseCalibration({ id: 'a', quantity_change: 140,
       remark: 'Report: Transplanting. Plot: B8. Move to B8. TxTray:P4. TxMap:https://x/y.jpg TxRow:new-900 [APPROVED by coco@mjm on 2026-09-24]' });
-    const without = window._parseCalibration({ id: 'b', quantity_change: 140,
-      remark: 'Report: Transplanting. Plot: B8. Move to B8. TxTray:P4. TxMap:https://x/y.jpg [APPROVED by coco@mjm on 2026-09-24]' });
-    return { withRow: withRow.txRow, without: without.txRow, approved: withRow.approved };
+    return { txRow: r.txRow, txTray: r.txTray, approved: r.approved, qty: r.qty, plot: r.plot };
   });
-  check('a spawned adjustment is recognisable by its TxRow', counted.withRow, 'new-900');
-  check('one that has not spawned yet is not', counted.without, '');
-  check('…and it is still an approved adjustment either way', counted.approved, true);
+  check('the link back to its row is kept', counted.txRow, 'new-900');
+  check('…so a second row is never created for it', counted.txRow !== '', true);
+  check('but it is still an approved adjustment of +140 on the plot',
+        { approved: counted.approved, qty: counted.qty, plot: counted.plot },
+        { approved: true, qty: 140, plot: 'B8' });
 
-  /* The rule itself: the strip and the per-row painter both skip a spawned
-     adjustment, so B8's 140 is counted once — in the Qty column. */
+  /* The two places that decide whether an adjustment counts. Both must take
+     it — the row it wrote carries 0, so nothing is counted twice, and hiding
+     the adjustment would leave the plot reading 0 instead of 140. */
   const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'operation',
                                                               'operation_batch_detail.html'), 'utf8');
-  checkTrue('the adjustment maps skip it', /rows\.filter\(r => r\.approved && !r\.txRow\)/.test(src));
-  checkTrue('and so does the per-row painter', /if \(r\.txRow\) return;/.test(src));
+  check('the adjustment maps do not skip a row-writing adjustment',
+        /rows\.filter\(r => r\.approved && !r\.txRow\)/.test(src), false);
+  checkTrue('they take every approved one', /rows\.filter\(r => r\.approved\)\.forEach/.test(src));
+  check('and neither does the per-row painter', /if \(r\.txRow\) return;/.test(src), false);
+  checkTrue('which pairs it with its row by the tray it answered',
+            /_t3TrayKey\(r\.tray \|\| r\.txTray\)/.test(src));
 
   await browser.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

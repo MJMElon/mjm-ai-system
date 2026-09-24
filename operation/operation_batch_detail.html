@@ -2977,11 +2977,13 @@
             const byPair = {};
             (ADJUST_ROWS || []).forEach(r => {
                 if (!r.approved) return;
-                // Same rule as the maps above: one that became a transplant row
-                // is in the Qty column now, not the Adjustment one.
-                if (r.txRow) return;
                 if (String(r.report || '').toLowerCase() !== 'transplanting') return;
-                const k = _t6PlotKey(r.plot) + '|' + _t3TrayKey(r.tray);
+                /* An adjustment that WROTE its own row names its tray as TxTray
+                   rather than Tray — it was answered on the panel, not split off
+                   an existing line. Either way it is the tray the seedlings came
+                   out of, and it is what pairs the adjustment with its row: the
+                   row carries Qty 0 and this is the +140 that goes beside it. */
+                const k = _t6PlotKey(r.plot) + '|' + _t3TrayKey(r.tray || r.txTray);
                 byPair[k] = (byPair[k] || 0) + r.qty;
             });
 
@@ -3108,10 +3110,12 @@
                this" is worth seeing — it just is not an answer yet. */
             Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
             Object.keys(ADJUST_PLOT_LOSS_STAGE).forEach(k => delete ADJUST_PLOT_LOSS_STAGE[k]);
-            /* NOT the ones that became a transplant row. Their figure is a
-               recorded movement now — it is in the plot's Qty — so counting it
-               here as well would put the same 140 into B8 twice. */
-            rows.filter(r => r.approved && !r.txRow).forEach(r => {
+            /* INCLUDING the ones that wrote their own transplant row. That row
+               is written with a quantity of nought — nobody keyed a transplant
+               into that plot, which is why it had none — so the figure lives
+               here, in the adjustment, exactly as it did before the row
+               existed. The row is only where it now lands. */
+            rows.filter(r => r.approved).forEach(r => {
                 if (r.side === 'plot') {
                     // Belongs to the plot it names, not to the batch total,
                     // and only to the reports still measuring against a figure
@@ -3906,11 +3910,19 @@
                has ruled on moves no figure anywhere else either, and that has
                to include putting seedlings into a plot.
 
-               The adjustment then carries TxRow:<id>, which is what stops it
-               ALSO counting as an adjustment against the plot — its figure is
-               a recorded movement now, and counting it twice is how B8 would
-               read 280 for one lot of 140. See paintT3Adjustments and the maps
-               in syncAdjustmentBars. */
+               THE ROW IS WRITTEN WITH A QUANTITY OF NOUGHT, and that is the
+               whole point of it. Nobody keyed a transplant into this plot —
+               that is why it had no record. What put the seedlings there is
+               the adjustment, so the adjustment is where the figure belongs:
+
+                   Qty 0  ·  Adjustment +140  ·  Final 140
+
+               Putting 140 in the Qty column instead would claim somebody
+               recorded a transplant that nobody recorded, and the adjustment
+               would then have to be hidden to stop the plot reading 280. This
+               way the adjustment goes on counting exactly as it always did and
+               the row is simply where it now lands. TxRow:<id> is kept as the
+               link back, so a second row is never created for the same one. */
             const cal = _parseCalibration(Object.assign({ id }, row || {}));
             if (cal.txTray && !cal.txRow) {
                 const txRemark = `Transplanted from tray [${cal.txTray}] to Main Plot [${cal.plot}]. `
@@ -3923,7 +3935,7 @@
                         transaction_type: 'Transplanted',
                         batch_name: row.batch_name,
                         plot_name: cal.plot,
-                        quantity_change: Math.abs(Number(row.quantity_change) || 0),
+                        quantity_change: 0,
                         transaction_date: row.transaction_date || String(row.created_at || '').slice(0, 10),
                         remark: txRemark
                     })])

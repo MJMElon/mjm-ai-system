@@ -233,6 +233,76 @@ const CAL_ROWS = [
   check('the untouched rows did not move', after.slice(0, 3).map(r => r.final),
         ['2,436', '2,307', '2,246']);
 
+  console.log('\nA row written by an adjustment: Qty 0, Adjustment +140, Final 140');
+  /* B8 had no transplanting record at all. Approving the adjustment wrote one
+     with a quantity of NOUGHT — nobody keyed a transplant there — so the 140
+     stays where it actually came from, in the Adjustment column. */
+  // First the orphan state: the adjustment exists, the plot has no row.
+  await page.evaluate(() => {
+    window.__CAL_ROWS = window.__CAL_ROWS.concat([{
+      id: 'cal-b8', batch_name: '242', transaction_type: 'Stock_Calibration',
+      plot_name: 'B8', quantity_change: 140, transaction_date: '2026-06-20',
+      created_at: '2026-06-20T02:00:00Z', last_edited_by: null,
+      remark: 'Report: Transplanting. Plot: B8. Move to B8. TxTray:P4. '
+            + 'TxMap:https://x/map.jpg TxRow:tx-b8'
+            + ' [APPROVED by esther@mjm on 2026-06-21T00:00:00Z]'
+    }]);
+  });
+  const num = t => Number(String(t).replace(/[^0-9-]/g, '')) || 0;
+  await page.evaluate(b => window.syncAdjustmentBars(b), BATCH);
+  await page.waitForTimeout(400);
+  const beforeTotals = await page.evaluate(() => ({
+    qty: document.getElementById('t3-saved-total-qty').innerText.trim(),
+    adj: document.getElementById('t3-saved-total-adj').innerText.trim(),
+    note: document.getElementById('t3-saved-adj-note').innerText
+  }));
+  // …then approval writes the row, with a quantity of nought.
+  await page.evaluate(() => {
+    window.__TX_ROWS = window.__TX_ROWS.concat([{
+      id: 'tx-b8', transaction_type: 'Transplanted', plot_name: 'B8', quantity_change: 0,
+      transaction_date: '2026-06-20', created_at: '2026-06-20T02:00:00Z',
+      remark: 'Transplanted from tray [P4] to Main Plot [B8]. Date: 2026-06-20 '
+            + 'MapUrl:https://x/map.jpg FromAdjustment:cal-b8 CalApprovedBy:esther@mjm'
+    }]);
+  });
+  await page.evaluate(b => window.syncTab3 && window.syncTab3(), BATCH);
+  await page.waitForSelector('#t3-saved-rows-list .t3-adj-cell[data-plot="B8"]',
+                             { state: 'attached', timeout: 8000 });
+  await page.evaluate(b => window.syncAdjustmentBars(b), BATCH);
+  await page.waitForTimeout(400);
+
+  const b8 = await page.evaluate(() => {
+    const c = document.querySelector('#t3-saved-rows-list .t3-adj-cell[data-plot="B8"]');
+    return {
+      tray:  c.getAttribute('data-tray'),
+      qty:   c.getAttribute('data-qty'),
+      adj:   c.innerText.trim(),
+      final: c.parentElement.querySelector('.t3-final-cell').innerText.trim()
+    };
+  });
+  check('B8 now has a row, and it is not claiming a transplant nobody keyed',
+        b8, { tray: 'P4', qty: '0', adj: '+140', final: '140' });
+
+  const afterTotals = await page.evaluate(() => ({
+    qty:  document.getElementById('t3-saved-total-qty').innerText.trim(),
+    adj:  document.getElementById('t3-saved-total-adj').innerText.trim(),
+    note: document.getElementById('t3-saved-adj-note').innerText
+  }));
+  check('Total Transplanted is unchanged — the new row adds nothing to it',
+        afterTotals.qty, beforeTotals.qty);
+  /* The total does NOT jump when the row appears. The +140 was already in it,
+     as the orphan line said; writing the row only moves it from that line onto
+     a row of its own. A total that moved would mean it was being counted
+     twice, or had stopped being counted at all. */
+  check('Total Adjustment does not move — the +140 was already in it',
+        num(afterTotals.adj) - num(beforeTotals.adj), 0);
+  checkTrue('and it is still in it', num(afterTotals.adj) !== 0);
+  // The fixture keeps another orphan (-13 on B4, no tray), so the note stays —
+  // but B8 must have left it, because B8 now has a row.
+  checkTrue('B8 was in the "not on any row above" note before',
+            /B8/.test(beforeTotals.note));
+  check('…and is not any more', /B8/.test(afterTotals.note), false);
+
   console.log('\nThe columns line up');
   /* Tailwind's CDN is blocked here, so `md:grid grid-cols-[...]` applies
      nothing and a computed grid-template-columns would be "none" for all
