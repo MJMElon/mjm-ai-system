@@ -1125,8 +1125,10 @@ function ymKey(d) {
 
 const SUMMARY_SKIP_TYPES = new Set([
   'Seed_Audit', 'Seed_Audit_Email', 'Seed_Audit_Note', 'Seed_Audit_Action',
-  'Planting_Photo', 'Stock_Calibration'
+  'Planting_Photo'
 ]);
+// Stock_Calibration used to be skipped here too — now it's read by the
+// Stock Adjustment branch below, so it has to actually reach the loop.
 
 /* ── Reading a movement date out of a batch-report log ──────────────────────
    The batch report writes most movement rows WITHOUT transaction_date — the
