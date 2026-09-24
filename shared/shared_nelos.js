@@ -441,7 +441,7 @@
     .nelos-row { display:flex; align-items:flex-start; gap:9px; padding:8px 2px; border-bottom:1px dashed #e2e8f0;
                  text-decoration:none; color:inherit; }
     .nelos-row:last-child { border-bottom:none; }
-    .nelos-row:hover { background:#faf5ff; }
+    .nelos-row:hover { background:#fdf7fb; }
     .nelos-dot { width:8px; height:8px; border-radius:50%; margin-top:5px; flex-shrink:0; }
     .nelos-p-urgent { background:#dc2626; } .nelos-p-high { background:#f97316; }
     .nelos-p-normal { background:#0ea5e9; } .nelos-p-low  { background:#94a3b8; }

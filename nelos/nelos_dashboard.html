@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NELOS</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%237c3aed%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3ENL%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%23efc7e2%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%233b162f%27 text-anchor=%27middle%27%3ENL%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
@@ -13,7 +13,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
   * { font-family:'Outfit', system-ui, sans-serif; }
-  body { background:#faf5ff; margin:0; }
+  body { background:#fcf5fa; margin:0; }
   .hidden { display:none !important; }
 
   .tool-btn { display:inline-flex; align-items:center; gap:8px; padding:9px 16px; border-radius:999px;
@@ -45,7 +45,7 @@
   .list-box { background:#fff; border:1.5px solid #f2cfe7; border-radius:16px; overflow:hidden;
               box-shadow:0 5px 20px rgba(188,73,150,.07); }
   .list-head { display:flex; align-items:center; gap:11px; padding:15px 18px;
-               border-bottom:1.5px solid #f8e2f1; background:#faf5ff; }
+               border-bottom:1.5px solid #f8e2f1; background:#fcf5fa; }
   .list-title { font-size:15px; font-weight:900; color:#511f41; letter-spacing:.01em; }
   /* Five columns, the same grid for the header strip and every row. */
   /* Five columns now. Status went with the tabs — a row in the Solved tab
@@ -54,12 +54,12 @@
   .th, .tr { display:grid; grid-template-columns:108px 104px 214px 1fr 150px; gap:17px; }
   /* align-items:center, or the two headings carrying a funnel sit a few
      pixels below the four that do not. */
-  .th { padding:10px 18px; background:#fdfcff; border-bottom:1.5px solid #f8e2f1;
+  .th { padding:10px 18px; background:#fefbfd; border-bottom:1.5px solid #f8e2f1;
         align-items:center; }
   .th span { font-size:9.5px; font-weight:900; letter-spacing:.11em; text-transform:uppercase; color:#913673; }
   .tr { padding:14px 18px; border-bottom:1px dashed #f8e2f1; align-items:start; }
   .tr:last-child { border-bottom:none; }
-  .tr:hover { background:#fdfcff; }
+  .tr:hover { background:#fefbfd; }
   .tr.is-overdue { background:#fffbfb; }
 
   .td-stack { display:flex; flex-direction:column; gap:4px; align-items:flex-start; min-width:0; }
@@ -110,7 +110,7 @@
      running 800px to meet a four-character value reads as an empty table. */
   .d-rows { margin-top:7px; display:flex; flex-direction:column; gap:2px; max-width:560px; }
   .d-row { display:grid; grid-template-columns:112px 1fr; gap:8px; align-items:baseline;
-           padding:2px 0; border-bottom:1px dotted #f1eafe; }
+           padding:2px 0; border-bottom:1px dotted #fbeff7; }
   .d-row:last-child { border-bottom:none; }
   .d-row.d-free { grid-template-columns:1fr; }
   .d-lab { font-size:10px; font-weight:900; letter-spacing:.06em; text-transform:uppercase;
@@ -167,7 +167,7 @@
      the filters above are how you find one case — this is how you walk the
      rest. */
   .pager { display:flex; align-items:center; gap:6px; flex-wrap:wrap;
-           padding:13px 18px; border-top:1.5px solid #f8e2f1; background:#fdfcff; }
+           padding:13px 18px; border-top:1.5px solid #f8e2f1; background:#fefbfd; }
   .pager:empty { display:none; }
   .pg { min-width:32px; height:32px; padding:0 9px; border-radius:9px; cursor:pointer;
         border:1.5px solid #e5e7eb; background:#fff; color:#374151;
@@ -210,29 +210,29 @@
      has its own edge, and the open one loses its bottom edge so it reads as
      the front of the panel below rather than a button above it. */
   .stabs { display:flex; gap:5px; padding:11px 14px 0; flex-wrap:wrap;
-           background:#faf5ff; border-bottom:1.5px solid #f8e2f1; }
+           background:#fcf5fa; border-bottom:1.5px solid #f8e2f1; }
   /* One third each, so the three read as one bar rather than three labels
      of whatever length their words happened to be. */
   .stab { flex:1 1 0; min-width:0; justify-content:center;
           position:relative; margin-bottom:-1.5px; padding:9px 16px 10px; cursor:pointer;
-          border:1.5px solid #e4dbfa; border-radius:11px 11px 0 0; background:#f2ecfd;
+          border:1.5px solid #f6dfef; border-radius:11px 11px 0 0; background:#fbeff7;
           font-family:inherit; font-size:11px; font-weight:900; letter-spacing:.06em;
-          text-transform:uppercase; color:#8b83a6; display:inline-flex; align-items:center; gap:7px; }
+          text-transform:uppercase; color:#88637c; display:inline-flex; align-items:center; gap:7px; }
   .stab:hover { background:#f8e2f1; color:#913673; }
   /* Same fill as the heading strip below, so the two share one surface. */
-  .stab.on { background:#fdfcff; border-color:#f8e2f1; border-bottom-color:#fdfcff;
+  .stab.on { background:#fefbfd; border-color:#f8e2f1; border-bottom-color:#fefbfd;
              color:#511f41; }
   .stab-short { display:none; }
   .stab-n { font-size:9.5px; font-weight:900; letter-spacing:.03em; padding:2px 7px;
-            border-radius:999px; background:#e4dbfa; color:#7c6aa8; }
+            border-radius:999px; background:#f6dfef; color:#8d537a; }
   .stab.on .stab-n { background:#f8e2f1; color:#913673; }
 
   /* Only when something is narrowing the list, because it is the only place
      left that says how many rows there are — the tab counts deliberately
      ignore the column ticks. */
   .narrowed { display:flex; align-items:center; gap:10px; padding:9px 18px;
-              background:#fdfcff; border-bottom:1.5px solid #f4f0ff;
-              font-size:11px; font-weight:800; color:#7c6aa8; }
+              background:#fefbfd; border-bottom:1.5px solid #fcf3f9;
+              font-size:11px; font-weight:800; color:#8d537a; }
   .narrowed button { margin-left:auto; border:1.5px solid #f2cfe7; background:#fff; cursor:pointer;
                      font-family:inherit; font-size:9.5px; font-weight:900; letter-spacing:.07em;
                      text-transform:uppercase; color:#bc4996; padding:5px 11px; border-radius:999px; }
@@ -243,7 +243,7 @@
      all of them. Everything else moved into the headings. */
   .srch { position:relative; flex:0 1 330px; min-width:110px; margin-left:auto; }
   .srch input { width:100%; box-sizing:border-box; font-family:inherit; font-size:12px;
-                font-weight:700; color:#1e293b; background:#fff; border:1.5px solid #e9d5ff;
+                font-weight:700; color:#1e293b; background:#fff; border:1.5px solid #f7deef;
                 border-radius:999px; padding:8px 28px 8px 31px; outline:none; }
   .srch input::placeholder { color:#a5aec0; font-weight:600; }
   .srch input:focus { border-color:#e4a0ce; box-shadow:0 0 0 3px rgba(167,139,250,.18); }
@@ -269,7 +269,7 @@
   .fmenu { position:absolute; z-index:70; min-width:214px; max-width:290px; max-height:66vh;
            overflow-y:auto; background:#fff; border:1.5px solid #f8e2f1; border-radius:14px;
            box-shadow:0 14px 40px rgba(76,29,149,.18); padding:8px; }
-  .fm-sec + .fm-sec { margin-top:7px; border-top:1px solid #f4f0ff; padding-top:7px; }
+  .fm-sec + .fm-sec { margin-top:7px; border-top:1px solid #fcf3f9; padding-top:7px; }
   .fm-h { display:flex; align-items:center; gap:8px; padding:4px 8px 3px; }
   .fm-t { font-size:9.5px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; color:#e4a0ce; }
   .fm-a { margin-left:auto; display:flex; gap:2px; }

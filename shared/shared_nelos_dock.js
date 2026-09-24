@@ -786,7 +786,7 @@
   .nd-doc[hidden] { display:none; }
   .nd-doc-name { flex:1; font-size:11.5px; font-weight:700; color:#511f41;
                  overflow-wrap:anywhere; }
-  .nd-doc-x { width:24px; height:24px; border-radius:999px; border:1px solid #e9d5ff;
+  .nd-doc-x { width:24px; height:24px; border-radius:999px; border:1px solid #f7deef;
               background:#fff; color:#bc4996; font-size:12px; cursor:pointer; flex-shrink:0; }
   .nd-solved-shots { display:flex; flex-wrap:wrap; gap:6px; margin:7px 0 2px; }
   .nd-solved-shots img { width:100%; border-radius:9px; display:block; }
