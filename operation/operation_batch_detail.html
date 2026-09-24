@@ -2252,33 +2252,23 @@
                                             <label class="label-style">Adjustment Qty (+/-)</label>
                                             <input type="number" id="t7-cal-qty" class="input-style" placeholder="e.g. 50 or -20" step="1">
                                         </div>
-                                        <!-- WHICH COUNT WAS WRONG.
+                                        <!-- WHICH COUNT WAS WRONG used to be asked here, and
+                                             is not any more: the REPORT already answers it, and a
+                                             question with a knowable answer is a question somebody
+                                             can get wrong. See ADJUST_SIDE_OF / ADJUST_APPLIES_TO.
 
-                                             A discrepancy is one of two quite different things, and
-                                             only the person who found it knows which:
+                                                 Seeds Received · Planting · Seed Audit
+                                                     → there were never that many. The batch total
+                                                       changes.
+                                                 Transplanting · 1st · 2nd · 3rd Culling
+                                                     → there were, and they left. The total does not
+                                                       change; what is standing there does.
 
-                                               the SEED count was wrong — there were never that many.
-                                               The total the whole batch is measured against changes.
-
-                                               the PLOT stock was wrong — there were, they reached a
-                                               plot, and then they left it: stolen, died, miscounted
-                                               on the ground. The total does not change; what is
-                                               standing in that plot does.
-
-                                             Guessing is what made batch 234 read OVER ALLOCATED:
-                                             53 seedlings stolen out of B14 after transplanting were
-                                             taken off the batch total, while the transplant record
-                                             still counted them into the plot — so more was allocated
-                                             than there was to allocate, by exactly 53. -->
-                                        <div>
-                                            <label class="label-style">Which count was wrong</label>
-                                            <div class="select-wrapper">
-                                                <select id="t7-cal-side" class="input-style">
-                                                    <option value="seed">Seed count — changes the batch total</option>
-                                                    <option value="plot">Plot stock — lost after transplanting</option>
-                                                </select>
-                                            </div>
-                                        </div>
+                                             Guessing is what made batch 234 read OVER ALLOCATED: 53
+                                             seedlings stolen out of B14 after transplanting were
+                                             taken off the batch total while the transplant record
+                                             still counted them into the plot. Filed under
+                                             Transplanting, that can no longer happen. -->
                                         <div>
                                             <label class="label-style">Report</label>
                                             <div class="select-wrapper">
@@ -2692,6 +2682,54 @@
                                     3: 'Transplanting', 4: '1st Culling',
                                     5: '2nd Culling', 6: '3rd Culling' };
 
+        /* WHICH COUNT WAS WRONG, AND WHERE THE ANSWER LANDS.
+
+           Both used to be somebody's choice. Both are now read off the
+           report they raised it on, because the report already knows:
+
+             Seeds Received · Planting · Seed Audit
+                 INITIAL — there were never that many. The batch total
+                 changes, and every report measures against the new one.
+
+             Transplanting · 1st · 2nd · 3rd Culling
+                 AFTER THE FACT — there were, they got there, and then they
+                 left: stolen, dead, miscounted on the ground. The total
+                 does not change; what is standing there does.
+
+           Derived and not stored, so it is one rule and not two: rows
+           written while the form still asked carry a "Side:" in the remark
+           which is now ignored, and a row somebody filed on the wrong side
+           corrects itself.
+
+           WHERE IT LANDS is the second half, and it is not the same
+           question. A loss is taken off the reports that are still
+           measuring against a figure which includes it, and off no others —
+           take it off a later count that already missed those seedlings and
+           one loss is subtracted twice.
+
+             Transplanting → 2nd + 3rd Culling. 1st Culling happened in the
+                 tray, before these ever went out, so it is untouched.
+             1st Culling   → 1st Culling only. The transplant record written
+                 after it says what actually went to the plots, so nothing
+                 downstream is still carrying the error.
+             2nd Culling   → 2nd + 3rd Culling.
+             3rd Culling   → 3rd Culling only.
+
+           Batch 235's N11 is why the last one matters: one seedling adjusted
+           away at the 2nd culling, counted again at the 3rd, and the row read
+           76 against a drone map of 77. There were 77 to cull. */
+        const ADJUST_INITIAL_REPORTS = ['seeds received', 'planting', 'seed audit'];
+        function ADJUST_SIDE_OF(report) {
+            return ADJUST_INITIAL_REPORTS.indexOf(String(report || '').trim().toLowerCase()) >= 0
+                 ? 'seed' : 'plot';
+        }
+        const ADJUST_APPLIES_TO = {
+            'transplanting': ['2nd culling', '3rd culling'],
+            '1st culling':   ['1st culling'],
+            '2nd culling':   ['2nd culling', '3rd culling'],
+            '3rd culling':   ['3rd culling']
+        };
+
         /* One parse of a calibration row, shared with the table on tab 7 so the
            two cannot read the same remark differently. Remark format:
            "Report: <r>. Plot: <p>. <reason> [APPROVED by <who> on <when>]" */
@@ -2717,7 +2755,7 @@
                 qty: Number(r.quantity_change) || 0,
                 report: rep  ? rep[1].trim()  : '',
                 plot:   plot ? plot[1].trim() : (r.plot_name || ''),
-                side:   side ? side[1].trim().toLowerCase() : 'seed',
+                side:   ADJUST_SIDE_OF(rep ? rep[1].trim() : ''),
                 reason: reason.trim(),
                 approved: !!approved,
                 approvedBy: approved ? approved[1].trim() : '',
@@ -2765,28 +2803,11 @@
            OVER ALLOCATED: 53 came off the total while the transplant record
            still counted them into B14, so 53 more was allocated than there
            was to allocate. */
-        const ADJUST_PLOT_LOSS = {};   // PLOT → net of approved plot-stock adjustments
-
-        /* …EXCEPT THE ONES A CULLING COUNT HAS ALREADY SETTLED.
-
-           The 2nd Culling and the 3rd Culling each count the plot, months
-           apart. An adjustment raised against one of those counts was
-           noticed AT it and settled there — by the time the next count is
-           made, on the ground and by the drone, it is history. Taking it off
-           again at the later report subtracts one loss twice, and the report
-           then disagrees with a drone map that was right all along.
-
-           N11 on batch 235: one seedling adjusted away during the 2nd
-           culling, and the 3rd Culling row read 76 against a drone map of
-           77. There were 77 to cull.
-
-           Anything raised anywhere else — Transplanting, 1st Culling, the
-           seed count — is a correction to what REACHED the plot, which both
-           culling reports are still carrying. Those stay above, and come off
-           both. B14 on batch 234 is that one: 53 stolen after transplanting,
-           and the 3rd cull is 53 fewer because of it. */
-        const ADJUST_PLOT_LOSS_STAGE = {};   // '2nd culling' | '3rd culling' → PLOT → net
-        const ADJUST_STAGE_REPORTS = ['2nd culling', '3rd culling'];
+        /* An after-the-fact loss, per report it comes off and per plot.
+           Which reports that is comes from ADJUST_APPLIES_TO — one place,
+           so the answer cannot differ between the tab that shows it and the
+           tab that subtracts it. */
+        const ADJUST_PLOT_LOSS_STAGE = {};   // report → PLOT → net
 
         /* Every adjustment on the batch as last read, approved or not.
 
@@ -2802,24 +2823,28 @@
             return Object.keys(ADJUST_NET).reduce((s, k) => s + (ADJUST_NET[k] || 0), 0);
         }
 
-        /* What comes off this plot ON THIS REPORT: everything raised before
-           either culling counted it, plus whatever was raised against this
-           report's own count. `report` is '2nd Culling' or '3rd Culling'. */
+        /* What comes off this plot ON THIS REPORT. `report` is the tab
+           asking — '1st Culling', '2nd Culling' or '3rd Culling'. */
         function adjustPlotLoss(plot, report) {
             const pk = _t6PlotKey(plot);
             if (!pk) return 0;
-            let v = typeof ADJUST_PLOT_LOSS[pk] === 'number' ? ADJUST_PLOT_LOSS[pk] : 0;
             const mine = ADJUST_PLOT_LOSS_STAGE[String(report || '').toLowerCase()];
-            if (mine && typeof mine[pk] === 'number') v += mine[pk];
-            return v;
+            return (mine && typeof mine[pk] === 'number') ? mine[pk] : 0;
         }
 
         /* Would settling this adjustment move the 3rd Culling row? Used by the
            drone-map panel, which must not offer an explanation that would not
            actually change the figure it is standing next to. */
         function _adjCouldMoveCull3(r) {
-            if (!r || r.report.toLowerCase() === '2nd culling') return false;
-            return !(r.approved && r.side === 'plot');
+            if (!r) return false;
+            /* Only a row whose report puts it on the 3rd Culling at all —
+               a 1st Culling adjustment is settled by the transplant record
+               that follows it and never reaches here. */
+            const lands = ADJUST_APPLIES_TO[String(r.report || '').toLowerCase()] || [];
+            if (lands.indexOf('3rd culling') < 0) return false;
+            // An approved one has already moved the row; it is not what is
+            // still standing between this plot and its drone map.
+            return !r.approved;
         }
 
         async function syncAdjustmentBars(batchId) {
@@ -2831,7 +2856,6 @@
                    allocation base — better the base is plainly short than
                    silently right for a reason nobody can see. */
                 Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
-                Object.keys(ADJUST_PLOT_LOSS).forEach(k => delete ADJUST_PLOT_LOSS[k]);
                 Object.keys(ADJUST_PLOT_LOSS_STAGE).forEach(k => delete ADJUST_PLOT_LOSS_STAGE[k]);
                 ADJUST_ROWS = [];
                 bars.forEach(n => {
@@ -2860,22 +2884,18 @@
                the unapproved ones, in amber, because "somebody has claimed
                this" is worth seeing — it just is not an answer yet. */
             Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
-            Object.keys(ADJUST_PLOT_LOSS).forEach(k => delete ADJUST_PLOT_LOSS[k]);
             Object.keys(ADJUST_PLOT_LOSS_STAGE).forEach(k => delete ADJUST_PLOT_LOSS_STAGE[k]);
             rows.filter(r => r.approved).forEach(r => {
                 if (r.side === 'plot') {
-                    // Belongs to the plot it names, not to the batch total —
-                    // and, when it was raised against a culling count, to that
-                    // report alone. See ADJUST_PLOT_LOSS_STAGE.
+                    // Belongs to the plot it names, not to the batch total,
+                    // and only to the reports still measuring against a figure
+                    // that includes it. See ADJUST_APPLIES_TO.
                     const pk = _t6PlotKey(r.plot);
                     if (!pk) return;
-                    const rep = r.report.toLowerCase();
-                    if (ADJUST_STAGE_REPORTS.indexOf(rep) >= 0) {
+                    (ADJUST_APPLIES_TO[r.report.toLowerCase()] || []).forEach(rep => {
                         const m = ADJUST_PLOT_LOSS_STAGE[rep] = ADJUST_PLOT_LOSS_STAGE[rep] || {};
                         m[pk] = (m[pk] || 0) + r.qty;
-                    } else {
-                        ADJUST_PLOT_LOSS[pk] = (ADJUST_PLOT_LOSS[pk] || 0) + r.qty;
-                    }
+                    });
                     return;
                 }
                 const k = r.report.toLowerCase();
@@ -3103,14 +3123,12 @@
             const qtyEl    = document.getElementById('t7-cal-qty');
             const reportEl = document.getElementById('t7-cal-report');
             const plotEl   = document.getElementById('t7-cal-plot');
-            const sideEl   = document.getElementById('t7-cal-side');
             const reasonEl = document.getElementById('t7-cal-reason');
             const btn      = document.getElementById('t7-cal-save-btn');
             const banner   = document.getElementById('t7-cal-edit-banner');
             if (qtyEl)    qtyEl.value    = qty;
             if (reportEl) reportEl.value = report || '';
             if (plotEl)   plotEl.value   = plot   || '';
-            if (sideEl)   sideEl.value   = side   || 'seed';
             if (reasonEl) reasonEl.value = reason || '';
             if (btn)      btn.innerText  = 'Update Adjustment';
             const msg = document.getElementById('t7-cal-edit-msg');
@@ -3128,14 +3146,12 @@
             const qtyEl    = document.getElementById('t7-cal-qty');
             const reportEl = document.getElementById('t7-cal-report');
             const plotEl   = document.getElementById('t7-cal-plot');
-            const sideEl   = document.getElementById('t7-cal-side');
             const reasonEl = document.getElementById('t7-cal-reason');
             const btn      = document.getElementById('t7-cal-save-btn');
             const banner   = document.getElementById('t7-cal-edit-banner');
             if (qtyEl)    qtyEl.value    = '';
             if (reportEl) reportEl.value = '';
             if (plotEl)   plotEl.value   = '';
-            if (sideEl)   sideEl.value   = 'seed';
             if (reasonEl) reasonEl.value = '';
             if (btn)      btn.innerText  = 'Save Adjustment';
             const msg = document.getElementById('t7-cal-edit-msg');
@@ -3212,13 +3228,11 @@
             const qtyEl    = document.getElementById('t7-cal-qty');
             const reportEl = document.getElementById('t7-cal-report');
             const plotEl   = document.getElementById('t7-cal-plot');
-            const sideEl   = document.getElementById('t7-cal-side');
             const reasonEl = document.getElementById('t7-cal-reason');
             const btn      = document.getElementById('t7-cal-save-btn');
             const qty      = parseInt(qtyEl.value, 10);
             const report   = (reportEl?.value || '').trim();
             const plot     = (plotEl?.value   || '').trim();
-            const side     = (sideEl?.value   || 'seed').trim().toLowerCase() === 'plot' ? 'plot' : 'seed';
             const reason   = (reasonEl.value  || '').trim();
             if (isNaN(qty) || qty === 0) { showToast('Enter a non-zero adjustment quantity (use a negative value to subtract).', 'error'); qtyEl.focus(); return; }
             if (!report) { showToast('Select which report this calibration relates to.', 'error'); reportEl.focus(); return; }
@@ -3245,7 +3259,7 @@
                    carried is not copied across, so the adjustment stops moving
                    figures until it is approved again. Deliberate — see the
                    Edit button on approved rows. */
-                remark: `Report: ${report}. Plot: ${plot}. Side: ${side}. ${reason}`
+                remark: `Report: ${report}. Plot: ${plot}. ${reason}`
             });
 
             let error;
@@ -8194,7 +8208,16 @@ Thank you.`;
             let totalTrayQty = 0;
 
             document.querySelectorAll('.cull-row').forEach(row => {
-                const trayQty = parseInt(row.querySelector('.cull-tray-qty').dataset.raw || 0);
+                /* A 1st Culling adjustment comes off the TRAY it names, and
+                   off nothing else — the transplant record written after this
+                   says what actually went out to the plots, so nothing
+                   downstream is still carrying the error. See
+                   ADJUST_APPLIES_TO. */
+                const trayName = (row.querySelector('.cull-tray-name')?.value || '').trim();
+                const trayAdj  = (typeof adjustPlotLoss === 'function')
+                               ? adjustPlotLoss(trayName, '1st Culling') : 0;
+                const trayQty = Math.max(0,
+                    (parseInt(row.querySelector('.cull-tray-qty').dataset.raw || 0) || 0) + trayAdj);
                 const culledQty = parseInt(row.querySelector('.cull-qty').value) || 0;
                 const rateDiv = row.querySelector('.cull-rate');
 
@@ -11549,20 +11572,14 @@ Thank you.`;
             const mine = ADJUST_ROWS.filter(r => _t6PlotKey(r.plot) === key && _adjCouldMoveCull3(r));
             if (!mine.length) return null;
             if (mine.reduce((s, r) => s + (r.qty || 0), 0) !== diff) return null;
-            const pending  = mine.filter(r => !r.approved);
-            const misfiled = mine.filter(r => r.approved && r.side !== 'plot');
             const one = mine.length === 1 ? mine[0] : null;
-            let why;
-            if (pending.length && !misfiled.length) {
-                why = mine.length === 1
-                    ? 'It is waiting for approval — an adjustment nobody has ruled on moves no figure. Approve it and this plot tallies.'
-                    : 'They are waiting for approval — an adjustment nobody has ruled on moves no figure. Approve them and this plot tallies.';
-            } else if (misfiled.length && !pending.length) {
-                why = 'It is filed against the SEED COUNT, so it corrected how many the batch started with instead of how many are standing here. '
-                    + 'Seedlings stolen, dead or miscounted after they reached the plot are PLOT STOCK — change it to that and this plot tallies.';
-            } else {
-                why = 'Some of it is waiting for approval and some is filed against the seed count. Settle both on the Adjustments tab and this plot tallies.';
-            }
+            /* There used to be a second reason — "filed against the seed
+               count" — and it cannot happen now: which count was wrong is
+               read off the report, so nothing is on the wrong side of it.
+               What is left is the one thing a person still has to do. */
+            const why = mine.length === 1
+                ? 'It is waiting for approval — an adjustment nobody has ruled on moves no figure. Approve it and this plot tallies.'
+                : 'They are waiting for approval — an adjustment nobody has ruled on moves no figure. Approve them and this plot tallies.';
             return {
                 qty: diff,
                 count: mine.length,
