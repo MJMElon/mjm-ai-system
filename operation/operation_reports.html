@@ -35,6 +35,25 @@
   .report-tab:hover:not(.active) { color:#4a7a2e; background:#f5f0e4; }
   .report-tab.active { color:#3d2610; background:#fff; border-bottom-color:#4a7a2e; }
 
+  /* Report switcher lives in a hover-reveal left sidebar: hidden off-screen,
+     slides in when the mouse nears the left edge, slides back out when it
+     leaves. Pure CSS via the adjacent-sibling hover, so "open", "stay open
+     while over the panel" and "close on leave" all fall out of :hover with
+     no JS mouseenter/mouseleave timing to get wrong. */
+  #mv-sidebar-trigger { position:fixed; top:0; left:0; width:16px; height:100vh; z-index:9000; }
+  #mv-report-sidebar {
+    position:fixed; top:0; left:0; height:100vh; width:240px; z-index:8999;
+    background:#fdfaf4; border-right:1px solid #e8dcc8; box-shadow:8px 0 24px -8px rgba(61, 38, 16, .2);
+    padding:28px 16px; box-sizing:border-box; overflow-y:auto;
+    transform:translateX(-100%); transition:transform .2s ease;
+  }
+  #mv-sidebar-trigger:hover + #mv-report-sidebar, #mv-report-sidebar:hover { transform:translateX(0); }
+  #mv-report-sidebar .report-tab-bar { flex-direction:column; flex-wrap:nowrap; width:100%; margin:0; }
+  #mv-report-sidebar .report-tab { border-right:none; border-bottom:1px solid #e8dcc8; text-align:left; }
+  #mv-report-sidebar .report-tab:last-child { border-bottom:none; }
+  #mv-report-sidebar .report-tab.active { border-bottom-color:#e8dcc8; border-left:3px solid #4a7a2e; }
+  @media print { #mv-sidebar-trigger, #mv-report-sidebar { display:none !important; } }
+
   table.report-table { width:100%; border-collapse:separate; border-spacing:0; }
   .report-table th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#8a7a68; padding:12px 14px; border-bottom:2px solid #e8dcc8; background:#fdfaf4; white-space:nowrap; }
   /* "th.text-right" outranks the plain "th" rule above (two selectors beat
@@ -120,6 +139,13 @@
 </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
+<!-- Report switcher: hover-reveal sidebar (see #mv-sidebar-trigger / #mv-report-sidebar
+     CSS). #f-report-tabs itself is untouched — renderReportTabs() just fills whatever
+     element has that id, wherever it lives in the DOM. -->
+<div id="mv-sidebar-trigger" class="no-print" aria-hidden="true"></div>
+<div id="mv-report-sidebar" class="no-print">
+  <div class="report-tab-bar" id="f-report-tabs"></div>
+</div>
 <div class="bg-pattern"></div>
 
 <div class="w-full max-w-[1600px] mx-auto z-10 space-y-6 py-4">
@@ -147,14 +173,15 @@
 
     <!-- Report selector + filters -->
     <div class="glass-panel p-5 rounded-[2rem] no-print">
-      <!-- Date/filter row first, then the report tabs, then the data below
-           (outside this panel). f-report stays as the state the rest of the
-           page reads (syncFilterVisibility, runReport, syncReportDefaults,
-           …) exactly the way it read a <select>'s .value before; the tabs
-           just keep it in sync now instead of a dropdown. Whichever filters
-           the picked report needs sit centred in their own row — most
-           reports only need one or two of them, and centring reads as
-           "here's what's on offer" rather than a row anchored to the left
+      <!-- Report picking now happens in the hover sidebar (#mv-report-sidebar,
+           near the top of <body>) instead of a bar in this panel. f-report
+           stays as the state the rest of the page reads (syncFilterVisibility,
+           runReport, syncReportDefaults, …) exactly the way it read a
+           <select>'s .value before; the sidebar tabs just keep it in sync
+           now instead of a dropdown. Whichever filters the picked report
+           needs sit centred in their own row — most reports only need one
+           or two of them, and centring reads as "here's what's on offer"
+           rather than a row anchored to the left
            with the rest of its width empty. -->
       <input type="hidden" id="f-report">
       <div class="flex flex-wrap gap-3 items-end justify-center mb-3">
@@ -217,11 +244,6 @@
           <div id="f-year-chips" class="flex flex-wrap gap-2"></div>
         </div>
       </div>
-      <!-- Tab bar after the date/filter row now — pick the date first (it's
-           the one thing every report shares), then which report, then the
-           data appears below. Centred (.report-tab-bar is width:fit-content
-           + margin:auto), not stretched to the panel's full width. -->
-      <div class="report-tab-bar" id="f-report-tabs"></div>
     </div>
 
     <!-- Loading state -->
