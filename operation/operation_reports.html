@@ -1797,14 +1797,19 @@ function buildMovementSection(scope, ev, ctx) {
       // once per row — a real rowspan cell, vertically centred, instead of
       // text pinned to the group's first row with blank cells trailing
       // under it (which read as stuck at the top, not "one merged value").
+      // Plot and Balance get their own background — white, always — rather
+      // than inheriting whichever zebra band their group's FIRST row
+      // happened to land on. Without this they looked white for some
+      // groups and tan for others purely by coincidence of position; every
+      // other cell in the row keeps the alternating stripe as before.
       bodyHtml.push(`<tr${zebra}>
-        ${i === 0 ? `<td rowspan="${g.list.length}" class="col-label font-black text-[#8a7a68] align-middle">${g.key}</td>` : ''}
+        ${i === 0 ? `<td rowspan="${g.list.length}" class="col-label font-black text-[#8a7a68] align-middle" style="background:#fff">${g.key}</td>` : ''}
         <td class="col-label">${otherOf(r) || '—'}</td>
         <td class="col-label text-[#8a7a68] text-xs whitespace-nowrap">${r.age}</td>
         ${fmtCell(r.bf, 'text-[#8a7a68] font-black')}
         ${cols.map(c => fmtDetailCell(r, c)).join('')}
         ${fmtCell(r.closing, 'text-[#4a7a2e] font-black')}
-        ${i === 0 ? `<td rowspan="${g.list.length}" class="font-black text-[#8a7a68] align-middle">${fmtNum(bal)}</td>` : ''}
+        ${i === 0 ? `<td rowspan="${g.list.length}" class="font-black text-[#8a7a68] align-middle" style="background:#fff">${fmtNum(bal)}</td>` : ''}
       </tr>`);
     });
   });
