@@ -3268,11 +3268,21 @@
            cannot drift out of alignment with each other. */
         const T7_TRAY_COLS = 'display:grid;grid-template-columns:minmax(86px,1.5fr) minmax(64px,1fr) minmax(86px,1fr) minmax(64px,1fr);column-gap:12px;align-items:center;';
 
-        /* TOTAL CALIBRATION IS ALWAYS THE ADJUSTMENT QTY, in both directions:
-             keying a new one  → the Qty box is the sum of the column
-             editing an old one → the column is driven by the Qty box
-           so the two can never drift apart and be two different claims about
-           the same adjustment. */
+        /* THE CALIBRATION COLUMN AND THE ADJUSTMENT QTY HAVE TO AGREE, and
+           which one leads depends on what is being done:
+
+             keying a NEW adjustment  → the Qty box is the sum of the column,
+                                        so they agree by construction
+             EDITING an existing row  → the Qty box is the figure being
+                                        corrected and the column is split out
+                                        of it by hand, so they can disagree —
+                                        and the total says so rather than
+                                        letting a mis-split be saved
+
+           Editing with nothing keyed is not an error: the row stays one
+           record against the plot, exactly as it was before trays were split
+           out at all. That is what lets somebody fix a typo in the reason
+           without being made to allocate the whole figure first. */
         function t7SumTrayAdj() {
             const host  = document.getElementById('t7-cal-trays');
             const qtyEl = document.getElementById('t7-cal-qty');
@@ -3280,31 +3290,27 @@
             const lines = host.querySelectorAll('.t7-tray-line');
             if (!lines.length) return;
 
-            const editing  = !!_t7EditingId;
-            const editQty  = editing ? (parseInt(qtyEl.value, 10) || 0) : 0;
-            const editTray = host.getAttribute('data-edit-tray') || '';
+            const editing = !!_t7EditingId;
+            const qty     = parseInt(qtyEl.value, 10);
 
             let totInit = 0, totCal = 0, touched = 0;
             lines.forEach(line => {
                 const sent = Number(line.getAttribute('data-sent')) || 0;
                 const inp  = line.querySelector('.t7-tray-adj');
-                let cal = 0;
-                if (inp) { cal = parseInt(inp.value, 10); if (isNaN(cal)) cal = 0; }
-                else if (editing && line.getAttribute('data-tray') === editTray) cal = editQty;
+                let cal = parseInt(inp ? inp.value : '', 10);
+                if (isNaN(cal)) cal = 0;
                 if (cal !== 0) touched++;
 
-                const calEl = line.querySelector('.t7-tray-cal');
-                if (calEl) {
-                    calEl.innerText = cal === 0 ? '—' : (cal > 0 ? '+' : '') + cal.toLocaleString();
-                    calEl.className = 't7-tray-cal text-sm font-black tabular-nums '
-                        + (cal > 0 ? 'text-[#4a7a2e]' : cal < 0 ? 'text-[#a83020]' : 'text-[#8a7a68]');
-                }
                 const finEl = line.querySelector('.t7-tray-final');
-                if (finEl) finEl.innerText = (sent + cal).toLocaleString();
-
+                if (finEl) {
+                    finEl.innerText = (sent + cal).toLocaleString();
+                    finEl.className = 't7-tray-final text-sm font-black tabular-nums text-right '
+                        + (cal === 0 ? 'text-[#3d2610]' : cal > 0 ? 'text-[#4a7a2e]' : 'text-[#a83020]');
+                }
                 totInit += sent; totCal += cal;
             });
 
+            // Keying a new one, the box follows the column.
             if (_t7TrayMode) qtyEl.value = touched === 0 ? '' : String(totCal);
 
             const set = (id, txt, cls) => {
@@ -3313,16 +3319,42 @@
                 el.innerText = txt;
                 if (cls) el.className = cls;
             };
-            set('t7-tray-tot-init',  totInit.toLocaleString());
-            set('t7-tray-tot-cal',
-                totCal === 0 ? '—' : (totCal > 0 ? '+' : '') + totCal.toLocaleString(),
-                'text-sm font-black tabular-nums text-right '
-                  + (totCal > 0 ? 'text-[#4a7a2e]' : totCal < 0 ? 'text-[#a83020]' : 'text-[#8a7a68]'));
+            set('t7-tray-tot-init', totInit.toLocaleString());
             set('t7-tray-tot-final', (totInit + totCal).toLocaleString());
+
+            const target = isNaN(qty) ? 0 : qty;
+            const off    = totCal - target;
+            const agrees = touched > 0 && off === 0;
+            set('t7-tray-tot-cal',
+                totCal === 0 && touched === 0 ? '—' : (totCal > 0 ? '+' : '') + totCal.toLocaleString(),
+                'text-sm font-black tabular-nums text-right '
+                  + (editing && touched > 0 && !agrees ? 'text-[#a83020]'
+                     : totCal > 0 ? 'text-[#4a7a2e]' : totCal < 0 ? 'text-[#a83020]' : 'text-[#8a7a68]'));
+
+            /* The verdict, so the sum is checked on screen and not in
+               somebody's head. Only while editing: keying a new one the two
+               cannot disagree. */
+            const v = document.getElementById('t7-tray-verdict');
+            if (!v) return;
+            if (!editing) { v.classList.add('hidden'); return; }
+            v.classList.remove('hidden');
+            const qtyTxt = isNaN(qty) ? '—' : (qty > 0 ? '+' : '') + qty.toLocaleString();
+            if (touched === 0) {
+                v.className = 'px-4 py-2 border-t border-[#e8dcc8] bg-[#fdf6e8] text-[10px] font-black uppercase tracking-widest text-[#8a7a68]';
+                v.innerText = `Not split by tray — the whole ${qtyTxt} stays on one record`;
+            } else if (agrees) {
+                v.className = 'px-4 py-2 border-t border-[#c3e6cb] bg-[#f0f8ec] text-[10px] font-black uppercase tracking-widest text-[#3d4f1e]';
+                v.innerText = `✓ The trays add up to ${qtyTxt} — saving splits this into ${touched} row${touched === 1 ? '' : 's'}`;
+            } else {
+                v.className = 'px-4 py-2 border-t border-[#f8d7da] bg-[#fff5f5] text-[10px] font-black uppercase tracking-widest text-[#a83020]';
+                v.innerText = `Off by ${(off > 0 ? '+' : '') + off.toLocaleString()} — the trays add up to `
+                            + `${(totCal > 0 ? '+' : '') + totCal.toLocaleString()}, the adjustment is ${qtyTxt}`;
+            }
         }
 
-        // One row of the table. `editable` decides whether Calibration is a
-        // box somebody types in or a figure read off the row being edited.
+        // One row of the table. Calibration is always typable — a plot's
+        // figure is split across trays whether it is being keyed for the first
+        // time or an old single-row one is being broken up.
         function _t7TrayLineHtml(t, editable, esc) {
             return `<div class="t7-tray-line px-4 py-2 border-t border-[#e8dcc8]"
                          style="${T7_TRAY_COLS}"
@@ -3334,11 +3366,10 @@
                         : ''}
                 </div>
                 <div class="text-sm font-bold text-[#3d2610] tabular-nums text-right">${t.qty.toLocaleString()}</div>
-                <div class="text-right">${editable
-                    ? `<input type="number" step="1" placeholder="0"
-                             class="t7-tray-adj input-style !py-1.5 !px-2 !text-sm text-right w-full"
-                             oninput="t7SumTrayAdj()" aria-label="Calibration for tray ${esc(t.tray)}">`
-                    : `<span class="t7-tray-cal text-sm font-black tabular-nums text-[#8a7a68]">—</span>`}</div>
+                <div class="text-right"><input type="number" step="1" placeholder="0"
+                         class="t7-tray-adj input-style !py-1.5 !px-2 !text-sm text-right w-full"
+                         value="${t.prefill ? t.prefill : ''}"
+                         oninput="t7SumTrayAdj()" aria-label="Calibration for tray ${esc(t.tray)}"></div>
                 <div class="t7-tray-final text-sm font-black text-[#3d2610] tabular-nums text-right">${t.qty.toLocaleString()}</div>
             </div>`;
         }
@@ -3364,6 +3395,7 @@
                     ${esc(plot)} was filled from ${n} tray${n === 1 ? '' : 's'}${note}
                 </div>
                 ${head}${rows.map(t => _t7TrayLineHtml(t, editable, esc)).join('')}${total}
+                <div id="t7-tray-verdict" class="hidden"></div>
             </div>`;
         }
 
@@ -3414,28 +3446,31 @@
                 </div>`);
             }
 
-            /* EDITING an existing row is still ONE row. Turning it into several
-               on an edit would quietly multiply a figure somebody has already
-               approved, so the Calibration column is read-only here and is
-               driven by the Qty box instead — which is what keeps the column's
-               total equal to the adjustment quantity in this direction too.
+            /* EDITING. The Qty box stays the figure being corrected and the
+               Calibration column is split out of it by hand, so the Qty box
+               stays typable and the column does NOT drive it — the total says
+               whether the two agree instead.
 
-               A row saved before the split existed names no tray, so its
-               figure gets a line of its own saying so rather than being hidden
-               and leaving the total disagreeing with the box. */
+               A row that already names a tray comes back with its own figure
+               in that tray's box, so an edit starts from what was saved rather
+               than from nothing. A row saved before trays were split out names
+               none, so every box starts empty and the verdict says the figure
+               is not split — which is a perfectly good thing to save. */
             if (_t7EditingId) {
                 _t7TrayMode = false;
                 if (qtyEl) { qtyEl.readOnly = false; qtyEl.classList.remove('bg-[#f5efe4]', 'cursor-not-allowed'); }
                 const editTray = _t7EditingTray || '';
-                const shown = editTray && !trays.some(t => t.tray === editTray)
-                    ? trays.concat([{ tray: editTray, qty: 0, dates: [] }])
-                    : trays.slice();
-                if (!editTray) shown.push({ tray: '', qty: 0, dates: [] });
+                const shown = (editTray && !trays.some(t => t.tray === editTray)
+                        ? trays.concat([{ tray: editTray, qty: 0, dates: [] }])
+                        : trays.slice())
+                    .map(t => t.tray === editTray && editTray
+                        ? Object.assign({}, t, { prefill: parseInt(qtyEl?.value, 10) || '' })
+                        : t);
                 host.setAttribute('data-edit-tray', editTray);
                 // trays.length, not shown.length — the heading counts the trays
-                // that really fed the plot, not the placeholder line.
-                host.innerHTML = _t7TrayTableHtml(plot, shown, false,
-                    ' — for reference while editing', esc, trays.length);
+                // that really fed the plot, not a tray added back for the row.
+                host.innerHTML = _t7TrayTableHtml(plot, shown, true,
+                    ' — split the adjustment across the trays it came from', esc, trays.length);
                 host.classList.remove('hidden');
                 t7SumTrayAdj();
                 return;
@@ -3595,11 +3630,26 @@
                the Qty box is the running sum, so an empty one means no tray
                has been keyed rather than a forgotten number. Say that instead
                of pointing at a box the person cannot type into. */
-            const traySplit = _t7TrayMode && !_t7EditingId ? _t7CollectTrayAdj() : null;
+            const traySplit = _t7TrayMode ? _t7CollectTrayAdj() : null;
             if (traySplit && !traySplit.length) {
                 showToast('Key the difference against the tray it came from — at least one tray needs a number.', 'error');
                 document.querySelector('#t7-cal-trays .t7-tray-adj')?.focus();
                 return;
+            }
+
+            /* EDITING with the column filled in splits the row. The trays have
+               to add up to the quantity being corrected or the split is not the
+               same adjustment any more — the total on screen says so as it is
+               keyed, and this is the same check at the door. Nothing keyed is
+               not a mis-split: the row stays one record, as it was. */
+            const editSplit = _t7EditingId ? _t7CollectTrayAdj() : [];
+            if (editSplit.length) {
+                const splitSum = editSplit.reduce((s, t) => s + t.qty, 0);
+                if (splitSum !== qty) {
+                    showToast(`The trays add up to ${splitSum > 0 ? '+' : ''}${splitSum}, but the adjustment is `
+                            + `${qty > 0 ? '+' : ''}${qty}. They have to match before it can be split.`, 'error');
+                    return;
+                }
             }
             if (isNaN(qty) || qty === 0) { showToast('Enter a non-zero adjustment quantity (use a negative value to subtract).', 'error'); qtyEl.focus(); return; }
             if (!date)   { showToast('Enter the date this adjustment happened — not the day you are keying it in.', 'error'); dateEl?.focus(); return; }
@@ -3652,13 +3702,39 @@
                   }))
                 : [payload];
 
+            // The same rows, built from the split keyed while editing.
+            const editPayloads = editSplit.map(t => withEditMeta({
+                batch_name: batchId,
+                transaction_type: 'Stock_Calibration',
+                plot_name: plot,
+                quantity_change: t.qty,
+                transaction_date: date,
+                remark: `Report: ${report}. Plot: ${plot}. Tray: ${t.tray}. ${reason}`
+            }));
+
             let error;
             if (_t7EditingId) {
-                // Edit path — admin updating an existing calibration row. Never
-                // a split: see the read-only tray panel in t7SyncTrayPanel().
-                ({ error } = await _supabase.from('shared_inventory_logs').update(payload).eq('id', _t7EditingId));
+                /* Edit path. With the column filled in, the row BECOMES the
+                   split: the record being edited is updated to the first
+                   tray's share and the rest are inserted beside it.
+
+                   Updated, not deleted and replaced, so the row keeps its id
+                   and its place in the audit trail — and its approval is not
+                   carried over, because the remark is rebuilt from the form,
+                   so every row of the split starts pending and has to be
+                   ruled on. A figure somebody signed for does not quietly
+                   become several. */
+                const head = editPayloads.length ? editPayloads[0] : payload;
+                const rest = editPayloads.slice(1);
+                ({ error } = await _supabase.from('shared_inventory_logs').update(head).eq('id', _t7EditingId));
                 if (error && isEditMetaColumnError && isEditMetaColumnError(error)) {
-                    ({ error } = await _supabase.from('shared_inventory_logs').update(stripEditMeta([payload])[0]).eq('id', _t7EditingId));
+                    ({ error } = await _supabase.from('shared_inventory_logs').update(stripEditMeta([head])[0]).eq('id', _t7EditingId));
+                }
+                if (!error && rest.length) {
+                    ({ error } = await _supabase.from('shared_inventory_logs').insert(rest));
+                    if (error && isEditMetaColumnError && isEditMetaColumnError(error)) {
+                        ({ error } = await _supabase.from('shared_inventory_logs').insert(stripEditMeta(rest)));
+                    }
                 }
             } else {
                 // Insert path — first save, one row or one per tray.
@@ -3675,10 +3751,13 @@
                 return;
             }
             const wasEditing = !!_t7EditingId;
-            const splitCount = traySplit && traySplit.length ? traySplit.length : 0;
+            const splitCount = traySplit && traySplit.length ? traySplit.length
+                             : editSplit.length;
             cancelEditCalibration(); // clears form + resets button + banner
             showToast(wasEditing
-                ? `Calibration updated: ${qty > 0 ? '+' : ''}${qty}`
+                ? splitCount > 1
+                    ? `Calibration updated and split across ${splitCount} trays: net ${qty > 0 ? '+' : ''}${qty}`
+                    : `Calibration updated: ${qty > 0 ? '+' : ''}${qty}`
                 : splitCount > 1
                     ? `Calibration recorded across ${splitCount} trays: net ${qty > 0 ? '+' : ''}${qty}`
                     : `Calibration recorded: ${qty > 0 ? '+' : ''}${qty}`, 'success');
