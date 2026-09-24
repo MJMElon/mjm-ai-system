@@ -121,6 +121,13 @@
                             <button type="button" id="mlk-day-save-btn" class="btn-purple !bg-rose-500 !px-5 !py-2.5 text-[10px] tracking-widest" onclick="saveMlkLockDay()">Save</button>
                             <span class="text-[10px] text-slate-400 font-semibold">of the following month — applies from this month onward</span>
                         </div>
+                        <!-- Forces every month of the selected Year open in one write, instead of
+                             clicking all 12 round icons by hand — same manual_override column
+                             toggleMonthLock() already writes, just all 12 rows at once. -->
+                        <button type="button" class="text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl px-4 py-2.5 flex items-center gap-2 transition-colors" onclick="unlockAllMonths()">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17 11V8a5 5 0 00-9.5-2M7 11h10a1 1 0 011 1v8a1 1 0 01-1 1H7a1 1 0 01-1-1v-8a1 1 0 011-1z"/></svg>
+                            Unlock All <span id="mlk-unlock-all-year"></span>
+                        </button>
                     </div>
                     <div id="mlk-months" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
                 </div>
@@ -557,14 +564,31 @@
             }
             menu.innerHTML = html;
             document.getElementById('mlk-year-label').textContent = _mlkYear;
+            document.getElementById('mlk-unlock-all-year').textContent = _mlkYear;
         }
 
         function selectMlkYear(year) {
             _mlkYear = year;
             document.getElementById('mlk-year-label').textContent = year;
+            document.getElementById('mlk-unlock-all-year').textContent = year;
             document.querySelectorAll('#mlk-year-menu .cf-opt').forEach(el => el.classList.toggle('active', parseInt(el.dataset.value, 10) === year));
             document.getElementById('mlk-year-menu').classList.add('hidden');
             document.getElementById('mlk-year-btn').classList.remove('open');
+            renderMonthLockGrid();
+        }
+
+        // "Unlock All" — same manual_override write toggleMonthLock() does
+        // for one month, but all 12 months of the selected Year in one go
+        // (see MJMMonthLock.setManualOverrideForYear). Confirmed first: it
+        // forces every month of the year open — Delivery Orders, Approval
+        // Letters and Batch Record alike — until locked again by hand or
+        // by the next auto-lock date.
+        async function unlockAllMonths() {
+            const year = _mlkYear;
+            if (!confirm(`Unlock all 12 months of ${year}?\n\nThis forces every month open — Delivery Orders, Approval Letters and Batch Record — until it's locked again.`)) return;
+            const { data: { user } } = await _supabase.auth.getUser();
+            const error = await MJMMonthLock.setManualOverrideForYear(_supabase, year, false, user?.email || null);
+            if (error) return alert('Could not save: ' + error.message + (error.message.includes('does not exist') ? '\n\nRun shared/RUN_ME_month_locks.sql in the Supabase SQL Editor first.' : ''));
             renderMonthLockGrid();
         }
 

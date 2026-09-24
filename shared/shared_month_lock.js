@@ -105,6 +105,21 @@
         return error;
     }
 
+    // Same as setManualOverride, but all 12 months of `year` in one upsert
+    // instead of 12 round trips — what "Unlock All" / "Lock All" for a year
+    // call.
+    async function setManualOverrideForYear(supabase, year, locked, updatedBy) {
+        const now = new Date().toISOString();
+        const rowsToWrite = [];
+        for (let month = 1; month <= 12; month++) {
+            rowsToWrite.push({ year, month, manual_override: locked, updated_at: now, updated_by: updatedBy || null });
+        }
+        const { error } = await supabase.from('shared_month_locks')
+            .upsert(rowsToWrite, { onConflict: 'year,month' });
+        if (!error) await load(supabase);
+        return error;
+    }
+
     // Changes the lock day effective from "right now" onward. Writes/
     // updates the history entry for the CURRENT calendar month — if one
     // was already made this month, it's replaced rather than duplicated,
@@ -123,6 +138,6 @@
 
     global.MJMMonthLock = {
         load, isMonthLocked, isDateLocked, rowFor, autoLockDateFor, defaultAutoLockDate,
-        autoLockDayFor, currentLockDay, setManualOverride, setLockDay
+        autoLockDayFor, currentLockDay, setManualOverride, setManualOverrideForYear, setLockDay
     };
 })(window);
