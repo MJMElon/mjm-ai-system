@@ -1355,16 +1355,12 @@ async function runMovementReportCombined() {
 
   // PN drives the Pre-Nursery section, any of BNN/UNN1/UNN2 drives the Main
   // Nursery section — one Movement Report tab, the Locations chips decide
-  // which section(s) actually render.
+  // which section(s) actually render. Same rule Transplanting/Sales Listing
+  // already use for these chips: nothing ticked means no filter at all, not
+  // nothing to show — nothing ticked shows every location, both sections.
   const pickedLocs = selectedNurseries();
-  const wantPre  = pickedLocs.includes('PN');
-  const wantMain = pickedLocs.some(l => l !== 'PN');
-  if (!wantPre && !wantMain) {
-    loading.classList.add('hidden');
-    out.classList.remove('hidden');
-    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-[#8a7a68] text-sm">Tick a location under Locations — PN, BNN, UNN 1 or UNN 2 — to see Movement Report data.</div>`;
-    return;
-  }
+  const wantPre  = pickedLocs.length === 0 || pickedLocs.includes('PN');
+  const wantMain = pickedLocs.length === 0 || pickedLocs.some(l => l !== 'PN');
 
   const fromStr = document.getElementById('f-from').value;
   const toStr   = document.getElementById('f-to').value;
@@ -1416,9 +1412,11 @@ async function runMovementReportCombined() {
   // BNN/UNN1/UNN2 filter which main-nursery plots pass; PN plays no part in
   // this check (plotToLoc never returns "PN" — it only ever comes from
   // shared_plots.nursery_name, a real main-nursery name), so leaving PN in
-  // the checked set is harmless here.
+  // the checked set is harmless here. Empty selectedLocs (nothing ticked)
+  // means no filter — same !selectedLocs.size guard as Transplanting/Sales
+  // Listing use for the same chips — not "nothing passes".
   const selectedLocs = new Set(pickedLocs);
-  const passMain = (plot) => !!plot && !isTray(plot) && selectedLocs.has(plotToLoc[plot] || 'Unassigned');
+  const passMain = (plot) => !!plot && !isTray(plot) && (!selectedLocs.size || selectedLocs.has(plotToLoc[plot] || 'Unassigned'));
 
   // ── When each batch was planted, for Age ──
   // The same source the batch list uses: the keyed date on Seeds_Received.
