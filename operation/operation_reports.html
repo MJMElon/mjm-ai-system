@@ -719,7 +719,13 @@ function monthStartOf(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   if (isNaN(d)) return '';
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+  // Built from the LOCAL year/month, as a plain string — not
+  // `new Date(y, m, 1).toISOString()`, which converts that local midnight to
+  // UTC and rolls it back a calendar day for anyone east of UTC (Malaysia is
+  // UTC+8): "As At 23 Sep" came out with a B/F cutoff of 31 Aug instead of
+  // 1 Sep, one real day short.
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-01`;
 }
 
 async function runReport() {
@@ -1569,8 +1575,11 @@ function buildMovementSection(scope, ev, ctx) {
   groups.forEach(g => {
     if (groupBy !== 'batch' && g.loc !== lastLoc) {
       lastLoc = g.loc;
+      // !text-left — .movement-table td defaults every cell to text-align:right
+      // (it's mostly a numbers table), which otherwise beats a plain
+      // text-left utility class on specificity alone.
       bodyHtml.push(`<tr style="background:#f3ede1"><td colspan="${totalCols}"
-        class="font-black text-[11px] uppercase tracking-widest text-[#3d2610] py-2">${g.loc}</td></tr>`);
+        class="font-black text-base !text-left uppercase tracking-widest text-[#3d2610] py-2">${g.loc}</td></tr>`);
     }
     const bal = g.list.reduce((s, r) => s + r.closing, 0);
     // Alternating band per ROW (not per group) — every line gets its own
@@ -1584,13 +1593,13 @@ function buildMovementSection(scope, ev, ctx) {
       // text pinned to the group's first row with blank cells trailing
       // under it (which read as stuck at the top, not "one merged value").
       bodyHtml.push(`<tr${zebra}>
-        ${i === 0 ? `<td rowspan="${g.list.length}" class="col-label font-black text-[#3d2610] align-middle">${g.key}</td>` : ''}
+        ${i === 0 ? `<td rowspan="${g.list.length}" class="col-label font-black text-[#8a7a68] align-middle">${g.key}</td>` : ''}
         <td class="col-label">${otherOf(r) || '—'}</td>
         <td class="col-label text-[#8a7a68] text-xs whitespace-nowrap">${r.age}</td>
         ${fmtCell(r.bf, 'text-[#8a7a68] font-black')}
         ${cols.map(c => fmtCell(r[c.key], c.cls)).join('')}
         ${fmtCell(r.closing, 'text-[#4a7a2e] font-black')}
-        ${i === 0 ? `<td rowspan="${g.list.length}" class="font-black text-[#4a7a2e] align-middle">${fmtNum(bal)}</td>` : ''}
+        ${i === 0 ? `<td rowspan="${g.list.length}" class="font-black text-[#8a7a68] align-middle">${fmtNum(bal)}</td>` : ''}
       </tr>`);
     });
   });
