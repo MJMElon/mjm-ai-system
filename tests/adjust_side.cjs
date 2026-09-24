@@ -16,11 +16,16 @@
    a figure that includes it, and off no others:
 
        Transplanting → itself + 2nd + 3rd     1st Culling → 1st only
-       2nd Culling   → itself + 3rd            3rd Culling → 3rd only
+       2nd Culling   → 2nd only                3rd Culling → 3rd only
 
-   Every report carries its own losses. 1st Culling is the one exception:
-   the transplant record written after it says what actually reached the
-   plots, so nothing downstream is still carrying the error.
+   Every CULLING keeps its own and passes nothing on: a culling is a fresh
+   count of the plot, by hand and by drone, so whatever was adjusted before
+   it is already absent from the number it produced. Batch 235's N11 is why
+   — one seedling adjusted away at the 2nd culling, counted again at the
+   3rd, and the row read 76 against a drone map of 77. There were 77.
+
+   Only Transplanting travels, because it is not a count of what is there;
+   it is a record of what was sent, and both cullings measure against it.
 
    Run: NODE_PATH=/opt/node22/lib/node_modules node tests/adjust_side.cjs
 */
@@ -257,7 +262,8 @@ const ROWS = {
     // ── 2nd Culling: itself and the 3rd, never the transplanting before it
     ['a 2nd Culling loss does not reach back to Transplanting', L['U4 @transplanting'] === 0],
     ['a 2nd Culling loss reaches the 2nd', L['U4 @2nd'] === -7],
-    ['and the 3rd', L['U4 @3rd'] === -7 + -6],
+    ['and NOT the 3rd — the drone counted the plot again after it',
+      L['U4 @3rd'] === -6],
 
     // ── 3rd Culling: itself only
     ['a 3rd Culling loss reaches the 3rd and no earlier count',
@@ -265,10 +271,10 @@ const ROWS = {
 
     // ── the old mis-file corrects itself
     ['a row filed against the seed count on a culling report is read the new way',
-      L['U4 @3rd'] === -13 && read.total === -30],
+      L['U4 @3rd'] === -6 && read.total === -30],
 
     // ── and nothing unapproved moves anything
-    ['an adjustment nobody has ruled on moves no figure', L['U4 @3rd'] !== -112],
+    ['an adjustment nobody has ruled on moves no figure', L['U4 @3rd'] !== -105],
 
     ['no page errors beyond the harness\'s own MJMReview race',
       errs.every(e => /MJMReview is not defined/.test(e))],
