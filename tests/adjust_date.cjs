@@ -33,6 +33,20 @@ async function setPlot(page, plot) {
   }, plot);
 }
 
+/* shared_cf_select.js replaces every <select> on the page with a custom
+   dropdown and hides the native one, so Playwright's selectOption cannot
+   reach it. Set the value and fire the same bubbling `change` the custom
+   widget fires — which is what the page's own onchange listens for. */
+async function setSelect(page, sel, value) {
+  await page.evaluate(([s, v]) => {
+    const el = document.querySelector(s);
+    if (!Array.from(el.options).some(o => o.value === v)) el.add(new Option(v, v));
+    el.value = v;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }, [sel, value]);
+  await page.waitForTimeout(120);
+}
+
 let pass = 0, fail = 0;
 function check(name, got, want) {
   const ok = JSON.stringify(got) === JSON.stringify(want);
@@ -216,7 +230,7 @@ const SEEDS_ROW = {
 
   console.log('\nSaving writes the date into transaction_date');
   await page.fill('#t7-cal-qty', '-20');
-  await page.selectOption('#t7-cal-report', 'Transplanting');
+  await setSelect(page,'#t7-cal-report', 'Transplanting');
   await setPlot(page, 'B14');
   await page.fill('#t7-cal-reason', 'Manual count');
   await page.fill('#t7-cal-date', '2026-03-04');
@@ -236,7 +250,7 @@ const SEEDS_ROW = {
   console.log('\nAn empty date is refused');
   await page.evaluate(() => { window.__INSERTS = []; window.__TOASTS = []; });
   await page.fill('#t7-cal-qty', '5');
-  await page.selectOption('#t7-cal-report', '1st Culling');
+  await setSelect(page,'#t7-cal-report', '1st Culling');
   await setPlot(page, 'B14');
   await page.fill('#t7-cal-reason', 'Recount');
   await page.fill('#t7-cal-date', '');
