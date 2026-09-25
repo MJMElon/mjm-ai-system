@@ -2995,7 +2995,7 @@
             if (!cells.length) return;
 
             // plot|tray → net, from the approved Transplanting adjustments.
-            const byPair = {};
+            const byPair = {}, byPairRows = {};
             (ADJUST_ROWS || []).forEach(r => {
                 if (!r.approved) return;
                 if (String(r.report || '').toLowerCase() !== 'transplanting') return;
@@ -3006,6 +3006,8 @@
                    row carries Qty 0 and this is the +140 that goes beside it. */
                 const k = _t6PlotKey(r.plot) + '|' + _t3TrayKey(r.tray || r.txTray);
                 byPair[k] = (byPair[k] || 0) + r.qty;
+                // Kept so an adjustment with no row left can be put right below.
+                (byPairRows[k] = byPairRows[k] || []).push(r);
             });
 
             const used = {};
@@ -3042,11 +3044,25 @@
                underneath rather than leaving it short by an unexplained amount. */
             let orphan = 0;
             const orphanNames = [];
+            /* …and the ones that CAN be put right on the spot. An adjustment
+               that already wrote a transplanting row once still carries the
+               answers it was given — TxTray and TxMap — so if that row is no
+               longer there, it can simply be written again with nothing asked.
+
+               That is not hypothetical: B8's row was deleted by a save of this
+               tab before saves learned to carry it across, and the TxRow marker
+               left behind pointed at a row that no longer existed, so nothing
+               would ever write it again. The marker is not the truth; whether a
+               row is actually there is. */
+            const rebuildable = [];
             Object.keys(byPair).forEach(k => {
                 if (used[k] || !byPair[k]) return;
                 orphan += byPair[k];
                 const plot = k.split('|')[0], tray = k.split('|')[1];
                 orphanNames.push(tray ? `${plot} ← ${tray}` : plot);
+                (byPairRows[k] || []).forEach(r => {
+                    if (r.txTray && r.qty > 0) rebuildable.push(r);
+                });
             });
             totAdj += orphan; totFinal += orphan;
 
@@ -3069,13 +3085,51 @@
             const note = document.getElementById('t3-saved-adj-note');
             if (note) {
                 if (orphan) {
-                    note.innerText = `Included in the total but not on any row above: `
-                        + `${(orphan > 0 ? '+' : '') + orphan.toLocaleString()} on ${orphanNames.join(', ')}`;
+                    const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;').replace(/"/g, '&quot;');
+                    const buttons = _t7IsAdmin() ? rebuildable.map(r =>
+                        `<button type="button" onclick="rebuildTxRow('${esc(r.id)}')"
+                                 class="ml-2 px-2 py-1 bg-white border border-[#a83020] text-[#a83020] text-[9px] font-black uppercase rounded hover:bg-[#fff5f5]"
+                                 title="Write ${esc(r.plot)}'s transplanting record again, from the tray and map already on this adjustment"
+                                >Add ${esc(r.plot)}'s row</button>`).join('') : '';
+                    note.innerHTML = `Included in the total but not on any row above: `
+                        + `${(orphan > 0 ? '+' : '') + orphan.toLocaleString()} on ${esc(orphanNames.join(', '))}`
+                        + buttons;
                     note.classList.remove('hidden');
                 } else {
                     note.classList.add('hidden');
                 }
             }
+        }
+
+        /* Write a transplanting row again for an adjustment that has lost it.
+
+           Nothing is asked: the tray and the map are still on the adjustment
+           from when it was approved. Used when the row was deleted — a save of
+           the Transplanting tab did exactly that before saves learned to carry
+           these across — and the TxRow marker left behind pointed at a row that
+           was no longer there. */
+        async function rebuildTxRow(calId) {
+            if (!_t7IsAdmin()) { showToast('Only admins can do this.', 'error'); return; }
+            const { data: row, error } = await _supabase.from('shared_inventory_logs')
+                .select('remark, plot_name, quantity_change, transaction_date, batch_name, created_at')
+                .eq('id', calId).maybeSingle();
+            if (error || !row) {
+                showToast('Could not read that adjustment' + (error ? ': ' + error.message : '') + '.', 'error');
+                return;
+            }
+            const cal = _parseCalibration(Object.assign({ id: calId }, row));
+            if (!cal.txTray) {
+                showToast('That adjustment never recorded which tray the seedlings came from, so the row '
+                    + 'cannot be written without asking. Raise it again on Adjustments & Audit.', 'error');
+                return;
+            }
+            const made = await _createTxRowFromCalibration(calId, row, cal, cal.approvedBy || '');
+            if (made.error) { showToast('Could not write it: ' + made.error, 'error'); return; }
+            showToast(`${cal.plot} has its transplanting record again.`, 'success');
+            _t7TxLogs = null;
+            await syncTab3();
+            syncAdjustmentBars((row.batch_name || '').trim());
         }
 
         /* Would settling this adjustment move the 3rd Culling row? Used by the
@@ -3948,37 +4002,21 @@
                the row is simply where it now lands. TxRow:<id> is kept as the
                link back, so a second row is never created for the same one. */
             const cal = _parseCalibration(Object.assign({ id }, row || {}));
-            if (cal.txTray && !cal.txRow) {
-                const txRemark = `Transplanted from tray [${cal.txTray}] to Main Plot [${cal.plot}]. `
-                    + `Date: ${(row.transaction_date || String(row.created_at || '').slice(0, 10))}`
-                    + (cal.txMap ? ` MapUrl:${cal.txMap}` : '')
-                    + ` FromAdjustment:${id} CalApprovedBy:${who}`;
-                const { data: made, error: txErr } = await _supabase
-                    .from('shared_inventory_logs')
-                    .insert([withEditMeta({
-                        transaction_type: 'Transplanted',
-                        batch_name: row.batch_name,
-                        plot_name: cal.plot,
-                        quantity_change: 0,
-                        transaction_date: row.transaction_date || String(row.created_at || '').slice(0, 10),
-                        remark: txRemark
-                    })])
-                    .select('id');
-                if (txErr || !made || !made.length) {
+            let wroteRow = false;
+            if (cal.txTray) {
+                const made = await _createTxRowFromCalibration(id, row, cal, who, newRemark);
+                if (made.error) {
                     /* The approval stands — it is already written — but say so
                        plainly, because the figure is now approved WITHOUT the
                        record it was supposed to create, and somebody has to
                        know that rather than find out from a report. */
                     showToast('Approved, but the transplanting record for ' + cal.plot
-                        + ' was NOT created' + (txErr ? ': ' + txErr.message : '')
-                        + '. Press Edit on the adjustment and save it again to retry.', 'error');
+                        + ' was NOT created: ' + made.error
+                        + '. Use "Add ' + cal.plot + '\'s row" under the Transplanting list to try again.', 'error');
                 } else {
-                    await _supabase.from('shared_inventory_logs')
-                        .update({ remark: newRemark + ` TxRow:${made[0].id}` })
-                        .eq('id', id);
-                    _t7TxLogs = null;   // the plot has a transplant row now
-                    showToast(`Approved. ${cal.plot} now has a transplanting record of `
-                        + `${Math.abs(Number(row.quantity_change) || 0).toLocaleString()} from ${cal.txTray}.`, 'success');
+                    wroteRow = true;
+                    showToast(`Approved. ${cal.plot} now has a transplanting record, `
+                        + `from ${cal.txTray}.`, 'success');
                 }
             } else {
                 showToast('Calibration approved and locked.', 'success');
@@ -3986,8 +4024,51 @@
 
             const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
             renderCalibrationHistory(batchId);
+            /* THE TRANSPLANTING LIST IS REBUILT FROM THE DATABASE, not repainted.
+               syncAdjustmentBars only recolours the rows that are already
+               drawn, so a row written a moment ago was not among them — the
+               plot went on reading as having no record until somebody reloaded
+               the page, which is exactly how it looked like nothing happened. */
+            if (wroteRow) { _t7TxLogs = null; await syncTab3(); }
             // …and the same rows on the report each was raised against.
             syncAdjustmentBars(batchId);
+        }
+
+        /* Writes the transplanting row an approved adjustment stands for, and
+           links the two. One copy, used by approval and by the rebuild button,
+           so the shape of the record cannot drift between them.
+
+           `stampOnto` is the remark to hang TxRow: off — approval passes the
+           one it has just built with the approval marker on it; the rebuild
+           passes nothing and the adjustment's current remark is used, with any
+           stale TxRow: replaced rather than a second one appended. */
+        async function _createTxRowFromCalibration(calId, row, cal, approvedBy, stampOnto) {
+            const when = row.transaction_date || String(row.created_at || '').slice(0, 10);
+            const txRemark = `Transplanted from tray [${cal.txTray}] to Main Plot [${cal.plot}]. `
+                + `Date: ${when}`
+                + (cal.txMap ? ` MapUrl:${cal.txMap}` : '')
+                + ` FromAdjustment:${calId} CalApprovedBy:${approvedBy || ''}`;
+            const { data: made, error: txErr } = await _supabase
+                .from('shared_inventory_logs')
+                .insert([withEditMeta({
+                    transaction_type: 'Transplanted',
+                    batch_name: row.batch_name,
+                    plot_name: cal.plot,
+                    quantity_change: 0,
+                    transaction_date: when,
+                    remark: txRemark
+                })])
+                .select('id');
+            if (txErr || !made || !made.length) {
+                return { error: (txErr && txErr.message) || 'the record came back empty' };
+            }
+            const base = String(stampOnto != null ? stampOnto : (row.remark || ''));
+            const stamped = /TxRow:\S+/.test(base)
+                ? base.replace(/TxRow:\S+/, `TxRow:${made[0].id}`)
+                : base + ` TxRow:${made[0].id}`;
+            await _supabase.from('shared_inventory_logs')
+                .update({ remark: stamped }).eq('id', calId);
+            return { id: made[0].id };
         }
 
         async function saveCalibration() {

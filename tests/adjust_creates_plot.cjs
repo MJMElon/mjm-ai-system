@@ -87,6 +87,8 @@ const TX_ROWS = [
           if (p === 'insert') return r => {
             const list = [].concat(r).map(x => Object.assign({ id: 'new-' + (nextId++) }, x));
             window.__INSERTS.push(...list);
+            // keep the fixture in step so a re-read sees what was written
+            list.forEach(x => { if (x.transaction_type === 'Transplanted') window.__TX_ROWS.push(x); });
             st.ins = list;
             const out = Promise.resolve({ data: list, error: null });
             return { select: () => out, then: (a, b) => out.then(a, b) };
@@ -247,6 +249,15 @@ const TX_ROWS = [
     }];
     window.__INSERTS = []; window.__UPDATES = []; window.__TOASTS = [];
   }, saved.ins[0].remark);
+  /* Spy on the list rebuild. syncAdjustmentBars only recolours rows that are
+     already drawn; the transplanting list is rebuilt from the database by
+     syncTab3, so without it a row written a moment ago is not on screen and it
+     looks like nothing happened. */
+  await page.evaluate(() => {
+    window.__SYNCED = 0;
+    const real = window.syncTab3;
+    window.syncTab3 = async function () { window.__SYNCED++; return real && real.apply(this, arguments); };
+  });
   await page.evaluate(() => window.approveCalibration('cal-b8'));
   await page.waitForFunction(() => window.__INSERTS.length > 0, { timeout: 8000 });
   await page.waitForTimeout(300);
@@ -270,6 +281,24 @@ const TX_ROWS = [
   const approvalUpd = made.upd.filter(u => u.id === 'cal-b8');
   checkTrue('the adjustment is marked approved', approvalUpd.some(u => /APPROVED by/.test(u.row.remark || '')));
   checkTrue('…and linked to the row it created', approvalUpd.some(u => /TxRow:new-/.test(u.row.remark || '')));
+
+  console.log('\nAnd the list is rebuilt, so the row is on screen straight away');
+  check('the transplanting list was reloaded after approval',
+        await page.evaluate(() => window.__SYNCED) > 0, true);
+  await page.waitForSelector('#t3-saved-rows-list .t3-adj-cell[data-plot="B8"]',
+                             { state: 'attached', timeout: 8000 });
+  const onScreen = await page.evaluate(() => {
+    const c = document.querySelector('#t3-saved-rows-list .t3-adj-cell[data-plot="B8"]');
+    const row = c.closest('[id^="t3-row-view-"]');
+    return {
+      tray: c.getAttribute('data-tray'),
+      qty:  c.getAttribute('data-qty'),
+      locked: /calibration approved by/i.test(row.lastElementChild.innerHTML
+                 .replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, ' '))
+    };
+  });
+  check('B8 is in the list, from P4, holding nought, and marked as the adjustment\'s',
+        onScreen, { tray: 'P4', qty: '0', locked: true });
 
   console.log('\nThe adjustment goes on counting — the row does not take it over');
   const counted = await page.evaluate(() => {
