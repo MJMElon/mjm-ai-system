@@ -5994,7 +5994,11 @@
                 matchBox.className = "w-full md:w-40 p-4 rounded-xl border border-[#a83020] bg-[#fff5f5] flex flex-col justify-center items-center text-center transition-colors shrink-0";
                 matchIcon.innerText = "❌"; 
                 matchTitle.innerText = "Error"; matchTitle.className = "text-[11px] font-black uppercase tracking-wider text-[#a83020] leading-tight";
-                matchDesc.innerText = "Over Allocated"; matchDesc.className = "text-[9px] font-bold text-[#a83020] uppercase tracking-widest mt-1 leading-tight";
+                /* BY HOW MUCH. "Over Allocated" on its own sends somebody off
+                   to subtract two figures by hand to find out how bad it is —
+                   and the number is right here. */
+                matchDesc.innerText = `Over Allocated by ${Math.abs(rawPending).toLocaleString()}`;
+                matchDesc.className = "text-[9px] font-bold text-[#a83020] uppercase tracking-widest mt-1 leading-tight";
             } else {
                 matchBox.className = "w-full md:w-40 p-4 rounded-xl border border-[#c07820] bg-[#fffaf0] flex flex-col justify-center items-center text-center transition-colors shrink-0";
                 matchIcon.innerText = "⏳"; 
@@ -6124,7 +6128,8 @@
             } else if (untransplanted === 0 && total > 0) {
                 desc.innerText = "100% Allocated"; desc.className = "text-base font-black uppercase text-[#4a7a2e] mt-1";
             } else if (untransplanted < 0) {
-                desc.innerText = "Over Allocated"; desc.className = "text-base font-black uppercase text-[#a83020] mt-1";
+                desc.innerText = `Over Allocated by ${Math.abs(untransplanted).toLocaleString()}`;
+                desc.className = "text-base font-black uppercase text-[#a83020] mt-1";
             } else if (percentage === 0) {
                 desc.innerText = "Awaiting Data"; desc.className = "text-base font-black uppercase text-[#3d2610] mt-1";
             } else {
@@ -9764,7 +9769,8 @@ Thank you.`;
             if (unaccounted === 0 && total > 0) {
                 desc.innerText = '100% Balanced'; desc.className = 'text-base font-black uppercase text-[#4a7a2e] mt-1';
             } else if (unaccounted < 0) {
-                desc.innerText = 'Over Allocated'; desc.className = 'text-base font-black uppercase text-[#a83020] mt-1';
+                desc.innerText = `Over Allocated by ${Math.abs(unaccounted).toLocaleString()}`;
+                desc.className = 'text-base font-black uppercase text-[#a83020] mt-1';
             } else {
                 desc.innerText = 'In Progress'; desc.className = 'text-base font-black uppercase text-[#c07820] mt-1';
             }
