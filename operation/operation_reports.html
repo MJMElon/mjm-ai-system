@@ -171,34 +171,76 @@
   .sales-table col.c-total { width: 9%;  }
   .sales-table th,
   .sales-table td { padding: 10px 8px; }
-  /* Life of Seedlings: eighteen columns wide, so it reads as a matrix rather
-     than a wall — a rule between every column, the two-row header's group
-     bands picked out, and figures right-aligned under their own heading. */
+  /* ── Life of Seedlings ──────────────────────────────────────────────────
+     Eighteen columns, and all eighteen have to be on the page at once: this
+     is a report you read ACROSS, batch by batch, and a table you scroll
+     sideways answers one half of a row at a time. So the table is
+     fixed-layout at 100% width with a colgroup that spends the width where
+     it is needed — the supplier's name and the two-line figures — and the
+     type is sized to what that leaves rather than the other way round.
+     Nothing sets a min-width, because a min-width is how a fixed layout
+     starts overflowing again. */
+  .los-wrap { overflow:visible; }
+  .los-table { table-layout:fixed; width:100%; }
   .los-table th, .los-table td { border-right:1px solid #efe6d4; }
   .los-table th:last-child, .los-table td:last-child { border-right:none; }
-  .los-table th.los-grp { text-align:center; color:#c07820; background:#f8f1e2; }
-  .los-table th { vertical-align:bottom; white-space:normal; line-height:1.3; max-width:110px; }
-  /* The four label columns are text, not figures — capping them at a figure
-     column's width broke "Applied Agricultural Resources Sdn. Bhd." onto five
-     lines and made every row as tall as its longest supplier name. */
-  .los-table thead tr:first-child th:nth-child(-n+4) { text-align:left; }
-  .los-table thead tr:first-child th:nth-child(2) { max-width:150px; }
-  .los-table thead tr:first-child th:nth-child(3) { max-width:250px; }
-  .los-table td:nth-child(2) { min-width:92px; }
-  .los-table td:nth-child(3) { min-width:184px; }
-  .los-table td { padding:10px 12px; }
+  /* Centred, and centred both ways: with columns this narrow a figure
+     pinned to the right edge sits under the NEXT column's heading as often
+     as its own, and a two-line supplier name next to a one-line date read
+     as two different rows. */
+  .los-table th, .los-table td {
+    text-align:center; vertical-align:middle; white-space:normal;
+    overflow-wrap:break-word; line-height:1.3;
+  }
+  /* No letter-spacing on these headings, unlike every other table's: the
+     tracking that makes a wide heading read well is what pushed
+     "TRANSPLANTING" a few pixels past its column and split it across two
+     lines as "TRANSPLANTIN / G". */
+  .los-table th { font-size:9px; padding:8px 4px; letter-spacing:0; }
+  .los-table td { font-size:11px; padding:8px 4px; }
+  .los-table th.los-grp { color:#c07820; background:#f8f1e2; letter-spacing:.12em; }
   .los-table tbody tr:nth-child(even) { background:#faf7f0; }
+  /* THE HEADINGS STAY. Sticky against the page itself, not against an inner
+     scrolling box — scroll to the four-hundredth batch and the headings are
+     still overhead. Two rows, so the second one has to sit exactly under the
+     first: its offset is measured after render and written to --los-head2
+     (see _losStickyHeads), because the first row's height depends on how the
+     group bands wrap, which no fixed number in here can know. The cells that
+     span both rows are in the first row and stick at 0, tall enough to cover
+     both.
+
+     This is also why .los-wrap does not scroll: an overflow ancestor becomes
+     the scrollport a sticky heading sticks to, and a box that scrolls
+     sideways but not down never scrolls past its own heading, so the heading
+     never sticks to anything. */
+  .los-table thead th { position:sticky; z-index:3; background:#fdfaf4; }
+  .los-table thead tr:first-child th { top:0; }
+  .los-table thead tr:nth-child(2) th { top:var(--los-head2, 34px); }
+  /* The sticky edge — a border on a sticky cell scrolls away with the cell's
+     own box, a shadow does not. */
+  .los-table thead tr:last-child th { box-shadow:0 2px 0 #e8dcc8; }
+  /* Below about 1100px there is no honest way to fit eighteen columns, so
+     the table is allowed to scroll sideways again. The headings stop
+     sticking when it does — that is the trade, and it only applies to a
+     window narrower than this report is meant for. */
+  @media (max-width:1100px) {
+    .los-wrap { overflow-x:auto; }
+    .los-table { table-layout:auto; width:auto; min-width:1100px; }
+  }
   /* A figure you can open. It has to read as a figure first — same size,
      same weight, same colour as one that has nothing behind it — so the
-     table is not a page of links; the underline on hover is what says it
-     will do something. Left as a <button> rather than an <a> because there
-     is nowhere to navigate to: it opens the records beside it. */
+     table is not a page of links; the underline is what says it will do
+     something. Pointing at one shows what it is made of; clicking opens the
+     same records in a window you can filter and read at length. */
   .los-fig { background:none; border:none; padding:0; font:inherit; color:inherit;
-             cursor:pointer; text-decoration:underline; text-decoration-style:dotted;
+             cursor:help; text-decoration:underline; text-decoration-style:dotted;
              text-underline-offset:3px; text-decoration-color:#d9cdb6; }
   .los-fig:hover { text-decoration-style:solid; text-decoration-color:currentColor; }
   .los-fig:focus-visible { outline:2px solid #6aa83c; outline-offset:2px; border-radius:4px; }
-  @media print { .los-fig { text-decoration:none; } }
+  @media print {
+    .los-fig { text-decoration:none; }
+    .los-table thead th { position:static; }
+  }
 
   /* Nursery multi-select chips */
   .nursery-chip { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:10px; background:#fff; border:1.5px solid #e8dcc8; cursor:pointer; font-size:11px; font-weight:700; color:#3d2610; user-select:none; }
@@ -265,8 +307,33 @@
           <label class="label-style !mb-1" id="f-to-label">As At</label>
           <input id="f-to" type="date" class="input-style">
         </div>
-        <div class="f-los f-los-year-wrap hidden w-32">
-          <label class="label-style !mb-1">Year</label>
+        <!-- Life of Seedlings reads its As At as a month and a year rather
+             than a day. A batch's life is months long, so "as at the 25th"
+             was a precision the report never had anything to say about, and
+             the day picker made "all of it" impossible to ask for. Both
+             start at All, which is what asks for every batch ever received —
+             pick a year alone for the whole of that year, or a year and a
+             month for up to the end of that month. -->
+        <div class="f-los hidden w-32">
+          <label class="label-style !mb-1">As At — Month</label>
+          <select id="f-los-month" class="input-style">
+            <option value="">All months</option>
+            <option value="0">January</option>
+            <option value="1">February</option>
+            <option value="2">March</option>
+            <option value="3">April</option>
+            <option value="4">May</option>
+            <option value="5">June</option>
+            <option value="6">July</option>
+            <option value="7">August</option>
+            <option value="8">September</option>
+            <option value="9">October</option>
+            <option value="10">November</option>
+            <option value="11">December</option>
+          </select>
+        </div>
+        <div class="f-los hidden w-32">
+          <label class="label-style !mb-1">As At — Year</label>
           <select id="f-los-year" class="input-style">
             <option value="">All years</option>
           </select>
@@ -488,6 +555,28 @@ function _losAgeLabel(m) {
   return m + (m === 1 ? ' month' : ' months');
 }
 
+/* The As At cut-off the Month and Year pickers come to, as YYYY-MM-DD, or
+   '' for no cut-off. A month without a year says nothing on its own — there
+   is no year for it to be the month of — so it is ignored until a year is
+   picked. */
+function _losAsAt(year, month) {
+  if (!year) return '';
+  const y = Number(year);
+  const m = month === '' ? 11 : Number(month);
+  // Day 0 of the NEXT month is the last day of this one, leap years and all.
+  const last = new Date(y, m + 1, 0);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${last.getFullYear()}-${pad(last.getMonth() + 1)}-${pad(last.getDate())}`;
+}
+
+/* How that cut-off reads on the report's own scope line. */
+const _LOS_MONTHS_LONG = ['January','February','March','April','May','June',
+  'July','August','September','October','November','December'];
+function _losAsAtLabel(year, month) {
+  if (!year) return 'all dates';
+  return 'as at ' + (month === '' ? year : _LOS_MONTHS_LONG[Number(month)] + ' ' + year);
+}
+
 /* The age bands the Age filter offers. Open-ended at the top so a batch never
    falls out of every band as it gets older. */
 const LOS_AGE_BANDS = [
@@ -512,13 +601,18 @@ async function runLifeOfSeedlings() {
   out.classList.add('hidden');
   loading.classList.remove('hidden');
 
-  const asAt     = document.getElementById('f-to').value;
   const breed    = document.getElementById('f-breed').value;
   const supplier = (document.getElementById('f-los-supplier') || {}).value || '';
   const nursery  = (document.getElementById('f-los-nursery')  || {}).value || '';
   const status   = (document.getElementById('f-los-status')   || {}).value || '';
   const year     = (document.getElementById('f-los-year')     || {}).value || '';
+  const month    = (document.getElementById('f-los-month')    || {}).value || '';
   const ageBand  = (document.getElementById('f-los-age')      || {}).value || '';
+  /* As At, from the month and year pickers. No year means no cut-off at all
+     — every batch ever received, which is what "All years" is for. A year on
+     its own runs to the last day of December; a year and a month to the last
+     day of that month. */
+  const asAt = _losAsAt(year, month);
 
   const [logsRes, dosRes, plotsRes, traysRes] = await Promise.all([
     fetchAllRows(() => _supabase.from('shared_inventory_logs')
@@ -727,21 +821,18 @@ async function runLifeOfSeedlings() {
   // ── Filters ── nothing picked means no filtering, so the report opens on
   // everything — active and completed alike — rather than on a slice nobody
   // asked for.
-  const asAtTs = asAt ? new Date(asAt).getTime() + 86400000 : Infinity;
   const band   = LOS_AGE_BANDS.find(b => b.value === ageBand);
   rows = rows.filter(r => {
     if (breed && r.breed !== breed) return false;
     if (supplier && r.supplier !== supplier) return false;
     if (status === 'active'    && r.completed) return false;
     if (status === 'completed' && !r.completed) return false;
-    // The Year picker stands in for the As At date on completed batches — a
-    // finished batch is read by the year it belongs to, not by a cut-off.
-    if (status === 'completed' && year) {
-      if ((r.seedsDate || '').slice(0, 4) !== year) return false;
-    } else if (r.seedsDate) {
-      const ts = new Date(r.seedsDate).getTime();
-      if (isFinite(ts) && ts > asAtTs) return false;
-    }
+    /* Compared as YYYY-MM-DD text, not as timestamps. Both sides are already
+       that shape, the ordering is the same either way, and it leaves no
+       midnight for a batch to slip through: parsing "2025-05-31" and adding
+       a day to take in the whole of it lands exactly on the 1st of June,
+       which then let a batch received THAT MORNING past an As At of May. */
+    if (asAt && r.seedsDate && String(r.seedsDate).slice(0, 10) > asAt) return false;
     if (nursery === 'pre'  && r.preBalance  <= 0) return false;
     if (nursery === 'main' && r.mainBalance <= 0) return false;
     if (band && (r.ageMonths == null || r.ageMonths < band.min || r.ageMonths > band.max)) return false;
@@ -764,8 +855,7 @@ async function runLifeOfSeedlings() {
   window._losData = { rows, asAt };
 
   const scope = [
-    asAt && !(status === 'completed' && year) ? 'as at ' + fmtDate(asAt) : '',
-    status === 'completed' && year ? 'year ' + year : '',
+    _losAsAtLabel(year, month),
     status === 'active' ? 'active' : status === 'completed' ? 'completed' : 'active & completed',
     nursery === 'pre' ? 'pre-nursery' : nursery === 'main' ? 'main nursery' : '',
     band ? band.label.replace(/\s/g, ' ') : '',
@@ -775,6 +865,9 @@ async function runLifeOfSeedlings() {
   loading.classList.add('hidden');
   out.classList.remove('hidden');
   out.innerHTML = _losSummaryHtml(rows, tot, scope) + _losBreedHtml(rows, breed, supplier);
+  // Where the second header row sticks can only be known once the first one
+  // has been laid out — see _losStickyHeads().
+  _losWireSticky();
 }
 
 /* The D/O + FOC split under the received figure. Said only when it says
@@ -786,40 +879,54 @@ function _losFocSplit(r) {
 }
 
 /* A figure that can be opened. Everything numeric on this report is one,
-   except where there is nothing behind it to show. */
+   except where there is nothing behind it to show.
+
+   POINTING at it is enough: the records behind it appear beside the pointer,
+   with no click. Clicking still opens the same records in a window you can
+   filter, sort through and read at length — the tooltip answers "what is
+   this number made of" at a glance, the window answers it in full. */
 function _losFig(kind, batch, text, cls) {
   /* Escaped for the JS string FIRST, then for the attribute — the other way
      round does nothing, because _losEsc has already turned the apostrophe
      into &#39; by the time the backslash would be added, and the parser
      hands it back as a bare quote that ends the argument early. */
   const arg = _losEsc(String(batch).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
-  return `<button type="button" class="los-fig ${cls || ''}" onclick="losDrill('${kind}','${arg}')">${text}</button>`;
+  const on = `onmouseenter="losShowTip(this,'${kind}','${arg}')" onmouseleave="losHideTip()"`
+           + ` onfocus="losShowTip(this,'${kind}','${arg}')" onblur="losHideTip()"`;
+  return `<button type="button" class="los-fig ${cls || ''}" ${on} onclick="losDrill('${kind}','${arg}')">${text}</button>`;
 }
 function _losCell(kind, batch, value, cls) {
-  if (!value) return `<td class="text-right text-[#8a7a68]">0</td>`;
-  return `<td class="text-right">${_losFig(kind, batch, fmtNum(value), cls)}</td>`;
+  if (!value) return `<td class="text-[#8a7a68]">0</td>`;
+  return `<td>${_losFig(kind, batch, fmtNum(value), cls)}</td>`;
 }
+
+/* How the eighteen columns share the width. Fixed layout means these are
+   what the browser uses rather than a hint it may ignore, which is what
+   gets all eighteen onto the page at once — see .los-table in <style>. The
+   three that carry text (batch/breed, supplier, the received split) get the
+   room; the plain figure columns take what is left, evenly. */
+const LOS_COL_WIDTHS = [6, 6, 8.5, 4, 6.5, 4.5, 5.5, 5, 6.5, 4.5, 4.5, 4.5, 4.5, 5.5, 4.5, 5.5, 5.5, 5.5];
 
 function _losSummaryHtml(rows, tot, scope) {
   const body = rows.map(r => `
     <tr>
-      <td class="whitespace-nowrap">${fmtDate(r.seedsDate)}</td>
+      <td>${fmtDate(r.seedsDate)}</td>
       <td>
         <div class="font-black text-[#3d2610]">${_losEsc(r.batch)}</div>
-        <div class="text-[10px] font-bold text-[#8a7a68]">${_losEsc(r.breed)}</div>
+        <div class="text-[9px] font-bold text-[#8a7a68]">${_losEsc(r.breed)}</div>
       </td>
       <td>
-        <div class="text-[11px] font-bold text-[#3d2610]">${_losEsc(r.supplier)}</div>
-        <div class="text-[10px] font-bold text-[#8a7a68]">${_losEsc(r.mpob)}</div>
+        <div class="text-[10px] font-bold text-[#3d2610]">${_losEsc(r.supplier)}</div>
+        <div class="text-[9px] font-bold text-[#8a7a68]">${_losEsc(r.mpob)}</div>
       </td>
-      <td class="whitespace-nowrap text-[#8a7a68]">${r.age}</td>
-      <td class="text-right">
+      <td class="text-[#8a7a68]">${r.age}</td>
+      <td>
         ${_losFig('received', r.batch, fmtNum(r.received), 'text-[#c07820] font-black')}
         ${_losFocSplit(r)}
       </td>
       ${_losCell('damaged', r.batch, r.damaged, 'text-[#a83020] font-black')}
       ${_losCell('planted', r.batch, r.planted, 'font-black')}
-      <td class="text-right">${_losFig('variance', r.batch,
+      <td>${_losFig('variance', r.batch,
         (r.variance > 0 ? '+' : r.variance < 0 ? '−' : '') + fmtNum(Math.abs(r.variance)),
         r.variance < 0 ? 'text-[#a83020] font-black' : r.variance > 0 ? 'text-[#4a7a2e] font-black' : 'text-[#8a7a68]')}</td>
       ${_losCell('trans', r.batch, r.trans, 'text-[#3a7ab4] font-black')}
@@ -830,10 +937,10 @@ function _losSummaryHtml(rows, tot, scope) {
       ${_losCell('cullTotal', r.batch, r.cullTotal, 'text-[#a83020] font-black')}
       ${_losCell('transfer', r.batch, r.transfer, 'font-black')}
       ${_losCell('sales', r.batch, r.sales, 'text-[#4a7a2e] font-black')}
-      <td class="text-right">${r.rec.calibration.length
+      <td>${r.rec.calibration.length
         ? _losFig('calibration', r.batch, fmtSigned(r.calibration), 'font-black')
         : '<span class="text-[#8a7a68]">0</span>'}</td>
-      <td class="text-right">${_losFig('balance', r.batch, fmtNum(r.balance),
+      <td>${_losFig('balance', r.batch, fmtNum(r.balance),
         r.balance < 0 ? 'text-[#a83020] font-black' : 'text-[#4a7a2e] font-black')}</td>
     </tr>`).join('');
 
@@ -843,9 +950,10 @@ function _losSummaryHtml(rows, tot, scope) {
         <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Life of Seedlings</h3>
         <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} batch${rows.length === 1 ? '' : 'es'}${scope ? ' · ' + _losEsc(scope) : ''}</div>
       </div>
-      <div class="text-[10px] font-bold text-[#8a7a68] mb-3 no-print">Tap any figure to see the records behind it.</div>
-      <div class="overflow-x-auto">
+      <div class="text-[10px] font-bold text-[#8a7a68] mb-3 no-print">Point at any figure to see the records behind it — click to open them in full.</div>
+      <div class="los-wrap">
         <table class="report-table los-table">
+          <colgroup>${LOS_COL_WIDTHS.map(w => `<col style="width:${w}%">`).join('')}</colgroup>
           <thead>
             <tr>
               <th rowspan="2">Seed In Date</th>
@@ -853,50 +961,50 @@ function _losSummaryHtml(rows, tot, scope) {
               <th rowspan="2">Supplier / MPOB Licence</th>
               <th rowspan="2">Age</th>
               <th colspan="4" class="los-grp">Seed In Details</th>
-              <th rowspan="2" class="text-right">Transplanting Qty</th>
-              <th rowspan="2" class="text-right">Double Tone</th>
+              <th rowspan="2">Transplanting Qty</th>
+              <th rowspan="2">Double Tone</th>
               <th colspan="4" class="los-grp">Culling Detail</th>
-              <th rowspan="2" class="text-right">Transfer</th>
-              <th rowspan="2" class="text-right">Total Sales</th>
-              <th rowspan="2" class="text-right">Stock Calibration</th>
-              <th rowspan="2" class="text-right" title="Actual planted − total culling − total sales + approved stock calibration. A transfer moves seedlings between two plots of the same batch, so it is not part of this.">Balance</th>
+              <th rowspan="2">Transfer</th>
+              <th rowspan="2">Total Sales</th>
+              <th rowspan="2">Stock Calibration</th>
+              <th rowspan="2" title="Actual planted − total culling − total sales + approved stock calibration. A transfer moves seedlings between two plots of the same batch, so it is not part of this.">Balance</th>
             </tr>
             <tr>
-              <th class="text-right" title="The delivery order quantity plus the FOC seeds that came with it">Seed Received (D/O) + FOC Qty</th>
-              <th class="text-right">Seed Damage</th>
-              <th class="text-right">Actual Planted</th>
-              <th class="text-right" title="Actual planted − (seed received − seed damage). Negative means fewer seeds were planted than arrived.">Variance Seed In</th>
-              <th class="text-right">1st Culling</th>
-              <th class="text-right">2nd Culled</th>
-              <th class="text-right">3rd Culling</th>
-              <th class="text-right" title="1st culling + 3rd culling. The 2nd culling is not added: the 3rd is keyed against the original transplanted figure and already contains it — while no 3rd has been recorded, the 2nd stands in its place.">Total Culling (1st + 3rd)</th>
+              <th title="The delivery order quantity plus the FOC seeds that came with it">Seed Received (D/O) + FOC Qty</th>
+              <th>Seed Damage</th>
+              <th>Actual Planted</th>
+              <th title="Actual planted − (seed received − seed damage). Negative means fewer seeds were planted than arrived.">Variance Seed In</th>
+              <th>1st Culling</th>
+              <th>2nd Culled</th>
+              <th>3rd Culling</th>
+              <th title="1st culling + 3rd culling. The 2nd culling is not added: the 3rd is keyed against the original transplanted figure and already contains it — while no 3rd has been recorded, the 2nd stands in its place.">Total Culling (1st + 3rd)</th>
             </tr>
           </thead>
           <tbody>
-            ${rows.length ? body : `<tr><td colspan="18" class="text-center py-10 text-[#8a7a68]">No batches match the selected filters.</td></tr>`}
+            ${rows.length ? body : `<tr><td colspan="18" class="py-10 text-[#8a7a68]">No batches match the selected filters.</td></tr>`}
           </tbody>
           ${rows.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
-            <td colspan="4" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
-            <td class="text-right">${_losFig('received', '*', fmtNum(tot.received), 'text-[#c07820] font-black')}
+            <td colspan="4" class="uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
+            <td>${_losFig('received', '*', fmtNum(tot.received), 'text-[#c07820] font-black')}
               <div class="text-[9px] font-bold text-[#8a7a68]">${fmtNum(tot.doQty)} + FOC ${fmtNum(tot.focQty)}</div></td>
-            <td class="text-right">${_losFig('damaged', '*', fmtNum(tot.damaged), 'text-[#a83020] font-black')}</td>
-            <td class="text-right">${_losFig('planted', '*', fmtNum(tot.planted), 'font-black')}</td>
-            <td class="text-right">
+            <td>${_losFig('damaged', '*', fmtNum(tot.damaged), 'text-[#a83020] font-black')}</td>
+            <td>${_losFig('planted', '*', fmtNum(tot.planted), 'font-black')}</td>
+            <td>
               <div class="text-[#a83020] font-black">${tot.varDown ? '−' + fmtNum(Math.abs(tot.varDown)) : '0'}</div>
               <div class="text-[9px] font-bold text-[#8a7a68]">sum of all less received</div>
               <div class="text-[#4a7a2e] font-black mt-1">${tot.varUp ? '+' + fmtNum(tot.varUp) : '0'}</div>
               <div class="text-[9px] font-bold text-[#8a7a68]">sum of all more received</div>
             </td>
-            <td class="text-right">${_losFig('trans', '*', fmtNum(tot.trans), 'text-[#3a7ab4] font-black')}</td>
-            <td class="text-right">${_losFig('dtone', '*', fmtNum(tot.dtone), 'text-[#7c3aed] font-black')}</td>
-            <td class="text-right">${_losFig('cull1', '*', fmtNum(tot.cull1), 'text-[#a83020]')}</td>
-            <td class="text-right">${_losFig('cull2', '*', fmtNum(tot.cull2), 'text-[#a83020]')}</td>
-            <td class="text-right">${_losFig('cull3', '*', fmtNum(tot.cull3), 'text-[#a83020]')}</td>
-            <td class="text-right">${_losFig('cullTotal', '*', fmtNum(tot.cullTotal), 'text-[#a83020] font-black')}</td>
-            <td class="text-right">${_losFig('transfer', '*', fmtNum(tot.transfer), 'font-black')}</td>
-            <td class="text-right">${_losFig('sales', '*', fmtNum(tot.sales), 'text-[#4a7a2e] font-black')}</td>
-            <td class="text-right">${_losFig('calibration', '*', fmtSigned(tot.calibration), 'font-black')}</td>
-            <td class="text-right">${_losFig('balance', '*', fmtNum(tot.balance), 'text-[#4a7a2e] font-black')}</td>
+            <td>${_losFig('trans', '*', fmtNum(tot.trans), 'text-[#3a7ab4] font-black')}</td>
+            <td>${_losFig('dtone', '*', fmtNum(tot.dtone), 'text-[#7c3aed] font-black')}</td>
+            <td>${_losFig('cull1', '*', fmtNum(tot.cull1), 'text-[#a83020]')}</td>
+            <td>${_losFig('cull2', '*', fmtNum(tot.cull2), 'text-[#a83020]')}</td>
+            <td>${_losFig('cull3', '*', fmtNum(tot.cull3), 'text-[#a83020]')}</td>
+            <td>${_losFig('cullTotal', '*', fmtNum(tot.cullTotal), 'text-[#a83020] font-black')}</td>
+            <td>${_losFig('transfer', '*', fmtNum(tot.transfer), 'font-black')}</td>
+            <td>${_losFig('sales', '*', fmtNum(tot.sales), 'text-[#4a7a2e] font-black')}</td>
+            <td>${_losFig('calibration', '*', fmtSigned(tot.calibration), 'font-black')}</td>
+            <td>${_losFig('balance', '*', fmtNum(tot.balance), 'text-[#4a7a2e] font-black')}</td>
           </tr></tfoot>` : ''}
         </table>
       </div>
@@ -911,6 +1019,8 @@ function _losSummaryHtml(rows, tot, scope) {
    already narrowed the rows by the time they arrive here, which is what
    makes "same supplier, two breeds" read as two tables rather than one
    mixed list. */
+const LOS_BREED_COL_WIDTHS = [13, 11, 24, 16, 12, 12, 12];
+
 function _losBreedHtml(rows, breed, supplier) {
   if (!rows.length) return '';
   const groups = {};
@@ -930,8 +1040,9 @@ function _losBreedHtml(rows, breed, supplier) {
         <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Seed In Details — ${_losEsc(name)}</h3>
         <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(list.length)} batch${list.length === 1 ? '' : 'es'}${supplier ? ' · ' + _losEsc(supplier) : ''}</div>
       </div>
-      <div class="overflow-x-auto">
-        <table class="report-table">
+      <div class="los-wrap">
+        <table class="report-table los-table">
+          <colgroup>${LOS_BREED_COL_WIDTHS.map(w => `<col style="width:${w}%">`).join('')}</colgroup>
           <thead>
             <tr>
               <th rowspan="2">Seed In Date</th>
@@ -940,38 +1051,38 @@ function _losBreedHtml(rows, breed, supplier) {
               <th colspan="4" class="los-grp">Seed In Details</th>
             </tr>
             <tr>
-              <th class="text-right">Seed Received (D/O) + FOC Qty</th>
-              <th class="text-right">Seed Damage</th>
-              <th class="text-right">Actual Planted</th>
-              <th class="text-right">Variance Seed In</th>
+              <th>Seed Received (D/O) + FOC Qty</th>
+              <th>Seed Damage</th>
+              <th>Actual Planted</th>
+              <th>Variance Seed In</th>
             </tr>
           </thead>
           <tbody>
             ${list.map(r => `
               <tr>
-                <td class="whitespace-nowrap">${fmtDate(r.seedsDate)}</td>
+                <td>${fmtDate(r.seedsDate)}</td>
                 <td class="font-black text-[#3d2610]">${_losEsc(r.batch)}</td>
                 <td>
-                  <div class="text-[11px] font-bold text-[#3d2610]">${_losEsc(r.supplier)}</div>
-                  <div class="text-[10px] font-bold text-[#8a7a68]">${_losEsc(r.mpob)}</div>
+                  <div class="text-[10px] font-bold text-[#3d2610]">${_losEsc(r.supplier)}</div>
+                  <div class="text-[9px] font-bold text-[#8a7a68]">${_losEsc(r.mpob)}</div>
                 </td>
-                <td class="text-right">
+                <td>
                   ${_losFig('received', r.batch, fmtNum(r.received), 'text-[#c07820] font-black')}
                   ${_losFocSplit(r)}
                 </td>
                 ${_losCell('damaged', r.batch, r.damaged, 'text-[#a83020] font-black')}
                 ${_losCell('planted', r.batch, r.planted, 'font-black')}
-                <td class="text-right">${_losFig('variance', r.batch,
+                <td>${_losFig('variance', r.batch,
                   (r.variance > 0 ? '+' : r.variance < 0 ? '−' : '') + fmtNum(Math.abs(r.variance)),
                   r.variance < 0 ? 'text-[#a83020] font-black' : r.variance > 0 ? 'text-[#4a7a2e] font-black' : 'text-[#8a7a68]')}</td>
               </tr>`).join('')}
           </tbody>
           <tfoot><tr class="font-black bg-[#f8f4ec]">
-            <td colspan="3" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
-            <td class="text-right text-[#c07820]">${fmtNum(t.received)}</td>
-            <td class="text-right text-[#a83020]">${fmtNum(t.damaged)}</td>
-            <td class="text-right">${fmtNum(t.planted)}</td>
-            <td class="text-right">
+            <td colspan="3" class="uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
+            <td class="text-[#c07820]">${fmtNum(t.received)}</td>
+            <td class="text-[#a83020]">${fmtNum(t.damaged)}</td>
+            <td>${fmtNum(t.planted)}</td>
+            <td>
               <div class="text-[#a83020]">${t.varDown ? '−' + fmtNum(Math.abs(t.varDown)) : '0'}</div>
               <div class="text-[#4a7a2e]">${t.varUp ? '+' + fmtNum(t.varUp) : '0'}</div>
             </td>
@@ -980,6 +1091,33 @@ function _losBreedHtml(rows, breed, supplier) {
       </div>
     </div>`;
   }).join('');
+}
+
+/* Where the SECOND header row has to stick.
+
+   The first row's height is whatever its group bands come to once they have
+   wrapped, which depends on the window's width and the reader's font — so it
+   is measured after every render (and on resize) and written to the table as
+   --los-head2, rather than guessed at in the stylesheet. The cells that span
+   both rows live in the first row and stick at 0; being two rows tall, they
+   cover the second row's line on their own. */
+function _losStickyHeads() {
+  document.querySelectorAll('#report-output .los-table').forEach(t => {
+    const first = t.querySelector('thead tr');
+    if (!first) return;
+    t.style.setProperty('--los-head2', Math.round(first.getBoundingClientRect().height) + 'px');
+  });
+}
+let _losResizeWired = false;
+function _losWireSticky() {
+  _losStickyHeads();
+  /* And again once the web font has actually arrived. Measured against the
+     fallback face the heading is a line shorter than it ends up, which would
+     leave a strip of scrolling rows showing between the two header rows. */
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(_losStickyHeads);
+  if (_losResizeWired) return;
+  _losResizeWired = true;
+  window.addEventListener('resize', _losStickyHeads);
 }
 
 /* Year and Supplier are offered from what the data actually holds, so there
@@ -1094,7 +1232,7 @@ function syncFilterVisibility() {
   // trend the old Seedling Sales report drew) wants a set of years instead.
   const isSalesTable = isSales && _salesViewMode !== 'chart';
   const isSalesChart = isSales && _salesViewMode === 'chart';
-  const hasRange  = isLife || isMovement || isTrans || isSalesTable;
+  const hasRange  = isMovement || isTrans || isSalesTable;
   document.querySelectorAll('.f-range').forEach(el         => el.classList.toggle('hidden', !hasRange));
   // No visible From anywhere — every report is one "As At" date. Movement
   // Report still shows the Culled/Transplanted/Damaged/etc columns as that
@@ -1114,14 +1252,11 @@ function syncFilterVisibility() {
   // destination nursery.
   document.querySelectorAll('.f-nursery-inline').forEach(el => el.classList.toggle('hidden', !(isMovement || isTrans || isSalesTable)));
   document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !(isLife || isTrans)));
-  /* Life of Seedlings' own six: nursery type, active/completed, the As At
-     date (shared, above), age, breed (shared) and supplier. The Year picker
-     is the one that comes and goes — a finished batch is read by the year it
-     belongs to rather than by a cut-off date, so it appears only once
-     Completed is what is being asked for. */
+  /* Life of Seedlings' own six: nursery type, active/completed, As At as a
+     month and a year, age, breed (shared, above) and supplier. Its As At is
+     its own pair of pickers, not the shared day picker — see the markup —
+     so .f-range is off for it. */
   document.querySelectorAll('.f-los').forEach(el           => el.classList.toggle('hidden', !isLife));
-  const losStatus = (document.getElementById('f-los-status') || {}).value;
-  document.querySelectorAll('.f-los-year-wrap').forEach(el => el.classList.toggle('hidden', !(isLife && losStatus === 'completed')));
   document.querySelectorAll('.f-sales-mode').forEach(el    => el.classList.toggle('hidden', !isSales));
   document.querySelectorAll('.f-sales-years').forEach(el   => el.classList.toggle('hidden', !isSalesChart));
 }
@@ -1179,7 +1314,7 @@ function selectedNurseries() {
 /* Defaults that change with which report is now selected — run once per
    switch, not on every "Run Report" click, so re-running the same report
    never clobbers a date someone deliberately picked. */
-const DATE_KEYED_REPORTS = new Set(['life_of_seedlings',
+const DATE_KEYED_REPORTS = new Set([
   'transplanting_report', 'sales_listing', 'movement_report']);
 function syncReportDefaults() {
   const which = document.getElementById('f-report').value;
@@ -1204,7 +1339,7 @@ if (_fSort) _fSort.addEventListener('change', runReport);
    read a table that is answering the previous question. Status goes through
    syncFilterVisibility() first so the Year picker appears (or goes) in the
    same breath as the choice that governs it. */
-['f-los-nursery', 'f-los-status', 'f-los-year', 'f-los-age', 'f-los-supplier', 'f-breed']
+['f-los-nursery', 'f-los-status', 'f-los-month', 'f-los-year', 'f-los-age', 'f-los-supplier', 'f-breed']
   .forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', () => { syncFilterVisibility(); runReport(); });
@@ -2611,50 +2746,68 @@ const _losCol = {
 };
 const _losQty = (label, cls) => ({ label, num: true, cls: cls || '', get: x => fmtNum(x.qty) });
 
-// kind → what it is called, which record list it reads, and its columns.
+/* kind → what it is called, which record list it reads, its columns, and —
+   for the hover tooltip, which has one line and no headings — the single
+   label that best identifies a record there (tipLabel) and what it
+   contributes to the total (tipSum, where that is not simply its qty). */
 const LOS_DRILL = {
   received: { title: 'Seed Received', list: 'received',
+    tipLabel: x => [x.batch, x.dono !== '—' ? x.dono : ''].filter(Boolean).join(' · '),
     cols: [_losCol.date, _losCol.batch, _losCol.supplier, _losCol.mpob, _losCol.dono,
       { label: 'D/O Qty', num: true, get: x => fmtNum(x.doQty), sum: x => x.doQty },
       { label: 'FOC Qty', num: true, cls: 'text-[#7c3aed]', get: x => fmtNum(x.focQty), sum: x => x.focQty },
       { label: 'Replacement', num: true, get: x => x.repl ? fmtNum(x.repl) : '—', sum: x => x.repl },
       { label: 'Total Received', num: true, cls: 'text-[#c07820] font-black', get: x => fmtNum(x.qty), sum: x => x.qty }] },
   damaged: { title: 'Seed Damage', list: 'damaged',
+    tipLabel: x => x.batch + ' · ' + x.place,
     cols: [_losCol.date, _losCol.batch, _losCol.place, _losCol.note,
       { ..._losQty('Damaged', 'text-[#a83020] font-black'), sum: x => x.qty }] },
   planted: { title: 'Actual Planted', list: 'planted',
+    tipLabel: x => x.batch + ' · ' + x.place,
     cols: [_losCol.date, _losCol.batch, _losCol.tray,
       { ..._losQty('Planted', 'font-black'), sum: x => x.qty }] },
   trans: { title: 'Transplanting', list: 'trans',
+    tipLabel: x => x.batch + ' · ' + x.place + ' (' + x.nursery + ')',
     cols: [_losCol.date, _losCol.batch, _losCol.fromTray, _losCol.nursery, _losCol.plot,
       { ..._losQty('Qty', 'text-[#3a7ab4] font-black'), sum: x => x.qty }],
     roll: x => x.nursery },
   dtone: { title: 'Double Tone', list: 'dtone',
+    tipLabel: x => x.batch + ' · ' + x.from + ' → ' + x.place,
     cols: [_losCol.date, _losCol.batch, _losCol.fromTray, _losCol.tray,
       { ..._losQty('Qty', 'text-[#7c3aed] font-black'), sum: x => x.qty }] },
   cull1: { title: '1st Culling', list: 'cull1',
+    tipLabel: x => x.batch + ' · ' + x.place,
     cols: [_losCol.date, _losCol.batch, _losCol.tray,
       { ..._losQty('Culled', 'text-[#a83020] font-black'), sum: x => x.qty }] },
   cull2: { title: '2nd Culled', list: 'cull2',
+    tipLabel: x => x.batch + ' · ' + x.place,
     cols: [_losCol.date, _losCol.batch, _losCol.nursery, _losCol.plot,
       { ..._losQty('Culled', 'text-[#a83020] font-black'), sum: x => x.qty }],
     roll: x => x.nursery },
   cull3: { title: '3rd Culling', list: 'cull3',
+    tipLabel: x => x.batch + ' · ' + x.place,
     cols: [_losCol.date, _losCol.batch, _losCol.nursery, _losCol.plot,
       { ..._losQty('Culled', 'text-[#a83020] font-black'), sum: x => x.qty }],
     roll: x => x.nursery },
   cullTotal: { title: 'Total Culling (1st + 3rd)', list: 'cullTotal',
+    tipLabel: x => x.stage + ' · ' + x.batch + ' · ' + x.place,
     cols: [_losCol.date, _losCol.stage, _losCol.batch, _losCol.nursery, _losCol.place,
       { ..._losQty('Culled', 'text-[#a83020] font-black'), sum: x => x.qty }],
     roll: x => x.stage + ' culling' },
   transfer: { title: 'Transfer', list: 'transfer',
+    tipLabel: x => x.batch + ' · ' + x.from + ' → ' + x.place,
     cols: [_losCol.date, _losCol.batch, _losCol.fromPlot, _losCol.nursery, _losCol.plot,
       { ..._losQty('Qty', 'font-black'), sum: x => x.qty }] },
   sales: { title: 'Total Sales', list: 'sales',
+    tipLabel: x => x.dono + ' · ' + x.batch + ' · ' + x.place,
     cols: [_losCol.date, _losCol.dono, _losCol.batch, _losCol.nursery, _losCol.plot,
       { ..._losQty('Sold', 'text-[#4a7a2e] font-black'), sum: x => x.qty }],
     roll: x => x.nursery },
   calibration: { title: 'Stock Calibration', list: 'calibration',
+    tipLabel: x => x.batch + ' · ' + x.place + (x.approved ? '' : ' (waiting)'),
+    // A waiting adjustment is listed but not counted, the same way the
+    // Balance column leaves it out.
+    tipSum: x => x.approved ? x.qty : 0,
     cols: [_losCol.date, _losCol.batch, { label: 'Report', get: x => _losEsc(x.report) },
       _losCol.place, { label: 'Side', get: x => _losEsc(x.side) },
       { label: 'Approved', get: x => x.approved
@@ -2738,11 +2891,13 @@ function _losDrillApplyFilter(all) {
 /* Balance and Variance have no record list of their own — they are what other
    figures come to. Opening one shows the sum being done, line by line, so the
    number can be checked rather than taken on trust. */
-function _losReconcile(kind, batch) {
-  const D = window._losData; if (!D) return '';
+/* The lines themselves, shared by the window and the tooltip so the two can
+   never show a different sum for the same figure. */
+function _losReconcileLines(kind, batch) {
+  const D = window._losData; if (!D) return null;
   const rows = batch === '*' ? D.rows : D.rows.filter(r => r.batch === batch);
   const add = (k) => rows.reduce((s, r) => s + (r[k] || 0), 0);
-  const lines = kind === 'variance'
+  const parts = kind === 'variance'
     ? [['Seed received', add('received'), +1],
        ['Seed damage', add('damaged'), -1],
        ['Actual planted', add('planted'), 0]]
@@ -2751,30 +2906,121 @@ function _losReconcile(kind, batch) {
        ['Post-transplant culling (3rd, or 2nd while no 3rd)', add('postCull'), -1],
        ['Total sales', add('sales'), -1],
        ['Approved stock calibration', add('calibration'), +1]];
-  const result = kind === 'variance'
-    ? rows.reduce((s, r) => s + r.variance, 0)
-    : rows.reduce((s, r) => s + r.balance, 0);
-  const resultLabel = kind === 'variance' ? 'Variance seed in' : 'Balance';
-  const note = kind === 'variance'
-    ? 'Actual planted less what arrived after damage. Negative means fewer seeds were planted than were received.'
-    : 'What the batch still has. It starts from actual planted, not from the transplanting quantity, because the transplanting quantity is already net of the 1st culling — starting there and taking the 1st culling off again would subtract it twice, and starting from planted keeps whatever is still sitting in a tray inside the balance. Transfers take no part: a 3rd-culling transfer moves seedlings between two plots of the SAME batch, so it changes where the batch is standing and not how many of it there are.';
+  return {
+    parts,
+    result: rows.reduce((s, r) => s + (kind === 'variance' ? r.variance : r.balance), 0),
+    label: kind === 'variance' ? 'Variance seed in' : 'Balance',
+    note: kind === 'variance'
+      ? 'Actual planted less what arrived after damage. Negative means fewer seeds were planted than were received.'
+      : 'What the batch still has. It starts from actual planted, not from the transplanting quantity, because the transplanting quantity is already net of the 1st culling — starting there and taking the 1st culling off again would subtract it twice, and starting from planted keeps whatever is still sitting in a tray inside the balance. Transfers take no part: a 3rd-culling transfer moves seedlings between two plots of the SAME batch, so it changes where the batch is standing and not how many of it there are.'
+  };
+}
+
+function _losReconcile(kind, batch) {
+  const L = _losReconcileLines(kind, batch); if (!L) return '';
   return `
-    <div class="text-[10px] font-bold text-[#8a7a68] mb-3">${note}</div>
+    <div class="text-[10px] font-bold text-[#8a7a68] mb-3">${L.note}</div>
     <table class="report-table w-full">
       <thead><tr><th>Line</th><th class="text-right">Qty</th></tr></thead>
       <tbody>
-        ${lines.map(([label, v, sign]) => `
+        ${L.parts.map(([label, v, sign]) => `
           <tr>
             <td>${sign === 0 ? '' : (sign > 0 ? '+ ' : '− ')}${label}</td>
             <td class="text-right ${sign < 0 ? 'text-[#a83020]' : ''} font-black">${fmtNum(v)}</td>
           </tr>`).join('')}
       </tbody>
       <tfoot><tr class="font-black bg-[#f8f4ec]">
-        <td class="uppercase tracking-widest text-[10px] text-[#8a7a68]">${resultLabel}</td>
-        <td class="text-right ${result < 0 ? 'text-[#a83020]' : 'text-[#4a7a2e]'}">${
-          kind === 'variance' ? fmtSigned(result) : fmtNum(result)}</td>
+        <td class="uppercase tracking-widest text-[10px] text-[#8a7a68]">${L.label}</td>
+        <td class="text-right ${L.result < 0 ? 'text-[#a83020]' : 'text-[#4a7a2e]'}">${
+          kind === 'variance' ? fmtSigned(L.result) : fmtNum(L.result)}</td>
       </tr></tfoot>
     </table>`;
+}
+
+/* ── Point at a figure and its records appear ─────────────────────────────
+   No click. The same records the drilldown window lists, in the same shape
+   the Movement Report's own cells show theirs (see mvShowDetailTip) and in
+   the same floating box — one tooltip element for the page, so two reports
+   can never leave two of them on screen at once.
+
+   A tooltip is a glance, not a table: it lists the most recent
+   LOS_TIP_ROWS records, says how many more there are, and always ends on
+   the total, which is the figure that was pointed at. Clicking opens the
+   lot, filterable. Balance and Variance have no records of their own, so
+   they show the sum being done instead — the same lines the window shows. */
+const LOS_TIP_ROWS = 10;
+
+function losShowTip(anchorEl, kind, batch) {
+  const D = window._losData; if (!D) return;
+  const tip = document.getElementById('mv-sales-tip'); if (!tip) return;
+  const who = batch === '*'
+    ? `${fmtNum(D.rows.length)} batch${D.rows.length === 1 ? '' : 'es'}`
+    : 'Batch ' + batch;
+
+  let html = '';
+  if (kind === 'balance' || kind === 'variance') {
+    const lines = _losReconcileLines(kind, batch);
+    if (!lines) return;
+    html = `<div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">${
+      _losEsc((kind === 'balance' ? 'Balance' : 'Variance Seed In') + ' — ' + who)}</div>`;
+    lines.parts.forEach(([label, v, sign]) => {
+      html += `<div class="flex items-baseline gap-3 py-0.5 text-[11px]">
+        <span class="font-bold text-[#3d2610]">${sign === 0 ? '' : (sign > 0 ? '+ ' : '− ')}${_losEsc(label)}</span>
+        <span class="ml-auto font-black ${sign < 0 ? 'text-[#a83020]' : 'text-[#3a7ab4]'}">${fmtNum(v)}</span>
+      </div>`;
+    });
+    html += `<div class="flex items-baseline gap-3 border-t border-[#e8dcc8] mt-1.5 pt-1.5 text-[11px]">
+      <span class="font-black text-[#3d2610] uppercase tracking-widest text-[9px]">${_losEsc(lines.label)}</span>
+      <span class="ml-auto font-black ${lines.result < 0 ? 'text-[#a83020]' : 'text-[#4a7a2e]'}">${
+        kind === 'variance' ? fmtSigned(lines.result) : fmtNum(lines.result)}</span>
+    </div>`;
+  } else {
+    const spec = LOS_DRILL[kind]; if (!spec) return;
+    const all = _losDrillCollect(kind, batch);
+    if (!all.length) return;
+    const sorted = all.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+    const shown = sorted.slice(0, LOS_TIP_ROWS);
+    // The total is of EVERY record, not just the ones that fitted — it has
+    // to come back to the figure the pointer is on.
+    const total = all.reduce((sum, x) => sum + (spec.tipSum ? spec.tipSum(x) : (x.qty || 0)), 0);
+    html = `<div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">${
+      _losEsc(spec.title + ' — ' + who)} · ${fmtNum(all.length)} record${all.length === 1 ? '' : 's'}</div>`;
+    shown.forEach(x => {
+      const label = spec.tipLabel ? spec.tipLabel(x) : '';
+      html += `<div class="flex items-baseline gap-2 py-0.5 text-[11px] whitespace-nowrap">
+        <span class="font-bold text-[#8a7a68]">${fmtDate(x.date)}</span>
+        ${label ? `<span class="font-bold text-[#3d2610] truncate max-w-[170px]">${_losEsc(label)}</span>` : ''}
+        <span class="ml-auto font-black text-[#3a7ab4]">${
+          kind === 'calibration' ? fmtSigned(x.qty) : fmtNum(x.qty)}</span>
+      </div>`;
+    });
+    if (all.length > shown.length) {
+      html += `<div class="text-[10px] font-bold text-[#8a7a68] py-0.5">… and ${
+        fmtNum(all.length - shown.length)} more — click to see them all</div>`;
+    }
+    html += `<div class="flex items-baseline gap-2 border-t border-[#e8dcc8] mt-1.5 pt-1.5 text-[11px]">
+      <span class="font-black text-[#3d2610] uppercase tracking-widest text-[9px]">Total</span>
+      <span class="ml-auto font-black text-[#3a7ab4]">${
+        kind === 'calibration' ? fmtSigned(total) : fmtNum(total)}</span>
+    </div>`;
+  }
+
+  tip.innerHTML = html;
+  tip.classList.remove('hidden');
+  // Below the figure, clamped to the window; above it when there is no room
+  // underneath — the same placement rule the Movement Report's own tooltip
+  // follows, so the two behave identically.
+  const a = anchorEl.getBoundingClientRect();
+  const t = tip.getBoundingClientRect();
+  const left = Math.min(Math.max(8, a.left), window.innerWidth - t.width - 8);
+  let top = a.bottom + 8;
+  if (top + t.height > window.innerHeight - 8) top = Math.max(8, a.top - t.height - 8);
+  tip.style.left = left + 'px';
+  tip.style.top  = top + 'px';
+}
+function losHideTip() {
+  const tip = document.getElementById('mv-sales-tip');
+  if (tip) tip.classList.add('hidden');
 }
 
 function losDrill(kind, batch) {
@@ -2863,6 +3109,8 @@ function closeLosDrill() {
 }
 
 window.losDrill             = losDrill;
+window.losShowTip           = losShowTip;
+window.losHideTip           = losHideTip;
 window.closeLosDrill        = closeLosDrill;
 window._losDrillSetFilter   = _losDrillSetFilter;
 window._losDrillClearFilter = _losDrillClearFilter;
