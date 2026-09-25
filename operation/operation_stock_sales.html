@@ -167,7 +167,7 @@
            shouldn't grow it. 190px fits the widest option with a little
            breathing room; space-between keeps the chevron pinned to the
            right edge instead of hugging short labels. */
-        .cf-btn{display:flex;align-items:center;justify-content:space-between;gap:6px;width:190px;text-transform:uppercase;letter-spacing:.06em;font-size:10px;font-weight:900;color:#334155;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;cursor:pointer;transition:border-color .15s,box-shadow .15s;}
+        .cf-btn{display:flex;align-items:center;justify-content:space-between;gap:6px;width:190px;box-sizing:border-box;text-transform:uppercase;letter-spacing:.06em;font-size:10px;font-weight:900;color:#334155;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;cursor:pointer;transition:border-color .15s,box-shadow .15s;}
         .cf-btn:hover{border-color:#cbd5e1;}
         .cf-btn.open{border-color:#1d4ed8;box-shadow:0 0 0 3px rgba(29,78,216,.12);}
         .cf-chevron{width:11px;height:11px;color:#94a3b8;transition:transform .15s;flex-shrink:0;}
@@ -680,9 +680,7 @@
         <div>
             <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
                 <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">📋 Customer Order Management</h2>
-                <div class="flex items-center gap-2">
-                    <input id="cust-search" type="text" placeholder="Search customer / order #" oninput="renderActiveCustView()"
-                        class="text-[11px] font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-500 w-56">
+                <div class="flex flex-col items-end gap-2">
                     <div class="cf-wrap" id="cust-filter-wrap">
                         <button type="button" id="cust-filter-btn" class="cf-btn" onclick="toggleCustFilterMenu(event)">
                             <span id="cust-filter-label">All Orders</span>
@@ -695,6 +693,9 @@
                             <button type="button" class="cf-opt" data-value="completed" onclick="selectCustFilter('completed')">Completed Orders</button>
                         </div>
                     </div>
+                    <input id="cust-search" type="text" placeholder="Search customer / order #" oninput="renderActiveCustView()"
+                        class="text-[11px] font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-500"
+                        style="width:190px;box-sizing:border-box;">
                 </div>
             </div>
 
