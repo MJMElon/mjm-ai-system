@@ -680,32 +680,34 @@
         <div>
             <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
                 <h2 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">📋 Customer Order Management</h2>
-                <div class="flex flex-col items-end gap-2">
-                    <div class="cf-wrap" id="cust-filter-wrap">
-                        <button type="button" id="cust-filter-btn" class="cf-btn" onclick="toggleCustFilterMenu(event)">
-                            <span id="cust-filter-label">All Orders</span>
-                            <svg class="cf-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 7l5 5 5-5"/></svg>
-                        </button>
-                        <div id="cust-filter-menu" class="cf-menu hidden">
-                            <button type="button" class="cf-opt active" data-value="all" onclick="selectCustFilter('all')">All Orders</button>
-                            <button type="button" class="cf-opt" data-value="outstanding" onclick="selectCustFilter('outstanding')">Outstanding Balance</button>
-                            <button type="button" class="cf-opt" data-value="cancelled" onclick="selectCustFilter('cancelled')">Cancelled Orders</button>
-                            <button type="button" class="cf-opt" data-value="completed" onclick="selectCustFilter('completed')">Completed Orders</button>
-                        </div>
+                <div class="cf-wrap" id="cust-filter-wrap">
+                    <button type="button" id="cust-filter-btn" class="cf-btn" onclick="toggleCustFilterMenu(event)">
+                        <span id="cust-filter-label">All Orders</span>
+                        <svg class="cf-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 7l5 5 5-5"/></svg>
+                    </button>
+                    <div id="cust-filter-menu" class="cf-menu hidden">
+                        <button type="button" class="cf-opt active" data-value="all" onclick="selectCustFilter('all')">All Orders</button>
+                        <button type="button" class="cf-opt" data-value="outstanding" onclick="selectCustFilter('outstanding')">Outstanding Balance</button>
+                        <button type="button" class="cf-opt" data-value="cancelled" onclick="selectCustFilter('cancelled')">Cancelled Orders</button>
+                        <button type="button" class="cf-opt" data-value="completed" onclick="selectCustFilter('completed')">Completed Orders</button>
                     </div>
-                    <input id="cust-search" type="text" placeholder="Search customer / order #" oninput="renderActiveCustView()"
-                        class="text-[11px] font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-500"
-                        style="width:190px;box-sizing:border-box;">
                 </div>
             </div>
 
             <!-- Booking asks "what's coming"; Collection asks "what's already
                  left, by month" — two different questions on the same list
                  of orders, so a tab each instead of one table trying to
-                 answer both (which is what "scroll right" used to be). -->
-            <div class="ph-tabs" id="cust-main-tabs">
-                <button type="button" class="ph-tab active" data-main-tab="booking" onclick="selectCustMainTab('booking')">📦 Booking</button>
-                <button type="button" class="ph-tab" data-main-tab="collection" onclick="selectCustMainTab('collection')">📥 Collection</button>
+                 answer both (which is what "scroll right" used to be).
+                 Same row as the search bar — one row for "which report",
+                 one for "which orders", rather than three stacked rows. -->
+            <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                <div class="ph-tabs" id="cust-main-tabs">
+                    <button type="button" class="ph-tab active" data-main-tab="booking" onclick="selectCustMainTab('booking')">📦 Booking</button>
+                    <button type="button" class="ph-tab" data-main-tab="collection" onclick="selectCustMainTab('collection')">📥 Collection</button>
+                </div>
+                <input id="cust-search" type="text" placeholder="Search customer / order #" oninput="renderActiveCustView()"
+                    class="text-[11px] font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-500"
+                    style="width:190px;box-sizing:border-box;">
             </div>
 
             <div id="cust-view-booking">
