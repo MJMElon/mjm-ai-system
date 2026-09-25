@@ -136,7 +136,15 @@
      below: #efe6d4 is lighter than the zebra stripe (#f0e6d2) it
      sometimes sits on, so it disappeared on every other row. Same fix. */
   .movement-table th, .movement-table td { border-right:1px solid #d9c8a3; }
-  .movement-table th:last-child, .movement-table td:last-child { border-right:none; }
+  .movement-table th:last-child { border-right:none; }
+  /* Not td:last-child — the Balance column is a rowspan cell that only
+     actually exists in the DOM on each group's FIRST row; every other row
+     in the group has Batch Balance as its real last <td>, so :last-child
+     wrongly stripped ITS border-right instead — the missing divider
+     reported before Balance on every row but a group's first. col-balance-
+     total names the real last column explicitly so removing its border
+     can't catch anything else by accident. */
+  .movement-table td.col-balance-total { border-right:none; }
   /* The row divider (.report-table td's default border-bottom:1px solid
      #f3efe6) is lighter than the zebra stripe it sometimes sits on
      (#f0e6d2) — against that darker band it all but disappears. Darker
@@ -1910,7 +1918,7 @@ function buildMovementSection(scope, ev, ctx) {
         ${fmtCell(r.bf, 'text-[#8a7a68] font-black')}
         ${cols.map(c => fmtDetailCell(r, c)).join('')}
         ${fmtCell(r.closing, 'text-[#4a7a2e] font-black')}
-        ${i === 0 ? `<td rowspan="${g.list.length}" class="font-black text-[#8a7a68] align-middle" style="background:#fff">${fmtNum(bal)}</td>` : ''}
+        ${i === 0 ? `<td rowspan="${g.list.length}" class="col-balance-total font-black text-[#8a7a68] align-middle" style="background:#fff">${fmtNum(bal)}</td>` : ''}
       </tr>`);
     });
   });
@@ -1987,7 +1995,7 @@ function buildMovementSection(scope, ev, ctx) {
               ${fmtCell(grand.bf, 'text-[#8a7a68] font-black')}
               ${cols.map(c => fmtCell(grand[c.key], (c.cls || '') + ' font-black')).join('')}
               ${fmtCell(grand.closing, 'text-[#4a7a2e] font-black')}
-              ${fmtCell(grand.closing, 'text-[#4a7a2e] font-black')}
+              ${fmtCell(grand.closing, 'text-[#4a7a2e] font-black col-balance-total')}
             </tr>
           </tbody>
         </table>
