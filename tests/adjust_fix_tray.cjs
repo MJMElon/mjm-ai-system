@@ -30,14 +30,23 @@ const SEEDS_ROW = {
   transaction_date: '2025-01-05', created_at: '2025-01-05T02:00:00.000Z',
   workers: 4, remark: 'Supplier: AAR. MPOB: 123-456'
 };
+/* THE REAL SHAPE OF BATCH 227. Its planting report names the trays 4 and 5;
+   every one of its transplant rows names them P4 and P5. The picker was built
+   from the planting names only, so "4" was the only thing on offer -- which is
+   how B8's tray came to be recorded as 4 in the first place. P4 is also fully
+   transplanted out, so the spent-tray filter would hide it even by its own
+   name. */
 const PLANTED_ROWS = [
-  { plot_name: 'P4', quantity_change: 2500 },
-  { plot_name: 'P5', quantity_change: 2800 }
+  { plot_name: '4', quantity_change: 0 },      // spent: everything went out
+  { plot_name: '5', quantity_change: 2800 }
 ];
 const APPROVED = ' [APPROVED by esther@mjm on 2026-06-21T00:00:00Z]';
 // The row B8 got, with the tray mistyped as "4".
 const TX_ROWS = [
-  { id: 'tx-b7', transaction_type: 'Transplanted', plot_name: 'B7', quantity_change: 2288,
+  { id: 'tx-b7a', transaction_type: 'Transplanted', plot_name: 'B7', quantity_change: 206,
+    transaction_date: '2025-05-05', created_at: '2025-05-05T02:00:00Z',
+    remark: 'Transplanted from tray [P4] to Main Plot [B7]. Date: 2025-05-05' },
+  { id: 'tx-b7b', transaction_type: 'Transplanted', plot_name: 'B7', quantity_change: 2288,
     transaction_date: '2025-05-05', created_at: '2025-05-05T02:00:00Z',
     remark: 'Transplanted from tray [P5] to Main Plot [B7]. Date: 2025-05-05' },
   { id: 'tx-b8', transaction_type: 'Transplanted', plot_name: 'B8', quantity_change: 0,
@@ -173,10 +182,17 @@ const CAL_ROWS = [
   check('the form is open', await page.evaluate(s => !document.querySelector(s).classList.contains('hidden'), form), true);
   check('…starting on the tray the row names, even though it is not a real one',
         await page.evaluate(s => document.querySelector(s + ' .t3-adjtray-select').value, form), '4');
-  check('…and the real trays are on offer',
-        await page.evaluate(s => Array.from(document.querySelectorAll(s + ' .t3-adjtray-select option'))
-                                      .map(o => o.value).filter(v => /^P\d/.test(v)), form),
-        ['P4', 'P5']);
+  const offered = await page.evaluate(s =>
+    Array.from(document.querySelectorAll(s + ' .t3-adjtray-select option')).map(o => o.value), form);
+  checkTrue('the tray the transplanting records actually use is on offer',
+            offered.indexOf('P4') >= 0);
+  checkTrue('…and so is P5', offered.indexOf('P5') >= 0);
+  checkTrue('the planting report\'s own names are still there too',
+            offered.indexOf('4') >= 0 && offered.indexOf('5') >= 0);
+  check('a spent tray is not hidden — it is exactly the answer being asked for',
+        offered.indexOf('4') >= 0, true);
+  check('nothing is offered twice',
+        offered.length, Array.from(new Set(offered)).length);
   check('the picker is left native so the card cannot clip it',
         await page.evaluate(s => document.querySelector(s + ' .t3-adjtray-select').classList.contains('cf-skip'), form), true);
 
@@ -212,8 +228,9 @@ const CAL_ROWS = [
   console.log('\nThe two still pair up, which is the point');
   const paired = await page.evaluate(() => {
     const row = window._parseCalibration({ id: 'cal-b8', quantity_change: 140,
-      remark: window.__CAL_ROWS[0].remark });
-    const txTray = (window.__TX_ROWS[1].remark.match(/tray \[([^\]]+)\]/) || [])[1];
+      remark: window.__CAL_ROWS.find(r => r.id === 'cal-b8').remark });
+    const b8Row = window.__TX_ROWS.find(r => r.id === 'tx-b8');
+    const txTray = (b8Row.remark.match(/tray \[([^\]]+)\]/) || [])[1];
     return { calTray: row.tray || row.txTray, rowTray: txTray };
   });
   check('the adjustment and its row name the same tray',

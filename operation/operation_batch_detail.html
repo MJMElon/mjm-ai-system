@@ -3605,7 +3605,10 @@
                                  which would need doing in the phone repo's copy
                                  too — until then every dropdown near the bottom
                                  of a card like this one has the same problem. -->
-                            <select id="t7-newplot-tray" class="input-style !text-[#c07820] cf-skip">${getTab3TrayOptionsHTML({})}</select>
+                            <select id="t7-newplot-tray" class="input-style !text-[#c07820] cf-skip">${getTab3TrayOptionsHTML({}, {
+                                includeSpent: true,
+                                alsoOffer: _trayNamesFromTransplants(_t7TxLogs)
+                            })}</select>
                         </div>
                         ${preNurseryTrayData.length ? '' : `<div class="mt-1 text-[10px] font-black text-[#a83020] uppercase tracking-widest">
                             No planted trays on this batch — save the Planting report first, or there is nothing to pick from
@@ -4771,7 +4774,10 @@
                                         <div class="flex flex-wrap gap-3 items-end">
                                             <div class="flex-1 basis-[220px] min-w-[180px]">
                                                 <label class="label-style !text-[#c07820]">Source Tray *</label>
-                                                <select class="input-style !text-[#c07820] cf-skip t3-adjtray-select">${getTab3TrayOptionsHTML({})}</select>
+                                                <select class="input-style !text-[#c07820] cf-skip t3-adjtray-select">${getTab3TrayOptionsHTML({}, {
+                                                    includeSpent: true,
+                                                    alsoOffer: _trayNamesFromTransplants(txLogs)
+                                                })}</select>
                                             </div>
                                             <button type="button" onclick="saveT3AdjTray(${idx})" class="btn-earth text-[10px] px-4 py-2 shrink-0">Save Tray</button>
                                             <button type="button" onclick="toggleT3AdjTray(${idx})" class="px-4 py-2 bg-white border border-[#e8dcc8] text-[#8a7a68] text-[10px] font-black uppercase rounded-lg hover:bg-[#e8dcc8] shrink-0">Cancel</button>
@@ -5302,7 +5308,35 @@
             }
         }
 
-        function getTab3TrayOptionsHTML(liveBalances) {
+        /* The tray names this batch's TRANSPLANTING records actually use.
+
+           preNurseryTrayData is built from the batch's Planted rows, so the
+           picker offers the names the PLANTING report keyed. Those are not
+           always the names the transplanting rows use: batch 227's planting
+           says 4, 5, 6, 7 and every one of its transplant rows says P4, P5,
+           P6, P7. Asking "which tray did these come out of" and offering only
+           the planting spelling makes the true answer unpickable — B8's tray
+           was recorded as "4" because "4" was the only thing on the list.
+
+           So the two pickers that ask that question offer these as well. */
+        function _trayNamesFromTransplants(logs) {
+            const seen = [];
+            (logs || []).forEach(l => {
+                const m = l.remark ? String(l.remark).match(/tray \[([^\]]+)\]/i) : null;
+                const name = m ? m[1].trim() : '';
+                if (name && seen.indexOf(name) < 0) seen.push(name);
+            });
+            return seen;
+        }
+
+        /* opts.includeSpent — keep trays with nothing left. The filter below
+           hides them because you cannot draw stock from an empty tray, which
+           is right for the transplant form it was written for and wrong for
+           the two pickers that ask where seedlings CAME FROM: a tray emptied
+           months ago is exactly the answer.
+           opts.alsoOffer — extra names to offer, from _trayNamesFromTransplants. */
+        function getTab3TrayOptionsHTML(liveBalances, opts) {
+            opts = opts || {};
             liveBalances = liveBalances || {};
             let html = '<option value="">Select Tray...</option>';
             
@@ -5320,18 +5354,34 @@
             const batchTrays = preNurseryTrayData
                 .filter(t => !['PREMIUM CARE','DOUBLE-TONE'].includes(t.name))
                 .filter(t => {
+                    if (opts.includeSpent) return true;
                     const remaining = liveBalances.hasOwnProperty(t.name) ? liveBalances[t.name] : t.initialQty;
                     return remaining !== 0;
                 });
+            const listed = {};
             if(batchTrays.length > 0) {
                 const batchId = document.getElementById('f-batchno').value || '—';
                 html += `<optgroup label="Pre-Nursery Trays  [Batch: ${batchId}]">`;
                 batchTrays.forEach(t => {
+                    listed[t.name] = true;
                     const remaining = liveBalances.hasOwnProperty(t.name) ? liveBalances[t.name] : t.initialQty;
                     const overdrawn = remaining < 0;
                     const label = `${t.name}  [Remaining: ${remaining.toLocaleString()}${overdrawn ? ' ⚠' : ''}]`;
                     html += `<option value="${t.name}">${label}</option>`;
                 });
+                html += `</optgroup>`;
+            }
+
+            /* The names the batch's own transplant rows use, when they are not
+               the planting report's names. No balance beside them: there is no
+               Planted row to get one from, and a made-up figure would be worse
+               than none. Their own group, so it is obvious these are the
+               spellings the transplanting records use. */
+            const extra = (opts.alsoOffer || []).filter(n => n && !listed[n]
+                && ['PREMIUM CARE', 'DOUBLE-TONE'].indexOf(n) < 0);
+            if (extra.length) {
+                html += `<optgroup label="Trays this batch transplanted from">`;
+                extra.forEach(n => { html += `<option value="${n}">${n}</option>`; });
                 html += `</optgroup>`;
             }
             return html;
