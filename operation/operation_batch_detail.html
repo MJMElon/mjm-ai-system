@@ -14012,11 +14012,35 @@ Thank you.`;
         });
         window.addEventListener('resize', updateTabScrollArrows);
 
-        _supabase.auth.getSession().then(({ data: { session } }) => {
+        _supabase.auth.getSession().then(async ({ data: { session } }) => {
             if (!session) { window.location.href = 'operation_dashboard.html'; return; }
             window.currentUserEmail = session.user?.email || '';
             showPageBuild();
-            initDetail().then(() => { syncBatchHeader(); MJMReview.boot(); });
+
+            /* PERMISSIONS BEFORE ANYTHING IS DRAWN.
+
+               They decide what each tab renders — Edit and Approve on an
+               adjustment, Fix Tray on a transplanting row, Add <plot>'s row on
+               the orphan line. MJMAccess.load() used to run inside
+               MJMReview.boot(), which is only reached AFTER initDetail() has
+               finished prewarming every tab, so every first render was built
+               as if nobody may do anything: the Adjustment History came up
+               headed "Lock" with no Edit, and only corrected itself the next
+               time something was saved and the table was rebuilt.
+
+               load() has no once-only guard and simply re-reads, so
+               MJMReview.boot() asking again below is harmless and its own
+               gates and redirects are untouched.
+
+               A failure here must not stop the page. Leaving the permissions
+               as they are — empty, everything locked — is what happens today
+               and is the safe direction to fail in. */
+            try { await MJMAccess.load(_supabase); }
+            catch (e) { console.warn('[access] could not be read before render:', e); }
+
+            await initDetail();
+            syncBatchHeader();
+            MJMReview.boot();
         });
     </script>
 
