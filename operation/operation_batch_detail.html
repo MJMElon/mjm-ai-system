@@ -481,7 +481,7 @@
                     <h1 class="text-2xl font-black text-[#3d2610] uppercase tracking-widest leading-none" id="window-title">New Batch Record</h1>
                     <p class="text-[12px] font-black text-[#4a7a2e] uppercase tracking-widest mt-1 truncate" id="window-breed">—</p>
                 </div>
-                <button onclick="window.location.href='operation_batch_record.html'" class="close-btn" title="Close and return">
+                <button onclick="closeBatchRecord()" class="close-btn" title="Close and return">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
@@ -1549,11 +1549,21 @@
 
                                     <!-- Saved records table -->
                                     <div id="t3-saved-rows-table" class="hidden mb-4">
-                                        <div class="hidden md:grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_80px] gap-2 px-3 pb-1 text-[8px] font-black text-[#8a7a68] uppercase tracking-widest border-b border-[#e8dcc8] mb-1 t-tidy">
+                                        <div class="hidden md:grid grid-cols-[1.7fr_1.2fr_1.2fr_0.9fr_1fr_1fr_0.9fr_80px] gap-2 px-3 pb-1 text-[8px] font-black text-[#8a7a68] uppercase tracking-widest border-b border-[#e8dcc8] mb-1 t-tidy">
                                             <span class="text-[#3a7ab4]">Plot / Destination</span>
                                             <span>Date</span>
                                             <span class="text-[#c07820]">Source Tray</span>
                                             <span class="text-[#4a7a2e]">Qty</span>
+                                            <!-- WHAT AN APPROVED ADJUSTMENT TAKES OFF THIS ROW.
+                                                 An adjustment on Transplanting is raised against a
+                                                 plot and split across the trays that filled it, so
+                                                 a row here — one tray into one plot — is exactly
+                                                 what one of those shares is about. Showing it only
+                                                 in the strip at the top of the tab meant the list
+                                                 underneath still read the pre-adjustment figure,
+                                                 and the two disagreed on the same screen. -->
+                                            <span class="text-[#a83020]">Adjustment</span>
+                                            <span class="text-[#4a7a2e]">Final Qty</span>
                                             <span>Map</span>
                                             <span></span>
                                         </div>
@@ -1565,11 +1575,13 @@
                                              is worked out FROM belongs on the screen, under
                                              its own column, not left to be summed by eye.
                                              Same grid as the rows, so it lines up with them. -->
-                                        <div class="hidden md:grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_80px] gap-2 items-center px-3 pt-2 mt-1 border-t-2 border-[#e8dcc8] t-tidy">
+                                        <div class="hidden md:grid grid-cols-[1.7fr_1.2fr_1.2fr_0.9fr_1fr_1fr_0.9fr_80px] gap-2 items-center px-3 pt-2 mt-1 border-t-2 border-[#e8dcc8] t-tidy">
                                             <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Total Transplanted</span>
                                             <span></span>
                                             <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest" id="t3-saved-total-count">—</span>
                                             <span class="text-base font-black text-[#4a7a2e] tabular-nums" id="t3-saved-total-qty">0</span>
+                                            <span class="text-base font-black text-[#8a7a68] tabular-nums" id="t3-saved-total-adj">—</span>
+                                            <span class="text-base font-black text-[#4a7a2e] tabular-nums" id="t3-saved-total-final">0</span>
                                             <span></span>
                                             <span></span>
                                         </div>
@@ -1578,11 +1590,22 @@
                                             <span class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">Total Transplanted</span>
                                             <span class="text-base font-black text-[#4a7a2e] tabular-nums" id="t3-saved-total-qty-m">0</span>
                                         </div>
+                                        <div id="t3-saved-total-adj-row-m" class="hidden md:hidden flex items-baseline justify-between px-3 pt-1">
+                                            <span class="text-[9px] font-black text-[#a83020] uppercase tracking-widest">After adjustments</span>
+                                            <span class="text-base font-black text-[#4a7a2e] tabular-nums" id="t3-saved-total-final-m">0</span>
+                                        </div>
                                         <!-- Which rows above are NOT in that total, and how many
                                              seedlings they hold. A figure smaller than the column
                                              it sits under needs to say why, or it reads as a
                                              mistake. Hidden when the batch has no holding tray. -->
                                         <div id="t3-saved-held-note" class="hidden px-3 pt-1 text-[9px] font-black text-[#8a7a68] uppercase tracking-widest"></div>
+                                        <!-- An approved adjustment that matches no row above:
+                                             raised on a plot before the tray split existed, or on
+                                             a plot/tray pairing that is no longer in the list. It
+                                             still comes off the total, so it is named here rather
+                                             than leaving the total short of the column it is
+                                             under by an amount nothing explains. -->
+                                        <div id="t3-saved-adj-note" class="hidden px-3 pt-1 text-[9px] font-black text-[#a83020] uppercase tracking-widest"></div>
                                     </div>
 
                                     <!-- New form rows -->
@@ -2803,12 +2826,27 @@
                adjustment could move then. Reading a missing marker as "plot"
                would silently restate what those rows said. */
             const side = body.match(/Side:\s*(seed|plot)\s*\.\s*/i);
+            /* An adjustment that is going to become — or has already become —
+               a transplant row on a plot nothing reached. See the panel on
+               tab 7 and approveCalibration().
+
+               TAKEN OUT OF THE BODY FIRST, and that order is load-bearing:
+               "Tray:" is a substring of "TxTray:", so matching the plain one
+               against a remark carrying TxTray:P4 eats the tail of it and
+               leaves "Tx" behind in the Reason column. Remove the longer
+               label, then look for the shorter one in what is left. */
+            const txTray = body.match(/TxTray:\s*([^.]+?)\s*\.\s*/i);
+            const txMap  = body.match(/TxMap:(\S+)/i);
+            const txRow  = body.match(/TxRow:(\S+)/i);
+            let reason = body;
+            if (txTray) reason = reason.replace(txTray[0], '');
+            if (txMap)  reason = reason.replace(txMap[0], '');
+            if (txRow)  reason = reason.replace(txRow[0], '');
             /* WHICH TRAY the plot's share came from, on a Transplanting
                adjustment. Stripped out of the reason like every other labelled
                fragment — a label left in the body is how the Reason column
                ends up reading "Tray: T3. Manual count". */
-            const tray = body.match(/Tray:\s*([^.]+?)\s*\.\s*/i);
-            let reason = body;
+            const tray = reason.match(/Tray:\s*([^.]+?)\s*\.\s*/i);
             if (rep)  reason = reason.replace(rep[0], '');
             if (plot) reason = reason.replace(plot[0], '');
             if (side) reason = reason.replace(side[0], '');
@@ -2819,6 +2857,9 @@
                 report: rep  ? rep[1].trim()  : '',
                 plot:   plot ? plot[1].trim() : (r.plot_name || ''),
                 tray:   tray ? tray[1].trim() : '',
+                txTray: txTray ? txTray[1].trim() : '',
+                txMap:  txMap ? txMap[1] : '',
+                txRow:  txRow ? txRow[1] : '',
                 side:   ADJUST_SIDE_OF(rep ? rep[1].trim() : ''),
                 reason: reason.trim(),
                 approved: !!approved,
@@ -2910,6 +2951,112 @@
             return Object.keys(mine).reduce((sum, k) => sum + (mine[k] || 0), 0);
         }
 
+        /* ── The adjustment, on the row it belongs to ────────────────────────
+
+           A Transplanting adjustment is raised against a plot and split across
+           the trays that filled it, so ONE saved transplant row — one tray into
+           one plot — is exactly what one of those shares is about. Painting it
+           onto the row is what stops the list underneath the strip going on
+           showing the pre-adjustment figure while the strip above says
+           otherwise, on the same screen.
+
+           Painted rather than built into the row's markup: the adjustments are
+           read after the list is drawn, so a figure baked in at render time
+           would be the stale one until somebody happened to reopen the tab.
+
+           Only APPROVED ones, like everywhere else. A pending adjustment has
+           not been ruled on and moves no figure; the strip above still shows it
+           in amber, which is the right place for "somebody has claimed this".  */
+        function _t3TrayKey(v) { return String(v == null ? '' : v).trim().toUpperCase(); }
+
+        function paintT3Adjustments() {
+            const cells = document.querySelectorAll('#t3-saved-rows-list .t3-adj-cell');
+            if (!cells.length) return;
+
+            // plot|tray → net, from the approved Transplanting adjustments.
+            const byPair = {};
+            (ADJUST_ROWS || []).forEach(r => {
+                if (!r.approved) return;
+                if (String(r.report || '').toLowerCase() !== 'transplanting') return;
+                /* An adjustment that WROTE its own row names its tray as TxTray
+                   rather than Tray — it was answered on the panel, not split off
+                   an existing line. Either way it is the tray the seedlings came
+                   out of, and it is what pairs the adjustment with its row: the
+                   row carries Qty 0 and this is the +140 that goes beside it. */
+                const k = _t6PlotKey(r.plot) + '|' + _t3TrayKey(r.tray || r.txTray);
+                byPair[k] = (byPair[k] || 0) + r.qty;
+            });
+
+            const used = {};
+            let totQty = 0, totAdj = 0, totFinal = 0;
+            cells.forEach(cell => {
+                const k = _t6PlotKey(cell.getAttribute('data-plot')) + '|'
+                        + _t3TrayKey(cell.getAttribute('data-tray'));
+                const adj = byPair[k] || 0;
+                if (adj) used[k] = true;
+                const qty = Number(cell.getAttribute('data-qty')) || 0;
+
+                cell.innerText = adj === 0 ? '—' : (adj > 0 ? '+' : '') + adj.toLocaleString();
+                cell.className = 't3-adj-cell text-sm font-black tabular-nums '
+                    + (adj > 0 ? 'text-[#4a7a2e]' : adj < 0 ? 'text-[#a83020]' : 'text-[#8a7a68]');
+
+                const finEl = cell.parentElement.querySelector('.t3-final-cell');
+                if (finEl) {
+                    finEl.innerText = (qty + adj).toLocaleString();
+                    finEl.className = 't3-final-cell text-sm font-black tabular-nums '
+                        + (adj === 0 ? 'text-[#4a7a2e]' : adj > 0 ? 'text-[#4a7a2e]' : 'text-[#a83020]');
+                }
+
+                /* Only the rows the Total counts. Premium Care and D-Tone are
+                   holding trays, not transplants — the same rule the Total
+                   Transplanted figure above already follows. */
+                if (cell.getAttribute('data-counted') === '1') {
+                    totQty += qty; totAdj += adj; totFinal += qty + adj;
+                }
+            });
+
+            /* Approved adjustments no row matched — raised on a plot before the
+               tray split existed, or on a pairing no longer in the list. They
+               still come off the plot, so they are added to the total and named
+               underneath rather than leaving it short by an unexplained amount. */
+            let orphan = 0;
+            const orphanNames = [];
+            Object.keys(byPair).forEach(k => {
+                if (used[k] || !byPair[k]) return;
+                orphan += byPair[k];
+                const plot = k.split('|')[0], tray = k.split('|')[1];
+                orphanNames.push(tray ? `${plot} ← ${tray}` : plot);
+            });
+            totAdj += orphan; totFinal += orphan;
+
+            const set = (id, txt, cls) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.innerText = txt;
+                if (cls) el.className = cls;
+            };
+            set('t3-saved-total-adj',
+                totAdj === 0 ? '—' : (totAdj > 0 ? '+' : '') + totAdj.toLocaleString(),
+                'text-base font-black tabular-nums '
+                  + (totAdj > 0 ? 'text-[#4a7a2e]' : totAdj < 0 ? 'text-[#a83020]' : 'text-[#8a7a68]'));
+            set('t3-saved-total-final', totFinal.toLocaleString());
+            set('t3-saved-total-final-m', totFinal.toLocaleString());
+
+            const mRow = document.getElementById('t3-saved-total-adj-row-m');
+            if (mRow) mRow.classList.toggle('hidden', totAdj === 0);
+
+            const note = document.getElementById('t3-saved-adj-note');
+            if (note) {
+                if (orphan) {
+                    note.innerText = `Included in the total but not on any row above: `
+                        + `${(orphan > 0 ? '+' : '') + orphan.toLocaleString()} on ${orphanNames.join(', ')}`;
+                    note.classList.remove('hidden');
+                } else {
+                    note.classList.add('hidden');
+                }
+            }
+        }
+
         /* Would settling this adjustment move the 3rd Culling row? Used by the
            drone-map panel, which must not offer an explanation that would not
            actually change the figure it is standing next to. */
@@ -2963,6 +3110,11 @@
                this" is worth seeing — it just is not an answer yet. */
             Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
             Object.keys(ADJUST_PLOT_LOSS_STAGE).forEach(k => delete ADJUST_PLOT_LOSS_STAGE[k]);
+            /* INCLUDING the ones that wrote their own transplant row. That row
+               is written with a quantity of nought — nobody keyed a transplant
+               into that plot, which is why it had none — so the figure lives
+               here, in the adjustment, exactly as it did before the row
+               existed. The row is only where it now lands. */
             rows.filter(r => r.approved).forEach(r => {
                 if (r.side === 'plot') {
                     // Belongs to the plot it names, not to the batch total,
@@ -2986,6 +3138,9 @@
                not stop the other, nor the strips below from rendering. */
             try { if (typeof calcTransplanting === 'function') calcTransplanting(); } catch (e) { console.warn(e); }
             try { if (typeof calcCulling === 'function') calcCulling(); } catch (e) { console.warn(e); }
+            // …and the saved transplant list, where each share lands on the
+            // row it was split out of. It is painted, not re-rendered.
+            try { paintT3Adjustments(); } catch (e) { console.warn(e); }
             /* …and both culling tabs, where a plot-stock adjustment lands on
                one row. Re-RENDERED, not just recalculated: the figure is drawn
                into the row's markup, so a recalculation alone would leave the
@@ -3400,6 +3555,115 @@
             </div>`;
         }
 
+        /* ── An adjustment that puts seedlings into a plot nothing reached ───
+
+           The panel that asks for the two things the form does not already
+           know. Everything else about the transplant row is on screen: the
+           plot, the date and the quantity.
+
+           The map is kept as a data URL until the adjustment is approved,
+           because that is when the row is written — uploading on every
+           keystroke would leave files behind for adjustments nobody ruled on.  */
+        let _t7NewPlotMap = '';          // data URL of the drone map, before upload
+
+        function _t7NewPlotPanelHtml(plot, esc) {
+            /* NO overflow-hidden ON THIS ONE. The other panels here use it to
+               keep their rows inside the rounded corner, but this one holds the
+               Source Tray dropdown, and the custom select's menu is an
+               absolutely positioned child — an ancestor that clips cuts the
+               menu off at the panel's edge, so the trays are built, are in the
+               select, and cannot be seen. That is exactly how this looked when
+               it was reported. Nothing in here overflows the corner anyway. */
+            return `<div class="rounded-xl border border-[#c8d9e8] bg-[#f7fbff]">
+                <div class="px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-[#3a7ab4]">
+                    ${esc(plot)} has no transplanting record — this will create one
+                </div>
+                <div class="px-4 pb-3 text-[11px] font-bold text-[#8a7a68]">
+                    Seedlings are standing in ${esc(plot)} that no transplant row accounts for. Approving this
+                    adjustment writes that row: the plot, the date and the quantity come from this form, so the
+                    two things left are which tray they came out of and the drone map.
+                </div>
+                <div class="px-4 pb-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="label-style !text-[#c07820]">Source Tray *</label>
+                        <div class="select-wrapper">
+                            <!-- cf-skip: KEPT NATIVE ON PURPOSE.
+
+                                 This panel sits at the bottom of the Stock
+                                 Calibration card, and that card has
+                                 overflow-hidden holding its gradient header
+                                 inside the rounded corner. The skinned
+                                 dropdown's menu is an absolutely positioned
+                                 element, so it was clipped at the card's edge —
+                                 the trays were built, were in the select, and
+                                 could not be seen. A native popup is drawn by
+                                 the browser and no ancestor can clip it.
+
+                                 shared_cf_select.js documents cf-skip for
+                                 exactly this. The real fix is for that widget
+                                 to render its menu in a layer nothing clips,
+                                 which would need doing in the phone repo's copy
+                                 too — until then every dropdown near the bottom
+                                 of a card like this one has the same problem. -->
+                            <select id="t7-newplot-tray" class="input-style !text-[#c07820] cf-skip">${getTab3TrayOptionsHTML({})}</select>
+                        </div>
+                        ${preNurseryTrayData.length ? '' : `<div class="mt-1 text-[10px] font-black text-[#a83020] uppercase tracking-widest">
+                            No planted trays on this batch — save the Planting report first, or there is nothing to pick from
+                        </div>`}
+                    </div>
+                    <div>
+                        <label class="label-style">Drone Map *</label>
+                        <div id="t7-newplot-map-zone"
+                             class="border-2 border-dashed border-[#e8dcc8] bg-white rounded-xl p-3 text-center cursor-pointer hover:bg-[#f3efe6] hover:border-[#c07820] transition-all"
+                             onclick="document.getElementById('t7-newplot-map-file').click()"
+                             ondragover="event.preventDefault(); this.classList.add('!border-[#c07820]');"
+                             ondragleave="event.preventDefault(); this.classList.remove('!border-[#c07820]');"
+                             ondrop="event.preventDefault(); this.classList.remove('!border-[#c07820]'); handleT7NewPlotMapDrop(event)">
+                            <div class="flex items-center justify-center gap-2 pointer-events-none">
+                                <span class="text-base">🗺️</span>
+                                <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest">Drag &amp; Drop or Click</div>
+                            </div>
+                        </div>
+                        <input type="file" id="t7-newplot-map-file" class="hidden" accept="image/*,.pdf"
+                               onchange="handleT7NewPlotMapPick(this)">
+                        <div id="t7-newplot-map-done" class="hidden items-center gap-1.5 p-2 border border-[#e8dcc8] rounded-xl bg-white mt-1">
+                            <span class="text-[9px] font-black text-[#4a7a2e] uppercase flex-1 truncate">✅ Map attached</span>
+                            <button type="button" class="w-6 h-6 bg-[#fff5f5] text-[#a83020] rounded hover:bg-[#f8d7da] flex items-center justify-center text-xs"
+                                    onclick="removeT7NewPlotMap()">✕</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function _t7RestoreNewPlotMap() {
+            const done = document.getElementById('t7-newplot-map-done');
+            const zone = document.getElementById('t7-newplot-map-zone');
+            if (!done || !zone) return;
+            done.classList.toggle('hidden', !_t7NewPlotMap);
+            done.classList.toggle('flex',   !!_t7NewPlotMap);
+            zone.classList.toggle('hidden', !!_t7NewPlotMap);
+        }
+        function handleT7NewPlotMapPick(input) {
+            const f = input.files && input.files[0];
+            input.value = '';
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = () => { _t7NewPlotMap = r.result; _t7RestoreNewPlotMap(); };
+            r.readAsDataURL(f);
+        }
+        function handleT7NewPlotMapDrop(e) {
+            const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = () => { _t7NewPlotMap = r.result; _t7RestoreNewPlotMap(); };
+            r.readAsDataURL(f);
+        }
+        function removeT7NewPlotMap() { _t7NewPlotMap = ''; _t7RestoreNewPlotMap(); }
+
+        // Is the form currently asking to create a transplant row?
+        function _t7NewPlotAsking() { return !!document.getElementById('t7-newplot-tray'); }
+
         // The tray lines that were actually keyed. A blank or a zero means
         // "that tray's count was right", not "nothing here to record".
         function _t7CollectTrayAdj() {
@@ -3441,10 +3705,38 @@
             const trays = _t7TraysFeeding(logs, plot);
 
             if (!trays.length) {
-                return plain(`<div class="rounded-xl border border-[#e8dcc8] bg-[#fdfaf4] px-4 py-3 text-[11px] font-bold text-[#8a7a68]">
-                    Nothing has been transplanted into <strong class="text-[#3d2610]">${esc(plot)}</strong> on this batch,
-                    so there is no tray to trace the difference back to. The adjustment is recorded against the plot as a whole.
-                </div>`);
+                /* NOTHING WAS EVER TRANSPLANTED INTO THIS PLOT, and the
+                   adjustment ADDS to it. That is not a correction to a figure
+                   — it is a movement nobody recorded: seedlings are standing
+                   in the plot and no transplant row says how they got there.
+
+                   So instead of filing it as an adjustment against a plot with
+                   nothing on it, the row is written. The date and the quantity
+                   are already on the form; the two things only the person
+                   knows are which tray they came out of and what the drone map
+                   shows, so those are asked for here and the record is created
+                   when the adjustment is approved.
+
+                   Only for a POSITIVE one. Taking seedlings off a plot that
+                   has none recorded is a different thing entirely and stays an
+                   adjustment. */
+                const addsToPlot = (parseInt(qtyEl?.value, 10) || 0) > 0;
+                if (!addsToPlot || _t7EditingId) {
+                    return plain(`<div class="rounded-xl border border-[#e8dcc8] bg-[#fdfaf4] px-4 py-3 text-[11px] font-bold text-[#8a7a68]">
+                        Nothing has been transplanted into <strong class="text-[#3d2610]">${esc(plot)}</strong> on this batch,
+                        so there is no tray to trace the difference back to. The adjustment is recorded against the plot as a whole.
+                    </div>`);
+                }
+                _t7TrayMode = false;
+                if (qtyEl) { qtyEl.readOnly = false; qtyEl.classList.remove('bg-[#f5efe4]', 'cursor-not-allowed'); }
+                host.setAttribute('data-edit-tray', '');
+                /* The tray list must not depend on whether the planting tab
+                   happens to be rendered — see _ensurePreNurseryTrayData. */
+                await _ensurePreNurseryTrayData(batchId);
+                host.innerHTML = _t7NewPlotPanelHtml(plot, esc);
+                host.classList.remove('hidden');
+                _t7RestoreNewPlotMap();
+                return;
             }
 
             /* EDITING. The Qty box stays the figure being corrected and the
@@ -3527,6 +3819,7 @@
         function cancelEditCalibration() {
             _t7EditingId = null;
             _t7EditingTray = '';
+            _t7NewPlotMap = '';   // a map picked for a row that is no longer being keyed
             const qtyEl    = document.getElementById('t7-cal-qty');
             const reportEl = document.getElementById('t7-cal-report');
             const plotEl   = document.getElementById('t7-cal-plot');
@@ -3585,7 +3878,7 @@
             if (!confirm('Approve and lock this adjustment? Once approved, no further edits are allowed for this row.')) return;
             const { data: row, error: readErr } = await _supabase
                 .from('shared_inventory_logs')
-                .select('remark')
+                .select('remark, plot_name, quantity_change, transaction_date, batch_name, created_at')
                 .eq('id', id)
                 .maybeSingle();
             if (readErr) { showToast('Failed to read row: ' + readErr.message, 'error'); return; }
@@ -3606,7 +3899,67 @@
                 .update({ remark: newRemark })
                 .eq('id', id);
             if (error) { showToast('Failed to approve: ' + error.message, 'error'); return; }
-            showToast('Calibration approved and locked.', 'success');
+
+            /* THE PLOT GETS ITS RECORD. An adjustment raised on a plot nothing
+               was ever transplanted into was keyed with the tray it came out of
+               and a drone map, and approving it is what turns that into a real
+               Transplanted row — the plot, the date and the quantity off the
+               adjustment, the tray and the map off the answers.
+
+               Written on approval, not on save, because an adjustment nobody
+               has ruled on moves no figure anywhere else either, and that has
+               to include putting seedlings into a plot.
+
+               THE ROW IS WRITTEN WITH A QUANTITY OF NOUGHT, and that is the
+               whole point of it. Nobody keyed a transplant into this plot —
+               that is why it had no record. What put the seedlings there is
+               the adjustment, so the adjustment is where the figure belongs:
+
+                   Qty 0  ·  Adjustment +140  ·  Final 140
+
+               Putting 140 in the Qty column instead would claim somebody
+               recorded a transplant that nobody recorded, and the adjustment
+               would then have to be hidden to stop the plot reading 280. This
+               way the adjustment goes on counting exactly as it always did and
+               the row is simply where it now lands. TxRow:<id> is kept as the
+               link back, so a second row is never created for the same one. */
+            const cal = _parseCalibration(Object.assign({ id }, row || {}));
+            if (cal.txTray && !cal.txRow) {
+                const txRemark = `Transplanted from tray [${cal.txTray}] to Main Plot [${cal.plot}]. `
+                    + `Date: ${(row.transaction_date || String(row.created_at || '').slice(0, 10))}`
+                    + (cal.txMap ? ` MapUrl:${cal.txMap}` : '')
+                    + ` FromAdjustment:${id} CalApprovedBy:${who}`;
+                const { data: made, error: txErr } = await _supabase
+                    .from('shared_inventory_logs')
+                    .insert([withEditMeta({
+                        transaction_type: 'Transplanted',
+                        batch_name: row.batch_name,
+                        plot_name: cal.plot,
+                        quantity_change: 0,
+                        transaction_date: row.transaction_date || String(row.created_at || '').slice(0, 10),
+                        remark: txRemark
+                    })])
+                    .select('id');
+                if (txErr || !made || !made.length) {
+                    /* The approval stands — it is already written — but say so
+                       plainly, because the figure is now approved WITHOUT the
+                       record it was supposed to create, and somebody has to
+                       know that rather than find out from a report. */
+                    showToast('Approved, but the transplanting record for ' + cal.plot
+                        + ' was NOT created' + (txErr ? ': ' + txErr.message : '')
+                        + '. Press Edit on the adjustment and save it again to retry.', 'error');
+                } else {
+                    await _supabase.from('shared_inventory_logs')
+                        .update({ remark: newRemark + ` TxRow:${made[0].id}` })
+                        .eq('id', id);
+                    _t7TxLogs = null;   // the plot has a transplant row now
+                    showToast(`Approved. ${cal.plot} now has a transplanting record of `
+                        + `${Math.abs(Number(row.quantity_change) || 0).toLocaleString()} from ${cal.txTray}.`, 'success');
+                }
+            } else {
+                showToast('Calibration approved and locked.', 'success');
+            }
+
             const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
             renderCalibrationHistory(batchId);
             // …and the same rows on the report each was raised against.
@@ -3638,6 +3991,23 @@
                 return;
             }
 
+            /* Creating a transplant row needs both answers. Neither can be
+               guessed and the row is wrong without either, so the save asks
+               rather than writing half a record. */
+            const newPlotAsk = _t7NewPlotAsking();
+            if (newPlotAsk) {
+                const t = (document.getElementById('t7-newplot-tray')?.value || '').trim();
+                if (!t) {
+                    showToast('Which tray did these seedlings come out of? The transplant row needs it.', 'error');
+                    document.getElementById('t7-newplot-tray')?.focus();
+                    return;
+                }
+                if (!_t7NewPlotMap) {
+                    showToast('Attach the drone map — the transplant row this creates has to carry one.', 'error');
+                    return;
+                }
+            }
+
             /* EDITING with the column filled in splits the row. The trays have
                to add up to the quantity being corrected or the split is not the
                same adjustment any more — the total on screen says so as it is
@@ -3659,6 +4029,27 @@
             if (!reason) { showToast('Reason is required for every calibration.', 'error'); reasonEl.focus(); return; }
 
             btn.disabled = true; btn.innerText = _t7EditingId ? 'Updating…' : 'Saving…';
+
+            /* The map is uploaded NOW, not when the adjustment is approved.
+               It is a real thing the person attached, and the page may well be
+               reloaded between keying this and somebody ruling on it — a data
+               URL held in a variable would not survive that. An adjustment
+               that is never approved leaves one unused file behind, which is a
+               much smaller problem than losing the map. */
+            let newPlotSuffix = '';
+            if (newPlotAsk) {
+                btn.innerText = 'Uploading map…';
+                const url = await _uploadBatchDoc('transplant_maps', batchId, `${plot}-from-adjustment`, _t7NewPlotMap);
+                if (!url) {
+                    btn.disabled = false; btn.innerText = 'Save Adjustment';
+                    showToast('The drone map did not upload'
+                        + (window._mjmLastUploadError ? ': ' + window._mjmLastUploadError : '')
+                        + '. Nothing was saved — try again.', 'error');
+                    return;
+                }
+                newPlotSuffix = ` TxTray:${(document.getElementById('t7-newplot-tray')?.value || '').trim()}.`
+                              + ` TxMap:${url}`;
+            }
 
             // plot_name is the right schema column for the location; report
             // and the freeform reason are stored as labelled fragments in the
@@ -3684,7 +4075,12 @@
                    carried is not copied across, so the adjustment stops moving
                    figures until it is approved again. Deliberate — see the
                    Edit button on approved rows. */
-                remark: `Report: ${report}. Plot: ${plot}. ${reason}`
+                /* TxTray / TxMap ride along when this adjustment is going to
+                   become a transplant row. They are read back by
+                   approveCalibration(), which is where the row is actually
+                   written — an adjustment nobody has ruled on moves nothing,
+                   and that has to include putting 140 seedlings into a plot. */
+                remark: `Report: ${report}. Plot: ${plot}. ${reason}${newPlotSuffix}`
             });
 
             /* ONE ROW PER TRAY on a Transplanting adjustment. Each carries the
@@ -3765,6 +4161,87 @@
             renderCalibrationHistory(batchId);
             // …and the same rows on the report each was raised against.
             syncAdjustmentBars(batchId);
+        }
+
+        /* ── Leaving a tab with something keyed into it ──────────────────────
+
+           Each tab is saved by its own button at the bottom, and the X in the
+           corner navigates away without going near any of them. A morning's
+           counting typed into 3rd Culling and not saved was gone, silently,
+           with one click and nothing asked.
+
+           DIRTY IS PER TAB, and it is what somebody TYPED. The listener only
+           fires on a real `input`/`change` from the field itself, so the many
+           places this page writes a value into a box — restoring a saved row,
+           the calibration total following the tray column, a percentage
+           recalculated — do not make a tab look edited when nobody touched it.
+
+           CLEARED ONLY WHEN THE SAVE ACTUALLY WORKED. Every save on this page
+           reports failure through showToast(…, 'error'), so the wrapper below
+           watches for one while the save runs and leaves the tab dirty if it
+           sees one. Clearing on "the function returned" would drop the warning
+           on exactly the save that did not happen. */
+        const TAB_TITLES = {
+            1: 'Seeds Received', 2: 'Seed Planting', 3: 'Transplanting',
+            4: '1st Culling', 5: '2nd Culling', 6: '3rd Culling',
+            7: 'Adjustments & Audit', 8: 'Seed Audit'
+        };
+        const _tabDirty = {};
+
+        document.addEventListener('input', _markTabDirty, true);
+        document.addEventListener('change', _markTabDirty, true);
+        function _markTabDirty(e) {
+            const el = e.target;
+            if (!el || !el.closest) return;
+            if (!/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
+            if (el.type === 'file') return;          // picking a file is not yet a change to the record
+            const pane = el.closest('.tab-content');
+            if (!pane) return;
+            const n = parseInt(String(pane.id || '').replace('tab-', ''), 10);
+            if (!isNaN(n)) _tabDirty[n] = true;
+        }
+
+        function _dirtyTabNames() {
+            return Object.keys(_tabDirty)
+                .filter(n => _tabDirty[n])
+                .map(n => TAB_TITLES[n] || ('Tab ' + n));
+        }
+
+        /* Runs a tab's save and clears that tab only if nothing reported an
+           error while it ran. Wrapped after the page has defined them all, so
+           the order of declarations here does not matter. */
+        function _trackTabSave(name, tabIdx) {
+            const orig = window[name];
+            if (typeof orig !== 'function') return;
+            window[name] = function () {
+                let sawError = false;
+                const realToast = window.showToast;
+                window.showToast = function (m, t) { if (t === 'error') sawError = true; return realToast.apply(this, arguments); };
+                const done = () => { window.showToast = realToast; if (!sawError) _tabDirty[tabIdx] = false; };
+                let out;
+                try { out = orig.apply(this, arguments); }
+                catch (err) { done(); throw err; }
+                if (out && typeof out.then === 'function') return out.then(
+                    v => { done(); return v; },
+                    e => { done(); throw e; });
+                done();
+                return out;
+            };
+        }
+
+        function closeBatchRecord() {
+            const dirty = _dirtyTabNames();
+            if (dirty.length && !confirm(
+                    `Not saved yet: ${dirty.join(', ')}.\n\n`
+                  + `Closing now loses what has been keyed into `
+                  + `${dirty.length === 1 ? 'that tab' : 'those tabs'} — each one is kept by its own `
+                  + `Save button at the bottom of it.\n\nClose anyway?`)) return;
+            /* The flags are cleared before navigating so the browser's own
+               "Leave site?" prompt does not ask a second time about a question
+               that has just been answered. */
+            Object.keys(_tabDirty).forEach(k => delete _tabDirty[k]);
+            _seedAuditDirty = false;
+            window.location.href = 'operation_batch_record.html';
         }
 
         // ── Toast helper ──────────────────────────────────────────
@@ -4033,6 +4510,35 @@
         let preNurseryTrayData = [];
         let mockCullingTab4 = 0; 
 
+        /* THE TRAY LIST, FROM THE DATABASE, WHEREVER IT IS ASKED FOR.
+
+           preNurseryTrayData is what getTab3TrayOptionsHTML() offers, and
+           syncTab3() below rebuilds it by reading tab 2's tray rows OUT OF THE
+           DOM — emptying it first. syncTab3() runs on every switch to
+           Transplanting and after every transplant save, so any screen that
+           asks for the tray list while tab 2's rows are not rendered gets
+           nothing: open a batch, touch Transplanting, go to Adjustments, and
+           the Source Tray dropdown is empty but for the two special trays.
+
+           This fills it from the batch's own Planted rows when it is empty, and
+           anything that needs the list awaits it first rather than hoping the
+           planting tab happens to be on screen. Returns whether it loaded
+           anything, so the one caller that also updates a total still can.  */
+        async function _ensurePreNurseryTrayData(batchId) {
+            if (preNurseryTrayData.length) return false;
+            if (!batchId) return false;
+            const { data: plantedLogs, error } = await _supabase
+                .from('shared_inventory_logs')
+                .select('plot_name, quantity_change')
+                .eq('batch_name', batchId)
+                .eq('transaction_type', 'Planted');
+            // Fail open: no list is what it was before, not a broken screen.
+            if (error) { console.warn('[trays] not read:', error.message); return false; }
+            if (!plantedLogs || !plantedLogs.length) return false;
+            preNurseryTrayData = plantedLogs.map(l => ({ name: l.plot_name, initialQty: l.quantity_change }));
+            return true;
+        }
+
         async function syncTab3() {
             let totalPlantedRaw = 0;
             preNurseryTrayData = [];
@@ -4197,20 +4703,80 @@
                                        <span class="text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest group-hover:text-[#c07820] transition-colors">View</span>
                                    </button>`
                                 : `<div class="text-sm text-[#8a7a68]">—</div>`;
+                            /* A ROW THE SYSTEM WROTE, not one somebody keyed.
+
+                               It came from an adjustment on a plot nothing had
+                               been transplanted into, and it exists because that
+                               adjustment was approved — so it is not verified
+                               the usual way, and its plot, date and quantity are
+                               the adjustment's, not this row's. Editing those
+                               here would put the two out of step with nothing to
+                               say which was right.
+
+                               THE TRAY IS THE EXCEPTION, and it has to be. It is
+                               not the adjustment's figure — it is an answer
+                               somebody typed, and an answer can be wrong: B8's
+                               was keyed as "4" when the tray is P4. With the row
+                               locked outright there was no way to correct it
+                               from anywhere, which is worse than the drift the
+                               lock was guarding against. Fix Tray changes it on
+                               BOTH the row and the adjustment, so they stay in
+                               step, and touches nothing else. */
+                            const fromAdjMatch = log.remark ? log.remark.match(/FromAdjustment:(\S+)/) : null;
+                            const calWhoMatch  = log.remark ? log.remark.match(/CalApprovedBy:(\S+)/) : null;
+                            const fromAdjCell = fromAdjMatch
+                                ? `<div class="text-[8px] font-black text-[#4a7a2e] uppercase tracking-wider leading-tight"
+                                        title="Created from an approved stock adjustment — its plot, date and quantity belong to the adjustment on Adjustments &amp; Audit">
+                                       🔒 Calibration<br>approved by<br>${_escAttr(mjmWho(calWhoMatch ? calWhoMatch[1] : '') || '—')}
+                                       ${_t7IsAdmin() ? `<button type="button" onclick="toggleT3AdjTray(${idx})"
+                                            class="mt-1 px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[8px] font-black uppercase rounded hover:bg-[#f0f8ff] transition-colors"
+                                            title="Correct the source tray on this row and on the adjustment that wrote it">Fix Tray</button>` : ''}
+                                   </div>`
+                                : `<div class="flex gap-1">
+                                            <button type="button" onclick="toggleT3EditRow(${idx})" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[8px] font-black uppercase rounded hover:bg-[#f0f8ff] transition-colors">Edit</button>
+                                            <button type="button" onclick="deleteT3Row(${idx})" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}" class="px-2 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[8px] font-black uppercase rounded hover:bg-[#fff5f5] transition-colors">Del</button>
+                                        </div>`;
                             tableList.insertAdjacentHTML('beforeend', `
                                 <div class="t3-saved-row${rowLocked ? ' mjm-locked' : ''}" data-review-key="${reviewKey}">
                                     <!-- Compact row -->
-                                    <div id="t3-row-view-${idx}" class="grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_80px] gap-2 items-center px-3 py-2 rounded-lg bg-[#fdfaf4] border border-[#e8dcc8] hover:bg-white transition-colors t-tidy">
+                                    <div id="t3-row-view-${idx}" class="grid grid-cols-[1.7fr_1.2fr_1.2fr_0.9fr_1fr_1fr_0.9fr_80px] gap-2 items-center px-3 py-2 rounded-lg bg-[#fdfaf4] border border-[#e8dcc8] hover:bg-white transition-colors t-tidy">
                                         <div class="font-black text-sm ${color}">${icon} ${log.plot_name}</div>
                                         <div class="text-sm font-bold text-[#3d2610]">${dateStr}${rowLocked ? ' 🔒' : ''}</div>
                                         <div class="text-sm font-bold text-[#c07820] truncate">${trayStr}</div>
                                         <div class="text-sm font-black text-[#4a7a2e]">${log.quantity_change.toLocaleString()}</div>
+                                        <!-- Filled in by paintT3Adjustments() rather than here:
+                                             the adjustments are read after this list is drawn, so
+                                             a figure baked in now would be a stale one until
+                                             somebody happened to reopen the tab. -->
+                                        <div class="t3-adj-cell text-sm font-black tabular-nums text-[#8a7a68]"
+                                             data-plot="${_escAttr(log.plot_name || '')}"
+                                             data-tray="${_escAttr(trayStr)}"
+                                             data-qty="${log.quantity_change || 0}"
+                                             data-counted="${log.transaction_type === 'Transplanted' ? '1' : '0'}">—</div>
+                                        <div class="t3-final-cell text-sm font-black text-[#4a7a2e] tabular-nums">${log.quantity_change.toLocaleString()}</div>
                                         <div>${rowMapCell}</div>
-                                        <div class="flex gap-1">
-                                            <button type="button" onclick="toggleT3EditRow(${idx})" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[8px] font-black uppercase rounded hover:bg-[#f0f8ff] transition-colors">Edit</button>
-                                            <button type="button" onclick="deleteT3Row(${idx})" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}" class="px-2 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[8px] font-black uppercase rounded hover:bg-[#fff5f5] transition-colors">Del</button>
-                                        </div>
+                                        ${fromAdjCell}
                                     </div>
+                                    ${fromAdjMatch ? `<!-- Fix Tray, for a row an adjustment wrote. cf-skip so the
+                                         menu is not clipped by the card, same as the panel on tab 7. -->
+                                    <div id="t3-adjtray-form-${idx}" class="hidden mt-1 p-4 bg-white border border-[#3a7ab4] rounded-xl"
+                                         data-log-id="${_escAttr(log.id)}" data-cal-id="${_escAttr(fromAdjMatch[1])}">
+                                        <div class="text-[10px] font-black text-[#3a7ab4] uppercase tracking-widest mb-2">
+                                            Which tray did ${_escAttr(log.plot_name || '')}'s seedlings come out of?
+                                        </div>
+                                        <div class="text-[11px] font-bold text-[#8a7a68] mb-3">
+                                            Only the tray changes — the plot, the date, the quantity and the drone map stay
+                                            as they are, and the adjustment that wrote this row is corrected with it.
+                                        </div>
+                                        <div class="flex flex-wrap gap-3 items-end">
+                                            <div class="flex-1 basis-[220px] min-w-[180px]">
+                                                <label class="label-style !text-[#c07820]">Source Tray *</label>
+                                                <select class="input-style !text-[#c07820] cf-skip t3-adjtray-select">${getTab3TrayOptionsHTML({})}</select>
+                                            </div>
+                                            <button type="button" onclick="saveT3AdjTray(${idx})" class="btn-earth text-[10px] px-4 py-2 shrink-0">Save Tray</button>
+                                            <button type="button" onclick="toggleT3AdjTray(${idx})" class="px-4 py-2 bg-white border border-[#e8dcc8] text-[#8a7a68] text-[10px] font-black uppercase rounded-lg hover:bg-[#e8dcc8] shrink-0">Cancel</button>
+                                        </div>
+                                    </div>` : ''}
                                     <!-- Inline edit form (hidden by default) -->
                                     <div id="${editId}" class="hidden mt-1 p-4 bg-white border border-[#3a7ab4] rounded-xl space-y-3">
                                         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -4312,6 +4878,11 @@
                         setTot('t3-saved-total-qty',   savedTotal.toLocaleString());
                         setTot('t3-saved-total-qty-m', savedTotal.toLocaleString());
                         setTot('t3-saved-total-count', `${counted.length} record${counted.length === 1 ? '' : 's'}`);
+                        /* The Adjustment and Final columns, now the rows exist.
+                           Safe before the adjustments have been read — it just
+                           paints zeroes, and syncAdjustmentBars paints it again
+                           the moment they arrive. */
+                        try { paintT3Adjustments(); } catch (e) { console.warn(e); }
 
                         // Say what was left out, and how much of it.
                         const heldNote = document.getElementById('t3-saved-held-note');
@@ -4419,6 +4990,81 @@
                 sel.innerHTML = getPlotOptionsHTML(); sel.disabled = false;
                 sel.className = 'input-style !text-[#3a7ab4] t3e-dest-plot';
             }
+        }
+
+        /* ── Correcting the tray on a row an adjustment wrote ────────────────
+
+           The tray is the one thing on such a row that came from a person
+           rather than from the adjustment, so it is the one thing that can be
+           mistyped — B8's was keyed as "4" when the tray is P4. Everything else
+           is the adjustment's and stays put.
+
+           Both records are rewritten, the row and the adjustment, because they
+           have to agree: paintT3Adjustments pairs them on plot + tray, and a
+           row that says P4 beside an adjustment that says 4 pairs with nothing
+           and the plot goes back to reading as an orphan. */
+        function toggleT3AdjTray(idx) {
+            const form = document.getElementById(`t3-adjtray-form-${idx}`);
+            if (!form) return;
+            const opening = form.classList.contains('hidden');
+            form.classList.toggle('hidden');
+            if (!opening) return;
+            // Start on what it says now, even if that tray is not in the list
+            // any more — otherwise the picker silently proposes a different one.
+            const row = form.previousElementSibling;
+            const shown = row ? (row.children[2]?.innerText || '').trim() : '';
+            const sel = form.querySelector('.t3-adjtray-select');
+            if (sel && shown && shown !== '—') setSelectValuePreserve(sel, shown, shown);
+        }
+
+        async function saveT3AdjTray(idx) {
+            if (!_t7IsAdmin()) { showToast('Only admins can change this.', 'error'); return; }
+            const form = document.getElementById(`t3-adjtray-form-${idx}`);
+            if (!form) return;
+            const logId = form.getAttribute('data-log-id');
+            const calId = form.getAttribute('data-cal-id');
+            const tray  = (form.querySelector('.t3-adjtray-select')?.value || '').trim();
+            if (!tray) { showToast('Pick the tray these seedlings came out of.', 'error'); return; }
+
+            const { data: rowNow, error: readErr } = await _supabase
+                .from('shared_inventory_logs').select('remark').eq('id', logId).maybeSingle();
+            if (readErr || !rowNow) {
+                showToast('Could not read that record' + (readErr ? ': ' + readErr.message : '') + '.', 'error');
+                return;
+            }
+            /* Replace only what is inside the brackets. Everything else on the
+               remark — the date, MapUrl, FromAdjustment, CalApprovedBy — is
+               carried across untouched. */
+            const newRemark = String(rowNow.remark || '').replace(/tray \[[^\]]*\]/i, `tray [${tray}]`);
+            const { error: upErr } = await _supabase.from('shared_inventory_logs')
+                .update({ remark: newRemark }).eq('id', logId);
+            if (upErr) { showToast('Could not save: ' + upErr.message, 'error'); return; }
+
+            // …and the adjustment, so the two go on pairing with each other.
+            if (calId) {
+                const { data: calNow } = await _supabase
+                    .from('shared_inventory_logs').select('remark').eq('id', calId).maybeSingle();
+                if (calNow && calNow.remark) {
+                    const calRemark = /TxTray:/i.test(calNow.remark)
+                        ? calNow.remark.replace(/TxTray:\s*[^.]*\./i, `TxTray:${tray}.`)
+                        : calNow.remark;
+                    if (calRemark !== calNow.remark) {
+                        const { error: calErr } = await _supabase.from('shared_inventory_logs')
+                            .update({ remark: calRemark }).eq('id', calId);
+                        if (calErr) {
+                            showToast('The row was changed to ' + tray + ', but the adjustment still says the old '
+                                + 'tray — they will not line up until that is fixed: ' + calErr.message, 'error');
+                        }
+                    }
+                }
+            }
+
+            showToast('Source tray changed to ' + tray + '.', 'success');
+            toggleT3AdjTray(idx);
+            _t7TxLogs = null;
+            await syncTab3();
+            const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
+            syncAdjustmentBars(batchId);
         }
 
         async function saveT3EditRow(idx, origTxType) {
@@ -7141,7 +7787,7 @@
         const seedAuditPhotoState = {};
         let _seedAuditDirty = false;
         window.addEventListener('beforeunload', e => {
-            if (_seedAuditDirty) {
+            if (_seedAuditDirty || _dirtyTabNames().length) {
                 e.preventDefault();
                 e.returnValue = ''; // browser shows its own "Leave site?" prompt
             }
@@ -8443,6 +9089,9 @@ Thank you.`;
                 updateT1Completion(); document.getElementById('t1-pie-analysis').style.setProperty('--percentage', 100); document.getElementById('t1-percent-text').innerText = '100%'; document.getElementById('t1-status-desc').innerText = 'Complete'; document.getElementById('t1-status-desc').className = 'text-base font-black uppercase text-[#4a7a2e] mt-1';
                 setEditMetaUI(1, ledgerPayload.last_edited_at || new Date().toISOString(), ledgerPayload.last_edited_by || window.currentUserEmail);
                 showToast('Seeds In record saved successfully.', 'success');
+                // Kept by hand here — tab 1 is a form submit, not one of the
+                // named save functions _trackTabSave() wraps.
+                _tabDirty[1] = false;
                 saveBtn.innerText = 'Save'; saveBtn.disabled = false;
                 /* STAY WHERE THE PERSON IS. Saving used to walk them onto
                    Seed Audit half a second later — so a figure corrected and
@@ -8496,18 +9145,9 @@ Thank you.`;
                 }
 
                 // Also load planted tray data from DB if preNurseryTrayData is empty
-                if (preNurseryTrayData.length === 0) {
-                    const { data: plantedLogs } = await _supabase
-                        .from('shared_inventory_logs')
-                        .select('plot_name, quantity_change')
-                        .eq('batch_name', batch)
-                        .eq('transaction_type', 'Planted');
-                    if (plantedLogs && plantedLogs.length > 0) {
-                        preNurseryTrayData = plantedLogs.map(l => ({ name: l.plot_name, initialQty: l.quantity_change }));
-                        // Also update t4_totalPlanted
-                        t4_totalPlanted = preNurseryTrayData.reduce((s, t) => s + t.initialQty, 0);
-                        document.getElementById('t3-total-planted').innerText = t4_totalPlanted.toLocaleString();
-                    }
+                if (await _ensurePreNurseryTrayData(batch)) {
+                    t4_totalPlanted = preNurseryTrayData.reduce((s, t) => s + t.initialQty, 0);
+                    document.getElementById('t3-total-planted').innerText = t4_totalPlanted.toLocaleString();
                 }
             } else {
                 t4_totalMain       = parseInt(document.getElementById('t3-val-main').innerText.replace(/,/g, '')) || 0;
@@ -13066,6 +13706,16 @@ Thank you.`;
 
         // Init arrows on load
         window.addEventListener('load', () => setTimeout(updateTabScrollArrows, 100));
+
+        /* Wrap each tab's save so closing knows what has been kept. Done on
+           load, once every one of them exists, rather than beside any single
+           declaration — see _trackTabSave. Tab 1 clears itself; it is a form
+           submit rather than a named function. */
+        window.addEventListener('load', () => {
+            [['savePlantingTab', 2], ['saveTransplantTab', 3], ['saveCullingTab', 4],
+             ['saveTab5', 5], ['saveTab6', 6], ['saveCalibration', 7], ['saveSeedAudit', 8]]
+                .forEach(([fn, tab]) => { try { _trackTabSave(fn, tab); } catch (e) { console.warn('[dirty]', fn, e); } });
+        });
         window.addEventListener('resize', updateTabScrollArrows);
 
         _supabase.auth.getSession().then(({ data: { session } }) => {

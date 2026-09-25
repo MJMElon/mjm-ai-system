@@ -24,6 +24,20 @@
 const { chromium } = require('playwright');
 
 const BATCH = '242';
+/* shared_cf_select.js replaces every <select> on the page with a custom
+   dropdown and hides the native one, so Playwright's selectOption cannot
+   reach it. Set the value and fire the same bubbling `change` the custom
+   widget fires — which is what the page's own onchange listens for. */
+async function setSelect(page, sel, value) {
+  await page.evaluate(([s, v]) => {
+    const el = document.querySelector(s);
+    if (!Array.from(el.options).some(o => o.value === v)) el.add(new Option(v, v));
+    el.value = v;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }, [sel, value]);
+  await page.waitForTimeout(120);
+}
+
 let pass = 0, fail = 0;
 function check(name, got, want) {
   const ok = JSON.stringify(got) === JSON.stringify(want);
@@ -162,7 +176,7 @@ async function setPlot(page, plot) {
 
   // ── Picking the plot lists the trays ───────────────────────────────────
   console.log('\nPicking the plot reads back the trays that fed it');
-  await page.selectOption('#t7-cal-report', 'Transplanting');
+  await setSelect(page,'#t7-cal-report', 'Transplanting');
   await setPlot(page, 'B14');
   await page.waitForSelector('#t7-cal-trays .t7-tray-line', { timeout: 5000 });
 
@@ -235,14 +249,14 @@ async function setPlot(page, plot) {
 
   console.log('\nThe plain form is left alone everywhere else');
   await page.evaluate(() => { window.__INSERTS = []; window.__TOASTS = []; });
-  await page.selectOption('#t7-cal-report', '1st Culling');
+  await setSelect(page,'#t7-cal-report', '1st Culling');
   await setPlot(page, 'B14');
   check('another report shows no tray panel',
         await page.locator('#t7-cal-trays .t7-tray-line').count(), 0);
   check('and the Qty box is typable again',
         await page.getAttribute('#t7-cal-qty', 'readonly'), null);
 
-  await page.selectOption('#t7-cal-report', 'Transplanting');
+  await setSelect(page,'#t7-cal-report', 'Transplanting');
   await setPlot(page, 'U17');
   check('a plot nothing was transplanted into has no tray lines',
         await page.locator('#t7-cal-trays .t7-tray-line').count(), 0);
@@ -251,7 +265,7 @@ async function setPlot(page, plot) {
   check('and the Qty box is typable', await page.getAttribute('#t7-cal-qty', 'readonly'), null);
 
   console.log('\nKeying no tray at all is refused');
-  await page.selectOption('#t7-cal-report', 'Transplanting');
+  await setSelect(page,'#t7-cal-report', 'Transplanting');
   await setPlot(page, 'N19');
   await page.waitForSelector('#t7-cal-trays .t7-tray-line', { timeout: 5000 });
   await page.fill('#t7-cal-reason', 'Something');
@@ -386,7 +400,7 @@ async function setPlot(page, plot) {
     await page.waitForTimeout(150);
     await page.locator('#t7-cal-trays').screenshot({ path: '/tmp/tray_edit_ok.png' });
     await page.evaluate(() => window.cancelEditCalibration());
-    await page.selectOption('#t7-cal-report', 'Transplanting');
+    await setSelect(page,'#t7-cal-report', 'Transplanting');
     await setPlot(page, 'B14');
     await page.waitForSelector('#t7-cal-trays .t7-tray-line');
     await page.locator('#t7-cal-trays .t7-tray-line[data-tray="T1"] .t7-tray-adj').fill('-40');
