@@ -5875,8 +5875,23 @@
                leaves the tab looking for stock that is gone. See
                ADJUST_APPLIES_TO — the same loss comes off the 2nd and 3rd
                cullings, which are the counts still measuring against it. */
+            /* BOTH SIDES OF THE SUM MOVE, OR NEITHER. Taking the loss off the
+               base while the transplant rows still count every seedling they
+               sent out leaves the tab short by exactly the amount that was
+               already explained — batch 242 read OVER ALLOCATED BY 127 with
+               the -127 sitting in the Adjustment column of the same screen,
+               and batch 234 read it by 53 for the same reason.
+
+               So the loss comes off the base AND off what is standing in the
+               main plots, which is what the list's own Final Qty column
+               already shows. A plot losing seedlings does not make the batch
+               over-allocated; it makes both figures smaller by the same
+               amount, and the balance is unchanged. */
+            const plotLossT3 = adjustPlotLossTotal('Transplanting');
             const allocBase = totalPlantedRaw + getDtoneNurseryQty() + adjustNetTotal()
-                            + adjustPlotLossTotal('Transplanting');
+                            + plotLossT3;
+            // What the main plots actually hold — Qty as recorded, less the loss.
+            const mainStanding = totalMain + plotLossT3;
             /* The engine's headline figure IS this base — what the four
                percentages below are each a percentage of. Main plot plus
                D-Tone plus the 1st cull comes to the same thing from the other
@@ -5886,19 +5901,21 @@
             const pendingTotal = Math.max(
                 0,
                 allocBase
-                - totalMain
+                - mainStanding
                 - mockCullingTab4
             );
 
             // accounted uses net premium/d-tone (seeds truly "in holding" there)
-            const accounted = totalMain + mockCullingTab4 + netPremium + netDtone;
+            const accounted = mainStanding + mockCullingTab4 + netPremium + netDtone;
             const untransplanted = pendingTotal;
 
             renderTrayBalances(activeTrayBalances, netPremium, netDtone, pendingTotal);
 
             // All "% of total" figures divide by the allocation base
             // (planted + D-Tone nursery qty) per spec.
-            const pctMain        = allocBase > 0 ? (totalMain / allocBase) * 100 : 0;
+            // mainStanding, not totalMain — the base below it has the loss
+            // taken off, so dividing the pre-loss figure by it reads over 100%.
+            const pctMain        = allocBase > 0 ? (mainStanding / allocBase) * 100 : 0;
             const pctPremium     = allocBase > 0 ? (totalPremium / allocBase) * 100 : 0;
             const pctDoubletone  = allocBase > 0 ? (totalDoubletone / allocBase) * 100 : 0;
             const pctCull        = allocBase > 0 ? (mockCullingTab4 / allocBase) * 100 : 0;
@@ -5982,7 +5999,7 @@
             // (planted + D-Tone nursery qty), so main-plot transplants covered
             // by the keyed D-Tone pool no longer read as Over-Allocated.
             // netPremium / netDtone holding pools stay on the "Pending" side.
-            const fullyAccounted = totalMain + mockCullingTab4;
+            const fullyAccounted = mainStanding + mockCullingTab4;
             const rawPending = allocBase - fullyAccounted;
 
             if (rawPending === 0 && allocBase > 0) {
