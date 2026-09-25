@@ -515,7 +515,7 @@
                 renderBreeds(); renderBatches(); renderNurseries();
                 populateNurseryFilters();
                 renderFilteredPlots(); renderFilteredTrays();
-                populateMonthLockYears();
+                await populateMonthLockYears();
                 initMlkDayRoller();
                 renderMonthLockGrid();
             } catch(err) {
@@ -563,12 +563,47 @@
             }
         });
 
-        function populateMonthLockYears() {
+        // A wrongly-keyed date (24/09/2016 typed for 2026) locks itself out
+        // by the auto-lock default — that year is long past, so it reads as
+        // locked, and nobody could unlock it to fix the typo because the
+        // Year picker only ever offered nowYear-3..nowYear+1. Widens the
+        // range to whatever years actually have a date keyed against them —
+        // Delivery Orders, Approval Letters, Batch Record's logs — so a
+        // mis-typed year shows up here too, not just the plausible ones.
+        // Clamped to ±50 years so one wildly malformed date can't blow the
+        // list out to thousands of options.
+        async function monthLockYearBounds() {
+            const nowYear = new Date().getFullYear();
+            let minYear = nowYear - 3, maxYear = nowYear + 1;
+            const sources = [
+                { table: 'shared_do_records', col: 'delivery_date' },
+                { table: 'shared_al_orders', col: 'order_date' },
+                { table: 'shared_inventory_logs', col: 'transaction_date' },
+            ];
+            await Promise.all(sources.map(async (s) => {
+                try {
+                    const [minRes, maxRes] = await Promise.all([
+                        _supabase.from(s.table).select(s.col).not(s.col, 'is', null).order(s.col, { ascending: true }).limit(1),
+                        _supabase.from(s.table).select(s.col).not(s.col, 'is', null).order(s.col, { ascending: false }).limit(1),
+                    ]);
+                    const minVal = minRes.data?.[0]?.[s.col];
+                    const maxVal = maxRes.data?.[0]?.[s.col];
+                    const minY = minVal ? new Date(minVal).getFullYear() : NaN;
+                    const maxY = maxVal ? new Date(maxVal).getFullYear() : NaN;
+                    if (Number.isFinite(minY)) minYear = Math.min(minYear, minY);
+                    if (Number.isFinite(maxY)) maxYear = Math.max(maxYear, maxY);
+                } catch (e) { /* table missing or query failed — keep the safety-net range for this source */ }
+            }));
+            return { minYear: Math.max(minYear, nowYear - 50), maxYear: Math.min(maxYear, nowYear + 50) };
+        }
+
+        async function populateMonthLockYears() {
             const menu = document.getElementById('mlk-year-menu');
             if (menu.children.length) return; // only needs building once
             const nowYear = new Date().getFullYear();
+            const { minYear, maxYear } = await monthLockYearBounds();
             let html = '';
-            for (let y = nowYear - 3; y <= nowYear + 1; y++) {
+            for (let y = maxYear; y >= minYear; y--) {
                 html += `<button type="button" class="cf-opt${y === nowYear ? ' active' : ''}" data-value="${y}" onclick="selectMlkYear(${y})">${y}</button>`;
             }
             menu.innerHTML = html;
