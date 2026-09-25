@@ -161,7 +161,13 @@
            can't be styled, so the OS renders its own ugly highlight) with
            a checkmark against the active option instead. */
         .cf-wrap{position:relative;}
-        .cf-btn{display:flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.06em;font-size:10px;font-weight:900;color:#334155;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;cursor:pointer;transition:border-color .15s,box-shadow .15s;}
+        /* Fixed width, not sized to whichever option's text happens to be
+           showing — picking a short one ("All Orders") shouldn't shrink the
+           button and picking a long one ("Outstanding Balance", the widest)
+           shouldn't grow it. 190px fits the widest option with a little
+           breathing room; space-between keeps the chevron pinned to the
+           right edge instead of hugging short labels. */
+        .cf-btn{display:flex;align-items:center;justify-content:space-between;gap:6px;width:190px;text-transform:uppercase;letter-spacing:.06em;font-size:10px;font-weight:900;color:#334155;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;cursor:pointer;transition:border-color .15s,box-shadow .15s;}
         .cf-btn:hover{border-color:#cbd5e1;}
         .cf-btn.open{border-color:#1d4ed8;box-shadow:0 0 0 3px rgba(29,78,216,.12);}
         .cf-chevron{width:11px;height:11px;color:#94a3b8;transition:transform .15s;flex-shrink:0;}
