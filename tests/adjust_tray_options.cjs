@@ -43,14 +43,18 @@ const SEEDS_ROW = {
 const PLANTED_ROWS = [
   { plot_name: 'P4', quantity_change: 2500 },
   { plot_name: 'P5', quantity_change: 2800 },
-  { plot_name: 'P6', quantity_change: 2727 },
+  { plot_name: 'P6', quantity_change: 0 },      // fully transplanted out
   { plot_name: 'P7', quantity_change: 2727 }
 ];
 // …and B7 was transplanted into, B8 never was.
 const TX_ROWS = [
   { id: 'tx1', transaction_type: 'Transplanted', plot_name: 'B7', quantity_change: 206,
     transaction_date: '2025-05-05', created_at: '2025-05-05T02:00:00Z',
-    remark: 'Transplanted from tray [P4] to Main Plot [B7]. Date: 2025-05-05' }
+    remark: 'Transplanted from tray [P4] to Main Plot [B7]. Date: 2025-05-05' },
+  // a tray the planting report never named, the way 227's P4..P7 are
+  { id: 'tx2', transaction_type: 'Transplanted', plot_name: 'B9', quantity_change: 300,
+    transaction_date: '2025-05-06', created_at: '2025-05-06T02:00:00Z',
+    remark: 'Transplanted from tray [T9] to Main Plot [B9]. Date: 2025-05-06' }
 ];
 
 function stub(withPlanted) {
@@ -171,6 +175,16 @@ async function openPage(browser, usePlanted) {
   const opts = await page.evaluate(() =>
     Array.from(document.getElementById('t7-newplot-tray').options).map(o => o.value));
   check('every planted tray is offered', opts.filter(v => /^P\d/.test(v)), ['P4', 'P5', 'P6', 'P7']);
+  /* The spent-tray filter must NOT apply here. This picker asks where
+     seedlings CAME FROM, and a tray emptied months ago is exactly the
+     answer — hiding it is what made P4 unpickable on batch 227. P6 is
+     fully transplanted out in the fixture. */
+  checkTrue('a tray with nothing left is still offered', opts.indexOf('P6') >= 0);
+  /* And the names the batch's TRANSPLANT rows use, which are not always the
+     planting report's: 227 plants into 4/5/6/7 and transplants from P4..P7. */
+  checkTrue('a tray known only from a transplant record is offered too',
+            opts.indexOf('T9') >= 0);
+  check('nothing is offered twice', opts.length, Array.from(new Set(opts)).length);
   checkTrue('the special trays are still there too',
             opts.indexOf('PREMIUM CARE') >= 0 && opts.indexOf('DOUBLE-TONE') >= 0);
   checkTrue('and a blank to start on', opts.indexOf('') >= 0);
@@ -236,8 +250,12 @@ async function openPage(browser, usePlanted) {
   await bare.waitForSelector('#t7-newplot-tray', { state: 'attached', timeout: 5000 });
   const bareOpts = await bare.evaluate(() =>
     Array.from(document.getElementById('t7-newplot-tray').options).map(o => o.value));
-  check('no pre-nursery trays are invented', bareOpts.filter(v => /^P\d/.test(v)), []);
-  checkTrue('and it says why rather than showing an empty picker',
+  /* Nothing is invented: with no planting report the only trays offered are
+     the ones its own transplant rows name. */
+  check('the offered trays are exactly the ones it transplanted from',
+        bareOpts.filter(v => v && ['PREMIUM CARE', 'DOUBLE-TONE'].indexOf(v) < 0).sort(),
+        ['P4', 'T9']);
+  checkTrue('and it still says the planting report is missing',
             /No planted trays on this batch/i.test(await bare.textContent('#t7-cal-trays')));
   await bare.close();
 
