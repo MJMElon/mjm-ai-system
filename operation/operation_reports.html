@@ -71,7 +71,8 @@
   }
   #mv-report-sidebar .flex.flex-wrap.gap-3.items-end.justify-center { flex-direction:column; align-items:stretch; }
   #mv-report-sidebar .f-range, #mv-report-sidebar .f-sort, #mv-report-sidebar .f-breed,
-  #mv-report-sidebar .f-nursery-inline, #mv-report-sidebar .f-sales-mode { width:100%; }
+  #mv-report-sidebar .f-nursery-inline, #mv-report-sidebar .f-sales-mode,
+  #mv-report-sidebar .f-los { width:100%; }
   /* Locations chips: one per row going down, not wrapped side by side —
      easier to scan and tick in a narrow sidebar than a wrapped cluster. */
   #mv-report-sidebar #f-nursery-chips { flex-direction:column; flex-wrap:nowrap; }
@@ -170,12 +171,34 @@
   .sales-table col.c-total { width: 9%;  }
   .sales-table th,
   .sales-table td { padding: 10px 8px; }
-  .funnel-bar { height:14px; background:#f3efe6; border-radius:999px; overflow:hidden; display:flex; box-shadow:inset 0 1px 2px rgba(0,0,0,.05); }
-  .funnel-seg { height:100%; transition:width .5s ease-out; }
-  .seg-seeds   { background:#c07820; }
-  .seg-planted { background:#6aa83c; }
-  .seg-trans   { background:#3a7ab4; }
-  .seg-cull    { background:#a83020; }
+  /* Life of Seedlings: eighteen columns wide, so it reads as a matrix rather
+     than a wall — a rule between every column, the two-row header's group
+     bands picked out, and figures right-aligned under their own heading. */
+  .los-table th, .los-table td { border-right:1px solid #efe6d4; }
+  .los-table th:last-child, .los-table td:last-child { border-right:none; }
+  .los-table th.los-grp { text-align:center; color:#c07820; background:#f8f1e2; }
+  .los-table th { vertical-align:bottom; white-space:normal; line-height:1.3; max-width:110px; }
+  /* The four label columns are text, not figures — capping them at a figure
+     column's width broke "Applied Agricultural Resources Sdn. Bhd." onto five
+     lines and made every row as tall as its longest supplier name. */
+  .los-table thead tr:first-child th:nth-child(-n+4) { text-align:left; }
+  .los-table thead tr:first-child th:nth-child(2) { max-width:150px; }
+  .los-table thead tr:first-child th:nth-child(3) { max-width:250px; }
+  .los-table td:nth-child(2) { min-width:92px; }
+  .los-table td:nth-child(3) { min-width:184px; }
+  .los-table td { padding:10px 12px; }
+  .los-table tbody tr:nth-child(even) { background:#faf7f0; }
+  /* A figure you can open. It has to read as a figure first — same size,
+     same weight, same colour as one that has nothing behind it — so the
+     table is not a page of links; the underline on hover is what says it
+     will do something. Left as a <button> rather than an <a> because there
+     is nowhere to navigate to: it opens the records beside it. */
+  .los-fig { background:none; border:none; padding:0; font:inherit; color:inherit;
+             cursor:pointer; text-decoration:underline; text-decoration-style:dotted;
+             text-underline-offset:3px; text-decoration-color:#d9cdb6; }
+  .los-fig:hover { text-decoration-style:solid; text-decoration-color:currentColor; }
+  .los-fig:focus-visible { outline:2px solid #6aa83c; outline-offset:2px; border-radius:4px; }
+  @media print { .los-fig { text-decoration:none; } }
 
   /* Nursery multi-select chips */
   .nursery-chip { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:10px; background:#fff; border:1.5px solid #e8dcc8; cursor:pointer; font-size:11px; font-weight:700; color:#3d2610; user-select:none; }
@@ -218,9 +241,46 @@
              second field — see the f-from hidden input below and
              runReport(). -->
         <input type="hidden" id="f-from">
+        <!-- Life of Seedlings' filters, in the order they narrow a batch
+             down: where it is, whether it is still going, when, how old,
+             what it is and who sold it. Nothing picked is not a filter —
+             the report opens on every batch, active and completed alike. -->
+        <div class="f-los hidden w-40">
+          <label class="label-style !mb-1">Nursery Type</label>
+          <select id="f-los-nursery" class="input-style">
+            <option value="">All</option>
+            <option value="pre">Pre-Nursery</option>
+            <option value="main">Main Nursery</option>
+          </select>
+        </div>
+        <div class="f-los hidden w-40">
+          <label class="label-style !mb-1">Status</label>
+          <select id="f-los-status" class="input-style">
+            <option value="">Active &amp; completed</option>
+            <option value="active">Active</option>
+            <option value="completed">Completed</option>
+          </select>
+        </div>
         <div class="f-range w-[9.5rem]">
           <label class="label-style !mb-1" id="f-to-label">As At</label>
           <input id="f-to" type="date" class="input-style">
+        </div>
+        <div class="f-los f-los-year-wrap hidden w-32">
+          <label class="label-style !mb-1">Year</label>
+          <select id="f-los-year" class="input-style">
+            <option value="">All years</option>
+          </select>
+        </div>
+        <div class="f-los hidden w-40">
+          <label class="label-style !mb-1">Age</label>
+          <select id="f-los-age" class="input-style">
+            <option value="">Any age</option>
+            <option value="0-3">0 – 3 months</option>
+            <option value="4-6">4 – 6 months</option>
+            <option value="7-9">7 – 9 months</option>
+            <option value="10-12">10 – 12 months</option>
+            <option value="12+">Over 12 months</option>
+          </select>
         </div>
         <div class="f-sort hidden w-32">
           <label class="label-style !mb-1">Sort by</label>
@@ -245,6 +305,12 @@
           <label class="label-style !mb-1">Breed</label>
           <select id="f-breed" class="input-style">
             <option value="">All breeds</option>
+          </select>
+        </div>
+        <div class="f-los hidden w-56">
+          <label class="label-style !mb-1">Supplier</label>
+          <select id="f-los-supplier" class="input-style">
+            <option value="">All suppliers</option>
           </select>
         </div>
         <div class="f-sales-mode hidden">
@@ -325,17 +391,7 @@
 <script>
 const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
 
-const STAGE_TYPES = {
-  seeds:   ['Seeds_Received'],
-  planted: ['Planted'],
-  trans:   ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone'],
-  cull1:   ['1st_Culling'],
-  cull2:   ['2nd_Culling'],
-  cull3:   ['3rd_Culling']
-};
-
 function fmtNum(n)   { return (n || 0).toLocaleString(); }
-function fmtPct(n)   { return (Math.max(0, Math.min(999, n || 0))).toFixed(2) + '%'; }
 function fmtDate(d)  { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? '—' : x.toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' }); }
 // Same thousand-separator grouping as fmtNum, kept at 2 decimals — a
 // subtotal like RM 33390.00 read as one long unbroken run of digits;
@@ -352,428 +408,607 @@ async function loadBreeds() {
   });
 }
 
-/**
- * Batch Production Summary
- *
- * Per batch, aggregate quantity_change by transaction_type group:
- *   seeds_in          = SUM(Seeds_Received)
- *   damaged           = ABS(SUM(Damaged_Seeds))   // not in funnel; shown for context
- *   planted           = SUM(Planted)
- *   transplanted      = SUM(Transplanted | _Premium | _DoubleTone)
- *   cull_1/2/3        = ABS(SUM(1st/2nd/3rd_Culling))
- *
- * Final alive  = transplanted − cull_1 − cull_2 − cull_3   (post-transplant losses only)
- * Survival %   = final alive / seeds_in × 100
- */
-async function runBatchProduction() {
+/* ════════════════════════════════════════════════════════════════════════════
+   LIFE OF SEEDLINGS
+
+   One row per batch, following it from the day its seeds arrived to what is
+   still standing today. It replaces three reports that each showed a slice of
+   the same life — Batch Production Summary, Double Tone and Seed Received —
+   because reading a batch meant opening all three and lining them up by eye.
+
+   Everything on the row comes out of shared_inventory_logs and shared_do_records,
+   the same ledger the Movement Report reads, and it is netted the same way, so
+   a batch's Balance here and its Balance there are the same number:
+
+     Balance = actual planted
+             − total culling (1st + the post-transplant cull)
+             + transfer in − transfer out
+             − total sales
+             + approved stock calibration
+
+   Two things about that formula are worth knowing before changing it.
+
+   FIRST, the 2nd culling is not added to the 3rd. The 3rd culling is keyed
+   against the ORIGINAL transplanted figure, so it already contains the 2nd;
+   counting both takes the same seedlings off twice. The 2nd counts only while
+   no 3rd has been recorded — the same rule netOfRow() applies in the Movement
+   Report, which is why the "total culling" column is headed 1st + 3rd.
+
+   SECOND, it starts from actual planted, not from the transplanting quantity.
+   The seedlings culled in the tray never reached the field, so the
+   transplanting figure is ALREADY net of the 1st culling — starting there and
+   then taking the 1st culling off again subtracts it twice. Once a batch is
+   fully transplanted the two readings are the same number, because
+   planted − 1st culling IS the transplanting quantity; before that, starting
+   from planted is what keeps the seedlings still sitting in a tray inside the
+   balance instead of losing them.
+
+   Supplier, MPOB licence, D/O quantity and FOC percent are not columns of
+   their own in the ledger — Seeds In writes them as labelled fragments of the
+   Seeds_Received remark (see operation_batch_detail.html's save), and they are
+   read back out of it here with the same patterns that page reads them with.
+════════════════════════════════════════════════════════════════════════════ */
+
+const _RE_LOS_SUPPLIER = /Supplier:\s*(.*?)\s*\.?\s*(?=MPOB:|D\/O:|DO_Qty:|Incl\.|Replacement:|$)/i;
+const _RE_LOS_MPOB     = /MPOB:\s*([0-9\-]+)/i;
+const _RE_LOS_DONO     = /D\/O:\s*([^.]+)/i;
+const _RE_LOS_DO_QTY   = /DO_Qty:\s*(\d+)/i;
+const _RE_LOS_FOC_PCT  = /Incl\.\s*([\d.]+)%\s*FOC/i;
+const _RE_LOS_REPL     = /Replacement:\s*(\d+)/i;
+/* A calibration only moves a figure once somebody has approved it — an
+   unapproved one is a claim, not a correction. Same marker Adjustments &
+   Audit writes and the batch report reads. */
+const _RE_LOS_APPROVED = /\[APPROVED by ([^\]]+) on ([^\]]+)\]/i;
+const _RE_LOS_CAL_REPORT = /Report:\s*([^.]+?)\s*\.\s*/i;
+const _RE_LOS_CAL_SIDE   = /Side:\s*(seed|plot)\s*\.\s*/i;
+const _RE_LOS_FROM_TRAY  = /from tray \[([^\]]+)\]/i;
+const _RE_LOS_FROM_PLOT  = /From:\s*\[([^\]|]+)\|/i;
+
+function _losEsc(s) {
+  return String(s == null ? '' : s).replace(/[<>"'&]/g,
+    c => ({ '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;', '&':'&amp;' }[c]));
+}
+
+/* Whole months between two dates, the way the nursery counts them: six weeks
+   is one month, not one and a half — the month only turns once the same day
+   of the month comes round again. Measured to the As At date rather than to
+   today, so looking back at March shows what the batch's age WAS in March. */
+function _losAgeMonths(from, asAt) {
+  if (!from) return null;
+  const d = new Date(from);
+  if (isNaN(d.getTime())) return null;
+  const now = asAt ? new Date(asAt) : new Date();
+  if (isNaN(now.getTime())) return null;
+  let m = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+  if (now.getDate() < d.getDate()) m--;
+  return m < 0 ? 0 : m;
+}
+function _losAgeLabel(m) {
+  if (m == null) return '—';
+  return m + (m === 1 ? ' month' : ' months');
+}
+
+/* The age bands the Age filter offers. Open-ended at the top so a batch never
+   falls out of every band as it gets older. */
+const LOS_AGE_BANDS = [
+  { value: '0-3',   label: '0 – 3 months',   min: 0,  max: 3  },
+  { value: '4-6',   label: '4 – 6 months',   min: 4,  max: 6  },
+  { value: '7-9',   label: '7 – 9 months',   min: 7,  max: 9  },
+  { value: '10-12', label: '10 – 12 months', min: 10, max: 12 },
+  { value: '12+',   label: 'Over 12 months', min: 13, max: Infinity },
+];
+
+/* Signed, so a stock calibration reads "+3" / "−2" rather than leaving the
+   reader to work out which way it went. */
+function fmtSigned(n) {
+  const v = Number(n || 0);
+  if (!v) return '0';
+  return (v > 0 ? '+' : '−') + Math.abs(v).toLocaleString();
+}
+
+async function runLifeOfSeedlings() {
   const out = document.getElementById('report-output');
   const loading = document.getElementById('loading');
   out.classList.add('hidden');
   loading.classList.remove('hidden');
 
-  // No From — this report is every batch's whole funnel up to a point in
-  // time, not a period, so there's only a To ("as at") to read.
-  const to    = document.getElementById('f-to').value;
-  const breed = document.getElementById('f-breed').value;
+  const asAt     = document.getElementById('f-to').value;
+  const breed    = document.getElementById('f-breed').value;
+  const supplier = (document.getElementById('f-los-supplier') || {}).value || '';
+  const nursery  = (document.getElementById('f-los-nursery')  || {}).value || '';
+  const status   = (document.getElementById('f-los-status')   || {}).value || '';
+  const year     = (document.getElementById('f-los-year')     || {}).value || '';
+  const ageBand  = (document.getElementById('f-los-age')      || {}).value || '';
 
-  // Fetch all batches up to the To date — anchor date is Seeds_Received transaction_date.
-  // plot_name joins us to nursery (main-nursery drilldowns need it).
-  const [logsRes, plotsRes] = await Promise.all([
-    // Paged — a single request stops at 1000 rows, which quietly dropped the
-    // older batches out of the funnel entirely.
+  const [logsRes, dosRes, plotsRes, traysRes] = await Promise.all([
     fetchAllRows(() => _supabase.from('shared_inventory_logs')
-      // breed_name comes off the log too — bulk-imported batches don't
-      // have an operation_batches mirror row, and that table has no
-      // breed_name column to fall back to anyway, so the log is the only
-      // source that actually names the breed.
-      .select('batch_name, transaction_type, quantity_change, transaction_date, created_at, remark, plot_name, breed_name')
-      // Only the funnel's types — the aggregation loop ignores everything
-      // else anyway, and pulling the full table (photo rows, calibration,
-      // audit notes…) was hammering the database on every report open.
+      .select('batch_name, breed_name, transaction_type, transaction_date, created_at, remark, plot_name, quantity_change')
       .in('transaction_type', ['Seeds_Received', 'Damaged_Seeds', 'Planted',
           'Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone',
-          '1st_Culling', '2nd_Culling', '3rd_Culling'])
+          '1st_Culling', '2nd_Culling', '3rd_Culling', 'Cull3_Transfer',
+          'Stock_Calibration'])
       .order('id', { ascending: true })),
-    _supabase.from('shared_plots').select('plot_name, nursery_name')
+    fetchAllRows(() => _supabase.from('shared_do_records')
+      .select('do_number, delivery_date, status, remark, plot_1, qty_1, batch_1, plot_2, qty_2, batch_2, plot_3, qty_3, batch_3, plot_4, qty_4, batch_4, plot_5, qty_5, batch_5')
+      .order('id', { ascending: true })),
+    _supabase.from('shared_plots').select('plot_name, nursery_name'),
+    _supabase.from('operation_trays').select('tray_name, nursery_name').then(r => r, () => ({ data: [] }))
   ]);
 
-  const { data: logs, error: logErr } = logsRes;
-  if (logErr) {
-    loading.classList.add('hidden');
-    out.classList.remove('hidden');
-    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-red-700 text-sm">Failed to load logs: ${logErr.message}</div>`;
+  if (logsRes.error) {
+    loading.classList.add('hidden'); out.classList.remove('hidden');
+    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-red-700 text-sm">Failed to load logs: ${_losEsc(logsRes.error.message)}</div>`;
     return;
   }
 
-  // Nursery lookup — Pre-Nursery holding trays map to a virtual "Pre-Nursery"
-  // slot; main-nursery plots resolve via shared_plots.nursery_name; anything
-  // missing lands in "Unassigned" so it's still visible in the drilldown.
-  const plotToNursery = {};
-  (plotsRes.data || []).forEach(p => {
-    if (p.plot_name) plotToNursery[p.plot_name] = p.nursery_name || 'Unassigned';
-  });
-  const nurseryOf = (plot) => {
-    if (!plot) return 'Unassigned';
-    if (PRE_NURSERY_PLOTS.includes(plot)) return 'Pre-Nursery';
-    return plotToNursery[plot] || 'Unassigned';
-  };
+  const plotToLoc = {};
+  (plotsRes.data || []).forEach(p => { plotToLoc[p.plot_name] = p.nursery_name || 'Unassigned'; });
+  const trayNames = new Set(PRE_NURSERY_PLOTS);
+  (((traysRes && traysRes.data) || [])).forEach(t => { if (t.tray_name) trayNames.add(t.tray_name); });
+  const isTray    = (n) => trayNames.has(n);
+  const nurseryOf = (plot) => !plot ? 'Unassigned'
+    : (isTray(plot) ? 'Pre-Nursery' : (plotToLoc[plot] || 'Unassigned'));
 
-  // Group logs by batch. Also track per-batch damaged qty (for the seeds
-  // drilldown) and raw records per stage (for the transplant / cull
-  // drilldowns).
-  const byBatch = {};
-  (logs || []).forEach(l => {
-    const b = l.batch_name; if (!b) return;
-    if (!byBatch[b]) byBatch[b] = {
-      batch_name: b,
-      seeds: 0, planted: 0, trans: 0, cull1: 0, cull2: 0, cull3: 0,
-      damaged: 0,
-      seeds_date: null,
-      log_breed: null,               // captured from any log with breed_name
-      seedsLogs: [], transLogs: [], cull1Logs: [], cull2Logs: [], cull3Logs: []
-    };
-    const row = byBatch[b];
-    if (!row.log_breed && l.breed_name) row.log_breed = l.breed_name;
-    const qty = Number(l.quantity_change || 0);
+  // ── One row per batch ──
+  const rowsByBatch = {};
+  const blank = (name) => ({
+    batch: name, breed: '—', supplier: '—', mpob: '—',
+    seedsDate: null,
+    received: 0, doQty: 0, focPct: null, focQty: 0, replQty: 0,
+    damaged: 0, planted: 0,
+    trans: 0, premium: 0, dtone: 0,
+    cull1: 0, cull2: 0, cull3: 0,
+    transfer: 0, sales: 0, calibration: 0,
+    preBalance: 0,
+    rec: { received: [], damaged: [], planted: [], trans: [], premium: [], dtone: [],
+           cull1: [], cull2: [], cull3: [], transfer: [], sales: [], calibration: [] }
+  });
+  const rowFor = (name) => rowsByBatch[name] || (rowsByBatch[name] = blank(name));
+
+  (logsRes.data || []).forEach(l => {
+    const name = l.batch_name; if (!name) return;
+    const r = rowFor(name);
+    const d = _logDate(l);
+    const q = Math.abs(Number(l.quantity_change || 0));
     const t = l.transaction_type;
-    if (STAGE_TYPES.seeds.includes(t))   { row.seeds   += qty; row.seeds_date = row.seeds_date || l.transaction_date || l.created_at; row.seedsLogs.push(l); }
-    else if (t === 'Damaged_Seeds')      { row.damaged += Math.abs(qty); }
-    else if (STAGE_TYPES.planted.includes(t)) row.planted += qty;
-    else if (STAGE_TYPES.trans.includes(t))   { row.trans += qty; row.transLogs.push(l); }
-    else if (STAGE_TYPES.cull1.includes(t))   { row.cull1 += Math.abs(qty); row.cull1Logs.push(l); }
-    else if (STAGE_TYPES.cull2.includes(t))   { row.cull2 += Math.abs(qty); row.cull2Logs.push(l); }
-    else if (STAGE_TYPES.cull3.includes(t))   { row.cull3 += Math.abs(qty); row.cull3Logs.push(l); }
+    // The log is the only thing that names the breed: operation_batches has
+    // no breed_name column, and a bulk-imported batch has no row there at
+    // all. Every Seeds_Received row carries its own — see the reception
+    // form's save in operation_batch_detail.html.
+    if (r.breed === '—' && l.breed_name) r.breed = l.breed_name;
+
+    if (t === 'Seeds_Received') {
+      const rm = l.remark || '';
+      const sup  = rm.match(_RE_LOS_SUPPLIER);
+      const mp   = rm.match(_RE_LOS_MPOB);
+      const dono = rm.match(_RE_LOS_DONO);
+      const dq   = rm.match(_RE_LOS_DO_QTY);
+      const fp   = rm.match(_RE_LOS_FOC_PCT);
+      const rp   = rm.match(_RE_LOS_REPL);
+      // Legacy rows carry no DO_Qty marker — the whole received quantity WAS
+      // the D/O quantity then, there being no FOC concept yet to split it from.
+      const doQty = dq ? parseInt(dq[1], 10) : Number(l.quantity_change || 0);
+      const focPct = fp ? parseFloat(fp[1]) : null;
+      // The same "Calculated FOC Qty" arithmetic Seeds In shows beside the FOC
+      // percent it comes from, so this report's figure is the one the batch
+      // was keyed against.
+      const focQty = focPct != null ? Math.round(doQty * (focPct / 100)) : 0;
+      const repl   = rp ? parseInt(rp[1], 10) : 0;
+      if (!r.seedsDate || (d && d < r.seedsDate)) r.seedsDate = d;
+      if (r.supplier === '—' && sup && sup[1].trim()) r.supplier = sup[1].trim();
+      if (r.mpob === '—' && mp) r.mpob = mp[1].trim();
+      r.received += Number(l.quantity_change || 0);
+      r.doQty    += doQty;
+      r.focQty   += focQty;
+      r.replQty  += repl;
+      if (r.focPct == null && focPct != null) r.focPct = focPct;
+      r.rec.received.push({ date: d, batch: name, supplier: sup ? sup[1].trim() : '—',
+        mpob: mp ? mp[1].trim() : '—', dono: dono ? dono[1].trim() : '—',
+        doQty, focQty, repl, qty: Number(l.quantity_change || 0) });
+      return;
+    }
+    if (t === 'Damaged_Seeds') {
+      r.damaged += q;
+      r.rec.damaged.push({ date: d, batch: name, place: l.plot_name || '—', qty: q, note: l.remark || '' });
+      return;
+    }
+    if (t === 'Planted') {
+      r.planted += q;
+      r.rec.planted.push({ date: d, batch: name, place: l.plot_name || '—', qty: q });
+      return;
+    }
+    if (t === 'Transplanted') {
+      const src = (l.remark || '').match(_RE_LOS_FROM_TRAY);
+      r.trans += q;
+      r.rec.trans.push({ date: d, batch: name, from: src ? src[1].trim() : '—',
+        place: l.plot_name || '—', nursery: nurseryOf(l.plot_name), qty: q });
+      return;
+    }
+    if (t === 'Transplanted_Premium' || t === 'Transplanted_DoubleTone') {
+      const src = (l.remark || '').match(_RE_LOS_FROM_TRAY);
+      const key = t === 'Transplanted_Premium' ? 'premium' : 'dtone';
+      r[key] += q;
+      r.rec[key].push({ date: d, batch: name, from: src ? src[1].trim() : '—',
+        place: l.plot_name || '—', qty: q });
+      return;
+    }
+    if (t === '1st_Culling' || t === '2nd_Culling' || t === '3rd_Culling') {
+      const key = t === '1st_Culling' ? 'cull1' : t === '2nd_Culling' ? 'cull2' : 'cull3';
+      const stage = t === '1st_Culling' ? '1st' : t === '2nd_Culling' ? '2nd' : '3rd';
+      r[key] += q;
+      r.rec[key].push({ date: d, batch: name, stage, place: l.plot_name || '—',
+        nursery: t === '1st_Culling' ? 'Pre-Nursery' : nurseryOf(l.plot_name), qty: q });
+      return;
+    }
+    if (t === 'Cull3_Transfer') {
+      /* One log describes both sides of the move: the plot named on the row
+         gained the seedlings, the plot named in its remark lost them. Both
+         plots belong to THIS batch — a 3rd-culling transfer only ever moves
+         seedlings from one of a batch's plots to another — so it changes
+         where the batch is standing and not how many of it there are. That
+         is why the column is the quantity moved, and why it takes no part in
+         the Balance beside it. */
+      const from = (l.remark || '').match(_RE_LOS_FROM_PLOT);
+      r.transfer += q;
+      r.rec.transfer.push({ date: d, batch: name, from: from ? from[1].trim() : '—',
+        place: l.plot_name || '—', nursery: nurseryOf(l.plot_name), qty: q });
+      return;
+    }
+    if (t === 'Stock_Calibration') {
+      const rm = l.remark || '';
+      const ok = _RE_LOS_APPROVED.test(rm);
+      const body = rm.replace(_RE_LOS_APPROVED, '').trim();
+      const rep  = body.match(_RE_LOS_CAL_REPORT);
+      const side = body.match(_RE_LOS_CAL_SIDE);
+      const signed = Number(l.quantity_change || 0);
+      if (ok) r.calibration += signed;
+      r.rec.calibration.push({ date: d, batch: name, place: l.plot_name || '—',
+        report: rep ? rep[1].trim() : '—', side: side ? side[1].toLowerCase() : 'seed',
+        approved: ok, qty: signed, note: body.replace(_RE_LOS_CAL_REPORT, '').replace(_RE_LOS_CAL_SIDE, '').trim() });
+      return;
+    }
   });
 
-  // Filter by date (on Seeds_Received date, up to To) and breed.
-  const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
-
-  let rows = Object.values(byBatch).map(r => {
-    // The breed captured on the actual log rows — every Seeds_Received
-    // log has breed_name filled in (see reception-form save in
-    // operation_batch_detail.html), which is the only reliable source.
-    r.breed_name = r.log_breed || '—';
-    r.batch_created_at = r.seeds_date;
-    const finalAlive = Math.max(0, r.trans - r.cull1 - r.cull2 - r.cull3);
-    const survival   = r.seeds > 0 ? (finalAlive / r.seeds) * 100 : 0;
-    r.final_alive = finalAlive;
-    r.survival_pct = survival;
-    return r;
+  // ── Sales, off the delivery orders ──
+  // Matched on the batch alone, not plot·batch: this report's row IS the batch,
+  // so a D/O line for it counts wherever in the nursery it was picked from.
+  // Cancelled D/Os are the only ones left out; CAL- calibration D/Os count,
+  // the same rule Batch Detail's Sales figure follows.
+  const byBatchKey = {};
+  Object.values(rowsByBatch).forEach(r => {
+    const k = _mvBatchKey(r.batch);
+    if (k) byBatchKey[k] = r;
+  });
+  (dosRes.data || []).forEach(d => {
+    if (d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'))) return;
+    for (let i = 1; i <= 5; i++) {
+      const qty = Number(d['qty_' + i] || 0);
+      if (!qty) continue;
+      const r = byBatchKey[_mvBatchKey(d['batch_' + i])];
+      if (!r) continue;
+      r.sales += qty;
+      r.rec.sales.push({ date: d.delivery_date || null, batch: r.batch,
+        dono: d.do_number || '—', place: d['plot_' + i] || '—',
+        nursery: nurseryOf(d['plot_' + i]), qty });
+    }
   });
 
+  // ── Derived figures ──
+  Object.values(rowsByBatch).forEach(r => {
+    // What the 2nd culling contributes: nothing once a 3rd has been recorded,
+    // because the 3rd was keyed against the original transplanted figure and
+    // already contains it. Same rule as the Movement Report's netOfRow().
+    r.postCull   = r.cull3 > 0 ? r.cull3 : r.cull2;
+    r.cullTotal  = r.cull1 + r.postCull;
+    r.variance   = r.planted - (r.received - r.damaged);
+    r.balance    = r.planted - r.cullTotal - r.sales + r.calibration;
+    // Where the batch is standing NOW, which is what the Pre / Main filter
+    // asks. Pre-nursery holds whatever was planted and has not been culled in
+    // the tray or transplanted out of it; the rest is in the field.
+    r.preBalance  = r.planted - r.cull1 - r.trans;
+    r.mainBalance = r.balance - r.preBalance;
+    r.ageMonths   = _losAgeMonths(r.seedsDate, asAt);
+    r.age         = _losAgeLabel(r.ageMonths);
+    // Completed: it went out to the field and there is nothing of it left.
+    // A batch that has not been transplanted yet also nets to nought at the
+    // start of its life and is very much active, so that is guarded for.
+    r.completed   = r.trans > 0 && r.balance <= 0;
+  });
+
+  let rows = Object.values(rowsByBatch);
+
+  // Years offered by the Year picker come from the data, so there is never a
+  // year to choose that has no batch in it.
+  const years = [...new Set(rows.map(r => (r.seedsDate || '').slice(0, 4)).filter(Boolean))]
+    .sort((a, b) => b.localeCompare(a));
+  _losSyncYearOptions(years);
+  _losSyncSupplierOptions([...new Set(rows.map(r => r.supplier).filter(s => s && s !== '—'))].sort());
+
+  // ── Filters ── nothing picked means no filtering, so the report opens on
+  // everything — active and completed alike — rather than on a slice nobody
+  // asked for.
+  const asAtTs = asAt ? new Date(asAt).getTime() + 86400000 : Infinity;
+  const band   = LOS_AGE_BANDS.find(b => b.value === ageBand);
   rows = rows.filter(r => {
-    if (breed && r.breed_name !== breed) return false;
-    // Completed — the batch was transplanted and everything from that
-    // transplant has since been culled away, so there's nothing left for
-    // this funnel to track. A batch that hasn't reached transplanting yet
-    // also computes to 0 here but is very much still active, not
-    // completed, so that's guarded separately (r.trans > 0).
-    if (r.trans > 0 && r.final_alive === 0) return false;
-    const anchor = r.seeds_date ? new Date(r.seeds_date).getTime()
-                : (r.batch_created_at ? new Date(r.batch_created_at).getTime() : NaN);
-    if (isNaN(anchor)) return true; // keep batches with no anchor date so users see them
-    return anchor <= toTs;
+    if (breed && r.breed !== breed) return false;
+    if (supplier && r.supplier !== supplier) return false;
+    if (status === 'active'    && r.completed) return false;
+    if (status === 'completed' && !r.completed) return false;
+    // The Year picker stands in for the As At date on completed batches — a
+    // finished batch is read by the year it belongs to, not by a cut-off.
+    if (status === 'completed' && year) {
+      if ((r.seedsDate || '').slice(0, 4) !== year) return false;
+    } else if (r.seedsDate) {
+      const ts = new Date(r.seedsDate).getTime();
+      if (isFinite(ts) && ts > asAtTs) return false;
+    }
+    if (nursery === 'pre'  && r.preBalance  <= 0) return false;
+    if (nursery === 'main' && r.mainBalance <= 0) return false;
+    if (band && (r.ageMonths == null || r.ageMonths < band.min || r.ageMonths > band.max)) return false;
+    return true;
   });
 
-  rows.sort((a, b) => {
-    const da = a.seeds_date ? new Date(a.seeds_date).getTime() : 0;
-    const db = b.seeds_date ? new Date(b.seeds_date).getTime() : 0;
-    return db - da;
-  });
+  rows.sort((a, b) => String(b.seedsDate || '').localeCompare(String(a.seedsDate || ''))
+                   || String(b.batch).localeCompare(String(a.batch)));
 
-  // Stash drilldown data on window for the click-through modal below.
-  // We only publish rows that survived the filter step so drilldowns
-  // reflect exactly what the summary is counting.
-  window._bpDetails = { rows, nurseryOf, filterTo: to, breed };
+  const tot = rows.reduce((s, r) => {
+    ['received','doQty','focQty','damaged','planted','trans','dtone','cull1','cull2','cull3',
+     'cullTotal','transfer','sales','calibration','balance'].forEach(k => { s[k] += r[k] || 0; });
+    if (r.variance < 0) s.varDown += r.variance; else if (r.variance > 0) s.varUp += r.variance;
+    return s;
+  }, { received:0, doQty:0, focQty:0, damaged:0, planted:0, trans:0, dtone:0, cull1:0, cull2:0,
+       cull3:0, cullTotal:0, transfer:0, sales:0, calibration:0, balance:0, varDown:0, varUp:0 });
 
-  // ── Render ──
+  // What the drilldowns read. Published only after filtering, so a detail
+  // window can never show rows the summary above it is not counting.
+  window._losData = { rows, asAt };
+
+  const scope = [
+    asAt && !(status === 'completed' && year) ? 'as at ' + fmtDate(asAt) : '',
+    status === 'completed' && year ? 'year ' + year : '',
+    status === 'active' ? 'active' : status === 'completed' ? 'completed' : 'active & completed',
+    nursery === 'pre' ? 'pre-nursery' : nursery === 'main' ? 'main nursery' : '',
+    band ? band.label.replace(/\s/g, ' ') : '',
+    breed, supplier === '—' ? '' : supplier
+  ].filter(Boolean).join(' · ');
+
   loading.classList.add('hidden');
   out.classList.remove('hidden');
+  out.innerHTML = _losSummaryHtml(rows, tot, scope) + _losBreedHtml(rows, breed, supplier);
+}
 
-  out.innerHTML = `
-    <!-- Per-batch table -->
+/* The D/O + FOC split under the received figure. Said only when it says
+   something: a batch with no FOC seeds would otherwise carry a permanent
+   "1,000 + FOC 0" under a figure that is already 1,000. */
+function _losFocSplit(r) {
+  if (!r.focQty && r.doQty === r.received) return '';
+  return `<div class="text-[9px] font-bold text-[#8a7a68]">${fmtNum(r.doQty)} + FOC ${fmtNum(r.focQty)}</div>`;
+}
+
+/* A figure that can be opened. Everything numeric on this report is one,
+   except where there is nothing behind it to show. */
+function _losFig(kind, batch, text, cls) {
+  /* Escaped for the JS string FIRST, then for the attribute — the other way
+     round does nothing, because _losEsc has already turned the apostrophe
+     into &#39; by the time the backslash would be added, and the parser
+     hands it back as a bare quote that ends the argument early. */
+  const arg = _losEsc(String(batch).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+  return `<button type="button" class="los-fig ${cls || ''}" onclick="losDrill('${kind}','${arg}')">${text}</button>`;
+}
+function _losCell(kind, batch, value, cls) {
+  if (!value) return `<td class="text-right text-[#8a7a68]">0</td>`;
+  return `<td class="text-right">${_losFig(kind, batch, fmtNum(value), cls)}</td>`;
+}
+
+function _losSummaryHtml(rows, tot, scope) {
+  const body = rows.map(r => `
+    <tr>
+      <td class="whitespace-nowrap">${fmtDate(r.seedsDate)}</td>
+      <td>
+        <div class="font-black text-[#3d2610]">${_losEsc(r.batch)}</div>
+        <div class="text-[10px] font-bold text-[#8a7a68]">${_losEsc(r.breed)}</div>
+      </td>
+      <td>
+        <div class="text-[11px] font-bold text-[#3d2610]">${_losEsc(r.supplier)}</div>
+        <div class="text-[10px] font-bold text-[#8a7a68]">${_losEsc(r.mpob)}</div>
+      </td>
+      <td class="whitespace-nowrap text-[#8a7a68]">${r.age}</td>
+      <td class="text-right">
+        ${_losFig('received', r.batch, fmtNum(r.received), 'text-[#c07820] font-black')}
+        ${_losFocSplit(r)}
+      </td>
+      ${_losCell('damaged', r.batch, r.damaged, 'text-[#a83020] font-black')}
+      ${_losCell('planted', r.batch, r.planted, 'font-black')}
+      <td class="text-right">${_losFig('variance', r.batch,
+        (r.variance > 0 ? '+' : r.variance < 0 ? '−' : '') + fmtNum(Math.abs(r.variance)),
+        r.variance < 0 ? 'text-[#a83020] font-black' : r.variance > 0 ? 'text-[#4a7a2e] font-black' : 'text-[#8a7a68]')}</td>
+      ${_losCell('trans', r.batch, r.trans, 'text-[#3a7ab4] font-black')}
+      ${_losCell('dtone', r.batch, r.dtone, 'text-[#7c3aed] font-black')}
+      ${_losCell('cull1', r.batch, r.cull1, 'text-[#a83020]')}
+      ${_losCell('cull2', r.batch, r.cull2, 'text-[#a83020]')}
+      ${_losCell('cull3', r.batch, r.cull3, 'text-[#a83020]')}
+      ${_losCell('cullTotal', r.batch, r.cullTotal, 'text-[#a83020] font-black')}
+      ${_losCell('transfer', r.batch, r.transfer, 'font-black')}
+      ${_losCell('sales', r.batch, r.sales, 'text-[#4a7a2e] font-black')}
+      <td class="text-right">${r.rec.calibration.length
+        ? _losFig('calibration', r.batch, fmtSigned(r.calibration), 'font-black')
+        : '<span class="text-[#8a7a68]">0</span>'}</td>
+      <td class="text-right">${_losFig('balance', r.batch, fmtNum(r.balance),
+        r.balance < 0 ? 'text-[#a83020] font-black' : 'text-[#4a7a2e] font-black')}</td>
+    </tr>`).join('');
+
+  return `
     <div class="glass-panel p-6 rounded-[2rem]">
-      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
-        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Batch Production Summary</h3>
-        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} batch${rows.length === 1 ? '' : 'es'}${to ? ' · as at ' + fmtDate(to) : ''}${breed ? ' · ' + breed : ''}</div>
+      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4 gap-4 flex-wrap">
+        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Life of Seedlings</h3>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} batch${rows.length === 1 ? '' : 'es'}${scope ? ' · ' + _losEsc(scope) : ''}</div>
       </div>
+      <div class="text-[10px] font-bold text-[#8a7a68] mb-3 no-print">Tap any figure to see the records behind it.</div>
+      <div class="overflow-x-auto">
+        <table class="report-table los-table">
+          <thead>
+            <tr>
+              <th rowspan="2">Seed In Date</th>
+              <th rowspan="2">Batch / Breed</th>
+              <th rowspan="2">Supplier / MPOB Licence</th>
+              <th rowspan="2">Age</th>
+              <th colspan="4" class="los-grp">Seed In Details</th>
+              <th rowspan="2" class="text-right">Transplanting Qty</th>
+              <th rowspan="2" class="text-right">Double Tone</th>
+              <th colspan="4" class="los-grp">Culling Detail</th>
+              <th rowspan="2" class="text-right">Transfer</th>
+              <th rowspan="2" class="text-right">Total Sales</th>
+              <th rowspan="2" class="text-right">Stock Calibration</th>
+              <th rowspan="2" class="text-right" title="Actual planted − total culling − total sales + approved stock calibration. A transfer moves seedlings between two plots of the same batch, so it is not part of this.">Balance</th>
+            </tr>
+            <tr>
+              <th class="text-right" title="The delivery order quantity plus the FOC seeds that came with it">Seed Received (D/O) + FOC Qty</th>
+              <th class="text-right">Seed Damage</th>
+              <th class="text-right">Actual Planted</th>
+              <th class="text-right" title="Actual planted − (seed received − seed damage). Negative means fewer seeds were planted than arrived.">Variance Seed In</th>
+              <th class="text-right">1st Culling</th>
+              <th class="text-right">2nd Culled</th>
+              <th class="text-right">3rd Culling</th>
+              <th class="text-right" title="1st culling + 3rd culling. The 2nd culling is not added: the 3rd is keyed against the original transplanted figure and already contains it — while no 3rd has been recorded, the 2nd stands in its place.">Total Culling (1st + 3rd)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.length ? body : `<tr><td colspan="18" class="text-center py-10 text-[#8a7a68]">No batches match the selected filters.</td></tr>`}
+          </tbody>
+          ${rows.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
+            <td colspan="4" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
+            <td class="text-right">${_losFig('received', '*', fmtNum(tot.received), 'text-[#c07820] font-black')}
+              <div class="text-[9px] font-bold text-[#8a7a68]">${fmtNum(tot.doQty)} + FOC ${fmtNum(tot.focQty)}</div></td>
+            <td class="text-right">${_losFig('damaged', '*', fmtNum(tot.damaged), 'text-[#a83020] font-black')}</td>
+            <td class="text-right">${_losFig('planted', '*', fmtNum(tot.planted), 'font-black')}</td>
+            <td class="text-right">
+              <div class="text-[#a83020] font-black">${tot.varDown ? '−' + fmtNum(Math.abs(tot.varDown)) : '0'}</div>
+              <div class="text-[9px] font-bold text-[#8a7a68]">sum of all less received</div>
+              <div class="text-[#4a7a2e] font-black mt-1">${tot.varUp ? '+' + fmtNum(tot.varUp) : '0'}</div>
+              <div class="text-[9px] font-bold text-[#8a7a68]">sum of all more received</div>
+            </td>
+            <td class="text-right">${_losFig('trans', '*', fmtNum(tot.trans), 'text-[#3a7ab4] font-black')}</td>
+            <td class="text-right">${_losFig('dtone', '*', fmtNum(tot.dtone), 'text-[#7c3aed] font-black')}</td>
+            <td class="text-right">${_losFig('cull1', '*', fmtNum(tot.cull1), 'text-[#a83020]')}</td>
+            <td class="text-right">${_losFig('cull2', '*', fmtNum(tot.cull2), 'text-[#a83020]')}</td>
+            <td class="text-right">${_losFig('cull3', '*', fmtNum(tot.cull3), 'text-[#a83020]')}</td>
+            <td class="text-right">${_losFig('cullTotal', '*', fmtNum(tot.cullTotal), 'text-[#a83020] font-black')}</td>
+            <td class="text-right">${_losFig('transfer', '*', fmtNum(tot.transfer), 'font-black')}</td>
+            <td class="text-right">${_losFig('sales', '*', fmtNum(tot.sales), 'text-[#4a7a2e] font-black')}</td>
+            <td class="text-right">${_losFig('calibration', '*', fmtSigned(tot.calibration), 'font-black')}</td>
+            <td class="text-right">${_losFig('balance', '*', fmtNum(tot.balance), 'text-[#4a7a2e] font-black')}</td>
+          </tr></tfoot>` : ''}
+        </table>
+      </div>
+    </div>`;
+}
 
+/* ── The Seed In detail, one table per breed ──────────────────────────────
+   The same batches as the summary above, split by breed and showing only
+   what came in: who supplied it, how much arrived, how much was damaged and
+   how much of it was actually planted. With no breed picked every breed gets
+   its own table; with one picked, only that one. The supplier filter has
+   already narrowed the rows by the time they arrive here, which is what
+   makes "same supplier, two breeds" read as two tables rather than one
+   mixed list. */
+function _losBreedHtml(rows, breed, supplier) {
+  if (!rows.length) return '';
+  const groups = {};
+  rows.forEach(r => { (groups[r.breed] = groups[r.breed] || []).push(r); });
+  const names = Object.keys(groups).sort();
+  return names.map(name => {
+    const list = groups[name];
+    const t = list.reduce((s, r) => ({
+      received: s.received + r.received, damaged: s.damaged + r.damaged,
+      planted: s.planted + r.planted,
+      varDown: s.varDown + (r.variance < 0 ? r.variance : 0),
+      varUp:   s.varUp   + (r.variance > 0 ? r.variance : 0)
+    }), { received: 0, damaged: 0, planted: 0, varDown: 0, varUp: 0 });
+    return `
+    <div class="glass-panel p-6 rounded-[2rem]">
+      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4 gap-4 flex-wrap">
+        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Seed In Details — ${_losEsc(name)}</h3>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(list.length)} batch${list.length === 1 ? '' : 'es'}${supplier ? ' · ' + _losEsc(supplier) : ''}</div>
+      </div>
       <div class="overflow-x-auto">
         <table class="report-table">
           <thead>
             <tr>
-              <th>Batch</th>
-              <th>Breed</th>
-              <th>Seeds In</th>
-              <th class="text-right">Seeds</th>
-              <th class="text-right">Planted</th>
-              <th class="text-right">Transplanted</th>
-              <th class="text-right">Cull 1 / 2 / 3</th>
-              <th class="text-right">Final Alive</th>
-              <th class="text-right">Survival</th>
-              <th style="min-width:200px">Funnel</th>
+              <th rowspan="2">Seed In Date</th>
+              <th rowspan="2">Batch</th>
+              <th rowspan="2">Supplier / MPOB Licence</th>
+              <th colspan="4" class="los-grp">Seed In Details</th>
+            </tr>
+            <tr>
+              <th class="text-right">Seed Received (D/O) + FOC Qty</th>
+              <th class="text-right">Seed Damage</th>
+              <th class="text-right">Actual Planted</th>
+              <th class="text-right">Variance Seed In</th>
             </tr>
           </thead>
           <tbody>
-            ${rows.length ? rows.map(r => {
-              const segMax = Math.max(r.seeds, r.planted, r.trans, 1);
-              const segPct = (v) => Math.max(0, Math.min(100, (v / segMax) * 100));
-              return `
-                <tr>
-                  <td><div class="font-black text-[#3d2610]">${r.batch_name}</div></td>
-                  <td>${r.breed_name}</td>
-                  <td>${fmtDate(r.seeds_date)}</td>
-                  <td class="text-right text-[#c07820] font-black">${fmtNum(r.seeds)}</td>
-                  <td class="text-right">${fmtNum(r.planted)}</td>
-                  <td class="text-right text-[#3a7ab4] font-black">${fmtNum(r.trans)}</td>
-                  <td class="text-right text-[#a83020]">${fmtNum(r.cull1)} / ${fmtNum(r.cull2)} / ${fmtNum(r.cull3)}</td>
-                  <td class="text-right text-[#4a7a2e] font-black">${fmtNum(r.final_alive)}</td>
-                  <td class="text-right font-black ${r.survival_pct >= 80 ? 'text-[#4a7a2e]' : r.survival_pct >= 60 ? 'text-[#c07820]' : 'text-[#a83020]'}">${fmtPct(r.survival_pct)}</td>
-                  <td>
-                    <div class="funnel-bar" title="Seeds ${fmtNum(r.seeds)} → Planted ${fmtNum(r.planted)} → Transplanted ${fmtNum(r.trans)}">
-                      <div class="funnel-seg seg-seeds"   style="width:${segPct(r.seeds)}%"></div>
-                    </div>
-                    <div class="funnel-bar mt-1">
-                      <div class="funnel-seg seg-planted" style="width:${segPct(r.planted)}%"></div>
-                    </div>
-                    <div class="funnel-bar mt-1">
-                      <div class="funnel-seg seg-trans"   style="width:${segPct(r.trans)}%"></div>
-                    </div>
-                  </td>
-                </tr>`;
-            }).join('') : `<tr><td colspan="10" class="text-center py-10 text-[#8a7a68]">No batches match the selected filters.</td></tr>`}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  `;
-}
-
-/**
- * Batch Double Tone
- *
- * Every batch with any Transplanted_DoubleTone qty, keyed to the date it was
- * keyed into the system (_logDate — the transplant's own "Date:" if one was
- * typed, else when the row was saved). Batch, Breed, Qty — nothing else, per
- * the request; this isn't the full funnel Batch Production Summary already
- * covers.
- */
-async function runBatchDoubleTone() {
-  const out = document.getElementById('report-output');
-  const loading = document.getElementById('loading');
-  out.classList.add('hidden');
-  loading.classList.remove('hidden');
-
-  const from  = document.getElementById('f-from').value;
-  const to    = document.getElementById('f-to').value;
-  const breed = document.getElementById('f-breed').value;
-
-  const [logsRes, batchesRes] = await Promise.all([
-    fetchAllRows(() => _supabase.from('shared_inventory_logs')
-      .select('batch_name, transaction_date, created_at, remark, quantity_change, breed_name')
-      .eq('transaction_type', 'Transplanted_DoubleTone')
-      .order('id', { ascending: true })),
-    // operation_batches has no breed_name column. A Transplanted_DoubleTone
-    // row is sometimes saved without its own either, so Seeds_Received —
-    // the batch's own Breed Variety field from Tab 1 — is the fallback.
-    fetchAllRows(() => _supabase.from('shared_inventory_logs')
-      .select('batch_name, breed_name')
-      .eq('transaction_type', 'Seeds_Received'))
-  ]);
-  if (logsRes.error) {
-    loading.classList.add('hidden'); out.classList.remove('hidden');
-    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-red-700 text-sm">Failed to load logs: ${logsRes.error.message}</div>`;
-    return;
-  }
-
-  const batchBreed = {};
-  (batchesRes.data || []).forEach(b => { if (b.breed_name) batchBreed[b.batch_name] = b.breed_name; });
-
-  const fromTs = from ? new Date(from).getTime() : -Infinity;
-  const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
-
-  const byBatch = {};
-  (logsRes.data || []).forEach(l => {
-    const b = l.batch_name; if (!b) return;
-    const d = _logDate(l);
-    const ts = d ? new Date(d).getTime() : NaN;
-    if (isFinite(ts) && (ts < fromTs || ts > toTs)) return;
-    if (!byBatch[b]) byBatch[b] = { batch_name: b, qty: 0, date: d, breed: l.breed_name || batchBreed[b] || '—' };
-    byBatch[b].qty += Number(l.quantity_change || 0);
-    // Earliest keyed date represents the batch, same convention as Seeds In.
-    if (d && (!byBatch[b].date || d < byBatch[b].date)) byBatch[b].date = d;
-    if (!byBatch[b].breed || byBatch[b].breed === '—') byBatch[b].breed = l.breed_name || batchBreed[b] || '—';
-  });
-
-  let rows = Object.values(byBatch).filter(r => !breed || r.breed === breed);
-  rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')));
-  const total = rows.reduce((s, r) => s + r.qty, 0);
-
-  loading.classList.add('hidden');
-  out.classList.remove('hidden');
-  out.innerHTML = `
-    <div class="glass-panel p-6 rounded-[2rem]">
-      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
-        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Batch Double Tone</h3>
-        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} batch${rows.length === 1 ? '' : 'es'}${from ? ' · from ' + fmtDate(from) : ''}${to ? ' · to ' + fmtDate(to) : ''}${breed ? ' · ' + breed : ''}</div>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="report-table">
-          <thead><tr><th>Date</th><th>Batch</th><th>Breed</th><th class="text-right">Qty</th></tr></thead>
-          <tbody>
-            ${rows.length ? rows.map(r => `
+            ${list.map(r => `
               <tr>
-                <td>${fmtDate(r.date)}</td>
-                <td class="font-black text-[#3d2610]">${r.batch_name}</td>
-                <td>${r.breed}</td>
-                <td class="text-right text-[#7c3aed] font-black">${fmtNum(r.qty)}</td>
-              </tr>`).join('') : `<tr><td colspan="4" class="text-center py-10 text-[#8a7a68]">No Double Tone batches match the selected filters.</td></tr>`}
+                <td class="whitespace-nowrap">${fmtDate(r.seedsDate)}</td>
+                <td class="font-black text-[#3d2610]">${_losEsc(r.batch)}</td>
+                <td>
+                  <div class="text-[11px] font-bold text-[#3d2610]">${_losEsc(r.supplier)}</div>
+                  <div class="text-[10px] font-bold text-[#8a7a68]">${_losEsc(r.mpob)}</div>
+                </td>
+                <td class="text-right">
+                  ${_losFig('received', r.batch, fmtNum(r.received), 'text-[#c07820] font-black')}
+                  ${_losFocSplit(r)}
+                </td>
+                ${_losCell('damaged', r.batch, r.damaged, 'text-[#a83020] font-black')}
+                ${_losCell('planted', r.batch, r.planted, 'font-black')}
+                <td class="text-right">${_losFig('variance', r.batch,
+                  (r.variance > 0 ? '+' : r.variance < 0 ? '−' : '') + fmtNum(Math.abs(r.variance)),
+                  r.variance < 0 ? 'text-[#a83020] font-black' : r.variance > 0 ? 'text-[#4a7a2e] font-black' : 'text-[#8a7a68]')}</td>
+              </tr>`).join('')}
           </tbody>
-          ${rows.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
+          <tfoot><tr class="font-black bg-[#f8f4ec]">
             <td colspan="3" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
-            <td class="text-right text-[#7c3aed]">${fmtNum(total)}</td>
-          </tr></tfoot>` : ''}
+            <td class="text-right text-[#c07820]">${fmtNum(t.received)}</td>
+            <td class="text-right text-[#a83020]">${fmtNum(t.damaged)}</td>
+            <td class="text-right">${fmtNum(t.planted)}</td>
+            <td class="text-right">
+              <div class="text-[#a83020]">${t.varDown ? '−' + fmtNum(Math.abs(t.varDown)) : '0'}</div>
+              <div class="text-[#4a7a2e]">${t.varUp ? '+' + fmtNum(t.varUp) : '0'}</div>
+            </td>
+          </tr></tfoot>
         </table>
       </div>
-    </div>
-  `;
+    </div>`;
+  }).join('');
 }
 
-/**
- * Seed Received
- *
- * Per batch, the D/O quantity and FOC% keyed on Seeds_Received (parsed from
- * the remark — the same "DO_Qty: N." / "Incl. P% FOC." markers Tab 1 writes,
- * see operation_batch_detail.html), plus Damaged_Seeds summed the same way
- * Batch Production Summary already does it. Grouped by month via _logDate on
- * the Seeds_Received transaction.
- */
-const _RE_DO_QTY = /DO_Qty:\s*(\d+)/i;
-const _RE_FOC_PCT = /Incl\.\s*([\d.]+)%\s*FOC/i;
-async function runSeedReceived() {
-  const out = document.getElementById('report-output');
-  const loading = document.getElementById('loading');
-  out.classList.add('hidden');
-  loading.classList.remove('hidden');
-
-  const from  = document.getElementById('f-from').value;
-  const to    = document.getElementById('f-to').value;
-  const breed = document.getElementById('f-breed').value;
-
-  const [logsRes] = await Promise.all([
-    // operation_batches has no breed_name column — every Seeds_Received row
-    // already carries its own (see reception-form save in
-    // operation_batch_detail.html), so there's nothing to fall back to here.
-    fetchAllRows(() => _supabase.from('shared_inventory_logs')
-      .select('batch_name, transaction_type, transaction_date, created_at, remark, quantity_change, breed_name')
-      .in('transaction_type', ['Seeds_Received', 'Damaged_Seeds'])
-      .order('id', { ascending: true }))
-  ]);
-  if (logsRes.error) {
-    loading.classList.add('hidden'); out.classList.remove('hidden');
-    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-red-700 text-sm">Failed to load logs: ${logsRes.error.message}</div>`;
-    return;
-  }
-
-  const fromTs = from ? new Date(from).getTime() : -Infinity;
-  const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
-
-  const byBatch = {};
-
-  // Pass 1: Seeds_Received — this is what anchors a batch to the report and
-  // to the date filter (a batch belongs to the month it was received in).
-  (logsRes.data || []).forEach(l => {
-    if (l.transaction_type !== 'Seeds_Received') return;
-    const b = l.batch_name; if (!b) return;
-    const d = _logDate(l);
-    const ts = d ? new Date(d).getTime() : NaN;
-    if (isFinite(ts) && (ts < fromTs || ts > toTs)) return;
-
-    const row = byBatch[b] || (byBatch[b] = { batch_name: b, breed: '—', date: null, doQty: 0, focPct: null, damaged: 0 });
-    if (!row.date || (d && d < row.date)) row.date = d;
-    if ((!row.breed || row.breed === '—') && l.breed_name) row.breed = l.breed_name;
-    const doMatch  = (l.remark || '').match(_RE_DO_QTY);
-    const focMatch = (l.remark || '').match(_RE_FOC_PCT);
-    // Legacy rows saved before the D/O·FOC split existed carry no DO_Qty
-    // marker at all — the whole received qty was the D/O qty then, there
-    // being no FOC concept yet to separate it from.
-    row.doQty += doMatch ? parseInt(doMatch[1], 10) : Number(l.quantity_change || 0);
-    if (row.focPct == null && focMatch) row.focPct = parseFloat(focMatch[1]);
-  });
-
-  // Pass 2: Damaged_Seeds — deliberately NOT bounded by the date filter
-  // above, same as Batch Production Summary's own damage total: a batch's
-  // damage can be logged days after intake, and it still belongs to that
-  // batch's one row rather than needing a date of its own to qualify.
-  (logsRes.data || []).forEach(l => {
-    if (l.transaction_type !== 'Damaged_Seeds') return;
-    const row = byBatch[l.batch_name];
-    if (row) row.damaged += Math.abs(Number(l.quantity_change || 0));
-  });
-
-  let rows = Object.values(byBatch).filter(r => !breed || r.breed === breed);
-  rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')));
-
-  // Same "Calculated FOC Qty" formula Tab 1 (Seeds In) shows next to the FOC
-  // Percent field it comes from — round(D/O qty × FOC% / 100) — so this
-  // report's number matches the one the batch was actually keyed against.
-  rows.forEach(r => { r.focQty = r.focPct != null ? Math.round(r.doQty * (r.focPct / 100)) : null; });
-
-  const totals = rows.reduce((s, r) => ({
-    doQty: s.doQty + r.doQty, focQty: s.focQty + (r.focQty || 0), damaged: s.damaged + r.damaged
-  }), { doQty: 0, focQty: 0, damaged: 0 });
-
-  loading.classList.add('hidden');
-  out.classList.remove('hidden');
-  out.innerHTML = `
-    <div class="glass-panel p-6 rounded-[2rem]">
-      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
-        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Seed Received</h3>
-        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} batch${rows.length === 1 ? '' : 'es'}${from ? ' · from ' + fmtDate(from) : ''}${to ? ' · to ' + fmtDate(to) : ''}${breed ? ' · ' + breed : ''}</div>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="report-table">
-          <thead><tr>
-            <th>Date</th><th>Batch</th><th>Breed</th>
-            <th class="text-right">Seed Received (D/O)</th>
-            <th class="text-right">FOC Qty</th>
-            <th class="text-right">Seed Damage</th>
-          </tr></thead>
-          <tbody>
-            ${rows.length ? rows.map(r => `
-              <tr>
-                <td>${fmtDate(r.date)}</td>
-                <td class="font-black text-[#3d2610]">${r.batch_name}</td>
-                <td>${r.breed}</td>
-                <td class="text-right text-[#c07820] font-black">${fmtNum(r.doQty)}</td>
-                <td class="text-right">${r.focQty != null
-                  ? `<span class="font-black text-[#7c3aed]">${fmtNum(r.focQty)}</span>
-                     <span class="block text-[9px] text-[#8a7a68] font-bold">${r.focPct.toFixed(2)}%</span>`
-                  : '—'}</td>
-                <td class="text-right ${r.damaged ? 'text-[#a83020] font-black' : 'text-[#8a7a68]'}">${r.damaged ? fmtNum(r.damaged) : '—'}</td>
-              </tr>`).join('') : `<tr><td colspan="6" class="text-center py-10 text-[#8a7a68]">No seed receipts match the selected filters.</td></tr>`}
-          </tbody>
-          ${rows.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
-            <td colspan="3" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
-            <td class="text-right text-[#c07820]">${fmtNum(totals.doQty)}</td>
-            <td class="text-right text-[#7c3aed]">${fmtNum(totals.focQty)}</td>
-            <td class="text-right text-[#a83020]">${fmtNum(totals.damaged)}</td>
-          </tr></tfoot>` : ''}
-        </table>
-      </div>
-    </div>
-  `;
+/* Year and Supplier are offered from what the data actually holds, so there
+   is never a dead selection. Rebuilt only when the set changes, and the
+   current pick is kept if it is still on offer — otherwise switching report
+   or re-running would silently clear a filter somebody had set. */
+function _losSyncOptions(id, values, allLabel) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  const have = [...sel.options].slice(1).map(o => o.value);
+  if (have.length === values.length && have.every((v, i) => v === values[i])) return;
+  const keep = sel.value;
+  sel.innerHTML = `<option value="">${allLabel}</option>`
+    + values.map(v => `<option value="${_losEsc(v)}">${_losEsc(v)}</option>`).join('');
+  sel.value = values.includes(keep) ? keep : '';
 }
-
+function _losSyncYearOptions(years)       { _losSyncOptions('f-los-year', years, 'All years'); }
+function _losSyncSupplierOptions(suppliers) { _losSyncOptions('f-los-supplier', suppliers, 'All suppliers'); }
 // ── Report menu ───────────────────────────────────────────────────────────
 // One flat row — every report is a tab, no Category tier to click through
 // first. label is what the tab shows; hint is the fuller description (e.g.
 // "by Plot / Batch") kept as the button's title (a hover tooltip) instead
 // of dropped.
 const REPORTS = [
-  { value: 'batch_production',      label: 'Production Summary', hint: 'Batch Production Summary — the seeds → transplant → cull funnel, per batch' },
-  { value: 'batch_double_tone',     label: 'Double Tone',        hint: 'Batch Double Tone — batch, breed, qty' },
-  { value: 'seed_received',         label: 'Seed Received',      hint: 'Seed Received — D/O qty, FOC qty, seed damage, per batch' },
+  /* One report where there were three. Production Summary, Double Tone and
+     Seed Received each showed a slice of the same batch's life, so reading a
+     batch meant opening all three and lining them up by eye; every column
+     they had is a column here. */
+  { value: 'life_of_seedlings',     label: 'Life of Seedling',   hint: 'Life of Seedlings — one row per batch: seeds in, planted, transplanted, culled, sold, and what is still standing' },
   { value: 'movement_report',       label: 'Movement Report',    hint: 'Movement Report — pick PN, BNN, UNN 1 and/or UNN 2 under Locations to see that location\'s data' },
   { value: 'transplanting_report',  label: 'Transplanting',      hint: 'Transplanting Report — date, maturity date, location' },
   { value: 'sales_listing',         label: 'Sales Listing',      hint: 'Sales Listing — line items or the year × month chart' },
@@ -841,9 +1076,7 @@ async function runReport() {
   const fromEl = document.getElementById('f-from');
   if (toEl && fromEl) fromEl.value = monthStartOf(toEl.value);
   const which = document.getElementById('f-report').value;
-  if (which === 'batch_production')      return runBatchProduction();
-  if (which === 'batch_double_tone')     return runBatchDoubleTone();
-  if (which === 'seed_received')         return runSeedReceived();
+  if (which === 'life_of_seedlings')     return runLifeOfSeedlings();
   if (which === 'movement_report')       return runMovementReportCombined();
   if (which === 'transplanting_report')  return runTransplantingReport();
   if (which === 'sales_listing')         return runSalesListing();
@@ -854,16 +1087,14 @@ function syncFilterVisibility() {
   const which     = document.getElementById('f-report').value;
   const isMovement = (which === 'movement_report');
   const isTrans   = (which === 'transplanting_report');
-  const isBatch   = (which === 'batch_production');
-  const isDTone   = (which === 'batch_double_tone');
-  const isSeedRcv = (which === 'seed_received');
+  const isLife    = (which === 'life_of_seedlings');
   const isSales   = (which === 'sales_listing');
   // Sales Listing carries two views that want different filters: the Table
   // (line items) wants a date range + nurseries, the Chart (the year×month
   // trend the old Seedling Sales report drew) wants a set of years instead.
   const isSalesTable = isSales && _salesViewMode !== 'chart';
   const isSalesChart = isSales && _salesViewMode === 'chart';
-  const hasRange  = isBatch || isMovement || isTrans || isDTone || isSeedRcv || isSalesTable;
+  const hasRange  = isLife || isMovement || isTrans || isSalesTable;
   document.querySelectorAll('.f-range').forEach(el         => el.classList.toggle('hidden', !hasRange));
   // No visible From anywhere — every report is one "As At" date. Movement
   // Report still shows the Culled/Transplanted/Damaged/etc columns as that
@@ -882,7 +1113,15 @@ function syncFilterVisibility() {
   // Listing (table view) use the same chips to filter their own rows by
   // destination nursery.
   document.querySelectorAll('.f-nursery-inline').forEach(el => el.classList.toggle('hidden', !(isMovement || isTrans || isSalesTable)));
-  document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !(isBatch || isDTone || isSeedRcv || isTrans)));
+  document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !(isLife || isTrans)));
+  /* Life of Seedlings' own six: nursery type, active/completed, the As At
+     date (shared, above), age, breed (shared) and supplier. The Year picker
+     is the one that comes and goes — a finished batch is read by the year it
+     belongs to rather than by a cut-off date, so it appears only once
+     Completed is what is being asked for. */
+  document.querySelectorAll('.f-los').forEach(el           => el.classList.toggle('hidden', !isLife));
+  const losStatus = (document.getElementById('f-los-status') || {}).value;
+  document.querySelectorAll('.f-los-year-wrap').forEach(el => el.classList.toggle('hidden', !(isLife && losStatus === 'completed')));
   document.querySelectorAll('.f-sales-mode').forEach(el    => el.classList.toggle('hidden', !isSales));
   document.querySelectorAll('.f-sales-years').forEach(el   => el.classList.toggle('hidden', !isSalesChart));
 }
@@ -940,7 +1179,7 @@ function selectedNurseries() {
 /* Defaults that change with which report is now selected — run once per
    switch, not on every "Run Report" click, so re-running the same report
    never clobbers a date someone deliberately picked. */
-const DATE_KEYED_REPORTS = new Set(['batch_production', 'batch_double_tone', 'seed_received',
+const DATE_KEYED_REPORTS = new Set(['life_of_seedlings',
   'transplanting_report', 'sales_listing', 'movement_report']);
 function syncReportDefaults() {
   const which = document.getElementById('f-report').value;
@@ -959,6 +1198,17 @@ document.getElementById('f-run').addEventListener('click', runReport);
 // listener did here — nothing left to wire up.
 const _fSort = document.getElementById('f-sort');
 if (_fSort) _fSort.addEventListener('change', runReport);
+
+/* Life of Seedlings' filters re-run on pick rather than waiting for Run
+   Report — six dropdowns and a button to remember is five more chances to
+   read a table that is answering the previous question. Status goes through
+   syncFilterVisibility() first so the Year picker appears (or goes) in the
+   same breath as the choice that governs it. */
+['f-los-nursery', 'f-los-status', 'f-los-year', 'f-los-age', 'f-los-supplier', 'f-breed']
+  .forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', () => { syncFilterVisibility(); runReport(); });
+  });
 
 // ════════════════════════════════════════════════════════════════════════════
 // Seedling Sales Report (year × month grid)
@@ -2297,7 +2547,7 @@ async function bootstrap() {
   // that before anything reads f-report.value. Reopens whichever tab was
   // last selected (see selectReport()) — a refresh used to always land
   // back on Production Summary regardless of what was actually open.
-  let DEFAULT_REPORT = 'batch_production';
+  let DEFAULT_REPORT = 'life_of_seedlings';
   try {
     const remembered = localStorage.getItem(LAST_REPORT_KEY);
     if (remembered && REPORTS.some(r => r.value === remembered)) DEFAULT_REPORT = remembered;
@@ -2329,110 +2579,151 @@ async function bootstrap() {
 
 bootstrap();
 
-// ── Batch Production drilldown modal ─────────────────────────────
-// A single centred modal reused for the Seeds Received / Transplanted /
-// Culled tiles. Content is regenerated on every open so we always
-// reflect the active date+breed filter.
-// Persist the active drilldown's Year + Month picks so onchange handlers
-// on the modal's dropdowns can re-render without re-fetching.
-let _bpDrillState = { kind: null, year: '', month: '' };
+// ── Life of Seedlings drilldown ──────────────────────────────────────────
+// Every figure on the report is a button, and this is what opens behind it:
+// the records that add up to it, in the same shape the Movement Report shows
+// a movement — when, which batch, which tray or plot, which nursery, how
+// many. A figure with nothing behind it (a plain 0) is not a button, so
+// tapping never opens an empty window.
+//
+// '*' as the batch means the tfoot's total: every batch the report is
+// currently showing, which is why _losData is published after filtering and
+// not before.
 
-const _BP_MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let _losDrillState = { kind: null, batch: null, year: '', month: '' };
 
-// Extract raw records for the active drilldown kind. Each record must
-// carry a `date` so we can build Year / Month filters and re-filter
-// without re-querying the DB.
-function _bpDrillCollect(kind, D) {
-  const rows = D.rows || [];
-  const list = [];
-  if (kind === 'seeds') {
-    rows.forEach(r => {
-      const seedsQty = r.seedsLogs.reduce((s, l) => s + Number(l.quantity_change || 0), 0) || r.seeds;
-      list.push({
-        date:     r.seeds_date,
-        breed:    r.breed_name,
-        batch:    r.batch_name,
-        received: seedsQty,
-        damaged:  r.damaged || 0
-      });
-    });
-  } else if (kind === 'trans') {
-    rows.forEach(r => r.transLogs.forEach(l => list.push({
-      // The keyed transplanting date, not when the row happened to be written.
-      date:    _logDate(l),
-      batch:   r.batch_name,
-      breed:   r.breed_name,
-      plot:    l.plot_name || '—',
-      nursery: D.nurseryOf(l.plot_name),
-      qty:     Number(l.quantity_change || 0)
-    })));
-  } else if (kind === 'cull') {
-    const push = (r, l, stage) => list.push({
-      date:    _logDate(l),
-      stage,
-      batch:   r.batch_name,
-      breed:   r.breed_name,
-      plot:    l.plot_name || '—',
-      nursery: stage === '1st' ? 'Pre-Nursery' : D.nurseryOf(l.plot_name),
-      qty:     Math.abs(Number(l.quantity_change || 0))
-    });
-    rows.forEach(r => {
-      r.cull1Logs.forEach(l => push(r, l, '1st'));
-      r.cull2Logs.forEach(l => push(r, l, '2nd'));
-      r.cull3Logs.forEach(l => push(r, l, '3rd'));
-    });
-  }
-  return list;
+const _LOS_MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+const _losCol = {
+  date:    { label: 'Date',     get: x => fmtDate(x.date), cls: 'whitespace-nowrap' },
+  batch:   { label: 'Batch',    get: x => _losEsc(x.batch), cls: 'font-black text-[#3d2610]' },
+  stage:   { label: 'Stage',    get: x => _losEsc(x.stage), cls: 'font-black text-[#a83020]' },
+  fromTray:{ label: 'From Tray', get: x => _losEsc(x.from) },
+  fromPlot:{ label: 'From Plot', get: x => _losEsc(x.from) },
+  tray:    { label: 'Tray',     get: x => _losEsc(x.place) },
+  place:   { label: 'Tray / Plot', get: x => _losEsc(x.place) },
+  plot:    { label: 'Plot',     get: x => _losEsc(x.place) },
+  nursery: { label: 'Nursery',  get: x => _losEsc(x.nursery), cls: 'font-black text-[#3a7ab4]' },
+  dono:    { label: 'D/O No',   get: x => _losEsc(x.dono) },
+  supplier:{ label: 'Supplier', get: x => _losEsc(x.supplier) },
+  mpob:    { label: 'MPOB Licence', get: x => _losEsc(x.mpob) },
+  note:    { label: 'Remark',   get: x => _losEsc(x.note || '—') },
+};
+const _losQty = (label, cls) => ({ label, num: true, cls: cls || '', get: x => fmtNum(x.qty) });
+
+// kind → what it is called, which record list it reads, and its columns.
+const LOS_DRILL = {
+  received: { title: 'Seed Received', list: 'received',
+    cols: [_losCol.date, _losCol.batch, _losCol.supplier, _losCol.mpob, _losCol.dono,
+      { label: 'D/O Qty', num: true, get: x => fmtNum(x.doQty), sum: x => x.doQty },
+      { label: 'FOC Qty', num: true, cls: 'text-[#7c3aed]', get: x => fmtNum(x.focQty), sum: x => x.focQty },
+      { label: 'Replacement', num: true, get: x => x.repl ? fmtNum(x.repl) : '—', sum: x => x.repl },
+      { label: 'Total Received', num: true, cls: 'text-[#c07820] font-black', get: x => fmtNum(x.qty), sum: x => x.qty }] },
+  damaged: { title: 'Seed Damage', list: 'damaged',
+    cols: [_losCol.date, _losCol.batch, _losCol.place, _losCol.note,
+      { ..._losQty('Damaged', 'text-[#a83020] font-black'), sum: x => x.qty }] },
+  planted: { title: 'Actual Planted', list: 'planted',
+    cols: [_losCol.date, _losCol.batch, _losCol.tray,
+      { ..._losQty('Planted', 'font-black'), sum: x => x.qty }] },
+  trans: { title: 'Transplanting', list: 'trans',
+    cols: [_losCol.date, _losCol.batch, _losCol.fromTray, _losCol.nursery, _losCol.plot,
+      { ..._losQty('Qty', 'text-[#3a7ab4] font-black'), sum: x => x.qty }],
+    roll: x => x.nursery },
+  dtone: { title: 'Double Tone', list: 'dtone',
+    cols: [_losCol.date, _losCol.batch, _losCol.fromTray, _losCol.tray,
+      { ..._losQty('Qty', 'text-[#7c3aed] font-black'), sum: x => x.qty }] },
+  cull1: { title: '1st Culling', list: 'cull1',
+    cols: [_losCol.date, _losCol.batch, _losCol.tray,
+      { ..._losQty('Culled', 'text-[#a83020] font-black'), sum: x => x.qty }] },
+  cull2: { title: '2nd Culled', list: 'cull2',
+    cols: [_losCol.date, _losCol.batch, _losCol.nursery, _losCol.plot,
+      { ..._losQty('Culled', 'text-[#a83020] font-black'), sum: x => x.qty }],
+    roll: x => x.nursery },
+  cull3: { title: '3rd Culling', list: 'cull3',
+    cols: [_losCol.date, _losCol.batch, _losCol.nursery, _losCol.plot,
+      { ..._losQty('Culled', 'text-[#a83020] font-black'), sum: x => x.qty }],
+    roll: x => x.nursery },
+  cullTotal: { title: 'Total Culling (1st + 3rd)', list: 'cullTotal',
+    cols: [_losCol.date, _losCol.stage, _losCol.batch, _losCol.nursery, _losCol.place,
+      { ..._losQty('Culled', 'text-[#a83020] font-black'), sum: x => x.qty }],
+    roll: x => x.stage + ' culling' },
+  transfer: { title: 'Transfer', list: 'transfer',
+    cols: [_losCol.date, _losCol.batch, _losCol.fromPlot, _losCol.nursery, _losCol.plot,
+      { ..._losQty('Qty', 'font-black'), sum: x => x.qty }] },
+  sales: { title: 'Total Sales', list: 'sales',
+    cols: [_losCol.date, _losCol.dono, _losCol.batch, _losCol.nursery, _losCol.plot,
+      { ..._losQty('Sold', 'text-[#4a7a2e] font-black'), sum: x => x.qty }],
+    roll: x => x.nursery },
+  calibration: { title: 'Stock Calibration', list: 'calibration',
+    cols: [_losCol.date, _losCol.batch, { label: 'Report', get: x => _losEsc(x.report) },
+      _losCol.place, { label: 'Side', get: x => _losEsc(x.side) },
+      { label: 'Approved', get: x => x.approved
+          ? '<span class="text-[#4a7a2e] font-black">Yes</span>'
+          : '<span class="text-[#c07820] font-black">Waiting</span>' },
+      _losCol.note,
+      { label: 'Adjustment', num: true, cls: 'font-black', get: x => fmtSigned(x.qty),
+        // Only approved adjustments move the batch's figures, so only those
+        // are totalled — the waiting ones are listed but not counted, which
+        // is exactly what the Balance column does with them.
+        sum: x => x.approved ? x.qty : 0 }] },
+};
+
+/* The records behind one figure, for one batch or for all of them. */
+function _losDrillCollect(kind, batch) {
+  const D = window._losData; if (!D) return [];
+  const rows = batch === '*' ? D.rows : D.rows.filter(r => r.batch === batch);
+  const spec = LOS_DRILL[kind];
+  if (!spec) return [];
+  const out = [];
+  rows.forEach(r => {
+    if (spec.list === 'cullTotal') {
+      // 1st + 3rd, and the 2nd only while no 3rd has replaced it — the same
+      // rule the column itself is totalled by, so the window and the figure
+      // it opened from can never disagree.
+      out.push(...r.rec.cull1);
+      out.push(...(r.cull3 > 0 ? r.rec.cull3 : r.rec.cull2));
+    } else {
+      out.push(...(r.rec[spec.list] || []));
+    }
+  });
+  return out;
 }
 
-// Render the Year/Month picker bar for the active drilldown. `all` is the
-// full extracted set (pre-filter) so we can offer only years/months that
-// actually have records — no dead selections.
-function _bpDrillFilterBar(all) {
+function _losDrillFilterBar(all) {
   const years = new Set(), months = new Set();
   all.forEach(x => {
     if (!x.date) return;
     const d = new Date(x.date);
     if (isNaN(d)) return;
-    years.add(d.getFullYear());
-    months.add(d.getMonth());
+    years.add(d.getFullYear()); months.add(d.getMonth());
   });
-  const yearOpts = ['<option value="">All years</option>']
-    .concat(Array.from(years).sort((a,b) => b-a)
-      .map(y => `<option value="${y}"${String(y) === String(_bpDrillState.year) ? ' selected' : ''}>${y}</option>`))
-    .join('');
-  const monthOpts = ['<option value="">All months</option>']
-    .concat(Array.from(months).sort((a,b) => a-b)
-      .map(m => `<option value="${m}"${String(m) === String(_bpDrillState.month) ? ' selected' : ''}>${_BP_MONTH_NAMES[m]}</option>`))
-    .join('');
+  if (!years.size) return '';
+  const yearOpts = ['<option value="">All years</option>'].concat(
+    [...years].sort((a, b) => b - a).map(y =>
+      `<option value="${y}"${String(y) === String(_losDrillState.year) ? ' selected' : ''}>${y}</option>`)).join('');
+  const monthOpts = ['<option value="">All months</option>'].concat(
+    [...months].sort((a, b) => a - b).map(m =>
+      `<option value="${m}"${String(m) === String(_losDrillState.month) ? ' selected' : ''}>${_LOS_MONTH_NAMES[m]}</option>`)).join('');
   return `
     <div class="flex items-center gap-2 flex-wrap mb-3">
       <span class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mr-1">Filter</span>
       <label class="text-[10px] font-bold text-[#3d2610] flex items-center gap-1.5">Year
         <select class="border border-[#e8dcc8] rounded-lg px-2 py-1 text-[11px] font-black text-[#3d2610]"
-                onchange="_bpDrillSetFilter('year', this.value)">${yearOpts}</select>
+                onchange="_losDrillSetFilter('year', this.value)">${yearOpts}</select>
       </label>
       <label class="text-[10px] font-bold text-[#3d2610] flex items-center gap-1.5">Month
         <select class="border border-[#e8dcc8] rounded-lg px-2 py-1 text-[11px] font-black text-[#3d2610]"
-                onchange="_bpDrillSetFilter('month', this.value)">${monthOpts}</select>
+                onchange="_losDrillSetFilter('month', this.value)">${monthOpts}</select>
       </label>
-      ${(_bpDrillState.year || _bpDrillState.month !== '') ? `
-        <button type="button" onclick="_bpDrillClearFilter()" class="text-[10px] font-black text-[#a83020] uppercase tracking-widest hover:underline ml-1">Clear</button>
-      ` : ''}
+      ${(_losDrillState.year || _losDrillState.month !== '') ? `
+        <button type="button" onclick="_losDrillClearFilter()" class="text-[10px] font-black text-[#a83020] uppercase tracking-widest hover:underline ml-1">Clear</button>` : ''}
     </div>`;
 }
+function _losDrillSetFilter(key, value) { _losDrillState[key] = value; _losDrillRender(); }
+function _losDrillClearFilter() { _losDrillState.year = ''; _losDrillState.month = ''; _losDrillRender(); }
 
-function _bpDrillSetFilter(key, value) {
-  _bpDrillState[key] = value;
-  _bpDrillRender();
-}
-function _bpDrillClearFilter() {
-  _bpDrillState.year = ''; _bpDrillState.month = '';
-  _bpDrillRender();
-}
-
-function _bpDrillApplyFilter(all) {
-  const y = _bpDrillState.year, m = _bpDrillState.month;
+function _losDrillApplyFilter(all) {
+  const y = _losDrillState.year, m = _losDrillState.month;
   if (!y && m === '') return all.slice();
   return all.filter(x => {
     if (!x.date) return false;
@@ -2444,178 +2735,147 @@ function _bpDrillApplyFilter(all) {
   });
 }
 
-function openBpDrill(kind) {
-  if (!window._bpDetails) return;
-  _bpDrillState = { kind, year: '', month: '' };
-  _bpDrillRender();
-  document.getElementById('bp-drill-modal').classList.remove('hidden');
-  document.getElementById('bp-drill-modal').classList.add('flex');
+/* Balance and Variance have no record list of their own — they are what other
+   figures come to. Opening one shows the sum being done, line by line, so the
+   number can be checked rather than taken on trust. */
+function _losReconcile(kind, batch) {
+  const D = window._losData; if (!D) return '';
+  const rows = batch === '*' ? D.rows : D.rows.filter(r => r.batch === batch);
+  const add = (k) => rows.reduce((s, r) => s + (r[k] || 0), 0);
+  const lines = kind === 'variance'
+    ? [['Seed received', add('received'), +1],
+       ['Seed damage', add('damaged'), -1],
+       ['Actual planted', add('planted'), 0]]
+    : [['Actual planted', add('planted'), +1],
+       ['1st culling', add('cull1'), -1],
+       ['Post-transplant culling (3rd, or 2nd while no 3rd)', add('postCull'), -1],
+       ['Total sales', add('sales'), -1],
+       ['Approved stock calibration', add('calibration'), +1]];
+  const result = kind === 'variance'
+    ? rows.reduce((s, r) => s + r.variance, 0)
+    : rows.reduce((s, r) => s + r.balance, 0);
+  const resultLabel = kind === 'variance' ? 'Variance seed in' : 'Balance';
+  const note = kind === 'variance'
+    ? 'Actual planted less what arrived after damage. Negative means fewer seeds were planted than were received.'
+    : 'What the batch still has. It starts from actual planted, not from the transplanting quantity, because the transplanting quantity is already net of the 1st culling — starting there and taking the 1st culling off again would subtract it twice, and starting from planted keeps whatever is still sitting in a tray inside the balance. Transfers take no part: a 3rd-culling transfer moves seedlings between two plots of the SAME batch, so it changes where the batch is standing and not how many of it there are.';
+  return `
+    <div class="text-[10px] font-bold text-[#8a7a68] mb-3">${note}</div>
+    <table class="report-table w-full">
+      <thead><tr><th>Line</th><th class="text-right">Qty</th></tr></thead>
+      <tbody>
+        ${lines.map(([label, v, sign]) => `
+          <tr>
+            <td>${sign === 0 ? '' : (sign > 0 ? '+ ' : '− ')}${label}</td>
+            <td class="text-right ${sign < 0 ? 'text-[#a83020]' : ''} font-black">${fmtNum(v)}</td>
+          </tr>`).join('')}
+      </tbody>
+      <tfoot><tr class="font-black bg-[#f8f4ec]">
+        <td class="uppercase tracking-widest text-[10px] text-[#8a7a68]">${resultLabel}</td>
+        <td class="text-right ${result < 0 ? 'text-[#a83020]' : 'text-[#4a7a2e]'}">${
+          kind === 'variance' ? fmtSigned(result) : fmtNum(result)}</td>
+      </tr></tfoot>
+    </table>`;
 }
 
-function _bpDrillRender() {
-  const D = window._bpDetails; if (!D) return;
-  const kind = _bpDrillState.kind;
-  const rangeLabel = [
-    D.filterFrom ? 'From ' + fmtDate(D.filterFrom) : '',
-    D.filterTo   ? 'to '   + fmtDate(D.filterTo)   : '',
-    D.breed || ''
-  ].filter(Boolean).join(' · ') || 'All time';
-
-  const allList = _bpDrillCollect(kind, D);
-  const list    = _bpDrillApplyFilter(allList);
-
-  // Filter chip text so the count line reads honestly.
-  const activeYear  = _bpDrillState.year;
-  const activeMonth = _bpDrillState.month;
-  const filterNote = (activeYear || activeMonth !== '') ?
-    ` · Filtered: ${activeMonth !== '' ? _BP_MONTH_NAMES[Number(activeMonth)] : ''} ${activeYear || ''}`.trim() : '';
-
-  const barHtml = _bpDrillFilterBar(allList);
-
-  let title = '', bodyInner = '';
-  if (kind === 'seeds') {
-    title = 'Seeds Received · detail';
-    list.sort((a, b) => (new Date(b.date || 0)) - (new Date(a.date || 0)));
-    const totRcv = list.reduce((s, x) => s + x.received, 0);
-    const totDmg = list.reduce((s, x) => s + x.damaged,  0);
-    bodyInner = `
-      <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">${rangeLabel} · ${list.length} batch${list.length === 1 ? '' : 'es'}${filterNote}</div>
-      <div class="overflow-x-auto">
-        <table class="report-table w-full">
-          <thead><tr>
-            <th>Date</th><th>Breed (Source)</th><th>Batch</th>
-            <th class="text-right">Qty Received</th><th class="text-right">Damaged</th>
-          </tr></thead>
-          <tbody>
-            ${list.length ? list.map(x => `
-              <tr>
-                <td>${fmtDate(x.date)}</td>
-                <td>${x.breed}</td>
-                <td class="font-black">${x.batch}</td>
-                <td class="text-right text-[#c07820] font-black">${fmtNum(x.received)}</td>
-                <td class="text-right ${x.damaged ? 'text-[#a83020] font-black' : 'text-[#8a7a68]'}">${x.damaged ? fmtNum(x.damaged) : '—'}</td>
-              </tr>`).join('') : '<tr><td colspan="5" class="text-center text-[#8a7a68] text-[11px] py-6">No records for the selected filter.</td></tr>'}
-          </tbody>
-          <tfoot><tr class="font-black bg-[#f8f4ec]">
-            <td colspan="3" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Totals</td>
-            <td class="text-right text-[#c07820]">${fmtNum(totRcv)}</td>
-            <td class="text-right text-[#a83020]">${fmtNum(totDmg)}</td>
-          </tr></tfoot>
-        </table>
-      </div>`;
-  }
-  else if (kind === 'trans') {
-    title = 'Transplanted · detail';
-    list.sort((a, b) => (new Date(b.date || 0)) - (new Date(a.date || 0)));
-    const roll = {};
-    list.forEach(x => { roll[x.nursery] = (roll[x.nursery] || 0) + x.qty; });
-    const rollRows = Object.entries(roll).sort((a, b) => b[1] - a[1]);
-    const total = list.reduce((s, x) => s + x.qty, 0);
-    bodyInner = `
-      <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">${rangeLabel} · ${list.length} transplant record${list.length === 1 ? '' : 's'}${filterNote}</div>
-      <div class="mb-4 grid grid-cols-2 md:grid-cols-4 gap-2">
-        ${rollRows.map(([n, q]) => `
-          <div class="bg-[#eef5fc] border border-[#bee3f8] rounded-xl px-3 py-2">
-            <div class="text-[9px] font-black text-[#3a7ab4] uppercase tracking-widest">${n}</div>
-            <div class="text-lg font-black text-[#3a7ab4]">${fmtNum(q)}</div>
-          </div>`).join('') || '<div class="text-[10px] text-[#8a7a68] uppercase tracking-widest col-span-full">No transplant records for the selected filter.</div>'}
-      </div>
-      <div class="overflow-x-auto">
-        <table class="report-table w-full">
-          <thead><tr>
-            <th>Date</th><th>Batch</th><th>Breed (Source)</th>
-            <th>Nursery</th><th>Plot</th><th class="text-right">Qty</th>
-          </tr></thead>
-          <tbody>
-            ${list.length ? list.map(x => `
-              <tr>
-                <td>${fmtDate(x.date)}</td>
-                <td class="font-black">${x.batch}</td>
-                <td>${x.breed}</td>
-                <td class="font-black text-[#3a7ab4]">${x.nursery}</td>
-                <td>${x.plot}</td>
-                <td class="text-right text-[#3a7ab4] font-black">${fmtNum(x.qty)}</td>
-              </tr>`).join('') : '<tr><td colspan="6" class="text-center text-[#8a7a68] text-[11px] py-6">No records for the selected filter.</td></tr>'}
-          </tbody>
-          <tfoot><tr class="font-black bg-[#f8f4ec]">
-            <td colspan="5" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
-            <td class="text-right text-[#3a7ab4]">${fmtNum(total)}</td>
-          </tr></tfoot>
-        </table>
-      </div>`;
-  }
-  else if (kind === 'cull') {
-    title = 'Culled (1 + 2 + 3) · detail';
-    list.sort((a, b) => (new Date(b.date || 0)) - (new Date(a.date || 0)));
-    const roll = {};
-    list.forEach(x => {
-      if (!roll[x.nursery]) roll[x.nursery] = { total: 0, '1st': 0, '2nd': 0, '3rd': 0 };
-      roll[x.nursery].total    += x.qty;
-      roll[x.nursery][x.stage] += x.qty;
-    });
-    const rollEntries = Object.entries(roll).sort((a, b) => b[1].total - a[1].total);
-    const total = list.reduce((s, x) => s + x.qty, 0);
-    bodyInner = `
-      <div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">${rangeLabel} · ${list.length} culling record${list.length === 1 ? '' : 's'}${filterNote}</div>
-      <div class="mb-4 grid grid-cols-2 md:grid-cols-4 gap-2">
-        ${rollEntries.map(([n, v]) => `
-          <div class="bg-[#fff5f5] border border-[#f8d7da] rounded-xl px-3 py-2">
-            <div class="text-[9px] font-black text-[#a83020] uppercase tracking-widest">${n}</div>
-            <div class="text-lg font-black text-[#a83020]">${fmtNum(v.total)}</div>
-            <div class="text-[9px] font-bold text-[#8a7a68] mt-0.5">1st ${fmtNum(v['1st'])} · 2nd ${fmtNum(v['2nd'])} · 3rd ${fmtNum(v['3rd'])}</div>
-          </div>`).join('') || '<div class="text-[10px] text-[#8a7a68] uppercase tracking-widest col-span-full">No culling records for the selected filter.</div>'}
-      </div>
-      <div class="overflow-x-auto">
-        <table class="report-table w-full">
-          <thead><tr>
-            <th>Date</th><th>Stage</th><th>Batch</th><th>Breed (Source)</th>
-            <th>Nursery</th><th>Plot</th><th class="text-right">Culled Qty</th>
-          </tr></thead>
-          <tbody>
-            ${list.length ? list.map(x => `
-              <tr>
-                <td>${fmtDate(x.date)}</td>
-                <td class="font-black text-[#a83020]">${x.stage}</td>
-                <td class="font-black">${x.batch}</td>
-                <td>${x.breed}</td>
-                <td class="font-black text-[#a83020]">${x.nursery}</td>
-                <td>${x.plot}</td>
-                <td class="text-right text-[#a83020] font-black">${fmtNum(x.qty)}</td>
-              </tr>`).join('') : '<tr><td colspan="7" class="text-center text-[#8a7a68] text-[11px] py-6">No records for the selected filter.</td></tr>'}
-          </tbody>
-          <tfoot><tr class="font-black bg-[#f8f4ec]">
-            <td colspan="6" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
-            <td class="text-right text-[#a83020]">${fmtNum(total)}</td>
-          </tr></tfoot>
-        </table>
-      </div>`;
-  }
-
-  document.getElementById('bp-drill-title').textContent = title;
-  document.getElementById('bp-drill-body').innerHTML   = barHtml + bodyInner;
+function losDrill(kind, batch) {
+  if (!window._losData) return;
+  _losDrillState = { kind, batch, year: '', month: '' };
+  _losDrillRender();
+  const m = document.getElementById('los-drill-modal');
+  m.classList.remove('hidden');
+  m.classList.add('flex');
 }
-window._bpDrillSetFilter   = _bpDrillSetFilter;
-window._bpDrillClearFilter = _bpDrillClearFilter;
 
-function closeBpDrill() {
-  const m = document.getElementById('bp-drill-modal');
+function _losDrillRender() {
+  const D = window._losData; if (!D) return;
+  const { kind, batch } = _losDrillState;
+  const who = batch === '*' ? `${fmtNum(D.rows.length)} batch${D.rows.length === 1 ? '' : 'es'}` : 'Batch ' + batch;
+
+  if (kind === 'balance' || kind === 'variance') {
+    document.getElementById('los-drill-title').textContent =
+      (kind === 'balance' ? 'Balance' : 'Variance Seed In') + ' · ' + who;
+    document.getElementById('los-drill-body').innerHTML = _losReconcile(kind, batch);
+    return;
+  }
+
+  const spec = LOS_DRILL[kind];
+  if (!spec) return;
+  const all  = _losDrillCollect(kind, batch);
+  const list = _losDrillApplyFilter(all);
+  list.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+
+  const totals = {};
+  spec.cols.forEach((c, i) => { if (c.sum) totals[i] = list.reduce((s, x) => s + (c.sum(x) || 0), 0); });
+
+  // A roll-up across nurseries or culling stages, where the figure is made of
+  // records from more than one — the same at-a-glance split the Movement
+  // Report gives a column.
+  let rollHtml = '';
+  if (spec.roll) {
+    const roll = {};
+    list.forEach(x => { const k = spec.roll(x) || '—'; roll[k] = (roll[k] || 0) + (x.qty || 0); });
+    const entries = Object.entries(roll).sort((a, b) => b[1] - a[1]);
+    if (entries.length > 1) {
+      rollHtml = `<div class="mb-4 grid grid-cols-2 md:grid-cols-4 gap-2">
+        ${entries.map(([n, q]) => `
+          <div class="bg-[#f8f4ec] border border-[#e8dcc8] rounded-xl px-3 py-2">
+            <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest">${_losEsc(n)}</div>
+            <div class="text-lg font-black text-[#3d2610]">${fmtNum(q)}</div>
+          </div>`).join('')}
+      </div>`;
+    }
+  }
+
+  const filterNote = (_losDrillState.year || _losDrillState.month !== '')
+    ? ` · filtered: ${_losDrillState.month !== '' ? _LOS_MONTH_NAMES[Number(_losDrillState.month)] : ''} ${_losDrillState.year || ''}`.trim()
+    : '';
+
+  document.getElementById('los-drill-title').textContent = spec.title + ' · ' + who;
+  document.getElementById('los-drill-body').innerHTML =
+    _losDrillFilterBar(all) +
+    `<div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">${
+       fmtNum(list.length)} record${list.length === 1 ? '' : 's'}${
+       D.asAt ? ' · as at ' + fmtDate(D.asAt) : ''}${filterNote}</div>` +
+    rollHtml +
+    `<div class="overflow-x-auto">
+      <table class="report-table w-full">
+        <thead><tr>${spec.cols.map(c => `<th class="${c.num ? 'text-right' : ''}">${c.label}</th>`).join('')}</tr></thead>
+        <tbody>
+          ${list.length ? list.map(x => `<tr>${spec.cols.map(c =>
+            `<td class="${c.num ? 'text-right ' : ''}${c.cls || ''}">${c.get(x)}</td>`).join('')}</tr>`).join('')
+            : `<tr><td colspan="${spec.cols.length}" class="text-center text-[#8a7a68] text-[11px] py-6">No records for the selected filter.</td></tr>`}
+        </tbody>
+        ${list.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
+          ${spec.cols.map((c, i) => i === 0
+            ? `<td class="uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>`
+            : `<td class="${c.num ? 'text-right ' : ''}${c.cls || ''}">${
+                 totals[i] != null ? (c.label === 'Adjustment' ? fmtSigned(totals[i]) : fmtNum(totals[i])) : ''}</td>`).join('')}
+        </tr></tfoot>` : ''}
+      </table>
+    </div>`;
+}
+
+function closeLosDrill() {
+  const m = document.getElementById('los-drill-modal');
   if (!m) return;
   m.classList.add('hidden');
   m.classList.remove('flex');
 }
 
-window.openBpDrill  = openBpDrill;
-window.closeBpDrill = closeBpDrill;
+window.losDrill             = losDrill;
+window.closeLosDrill        = closeLosDrill;
+window._losDrillSetFilter   = _losDrillSetFilter;
+window._losDrillClearFilter = _losDrillClearFilter;
 </script>
 
-<!-- Batch Production drilldown modal — reused across Seeds Received / Transplanted / Culled tiles. -->
-<div id="bp-drill-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/60 p-4" onclick="if(event.target===this)closeBpDrill()">
+<!-- Life of Seedlings drilldown — one window, reused by every figure on the report. -->
+<div id="los-drill-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/60 p-4" onclick="if(event.target===this)closeLosDrill()">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
     <div class="flex items-center justify-between px-6 py-4 border-b border-[#e8dcc8] bg-gradient-to-r from-[#f8f4ec] to-white">
-      <div class="text-base font-black text-[#3d2610] uppercase tracking-widest" id="bp-drill-title">Detail</div>
-      <button onclick="closeBpDrill()" class="w-9 h-9 rounded-lg bg-[#e8dcc8]/60 hover:bg-[#e8dcc8] text-[#3d2610] text-xl leading-none flex items-center justify-center transition-colors">×</button>
+      <div class="text-base font-black text-[#3d2610] uppercase tracking-widest" id="los-drill-title">Detail</div>
+      <button onclick="closeLosDrill()" class="w-9 h-9 rounded-lg bg-[#e8dcc8]/60 hover:bg-[#e8dcc8] text-[#3d2610] text-xl leading-none flex items-center justify-center transition-colors">×</button>
     </div>
-    <div class="p-5 overflow-y-auto" id="bp-drill-body"></div>
+    <div class="p-5 overflow-y-auto" id="los-drill-body"></div>
   </div>
 </div>
 
