@@ -1516,9 +1516,33 @@ async function runMovementReportCombined() {
     if (!place || !qty) return;
     ev.push({ sc, date, place, batch: batch || '—', col, qty });
   };
+  // DOUBLE-TONE and PREMIUM CARE (PRE_NURSERY_PLOTS) are quality-grade
+  // labels, not physical trays — a batch graded Double Tone never actually
+  // moves into a tray called that; it stays in whatever numbered tray it
+  // was planted into, just re-tagged. So a "from tray [DOUBLE-TONE]" /
+  // "[PREMIUM CARE]" remark names a grade, not a place with its own
+  // standing balance — no "Planted" event ever credits one, which without
+  // this fallback debited a tray that (correctly) never existed, System-
+  // wide sweep (CHECK_pre_nursery_negative_balances.sql): every one of
+  // these came back showing transfer_in=0 too, confirming nothing ever
+  // credits "DOUBLE-TONE"/"PREMIUM CARE" as a place either. Redirected to
+  // the batch's home tray — the same fallback Damaged_Seeds already uses
+  // for exactly the same reason (see batchHomeTray below).
+  //
+  // Any OTHER tray name a "from tray [X]" remark names — a real numbered
+  // tray, or a range/list like "P28-P30" — is left as-is. Those are
+  // genuine tray-attribution gaps in the source data (see the SQL sweep),
+  // not something this report can safely paper over by guessing which
+  // real tray the seedlings actually came from.
+  const PRE_GRADE_LABELS = new Set(['DOUBLE-TONE', 'PREMIUM CARE']);
   const srcTrayOf = (l) => {
     const m = (l.remark || '').match(/from tray \[([^\]]+)\]/i);
-    return m ? m[1].trim() : null;
+    const raw = m ? m[1].trim() : null;
+    if (raw && PRE_GRADE_LABELS.has(raw)) {
+      const home = batchHomeTray[_mvBatchKey(l.batch_name)];
+      return home ? home.tray : raw;
+    }
+    return raw;
   };
 
   // Records behind Transfer In / Transplanted from PN / 3rd Culled /
