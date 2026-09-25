@@ -913,9 +913,13 @@ async function loadNurseryFilter() {
     .sort((a, b) => nurseryRank(a) - nurseryRank(b) || String(a).localeCompare(String(b)))
     .forEach(n => {
     const safe = String(n).replace(/[<>"'&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]));
+    // The chip's value stays "PN" — every wantPre/passMain/NURSERY_ORDER
+    // check elsewhere keys off that exact string — only the label shown
+    // to the reader spells it out.
+    const label = n === 'PN' ? 'Pre-Nursery' : safe;
     const lbl = document.createElement('label');
     lbl.className = 'nursery-chip';
-    lbl.innerHTML = `<input type="checkbox" class="f-nurs-cb" value="${safe}" checked>${safe}`;
+    lbl.innerHTML = `<input type="checkbox" class="f-nurs-cb" value="${safe}" checked>${label}`;
     wrap.appendChild(lbl);
   });
   document.getElementById('f-nurs-all').onclick  = () => { document.querySelectorAll('.f-nurs-cb').forEach(cb => cb.checked = true); };
