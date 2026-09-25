@@ -255,6 +255,24 @@ const CAL_ROWS = [
   check('a non-admin cannot change it',
         await page.evaluate(() => window.__UPDATES.length), 0);
 
+  console.log('\nSaving the Transplanting tab does not threaten the row');
+  /* The row an adjustment wrote is not one of the form's rows, and saving
+     this tab is a delete-then-insert of everything the form holds. Without
+     carrying it across, every save would delete it -- and the safety net
+     would pop up on EVERY save to say records would be lost. */
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'operation',
+                                                              'operation_batch_detail.html'), 'utf8');
+  const save = src.slice(src.indexOf('async function saveTransplantTab'),
+                         src.indexOf('async function syncTab4'));
+  checkTrue('the save collects the rows an adjustment wrote',
+            /FromAdjustment:/.test(save) && /logsToInsert\.push/.test(save));
+  checkTrue('…re-inserting their remark verbatim, so the link survives',
+            /remark: r\.remark/.test(save));
+  checkTrue('…and it does so BEFORE the count that warns about losing rows',
+            save.indexOf('FromAdjustment:') < save.indexOf('would be LOST'));
+  checkTrue('a read it cannot do stops the save rather than losing them',
+            /Could not check for records written by adjustments/.test(save));
+
   await browser.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

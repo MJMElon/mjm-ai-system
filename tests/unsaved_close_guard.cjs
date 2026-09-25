@@ -95,10 +95,23 @@ const SEEDS_ROW = {
   await page.waitForFunction(() => typeof window.closeBatchRecord === 'function', { timeout: 15000 });
   await page.waitForTimeout(400);   // the load handler wraps the save functions
 
+  // Record toasts so the test can read what the page said.
+  const catchToasts = () => page.evaluate(() => {
+    window.__TOASTS = [];
+    const real = window.showToast;
+    window.showToast = function (m, t) { window.__TOASTS.push({ m, t }); return real.apply(this, arguments); };
+  });
+
   // Every dialog the page raises, so the test can read and answer them.
   let dialogs = [];
   let answer = false;
   page.on('dialog', async d => { dialogs.push(d.message()); await (answer ? d.accept() : d.dismiss()); });
+  await catchToasts();
+
+  /* The saves are recorded on THIS side: closing navigates away, so anything
+     kept on window goes with it. */
+  const ran = [];
+  await page.exposeFunction('__note', n => { ran.push(n); });
 
   console.log('\nNothing typed, nothing asked');
   await page.evaluate(() => window.closeBatchRecord());
@@ -109,6 +122,7 @@ const SEEDS_ROW = {
   await page.goto(URL_HERE, { waitUntil: 'load' });
   await page.waitForFunction(() => typeof window.closeBatchRecord === 'function', { timeout: 15000 });
   await page.waitForTimeout(400);
+  await catchToasts();
 
   console.log('\nA value the page writes is not somebody typing');
   await page.evaluate(() => {
@@ -119,106 +133,101 @@ const SEEDS_ROW = {
         await page.evaluate(() => Object.keys(window._tabDirty || {}).length === 0), true);
 
   console.log('\nTyping into a tab and pressing X');
-  /* Fields that are on the page from the start. The culling tabs build
-     their rows from plot data this fixture does not load, so they have
-     nothing to type into here. */
   const type = (sel, val) => page.evaluate(([s, v]) => {
     const el = document.querySelector(s);
     el.value = v;
     el.dispatchEvent(new Event('input',  { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
   }, [sel, val]);
+  const modalOpen = () => page.evaluate(() =>
+    !document.getElementById('unsaved-modal').classList.contains('hidden'));
+  const listed = () => page.evaluate(() =>
+    Array.from(document.querySelectorAll('#unsaved-modal-list .unsaved-row'))
+         .map(r => r.querySelector('span').textContent.trim()));
 
   await type('#t3-dtone-nursery-qty', '1234');
   check('the tab typed into is the one that goes dirty',
         await page.evaluate(() => window._dirtyTabNames()), ['Transplanting']);
 
-  dialogs = []; answer = false;
   await page.evaluate(() => window.closeBatchRecord());
   await page.waitForTimeout(250);
-  check('pressing X asks', dialogs.length, 1);
-  checkTrue('and names the tab', /Transplanting/.test(dialogs[0]));
-  checkTrue('…says what is at stake', /loses what has been keyed/i.test(dialogs[0]));
-  checkTrue('…and points at the Save button', /Save button/i.test(dialogs[0]));
-  checkTrue('…and reads as one tab', /that tab/.test(dialogs[0]));
-  check('saying no stays on the page',
-        new URL(page.url()).pathname.endsWith('operation_batch_detail.html'), true);
-  check('…with the typing still there',
-        await page.inputValue('#t3-dtone-nursery-qty'), '1234');
-  check('…and the tab still dirty',
-        await page.evaluate(() => window._dirtyTabNames()), ['Transplanting']);
+  check('no browser confirm box is used at all', dialogs.length, 0);
+  check('a dialog of our own opens instead', await modalOpen(), true);
+  check('…naming the tab', await listed(), ['Transplanting']);
+  check('…offering Save and Don\'t save for it',
+        await page.evaluate(() => ({
+          save: !!document.querySelector('#unsaved-modal-list .unsaved-save'),
+          drop: !!document.querySelector('#unsaved-modal-list .unsaved-drop')
+        })), { save: true, drop: true });
+  check('still on the page', new URL(page.url()).pathname.endsWith('operation_batch_detail.html'), true);
 
-  console.log('\nEach tab is tracked on its own');
+  console.log('\nStay puts it back');
+  await page.evaluate(() => window.closeUnsavedModal());
+  await page.waitForTimeout(150);
+  check('the dialog closes', await modalOpen(), false);
+  check('…and the typing is still there', await page.inputValue('#t3-dtone-nursery-qty'), '1234');
+  check('…and the tab still dirty', await page.evaluate(() => window._dirtyTabNames()), ['Transplanting']);
+
+  console.log('\nEvery dirty tab is listed, in tab order');
   await type('#t2-gap-note', 'short by a few');
   await page.evaluate(() => {
-    const el = document.querySelector('#tab-6 select');
-    el.dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('#tab-6 select').dispatchEvent(new Event('change', { bubbles: true }));
   });
-  check('all three are named, in tab order',
-        await page.evaluate(() => window._dirtyTabNames()),
-        ['Seed Planting', 'Transplanting', '3rd Culling']);
-  dialogs = []; answer = false;
   await page.evaluate(() => window.closeBatchRecord());
-  await page.waitForTimeout(250);
-  checkTrue('the prompt names every one of them',
-            ['Seed Planting', 'Transplanting', '3rd Culling'].every(t => dialogs[0].includes(t)));
-  checkTrue('…and reads as more than one', /those tabs/.test(dialogs[0]));
+  await page.waitForTimeout(200);
+  check('three tabs, named', await listed(), ['Seed Planting', 'Transplanting', '3rd Culling']);
 
-  console.log('\nThe page really did wrap its saves');
-  check('every tab save is tracked',
-        await page.evaluate(() => ['savePlantingTab', 'saveTransplantTab', 'saveCullingTab',
-                                   'saveTab5', 'saveTab6', 'saveCalibration', 'saveSeedAudit']
-          .filter(n => typeof window[n] === 'function' && /sawError/.test(window[n].toString()))),
-        ['savePlantingTab', 'saveTransplantTab', 'saveCullingTab',
-         'saveTab5', 'saveTab6', 'saveCalibration', 'saveSeedAudit']);
+  console.log('\nSave is the default, and Don\'t save can be picked per tab');
+  check('nothing is marked dropped to begin with',
+        await page.evaluate(() => Array.from(document.querySelectorAll('#unsaved-modal-list .unsaved-row'))
+                                       .map(r => r.getAttribute('data-choice'))), [null, null, null]);
+  await page.evaluate(() => window._pickUnsaved(6, 0));
+  await page.waitForTimeout(100);
+  check('only the one picked is marked dropped',
+        await page.evaluate(() => Array.from(document.querySelectorAll('#unsaved-modal-list .unsaved-row'))
+                                       .map(r => r.getAttribute('data-tab') + ':' + (r.getAttribute('data-choice') || 'save'))),
+        ['2:save', '3:save', '6:drop']);
 
-  console.log('\nA save that worked clears its tab — a failed one does not');
+  console.log('\nClosing runs the saves that were chosen, and only those');
   await page.evaluate(() => {
-    // Stand-ins that do the one thing the wrapper reads: how they report.
-    window.saveTab6        = function () { window.showToast('Saved.', 'success'); };
-    window.saveTransplantTab = function () { window.showToast('Database blocked save.', 'error'); };
+    ['savePlantingTab', 'saveTransplantTab', 'saveTab6'].forEach(n => {
+      window[n] = function () { window.__note(n); window.showToast('Saved.', 'success'); };
+    });
+    window._trackTabSave('savePlantingTab', 2);
+    window._trackTabSave('saveTransplantTab', 3);
     window._trackTabSave('saveTab6', 6);
+  });
+  ran.length = 0;
+  await page.evaluate(() => window.confirmCloseBatchRecord());
+  await page.waitForTimeout(800);
+  check('the two marked Save ran', ran.slice().sort(),
+        ['savePlantingTab', 'saveTransplantTab']);
+  check('…and the one marked Don\'t save did not', ran.indexOf('saveTab6'), -1);
+  check('and it left', new URL(page.url()).pathname.endsWith('operation_batch_record.html'), true);
+
+  console.log('\nA save that fails does not close over it');
+  await page.goto(URL_HERE, { waitUntil: 'load' });
+  await page.waitForFunction(() => typeof window.closeBatchRecord === 'function', { timeout: 15000 });
+  await page.waitForTimeout(400);
+  await catchToasts();
+  await type('#t3-dtone-nursery-qty', '99');
+  await page.evaluate(() => {
+    window.saveTransplantTab = function () { window.showToast('Database blocked save.', 'error'); };
     window._trackTabSave('saveTransplantTab', 3);
   });
-  await page.evaluate(() => window.saveTab6());
-  await page.waitForTimeout(200);
-  check('the saved tab is clean', await page.evaluate(() => window._dirtyTabNames()),
-        ['Seed Planting', 'Transplanting']);
-
-  await page.evaluate(() => window.saveTransplantTab());
-  await page.waitForTimeout(200);
-  check('the tab whose save FAILED stays dirty',
-        await page.evaluate(() => window._dirtyTabNames()), ['Seed Planting', 'Transplanting']);
-  dialogs = []; answer = false;
   await page.evaluate(() => window.closeBatchRecord());
-  await page.waitForTimeout(250);
-  check('…so X still asks about it', dialogs.length, 1);
-  checkTrue('…and still names it', /Transplanting/.test(dialogs[0]));
-
-  console.log('\nAn async save is waited for, not guessed at');
-  await page.evaluate(() => {
-    window.savePlantingTab = async function () {
-      window.__inFlight = true;
-      await new Promise(r => setTimeout(r, 200));
-      window.showToast('Saved.', 'success');
-      window.__inFlight = false;
-    };
-    window._trackTabSave('savePlantingTab', 2);
-    window.__p = window.savePlantingTab();
-  });
-  await page.waitForFunction(() => window.__inFlight === true, { timeout: 3000 });
-  check('the tab is still dirty while the save is in flight',
-        await page.evaluate(() => window._dirtyTabNames().indexOf('Seed Planting') >= 0), true);
-  await page.evaluate(() => window.__p);
-  check('…and clean once it has actually finished',
-        await page.evaluate(() => window._dirtyTabNames()), ['Transplanting']);
-
-  console.log('\nSaying yes leaves');
-  dialogs = []; answer = true;
-  await page.evaluate(() => window.closeBatchRecord());
+  await page.waitForTimeout(200);
+  await page.evaluate(() => window.confirmCloseBatchRecord());
   await page.waitForTimeout(600);
-  check('it asked once', dialogs.length, 1);
-  check('and left', new URL(page.url()).pathname.endsWith('operation_batch_record.html'), true);
+  check('it stayed on the page', new URL(page.url()).pathname.endsWith('operation_batch_detail.html'), true);
+  check('…the tab is still dirty', await page.evaluate(() => window._dirtyTabNames()), ['Transplanting']);
+  check('…the dialog is showing again', await modalOpen(), true);
+  checkTrue('…and it says nothing was lost',
+            await page.evaluate(() => (window.__TOASTS.slice(-1)[0] || {}).m || '')
+              .then(m => /did not save/i.test(m) && /nothing has been lost/i.test(m)));
+
+  console.log('\nNo browser confirm box was used anywhere');
+  check('not once', dialogs.length, 0);
 
   await browser.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

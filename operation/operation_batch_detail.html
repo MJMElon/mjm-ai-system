@@ -416,6 +416,27 @@
     <!-- Tab 6 Sales click-through: the Customer Order Monitoring Delivery
          Notes behind one plot's Sales figure. Sits ABOVE the page's own
          modal-backdrop (z-10/20), below toasts (z-9999). -->
+    <!-- Closing with something keyed and not saved. Small on purpose: it is a
+         question about a few tabs, not a page. Each tab is kept or dropped on
+         its own — the browser's confirm box can only ask one yes/no about all
+         of them, so somebody with two tabs half-filled had to lose both or
+         keep both. Sits above the other modals; nothing opens over it. -->
+    <div id="unsaved-modal" class="hidden fixed inset-0 z-[9400] bg-[rgba(26,21,13,0.7)] backdrop-blur-sm overflow-y-auto justify-center items-start p-4 md:p-8" onclick="if (event.target === this) closeUnsavedModal()">
+        <div class="bg-[#f8f4ec] w-full max-w-md rounded-3xl shadow-2xl border border-[#e8dcc8] mt-16">
+            <div class="px-5 py-4 border-b border-[#e8dcc8] bg-white rounded-t-3xl">
+                <h3 class="text-base font-black text-[#3d2610] uppercase tracking-widest">Not saved yet</h3>
+                <p class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1">Close without saving these?</p>
+            </div>
+            <div id="unsaved-modal-list"></div>
+            <div class="px-5 py-4 border-t border-[#e8dcc8] flex flex-wrap gap-2 justify-end">
+                <button type="button" onclick="closeUnsavedModal()"
+                        class="px-4 py-2 rounded-xl bg-white border border-[#e8dcc8] text-[#8a7a68] text-[10px] font-black uppercase tracking-widest hover:bg-[#e8dcc8]">Stay</button>
+                <button type="button" id="unsaved-modal-go" onclick="confirmCloseBatchRecord()"
+                        class="px-5 py-2 rounded-xl bg-[#3d2610] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#5a3a1a] disabled:opacity-50">Close</button>
+            </div>
+        </div>
+    </div>
+
     <div id="t6-sales-modal" class="hidden fixed inset-0 z-[9000] bg-[rgba(26,21,13,0.7)] backdrop-blur-sm overflow-y-auto flex justify-center items-start p-4 md:p-8" onclick="if (event.target === this) closeT6SalesModal()">
         <div class="bg-[#f8f4ec] w-full max-w-2xl rounded-3xl shadow-2xl border border-[#e8dcc8] mt-8">
             <div class="px-6 py-5 border-b border-[#e8dcc8] flex justify-between items-center bg-white rounded-t-3xl">
@@ -4232,19 +4253,99 @@
             };
         }
 
-        function closeBatchRecord() {
-            const dirty = _dirtyTabNames();
-            if (dirty.length && !confirm(
-                    `Not saved yet: ${dirty.join(', ')}.\n\n`
-                  + `Closing now loses what has been keyed into `
-                  + `${dirty.length === 1 ? 'that tab' : 'those tabs'} — each one is kept by its own `
-                  + `Save button at the bottom of it.\n\nClose anyway?`)) return;
-            /* The flags are cleared before navigating so the browser's own
-               "Leave site?" prompt does not ask a second time about a question
-               that has just been answered. */
+        /* Which save belongs to which tab, so the close dialog can offer to
+           run them. The same list the load handler wraps for dirty-tracking. */
+        const TAB_SAVE_FN = {
+            2: 'savePlantingTab', 3: 'saveTransplantTab', 4: 'saveCullingTab',
+            5: 'saveTab5', 6: 'saveTab6', 7: 'saveCalibration', 8: 'saveSeedAudit'
+        };
+
+        function _dirtyTabIndices() {
+            return Object.keys(_tabDirty).filter(n => _tabDirty[n]).map(Number);
+        }
+
+        function _leaveBatchRecord() {
+            /* Cleared before navigating so the browser's own "Leave site?"
+               prompt does not ask again about a question just answered. */
             Object.keys(_tabDirty).forEach(k => delete _tabDirty[k]);
             _seedAuditDirty = false;
             window.location.href = 'operation_batch_record.html';
+        }
+
+        /* CLOSING WITH SOMETHING KEYED AND NOT SAVED.
+
+           Not the browser's confirm box: that can only ask one yes/no about
+           everything at once, so somebody with two tabs half-filled has to
+           lose both or keep both. This names each tab and lets each one be
+           kept or dropped on its own, which is the actual decision. */
+        function closeBatchRecord() {
+            const dirty = _dirtyTabIndices();
+            if (!dirty.length) return _leaveBatchRecord();
+
+            const host = document.getElementById('unsaved-modal');
+            const list = document.getElementById('unsaved-modal-list');
+            if (!host || !list) {           // markup missing — never trap them here
+                return _leaveBatchRecord();
+            }
+            list.innerHTML = dirty.map(n => `
+                <div class="unsaved-row flex flex-wrap items-center gap-2 px-4 py-3 border-t border-[#e8dcc8]"
+                     data-tab="${n}">
+                    <span class="text-sm font-black text-[#3d2610] flex-1 min-w-[120px]">${TAB_TITLES[n] || ('Tab ' + n)}</span>
+                    <button type="button" onclick="_pickUnsaved(${n}, 1)"
+                            class="unsaved-save px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border-2 border-[#4a7a2e] bg-[#4a7a2e] text-white">Save</button>
+                    <button type="button" onclick="_pickUnsaved(${n}, 0)"
+                            class="unsaved-drop px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border-2 border-[#e8dcc8] bg-white text-[#8a7a68]">Don't save</button>
+                </div>`).join('');
+            host.classList.remove('hidden');
+            host.classList.add('flex');
+        }
+
+        // Save is the default on every tab; this only moves the highlight.
+        function _pickUnsaved(tab, save) {
+            const row = document.querySelector(`#unsaved-modal-list .unsaved-row[data-tab="${tab}"]`);
+            if (!row) return;
+            row.setAttribute('data-choice', save ? 'save' : 'drop');
+            const s = row.querySelector('.unsaved-save'), d = row.querySelector('.unsaved-drop');
+            s.className = 'unsaved-save px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border-2 '
+                + (save ? 'border-[#4a7a2e] bg-[#4a7a2e] text-white' : 'border-[#e8dcc8] bg-white text-[#8a7a68]');
+            d.className = 'unsaved-drop px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border-2 '
+                + (save ? 'border-[#e8dcc8] bg-white text-[#8a7a68]' : 'border-[#a83020] bg-[#a83020] text-white');
+        }
+
+        function closeUnsavedModal() {
+            const host = document.getElementById('unsaved-modal');
+            if (!host) return;
+            host.classList.add('hidden');
+            host.classList.remove('flex');
+        }
+
+        async function confirmCloseBatchRecord() {
+            const rows = Array.from(document.querySelectorAll('#unsaved-modal-list .unsaved-row'));
+            const btn  = document.getElementById('unsaved-modal-go');
+            const toSave = rows.filter(r => r.getAttribute('data-choice') !== 'drop')
+                               .map(r => Number(r.getAttribute('data-tab')));
+            if (btn) { btn.disabled = true; btn.innerText = toSave.length ? 'Saving…' : 'Closing…'; }
+
+            /* Run each chosen save and WAIT for it. A tab whose save fails
+               stays dirty — the wrapper on it only clears the flag when
+               nothing reported an error — so the ones that did not work are
+               still listed rather than closed over. */
+            for (const n of toSave) {
+                const fn = window[TAB_SAVE_FN[n]];
+                if (typeof fn !== 'function') continue;
+                try { await fn(); } catch (e) { console.warn('[close] save failed on tab ' + n, e); }
+            }
+
+            const stillDirty = _dirtyTabIndices().filter(n => toSave.indexOf(n) >= 0);
+            if (btn) { btn.disabled = false; btn.innerText = 'Close'; }
+            if (stillDirty.length) {
+                showToast('Not closing — ' + stillDirty.map(n => TAB_TITLES[n] || ('Tab ' + n)).join(', ')
+                    + ' did not save. Nothing has been lost.', 'error');
+                closeBatchRecord();      // redraw the list with what is left
+                return;
+            }
+            closeUnsavedModal();
+            _leaveBatchRecord();
         }
 
         // ── Toast helper ──────────────────────────────────────────
@@ -6049,6 +6150,45 @@
                 if (overdrawn.length > 0) {
                     const msg = overdrawn.map(([name, bal]) => `${name}: exceeds by ${Math.abs(bal).toLocaleString()}`).join(', ');
                     showToast(`Cannot save — tray over-drawn: ${msg}`, 'error');
+                    btn.innerText = originalText; btn.disabled = false;
+                    return;
+                }
+
+                /* ROWS THIS FORM DOES NOT OWN, CARRIED ACROSS THE REPLACE.
+
+                   A transplanting row written by an approved adjustment — a
+                   plot nothing had been transplanted into — is not one of the
+                   form's rows and never will be. The save is a
+                   delete-then-insert of everything the form holds, so without
+                   this it deletes that row every time somebody saves this tab,
+                   and the safety net below fires on every save to say so.
+
+                   Re-inserted verbatim, remark and all, so it keeps its
+                   FromAdjustment link, its map and its quantity of nought. */
+                try {
+                    const { data: keepRows } = await _supabase
+                        .from('shared_inventory_logs')
+                        .select('transaction_type, batch_name, breed_name, plot_name, quantity_change, transaction_date, remark')
+                        .eq('batch_name', batchId)
+                        .in('transaction_type', ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone']);
+                    (keepRows || []).forEach(r => {
+                        if (!/FromAdjustment:/.test(String(r.remark || ''))) return;
+                        logsToInsert.push(withEditMeta({
+                            transaction_type: r.transaction_type,
+                            batch_name: r.batch_name,
+                            breed_name: r.breed_name || breed,
+                            plot_name: r.plot_name,
+                            quantity_change: r.quantity_change,
+                            transaction_date: r.transaction_date || null,
+                            remark: r.remark
+                        }));
+                    });
+                } catch (e) {
+                    /* Could not read them: stop rather than save, because
+                       saving now would delete rows this form cannot see. The
+                       count below would catch it, but a plain message here
+                       beats a dialog about numbers. */
+                    showToast('Could not check for records written by adjustments — nothing saved. Try again.', 'error');
                     btn.innerText = originalText; btn.disabled = false;
                     return;
                 }
