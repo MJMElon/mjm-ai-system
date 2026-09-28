@@ -627,7 +627,17 @@ const PAYROLL_TYPES = {
 };
 let _payrollView = 'pd';
 let payrollData  = {};   // `${nursery}_${month}_${type}` → { recId: { worker: qty } }
-let _payrollSaveTimer = null;
+/* ONE TIMER PER SHEET, not one for the page.
+   A single timer meant every call to persistPayroll cancelled the one before
+   it, and applyFieldRecords ends by saving every sheet the field touched:
+       touched.forEach(type => persistPayroll(nursery, month, type));
+   Four calls in a row, three of them cancelled, so only the LAST work type
+   the sync happened to touch was ever written. The other three were ticked on
+   this screen, re-ticked from the field records on every load — so this page
+   always looked right — and never reached the database, which is where the
+   salary claim reads them from. That is why P & D and Weeding priced at
+   RM 0.00 in the payroll module while Manuring and Interrow paid. */
+let _payrollSaveTimers = {};   // `${nursery}_${month}_${type}` → timer
 /* `${nursery}_${month}` → names the field credited that matched no column on
    that sheet. Filled by applyFieldRecords, shown by renderPayroll. Not saved:
    it is a fact about the last sync, not about the month. */
@@ -728,6 +738,8 @@ function renderPayroll() {
     if (gone.length)  lines.push(`${t('pay.offRegister')} ${gone.map(x => _nameWithReason(n, x)).join('; ')}`);
     if (nofit.length) lines.push(`${t('pay.fieldNoColumn')} ${nofit.map(x => _nameWithReason(n, x)).join('; ')}`);
     if (unpaired.length) lines.push(`${t('pay.unpaired')} ${unpaired.join(', ')}`);
+    const saveErr = _payrollSaveErr[payrollKey(n, m, _payrollView)];
+    if (saveErr) lines.push(`${t('pay.saveFailed')} ${saveErr}`);
     off.style.display = lines.length ? 'block' : 'none';
     off.textContent = lines.join('\n');
     off.style.whiteSpace = 'pre-line';
@@ -808,15 +820,26 @@ function togglePayrollTick(recId, worker) {
 
 function persistPayroll(n, m, type) {
   if (!_supabase || !_dbReady) return;
-  clearTimeout(_payrollSaveTimer);
-  _payrollSaveTimer = setTimeout(() => {
+  const k = payrollKey(n, m, type);
+  clearTimeout(_payrollSaveTimers[k]);
+  _payrollSaveTimers[k] = setTimeout(() => {
+    delete _payrollSaveTimers[k];
     _supabase.from('nops_maint_payroll')
       .upsert({ nursery: n, month: m, work_type: type,
-                data: payrollData[payrollKey(n, m, type)] || {},
+                data: payrollData[k] || {},
                 updated_at: new Date().toISOString() }, { onConflict: 'nursery,month,work_type' })
-      .then(({ error }) => { if (error) console.warn('[maint] payroll save failed:', error.message); });
+      .then(({ error }) => {
+        if (!error) { delete _payrollSaveErr[k]; return; }
+        /* A tick that did not save is a worker who does not get paid, and a
+           console warning is not where anybody would look for that. */
+        console.warn('[maint] payroll save failed:', error.message);
+        _payrollSaveErr[k] = error.message;
+        try { renderPayroll(); } catch (_) {}
+      });
   }, 400);
 }
+/* Sheets whose last save was refused, so the screen can say so. */
+let _payrollSaveErr = {};
 
 /* Print a piece rate at its real precision. Forcing 2 decimals showed a rate
    of 0.015 as "0.01" while the money column was still worked out from 0.015,
@@ -1553,10 +1576,18 @@ function persistState(n, m) {
    Every change to the schedule now writes itself, debounced so a run of ticks
    is one request. "Save Schedule" still publishes the flat task list for the
    worker app and takes the snapshot the "modified" highlight compares against. */
-let _stateSaveTimer = null;
+/* Per nursery and month, for the same reason persistPayroll keeps one timer
+   per sheet: a single timer means saving one month cancels the save of
+   another that was still pending, and switching nursery or month straight
+   after an edit is exactly when that happens. */
+let _stateSaveTimers = {};
 function persistStateSoon(n, m) {
-  clearTimeout(_stateSaveTimer);
-  _stateSaveTimer = setTimeout(() => persistState(n, m), 700);
+  const k = stateKey(n, m);
+  clearTimeout(_stateSaveTimers[k]);
+  _stateSaveTimers[k] = setTimeout(() => {
+    delete _stateSaveTimers[k];
+    persistState(n, m);
+  }, 700);
 }
 
 /* Sortable key for a "Aug 2026" month label — 202608. */
@@ -1638,6 +1669,7 @@ const I18N = {
     'pay.whyRole':'is a {role} on the register, so has no column on these sheets',
     'pay.whyNotGeneral':'not counted as a general worker of this nursery on the register',
     'pay.whyUnknown':'on the register as a general worker of this nursery — reload the page',
+    'pay.saveFailed':'⚠ These ticks did not save, so the Nursery Payroll System cannot see them and will not pay them. Try ticking again:',
     /* The other half of the same warning: work that never reached the sheet
        at all, as against work that reached it with a name nobody could
        place. */
@@ -1740,6 +1772,7 @@ const I18N = {
     'pay.whyRole':'ialah {role} dalam daftar, jadi tiada lajur pada helaian ini',
     'pay.whyNotGeneral':'tidak dikira sebagai pekerja am nurseri ini dalam daftar',
     'pay.whyUnknown':'ada dalam daftar sebagai pekerja am nurseri ini \u2014 muat semula halaman',
+    'pay.saveFailed':'⚠ Tanda ini tidak disimpan, jadi Sistem Payroll Nurseri tidak dapat melihatnya dan tidak akan membayarnya. Cuba tanda semula:',
     'pay.unpaired':'⚠ Disahkan di ladang tetapi tiada baris sepadan pada jadual bulan ini, jadi ia tidak ditanda dan tidak dibayar. Tambah baris itu pada jadual bulan ini, kemudian Sync dari Jadual:',
     'pay.roundN':'Pusingan {n}',
     /* Borang tuntutan gaji (PDF) */
