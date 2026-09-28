@@ -2471,12 +2471,12 @@ function renderAll() {
 ══════════════════════════════════════════════════════════════ */
 let fieldRecords = [];
 
-const _FIELD_JENIS = {
-  pd:       'Penyemburan racun kulat dan serangga',
-  manuring: 'Membaja',
-  weeding:  'Merumput',
-  interrow: 'Meracun rumput secara selingan'
-};
+/* The pairing rule itself lives in shared/shared_maint_field.js now — the
+   payroll module's salary claim has to reach the same answer, and a second
+   copy of "which office row does this morning's work belong to" is two
+   screens that pay different people. What stays here is what this page does
+   with the answer: ticking, dates, batches, provenance and saving. */
+const _FIELD_JENIS = MJMMaintField.JENIS;
 
 /* Every read here carries the same filter, in every fallback: a record that
    nobody has verified is not this page's business. Putting it on the query
@@ -2786,50 +2786,17 @@ function _matchWorkerName(nursery, name) {
   return (workers[nursery] || []).find((w) => key(w) === want) || null;
 }
 
-function _recRound(racun) {
-  const m = /^\s*Round\s+(\d+)\s*:/i.exec(String(racun || ''));
-  return m ? parseInt(m[1], 10) : 0;
-}
-/* Which seven-day block of the month a date falls in — the 29th on is the 4th,
-   the same way the schedule's last round runs to the end of the month. */
-function _weekOfDate(iso) {
-  const day = parseInt(String(iso || '').slice(8, 10), 10);
-  return day ? Math.min(4, Math.ceil(day / 7)) : 0;
-}
-function _isoMonthLabel(iso) {
-  const m = /^(\d{4})-(\d{2})/.exec(String(iso || ''));
-  return m ? `${_MONTHS_SHORT[parseInt(m[2], 10) - 1]} ${m[1]}` : '';
-}
-const _fieldKey = (jenis, plot, week) => `${jenis}||${_mvPlotKey(plot)}||${week}`;
-
-/* A chemical, compared the way a person would compare it: the round label off
-   the front, then letters and digits only.
-
-     "Round 1: Manzate 50gm + Bond 15mL"  →  MANZATE50GMBOND15ML
-     "Manzate 50gm + Bond 15mL"           →  the same
-
-   The round comes off because it is the thing that disagrees — it is what the
-   office calls the job, not what the job IS. */
-function _chemKey(s) {
-  return String(s == null ? '' : s)
-    .replace(/^\s*Round\s+\d+\s*:/i, '')
-    .replace(/[^a-z0-9]/gi, '')
-    .toUpperCase();
-}
-const _fieldChemKey = (jenis, plot, chem) =>
-  `${jenis}||${_mvPlotKey(plot)}||${_chemKey(chem)}`;
-
-/* Who a field record credits the work to.
-
-   `worked_by` is the conductor keying a job for somebody whose phone was
-   broken; NULL means the person who reported it did it themselves. Both are
-   read, because a job three workers each saved from their own phone has
-   worked_by empty on all three, and crediting nobody for a morning three
-   people spent is worse than crediting the wrong person — it is silent. */
-function _fieldCredits(f) {
-  const raw = String(f.worked_by || '').trim() || String(f.reported_by || '').trim();
-  return raw.split(',').map((x) => x.trim()).filter(Boolean);
-}
+/* All of these are shared/shared_maint_field.js's, named locally so the rest
+   of this file reads as it did. The office's plot key and the shared one are
+   the same comparison — letters and digits, upper case — so the two sides
+   build the same keys. */
+const _recRound      = MJMMaintField.recRound;
+const _weekOfDate    = MJMMaintField.weekOfDate;
+const _isoMonthLabel = MJMMaintField.isoMonthLabel;
+const _fieldKey      = MJMMaintField.fieldKey;
+const _chemKey       = MJMMaintField.chemKey;
+const _fieldChemKey  = MJMMaintField.fieldChemKey;
+const _fieldCredits  = MJMMaintField.credits;
 
 /* Every field record for one (job, plot, round), summarised.
 
@@ -2857,83 +2824,34 @@ function _fieldCredits(f) {
    Which of "they split it" and "they shared it" is true is not something
    this table can tell from the outside, and quantities here are piece-rate
    money, so it keeps the answer it has always given. */
-function _summariseFieldGroup(list) {
-  const newest = list.reduce((best, f) => {
-    if (!best) return f;
-    const a = String(f.work_date || ''), b = String(best.work_date || '');
-    return (a > b || (a === b && (f.id || 0) > (best.id || 0))) ? f : best;
-  }, null);
+/* The shared summary, plus the one thing only this page wants: the GPS walks.
 
-  const uniq = (xs) => [...new Set(xs.filter(Boolean))];
-
+   One job can be three workers and three tracks, and the Track Record cell
+   offers each of them rather than picking one and calling it the answer. The
+   LINE is not here: only the summary is read for the whole month, and the
+   thousand points of a walk are fetched for the one record somebody opens.
+   See _openTrack. */
+function _fieldTracks(list) {
   return {
-    list,
-    ids:     list.map((f) => f.id),
-    dates:   uniq(list.map((f) => f.work_date)).sort(),
-    batches: uniq(list.flatMap((f) => String(f.batch_name || '').split(',').map((x) => x.trim()))),
-    workers: uniq(list.flatMap(_fieldCredits)),
-    qty:     newest ? newest.qty : null,
-    /* The records in this group that carry a walk, newest first — one job can
-       be three workers and three tracks, and the Track Record cell offers
-       each of them rather than picking one and calling it the answer. The
-       LINE is not here: only the summary is read for the whole month, and the
-       thousand points of a walk are fetched for the one record somebody
-       opens. See _openTrack. */
-    tracks:  list.filter((f) => f.gps_points > 0 || f.gps_distance_m != null)
-                 .sort((a, b) => (b.id || 0) - (a.id || 0))
-                 .map((f) => ({ id: f.id, m: f.gps_distance_m, n: f.gps_points,
-                                who: (_fieldCredits(f) || [])[0] || '' })),
+    tracks: list.filter((f) => f.gps_points > 0 || f.gps_distance_m != null)
+                .sort((a, b) => (b.id || 0) - (a.id || 0))
+                .map((f) => ({ id: f.id, m: f.gps_distance_m, n: f.gps_points,
+                               who: (_fieldCredits(f) || [])[0] || '' }))
   };
 }
+function _summariseFieldGroup(list) {
+  const g = MJMMaintField.summarise(list);
+  return Object.assign(g, _fieldTracks(list));
+}
 
-/* The field's answer for each (job, plot, round) of one month — and, beside
-   it, the same records filed by (job, plot, CHEMICAL).
- 
-   ── Why two indexes ──
- 
-   The round is the one fact the two sides get from different places. The
-   office reads it off the front of its own chemical ("Round 2: Manzate …");
-   the phone sends the week its board was showing. Those agree only when the
-   office schedules one round per week, and it often does not: a plot with a
-   single P & D round in the month is worked in week two, and the two numbers
-   part company. Verified work then paired with nothing and vanished — no
-   date, no batch, no tick, while a worker had done it and a conductor had
-   signed it off.
- 
-   So the chemical is the second way in, and it is the better fact: it is what
-   the job IS, where the round is only what the office calls it. Manzate is
-   Manzate whichever week the phone was showing.
- 
-   It cannot attach work to a job the office did not schedule, which is what
-   makes it safe to fall back on: if the office has no Manzate row for that
-   plot, nothing matches and the record stays unpaired and reported. And the
-   caller only uses it where the chemical picks out ONE office row — see the
-   ambiguity guard there. */
+/* The field's answer for each (job, plot, round) of one month, and beside it
+   the same records filed by (job, plot, CHEMICAL). Why two indexes, and why
+   the chemical is the better fact, is written out in shared_maint_field.js —
+   the payroll module's salary claim builds the very same index from the very
+   same records, which is what lets it price field work whether or not anybody
+   has opened this screen for that month. */
 function fieldRecordIndex(monthLbl) {
-  const groups = {};
-  const byChem = {};
-  fieldRecords.forEach(f => {
-    const jenis = f.jenis || _FIELD_JENIS[f.work_type];
-    if (!jenis) return;
-    if ((f.schedule_month || _isoMonthLabel(f.work_date)) !== monthLbl) return;
-    const week = f.week_no || _weekOfDate(f.work_date);
-    if (!week) return;
-    const k = _fieldKey(jenis, f.plot_name, week);
-    (groups[k] || (groups[k] = [])).push(f);
-    /* Only where the phone actually recorded one. A record with no chemical
-       has nothing to be matched on and keeps the round as its only route. */
-    const ck = _chemKey(f.chemical);
-    if (ck) {
-      const c = _fieldChemKey(jenis, f.plot_name, f.chemical);
-      (byChem[c] || (byChem[c] = [])).push(f);
-    }
-  });
-  const idx = {};
-  Object.keys(groups).forEach((k) => { idx[k] = _summariseFieldGroup(groups[k]); });
-  const chem = {};
-  Object.keys(byChem).forEach((k) => { chem[k] = _summariseFieldGroup(byChem[k]); });
-  idx.__byChem = chem;
-  return idx;
+  return MJMMaintField.index(fieldRecords, monthLbl, _fieldTracks);
 }
 
 function applyFieldRecords(nursery, monthLbl) {
