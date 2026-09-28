@@ -2585,7 +2585,11 @@ async function runTransplantingReport() {
   });
   rows = [...merged.values()];
 
-  rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')));
+  // Newest date first; same date, same plot sits together (natural order —
+  // "B10" after "B9", not before it) instead of interleaving with whatever
+  // other plots happened to share that date.
+  const _tpNatCmp = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
+  rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')) || _tpNatCmp(a.plot, c.plot));
   const total = rows.reduce((s, r) => s + r.qty, 0);
 
   loading.classList.add('hidden');
