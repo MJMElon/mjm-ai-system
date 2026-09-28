@@ -633,34 +633,27 @@ function fmtSigned(n) {
   return (v > 0 ? '+' : '−') + Math.abs(v).toLocaleString();
 }
 
-// The whole Life of Seedlings data pipeline — fetch, one row per batch,
-// filter, sort, totals — shared by runLifeOfSeedlings() (summary + Seed In
-// Details) and runSeedInReport() (Seed In Details alone, under the Nursery
-// Report tab's own selector). Same filters either way: the Seed In figures
-// on a batch (received/damaged/planted/variance) come from the exact same
-// per-batch build this always did, not a separate simpler one.
+// The whole Life of Seedlings data pipeline's FETCH + BUILD half — one row
+// per batch, every figure computed (received/damaged/planted/transplanted/
+// culled/sold/balance/variance/age…), completely UNFILTERED. Shared by
+// _losBuildData() (Life of Seedling's own LOS-style filters: nursery type,
+// status, As At month/year, age, breed, supplier) and runSeedInReport()
+// (Nursery Report's Seed In sub-report, which filters the same rows a
+// simpler way — As At as a single day, Locations, breed — see its own
+// comment). Neither is a second implementation of the figures themselves;
+// both filter the exact same build.
+//
+// asAt only affects r.ageMonths/r.age here — the "as at THIS date, is a
+// batch too old/too young for the age band" question. Each caller applies
+// its own as-at-based CUTOFF (excluding batches received after asAt)
+// itself, once it has its own filtered rows to work with.
 //
 // Returns null (having already rendered the error and unhidden #report-
 // output) if the fetch failed — callers just `return` on that. Otherwise
-// {rows, tot, scope, breed, supplier}; #report-output/#loading visibility
-// for the SUCCESS path is left to the caller, since the summary view and
-// the Seed-In-only view render different final HTML.
-async function _losBuildData() {
+// the unfiltered array of per-batch rows.
+async function _losBuildAllRows(asAt) {
   const out = document.getElementById('report-output');
   const loading = document.getElementById('loading');
-
-  const breed    = document.getElementById('f-breed').value;
-  const supplier = (document.getElementById('f-los-supplier') || {}).value || '';
-  const nursery  = (document.getElementById('f-los-nursery')  || {}).value || '';
-  const status   = (document.getElementById('f-los-status')   || {}).value || '';
-  const year     = (document.getElementById('f-los-year')     || {}).value || '';
-  const month    = (document.getElementById('f-los-month')    || {}).value || '';
-  const ageBand  = (document.getElementById('f-los-age')      || {}).value || '';
-  /* As At, from the month and year pickers. No year means no cut-off at all
-     — every batch ever received, which is what "All years" is for. A year on
-     its own runs to the last day of December; a year and a month to the last
-     day of that month. */
-  const asAt = _losAsAt(year, month);
 
   const [logsRes, dosRes, plotsRes, traysRes] = await Promise.all([
     fetchAllRows(() => _supabase.from('shared_inventory_logs')
@@ -857,20 +850,46 @@ async function _losBuildData() {
     r.completed   = r.trans > 0 && r.balance <= 0;
   });
 
-  let rows = Object.values(rowsByBatch);
+  const rows = Object.values(rowsByBatch);
 
-  // Years offered by the Year picker come from the data, so there is never a
-  // year to choose that has no batch in it.
+  // Years/suppliers offered by their pickers come from the data, so there
+  // is never a choice offered that has no batch behind it. Cheap enough to
+  // keep in sync here regardless of which caller is asking — Seed In
+  // Report doesn't use either picker, but nothing is hurt by refreshing
+  // them anyway.
   const years = [...new Set(rows.map(r => (r.seedsDate || '').slice(0, 4)).filter(Boolean))]
     .sort((a, b) => b.localeCompare(a));
   _losSyncYearOptions(years);
   _losSyncSupplierOptions([...new Set(rows.map(r => r.supplier).filter(s => s && s !== '—'))].sort());
 
+  return rows;
+}
+
+// Life of Seedling's own filtering on top of _losBuildAllRows() — nursery
+// type, active/completed, As At month/year, age band, breed, supplier.
+// Returns null if the fetch failed (already reported by _losBuildAllRows()).
+async function _losBuildData() {
+  const breed    = document.getElementById('f-breed').value;
+  const supplier = (document.getElementById('f-los-supplier') || {}).value || '';
+  const nursery  = (document.getElementById('f-los-nursery')  || {}).value || '';
+  const status   = (document.getElementById('f-los-status')   || {}).value || '';
+  const year     = (document.getElementById('f-los-year')     || {}).value || '';
+  const month    = (document.getElementById('f-los-month')    || {}).value || '';
+  const ageBand  = (document.getElementById('f-los-age')      || {}).value || '';
+  /* As At, from the month and year pickers. No year means no cut-off at all
+     — every batch ever received, which is what "All years" is for. A year on
+     its own runs to the last day of December; a year and a month to the last
+     day of that month. */
+  const asAt = _losAsAt(year, month);
+
+  const allRows = await _losBuildAllRows(asAt);
+  if (!allRows) return null;
+
   // ── Filters ── nothing picked means no filtering, so the report opens on
   // everything — active and completed alike — rather than on a slice nobody
   // asked for.
-  const band   = LOS_AGE_BANDS.find(b => b.value === ageBand);
-  rows = rows.filter(r => {
+  const band = LOS_AGE_BANDS.find(b => b.value === ageBand);
+  let rows = allRows.filter(r => {
     if (breed && r.breed !== breed) return false;
     if (supplier && r.supplier !== supplier) return false;
     if (status === 'active'    && r.completed) return false;
@@ -932,22 +951,49 @@ async function runLifeOfSeedlings() {
 }
 
 // Nursery Report → Seed In Report: the same batch-level Seed In figures
-// Life of Seedlings always showed (see _losBuildData()), just without the
-// full per-batch summary table alongside it — this is "what came in and
-// what happened to it", not "where does every batch stand right now".
+// Life of Seedlings always showed (see _losBuildAllRows()), just filtered
+// and grouped differently — the simple As At (one day) + Locations chips
+// every other Nursery Report sub-report already uses, grouped by
+// SUPPLIER rather than breed (see _losSupplierHtml()), instead of Life of
+// Seedling's own six-filter set grouped by breed.
 async function runSeedInReport() {
   const out = document.getElementById('report-output');
   const loading = document.getElementById('loading');
   out.classList.add('hidden');
   loading.classList.remove('hidden');
 
-  const built = await _losBuildData();
-  if (!built) return; // error already shown by _losBuildData()
-  const { rows, breed, supplier } = built;
+  const to    = document.getElementById('f-to').value;
+  const breed = document.getElementById('f-breed').value;
+  const selectedLocs = new Set(selectedNurseries());
+  // "As At" here — every batch received up to and including this date, the
+  // same cumulative reading Life of Seedling's own As At gives, not a
+  // period-only window like Transplanting/Culling's date range.
+  const asAt = to || null;
+
+  const allRows = await _losBuildAllRows(asAt);
+  if (!allRows) return; // error already shown by _losBuildAllRows()
+
+  let rows = allRows.filter(r => {
+    if (breed && r.breed !== breed) return false;
+    if (asAt && r.seedsDate && String(r.seedsDate).slice(0, 10) > asAt) return false;
+    // Every Seed In event is inherently Pre-Nursery — shared_inventory_logs
+    // hardcodes plot_name:'Pre-Nursery' on every Seeds_Received row (see
+    // operation_batch_detail.html's reception-form save). Ticking a
+    // Location that isn't PN genuinely has nothing to show, same as
+    // Transplanting Report ticking a nursery a batch never reached.
+    if (selectedLocs.size && !selectedLocs.has('PN')) return false;
+    return true;
+  });
+  rows.sort((a, b) => String(b.seedsDate || '').localeCompare(String(a.seedsDate || ''))
+                   || String(b.batch).localeCompare(String(a.batch)));
+
+  // Same drilldown-read convention _losBuildData() uses — published only
+  // after filtering.
+  window._losData = { rows, asAt };
 
   loading.classList.add('hidden');
   out.classList.remove('hidden');
-  out.innerHTML = _losBreedHtml(rows, breed, supplier) || `
+  out.innerHTML = _losSupplierHtml(rows) || `
     <div class="glass-panel p-6 rounded-[2rem] text-[#8a7a68] text-sm">No seed-in records match the selected filters.</div>`;
   _losWireSticky();
 }
@@ -1175,6 +1221,83 @@ function _losBreedHtml(rows, breed, supplier) {
   }).join('');
 }
 
+/* ── The same Seed In detail, grouped by SUPPLIER instead of breed ────────
+   Nursery Report's Seed In Report — same rows, same figures, same row
+   template as _losBreedHtml() above, just grouped by who supplied the
+   seeds rather than what breed they are (which becomes a per-row column
+   here instead, since it's no longer the group heading). */
+function _losSupplierHtml(rows) {
+  if (!rows.length) return '';
+  const groups = {};
+  rows.forEach(r => { (groups[r.supplier] = groups[r.supplier] || []).push(r); });
+  const names = Object.keys(groups).sort();
+  return names.map(name => {
+    const list = groups[name];
+    const t = list.reduce((s, r) => ({
+      received: s.received + r.received, damaged: s.damaged + r.damaged,
+      planted: s.planted + r.planted,
+      varDown: s.varDown + (r.variance < 0 ? r.variance : 0),
+      varUp:   s.varUp   + (r.variance > 0 ? r.variance : 0)
+    }), { received: 0, damaged: 0, planted: 0, varDown: 0, varUp: 0 });
+    return `
+    <div class="glass-panel p-6 rounded-[2rem]">
+      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4 gap-4 flex-wrap">
+        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Seed In Details — ${_losEsc(name)}</h3>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(list.length)} batch${list.length === 1 ? '' : 'es'}</div>
+      </div>
+      <div class="los-wrap">
+        <table class="report-table los-table">
+          <colgroup>${LOS_BREED_COL_WIDTHS.map(w => `<col style="width:${w}%">`).join('')}</colgroup>
+          <thead>
+            <tr>
+              <th rowspan="2">Seed In Date</th>
+              <th rowspan="2">Batch</th>
+              <th rowspan="2">Breed / MPOB Licence</th>
+              <th colspan="4" class="los-grp">Seed In Details</th>
+            </tr>
+            <tr>
+              <th>Seed Received (D/O) + FOC Qty</th>
+              <th>Seed Damage</th>
+              <th>Actual Planted</th>
+              <th>Variance Seed In</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${list.map(r => `
+              <tr>
+                <td>${fmtDate(r.seedsDate)}</td>
+                <td class="font-black text-[#3d2610]">${_losEsc(r.batch)}</td>
+                <td>
+                  <div class="text-[10px] font-bold text-[#3d2610]">${_losEsc(r.breed)}</div>
+                  <div class="text-[9px] font-bold text-[#8a7a68]">${_losEsc(r.mpob)}</div>
+                </td>
+                <td>
+                  ${_losFig('received', r.batch, fmtNum(r.received), 'text-[#c07820] font-black')}
+                  ${_losFocSplit(r)}
+                </td>
+                ${_losCell('damaged', r.batch, r.damaged, 'text-[#a83020] font-black')}
+                ${_losCell('planted', r.batch, r.planted, 'font-black')}
+                <td>${_losFig('variance', r.batch,
+                  (r.variance > 0 ? '+' : r.variance < 0 ? '−' : '') + fmtNum(Math.abs(r.variance)),
+                  r.variance < 0 ? 'text-[#a83020] font-black' : r.variance > 0 ? 'text-[#4a7a2e] font-black' : 'text-[#8a7a68]')}</td>
+              </tr>`).join('')}
+          </tbody>
+          <tfoot><tr class="font-black bg-[#f8f4ec]">
+            <td colspan="3" class="uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
+            <td class="text-[#c07820]">${fmtNum(t.received)}</td>
+            <td class="text-[#a83020]">${fmtNum(t.damaged)}</td>
+            <td>${fmtNum(t.planted)}</td>
+            <td>
+              <div class="text-[#a83020]">${t.varDown ? '−' + fmtNum(Math.abs(t.varDown)) : '0'}</div>
+              <div class="text-[#4a7a2e]">${t.varUp ? '+' + fmtNum(t.varUp) : '0'}</div>
+            </td>
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 /* Where the SECOND header row has to stick.
 
    The first row's height is whatever its group bands come to once they have
@@ -1343,10 +1466,12 @@ function syncFilterVisibility() {
   const sub = isNurseryTab ? ((document.getElementById('f-nursery-sub') || {}).value || 'summary') : '';
   const isMovement = sub === 'summary';
   const isTrans    = sub === 'transplanting';
-  // isLife is the standalone Life of Seedling TAB; isSeedIn is Nursery
-  // Report's Seed In sub-report. Both read the same .f-los/.f-breed
-  // filters (same _losBuildData() pipeline underneath either way), so
-  // they're combined below rather than kept as two separate toggles.
+  // isLife is the standalone Life of Seedling tab — its own six-filter set
+  // (.f-los + breed). isSeedIn (Nursery Report's Seed In sub-report) reads
+  // the SAME underlying figures (_losBuildAllRows()) but filters the
+  // simple way every other Nursery Report sub-report does — As At + Locations
+  // + breed — so it joins isMovement/isTrans/isCulling below instead of
+  // isLife's own filter group.
   const isLife     = (which === 'life_of_seedlings');
   const isSeedIn   = sub === 'seed_in';
   const isCulling  = sub === 'culling';
@@ -1358,7 +1483,7 @@ function syncFilterVisibility() {
   const isSalesChart = isSales && _salesViewMode === 'chart';
   document.querySelectorAll('.f-nursery-sub-wrap').forEach(el   => el.classList.toggle('hidden', !isNurseryTab));
   document.querySelectorAll('.f-culling-stage-wrap').forEach(el => el.classList.toggle('hidden', !isCulling));
-  const hasRange  = isMovement || isTrans || isCulling || isSalesTable;
+  const hasRange  = isMovement || isTrans || isSeedIn || isCulling || isSalesTable;
   document.querySelectorAll('.f-range').forEach(el         => el.classList.toggle('hidden', !hasRange));
   // No visible From anywhere — every report is one "As At" date. Movement
   // Report still shows the Culled/Transplanted/Damaged/etc columns as that
@@ -1373,17 +1498,20 @@ function syncFilterVisibility() {
   document.querySelectorAll('.f-sort').forEach(el          => el.classList.toggle('hidden', !isMovement));
   // Locations (PN / BNN / UNN 1 / UNN 2) drives Movement Report directly now
   // — which of those are checked decides whether the Pre-Nursery section,
-  // the Main Nursery section, or both, render. Transplanting, Culling and
-  // Sales Listing (table view) use the same chips to filter their own rows
-  // by destination nursery. Seed In uses its own Nursery Type filter
-  // instead (.f-los, below) — the same one Life of Seedling always did.
-  document.querySelectorAll('.f-nursery-inline').forEach(el => el.classList.toggle('hidden', !(isMovement || isTrans || isCulling || isSalesTable)));
+  // the Main Nursery section, or both, render. Transplanting, Seed In,
+  // Culling and Sales Listing (table view) use the same chips to filter
+  // their own rows by destination nursery (Seed In's is always Pre-Nursery
+  // in practice — see runSeedInReport() — but the same chip set asks the
+  // same question every other sub-report does). Life of Seedling uses its
+  // own Nursery Type filter instead (.f-los, below).
+  document.querySelectorAll('.f-nursery-inline').forEach(el => el.classList.toggle('hidden', !(isMovement || isTrans || isSeedIn || isCulling || isSalesTable)));
   document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !(isLife || isSeedIn || isTrans || isCulling)));
-  /* Life of Seedling's / Seed In Report's own five: nursery type,
-     active/completed, As At as a month and a year, age (breed is shared,
-     above). Its As At is its own pair of pickers, not the shared day
-     picker — see the markup — so .f-range is off for both. */
-  document.querySelectorAll('.f-los').forEach(el           => el.classList.toggle('hidden', !(isLife || isSeedIn)));
+  /* Life of Seedling's own five: nursery type, active/completed, As At as a
+     month and a year, age (breed is shared, above). Its As At is its own
+     pair of pickers, not the shared day picker — see the markup — so
+     .f-range is off for it. Seed In Report reads the shared day picker
+     and Locations instead (both handled above), not this set. */
+  document.querySelectorAll('.f-los').forEach(el           => el.classList.toggle('hidden', !isLife));
   document.querySelectorAll('.f-sales-mode').forEach(el    => el.classList.toggle('hidden', !isSales));
   document.querySelectorAll('.f-sales-years').forEach(el   => el.classList.toggle('hidden', !isSalesChart));
 }
