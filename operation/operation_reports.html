@@ -2932,13 +2932,23 @@ async function runCullingReport() {
       date, nursery,
       plot: l.plot_name || '—', batch: l.batch_name || '—',
       breed: l.breed_name || batchBreed[l.batch_name] || '—',
-      qty: Number(l.quantity_change || 0)
+      qty: Number(l.quantity_change || 0),
+      // 3rd Culling only — same MapQty: gate Movement Report's Summary
+      // uses for the identical reason: Tab 6 computes/saves a "fully
+      // culled" figure the moment Alive reaches zero, whether or not
+      // anyone has actually counted/photographed it. An un-evidenced
+      // figure would otherwise show here on nothing more than a formula.
+      hasMapQty: /MapQty:\s*\d+/.test(l.remark || '')
     };
   }).filter(r => {
     const ts = r.date ? new Date(r.date).getTime() : NaN;
     if (from || to) { if (!isFinite(ts) || ts < fromTs || ts >= toTs) return false; }
     if (selectedLocs.size && !selectedLocs.has(r.nursery)) return false;
     if (breed && r.breed !== breed) return false;
+    if (stage === '3rd_Culling' && !r.hasMapQty) return false;
+    // A zero-qty row is furniture, not a record — nothing was culled, so
+    // there's nothing to report, for any stage.
+    if (!r.qty) return false;
     return true;
   });
 
