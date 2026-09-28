@@ -54,6 +54,13 @@
      long the filter list above it gets. */
   #mv-sidebar-scroll { flex:1 1 auto; overflow-y:auto; padding:28px 16px; }
   #mv-sidebar-trigger:hover + #mv-report-sidebar, #mv-report-sidebar:hover { transform:translateX(0); }
+  /* The As At date's native picker renders as a browser overlay outside
+     the DOM — the mouse moving onto it isn't hovering #mv-report-sidebar
+     any more, so :hover alone closed the panel mid-pick. #f-to keeps
+     browser focus for as long as that picker is open, and :focus-within
+     keeps tracking that even though the picker itself isn't a DOM
+     descendant to :hover. */
+  #mv-report-sidebar:focus-within { transform:translateX(0); }
   #mv-report-sidebar .report-tab-bar { flex-direction:column; flex-wrap:nowrap; width:100%; margin:0; }
   #mv-report-sidebar .report-tab { border-right:none; border-bottom:1px solid #e8dcc8; text-align:left; }
   #mv-report-sidebar .report-tab:last-child { border-bottom:none; }
@@ -96,7 +103,8 @@
     transition:opacity .15s ease;
   }
   #mv-sidebar-handle svg { width:15px; height:15px; }
-  #mv-sidebar-trigger:hover ~ #mv-sidebar-handle, #mv-report-sidebar:hover ~ #mv-sidebar-handle { opacity:0; }
+  #mv-sidebar-trigger:hover ~ #mv-sidebar-handle, #mv-report-sidebar:hover ~ #mv-sidebar-handle,
+  #mv-report-sidebar:focus-within ~ #mv-sidebar-handle { opacity:0; }
   @media print { #mv-sidebar-trigger, #mv-report-sidebar, #mv-sidebar-handle { display:none !important; } }
 
   table.report-table { width:100%; border-collapse:separate; border-spacing:0; }
