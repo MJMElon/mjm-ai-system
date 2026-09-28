@@ -61,6 +61,13 @@
      keeps tracking that even though the picker itself isn't a DOM
      descendant to :hover. */
   #mv-report-sidebar:focus-within { transform:translateX(0); }
+  /* Forced shut right after Run Report is clicked — the mouse is usually
+     still over the button (inside the sidebar) at that moment, so :hover
+     alone would keep it open and cover the very results just asked for.
+     !important beats both :hover rules above; cleared the moment the
+     mouse actually leaves the trigger/sidebar (see the JS below), so the
+     next hover opens it normally rather than leaving it stuck shut. */
+  #mv-report-sidebar.mv-force-closed { transform:translateX(-100%) !important; }
   #mv-report-sidebar .report-tab-bar { flex-direction:column; flex-wrap:nowrap; width:100%; margin:0; }
   #mv-report-sidebar .report-tab { border-right:none; border-bottom:1px solid #e8dcc8; text-align:left; }
   #mv-report-sidebar .report-tab:last-child { border-bottom:none; }
@@ -1353,6 +1360,22 @@ document.getElementById('f-run').addEventListener('click', runReport);
 const _fSort = document.getElementById('f-sort');
 if (_fSort) _fSort.addEventListener('change', runReport);
 
+// Closes the sidebar the moment Run Report is clicked, instead of leaving
+// it open (and covering the results) until the mouse happens to wander
+// off — see .mv-force-closed above. document.activeElement is blurred too:
+// without it, #f-to (or whichever field was last focused) would keep the
+// panel open via :focus-within even with the mouse gone and this class
+// applied everywhere else.
+document.getElementById('f-run').addEventListener('click', () => {
+  document.getElementById('mv-report-sidebar').classList.add('mv-force-closed');
+  document.activeElement?.blur();
+});
+['mv-sidebar-trigger', 'mv-report-sidebar'].forEach(id => {
+  document.getElementById(id).addEventListener('mouseleave', () => {
+    document.getElementById('mv-report-sidebar').classList.remove('mv-force-closed');
+  });
+});
+
 /* Life of Seedlings' filters re-run on pick rather than waiting for Run
    Report — six dropdowns and a button to remember is five more chances to
    read a table that is answering the previous question. Status goes through
@@ -2181,7 +2204,13 @@ function buildMovementSection(scope, ev, ctx) {
   const buc = {}, per = {}, bf = {}, meta = {};
   for (const e of ev) {
     const ts = e.date ? new Date(e.date).getTime() : NaN;
-    if (!isFinite(ts) || ts > toMs) continue;
+    // toMs is midnight of the day AFTER "As At" (fromStr/toMs above) — an
+    // exclusive upper bound, so a row dated exactly there belongs to that
+    // NEXT day, not the one picked. `> toMs` let a date-only value (no
+    // time component, so it parses to exactly that midnight) slip through
+    // as "not greater than" — reported as "I picked 31/07 and 01/08 data
+    // still showed up". `>=` is the correct exclusion.
+    if (!isFinite(ts) || ts >= toMs) continue;
     const k = e.place + SEP + e.batch;
     meta[k] = meta[k] || { place: e.place, batch: e.batch };
     if (!buc[k]) buc[k] = emptyRow(scope);
@@ -2532,7 +2561,10 @@ async function runTransplantingReport() {
     const ts = r.date ? new Date(r.date).getTime() : NaN;
     // A row with no usable date at all can't be placed within a chosen
     // range — leave it out rather than guess which month it belongs to.
-    if (from || to) { if (!isFinite(ts) || ts < fromTs || ts > toTs) return false; }
+    // toTs is midnight of the day AFTER "As At" — exclusive, so `>=` (not
+    // `>`) is what actually excludes a date-only value dated exactly there
+    // (see the same fix/comment in buildMovementSection above).
+    if (from || to) { if (!isFinite(ts) || ts < fromTs || ts >= toTs) return false; }
     if (selectedLocs.size && !selectedLocs.has(r.nursery)) return false;
     if (breed && r.breed !== breed) return false;
     return true;
@@ -2553,7 +2585,11 @@ async function runTransplantingReport() {
   });
   rows = [...merged.values()];
 
-  rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')));
+  // Newest date first; same date, same plot sits together (natural order —
+  // "B10" after "B9", not before it) instead of interleaving with whatever
+  // other plots happened to share that date.
+  const _tpNatCmp = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
+  rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')) || _tpNatCmp(a.plot, c.plot));
   const total = rows.reduce((s, r) => s + r.qty, 0);
 
   loading.classList.add('hidden');
@@ -2654,7 +2690,9 @@ async function runSalesListing() {
     if (d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'))) return;
     if (/^CAL-/i.test(d.do_number || '')) return; // a stock correction, not a customer sale
     const ts = d.delivery_date ? new Date(d.delivery_date).getTime() : NaN;
-    if (from || to) { if (!isFinite(ts) || ts < fromTs || ts > toTs) return; }
+    // toTs is midnight of the day AFTER "As At" — exclusive (see the same
+    // fix/comment in buildMovementSection/runTransplantingReport above).
+    if (from || to) { if (!isFinite(ts) || ts < fromTs || ts >= toTs) return; }
 
     let filled = 0;
     for (let i = 1; i <= 5; i++) if (String(d[`plot_${i}`] || '').trim()) filled++;
