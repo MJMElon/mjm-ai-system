@@ -1175,6 +1175,17 @@ function _rememberReport(report) {
   try { localStorage.setItem(LAST_REPORT_KEY, report); } catch (e) { /* private mode, etc — just don't persist */ }
 }
 
+// Same idea for the "As At" date — picking one and refreshing used to
+// always land back on today regardless. Only remembers across a REFRESH;
+// switching report tabs still resets to today on purpose (see
+// syncReportDefaults()'s own comment — re-running the same report should
+// never clobber a date someone deliberately picked, but a fresh tab should
+// not inherit a stale one either).
+const LAST_DATE_KEY = 'mjm_reports_last_date';
+function _rememberDate(dateStr) {
+  try { localStorage.setItem(LAST_DATE_KEY, dateStr || ''); } catch (e) { /* private mode, etc — just don't persist */ }
+}
+
 function selectReport(report) {
   document.getElementById('f-report').value = report;
   _rememberReport(report);
@@ -2754,11 +2765,24 @@ async function bootstrap() {
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const fTo = document.getElementById('f-to');
-  fTo.value = todayStr;
+  // Restores whichever "As At" date was last picked, same idea as the
+  // report tab above — a refresh used to always land back on today even
+  // right after deliberately picking an earlier date. A malformed or
+  // future-dated value (a stale save, a clock change) falls back to today
+  // rather than feeding runReport() something it can't use.
+  let restoredDate = todayStr;
+  try {
+    const rememberedDate = localStorage.getItem(LAST_DATE_KEY);
+    if (rememberedDate && /^\d{4}-\d{2}-\d{2}$/.test(rememberedDate) && rememberedDate <= todayStr) {
+      restoredDate = rememberedDate;
+    }
+  } catch (e) { /* private mode, etc — falls back to today */ }
+  fTo.value = restoredDate;
   // Reports look at what has actually happened — future dates make no
   // sense. f-from is hidden and derived from f-to (see runReport()), so
   // only f-to needs a bound.
   fTo.max = todayStr;
+  fTo.addEventListener('change', () => _rememberDate(fTo.value));
   await Promise.all([loadBreeds(), loadNurseryFilter()]);
   // Same rule as selectReport() — a refresh landing straight back on
   // Movement Report still starts with Locations unticked, not whatever
