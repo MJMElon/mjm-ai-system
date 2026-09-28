@@ -701,30 +701,107 @@ const MAINT_TYPES = [
   { code:'interrow', label:'Interrow Spray', jenis:'Meracun rumput secara selingan' }
 ];
 
+/* WHY A COLUMN IS EMPTY.
+
+   A column of dashes on this claim looks exactly like a month nobody worked,
+   and it is reached five different ways — the work records for that job not
+   arriving, their plots not resolving to this nursery, the Worker Record's
+   ticks not being there, the ticks naming somebody the claim has no row for,
+   or the batch-report ledger not having loaded so every row with no keyed
+   quantity reads nought. Four of those are faults and one is a quiet month,
+   and until this they all printed the same dash.
+
+   So every column is counted as it is built, and renderMaint() says which of
+   the five it is. This runs inside maintTotals rather than beside it because
+   a second pass over the same records is a second chance to disagree with the
+   figure it is explaining. */
 function maintTotals(nursery, month, ym) {
   const wk = maintWorkerNames(nursery, ym || monthValue());
   const per = {};                       // worker → { code: capacity }
   wk.forEach(w => { per[w] = {}; MAINT_TYPES.forEach(t => per[w][t.code] = 0); });
+  const why = {};
+  maint.why = why;
 
   MAINT_TYPES.forEach(t => {
     const store = maint.ticks[`${nursery}_${month}_${t.code}`] || {};
+    const d = why[t.code] = {
+      label: t.label,
+      rows: 0,          // work records for this job in this nursery
+      ticked: 0,        // of those, rows with a tick this claim can use
+      paid: 0,          // of those, rows that carried a capacity
+      noCap: 0,         // ticked, but the quantity came to nothing
+      stray: new Set(), // tick names with no row on this claim
+      orphanTicks: 0,   // ticks against a record id this month's list has not got
+      tickRows: Object.keys(store).length
+    };
+    const seen = new Set();
     maint.records
       .filter(r => r.jenis === t.jenis && (r.__nursery === nursery))
       .forEach(r => {
-        const cells  = store[r.id] || {};
+        d.rows++;
+        const cells = store[r.id] || {};
+        seen.add(String(r.id));
         const ticked = wk.filter(w => cells[w]);
+        // Somebody ticked on the Worker Record who has no row here — their
+        // share of the plot goes missing, quietly, unless it is said.
+        Object.keys(cells).forEach(name => {
+          if (cells[name] && !wk.includes(name)) d.stray.add(name);
+        });
         if (!ticked.length) return;
+        d.ticked++;
         /* Same quantity the Work Maintenance record list shows: whatever was
            keyed on the row, and when nothing was keyed, the batch report's
            closing balance for that plot, batch and work date. Reading r.qty
            alone left every FC-saved record at nought, so a plot with four
            workers ticked still paid RM 0.00. */
         const cap = PlotMovement.recQty(r).value || 0;
+        if (!cap) { d.noCap++; return; }
+        d.paid++;
         const share = cap / ticked.length;
         ticked.forEach(w => { per[w][t.code] += share; });
       });
+    // Ticks filed against a record this month's list does not hold — the
+    // Worker Record shows them, and nothing here can price them.
+    Object.keys(store).forEach(id => {
+      if (!seen.has(String(id)) && Object.values(store[id] || {}).some(Boolean)) d.orphanTicks++;
+    });
   });
   return per;
+}
+
+/* The five, in the order they break the chain: no records, no ticks, ticks on
+   records this list has not got, ticks on names this claim has no row for, and
+   a quantity that came to nothing. Said per work type, and only about the ones
+   that actually came to nought — a column that paid needs no explanation. */
+function maintWhyEmpty(code) {
+  const d = (maint.why || {})[code];
+  if (!d) return '';
+  if (d.paid) return '';
+  if (!d.rows) {
+    return `${d.label}: no work record for this job in this nursery this month.`;
+  }
+  if (!d.ticked && !d.tickRows) {
+    return `${d.label}: ${d.rows} work record${d.rows === 1 ? '' : 's'}, and nobody ticked on `
+         + 'the Worker Record in Work Maintenance — tick who did the work there and it prices here.';
+  }
+  if (!d.ticked && d.orphanTicks) {
+    return `${d.label}: ${d.orphanTicks} tick${d.orphanTicks === 1 ? ' sits' : 's sit'} on the Worker `
+         + 'Record against work records this month no longer has — open Work Maintenance\u2019s Worker '
+         + 'Record for this month and tick them again.';
+  }
+  if (!d.ticked && d.stray.size) {
+    return `${d.label}: the only names ticked are ${[...d.stray].join(', ')}, who have no row on this `
+         + 'claim — file them under this nursery in Worker System, or correct the spelling.';
+  }
+  if (!d.ticked) {
+    return `${d.label}: ${d.rows} work record${d.rows === 1 ? '' : 's'}, none of them ticked for `
+         + 'anybody on this claim.';
+  }
+  // Ticked, but every one came to no quantity.
+  return `${d.label}: ${d.ticked} row${d.ticked === 1 ? '' : 's'} ticked, but none of them has a `
+       + 'quantity — nothing keyed on the work record, and the batch report shows nothing standing on '
+       + 'that plot and batch at the work date'
+       + (PlotMovement.ready() ? '.' : ', and the batch report has not loaded (reload the page).');
 }
 
 function renderMaint() {
@@ -807,6 +884,21 @@ function renderMaint() {
      Anything that would make the sheet short is said FIRST, because a claim
      that is missing work looks exactly like a quiet month. */
   const notes = [];
+  /* Why any column came to nothing, first — it is the question somebody is
+     holding the sheet to ask. */
+  MAINT_TYPES.forEach(t => { const w = maintWhyEmpty(t.code); if (w) notes.push(w); });
+  /* A name ticked on the Worker Record with no row here loses that worker's
+     share of the plot, and the row still looks complete on both screens. */
+  const stray = [...new Set(MAINT_TYPES.flatMap(t => [...(((maint.why || {})[t.code] || {}).stray || [])]))];
+  if (stray.length) {
+    notes.push(`Ticked on the Worker Record but not on this claim: ${stray.join(', ')} — `
+             + 'their share of those plots is not priced. File them under this nursery in Worker '
+             + 'System, or correct the spelling there.');
+  }
+  if (!PlotMovement.ready()) {
+    notes.push('The batch report has not loaded, so any work record with no quantity keyed on it '
+             + 'reads as nothing. Reload the page.');
+  }
   const missing = MAINT_TYPES.filter(t => rateOf(t.code) == null).map(t => t.label);
   if (missing.length) {
     notes.push(`No piece rate set for ${missing.join(', ')} — set it under `
