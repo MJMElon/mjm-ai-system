@@ -721,6 +721,13 @@ function maintTotals(nursery, month, ym) {
   wk.forEach(w => { per[w] = {}; MAINT_TYPES.forEach(t => per[w][t.code] = 0); });
   const why = {};
   maint.why = why;
+  /* The field's own answer, paired here. Used where the Worker Record has
+     saved no tick for a row — a tick made or corrected in the office ALWAYS
+     wins, the same order of precedence the office itself applies, so a
+     conductor's correction is never undone by the record it corrected. */
+  const fld = maintFieldCredits(nursery, month, wk);
+  maint.fieldUnmatched = fld.unmatched;
+  let fromField = 0;
 
   MAINT_TYPES.forEach(t => {
     const store = maint.ticks[`${nursery}_${month}_${t.code}`] || {};
@@ -732,6 +739,8 @@ function maintTotals(nursery, month, ym) {
       noCap: 0,         // ticked, but the quantity came to nothing
       stray: new Set(), // tick names with no row on this claim
       orphanTicks: 0,   // ticks against a record id this month's list has not got
+      fromField: 0,     // rows priced from the field because nothing was saved
+      noTaker: new Set(),// the field answered, and nobody it named has a row here
       tickRows: Object.keys(store).length
     };
     const seen = new Set();
@@ -741,7 +750,16 @@ function maintTotals(nursery, month, ym) {
         d.rows++;
         const cells = store[r.id] || {};
         seen.add(String(r.id));
-        const ticked = wk.filter(w => cells[w]);
+        let ticked = wk.filter(w => cells[w]);
+        /* Nothing saved against this row — fall back to what the field said.
+           Only when the office has said NOTHING: an empty cell is a question
+           nobody has answered, while a cell with anything in it has been
+           answered and stands. */
+        if (!ticked.length && !Object.keys(cells).length && (fld.credits[r.id] || []).length) {
+          ticked = fld.credits[r.id].filter(w => wk.includes(w));
+          if (ticked.length) { d.fromField++; fromField++; }
+        }
+        (fld.noTaker[r.id] || []).forEach(nm => d.noTaker.add(nm));
         // Somebody ticked on the Worker Record who has no row here — their
         // share of the plot goes missing, quietly, unless it is said.
         Object.keys(cells).forEach(name => {
@@ -766,6 +784,7 @@ function maintTotals(nursery, month, ym) {
       if (!seen.has(String(id)) && Object.values(store[id] || {}).some(Boolean)) d.orphanTicks++;
     });
   });
+  maint.fromField = fromField;
   return per;
 }
 
@@ -780,9 +799,15 @@ function maintWhyEmpty(code) {
   if (!d.rows) {
     return `${d.label}: no work record for this job in this nursery this month.`;
   }
+  if (!d.ticked && d.noTaker.size) {
+    return `${d.label}: recorded in the field, but credited only to ${[...d.noTaker].join(', ')}, `
+         + `who ${d.noTaker.size === 1 ? 'has' : 'have'} no row on this claim — so there is nobody `
+         + 'to pay it to.';
+  }
   if (!d.ticked && !d.tickRows) {
-    return `${d.label}: ${d.rows} work record${d.rows === 1 ? '' : 's'}, and nobody ticked on `
-         + 'the Worker Record in Work Maintenance — tick who did the work there and it prices here.';
+    return `${d.label}: ${d.rows} work record${d.rows === 1 ? '' : 's'}, nobody ticked on the Worker `
+         + 'Record and nothing recorded in the field against them — tick who did the work in Work '
+         + 'Maintenance and it prices here.';
   }
   if (!d.ticked && d.orphanTicks) {
     return `${d.label}: ${d.orphanTicks} tick${d.orphanTicks === 1 ? ' sits' : 's sit'} on the Worker `
@@ -887,13 +912,25 @@ function renderMaint() {
   /* Why any column came to nothing, first — it is the question somebody is
      holding the sheet to ask. */
   MAINT_TYPES.forEach(t => { const w = maintWhyEmpty(t.code); if (w) notes.push(w); });
+  /* Work priced straight from the field. Said out loud because it is the one
+     figure on this sheet that nobody has been asked to confirm: the office's
+     Worker Record has no tick saved against those rows, and what is being paid
+     is the worker's own record of their morning, verified in the field. */
+  if (maint.fromField) {
+    notes.push(`${maint.fromField} row${maint.fromField === 1 ? '' : 's'} priced from what the field `
+             + 'recorded, because the Worker Record has no tick saved against them. Ticking them in '
+             + 'Work Maintenance confirms it and overrides this.');
+  }
   /* A name ticked on the Worker Record with no row here loses that worker's
      share of the plot, and the row still looks complete on both screens. */
-  const stray = [...new Set(MAINT_TYPES.flatMap(t => [...(((maint.why || {})[t.code] || {}).stray || [])]))];
+  const stray = [...new Set(
+    MAINT_TYPES.flatMap(t => [...(((maint.why || {})[t.code] || {}).stray || [])])
+      .concat(maint.fieldUnmatched || []))];
   if (stray.length) {
-    notes.push(`Ticked on the Worker Record but not on this claim: ${stray.join(', ')} — `
-             + 'their share of those plots is not priced. File them under this nursery in Worker '
-             + 'System, or correct the spelling there.');
+    notes.push(`Credited for work but with no row on this claim: ${stray.join(', ')} — their share `
+             + 'of those plots is not priced. File them under this nursery in Worker System as a '
+             + 'general worker, or correct the spelling there. A Field Conductor has no row here '
+             + 'unless their record is ticked as a general worker.');
   }
   if (!PlotMovement.ready()) {
     notes.push('The batch report has not loaded, so any work record with no quantity keyed on it '
@@ -1245,11 +1282,22 @@ function flagSetup(msg) {
 
 /* Work Maintenance lives in the Nursery Operation module; read it as-is. */
 async function loadMaint() {
-  const [recRes, tickRes, rateRes, wkRes] = await Promise.all([
+  const [recRes, tickRes, rateRes, wkRes, fieldRes] = await Promise.all([
     _supabase.from('nops_maint_records').select('records').eq('id', 1).maybeSingle().then(r => r, () => ({ data: null })),
     _supabase.from('nops_maint_payroll').select('nursery, month, work_type, data').then(r => r, () => ({ data: [] })),
     _supabase.from('nops_maint_piece_rates').select('nursery, work_type, rate').then(r => r, () => ({ data: [] })),
-    _supabase.from('nops_maint_workers').select('nursery, name').then(r => r, () => ({ data: [] }))
+    _supabase.from('nops_maint_workers').select('nursery, name').then(r => r, () => ({ data: [] })),
+    /* What the field actually recorded. Verified only — a record nobody has
+       checked is not payable — and read here so the claim can pair the work
+       to a schedule row ITSELF. It used to price only the ticks the Work
+       Maintenance Worker Record had saved, which meant field work paid
+       nothing until somebody opened that screen for the month, and nothing at
+       all when the saving failed. Soft: a database without the table leaves
+       the saved ticks as the only source, exactly as before. */
+    PlotMovement.fetchAll(() => _supabase.from('nops_maint_field_records')
+      .select('id, work_date, plot_name, work_type, jenis, chemical, qty, batch_name, week_no, schedule_month, worked_by, reported_by')
+      .not('verified_at', 'is', null)
+      .order('id', { ascending: true })).then(r => r, () => ({ data: [] }))
   ]);
 
   // The maintenance module's own old list — only the fallback now.
@@ -1288,6 +1336,26 @@ async function loadMaint() {
   maint.orphanPlots = [...new Set(recs.filter(r => !MJMMaintPlots.nurseryOfPlot(r.plot, maint.plotIndex))
                                       .map(r => String(r.plot || '').trim())
                                       .filter(Boolean))].sort();
+  maint.field = ((fieldRes && fieldRes.data) || []);
+}
+
+/* WHO THE FIELD CREDITED, record by record, worked out here rather than read
+   off the Worker Record's saved ticks.
+
+   The pairing is shared/shared_maint_field.js's — the same one the Worker
+   Record uses, so the two screens cannot land a morning's work on different
+   rows. A name is resolved against the workers this claim holds by letters and
+   digits, the way names are compared everywhere else here, and anything that
+   resolves to nobody is collected so the sheet can say whose share went
+   missing rather than quietly paying less. */
+function maintFieldCredits(nursery, monthLbl, wk) {
+  // Every shape this can return has all three keys — a caller reading
+  // noTaker on the empty one took the whole claim down.
+  const out = { credits: {}, unmatched: [], noTaker: {} };
+  if (!maint.field || !maint.field.length || !window.MJMMaintField) return out;
+  const idx  = MJMMaintField.index(maint.field, monthLbl);
+  const mine = maint.records.filter(r => r.__nursery === nursery);
+  return MJMMaintField.creditsByRecord(mine, idx, MJMMaintField.nameResolver(wk));
 }
 
 /* ════════════ BOOT ════════════ */
