@@ -2341,6 +2341,21 @@ async function runTransplantingReport() {
     return true;
   });
 
+  // Several log rows for the same date/plot/batch are the same move keyed
+  // in more than once (the same tray split across several rows at save
+  // time, e.g.) — one line on this report, qty summed, rather than the
+  // same date/plot/batch repeated with a different number each time.
+  // Breed/maturity/nursery are all derived from date+plot+batch already,
+  // so any row sharing that key already agrees on them — first one wins.
+  const merged = new Map();
+  rows.forEach(r => {
+    const k = r.date + '\x01' + r.plot + '\x01' + r.batch;
+    const existing = merged.get(k);
+    if (existing) existing.qty += r.qty;
+    else merged.set(k, { ...r });
+  });
+  rows = [...merged.values()];
+
   rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')));
   const total = rows.reduce((s, r) => s + r.qty, 0);
 
