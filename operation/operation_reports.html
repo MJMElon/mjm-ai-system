@@ -2204,7 +2204,13 @@ function buildMovementSection(scope, ev, ctx) {
   const buc = {}, per = {}, bf = {}, meta = {};
   for (const e of ev) {
     const ts = e.date ? new Date(e.date).getTime() : NaN;
-    if (!isFinite(ts) || ts > toMs) continue;
+    // toMs is midnight of the day AFTER "As At" (fromStr/toMs above) — an
+    // exclusive upper bound, so a row dated exactly there belongs to that
+    // NEXT day, not the one picked. `> toMs` let a date-only value (no
+    // time component, so it parses to exactly that midnight) slip through
+    // as "not greater than" — reported as "I picked 31/07 and 01/08 data
+    // still showed up". `>=` is the correct exclusion.
+    if (!isFinite(ts) || ts >= toMs) continue;
     const k = e.place + SEP + e.batch;
     meta[k] = meta[k] || { place: e.place, batch: e.batch };
     if (!buc[k]) buc[k] = emptyRow(scope);
@@ -2555,7 +2561,10 @@ async function runTransplantingReport() {
     const ts = r.date ? new Date(r.date).getTime() : NaN;
     // A row with no usable date at all can't be placed within a chosen
     // range — leave it out rather than guess which month it belongs to.
-    if (from || to) { if (!isFinite(ts) || ts < fromTs || ts > toTs) return false; }
+    // toTs is midnight of the day AFTER "As At" — exclusive, so `>=` (not
+    // `>`) is what actually excludes a date-only value dated exactly there
+    // (see the same fix/comment in buildMovementSection above).
+    if (from || to) { if (!isFinite(ts) || ts < fromTs || ts >= toTs) return false; }
     if (selectedLocs.size && !selectedLocs.has(r.nursery)) return false;
     if (breed && r.breed !== breed) return false;
     return true;
@@ -2677,7 +2686,9 @@ async function runSalesListing() {
     if (d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'))) return;
     if (/^CAL-/i.test(d.do_number || '')) return; // a stock correction, not a customer sale
     const ts = d.delivery_date ? new Date(d.delivery_date).getTime() : NaN;
-    if (from || to) { if (!isFinite(ts) || ts < fromTs || ts > toTs) return; }
+    // toTs is midnight of the day AFTER "As At" — exclusive (see the same
+    // fix/comment in buildMovementSection/runTransplantingReport above).
+    if (from || to) { if (!isFinite(ts) || ts < fromTs || ts >= toTs) return; }
 
     let filled = 0;
     for (let i = 1; i <= 5; i++) if (String(d[`plot_${i}`] || '').trim()) filled++;
