@@ -61,6 +61,13 @@
      keeps tracking that even though the picker itself isn't a DOM
      descendant to :hover. */
   #mv-report-sidebar:focus-within { transform:translateX(0); }
+  /* Forced shut right after Run Report is clicked — the mouse is usually
+     still over the button (inside the sidebar) at that moment, so :hover
+     alone would keep it open and cover the very results just asked for.
+     !important beats both :hover rules above; cleared the moment the
+     mouse actually leaves the trigger/sidebar (see the JS below), so the
+     next hover opens it normally rather than leaving it stuck shut. */
+  #mv-report-sidebar.mv-force-closed { transform:translateX(-100%) !important; }
   #mv-report-sidebar .report-tab-bar { flex-direction:column; flex-wrap:nowrap; width:100%; margin:0; }
   #mv-report-sidebar .report-tab { border-right:none; border-bottom:1px solid #e8dcc8; text-align:left; }
   #mv-report-sidebar .report-tab:last-child { border-bottom:none; }
@@ -1352,6 +1359,22 @@ document.getElementById('f-run').addEventListener('click', runReport);
 // listener did here — nothing left to wire up.
 const _fSort = document.getElementById('f-sort');
 if (_fSort) _fSort.addEventListener('change', runReport);
+
+// Closes the sidebar the moment Run Report is clicked, instead of leaving
+// it open (and covering the results) until the mouse happens to wander
+// off — see .mv-force-closed above. document.activeElement is blurred too:
+// without it, #f-to (or whichever field was last focused) would keep the
+// panel open via :focus-within even with the mouse gone and this class
+// applied everywhere else.
+document.getElementById('f-run').addEventListener('click', () => {
+  document.getElementById('mv-report-sidebar').classList.add('mv-force-closed');
+  document.activeElement?.blur();
+});
+['mv-sidebar-trigger', 'mv-report-sidebar'].forEach(id => {
+  document.getElementById(id).addEventListener('mouseleave', () => {
+    document.getElementById('mv-report-sidebar').classList.remove('mv-force-closed');
+  });
+});
 
 /* Life of Seedlings' filters re-run on pick rather than waiting for Run
    Report — six dropdowns and a button to remember is five more chances to
