@@ -541,6 +541,128 @@ async function removeRate(id) {
   renderRates();
 }
 
+/* ════════════ TRANSPLANTING, AS THE FIELD RECORDED IT ════════════
+   The FC Portal's Transplanting Job button writes one row per plot per job
+   per month — who did the blanket spray, the lining, the polybag filling and
+   the transplanting itself — with the quantity taken from the Transplanting
+   Report rather than typed. Those rows are priced here, so the office does
+   not key a second time what the field has already said.
+
+   They are shown READ-ONLY beside the keyed entries and counted in the same
+   total. Editing one would mean the payroll and the field record disagreeing
+   about the same morning with nothing on either screen to say which is
+   right; the fix for a wrong record is to correct it in the FC Portal, where
+   it was made. Anything the field cannot express is still keyed with + Add
+   Entry, exactly as before.
+
+   The four jobs, and the office's own wording for each. Mirrors
+   TRANSPLANT_JOBS in FC-Portal/src/modules/maintenance/transplantData.js —
+   change one, change the other. `jenis` is what a Piece Rate row is matched
+   on, which is why it is stored on the record rather than derived here. */
+const TRANSPLANT_JOBS = [
+  { key:'blanket_spray', jenis:'Blanket Spray',        label:'Blanket Spray' },
+  { key:'lining',        jenis:'Menyusun polibeg',     label:'Lining & Arranging Polybag' },
+  { key:'polybag_fill',  jenis:'Mengisi polibeg',      label:'Polybag Filling 15" x 18"', split:true },
+  { key:'transplanting', jenis:'Menanam anak benih',   label:'Transplanting (Hy Plug to polybag)' }
+];
+const TRANSPLANT_JOB = Object.fromEntries(TRANSPLANT_JOBS.map(j => [j.key, j]));
+
+let transplantField = [];      // the FC Portal's rows for the month on screen
+
+/* NOT filtered on a verification column, unlike loadMaint's field records.
+   Those can be recorded by a WORKER from the Worker Portal, so a conductor's
+   signature is what makes them payable — nobody signs for their own work.
+   A transplanting row is written by the conductor himself, from his own
+   portal: keying it IS the signature, and there is no second person to wait
+   for. If that ever changes, this is the line that has to change with it. */
+async function loadTransplantField() {
+  const res = await _supabase.from('nops_transplant_field_records')
+    .select('work_date, nursery_name, plot_name, batch_name, work_type, jenis, schedule_month, source_qty, workers, total_qty')
+    .eq('schedule_month', monthLabel(monthValue()))
+    .then(r => r, () => ({ data: [] }));
+  // A database without the table is not an error here: the office ran the
+  // payroll module before this button existed and must go on running it.
+  transplantField = (res && !res.error && res.data) ? res.data : [];
+}
+
+/* "UNN 1" and "UNN1" are one nursery. shared_plots spells it with a space,
+   the payroll sections without one. Same question shared_access.js's
+   nurseryKey asks — kept local because this file imports nothing from it. */
+const _tpKey = v => String(v == null ? '' : v).replace(/[^a-z0-9]/gi, '').toUpperCase();
+
+/* A Piece Rate for one of the four jobs: matched on the office's own wording
+   first, then on the English label, within the transplanting category (or a
+   rate nobody has filed under a sheet yet). Returns null when nothing
+   matches — the row is then shown with no rate rather than priced at zero,
+   because a zero that looks like a price is worse than a blank that asks a
+   question. */
+function transplantRate(rec) {
+  const job = TRANSPLANT_JOB[rec.work_type];
+  const want = [rec.jenis, job && job.jenis, job && job.label]
+    .filter(Boolean).map(_tpNorm);
+  const pool = rates.filter(r => r.active !== false
+    && (!r.category || r.category === 'transplanting'));
+  return pool.find(r => want.includes(_tpNorm(r.job_desc))) || null;
+}
+const _tpNorm = v => String(v == null ? '' : v).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * The field's rows, as payroll lines — one per worker per record.
+ *
+ * THE SHARE. Polybag filling carries its own split: the conductor keyed how
+ * many bags each person filled and the total was made to agree with the
+ * report before it would save, so those numbers are used as they stand.
+ *
+ * The other three carry names and no numbers, and are divided EQUALLY among
+ * the workers credited. That is not a choice made here — it is the rule the
+ * maintenance module already pays by ("every ticked row hands its plot
+ * capacity out equally among the workers ticked on it", payrollTotalsFor in
+ * plot_maintenance_script.js). Two sheets on one claim must not divide the
+ * same kind of work two different ways.
+ */
+function transplantFieldLines() {
+  const out = [];
+  transplantField.forEach(rec => {
+    const job = TRANSPLANT_JOB[rec.work_type];
+    const crew = Array.isArray(rec.workers) ? rec.workers.filter(w => w && w.name) : [];
+    if (!crew.length) return;
+    const rate = transplantRate(rec);
+    const cap  = Number(rec.source_qty || 0);
+    crew.forEach(w => {
+      const qty = job && job.split
+        ? Number(w.qty || 0)
+        : (crew.length ? cap / crew.length : 0);
+      const known = workers.find(x => (x.full_name || '').trim().toLowerCase()
+                                   === String(w.name).trim().toLowerCase());
+      out.push({
+        fc: true,
+        work_date: rec.work_date,
+        worker_name: w.name,
+        known,
+        // The worker's own section where the register knows them; the plot's
+        // nursery otherwise, so an unmatched name still lands in the right
+        // block rather than in none.
+        section: (known && known.section) || _tpSection(rec.nursery_name),
+        job_desc: (job && job.label) || rec.jenis || rec.work_type,
+        plot: rec.plot_name,
+        qty,
+        unit: rate ? rate.unit : '',
+        rate: rate ? Number(rate.rate || 0) : null,
+        amount: rate ? qty * Number(rate.rate || 0) : 0
+      });
+    });
+  });
+  return out.sort((a, b) => String(a.work_date || '').localeCompare(String(b.work_date || ''))
+                         || String(a.worker_name).localeCompare(String(b.worker_name)));
+}
+
+/* The plot's nursery as a payroll section code, where one matches. */
+function _tpSection(nursery) {
+  const k = _tpKey(nursery);
+  const hit = SECTIONS.find(s => _tpKey(s.code) === k);
+  return hit ? hit.code : '';
+}
+
 /* ════════════ TRANSPLANTING / SEEDLINGS ════════════ */
 const SHEET = {
   transplanting: { table:'transpl-table',  section:'transpl-section',  title:'Transplanting' },
@@ -559,7 +681,31 @@ function renderEntries(category) {
     .filter(e => !secFilter || (e.section || '') === secFilter)
     .sort((a, b) => String(a.work_date || '').localeCompare(String(b.work_date || '')) || a.id - b.id);
 
+  /* What the FC Portal recorded, priced and shown above the keyed rows —
+     read-only, because the record was made there and correcting it here
+     would leave the two screens disagreeing about one morning. */
+  const fc = category === 'transplanting'
+    ? transplantFieldLines().filter(l => !secFilter || (l.section || '') === secFilter)
+    : [];
+
   const wName = id => (workers.find(w => w.id === id) || {}).full_name || '—';
+  const fcRows = fc.map((l, i) => `
+    <tr>
+      <td style="color:var(--text-faint);width:44px;">${i + 1}</td>
+      <td>${l.work_date ? fmtDay(l.work_date) : '—'}</td>
+      <td class="l" style="font-weight:700;color:var(--text-head);">${esc(l.worker_name)}
+        ${l.known ? '' : '<span title="Not on the worker register — add them in Worker System, or the claim cannot pay this line" style="color:var(--danger,#c0392b);font-weight:700;"> &#9888;</span>'}
+      </td>
+      <td>${esc(l.section || '—')}</td>
+      <td class="l">${esc(l.job_desc)}${l.plot ? ` <span style="color:var(--text-faint);">&middot; ${esc(l.plot)}</span>` : ''}</td>
+      <td>${num(Math.round(l.qty))}${l.unit ? ' ' + esc(l.unit) : ''}</td>
+      <td>${l.rate == null
+             ? '<span title="No Piece Rate set up for this job — add one under Piece Rate" style="color:var(--danger,#c0392b);">no rate</span>'
+             : rateTxt(l.rate)}</td>
+      <td class="money">${money(l.amount)}</td>
+      <td class="r" style="white-space:nowrap;color:var(--text-faint);font-size:.78rem;">FC Portal</td>
+    </tr>`).join('');
+
   const rows = list.length ? list.map((e, i) => `
     <tr>
       <td style="color:var(--text-faint);width:44px;">${i + 1}</td>
@@ -575,18 +721,44 @@ function renderEntries(category) {
         <button class="btn btn-sm btn-danger" onclick="removeEntry(${e.id})">Del</button>
       </td>
     </tr>`).join('')
-    : `<tr><td colspan="9" class="empty">Nothing keyed for ${monthLabel(monthValue())} yet.</td></tr>`;
+    : (fc.length ? '' : `<tr><td colspan="9" class="empty">Nothing keyed for ${monthLabel(monthValue())} yet.</td></tr>`);
 
-  const total = list.reduce((s, e) => s + Number(e.amount || 0), 0);
+  /* Both halves, in one total. A sheet that showed the field's work priced
+     and then left it out of the month would be the worst kind of wrong. */
+  const total = list.reduce((s, e) => s + Number(e.amount || 0), 0)
+              + fc.reduce((s, l) => s + Number(l.amount || 0), 0);
+
+  /* Where this total and the salary claim will disagree, and why.
+     The claim pays a worker ROW; a name the register does not know has no row
+     to pay, so its money is on this sheet and not in the month. Saying the
+     figure out loud is the difference between a discrepancy somebody finds in
+     January and one they fix today. A job with no Piece Rate is worth naming
+     for the opposite reason — it costs nothing yet, and will the moment
+     somebody prices it. */
+  const unknown  = fc.filter(l => !l.known);
+  const unpriced = fc.filter(l => l.rate == null);
+  const held     = unknown.reduce((s, l) => s + Number(l.amount || 0), 0);
+  const notes = [];
+  if (unknown.length) notes.push(
+    `${money(held)} of this is NOT in the salary claim — `
+    + `${[...new Set(unknown.map(l => l.worker_name))].map(esc).join(', ')} `
+    + `${unknown.length === 1 ? 'is' : 'are'} not on the worker register. Add them in Worker System.`);
+  if (unpriced.length) notes.push(
+    `${unpriced.length} line${unpriced.length === 1 ? '' : 's'} priced at nothing — `
+    + `no Piece Rate for ${[...new Set(unpriced.map(l => l.job_desc))].map(esc).join(', ')}.`);
+  const warn = notes.length
+    ? `<tr><td class="l" colspan="9" style="color:var(--danger,#c0392b);font-weight:600;white-space:normal;">`
+      + notes.join('<br>') + `</td></tr>`
+    : '';
   $(cfg.table).innerHTML = `
     <thead><tr>
       <th style="width:44px;">No.</th><th style="width:110px;">Date</th><th class="l">Worker</th>
       <th style="width:90px;">Section</th><th class="l">Job</th><th style="width:130px;">Quantity</th>
       <th style="width:110px;">Rate</th><th style="width:120px;">Amount</th><th style="width:140px;"></th>
     </tr></thead>
-    <tbody>${rows}</tbody>
-    ${list.length ? `<tfoot><tr><td class="l" colspan="7">TOTAL — ${esc(monthLabel(monthValue()))}</td>
-       <td>${money(total)}</td><td></td></tr></tfoot>` : ''}`;
+    <tbody>${fcRows}${rows}</tbody>
+    ${(list.length || fc.length) ? `<tfoot><tr><td class="l" colspan="7">TOTAL — ${esc(monthLabel(monthValue()))}</td>
+       <td>${money(total)}</td><td></td></tr>${warn}</tfoot>` : ''}`;
 }
 
 const fmtDay = d => {
@@ -1013,6 +1185,16 @@ function monthlyRows() {
     });
   });
 
+  /* The FC Portal's transplanting, priced the same way the sheet above
+     prices it. A name the register does not know is skipped and said out
+     loud on the sheet — the claim pays a worker row, and there is no row to
+     pay. */
+  transplantFieldLines().forEach(l => {
+    if (!l.known) return;
+    if (secFilter && (l.known.section || '') !== secFilter) return;
+    touch(l.known.full_name, l.known.section || '').transpl += Number(l.amount || 0);
+  });
+
   // Keyed sheets.
   entries.filter(e => e.month === month).forEach(e => {
     const w = workers.find(x => x.id === e.worker_id);
@@ -1361,7 +1543,7 @@ function maintFieldCredits(nursery, monthLbl, wk) {
 /* ════════════ BOOT ════════════ */
 $('global-month').addEventListener('change', async () => {
   try { localStorage.setItem('npayroll_month', monthValue()); } catch (_) {}
-  await loadEntries();
+  await Promise.all([loadEntries(), loadTransplantField()]);
   refreshPayrollTab();
 });
 
@@ -1401,7 +1583,8 @@ $('global-month').addEventListener('change', async () => {
     /* The register first: the dropdown, the headings and which sheets exist
        all read it, so everything after this should see the real list. */
     await loadNurseryRegister();
-    await Promise.all([loadWorkers(), loadRates(), loadEntries(), loadMaint()]);
+    await Promise.all([loadWorkers(), loadRates(), loadEntries(), loadMaint(),
+                       loadTransplantField()]);
     resolveMaintWorkers();
 
     /* The batch-report ledger is a much larger read than anything above, and
