@@ -636,6 +636,9 @@ function transplantFieldLines() {
                                    === String(w.name).trim().toLowerCase());
       out.push({
         fc: true,
+        // Which of the four jobs, so the claim can put the figure in the
+        // right column without matching on a label somebody may translate.
+        key: rec.work_type,
         work_date: rec.work_date,
         worker_name: w.name,
         known,
@@ -673,6 +676,123 @@ const SHEET = {
   other:         { table:'other-table',    section:'other-section',    title:'Others' }
 };
 
+/**
+ * The Transplanting claim: workers down the left, the four jobs across the
+ * top, capacity and money under each, total earned on the right.
+ *
+ * The same shape as Work Maintenance's claim (renderMaint) on purpose — one
+ * office reads both, and a sheet that answers the same question in a
+ * different layout is a sheet somebody has to learn twice.
+ *
+ * Every figure is the FC Portal's, priced here. What each worker did is
+ * theirs; what it comes to is this page's.
+ */
+function renderTransplantClaim() {
+  const secFilter = $('transpl-section').value || '';
+  const lines = transplantFieldLines()
+    .filter(l => !secFilter || (l.section || '') === secFilter);
+
+  const sub = $('transpl-sub');
+  if (sub) sub.textContent = `From the FC Portal${secFilter ? ' \u00b7 ' + (SECTION_NAME[secFilter] || secFilter) : ''}`
+                           + ` \u00b7 ${monthLabel(monthValue())}`;
+
+  if (!lines.length) {
+    $('transpl-table').innerHTML = `<tbody><tr><td class="empty">
+      No transplanting recorded in the FC Portal for ${esc(monthLabel(monthValue()))}${
+      secFilter ? ' in ' + esc(SECTION_NAME[secFilter] || secFilter) : ''}.
+      A conductor records it under Maintenance &rarr; Transplanting Job.
+    </td></tr></tbody>`;
+    $('transpl-note').textContent = '';
+    return;
+  }
+
+  /* One row per person credited, not the whole register. Work Maintenance
+     lists everybody because it has a tick sheet to fill in; this sheet has
+     nothing to key, so a worker with no transplanting this month is a row of
+     dashes nobody needs. */
+  const names = [...new Set(lines.map(l => l.worker_name))]
+    .sort((a, b) => a.localeCompare(b));
+  const knownOf = n => (lines.find(l => l.worker_name === n) || {}).known;
+  const rateOf  = key => {
+    const l = lines.find(x => x.key === key && x.rate != null);
+    return l ? l.rate : null;
+  };
+  /* Capacity rounded first, then priced — the same order renderMaint uses,
+     so the row on screen multiplies out to the money beside it. */
+  const capOf = (n, key) => Math.round(lines
+    .filter(l => l.worker_name === n && l.key === key)
+    .reduce((s, l) => s + Number(l.qty || 0), 0));
+  const rmOf = (n, key) => {
+    const r = rateOf(key);
+    if (r == null) return 0;
+    return Math.round(capOf(n, key) * Math.round(r * 100000) / 1000) / 100;
+  };
+  const earned = n => TRANSPLANT_JOBS.reduce((s, j) => s + rmOf(n, j.key), 0);
+
+  const head = `
+    <thead>
+      <tr>
+        <th rowspan="2" style="width:44px;">No.</th>
+        <th rowspan="2" class="l">Worker</th>
+        ${TRANSPLANT_JOBS.map(j => `<th colspan="2">${esc(j.label)}</th>`).join('')}
+        <th rowspan="2" style="width:120px;">Total Earned</th>
+      </tr>
+      <tr>${TRANSPLANT_JOBS.map(() => '<th style="width:90px;">Capacity</th><th style="width:110px;">Earned</th>').join('')}</tr>
+      <tr>
+        <td colspan="2" class="l" style="font-weight:800;background:#fafaff;">Piece Rate</td>
+        ${TRANSPLANT_JOBS.map(j => `<td colspan="2" style="background:#fafaff;font-size:12px;">${rateTxt(rateOf(j.key))}</td>`).join('')}
+        <td style="background:#fafaff;"></td>
+      </tr>
+    </thead>`;
+
+  const body = names.map((n, i) => `
+    <tr>
+      <td style="color:var(--text-faint);">${i + 1}</td>
+      <td class="l" style="font-weight:700;color:var(--text-head);">${esc(n)}${
+        knownOf(n) ? '' : '<span title="Not on the worker register — add them in Worker System, or the claim cannot pay this" style="color:var(--danger,#c0392b);"> &#9888;</span>'}</td>
+      ${TRANSPLANT_JOBS.map(j => {
+        const c = capOf(n, j.key);
+        return `<td>${c ? num(c) : '—'}</td><td>${c ? money(rmOf(n, j.key)) : '—'}</td>`;
+      }).join('')}
+      <td class="money">${money(earned(n))}</td>
+    </tr>`).join('');
+
+  const capSum = key => names.reduce((s, n) => s + capOf(n, key), 0);
+  const rmSum  = key => names.reduce((s, n) => s + rmOf(n, key), 0);
+  const grand  = names.reduce((s, n) => s + earned(n), 0);
+  const foot = `
+    <tfoot><tr>
+      <td class="l" colspan="2">GRAND TOTAL</td>
+      ${TRANSPLANT_JOBS.map(j => `<td>${num(capSum(j.key))}</td><td>${money(rmSum(j.key))}</td>`).join('')}
+      <td>${money(grand)}</td>
+    </tr></tfoot>`;
+
+  $('transpl-table').innerHTML = head + `<tbody>${body}</tbody>` + foot;
+
+  /* Anything that would make the claim short is said FIRST, because a claim
+     missing work looks exactly like a quiet month. */
+  const notes = [];
+  const unknown = names.filter(n => !knownOf(n));
+  if (unknown.length) {
+    const held = unknown.reduce((s, n) => s + earned(n), 0);
+    notes.push(`${money(held)} of this is NOT in the salary claim — ${unknown.map(esc).join(', ')} `
+             + `${unknown.length === 1 ? 'is' : 'are'} not on the worker register. `
+             + 'Add them in Worker System, or correct the spelling there.');
+  }
+  const unpriced = TRANSPLANT_JOBS.filter(j => capSum(j.key) > 0 && rateOf(j.key) == null);
+  if (unpriced.length) {
+    notes.push(`No piece rate set for ${unpriced.map(j => esc(j.label)).join(', ')} — `
+             + 'set it under Piece Rate, filed against Transplanting. Until then that work prices '
+             + 'at nothing.');
+  }
+  notes.push('Capacity comes from the FC Portal\u2019s Transplanting Job: polybag filling is the split '
+           + 'the conductor keyed, and the other three divide the plot\u2019s quantity equally among '
+           + 'the workers credited — the same arithmetic Work Maintenance pays by.');
+  $('transpl-note').innerHTML = notes.map((t, i) =>
+    `<div style="${i < notes.length - 1 ? 'color:var(--danger,#c0392b);font-weight:600;' : ''}margin-bottom:.25rem;">${t}</div>`
+  ).join('');
+}
+
 function renderEntries(category) {
   const cfg = SHEET[category];
   const secFilter = $(cfg.section).value || '';
@@ -681,31 +801,17 @@ function renderEntries(category) {
     .filter(e => !secFilter || (e.section || '') === secFilter)
     .sort((a, b) => String(a.work_date || '').localeCompare(String(b.work_date || '')) || a.id - b.id);
 
-  /* What the FC Portal recorded, priced and shown above the keyed rows —
-     read-only, because the record was made there and correcting it here
-     would leave the two screens disagreeing about one morning. */
-  const fc = category === 'transplanting'
-    ? transplantFieldLines().filter(l => !secFilter || (l.section || '') === secFilter)
-    : [];
+  /* Transplanting's own claim is the matrix above; this table is only what
+     somebody keyed by hand, and it stays out of the way when there is none. */
+  if (category === 'transplanting') {
+    renderTransplantClaim();
+    const wrap = $('transpl-keyed-wrap');
+    if (wrap) wrap.classList.toggle('hidden', !list.length);
+    if (!list.length) { $('transpl-keyed-table').innerHTML = ''; return; }
+  }
 
+  const tableId = category === 'transplanting' ? 'transpl-keyed-table' : cfg.table;
   const wName = id => (workers.find(w => w.id === id) || {}).full_name || '—';
-  const fcRows = fc.map((l, i) => `
-    <tr>
-      <td style="color:var(--text-faint);width:44px;">${i + 1}</td>
-      <td>${l.work_date ? fmtDay(l.work_date) : '—'}</td>
-      <td class="l" style="font-weight:700;color:var(--text-head);">${esc(l.worker_name)}
-        ${l.known ? '' : '<span title="Not on the worker register — add them in Worker System, or the claim cannot pay this line" style="color:var(--danger,#c0392b);font-weight:700;"> &#9888;</span>'}
-      </td>
-      <td>${esc(l.section || '—')}</td>
-      <td class="l">${esc(l.job_desc)}${l.plot ? ` <span style="color:var(--text-faint);">&middot; ${esc(l.plot)}</span>` : ''}</td>
-      <td>${num(Math.round(l.qty))}${l.unit ? ' ' + esc(l.unit) : ''}</td>
-      <td>${l.rate == null
-             ? '<span title="No Piece Rate set up for this job — add one under Piece Rate" style="color:var(--danger,#c0392b);">no rate</span>'
-             : rateTxt(l.rate)}</td>
-      <td class="money">${money(l.amount)}</td>
-      <td class="r" style="white-space:nowrap;color:var(--text-faint);font-size:.78rem;">FC Portal</td>
-    </tr>`).join('');
-
   const rows = list.length ? list.map((e, i) => `
     <tr>
       <td style="color:var(--text-faint);width:44px;">${i + 1}</td>
@@ -721,44 +827,18 @@ function renderEntries(category) {
         <button class="btn btn-sm btn-danger" onclick="removeEntry(${e.id})">Del</button>
       </td>
     </tr>`).join('')
-    : (fc.length ? '' : `<tr><td colspan="9" class="empty">Nothing keyed for ${monthLabel(monthValue())} yet.</td></tr>`);
+    : `<tr><td colspan="9" class="empty">Nothing keyed for ${monthLabel(monthValue())} yet.</td></tr>`;
 
-  /* Both halves, in one total. A sheet that showed the field's work priced
-     and then left it out of the month would be the worst kind of wrong. */
-  const total = list.reduce((s, e) => s + Number(e.amount || 0), 0)
-              + fc.reduce((s, l) => s + Number(l.amount || 0), 0);
-
-  /* Where this total and the salary claim will disagree, and why.
-     The claim pays a worker ROW; a name the register does not know has no row
-     to pay, so its money is on this sheet and not in the month. Saying the
-     figure out loud is the difference between a discrepancy somebody finds in
-     January and one they fix today. A job with no Piece Rate is worth naming
-     for the opposite reason — it costs nothing yet, and will the moment
-     somebody prices it. */
-  const unknown  = fc.filter(l => !l.known);
-  const unpriced = fc.filter(l => l.rate == null);
-  const held     = unknown.reduce((s, l) => s + Number(l.amount || 0), 0);
-  const notes = [];
-  if (unknown.length) notes.push(
-    `${money(held)} of this is NOT in the salary claim — `
-    + `${[...new Set(unknown.map(l => l.worker_name))].map(esc).join(', ')} `
-    + `${unknown.length === 1 ? 'is' : 'are'} not on the worker register. Add them in Worker System.`);
-  if (unpriced.length) notes.push(
-    `${unpriced.length} line${unpriced.length === 1 ? '' : 's'} priced at nothing — `
-    + `no Piece Rate for ${[...new Set(unpriced.map(l => l.job_desc))].map(esc).join(', ')}.`);
-  const warn = notes.length
-    ? `<tr><td class="l" colspan="9" style="color:var(--danger,#c0392b);font-weight:600;white-space:normal;">`
-      + notes.join('<br>') + `</td></tr>`
-    : '';
-  $(cfg.table).innerHTML = `
+  const total = list.reduce((s, e) => s + Number(e.amount || 0), 0);
+  $(tableId).innerHTML = `
     <thead><tr>
       <th style="width:44px;">No.</th><th style="width:110px;">Date</th><th class="l">Worker</th>
       <th style="width:90px;">Section</th><th class="l">Job</th><th style="width:130px;">Quantity</th>
       <th style="width:110px;">Rate</th><th style="width:120px;">Amount</th><th style="width:140px;"></th>
     </tr></thead>
-    <tbody>${fcRows}${rows}</tbody>
-    ${(list.length || fc.length) ? `<tfoot><tr><td class="l" colspan="7">TOTAL — ${esc(monthLabel(monthValue()))}</td>
-       <td>${money(total)}</td><td></td></tr>${warn}</tfoot>` : ''}`;
+    <tbody>${rows}</tbody>
+    ${list.length ? `<tfoot><tr><td class="l" colspan="7">TOTAL — ${esc(monthLabel(monthValue()))}</td>
+       <td>${money(total)}</td><td></td></tr></tfoot>` : ''}`;
 }
 
 const fmtDay = d => {

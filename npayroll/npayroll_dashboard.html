@@ -109,14 +109,25 @@
       <div class="bar">
         <div>
           <div class="bar-title">Transplanting</div>
-          <div class="bar-sub">Key what each worker transplanted. The rate comes from Piece Rate.</div>
+          <div class="bar-sub" id="transpl-sub">What each worker did, from the FC Portal. The rate comes from Piece Rate.</div>
         </div>
         <div class="bar-actions">
           <select id="transpl-section" class="sel" onchange="renderEntries('transplanting')"></select>
           <button class="btn btn-primary" onclick="openEntry('transplanting')">+ Add Entry</button>
         </div>
       </div>
+      <!-- The claim: workers down, the four jobs across, the same shape as
+           Work Maintenance so one sheet is read the way the other is. -->
       <div class="card"><div class="tbl-wrap"><table id="transpl-table"></table></div></div>
+      <div id="transpl-note" class="bar-sub" style="padding:.6rem .2rem 0;white-space:normal;"></div>
+      <!-- Anything the field could not express, keyed by hand. Hidden until
+           there is something in it: an empty second table on a sheet that is
+           usually all linked work is a table that has to be read and
+           discarded every month. -->
+      <div id="transpl-keyed-wrap" class="hidden" style="margin-top:1.1rem;">
+        <div class="bar-sub" style="padding:0 .2rem .4rem;font-weight:700;">Keyed by hand</div>
+        <div class="card"><div class="tbl-wrap"><table id="transpl-keyed-table"></table></div></div>
+      </div>
     </div>
 
     <!-- ── Seedlings Collection ── -->
@@ -259,7 +270,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=21"></script>
+<script src="npayroll_script.js?v=22"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->
