@@ -10,6 +10,9 @@
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_access.js"></script>
 <script src="../shared/shared_plot_movement.js?v=1"></script>
+<!-- Which nursery a plot belongs to. Shared with the Work Maintenance
+     schedule, so a work record lands under the nursery it was drawn in. -->
+<script src="../shared/shared_maint_plots.js?v=1"></script>
 <!-- Which location a section sits in — Pre Nursery, Main Nursery, Estate.
      The same file System Setting's Location card and the Team Board read, so
      the Estate is kept off the maintenance sheets by one rule rather than by
@@ -253,7 +256,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=17"></script>
+<script src="npayroll_script.js?v=18"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->
