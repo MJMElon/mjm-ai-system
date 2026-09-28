@@ -309,6 +309,7 @@
         <div class="f-culling-stage-wrap hidden w-full">
           <label class="label-style !mb-1">Culling Stage</label>
           <select id="f-culling-stage" class="input-style">
+            <option value="">All Stages</option>
             <option value="1st_Culling">1st Culling</option>
             <option value="2nd_Culling">2nd Culling</option>
             <option value="3rd_Culling">3rd Culling</option>
@@ -1221,29 +1222,77 @@ function _losBreedHtml(rows, breed, supplier) {
   }).join('');
 }
 
-/* ── The same Seed In detail, grouped by SUPPLIER instead of breed ────────
-   Nursery Report's Seed In Report — same rows, same figures, same row
-   template as _losBreedHtml() above, just grouped by who supplied the
-   seeds rather than what breed they are (which becomes a per-row column
-   here instead, since it's no longer the group heading). */
+/* ── The same Seed In detail, ONE table grouped by supplier ───────────────
+   Same shape Sales Listing uses (see runSalesListing()): a single table, a
+   group-header row per supplier — showing the supplier's name AND its MPOB
+   licence together, "the customer name" of this report — a subtotal row
+   under their batches, and one grand total at the end, rather than a
+   separate <table> per group. Breed moves to a plain per-row column since
+   the group heading is supplier now, not breed. */
 function _losSupplierHtml(rows) {
   if (!rows.length) return '';
   const groups = {};
   rows.forEach(r => { (groups[r.supplier] = groups[r.supplier] || []).push(r); });
-  const names = Object.keys(groups).sort();
-  return names.map(name => {
-    const list = groups[name];
+  // Busiest supplier first — same ordering rule Sales Listing uses for
+  // customers.
+  const names = Object.keys(groups).sort((a, b) =>
+    groups[b].reduce((s, r) => s + r.received, 0) - groups[a].reduce((s, r) => s + r.received, 0));
+
+  const grand = rows.reduce((s, r) => ({
+    received: s.received + r.received, damaged: s.damaged + r.damaged,
+    planted: s.planted + r.planted,
+    varDown: s.varDown + (r.variance < 0 ? r.variance : 0),
+    varUp:   s.varUp   + (r.variance > 0 ? r.variance : 0)
+  }), { received: 0, damaged: 0, planted: 0, varDown: 0, varUp: 0 });
+
+  const bodyHtml = names.map(name => {
+    const list = groups[name].slice().sort((a, b) => String(b.seedsDate || '').localeCompare(String(a.seedsDate || '')));
     const t = list.reduce((s, r) => ({
       received: s.received + r.received, damaged: s.damaged + r.damaged,
       planted: s.planted + r.planted,
       varDown: s.varDown + (r.variance < 0 ? r.variance : 0),
       varUp:   s.varUp   + (r.variance > 0 ? r.variance : 0)
     }), { received: 0, damaged: 0, planted: 0, varDown: 0, varUp: 0 });
+    // MPOB licence is the supplier's own, not the batch's — every batch
+    // under one supplier should carry the same one, but read from whichever
+    // row actually has it in case an older batch was saved before the field
+    // existed.
+    const mpob = (list.find(r => r.mpob && r.mpob !== '—') || {}).mpob;
+    const heading = mpob && mpob !== '—' ? `${_losEsc(name)} · ${_losEsc(mpob)}` : _losEsc(name);
     return `
+      <tr style="background:#f3ede1"><td colspan="7" class="font-black text-[11px] uppercase tracking-widest text-[#3d2610] py-2">${heading}</td></tr>
+      ${list.map(r => `
+        <tr>
+          <td>${fmtDate(r.seedsDate)}</td>
+          <td class="font-black text-[#3d2610]">${_losEsc(r.batch)}</td>
+          <td>${_losEsc(r.breed)}</td>
+          <td>
+            ${_losFig('received', r.batch, fmtNum(r.received), 'text-[#c07820] font-black')}
+            ${_losFocSplit(r)}
+          </td>
+          ${_losCell('damaged', r.batch, r.damaged, 'text-[#a83020] font-black')}
+          ${_losCell('planted', r.batch, r.planted, 'font-black')}
+          <td>${_losFig('variance', r.batch,
+            (r.variance > 0 ? '+' : r.variance < 0 ? '−' : '') + fmtNum(Math.abs(r.variance)),
+            r.variance < 0 ? 'text-[#a83020] font-black' : r.variance > 0 ? 'text-[#4a7a2e] font-black' : 'text-[#8a7a68]')}</td>
+        </tr>`).join('')}
+      <tr style="background:#fdfaf4">
+        <td colspan="3" class="text-right font-black text-[10px] uppercase tracking-widest text-[#8a7a68]">Subtotal — ${_losEsc(name)}</td>
+        <td class="font-black text-[#c07820]">${fmtNum(t.received)}</td>
+        <td class="font-black text-[#a83020]">${fmtNum(t.damaged)}</td>
+        <td class="font-black">${fmtNum(t.planted)}</td>
+        <td class="font-black">
+          <div class="text-[#a83020]">${t.varDown ? '−' + fmtNum(Math.abs(t.varDown)) : '0'}</div>
+          <div class="text-[#4a7a2e]">${t.varUp ? '+' + fmtNum(t.varUp) : '0'}</div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  return `
     <div class="glass-panel p-6 rounded-[2rem]">
       <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4 gap-4 flex-wrap">
-        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Seed In Details — ${_losEsc(name)}</h3>
-        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(list.length)} batch${list.length === 1 ? '' : 'es'}</div>
+        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Seed In Details</h3>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} batch${rows.length === 1 ? '' : 'es'} · ${fmtNum(names.length)} supplier${names.length === 1 ? '' : 's'}</div>
       </div>
       <div class="los-wrap">
         <table class="report-table los-table">
@@ -1252,7 +1301,7 @@ function _losSupplierHtml(rows) {
             <tr>
               <th rowspan="2">Seed In Date</th>
               <th rowspan="2">Batch</th>
-              <th rowspan="2">Breed / MPOB Licence</th>
+              <th rowspan="2">Breed</th>
               <th colspan="4" class="los-grp">Seed In Details</th>
             </tr>
             <tr>
@@ -1262,40 +1311,20 @@ function _losSupplierHtml(rows) {
               <th>Variance Seed In</th>
             </tr>
           </thead>
-          <tbody>
-            ${list.map(r => `
-              <tr>
-                <td>${fmtDate(r.seedsDate)}</td>
-                <td class="font-black text-[#3d2610]">${_losEsc(r.batch)}</td>
-                <td>
-                  <div class="text-[10px] font-bold text-[#3d2610]">${_losEsc(r.breed)}</div>
-                  <div class="text-[9px] font-bold text-[#8a7a68]">${_losEsc(r.mpob)}</div>
-                </td>
-                <td>
-                  ${_losFig('received', r.batch, fmtNum(r.received), 'text-[#c07820] font-black')}
-                  ${_losFocSplit(r)}
-                </td>
-                ${_losCell('damaged', r.batch, r.damaged, 'text-[#a83020] font-black')}
-                ${_losCell('planted', r.batch, r.planted, 'font-black')}
-                <td>${_losFig('variance', r.batch,
-                  (r.variance > 0 ? '+' : r.variance < 0 ? '−' : '') + fmtNum(Math.abs(r.variance)),
-                  r.variance < 0 ? 'text-[#a83020] font-black' : r.variance > 0 ? 'text-[#4a7a2e] font-black' : 'text-[#8a7a68]')}</td>
-              </tr>`).join('')}
-          </tbody>
+          <tbody>${bodyHtml}</tbody>
           <tfoot><tr class="font-black bg-[#f8f4ec]">
-            <td colspan="3" class="uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
-            <td class="text-[#c07820]">${fmtNum(t.received)}</td>
-            <td class="text-[#a83020]">${fmtNum(t.damaged)}</td>
-            <td>${fmtNum(t.planted)}</td>
+            <td colspan="3" class="uppercase tracking-widest text-[10px] text-[#8a7a68]">Grand Total</td>
+            <td class="text-[#c07820]">${fmtNum(grand.received)}</td>
+            <td class="text-[#a83020]">${fmtNum(grand.damaged)}</td>
+            <td>${fmtNum(grand.planted)}</td>
             <td>
-              <div class="text-[#a83020]">${t.varDown ? '−' + fmtNum(Math.abs(t.varDown)) : '0'}</div>
-              <div class="text-[#4a7a2e]">${t.varUp ? '+' + fmtNum(t.varUp) : '0'}</div>
+              <div class="text-[#a83020]">${grand.varDown ? '−' + fmtNum(Math.abs(grand.varDown)) : '0'}</div>
+              <div class="text-[#4a7a2e]">${grand.varUp ? '+' + fmtNum(grand.varUp) : '0'}</div>
             </td>
           </tr></tfoot>
         </table>
       </div>
     </div>`;
-  }).join('');
 }
 
 /* Where the SECOND header row has to stick.
@@ -1586,8 +1615,12 @@ function syncReportDefaults() {
   if (which === 'movement_report') {
     const subEl = document.getElementById('f-nursery-sub');
     if (subEl) subEl.value = 'summary';
+    // Culling Report opens on all three stages combined — a fresh visit
+    // shouldn't hide 2nd/3rd Culling behind a stage nobody picked yet.
+    // Narrowing to one stage only happens once someone actually chooses
+    // it from this dropdown (see #f-culling-stage's change listener).
     const stageEl = document.getElementById('f-culling-stage');
-    if (stageEl) stageEl.value = '1st_Culling';
+    if (stageEl) stageEl.value = '';
   }
 }
 
@@ -2893,8 +2926,11 @@ async function runCullingReport() {
   out.classList.add('hidden');
   loading.classList.remove('hidden');
 
-  const stage = (document.getElementById('f-culling-stage') || {}).value || '1st_Culling';
-  const stageLabel = CULLING_STAGES[stage] || stage;
+  // '' (All Stages) is the default on a fresh visit — see syncReportDefaults()
+  // — so the first thing anyone sees is every stage together; picking a
+  // stage from the dropdown is what narrows it to just that one.
+  const stage = (document.getElementById('f-culling-stage') || {}).value || '';
+  const stageLabel = stage ? (CULLING_STAGES[stage] || stage) : 'Culling';
   const from  = document.getElementById('f-from').value;
   const to    = document.getElementById('f-to').value;
   const breed = document.getElementById('f-breed').value;
@@ -2903,10 +2939,12 @@ async function runCullingReport() {
   const selectedLocs = new Set(selectedNurseries());
 
   const [logsRes, plotsRes, batchesRes] = await Promise.all([
-    fetchAllRows(() => _supabase.from('shared_inventory_logs')
-      .select('batch_name, transaction_date, created_at, remark, plot_name, quantity_change, breed_name')
-      .eq('transaction_type', stage)
-      .order('id', { ascending: true })),
+    fetchAllRows(() => {
+      let q = _supabase.from('shared_inventory_logs')
+        .select('batch_name, transaction_date, created_at, remark, plot_name, quantity_change, breed_name, transaction_type');
+      q = stage ? q.eq('transaction_type', stage) : q.in('transaction_type', Object.keys(CULLING_STAGES));
+      return q.order('id', { ascending: true });
+    }),
     _supabase.from('shared_plots').select('plot_name, nursery_name'),
     // Same breed fallback Transplanting Report uses — operation_batches has
     // no breed_name column, and a culling log doesn't always carry its own.
@@ -2933,6 +2971,7 @@ async function runCullingReport() {
       plot: l.plot_name || '—', batch: l.batch_name || '—',
       breed: l.breed_name || batchBreed[l.batch_name] || '—',
       qty: Number(l.quantity_change || 0),
+      stage: l.transaction_type,
       // 3rd Culling only — same MapQty: gate Movement Report's Summary
       // uses for the identical reason: Tab 6 computes/saves a "fully
       // culled" figure the moment Alive reaches zero, whether or not
@@ -2945,18 +2984,23 @@ async function runCullingReport() {
     if (from || to) { if (!isFinite(ts) || ts < fromTs || ts >= toTs) return false; }
     if (selectedLocs.size && !selectedLocs.has(r.nursery)) return false;
     if (breed && r.breed !== breed) return false;
-    if (stage === '3rd_Culling' && !r.hasMapQty) return false;
+    // The MapQty gate is a 3rd Culling rule specifically — checked per row
+    // so it still applies to just the 3rd Culling rows when All Stages is
+    // showing 1st/2nd/3rd together.
+    if (r.stage === '3rd_Culling' && !r.hasMapQty) return false;
     // A zero-qty row is furniture, not a record — nothing was culled, so
     // there's nothing to report, for any stage.
     if (!r.qty) return false;
     return true;
   });
 
-  // Same date/plot/batch collapses to one row, qty summed — see the
-  // identical fix in runTransplantingReport() above.
+  // Same date/plot/batch(/stage) collapses to one row, qty summed — see the
+  // identical fix in runTransplantingReport() above. Stage joins the key so
+  // an All-Stages view never merges e.g. a 1st and 2nd Culling on the same
+  // day/plot/batch into one blended row.
   const merged = new Map();
   rows.forEach(r => {
-    const k = r.date + '\x01' + r.plot + '\x01' + r.batch;
+    const k = r.date + '\x01' + r.plot + '\x01' + r.batch + '\x01' + r.stage;
     const existing = merged.get(k);
     if (existing) existing.qty += r.qty;
     else merged.set(k, { ...r });
@@ -2964,8 +3008,17 @@ async function runCullingReport() {
   rows = [...merged.values()];
 
   const _clNatCmp = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
-  rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')) || _clNatCmp(a.plot, c.plot));
+  const _clStageOrder = { '1st_Culling': 0, '2nd_Culling': 1, '3rd_Culling': 2 };
+  rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || ''))
+    || _clNatCmp(a.plot, c.plot)
+    || (_clStageOrder[a.stage] ?? 0) - (_clStageOrder[c.stage] ?? 0));
   const total = rows.reduce((s, r) => s + r.qty, 0);
+
+  // All Stages gets its own Stage column so 1st/2nd/3rd rows sharing a
+  // date/plot/batch stay tellable apart; a single stage already says so in
+  // the heading, so the column would just repeat it.
+  const isAll = !stage;
+  const colCount = isAll ? 7 : 6;
 
   loading.classList.add('hidden');
   out.classList.remove('hidden');
@@ -2978,21 +3031,22 @@ async function runCullingReport() {
       <div class="overflow-x-auto">
         <table class="report-table">
           <thead><tr>
-            <th>Culling Date</th><th>Location</th><th>Plot</th><th>Batch</th><th>Breed</th><th class="text-right">Qty Culled</th>
+            <th>Culling Date</th>${isAll ? '<th>Stage</th>' : ''}<th>Location</th><th>Plot</th><th>Batch</th><th>Breed</th><th class="text-right">Qty Culled</th>
           </tr></thead>
           <tbody>
             ${rows.length ? rows.map(r => `
               <tr>
                 <td>${fmtDate(r.date)}</td>
+                ${isAll ? `<td class="font-black">${CULLING_STAGES[r.stage] || r.stage}</td>` : ''}
                 <td class="font-black text-[#3a7ab4]">${r.nursery}</td>
                 <td>${r.plot}</td>
                 <td class="font-black">${r.batch}</td>
                 <td>${r.breed}</td>
                 <td class="text-right font-black">${fmtNum(r.qty)}</td>
-              </tr>`).join('') : `<tr><td colspan="6" class="text-center py-10 text-[#8a7a68]">No ${stageLabel.toLowerCase()} records match the selected filters.</td></tr>`}
+              </tr>`).join('') : `<tr><td colspan="${colCount}" class="text-center py-10 text-[#8a7a68]">No ${stageLabel.toLowerCase()} records match the selected filters.</td></tr>`}
           </tbody>
           ${rows.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
-            <td colspan="5" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
+            <td colspan="${colCount - 1}" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
             <td class="text-right text-[#3a7ab4]">${fmtNum(total)}</td>
           </tr></tfoot>` : ''}
         </table>
