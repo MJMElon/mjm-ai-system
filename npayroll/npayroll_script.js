@@ -54,7 +54,8 @@ let isAdmin   = false;
 let _tablesOk = true;
 
 /* Work-maintenance data, mirrored from the Nursery Operation module. */
-let maint = { records: [], ticks: {}, rates: {}, workers: {}, localWorkers: {} };
+let maint = { records: [], ticks: {}, rates: {}, workers: {}, localWorkers: {},
+              plotIndex: {}, orphanPlots: [], linked: {} };
 
 /* The Work Maintenance tick sheets take their worker names from the Worker
    System below — a nursery's own section, general workers only. Resolve it the
@@ -207,17 +208,84 @@ function onMaintSheet(w) {
   return isGeneralWorker(w, nurseryNamesRole(n));
 }
 
+/* WHO THE CLAIM PRICES, nursery by nursery, straight off the Worker System
+   register: the people filed under that nursery who are on the Work
+   Maintenance sheets. Same rules and same nursery-name comparison the
+   schedule's own Worker Record uses (generalWorkersByNursery in
+   nursery_ops/plot_maintenance_script.js), so the two always list the same
+   names — a name the claim does not hold is a worker whose ticks nobody
+   prices.
+
+   maint.rows[n] keeps their register rows, not just their names, because
+   whether somebody belongs on THIS month's claim depends on when they left —
+   see maintWorkerNames() below. maint.workers[n] stays as the plain name
+   list for anything that wants every name the nursery has. */
 function resolveMaintWorkers() {
   maint.workers = {};
+  maint.rows    = {};
+  maint.linked  = {};
   MAINT_NURSERIES.forEach(n => {
     const named = nurseryNamesRole(n);
-    const linked = [...new Set(workers
+    const mine = workers
       .filter(w => registerNurseryKey(w) === n)   // UNE, Driver excluded
-      .filter(w => isGeneralWorker(w, named))
-      .map(w => String(w.full_name || '').trim())
-      .filter(Boolean))].sort((a, b) => a.localeCompare(b));
-    maint.workers[n] = linked.length ? linked : (maint.localWorkers[n] || []);
+      /* Asked as if they were still here. isGeneralWorker() says no to
+         anybody Inactive, which is the right answer to "is this person on the
+         sheets today" and the wrong one to "were they on them in September" —
+         and September is what a September claim pays. Whether a leaver
+         belongs on THIS month is maintWorkerNames()'s question, below. */
+      .filter(w => isGeneralWorker({ ...w, active: true }, named))
+      .filter(w => String(w.full_name || '').trim());
+    // One row per name — a register with the same person twice must not give
+    // the claim two lines to pay.
+    const seen = new Set();
+    const rows = mine.filter(w => {
+      const k = String(w.full_name).trim().toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k); return true;
+    }).sort((a, b) => String(a.full_name).localeCompare(String(b.full_name)));
+
+    maint.linked[n] = rows.length > 0;
+    maint.rows[n]   = rows;
+    // The plain list is who is on the sheets TODAY — the leavers live in
+    // maint.rows and are put back a month at a time.
+    maint.workers[n] = rows.length
+      ? rows.filter(w => w.active !== false).map(w => String(w.full_name).trim())
+      /* Only when the register has nobody at all for this nursery. The
+         maintenance module's own old list (nops_maint_workers) is the same
+         fallback the schedule falls back to, so the two still agree — but the
+         claim says which list it is showing rather than letting an unmanaged
+         one pass for the register. */
+      : (maint.localWorkers[n] || []);
   });
+}
+
+/* THE NAMES ON ONE MONTH'S CLAIM.
+
+   A worker who left in September worked in September, and a claim for
+   September has to pay them. Marking them Inactive used to take them off
+   every month at once, including the ones they were here for — so a last day,
+   now that the register keeps one, is what decides:
+
+     still active          on every month's claim
+     left, last day known  on every month up to and including the one they
+                           left in, and off it after
+     left, no last day     off, as before — "inactive" is all the register
+                           says and there is no date to reason from
+
+   The registered date is deliberately NOT used to take anybody off an earlier
+   month. It was backfilled from when the row was written for every worker
+   already on the register, which for anybody typed up from an older paper
+   list is years after they actually started — dropping them off those months
+   on the strength of a guess is worse than carrying them. */
+function maintWorkerNames(nursery, ym) {
+  const rows = maint.rows && maint.rows[nursery];
+  if (!rows || !rows.length) return maint.workers[nursery] || [];
+  const monthStart = `${ym}-01`;
+  return rows.filter(w => {
+    if (w.active !== false) return true;
+    const last = w.last_day ? String(w.last_day).slice(0, 10) : '';
+    return !!last && last >= monthStart;
+  }).map(w => String(w.full_name).trim());
 }
 
 const money = v => 'RM ' + (Number(v) || 0).toFixed(2);
@@ -633,8 +701,8 @@ const MAINT_TYPES = [
   { code:'interrow', label:'Interrow Spray', jenis:'Meracun rumput secara selingan' }
 ];
 
-function maintTotals(nursery, month) {
-  const wk = maint.workers[nursery] || [];
+function maintTotals(nursery, month, ym) {
+  const wk = maintWorkerNames(nursery, ym || monthValue());
   const per = {};                       // worker → { code: capacity }
   wk.forEach(w => { per[w] = {}; MAINT_TYPES.forEach(t => per[w][t.code] = 0); });
 
@@ -661,10 +729,11 @@ function maintTotals(nursery, month) {
 
 function renderMaint() {
   const n = $('maint-nursery').value;
-  const monthTxt = maintMonthLabel(monthValue());     // "Apr 2026"
-  const wk = maint.workers[n] || [];
+  const ym = monthValue();
+  const monthTxt = maintMonthLabel(ym);               // "Apr 2026"
+  const wk = maintWorkerNames(n, ym);
   const rateOf = c => (maint.rates[n] || {})[c];
-  const per = maintTotals(n, monthTxt);
+  const per = maintTotals(n, monthTxt, ym);
 
   $('maint-sub').textContent =
     `From Work Maintenance · ${NURSERY_FULL[n] || n} · ${monthTxt}`;
@@ -729,10 +798,44 @@ function renderMaint() {
 
   $('maint-table').innerHTML = head + `<tbody>${body}</tbody>` + foot;
 
+  /* WHERE THE SHEET COMES FROM, said on the sheet. Both halves of it are read
+     from somewhere else and neither is obvious from looking: the names are the
+     Worker System's register for this nursery, the capacity is the Work
+     Maintenance schedule's Work Record and Worker Record. What this page does
+     is the money.
+
+     Anything that would make the sheet short is said FIRST, because a claim
+     that is missing work looks exactly like a quiet month. */
+  const notes = [];
   const missing = MAINT_TYPES.filter(t => rateOf(t.code) == null).map(t => t.label);
-  $('maint-note').textContent = missing.length
-    ? `No piece rate set for ${missing.join(', ')} — set it under Nursery Operation → Work Maintenance → Setting → Piece Rate.`
-    : 'Capacity comes from the Worker Record in Work Maintenance — a plot’s quantity divided among the workers ticked on that row. A row with no quantity keyed uses the batch report’s closing balance for that plot, batch and work date. The money is worked out here.';
+  if (missing.length) {
+    notes.push(`No piece rate set for ${missing.join(', ')} — set it under `
+             + 'Nursery Operation → Work Maintenance → Setting → Piece Rate.');
+  }
+  if (!maint.linked[n]) {
+    notes.push(`No general worker is filed under ${NURSERY_FULL[n] || n} on the Worker System register, `
+             + 'so this is Work Maintenance\u2019s own older list. File them under the nursery in '
+             + 'Worker System and the two lists become one.');
+  }
+  if ((maint.orphanPlots || []).length) {
+    notes.push(`${maint.orphanPlots.length} plot${maint.orphanPlots.length === 1 ? '' : 's'} `
+             + `on the work records belong to no nursery and are not priced anywhere: `
+             + `${maint.orphanPlots.slice(0, 8).join(', ')}`
+             + `${maint.orphanPlots.length > 8 ? ', …' : ''}. `
+             + 'Add the row to its schedule in Work Maintenance.');
+  }
+  const gone = (maint.rows[n] || []).filter(w => w.active !== false ? false
+    : (w.last_day && String(w.last_day).slice(0, 10) >= `${ym}-01`));
+  if (gone.length) {
+    notes.push(`On this month because they were still here: `
+             + gone.map(w => `${w.full_name} (last day ${String(w.last_day).slice(0, 10)})`).join(', ') + '.');
+  }
+  notes.push('Workers come from the Worker System register — the ones filed under this nursery and on the '
+           + 'Work Maintenance sheets. Capacity comes from Work Maintenance\u2019s Work Record and Worker '
+           + 'Record: a plot\u2019s quantity divided among the workers ticked on that row, and a row with no '
+           + 'quantity keyed uses the batch report\u2019s closing balance for that plot, batch and work date. '
+           + 'The money is worked out here.');
+  $('maint-note').textContent = notes.join(' ');
 }
 
 /* ════════════ MONTHLY PAYROLL ════════════ */
@@ -763,9 +866,9 @@ function monthlyRows() {
   workers.forEach(w => { if (w.full_name) byName.set(w.full_name.trim().toLowerCase(), w); });
 
   ['PN','BNN','UNN1','UNN2'].forEach(n => {
-    const wk = maint.workers[n] || [];
+    const wk = maintWorkerNames(n, month);
     if (!wk.length) return;
-    const per = maintTotals(n, monthTxt);
+    const per = maintTotals(n, monthTxt, month);
     const rateOf = c => (maint.rates[n] || {})[c];
     wk.forEach(w => {
       const known = byName.get(String(w).trim().toLowerCase());
@@ -884,10 +987,10 @@ function downloadMaintPDF() {
   if (!mayDo('maint', 'export',
       'You do not have permission to download the salary claim form.')) return;
   const n = $('maint-nursery').value, month = monthValue(), monthTxt = maintMonthLabel(month);
-  const wk = maint.workers[n] || [];
+  const wk = maintWorkerNames(n, month);
   if (!wk.length) { alert('No worker on the Work Maintenance list for this nursery.'); return; }
   const rateOf = c => (maint.rates[n] || {})[c];
-  const per = maintTotals(n, monthTxt);
+  const per = maintTotals(n, monthTxt, month);
   const capOf = (w, c) => Math.round(per[w] ? per[w][c] : 0);
   const rmOf  = (w, c) => { const r = rateOf(c); return r == null ? 0 : Math.round(capOf(w, c) * Math.round(r * 100000) / 1000) / 100; };
   const earned = w => MAINT_TYPES.reduce((s, t) => s + rmOf(w, t.code), 0);
@@ -1072,19 +1175,27 @@ async function loadMaint() {
     maint.ticks[`${r.nursery}_${r.month}_${r.work_type}`] = r.data || {};
   });
 
-  // A record's plot tells us its nursery — the maintenance module keeps one
-  // global list, so tag each row before use.
-  const NPLOTS = {
-    PN:   Array.from({ length: 52 }, (_, i) => 'P' + String(i + 1).padStart(2, '0')),
-    BNN:  Array.from({ length: 14 }, (_, i) => 'B' + (i + 1)),
-    UNN1: Array.from({ length: 40 }, (_, i) => 'U' + (i + 1)),
-    UNN2: Array.from({ length: 40 }, (_, i) => 'V' + (i + 1))
-  };
-  const plotNursery = {};
-  Object.entries(NPLOTS).forEach(([n, ps]) => ps.forEach(p => { plotNursery[p] = n; }));
+  /* A record names its plot and nothing else, so the plot is what puts it
+     back under a nursery. The list comes from shared/shared_maint_plots.js —
+     the same one the Work Maintenance schedule draws its rows from — plus
+     whatever has been added by hand with "Add Row" on a schedule.
+
+     This page used to keep its own copy of that list, and it had drifted: it
+     had UNN 2 as V1-V40 where the schedule has always drawn N1-N20, so every
+     UNN 2 work record matched no nursery, its capacity was dropped, and the
+     claim showed a page of dashes indistinguishable from a quiet month. Hand-
+     added plots were unknown to it entirely, so work on one paid nothing. */
+  const customPlots = await MJMMaintPlots.loadCustom(_supabase);
+  maint.plotIndex = MJMMaintPlots.index(customPlots);
 
   const recs = (recRes && recRes.data && Array.isArray(recRes.data.records)) ? recRes.data.records : [];
-  maint.records = recs.map(r => ({ ...r, __nursery: plotNursery[r.plot] || null }));
+  maint.records = recs.map(r => ({ ...r, __nursery: MJMMaintPlots.nurseryOfPlot(r.plot, maint.plotIndex) }));
+  /* Records whose plot is on no schedule. Counted rather than dropped in
+     silence: this is the shape the UNN 2 bug came in, and a claim that is
+     short should say so on the sheet instead of looking like a quiet month. */
+  maint.orphanPlots = [...new Set(recs.filter(r => !MJMMaintPlots.nurseryOfPlot(r.plot, maint.plotIndex))
+                                      .map(r => String(r.plot || '').trim())
+                                      .filter(Boolean))].sort();
 }
 
 /* ════════════ BOOT ════════════ */

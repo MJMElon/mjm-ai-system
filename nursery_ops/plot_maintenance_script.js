@@ -6,20 +6,17 @@
 /* ════════════════════════════
    CONSTANTS
 ════════════════════════════ */
-const NURSERY_PLOTS = {
-  PN:   ['P01','P02','P03','P04','P05','P06','P07','P08','P09','P10',
-         'P11','P12','P13','P14','P15','P16','P17','P18','P19','P20',
-         'P21','P22','P23','P24','P25','P26','P27','P28','P29','P30',
-         'P31','P32','P33','P34','P35','P36','P37','P38','P39','P40',
-         'P41','P42','P43','P44','P45','P46','P47','P48','P49','P50',
-         'P51','P52'],
-  BNN:  ['B1','B2','B3','B4','B5','B6','B7',
-         'B8','B9','B10','B11','B12','B13','B14'],
-  UNN1: ['U1','U2','U3','U4','U5','U6','U7','U8','U9',
-         'U10','U11','U12','U13','U14','U15','U16','U17','U18'],
-  UNN2: ['N1','N2','N3','N4','N5','N6','N7','N8','N9','N10',
-         'N11','N12','N13','N14','N15','N16','N17','N18','N19','N20']
-};
+/* The plots each nursery is drawn with. The list itself lives in
+   shared/shared_maint_plots.js, because the salary claim in the payroll
+   module has to put a work record back under the nursery it came from and
+   was keeping its own copy — which had drifted, with UNN 2 as V1-V40 against
+   this page's N1-N20, so every UNN 2 record matched no nursery and its
+   capacity was dropped on the floor. One list, read by both.
+
+   A COPY, not the shared arrays: _mergeCustomPlots() below pushes hand-added
+   plots onto these, and mutating the shared ones would reach into the other
+   page's list. */
+const NURSERY_PLOTS = MJMMaintPlots.base();
 const NURSERY_LABELS = {
   PN:   'PN — Pre Nursery',
   BNN:  'BNN — Batu Niah Nursery',
@@ -665,6 +662,7 @@ function payrollRows() { return payrollRowsFor(_payrollView); }
    work types at once. */
 function payrollTotalsFor(type) {
   const n = getNursery(), m = getMonth();
+  resolveWorkers();                      // the month decides who has a column
   const wk = workers[n] || [];
   const store = payrollData[payrollKey(n, m, type)] || {};
   const perWorker = {}; wk.forEach(w => perWorker[w] = 0);
@@ -684,6 +682,7 @@ function payrollTotalsFor(type) {
 function renderPayroll() {
   const tbl = document.getElementById('payroll-table');
   if (!tbl) return;
+  resolveWorkers();                      // the month decides who has a column
   const n = getNursery(), m = getMonth();
   const cfg = PAYROLL_TYPES[_payrollView];
   const line = document.getElementById('payroll-form-line');
@@ -1249,7 +1248,7 @@ async function unlockPieceRates() {
    nursery not yet on the register still has its sheet. */
 const MAINT_NURSERIES = ['PN', 'BNN', 'UNN1', 'UNN2'];
 let workers        = { PN: [], BNN: [], UNN1: [], UNN2: [] };  // resolved, what the page uses
-let _linkedWorkers = {};                                       // from mjmnpayroll_workers
+let _linkedRows    = {};                                       // register rows from mjmnpayroll_workers
 let _localWorkers  = { PN: [], BNN: [], UNN1: [], UNN2: [] };  // from nops_maint_workers
 let _linkErr       = null;
 let _linkAt        = 0;
@@ -1315,17 +1314,58 @@ function _registerNurseryKey(r) {
   return key(r && r.section) || key(r && r.nursery);
 }
 
+/* Register ROWS per nursery, not names — whether somebody belongs on the
+   sheet for the month being looked at depends on when they left, and only the
+   row knows that. See workersForMonth() below. */
 function generalWorkersByNursery(rows) {
   const by = {};
   MAINT_NURSERIES.forEach(n => {
     const mine = (rows || []).filter(r => _registerNurseryKey(r) === n);
     const named = mine.some(r => r.active !== false && MAINT_ROLE.test(roleOf(r)));
-    const names = mine.filter(r => isGeneralWorker(r, named))
-                      .map(r => String(r.full_name || '').trim())
-                      .filter(Boolean);
-    if (names.length) by[n] = [...new Set(names)].sort((a, b) => a.localeCompare(b));
+    /* Asked as if they were still here. isGeneralWorker() says no to anybody
+       Inactive, which is the right answer to "is this person on the sheets
+       today" and the wrong one to "were they on them in September". */
+    const seen = new Set();
+    const mineRows = mine.filter(r => {
+      const name = String(r.full_name || '').trim();
+      if (!name || !isGeneralWorker({ ...r, active: true }, named)) return false;
+      const k = name.toLowerCase();
+      if (seen.has(k)) return false;          // the same person keyed twice
+      seen.add(k); return true;
+    }).sort((a, b) => String(a.full_name).localeCompare(String(b.full_name)));
+    if (mineRows.length) by[n] = mineRows;
   });
   return by;
+}
+
+/* WHO WAS ON THE SHEET IN A GIVEN MONTH.
+
+   A worker who left on the 18th of September worked in September, and
+   September's Worker Record has to keep their column so the work they were
+   ticked for is still divided among the right number of people — and so the
+   salary claim pays them.
+
+     still active          every month
+     left, last day known  every month up to and including the one they left
+                           in, and none after
+     left, no last day     none — "inactive" is all the register says
+
+   The registered date is deliberately not used to take anybody off an earlier
+   month: it was backfilled from when the row was written, which for a worker
+   typed up from an older paper list is years after they started.
+
+   SHARED RULE. maintWorkerNames() in npayroll/npayroll_script.js is the same
+   rule, deciding the same thing for the salary claim that prices this sheet.
+   Change one, change the other — two rules here is the Worker Record and the
+   claim dividing one plot's quantity among different numbers of people. */
+function workersForMonth(rows, ymLabel) {
+  const ym = monthLabelToInput(ymLabel) || '';
+  const monthStart = ym ? `${ym}-01` : '';
+  return (rows || []).filter(r => {
+    if (r.active !== false) return true;
+    const last = r.last_day ? String(r.last_day).slice(0, 10) : '';
+    return !!last && (!monthStart || last >= monthStart);
+  }).map(r => String(r.full_name).trim());
 }
 
 async function loadLinkedWorkers() {
@@ -1339,24 +1379,30 @@ async function loadLinkedWorkers() {
   if (res.error) {
     // The payroll module may simply not be set up yet — keep the old list.
     _linkErr = res.error.message || String(res.error);
-    _linkedWorkers = {};
+    _linkedRows = {};
     resolveWorkers();
     return;
   }
   _linkErr = null;
   // UNE and Driver are their own sections in the register and belong to no
   // nursery sheet, so matching the nursery keeps them out on its own.
-  _linkedWorkers = generalWorkersByNursery(res.data || []);
+  _linkedRows = generalWorkersByNursery(res.data || []);
   resolveWorkers();
 }
 
+/* Re-run whenever the month may have moved, not only when the register is
+   re-read: which names belong on the sheet is a question about the month
+   being looked at. Cheap — a filter over one nursery's worth of rows. */
 function resolveWorkers() {
+  const m = (typeof getMonth === 'function' && document.getElementById('global-month'))
+    ? getMonth() : '';
   MAINT_NURSERIES.forEach(n => {
-    const linked = _linkedWorkers[n] || [];
-    workers[n] = linked.length ? linked.slice() : (_localWorkers[n] || []).slice();
+    const rows = _linkedRows[n] || [];
+    const linked = workersForMonth(rows, m);
+    workers[n] = rows.length ? linked : (_localWorkers[n] || []).slice();
   });
 }
-function isLinked(n) { return (_linkedWorkers[n] || []).length > 0; }
+function isLinked(n) { return (_linkedRows[n] || []).length > 0; }
 
 /* Pick up an amendment made in the payroll module while this page is open.
    Throttled — opening the Worker Record tab twice in a row should not fire
@@ -5303,7 +5349,7 @@ async function initDb() {
       console.warn('[maint] worker register could not be read:', _linkErr);
     } else {
       _linkErr = null;
-      _linkedWorkers = generalWorkersByNursery((regRes && regRes.data) || []);
+      _linkedRows = generalWorkersByNursery((regRes && regRes.data) || []);
     }
     resolveWorkers();
     ((payRes && payRes.data) || []).forEach(r => {
