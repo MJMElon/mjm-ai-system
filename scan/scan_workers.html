@@ -133,6 +133,11 @@
       Run <code>shared/add_npayroll_worker_pin.sql</code> in the Supabase SQL Editor, then reload.
       Until then the PIN boxes below are read-only.
     </div>
+    <div id="dates-setup" class="warn hidden">
+      <b>⚠️ Registered date and last day are not switched on yet.</b>
+      Run <code>shared/RUN_ME_worker_dates.sql</code> in the Supabase SQL Editor, then reload.
+      Until then those two boxes on a worker's record are read-only.
+    </div>
     <div id="photo-setup" class="warn hidden">
       <b>⚠️ Worker photos are not switched on yet.</b>
       Run <code>shared/RUN_ME_worker_photos.sql</code> in the Supabase SQL Editor, then reload.
@@ -175,8 +180,10 @@
                    back to the file picker — so one button works everywhere. -->
               <button type="button" class="wf-photo-btn" onclick="wfPhotoPick(true)">📷 Take photo</button>
               <button type="button" class="wf-photo-btn" onclick="wfPhotoPick(false)">🖼️ Choose file</button>
-              <button type="button" class="wf-photo-btn is-danger hidden" id="wf-photo-clear"
-                      onclick="wfPhotoClear()">Remove</button>
+              <!-- No Remove here any more, asked for along with Remove
+                   Worker. A photo is replaced by taking or choosing another
+                   one; there is no reason to want a worker's record to go
+                   back to showing initials. -->
             </div>
             <div id="wf-photo-note"
                  style="font-size:11px;font-weight:500;color:var(--text-faint);margin-top:5px;">
@@ -192,9 +199,23 @@
         <!-- Filled from ROLES; the same list in every section. -->
         <div class="frow"><label>Role</label>
           <select id="wf-role" onchange="onWorkerRoleChange()"></select></div>
-        <div class="frow"><label>Status</label>
-          <select id="wf-active"><option value="1">Active</option><option value="0">Inactive</option></select></div>
+        <!-- When they joined. Kept as a date of its own rather than read off
+             created_at: a worker is keyed in days or weeks after they start,
+             and sometimes years after, when an old register is typed up. -->
+        <div class="frow"><label>Registered date</label>
+          <input type="date" id="wf-registered"></div>
       </div>
+      <div class="grid2">
+        <div class="frow"><label>Status</label>
+          <select id="wf-active" onchange="onWorkerStatusChange()">
+            <option value="1">Active</option><option value="0">Inactive</option></select></div>
+        <!-- Only asked once somebody is Inactive, because it is the one
+             question that has no answer while they are still here. -->
+        <div class="frow hidden" id="wf-lastday-row"><label>Until (last day)</label>
+          <input type="date" id="wf-lastday"></div>
+      </div>
+      <div id="wf-status-note"
+           style="font-size:11px;font-weight:500;color:var(--text-faint);margin:-4px 0 12px 0;"></div>
       <!-- What this worker will key into the worker portal to sign in.
            Also settable straight from the register list. -->
       <div class="frow"><label>Worker PIN</label>
@@ -216,10 +237,10 @@
       <div class="frow"><label>Remark</label><textarea id="wf-remark" rows="2"></textarea></div>
     </div>
     <div class="modal-foot">
-      <!-- Only on an existing worker, and only for somebody allowed to move
-           people about. Left of the others and away from Save, because it is
-           the one button here that cannot be undone. -->
-      <button class="btn btn-danger hidden" id="wf-remove" onclick="removeWorkerFromForm()">Remove Worker</button>
+      <!-- No Remove Worker. Somebody who has left is marked Inactive with
+           their last day, which keeps their name against the work they did
+           and their pay entries where they are; deleting the row took those
+           with it. Nothing on this screen deletes a worker any more. -->
       <span style="flex:1"></span>
       <button class="btn" onclick="closeModal('worker-modal')">Cancel</button>
       <button class="btn btn-primary" id="wf-save" onclick="saveWorker()">Save Worker</button>
@@ -422,6 +443,7 @@ let _tablesOk = true;
 let _maintGeneralCol = true;
 let _pinCol = true;
 let _photoCol = true;
+let _dateCols = true;   // registered_on / last_day
 
 /* Whether this person may do one thing on the register. Same question the
    Payroll tab asked, so the answer is the same. Allows it when the shared
@@ -481,6 +503,25 @@ async function loadWorkers() {
   _photoCol = !photoProbe.error;
   const ph = $('photo-setup');
   if (ph) ph.classList.toggle('hidden', _photoCol);
+  // And the two dates — when they joined, and the last day of anybody who
+  // has left. Asked for together, so one probe answers for both.
+  const dateProbe = await _supabase.from('mjmnpayroll_workers').select('registered_on, last_day').limit(1);
+  _dateCols = !dateProbe.error;
+  const dp = $('dates-setup');
+  if (dp) dp.classList.toggle('hidden', _dateCols);
+}
+
+/* A date column read back for a date input: the input wants YYYY-MM-DD and
+   nothing else, and the column may come back as a date, as a timestamp, or
+   as null. */
+function dateOnly(v) { return v ? String(v).slice(0, 10) : ''; }
+
+/* "28 Sep 2026" — dates are read on this screen, not sorted by eye. */
+function fmtDay(v) {
+  const d = dateOnly(v);
+  if (!d) return '';
+  const x = new Date(d + 'T00:00:00');
+  return isNaN(x) ? d : x.toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 /* ── A photo of a worker ────────────────────────────────────────────────
@@ -592,8 +633,6 @@ async function wfPhotoChosen(input) {
   }
 }
 
-function wfPhotoClear() { _wfPhoto = null; wfPhotoDraw(); }
-
 function wfPhotoDraw() {
   const box = $('wf-photo-img');
   if (!box) return;
@@ -602,7 +641,6 @@ function wfPhotoDraw() {
   } else {
     box.textContent = '👤';
   }
-  $('wf-photo-clear').classList.toggle('hidden', !_wfPhoto);
   // No column, no photo. The box still shows whatever is saved, so a
   // database mid-migration does not look like it lost anybody's picture.
   const off = !_photoCol;
@@ -647,6 +685,22 @@ function workerShown(w) {
 }
 
 function renderWorkers() { renderWorkerBoard(); }
+
+/* What a name on the board says when you rest on it. The two dates are here
+   rather than on the chip itself because the chip is a name and a face — a
+   date under every one of thirty-two names is a wall, and the question "since
+   when / until when" is asked of one person at a time. */
+function workerTitle(w) {
+  const bits = [w.full_name];
+  if (w.role) bits.push(w.role);
+  const since = fmtDay(w.registered_on);
+  if (since) bits.push('registered ' + since);
+  if (w.active === false) {
+    const until = fmtDay(w.last_day);
+    bits.push(until ? 'inactive — last day ' + until : 'inactive');
+  }
+  return bits.join(' · ');
+}
 
 /* The board's columns: sections grouped under the heading the yard uses for
    them. A division is a heading over sections, not a third column — Main
@@ -725,7 +779,7 @@ function renderWorkerBoard() {
               ${canEdit ? 'draggable="true"' : ''}
               ondragstart="boardDragStart(event, ${w.id})" ondragend="boardDragEnd(event)"
               onclick="openWorker(${w.id})"
-              title="${esc(w.full_name)}${w.role ? ' - ' + esc(w.role) : ''}${w.active === false ? ' (inactive)' : ''}"
+              title="${esc(workerTitle(w))}"
               >${faceHtml(w)}<span>${esc(w.full_name)}</span></span>`).join('');
       // Adding from the Other row would have to invent a role for them, so
       // that one row takes drops but does not offer to add.
@@ -764,7 +818,7 @@ function renderWorkerBoard() {
               ${canEdit ? 'draggable="true"' : ''}
               ondragstart="boardDragStart(event, ${w.id})" ondragend="boardDragEnd(event)"
               onclick="openWorker(${w.id})"
-              title="${esc(w.full_name)}${w.role ? ' - ' + esc(w.role) : ''}"
+              title="${esc(workerTitle(w))}"
               >${faceHtml(w)}<span>${esc(w.full_name)}</span></span>`).join('')}</div>
     </div>` : '';
 
@@ -784,7 +838,30 @@ function renderWorkerBoard() {
   box.innerHTML =
     `${pendingHtml}
      <div class="card bd-wrap"><table class="bd"><thead>${head}</thead><tbody>${body}</tbody></table></div>
-     ${note.trim() ? `<p class="foot-note">${note.trim()}</p>` : ''}`;
+     ${note.trim() ? `<p class="foot-note">${note.trim()}</p>` : ''}
+     <p class="foot-note">${esc(lastUpdatedLine())}</p>`;
+}
+
+/* WHEN THE REGISTER WAS LAST TOUCHED, under the board.
+
+   Read off the whole register, not off what is on screen: this answers "is
+   what I am looking at current", and a line that went quiet because somebody
+   ticked Show inactive would answer it wrongly. Every save writes updated_at
+   (see saveWorker), and a row added before that column was filled in falls
+   back to when it was written. */
+function lastUpdatedLine() {
+  let best = null, who = '';
+  workers.forEach(w => {
+    const t = w.updated_at || w.created_at;
+    if (!t) return;
+    if (!best || String(t) > String(best)) { best = t; who = w.updated_by || w.created_by || ''; }
+  });
+  if (!best) return 'Last updated — nothing on the register yet.';
+  const d = new Date(best);
+  const when = isNaN(d) ? String(best).slice(0, 10)
+    : d.toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' })
+      + ', ' + d.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });
+  return `Last updated ${when}${who ? ' by ' + who : ''}.`;
 }
 
 /* -- Moving a name ------------------------------------------------------
@@ -975,6 +1052,16 @@ function openWorker(id, section, role) {
   $('wf-name').value   = w?.full_name || '';
   fillRoleSelect(w?.role || w?.job_title || role || '');
   $('wf-active').value = (w && w.active === false) ? '0' : '1';
+  /* A new worker is registered today until somebody says otherwise — that is
+     what adding them means, and it is the answer nine times in ten. An
+     existing one shows what is on their record, falling back to the day the
+     row was written for everybody added before the box existed. */
+  $('wf-registered').value = w ? dateOnly(w.registered_on || w.created_at)
+                               : new Date().toISOString().slice(0, 10);
+  $('wf-lastday').value    = w ? dateOnly(w.last_day) : '';
+  $('wf-registered').disabled = !_dateCols;
+  $('wf-lastday').disabled    = !_dateCols;
+  onWorkerStatusChange();
   $('wf-pin').value    = pinClean(w?.pin);
   $('wf-pin').disabled = !_pinCol;
   _wfPhoto = w?.photo_url || null;
@@ -983,14 +1070,23 @@ function openWorker(id, section, role) {
   _maintExplicit = w ? (w.maint_general === true || w.maint_general === false) : false;
   $('wf-maint').checked = w ? onMaintSheet(w) : true;
   onWorkerRoleChange();
-  /* Remove is for a worker who is already on the register — there is nothing
-     to remove from a form that has not saved anybody yet. The permission is
-     asked again here although openWorker refused entry without it above:
-     the button is the thing that deletes, and a button that deletes should
-     not rely on somebody else having checked. */
-  $('wf-remove').classList.toggle('hidden', !w || !may('workers', 'manage'));
   $('worker-modal').classList.add('open');
   $('wf-name').focus();
+}
+
+/* Whether somebody is still here decides whether "until when" is a question
+   at all. Turning them back to Active clears the last day rather than leaving
+   a date sitting on the record of somebody who is working — a stale one is
+   how a rejoining worker ends up filed as having left. */
+function onWorkerStatusChange() {
+  const gone = $('wf-active').value === '0';
+  $('wf-lastday-row').classList.toggle('hidden', !gone);
+  if (!gone) $('wf-lastday').value = '';
+  $('wf-status-note').textContent = !_dateCols
+    ? 'Run shared/RUN_ME_worker_dates.sql to switch the two date boxes on.'
+    : gone
+      ? 'Inactive workers come off the board. Tick Show inactive at the top to see them again.'
+      : '';
 }
 
 /* The tick box starts on whatever the role implies, so an existing worker
@@ -1053,6 +1149,12 @@ async function saveWorker() {
   };
   // Writing a column the table does not have fails the whole save.
   if (_maintGeneralCol && MAINT_NURSERIES.includes(row.section)) row.maint_general = $('wf-maint').checked;
+  if (_dateCols) {
+    row.registered_on = $('wf-registered').value || null;
+    // Only somebody who has left has a last day, and Active clears it —
+    // otherwise a worker who comes back keeps the date they left on.
+    row.last_day = row.active ? null : ($('wf-lastday').value || null);
+  }
   if (_pinCol) {
     const { pin, problem } = readPin($('wf-pin').value, editWorkerId);
     if (problem) { alert(problem); $('wf-pin').focus(); return; }
@@ -1084,35 +1186,11 @@ async function saveWorker() {
   } finally { $('wf-save').disabled = false; }
 }
 
-/* The Remove button on the form. removeWorker() below does the asking, the
-   deleting and the reloading; this only says who, and shuts the form if
-   something actually happened — a refused permission or a database that said
-   no leaves it open, because there is still a record there to work on. */
-async function removeWorkerFromForm() {
-  if (!editWorkerId) return;
-  if (await removeWorker(editWorkerId)) closeModal('worker-modal');
-}
-
-/* Answers whether the register changed, so a caller can tell "done" from
-   "they said no" without guessing at the worker list afterwards. */
-async function removeWorker(id) {
-  const w = workers.find(x => x.id === id);
-  if (!w) return false;
-  if (!mayDo('workers', 'remove',
-      'You do not have permission to remove a worker. Ask an admin to grant it in User Access.')) return false;
-  // Deleting takes their pay entries with it, so offer the safe option first.
-  const ok = confirm(`Remove ${w.full_name}?\n\nOK = delete permanently (their work entries go too).\n` +
-                     `Cancel = keep the record and mark them Inactive.`);
-  const q = ok
-    ? _supabase.from('mjmnpayroll_workers').delete().eq('id', id)
-    : _supabase.from('mjmnpayroll_workers').update({ active: false, updated_by: userEmail || null }).eq('id', id);
-  const { error } = await q;
-  if (error) { alert('Could not update: ' + error.message); return false; }
-  await loadWorkers();
-  resolveMaintWorkers();
-  renderWorkers();
-  return true;
-}
+/* removeWorkerFromForm() and removeWorker() are gone with the buttons that
+   called them. Deleting a worker deleted their work entries with them, and
+   there was never a reason to: somebody who has left is marked Inactive with
+   their last day, which keeps the record against the work they did. Nothing
+   on this screen deletes a worker. */
 
 
 (async () => {
