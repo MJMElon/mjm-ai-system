@@ -1175,6 +1175,17 @@ function _rememberReport(report) {
   try { localStorage.setItem(LAST_REPORT_KEY, report); } catch (e) { /* private mode, etc — just don't persist */ }
 }
 
+// Same idea for the "As At" date — picking one and refreshing used to
+// always land back on today regardless. Only remembers across a REFRESH;
+// switching report tabs still resets to today on purpose (see
+// syncReportDefaults()'s own comment — re-running the same report should
+// never clobber a date someone deliberately picked, but a fresh tab should
+// not inherit a stale one either).
+const LAST_DATE_KEY = 'mjm_reports_last_date';
+function _rememberDate(dateStr) {
+  try { localStorage.setItem(LAST_DATE_KEY, dateStr || ''); } catch (e) { /* private mode, etc — just don't persist */ }
+}
+
 function selectReport(report) {
   document.getElementById('f-report').value = report;
   _rememberReport(report);
@@ -2405,6 +2416,7 @@ async function runTransplantingReport() {
   const loading = document.getElementById('loading');
   out.classList.add('hidden');
   loading.classList.remove('hidden');
+  _mvDetailPool = [];
 
   const from  = document.getElementById('f-from').value;
   const to    = document.getElementById('f-to').value;
@@ -2413,7 +2425,7 @@ async function runTransplantingReport() {
   const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
   const selectedLocs = new Set(selectedNurseries());
 
-  const [logsRes, plotsRes, batchesRes] = await Promise.all([
+  const [logsRes, plotsRes, calRes, batchesRes] = await Promise.all([
     // Transplanted only — a move INTO a real main plot. Transplanted_Premium
     // and Transplanted_DoubleTone are pre-nursery-to-pre-nursery moves (into
     // the Premium Care / Double-Tone holding tray, not a plot), and don't
@@ -2423,6 +2435,16 @@ async function runTransplantingReport() {
       .eq('transaction_type', 'Transplanted')
       .order('id', { ascending: true })),
     _supabase.from('shared_plots').select('plot_name, nursery_name'),
+    // Approved Stock_Calibration adjustments filed against this report (Tab
+    // 7's "Report:" field — see _parseCalibration() in
+    // operation_batch_detail.html, same [APPROVED by … on …]/"Report:
+    // X. Plot: Y." convention this file already reads for Movement Report's
+    // Stock Adjustment column). Marks the Qty cell it applies to rather
+    // than adding a column — a row with no matching calibration renders
+    // exactly as before.
+    fetchAllRows(() => _supabase.from('shared_inventory_logs')
+      .select('batch_name, plot_name, quantity_change, transaction_date, created_at, remark')
+      .eq('transaction_type', 'Stock_Calibration')),
     // operation_batches has no breed_name column to fall back to (a
     // Transplanted row is sometimes saved without one of its own — see
     // batch 260/U4). Seeds_Received is the batch's own "Breed Variety"
@@ -2444,6 +2466,37 @@ async function runTransplantingReport() {
   const batchBreed = {};
   (batchesRes.data || []).forEach(b => { if (b.breed_name) batchBreed[b.batch_name] = b.breed_name; });
 
+  // Approved calibrations filed against the Transplanting report, keyed by
+  // batch+plot so a row's Qty cell can be marked. Same [APPROVED by … on
+  // …] / "Report: X. Plot: Y." remark convention _parseCalibration() reads
+  // in operation_batch_detail.html — a lightweight read of the same shape,
+  // not a shared function, since this file has no import from that one.
+  const calByBatchPlot = {};
+  (calRes.data || []).forEach(l => {
+    const approved = (l.remark || '').match(/\[APPROVED by ([^\]]+) on ([^\]]+)\]/);
+    if (!approved) return;
+    let body = (l.remark || '').replace(approved[0], '').trim();
+    const repMatch = body.match(/Report:\s*([^.]+?)\s*\.\s*/i);
+    if (!repMatch || repMatch[1].trim().toLowerCase() !== 'transplanting') return;
+    const plotMatch = body.match(/Plot:\s*([^.]+?)\s*\.\s*/i);
+    const plot = plotMatch ? plotMatch[1].trim() : (l.plot_name || '');
+    if (!plot) return;
+    let reason = body.replace(repMatch[0], '');
+    if (plotMatch) reason = reason.replace(plotMatch[0], '');
+    reason = reason.replace(/Side:\s*(seed|plot)\s*\.\s*/i, '')
+                    .replace(/Tray:\s*[^.]+?\s*\.\s*/i, '')
+                    .replace(/TxTray:\s*[^.]+?\.?/i, '')
+                    .replace(/TxMap:\S*/i, '')
+                    .replace(/TxRow:\S*/i, '')
+                    .trim();
+    const k = _mvBatchKey(l.batch_name) + '::' + plot;
+    (calByBatchPlot[k] = calByBatchPlot[k] || []).push({
+      date: l.transaction_date || l.created_at,
+      qty: Number(l.quantity_change) || 0,
+      label: reason || ('Approved by ' + approved[1].trim())
+    });
+  });
+
   const maturityOf = (d) => {
     const dt = new Date(d);
     if (isNaN(dt)) return null;
@@ -2464,7 +2517,8 @@ async function runTransplantingReport() {
       nursery,
       plot: l.plot_name || '—', batch: l.batch_name || '—',
       breed: l.breed_name || batchBreed[l.batch_name] || '—',
-      qty: Number(l.quantity_change || 0)
+      qty: Number(l.quantity_change || 0),
+      cal: calByBatchPlot[_mvBatchKey(l.batch_name) + '::' + (l.plot_name || '')] || null
     };
   }).filter(r => {
     const ts = r.date ? new Date(r.date).getTime() : NaN;
@@ -2475,6 +2529,21 @@ async function runTransplantingReport() {
     if (breed && r.breed !== breed) return false;
     return true;
   });
+
+  // Several log rows for the same date/plot/batch are the same move keyed
+  // in more than once (the same tray split across several rows at save
+  // time, e.g.) — one line on this report, qty summed, rather than the
+  // same date/plot/batch repeated with a different number each time.
+  // Breed/maturity/nursery are all derived from date+plot+batch already,
+  // so any row sharing that key already agrees on them — first one wins.
+  const merged = new Map();
+  rows.forEach(r => {
+    const k = r.date + '\x01' + r.plot + '\x01' + r.batch;
+    const existing = merged.get(k);
+    if (existing) existing.qty += r.qty;
+    else merged.set(k, { ...r });
+  });
+  rows = [...merged.values()];
 
   rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')));
   const total = rows.reduce((s, r) => s + r.qty, 0);
@@ -2501,7 +2570,11 @@ async function runTransplantingReport() {
                 <td>${r.plot}</td>
                 <td class="font-black">${r.batch}</td>
                 <td>${r.breed}</td>
-                <td class="text-right font-black">${fmtNum(r.qty)}</td>
+                ${r.cal && r.cal.length ? (() => {
+                  const idx = _mvDetailPool.push({ title: 'Calibration', rows: r.cal }) - 1;
+                  return `<td class="text-right font-black"><span class="cursor-help border-b border-dotted border-current"
+                    onmouseenter="mvShowDetailTip(this, ${idx})" onmouseleave="mvHideDetailTip()">${fmtNum(r.qty)}</span></td>`;
+                })() : `<td class="text-right font-black">${fmtNum(r.qty)}</td>`}
               </tr>`).join('') : `<tr><td colspan="7" class="text-center py-10 text-[#8a7a68]">No transplant records match the selected filters.</td></tr>`}
           </tbody>
           ${rows.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
@@ -2692,11 +2765,24 @@ async function bootstrap() {
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const fTo = document.getElementById('f-to');
-  fTo.value = todayStr;
+  // Restores whichever "As At" date was last picked, same idea as the
+  // report tab above — a refresh used to always land back on today even
+  // right after deliberately picking an earlier date. A malformed or
+  // future-dated value (a stale save, a clock change) falls back to today
+  // rather than feeding runReport() something it can't use.
+  let restoredDate = todayStr;
+  try {
+    const rememberedDate = localStorage.getItem(LAST_DATE_KEY);
+    if (rememberedDate && /^\d{4}-\d{2}-\d{2}$/.test(rememberedDate) && rememberedDate <= todayStr) {
+      restoredDate = rememberedDate;
+    }
+  } catch (e) { /* private mode, etc — falls back to today */ }
+  fTo.value = restoredDate;
   // Reports look at what has actually happened — future dates make no
   // sense. f-from is hidden and derived from f-to (see runReport()), so
   // only f-to needs a bound.
   fTo.max = todayStr;
+  fTo.addEventListener('change', () => _rememberDate(fTo.value));
   await Promise.all([loadBreeds(), loadNurseryFilter()]);
   // Same rule as selectReport() — a refresh landing straight back on
   // Movement Report still starts with Locations unticked, not whatever
