@@ -291,6 +291,29 @@
     <div class="glass-panel no-print">
       <input type="hidden" id="f-report">
       <div class="flex flex-wrap gap-3 items-end justify-center mb-3">
+        <!-- Which of the four reports living inside Nursery Report — see
+             NURSERY_SUB_REPORTS and syncFilterVisibility(). Comes first:
+             it decides which of the OTHER filters below even apply, same
+             as the outer report tabs above deciding this whole panel. -->
+        <div class="f-nursery-sub-wrap hidden w-full">
+          <label class="label-style !mb-1">Report</label>
+          <select id="f-nursery-sub" class="input-style">
+            <option value="summary">Summary Report</option>
+            <option value="transplanting">Transplanting Report</option>
+            <option value="seed_in">Seed In Report</option>
+            <option value="culling">Culling Report</option>
+          </select>
+        </div>
+        <!-- Only Culling Report needs this — which of the three stages to
+             list. See CULLING_STAGES / runCullingReport(). -->
+        <div class="f-culling-stage-wrap hidden w-full">
+          <label class="label-style !mb-1">Culling Stage</label>
+          <select id="f-culling-stage" class="input-style">
+            <option value="1st_Culling">1st Culling</option>
+            <option value="2nd_Culling">2nd Culling</option>
+            <option value="3rd_Culling">3rd Culling</option>
+          </select>
+        </div>
         <!-- One date, not a range — every report is "as at" a day now. A
              report that needs a period (Movement's Culled/Transplanted/etc
              columns, "this month's activity") gets it derived from this one
@@ -610,11 +633,21 @@ function fmtSigned(n) {
   return (v > 0 ? '+' : '−') + Math.abs(v).toLocaleString();
 }
 
-async function runLifeOfSeedlings() {
+// The whole Life of Seedlings data pipeline — fetch, one row per batch,
+// filter, sort, totals — shared by runLifeOfSeedlings() (summary + Seed In
+// Details) and runSeedInReport() (Seed In Details alone, under the Nursery
+// Report tab's own selector). Same filters either way: the Seed In figures
+// on a batch (received/damaged/planted/variance) come from the exact same
+// per-batch build this always did, not a separate simpler one.
+//
+// Returns null (having already rendered the error and unhidden #report-
+// output) if the fetch failed — callers just `return` on that. Otherwise
+// {rows, tot, scope, breed, supplier}; #report-output/#loading visibility
+// for the SUCCESS path is left to the caller, since the summary view and
+// the Seed-In-only view render different final HTML.
+async function _losBuildData() {
   const out = document.getElementById('report-output');
   const loading = document.getElementById('loading');
-  out.classList.add('hidden');
-  loading.classList.remove('hidden');
 
   const breed    = document.getElementById('f-breed').value;
   const supplier = (document.getElementById('f-los-supplier') || {}).value || '';
@@ -647,7 +680,7 @@ async function runLifeOfSeedlings() {
   if (logsRes.error) {
     loading.classList.add('hidden'); out.classList.remove('hidden');
     out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-red-700 text-sm">Failed to load logs: ${_losEsc(logsRes.error.message)}</div>`;
-    return;
+    return null;
   }
 
   const plotToLoc = {};
@@ -877,11 +910,45 @@ async function runLifeOfSeedlings() {
     breed, supplier === '—' ? '' : supplier
   ].filter(Boolean).join(' · ');
 
+  return { rows, tot, scope, breed, supplier };
+}
+
+async function runLifeOfSeedlings() {
+  const out = document.getElementById('report-output');
+  const loading = document.getElementById('loading');
+  out.classList.add('hidden');
+  loading.classList.remove('hidden');
+
+  const built = await _losBuildData();
+  if (!built) return; // error already shown by _losBuildData()
+  const { rows, tot, scope, breed, supplier } = built;
+
   loading.classList.add('hidden');
   out.classList.remove('hidden');
   out.innerHTML = _losSummaryHtml(rows, tot, scope) + _losBreedHtml(rows, breed, supplier);
   // Where the second header row sticks can only be known once the first one
   // has been laid out — see _losStickyHeads().
+  _losWireSticky();
+}
+
+// Nursery Report → Seed In Report: the same batch-level Seed In figures
+// Life of Seedlings always showed (see _losBuildData()), just without the
+// full per-batch summary table alongside it — this is "what came in and
+// what happened to it", not "where does every batch stand right now".
+async function runSeedInReport() {
+  const out = document.getElementById('report-output');
+  const loading = document.getElementById('loading');
+  out.classList.add('hidden');
+  loading.classList.remove('hidden');
+
+  const built = await _losBuildData();
+  if (!built) return; // error already shown by _losBuildData()
+  const { rows, breed, supplier } = built;
+
+  loading.classList.add('hidden');
+  out.classList.remove('hidden');
+  out.innerHTML = _losBreedHtml(rows, breed, supplier) || `
+    <div class="glass-panel p-6 rounded-[2rem] text-[#8a7a68] text-sm">No seed-in records match the selected filters.</div>`;
   _losWireSticky();
 }
 
@@ -1156,15 +1223,23 @@ function _losSyncSupplierOptions(suppliers) { _losSyncOptions('f-los-supplier', 
 // first. label is what the tab shows; hint is the fuller description (e.g.
 // "by Plot / Batch") kept as the button's title (a hover tooltip) instead
 // of dropped.
+// Nursery Report absorbs what used to be four separate tabs — Movement
+// Report itself, Transplanting, and Life of Seedling's Seed In view, plus
+// a new Culling view — behind its own selector (#f-nursery-sub, see
+// syncFilterVisibility()) rather than four more entries here. value stays
+// 'movement_report' (nothing downstream keying off it needs to change) —
+// only the label changes.
 const REPORTS = [
-  /* One report where there were three. Production Summary, Double Tone and
-     Seed Received each showed a slice of the same batch's life, so reading a
-     batch meant opening all three and lining them up by eye; every column
-     they had is a column here. */
-  { value: 'life_of_seedlings',     label: 'Life of Seedling',   hint: 'Life of Seedlings — one row per batch: seeds in, planted, transplanted, culled, sold, and what is still standing' },
-  { value: 'movement_report',       label: 'Movement Report',    hint: 'Movement Report — pick PN, BNN, UNN 1 and/or UNN 2 under Locations to see that location\'s data' },
-  { value: 'transplanting_report',  label: 'Transplanting',      hint: 'Transplanting Report — date, maturity date, location' },
+  { value: 'movement_report',       label: 'Nursery Report',     hint: 'Nursery Report — Summary (Movement), Transplanting, Seed In or Culling; pick which under Report below' },
   { value: 'sales_listing',         label: 'Sales Listing',      hint: 'Sales Listing — line items or the year × month chart' },
+];
+
+// The four reports living inside the Nursery Report tab's own selector.
+const NURSERY_SUB_REPORTS = [
+  { value: 'summary',       label: 'Summary Report',       hint: 'Summary Report — the Movement Report: pick PN, BNN, UNN 1 and/or UNN 2 under Locations to see that location\'s data' },
+  { value: 'transplanting', label: 'Transplanting Report', hint: 'Transplanting Report — date, maturity date, location' },
+  { value: 'seed_in',       label: 'Seed In Report',       hint: 'Seed In Report — what came in, per batch: supplier, quantity, damage, planted, variance' },
+  { value: 'culling',       label: 'Culling Report',       hint: 'Culling Report — pick 1st, 2nd or 3rd Culling under Culling Stage below' },
 ];
 
 // ── Report tabs ───────────────────────────────────────────────────────────
@@ -1240,25 +1315,36 @@ async function runReport() {
   const fromEl = document.getElementById('f-from');
   if (toEl && fromEl) fromEl.value = monthStartOf(toEl.value);
   const which = document.getElementById('f-report').value;
-  if (which === 'life_of_seedlings')     return runLifeOfSeedlings();
-  if (which === 'movement_report')       return runMovementReportCombined();
-  if (which === 'transplanting_report')  return runTransplantingReport();
-  if (which === 'sales_listing')         return runSalesListing();
+  if (which === 'movement_report') {
+    const sub = (document.getElementById('f-nursery-sub') || {}).value || 'summary';
+    if (sub === 'summary')       return runMovementReportCombined();
+    if (sub === 'transplanting') return runTransplantingReport();
+    if (sub === 'seed_in')       return runSeedInReport();
+    if (sub === 'culling')       return runCullingReport();
+  }
+  if (which === 'sales_listing') return runSalesListing();
 }
 
 // ── Filter visibility by report type ─────────────────────────────────────────
 function syncFilterVisibility() {
-  const which     = document.getElementById('f-report').value;
-  const isMovement = (which === 'movement_report');
-  const isTrans   = (which === 'transplanting_report');
-  const isLife    = (which === 'life_of_seedlings');
-  const isSales   = (which === 'sales_listing');
+  const which        = document.getElementById('f-report').value;
+  const isNurseryTab = (which === 'movement_report');
+  // Which of the four reports inside Nursery Report — see
+  // NURSERY_SUB_REPORTS. Only meaningful (and only shown) on that tab.
+  const sub = isNurseryTab ? ((document.getElementById('f-nursery-sub') || {}).value || 'summary') : '';
+  const isMovement = sub === 'summary';
+  const isTrans    = sub === 'transplanting';
+  const isSeedIn   = sub === 'seed_in';
+  const isCulling  = sub === 'culling';
+  const isSales    = (which === 'sales_listing');
   // Sales Listing carries two views that want different filters: the Table
   // (line items) wants a date range + nurseries, the Chart (the year×month
   // trend the old Seedling Sales report drew) wants a set of years instead.
   const isSalesTable = isSales && _salesViewMode !== 'chart';
   const isSalesChart = isSales && _salesViewMode === 'chart';
-  const hasRange  = isMovement || isTrans || isSalesTable;
+  document.querySelectorAll('.f-nursery-sub-wrap').forEach(el   => el.classList.toggle('hidden', !isNurseryTab));
+  document.querySelectorAll('.f-culling-stage-wrap').forEach(el => el.classList.toggle('hidden', !isCulling));
+  const hasRange  = isMovement || isTrans || isCulling || isSalesTable;
   document.querySelectorAll('.f-range').forEach(el         => el.classList.toggle('hidden', !hasRange));
   // No visible From anywhere — every report is one "As At" date. Movement
   // Report still shows the Culled/Transplanted/Damaged/etc columns as that
@@ -1273,16 +1359,18 @@ function syncFilterVisibility() {
   document.querySelectorAll('.f-sort').forEach(el          => el.classList.toggle('hidden', !isMovement));
   // Locations (PN / BNN / UNN 1 / UNN 2) drives Movement Report directly now
   // — which of those are checked decides whether the Pre-Nursery section,
-  // the Main Nursery section, or both, render. Transplanting and Sales
-  // Listing (table view) use the same chips to filter their own rows by
-  // destination nursery.
-  document.querySelectorAll('.f-nursery-inline').forEach(el => el.classList.toggle('hidden', !(isMovement || isTrans || isSalesTable)));
-  document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !(isLife || isTrans)));
-  /* Life of Seedlings' own six: nursery type, active/completed, As At as a
-     month and a year, age, breed (shared, above) and supplier. Its As At is
-     its own pair of pickers, not the shared day picker — see the markup —
-     so .f-range is off for it. */
-  document.querySelectorAll('.f-los').forEach(el           => el.classList.toggle('hidden', !isLife));
+  // the Main Nursery section, or both, render. Transplanting, Culling and
+  // Sales Listing (table view) use the same chips to filter their own rows
+  // by destination nursery. Seed In uses its own Nursery Type filter
+  // instead (.f-los, below) — the same one Life of Seedling always did.
+  document.querySelectorAll('.f-nursery-inline').forEach(el => el.classList.toggle('hidden', !(isMovement || isTrans || isCulling || isSalesTable)));
+  document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !(isSeedIn || isTrans || isCulling)));
+  /* Seed In Report's own five: nursery type, active/completed, As At as a
+     month and a year, age (breed is shared, above). Its As At is its own
+     pair of pickers, not the shared day picker — see the markup — so
+     .f-range is off for it. Same filters Life of Seedling always used;
+     only which report they narrow has changed. */
+  document.querySelectorAll('.f-los').forEach(el           => el.classList.toggle('hidden', !isSeedIn));
   document.querySelectorAll('.f-sales-mode').forEach(el    => el.classList.toggle('hidden', !isSales));
   document.querySelectorAll('.f-sales-years').forEach(el   => el.classList.toggle('hidden', !isSalesChart));
 }
@@ -1340,8 +1428,7 @@ function selectedNurseries() {
 /* Defaults that change with which report is now selected — run once per
    switch, not on every "Run Report" click, so re-running the same report
    never clobbers a date someone deliberately picked. */
-const DATE_KEYED_REPORTS = new Set([
-  'transplanting_report', 'sales_listing', 'movement_report']);
+const DATE_KEYED_REPORTS = new Set(['sales_listing', 'movement_report']);
 function syncReportDefaults() {
   const which = document.getElementById('f-report').value;
   if (DATE_KEYED_REPORTS.has(which)) {
@@ -1351,6 +1438,16 @@ function syncReportDefaults() {
   // Plot is the more commonly checked default for both sections (see
   // buildMovementSection).
   if (_fSort && which === 'movement_report') _fSort.value = 'plot';
+  // Nursery Report always opens on Summary (the old Movement Report) — a
+  // fresh visit to the tab shouldn't land on whichever sub-report someone
+  // was last looking at, same "fresh tab starts clean" rule as the date
+  // reset above.
+  if (which === 'movement_report') {
+    const subEl = document.getElementById('f-nursery-sub');
+    if (subEl) subEl.value = 'summary';
+    const stageEl = document.getElementById('f-culling-stage');
+    if (stageEl) stageEl.value = '1st_Culling';
+  }
 }
 
 document.getElementById('f-run').addEventListener('click', runReport);
@@ -1359,6 +1456,14 @@ document.getElementById('f-run').addEventListener('click', runReport);
 // listener did here — nothing left to wire up.
 const _fSort = document.getElementById('f-sort');
 if (_fSort) _fSort.addEventListener('change', runReport);
+// Picking a different sub-report (or culling stage) changes which OTHER
+// filters apply — Summary's Sort By, Seed In's month/year pickers, and so
+// on — so this goes through syncFilterVisibility() first, same as the
+// outer report tabs do, not straight to runReport() like f-sort above.
+const _fNurserySub = document.getElementById('f-nursery-sub');
+if (_fNurserySub) _fNurserySub.addEventListener('change', () => { syncFilterVisibility(); runReport(); });
+const _fCullingStage = document.getElementById('f-culling-stage');
+if (_fCullingStage) _fCullingStage.addEventListener('change', runReport);
 
 // Closes the sidebar the moment Run Report is clicked, instead of leaving
 // it open (and covering the results) until the mouse happens to wander
@@ -2631,6 +2736,120 @@ async function runTransplantingReport() {
   `;
 }
 
+// Nursery Report → Culling Report: one row per log entry for whichever
+// culling stage is picked (see #f-culling-stage) — 1st Culling always
+// happens in a Pre-Nursery tray, 2nd/3rd in whichever main plot the batch
+// is standing in by then, same PRE_NURSERY_PLOTS check Transplanting
+// Report uses to tell the two apart.
+const CULLING_STAGES = {
+  '1st_Culling': 'First Culling',
+  '2nd_Culling': 'Second Culling',
+  '3rd_Culling': 'Third Culling',
+};
+async function runCullingReport() {
+  const out = document.getElementById('report-output');
+  const loading = document.getElementById('loading');
+  out.classList.add('hidden');
+  loading.classList.remove('hidden');
+
+  const stage = (document.getElementById('f-culling-stage') || {}).value || '1st_Culling';
+  const stageLabel = CULLING_STAGES[stage] || stage;
+  const from  = document.getElementById('f-from').value;
+  const to    = document.getElementById('f-to').value;
+  const breed = document.getElementById('f-breed').value;
+  const fromTs = from ? new Date(from).getTime() : -Infinity;
+  const toTs   = to   ? new Date(to).getTime() + 86400000 : Infinity;
+  const selectedLocs = new Set(selectedNurseries());
+
+  const [logsRes, plotsRes, batchesRes] = await Promise.all([
+    fetchAllRows(() => _supabase.from('shared_inventory_logs')
+      .select('batch_name, transaction_date, created_at, remark, plot_name, quantity_change, breed_name')
+      .eq('transaction_type', stage)
+      .order('id', { ascending: true })),
+    _supabase.from('shared_plots').select('plot_name, nursery_name'),
+    // Same breed fallback Transplanting Report uses — operation_batches has
+    // no breed_name column, and a culling log doesn't always carry its own.
+    fetchAllRows(() => _supabase.from('shared_inventory_logs')
+      .select('batch_name, breed_name')
+      .eq('transaction_type', 'Seeds_Received'))
+  ]);
+  if (logsRes.error) {
+    loading.classList.add('hidden'); out.classList.remove('hidden');
+    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-red-700 text-sm">Failed to load logs: ${logsRes.error.message}</div>`;
+    return;
+  }
+
+  const plotToLoc = {};
+  (plotsRes.data || []).forEach(p => { plotToLoc[p.plot_name] = p.nursery_name || 'Unassigned'; });
+  const batchBreed = {};
+  (batchesRes.data || []).forEach(b => { if (b.breed_name) batchBreed[b.batch_name] = b.breed_name; });
+
+  let rows = (logsRes.data || []).map(l => {
+    const date = _logDate(l);
+    const nursery = PRE_NURSERY_PLOTS.includes(l.plot_name) ? 'PN' : (plotToLoc[l.plot_name] || 'Unassigned');
+    return {
+      date, nursery,
+      plot: l.plot_name || '—', batch: l.batch_name || '—',
+      breed: l.breed_name || batchBreed[l.batch_name] || '—',
+      qty: Number(l.quantity_change || 0)
+    };
+  }).filter(r => {
+    const ts = r.date ? new Date(r.date).getTime() : NaN;
+    if (from || to) { if (!isFinite(ts) || ts < fromTs || ts >= toTs) return false; }
+    if (selectedLocs.size && !selectedLocs.has(r.nursery)) return false;
+    if (breed && r.breed !== breed) return false;
+    return true;
+  });
+
+  // Same date/plot/batch collapses to one row, qty summed — see the
+  // identical fix in runTransplantingReport() above.
+  const merged = new Map();
+  rows.forEach(r => {
+    const k = r.date + '\x01' + r.plot + '\x01' + r.batch;
+    const existing = merged.get(k);
+    if (existing) existing.qty += r.qty;
+    else merged.set(k, { ...r });
+  });
+  rows = [...merged.values()];
+
+  const _clNatCmp = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
+  rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')) || _clNatCmp(a.plot, c.plot));
+  const total = rows.reduce((s, r) => s + r.qty, 0);
+
+  loading.classList.add('hidden');
+  out.classList.remove('hidden');
+  out.innerHTML = `
+    <div class="glass-panel p-6 rounded-[2rem]">
+      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
+        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">${stageLabel} Report</h3>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} record${rows.length === 1 ? '' : 's'}${from ? ' · from ' + fmtDate(from) : ''}${to ? ' · to ' + fmtDate(to) : ''}${breed ? ' · ' + breed : ''}</div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="report-table">
+          <thead><tr>
+            <th>Culling Date</th><th>Location</th><th>Plot</th><th>Batch</th><th>Breed</th><th class="text-right">Qty Culled</th>
+          </tr></thead>
+          <tbody>
+            ${rows.length ? rows.map(r => `
+              <tr>
+                <td>${fmtDate(r.date)}</td>
+                <td class="font-black text-[#3a7ab4]">${r.nursery}</td>
+                <td>${r.plot}</td>
+                <td class="font-black">${r.batch}</td>
+                <td>${r.breed}</td>
+                <td class="text-right font-black">${fmtNum(r.qty)}</td>
+              </tr>`).join('') : `<tr><td colspan="6" class="text-center py-10 text-[#8a7a68]">No ${stageLabel.toLowerCase()} records match the selected filters.</td></tr>`}
+          </tbody>
+          ${rows.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
+            <td colspan="5" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
+            <td class="text-right text-[#3a7ab4]">${fmtNum(total)}</td>
+          </tr></tfoot>` : ''}
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 /**
  * Sales Listing
  *
@@ -2801,7 +3020,10 @@ async function bootstrap() {
   // that before anything reads f-report.value. Reopens whichever tab was
   // last selected (see selectReport()) — a refresh used to always land
   // back on Production Summary regardless of what was actually open.
-  let DEFAULT_REPORT = 'life_of_seedlings';
+  // Nursery Report absorbed the old default ('life_of_seedlings', a value
+  // REPORTS no longer has) — its Summary sub-report is the closest
+  // equivalent landing spot now.
+  let DEFAULT_REPORT = 'movement_report';
   try {
     const remembered = localStorage.getItem(LAST_REPORT_KEY);
     if (remembered && REPORTS.some(r => r.value === remembered)) DEFAULT_REPORT = remembered;
