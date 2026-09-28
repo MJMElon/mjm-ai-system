@@ -725,8 +725,8 @@ function renderPayroll() {
     const nofit = (_fieldUnmatched[`${n}_${m}`] || []).filter((x) => !known.has(x));
     const lines = [];
     const unpaired = _fieldUnpaired[`${n}_${m}`] || [];
-    if (gone.length)  lines.push(`${t('pay.offRegister')} ${gone.join(', ')}`);
-    if (nofit.length) lines.push(`${t('pay.fieldNoColumn')} ${nofit.join(', ')}`);
+    if (gone.length)  lines.push(`${t('pay.offRegister')} ${gone.map(x => _nameWithReason(n, x)).join('; ')}`);
+    if (nofit.length) lines.push(`${t('pay.fieldNoColumn')} ${nofit.map(x => _nameWithReason(n, x)).join('; ')}`);
     if (unpaired.length) lines.push(`${t('pay.unpaired')} ${unpaired.join(', ')}`);
     off.style.display = lines.length ? 'block' : 'none';
     off.textContent = lines.join('\n');
@@ -1249,6 +1249,11 @@ async function unlockPieceRates() {
 const MAINT_NURSERIES = ['PN', 'BNN', 'UNN1', 'UNN2'];
 let workers        = { PN: [], BNN: [], UNN1: [], UNN2: [] };  // resolved, what the page uses
 let _linkedRows    = {};                                       // register rows from mjmnpayroll_workers
+/* The whole register as read, so a name with no column here can be looked up
+   and the REASON given. Saying "check the spelling, or that they are a general
+   worker" makes somebody go and check both; the register already knows which
+   it is. */
+let _registerRows  = [];
 let _localWorkers  = { PN: [], BNN: [], UNN1: [], UNN2: [] };  // from nops_maint_workers
 let _linkErr       = null;
 let _linkAt        = 0;
@@ -1386,8 +1391,56 @@ async function loadLinkedWorkers() {
   _linkErr = null;
   // UNE and Driver are their own sections in the register and belong to no
   // nursery sheet, so matching the nursery keeps them out on its own.
-  _linkedRows = generalWorkersByNursery(res.data || []);
+  _registerRows = res.data || [];
+  _linkedRows = generalWorkersByNursery(_registerRows);
   resolveWorkers();
+}
+
+/* WHY THIS NAME HAS NO COLUMN. One of five answers, off the register itself:
+
+     not on it at all         — a spelling the register does not carry
+     filed under another      — the work was done here, the worker is filed there
+     marked Inactive          — with their last day, if one was keyed
+     another role             — a Field Conductor is not general nursery work
+     no longer on this month  — they left before the month being looked at
+
+   Compared on letters and digits, the same as everywhere else this boundary
+   is crossed, so "Lalu Aenal mashuri" finds "Lalu Aenal Mashuri" and the
+   answer is about the role rather than about the typing. */
+function _whyNoColumn(nursery, name) {
+  const key = (x) => String(x == null ? '' : x).replace(/[^a-z0-9]/gi, '').toUpperCase();
+  const want = key(name);
+  const hit = _registerRows.filter(r => key(r.full_name) === want);
+  if (!hit.length) return t('pay.whyNotOnRegister');
+  const here = hit.find(r => _registerNurseryKey(r) === nursery);
+  if (!here) {
+    const where = _registerNurseryKey(hit[0]) || '—';
+    return t('pay.whyOtherNursery', { nursery: NURSERY_NAMES[where] || where });
+  }
+  if (here.active === false) {
+    const last = here.last_day ? String(here.last_day).slice(0, 10) : '';
+    return last ? t('pay.whyLeftOn', { date: last }) : t('pay.whyInactive');
+  }
+  const named = (_registerRows.filter(r => _registerNurseryKey(r) === nursery)
+    .some(r => r.active !== false && MAINT_ROLE.test(roleOf(r))));
+  if (!isGeneralWorker({ ...here, active: true }, named)) {
+    const role = roleOf(here);
+    return role ? t('pay.whyRole', { role }) : t('pay.whyNotGeneral');
+  }
+  // On the register, of this nursery, a general worker, still here — and yet
+  // no column. Nothing left to name, so say that rather than invent a cause.
+  return t('pay.whyUnknown');
+}
+
+/* "Name — why", with the register's own spelling where it has one, so a
+   spelling that differs only by punctuation is visible as the same person
+   rather than read as a second worker. */
+function _nameWithReason(nursery, name) {
+  const key = (x) => String(x == null ? '' : x).replace(/[^a-z0-9]/gi, '').toUpperCase();
+  const hit = _registerRows.find(r => key(r.full_name) === key(name));
+  const shown = (hit && String(hit.full_name).trim() !== String(name).trim())
+    ? `${name} (register: ${hit.full_name})` : name;
+  return `${shown} — ${_whyNoColumn(nursery, name)}`;
 }
 
 /* Re-run whenever the month may have moved, not only when the register is
@@ -1570,12 +1623,25 @@ const I18N = {
        list looks exactly like a linked one, so it has to say which it is. */
     'pay.notLinkedNote':'These names are this module\u2019s own old list \u2014 {nursery} is NOT taking them from the Worker System. Check that its workers are filed under that nursery and counted as general workers on the 555 Worker Portal\u2019s Manage page.',
     'pay.notLinkedWhy':'The register could not be read: {why}',
-    'pay.offRegister':'⚠ Ticked this month but no longer a general worker of this nursery on the register, so their capacity is not counted:',
-    'pay.fieldNoColumn':'⚠ The field credited work to these names and they have no column here, so their share of the plot is not counted. Check the spelling against the register, or that they are a general worker of this nursery:',
+    'pay.offRegister':'⚠ Ticked this month but has no column here now, so their capacity is not counted:',
+    'pay.fieldNoColumn':'⚠ The field credited work to these names and they have no column here, so their share of the plot is not counted and the Nursery Payroll System will not pay it:',
+    /* The five answers _whyNoColumn() can give. Said INSTEAD of "check the
+       spelling, or that they are a general worker" — that sentence sent
+       somebody off to check two things the register already knows the answer
+       to, and the commonest answer is neither: a Field Conductor doing a
+       morning's spraying is not a general worker and never gets a column,
+       which is a decision, not a mistake to go and find. */
+    'pay.whyNotOnRegister':'no worker of this name on the register, so check the spelling there',
+    'pay.whyOtherNursery':'filed under {nursery} on the register, not this nursery',
+    'pay.whyInactive':'marked Inactive on the register',
+    'pay.whyLeftOn':'marked Inactive on the register, last day {date}',
+    'pay.whyRole':'is a {role} on the register, so has no column on these sheets',
+    'pay.whyNotGeneral':'not counted as a general worker of this nursery on the register',
+    'pay.whyUnknown':'on the register as a general worker of this nursery — reload the page',
     /* The other half of the same warning: work that never reached the sheet
        at all, as against work that reached it with a name nobody could
        place. */
-    'pay.unpaired':'Verified in the field but matched no row on this month\u2019s schedule, so nothing was filled in or ticked:',
+    'pay.unpaired':'⚠ Verified in the field but matched no row on this month\u2019s schedule, so it was not ticked and is not paid. Add the row to the schedule for this month, then Sync from Schedule:',
     'pay.roundN':'Round {n}',
     'pay.noRows':'No records for this nursery and month yet — tick the schedule, then Sync from Schedule.',
     'pay.tickHint':'Tick each worker who did the job. Capacity per worker = plot capacity ÷ number of ticks on that row. Pay is worked out from this record in the Nursery Payroll System.',
@@ -1665,9 +1731,16 @@ const I18N = {
     'pay.linkedNote':'Nama pekerja diambil daripada Worker System di halaman Manage Portal 555 FC dan mengikut sebarang pindaan di sana.',
     'pay.notLinkedNote':'Nama ini adalah senarai lama modul ini \u2014 {nursery} TIDAK mengambil daripada Worker System. Pastikan pekerjanya difailkan di bawah nurseri itu dan dikira sebagai pekerja am di halaman Manage Portal 555 FC.',
     'pay.notLinkedWhy':'Daftar tidak dapat dibaca: {why}',
-    'pay.offRegister':'⚠ Ditanda bulan ini tetapi bukan lagi pekerja am nurseri ini dalam daftar, jadi kapasiti mereka tidak dikira:',
-    'pay.fieldNoColumn':'⚠ Lapangan mengkreditkan kerja kepada nama ini tetapi tiada lajur di sini, jadi bahagian mereka tidak dikira. Semak ejaan dengan daftar, atau sama ada mereka pekerja am nurseri ini:',
-    'pay.unpaired':'Disahkan di ladang tetapi tiada baris sepadan pada jadual bulan ini, jadi tiada apa diisi atau ditanda:',
+    'pay.offRegister':'⚠ Ditanda bulan ini tetapi tiada lajur di sini sekarang, jadi kapasiti mereka tidak dikira:',
+    'pay.fieldNoColumn':'⚠ Lapangan mengkreditkan kerja kepada nama ini tetapi tiada lajur di sini, jadi bahagian mereka tidak dikira dan Sistem Payroll Nurseri tidak akan membayarnya:',
+    'pay.whyNotOnRegister':'tiada pekerja dengan nama ini dalam daftar \u2014 semak ejaan di sana',
+    'pay.whyOtherNursery':'difailkan di bawah {nursery} dalam daftar, bukan nurseri ini',
+    'pay.whyInactive':'ditanda Tidak Aktif dalam daftar',
+    'pay.whyLeftOn':'ditanda Tidak Aktif dalam daftar, hari terakhir {date}',
+    'pay.whyRole':'ialah {role} dalam daftar, jadi tiada lajur pada helaian ini',
+    'pay.whyNotGeneral':'tidak dikira sebagai pekerja am nurseri ini dalam daftar',
+    'pay.whyUnknown':'ada dalam daftar sebagai pekerja am nurseri ini \u2014 muat semula halaman',
+    'pay.unpaired':'⚠ Disahkan di ladang tetapi tiada baris sepadan pada jadual bulan ini, jadi ia tidak ditanda dan tidak dibayar. Tambah baris itu pada jadual bulan ini, kemudian Sync dari Jadual:',
     'pay.roundN':'Pusingan {n}',
     /* Borang tuntutan gaji (PDF) */
     'pay.no':'Bil.', 'pay.worker':'Nama Pekerja', 'pay.workersRange':'Pekerja', 'pay.ofTotal':'daripada',
@@ -5349,7 +5422,12 @@ async function initDb() {
       console.warn('[maint] worker register could not be read:', _linkErr);
     } else {
       _linkErr = null;
-      _linkedRows = generalWorkersByNursery((regRes && regRes.data) || []);
+      // The raw register too, so _whyNoColumn() can answer. The boot read is
+      // a second door into the same state as loadLinkedWorkers(); leaving it
+      // out here is why the explanation read "no worker of this name" for
+      // everybody until the register happened to be re-read.
+      _registerRows = (regRes && regRes.data) || [];
+      _linkedRows = generalWorkersByNursery(_registerRows);
     }
     resolveWorkers();
     ((payRes && payRes.data) || []).forEach(r => {
