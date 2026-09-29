@@ -164,12 +164,18 @@
         /* Fixed width, not sized to whichever option's text happens to be
            showing — picking a short one ("All Orders") shouldn't shrink the
            button and picking a long one ("Outstanding Balance", the widest)
-           shouldn't grow it. 190px fits the widest option with a little
-           breathing room; space-between keeps the chevron pinned to the
-           right edge instead of hugging short labels. */
-        .cf-btn{display:flex;align-items:center;justify-content:space-between;gap:6px;width:190px;box-sizing:border-box;text-transform:uppercase;letter-spacing:.06em;font-size:10px;font-weight:900;color:#334155;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px;cursor:pointer;transition:border-color .15s,box-shadow .15s;}
+           shouldn't grow it. Same width/height/type treatment as the
+           #cust-search box right next to it — same 190px, same plain
+           11px/700 text, not the old uppercase+900+letter-spacing styling,
+           which was wide enough to wrap "Outstanding Balance" onto a
+           second line and make this button visibly taller than the
+           search bar beside it. #cust-filter-label truncates with an
+           ellipsis rather than wrapping if a future label is still too
+           long for 190px. */
+        .cf-btn{display:flex;align-items:center;justify-content:space-between;gap:6px;width:190px;box-sizing:border-box;font-size:11px;font-weight:700;color:#334155;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:6px 12px;cursor:pointer;transition:border-color .15s,box-shadow .15s;}
         .cf-btn:hover{border-color:#cbd5e1;}
         .cf-btn.open{border-color:#1d4ed8;box-shadow:0 0 0 3px rgba(29,78,216,.12);}
+        #cust-filter-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
         .cf-chevron{width:11px;height:11px;color:#94a3b8;transition:transform .15s;flex-shrink:0;}
         .cf-btn.open .cf-chevron{transform:rotate(180deg);}
         .cf-menu{position:absolute;right:0;top:calc(100% + 6px);min-width:220px;max-height:280px;overflow-y:auto;background:#fff;border:1px solid #e5e9f0;border-radius:14px;box-shadow:0 16px 32px -10px rgba(15,23,42,.18),0 4px 10px rgba(15,23,42,.06);padding:4px 0;z-index:30;}
