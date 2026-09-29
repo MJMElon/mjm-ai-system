@@ -194,6 +194,23 @@ const PAGES = [
          somebody trusted to make a record disappear. */
       { key:'delete', label:'Delete work done', dflt:false,
         desc:'Remove a record from the books altogether. It does not come back' },
+      /* The Transplanting Job sheet's own, and deliberately NOT part of Edit
+         work done above.
+
+         A transplanting record is the crew for a plot, and the payroll
+         divides that plot's quantity among exactly the names ticked on it —
+         so reopening one moves a day's pay from one person to another, after
+         the claim has been read and possibly after it has been paid.
+         Correcting a quantity on a spraying record is bookkeeping; this is
+         not, and the two should not be answered by one box.
+
+         Saved transplanting records are read-only for everybody else, which
+         is the point: dflt:false keeps the box unticked and keeps the key out
+         of the seeding below, so the tick is the only thing that says yes and
+         the screen shows exactly who has it. */
+      { key:'transplant_edit', label:'Edit transplanting record', dflt:false,
+        desc:'Reopen a saved Transplanting Job record and change who is credited. Without this, '
+           + 'a transplanting record cannot be altered once it is saved' },
       { key:'export', label:'Download the month',
         desc:'Take the nursery\u2019s records away as a spreadsheet' }
     ] },
