@@ -984,6 +984,36 @@ function transplantFieldLines() {
                          || String(a.worker_name).localeCompare(String(b.worker_name)));
 }
 
+/* WHAT THE FC SAVED, per job, for one nursery — the transplanting report's
+   own totals rather than the per-worker shares this claim divides them into.
+
+   The figure is the record's own: the workers' keyed quantities where the job
+   splits (polybag filling, where the app makes them agree with the report
+   before it will save) and the source figure otherwise. Not the sum of the
+   claim's lines, which is a different number in two cases that matter — a
+   record whose crew was left empty produces no lines at all, and a name the
+   register does not know produces a line that cannot be paid. Both are work
+   that was done and reported, and this row is where they show.
+
+   Keyed on the PLOT's nursery, which is what the transplanting report is
+   organised by. A claim line is keyed on the worker's own section where the
+   register knows them, so the two can differ — somebody registered in UNN 1
+   credited on a BNN plot. That difference is real, and showing it as a gap
+   is better than asking the same question two different ways to hide it. */
+function transplantWorkdone(sec) {
+  const out = {};
+  TRANSPLANT_JOBS.forEach(j => { out[j.key] = 0; });
+  transplantField.forEach(rec => {
+    const job = TRANSPLANT_JOB[rec.work_type];
+    if (!job) return;
+    if (sec && !inSection(sec, _tpSection(rec.nursery_name))) return;
+    out[job.key] += (job.split && rec.total_qty != null)
+      ? (Number(rec.total_qty) || 0)
+      : (Number(rec.source_qty) || 0);
+  });
+  return out;
+}
+
 /* The plot's nursery as a payroll section code, where one matches. */
 function _tpSection(nursery) {
   const k = _tpKey(nursery);
@@ -1039,18 +1069,22 @@ function renderTransplantClaim() {
   const names = [...new Set(lines.map(l => l.worker_name))]
     .sort((a, b) => a.localeCompare(b));
   const knownOf = n => (lines.find(l => l.worker_name === n) || {}).known;
-  const rateOf  = key => {
+  /* A rate the lines cannot supply is still looked up directly: a nursery can
+     have records the claim shows no line for — nobody was credited on them —
+     and the Total Workdone row still has to price that work. */
+  const rateRowOf = key => {
     const l = lines.find(x => x.key === key && x.rate != null);
-    return l ? l.rate : null;
+    if (l) return { rate: l.rate, unit: l.unit || '' };
+    const r = transplantRate({ work_type: key, jenis: (TRANSPLANT_JOB[key] || {}).jenis });
+    return r ? { rate: Number(r.rate || 0), unit: r.unit || '' } : null;
   };
+  const rateOf = key => { const r = rateRowOf(key); return r ? r.rate : null; };
   /* "RM 0.38 / Bag" — the unit is the Piece Rate screen's own, carried down
      the line with the rate. A rate with no unit is half a rate: nobody can
      check RM 0.38 without knowing what it is 0.38 of. */
   const rateCell = key => {
-    const r = rateOf(key);
-    if (r == null) return '\u2014';
-    const u = (lines.find(x => x.key === key && x.rate != null) || {}).unit;
-    return rateTxt(r) + (u ? ' / ' + u : '');
+    const r = rateRowOf(key);
+    return r ? rateTxt(r.rate) + (r.unit ? ' / ' + r.unit : '') : '\u2014';
   };
   /* Capacity to two places first, then priced — the same order renderMaint
      uses, so the row on screen multiplies out to the money beside it. */
@@ -1073,18 +1107,25 @@ function renderTransplantClaim() {
   };
   const earned = n => TRANSPLANT_JOBS.reduce((s, j) => s + payOf(n, j.key), 0);
 
-  // The office's claim form, same three rows as Work Maintenance: the job,
-  // the rate it pays, then Capacity and Total under it.
+  const capSum = key => names.reduce((s, n) => s + capOf(n, key), 0);
+  const rmSum  = key => names.reduce((s, n) => s + payOf(n, key), 0);
+  const grand  = names.reduce((s, n) => s + earned(n), 0);
+  const workdone = transplantWorkdone(secFilter);
+
+  // The office's claim form, same four rows as Work Maintenance: the job, the
+  // rate it pays, what the whole of it comes to, then Capacity and Total.
   const head = `
     <thead>
       <tr>
-        <th rowspan="3" style="width:44px;">No.</th>
-        <th rowspan="3" class="l">Worker</th>
+        <th rowspan="4" style="width:44px;">No.</th>
+        <th rowspan="4" class="l">Worker</th>
         ${TRANSPLANT_JOBS.map(j => `<th colspan="2">${esc(j.label)}</th>`).join('')}
-        <th rowspan="3" style="width:120px;">Subtotal (RM)</th>
+        <th rowspan="4" style="width:120px;">Subtotal (RM)</th>
       </tr>
       <tr>${TRANSPLANT_JOBS.map(j =>
         `<th colspan="2" style="font-weight:600;font-size:12px;">${esc(rateCell(j.key))}</th>`).join('')}</tr>
+      <tr>${TRANSPLANT_JOBS.map(j =>
+        workdoneCell(workdone[j.key] || 0, rateOf(j.key), rmSum(j.key))).join('')}</tr>
       <tr>${TRANSPLANT_JOBS.map(() =>
         '<th style="width:90px;">Capacity</th><th style="width:110px;">Total (RM)</th>').join('')}</tr>
     </thead>`;
@@ -1102,9 +1143,6 @@ function renderTransplantClaim() {
       <td class="money">${money(earned(n))}</td>
     </tr>`).join('');
 
-  const capSum = key => names.reduce((s, n) => s + capOf(n, key), 0);
-  const rmSum  = key => names.reduce((s, n) => s + payOf(n, key), 0);
-  const grand  = names.reduce((s, n) => s + earned(n), 0);
   const foot = `
     <tfoot><tr>
       <td colspan="2">Grand Total</td>
@@ -1379,6 +1417,13 @@ function maintTotals(nursery, month, ym) {
       rows: 0,          // work records for this job in this nursery
       ticked: 0,        // of those, rows with a tick this claim can use
       paid: 0,          // of those, rows that carried a capacity
+      /* Every record's capacity, ticked or not — the whole of the work done
+         on this job in this nursery, which is what "Total Workdone" prices.
+         Deliberately NOT the sum of the workers' columns: those are shares
+         of the rows somebody was ticked on, and a row with nobody ticked
+         still happened. The gap between the two is work nobody is being
+         paid for, and the claim says so under the total. */
+      capAll: 0,
       noCap: 0,         // ticked, but the quantity came to nothing
       stray: new Set(), // tick names with no row on this claim
       orphanTicks: 0,   // ticks against a record id this month's list has not got
@@ -1408,14 +1453,18 @@ function maintTotals(nursery, month, ym) {
         Object.keys(cells).forEach(name => {
           if (cells[name] && !wk.includes(name)) d.stray.add(name);
         });
-        if (!ticked.length) return;
-        d.ticked++;
         /* Same quantity the Work Maintenance record list shows: whatever was
            keyed on the row, and when nothing was keyed, the batch report's
            closing balance for that plot, batch and work date. Reading r.qty
            alone left every FC-saved record at nought, so a plot with four
-           workers ticked still paid RM 0.00. */
+           workers ticked still paid RM 0.00.
+
+           Read BEFORE the tick test, because Total Workdone counts the work,
+           and whether anybody was ticked on it is a separate question. */
         const cap = PlotMovement.recQty(r).value || 0;
+        d.capAll += cap;
+        if (!ticked.length) return;
+        d.ticked++;
         if (!cap) { d.noCap++; return; }
         d.paid++;
         const share = cap / ticked.length;
@@ -1481,6 +1530,42 @@ function maintWhyEmpty(code) {
        + (PlotMovement.ready() ? '.' : ', and the batch report has not loaded (reload the page).');
 }
 
+/* ── TOTAL WORKDONE ────────────────────────────────────────────────────────
+
+   The whole of a job's capacity for this nursery and month, priced at its
+   rate. It sits in the header, under the rate, exactly where the office's own
+   claim form has it.
+
+   It is NOT the Grand Total below. That adds up the workers' columns, which
+   are shares of the rows somebody was ticked on. This adds up the WORK — a
+   plot nobody was ticked on, a record whose crew was left empty, a name the
+   register does not know — and prices all of it. The two agreeing means
+   every hour of work found a worker to pay. The two differing is the thing
+   worth seeing: the difference is work being done and nobody being paid for
+   it, which otherwise only shows up as a line of red text under the table
+   that is easy to read past.
+
+   Shown to the cent both ways, so the gap can be read off rather than
+   worked out. */
+function workdoneCell(cap, rate, claimed) {
+  const span = 'colspan="2" style="font-weight:700;font-size:11px;"';
+  if (rate == null) {
+    return `<th ${span} title="No piece rate for this job, so its work cannot be priced."
+             >Total Workdone (RM) : &mdash;</th>`;
+  }
+  const total = Math.round(cap2(cap) * Math.round(rate * 100000) / 1000) / 100;
+  const short = Math.round((total - (claimed || 0)) * 100) / 100;
+  /* A claim that pays MORE than the work is an adjustment somebody typed in
+     on purpose, so it is not called a shortfall — but it is still a
+     difference, and a difference between two totals on one form has to be
+     accounted for or somebody will spend the afternoon on it. */
+  const gap = Math.abs(short) < 0.005 ? '' :
+    `<span style="color:var(--danger,#c0392b);font-weight:800;"> &middot; ${
+      short > 0 ? money(short) + ' not claimed' : money(-short) + ' over'}</span>`;
+  return `<th ${span} title="${esc(capFmt(cap2(cap)))} at ${esc(rateTxt(rate))}"
+           >Total Workdone (RM) : ${money(total)}${gap}</th>`;
+}
+
 function renderMaint() {
   const n = $('maint-nursery').value;
   const ym = monthValue();
@@ -1520,21 +1605,31 @@ function renderMaint() {
   const payOf  = (w, c) => { const a = adjOf('maint', n, w, c); return a ? Number(a.amount || 0) : rmOf(w, c); };
   const earned = w => MAINT_TYPES.reduce((s, t) => s + payOf(w, t.code), 0);
 
-  /* The office's own claim form, three header rows: the work, the rate it
-     pays, then Capacity and Total under it. The rate sits INSIDE the work's
-     column group rather than on a row of its own across the sheet, which is
-     what makes it read as "P & D Spraying, at RM 0.01 a bag" instead of as a
-     fourth kind of row. */
+  const capSum = c => wk.reduce((s, w) => s + capOf(w, c), 0);
+  const rmSum  = c => wk.reduce((s, w) => s + payOf(w, c), 0);
+  const grand  = wk.reduce((s, w) => s + earned(w), 0);
+  /* The whole job's capacity off the Worker Record — every work record for
+     this job in this nursery, ticked or not. maintTotals counts it while it
+     is already walking those records. */
+  const capAll = c => ((maint.why || {})[c] || {}).capAll || 0;
+
+  /* The office's own claim form, four header rows: the work, the rate it
+     pays, what the whole of it comes to, then Capacity and Total under it.
+     The rate sits INSIDE the work's column group rather than on a row of its
+     own across the sheet, which is what makes it read as "P & D Spraying, at
+     RM 0.01 a bag" instead of as a fourth kind of row. */
   const head = `
     <thead>
       <tr>
-        <th rowspan="3" style="width:44px;">No.</th>
-        <th rowspan="3" class="l">Worker</th>
+        <th rowspan="4" style="width:44px;">No.</th>
+        <th rowspan="4" class="l">Worker</th>
         ${MAINT_TYPES.map(t => `<th colspan="2">${esc(t.label)}</th>`).join('')}
-        <th rowspan="3" style="width:120px;">Subtotal (RM)</th>
+        <th rowspan="4" style="width:120px;">Subtotal (RM)</th>
       </tr>
       <tr>${MAINT_TYPES.map(t =>
         `<th colspan="2" style="font-weight:600;font-size:12px;">${maintRateTxt(t, rateOf(t.code))}</th>`).join('')}</tr>
+      <tr>${MAINT_TYPES.map(t =>
+        workdoneCell(capAll(t.code), rateOf(t.code), rmSum(t.code))).join('')}</tr>
       <tr>${MAINT_TYPES.map(() =>
         `<th style="width:90px;">Capacity</th><th style="width:110px;">Total (RM)</th>`).join('')}</tr>
     </thead>`;
@@ -1551,9 +1646,6 @@ function renderMaint() {
       <td class="money">${money(earned(w))}</td>
     </tr>`).join('');
 
-  const capSum = c => wk.reduce((s, w) => s + capOf(w, c), 0);
-  const rmSum  = c => wk.reduce((s, w) => s + payOf(w, c), 0);
-  const grand  = wk.reduce((s, w) => s + earned(w), 0);
   const foot = `
     <tfoot><tr>
       <td colspan="2">Grand Total</td>
@@ -2094,9 +2186,20 @@ function downloadMaintPDF() {
      then Capacity and Total under it. The rate is INSIDE the work's column
      group, not on a band of its own across the sheet — the same three rows
      the office's own claim form has. */
+  /* The whole job's capacity off the Worker Record, priced — the same figure
+     the screen puts under the rate, so the printed form and the screen agree
+     on what the work came to as well as on what is being claimed. */
+  const workdoneTxt = t => {
+    const r = rateOf(t.code);
+    if (r == null) return 'Total Workdone (RM) : —';
+    const cap = ((maint.why || {})[t.code] || {}).capAll || 0;
+    return 'Total Workdone (RM) : RM '
+         + (Math.round(cap2(cap) * Math.round(r * 100000) / 1000) / 100).toFixed(2);
+  };
+
   const drawHead = () => {
     let y = pdfTitle(doc, ['SALARY CLAIM FORM — WORK MAINTENANCE', `${NURSERY_FULL[n] || n} (${n})`, `Month ${monthTxt}`]);
-    const H1 = 9, H2 = 7, H3 = 7, HT = H1 + H2 + H3;
+    const H1 = 9, H2 = 7, HW = 7, H3 = 7, HT = H1 + H2 + HW + H3;
     pdfCell(doc, X[0], y, COL[0], HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
     pdfCell(doc, X[1], y, COL[1], HT, 'Worker', { bold: true, size: 8.5, fill: HF });
     MAINT_TYPES.forEach((t, i) => {
@@ -2104,8 +2207,10 @@ function downloadMaintPDF() {
       pdfCell(doc, X[c], y, COL[c] + COL[c+1], H1, t.label, { bold: true, size: 7.5, fill: HF });
       pdfCell(doc, X[c], y + H1, COL[c] + COL[c+1], H2, maintRateTxt(t, rateOf(t.code)),
               { size: 7, nowrap: true, fill: HF });
-      pdfCell(doc, X[c],   y + H1 + H2, COL[c],   H3, 'Capacity',  { bold: true, size: 6.5, nowrap: true, fill: HF });
-      pdfCell(doc, X[c+1], y + H1 + H2, COL[c+1], H3, 'Total (RM)', { bold: true, size: 6.5, nowrap: true, fill: HF });
+      pdfCell(doc, X[c], y + H1 + H2, COL[c] + COL[c+1], HW, workdoneTxt(t),
+              { bold: true, size: 6.5, nowrap: true, fill: HF });
+      pdfCell(doc, X[c],   y + H1 + H2 + HW, COL[c],   H3, 'Capacity',  { bold: true, size: 6.5, nowrap: true, fill: HF });
+      pdfCell(doc, X[c+1], y + H1 + H2 + HW, COL[c+1], H3, 'Total (RM)', { bold: true, size: 6.5, nowrap: true, fill: HF });
     });
     pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], HT, 'Subtotal (RM)', { bold: true, size: 7.5, fill: HF });
     return y + HT;
@@ -2171,15 +2276,18 @@ function downloadTransplantPDF() {
     .sort((a, b) => a.localeCompare(b));
   if (!names.length) { alert('Nothing to claim for this nursery this month.'); return; }
 
-  const rateOf = key => {
+  /* Same fallback the screen uses: a nursery can have records this form shows
+     no line for, and Total Workdone still has to price them. */
+  const rateRowOf = key => {
     const l = lines.find(x => x.key === key && x.rate != null);
-    return l ? l.rate : null;
+    if (l) return { rate: l.rate, unit: l.unit || '' };
+    const r = transplantRate({ work_type: key, jenis: (TRANSPLANT_JOB[key] || {}).jenis });
+    return r ? { rate: Number(r.rate || 0), unit: r.unit || '' } : null;
   };
+  const rateOf = key => { const r = rateRowOf(key); return r ? r.rate : null; };
   const rateTxtOf = key => {
-    const r = rateOf(key);
-    if (r == null) return '—';
-    const u = (lines.find(x => x.key === key && x.rate != null) || {}).unit;
-    return rateTxt(r) + (u ? ' / ' + u : '');
+    const r = rateRowOf(key);
+    return r ? rateTxt(r.rate) + (r.unit ? ' / ' + r.unit : '') : '—';
   };
   const capOf = (n, key) => cap2(lines
     .filter(l => l.worker_name === n && l.key === key)
@@ -2201,17 +2309,29 @@ function downloadTransplantPDF() {
   const PAIR = i => 2 + i * 2, I_TOTAL = COL.length - 1;
   const HF = [232, 236, 252], TF = [222, 228, 250];
 
+  /* The FC's own totals for this nursery, priced — the same figure the screen
+     puts under the rate. */
+  const workdone = transplantWorkdone(sec);
+  const workdoneTxt = key => {
+    const r = rateOf(key);
+    if (r == null) return 'Total Workdone (RM) : —';
+    return 'Total Workdone (RM) : RM '
+         + (Math.round(cap2(workdone[key] || 0) * Math.round(r * 100000) / 1000) / 100).toFixed(2);
+  };
+
   const drawHead = () => {
     let y = pdfTitle(doc, ['SALARY CLAIM FORM — TRANSPLANTING', secTxt, `Month ${monthTxt}`]);
-    const H1 = 9, H2 = 7, H3 = 7, HT = H1 + H2 + H3;
+    const H1 = 9, H2 = 7, HW = 7, H3 = 7, HT = H1 + H2 + HW + H3;
     pdfCell(doc, X[0], y, COL[0], HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
     pdfCell(doc, X[1], y, COL[1], HT, 'Worker', { bold: true, size: 8.5, fill: HF });
     TRANSPLANT_JOBS.forEach((j, i) => {
       const c = PAIR(i);
       pdfCell(doc, X[c], y, COL[c] + COL[c+1], H1, j.label, { bold: true, size: 7.5, fill: HF });
       pdfCell(doc, X[c], y + H1, COL[c] + COL[c+1], H2, rateTxtOf(j.key), { size: 7, nowrap: true, fill: HF });
-      pdfCell(doc, X[c],   y + H1 + H2, COL[c],   H3, 'Capacity',   { bold: true, size: 6.5, nowrap: true, fill: HF });
-      pdfCell(doc, X[c+1], y + H1 + H2, COL[c+1], H3, 'Total (RM)', { bold: true, size: 6.5, nowrap: true, fill: HF });
+      pdfCell(doc, X[c], y + H1 + H2, COL[c] + COL[c+1], HW, workdoneTxt(j.key),
+              { bold: true, size: 6.5, nowrap: true, fill: HF });
+      pdfCell(doc, X[c],   y + H1 + H2 + HW, COL[c],   H3, 'Capacity',   { bold: true, size: 6.5, nowrap: true, fill: HF });
+      pdfCell(doc, X[c+1], y + H1 + H2 + HW, COL[c+1], H3, 'Total (RM)', { bold: true, size: 6.5, nowrap: true, fill: HF });
     });
     pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], HT, 'Subtotal (RM)', { bold: true, size: 7.5, fill: HF });
     return y + HT;
