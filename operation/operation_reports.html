@@ -2412,6 +2412,16 @@ const SUMMARY_SKIP_TYPES = new Set([
    read 0 while Sold (from the DO system, which does carry a date) did not.
    Resolve in the order the batch report actually records: the keyed date
    first, then the remark, then when the row was written. */
+/* WHEN a ledger row happened: transaction_date, else a date written into the
+   remark, else the created_at it was saved with. Not every row carries a
+   transaction_date, and a row without one still belongs on a day.
+
+   SHARED RULE. The FC Portal reads the same ledger to build its Transplanting
+   Job list and carries its own copy — logDate() in
+   src/modules/maintenance/transplantData.js, MJMElon/FC-Portal. Change one,
+   change the other: that screen once narrowed by transaction_date in the
+   query alone, PostgREST dropped every undated row, and a plot arrived on the
+   phone carrying less than this report showed. */
 const _RE_LOG_DATE = /(?:Cull)?Date:\s*(\d{4}-\d{2}-\d{2})/i;
 function _logDate(l) {
   if (l.transaction_date) return String(l.transaction_date).slice(0, 10);

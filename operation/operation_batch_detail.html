@@ -4306,10 +4306,12 @@
             if (!isNaN(n)) _tabDirty[n] = true;
         }
 
+        /* Through _dirtyTabIndices, so there is ONE answer to "what is not
+           saved". These read the flags separately once, and the day Seed
+           Audit's own flag was folded into the indices the names went on
+           without it — which is the whole bug this is guarding against. */
         function _dirtyTabNames() {
-            return Object.keys(_tabDirty)
-                .filter(n => _tabDirty[n])
-                .map(n => TAB_TITLES[n] || ('Tab ' + n));
+            return _dirtyTabIndices().map(n => TAB_TITLES[n] || ('Tab ' + n));
         }
 
         /* Runs a tab's save and clears that tab only if nothing reported an
@@ -4322,7 +4324,16 @@
                 let sawError = false;
                 const realToast = window.showToast;
                 window.showToast = function (m, t) { if (t === 'error') sawError = true; return realToast.apply(this, arguments); };
-                const done = () => { window.showToast = realToast; if (!sawError) _tabDirty[tabIdx] = false; };
+                const done = () => {
+                    window.showToast = realToast;
+                    if (sawError) return;
+                    _tabDirty[tabIdx] = false;
+                    /* Seed Audit keeps its own flag for the bag counts, which
+                       are not typed into anything. saveSeedAudit clears it
+                       itself, but clearing it here as well keeps ONE place
+                       that decides a tab is saved. */
+                    if (tabIdx === 8) _seedAuditDirty = false;
+                };
                 let out;
                 try { out = orig.apply(this, arguments); }
                 catch (err) { done(); throw err; }
@@ -4341,8 +4352,20 @@
             5: 'saveTab5', 6: 'saveTab6', 7: 'saveCalibration', 8: 'saveSeedAudit'
         };
 
+        /* SEED AUDIT COUNTS AS ITS OWN, and it has to be asked for by name.
+
+           Counting a bag is a file input, and _markTabDirty skips those —
+           picking a drone map is not a change to the record until it is
+           saved with the row. But a seed count is: the photo is read, the AI
+           counts it, and the figure is on screen. That state lives in
+           seedAuditPhotoState and is flagged by _seedAuditDirty, which the
+           close dialog knew nothing about — so counting eight bags and
+           pressing the X closed the batch without a word and the counts were
+           gone, having never reached the database at all. */
         function _dirtyTabIndices() {
-            return Object.keys(_tabDirty).filter(n => _tabDirty[n]).map(Number);
+            const out = Object.keys(_tabDirty).filter(n => _tabDirty[n]).map(Number);
+            if (_seedAuditDirty && out.indexOf(8) < 0) out.push(8);
+            return out.sort((a, b) => a - b);
         }
 
         function _leaveBatchRecord() {
