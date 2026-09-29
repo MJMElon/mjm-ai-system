@@ -1563,6 +1563,13 @@ function syncFilterVisibility() {
   // own Nursery Type filter instead (.f-los, below).
   document.querySelectorAll('.f-nursery-inline').forEach(el => el.classList.toggle('hidden', !(isMovement || isTrans || isSeedIn || isCulling || isSalesTable)));
   document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !(isLife || isSeedIn || isTrans || isCulling)));
+  // 2nd/3rd Culling never happens in a Pre-Nursery tray — see
+  // runCullingReport()'s own PRE_NURSERY_PLOTS comment: 1st Culling is the
+  // only stage that is. The Pre-Nursery chip has nothing to filter for
+  // either of those two, so it's hidden (and unticked, so a leftover tick
+  // from 1st Culling/All Stages doesn't silently keep filtering through a
+  // chip nobody can see) whenever one of them is picked.
+  _cullingSyncPreNurseryChip(isCulling);
   /* Life of Seedling's own five: nursery type, active/completed, As At as a
      month and a year, age (breed is shared, above). Its As At is its own
      pair of pickers, not the shared day picker — see the markup — so
@@ -1613,6 +1620,9 @@ async function loadNurseryFilter() {
     const label = n === 'PN' ? 'Pre-Nursery' : safe;
     const lbl = document.createElement('label');
     lbl.className = 'nursery-chip';
+    // Own id so 2nd/3rd Culling can hide just this one chip — see
+    // _cullingSyncPreNurseryChip() — without touching BNN/UNN1/UNN2.
+    if (n === 'PN') lbl.id = 'f-nurs-chip-pn';
     lbl.innerHTML = `<input type="checkbox" class="f-nurs-cb" value="${safe}" checked>${label}`;
     wrap.appendChild(lbl);
   });
@@ -1621,6 +1631,23 @@ async function loadNurseryFilter() {
 }
 function selectedNurseries() {
   return [...document.querySelectorAll('.f-nurs-cb:checked')].map(cb => cb.value);
+}
+
+// Hides (and unticks) the Pre-Nursery Locations chip while Culling Report
+// is showing 2nd Culling or 3rd Culling — see syncFilterVisibility()'s own
+// call site for why. Shown again for 1st Culling, All Stages, or any other
+// sub-report, unconditionally — nothing else hides this chip, so there's
+// no other state to preserve or clobber.
+function _cullingSyncPreNurseryChip(isCulling) {
+  const chip = document.getElementById('f-nurs-chip-pn');
+  if (!chip) return;
+  const stage = (document.getElementById('f-culling-stage') || {}).value || '';
+  const hidePN = isCulling && (stage === '2nd_Culling' || stage === '3rd_Culling');
+  chip.classList.toggle('hidden', hidePN);
+  if (hidePN) {
+    const cb = chip.querySelector('.f-nurs-cb');
+    if (cb && cb.checked) { cb.checked = false; _rememberLocations(selectedNurseries()); }
+  }
 }
 
 /* Defaults that change with which report is now selected — run once per
@@ -1665,7 +1692,7 @@ if (_fSort) _fSort.addEventListener('change', runReport);
 const _fNurserySub = document.getElementById('f-nursery-sub');
 if (_fNurserySub) _fNurserySub.addEventListener('change', () => { _rememberNurserySub(_fNurserySub.value); syncFilterVisibility(); runReport(); });
 const _fCullingStage = document.getElementById('f-culling-stage');
-if (_fCullingStage) _fCullingStage.addEventListener('change', () => { _rememberCullingStage(_fCullingStage.value); runReport(); });
+if (_fCullingStage) _fCullingStage.addEventListener('change', () => { _rememberCullingStage(_fCullingStage.value); syncFilterVisibility(); runReport(); });
 
 // Closes the sidebar the moment Run Report is clicked, instead of leaving
 // it open (and covering the results) until the mouse happens to wander
@@ -3039,17 +3066,48 @@ async function runCullingReport() {
   rows = [...merged.values()];
 
   const _clNatCmp = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
-  const _clStageOrder = { '1st_Culling': 0, '2nd_Culling': 1, '3rd_Culling': 2 };
-  rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || ''))
-    || _clNatCmp(a.plot, c.plot)
-    || (_clStageOrder[a.stage] ?? 0) - (_clStageOrder[c.stage] ?? 0));
+  const _clByDatePlot = (a, c) => String(c.date || '').localeCompare(String(a.date || '')) || _clNatCmp(a.plot, c.plot);
   const total = rows.reduce((s, r) => s + r.qty, 0);
+  const colCount = 6;
+  const emptyRow = `<tr><td colspan="${colCount}" class="text-center py-10 text-[#8a7a68]">No ${stageLabel.toLowerCase()} records match the selected filters.</td></tr>`;
+  const rowHtml = r => `
+              <tr>
+                <td>${fmtDate(r.date)}</td>
+                <td class="font-black text-[#3a7ab4]">${r.nursery}</td>
+                <td>${r.plot}</td>
+                <td class="font-black">${r.batch}</td>
+                <td>${r.breed}</td>
+                <td class="text-right font-black">${fmtNum(r.qty)}</td>
+              </tr>`;
 
-  // All Stages gets its own Stage column so 1st/2nd/3rd rows sharing a
-  // date/plot/batch stay tellable apart; a single stage already says so in
-  // the heading, so the column would just repeat it.
+  // All Stages — grouped into a section per stage, fixed 1st/2nd/3rd order
+  // (not busiest-first the way Seed In Report orders suppliers: these are
+  // three fixed categories, not an open list), each with its own subtotal
+  // row and one grand total at the end — same shape _losSupplierHtml() and
+  // Sales Listing use for their own groups. A single stage stays the plain
+  // flat table it always was; the grouping only matters once more than one
+  // stage is on screen at a time.
   const isAll = !stage;
-  const colCount = isAll ? 7 : 6;
+  let bodyHtml;
+  if (isAll) {
+    const byStage = {};
+    rows.forEach(r => { (byStage[r.stage] = byStage[r.stage] || []).push(r); });
+    bodyHtml = Object.keys(CULLING_STAGES).filter(s => (byStage[s] || []).length).map(s => {
+      const list = byStage[s].slice().sort(_clByDatePlot);
+      const stageTotal = list.reduce((sum, r) => sum + r.qty, 0);
+      const label = CULLING_STAGES[s] || s;
+      return `
+      <tr style="background:#f3ede1"><td colspan="${colCount}" class="font-black text-[11px] uppercase tracking-widest text-[#3d2610] py-2">${label}</td></tr>
+      ${list.map(rowHtml).join('')}
+      <tr style="background:#fdfaf4">
+        <td colspan="${colCount - 1}" class="text-right font-black text-[10px] uppercase tracking-widest text-[#8a7a68]">Subtotal — ${label}</td>
+        <td class="text-right font-black text-[#3a7ab4]">${fmtNum(stageTotal)}</td>
+      </tr>`;
+    }).join('') || emptyRow;
+  } else {
+    rows.sort(_clByDatePlot);
+    bodyHtml = rows.length ? rows.map(rowHtml).join('') : emptyRow;
+  }
 
   loading.classList.add('hidden');
   out.classList.remove('hidden');
@@ -3062,22 +3120,11 @@ async function runCullingReport() {
       <div class="overflow-x-auto">
         <table class="report-table">
           <thead><tr>
-            <th>Culling Date</th>${isAll ? '<th>Stage</th>' : ''}<th>Location</th><th>Plot</th><th>Batch</th><th>Breed</th><th class="text-right">Qty Culled</th>
+            <th>Culling Date</th><th>Location</th><th>Plot</th><th>Batch</th><th>Breed</th><th class="text-right">Qty Culled</th>
           </tr></thead>
-          <tbody>
-            ${rows.length ? rows.map(r => `
-              <tr>
-                <td>${fmtDate(r.date)}</td>
-                ${isAll ? `<td class="font-black">${CULLING_STAGES[r.stage] || r.stage}</td>` : ''}
-                <td class="font-black text-[#3a7ab4]">${r.nursery}</td>
-                <td>${r.plot}</td>
-                <td class="font-black">${r.batch}</td>
-                <td>${r.breed}</td>
-                <td class="text-right font-black">${fmtNum(r.qty)}</td>
-              </tr>`).join('') : `<tr><td colspan="${colCount}" class="text-center py-10 text-[#8a7a68]">No ${stageLabel.toLowerCase()} records match the selected filters.</td></tr>`}
-          </tbody>
+          <tbody>${bodyHtml}</tbody>
           ${rows.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
-            <td colspan="${colCount - 1}" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
+            <td colspan="${colCount - 1}" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">${isAll ? 'Grand Total' : 'Total'}</td>
             <td class="text-right text-[#3a7ab4]">${fmtNum(total)}</td>
           </tr></tfoot>` : ''}
         </table>
