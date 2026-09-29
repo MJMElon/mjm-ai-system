@@ -560,10 +560,14 @@ async function removeRate(id) {
    change one, change the other. `jenis` is what a Piece Rate row is matched
    on, which is why it is stored on the record rather than derived here. */
 const TRANSPLANT_JOBS = [
-  { key:'blanket_spray', jenis:'Blanket Spray',        label:'Blanket Spray' },
-  { key:'lining',        jenis:'Menyusun polibeg',     label:'Lining & Arranging Polybag' },
-  { key:'polybag_fill',  jenis:'Mengisi polibeg',      label:'Polybag Filling 15" x 18"', split:true },
-  { key:'transplanting', jenis:'Menanam anak benih',   label:'Transplanting (Hy Plug to polybag)' }
+  { key:'blanket_spray', jenis:'Menyembur rumput secara rata',
+    label:'Blanket Spray',                        aka:['Blanket Spray'] },
+  { key:'lining',        jenis:'Menyusun dan mengatur polibeg 15" X 18"',
+    label:'Lining & Arranging Polybag 15" x 18"', aka:['Menyusun polibeg'] },
+  { key:'polybag_fill',  jenis:'Mengisi polibeg 15" X 18"', split:true,
+    label:'Polybag Filling 15" x 18"',            aka:['Mengisi polibeg'] },
+  { key:'transplanting', jenis:'Memindah anak sawit ke polibeg besar',
+    label:'Transplanting (Hy Plug to big polybag)', aka:['Menanam anak benih'] }
 ];
 const TRANSPLANT_JOB = Object.fromEntries(TRANSPLANT_JOBS.map(j => [j.key, j]));
 
@@ -590,15 +594,24 @@ async function loadTransplantField() {
    nurseryKey asks — kept local because this file imports nothing from it. */
 const _tpKey = v => String(v == null ? '' : v).replace(/[^a-z0-9]/gi, '').toUpperCase();
 
-/* A Piece Rate for one of the four jobs: matched on the office's own wording
-   first, then on the English label, within the transplanting category (or a
-   rate nobody has filed under a sheet yet). Returns null when nothing
-   matches — the row is then shown with no rate rather than priced at zero,
-   because a zero that looks like a price is worse than a blank that asks a
-   question. */
+/* A Piece Rate for one of the four jobs, within the transplanting category
+   (or a rate nobody has filed under a sheet yet).
+
+   EVERY name the job has ever gone by is tried, not just the record's own:
+   the wording on a record is whatever the FC Portal used the day it was
+   saved, and the wording on a Piece Rate is whatever the office typed. Those
+   two dates are not the same. Matching on one string would mean that
+   renaming a job — which the office did, to the nursery's real Malay names —
+   silently stopped last month's work pricing, with the sheet showing "no
+   rate" and nobody able to say why.
+
+   Returns null when nothing matches. The row is then shown with no rate
+   rather than priced at zero, because a zero that looks like a price is
+   worse than a blank that asks a question. */
 function transplantRate(rec) {
   const job = TRANSPLANT_JOB[rec.work_type];
   const want = [rec.jenis, job && job.jenis, job && job.label]
+    .concat((job && job.aka) || [])
     .filter(Boolean).map(_tpNorm);
   const pool = rates.filter(r => r.active !== false
     && (!r.category || r.category === 'transplanting'));
