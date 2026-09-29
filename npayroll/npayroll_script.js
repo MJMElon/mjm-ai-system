@@ -728,15 +728,33 @@ const capFmt = v => {
    TRANSPLANT_JOBS in FC-Portal/src/modules/maintenance/transplantData.js —
    change one, change the other. `jenis` is what a Piece Rate row is matched
    on, which is why it is stored on the record rather than derived here. */
+/* `mark` is the WORD that tells this job apart from the other three, in both
+   languages, and it is how a Piece Rate is found when its description is not
+   one of the spellings above.
+
+   Exact wording has now drifted three times. The office types the job into
+   Piece Rate in its own words — "Blanket Spraying", "Lining and Arranging
+   Polybag" — and every one of those is one letter or one "and" away from a
+   name listed here, so an exact match found nothing and four columns of real
+   work priced at zero with the capacity sitting right there beside them.
+
+   The marks are chosen so that no rate for one job can contain another's:
+   "polybag" appears in three of these four descriptions and is not a mark;
+   "lining", "filling", "blanket" and "transplant" appear in exactly one each.
+   A mark that ever matches two rate rows prices NEITHER — see transplantRate. */
 const TRANSPLANT_JOBS = [
   { key:'blanket_spray', jenis:'Menyembur rumput secara rata',
-    label:'Blanket Spray',                        aka:['Blanket Spray'] },
+    label:'Blanket Spray',                        aka:['Blanket Spray'],
+    mark:['blanket', 'menyembur'] },
   { key:'lining',        jenis:'Menyusun dan mengatur polibeg 15" X 18"',
-    label:'Lining & Arranging Polybag 15" x 18"', aka:['Menyusun polibeg'] },
+    label:'Lining & Arranging Polybag 15" x 18"', aka:['Menyusun polibeg'],
+    mark:['lining', 'arranging', 'menyusun', 'mengatur'] },
   { key:'polybag_fill',  jenis:'Mengisi polibeg 15" X 18"', split:true,
-    label:'Polybag Filling 15" x 18"',            aka:['Mengisi polibeg'] },
+    label:'Polybag Filling 15" x 18"',            aka:['Mengisi polibeg'],
+    mark:['filling', 'mengisi'] },
   { key:'transplanting', jenis:'Memindah anak sawit ke polibeg besar',
-    label:'Transplanting (Hy Plug to big polybag)', aka:['Menanam anak benih'] }
+    label:'Transplanting (Hy Plug to big polybag)', aka:['Menanam anak benih'],
+    mark:['transplant', 'hyplug', 'memindah', 'menanam'] }
 ];
 const TRANSPLANT_JOB = Object.fromEntries(TRANSPLANT_JOBS.map(j => [j.key, j]));
 
@@ -777,14 +795,35 @@ const _tpKey = v => String(v == null ? '' : v).replace(/[^a-z0-9]/gi, '').toUppe
    Returns null when nothing matches. The row is then shown with no rate
    rather than priced at zero, because a zero that looks like a price is
    worse than a blank that asks a question. */
+/* Jobs whose mark matched more than one Piece Rate, so nothing was priced.
+   Filled by transplantRate, read by the claim's notes — guessing between two
+   rates is how somebody gets paid the wrong one and nobody ever finds out. */
+let transplantRateClash = {};
+
 function transplantRate(rec) {
   const job = TRANSPLANT_JOB[rec.work_type];
+  const pool = rates.filter(r => r.active !== false
+    && (!r.category || r.category === 'transplanting'));
+
+  // The spellings we know, first. An exact match is never ambiguous.
   const want = [rec.jenis, job && job.jenis, job && job.label]
     .concat((job && job.aka) || [])
     .filter(Boolean).map(_tpNorm);
-  const pool = rates.filter(r => r.active !== false
-    && (!r.category || r.category === 'transplanting'));
-  return pool.find(r => want.includes(_tpNorm(r.job_desc))) || null;
+  const exact = pool.find(r => want.includes(_tpNorm(r.job_desc)));
+  if (exact) return exact;
+
+  // Then the job's own word, wherever the office put it in the description.
+  const marks = (job && job.mark) || [];
+  if (!marks.length) return null;
+  const hits = pool.filter(r => {
+    const d = _tpNorm(r.job_desc);
+    return marks.some(m => d.includes(m));
+  });
+  if (hits.length === 1) return hits[0];
+  if (hits.length > 1 && job) {
+    transplantRateClash[job.key] = hits.map(r => r.job_desc);
+  }
+  return null;
 }
 const _tpNorm = v => String(v == null ? '' : v).toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -804,6 +843,7 @@ const _tpNorm = v => String(v == null ? '' : v).toLowerCase().replace(/[^a-z0-9]
  */
 function transplantFieldLines() {
   const out = [];
+  transplantRateClash = {};
   transplantField.forEach(rec => {
     const job = TRANSPLANT_JOB[rec.work_type];
     const crew = Array.isArray(rec.workers) ? rec.workers.filter(w => w && w.name) : [];
@@ -899,6 +939,15 @@ function renderTransplantClaim() {
     const l = lines.find(x => x.key === key && x.rate != null);
     return l ? l.rate : null;
   };
+  /* "RM 0.38 / Bag" — the unit is the Piece Rate screen's own, carried down
+     the line with the rate. A rate with no unit is half a rate: nobody can
+     check RM 0.38 without knowing what it is 0.38 of. */
+  const rateCell = key => {
+    const r = rateOf(key);
+    if (r == null) return '\u2014';
+    const u = (lines.find(x => x.key === key && x.rate != null) || {}).unit;
+    return rateTxt(r) + (u ? ' / ' + u : '');
+  };
   /* Capacity to two places first, then priced — the same order renderMaint
      uses, so the row on screen multiplies out to the money beside it. */
   const capOf = (n, key) => cap2(lines
@@ -920,20 +969,20 @@ function renderTransplantClaim() {
   };
   const earned = n => TRANSPLANT_JOBS.reduce((s, j) => s + payOf(n, j.key), 0);
 
+  // The office's claim form, same three rows as Work Maintenance: the job,
+  // the rate it pays, then Capacity and Total under it.
   const head = `
     <thead>
       <tr>
-        <th rowspan="2" style="width:44px;">No.</th>
-        <th rowspan="2" class="l">Worker</th>
+        <th rowspan="3" style="width:44px;">No.</th>
+        <th rowspan="3" class="l">Worker</th>
         ${TRANSPLANT_JOBS.map(j => `<th colspan="2">${esc(j.label)}</th>`).join('')}
-        <th rowspan="2" style="width:120px;">Total Earned</th>
+        <th rowspan="3" style="width:120px;">Subtotal (RM)</th>
       </tr>
-      <tr>${TRANSPLANT_JOBS.map(() => '<th style="width:90px;">Capacity</th><th style="width:110px;">Earned</th>').join('')}</tr>
-      <tr>
-        <td colspan="2" class="l" style="font-weight:800;background:#fafaff;">Piece Rate</td>
-        ${TRANSPLANT_JOBS.map(j => `<td colspan="2" style="background:#fafaff;font-size:12px;">${rateTxt(rateOf(j.key))}</td>`).join('')}
-        <td style="background:#fafaff;"></td>
-      </tr>
+      <tr>${TRANSPLANT_JOBS.map(j =>
+        `<th colspan="2" style="font-weight:600;font-size:12px;">${esc(rateCell(j.key))}</th>`).join('')}</tr>
+      <tr>${TRANSPLANT_JOBS.map(() =>
+        '<th style="width:90px;">Capacity</th><th style="width:110px;">Total (RM)</th>').join('')}</tr>
     </thead>`;
 
   const body = names.map((n, i) => `
@@ -954,7 +1003,7 @@ function renderTransplantClaim() {
   const grand  = names.reduce((s, n) => s + earned(n), 0);
   const foot = `
     <tfoot><tr>
-      <td class="l" colspan="2">GRAND TOTAL</td>
+      <td colspan="2">Grand Total</td>
       ${TRANSPLANT_JOBS.map(j => `<td>${capFmt(capSum(j.key))}</td><td>${money(rmSum(j.key))}</td>`).join('')}
       <td>${money(grand)}</td>
     </tr></tfoot>`;
@@ -971,17 +1020,27 @@ function renderTransplantClaim() {
              + `${unknown.length === 1 ? 'is' : 'are'} not on the worker register. `
              + 'Add them in Worker System, or correct the spelling there.');
   }
-  const unpriced = TRANSPLANT_JOBS.filter(j => capSum(j.key) > 0 && rateOf(j.key) == null);
+  /* Two rates the job's word cannot choose between. Named, because the
+     alternative is paying one of them and never knowing which. */
+  Object.entries(transplantRateClash).forEach(([key, descs]) => {
+    const j = TRANSPLANT_JOBS.find(x => x.key === key);
+    if (!j || !capSum(key)) return;
+    notes.push(`${esc(j.label)} matches more than one piece rate — ${descs.map(esc).join(' and ')} `
+             + '— so it prices at nothing. Retire the one you do not use, or rename it.');
+  });
+  const clashed = new Set(Object.keys(transplantRateClash));
+  const unpriced = TRANSPLANT_JOBS.filter(j =>
+    capSum(j.key) > 0 && rateOf(j.key) == null && !clashed.has(j.key));
   if (unpriced.length) {
-    notes.push(`No piece rate set for ${unpriced.map(j => esc(j.label)).join(', ')} — `
-             + 'set it under Piece Rate, filed against Transplanting. Until then that work prices '
-             + 'at nothing.');
+    notes.push(`No piece rate set for ${joinAnd(unpriced.map(j => esc(j.label)))} — add it under `
+             + 'Piece Rate, used for Transplanting. Until then that work prices at nothing.');
   }
-  notes.push('Capacity comes from the FC Portal\u2019s Transplanting Job: polybag filling is the split '
-           + 'the conductor keyed, and the other three divide the plot\u2019s quantity equally among '
-           + 'the workers credited — the same arithmetic Work Maintenance pays by.');
-  $('transpl-note').innerHTML = notes.map((t, i) =>
-    `<div style="${i < notes.length - 1 ? 'color:var(--danger,#c0392b);font-weight:600;' : ''}margin-bottom:.25rem;">${t}</div>`
+  /* Every note left here is a fault, so every one is red. The last used to be
+     a paragraph explaining the arithmetic, and it was the one printed plain —
+     which meant the styling said "this last one is just for information" about
+     whatever note happened to end up last once that paragraph went. */
+  $('transpl-note').innerHTML = notes.map(t =>
+    `<div style="color:var(--danger,#c0392b);font-weight:600;margin-bottom:.25rem;">${t}</div>`
   ).join('');
 }
 
