@@ -424,15 +424,15 @@
     <div id="unsaved-modal" class="hidden fixed inset-0 z-[9400] bg-[rgba(26,21,13,0.7)] backdrop-blur-sm overflow-y-auto justify-center items-start p-4 md:p-8" onclick="if (event.target === this) closeUnsavedModal()">
         <div class="bg-[#f8f4ec] w-full max-w-md rounded-3xl shadow-2xl border border-[#e8dcc8] mt-16">
             <div class="px-5 py-4 border-b border-[#e8dcc8] bg-white rounded-t-3xl">
-                <h3 class="text-base font-black text-[#3d2610] uppercase tracking-widest">Not saved yet</h3>
-                <p class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1">Close without saving these?</p>
+                <h3 class="text-base font-black text-[#3d2610] uppercase tracking-widest">Leave now?</h3>
+                <p class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest mt-1">Changes you made may not be saved.</p>
             </div>
             <div id="unsaved-modal-list"></div>
             <div class="px-5 py-4 border-t border-[#e8dcc8] flex flex-wrap gap-2 justify-end">
                 <button type="button" onclick="closeUnsavedModal()"
                         class="px-4 py-2 rounded-xl bg-white border border-[#e8dcc8] text-[#8a7a68] text-[10px] font-black uppercase tracking-widest hover:bg-[#e8dcc8]">Stay</button>
                 <button type="button" id="unsaved-modal-go" onclick="confirmCloseBatchRecord()"
-                        class="px-5 py-2 rounded-xl bg-[#3d2610] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#5a3a1a] disabled:opacity-50">Close</button>
+                        class="px-5 py-2 rounded-xl bg-[#3d2610] text-white text-[10px] font-black uppercase tracking-widest hover:bg-[#5a3a1a] disabled:opacity-50">Leave</button>
             </div>
         </div>
     </div>
@@ -4477,7 +4477,7 @@
                                    return c !== 'drop' && c !== 'saved';
                                })
                                .map(r => Number(r.getAttribute('data-tab')));
-            if (btn) { btn.disabled = true; btn.innerText = toSave.length ? 'Saving…' : 'Closing…'; }
+            if (btn) { btn.disabled = true; btn.innerText = toSave.length ? 'Saving…' : 'Leaving…'; }
 
             /* Run each chosen save and WAIT for it. A tab whose save fails
                stays dirty — the wrapper on it only clears the flag when
@@ -4490,7 +4490,7 @@
             }
 
             const stillDirty = _dirtyTabIndices().filter(n => toSave.indexOf(n) >= 0);
-            if (btn) { btn.disabled = false; btn.innerText = 'Close'; }
+            if (btn) { btn.disabled = false; btn.innerText = 'Leave'; }
             if (stillDirty.length) {
                 showToast('Not closing — ' + stillDirty.map(n => TAB_TITLES[n] || ('Tab ' + n)).join(', ')
                     + ' did not save. Nothing has been lost.', 'error');

@@ -10,6 +10,12 @@
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_access.js"></script>
 <script src="../shared/shared_plot_movement.js?v=1"></script>
+<!-- Which nursery a plot belongs to. Shared with the Work Maintenance
+     schedule, so a work record lands under the nursery it was drawn in. -->
+<script src="../shared/shared_maint_plots.js?v=1"></script>
+<!-- Pairing the field's work to a schedule row, so the claim prices what a
+     worker recorded whether or not the office screen has been opened. -->
+<script src="../shared/shared_maint_field.js?v=1"></script>
 <!-- Which location a section sits in — Pre Nursery, Main Nursery, Estate.
      The same file System Setting's Location card and the Team Board read, so
      the Estate is kept off the maintenance sheets by one rule rather than by
@@ -78,7 +84,7 @@
       <div class="bar">
         <div>
           <div class="bar-title">Work Maintenance — Salary Claim</div>
-          <div class="bar-sub" id="maint-sub">Priced from the Worker Record in Work Maintenance.</div>
+          <div class="bar-sub" id="maint-sub"></div>
         </div>
         <div class="bar-actions">
           <!-- Filled from Facility Management's nursery register by
@@ -103,14 +109,25 @@
       <div class="bar">
         <div>
           <div class="bar-title">Transplanting</div>
-          <div class="bar-sub">Key what each worker transplanted. The rate comes from Piece Rate.</div>
+          <div class="bar-sub" id="transpl-sub">What each worker did, from the FC Portal. The rate comes from Piece Rate.</div>
         </div>
         <div class="bar-actions">
           <select id="transpl-section" class="sel" onchange="renderEntries('transplanting')"></select>
           <button class="btn btn-primary" onclick="openEntry('transplanting')">+ Add Entry</button>
         </div>
       </div>
+      <!-- The claim: workers down, the four jobs across, the same shape as
+           Work Maintenance so one sheet is read the way the other is. -->
       <div class="card"><div class="tbl-wrap"><table id="transpl-table"></table></div></div>
+      <div id="transpl-note" class="bar-sub" style="padding:.6rem .2rem 0;white-space:normal;"></div>
+      <!-- Anything the field could not express, keyed by hand. Hidden until
+           there is something in it: an empty second table on a sheet that is
+           usually all linked work is a table that has to be read and
+           discarded every month. -->
+      <div id="transpl-keyed-wrap" class="hidden" style="margin-top:1.1rem;">
+        <div class="bar-sub" style="padding:0 .2rem .4rem;font-weight:700;">Keyed by hand</div>
+        <div class="card"><div class="tbl-wrap"><table id="transpl-keyed-table"></table></div></div>
+      </div>
     </div>
 
     <!-- ── Seedlings Collection ── -->
@@ -229,6 +246,33 @@
 </div>
 
 <!-- ═══ WORK ENTRY MODAL ═══ -->
+<!-- Changing what a job earned. Its own tick on User Access (Adjust Pay),
+     and its own modal rather than a prompt(): a figure that decides somebody's
+     pay is worth a form that shows what it was, what it becomes, and asks why. -->
+<div class="modal-bg" id="adjust-modal">
+  <div class="modal">
+    <div class="modal-top"><div class="modal-title" id="adj-title">Adjust Earned</div>
+      <button class="modal-x" onclick="closeModal('adjust-modal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="frow"><label>Worker</label><input type="text" id="adj-who" readonly></div>
+      <div class="frow"><label>Job</label><input type="text" id="adj-job" readonly></div>
+      <div class="grid2">
+        <div class="frow"><label>Worked out as</label><input type="text" id="adj-was" readonly></div>
+        <div class="frow"><label>Pay instead (RM) *</label>
+          <input type="number" min="0" step="0.01" id="adj-amount" placeholder="0.00"></div>
+      </div>
+      <div class="frow"><label>Reason *</label>
+        <input type="text" id="adj-reason" placeholder="Why this figure and not the one above"></div>
+      <div class="frow" id="adj-meta" style="color:var(--text-faint);font-size:.8rem;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-danger" id="adj-clear" onclick="clearAdjust()">Put back</button>
+      <button class="btn" onclick="closeModal('adjust-modal')">Cancel</button>
+      <button class="btn btn-primary" id="adj-save" onclick="saveAdjust()">Save</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="entry-modal">
   <div class="modal">
     <div class="modal-top"><div class="modal-title" id="entry-modal-title">Add Entry</div>
@@ -253,7 +297,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=17"></script>
+<script src="npayroll_script.js?v=27"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

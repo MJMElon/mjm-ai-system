@@ -6,20 +6,17 @@
 /* ════════════════════════════
    CONSTANTS
 ════════════════════════════ */
-const NURSERY_PLOTS = {
-  PN:   ['P01','P02','P03','P04','P05','P06','P07','P08','P09','P10',
-         'P11','P12','P13','P14','P15','P16','P17','P18','P19','P20',
-         'P21','P22','P23','P24','P25','P26','P27','P28','P29','P30',
-         'P31','P32','P33','P34','P35','P36','P37','P38','P39','P40',
-         'P41','P42','P43','P44','P45','P46','P47','P48','P49','P50',
-         'P51','P52'],
-  BNN:  ['B1','B2','B3','B4','B5','B6','B7',
-         'B8','B9','B10','B11','B12','B13','B14'],
-  UNN1: ['U1','U2','U3','U4','U5','U6','U7','U8','U9',
-         'U10','U11','U12','U13','U14','U15','U16','U17','U18'],
-  UNN2: ['N1','N2','N3','N4','N5','N6','N7','N8','N9','N10',
-         'N11','N12','N13','N14','N15','N16','N17','N18','N19','N20']
-};
+/* The plots each nursery is drawn with. The list itself lives in
+   shared/shared_maint_plots.js, because the salary claim in the payroll
+   module has to put a work record back under the nursery it came from and
+   was keeping its own copy — which had drifted, with UNN 2 as V1-V40 against
+   this page's N1-N20, so every UNN 2 record matched no nursery and its
+   capacity was dropped on the floor. One list, read by both.
+
+   A COPY, not the shared arrays: _mergeCustomPlots() below pushes hand-added
+   plots onto these, and mutating the shared ones would reach into the other
+   page's list. */
+const NURSERY_PLOTS = MJMMaintPlots.base();
 const NURSERY_LABELS = {
   PN:   'PN — Pre Nursery',
   BNN:  'BNN — Batu Niah Nursery',
@@ -630,7 +627,17 @@ const PAYROLL_TYPES = {
 };
 let _payrollView = 'pd';
 let payrollData  = {};   // `${nursery}_${month}_${type}` → { recId: { worker: qty } }
-let _payrollSaveTimer = null;
+/* ONE TIMER PER SHEET, not one for the page.
+   A single timer meant every call to persistPayroll cancelled the one before
+   it, and applyFieldRecords ends by saving every sheet the field touched:
+       touched.forEach(type => persistPayroll(nursery, month, type));
+   Four calls in a row, three of them cancelled, so only the LAST work type
+   the sync happened to touch was ever written. The other three were ticked on
+   this screen, re-ticked from the field records on every load — so this page
+   always looked right — and never reached the database, which is where the
+   salary claim reads them from. That is why P & D and Weeding priced at
+   RM 0.00 in the payroll module while Manuring and Interrow paid. */
+let _payrollSaveTimers = {};   // `${nursery}_${month}_${type}` → timer
 /* `${nursery}_${month}` → names the field credited that matched no column on
    that sheet. Filled by applyFieldRecords, shown by renderPayroll. Not saved:
    it is a fact about the last sync, not about the month. */
@@ -659,12 +666,30 @@ function payrollRowsFor(type) {
 }
 function payrollRows() { return payrollRowsFor(_payrollView); }
 
+/* Capacity, as a figure somebody can check.
+   A plot's quantity divided among the people who worked it rarely comes out
+   whole — 2,200 across three is 733.33 — and rounding it to 733 on screen
+   made three workers' shares add up to 2,199 against a plot of 2,200. The
+   missing one had nowhere to be and nothing to blame it on.
+   Whole numbers still print whole; only a share that HAS a fraction shows
+   it, to two places. Same rule in npayroll_script.js, which prices this —
+   change one, change the other. */
+function capFmt(v) {
+  const n = Number(v || 0);
+  if (!n) return '—';
+  const r = Math.round(n * 100) / 100;
+  return Number.isInteger(r)
+    ? r.toLocaleString()
+    : r.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 /* Capacity each worker earned on one work type: every ticked row hands its
    plot capacity out equally among the workers ticked on it. Same arithmetic
    the on-screen table uses, pulled out so the PDF can run it for all four
    work types at once. */
 function payrollTotalsFor(type) {
   const n = getNursery(), m = getMonth();
+  resolveWorkers();                      // the month decides who has a column
   const wk = workers[n] || [];
   const store = payrollData[payrollKey(n, m, type)] || {};
   const perWorker = {}; wk.forEach(w => perWorker[w] = 0);
@@ -684,6 +709,7 @@ function payrollTotalsFor(type) {
 function renderPayroll() {
   const tbl = document.getElementById('payroll-table');
   if (!tbl) return;
+  resolveWorkers();                      // the month decides who has a column
   const n = getNursery(), m = getMonth();
   const cfg = PAYROLL_TYPES[_payrollView];
   const line = document.getElementById('payroll-form-line');
@@ -726,9 +752,11 @@ function renderPayroll() {
     const nofit = (_fieldUnmatched[`${n}_${m}`] || []).filter((x) => !known.has(x));
     const lines = [];
     const unpaired = _fieldUnpaired[`${n}_${m}`] || [];
-    if (gone.length)  lines.push(`${t('pay.offRegister')} ${gone.join(', ')}`);
-    if (nofit.length) lines.push(`${t('pay.fieldNoColumn')} ${nofit.join(', ')}`);
+    if (gone.length)  lines.push(`${t('pay.offRegister')} ${gone.map(x => _nameWithReason(n, x)).join('; ')}`);
+    if (nofit.length) lines.push(`${t('pay.fieldNoColumn')} ${nofit.map(x => _nameWithReason(n, x)).join('; ')}`);
     if (unpaired.length) lines.push(`${t('pay.unpaired')} ${unpaired.join(', ')}`);
+    const saveErr = _payrollSaveErr[payrollKey(n, m, _payrollView)];
+    if (saveErr) lines.push(`${t('pay.saveFailed')} ${saveErr}`);
     off.style.display = lines.length ? 'block' : 'none';
     off.textContent = lines.join('\n');
     off.style.whiteSpace = 'pre-line';
@@ -775,7 +803,7 @@ function renderPayroll() {
         <td class="plot-td">${r.plot}</td>
         <td>${cap ? cap.toLocaleString() : '—'}</td>
         ${wk.map(w => `<td class="check-td${cells[w] ? ' ticked' : ''}" onclick="togglePayrollTick(${r.id},'${String(w).replace(/'/g, "\\'")}')" title="${w}"></td>`).join('')}
-        <td style="font-weight:700;">${share ? Math.round(share).toLocaleString() : '—'}</td>
+        <td style="font-weight:700;">${capFmt(share)}</td>
       </tr>`;
     });
   }
@@ -789,8 +817,8 @@ function renderPayroll() {
     <tr class="jumlah-tr">
       <td class="th-left">${t('pay.totalCap')}</td><td></td>
       <td>${capTotal ? capTotal.toLocaleString() : '—'}</td>
-      ${wk.map(w => `<td>${Math.round(totals[w]).toLocaleString()}</td>`).join('')}
-      <td>${Math.round(grand).toLocaleString()}</td></tr>
+      ${wk.map(w => `<td>${capFmt(totals[w])}</td>`).join('')}
+      <td>${capFmt(grand)}</td></tr>
   </tfoot>`;
   tbl.innerHTML = h;
 }
@@ -809,15 +837,26 @@ function togglePayrollTick(recId, worker) {
 
 function persistPayroll(n, m, type) {
   if (!_supabase || !_dbReady) return;
-  clearTimeout(_payrollSaveTimer);
-  _payrollSaveTimer = setTimeout(() => {
+  const k = payrollKey(n, m, type);
+  clearTimeout(_payrollSaveTimers[k]);
+  _payrollSaveTimers[k] = setTimeout(() => {
+    delete _payrollSaveTimers[k];
     _supabase.from('nops_maint_payroll')
       .upsert({ nursery: n, month: m, work_type: type,
-                data: payrollData[payrollKey(n, m, type)] || {},
+                data: payrollData[k] || {},
                 updated_at: new Date().toISOString() }, { onConflict: 'nursery,month,work_type' })
-      .then(({ error }) => { if (error) console.warn('[maint] payroll save failed:', error.message); });
+      .then(({ error }) => {
+        if (!error) { delete _payrollSaveErr[k]; return; }
+        /* A tick that did not save is a worker who does not get paid, and a
+           console warning is not where anybody would look for that. */
+        console.warn('[maint] payroll save failed:', error.message);
+        _payrollSaveErr[k] = error.message;
+        try { renderPayroll(); } catch (_) {}
+      });
   }, 400);
 }
+/* Sheets whose last save was refused, so the screen can say so. */
+let _payrollSaveErr = {};
 
 /* Print a piece rate at its real precision. Forcing 2 decimals showed a rate
    of 0.015 as "0.01" while the money column was still worked out from 0.015,
@@ -1045,7 +1084,7 @@ function downloadPayrollPDF() {
             cell(xs[3 + i], y, widths[3 + i], ROW_H, '', { fill: z });
             if (cells[w]) drawTick(xs[3 + i], y, widths[3 + i], ROW_H);
           });
-          cell(xs[iPer], y, widths[iPer], ROW_H, share ? Math.round(share).toLocaleString() : '—',
+          cell(xs[iPer], y, widths[iPer], ROW_H, capFmt(share),
                { size: 8.5, bold: true, nowrap: true, fill: z });
           y += ROW_H;
         });
@@ -1056,8 +1095,8 @@ function downloadPayrollPDF() {
       cell(xs[0], y, widths[0] + widths[1], ROW_H + 1, t('pay.totalCap'), { bold: true, size: 8.5, fill: TOTAL_FILL });
       cell(xs[2], y, widths[2], ROW_H + 1, capTotal ? capTotal.toLocaleString() : '—', { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
       chunk.forEach((w, i) => cell(xs[3 + i], y, widths[3 + i], ROW_H + 1,
-        totals[w] ? Math.round(totals[w]).toLocaleString() : '—', { bold: true, size: 8, nowrap: true, fill: TOTAL_FILL }));
-      cell(xs[iPer], y, widths[iPer], ROW_H + 1, grand ? Math.round(grand).toLocaleString() : '—',
+        capFmt(totals[w]), { bold: true, size: 8, nowrap: true, fill: TOTAL_FILL }));
+      cell(xs[iPer], y, widths[iPer], ROW_H + 1, capFmt(grand),
            { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
       y += ROW_H + 1;
 
@@ -1249,7 +1288,12 @@ async function unlockPieceRates() {
    nursery not yet on the register still has its sheet. */
 const MAINT_NURSERIES = ['PN', 'BNN', 'UNN1', 'UNN2'];
 let workers        = { PN: [], BNN: [], UNN1: [], UNN2: [] };  // resolved, what the page uses
-let _linkedWorkers = {};                                       // from mjmnpayroll_workers
+let _linkedRows    = {};                                       // register rows from mjmnpayroll_workers
+/* The whole register as read, so a name with no column here can be looked up
+   and the REASON given. Saying "check the spelling, or that they are a general
+   worker" makes somebody go and check both; the register already knows which
+   it is. */
+let _registerRows  = [];
 let _localWorkers  = { PN: [], BNN: [], UNN1: [], UNN2: [] };  // from nops_maint_workers
 let _linkErr       = null;
 let _linkAt        = 0;
@@ -1315,17 +1359,58 @@ function _registerNurseryKey(r) {
   return key(r && r.section) || key(r && r.nursery);
 }
 
+/* Register ROWS per nursery, not names — whether somebody belongs on the
+   sheet for the month being looked at depends on when they left, and only the
+   row knows that. See workersForMonth() below. */
 function generalWorkersByNursery(rows) {
   const by = {};
   MAINT_NURSERIES.forEach(n => {
     const mine = (rows || []).filter(r => _registerNurseryKey(r) === n);
     const named = mine.some(r => r.active !== false && MAINT_ROLE.test(roleOf(r)));
-    const names = mine.filter(r => isGeneralWorker(r, named))
-                      .map(r => String(r.full_name || '').trim())
-                      .filter(Boolean);
-    if (names.length) by[n] = [...new Set(names)].sort((a, b) => a.localeCompare(b));
+    /* Asked as if they were still here. isGeneralWorker() says no to anybody
+       Inactive, which is the right answer to "is this person on the sheets
+       today" and the wrong one to "were they on them in September". */
+    const seen = new Set();
+    const mineRows = mine.filter(r => {
+      const name = String(r.full_name || '').trim();
+      if (!name || !isGeneralWorker({ ...r, active: true }, named)) return false;
+      const k = name.toLowerCase();
+      if (seen.has(k)) return false;          // the same person keyed twice
+      seen.add(k); return true;
+    }).sort((a, b) => String(a.full_name).localeCompare(String(b.full_name)));
+    if (mineRows.length) by[n] = mineRows;
   });
   return by;
+}
+
+/* WHO WAS ON THE SHEET IN A GIVEN MONTH.
+
+   A worker who left on the 18th of September worked in September, and
+   September's Worker Record has to keep their column so the work they were
+   ticked for is still divided among the right number of people — and so the
+   salary claim pays them.
+
+     still active          every month
+     left, last day known  every month up to and including the one they left
+                           in, and none after
+     left, no last day     none — "inactive" is all the register says
+
+   The registered date is deliberately not used to take anybody off an earlier
+   month: it was backfilled from when the row was written, which for a worker
+   typed up from an older paper list is years after they started.
+
+   SHARED RULE. maintWorkerNames() in npayroll/npayroll_script.js is the same
+   rule, deciding the same thing for the salary claim that prices this sheet.
+   Change one, change the other — two rules here is the Worker Record and the
+   claim dividing one plot's quantity among different numbers of people. */
+function workersForMonth(rows, ymLabel) {
+  const ym = monthLabelToInput(ymLabel) || '';
+  const monthStart = ym ? `${ym}-01` : '';
+  return (rows || []).filter(r => {
+    if (r.active !== false) return true;
+    const last = r.last_day ? String(r.last_day).slice(0, 10) : '';
+    return !!last && (!monthStart || last >= monthStart);
+  }).map(r => String(r.full_name).trim());
 }
 
 async function loadLinkedWorkers() {
@@ -1339,24 +1424,78 @@ async function loadLinkedWorkers() {
   if (res.error) {
     // The payroll module may simply not be set up yet — keep the old list.
     _linkErr = res.error.message || String(res.error);
-    _linkedWorkers = {};
+    _linkedRows = {};
     resolveWorkers();
     return;
   }
   _linkErr = null;
   // UNE and Driver are their own sections in the register and belong to no
   // nursery sheet, so matching the nursery keeps them out on its own.
-  _linkedWorkers = generalWorkersByNursery(res.data || []);
+  _registerRows = res.data || [];
+  _linkedRows = generalWorkersByNursery(_registerRows);
   resolveWorkers();
 }
 
+/* WHY THIS NAME HAS NO COLUMN. One of five answers, off the register itself:
+
+     not on it at all         — a spelling the register does not carry
+     filed under another      — the work was done here, the worker is filed there
+     marked Inactive          — with their last day, if one was keyed
+     another role             — a Field Conductor is not general nursery work
+     no longer on this month  — they left before the month being looked at
+
+   Compared on letters and digits, the same as everywhere else this boundary
+   is crossed, so "Lalu Aenal mashuri" finds "Lalu Aenal Mashuri" and the
+   answer is about the role rather than about the typing. */
+function _whyNoColumn(nursery, name) {
+  const key = (x) => String(x == null ? '' : x).replace(/[^a-z0-9]/gi, '').toUpperCase();
+  const want = key(name);
+  const hit = _registerRows.filter(r => key(r.full_name) === want);
+  if (!hit.length) return t('pay.whyNotOnRegister');
+  const here = hit.find(r => _registerNurseryKey(r) === nursery);
+  if (!here) {
+    const where = _registerNurseryKey(hit[0]) || '—';
+    return t('pay.whyOtherNursery', { nursery: NURSERY_NAMES[where] || where });
+  }
+  if (here.active === false) {
+    const last = here.last_day ? String(here.last_day).slice(0, 10) : '';
+    return last ? t('pay.whyLeftOn', { date: last }) : t('pay.whyInactive');
+  }
+  const named = (_registerRows.filter(r => _registerNurseryKey(r) === nursery)
+    .some(r => r.active !== false && MAINT_ROLE.test(roleOf(r))));
+  if (!isGeneralWorker({ ...here, active: true }, named)) {
+    const role = roleOf(here);
+    return role ? t('pay.whyRole', { role }) : t('pay.whyNotGeneral');
+  }
+  // On the register, of this nursery, a general worker, still here — and yet
+  // no column. Nothing left to name, so say that rather than invent a cause.
+  return t('pay.whyUnknown');
+}
+
+/* "Name — why", with the register's own spelling where it has one, so a
+   spelling that differs only by punctuation is visible as the same person
+   rather than read as a second worker. */
+function _nameWithReason(nursery, name) {
+  const key = (x) => String(x == null ? '' : x).replace(/[^a-z0-9]/gi, '').toUpperCase();
+  const hit = _registerRows.find(r => key(r.full_name) === key(name));
+  const shown = (hit && String(hit.full_name).trim() !== String(name).trim())
+    ? `${name} (register: ${hit.full_name})` : name;
+  return `${shown} — ${_whyNoColumn(nursery, name)}`;
+}
+
+/* Re-run whenever the month may have moved, not only when the register is
+   re-read: which names belong on the sheet is a question about the month
+   being looked at. Cheap — a filter over one nursery's worth of rows. */
 function resolveWorkers() {
+  const m = (typeof getMonth === 'function' && document.getElementById('global-month'))
+    ? getMonth() : '';
   MAINT_NURSERIES.forEach(n => {
-    const linked = _linkedWorkers[n] || [];
-    workers[n] = linked.length ? linked.slice() : (_localWorkers[n] || []).slice();
+    const rows = _linkedRows[n] || [];
+    const linked = workersForMonth(rows, m);
+    workers[n] = rows.length ? linked : (_localWorkers[n] || []).slice();
   });
 }
-function isLinked(n) { return (_linkedWorkers[n] || []).length > 0; }
+function isLinked(n) { return (_linkedRows[n] || []).length > 0; }
 
 /* Pick up an amendment made in the payroll module while this page is open.
    Throttled — opening the Worker Record tab twice in a row should not fire
@@ -1454,10 +1593,18 @@ function persistState(n, m) {
    Every change to the schedule now writes itself, debounced so a run of ticks
    is one request. "Save Schedule" still publishes the flat task list for the
    worker app and takes the snapshot the "modified" highlight compares against. */
-let _stateSaveTimer = null;
+/* Per nursery and month, for the same reason persistPayroll keeps one timer
+   per sheet: a single timer means saving one month cancels the save of
+   another that was still pending, and switching nursery or month straight
+   after an edit is exactly when that happens. */
+let _stateSaveTimers = {};
 function persistStateSoon(n, m) {
-  clearTimeout(_stateSaveTimer);
-  _stateSaveTimer = setTimeout(() => persistState(n, m), 700);
+  const k = stateKey(n, m);
+  clearTimeout(_stateSaveTimers[k]);
+  _stateSaveTimers[k] = setTimeout(() => {
+    delete _stateSaveTimers[k];
+    persistState(n, m);
+  }, 700);
 }
 
 /* Sortable key for a "Aug 2026" month label — 202608. */
@@ -1524,12 +1671,26 @@ const I18N = {
        list looks exactly like a linked one, so it has to say which it is. */
     'pay.notLinkedNote':'These names are this module\u2019s own old list \u2014 {nursery} is NOT taking them from the Worker System. Check that its workers are filed under that nursery and counted as general workers on the 555 Worker Portal\u2019s Manage page.',
     'pay.notLinkedWhy':'The register could not be read: {why}',
-    'pay.offRegister':'⚠ Ticked this month but no longer a general worker of this nursery on the register, so their capacity is not counted:',
-    'pay.fieldNoColumn':'⚠ The field credited work to these names and they have no column here, so their share of the plot is not counted. Check the spelling against the register, or that they are a general worker of this nursery:',
+    'pay.offRegister':'⚠ Ticked this month but has no column here now, so their capacity is not counted:',
+    'pay.fieldNoColumn':'⚠ The field credited work to these names and they have no column here, so their share of the plot is not counted and the Nursery Payroll System will not pay it:',
+    /* The five answers _whyNoColumn() can give. Said INSTEAD of "check the
+       spelling, or that they are a general worker" — that sentence sent
+       somebody off to check two things the register already knows the answer
+       to, and the commonest answer is neither: a Field Conductor doing a
+       morning's spraying is not a general worker and never gets a column,
+       which is a decision, not a mistake to go and find. */
+    'pay.whyNotOnRegister':'no worker of this name on the register, so check the spelling there',
+    'pay.whyOtherNursery':'filed under {nursery} on the register, not this nursery',
+    'pay.whyInactive':'marked Inactive on the register',
+    'pay.whyLeftOn':'marked Inactive on the register, last day {date}',
+    'pay.whyRole':'is a {role} on the register, so has no column on these sheets',
+    'pay.whyNotGeneral':'not counted as a general worker of this nursery on the register',
+    'pay.whyUnknown':'on the register as a general worker of this nursery — reload the page',
+    'pay.saveFailed':'⚠ These ticks did not save, so the Nursery Payroll System cannot see them and will not pay them. Try ticking again:',
     /* The other half of the same warning: work that never reached the sheet
        at all, as against work that reached it with a name nobody could
        place. */
-    'pay.unpaired':'Verified in the field but matched no row on this month\u2019s schedule, so nothing was filled in or ticked:',
+    'pay.unpaired':'⚠ Verified in the field but matched no row on this month\u2019s schedule, so it was not ticked and is not paid. Add the row to the schedule for this month, then Sync from Schedule:',
     'pay.roundN':'Round {n}',
     'pay.noRows':'No records for this nursery and month yet — tick the schedule, then Sync from Schedule.',
     'pay.tickHint':'Tick each worker who did the job. Capacity per worker = plot capacity ÷ number of ticks on that row. Pay is worked out from this record in the Nursery Payroll System.',
@@ -1619,9 +1780,17 @@ const I18N = {
     'pay.linkedNote':'Nama pekerja diambil daripada Worker System di halaman Manage Portal 555 FC dan mengikut sebarang pindaan di sana.',
     'pay.notLinkedNote':'Nama ini adalah senarai lama modul ini \u2014 {nursery} TIDAK mengambil daripada Worker System. Pastikan pekerjanya difailkan di bawah nurseri itu dan dikira sebagai pekerja am di halaman Manage Portal 555 FC.',
     'pay.notLinkedWhy':'Daftar tidak dapat dibaca: {why}',
-    'pay.offRegister':'⚠ Ditanda bulan ini tetapi bukan lagi pekerja am nurseri ini dalam daftar, jadi kapasiti mereka tidak dikira:',
-    'pay.fieldNoColumn':'⚠ Lapangan mengkreditkan kerja kepada nama ini tetapi tiada lajur di sini, jadi bahagian mereka tidak dikira. Semak ejaan dengan daftar, atau sama ada mereka pekerja am nurseri ini:',
-    'pay.unpaired':'Disahkan di ladang tetapi tiada baris sepadan pada jadual bulan ini, jadi tiada apa diisi atau ditanda:',
+    'pay.offRegister':'⚠ Ditanda bulan ini tetapi tiada lajur di sini sekarang, jadi kapasiti mereka tidak dikira:',
+    'pay.fieldNoColumn':'⚠ Lapangan mengkreditkan kerja kepada nama ini tetapi tiada lajur di sini, jadi bahagian mereka tidak dikira dan Sistem Payroll Nurseri tidak akan membayarnya:',
+    'pay.whyNotOnRegister':'tiada pekerja dengan nama ini dalam daftar \u2014 semak ejaan di sana',
+    'pay.whyOtherNursery':'difailkan di bawah {nursery} dalam daftar, bukan nurseri ini',
+    'pay.whyInactive':'ditanda Tidak Aktif dalam daftar',
+    'pay.whyLeftOn':'ditanda Tidak Aktif dalam daftar, hari terakhir {date}',
+    'pay.whyRole':'ialah {role} dalam daftar, jadi tiada lajur pada helaian ini',
+    'pay.whyNotGeneral':'tidak dikira sebagai pekerja am nurseri ini dalam daftar',
+    'pay.whyUnknown':'ada dalam daftar sebagai pekerja am nurseri ini \u2014 muat semula halaman',
+    'pay.saveFailed':'⚠ Tanda ini tidak disimpan, jadi Sistem Payroll Nurseri tidak dapat melihatnya dan tidak akan membayarnya. Cuba tanda semula:',
+    'pay.unpaired':'⚠ Disahkan di ladang tetapi tiada baris sepadan pada jadual bulan ini, jadi ia tidak ditanda dan tidak dibayar. Tambah baris itu pada jadual bulan ini, kemudian Sync dari Jadual:',
     'pay.roundN':'Pusingan {n}',
     /* Borang tuntutan gaji (PDF) */
     'pay.no':'Bil.', 'pay.worker':'Nama Pekerja', 'pay.workersRange':'Pekerja', 'pay.ofTotal':'daripada',
@@ -2319,12 +2488,12 @@ function renderAll() {
 ══════════════════════════════════════════════════════════════ */
 let fieldRecords = [];
 
-const _FIELD_JENIS = {
-  pd:       'Penyemburan racun kulat dan serangga',
-  manuring: 'Membaja',
-  weeding:  'Merumput',
-  interrow: 'Meracun rumput secara selingan'
-};
+/* The pairing rule itself lives in shared/shared_maint_field.js now — the
+   payroll module's salary claim has to reach the same answer, and a second
+   copy of "which office row does this morning's work belong to" is two
+   screens that pay different people. What stays here is what this page does
+   with the answer: ticking, dates, batches, provenance and saving. */
+const _FIELD_JENIS = MJMMaintField.JENIS;
 
 /* Every read here carries the same filter, in every fallback: a record that
    nobody has verified is not this page's business. Putting it on the query
@@ -2634,50 +2803,17 @@ function _matchWorkerName(nursery, name) {
   return (workers[nursery] || []).find((w) => key(w) === want) || null;
 }
 
-function _recRound(racun) {
-  const m = /^\s*Round\s+(\d+)\s*:/i.exec(String(racun || ''));
-  return m ? parseInt(m[1], 10) : 0;
-}
-/* Which seven-day block of the month a date falls in — the 29th on is the 4th,
-   the same way the schedule's last round runs to the end of the month. */
-function _weekOfDate(iso) {
-  const day = parseInt(String(iso || '').slice(8, 10), 10);
-  return day ? Math.min(4, Math.ceil(day / 7)) : 0;
-}
-function _isoMonthLabel(iso) {
-  const m = /^(\d{4})-(\d{2})/.exec(String(iso || ''));
-  return m ? `${_MONTHS_SHORT[parseInt(m[2], 10) - 1]} ${m[1]}` : '';
-}
-const _fieldKey = (jenis, plot, week) => `${jenis}||${_mvPlotKey(plot)}||${week}`;
-
-/* A chemical, compared the way a person would compare it: the round label off
-   the front, then letters and digits only.
-
-     "Round 1: Manzate 50gm + Bond 15mL"  →  MANZATE50GMBOND15ML
-     "Manzate 50gm + Bond 15mL"           →  the same
-
-   The round comes off because it is the thing that disagrees — it is what the
-   office calls the job, not what the job IS. */
-function _chemKey(s) {
-  return String(s == null ? '' : s)
-    .replace(/^\s*Round\s+\d+\s*:/i, '')
-    .replace(/[^a-z0-9]/gi, '')
-    .toUpperCase();
-}
-const _fieldChemKey = (jenis, plot, chem) =>
-  `${jenis}||${_mvPlotKey(plot)}||${_chemKey(chem)}`;
-
-/* Who a field record credits the work to.
-
-   `worked_by` is the conductor keying a job for somebody whose phone was
-   broken; NULL means the person who reported it did it themselves. Both are
-   read, because a job three workers each saved from their own phone has
-   worked_by empty on all three, and crediting nobody for a morning three
-   people spent is worse than crediting the wrong person — it is silent. */
-function _fieldCredits(f) {
-  const raw = String(f.worked_by || '').trim() || String(f.reported_by || '').trim();
-  return raw.split(',').map((x) => x.trim()).filter(Boolean);
-}
+/* All of these are shared/shared_maint_field.js's, named locally so the rest
+   of this file reads as it did. The office's plot key and the shared one are
+   the same comparison — letters and digits, upper case — so the two sides
+   build the same keys. */
+const _recRound      = MJMMaintField.recRound;
+const _weekOfDate    = MJMMaintField.weekOfDate;
+const _isoMonthLabel = MJMMaintField.isoMonthLabel;
+const _fieldKey      = MJMMaintField.fieldKey;
+const _chemKey       = MJMMaintField.chemKey;
+const _fieldChemKey  = MJMMaintField.fieldChemKey;
+const _fieldCredits  = MJMMaintField.credits;
 
 /* Every field record for one (job, plot, round), summarised.
 
@@ -2705,83 +2841,34 @@ function _fieldCredits(f) {
    Which of "they split it" and "they shared it" is true is not something
    this table can tell from the outside, and quantities here are piece-rate
    money, so it keeps the answer it has always given. */
-function _summariseFieldGroup(list) {
-  const newest = list.reduce((best, f) => {
-    if (!best) return f;
-    const a = String(f.work_date || ''), b = String(best.work_date || '');
-    return (a > b || (a === b && (f.id || 0) > (best.id || 0))) ? f : best;
-  }, null);
+/* The shared summary, plus the one thing only this page wants: the GPS walks.
 
-  const uniq = (xs) => [...new Set(xs.filter(Boolean))];
-
+   One job can be three workers and three tracks, and the Track Record cell
+   offers each of them rather than picking one and calling it the answer. The
+   LINE is not here: only the summary is read for the whole month, and the
+   thousand points of a walk are fetched for the one record somebody opens.
+   See _openTrack. */
+function _fieldTracks(list) {
   return {
-    list,
-    ids:     list.map((f) => f.id),
-    dates:   uniq(list.map((f) => f.work_date)).sort(),
-    batches: uniq(list.flatMap((f) => String(f.batch_name || '').split(',').map((x) => x.trim()))),
-    workers: uniq(list.flatMap(_fieldCredits)),
-    qty:     newest ? newest.qty : null,
-    /* The records in this group that carry a walk, newest first — one job can
-       be three workers and three tracks, and the Track Record cell offers
-       each of them rather than picking one and calling it the answer. The
-       LINE is not here: only the summary is read for the whole month, and the
-       thousand points of a walk are fetched for the one record somebody
-       opens. See _openTrack. */
-    tracks:  list.filter((f) => f.gps_points > 0 || f.gps_distance_m != null)
-                 .sort((a, b) => (b.id || 0) - (a.id || 0))
-                 .map((f) => ({ id: f.id, m: f.gps_distance_m, n: f.gps_points,
-                                who: (_fieldCredits(f) || [])[0] || '' })),
+    tracks: list.filter((f) => f.gps_points > 0 || f.gps_distance_m != null)
+                .sort((a, b) => (b.id || 0) - (a.id || 0))
+                .map((f) => ({ id: f.id, m: f.gps_distance_m, n: f.gps_points,
+                               who: (_fieldCredits(f) || [])[0] || '' }))
   };
 }
+function _summariseFieldGroup(list) {
+  const g = MJMMaintField.summarise(list);
+  return Object.assign(g, _fieldTracks(list));
+}
 
-/* The field's answer for each (job, plot, round) of one month — and, beside
-   it, the same records filed by (job, plot, CHEMICAL).
- 
-   ── Why two indexes ──
- 
-   The round is the one fact the two sides get from different places. The
-   office reads it off the front of its own chemical ("Round 2: Manzate …");
-   the phone sends the week its board was showing. Those agree only when the
-   office schedules one round per week, and it often does not: a plot with a
-   single P & D round in the month is worked in week two, and the two numbers
-   part company. Verified work then paired with nothing and vanished — no
-   date, no batch, no tick, while a worker had done it and a conductor had
-   signed it off.
- 
-   So the chemical is the second way in, and it is the better fact: it is what
-   the job IS, where the round is only what the office calls it. Manzate is
-   Manzate whichever week the phone was showing.
- 
-   It cannot attach work to a job the office did not schedule, which is what
-   makes it safe to fall back on: if the office has no Manzate row for that
-   plot, nothing matches and the record stays unpaired and reported. And the
-   caller only uses it where the chemical picks out ONE office row — see the
-   ambiguity guard there. */
+/* The field's answer for each (job, plot, round) of one month, and beside it
+   the same records filed by (job, plot, CHEMICAL). Why two indexes, and why
+   the chemical is the better fact, is written out in shared_maint_field.js —
+   the payroll module's salary claim builds the very same index from the very
+   same records, which is what lets it price field work whether or not anybody
+   has opened this screen for that month. */
 function fieldRecordIndex(monthLbl) {
-  const groups = {};
-  const byChem = {};
-  fieldRecords.forEach(f => {
-    const jenis = f.jenis || _FIELD_JENIS[f.work_type];
-    if (!jenis) return;
-    if ((f.schedule_month || _isoMonthLabel(f.work_date)) !== monthLbl) return;
-    const week = f.week_no || _weekOfDate(f.work_date);
-    if (!week) return;
-    const k = _fieldKey(jenis, f.plot_name, week);
-    (groups[k] || (groups[k] = [])).push(f);
-    /* Only where the phone actually recorded one. A record with no chemical
-       has nothing to be matched on and keeps the round as its only route. */
-    const ck = _chemKey(f.chemical);
-    if (ck) {
-      const c = _fieldChemKey(jenis, f.plot_name, f.chemical);
-      (byChem[c] || (byChem[c] = [])).push(f);
-    }
-  });
-  const idx = {};
-  Object.keys(groups).forEach((k) => { idx[k] = _summariseFieldGroup(groups[k]); });
-  const chem = {};
-  Object.keys(byChem).forEach((k) => { chem[k] = _summariseFieldGroup(byChem[k]); });
-  idx.__byChem = chem;
-  return idx;
+  return MJMMaintField.index(fieldRecords, monthLbl, _fieldTracks);
 }
 
 function applyFieldRecords(nursery, monthLbl) {
@@ -5303,7 +5390,12 @@ async function initDb() {
       console.warn('[maint] worker register could not be read:', _linkErr);
     } else {
       _linkErr = null;
-      _linkedWorkers = generalWorkersByNursery((regRes && regRes.data) || []);
+      // The raw register too, so _whyNoColumn() can answer. The boot read is
+      // a second door into the same state as loadLinkedWorkers(); leaving it
+      // out here is why the explanation read "no worker of this name" for
+      // everybody until the register happened to be re-read.
+      _registerRows = (regRes && regRes.data) || [];
+      _linkedRows = generalWorkersByNursery(_registerRows);
     }
     resolveWorkers();
     ((payRes && payRes.data) || []).forEach(r => {
