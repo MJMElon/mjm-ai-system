@@ -31,7 +31,8 @@ MJMModuleAccess.init({
         { key:'adjust', label:'Adjust what a job earned',
           desc:'Type over the money on any worker\u2019s Earned cell, with a reason. The figure the '
              + 'sheet worked out stays visible underneath, and the reason is kept with it',
-          adminOnly:true, highlight:true, chip:'Adjust Pay' }
+          adminOnly:true, highlight:true, chip:'Adjust Pay' },
+        { key:'verify', label:'Verify & lock the month', desc:'Say this sheet is checked and right. It locks straight away and only Lock Controls can re-open it', highlight:true, chip:'Verify' }
       ]},
     { key:'transpl', label:'Payroll · Transplanting', desc:'What each worker transplanted, and what it pays',
       actions:[
@@ -39,25 +40,36 @@ MJMModuleAccess.init({
         { key:'adjust', label:'Adjust what a job earned',
           desc:'Type over the money on any worker\u2019s Earned cell, with a reason. The figure the '
              + 'sheet worked out stays visible underneath, and the reason is kept with it',
-          adminOnly:true, highlight:true, chip:'Adjust Pay' }
+          adminOnly:true, highlight:true, chip:'Adjust Pay' },
+        { key:'verify', label:'Verify & lock the month', desc:'Say this sheet is checked and right. It locks straight away and only Lock Controls can re-open it', highlight:true, chip:'Verify' }
       ]},
     { key:'seedling', label:'Payroll · Seedlings Collection', desc:'What each worker collected, and what it pays',
       actions:[
-        { key:'manage', label:'Add, edit & delete entries', desc:'Key in collection work against a worker' }
+        { key:'manage', label:'Add, edit & delete entries', desc:'Key in collection work against a worker' },
+        { key:'verify', label:'Verify & lock the month', desc:'Say this sheet is checked and right. It locks straight away and only Lock Controls can re-open it', highlight:true, chip:'Verify' }
       ]},
     { key:'other', label:'Payroll · Others', desc:'Piece work that is none of the three sheets above',
       actions:[
-        { key:'manage', label:'Add, edit & delete entries', desc:'Key in other piece work against a worker' }
+        { key:'manage', label:'Add, edit & delete entries', desc:'Key in other piece work against a worker' },
+        { key:'verify', label:'Verify & lock the month', desc:'Say this sheet is checked and right. It locks straight away and only Lock Controls can re-open it', highlight:true, chip:'Verify' }
       ]},
     { key:'monthly', label:'Payroll · Monthly Payroll', desc:'Everything a worker earned this month, from all sheets',
       actions:[
-        { key:'export', label:'Download the monthly payroll', desc:'Produce the month’s payroll PDF' }
+        { key:'export', label:'Download the monthly payroll', desc:'Produce the month’s payroll PDF' },
+        { key:'verify', label:'Verify & lock the month', desc:'Say this sheet is checked and right. It locks straight away and only Lock Controls can re-open it', highlight:true, chip:'Verify' }
       ]},
     { key:'workers', label:'Worker System', desc:'The worker register — the one the tick sheets read',
       actions:[
         { key:'manage', label:'Add & edit workers',   desc:'Add somebody, change their role, section or status' },
         { key:'remove', label:'Remove workers',       desc:'Delete a worker permanently, taking their pay entries with them',
           adminOnly:true, highlight:true, chip:'Remove Workers' }
+      ]},
+    /* The one screen that can re-open a month somebody has verified and been
+       paid against, so it is its own page rather than an action on another. */
+    { key:'locks', label:'System Setting · Lock Controls', desc:'The month lock calendar — when payroll months close, and re-opening one',
+      actions:[
+        { key:'manage', label:'Lock & unlock months', desc:'Force a month open or shut, and set the day months lock on. Re-opening a month takes back every verification on it',
+          adminOnly:true, highlight:true, chip:'Lock Controls' }
       ]},
     { key:'rates', label:'Piece Rate', desc:'What each job pays per unit — MN, PN and Machinery',
       actions:[

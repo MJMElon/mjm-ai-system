@@ -334,7 +334,18 @@
             <option value="main">Main Nursery</option>
           </select>
         </div>
-        <div class="f-los hidden w-40">
+        <!-- Status and Supplier are shared with Life of Plot too (see
+             .f-los-shared in syncFilterVisibility()) — a plot's own
+             "Active" reads as "still has something standing" rather than
+             a batch's own life having ended, but the question ("only the
+             ones still going, or only the finished ones") is the same
+             one. Nursery Type / As At Month·Year / Age stay Life of
+             Seedling-only (.f-los): Life of Plot only ever lists Main
+             Nursery plots to begin with, it already has its own As At
+             (the shared single-day picker below), and there is no one
+             coherent "age" for a plot that has carried several batches of
+             different ages over its life. -->
+        <div class="f-los-shared hidden w-40">
           <label class="label-style !mb-1">Status</label>
           <select id="f-los-status" class="input-style">
             <option value="">Active &amp; completed</option>
@@ -413,7 +424,7 @@
             <option value="">All breeds</option>
           </select>
         </div>
-        <div class="f-los hidden w-56">
+        <div class="f-los-shared hidden w-56">
           <label class="label-style !mb-1">Supplier</label>
           <select id="f-los-supplier" class="input-style">
             <option value="">All suppliers</option>
@@ -1489,6 +1500,23 @@ async function runLifeOfPlot() {
   });
   const breedFilter = (document.getElementById('f-breed') || {}).value || '';
 
+  // ── Which supplier each batch's seeds came from — same Seeds_Received
+  //    remark convention Life of Seedling parses (_RE_LOS_SUPPLIER),
+  //    reused here rather than re-derived, so the two never drift apart on
+  //    what counts as "the supplier". Also drives the Supplier filter
+  //    below, and syncs the shared #f-los-supplier dropdown's own options
+  //    to whatever suppliers are actually in THIS run's data. ──
+  const batchSupplier = {};
+  (logsRes.data || []).forEach(l => {
+    if (l.transaction_type !== 'Seeds_Received' || !l.batch_name) return;
+    const bk = _mvBatchKey(l.batch_name);
+    if (!bk || batchSupplier[bk]) return;
+    const sup = (l.remark || '').match(_RE_LOS_SUPPLIER);
+    if (sup && sup[1].trim()) batchSupplier[bk] = sup[1].trim();
+  });
+  _losSyncSupplierOptions([...new Set(Object.values(batchSupplier))].sort());
+  const supplierFilter = (document.getElementById('f-los-supplier') || {}).value || '';
+
   // ── One row per plot; inside it, the same figures divided per batch
   //    (r.byBatch) plus the raw event list — both feed the unfold row. ──
   const rows = new Map();   // plot key → row
@@ -1505,10 +1533,12 @@ async function runLifeOfPlot() {
     if (!plotName || !qty) return;
     // As At cut-off: the plot's life up to that day, everything if unset.
     if (date && new Date(date).getTime() >= toMs) return;
-    // Breed filter: only that breed's batches count — the plot's figures
-    // become that breed's share of the plot, and a plot with none of that
-    // breed drops off the list entirely (it renders only rows with events).
+    // Breed / Supplier filters: only that breed's or supplier's batches
+    // count — the plot's figures become that batch attribute's share of
+    // the plot, and a plot with none of it drops off the list entirely
+    // (it renders only rows with events).
     if (breedFilter && batchBreed[_mvBatchKey(batch)] !== breedFilter) return;
+    if (supplierFilter && batchSupplier[_mvBatchKey(batch)] !== supplierFilter) return;
     const r = rowOf(plotName);
     r[col] = (r[col] || 0) + qty;
     if (batch && batch !== '—') r.batches.add(batch);
@@ -1599,7 +1629,14 @@ async function runLifeOfPlot() {
 
   // ── Rows out, grouped by location in the nursery's own order ──
   const cmp = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
-  const list = [...rows.values()].filter(r => r.events.length);
+  let list = [...rows.values()].filter(r => r.events.length);
+  // Status filter, reread here as "does this plot currently have anything
+  // standing" — Active = standing > 0, Completed = 0 or less (everything
+  // that ever passed through it has since moved out, been culled, or sold).
+  const statusFilter = (document.getElementById('f-los-status') || {}).value || '';
+  if (statusFilter) {
+    list = list.filter(r => statusFilter === 'active' ? netOfRow('main', r) > 0 : netOfRow('main', r) <= 0);
+  }
   const locIdx = (loc) => {
     const i = NURSERY_ORDER.findIndex(x => _mvPlotKey(x) === _mvPlotKey(loc));
     return i === -1 ? NURSERY_ORDER.length : i;
@@ -1705,7 +1742,9 @@ async function runLifeOfPlot() {
   const scopeBits = [];
   scopeBits.push(toStr ? 'as at ' + fmtDate(toStr) : 'all dates');
   if (selectedLocs.size) scopeBits.push([...selectedLocs].join(', '));
+  if (statusFilter) scopeBits.push(statusFilter === 'active' ? 'active only' : 'completed only');
   if (breedFilter) scopeBits.push(breedFilter);
+  if (supplierFilter) scopeBits.push(supplierFilter);
 
   loading.classList.add('hidden');
   out.classList.remove('hidden');
@@ -1944,12 +1983,14 @@ function syncFilterVisibility() {
   // from 1st Culling/All Stages doesn't silently keep filtering through a
   // chip nobody can see) whenever one of them is picked.
   _cullingSyncPreNurseryChip(isCulling);
-  /* Life of Seedling's own five: nursery type, active/completed, As At as a
-     month and a year, age (breed is shared, above). Its As At is its own
-     pair of pickers, not the shared day picker — see the markup — so
-     .f-range is off for it. Seed In Report reads the shared day picker
-     and Locations instead (both handled above), not this set. */
+  /* Life of Seedling's own four: nursery type, As At as a month and a
+     year, age (breed and status are shared — see .f-los-shared and the
+     markup's own comment). Its As At is its own pair of pickers, not the
+     shared day picker, so .f-range is off for it. Seed In Report reads
+     the shared day picker and Locations instead (both handled above), not
+     this set. */
   document.querySelectorAll('.f-los').forEach(el           => el.classList.toggle('hidden', !isLife));
+  document.querySelectorAll('.f-los-shared').forEach(el    => el.classList.toggle('hidden', !(isLife || isLifePlot)));
   document.querySelectorAll('.f-sales-mode').forEach(el    => el.classList.toggle('hidden', !isSales));
   document.querySelectorAll('.f-sales-years').forEach(el   => el.classList.toggle('hidden', !isSalesChart));
 }

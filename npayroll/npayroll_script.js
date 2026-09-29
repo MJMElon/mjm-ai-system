@@ -326,7 +326,11 @@ function applyPageAccess() {
   document.querySelectorAll('.subtab[data-sub]').forEach(b => {
     if (!may(b.dataset.sub)) b.style.display = 'none';
   });
-  const tabPages = { workers: 'workers', rates: 'rates' };
+  // System Setting is hidden rather than shown disabled: it is one screen with
+  // one job, and an empty one would only invite the question.
+  const lk = $('tab-btn-locks');
+  if (lk) lk.classList.toggle('hidden', !may('locks'));
+  const tabPages = { workers: 'workers', rates: 'rates', locks: 'locks' };
   Object.entries(tabPages).forEach(([tab, page]) => {
     if (!may(page)) {
       const b = document.querySelector(`.tab[data-tab="${tab}"]`);
@@ -349,6 +353,7 @@ function switchTab(name) {
   try { localStorage.setItem('npayroll_tab', name); } catch (_) {}
   if (name === 'rates')   renderRates();
   if (name === 'payroll') refreshPayrollTab();
+  if (name === 'locks')   renderLockCalendar();
 }
 function switchSub(name) {
   document.querySelectorAll('.subtab').forEach(b => b.classList.toggle('active', b.dataset.sub === name));
@@ -363,6 +368,11 @@ function activeSub() {
 }
 function refreshPayrollTab() {
   const s = activeSub();
+  /* Every strip, not only the visible one. They are cheap, the month picker
+     changes all five at once, and a stale strip on the sub-tab somebody
+     switches to is exactly the thing that invites them to start keying into
+     a month that is shut. */
+  try { Object.keys(LOCK_SHEETS).forEach(renderVerifyBar); } catch (_) {}
   if (s === 'maint')    renderMaint();
   if (s === 'transpl')  renderEntries('transplanting');
   if (s === 'seedling') renderEntries('seedlings');
@@ -601,7 +611,11 @@ function adjOf(sheet, section, name, code) {
 function earnedCell(sheet, page, section, name, code, jobLabel, worked) {
   const a = adjOf(sheet, section, name, code);
   const shown = a ? Number(a.amount || 0) : worked;
-  const open  = mayAdjust(page)
+  /* A closed month offers no pencil. The click refuses anyway, but a cell
+     that invites an edit it will not take is worse than one that does not
+     invite it. */
+  const canEdit = mayAdjust(page) && !sheetLocked(page);
+  const open  = canEdit
     ? ` onclick="openAdjust('${sheet}','${page}','${_esc1(section)}','${_esc1(name)}','${_esc1(code)}','${_esc1(jobLabel)}',${worked})"`
       + ' style="cursor:pointer;" title="Adjust what this job earned"'
     : '';
@@ -610,7 +624,7 @@ function earnedCell(sheet, page, section, name, code, jobLabel, worked) {
        + (a ? `<div style="font-size:.7rem;font-weight:600;color:var(--danger,#c0392b);white-space:nowrap;"
                 title="${esc(a.reason || '')}${a.adjusted_by ? ' — ' + esc(a.adjusted_by) : ''}"
                 >adjusted · was ${money(worked)}</div>` : '')
-       + (mayAdjust(page) && !a ? '<span style="color:var(--text-faint);font-size:.7rem;"> \u270e</span>' : '')
+       + (canEdit && !a ? '<span style="color:var(--text-faint);font-size:.7rem;"> \u270e</span>' : '')
        + '</td>';
 }
 /* A value going into a JS string inside an HTML attribute crosses TWO
@@ -640,6 +654,9 @@ function openAdjust(sheet, page, section, name, code, jobLabel, worked) {
         + 'Ask an admin to grant Adjust Pay in User Access.');
     return;
   }
+  /* An adjustment is money on a sheet, so a closed month refuses it the same
+     way it refuses a keyed entry. */
+  if (!lockAllows(page)) return;
   const a = adjOf(sheet, section, name, code);
   _adj = { sheet, page, section, name, code, worked: Number(worked || 0) };
   $('adj-title').textContent  = a ? 'Change this adjustment' : 'Adjust Earned';
@@ -657,6 +674,8 @@ function openAdjust(sheet, page, section, name, code, jobLabel, worked) {
 
 async function saveAdjust() {
   if (!_adj) return;
+  // Again at the save: a month can close while the form is open.
+  if (!lockAllows(_adj.page)) return;
   const amt = parseFloat($('adj-amount').value);
   if (!isFinite(amt) || amt < 0) { alert('Enter what this job should pay, in RM.'); return; }
   const reason = $('adj-reason').value.trim();
@@ -682,6 +701,7 @@ async function saveAdjust() {
 
 async function clearAdjust() {
   if (!_adj) return;
+  if (!lockAllows(_adj.page)) return;
   if (!confirm('Put this back to what the sheet worked out?')) return;
   const { error } = await _supabase.from('mjmnpayroll_earn_adjustments')
     .delete()
@@ -1046,6 +1066,13 @@ function renderTransplantClaim() {
 
 function renderEntries(category) {
   const cfg = SHEET[category];
+  const sheet = { transplanting: 'transpl', seedlings: 'seedling', other: 'other' }[category];
+  // The section picker changes which scope is being asked about, and this is
+  // where a change to it lands.
+  try { renderVerifyBar(sheet); } catch (_) {}
+  const locked = sheetLocked(sheet);
+  const addBtn = document.querySelector(`#sub-${sheet} .bar-actions .btn-primary`);
+  if (addBtn) { addBtn.disabled = locked; addBtn.title = locked ? 'This month is closed.' : ''; }
   const secFilter = $(cfg.section).value || '';
   const list = entries
     .filter(e => e.category === category)
@@ -1074,8 +1101,9 @@ function renderEntries(category) {
       <td>${rateTxt(e.rate)}</td>
       <td class="money">${money(e.amount)}</td>
       <td class="r" style="white-space:nowrap;">
+        ${locked ? '<span style="color:var(--text-faint);font-size:11px;font-weight:800;">🔒 Closed</span>' : `
         <button class="btn btn-sm" onclick="openEntry('${category}',${e.id})">Edit</button>
-        <button class="btn btn-sm btn-danger" onclick="removeEntry(${e.id})">Del</button>
+        <button class="btn btn-sm btn-danger" onclick="removeEntry(${e.id})">Del</button>`}
       </td>
     </tr>`).join('')
     : `<tr><td colspan="9" class="empty">Nothing keyed for ${monthLabel(monthValue())} yet.</td></tr>`;
@@ -1107,6 +1135,9 @@ function openEntry(category, id) {
             || 'seedling';
   if (!mayDo(page, 'manage',
       'You do not have permission to key in this work. Ask an admin to grant it in User Access.')) return;
+  /* A closed month refuses here as well as hiding its buttons: the buttons are
+     what somebody sees, this is what actually stops the write. */
+  if (!lockAllows(page)) return;
   if (!_tablesOk) { alert('Set the database up first — see the notice at the top.'); return; }
   const e = id ? entries.find(x => x.id === id) : null;
   editEntryId = e ? e.id : null;
@@ -1149,6 +1180,11 @@ function onEntryQtyChange() {
 }
 
 async function saveEntry() {
+  /* Asked again at the save, not only when the form opened: a month can close
+     while somebody has the form up, and the last word has to be here. */
+  const page = { transplanting: 'transpl', seedlings: 'seedling', other: 'other' }[entryCategory]
+            || 'seedling';
+  if (!lockAllows(page)) return;
   const workerId = $('ef-worker').value;
   const r = currentEntryRate();
   if (!workerId) { alert('Pick a worker. Add one under Worker System if the section is empty.'); return; }
@@ -1186,6 +1222,10 @@ async function saveEntry() {
 }
 
 async function removeEntry(id) {
+  const e = entries.find(x => x.id === id);
+  const page = { transplanting: 'transpl', seedlings: 'seedling', other: 'other' }[e && e.category]
+            || 'seedling';
+  if (!lockAllows(page)) return;
   if (!confirm('Delete this entry?')) return;
   const { error } = await _supabase.from('mjmnpayroll_work_entries').delete().eq('id', id);
   if (error) { alert('Could not delete: ' + error.message); return; }
@@ -1363,6 +1403,8 @@ function renderMaint() {
 
   // The two things a claim form has to say about itself, and no preamble.
   $('maint-sub').textContent = `${NURSERY_FULL[n] || n} · ${monthTxt}`;
+  // The nursery picker changes which claim is being asked about.
+  try { renderVerifyBar('maint'); } catch (_) {}
 
   if (!wk.length) {
     $('maint-table').innerHTML = `<tbody><tr><td class="empty">
@@ -1500,6 +1542,259 @@ function renderMaint() {
   $('maint-note').textContent = notes.join(' ');
 }
 
+/* ════════════ WHEN A PAYROLL MONTH STOPS BEING EDITABLE ════════════
+
+   Two ways, and they answer different questions.
+
+   VERIFICATION is per sheet. Somebody with the Verify tick on that sheet says
+   "this one is checked and right", and it locks the moment they do, with
+   their name and the time against it. It is the normal way a month closes:
+   sheet by sheet, by the person who checked it.
+
+   THE MONTH LOCK is the whole module at once, on the calendar under System
+   Setting. It auto-locks on the Nth of the following month and can be forced
+   either way by somebody with Lock Controls — the backstop, and the only
+   thing that can re-open a month whose sheets have been verified.
+
+   The rules themselves are in shared/shared_npayroll_lock.js. What is here is
+   what the screens do with them: which sheet a tab is, whose permission is
+   asked, and how a shut sheet says so.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* A payroll sub-tab, and the thing it is showing. Work Maintenance is
+   verified one NURSERY at a time — a claim checked for BNN says nothing about
+   UNN 1 — and the three keyed sheets one SECTION at a time, which is the
+   picker each of them already carries. Monthly Payroll has a section picker
+   too, but it is a roll-up of the other sheets rather than a sheet of its
+   own, so it is verified whole. */
+const LOCK_SHEETS = {
+  maint:    { label: 'Work Maintenance',     scope: () => $('maint-nursery').value || '' },
+  transpl:  { label: 'Transplanting',        scope: () => $('transpl-section').value || '' },
+  seedling: { label: 'Seedlings Collection', scope: () => $('seedling-section').value || '' },
+  other:    { label: 'Others',               scope: () => $('other-section').value || '' },
+  monthly:  { label: 'Monthly Payroll',      scope: () => '' }
+};
+const lockScope = (sheet) => (LOCK_SHEETS[sheet] ? LOCK_SHEETS[sheet].scope() : '');
+/* What the picker is currently showing, in words. Left on "All sections" it
+   is every section of that sheet — which is what verifying then closes, so
+   the strip has to say so rather than name nothing. */
+function scopeLabel(sheet, scope) {
+  if (scope) return NURSERY_FULL[scope] || scope;
+  if (sheet === 'monthly') return 'the whole month';
+  if (sheet === 'maint')   return 'every nursery';
+  return 'all sections';
+}
+
+/* Is the sheet on screen shut, and why. Everything that writes asks this. */
+function sheetLocked(sheet) {
+  if (typeof MJMPayrollLock === 'undefined') return false;
+  return MJMPayrollLock.isSheetLocked(monthValue(), sheet, lockScope(sheet));
+}
+function sheetLockReason(sheet) {
+  if (typeof MJMPayrollLock === 'undefined') return null;
+  return MJMPayrollLock.lockReason(monthValue(), sheet, lockScope(sheet));
+}
+
+/* Refuse a write, saying which of the two is holding it — a message that only
+   says "locked" leaves somebody hunting for a switch that may not be the one
+   in their way. */
+function lockAllows(sheet) {
+  const why = sheetLockReason(sheet);
+  if (!why) return true;
+  const m = monthLabel(monthValue());
+  alert(why.kind === 'month'
+    ? `${m} is locked, so nothing on any payroll sheet for that month can be changed.\n\n`
+      + 'Somebody with Lock Controls can re-open it under System Setting.'
+    : `${LOCK_SHEETS[sheet].label} for ${scopeLabel(sheet, lockScope(sheet))} was verified by `
+      + `${why.by || 'somebody'} on ${fmtStamp(why.at)}, so it is closed.\n\n`
+      + 'Re-opening the month under System Setting takes that verification back.');
+  return false;
+}
+
+function fmtStamp(t) {
+  if (!t) return '—';
+  const d = new Date(t);
+  if (isNaN(d)) return String(t).slice(0, 10);
+  return d.toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' })
+       + ', ' + d.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });
+}
+
+/* ── The strip above each sheet ──────────────────────────────────────────
+   Drawn on every render, because the month picker and the nursery/section
+   picker both change what it is answering about. */
+function renderVerifyBar(sheet) {
+  const el = $('vb-' + sheet);
+  if (!el) return;
+  if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) { el.className = 'verify-bar'; el.innerHTML = ''; return; }
+  const ym    = monthValue();
+  const scope = lockScope(sheet);
+  const why   = sheetLockReason(sheet);
+  const mayVerify = may(sheet, 'verify');
+  const what  = `${LOCK_SHEETS[sheet].label} · ${scopeLabel(sheet, scope)} · ${monthLabel(ym)}`;
+
+  if (why && why.kind === 'month') {
+    el.className = 'verify-bar verify-locked';
+    el.innerHTML = `<span>🔒 ${esc(monthLabel(ym))} is locked — every payroll sheet for this month is closed.</span>`
+                 + `<span class="vb-spacer"></span>`
+                 + `<span>Re-open it under System Setting.</span>`;
+    return;
+  }
+  if (why) {
+    el.className = 'verify-bar verify-done';
+    el.innerHTML = `<span>✔ Verified — ${esc(what)}</span>`
+                 + `<span class="vb-spacer"></span>`
+                 + `<span class="vb-who">${esc(why.by || 'somebody')}</span>`
+                 + `<span>${esc(fmtStamp(why.at))}</span>`;
+    return;
+  }
+  el.className = 'verify-bar verify-open';
+  el.innerHTML = `<span>Open — ${esc(what)}</span>`
+               + `<span class="vb-spacer"></span>`
+               + (mayVerify
+                   ? `<button class="btn btn-primary btn-sm" onclick="verifySheet('${sheet}')">✔ Verify &amp; lock</button>`
+                   : `<span>Verifying needs the Verify tick on this sheet in User Access.</span>`);
+}
+
+/* Verifying is the act that closes a sheet, so it asks plainly first: it
+   cannot be taken back from this screen, only by re-opening the month. */
+async function verifySheet(sheet) {
+  if (!mayDo(sheet, 'verify',
+      'You do not have permission to verify this sheet. Ask an admin to grant it in User Access.')) return;
+  if (!MJMPayrollLock.ready()) {
+    alert('Lock Controls are not set up yet — run shared/RUN_ME_npayroll_locks.sql first.');
+    return;
+  }
+  const ym = monthValue(), scope = lockScope(sheet);
+  if (!confirm(`Verify ${LOCK_SHEETS[sheet].label} for ${scopeLabel(sheet, scope)}, ${monthLabel(ym)}?\n\n`
+             + 'It locks straight away and cannot be changed after this. Only somebody with Lock '
+             + 'Controls can re-open the month.')) return;
+  const error = await MJMPayrollLock.verify(_supabase, ym, sheet, scope, userEmail || null);
+  if (error) { alert('Could not verify: ' + error.message); return; }
+  refreshPayrollTab();
+  if (typeof renderLockCalendar === 'function' && $('tab-locks')) renderLockCalendar();
+}
+
+/* ── Lock Controls ──────────────────────────────────────────────────── */
+
+const LOCK_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let _lockYear = new Date().getFullYear();
+
+function initLockControls() {
+  const y = $('lk-year');
+  if (!y) return;
+  const now = new Date().getFullYear();
+  const years = [];
+  for (let i = now - 5; i <= now + 1; i++) years.push(i);
+  y.innerHTML = years.map(v => `<option value="${v}">${v}</option>`).join('');
+  y.value = String(_lockYear);
+  const setup = $('lock-setup');
+  if (setup) setup.classList.toggle('hidden', MJMPayrollLock.ready());
+  $('lk-day').value = MJMPayrollLock.currentLockDay();
+  renderLockCalendar();
+}
+
+function renderLockCalendar() {
+  const box = $('lk-months');
+  if (!box) return;
+  _lockYear = Number($('lk-year').value) || _lockYear;
+  const mayLock = may('locks', 'manage');
+  const ready = MJMPayrollLock.ready();
+
+  box.innerHTML = LOCK_MONTHS.map((name, i) => {
+    const month  = i + 1;
+    const locked = ready && MJMPayrollLock.isMonthLocked(_lockYear, month);
+    const row    = MJMPayrollLock.lockRow(_lockYear, month);
+    const manual = !!(row && row.manual_override !== null && row.manual_override !== undefined);
+    const when   = MJMPayrollLock.autoLockDateFor(_lockYear, month);
+    const ym     = `${_lockYear}-${String(month).padStart(2, '0')}`;
+    const nVer   = MJMPayrollLock.verificationsFor(ym).length;
+    return `<button type="button" class="lock-month ${locked ? 'lock-shut' : 'lock-open'}"
+              ${mayLock && ready ? '' : 'disabled'}
+              onclick="toggleLockMonth(${month})"
+              title="${locked ? 'Locked' : 'Open'}${manual ? ' by hand' : ' by the calendar'}${
+                nVer ? ` · ${nVer} sheet${nVer === 1 ? '' : 's'} verified` : ''}">
+              <span class="lm-icon">${locked ? '🔒' : '🔓'}</span>
+              <span class="lm-name">${name}</span>
+              <span class="lm-how">${manual ? 'By hand' : 'Auto'}</span>
+              <span class="lm-date">${when.toISOString().slice(0, 10)}</span>
+              ${nVer ? `<span class="lm-date">${nVer} verified</span>` : ''}
+            </button>`;
+  }).join('');
+
+  const allOpen = LOCK_MONTHS.every((_, i) => !MJMPayrollLock.isMonthLocked(_lockYear, i + 1));
+  const t = $('lk-toggle-all');
+  t.textContent = allOpen ? `🔒 Lock all ${_lockYear}` : `🔓 Unlock all ${_lockYear}`;
+  t.disabled = !mayLock || !ready;
+  $('lk-day').disabled = !mayLock || !ready;
+  $('lk-day-save').disabled = !mayLock || !ready;
+
+  $('lk-note').textContent = !ready
+    ? 'Lock Controls are not set up yet — nothing locks and nothing can be verified.'
+    : mayLock
+      ? 'Re-opening a month also takes back every verification on it, so the sheets go back to '
+      + 'being editable and whoever checked them has to check them again.'
+      : 'You can see this calendar, but changing it needs Lock Controls in User Access.';
+}
+
+/* Forcing one month either way. Re-opening takes its verifications with it:
+   leaving them would put a sheet back on screen as editable while still
+   showing somebody's name against it as checked, which is the worst of both. */
+async function toggleLockMonth(month) {
+  if (!mayDo('locks', 'manage',
+      'You do not have permission to change the lock calendar. Ask an admin to grant it in User Access.')) return;
+  const locked = MJMPayrollLock.isMonthLocked(_lockYear, month);
+  const ym = `${_lockYear}-${String(month).padStart(2, '0')}`;
+  const vers = MJMPayrollLock.verificationsFor(ym);
+  if (locked) {
+    if (!confirm(`Re-open ${LOCK_MONTHS[month - 1]} ${_lockYear} for editing?`
+      + (vers.length
+          ? `\n\nThis also takes back ${vers.length} verification${vers.length === 1 ? '' : 's'} on that `
+            + 'month. Those sheets become editable again and have to be checked again.'
+          : ''))) return;
+  } else if (!confirm(`Lock ${LOCK_MONTHS[month - 1]} ${_lockYear}?\n\n`
+                    + 'Every payroll sheet for that month stops being editable.')) return;
+
+  const error = await MJMPayrollLock.setManualOverride(_supabase, _lockYear, month, !locked, userEmail || null);
+  if (error) { alert('Could not change the lock: ' + error.message); return; }
+  if (locked) {
+    for (const v of vers) {
+      const e = await MJMPayrollLock.unverify(_supabase, v.month, v.sheet, v.scope);
+      if (e) { alert('Re-opened, but a verification could not be taken back: ' + e.message); break; }
+    }
+  }
+  renderLockCalendar();
+  refreshPayrollTab();
+}
+
+/* "Lock all" does NOT force twelve months shut — that would freeze months
+   whose own auto-lock date has not arrived. It clears the overrides back to
+   the computed default, which already means "locked if its date has passed".
+   Same reasoning as the Delivery Order calendar's own button. */
+async function toggleLockYear() {
+  if (!mayDo('locks', 'manage',
+      'You do not have permission to change the lock calendar. Ask an admin to grant it in User Access.')) return;
+  const allOpen = LOCK_MONTHS.every((_, i) => !MJMPayrollLock.isMonthLocked(_lockYear, i + 1));
+  if (!confirm(allOpen
+      ? `Lock ${_lockYear} back to the calendar?\n\nEvery month whose lock day has passed closes; the rest stay open.`
+      : `Unlock every month of ${_lockYear}?\n\nVerifications are kept — a verified sheet stays closed until its own month is re-opened.`)) return;
+  const error = allOpen
+    ? await MJMPayrollLock.clearManualOverrideForYear(_supabase, _lockYear, userEmail || null)
+    : await MJMPayrollLock.setManualOverrideForYear(_supabase, _lockYear, false, userEmail || null);
+  if (error) { alert('Could not change the year: ' + error.message); return; }
+  renderLockCalendar();
+  refreshPayrollTab();
+}
+
+async function saveLockDay() {
+  if (!mayDo('locks', 'manage',
+      'You do not have permission to change the lock day. Ask an admin to grant it in User Access.')) return;
+  const day = parseInt($('lk-day').value, 10);
+  if (!(day >= 1 && day <= 28)) { alert('Pick a day between 1 and 28.'); return; }
+  const error = await MJMPayrollLock.setLockDay(_supabase, day, userEmail || null);
+  if (error) { alert('Could not save the lock day: ' + error.message); return; }
+  renderLockCalendar();
+}
+
 /* ════════════ MONTHLY PAYROLL ════════════ */
 function monthlyRows() {
   const secFilter = $('monthly-section').value || '';
@@ -1603,6 +1898,7 @@ function monthlyRows() {
 }
 
 function renderMonthly() {
+  try { renderVerifyBar('monthly'); } catch (_) {}
   const list = monthlyRows();
   const rows = list.length ? list.map((r, i) => `
     <tr>
@@ -1934,6 +2230,7 @@ $('global-month').addEventListener('change', async () => {
   try { localStorage.setItem('npayroll_month', monthValue()); } catch (_) {}
   await Promise.all([loadEntries(), loadTransplantField(), loadEarnAdj()]);
   refreshPayrollTab();
+  if ($('tab-locks')) { try { renderLockCalendar(); } catch (_) {} }
 });
 
 /* Click the backdrop to close. Guarded rather than assumed: worker-modal used
@@ -1984,6 +2281,12 @@ $('global-month').addEventListener('change', async () => {
       try { refreshPayrollTab(); } catch (_) {}
     });
 
+    /* Whether a month is closed has to be known before the first paint —
+       a sheet that draws as open and then turns out to be shut has already
+       invited somebody to start keying. */
+    await MJMPayrollLock.load(_supabase);
+    initLockControls();
+
     applyPageAccess();
 
     let tab = 'payroll', sub = 'maint';
@@ -1992,8 +2295,8 @@ $('global-month').addEventListener('change', async () => {
     // blank screen, so fall back to the first one they can.
     if (!may(sub)) sub = firstOpen(['maint', 'transpl', 'seedling', 'other', 'monthly']) || sub;
     const tabOpen = { payroll: !!firstOpen(['maint','transpl','seedling','other','monthly']),
-                      workers: may('workers'), rates: may('rates') };
-    if (!tabOpen[tab]) tab = ['payroll','workers','rates'].find(t => tabOpen[t]) || tab;
+                      workers: may('workers'), rates: may('rates'), locks: may('locks') };
+    if (!tabOpen[tab]) tab = ['payroll','workers','rates','locks'].find(t => tabOpen[t]) || tab;
     if ($('sub-' + sub)) switchSub(sub);
     if ($('tab-' + tab)) switchTab(tab);
 
