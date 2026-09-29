@@ -1446,8 +1446,11 @@ async function runLifeOfPlot() {
 
   const [logsRes, dosRes, alsRes, plotsRes] = await Promise.all([
     fetchAllRows(() => _supabase.from('shared_inventory_logs')
-      .select('transaction_type, transaction_date, created_at, remark, plot_name, batch_name, quantity_change')
-      .in('transaction_type', ['Transplanted', 'Transplanted_Premium',
+      .select('transaction_type, transaction_date, created_at, remark, plot_name, batch_name, quantity_change, breed_name')
+      // Seeds_Received is fetched only for its breed_name — the log is the
+      // only thing that names a batch's breed (same note as Life of
+      // Seedlings) — it is never an event of a plot's life.
+      .in('transaction_type', ['Seeds_Received', 'Transplanted', 'Transplanted_Premium',
           'Transplanted_DoubleTone', '3rd_Culling', 'Cull3_Transfer',
           'Stock_Calibration'])
       .order('id', { ascending: true })),
@@ -1475,13 +1478,26 @@ async function runLifeOfPlot() {
     return !selectedLocs.size || selectedLocs.has(locOfKey[_mvPlotKey(name)] || 'Unassigned');
   };
 
-  // ── One row per plot, one event list per plot ──
+  // ── Which breed each batch is — from any log that names it, the
+  //    Seeds_Received row usually. Also drives the Breed filter below. ──
+  const batchBreed = {};
+  (logsRes.data || []).forEach(l => {
+    if (l.breed_name && l.batch_name) {
+      const bk = _mvBatchKey(l.batch_name);
+      if (bk && !batchBreed[bk]) batchBreed[bk] = l.breed_name;
+    }
+  });
+  const breedFilter = (document.getElementById('f-breed') || {}).value || '';
+
+  // ── One row per plot; inside it, the same figures divided per batch
+  //    (r.byBatch) plus the raw event list — both feed the unfold row. ──
   const rows = new Map();   // plot key → row
   const rowOf = (plotName) => {
     const k = _mvPlotKey(plotName);
     if (!rows.has(k)) rows.set(k, Object.assign(emptyRow('main'), {
       plot: plotName, loc: locOfKey[k] || 'Unassigned',
       batches: new Set(), first: null, last: null, events: [],
+      byBatch: new Map(),   // batch key → per-batch totals, same columns
     }));
     return rows.get(k);
   };
@@ -1489,6 +1505,10 @@ async function runLifeOfPlot() {
     if (!plotName || !qty) return;
     // As At cut-off: the plot's life up to that day, everything if unset.
     if (date && new Date(date).getTime() >= toMs) return;
+    // Breed filter: only that breed's batches count — the plot's figures
+    // become that breed's share of the plot, and a plot with none of that
+    // breed drops off the list entirely (it renders only rows with events).
+    if (breedFilter && batchBreed[_mvBatchKey(batch)] !== breedFilter) return;
     const r = rowOf(plotName);
     r[col] = (r[col] || 0) + qty;
     if (batch && batch !== '—') r.batches.add(batch);
@@ -1498,6 +1518,16 @@ async function runLifeOfPlot() {
       if (!r.last  || ds > r.last)  r.last  = ds;
     }
     r.events.push({ date: ds, col, batch: batch || '—', qty, label: label || '' });
+    // The same figure, kept per batch — what the unfold's "by batch"
+    // breakdown rows read.
+    const bk = _mvBatchKey(batch) || '—';
+    if (!r.byBatch.has(bk)) r.byBatch.set(bk, Object.assign(emptyRow('main'), { batch: batch || '—', breed: batchBreed[bk] || '—', first: null, last: null }));
+    const bb = r.byBatch.get(bk);
+    bb[col] = (bb[col] || 0) + qty;
+    if (ds) {
+      if (!bb.first || ds < bb.first) bb.first = ds;
+      if (!bb.last  || ds > bb.last)  bb.last  = ds;
+    }
   };
 
   (logsRes.data || []).forEach(l => {
@@ -1590,9 +1620,48 @@ async function runLifeOfPlot() {
     const events = r.events.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
     const idx = _lopDetailPool.push(events) - 1;
 
+    // The plot's figures DIVIDED PER BATCH — the same columns as the
+    // parent row, one line per batch, so the plot's total reads as the
+    // sum of the batch lines right under it. The raw event history
+    // follows below it.
+    const byBatch = [...r.byBatch.values()].sort((a, b) => cmp(a.batch, b.batch));
+    const byBatchRows = byBatch.map(bb => {
+      const st = netOfRow('main', bb);
+      return `
+              <tr>
+                <td>
+                  <div class="font-black text-[#3d2610]">${esc(bb.batch)}</div>
+                  <div class="text-[9px] font-bold text-[#8a7a68]">${esc(bb.breed)}</div>
+                </td>
+                <td class="text-[#8a7a68] whitespace-nowrap">${fmtDate(bb.first)}</td>
+                <td class="text-[#8a7a68] whitespace-nowrap">${fmtDate(bb.last)}</td>
+                ${cell(bb.transIn, 'text-[#3a7ab4] font-black')}
+                ${cell(bb.trIn, 'text-[#3a7ab4] font-black')}
+                ${cell(bb.trOut, 'text-[#a83020] font-black')}
+                ${cell(bb.cull3, 'text-[#a83020] font-black')}
+                ${cell(bb.sold, 'text-[#4a7a2e] font-black')}
+                <td class="text-right font-black ${st < 0 ? 'text-[#a83020]' : 'text-[#4a7a2e]'}">${fmtNum(st)}${bb.adjust ? `<div class="text-[9px] font-bold text-[#7a4a10]">adj ${fmtSigned(bb.adjust)}</div>` : ''}</td>
+              </tr>`;
+    }).join('');
+
     const detail = `
       <tr id="lop-detail-${idx}" class="hidden">
         <td colspan="10" style="background:#fdfaf4; padding:0.75rem 1rem 1rem;">
+          <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">${esc(r.plot)} — by batch · ${byBatch.length} batch${byBatch.length === 1 ? '' : 'es'}</div>
+          <table class="report-table" style="background:#fff; border:1px solid #e8dcc8; border-radius:12px; overflow:hidden; margin-bottom:0.9rem;">
+            <thead><tr>
+              <th style="width:140px;">Batch / Breed</th>
+              <th style="width:120px;">First Activity</th>
+              <th style="width:120px;">Latest Activity</th>
+              <th class="text-right">Transplanted In</th>
+              <th class="text-right">Transfer In</th>
+              <th class="text-right">Transfer Out</th>
+              <th class="text-right">3rd Culled</th>
+              <th class="text-right">Sold</th>
+              <th class="text-right">Standing</th>
+            </tr></thead>
+            <tbody>${byBatchRows}</tbody>
+          </table>
           <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">History — ${esc(r.plot)} · ${events.length} event${events.length === 1 ? '' : 's'}</div>
           <table class="report-table" style="background:#fff; border:1px solid #e8dcc8; border-radius:12px; overflow:hidden;">
             <thead><tr><th style="width:110px;">Date</th><th style="width:170px;">Event</th><th style="width:90px;">Batch</th><th class="text-right" style="width:90px;">Qty</th><th>Note</th></tr></thead>
@@ -1636,6 +1705,7 @@ async function runLifeOfPlot() {
   const scopeBits = [];
   scopeBits.push(toStr ? 'as at ' + fmtDate(toStr) : 'all dates');
   if (selectedLocs.size) scopeBits.push([...selectedLocs].join(', '));
+  if (breedFilter) scopeBits.push(breedFilter);
 
   loading.classList.add('hidden');
   out.classList.remove('hidden');
@@ -1866,7 +1936,7 @@ function syncFilterVisibility() {
   // same question every other sub-report does). Life of Seedling uses its
   // own Nursery Type filter instead (.f-los, below).
   document.querySelectorAll('.f-nursery-inline').forEach(el => el.classList.toggle('hidden', !(isMovement || isTrans || isSeedIn || isCulling || isSalesTable || isLifePlot)));
-  document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !(isLife || isSeedIn || isTrans || isCulling)));
+  document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !(isLife || isSeedIn || isTrans || isCulling || isLifePlot)));
   // 2nd/3rd Culling never happens in a Pre-Nursery tray — see
   // runCullingReport()'s own PRE_NURSERY_PLOTS comment: 1st Culling is the
   // only stage that is. The Pre-Nursery chip has nothing to filter for
