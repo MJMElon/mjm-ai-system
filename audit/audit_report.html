@@ -90,9 +90,21 @@ html,body{min-height:100%;font-family:'Outfit',system-ui,sans-serif;font-size:16
    Plot takes whatever's left over. All four in the one row on a desk;
    the 900px query below falls back to the old auto-fit wrap for anything
    narrower. */
-.filter-grid{display:grid;grid-template-columns:130px 100px max-content 1fr;gap:16px;align-items:end}
+.filter-grid{display:grid;grid-template-columns:130px 100px max-content minmax(200px,260px);gap:16px;align-items:end}
 @media (max-width:900px){
   .filter-grid{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+}
+/* Second row: Modules to Include on the left, Generate Report on the
+   right, bottoms aligned — one balanced row instead of a label row, a
+   chip row and a button floating centred in white space below them.
+   A hairline above separates "what to report on" from "what to include
+   and go". On a phone the two stack and the button centres itself. */
+.filter-actions{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;
+                flex-wrap:wrap;margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
+.filter-actions .btn-generate{margin:0}
+@media (max-width:900px){
+  .filter-actions{flex-direction:column;align-items:stretch}
+  .filter-actions .btn-generate{align-self:center}
 }
 .filter-label{font-size:10px;font-weight:800;color:var(--ink3);text-transform:uppercase;
               letter-spacing:1px;margin-bottom:6px}
@@ -441,18 +453,21 @@ body.is-full #btn-full{display:none}
           </div>
         </div>
 
-        <div class="filter-label" style="margin:16px 0 8px">Modules to Include</div>
-        <div class="tick-row">
-          <label class="tick-chip"><input type="checkbox" class="mod-cb" onchange="toggleMod(this,'plot')">📋 Plot Condition</label>
-          <label class="tick-chip"><input type="checkbox" class="mod-cb" onchange="toggleMod(this,'height')">📏 Seedling Height</label>
-          <label class="tick-chip"><input type="checkbox" class="mod-cb" onchange="toggleMod(this,'papan')">🪧 Papan Tanda</label>
-          <label class="tick-chip"><input type="checkbox" class="mod-cb" onchange="toggleMod(this,'maint')">🔧 Maintenance</label>
+        <div class="filter-actions">
+          <div>
+            <div class="filter-label" style="margin:0 0 8px">Modules to Include</div>
+            <div class="tick-row">
+              <label class="tick-chip"><input type="checkbox" class="mod-cb" onchange="toggleMod(this,'plot')">📋 Plot Condition</label>
+              <label class="tick-chip"><input type="checkbox" class="mod-cb" onchange="toggleMod(this,'height')">📏 Seedling Height</label>
+              <label class="tick-chip"><input type="checkbox" class="mod-cb" onchange="toggleMod(this,'papan')">🪧 Papan Tanda</label>
+              <label class="tick-chip"><input type="checkbox" class="mod-cb" onchange="toggleMod(this,'maint')">🔧 Maintenance</label>
+            </div>
+          </div>
+          <button class="btn-generate" onclick="generateReport()">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <span>Generate Report</span>
+          </button>
         </div>
-
-        <button class="btn-generate" onclick="generateReport()">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          <span>Generate Report</span>
-        </button>
       </div>
     </div>
 

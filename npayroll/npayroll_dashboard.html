@@ -84,7 +84,7 @@
       <div class="bar">
         <div>
           <div class="bar-title">Work Maintenance — Salary Claim</div>
-          <div class="bar-sub" id="maint-sub">Priced from the Worker Record in Work Maintenance.</div>
+          <div class="bar-sub" id="maint-sub"></div>
         </div>
         <div class="bar-actions">
           <!-- Filled from Facility Management's nursery register by
@@ -246,6 +246,33 @@
 </div>
 
 <!-- ═══ WORK ENTRY MODAL ═══ -->
+<!-- Changing what a job earned. Its own tick on User Access (Adjust Pay),
+     and its own modal rather than a prompt(): a figure that decides somebody's
+     pay is worth a form that shows what it was, what it becomes, and asks why. -->
+<div class="modal-bg" id="adjust-modal">
+  <div class="modal">
+    <div class="modal-top"><div class="modal-title" id="adj-title">Adjust Earned</div>
+      <button class="modal-x" onclick="closeModal('adjust-modal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="frow"><label>Worker</label><input type="text" id="adj-who" readonly></div>
+      <div class="frow"><label>Job</label><input type="text" id="adj-job" readonly></div>
+      <div class="grid2">
+        <div class="frow"><label>Worked out as</label><input type="text" id="adj-was" readonly></div>
+        <div class="frow"><label>Pay instead (RM) *</label>
+          <input type="number" min="0" step="0.01" id="adj-amount" placeholder="0.00"></div>
+      </div>
+      <div class="frow"><label>Reason *</label>
+        <input type="text" id="adj-reason" placeholder="Why this figure and not the one above"></div>
+      <div class="frow" id="adj-meta" style="color:var(--text-faint);font-size:.8rem;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-danger" id="adj-clear" onclick="clearAdjust()">Put back</button>
+      <button class="btn" onclick="closeModal('adjust-modal')">Cancel</button>
+      <button class="btn btn-primary" id="adj-save" onclick="saveAdjust()">Save</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="entry-modal">
   <div class="modal">
     <div class="modal-top"><div class="modal-title" id="entry-modal-title">Add Entry</div>
@@ -270,7 +297,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=24"></script>
+<script src="npayroll_script.js?v=27"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->
