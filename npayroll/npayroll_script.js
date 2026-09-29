@@ -541,6 +541,23 @@ async function removeRate(id) {
   renderRates();
 }
 
+/* Capacity, to two places where it has them.
+   A plot's quantity divided among the people who worked it rarely comes out
+   whole — 2,200 across three is 733.33 — and rounding each share to a whole
+   number made three of them add up to 2,199 against a plot of 2,200.
+   `cap2` is what is BOTH shown and priced, so the row on screen multiplies
+   out to the money beside it and this page agrees with the Work Maintenance
+   Worker Record it reads. Same rule in
+   nursery_ops/plot_maintenance_script.js — change one, change the other. */
+const cap2   = v => Math.round(Number(v || 0) * 100) / 100;
+const capFmt = v => {
+  const n = cap2(v);
+  if (!n) return '—';
+  return Number.isInteger(n)
+    ? n.toLocaleString()
+    : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
 /* ════════════ TRANSPLANTING, AS THE FIELD RECORDED IT ════════════
    The FC Portal's Transplanting Job button writes one row per plot per job
    per month — who did the blanket spray, the lining, the polybag filling and
@@ -730,9 +747,9 @@ function renderTransplantClaim() {
     const l = lines.find(x => x.key === key && x.rate != null);
     return l ? l.rate : null;
   };
-  /* Capacity rounded first, then priced — the same order renderMaint uses,
-     so the row on screen multiplies out to the money beside it. */
-  const capOf = (n, key) => Math.round(lines
+  /* Capacity to two places first, then priced — the same order renderMaint
+     uses, so the row on screen multiplies out to the money beside it. */
+  const capOf = (n, key) => cap2(lines
     .filter(l => l.worker_name === n && l.key === key)
     .reduce((s, l) => s + Number(l.qty || 0), 0));
   const rmOf = (n, key) => {
@@ -765,7 +782,7 @@ function renderTransplantClaim() {
         knownOf(n) ? '' : '<span title="Not on the worker register — add them in Worker System, or the claim cannot pay this" style="color:var(--danger,#c0392b);"> &#9888;</span>'}</td>
       ${TRANSPLANT_JOBS.map(j => {
         const c = capOf(n, j.key);
-        return `<td>${c ? num(c) : '—'}</td><td>${c ? money(rmOf(n, j.key)) : '—'}</td>`;
+        return `<td>${capFmt(c)}</td><td>${c ? money(rmOf(n, j.key)) : '—'}</td>`;
       }).join('')}
       <td class="money">${money(earned(n))}</td>
     </tr>`).join('');
@@ -776,7 +793,7 @@ function renderTransplantClaim() {
   const foot = `
     <tfoot><tr>
       <td class="l" colspan="2">GRAND TOTAL</td>
-      ${TRANSPLANT_JOBS.map(j => `<td>${num(capSum(j.key))}</td><td>${money(rmSum(j.key))}</td>`).join('')}
+      ${TRANSPLANT_JOBS.map(j => `<td>${capFmt(capSum(j.key))}</td><td>${money(rmSum(j.key))}</td>`).join('')}
       <td>${money(grand)}</td>
     </tr></tfoot>`;
 
@@ -1114,8 +1131,8 @@ function renderMaint() {
     return;
   }
 
-  // Money from the rounded capacity, so the printed row multiplies out.
-  const capOf = (w, c) => Math.round(per[w] ? per[w][c] : 0);
+  // Money from the capacity AS SHOWN, so the printed row multiplies out.
+  const capOf = (w, c) => cap2(per[w] ? per[w][c] : 0);
   const rmOf  = (w, c) => {
     const r = rateOf(c);
     if (r == null) return 0;
@@ -1148,7 +1165,7 @@ function renderMaint() {
       <td class="l" style="font-weight:700;color:var(--text-head);">${esc(w)}</td>
       ${MAINT_TYPES.map(t => {
         const c = capOf(w, t.code);
-        return `<td>${c ? num(c) : '—'}</td><td>${c ? money(rmOf(w, t.code)) : '—'}</td>`;
+        return `<td>${capFmt(c)}</td><td>${c ? money(rmOf(w, t.code)) : '—'}</td>`;
       }).join('')}
       <td class="money">${money(earned(w))}</td>
     </tr>`).join('');
@@ -1159,7 +1176,7 @@ function renderMaint() {
   const foot = `
     <tfoot><tr>
       <td class="l" colspan="2">GRAND TOTAL</td>
-      ${MAINT_TYPES.map(t => `<td>${num(capSum(t.code))}</td><td>${money(rmSum(t.code))}</td>`).join('')}
+      ${MAINT_TYPES.map(t => `<td>${capFmt(capSum(t.code))}</td><td>${money(rmSum(t.code))}</td>`).join('')}
       <td>${money(grand)}</td>
     </tr></tfoot>`;
 
@@ -1271,7 +1288,7 @@ function monthlyRows() {
       const amt = MAINT_TYPES.reduce((s, t) => {
         const r = rateOf(t.code);
         if (r == null) return s;
-        const cap = Math.round(per[w] ? per[w][t.code] : 0);
+        const cap = cap2(per[w] ? per[w][t.code] : 0);
         return s + Math.round(cap * Math.round(r * 100000) / 1000) / 100;
       }, 0);
       if (amt) touch(known ? known.full_name : w, section).maint += amt;
@@ -1395,7 +1412,7 @@ function downloadMaintPDF() {
   if (!wk.length) { alert('No worker on the Work Maintenance list for this nursery.'); return; }
   const rateOf = c => (maint.rates[n] || {})[c];
   const per = maintTotals(n, monthTxt, month);
-  const capOf = (w, c) => Math.round(per[w] ? per[w][c] : 0);
+  const capOf = (w, c) => cap2(per[w] ? per[w][c] : 0);
   const rmOf  = (w, c) => { const r = rateOf(c); return r == null ? 0 : Math.round(capOf(w, c) * Math.round(r * 100000) / 1000) / 100; };
   const earned = w => MAINT_TYPES.reduce((s, t) => s + rmOf(w, t.code), 0);
 
