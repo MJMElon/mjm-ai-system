@@ -4372,25 +4372,91 @@
                 <div class="unsaved-row flex flex-wrap items-center gap-2 px-4 py-3 border-t border-[#e8dcc8]"
                      data-tab="${n}">
                     <span class="text-sm font-black text-[#3d2610] flex-1 min-w-[120px]">${TAB_TITLES[n] || ('Tab ' + n)}</span>
-                    <button type="button" onclick="_pickUnsaved(${n}, 1)"
-                            class="unsaved-save px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border-2 border-[#4a7a2e] bg-[#4a7a2e] text-white">Save</button>
+                    <button type="button" onclick="saveOneUnsaved(${n})"
+                            class="unsaved-save px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border-2 border-[#4a7a2e] bg-[#4a7a2e] text-white hover:bg-[#3d6624] disabled:opacity-50">Save</button>
                     <button type="button" onclick="_pickUnsaved(${n}, 0)"
-                            class="unsaved-drop px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border-2 border-[#e8dcc8] bg-white text-[#8a7a68]">Don't save</button>
+                            class="unsaved-drop px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border-2 border-[#e8dcc8] bg-white text-[#8a7a68] hover:bg-[#f8f4ec] disabled:opacity-50">Don't save</button>
                 </div>`).join('');
             host.classList.remove('hidden');
             host.classList.add('flex');
         }
 
-        // Save is the default on every tab; this only moves the highlight.
+        /* SAVE ON A ROW SAVES IT, THERE AND THEN.
+
+           It used to only move a highlight — a choice to be acted on when
+           Leave was pressed. But Save was the choice every row already
+           started on, so pressing it changed nothing that could be seen, and
+           a button labelled Save that appears to do nothing reads as broken.
+           A button that says Save saves. */
+        async function saveOneUnsaved(tab) {
+            const row = document.querySelector(`#unsaved-modal-list .unsaved-row[data-tab="${tab}"]`);
+            if (!row) return;
+            const btn = row.querySelector('.unsaved-save');
+            const drop = row.querySelector('.unsaved-drop');
+            const fn = window[TAB_SAVE_FN[tab]];
+            if (typeof fn !== 'function') { _markUnsavedRow(row, 'gone'); return; }
+
+            if (btn) { btn.disabled = true; btn.innerText = 'Saving…'; }
+            if (drop) drop.disabled = true;
+            try { await fn(); } catch (e) { console.warn('[close] save failed on tab ' + tab, e); }
+
+            /* Dirty still set means the save reported an error — the wrapper
+               on it only clears the flag when nothing did. Say so on the row
+               rather than claiming it is kept. */
+            if (_dirtyTabIndices().indexOf(Number(tab)) >= 0) {
+                if (btn) { btn.disabled = false; btn.innerText = 'Save'; }
+                if (drop) drop.disabled = false;
+                _markUnsavedRow(row, 'failed');
+            } else {
+                _markUnsavedRow(row, 'saved');
+            }
+        }
+
+        function _markUnsavedRow(row, state) {
+            /* A FAILED SAVE DECIDES NOTHING. Marking it 'drop' would turn a
+               save that did not work into a choice to throw the work away,
+               which is the opposite of what pressing Save meant. The row keeps
+               whatever it had, so Leave tries again and refuses to close if it
+               fails again. */
+            if (state !== 'failed') {
+                row.setAttribute('data-choice', state === 'saved' ? 'saved' : 'drop');
+            }
+            const btn = row.querySelector('.unsaved-save');
+            const drop = row.querySelector('.unsaved-drop');
+            let tag = row.querySelector('.unsaved-state');
+            if (!tag) {
+                tag = document.createElement('span');
+                tag.className = 'unsaved-state text-[10px] font-black uppercase tracking-widest';
+                row.appendChild(tag);
+            }
+            if (state === 'saved') {
+                if (btn) btn.remove();
+                if (drop) drop.remove();
+                tag.className = 'unsaved-state text-[10px] font-black uppercase tracking-widest text-[#4a7a2e]';
+                tag.innerText = '✓ Saved';
+            } else if (state === 'failed') {
+                tag.className = 'unsaved-state text-[10px] font-black uppercase tracking-widest text-[#a83020]';
+                tag.innerText = 'Did not save — nothing lost';
+            } else {
+                if (btn) btn.remove();
+                if (drop) drop.remove();
+                tag.className = 'unsaved-state text-[10px] font-black uppercase tracking-widest text-[#8a7a68]';
+                tag.innerText = 'Has no save of its own';
+            }
+        }
+
+        // Don't save: mark this tab to be dropped when the page closes.
         function _pickUnsaved(tab, save) {
             const row = document.querySelector(`#unsaved-modal-list .unsaved-row[data-tab="${tab}"]`);
             if (!row) return;
             row.setAttribute('data-choice', save ? 'save' : 'drop');
             const s = row.querySelector('.unsaved-save'), d = row.querySelector('.unsaved-drop');
-            s.className = 'unsaved-save px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border-2 '
-                + (save ? 'border-[#4a7a2e] bg-[#4a7a2e] text-white' : 'border-[#e8dcc8] bg-white text-[#8a7a68]');
-            d.className = 'unsaved-drop px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border-2 '
-                + (save ? 'border-[#e8dcc8] bg-white text-[#8a7a68]' : 'border-[#a83020] bg-[#a83020] text-white');
+            if (s) s.className = 'unsaved-save px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border-2 '
+                + (save ? 'border-[#4a7a2e] bg-[#4a7a2e] text-white hover:bg-[#3d6624]'
+                        : 'border-[#e8dcc8] bg-white text-[#8a7a68] hover:bg-[#f8f4ec]');
+            if (d) d.className = 'unsaved-drop px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border-2 '
+                + (save ? 'border-[#e8dcc8] bg-white text-[#8a7a68] hover:bg-[#f8f4ec]'
+                        : 'border-[#a83020] bg-[#a83020] text-white');
         }
 
         function closeUnsavedModal() {
@@ -4403,7 +4469,13 @@
         async function confirmCloseBatchRecord() {
             const rows = Array.from(document.querySelectorAll('#unsaved-modal-list .unsaved-row'));
             const btn  = document.getElementById('unsaved-modal-go');
-            const toSave = rows.filter(r => r.getAttribute('data-choice') !== 'drop')
+            /* Anything already saved on its own row, or marked Don't save, is
+               done with. Everything untouched still defaults to being kept, so
+               pressing Leave without deciding anything loses nothing. */
+            const toSave = rows.filter(r => {
+                                   const c = r.getAttribute('data-choice');
+                                   return c !== 'drop' && c !== 'saved';
+                               })
                                .map(r => Number(r.getAttribute('data-tab')));
             if (btn) { btn.disabled = true; btn.innerText = toSave.length ? 'Saving…' : 'Leaving…'; }
 

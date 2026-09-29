@@ -188,6 +188,55 @@ const SEEDS_ROW = {
                                        .map(r => r.getAttribute('data-tab') + ':' + (r.getAttribute('data-choice') || 'save'))),
         ['2:save', '3:save', '6:drop']);
 
+  console.log('\nSave on a row saves that tab, there and then');
+  await page.evaluate(() => {
+    ['savePlantingTab', 'saveTransplantTab', 'saveTab6'].forEach(n => {
+      window[n] = function () { window.__note(n); window.showToast('Saved.', 'success'); };
+    });
+    window._trackTabSave('savePlantingTab', 2);
+    window._trackTabSave('saveTransplantTab', 3);
+    window._trackTabSave('saveTab6', 6);
+  });
+  ran.length = 0;
+  await page.evaluate(() => window.saveOneUnsaved(2));
+  await page.waitForTimeout(400);
+  check('pressing Save on a row runs that tab\'s save', ran.slice(), ['savePlantingTab']);
+  check('…and only that tab\'s', await page.evaluate(() => window._dirtyTabNames()),
+        ['Transplanting', '3rd Culling']);
+  const savedRow = await page.evaluate(() => {
+    const r = document.querySelector('#unsaved-modal-list .unsaved-row[data-tab="2"]');
+    return { choice: r.getAttribute('data-choice'),
+             text: r.textContent.replace(/\s+/g, ' ').trim(),
+             buttons: r.querySelectorAll('button').length };
+  });
+  checkTrue('the row says so', /✓ Saved/.test(savedRow.text));
+  check('…and its buttons are gone, there being nothing left to decide', savedRow.buttons, 0);
+  check('…and it is marked saved, not dropped', savedRow.choice, 'saved');
+
+  console.log('\nA row whose save fails says so and stays');
+  await page.evaluate(() => {
+    window.saveTab6 = function () { window.showToast('Database blocked save.', 'error'); };
+    window._trackTabSave('saveTab6', 6);
+  });
+  await page.evaluate(() => window.saveOneUnsaved(6));
+  await page.waitForTimeout(400);
+  const failedRow = await page.evaluate(() => {
+    const r = document.querySelector('#unsaved-modal-list .unsaved-row[data-tab="6"]');
+    return { choice: r.getAttribute('data-choice'),
+             text: r.textContent.replace(/\s+/g, ' ').trim(),
+             buttons: Array.from(r.querySelectorAll('button')).map(b => b.innerText.trim()),
+             disabled: Array.from(r.querySelectorAll('button')).some(b => b.disabled) };
+  });
+  checkTrue('it says it did not save, and that nothing was lost',
+            /did not save/i.test(failedRow.text) && /nothing lost/i.test(failedRow.text));
+  check('…and a failed save decides nothing — the row keeps what it had',
+        failedRow.choice, 'drop');
+  check('…Save is offered again', failedRow.buttons.indexOf('Save') >= 0, true);
+  check('…and is not left disabled', failedRow.disabled, false);
+  check('…and the tab is still dirty',
+        await page.evaluate(() => window._dirtyTabNames().indexOf('3rd Culling') >= 0), true);
+
+  console.log('\nClosing runs the saves that were chosen, and only those');
   console.log('\nClosing runs the saves that were chosen, and only those');
   await page.evaluate(() => {
     ['savePlantingTab', 'saveTransplantTab', 'saveTab6'].forEach(n => {
@@ -200,9 +249,13 @@ const SEEDS_ROW = {
   ran.length = 0;
   await page.evaluate(() => window.confirmCloseBatchRecord());
   await page.waitForTimeout(800);
-  check('the two marked Save ran', ran.slice().sort(),
-        ['savePlantingTab', 'saveTransplantTab']);
-  check('…and the one marked Don\'t save did not', ran.indexOf('saveTab6'), -1);
+  /* Seed Planting was already saved on its own row, so Leave has nothing to
+     do for it; 3rd Culling was marked Don't save. Transplanting is the only
+     one left untouched, and untouched still means keep. */
+  check('only the tab still untouched was saved', ran.slice(), ['saveTransplantTab']);
+  check('…the one already saved on its row was not saved twice',
+        ran.indexOf('savePlantingTab'), -1);
+  check('…and the one marked Don\'t save was not saved', ran.indexOf('saveTab6'), -1);
   check('and it left', new URL(page.url()).pathname.endsWith('operation_batch_record.html'), true);
 
   console.log('\nA save that fails does not close over it');
