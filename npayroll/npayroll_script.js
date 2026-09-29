@@ -1138,12 +1138,24 @@ async function removeEntry(id) {
    The maintenance module divides a plot's quantity among the workers ticked
    on that row, then pays it at that work type's piece rate. Repeat that here
    so the two always show the same figures. */
+/* `unit` is what the rate is PER, printed under the work's name on the claim
+   form — "RM 0.01 / Bag". The maintenance module's rate table is
+   (nursery, work_type, rate) and carries no unit, and all four of these are
+   paid per polybag, so it is named here rather than invented at the point of
+   printing. A work paid by something else gets its own word here. */
 const MAINT_TYPES = [
-  { code:'pd',       label:'P & D Spraying', jenis:'Penyemburan racun kulat dan serangga' },
-  { code:'manuring', label:'Manuring',       jenis:'Membaja' },
-  { code:'weeding',  label:'Weeding',        jenis:'Merumput' },
-  { code:'interrow', label:'Interrow Spray', jenis:'Meracun rumput secara selingan' }
+  { code:'pd',       label:'P & D Spraying', unit:'Bag', jenis:'Penyemburan racun kulat dan serangga' },
+  { code:'manuring', label:'Manuring',       unit:'Bag', jenis:'Membaja' },
+  { code:'weeding',  label:'Weeding',        unit:'Bag', jenis:'Merumput' },
+  { code:'interrow', label:'Interrow Spray', unit:'Bag', jenis:'Meracun rumput secara selingan' }
 ];
+
+/* The rate as the claim form writes it: "RM 0.01 / Bag", or a dash where no
+   rate has been set. */
+function maintRateTxt(t, rate) {
+  if (rate == null) return '\u2014';
+  return rateTxt(rate) + (t.unit ? ' / ' + t.unit : '');
+}
 
 /* WHY A COLUMN IS EMPTY.
 
@@ -1236,38 +1248,47 @@ function maintTotals(nursery, month, ym) {
    records this list has not got, ticks on names this claim has no row for, and
    a quantity that came to nothing. Said per work type, and only about the ones
    that actually came to nought — a column that paid needs no explanation. */
+/* "a, b and c" — a list read out loud, not a machine's comma run. */
+function joinAnd(list) {
+  if (list.length <= 1) return list[0] || '';
+  return list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1];
+}
+
+/* Returns WHY, without naming the work — renderMaint puts the names on,
+   because four columns empty for the same reason is one sentence, not four
+   that differ only in the word at the front. */
 function maintWhyEmpty(code) {
   const d = (maint.why || {})[code];
   if (!d) return '';
   if (d.paid) return '';
   if (!d.rows) {
-    return `${d.label}: no work record for this job in this nursery this month.`;
+    return `no work record for this job in this nursery this month.`;
   }
   if (!d.ticked && d.noTaker.size) {
-    return `${d.label}: recorded in the field, but credited only to ${[...d.noTaker].join(', ')}, `
+    return `recorded in the field, but credited only to ${[...d.noTaker].join(', ')}, `
          + `who ${d.noTaker.size === 1 ? 'has' : 'have'} no row on this claim — so there is nobody `
          + 'to pay it to.';
   }
   if (!d.ticked && !d.tickRows) {
-    return `${d.label}: ${d.rows} work record${d.rows === 1 ? '' : 's'}, nobody ticked on the Worker `
+    return `${d.rows} work record${d.rows === 1 ? '' : 's'}, nobody ticked on the Worker `
          + 'Record and nothing recorded in the field against them — tick who did the work in Work '
          + 'Maintenance and it prices here.';
   }
   if (!d.ticked && d.orphanTicks) {
-    return `${d.label}: ${d.orphanTicks} tick${d.orphanTicks === 1 ? ' sits' : 's sit'} on the Worker `
+    return `${d.orphanTicks} tick${d.orphanTicks === 1 ? ' sits' : 's sit'} on the Worker `
          + 'Record against work records this month no longer has — open Work Maintenance\u2019s Worker '
          + 'Record for this month and tick them again.';
   }
   if (!d.ticked && d.stray.size) {
-    return `${d.label}: the only names ticked are ${[...d.stray].join(', ')}, who have no row on this `
+    return `the only names ticked are ${[...d.stray].join(', ')}, who have no row on this `
          + 'claim — file them under this nursery in Worker System, or correct the spelling.';
   }
   if (!d.ticked) {
-    return `${d.label}: ${d.rows} work record${d.rows === 1 ? '' : 's'}, none of them ticked for `
+    return `${d.rows} work record${d.rows === 1 ? '' : 's'}, none of them ticked for `
          + 'anybody on this claim.';
   }
   // Ticked, but every one came to no quantity.
-  return `${d.label}: ${d.ticked} row${d.ticked === 1 ? '' : 's'} ticked, but none of them has a `
+  return `${d.ticked} row${d.ticked === 1 ? '' : 's'} ticked, but none of them has a `
        + 'quantity — nothing keyed on the work record, and the batch report shows nothing standing on '
        + 'that plot and batch at the work date'
        + (PlotMovement.ready() ? '.' : ', and the batch report has not loaded (reload the page).');
@@ -1281,8 +1302,8 @@ function renderMaint() {
   const rateOf = c => (maint.rates[n] || {})[c];
   const per = maintTotals(n, monthTxt, ym);
 
-  $('maint-sub').textContent =
-    `From Work Maintenance · ${NURSERY_FULL[n] || n} · ${monthTxt}`;
+  // The two things a claim form has to say about itself, and no preamble.
+  $('maint-sub').textContent = `${NURSERY_FULL[n] || n} · ${monthTxt}`;
 
   if (!wk.length) {
     $('maint-table').innerHTML = `<tbody><tr><td class="empty">
@@ -1310,23 +1331,23 @@ function renderMaint() {
   const payOf  = (w, c) => { const a = adjOf('maint', n, w, c); return a ? Number(a.amount || 0) : rmOf(w, c); };
   const earned = w => MAINT_TYPES.reduce((s, t) => s + payOf(w, t.code), 0);
 
+  /* The office's own claim form, three header rows: the work, the rate it
+     pays, then Capacity and Total under it. The rate sits INSIDE the work's
+     column group rather than on a row of its own across the sheet, which is
+     what makes it read as "P & D Spraying, at RM 0.01 a bag" instead of as a
+     fourth kind of row. */
   const head = `
     <thead>
       <tr>
-        <th rowspan="2" style="width:44px;">No.</th>
-        <th rowspan="2" class="l">Worker</th>
+        <th rowspan="3" style="width:44px;">No.</th>
+        <th rowspan="3" class="l">Worker</th>
         ${MAINT_TYPES.map(t => `<th colspan="2">${esc(t.label)}</th>`).join('')}
-        <th rowspan="2" style="width:120px;">Total Earned</th>
+        <th rowspan="3" style="width:120px;">Subtotal (RM)</th>
       </tr>
-      <tr>${MAINT_TYPES.map(() => `<th style="width:90px;">Capacity</th><th style="width:110px;">Earned</th>`).join('')}</tr>
-      <tr>
-        <td colspan="2" class="l" style="font-weight:800;background:#fafaff;">Piece Rate</td>
-        ${MAINT_TYPES.map(t => {
-          const r = rateOf(t.code);
-          return `<td colspan="2" style="background:#fafaff;font-size:12px;">${rateTxt(r)}</td>`;
-        }).join('')}
-        <td style="background:#fafaff;"></td>
-      </tr>
+      <tr>${MAINT_TYPES.map(t =>
+        `<th colspan="2" style="font-weight:600;font-size:12px;">${maintRateTxt(t, rateOf(t.code))}</th>`).join('')}</tr>
+      <tr>${MAINT_TYPES.map(() =>
+        `<th style="width:90px;">Capacity</th><th style="width:110px;">Total (RM)</th>`).join('')}</tr>
     </thead>`;
 
   const body = wk.map((w, i) => `
@@ -1346,33 +1367,41 @@ function renderMaint() {
   const grand  = wk.reduce((s, w) => s + earned(w), 0);
   const foot = `
     <tfoot><tr>
-      <td class="l" colspan="2">GRAND TOTAL</td>
+      <td colspan="2">Grand Total</td>
       ${MAINT_TYPES.map(t => `<td>${capFmt(capSum(t.code))}</td><td>${money(rmSum(t.code))}</td>`).join('')}
       <td>${money(grand)}</td>
     </tr></tfoot>`;
 
   $('maint-table').innerHTML = head + `<tbody>${body}</tbody>` + foot;
 
-  /* WHERE THE SHEET COMES FROM, said on the sheet. Both halves of it are read
-     from somewhere else and neither is obvious from looking: the names are the
-     Worker System's register for this nursery, the capacity is the Work
-     Maintenance schedule's Work Record and Worker Record. What this page does
-     is the money.
-
-     Anything that would make the sheet short is said FIRST, because a claim
-     that is missing work looks exactly like a quiet month. */
+  /* ONLY WHAT IS WRONG.
+     This used to carry a paragraph explaining where the names and the capacity
+     are read from. True, and nobody holding a claim form needs it — it is the
+     module's own workings, and printing it under every sheet buried the notes
+     that matter in the middle of an essay. What is left is the short list of
+     things that would make this claim SHORT, because a claim missing work
+     looks exactly like a quiet month. Nothing wrong, nothing printed. */
   const notes = [];
   /* Why any column came to nothing, first — it is the question somebody is
      holding the sheet to ask. */
-  MAINT_TYPES.forEach(t => { const w = maintWhyEmpty(t.code); if (w) notes.push(w); });
+  /* Grouped by reason. A month where nobody has opened the Worker Record yet
+     has the same thing wrong with all four columns, and saying it four times
+     over reads as four separate problems. */
+  const whyGroups = new Map();
+  MAINT_TYPES.forEach(t => {
+    const w = maintWhyEmpty(t.code);
+    if (!w) return;
+    if (!whyGroups.has(w)) whyGroups.set(w, []);
+    whyGroups.get(w).push(t.label);
+  });
+  whyGroups.forEach((labels, why) => notes.push(joinAnd(labels) + ': ' + why));
   /* Work priced straight from the field. Said out loud because it is the one
      figure on this sheet that nobody has been asked to confirm: the office's
      Worker Record has no tick saved against those rows, and what is being paid
      is the worker's own record of their morning, verified in the field. */
   if (maint.fromField) {
-    notes.push(`${maint.fromField} row${maint.fromField === 1 ? '' : 's'} priced from what the field `
-             + 'recorded, because the Worker Record has no tick saved against them. Ticking them in '
-             + 'Work Maintenance confirms it and overrides this.');
+    notes.push(`${maint.fromField} row${maint.fromField === 1 ? '' : 's'} priced from the field’s own `
+             + 'record, with no tick against them on the Worker Record.');
   }
   /* A name ticked on the Worker Record with no row here loses that worker's
      share of the plot, and the row still looks complete on both screens. */
@@ -1380,10 +1409,8 @@ function renderMaint() {
     MAINT_TYPES.flatMap(t => [...(((maint.why || {})[t.code] || {}).stray || [])])
       .concat(maint.fieldUnmatched || []))];
   if (stray.length) {
-    notes.push(`Credited for work but with no row on this claim: ${stray.join(', ')} — their share `
-             + 'of those plots is not priced. File them under this nursery in Worker System as a '
-             + 'general worker, or correct the spelling there. A Field Conductor has no row here '
-             + 'unless their record is ticked as a general worker.');
+    notes.push(`Credited for work but with no row here, so their share is not priced: `
+             + `${stray.join(', ')}. File them under this nursery in Worker System as a general worker.`);
   }
   if (!PlotMovement.ready()) {
     notes.push('The batch report has not loaded, so any work record with no quantity keyed on it '
@@ -1395,9 +1422,8 @@ function renderMaint() {
              + 'Nursery Operation → Work Maintenance → Setting → Piece Rate.');
   }
   if (!maint.linked[n]) {
-    notes.push(`No general worker is filed under ${NURSERY_FULL[n] || n} on the Worker System register, `
-             + 'so this is Work Maintenance\u2019s own older list. File them under the nursery in '
-             + 'Worker System and the two lists become one.');
+    notes.push(`No general worker is filed under ${NURSERY_FULL[n] || n} in Worker System, so this is `
+             + 'Work Maintenance\u2019s own older list.');
   }
   if ((maint.orphanPlots || []).length) {
     notes.push(`${maint.orphanPlots.length} plot${maint.orphanPlots.length === 1 ? '' : 's'} `
@@ -1412,11 +1438,6 @@ function renderMaint() {
     notes.push(`On this month because they were still here: `
              + gone.map(w => `${w.full_name} (last day ${String(w.last_day).slice(0, 10)})`).join(', ') + '.');
   }
-  notes.push('Workers come from the Worker System register — the ones filed under this nursery and on the '
-           + 'Work Maintenance sheets. Capacity comes from Work Maintenance\u2019s Work Record and Worker '
-           + 'Record: a plot\u2019s quantity divided among the workers ticked on that row, and a row with no '
-           + 'quantity keyed uses the batch report\u2019s closing balance for that plot, batch and work date. '
-           + 'The money is worked out here.');
   $('maint-note').textContent = notes.join(' ');
 }
 
@@ -1623,28 +1644,25 @@ function downloadMaintPDF() {
   const PAIR = i => 2 + i * 2, I_TOTAL = COL.length - 1;
   const HF = [232, 236, 252], TF = [222, 228, 250];
 
+  /* The printed form, laid out like the screen: the work, the rate it pays,
+     then Capacity and Total under it. The rate is INSIDE the work's column
+     group, not on a band of its own across the sheet — the same three rows
+     the office's own claim form has. */
   const drawHead = () => {
     let y = pdfTitle(doc, ['SALARY CLAIM FORM — WORK MAINTENANCE', `${NURSERY_FULL[n] || n} (${n})`, `Month ${monthTxt}`]);
-    const H1 = 9, H2 = 7;
-    pdfCell(doc, X[0], y, COL[0], H1 + H2, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
-    pdfCell(doc, X[1], y, COL[1], H1 + H2, 'Worker Name', { bold: true, size: 8.5, fill: HF });
+    const H1 = 9, H2 = 7, H3 = 7, HT = H1 + H2 + H3;
+    pdfCell(doc, X[0], y, COL[0], HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
+    pdfCell(doc, X[1], y, COL[1], HT, 'Worker', { bold: true, size: 8.5, fill: HF });
     MAINT_TYPES.forEach((t, i) => {
       const c = PAIR(i);
       pdfCell(doc, X[c], y, COL[c] + COL[c+1], H1, t.label, { bold: true, size: 7.5, fill: HF });
-      pdfCell(doc, X[c],   y + H1, COL[c],   H2, 'Capacity', { bold: true, size: 6.5, nowrap: true, fill: HF });
-      pdfCell(doc, X[c+1], y + H1, COL[c+1], H2, 'Earned',   { bold: true, size: 6.5, nowrap: true, fill: HF });
+      pdfCell(doc, X[c], y + H1, COL[c] + COL[c+1], H2, maintRateTxt(t, rateOf(t.code)),
+              { size: 7, nowrap: true, fill: HF });
+      pdfCell(doc, X[c],   y + H1 + H2, COL[c],   H3, 'Capacity',  { bold: true, size: 6.5, nowrap: true, fill: HF });
+      pdfCell(doc, X[c+1], y + H1 + H2, COL[c+1], H3, 'Total (RM)', { bold: true, size: 6.5, nowrap: true, fill: HF });
     });
-    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], H1 + H2, 'Total Earned (RM)', { bold: true, size: 7.5, fill: HF });
-    y += H1 + H2;
-    const RH = 7;
-    pdfCell(doc, X[0], y, COL[0] + COL[1], RH, 'Piece Rate (RM)', { bold: true, size: 7.5, fill: [246, 247, 252] });
-    MAINT_TYPES.forEach((t, i) => {
-      const c = PAIR(i), r = rateOf(t.code);
-      pdfCell(doc, X[c], y, COL[c] + COL[c+1], RH, rateTxt(r),
-              { size: 7, nowrap: true, fill: [246, 247, 252] });
-    });
-    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH, '', { fill: [246, 247, 252] });
-    return y + RH;
+    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], HT, 'Subtotal (RM)', { bold: true, size: 7.5, fill: HF });
+    return y + HT;
   };
 
   let y = drawHead();
@@ -1656,7 +1674,7 @@ function downloadMaintPDF() {
     pdfCell(doc, X[1], y, COL[1], RH, w, { size: 8.5, fill: z });
     MAINT_TYPES.forEach((t, k) => {
       const c = PAIR(k), cap = capOf(w, t.code);
-      pdfCell(doc, X[c],   y, COL[c],   RH, cap ? cap.toLocaleString() : '—', { size: 8, nowrap: true, fill: z });
+      pdfCell(doc, X[c],   y, COL[c],   RH, capFmt(cap), { size: 8, nowrap: true, fill: z });
       pdfCell(doc, X[c+1], y, COL[c+1], RH, (cap || adjOf('maint', n, w, t.code))
               ? 'RM ' + payOf(w, t.code).toFixed(2) : '—', { size: 7.5, nowrap: true, fill: z });
     });
@@ -1664,12 +1682,12 @@ function downloadMaintPDF() {
     y += RH;
   });
 
-  pdfCell(doc, X[0], y, COL[0] + COL[1], RH + 1, 'GRAND TOTAL', { bold: true, size: 8.5, fill: TF });
+  pdfCell(doc, X[0], y, COL[0] + COL[1], RH + 1, 'Grand Total', { bold: true, size: 8.5, fill: TF });
   MAINT_TYPES.forEach((t, k) => {
     const c = PAIR(k);
     const cs = wk.reduce((s, w) => s + capOf(w, t.code), 0);
     const rs = wk.reduce((s, w) => s + payOf(w, t.code), 0);
-    pdfCell(doc, X[c],   y, COL[c],   RH + 1, cs ? cs.toLocaleString() : '—', { bold: true, size: 8, nowrap: true, fill: TF });
+    pdfCell(doc, X[c],   y, COL[c],   RH + 1, capFmt(cs), { bold: true, size: 8, nowrap: true, fill: TF });
     pdfCell(doc, X[c+1], y, COL[c+1], RH + 1, 'RM ' + rs.toFixed(2), { bold: true, size: 7.5, nowrap: true, fill: TF });
   });
   pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH + 1, 'RM ' + wk.reduce((s, w) => s + earned(w), 0).toFixed(2),
