@@ -100,6 +100,15 @@ select.input{width:100%;height:44px;padding:0 34px 0 13px;font-size:13.5px;font-
 select.input:hover{background:#eef3f8}
 select.input:focus{border-color:var(--green);background:var(--card);
                    box-shadow:0 0 0 3px rgba(74,122,46,.15)}
+/* The Plot search box — same look as the selects above it, minus the
+   dropdown-arrow bits that only make sense on a <select>. */
+input.input{width:100%;height:44px;padding:0 13px;font-size:13.5px;font-weight:600;
+            font-family:inherit;border:1px solid var(--line);border-radius:var(--r-md);
+            background:#f8fafc;color:var(--ink);outline:none}
+input.input::placeholder{color:var(--ink3);font-weight:600}
+input.input:hover{background:#eef3f8}
+input.input:focus{border-color:var(--green);background:var(--card);
+                  box-shadow:0 0 0 3px rgba(74,122,46,.15)}
 
 /* Tick chips — Month/Year stay plain selects, but Nursery (Pre-Nursery /
    BNN / UNN 1 / UNN 2) and Modules to Include are both multi-select-by-
@@ -405,21 +414,30 @@ body.is-full #btn-full{display:none}
           </div>
           <div>
             <div class="filter-label">Nursery</div>
+            <!-- No `checked` — Nursery, Modules and Plot below all start
+                 empty now (see generateReport()'s own guard), so a report
+                 is always what was deliberately ticked/typed, never
+                 whatever happened to be preselected. -->
             <div class="tick-row" id="f-nursery-chips">
-              <label class="tick-chip"><input type="checkbox" class="f-nurs-cb" value="PN" checked onchange="ensureAtLeastOneNursery(this)">Pre-Nursery</label>
-              <label class="tick-chip"><input type="checkbox" class="f-nurs-cb" value="BNN" checked onchange="ensureAtLeastOneNursery(this)">BNN</label>
-              <label class="tick-chip"><input type="checkbox" class="f-nurs-cb" value="UNN1" checked onchange="ensureAtLeastOneNursery(this)">UNN 1</label>
-              <label class="tick-chip"><input type="checkbox" class="f-nurs-cb" value="UNN2" checked onchange="ensureAtLeastOneNursery(this)">UNN 2</label>
+              <label class="tick-chip"><input type="checkbox" class="f-nurs-cb" value="PN">Pre-Nursery</label>
+              <label class="tick-chip"><input type="checkbox" class="f-nurs-cb" value="BNN">BNN</label>
+              <label class="tick-chip"><input type="checkbox" class="f-nurs-cb" value="UNN1">UNN 1</label>
+              <label class="tick-chip"><input type="checkbox" class="f-nurs-cb" value="UNN2">UNN 2</label>
             </div>
+          </div>
+          <div>
+            <div class="filter-label">Plot</div>
+            <input class="input" id="f-plot" type="text" placeholder="e.g. P10, B7…" autocomplete="off"
+                   aria-label="Plot number">
           </div>
         </div>
 
         <div class="filter-label" style="margin:16px 0 8px">Modules to Include</div>
         <div class="tick-row">
-          <label class="tick-chip"><input type="checkbox" class="mod-cb" checked onchange="toggleMod(this,'plot')">📋 Plot Condition</label>
-          <label class="tick-chip"><input type="checkbox" class="mod-cb" checked onchange="toggleMod(this,'height')">📏 Seedling Height</label>
-          <label class="tick-chip"><input type="checkbox" class="mod-cb" checked onchange="toggleMod(this,'papan')">🪧 Papan Tanda</label>
-          <label class="tick-chip"><input type="checkbox" class="mod-cb" checked onchange="toggleMod(this,'maint')">🔧 Maintenance</label>
+          <label class="tick-chip"><input type="checkbox" class="mod-cb" onchange="toggleMod(this,'plot')">📋 Plot Condition</label>
+          <label class="tick-chip"><input type="checkbox" class="mod-cb" onchange="toggleMod(this,'height')">📏 Seedling Height</label>
+          <label class="tick-chip"><input type="checkbox" class="mod-cb" onchange="toggleMod(this,'papan')">🪧 Papan Tanda</label>
+          <label class="tick-chip"><input type="checkbox" class="mod-cb" onchange="toggleMod(this,'maint')">🔧 Maintenance</label>
         </div>
 
         <button class="btn-generate" onclick="generateReport()">
@@ -486,30 +504,26 @@ let toastTimer=null;
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2800);}
 function setLoading(on){document.getElementById('loading-overlay').classList.toggle('hidden',!on);}
 
-const selectedMods=new Set(['plot','height','papan','maint']);
+// Starts empty — Nursery, Modules and Plot all start unset now (see the
+// markup's own comment), so nothing is presumed picked until a report is
+// actually generated. generateReport() is what enforces "at least one
+// module" and "at least one nursery", not the tick itself — ticking or
+// unticking any one of these is otherwise unconstrained.
+const selectedMods=new Set();
 // cb is the checkbox itself now (see the .tick-chip markup) — its own
 // .checked is the state, not a class toggled by hand on the label.
 function toggleMod(cb,mod){
-  if(!cb.checked){
-    if(selectedMods.size===1){cb.checked=true;showToast('⚠ At least one module required');return;}
-    selectedMods.delete(mod);
-  }else{
-    selectedMods.add(mod);
-  }
+  if(cb.checked) selectedMods.add(mod); else selectedMods.delete(mod);
 }
 
 // Nursery — Pre-Nursery / BNN / UNN 1 / UNN 2 — same tick-chip idea as
 // Modules above, replacing the old three-way "both/pn/mn" select with one
 // checkbox per nursery so any combination can be picked, not just the
-// three the select happened to offer.
+// three the select happened to offer. Read straight off the DOM at
+// generate time — no separate Set to keep in sync the way selectedMods
+// needs one.
 function selectedAuditNurseries(){
   return [...document.querySelectorAll('.f-nurs-cb:checked')].map(cb=>cb.value);
-}
-function ensureAtLeastOneNursery(cb){
-  if(!cb.checked && selectedAuditNurseries().length===0){
-    cb.checked=true;
-    showToast('⚠ At least one nursery required');
-  }
 }
 
 /* ── FILTERS FOLD AWAY ──
@@ -597,6 +611,18 @@ async function fetchData(month,year){
 
 function filterByNursery(rows,nurseries){
   return(rows||[]).filter(r=>nurseries.includes(r.nursery));
+}
+
+// The Plot search box (#f-plot) — a case-insensitive substring match on
+// each row's own plot field, every module table carries one. Empty query
+// means no filter at all, same "nothing typed = show everything" rule the
+// Nursery/Module ticks don't get (those default empty and mean "show
+// nothing" until picked — a search box works the other way round).
+function filterByPlot(rows,query){
+  if(!query) return rows||[];
+  const q=query.trim().toLowerCase();
+  if(!q) return rows||[];
+  return(rows||[]).filter(r=>String(r.plot||'').toLowerCase().includes(q));
 }
 
 /* ── COLUMNS ──
@@ -694,12 +720,21 @@ function buildNurserySection(label, sub, headClass, data, nurseries){
 }
 
 async function generateReport(){
+  // Nursery and Modules both start untied to anything — see their markup's
+  // own comment — so a click with nothing ticked in either is "forgot to
+  // pick", not "meant everything". Caught here rather than by re-ticking a
+  // checkbox on uncheck (which would have made "nothing ticked" an
+  // impossible state to ever be in, including the moment the page loads).
+  if(selectedMods.size===0){showToast('⚠ Select at least one module');return;}
+  const tickedNurseries=selectedAuditNurseries();
+  if(tickedNurseries.length===0){showToast('⚠ Select at least one nursery');return;}
+
   const month=parseInt(document.getElementById('f-month').value);
   const year=parseInt(document.getElementById('f-year').value);
+  const plotQuery=document.getElementById('f-plot').value.trim();
   // Whichever of Pre-Nursery/BNN/UNN1/UNN2 are ticked (see the tick-chip
   // row) — Main Nursery is no longer all-or-nothing: BNN can be included
   // without UNN1/UNN2, same as PN can sit alongside just one of them.
-  const tickedNurseries=selectedAuditNurseries();
   const showPN=tickedNurseries.includes('PN');
   const mnNurseries=MN_NURSERIES.filter(n=>tickedNurseries.includes(n));
   const showMN=mnNurseries.length>0;
@@ -707,6 +742,10 @@ async function generateReport(){
   setLoading(true);
   try{
     const data=await fetchData(month,year);
+    // Plot search narrows every module's rows before anything downstream
+    // (summary counts, the nursery-section tables) ever sees them, so
+    // there's exactly one place this filter has to be applied.
+    if(plotQuery) for(const m of ['plot','height','papan','maint']) if(data[m]) data[m]=filterByPlot(data[m],plotQuery);
     const countAll=(d,n)=>[...selectedMods].reduce((s,m)=>s+(filterByNursery(d[m],n).length),0);
     const pnTotal=showPN?countAll(data,PN_NURSERIES):0;
     const mnTotal=showMN?countAll(data,mnNurseries):0;
@@ -745,7 +784,7 @@ async function generateReport(){
         <div class="report-logo">MJM <span>Nursery</span></div>
         <div class="report-company">Mega Jutamas Sdn Bhd · Miri, Sarawak</div>
         <div class="report-title">Monthly Audit Report</div>
-        <div class="report-period">${periodStr} · ${nurseryLabel}</div>
+        <div class="report-period">${periodStr} · ${nurseryLabel}${plotQuery?' · Plot: '+esc(plotQuery):''}</div>
         <div class="report-generated">Generated: ${now.toLocaleString('en-MY',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
       </div>
       <div class="summary-row">${summaryCards}</div>
