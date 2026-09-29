@@ -666,6 +666,23 @@ function payrollRowsFor(type) {
 }
 function payrollRows() { return payrollRowsFor(_payrollView); }
 
+/* Capacity, as a figure somebody can check.
+   A plot's quantity divided among the people who worked it rarely comes out
+   whole — 2,200 across three is 733.33 — and rounding it to 733 on screen
+   made three workers' shares add up to 2,199 against a plot of 2,200. The
+   missing one had nowhere to be and nothing to blame it on.
+   Whole numbers still print whole; only a share that HAS a fraction shows
+   it, to two places. Same rule in npayroll_script.js, which prices this —
+   change one, change the other. */
+function capFmt(v) {
+  const n = Number(v || 0);
+  if (!n) return '—';
+  const r = Math.round(n * 100) / 100;
+  return Number.isInteger(r)
+    ? r.toLocaleString()
+    : r.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 /* Capacity each worker earned on one work type: every ticked row hands its
    plot capacity out equally among the workers ticked on it. Same arithmetic
    the on-screen table uses, pulled out so the PDF can run it for all four
@@ -786,7 +803,7 @@ function renderPayroll() {
         <td class="plot-td">${r.plot}</td>
         <td>${cap ? cap.toLocaleString() : '—'}</td>
         ${wk.map(w => `<td class="check-td${cells[w] ? ' ticked' : ''}" onclick="togglePayrollTick(${r.id},'${String(w).replace(/'/g, "\\'")}')" title="${w}"></td>`).join('')}
-        <td style="font-weight:700;">${share ? Math.round(share).toLocaleString() : '—'}</td>
+        <td style="font-weight:700;">${capFmt(share)}</td>
       </tr>`;
     });
   }
@@ -800,8 +817,8 @@ function renderPayroll() {
     <tr class="jumlah-tr">
       <td class="th-left">${t('pay.totalCap')}</td><td></td>
       <td>${capTotal ? capTotal.toLocaleString() : '—'}</td>
-      ${wk.map(w => `<td>${Math.round(totals[w]).toLocaleString()}</td>`).join('')}
-      <td>${Math.round(grand).toLocaleString()}</td></tr>
+      ${wk.map(w => `<td>${capFmt(totals[w])}</td>`).join('')}
+      <td>${capFmt(grand)}</td></tr>
   </tfoot>`;
   tbl.innerHTML = h;
 }
@@ -1067,7 +1084,7 @@ function downloadPayrollPDF() {
             cell(xs[3 + i], y, widths[3 + i], ROW_H, '', { fill: z });
             if (cells[w]) drawTick(xs[3 + i], y, widths[3 + i], ROW_H);
           });
-          cell(xs[iPer], y, widths[iPer], ROW_H, share ? Math.round(share).toLocaleString() : '—',
+          cell(xs[iPer], y, widths[iPer], ROW_H, capFmt(share),
                { size: 8.5, bold: true, nowrap: true, fill: z });
           y += ROW_H;
         });
@@ -1078,8 +1095,8 @@ function downloadPayrollPDF() {
       cell(xs[0], y, widths[0] + widths[1], ROW_H + 1, t('pay.totalCap'), { bold: true, size: 8.5, fill: TOTAL_FILL });
       cell(xs[2], y, widths[2], ROW_H + 1, capTotal ? capTotal.toLocaleString() : '—', { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
       chunk.forEach((w, i) => cell(xs[3 + i], y, widths[3 + i], ROW_H + 1,
-        totals[w] ? Math.round(totals[w]).toLocaleString() : '—', { bold: true, size: 8, nowrap: true, fill: TOTAL_FILL }));
-      cell(xs[iPer], y, widths[iPer], ROW_H + 1, grand ? Math.round(grand).toLocaleString() : '—',
+        capFmt(totals[w]), { bold: true, size: 8, nowrap: true, fill: TOTAL_FILL }));
+      cell(xs[iPer], y, widths[iPer], ROW_H + 1, capFmt(grand),
            { bold: true, size: 8.5, nowrap: true, fill: TOTAL_FILL });
       y += ROW_H + 1;
 
