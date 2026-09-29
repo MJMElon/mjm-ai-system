@@ -125,19 +125,98 @@ async function loadNurseryRegister() {
   fillMaintNurseries();
 }
 
-/* The claim's nursery dropdown, from the register. Keeps whatever was chosen
-   if that nursery is still there — the read lands after the first paint, and
-   rebuilding the list must not quietly move somebody to another nursery. */
-function fillMaintNurseries() {
-  const el = $('maint-nursery');
-  if (!el) return;
-  const want = el.value;
-  el.innerHTML = MAINT_NURSERIES
-    .map(c => `<option value="${esc(c)}">${esc(c + ' — ' + (NURSERY_FULL[c] || c))}</option>`)
-    .join('');
-  el.value = MAINT_NURSERIES.includes(want) ? want
-           : (MAINT_NURSERIES.includes('BNN') ? 'BNN' : (MAINT_NURSERIES[0] || ''));
+/* ── THE CLAIM'S NURSERY PICKER: CIRCLES, NOT A DROPDOWN ────────────────────
+
+   A salary claim is read one nursery at a time — you check BNN, sign it, then
+   check UNN 1 — so the nurseries belong on the bar where you can see all of
+   them and which one you are in. A dropdown hid two of the three answers
+   behind a click and never said how many there were.
+
+   THE <select> IS STILL THERE, HIDDEN, and is still the value. Roughly a
+   dozen lines on this page ask it what is chosen — renderMaint, the PDF, the
+   lock scope, renderEntries' filter — and a picker that changed shape must
+   not also change what any of them read. The circles set it and fire its
+   change, exactly as a finger on the dropdown did.
+
+   THE THREE ARE A FLOOR, NOT A CEILING. Anything else that actually has work
+   filed against it this month gets a circle of its own after them. A nursery
+   with a real claim must never become unreachable because it is not one of
+   the three named — that is how a claim goes unpaid with nobody the wiser. */
+const CLAIM_NURSERIES  = ['BNN', 'UNN1', 'UNN2'];
+const CLAIM_PILL_LABEL = { PN:'PN', BNN:'BNN', UNN1:'UNN 1', UNN2:'UNN 2',
+                           UNE:'UNE', Driver:'Driver', __none:'No section' };
+/* The circle for work whose plot matched no payroll section at all. It only
+   ever appears when there IS such work: without it that work is invisible
+   under every circle, which is a claim quietly going short. */
+const NO_SECTION = '__none';
+
+/* Does this row belong under the chosen circle? */
+const inSection = (sec, v) => sec === NO_SECTION ? !(v || '') : (v || '') === sec;
+
+function renderClaimPills(wrapId, selId, extras, onPick) {
+  const wrap = $(wrapId), sel = $(selId);
+  if (!wrap || !sel) return;
+  const codes = CLAIM_NURSERIES.concat(
+    (extras || []).filter((c, i, a) => c && !CLAIM_NURSERIES.includes(c) && a.indexOf(c) === i));
+  /* Keep what was chosen where it still exists — the field read lands after
+     the first paint, and a redraw must not quietly move somebody to another
+     nursery mid-check. */
+  const want = codes.includes(sel.value) ? sel.value : codes[0];
+  sel.innerHTML = codes.map(c =>
+    `<option value="${esc(c)}">${esc(c === NO_SECTION ? 'No section'
+                                   : c + ' — ' + (NURSERY_FULL[c] || c))}</option>`).join('');
+  sel.value = want;
+  wrap.innerHTML = codes.map(c => `
+    <button type="button" class="npill${c === want ? ' on' : ''}${c === NO_SECTION ? ' npill-odd' : ''}"
+            data-code="${esc(c)}"
+            title="${esc(c === NO_SECTION
+                        ? 'Work whose plot matches no payroll section. Check the plot’s nursery in Facility Management.'
+                        : (NURSERY_FULL[c] || c))}"
+      >${esc(CLAIM_PILL_LABEL[c] || c)}</button>`).join('');
+  wrap.querySelectorAll('.npill').forEach(b => b.onclick = () => {
+    if (sel.value === b.dataset.code) return;
+    sel.value = b.dataset.code;
+    renderClaimPills(wrapId, selId, extras, onPick);
+    try { onPick(); } catch (_) {}
+  });
 }
+
+/* Nurseries outside the three that have a Work Maintenance claim this month —
+   PN, whose P01–P52 are maintained like any other plot, and anything
+   Facility Management has since added. */
+function maintExtraNurseries() {
+  const m = monthValue();
+  return MAINT_NURSERIES.filter(c => {
+    if (CLAIM_NURSERIES.includes(c)) return false;
+    try { return maintWorkerNames(c, m).length > 0; } catch (_) { return false; }
+  });
+}
+
+/* Sections outside the three with transplanting this month — the field's own
+   rows and anything keyed by hand, including work that matched no section. */
+function transplantExtraSections() {
+  const seen = new Set();
+  try { transplantFieldLines().forEach(l => seen.add(l.section || NO_SECTION)); } catch (_) {}
+  try {
+    entries.filter(e => e.category === 'transplanting')
+           .forEach(e => seen.add(e.section || NO_SECTION));
+  } catch (_) {}
+  return [...seen].filter(c => c && !CLAIM_NURSERIES.includes(c));
+}
+
+/* Both pickers, redrawn. Called wherever the month or the data changes, so
+   the extra circles follow what is actually filed rather than what was
+   filed when the page opened. */
+function renderClaimPickers() {
+  renderClaimPills('maint-nursery-pills',   'maint-nursery',   maintExtraNurseries(),
+                   () => renderMaint());
+  renderClaimPills('transpl-section-pills', 'transpl-section', transplantExtraSections(),
+                   () => renderEntries('transplanting'));
+}
+
+/* Kept as its own name because loadNurseryRegister calls it: the register
+   read is what adds a nursery this module had never heard of. */
+function fillMaintNurseries() { try { renderClaimPickers(); } catch (_) {} }
 
 /* The roles a worker can hold. One list, offered in every section. */
 const ROLES = [
@@ -368,6 +447,10 @@ function activeSub() {
 }
 function refreshPayrollTab() {
   const s = activeSub();
+  /* Before anything reads a picker: the extra circles depend on the month's
+     own data, so a month change has to redraw them before the sheet under
+     them is drawn. */
+  try { renderClaimPickers(); } catch (_) {}
   /* Every strip, not only the visible one. They are cheap, the month picker
      changes all five at once, and a stale strip on the sub-tab somebody
      switches to is exactly the thing that invites them to start keying into
@@ -932,16 +1015,17 @@ const SHEET = {
 function renderTransplantClaim() {
   const secFilter = $('transpl-section').value || '';
   const lines = transplantFieldLines()
-    .filter(l => !secFilter || (l.section || '') === secFilter);
+    .filter(l => !secFilter || inSection(secFilter, l.section));
 
+  const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
   const sub = $('transpl-sub');
-  if (sub) sub.textContent = `From the FC Portal${secFilter ? ' \u00b7 ' + (SECTION_NAME[secFilter] || secFilter) : ''}`
+  if (sub) sub.textContent = `From the FC Portal${secFilter ? ' \u00b7 ' + secName(secFilter) : ''}`
                            + ` \u00b7 ${monthLabel(monthValue())}`;
 
   if (!lines.length) {
     $('transpl-table').innerHTML = `<tbody><tr><td class="empty">
       No transplanting recorded in the FC Portal for ${esc(monthLabel(monthValue()))}${
-      secFilter ? ' in ' + esc(SECTION_NAME[secFilter] || secFilter) : ''}.
+      secFilter ? ' in ' + esc(secName(secFilter)) : ''}.
       A conductor records it under Maintenance &rarr; Transplanting Job.
     </td></tr></tbody>`;
     $('transpl-note').textContent = '';
@@ -1071,12 +1155,16 @@ function renderEntries(category) {
   // where a change to it lands.
   try { renderVerifyBar(sheet); } catch (_) {}
   const locked = sheetLocked(sheet);
-  const addBtn = document.querySelector(`#sub-${sheet} .bar-actions .btn-primary`);
+  /* By its own mark, not by being the first primary button on the bar:
+     Transplanting now has the claim-form download beside Add Entry, and the
+     first-primary rule would have greyed the download in a closed month and
+     left Add Entry live. */
+  const addBtn = document.querySelector(`#sub-${sheet} .bar-actions [data-add]`);
   if (addBtn) { addBtn.disabled = locked; addBtn.title = locked ? 'This month is closed.' : ''; }
   const secFilter = $(cfg.section).value || '';
   const list = entries
     .filter(e => e.category === category)
-    .filter(e => !secFilter || (e.section || '') === secFilter)
+    .filter(e => !secFilter || inSection(secFilter, e.section))
     .sort((a, b) => String(a.work_date || '').localeCompare(String(b.work_date || '')) || a.id - b.id);
 
   /* Transplanting's own claim is the matrix above; this table is only what
@@ -1579,6 +1667,9 @@ const lockScope = (sheet) => (LOCK_SHEETS[sheet] ? LOCK_SHEETS[sheet].scope() : 
    is every section of that sheet — which is what verifying then closes, so
    the strip has to say so rather than name nothing. */
 function scopeLabel(sheet, scope) {
+  /* NO_SECTION is a circle, not a nursery, so it has no register name to
+     fall back on — without this the strip reads "__none". */
+  if (scope === NO_SECTION) return 'work with no section';
   if (scope) return NURSERY_FULL[scope] || scope;
   if (sheet === 'monthly') return 'the whole month';
   if (sheet === 'maint')   return 'every nursery';
@@ -2052,6 +2143,134 @@ function downloadMaintPDF() {
   doc.save(`Salary_Claim_Work_Maintenance_${n}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
 }
 
+/* The Transplanting claim, on paper.
+
+   Deliberately the same form as Work Maintenance's above — same title block,
+   same three header rows (the job, the rate it pays, then Capacity and Total
+   under it), same Grand Total, same footer. One office signs both, and a
+   second layout for the same question is a form somebody has to learn twice.
+
+   It prints what the SCREEN shows, adjustments included, for the reason
+   downloadMaintPDF gives: a PDF that disagreed with the screen would be
+   found out at the counter.
+
+   Only workers the register knows are printed. A name the FC typed that
+   matches nobody cannot be paid — the screen says so in red above the
+   table — and a claim form that carried it would be a claim form for a
+   person the payroll has no row for. */
+function downloadTransplantPDF() {
+  if (!mayDo('transpl', 'export',
+      'You do not have permission to download the salary claim form.')) return;
+  const sec = $('transpl-section').value || '';
+  const monthTxt = monthLabel(monthValue());
+  const secTxt = sec === NO_SECTION ? 'No section'
+               : (NURSERY_FULL[sec] ? `${NURSERY_FULL[sec]} (${sec})` : (SECTION_NAME[sec] || sec));
+
+  const lines = transplantFieldLines().filter(l => !sec || inSection(sec, l.section));
+  const names = [...new Set(lines.filter(l => l.known).map(l => l.worker_name))]
+    .sort((a, b) => a.localeCompare(b));
+  if (!names.length) { alert('Nothing to claim for this nursery this month.'); return; }
+
+  const rateOf = key => {
+    const l = lines.find(x => x.key === key && x.rate != null);
+    return l ? l.rate : null;
+  };
+  const rateTxtOf = key => {
+    const r = rateOf(key);
+    if (r == null) return '—';
+    const u = (lines.find(x => x.key === key && x.rate != null) || {}).unit;
+    return rateTxt(r) + (u ? ' / ' + u : '');
+  };
+  const capOf = (n, key) => cap2(lines
+    .filter(l => l.worker_name === n && l.key === key)
+    .reduce((s, l) => s + Number(l.qty || 0), 0));
+  const rmOf = (n, key) => {
+    const r = rateOf(key);
+    return r == null ? 0 : Math.round(capOf(n, key) * Math.round(r * 100000) / 1000) / 100;
+  };
+  const secOf = n => (lines.find(l => l.worker_name === n) || {}).section || '';
+  const payOf = (n, key) => {
+    const a = adjOf('transplanting', secOf(n), n, key);
+    return a ? Number(a.amount || 0) : rmOf(n, key);
+  };
+  const earned = n => TRANSPLANT_JOBS.reduce((s, j) => s + payOf(n, j.key), 0);
+
+  const doc = pdfDoc();
+  const COL = [7, 30, 11, 15, 11, 15, 11, 15, 11, 15, 19];
+  const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, 25);
+  const PAIR = i => 2 + i * 2, I_TOTAL = COL.length - 1;
+  const HF = [232, 236, 252], TF = [222, 228, 250];
+
+  const drawHead = () => {
+    let y = pdfTitle(doc, ['SALARY CLAIM FORM — TRANSPLANTING', secTxt, `Month ${monthTxt}`]);
+    const H1 = 9, H2 = 7, H3 = 7, HT = H1 + H2 + H3;
+    pdfCell(doc, X[0], y, COL[0], HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
+    pdfCell(doc, X[1], y, COL[1], HT, 'Worker', { bold: true, size: 8.5, fill: HF });
+    TRANSPLANT_JOBS.forEach((j, i) => {
+      const c = PAIR(i);
+      pdfCell(doc, X[c], y, COL[c] + COL[c+1], H1, j.label, { bold: true, size: 7.5, fill: HF });
+      pdfCell(doc, X[c], y + H1, COL[c] + COL[c+1], H2, rateTxtOf(j.key), { size: 7, nowrap: true, fill: HF });
+      pdfCell(doc, X[c],   y + H1 + H2, COL[c],   H3, 'Capacity',   { bold: true, size: 6.5, nowrap: true, fill: HF });
+      pdfCell(doc, X[c+1], y + H1 + H2, COL[c+1], H3, 'Total (RM)', { bold: true, size: 6.5, nowrap: true, fill: HF });
+    });
+    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], HT, 'Subtotal (RM)', { bold: true, size: 7.5, fill: HF });
+    return y + HT;
+  };
+
+  let y = drawHead();
+  const RH = 9;
+  names.forEach((n, i) => {
+    if (y + RH > 297 - 25 - 40) { doc.addPage(); y = drawHead(); }
+    const z = i % 2 ? [250, 250, 253] : null;
+    pdfCell(doc, X[0], y, COL[0], RH, String(i + 1), { size: 8, nowrap: true, fill: z });
+    pdfCell(doc, X[1], y, COL[1], RH, n, { size: 8.5, fill: z });
+    TRANSPLANT_JOBS.forEach((j, k) => {
+      const c = PAIR(k), cap = capOf(n, j.key);
+      pdfCell(doc, X[c],   y, COL[c],   RH, capFmt(cap), { size: 8, nowrap: true, fill: z });
+      pdfCell(doc, X[c+1], y, COL[c+1], RH, (cap || adjOf('transplanting', secOf(n), n, j.key))
+              ? 'RM ' + payOf(n, j.key).toFixed(2) : '—', { size: 7.5, nowrap: true, fill: z });
+    });
+    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH, 'RM ' + earned(n).toFixed(2),
+            { bold: true, size: 8.5, nowrap: true, fill: z });
+    y += RH;
+  });
+
+  pdfCell(doc, X[0], y, COL[0] + COL[1], RH + 1, 'Grand Total', { bold: true, size: 8.5, fill: TF });
+  TRANSPLANT_JOBS.forEach((j, k) => {
+    const c = PAIR(k);
+    const cs = names.reduce((s, n) => s + capOf(n, j.key), 0);
+    const rs = names.reduce((s, n) => s + payOf(n, j.key), 0);
+    pdfCell(doc, X[c],   y, COL[c],   RH + 1, capFmt(cs), { bold: true, size: 8, nowrap: true, fill: TF });
+    pdfCell(doc, X[c+1], y, COL[c+1], RH + 1, 'RM ' + rs.toFixed(2), { bold: true, size: 7.5, nowrap: true, fill: TF });
+  });
+  pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH + 1,
+          'RM ' + names.reduce((s, n) => s + earned(n), 0).toFixed(2),
+          { bold: true, size: 9, nowrap: true, fill: TF });
+  y += RH + 1;
+
+  /* Anybody the field credited who is not on the register is named UNDER the
+     total rather than left off it in silence — the form is what goes for
+     payment, and "this much is missing, and why" has to travel with it. */
+  const lost = [...new Set(lines.filter(l => !l.known).map(l => l.worker_name))].sort();
+  if (lost.length) {
+    const held = lost.reduce((s, n) => {
+      const cap = k => cap2(lines.filter(l => l.worker_name === n && l.key === k)
+                                 .reduce((a, l) => a + Number(l.qty || 0), 0));
+      return s + TRANSPLANT_JOBS.reduce((a, j) => {
+        const r = rateOf(j.key);
+        return a + (r == null ? 0 : Math.round(cap(j.key) * Math.round(r * 100000) / 1000) / 100);
+      }, 0);
+    }, 0);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(150, 30, 30);
+    doc.text(`NOT CLAIMED — not on the worker register: ${lost.join(', ')} (RM ${held.toFixed(2)})`,
+             25, y + 6, { maxWidth: 160 });
+    y += 8;
+  }
+
+  pdfFooterNote(doc, y);
+  doc.save(`Salary_Claim_Transplanting_${sec === NO_SECTION ? 'No_Section' : (sec || 'All')}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
+}
+
 function downloadMonthlyPDF() {
   if (!mayDo('monthly', 'export',
       'You do not have permission to download the monthly payroll.')) return;
@@ -2261,7 +2480,9 @@ $('global-month').addEventListener('change', async () => {
     try { savedMonth = localStorage.getItem('npayroll_month'); } catch (_) {}
     $('global-month').value = savedMonth || todayMonth();
 
-    fillSectionSelect($('transpl-section'),  true, '');
+    /* transpl-section is NOT filled here — renderClaimPills owns it, and the
+       circles offer nurseries rather than every section this module files
+       under. */
     fillSectionSelect($('seedling-section'), true, '');
     fillSectionSelect($('other-section'),    true, '');
     fillSectionSelect($('monthly-section'),  true, '');

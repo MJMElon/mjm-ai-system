@@ -357,3 +357,26 @@ tfoot td.l { text-align: left; }
    a button that looked ready and did nothing. */
 .btn:disabled, .btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
 .btn:disabled:hover, .btn[disabled]:hover { transform: none; }
+
+/* ── The claim's nursery picker: circles, not a dropdown ──────────────────
+   Three nurseries, all three on the bar, the chosen one filled in. A
+   dropdown hid two of the three answers behind a click and told nobody how
+   many there were; a claim is read nursery by nursery, so the nurseries
+   belong on the bar.
+
+   The <select> it replaces is still in the DOM, hidden — see
+   renderClaimPills. Everything else on the page asks that select what is
+   chosen, and a picker that changed shape must not also change what they
+   read. */
+.nsel { display: inline-flex; align-items: center; gap: 7px; }
+.npill { font-family: inherit; font-size: 12px; font-weight: 800; letter-spacing: .03em;
+         height: 38px; min-width: 38px; padding: 0 16px; border-radius: 999px;
+         border: 1.5px solid var(--border); background: var(--white); color: var(--text-muted);
+         cursor: pointer; transition: .12s; white-space: nowrap; }
+.npill:hover { border-color: var(--ink-mid); color: var(--ink-dark); background: var(--ink-light); }
+.npill.on { background: var(--ink); border-color: var(--ink); color: #fff; box-shadow: var(--shadow-sm); }
+.npill.on:hover { background: var(--ink-dark); color: #fff; }
+/* The circle that only appears when something has no section at all. It is a
+   fault, not a place, so it does not dress like the nurseries. */
+.npill.npill-odd { border-style: dashed; border-color: var(--red-bd, #fda4af); color: var(--red, #c0392b); }
+.npill.npill-odd.on { background: var(--red, #c0392b); border-color: var(--red, #c0392b); color: #fff; }
