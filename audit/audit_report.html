@@ -84,9 +84,16 @@ html,body{min-height:100%;font-family:'Outfit',system-ui,sans-serif;font-size:16
 .filter-card{background:var(--card);border:1px solid var(--line);border-left:10px solid var(--green);
              border-radius:1.75rem;padding:20px 22px 18px;box-shadow:0 1px 3px rgba(16,40,60,.05);
              margin-bottom:24px}
-/* auto-fit, so the three selects sit in a row on a desk and stack on a
-   phone without a breakpoint having to name either case. */
-.filter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+/* Month/Year narrow and fixed — a month name and a four-digit year never
+   need a 210px-wide column — Nursery sized to exactly fit its four chips
+   on one line (max-content, not 1fr, so it doesn't stretch or wrap), and
+   Plot takes whatever's left over. All four in the one row on a desk;
+   the 900px query below falls back to the old auto-fit wrap for anything
+   narrower. */
+.filter-grid{display:grid;grid-template-columns:130px 100px max-content 1fr;gap:16px;align-items:end}
+@media (max-width:900px){
+  .filter-grid{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+}
 .filter-label{font-size:10px;font-weight:800;color:var(--ink3);text-transform:uppercase;
               letter-spacing:1px;margin-bottom:6px}
 .select-wrap{position:relative}
