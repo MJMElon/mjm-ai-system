@@ -679,10 +679,23 @@ const MOD_COLS={
   ]
 };
 
+// Plot then Batch, both ascending — rows otherwise came back in whatever
+// order Supabase happened to return them (newest-entered first in
+// practice), which read as plot DESCENDING (B14, B12, B11, …) rather than
+// the field-walk order B01, B02, B03, … an auditor actually reads a
+// nursery in. Numeric-aware compare so B2 sorts before B10, not after it;
+// papan's batch column is batch_no, maintenance has no batch at all — ??
+// falls through to plot-only ordering for that one.
+function _auditPlotBatchSort(rows){
+  const natCmp=(a,b)=>String(a??'').localeCompare(String(b??''),undefined,{numeric:true,sensitivity:'base'});
+  return rows.slice().sort((a,b)=>natCmp(a.plot,b.plot)||natCmp(a.batch??a.batch_no,b.batch??b.batch_no));
+}
+
 function buildModTable(mod, rows){
   if(!rows||!rows.length) return '<div class="no-data">No records found.</div>';
   const cols=MOD_COLS[mod];
   if(!cols) return '<div class="no-data">No records found.</div>';
+  rows=_auditPlotBatchSort(rows);
 
   const head='<tr>'+cols.map(c=>`<th>${esc(c.h)}</th>`).join('')+'</tr>';
   let body='';
