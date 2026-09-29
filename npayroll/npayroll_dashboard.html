@@ -16,13 +16,16 @@
 <!-- Pairing the field's work to a schedule row, so the claim prices what a
      worker recorded whether or not the office screen has been opened. -->
 <script src="../shared/shared_maint_field.js?v=1"></script>
+<!-- When a payroll month stops being editable: verification per sheet, and
+     the month lock calendar behind it. -->
+<script src="../shared/shared_npayroll_lock.js?v=1"></script>
 <!-- Which location a section sits in — Pre Nursery, Main Nursery, Estate.
      The same file System Setting's Location card and the Team Board read, so
      the Estate is kept off the maintenance sheets by one rule rather than by
      three copies of it. -->
 <script src="../shared/shared_worker_locations.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="npayroll_styles.css?v=11">
+<link rel="stylesheet" href="npayroll_styles.css?v=12">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -56,6 +59,9 @@
     <button class="tab active" data-tab="payroll" onclick="switchTab('payroll')">💵 Payroll</button>
     <button class="tab"        data-tab="rates"   onclick="switchTab('rates')">🏷️ Piece Rate</button>
     <!-- Shown only to users who may change other people's access. -->
+    <!-- Shown only to somebody with Lock Controls. It is the one screen that
+         can re-open a month that has been verified and paid. -->
+    <button class="tab hidden" id="tab-btn-locks" data-tab="locks" onclick="switchTab('locks')">⚙️ System Setting</button>
     <a class="tab tab-access hidden" id="user-access-tab" href="npayroll_user_access.html">🔐 User Access</a>
   </nav>
 
@@ -100,6 +106,7 @@
           <button class="btn btn-primary" onclick="downloadMaintPDF()">⬇ Salary Claim Form (PDF)</button>
         </div>
       </div>
+            <div class="verify-bar" id="vb-maint"></div>
       <div class="card"><div class="tbl-wrap"><table id="maint-table"></table></div></div>
       <p class="foot-note" id="maint-note"></p>
     </div>
@@ -118,6 +125,7 @@
       </div>
       <!-- The claim: workers down, the four jobs across, the same shape as
            Work Maintenance so one sheet is read the way the other is. -->
+      <div class="verify-bar" id="vb-transpl"></div>
       <div class="card"><div class="tbl-wrap"><table id="transpl-table"></table></div></div>
       <div id="transpl-note" class="bar-sub" style="padding:.6rem .2rem 0;white-space:normal;"></div>
       <!-- Anything the field could not express, keyed by hand. Hidden until
@@ -142,6 +150,7 @@
           <button class="btn btn-primary" onclick="openEntry('seedlings')">+ Add Entry</button>
         </div>
       </div>
+            <div class="verify-bar" id="vb-seedling"></div>
       <div class="card"><div class="tbl-wrap"><table id="seedling-table"></table></div></div>
     </div>
 
@@ -157,6 +166,7 @@
           <button class="btn btn-primary" onclick="openEntry('other')">+ Add Entry</button>
         </div>
       </div>
+            <div class="verify-bar" id="vb-other"></div>
       <div class="card"><div class="tbl-wrap"><table id="other-table"></table></div></div>
     </div>
 
@@ -172,6 +182,7 @@
           <button class="btn btn-primary" onclick="downloadMonthlyPDF()">⬇ Monthly Payroll (PDF)</button>
         </div>
       </div>
+            <div class="verify-bar" id="vb-monthly"></div>
       <div class="card"><div class="tbl-wrap"><table id="monthly-table"></table></div></div>
       <p class="foot-note" id="monthly-note"></p>
     </div>
@@ -194,6 +205,43 @@
     </div>
     <div id="rate-groups"></div>
     <p class="foot-note">A rate is copied onto a work entry when it is keyed, so changing it here never restates a month already paid.</p>
+  </section>
+
+  <!-- ═══════════ SYSTEM SETTING — LOCK CONTROLS ═══════════ -->
+  <section id="tab-locks" class="panel">
+    <div class="bar">
+      <div>
+        <div class="bar-title">🔒 Lock Controls</div>
+        <div class="bar-sub">A payroll month closes one of two ways: somebody verifies a sheet, or the
+          month itself locks. This calendar is the second, and the only thing that re-opens the first.</div>
+      </div>
+    </div>
+    <div id="lock-setup" class="warn hidden">
+      <b>⚠️ Lock Controls are not switched on yet.</b>
+      Run <code>shared/RUN_ME_npayroll_locks.sql</code> in the Supabase SQL Editor, then reload.
+      Until then nothing locks and nothing can be verified.
+    </div>
+    <div class="card" style="padding:20px;">
+      <div class="lock-head">
+        <div class="lock-title">Month Lock Calendar</div>
+        <div class="lock-why">Each month auto-locks every payroll sheet on the day below, next month.
+          Click a month to force it locked or unlocked by hand instead. Re-opening a month also takes
+          back the verifications on it — the sheets go back to being editable, and whoever checked them
+          has to check them again.</div>
+      </div>
+      <div class="lock-ctrls">
+        <label class="lock-field"><span>Year</span>
+          <select id="lk-year" class="sel" onchange="renderLockCalendar()"></select></label>
+        <label class="lock-field"><span>Lock day</span>
+          <input type="number" id="lk-day" class="sel" min="1" max="28" style="width:5.5rem;"></label>
+        <button class="btn" id="lk-day-save" onclick="saveLockDay()">Save</button>
+        <span class="lock-hint">of the following month — applies from this month onward</span>
+        <span style="flex:1"></span>
+        <button class="btn" id="lk-toggle-all" onclick="toggleLockYear()"></button>
+      </div>
+      <div id="lk-months" class="lock-grid"></div>
+      <p class="foot-note" id="lk-note"></p>
+    </div>
   </section>
 
   <p class="access-note">
@@ -297,7 +345,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=27"></script>
+<script src="npayroll_script.js?v=28"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

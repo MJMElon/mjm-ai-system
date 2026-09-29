@@ -309,3 +309,51 @@ tfoot td.l { text-align: left; }
              font-family: inherit; font-size: 11px; font-weight: 800;
              transition: border-color .15s, color .15s, background .15s; }
 .wchip-add:hover { border-color: var(--ink-faint); color: var(--ink-dark); background: var(--ink-light); }
+
+/* ── When a payroll month stops being editable ──────────────────────────
+   A strip above each sheet saying whether it is open, verified or locked.
+   It is not a badge tucked in a corner: somebody about to key a Friday's
+   work needs to see that the month is shut BEFORE they start, not when the
+   save is refused. */
+.verify-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+              padding: 10px 14px; border-radius: 12px; margin-bottom: 12px;
+              font-size: 12px; font-weight: 700; line-height: 1.4; }
+.verify-bar:empty { display: none; }
+.verify-open   { background: #f8fafc; border: 1.5px solid var(--border); color: var(--text-faint); }
+.verify-done   { background: #ecfdf5; border: 1.5px solid #6ee7b7; color: #065f46; }
+.verify-locked { background: #fff1f2; border: 1.5px solid #fda4af; color: #9f1239; }
+.verify-bar .vb-who { font-weight: 800; }
+.verify-bar .vb-spacer { flex: 1; }
+
+/* ── Lock Controls ──────────────────────────────────────────────────── */
+.lock-head { border-bottom: 1.5px solid var(--border); padding-bottom: 12px; margin-bottom: 14px; }
+.lock-title { font-size: 15px; font-weight: 900; color: var(--text-head);
+              text-transform: uppercase; letter-spacing: .1em; }
+.lock-why { font-size: 12px; font-weight: 600; color: var(--text-faint); margin-top: 6px; line-height: 1.5; }
+.lock-ctrls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-bottom: 16px; }
+.lock-field { display: flex; flex-direction: column; gap: 4px; }
+.lock-field span { font-size: 10px; font-weight: 900; text-transform: uppercase;
+                   letter-spacing: .15em; color: var(--text-faint); }
+.lock-hint { font-size: 11px; font-weight: 600; color: var(--text-faint); align-self: center; }
+.lock-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+/* One month. The whole card is the button — a small round icon beside a
+   label is two targets for one decision. */
+.lock-month { display: flex; flex-direction: column; align-items: center; gap: 6px;
+              padding: 14px 10px; border-radius: 14px; cursor: pointer;
+              font-family: inherit; text-align: center;
+              border: 1.5px solid var(--border); background: #fff;
+              transition: transform .12s, box-shadow .12s; }
+.lock-month:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.lock-month:disabled { cursor: not-allowed; opacity: .75; }
+.lock-month .lm-icon { font-size: 20px; line-height: 1; }
+.lock-month .lm-name { font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: .1em; }
+.lock-month .lm-how  { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .12em; }
+.lock-month .lm-date { font-size: 10px; font-weight: 700; color: var(--text-faint); }
+.lock-open   { background: #ecfdf5; border-color: #6ee7b7; color: #065f46; }
+.lock-shut   { background: #fff1f2; border-color: #fda4af; color: #9f1239; }
+
+/* A button that is off has to LOOK off. Add Entry keeps its own background,
+   so the browser's own greying never showed through and a closed month left
+   a button that looked ready and did nothing. */
+.btn:disabled, .btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn:disabled:hover, .btn[disabled]:hover { transform: none; }
