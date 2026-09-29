@@ -1864,6 +1864,20 @@
     let _custFilterLast = '';
     let _custMainTab = 'booking';
 
+    // Collection tab's month columns only ever grow — every month with an
+    // actual collection stays forever, unlike Booking's current-month-
+    // onward window. Collapsed to the most recent few by default; the
+    // toggle button (#coll-months-toggle) switches this and re-renders.
+    // Total Collected/Balance are unaffected either way, since those sum
+    // every month regardless of which are shown — see renderCollectionGrid().
+    const COLL_MONTHS_DEFAULT = 6;
+    let _collMonthsExpanded = false;
+    function toggleCollMonths() {
+        _collMonthsExpanded = !_collMonthsExpanded;
+        renderCollectionGrid();
+    }
+    window.toggleCollMonths = toggleCollMonths;
+
     // Order-status filter — a custom dropdown (see .cf-* in the HTML) in
     // place of the state a native <select> would otherwise hold.
     let _custFilter = 'all';
@@ -2145,6 +2159,19 @@
         });
         const nowKey = monthKey(new Date());
 
+        // Collapsed by default to the most recent COLL_MONTHS_DEFAULT — see
+        // toggleCollMonths(). Months are sorted ascending above, so the
+        // recent ones are the tail end of the array.
+        const canCollapse = months.length > COLL_MONTHS_DEFAULT;
+        const visibleMonths = (_collMonthsExpanded || !canCollapse) ? months : months.slice(-COLL_MONTHS_DEFAULT);
+        const toggleBtn = document.getElementById('coll-months-toggle');
+        if (toggleBtn) {
+            toggleBtn.classList.toggle('hidden', !canCollapse);
+            toggleBtn.textContent = _collMonthsExpanded
+                ? `← Show last ${COLL_MONTHS_DEFAULT} months only`
+                : `Show all ${months.length} months →`;
+        }
+
         thead.innerHTML = `
             <tr>
                 <th class="h-cust" style="width:38px;">#</th>
@@ -2152,13 +2179,13 @@
                 <th>Order Month</th>
                 <th>Status</th>
                 <th>Ordered Qty</th>
-                ${months.map(m => `<th class="h-mo${m.key===nowKey?' is-now':''}">${m.label.replace(' ','<br>')}</th>`).join('')}
+                ${visibleMonths.map(m => `<th class="h-mo${m.key===nowKey?' is-now':''}">${m.label.replace(' ','<br>')}</th>`).join('')}
                 <th class="h-tot">Total<br>Collected</th>
                 <th class="h-tot">Balance</th>
                 <th class="h-tot">Order Total</th>
             </tr>`;
 
-        const colsTotal = 5 + months.length + 3;
+        const colsTotal = 5 + visibleMonths.length + 3;
         if (!allRows.length) {
             tbody.innerHTML = `<tr><td colspan="${colsTotal}" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">📥</div><div class="text-[10px] font-bold uppercase tracking-widest">No customer orders match the filter</div></td></tr>`;
             tfoot.innerHTML = '';
@@ -2173,14 +2200,19 @@
         const endIdx   = Math.min(startIdx + CUST_PAGE_SIZE, totalRows);
         const rows     = allRows.slice(startIdx, endIdx);
 
+        // Keyed by month key rather than a visibleMonths-sized array — the
+        // footer needs to show only the visible months' totals while
+        // totDoAll (Total Collected) still has to sum every month, shown
+        // or not, so this is computed once over the FULL months list and
+        // looked up by key wherever a subset is actually rendered.
         let totQty = 0, totDoAll = 0, totBalance = 0, totAmt = 0;
-        const colTotals = months.map(() => 0);
+        const colTotals = new Map(months.map(m => [m.key, 0]));
         allRows.forEach(r => {
             totQty += r.totalQty; totBalance += r.balance; totAmt += (r.totalAmount || 0);
             const byMonth = doByAl[r.alNumber] || {};
-            months.forEach((m, i) => {
+            months.forEach(m => {
                 const q = byMonth[m.key] || 0;
-                colTotals[i] += q;
+                colTotals.set(m.key, colTotals.get(m.key) + q);
                 totDoAll += q;
             });
         });
@@ -2193,10 +2225,13 @@
             const rowStyle = rowCancelled ? 'style="background:#fef2f2"' : '';
             const cancelStrike = rowCancelled ? 'style="text-decoration:line-through;color:#a83020"' : '';
             const byMonth = doByAl[r.alNumber] || {};
-            let rowTotal = 0;
-            const cellsHtml = months.map(m => {
+            // Total Collected for this row sums every month it ever had a
+            // DO in, same as totDoAll above — a hidden older month must
+            // not drop out of this figure just because its column isn't
+            // on screen right now.
+            const rowTotal = Object.values(byMonth).reduce((a, b) => a + b, 0);
+            const cellsHtml = visibleMonths.map(m => {
                 const qty = byMonth[m.key] || 0;
-                rowTotal += qty;
                 const cls = ['t-mo', qty ? 'has-qty' : '', m.key === nowKey ? 'is-now' : ''].filter(Boolean).join(' ');
                 const inner = qty
                     ? `<span class="cust-link" onclick="openCollectionDrilldown('${escapeHtml(r.customer||'').replace(/'/g,"\\'")}','${escapeHtml(r.orderNumber||'').replace(/'/g,"\\'")}','${m.key}')" title="Delivery Date / DO Number for ${m.label}">${qty.toLocaleString()}</span>`
@@ -2217,7 +2252,7 @@
                 </tr>`;
         }).join('');
 
-        const monthFootCells = months.map((m, i) => `<td class="t-tot">${colTotals[i] ? colTotals[i].toLocaleString() : '—'}</td>`).join('');
+        const monthFootCells = visibleMonths.map(m => `<td class="t-tot">${colTotals.get(m.key) ? colTotals.get(m.key).toLocaleString() : '—'}</td>`).join('');
 
         const pages = (() => {
             const out = new Set([1, totalPages, _custPage]);

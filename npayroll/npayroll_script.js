@@ -551,6 +551,363 @@ async function removeRate(id) {
   renderRates();
 }
 
+/* ════════════ ADJUSTING WHAT A JOB EARNED ════════════
+   The claims work the money out — capacity from the field, rate from Piece
+   Rate, one times the other — and usually that is the answer. Sometimes it
+   is not: a plot half done, a rate that was wrong all month, something
+   agreed with a worker on the day. The office has to be able to pay a
+   different figure WITHOUT going back and falsifying what was done.
+
+   So an adjustment overrides the money and touches nothing else. The
+   capacity, the rate and the figure they come to all stay on the sheet, with
+   the new number over them and the reason beside — a month reads back as
+   "this is what it came to, this is what we paid, this is why they differ".
+
+   Storage is mjmnpayroll_earn_adjustments; see
+   shared/RUN_ME_earn_adjustments.sql in this repository. */
+let earnAdj = [];            // this month's overrides, both sheets
+
+/* Its own tick on User Access, per sheet — 'maint' or 'transpl'. Reading what
+   a month pays and changing it are different jobs, so holding the sheet is
+   not holding this.
+
+   This one does NOT fail open, and that is a deliberate exception to the rule
+   above it. `may()` answers yes for a user nobody has configured, because the
+   thing it is asked about existed before per-function access did and taking it
+   away on a deploy would be the bug. Typing over what a month pays has never
+   existed, so there is no earlier behaviour to fall back to — falling open
+   here would hand a power to everybody on the day it shipped. Where nobody has
+   been asked, the answer is the module admin, which is where it would sit if
+   the tick were never used at all. */
+function mayAdjust(page) {
+  if (!may(page)) return false;              // sheet closed to them → so is this
+  let acts = null;
+  try { acts = (MJMAccess.permissions() || {}).npayroll_actions; } catch (_) {}
+  const set = acts && acts[page];
+  return set ? !!set.adjust : !!isAdmin;
+}
+
+const _adjKey = (sheet, section, name, code) =>
+  [sheet, section || '', name, code].join('\u0001');
+
+async function loadEarnAdj() {
+  const res = await _supabase.from('mjmnpayroll_earn_adjustments')
+    .select('*').eq('month', monthValue())
+    .then(r => r, () => ({ data: [] }));
+  // A database without the table is not an error: the payroll ran before
+  // this existed and must go on running.
+  earnAdj = (res && !res.error && res.data) ? res.data : [];
+}
+
+function adjOf(sheet, section, name, code) {
+  return earnAdj.find(a => _adjKey(a.sheet, a.section, a.worker_name, a.work_code)
+                        === _adjKey(sheet, section, name, code)) || null;
+}
+
+/* One Earned cell, with whatever has been decided about it.
+   `worked` is what the sheet worked out. Where an adjustment exists it is
+   the figure shown, the worked-out one is kept underneath, and the reason is
+   on hover — nothing is hidden by paying something else. */
+function earnedCell(sheet, page, section, name, code, jobLabel, worked) {
+  const a = adjOf(sheet, section, name, code);
+  const shown = a ? Number(a.amount || 0) : worked;
+  /* A closed month offers no pencil. The click refuses anyway, but a cell
+     that invites an edit it will not take is worse than one that does not
+     invite it. */
+  const canEdit = mayAdjust(page) && !sheetLocked(page);
+  const open  = canEdit
+    ? ` onclick="openAdjust('${sheet}','${page}','${_esc1(section)}','${_esc1(name)}','${_esc1(code)}','${_esc1(jobLabel)}',${worked})"`
+      + ' style="cursor:pointer;" title="Adjust what this job earned"'
+    : '';
+  if (!a && !worked) return `<td${open}>—</td>`;
+  return `<td class="money"${open}>${money(shown)}`
+       + (a ? `<div style="font-size:.7rem;font-weight:600;color:var(--danger,#c0392b);white-space:nowrap;"
+                title="${esc(a.reason || '')}${a.adjusted_by ? ' — ' + esc(a.adjusted_by) : ''}"
+                >adjusted · was ${money(worked)}</div>` : '')
+       + (canEdit && !a ? '<span style="color:var(--text-faint);font-size:.7rem;"> \u270e</span>' : '')
+       + '</td>';
+}
+/* A value going into a JS string inside an HTML attribute crosses TWO
+   quotings, and needs both. The four transplanting jobs are literally named
+   `15" X 18"` — one round of escaping puts a bare double quote inside
+   onclick="…", which ends the attribute and hands the rest of the call to the
+   HTML parser. Backslash-escape for the string, then HTML-escape for the
+   attribute; the browser undoes them in that same order. */
+const _esc1 = v => esc(String(v == null ? '' : v).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+
+/* What a worker earned on one sheet, after any adjustment — the figure the
+   monthly claim has to use, or the claim would pay the sheet's arithmetic
+   and the office would pay something else. */
+function earnedAfterAdj(sheet, section, name, codes, workedOf) {
+  return codes.reduce((s, c) => {
+    const a = adjOf(sheet, section, name, c);
+    return s + (a ? Number(a.amount || 0) : workedOf(c));
+  }, 0);
+}
+
+let _adj = null;     // the cell the modal is open on
+function openAdjust(sheet, page, section, name, code, jobLabel, worked) {
+  /* The same question the cell asked before it drew itself, asked again at
+     the click — the two must not be able to disagree. */
+  if (!mayAdjust(page)) {
+    alert('You do not have permission to change what a job earned.\n\n'
+        + 'Ask an admin to grant Adjust Pay in User Access.');
+    return;
+  }
+  /* An adjustment is money on a sheet, so a closed month refuses it the same
+     way it refuses a keyed entry. */
+  if (!lockAllows(page)) return;
+  const a = adjOf(sheet, section, name, code);
+  _adj = { sheet, page, section, name, code, worked: Number(worked || 0) };
+  $('adj-title').textContent  = a ? 'Change this adjustment' : 'Adjust Earned';
+  $('adj-who').value    = name;
+  $('adj-job').value    = jobLabel;
+  $('adj-was').value    = money(worked);
+  $('adj-amount').value = a ? a.amount : '';
+  $('adj-reason').value = a ? (a.reason || '') : '';
+  $('adj-meta').textContent = a && a.adjusted_by
+    ? `Last changed by ${a.adjusted_by}${a.adjusted_at ? ' on ' + String(a.adjusted_at).slice(0, 10) : ''}`
+    : '';
+  $('adj-clear').style.display = a ? '' : 'none';
+  $('adjust-modal').classList.add('open');
+}
+
+async function saveAdjust() {
+  if (!_adj) return;
+  // Again at the save: a month can close while the form is open.
+  if (!lockAllows(_adj.page)) return;
+  const amt = parseFloat($('adj-amount').value);
+  if (!isFinite(amt) || amt < 0) { alert('Enter what this job should pay, in RM.'); return; }
+  const reason = $('adj-reason').value.trim();
+  // Required, not merely asked for: an adjustment nobody explained is one
+  // nobody can defend three months later.
+  if (!reason) { alert('Say why. The reason is kept with the figure.'); return; }
+  $('adj-save').disabled = true;
+  try {
+    const { error } = await _supabase.from('mjmnpayroll_earn_adjustments').upsert({
+      month: monthValue(), sheet: _adj.sheet, section: _adj.section || '',
+      worker_name: _adj.name, work_code: _adj.code,
+      amount: Math.round(amt * 100) / 100, reason,
+      adjusted_by: userEmail || null, adjusted_at: new Date().toISOString()
+    }, { onConflict: 'month,sheet,section,worker_name,work_code' });
+    if (error) throw error;
+    closeModal('adjust-modal');
+    await loadEarnAdj();
+    refreshPayrollTab();
+  } catch (e) {
+    alert('Could not save the adjustment.\n\n' + (e.message || e));
+  } finally { $('adj-save').disabled = false; }
+}
+
+async function clearAdjust() {
+  if (!_adj) return;
+  if (!lockAllows(_adj.page)) return;
+  if (!confirm('Put this back to what the sheet worked out?')) return;
+  const { error } = await _supabase.from('mjmnpayroll_earn_adjustments')
+    .delete()
+    .eq('month', monthValue()).eq('sheet', _adj.sheet).eq('section', _adj.section || '')
+    .eq('worker_name', _adj.name).eq('work_code', _adj.code);
+  if (error) { alert('Could not put it back: ' + error.message); return; }
+  closeModal('adjust-modal');
+  await loadEarnAdj();
+  refreshPayrollTab();
+}
+
+/* Capacity, to two places where it has them.
+   A plot's quantity divided among the people who worked it rarely comes out
+   whole — 2,200 across three is 733.33 — and rounding each share to a whole
+   number made three of them add up to 2,199 against a plot of 2,200.
+   `cap2` is what is BOTH shown and priced, so the row on screen multiplies
+   out to the money beside it and this page agrees with the Work Maintenance
+   Worker Record it reads. Same rule in
+   nursery_ops/plot_maintenance_script.js — change one, change the other. */
+const cap2   = v => Math.round(Number(v || 0) * 100) / 100;
+const capFmt = v => {
+  const n = cap2(v);
+  if (!n) return '—';
+  return Number.isInteger(n)
+    ? n.toLocaleString()
+    : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+/* ════════════ TRANSPLANTING, AS THE FIELD RECORDED IT ════════════
+   The FC Portal's Transplanting Job button writes one row per plot per job
+   per month — who did the blanket spray, the lining, the polybag filling and
+   the transplanting itself — with the quantity taken from the Transplanting
+   Report rather than typed. Those rows are priced here, so the office does
+   not key a second time what the field has already said.
+
+   They are shown READ-ONLY beside the keyed entries and counted in the same
+   total. Editing one would mean the payroll and the field record disagreeing
+   about the same morning with nothing on either screen to say which is
+   right; the fix for a wrong record is to correct it in the FC Portal, where
+   it was made. Anything the field cannot express is still keyed with + Add
+   Entry, exactly as before.
+
+   The four jobs, and the office's own wording for each. Mirrors
+   TRANSPLANT_JOBS in FC-Portal/src/modules/maintenance/transplantData.js —
+   change one, change the other. `jenis` is what a Piece Rate row is matched
+   on, which is why it is stored on the record rather than derived here. */
+/* `mark` is the WORD that tells this job apart from the other three, in both
+   languages, and it is how a Piece Rate is found when its description is not
+   one of the spellings above.
+
+   Exact wording has now drifted three times. The office types the job into
+   Piece Rate in its own words — "Blanket Spraying", "Lining and Arranging
+   Polybag" — and every one of those is one letter or one "and" away from a
+   name listed here, so an exact match found nothing and four columns of real
+   work priced at zero with the capacity sitting right there beside them.
+
+   The marks are chosen so that no rate for one job can contain another's:
+   "polybag" appears in three of these four descriptions and is not a mark;
+   "lining", "filling", "blanket" and "transplant" appear in exactly one each.
+   A mark that ever matches two rate rows prices NEITHER — see transplantRate. */
+const TRANSPLANT_JOBS = [
+  { key:'blanket_spray', jenis:'Menyembur rumput secara rata',
+    label:'Blanket Spray',                        aka:['Blanket Spray'],
+    mark:['blanket', 'menyembur'] },
+  { key:'lining',        jenis:'Menyusun dan mengatur polibeg 15" X 18"',
+    label:'Lining & Arranging Polybag 15" x 18"', aka:['Menyusun polibeg'],
+    mark:['lining', 'arranging', 'menyusun', 'mengatur'] },
+  { key:'polybag_fill',  jenis:'Mengisi polibeg 15" X 18"', split:true,
+    label:'Polybag Filling 15" x 18"',            aka:['Mengisi polibeg'],
+    mark:['filling', 'mengisi'] },
+  { key:'transplanting', jenis:'Memindah anak sawit ke polibeg besar',
+    label:'Transplanting (Hy Plug to big polybag)', aka:['Menanam anak benih'],
+    mark:['transplant', 'hyplug', 'memindah', 'menanam'] }
+];
+const TRANSPLANT_JOB = Object.fromEntries(TRANSPLANT_JOBS.map(j => [j.key, j]));
+
+let transplantField = [];      // the FC Portal's rows for the month on screen
+
+/* NOT filtered on a verification column, unlike loadMaint's field records.
+   Those can be recorded by a WORKER from the Worker Portal, so a conductor's
+   signature is what makes them payable — nobody signs for their own work.
+   A transplanting row is written by the conductor himself, from his own
+   portal: keying it IS the signature, and there is no second person to wait
+   for. If that ever changes, this is the line that has to change with it. */
+async function loadTransplantField() {
+  const res = await _supabase.from('nops_transplant_field_records')
+    .select('work_date, nursery_name, plot_name, batch_name, work_type, jenis, schedule_month, source_qty, workers, total_qty')
+    .eq('schedule_month', monthLabel(monthValue()))
+    .then(r => r, () => ({ data: [] }));
+  // A database without the table is not an error here: the office ran the
+  // payroll module before this button existed and must go on running it.
+  transplantField = (res && !res.error && res.data) ? res.data : [];
+}
+
+/* "UNN 1" and "UNN1" are one nursery. shared_plots spells it with a space,
+   the payroll sections without one. Same question shared_access.js's
+   nurseryKey asks — kept local because this file imports nothing from it. */
+const _tpKey = v => String(v == null ? '' : v).replace(/[^a-z0-9]/gi, '').toUpperCase();
+
+/* A Piece Rate for one of the four jobs, within the transplanting category
+   (or a rate nobody has filed under a sheet yet).
+
+   EVERY name the job has ever gone by is tried, not just the record's own:
+   the wording on a record is whatever the FC Portal used the day it was
+   saved, and the wording on a Piece Rate is whatever the office typed. Those
+   two dates are not the same. Matching on one string would mean that
+   renaming a job — which the office did, to the nursery's real Malay names —
+   silently stopped last month's work pricing, with the sheet showing "no
+   rate" and nobody able to say why.
+
+   Returns null when nothing matches. The row is then shown with no rate
+   rather than priced at zero, because a zero that looks like a price is
+   worse than a blank that asks a question. */
+/* Jobs whose mark matched more than one Piece Rate, so nothing was priced.
+   Filled by transplantRate, read by the claim's notes — guessing between two
+   rates is how somebody gets paid the wrong one and nobody ever finds out. */
+let transplantRateClash = {};
+
+function transplantRate(rec) {
+  const job = TRANSPLANT_JOB[rec.work_type];
+  const pool = rates.filter(r => r.active !== false
+    && (!r.category || r.category === 'transplanting'));
+
+  // The spellings we know, first. An exact match is never ambiguous.
+  const want = [rec.jenis, job && job.jenis, job && job.label]
+    .concat((job && job.aka) || [])
+    .filter(Boolean).map(_tpNorm);
+  const exact = pool.find(r => want.includes(_tpNorm(r.job_desc)));
+  if (exact) return exact;
+
+  // Then the job's own word, wherever the office put it in the description.
+  const marks = (job && job.mark) || [];
+  if (!marks.length) return null;
+  const hits = pool.filter(r => {
+    const d = _tpNorm(r.job_desc);
+    return marks.some(m => d.includes(m));
+  });
+  if (hits.length === 1) return hits[0];
+  if (hits.length > 1 && job) {
+    transplantRateClash[job.key] = hits.map(r => r.job_desc);
+  }
+  return null;
+}
+const _tpNorm = v => String(v == null ? '' : v).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * The field's rows, as payroll lines — one per worker per record.
+ *
+ * THE SHARE. Polybag filling carries its own split: the conductor keyed how
+ * many bags each person filled and the total was made to agree with the
+ * report before it would save, so those numbers are used as they stand.
+ *
+ * The other three carry names and no numbers, and are divided EQUALLY among
+ * the workers credited. That is not a choice made here — it is the rule the
+ * maintenance module already pays by ("every ticked row hands its plot
+ * capacity out equally among the workers ticked on it", payrollTotalsFor in
+ * plot_maintenance_script.js). Two sheets on one claim must not divide the
+ * same kind of work two different ways.
+ */
+function transplantFieldLines() {
+  const out = [];
+  transplantRateClash = {};
+  transplantField.forEach(rec => {
+    const job = TRANSPLANT_JOB[rec.work_type];
+    const crew = Array.isArray(rec.workers) ? rec.workers.filter(w => w && w.name) : [];
+    if (!crew.length) return;
+    const rate = transplantRate(rec);
+    const cap  = Number(rec.source_qty || 0);
+    crew.forEach(w => {
+      const qty = job && job.split
+        ? Number(w.qty || 0)
+        : (crew.length ? cap / crew.length : 0);
+      const known = workers.find(x => (x.full_name || '').trim().toLowerCase()
+                                   === String(w.name).trim().toLowerCase());
+      out.push({
+        fc: true,
+        // Which of the four jobs, so the claim can put the figure in the
+        // right column without matching on a label somebody may translate.
+        key: rec.work_type,
+        work_date: rec.work_date,
+        worker_name: w.name,
+        known,
+        // The worker's own section where the register knows them; the plot's
+        // nursery otherwise, so an unmatched name still lands in the right
+        // block rather than in none.
+        section: (known && known.section) || _tpSection(rec.nursery_name),
+        job_desc: (job && job.label) || rec.jenis || rec.work_type,
+        plot: rec.plot_name,
+        qty,
+        unit: rate ? rate.unit : '',
+        rate: rate ? Number(rate.rate || 0) : null,
+        amount: rate ? qty * Number(rate.rate || 0) : 0
+      });
+    });
+  });
+  return out.sort((a, b) => String(a.work_date || '').localeCompare(String(b.work_date || ''))
+                         || String(a.worker_name).localeCompare(String(b.worker_name)));
+}
+
+/* The plot's nursery as a payroll section code, where one matches. */
+function _tpSection(nursery) {
+  const k = _tpKey(nursery);
+  const hit = SECTIONS.find(s => _tpKey(s.code) === k);
+  return hit ? hit.code : '';
+}
+
 /* ════════════ TRANSPLANTING / SEEDLINGS ════════════ */
 const SHEET = {
   transplanting: { table:'transpl-table',  section:'transpl-section',  title:'Transplanting' },
@@ -560,6 +917,152 @@ const SHEET = {
      rate keyed against Other now has a sheet to price. */
   other:         { table:'other-table',    section:'other-section',    title:'Others' }
 };
+
+/**
+ * The Transplanting claim: workers down the left, the four jobs across the
+ * top, capacity and money under each, total earned on the right.
+ *
+ * The same shape as Work Maintenance's claim (renderMaint) on purpose — one
+ * office reads both, and a sheet that answers the same question in a
+ * different layout is a sheet somebody has to learn twice.
+ *
+ * Every figure is the FC Portal's, priced here. What each worker did is
+ * theirs; what it comes to is this page's.
+ */
+function renderTransplantClaim() {
+  const secFilter = $('transpl-section').value || '';
+  const lines = transplantFieldLines()
+    .filter(l => !secFilter || (l.section || '') === secFilter);
+
+  const sub = $('transpl-sub');
+  if (sub) sub.textContent = `From the FC Portal${secFilter ? ' \u00b7 ' + (SECTION_NAME[secFilter] || secFilter) : ''}`
+                           + ` \u00b7 ${monthLabel(monthValue())}`;
+
+  if (!lines.length) {
+    $('transpl-table').innerHTML = `<tbody><tr><td class="empty">
+      No transplanting recorded in the FC Portal for ${esc(monthLabel(monthValue()))}${
+      secFilter ? ' in ' + esc(SECTION_NAME[secFilter] || secFilter) : ''}.
+      A conductor records it under Maintenance &rarr; Transplanting Job.
+    </td></tr></tbody>`;
+    $('transpl-note').textContent = '';
+    return;
+  }
+
+  /* One row per person credited, not the whole register. Work Maintenance
+     lists everybody because it has a tick sheet to fill in; this sheet has
+     nothing to key, so a worker with no transplanting this month is a row of
+     dashes nobody needs. */
+  const names = [...new Set(lines.map(l => l.worker_name))]
+    .sort((a, b) => a.localeCompare(b));
+  const knownOf = n => (lines.find(l => l.worker_name === n) || {}).known;
+  const rateOf  = key => {
+    const l = lines.find(x => x.key === key && x.rate != null);
+    return l ? l.rate : null;
+  };
+  /* "RM 0.38 / Bag" — the unit is the Piece Rate screen's own, carried down
+     the line with the rate. A rate with no unit is half a rate: nobody can
+     check RM 0.38 without knowing what it is 0.38 of. */
+  const rateCell = key => {
+    const r = rateOf(key);
+    if (r == null) return '\u2014';
+    const u = (lines.find(x => x.key === key && x.rate != null) || {}).unit;
+    return rateTxt(r) + (u ? ' / ' + u : '');
+  };
+  /* Capacity to two places first, then priced — the same order renderMaint
+     uses, so the row on screen multiplies out to the money beside it. */
+  const capOf = (n, key) => cap2(lines
+    .filter(l => l.worker_name === n && l.key === key)
+    .reduce((s, l) => s + Number(l.qty || 0), 0));
+  const rmOf = (n, key) => {
+    const r = rateOf(key);
+    if (r == null) return 0;
+    return Math.round(capOf(n, key) * Math.round(r * 100000) / 1000) / 100;
+  };
+  /* The worker's section, which is where an adjustment against them is filed
+     — the same key the Monthly Payroll reads it back under. It is the
+     register's section where the register knows them, so it does not move
+     when somebody changes the section filter above. */
+  const secOf  = n => (lines.find(l => l.worker_name === n) || {}).section || '';
+  const payOf  = (n, key) => {
+    const a = adjOf('transplanting', secOf(n), n, key);
+    return a ? Number(a.amount || 0) : rmOf(n, key);
+  };
+  const earned = n => TRANSPLANT_JOBS.reduce((s, j) => s + payOf(n, j.key), 0);
+
+  // The office's claim form, same three rows as Work Maintenance: the job,
+  // the rate it pays, then Capacity and Total under it.
+  const head = `
+    <thead>
+      <tr>
+        <th rowspan="3" style="width:44px;">No.</th>
+        <th rowspan="3" class="l">Worker</th>
+        ${TRANSPLANT_JOBS.map(j => `<th colspan="2">${esc(j.label)}</th>`).join('')}
+        <th rowspan="3" style="width:120px;">Subtotal (RM)</th>
+      </tr>
+      <tr>${TRANSPLANT_JOBS.map(j =>
+        `<th colspan="2" style="font-weight:600;font-size:12px;">${esc(rateCell(j.key))}</th>`).join('')}</tr>
+      <tr>${TRANSPLANT_JOBS.map(() =>
+        '<th style="width:90px;">Capacity</th><th style="width:110px;">Total (RM)</th>').join('')}</tr>
+    </thead>`;
+
+  const body = names.map((n, i) => `
+    <tr>
+      <td style="color:var(--text-faint);">${i + 1}</td>
+      <td class="l" style="font-weight:700;color:var(--text-head);">${esc(n)}${
+        knownOf(n) ? '' : '<span title="Not on the worker register — add them in Worker System, or the claim cannot pay this" style="color:var(--danger,#c0392b);"> &#9888;</span>'}</td>
+      ${TRANSPLANT_JOBS.map(j => {
+        const c = capOf(n, j.key);
+        return `<td>${capFmt(c)}</td>` + earnedCell('transplanting', 'transpl', secOf(n), n, j.key,
+                                                    j.label, c ? rmOf(n, j.key) : 0);
+      }).join('')}
+      <td class="money">${money(earned(n))}</td>
+    </tr>`).join('');
+
+  const capSum = key => names.reduce((s, n) => s + capOf(n, key), 0);
+  const rmSum  = key => names.reduce((s, n) => s + payOf(n, key), 0);
+  const grand  = names.reduce((s, n) => s + earned(n), 0);
+  const foot = `
+    <tfoot><tr>
+      <td colspan="2">Grand Total</td>
+      ${TRANSPLANT_JOBS.map(j => `<td>${capFmt(capSum(j.key))}</td><td>${money(rmSum(j.key))}</td>`).join('')}
+      <td>${money(grand)}</td>
+    </tr></tfoot>`;
+
+  $('transpl-table').innerHTML = head + `<tbody>${body}</tbody>` + foot;
+
+  /* Anything that would make the claim short is said FIRST, because a claim
+     missing work looks exactly like a quiet month. */
+  const notes = [];
+  const unknown = names.filter(n => !knownOf(n));
+  if (unknown.length) {
+    const held = unknown.reduce((s, n) => s + earned(n), 0);
+    notes.push(`${money(held)} of this is NOT in the salary claim — ${unknown.map(esc).join(', ')} `
+             + `${unknown.length === 1 ? 'is' : 'are'} not on the worker register. `
+             + 'Add them in Worker System, or correct the spelling there.');
+  }
+  /* Two rates the job's word cannot choose between. Named, because the
+     alternative is paying one of them and never knowing which. */
+  Object.entries(transplantRateClash).forEach(([key, descs]) => {
+    const j = TRANSPLANT_JOBS.find(x => x.key === key);
+    if (!j || !capSum(key)) return;
+    notes.push(`${esc(j.label)} matches more than one piece rate — ${descs.map(esc).join(' and ')} `
+             + '— so it prices at nothing. Retire the one you do not use, or rename it.');
+  });
+  const clashed = new Set(Object.keys(transplantRateClash));
+  const unpriced = TRANSPLANT_JOBS.filter(j =>
+    capSum(j.key) > 0 && rateOf(j.key) == null && !clashed.has(j.key));
+  if (unpriced.length) {
+    notes.push(`No piece rate set for ${joinAnd(unpriced.map(j => esc(j.label)))} — add it under `
+             + 'Piece Rate, used for Transplanting. Until then that work prices at nothing.');
+  }
+  /* Every note left here is a fault, so every one is red. The last used to be
+     a paragraph explaining the arithmetic, and it was the one printed plain —
+     which meant the styling said "this last one is just for information" about
+     whatever note happened to end up last once that paragraph went. */
+  $('transpl-note').innerHTML = notes.map(t =>
+    `<div style="color:var(--danger,#c0392b);font-weight:600;margin-bottom:.25rem;">${t}</div>`
+  ).join('');
+}
 
 function renderEntries(category) {
   const cfg = SHEET[category];
@@ -576,6 +1079,16 @@ function renderEntries(category) {
     .filter(e => !secFilter || (e.section || '') === secFilter)
     .sort((a, b) => String(a.work_date || '').localeCompare(String(b.work_date || '')) || a.id - b.id);
 
+  /* Transplanting's own claim is the matrix above; this table is only what
+     somebody keyed by hand, and it stays out of the way when there is none. */
+  if (category === 'transplanting') {
+    renderTransplantClaim();
+    const wrap = $('transpl-keyed-wrap');
+    if (wrap) wrap.classList.toggle('hidden', !list.length);
+    if (!list.length) { $('transpl-keyed-table').innerHTML = ''; return; }
+  }
+
+  const tableId = category === 'transplanting' ? 'transpl-keyed-table' : cfg.table;
   const wName = id => (workers.find(w => w.id === id) || {}).full_name || '—';
   const rows = list.length ? list.map((e, i) => `
     <tr>
@@ -596,7 +1109,7 @@ function renderEntries(category) {
     : `<tr><td colspan="9" class="empty">Nothing keyed for ${monthLabel(monthValue())} yet.</td></tr>`;
 
   const total = list.reduce((s, e) => s + Number(e.amount || 0), 0);
-  $(cfg.table).innerHTML = `
+  $(tableId).innerHTML = `
     <thead><tr>
       <th style="width:44px;">No.</th><th style="width:110px;">Date</th><th class="l">Worker</th>
       <th style="width:90px;">Section</th><th class="l">Job</th><th style="width:130px;">Quantity</th>
@@ -724,12 +1237,24 @@ async function removeEntry(id) {
    The maintenance module divides a plot's quantity among the workers ticked
    on that row, then pays it at that work type's piece rate. Repeat that here
    so the two always show the same figures. */
+/* `unit` is what the rate is PER, printed under the work's name on the claim
+   form — "RM 0.01 / Bag". The maintenance module's rate table is
+   (nursery, work_type, rate) and carries no unit, and all four of these are
+   paid per polybag, so it is named here rather than invented at the point of
+   printing. A work paid by something else gets its own word here. */
 const MAINT_TYPES = [
-  { code:'pd',       label:'P & D Spraying', jenis:'Penyemburan racun kulat dan serangga' },
-  { code:'manuring', label:'Manuring',       jenis:'Membaja' },
-  { code:'weeding',  label:'Weeding',        jenis:'Merumput' },
-  { code:'interrow', label:'Interrow Spray', jenis:'Meracun rumput secara selingan' }
+  { code:'pd',       label:'P & D Spraying', unit:'Bag', jenis:'Penyemburan racun kulat dan serangga' },
+  { code:'manuring', label:'Manuring',       unit:'Bag', jenis:'Membaja' },
+  { code:'weeding',  label:'Weeding',        unit:'Bag', jenis:'Merumput' },
+  { code:'interrow', label:'Interrow Spray', unit:'Bag', jenis:'Meracun rumput secara selingan' }
 ];
+
+/* The rate as the claim form writes it: "RM 0.01 / Bag", or a dash where no
+   rate has been set. */
+function maintRateTxt(t, rate) {
+  if (rate == null) return '\u2014';
+  return rateTxt(rate) + (t.unit ? ' / ' + t.unit : '');
+}
 
 /* WHY A COLUMN IS EMPTY.
 
@@ -822,38 +1347,47 @@ function maintTotals(nursery, month, ym) {
    records this list has not got, ticks on names this claim has no row for, and
    a quantity that came to nothing. Said per work type, and only about the ones
    that actually came to nought — a column that paid needs no explanation. */
+/* "a, b and c" — a list read out loud, not a machine's comma run. */
+function joinAnd(list) {
+  if (list.length <= 1) return list[0] || '';
+  return list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1];
+}
+
+/* Returns WHY, without naming the work — renderMaint puts the names on,
+   because four columns empty for the same reason is one sentence, not four
+   that differ only in the word at the front. */
 function maintWhyEmpty(code) {
   const d = (maint.why || {})[code];
   if (!d) return '';
   if (d.paid) return '';
   if (!d.rows) {
-    return `${d.label}: no work record for this job in this nursery this month.`;
+    return `no work record for this job in this nursery this month.`;
   }
   if (!d.ticked && d.noTaker.size) {
-    return `${d.label}: recorded in the field, but credited only to ${[...d.noTaker].join(', ')}, `
+    return `recorded in the field, but credited only to ${[...d.noTaker].join(', ')}, `
          + `who ${d.noTaker.size === 1 ? 'has' : 'have'} no row on this claim — so there is nobody `
          + 'to pay it to.';
   }
   if (!d.ticked && !d.tickRows) {
-    return `${d.label}: ${d.rows} work record${d.rows === 1 ? '' : 's'}, nobody ticked on the Worker `
+    return `${d.rows} work record${d.rows === 1 ? '' : 's'}, nobody ticked on the Worker `
          + 'Record and nothing recorded in the field against them — tick who did the work in Work '
          + 'Maintenance and it prices here.';
   }
   if (!d.ticked && d.orphanTicks) {
-    return `${d.label}: ${d.orphanTicks} tick${d.orphanTicks === 1 ? ' sits' : 's sit'} on the Worker `
+    return `${d.orphanTicks} tick${d.orphanTicks === 1 ? ' sits' : 's sit'} on the Worker `
          + 'Record against work records this month no longer has — open Work Maintenance\u2019s Worker '
          + 'Record for this month and tick them again.';
   }
   if (!d.ticked && d.stray.size) {
-    return `${d.label}: the only names ticked are ${[...d.stray].join(', ')}, who have no row on this `
+    return `the only names ticked are ${[...d.stray].join(', ')}, who have no row on this `
          + 'claim — file them under this nursery in Worker System, or correct the spelling.';
   }
   if (!d.ticked) {
-    return `${d.label}: ${d.rows} work record${d.rows === 1 ? '' : 's'}, none of them ticked for `
+    return `${d.rows} work record${d.rows === 1 ? '' : 's'}, none of them ticked for `
          + 'anybody on this claim.';
   }
   // Ticked, but every one came to no quantity.
-  return `${d.label}: ${d.ticked} row${d.ticked === 1 ? '' : 's'} ticked, but none of them has a `
+  return `${d.ticked} row${d.ticked === 1 ? '' : 's'} ticked, but none of them has a `
        + 'quantity — nothing keyed on the work record, and the batch report shows nothing standing on '
        + 'that plot and batch at the work date'
        + (PlotMovement.ready() ? '.' : ', and the batch report has not loaded (reload the page).');
@@ -867,8 +1401,8 @@ function renderMaint() {
   const rateOf = c => (maint.rates[n] || {})[c];
   const per = maintTotals(n, monthTxt, ym);
 
-  $('maint-sub').textContent =
-    `From Work Maintenance · ${NURSERY_FULL[n] || n} · ${monthTxt}`;
+  // The two things a claim form has to say about itself, and no preamble.
+  $('maint-sub').textContent = `${NURSERY_FULL[n] || n} · ${monthTxt}`;
   // The nursery picker changes which claim is being asked about.
   try { renderVerifyBar('maint'); } catch (_) {}
 
@@ -881,32 +1415,40 @@ function renderMaint() {
     return;
   }
 
-  // Money from the rounded capacity, so the printed row multiplies out.
-  const capOf = (w, c) => Math.round(per[w] ? per[w][c] : 0);
+  // Money from the capacity AS SHOWN, so the printed row multiplies out.
+  const capOf = (w, c) => cap2(per[w] ? per[w][c] : 0);
   const rmOf  = (w, c) => {
     const r = rateOf(c);
     if (r == null) return 0;
     return Math.round(capOf(w, c) * Math.round(r * 100000) / 1000) / 100;
   };
-  const earned = w => MAINT_TYPES.reduce((s, t) => s + rmOf(w, t.code), 0);
+  /* What the cell PAYS — the worked-out figure, or the one somebody typed
+     over it. Every total on this sheet is built from payOf rather than rmOf,
+     so an adjusted cell carries through to the row, the column and the grand
+     total. A sheet whose parts were adjusted and whose total was not is the
+     one thing worse than no adjustment at all. The adjustment is filed under
+     the NURSERY, which is what this sheet is scoped by and what the Monthly
+     Payroll re-reads it under. */
+  const payOf  = (w, c) => { const a = adjOf('maint', n, w, c); return a ? Number(a.amount || 0) : rmOf(w, c); };
+  const earned = w => MAINT_TYPES.reduce((s, t) => s + payOf(w, t.code), 0);
 
+  /* The office's own claim form, three header rows: the work, the rate it
+     pays, then Capacity and Total under it. The rate sits INSIDE the work's
+     column group rather than on a row of its own across the sheet, which is
+     what makes it read as "P & D Spraying, at RM 0.01 a bag" instead of as a
+     fourth kind of row. */
   const head = `
     <thead>
       <tr>
-        <th rowspan="2" style="width:44px;">No.</th>
-        <th rowspan="2" class="l">Worker</th>
+        <th rowspan="3" style="width:44px;">No.</th>
+        <th rowspan="3" class="l">Worker</th>
         ${MAINT_TYPES.map(t => `<th colspan="2">${esc(t.label)}</th>`).join('')}
-        <th rowspan="2" style="width:120px;">Total Earned</th>
+        <th rowspan="3" style="width:120px;">Subtotal (RM)</th>
       </tr>
-      <tr>${MAINT_TYPES.map(() => `<th style="width:90px;">Capacity</th><th style="width:110px;">Earned</th>`).join('')}</tr>
-      <tr>
-        <td colspan="2" class="l" style="font-weight:800;background:#fafaff;">Piece Rate</td>
-        ${MAINT_TYPES.map(t => {
-          const r = rateOf(t.code);
-          return `<td colspan="2" style="background:#fafaff;font-size:12px;">${rateTxt(r)}</td>`;
-        }).join('')}
-        <td style="background:#fafaff;"></td>
-      </tr>
+      <tr>${MAINT_TYPES.map(t =>
+        `<th colspan="2" style="font-weight:600;font-size:12px;">${maintRateTxt(t, rateOf(t.code))}</th>`).join('')}</tr>
+      <tr>${MAINT_TYPES.map(() =>
+        `<th style="width:90px;">Capacity</th><th style="width:110px;">Total (RM)</th>`).join('')}</tr>
     </thead>`;
 
   const body = wk.map((w, i) => `
@@ -915,43 +1457,52 @@ function renderMaint() {
       <td class="l" style="font-weight:700;color:var(--text-head);">${esc(w)}</td>
       ${MAINT_TYPES.map(t => {
         const c = capOf(w, t.code);
-        return `<td>${c ? num(c) : '—'}</td><td>${c ? money(rmOf(w, t.code)) : '—'}</td>`;
+        return `<td>${capFmt(c)}</td>` + earnedCell('maint', 'maint', n, w, t.code, t.label,
+                                                    c ? rmOf(w, t.code) : 0);
       }).join('')}
       <td class="money">${money(earned(w))}</td>
     </tr>`).join('');
 
   const capSum = c => wk.reduce((s, w) => s + capOf(w, c), 0);
-  const rmSum  = c => wk.reduce((s, w) => s + rmOf(w, c), 0);
+  const rmSum  = c => wk.reduce((s, w) => s + payOf(w, c), 0);
   const grand  = wk.reduce((s, w) => s + earned(w), 0);
   const foot = `
     <tfoot><tr>
-      <td class="l" colspan="2">GRAND TOTAL</td>
-      ${MAINT_TYPES.map(t => `<td>${num(capSum(t.code))}</td><td>${money(rmSum(t.code))}</td>`).join('')}
+      <td colspan="2">Grand Total</td>
+      ${MAINT_TYPES.map(t => `<td>${capFmt(capSum(t.code))}</td><td>${money(rmSum(t.code))}</td>`).join('')}
       <td>${money(grand)}</td>
     </tr></tfoot>`;
 
   $('maint-table').innerHTML = head + `<tbody>${body}</tbody>` + foot;
 
-  /* WHERE THE SHEET COMES FROM, said on the sheet. Both halves of it are read
-     from somewhere else and neither is obvious from looking: the names are the
-     Worker System's register for this nursery, the capacity is the Work
-     Maintenance schedule's Work Record and Worker Record. What this page does
-     is the money.
-
-     Anything that would make the sheet short is said FIRST, because a claim
-     that is missing work looks exactly like a quiet month. */
+  /* ONLY WHAT IS WRONG.
+     This used to carry a paragraph explaining where the names and the capacity
+     are read from. True, and nobody holding a claim form needs it — it is the
+     module's own workings, and printing it under every sheet buried the notes
+     that matter in the middle of an essay. What is left is the short list of
+     things that would make this claim SHORT, because a claim missing work
+     looks exactly like a quiet month. Nothing wrong, nothing printed. */
   const notes = [];
   /* Why any column came to nothing, first — it is the question somebody is
      holding the sheet to ask. */
-  MAINT_TYPES.forEach(t => { const w = maintWhyEmpty(t.code); if (w) notes.push(w); });
+  /* Grouped by reason. A month where nobody has opened the Worker Record yet
+     has the same thing wrong with all four columns, and saying it four times
+     over reads as four separate problems. */
+  const whyGroups = new Map();
+  MAINT_TYPES.forEach(t => {
+    const w = maintWhyEmpty(t.code);
+    if (!w) return;
+    if (!whyGroups.has(w)) whyGroups.set(w, []);
+    whyGroups.get(w).push(t.label);
+  });
+  whyGroups.forEach((labels, why) => notes.push(joinAnd(labels) + ': ' + why));
   /* Work priced straight from the field. Said out loud because it is the one
      figure on this sheet that nobody has been asked to confirm: the office's
      Worker Record has no tick saved against those rows, and what is being paid
      is the worker's own record of their morning, verified in the field. */
   if (maint.fromField) {
-    notes.push(`${maint.fromField} row${maint.fromField === 1 ? '' : 's'} priced from what the field `
-             + 'recorded, because the Worker Record has no tick saved against them. Ticking them in '
-             + 'Work Maintenance confirms it and overrides this.');
+    notes.push(`${maint.fromField} row${maint.fromField === 1 ? '' : 's'} priced from the field’s own `
+             + 'record, with no tick against them on the Worker Record.');
   }
   /* A name ticked on the Worker Record with no row here loses that worker's
      share of the plot, and the row still looks complete on both screens. */
@@ -959,10 +1510,8 @@ function renderMaint() {
     MAINT_TYPES.flatMap(t => [...(((maint.why || {})[t.code] || {}).stray || [])])
       .concat(maint.fieldUnmatched || []))];
   if (stray.length) {
-    notes.push(`Credited for work but with no row on this claim: ${stray.join(', ')} — their share `
-             + 'of those plots is not priced. File them under this nursery in Worker System as a '
-             + 'general worker, or correct the spelling there. A Field Conductor has no row here '
-             + 'unless their record is ticked as a general worker.');
+    notes.push(`Credited for work but with no row here, so their share is not priced: `
+             + `${stray.join(', ')}. File them under this nursery in Worker System as a general worker.`);
   }
   if (!PlotMovement.ready()) {
     notes.push('The batch report has not loaded, so any work record with no quantity keyed on it '
@@ -974,9 +1523,8 @@ function renderMaint() {
              + 'Nursery Operation → Work Maintenance → Setting → Piece Rate.');
   }
   if (!maint.linked[n]) {
-    notes.push(`No general worker is filed under ${NURSERY_FULL[n] || n} on the Worker System register, `
-             + 'so this is Work Maintenance\u2019s own older list. File them under the nursery in '
-             + 'Worker System and the two lists become one.');
+    notes.push(`No general worker is filed under ${NURSERY_FULL[n] || n} in Worker System, so this is `
+             + 'Work Maintenance\u2019s own older list.');
   }
   if ((maint.orphanPlots || []).length) {
     notes.push(`${maint.orphanPlots.length} plot${maint.orphanPlots.length === 1 ? '' : 's'} `
@@ -991,11 +1539,6 @@ function renderMaint() {
     notes.push(`On this month because they were still here: `
              + gone.map(w => `${w.full_name} (last day ${String(w.last_day).slice(0, 10)})`).join(', ') + '.');
   }
-  notes.push('Workers come from the Worker System register — the ones filed under this nursery and on the '
-           + 'Work Maintenance sheets. Capacity comes from Work Maintenance\u2019s Work Record and Worker '
-           + 'Record: a plot\u2019s quantity divided among the workers ticked on that row, and a row with no '
-           + 'quantity keyed uses the batch report\u2019s closing balance for that plot, batch and work date. '
-           + 'The money is worked out here.');
   $('maint-note').textContent = notes.join(' ');
 }
 
@@ -1288,15 +1831,51 @@ function monthlyRows() {
       const known = byName.get(String(w).trim().toLowerCase());
       const section = known ? (known.section || '') : n;
       if (secFilter && section !== secFilter) return;
-      const amt = MAINT_TYPES.reduce((s, t) => {
-        const r = rateOf(t.code);
-        if (r == null) return s;
-        const cap = Math.round(per[w] ? per[w][t.code] : 0);
-        return s + Math.round(cap * Math.round(r * 100000) / 1000) / 100;
-      }, 0);
+      /* Adjusted where somebody adjusted it — the claim has to pay what the
+         Work Maintenance sheet shows, not what it worked out. Filed under the
+         nursery, which is how that sheet is scoped. */
+      const amt = earnedAfterAdj('maint', n, w, MAINT_TYPES.map(t => t.code), code => {
+        const r = rateOf(code);
+        if (r == null) return 0;
+        const cap = cap2(per[w] ? per[w][code] : 0);
+        return Math.round(cap * Math.round(r * 100000) / 1000) / 100;
+      });
       if (amt) touch(known ? known.full_name : w, section).maint += amt;
     });
   });
+
+  /* The FC Portal's transplanting, priced the same way the sheet above
+     prices it. A name the register does not know is skipped and said out
+     loud on the sheet — the claim pays a worker row, and there is no row to
+     pay. */
+  /* Gathered per worker per job before it is priced, the way the
+     Transplanting sheet does it: capacity to two places first, THEN the rate.
+     Priced line by line the shares of one plot round separately and the claim
+     comes to a few sen away from the sheet it is read against. */
+  {
+    const tl = transplantFieldLines().filter(l => l.known);
+    const rateOfKey = key => {
+      const hit = tl.find(x => x.key === key && x.rate != null);
+      return hit ? hit.rate : null;
+    };
+    const who = new Map();          // full_name -> { section, caps: {key: qty} }
+    tl.forEach(l => {
+      const name = l.known.full_name;
+      if (!who.has(name)) who.set(name, { section: l.known.section || '', caps: {} });
+      const e = who.get(name);
+      e.caps[l.key] = (e.caps[l.key] || 0) + Number(l.qty || 0);
+    });
+    who.forEach((e, name) => {
+      if (secFilter && e.section !== secFilter) return;
+      const amt = earnedAfterAdj('transplanting', e.section, name,
+        Object.keys(e.caps), key => {
+          const r = rateOfKey(key);
+          if (r == null) return 0;
+          return Math.round(cap2(e.caps[key]) * Math.round(r * 100000) / 1000) / 100;
+        });
+      if (amt) touch(name, e.section).transpl += amt;
+    });
+  }
 
   // Keyed sheets.
   entries.filter(e => e.month === month).forEach(e => {
@@ -1406,9 +1985,13 @@ function downloadMaintPDF() {
   if (!wk.length) { alert('No worker on the Work Maintenance list for this nursery.'); return; }
   const rateOf = c => (maint.rates[n] || {})[c];
   const per = maintTotals(n, monthTxt, month);
-  const capOf = (w, c) => Math.round(per[w] ? per[w][c] : 0);
+  const capOf = (w, c) => cap2(per[w] ? per[w][c] : 0);
   const rmOf  = (w, c) => { const r = rateOf(c); return r == null ? 0 : Math.round(capOf(w, c) * Math.round(r * 100000) / 1000) / 100; };
-  const earned = w => MAINT_TYPES.reduce((s, t) => s + rmOf(w, t.code), 0);
+  /* The printed claim is what gets signed and paid, so it prints the ADJUSTED
+     figure — the same one the screen shows. A PDF that disagreed with the
+     screen would be found out at the counter. */
+  const payOf  = (w, c) => { const a = adjOf('maint', n, w, c); return a ? Number(a.amount || 0) : rmOf(w, c); };
+  const earned = w => MAINT_TYPES.reduce((s, t) => s + payOf(w, t.code), 0);
 
   const doc = pdfDoc();
   const COL = [7, 30, 11, 15, 11, 15, 11, 15, 11, 15, 19];
@@ -1416,28 +1999,25 @@ function downloadMaintPDF() {
   const PAIR = i => 2 + i * 2, I_TOTAL = COL.length - 1;
   const HF = [232, 236, 252], TF = [222, 228, 250];
 
+  /* The printed form, laid out like the screen: the work, the rate it pays,
+     then Capacity and Total under it. The rate is INSIDE the work's column
+     group, not on a band of its own across the sheet — the same three rows
+     the office's own claim form has. */
   const drawHead = () => {
     let y = pdfTitle(doc, ['SALARY CLAIM FORM — WORK MAINTENANCE', `${NURSERY_FULL[n] || n} (${n})`, `Month ${monthTxt}`]);
-    const H1 = 9, H2 = 7;
-    pdfCell(doc, X[0], y, COL[0], H1 + H2, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
-    pdfCell(doc, X[1], y, COL[1], H1 + H2, 'Worker Name', { bold: true, size: 8.5, fill: HF });
+    const H1 = 9, H2 = 7, H3 = 7, HT = H1 + H2 + H3;
+    pdfCell(doc, X[0], y, COL[0], HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
+    pdfCell(doc, X[1], y, COL[1], HT, 'Worker', { bold: true, size: 8.5, fill: HF });
     MAINT_TYPES.forEach((t, i) => {
       const c = PAIR(i);
       pdfCell(doc, X[c], y, COL[c] + COL[c+1], H1, t.label, { bold: true, size: 7.5, fill: HF });
-      pdfCell(doc, X[c],   y + H1, COL[c],   H2, 'Capacity', { bold: true, size: 6.5, nowrap: true, fill: HF });
-      pdfCell(doc, X[c+1], y + H1, COL[c+1], H2, 'Earned',   { bold: true, size: 6.5, nowrap: true, fill: HF });
+      pdfCell(doc, X[c], y + H1, COL[c] + COL[c+1], H2, maintRateTxt(t, rateOf(t.code)),
+              { size: 7, nowrap: true, fill: HF });
+      pdfCell(doc, X[c],   y + H1 + H2, COL[c],   H3, 'Capacity',  { bold: true, size: 6.5, nowrap: true, fill: HF });
+      pdfCell(doc, X[c+1], y + H1 + H2, COL[c+1], H3, 'Total (RM)', { bold: true, size: 6.5, nowrap: true, fill: HF });
     });
-    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], H1 + H2, 'Total Earned (RM)', { bold: true, size: 7.5, fill: HF });
-    y += H1 + H2;
-    const RH = 7;
-    pdfCell(doc, X[0], y, COL[0] + COL[1], RH, 'Piece Rate (RM)', { bold: true, size: 7.5, fill: [246, 247, 252] });
-    MAINT_TYPES.forEach((t, i) => {
-      const c = PAIR(i), r = rateOf(t.code);
-      pdfCell(doc, X[c], y, COL[c] + COL[c+1], RH, rateTxt(r),
-              { size: 7, nowrap: true, fill: [246, 247, 252] });
-    });
-    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH, '', { fill: [246, 247, 252] });
-    return y + RH;
+    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], HT, 'Subtotal (RM)', { bold: true, size: 7.5, fill: HF });
+    return y + HT;
   };
 
   let y = drawHead();
@@ -1449,19 +2029,20 @@ function downloadMaintPDF() {
     pdfCell(doc, X[1], y, COL[1], RH, w, { size: 8.5, fill: z });
     MAINT_TYPES.forEach((t, k) => {
       const c = PAIR(k), cap = capOf(w, t.code);
-      pdfCell(doc, X[c],   y, COL[c],   RH, cap ? cap.toLocaleString() : '—', { size: 8, nowrap: true, fill: z });
-      pdfCell(doc, X[c+1], y, COL[c+1], RH, cap ? 'RM ' + rmOf(w, t.code).toFixed(2) : '—', { size: 7.5, nowrap: true, fill: z });
+      pdfCell(doc, X[c],   y, COL[c],   RH, capFmt(cap), { size: 8, nowrap: true, fill: z });
+      pdfCell(doc, X[c+1], y, COL[c+1], RH, (cap || adjOf('maint', n, w, t.code))
+              ? 'RM ' + payOf(w, t.code).toFixed(2) : '—', { size: 7.5, nowrap: true, fill: z });
     });
     pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH, 'RM ' + earned(w).toFixed(2), { bold: true, size: 8.5, nowrap: true, fill: z });
     y += RH;
   });
 
-  pdfCell(doc, X[0], y, COL[0] + COL[1], RH + 1, 'GRAND TOTAL', { bold: true, size: 8.5, fill: TF });
+  pdfCell(doc, X[0], y, COL[0] + COL[1], RH + 1, 'Grand Total', { bold: true, size: 8.5, fill: TF });
   MAINT_TYPES.forEach((t, k) => {
     const c = PAIR(k);
     const cs = wk.reduce((s, w) => s + capOf(w, t.code), 0);
-    const rs = wk.reduce((s, w) => s + rmOf(w, t.code), 0);
-    pdfCell(doc, X[c],   y, COL[c],   RH + 1, cs ? cs.toLocaleString() : '—', { bold: true, size: 8, nowrap: true, fill: TF });
+    const rs = wk.reduce((s, w) => s + payOf(w, t.code), 0);
+    pdfCell(doc, X[c],   y, COL[c],   RH + 1, capFmt(cs), { bold: true, size: 8, nowrap: true, fill: TF });
     pdfCell(doc, X[c+1], y, COL[c+1], RH + 1, 'RM ' + rs.toFixed(2), { bold: true, size: 7.5, nowrap: true, fill: TF });
   });
   pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH + 1, 'RM ' + wk.reduce((s, w) => s + earned(w), 0).toFixed(2),
@@ -1647,7 +2228,7 @@ function maintFieldCredits(nursery, monthLbl, wk) {
 /* ════════════ BOOT ════════════ */
 $('global-month').addEventListener('change', async () => {
   try { localStorage.setItem('npayroll_month', monthValue()); } catch (_) {}
-  await loadEntries();
+  await Promise.all([loadEntries(), loadTransplantField(), loadEarnAdj()]);
   refreshPayrollTab();
   if ($('tab-locks')) { try { renderLockCalendar(); } catch (_) {} }
 });
@@ -1656,7 +2237,7 @@ $('global-month').addEventListener('change', async () => {
    to be on this list and left with the Worker System, and a missing element
    here would have thrown before the page finished setting itself up — taking
    the whole payroll screen down over a dialog nobody had opened. */
-['rate-modal','entry-modal'].forEach(id => {
+['rate-modal','entry-modal','adjust-modal'].forEach(id => {
   const el = $(id);
   if (el) el.addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(id); });
 });
@@ -1688,7 +2269,8 @@ $('global-month').addEventListener('change', async () => {
     /* The register first: the dropdown, the headings and which sheets exist
        all read it, so everything after this should see the real list. */
     await loadNurseryRegister();
-    await Promise.all([loadWorkers(), loadRates(), loadEntries(), loadMaint()]);
+    await Promise.all([loadWorkers(), loadRates(), loadEntries(), loadMaint(),
+                       loadTransplantField(), loadEarnAdj()]);
     resolveMaintWorkers();
 
     /* The batch-report ledger is a much larger read than anything above, and
