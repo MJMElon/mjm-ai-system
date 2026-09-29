@@ -726,6 +726,16 @@
             </div>
 
             <div id="cust-view-collection" class="hidden">
+                <!-- Every month with a collection stays in the table forever —
+                     it only ever grows. Hidden by default down to the most
+                     recent few (see COLL_MONTHS_DEFAULT/renderCollectionGrid()
+                     in operation_stock_sales.js), Total Collected/Balance
+                     unaffected either way since those already sum every
+                     month, shown or not. -->
+                <div class="flex justify-end mb-2">
+                    <button type="button" id="coll-months-toggle" onclick="toggleCollMonths()"
+                        class="text-[9px] font-black text-blue-700 uppercase tracking-widest bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors hidden"></button>
+                </div>
                 <div class="dash-card scroll-x-fade">
                     <table class="cust-table min-w-[1400px]">
                         <thead id="coll-thead"></thead>
