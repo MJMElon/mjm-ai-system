@@ -963,12 +963,14 @@ async function runSeedInReport() {
   out.classList.add('hidden');
   loading.classList.remove('hidden');
 
+  // "As At" is a period window here, same as Transplanting/Culling's own
+  // date range — f-from is that month's 1st (see monthStartOf() in
+  // runReport()), so "As At 31 Aug 2026" means August, not "everything
+  // received since the beginning".
+  const from  = document.getElementById('f-from').value;
   const to    = document.getElementById('f-to').value;
   const breed = document.getElementById('f-breed').value;
   const selectedLocs = new Set(selectedNurseries());
-  // "As At" here — every batch received up to and including this date, the
-  // same cumulative reading Life of Seedling's own As At gives, not a
-  // period-only window like Transplanting/Culling's date range.
   const asAt = to || null;
 
   const allRows = await _losBuildAllRows(asAt);
@@ -976,7 +978,9 @@ async function runSeedInReport() {
 
   let rows = allRows.filter(r => {
     if (breed && r.breed !== breed) return false;
-    if (asAt && r.seedsDate && String(r.seedsDate).slice(0, 10) > asAt) return false;
+    const d = r.seedsDate ? String(r.seedsDate).slice(0, 10) : '';
+    if (asAt && d && d > asAt) return false;
+    if (from && d && d < from) return false;
     // Every Seed In event is inherently Pre-Nursery — shared_inventory_logs
     // hardcodes plot_name:'Pre-Nursery' on every Seeds_Received row (see
     // operation_batch_detail.html's reception-form save). Ticking a
@@ -1436,6 +1440,30 @@ function _rememberDate(dateStr) {
   try { localStorage.setItem(LAST_DATE_KEY, dateStr || ''); } catch (e) { /* private mode, etc — just don't persist */ }
 }
 
+// Same idea again, one level down — which Nursery Report sub-page (and its
+// own Culling Stage / Breed / Locations filters) was open. A refresh used
+// to always drop Seed In Report back to Summary Report with every filter
+// cleared, exactly the "always lands on today" bug the two remembers above
+// already fixed for the report tab and the date. Only restored on a
+// REFRESH (see bootstrap()) — switching sub-reports by hand still resets
+// via syncReportDefaults(), same asymmetry LAST_DATE_KEY already has.
+const LAST_NURSERY_SUB_KEY = 'mjm_reports_last_nursery_sub';
+const LAST_CULLING_STAGE_KEY = 'mjm_reports_last_culling_stage';
+const LAST_BREED_KEY = 'mjm_reports_last_breed';
+const LAST_LOCATIONS_KEY = 'mjm_reports_last_locations';
+function _rememberNurserySub(sub) {
+  try { localStorage.setItem(LAST_NURSERY_SUB_KEY, sub || ''); } catch (e) { /* private mode, etc — just don't persist */ }
+}
+function _rememberCullingStage(stage) {
+  try { localStorage.setItem(LAST_CULLING_STAGE_KEY, stage || ''); } catch (e) { /* private mode, etc — just don't persist */ }
+}
+function _rememberBreed(breed) {
+  try { localStorage.setItem(LAST_BREED_KEY, breed || ''); } catch (e) { /* private mode, etc — just don't persist */ }
+}
+function _rememberLocations(locs) {
+  try { localStorage.setItem(LAST_LOCATIONS_KEY, JSON.stringify(locs || [])); } catch (e) { /* private mode, etc — just don't persist */ }
+}
+
 function selectReport(report) {
   document.getElementById('f-report').value = report;
   _rememberReport(report);
@@ -1635,9 +1663,9 @@ if (_fSort) _fSort.addEventListener('change', runReport);
 // on — so this goes through syncFilterVisibility() first, same as the
 // outer report tabs do, not straight to runReport() like f-sort above.
 const _fNurserySub = document.getElementById('f-nursery-sub');
-if (_fNurserySub) _fNurserySub.addEventListener('change', () => { syncFilterVisibility(); runReport(); });
+if (_fNurserySub) _fNurserySub.addEventListener('change', () => { _rememberNurserySub(_fNurserySub.value); syncFilterVisibility(); runReport(); });
 const _fCullingStage = document.getElementById('f-culling-stage');
-if (_fCullingStage) _fCullingStage.addEventListener('change', runReport);
+if (_fCullingStage) _fCullingStage.addEventListener('change', () => { _rememberCullingStage(_fCullingStage.value); runReport(); });
 
 // Closes the sidebar the moment Run Report is clicked, instead of leaving
 // it open (and covering the results) until the mouse happens to wander
@@ -1663,7 +1691,10 @@ document.getElementById('f-run').addEventListener('click', () => {
 ['f-los-nursery', 'f-los-status', 'f-los-month', 'f-los-year', 'f-los-age', 'f-los-supplier', 'f-breed']
   .forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.addEventListener('change', () => { syncFilterVisibility(); runReport(); });
+    if (el) el.addEventListener('change', () => {
+      if (id === 'f-breed') _rememberBreed(el.value);
+      syncFilterVisibility(); runReport();
+    });
   });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -3232,6 +3263,27 @@ async function bootstrap() {
   } catch (e) { /* private mode, etc — falls back to the plain default */ }
   document.getElementById('f-report').value = DEFAULT_REPORT;
   renderReportTabs();
+  // Reopens whichever Nursery Report sub-page (and Culling Stage, if that
+  // was it) was last open — see LAST_NURSERY_SUB_KEY above. Only applies
+  // when the tab itself is Nursery Report; syncReportDefaults() already
+  // resets both to Summary/All Stages on an actual tab switch, and that
+  // rule stays untouched here.
+  if (DEFAULT_REPORT === 'movement_report') {
+    try {
+      const rememberedSub = localStorage.getItem(LAST_NURSERY_SUB_KEY);
+      const subEl = document.getElementById('f-nursery-sub');
+      if (subEl && rememberedSub && NURSERY_SUB_REPORTS.some(r => r.value === rememberedSub)) {
+        subEl.value = rememberedSub;
+      }
+    } catch (e) { /* private mode, etc — falls back to Summary */ }
+    try {
+      const rememberedStage = localStorage.getItem(LAST_CULLING_STAGE_KEY);
+      const stageEl = document.getElementById('f-culling-stage');
+      if (stageEl && rememberedStage != null && ['', ...Object.keys(CULLING_STAGES)].includes(rememberedStage)) {
+        stageEl.value = rememberedStage;
+      }
+    } catch (e) { /* private mode, etc — falls back to All Stages */ }
+  }
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const fTo = document.getElementById('f-to');
@@ -3254,14 +3306,37 @@ async function bootstrap() {
   fTo.max = todayStr;
   fTo.addEventListener('change', () => _rememberDate(fTo.value));
   await Promise.all([loadBreeds(), loadNurseryFilter()]);
-  // Same rule as selectReport() — a refresh landing straight back on
-  // Movement Report still starts with Locations unticked, not whatever
-  // loadNurseryFilter()'s chips default to.
-  if (DEFAULT_REPORT === 'movement_report') document.querySelectorAll('.f-nurs-cb').forEach(cb => cb.checked = false);
+  // Restores whichever Breed was last picked, loadBreeds() having just
+  // built the option list fresh from shared_breeds — same "don't drop a
+  // deliberate choice on refresh" rule as the date above.
+  try {
+    const rememberedBreed = localStorage.getItem(LAST_BREED_KEY);
+    const breedEl = document.getElementById('f-breed');
+    if (breedEl && rememberedBreed && [...breedEl.options].some(o => o.value === rememberedBreed)) {
+      breedEl.value = rememberedBreed;
+    }
+  } catch (e) { /* private mode, etc — falls back to All Breeds */ }
+  // Same rule as selectReport() — a fresh visit to Movement Report starts
+  // with Locations unticked. A REFRESH is different: it restores whichever
+  // Locations were last ticked, same as the sub-report/date/breed above,
+  // rather than clearing them out from under an unchanged page.
+  if (DEFAULT_REPORT === 'movement_report') {
+    let restoredLocs = null;
+    try {
+      const raw = localStorage.getItem(LAST_LOCATIONS_KEY);
+      if (raw) restoredLocs = JSON.parse(raw);
+    } catch (e) { /* private mode, malformed save, etc — falls back below */ }
+    if (Array.isArray(restoredLocs)) {
+      document.querySelectorAll('.f-nurs-cb').forEach(cb => { cb.checked = restoredLocs.includes(cb.value); });
+    } else {
+      document.querySelectorAll('.f-nurs-cb').forEach(cb => cb.checked = false);
+    }
+  }
   _setSalesView('table');
   document.getElementById('f-mode-table').addEventListener('click', () => { _setSalesView('table'); runReport(); });
   document.getElementById('f-mode-chart').addEventListener('click', () => { _setSalesView('chart'); runReport(); });
   document.addEventListener('change', e => {
+    if (e.target && e.target.classList.contains('f-nurs-cb')) _rememberLocations(selectedNurseries());
     if (e.target && (e.target.classList.contains('f-yr-cb') || e.target.classList.contains('f-nurs-cb'))) runReport();
   });
   syncFilterVisibility();
