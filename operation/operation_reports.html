@@ -945,7 +945,10 @@ async function runLifeOfSeedlings() {
 
   loading.classList.add('hidden');
   out.classList.remove('hidden');
-  out.innerHTML = _losSummaryHtml(rows, tot, scope) + _losBreedHtml(rows, breed, supplier);
+  // The per-breed "Seed In Details" tables that used to follow the summary
+  // were asked off (Sep 2026) — that detail lives in Nursery Report → Seed
+  // In Report, so here it only repeated the summary's own Seed In columns.
+  out.innerHTML = _losSummaryHtml(rows, tot, scope);
   // Where the second header row sticks can only be known once the first one
   // has been laid out — see _losStickyHeads().
   _losWireSticky();
@@ -1379,6 +1382,303 @@ function _losSyncSupplierOptions(suppliers) { _losSyncOptions('f-los-supplier', 
 // first. label is what the tab shows; hint is the fuller description (e.g.
 // "by Plot / Batch") kept as the button's title (a hover tooltip) instead
 // of dropped.
+/* ════════════════════════════════════════════════════════════════════════════
+   LIFE OF PLOT
+
+   One row per main-nursery plot, following the PLOT rather than the batch:
+   every batch that was ever transplanted or transferred into it, what was
+   culled, sold and moved out of it, and what is standing in it now. Click a
+   plot to unfold its full history — every event in date order.
+
+   Built from the SAME events the Movement Report's Main Nursery section
+   reads, with the same rules, so a plot's Standing here and its balance
+   there are the same number:
+     · 3rd Culling counts only once evidenced (MapQty: keyed) — see the
+       matching branch in runMovementReportCombined().
+     · 2nd Culling never deducts (it is Tab 6's running snapshot, already
+       inside the 3rd).
+     · Stock calibrations count only once [APPROVED …].
+     · Sales attach only to a plot·batch the plot actually carries, and a
+       cancelled DO does not count. CAL-… calibration DOs DO count — same
+       rule as Batch Detail Tab 6's Sales figure.
+     Standing = transplanted in + transfer in − sold − 3rd culled
+              − transfer out + stock adjustment  (netOfRow('main', …)).
+════════════════════════════════════════════════════════════════════════════ */
+
+let _lopDetailPool = [];   // per-plot event history for the unfold rows
+
+const LOP_EVENT_LABELS = {
+  transIn: 'Transplanted In',
+  trIn:    'Transfer In',
+  trOut:   'Transfer Out',
+  cull3:   '3rd Culled',
+  sold:    'Sold',
+  adjust:  'Stock Adjustment',
+};
+const LOP_EVENT_CLS = {
+  transIn: 'text-[#3a7ab4]', trIn: 'text-[#3a7ab4]',
+  trOut: 'text-[#a83020]', cull3: 'text-[#a83020]',
+  sold: 'text-[#4a7a2e]', adjust: 'text-[#7a4a10]',
+};
+
+function lopToggleDetail(idx) {
+  const tr = document.getElementById('lop-detail-' + idx);
+  const chev = document.getElementById('lop-chev-' + idx);
+  if (!tr) return;
+  tr.classList.toggle('hidden');
+  if (chev) chev.style.transform = tr.classList.contains('hidden') ? '' : 'rotate(90deg)';
+}
+window.lopToggleDetail = lopToggleDetail;
+
+async function runLifeOfPlot() {
+  const out = document.getElementById('report-output');
+  const loading = document.getElementById('loading');
+  out.classList.add('hidden');
+  loading.classList.remove('hidden');
+  _lopDetailPool = [];
+
+  const toStr = document.getElementById('f-to').value;
+  const toMs  = toStr ? new Date(toStr).getTime() + 86400000 : Infinity;
+  // Locations chips: nothing ticked = every location — the same rule every
+  // other report reads these chips with. PN never matches a plot, so it is
+  // simply inert here.
+  const selectedLocs = new Set(selectedNurseries());
+
+  const [logsRes, dosRes, alsRes, plotsRes] = await Promise.all([
+    fetchAllRows(() => _supabase.from('shared_inventory_logs')
+      .select('transaction_type, transaction_date, created_at, remark, plot_name, batch_name, quantity_change')
+      .in('transaction_type', ['Transplanted', 'Transplanted_Premium',
+          'Transplanted_DoubleTone', '3rd_Culling', 'Cull3_Transfer',
+          'Stock_Calibration'])
+      .order('id', { ascending: true })),
+    fetchAllRows(() => _supabase.from('shared_do_records')
+      .select('do_number, al_number, delivery_date, status, remark, plot_1, qty_1, batch_1, plot_2, qty_2, batch_2, plot_3, qty_3, batch_3, plot_4, qty_4, batch_4, plot_5, qty_5, batch_5')
+      .order('id', { ascending: true })),
+    fetchAllRows(() => _supabase.from('shared_al_orders').select('al_number, customer_name')),
+    _supabase.from('shared_plots').select('plot_name, nursery_name'),
+  ]);
+  if (logsRes.error || dosRes.error || plotsRes.error) {
+    loading.classList.add('hidden');
+    out.classList.remove('hidden');
+    out.innerHTML = `<div class="glass-panel p-6 rounded-[2rem] text-red-700 text-sm">Failed to load data.</div>`;
+    return;
+  }
+
+  // Real plots only — a tray or a grade label is not a plot and has no row.
+  const plotToLoc = {};
+  (plotsRes.data || []).forEach(p => { plotToLoc[p.plot_name] = p.nursery_name || 'Unassigned'; });
+  const locOfKey = {};
+  Object.keys(plotToLoc).forEach(n => { locOfKey[_mvPlotKey(n)] = plotToLoc[n]; });
+  const isPlot   = (name) => !!name && (_mvPlotKey(name) in locOfKey);
+  const passLoc  = (name) => {
+    if (!isPlot(name)) return false;
+    return !selectedLocs.size || selectedLocs.has(locOfKey[_mvPlotKey(name)] || 'Unassigned');
+  };
+
+  // ── One row per plot, one event list per plot ──
+  const rows = new Map();   // plot key → row
+  const rowOf = (plotName) => {
+    const k = _mvPlotKey(plotName);
+    if (!rows.has(k)) rows.set(k, Object.assign(emptyRow('main'), {
+      plot: plotName, loc: locOfKey[k] || 'Unassigned',
+      batches: new Set(), first: null, last: null, events: [],
+    }));
+    return rows.get(k);
+  };
+  const addEvent = (plotName, batch, col, date, qty, label) => {
+    if (!plotName || !qty) return;
+    // As At cut-off: the plot's life up to that day, everything if unset.
+    if (date && new Date(date).getTime() >= toMs) return;
+    const r = rowOf(plotName);
+    r[col] = (r[col] || 0) + qty;
+    if (batch && batch !== '—') r.batches.add(batch);
+    const ds = date ? String(date).slice(0, 10) : '';
+    if (ds) {
+      if (!r.first || ds < r.first) r.first = ds;
+      if (!r.last  || ds > r.last)  r.last  = ds;
+    }
+    r.events.push({ date: ds, col, batch: batch || '—', qty, label: label || '' });
+  };
+
+  (logsRes.data || []).forEach(l => {
+    const d = _logDate(l);
+    const q = Math.abs(l.quantity_change || 0);
+    const t = l.transaction_type;
+    const b = l.batch_name;
+
+    if (t === 'Transplanted' || t === 'Transplanted_Premium' || t === 'Transplanted_DoubleTone') {
+      // Premium Care / Double Tone transplants usually land in a pre-nursery
+      // tray, which is not a plot and has no row here; when one names a REAL
+      // plot it counts like any other transplant in. passLoc() is the guard
+      // either way.
+      if (!passLoc(l.plot_name)) return;
+      const src = (l.remark || '').match(/from tray \[([^\]]+)\]/i);
+      const grade = t === 'Transplanted_Premium' ? 'Premium Care' : t === 'Transplanted_DoubleTone' ? 'Double Tone' : '';
+      addEvent(l.plot_name, b, 'transIn', d, q,
+        [src ? 'from tray ' + src[1] : '', grade].filter(Boolean).join(' · '));
+      return;
+    }
+    if (t === '3rd_Culling') {
+      // Only once evidenced — same MapQty rule as the Movement Report.
+      if (!/MapQty:\s*\d+/.test(l.remark || '')) return;
+      if (!passLoc(l.plot_name)) return;
+      addEvent(l.plot_name, b, 'cull3', d, q, '');
+      return;
+    }
+    if (t === 'Cull3_Transfer') {
+      const from = (l.remark || '').match(/From:\s*\[([^\]|]+)\|/);
+      if (passLoc(l.plot_name)) addEvent(l.plot_name, b, 'trIn', d, q, from ? 'from ' + from[1] : '');
+      if (from && passLoc(from[1])) addEvent(from[1], b, 'trOut', d, q, 'to ' + l.plot_name);
+      return;
+    }
+    if (t === 'Stock_Calibration') {
+      const approved = (l.remark || '').match(/\[APPROVED by [^\]]+ on [^\]]+\]/);
+      if (!approved || !passLoc(l.plot_name)) return;
+      const signedQty = Number(l.quantity_change) || 0;
+      if (!signedQty) return;
+      let reason = (l.remark || '').replace(approved[0], '').trim();
+      reason = reason.replace(/Report:\s*[^.]+?\s*\.\s*/i, '')
+                     .replace(/Plot:\s*[^.]+?\s*\.\s*/i, '')
+                     .replace(/Side:\s*(seed|plot)\s*\.\s*/i, '').trim();
+      addEvent(l.plot_name, b, 'adjust', d, signedQty, reason);
+      return;
+    }
+  });
+
+  // ── Sales — only against a plot·batch the plot actually carries, so a
+  //    typo'd DO line can't invent a plot. Cancelled DOs skipped; CAL-…
+  //    calibration DOs count, same as Batch Detail Tab 6's Sales. ──
+  const customerByAl = {};
+  (alsRes.data || []).forEach(a => { if (a.al_number) customerByAl[a.al_number] = a.customer_name || ''; });
+  (dosRes.data || []).forEach(dRec => {
+    if (dRec.status === 'Cancelled' || (dRec.remark && dRec.remark.includes('[CANCELLED]'))) return;
+    for (let i = 1; i <= 5; i++) {
+      const qty = Number(dRec[`qty_${i}`] || 0);
+      if (!qty) continue;
+      const plot = dRec[`plot_${i}`];
+      if (!passLoc(plot)) continue;
+      const r = rows.get(_mvPlotKey(plot));
+      if (!r) continue;
+      const bk = _mvBatchKey(dRec[`batch_${i}`]);
+      const batch = [...r.batches].find(x => _mvBatchKey(x) === bk);
+      if (!batch) continue;   // this plot never carried that batch
+      addEvent(r.plot, batch, 'sold', dRec.delivery_date || null, qty,
+        ('DO ' + (dRec.do_number || '—') + (customerByAl[dRec.al_number] ? ' · ' + customerByAl[dRec.al_number] : '')));
+    }
+  });
+
+  // ── Rows out, grouped by location in the nursery's own order ──
+  const cmp = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
+  const list = [...rows.values()].filter(r => r.events.length);
+  const locIdx = (loc) => {
+    const i = NURSERY_ORDER.findIndex(x => _mvPlotKey(x) === _mvPlotKey(loc));
+    return i === -1 ? NURSERY_ORDER.length : i;
+  };
+  list.sort((a, b) => (locIdx(a.loc) - locIdx(b.loc)) || cmp(a.loc, b.loc) || cmp(a.plot, b.plot));
+
+  const esc = _losEsc;
+  const cell = (v, cls) => `<td class="text-right ${v ? cls : 'text-[#8a7a68]'}">${v ? fmtNum(v) : '0'}</td>`;
+  const grand = { transIn: 0, trIn: 0, trOut: 0, cull3: 0, sold: 0, adjust: 0, standing: 0 };
+
+  let lastLoc = null;
+  const body = list.map(r => {
+    const standing = netOfRow('main', r);
+    ['transIn','trIn','trOut','cull3','sold','adjust'].forEach(k => grand[k] += r[k] || 0);
+    grand.standing += standing;
+
+    const batches = [...r.batches].sort(cmp);
+    const events = r.events.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const idx = _lopDetailPool.push(events) - 1;
+
+    const detail = `
+      <tr id="lop-detail-${idx}" class="hidden">
+        <td colspan="10" style="background:#fdfaf4; padding:0.75rem 1rem 1rem;">
+          <div class="text-[9px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">History — ${esc(r.plot)} · ${events.length} event${events.length === 1 ? '' : 's'}</div>
+          <table class="report-table" style="background:#fff; border:1px solid #e8dcc8; border-radius:12px; overflow:hidden;">
+            <thead><tr><th style="width:110px;">Date</th><th style="width:170px;">Event</th><th style="width:90px;">Batch</th><th class="text-right" style="width:90px;">Qty</th><th>Note</th></tr></thead>
+            <tbody>${events.map(e => `
+              <tr>
+                <td>${fmtDate(e.date)}</td>
+                <td class="font-black ${LOP_EVENT_CLS[e.col] || ''}">${LOP_EVENT_LABELS[e.col] || esc(e.col)}</td>
+                <td class="font-black text-[#3d2610]">${esc(e.batch)}</td>
+                <td class="text-right font-black ${LOP_EVENT_CLS[e.col] || ''}">${e.col === 'adjust' ? fmtSigned(e.qty) : fmtNum(e.qty)}</td>
+                <td class="text-[10px] text-[#8a7a68]">${esc(e.label)}</td>
+              </tr>`).join('')}</tbody>
+          </table>
+        </td>
+      </tr>`;
+
+    const locHeader = r.loc !== lastLoc
+      ? `<tr style="background:#f3ede1"><td colspan="10" class="font-black text-[11px] uppercase tracking-widest text-[#3d2610] py-2">${esc(r.loc)}</td></tr>`
+      : '';
+    lastLoc = r.loc;
+
+    return locHeader + `
+      <tr class="cursor-pointer hover:bg-[#fdfaf4]" onclick="lopToggleDetail(${idx})" title="Click to unfold this plot's full history">
+        <td>
+          <div class="flex items-center gap-2">
+            <svg id="lop-chev-${idx}" class="w-3 h-3 text-[#8a7a68] shrink-0" style="transition:transform .15s" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 6l6 6-6 6"/></svg>
+            <span class="font-black text-[#3d2610]">${esc(r.plot)}</span>
+          </div>
+        </td>
+        <td class="text-[10px] font-bold text-[#3d2610]">${batches.map(esc).join(', ') || '—'}</td>
+        <td class="text-[#8a7a68] whitespace-nowrap">${fmtDate(r.first)}</td>
+        <td class="text-[#8a7a68] whitespace-nowrap">${fmtDate(r.last)}</td>
+        ${cell(r.transIn, 'text-[#3a7ab4] font-black')}
+        ${cell(r.trIn, 'text-[#3a7ab4] font-black')}
+        ${cell(r.trOut, 'text-[#a83020] font-black')}
+        ${cell(r.cull3, 'text-[#a83020] font-black')}
+        ${cell(r.sold, 'text-[#4a7a2e] font-black')}
+        <td class="text-right font-black ${standing < 0 ? 'text-[#a83020]' : 'text-[#4a7a2e]'}">${fmtNum(standing)}${r.adjust ? `<div class="text-[9px] font-bold text-[#7a4a10]">adj ${fmtSigned(r.adjust)}</div>` : ''}</td>
+      </tr>` + detail;
+  }).join('');
+
+  const scopeBits = [];
+  scopeBits.push(toStr ? 'as at ' + fmtDate(toStr) : 'all dates');
+  if (selectedLocs.size) scopeBits.push([...selectedLocs].join(', '));
+
+  loading.classList.add('hidden');
+  out.classList.remove('hidden');
+  out.innerHTML = `
+    <div class="glass-panel p-6 rounded-[2rem]">
+      <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4 gap-4 flex-wrap">
+        <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Life of Plot</h3>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(list.length)} plot${list.length === 1 ? '' : 's'} · ${scopeBits.join(' · ')}</div>
+      </div>
+      <div class="text-[10px] font-bold text-[#8a7a68] mb-3 no-print">Click a plot to unfold its full history — every transplant, transfer, culling and sale in date order.</div>
+      <div style="overflow-x:auto;">
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Plot</th>
+              <th>Batches</th>
+              <th>First Activity</th>
+              <th>Latest Activity</th>
+              <th class="text-right">Transplanted In</th>
+              <th class="text-right">Transfer In</th>
+              <th class="text-right">Transfer Out</th>
+              <th class="text-right" title="Only 3rd Culling records with a keyed drone-map quantity count — same rule as the Nursery Report">3rd Culled</th>
+              <th class="text-right" title="Delivery Note collection lines matched to this plot's own batches; cancelled DOs excluded, CAL-… calibration DOs included">Sold</th>
+              <th class="text-right" title="Transplanted in + transfer in − sold − 3rd culled − transfer out + approved stock adjustment">Standing</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${list.length ? body : `<tr><td colspan="10" class="py-10 text-[#8a7a68] text-center">No plot activity matches the selected filters.</td></tr>`}
+          </tbody>
+          ${list.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
+            <td colspan="4" class="uppercase tracking-widest text-[10px] text-[#8a7a68]">Total — ${fmtNum(list.length)} plot${list.length === 1 ? '' : 's'}</td>
+            <td class="text-right text-[#3a7ab4]">${fmtNum(grand.transIn)}</td>
+            <td class="text-right text-[#3a7ab4]">${fmtNum(grand.trIn)}</td>
+            <td class="text-right text-[#a83020]">${fmtNum(grand.trOut)}</td>
+            <td class="text-right text-[#a83020]">${fmtNum(grand.cull3)}</td>
+            <td class="text-right text-[#4a7a2e]">${fmtNum(grand.sold)}</td>
+            <td class="text-right ${grand.standing < 0 ? 'text-[#a83020]' : 'text-[#4a7a2e]'}">${fmtNum(grand.standing)}${grand.adjust ? `<div class="text-[9px] font-bold text-[#7a4a10]">adj ${fmtSigned(grand.adjust)}</div>` : ''}</td>
+          </tr></tfoot>` : ''}
+        </table>
+      </div>
+    </div>`;
+}
+
 // Life of Seedling stays a tab of its own — the full per-batch summary
 // (received/planted/culled/sold/balance in one row) has no other home.
 // Nursery Report separately absorbs what used to be three OTHER tabs —
@@ -1394,6 +1694,7 @@ const REPORTS = [
      batch meant opening all three and lining them up by eye; every column
      they had is a column here. */
   { value: 'life_of_seedlings',     label: 'Life of Seedling',   hint: 'Life of Seedlings — one row per batch: seeds in, planted, transplanted, culled, sold, and what is still standing' },
+  { value: 'life_of_plot',          label: 'Life of Plot',       hint: 'Life of Plot — one row per plot: every batch that passed through it, in, out, culled, sold, and what is standing; click a plot for its full history' },
   { value: 'movement_report',       label: 'Nursery Report',     hint: 'Nursery Report — Summary (Movement), Transplanting, Seed In or Culling; pick which under Report below' },
   { value: 'sales_listing',         label: 'Sales Listing',      hint: 'Sales Listing — line items or the year × month chart' },
 ];
@@ -1504,6 +1805,7 @@ async function runReport() {
   if (toEl && fromEl) fromEl.value = monthStartOf(toEl.value);
   const which = document.getElementById('f-report').value;
   if (which === 'life_of_seedlings') return runLifeOfSeedlings();
+  if (which === 'life_of_plot') return runLifeOfPlot();
   if (which === 'movement_report') {
     const sub = (document.getElementById('f-nursery-sub') || {}).value || 'summary';
     if (sub === 'summary')       return runMovementReportCombined();
@@ -1530,6 +1832,8 @@ function syncFilterVisibility() {
   // + breed — so it joins isMovement/isTrans/isCulling below instead of
   // isLife's own filter group.
   const isLife     = (which === 'life_of_seedlings');
+  // Life of Plot filters the simple way: As At (one day) + Locations chips.
+  const isLifePlot = (which === 'life_of_plot');
   const isSeedIn   = sub === 'seed_in';
   const isCulling  = sub === 'culling';
   const isSales    = (which === 'sales_listing');
@@ -1540,7 +1844,7 @@ function syncFilterVisibility() {
   const isSalesChart = isSales && _salesViewMode === 'chart';
   document.querySelectorAll('.f-nursery-sub-wrap').forEach(el   => el.classList.toggle('hidden', !isNurseryTab));
   document.querySelectorAll('.f-culling-stage-wrap').forEach(el => el.classList.toggle('hidden', !isCulling));
-  const hasRange  = isMovement || isTrans || isSeedIn || isCulling || isSalesTable;
+  const hasRange  = isMovement || isTrans || isSeedIn || isCulling || isSalesTable || isLifePlot;
   document.querySelectorAll('.f-range').forEach(el         => el.classList.toggle('hidden', !hasRange));
   // No visible From anywhere — every report is one "As At" date. Movement
   // Report still shows the Culled/Transplanted/Damaged/etc columns as that
@@ -1561,7 +1865,7 @@ function syncFilterVisibility() {
   // in practice — see runSeedInReport() — but the same chip set asks the
   // same question every other sub-report does). Life of Seedling uses its
   // own Nursery Type filter instead (.f-los, below).
-  document.querySelectorAll('.f-nursery-inline').forEach(el => el.classList.toggle('hidden', !(isMovement || isTrans || isSeedIn || isCulling || isSalesTable)));
+  document.querySelectorAll('.f-nursery-inline').forEach(el => el.classList.toggle('hidden', !(isMovement || isTrans || isSeedIn || isCulling || isSalesTable || isLifePlot)));
   document.querySelectorAll('.f-breed').forEach(el         => el.classList.toggle('hidden', !(isLife || isSeedIn || isTrans || isCulling)));
   // 2nd/3rd Culling never happens in a Pre-Nursery tray — see
   // runCullingReport()'s own PRE_NURSERY_PLOTS comment: 1st Culling is the
@@ -1653,7 +1957,7 @@ function _cullingSyncPreNurseryChip(isCulling) {
 /* Defaults that change with which report is now selected — run once per
    switch, not on every "Run Report" click, so re-running the same report
    never clobbers a date someone deliberately picked. */
-const DATE_KEYED_REPORTS = new Set(['sales_listing', 'movement_report']);
+const DATE_KEYED_REPORTS = new Set(['sales_listing', 'movement_report', 'life_of_plot']);
 function syncReportDefaults() {
   const which = document.getElementById('f-report').value;
   if (DATE_KEYED_REPORTS.has(which)) {
