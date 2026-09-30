@@ -50,26 +50,45 @@
     return String(s == null ? '' : s).split(/[,;/|]+/).map(batchKey).filter(Boolean);
   }
 
-  /* Sign a movement the way the report's closing balance does. */
+  /* ── THE MAIN NURSERY MOVEMENT REPORT, AND NOTHING ELSE ─────────────────
+
+     One number for a plot and batch, and it is the one the report prints:
+
+       Balance = transplanted from PN + transfer in
+               - sold - 3rd culled - transfer out + stock adjustment
+
+     That is MOVE_COLS.main in operation_reports.html, column for column.
+     Every other transaction type has no column there and takes no part here:
+     the 1st and 2nd cullings and Planted are pre-nursery, and Seed Damage
+     never entered a tray to be lost from one.
+
+     Two of those columns carry a condition, applied where the events are
+     built rather than here, because both need the remark:
+       · a 3rd culling counts only once the drone map has been keyed
+         (MapQty:) — until the plot has been flown the figure is a claim;
+       · a stock calibration counts only once [APPROVED …], and keeps its
+         own sign.
+
+     Stock_Calibration is already signed when it reaches here — a Found is
+     positive, a Stolen negative — so it is returned as given rather than
+     forced in a direction. */
   function signed(type, qty) {
     const q = Number(qty || 0);
     switch (type) {
-      case 'Seeds_Received': case 'Planted': case 'Transplanted':
-      case 'Transplanted_Premium': case 'Transplanted_DoubleTone':
+      case 'Transplanted':
       // One 3rd-culling transfer log describes two sides; the event builder
       // splits it so the plot it arrived at gains and the one it left loses.
       case 'Cull3_Transfer_In':
-        return q;
-      case 'Damaged_Seeds': case '1st_Culling': case '2nd_Culling':
-      case '3rd_Culling':   case 'Sold':
-      case 'Cull3_Transfer_Out':
+        return Math.abs(q);
+      case '3rd_Culling': case 'Sold': case 'Cull3_Transfer_Out':
         return -Math.abs(q);
+      case 'Stock_Calibration':
+        return q;
       default: return 0;
     }
   }
 
   let _events = null;      // [{plotKey, batchKey, batch, type, qty, ms}]
-  let _cull2Verified = new Set();   // `plotKey|batchKey` of signed-off 2nd cullings
   let _ready  = false;
   let _err    = null;
   let _inFlight = null;
@@ -101,17 +120,11 @@
       const [logsRes, dosRes] = await Promise.all([
         fetchAll(() => supabase.from('shared_inventory_logs')
           .select('transaction_type, transaction_date, created_at, remark, plot_name, batch_name, quantity_change')
-          .in('transaction_type', ['Seeds_Received', 'Planted', 'Transplanted',
-              'Transplanted_Premium', 'Transplanted_DoubleTone', 'Damaged_Seeds',
-              '1st_Culling', '2nd_Culling', '3rd_Culling',
+          .in('transaction_type', ['Transplanted', '3rd_Culling',
               // A transfer plot (-R) is filled entirely by these. Without them
               // such a plot has no movement at all, and every quantity on it
               // reads as a dash.
-              'Cull3_Transfer',
-              // Not a movement — the signature on a 2nd-culling row. Its
-              // plot_name is 'cull_2::<PLOT>' and it carries no quantity, so
-              // it is pulled out below rather than pushed as an event.
-              'Row_Verification'])
+              'Cull3_Transfer', 'Stock_Calibration'])
           .order('id', { ascending: true })),
         // Sold comes from the customer DO system, exactly as the report does it.
         fetchAll(() => supabase.from('shared_do_records')
@@ -121,28 +134,23 @@
       if (logsRes.error) throw logsRes.error;
 
       const evs = [];
-      /* Which 2nd-culling rows have been signed off, as `plotKey|batchKey`.
-         operation_batch_detail.html writes one Row_Verification log per
-         verified row, with plot_name 'cull_2::<PLOT>' — see verifyRow() and
-         STAGE_BY_TAB there. */
-      const verified = new Set();
+      const EVIDENCED = /MapQty:\s*\d+/;
+      const APPROVED  = /\[APPROVED by [^\]]+ on [^\]]+\]/;
       (logsRes.data || []).forEach(l => {
-        if (l.transaction_type !== 'Row_Verification') return;
-        const m = /^cull_2::(.+)$/i.exec(String(l.plot_name || ''));
-        if (!m) return;
-        verified.add(plotKey(m[1]) + '|' + batchKey(l.batch_name));
-      });
-      _cull2Verified = verified;
-
-      (logsRes.data || []).forEach(l => {
-        if (l.transaction_type === 'Row_Verification') return;
+        const t = l.transaction_type;
+        // A 3rd culling nobody has flown yet is a claim, not a deduction —
+        // the report leaves the batch standing, and so does this.
+        if (t === '3rd_Culling' && !EVIDENCED.test(l.remark || '')) return;
+        // A pending adjustment has not been ruled on and moves no figure
+        // anywhere else in the system.
+        if (t === 'Stock_Calibration' && !APPROVED.test(l.remark || '')) return;
         const ms = parseDate(logDate(l));
         if (ms == null) return;
         evs.push({
           plotKey:  plotKey(l.plot_name),
           batchKey: batchKey(l.batch_name),
           batch:    l.batch_name || '—',
-          type:     l.transaction_type === 'Cull3_Transfer' ? 'Cull3_Transfer_In' : l.transaction_type,
+          type:     t === 'Cull3_Transfer' ? 'Cull3_Transfer_In' : t,
           qty:      Number(l.quantity_change || 0),
           ms
         });
@@ -197,75 +205,11 @@
     }
   }
 
-  /* What is actually standing, from one batch's movements up to a date.
-
-     The 3rd culling count is cumulative: it is keyed against the ORIGINAL
-     transplanted figure, not against what was left, so it already contains the
-     2nd culling. Subtracting both takes the 2nd culling off twice — which is
-     why B1's batch 237 read -2 when 1,182 transplanted less 90 culled, 989 sold
-     and 103 transferred away comes to exactly nought.
-
-     So the 2nd culling counts only while no 3rd culling has been recorded yet.
-     Before the 3rd, it is the live deduction; after it, it is already inside
-     the figure that replaced it.
-
-     This is the STANDING count, and it is not what a maintenance work record
-     is worth — see plotCapacity below. It stays because it is what the
-     Movement Report quotes, and anything comparing itself to that report has
-     to be able to ask for the same number. */
+  /* What the report's Balance column says for one plot and batch, up to a
+     date. Every event already carries the report's own sign, and the ones
+     it does not count never became events, so this is a plain sum. */
   function liveCount(evs) {
-    const superseded = evs.some(e => e.type === '3rd_Culling');
-    return evs.reduce((sum, e) =>
-      sum + (superseded && e.type === '2nd_Culling' ? 0 : signed(e.type, e.qty)), 0);
-  }
-
-  /* ── WHAT A PLOT IS WORTH TO MAINTAIN ──────────────────────────────────
-
-     One source: the main nursery movement data. What ARRIVED in this plot
-     and batch — transplanted in, plus transfers in, less transfers out.
-     That is the plot as the Movement Report describes it.
-
-     Then one refinement, and only one. A 2ND CULLING THAT HAS BEEN VERIFIED
-     replaces it with the balance it left: the "Alive" the 2nd Culling tab
-     counts, which is the transplanted figure less the dead. Somebody has
-     walked the plot, counted, and signed their name to it — that is a better
-     number than the one the transplanting recorded, and it is the figure the
-     3rd Culling tab itself then calls "Remaining Balance".
-
-     UNVERIFIED, IT DOES NOT COUNT YET. A 2nd culling nobody has signed off
-     is a count still being checked, and the plot goes on being worth what
-     arrived until it is. That is what the Verify button on each row of the
-     2nd Culling tab means, and it is the only thing that switches this.
-
-     AS AT THE WORK DATE, like everything else here: a 2nd culling dated
-     after the morning being claimed had not happened yet.
-
-     WHAT TAKES NO PART: the 3rd culling, because a plot culled at the end of
-     the month was maintained all month and the figure is cumulative against
-     the original transplanted quantity anyway; and sales, because a plot
-     sold down on the 28th still had to be sprayed on the 4th. Whether a
-     batch is still OFFERED in a plot is a different question, answered by
-     shared_plot_batch_balance — once nothing is standing it stops appearing
-     on the phone, and no new work can be recorded against it.
-
-     Seed damage never reaches a plot: it is recorded against the batch with
-     no plot at all. */
-  function plotCapacity(evs, cull2Verified) {
-    let arrived = 0, culled2 = 0;
-    for (const e of evs) {
-      switch (e.type) {
-        case 'Seeds_Received': case 'Planted': case 'Transplanted':
-        case 'Transplanted_Premium': case 'Transplanted_DoubleTone':
-        case 'Cull3_Transfer_In':
-          arrived += Math.abs(Number(e.qty || 0)); break;
-        case 'Cull3_Transfer_Out':
-          arrived -= Math.abs(Number(e.qty || 0)); break;
-        case '2nd_Culling':
-          culled2 += Math.abs(Number(e.qty || 0)); break;
-        default: break;   // 3rd culling, Sold, Damaged_Seeds: no part in this
-      }
-    }
-    return (cull2Verified && culled2 > 0) ? arrived - culled2 : arrived;
+    return evs.reduce((sum, e) => sum + signed(e.type, e.qty), 0);
   }
 
   /* The linked quantity for one work record.
@@ -289,27 +233,18 @@
       if (ev.ms > cutoff) continue;
       (per[ev.batchKey] ||= { evs: [], label: ev.batch }).evs.push(ev);
     }
-    /* closing is the STANDING count, kept for anything that wants to quote
-       the Movement Report. capacity is what the work record is worth, and is
-       what this returns. */
-    Object.values(per).forEach(b => {
-      b.closing  = liveCount(b.evs);
-      b.capacity = plotCapacity(b.evs, _cull2Verified.has(pk + '|' + b.evs[0].batchKey));
-    });
+    Object.values(per).forEach(b => { b.closing = liveCount(b.evs); });
 
     const keys = Object.keys(per);
     if (!keys.length) return null;
-    let raw = 0, standing = 0;
-    keys.forEach(k => { raw += per[k].capacity; standing += per[k].closing; });
+    let raw = 0;
+    keys.forEach(k => { raw += per[k].closing; });
     return {
-      // NOT floored at zero: a negative here means more was culled or
-      // transferred away than ever arrived, which is a figure to look into
-      // rather than one to round up and pay on.
+      // NOT floored at zero: the movement report shows a negative balance
+      // because it is a figure to look into, and a work record quoting 0 for
+      // the same plot and batch would be quietly disagreeing with it.
       qty: Math.round(raw),
       raw: Math.round(raw),
-      // What the Movement Report would say is standing there now. Not used
-      // for pay; carried so a screen can show both and say why they differ.
-      standing: Math.round(standing),
       batches: keys.map(k => per[k].label),
       allBatches: wanted.length === 0,
       asOf: asOf == null ? null : tarikh
@@ -331,7 +266,6 @@
     error: () => _err,
     events: () => _events,
     parseDate, logDate, plotKey, batchKey, batchList,
-    signed, liveCount, plotCapacity, linkedQty, recQty,
-    cull2Verified: (plot, batch) => _cull2Verified.has(plotKey(plot) + '|' + batchKey(batch))
+    signed, liveCount, linkedQty, recQty
   };
 })(window);

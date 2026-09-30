@@ -1,36 +1,26 @@
 -- ════════════════════════════════════════════════════════════════════════
--- THE FC PORTAL'S BATCH LIST *IS* THE MOVEMENT REPORT
+-- THE FC PORTAL'S BATCH LIST IS THE MAIN NURSERY MOVEMENT REPORT
 --
--- One rule, so there is nothing to keep in step by hand: the plots, the
--- batches and the quantities a Field Conductor sees are the Movement
--- Report's own, both of its sections, arithmetic for arithmetic. If the
--- phone and the report ever disagree again, one of them has a bug.
+-- One rule and no exceptions. The batches a Field Conductor is offered for
+-- a plot, and the quantity beside each, are that report's own:
 --
---   MAIN NURSERY   + transplanted from PN  + transfer in  - transfer out
---                  - 3rd culled (ONLY ONCE EVIDENCED - MapQty: keyed)
---                  - sold  + stock adjustment (approved only)
+--   Balance = transplanted from PN + transfer in
+--           - sold - 3rd culled - transfer out + stock adjustment
 --
---   PRE-NURSERY    + planted  + transfer in (a Premium Care / Double Tone
---                  tray filling up)  - 1st culled
---                  - transplanted out (the SOURCE tray's own loss)
+-- Two carry the report's own condition: a 3rd culling counts only once the
+-- drone map has been keyed (MapQty:), and a stock calibration only once
+-- [APPROVED ...]. Everything else takes no part because the report has no
+-- column for it - the 1st and 2nd cullings, Planted, Seeds_Received and
+-- Seed Damage.
 --
---   THE 2ND CULLING NEVER DEDUCTS, in either section. Seed damage counts at
---   zero. Seeds_Received is not a movement column.
+-- U1 is the worked example: the report prints batch 250 at 447 and batch
+-- 252 at 4,201, 4,648 for the plot. After this, so does the phone.
 --
--- Four things were wrong and all four are fixed here:
---   1. the 2nd culling was deducted - U1's batch 252 read 4,191 against the
---      report's 4,201, exactly its 2nd culling of 10;
---   2. an unflown 3rd culling was deducted - U1's batch 250 vanished off the
---      phone while the report showed it standing at 447;
---   3. a transplant was never deducted from its SOURCE TRAY, so trays went
---      on offering seedlings they had sent to the field months earlier;
---   4. "232 (B13)" was filed under batch 13.
+-- IT CHANGES NO DATA. Safe to run twice.
 --
--- After this U1 offers 250 at 447 and 252 at 4,201 - 4,648 for the plot,
--- which is the report's own Balance column.
---
--- IT CHANGES NO DATA. The view holds none; every figure is recomputed from
--- the ledger the moment it is asked. Safe to run twice.
+-- ONE THING TO KNOW: a PN plot (P01-P52) has no main-nursery movement, so
+-- it will offer no batches. If Field Conductors record maintenance on PN
+-- plots, say so and the report's Pre-Nursery section goes back in.
 -- ════════════════════════════════════════════════════════════════════════
 
 
@@ -86,9 +76,16 @@ CREATE OR REPLACE VIEW shared_plot_batch_balance
 WITH (security_invoker = true)     -- reads as the caller, so RLS still applies
 AS
 WITH ledger AS (
-  /* ══ MAIN NURSERY ══ MOVE_COLS.main in operation_reports.html:
-     transplanted from PN + transfer in - sold - 3rd culled - transfer out
-     + stock adjustment. Sold is joined on further down. */
+  /* THE MAIN NURSERY MOVEMENT REPORT, AND NOTHING ELSE.
+     MOVE_COLS.main in operation_reports.html, column for column:
+
+       Balance = transplanted from PN + transfer in
+               - sold - 3rd culled - transfer out + stock adjustment
+
+     Sold is joined on further down; the rest is here. Every other
+     transaction type has no column on that report and takes no part: the
+     1st and 2nd cullings and Planted are pre-nursery, Seeds_Received is not
+     a movement, and Seed Damage never entered a tray to be lost from one. */
 
   -- Transplanted from PN: arrives at the main plot named on the row.
   SELECT id, plot_name AS plot, batch_name AS batch,
@@ -127,45 +124,6 @@ WITH ledger AS (
   WHERE  transaction_type = 'Stock_Calibration'
     AND  coalesce(remark, '') ~ '\[APPROVED by [^\]]+ on [^\]]+\]'
 
-  UNION ALL
-
-  /* ══ PRE-NURSERY ══ MOVE_COLS.pre: transfer in + planted - 1st culled
-     - transplanted out. Seed Damage is shown there but counted at zero -
-     it never entered a tray - so it takes no part here either.
-
-     This section is what gives a PN plot (P01-P52) and the PREMIUM CARE /
-     DOUBLE-TONE holding trays their batches. Leaving it out would empty
-     PN's batch list on every phone. */
-
-  -- Planted into a tray.
-  SELECT id, plot_name, batch_name, abs(coalesce(quantity_change, 0))
-  FROM   shared_inventory_logs WHERE transaction_type = 'Planted'
-
-  UNION ALL
-
-  -- A Premium Care / Double Tone tray filling up reads as ordinary
-  -- transfer in: the row names the RECEIVING tray.
-  SELECT id, plot_name, batch_name, abs(coalesce(quantity_change, 0))
-  FROM   shared_inventory_logs
-  WHERE  transaction_type IN ('Transplanted_Premium', 'Transplanted_DoubleTone')
-
-  UNION ALL
-
-  -- 1st culled, in the tray.
-  SELECT id, plot_name, batch_name, -abs(coalesce(quantity_change, 0))
-  FROM   shared_inventory_logs WHERE transaction_type = '1st_Culling'
-
-  UNION ALL
-
-  -- Transplanted out: the SOURCE TRAY's own loss, read from the remark.
-  -- Without this a tray goes on showing seedlings it sent to the field
-  -- months ago, and the holding trays never net out.
-  SELECT l.id, s.src, l.batch_name, -abs(coalesce(l.quantity_change, 0))
-  FROM   shared_inventory_logs l
-  CROSS  JOIN LATERAL (SELECT (regexp_match(l.remark, 'from tray \[([^\]]+)\]', 'i'))[1] AS src) s
-  WHERE  l.transaction_type IN ('Transplanted', 'Transplanted_Premium',
-                                'Transplanted_DoubleTone')
-    AND  s.src IS NOT NULL
 ),
 bal AS (
   SELECT mjm_plot_key(plot)   AS plot_key,
@@ -217,18 +175,12 @@ NOTIFY pgrst, 'reload schema';
 
 
 -- ── WHAT SHOULD HAVE HAPPENED ──────────────────────────────────────────
--- A GOOD RESULT is five rows. The first two must read "yes".
---
--- Then open the Nursery Report for any plot and compare: the batches and
--- quantities should agree row for row. That is the only check that matters
--- and this file cannot do it for you - the report lives in the browser.
+-- Then open the Nursery Report for any plot and compare. The batches and
+-- quantities should agree row for row - that is the check that matters and
+-- this file cannot do it for you.
 SELECT 'view rebuilt' AS check,
        CASE WHEN to_regclass('public.shared_plot_batch_balance') IS NULL
             THEN 'NO' ELSE 'yes' END AS result
-UNION ALL
-SELECT 'batch key ignores a note',
-       CASE WHEN mjm_batch_key('232 (B13)') = '232' AND mjm_batch_key('250 (U1)') = '250'
-            THEN 'yes' ELSE 'NO - still reading the note' END
 UNION ALL
 SELECT 'plot/batch rows the phone will offer',
        (SELECT count(*)::text FROM shared_plot_batch_balance)

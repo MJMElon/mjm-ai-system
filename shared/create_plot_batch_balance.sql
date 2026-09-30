@@ -1,43 +1,29 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   WHAT IS STANDING IN EACH PLOT — WORKED OUT IN THE DATABASE
+   WHAT IS STANDING IN EACH PLOT — THE MAIN NURSERY MOVEMENT REPORT
 
-   Today every app that needs "which batches are in plot B5" downloads the
-   WHOLE inventory ledger and adds it up in the browser. The office reports
-   do it, and so does the Maintenance form on a Field Conductor's phone —
-   tens of thousands of rows crossing the network to produce about ten.
+   This view is what the FC Portal's Maintenance form reads to offer
+   "Batches in this plot". One rule and no exceptions: the batches a Field
+   Conductor is offered for a plot, and the quantity beside each, are the
+   Main Nursery Movement Report's own. MOVE_COLS.main in
+   operation_reports.html, column for column:
 
-   This view does the adding up inside Postgres. The phone asks for one plot
-   and gets back the handful of rows it actually needs.
+     Balance = transplanted from PN + transfer in
+             - sold - 3rd culled - transfer out + stock adjustment
 
-   The arithmetic is deliberately identical to the movement report's, so the
-   figures agree with what the office sees:
+   Two of those carry the report's own condition: a 3rd culling counts only
+   once the drone map has been keyed (MapQty:) — until the plot has been
+   flown the figure is a claim — and a stock calibration only once
+   [APPROVED …], with its own sign.
 
-   The arithmetic is the Movement Report's Main Nursery rules, written out
-   at the top of runLifeOfPlot() in operation_reports.html. Those rules and
-   these must not drift — the phone offering a batch the report says is
-   gone, or hiding one it says is there, is the whole failure mode:
+   Everything else takes no part, because that report has no column for it:
+   the 1st and 2nd cullings, Planted, Seeds_Received and Seed Damage.
 
-     in    Seeds_Received, Planted, Transplanted,
-           Transplanted_Premium, Transplanted_DoubleTone
-     out   Damaged_Seeds, 1st_Culling
-     out   3rd_Culling, BUT ONLY ONCE EVIDENCED — the report counts it only
-           where the drone-map figure has been keyed (MapQty: in the
-           remark), because until the plot has been flown the culled figure
-           is a claim. One still waiting on its map leaves the batch
-           standing on the report, so it leaves it standing here.
-     --    2nd_Culling NEVER DEDUCTS. It is Tab 6's running snapshot of a
-           batch working through the 3rd culling, not a loss on top of it,
-           and the Movement Report gives it no column at all. Deducting it
-           is what made U1's batch 252 read 4,191 where the report read
-           4,201 — a difference of exactly its 2nd culling.
-     both  Cull3_Transfer — one log, two sides: it ADDS to the plot named on
-           the row and SUBTRACTS from the plot named in the remark
-     in/out Stock_Calibration, approved ones only — the same
-           "[APPROVED by <who> on <when>]" marker the report reads. Its
-           quantity_change is already signed and is added as stored.
-     out   delivery orders, but ONLY against a plot·batch the ledger already
-           has. A D/O's plot and batch are typed by hand, and a mistyped
-           "24D" must never conjure a row into existence.
+   U1 is the worked example. The report prints batch 250 at 447 and batch
+   252 at 4,201, 4,648 for the plot. So does this.
+
+   A PN plot (P01–P52) has no main-nursery movement, so it offers no
+   batches. If maintenance is recorded on PN plots, the report's
+   Pre-Nursery section has to go back in beside this one.
 
    Safe to re-run: everything is CREATE OR REPLACE, and no data is changed.
    To undo, see the bottom of this file.
@@ -96,9 +82,16 @@ CREATE OR REPLACE VIEW shared_plot_batch_balance
 WITH (security_invoker = true)     -- reads as the caller, so RLS still applies
 AS
 WITH ledger AS (
-  /* ══ MAIN NURSERY ══ MOVE_COLS.main in operation_reports.html:
-     transplanted from PN + transfer in - sold - 3rd culled - transfer out
-     + stock adjustment. Sold is joined on further down. */
+  /* THE MAIN NURSERY MOVEMENT REPORT, AND NOTHING ELSE.
+     MOVE_COLS.main in operation_reports.html, column for column:
+
+       Balance = transplanted from PN + transfer in
+               - sold - 3rd culled - transfer out + stock adjustment
+
+     Sold is joined on further down; the rest is here. Every other
+     transaction type has no column on that report and takes no part: the
+     1st and 2nd cullings and Planted are pre-nursery, Seeds_Received is not
+     a movement, and Seed Damage never entered a tray to be lost from one. */
 
   -- Transplanted from PN: arrives at the main plot named on the row.
   SELECT id, plot_name AS plot, batch_name AS batch,
@@ -137,45 +130,6 @@ WITH ledger AS (
   WHERE  transaction_type = 'Stock_Calibration'
     AND  coalesce(remark, '') ~ '\[APPROVED by [^\]]+ on [^\]]+\]'
 
-  UNION ALL
-
-  /* ══ PRE-NURSERY ══ MOVE_COLS.pre: transfer in + planted - 1st culled
-     - transplanted out. Seed Damage is shown there but counted at zero -
-     it never entered a tray - so it takes no part here either.
-
-     This section is what gives a PN plot (P01-P52) and the PREMIUM CARE /
-     DOUBLE-TONE holding trays their batches. Leaving it out would empty
-     PN's batch list on every phone. */
-
-  -- Planted into a tray.
-  SELECT id, plot_name, batch_name, abs(coalesce(quantity_change, 0))
-  FROM   shared_inventory_logs WHERE transaction_type = 'Planted'
-
-  UNION ALL
-
-  -- A Premium Care / Double Tone tray filling up reads as ordinary
-  -- transfer in: the row names the RECEIVING tray.
-  SELECT id, plot_name, batch_name, abs(coalesce(quantity_change, 0))
-  FROM   shared_inventory_logs
-  WHERE  transaction_type IN ('Transplanted_Premium', 'Transplanted_DoubleTone')
-
-  UNION ALL
-
-  -- 1st culled, in the tray.
-  SELECT id, plot_name, batch_name, -abs(coalesce(quantity_change, 0))
-  FROM   shared_inventory_logs WHERE transaction_type = '1st_Culling'
-
-  UNION ALL
-
-  -- Transplanted out: the SOURCE TRAY's own loss, read from the remark.
-  -- Without this a tray goes on showing seedlings it sent to the field
-  -- months ago, and the holding trays never net out.
-  SELECT l.id, s.src, l.batch_name, -abs(coalesce(l.quantity_change, 0))
-  FROM   shared_inventory_logs l
-  CROSS  JOIN LATERAL (SELECT (regexp_match(l.remark, 'from tray \[([^\]]+)\]', 'i'))[1] AS src) s
-  WHERE  l.transaction_type IN ('Transplanted', 'Transplanted_Premium',
-                                'Transplanted_DoubleTone')
-    AND  s.src IS NOT NULL
 ),
 bal AS (
   SELECT mjm_plot_key(plot)   AS plot_key,
