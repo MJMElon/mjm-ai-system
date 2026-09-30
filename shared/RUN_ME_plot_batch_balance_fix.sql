@@ -1,38 +1,37 @@
 -- ════════════════════════════════════════════════════════════════════════
--- THE PHONE'S BATCH LIST DISAGREED WITH THE MOVEMENT REPORT
+-- THE PHONE'S BATCH LIST, BROUGHT BACK IN LINE WITH THE MOVEMENT REPORT
 --
 -- shared_plot_batch_balance is what the FC Portal's Maintenance form reads
 -- to offer "Batches in this plot". It was supposed to do the Movement
--- Report's arithmetic. It did not, in two ways:
+-- Report's arithmetic. It did not, in three ways — all three fixed here:
 --
 --   1. IT TOOK THE 2ND CULLING OFF ON TOP OF THE 3RD. The 3rd culling is
 --      keyed against the ORIGINAL transplanted figure, so it already
---      contains the 2nd — deducting both takes the same seedlings off
---      twice. The tell is a batch that should have netted to nought
---      reading as a small negative instead. This is the same fault already
---      found and fixed in shared/shared_plot_movement.js, where the note
---      names B1's batch 237 reading -2; it was never carried across to
---      here. The Movement Report gives 2nd Culled no column at all.
+--      contains the 2nd; deducting both takes the same seedlings off
+--      twice. U1's batch 250 is the worked example: 447 transplanted in,
+--      2 dead at the 2nd culling, all 447 cleared at the 3rd. The answer
+--      is 0. The old view said -2.
 --
 --   2. IT IGNORED STOCK CALIBRATIONS. The Movement Report counts approved
 --      ones as a Stock Adjustment. A plot whose count was corrected read
 --      short on the phone by exactly the correction.
 --
--- Worked example, from U1: the office showed batch 250 standing at 447 and
--- 252 at 4,201, while the phone offered 250 at -2 and 252 at 4,191, and
--- offered batch 230 at -2 when the office had finished with it entirely.
+--   3. A BATCH WITH A NOTE AFTER IT WAS FILED UNDER THE NOTE. The batch
+--      key read the trailing digits of the whole field, so "232 (B13)"
+--      came back as batch 13 and "250 (U1)" as batch 1 — a batch nobody
+--      meant, with the real one short by that much. The office fixed this
+--      in _mvBatchKey() after a delivery order reading "232 (B13)" stopped
+--      B14-R's batch 232 sale matching; the rule had never been carried
+--      here. THIS ONE IS NEW SINCE THE LAST RUN — re-running is what puts
+--      it in.
 --
--- This replaces the view with one that applies both rules. IT CHANGES NO
--- DATA — the view holds none. Every figure it reports is recomputed from
--- the ledger the moment it is asked.
---
--- Safe to run twice: CREATE OR REPLACE throughout.
+-- IT CHANGES NO DATA. The view holds none; every figure is recomputed from
+-- the ledger the moment it is asked. Safe to run twice.
 -- ════════════════════════════════════════════════════════════════════════
 
 
--- ── BEFORE: every plot and batch this will move, not just U1 ────────────
--- Run this FIRST, on its own, if you want the list to compare against.
--- It is commented out so the file has one result set; uncomment to use.
+-- ── BEFORE: the list as it stands, if you want one to compare against ───
+-- Run this on its own first. Commented out so this file has one result set.
 --
 --   SELECT plot_name, batch_name, qty AS phone_shows_now
 --   FROM   shared_plot_batch_balance ORDER BY plot_key, batch_key;
@@ -56,7 +55,16 @@ $$;
 
 /* A batch is its trailing digits: "MJM-225", "225." and " 225 " are all 225.
    Something with no trailing digits ("24D") is no batch at all and returns
-   '', so it can never be matched to one. */
+   '', so it can never be matched to one.
+
+   A PARENTHETICAL NOTE GOES FIRST. "232 (B13)" is batch 232, not batch 13 —
+   left in, the trailing-digits rule below reads the "13" inside the note and
+   files the row under a batch nobody meant. That is not hypothetical: it is
+   the bug _mvBatchKey() in operation_reports.html records having hit, on a
+   delivery order whose batch field read "232 (B13)". This is the same split
+   mjm_plot_key already does for its own notes.
+   SHARED RULE - _mvBatchKey() in operation_reports.html and batchKey() in
+   the FC portal's plotBatches.js. Change one, change the others. */
 CREATE OR REPLACE FUNCTION mjm_batch_key(v text)
 RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
   SELECT CASE
@@ -66,7 +74,10 @@ RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
          END
   FROM (
     SELECT (regexp_match(
-              regexp_replace(btrim(coalesce(v, '')), '[^0-9A-Za-z]+$', ''),
+              regexp_replace(
+                -- cut at the first space, bracket or comma: the note goes
+                regexp_replace(btrim(coalesce(v, '')), '[[:space:](,\[].*$', ''),
+                '[^0-9A-Za-z]+$', ''),
               '(\d+)$'))[1] AS d
   ) x;
 $$;
@@ -185,27 +196,34 @@ NOTIFY pgrst, 'reload schema';
 -- ── WHAT SHOULD HAVE HAPPENED ──────────────────────────────────────────
 -- One result set, because the SQL Editor only shows the last statement's.
 --
--- A GOOD RESULT is the view rebuilt and NO negative balances left that are
--- caused by a doubled 2nd culling:
+-- A GOOD RESULT is five rows:
 --
---   view rebuilt                      yes
---   batches still reading negative    <a count, and 0 is the hoped-for one>
---   plots the phone will now offer    <a count>
+--   view rebuilt                          yes
+--   batch key ignores a note              yes    <- the new fix; "232 (B13)"
+--                                                   must read as 232
+--   plot/batch rows the phone will offer  <a count>
+--   batches still reading negative        <a count>
+--   which ones are still negative         <names, or none>
 --
--- A non-zero "batches still reading negative" is NOT a failure of this
--- file — a plot really can be over-allocated, and the Movement Report
--- shows those too. It means those ones have some other cause and are
--- worth looking into on the report. The second row of the drill-down
--- below names them so you are not opening plots one at a time.
+-- A non-zero "still negative" is NOT a failure of this file — a plot really
+-- can be over-allocated and the Movement Report shows those too. The last
+-- row names them so they can be looked at on the report rather than opened
+-- one plot at a time.
 SELECT 'view rebuilt' AS check,
        CASE WHEN to_regclass('public.shared_plot_batch_balance') IS NULL
             THEN 'NO' ELSE 'yes' END AS result
 UNION ALL
-SELECT 'batches still reading negative',
-       (SELECT count(*)::text FROM shared_plot_batch_balance WHERE qty < 0)
+SELECT 'batch key ignores a note',
+       CASE WHEN mjm_batch_key('232 (B13)') = '232'
+             AND mjm_batch_key('250 (U1)')  = '250'
+             AND mjm_batch_key('MJM-225')   = '225'
+            THEN 'yes' ELSE 'NO - still reading the note' END
 UNION ALL
 SELECT 'plot/batch rows the phone will offer',
        (SELECT count(*)::text FROM shared_plot_batch_balance)
+UNION ALL
+SELECT 'batches still reading negative',
+       (SELECT count(*)::text FROM shared_plot_batch_balance WHERE qty < 0)
 UNION ALL
 SELECT 'which ones are still negative',
        coalesce((SELECT string_agg(plot_name || ' batch ' || batch_name || ' (' || qty || ')', ', '
