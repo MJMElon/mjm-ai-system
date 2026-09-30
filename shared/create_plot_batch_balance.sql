@@ -56,7 +56,16 @@ $$;
 
 /* A batch is its trailing digits: "MJM-225", "225." and " 225 " are all 225.
    Something with no trailing digits ("24D") is no batch at all and returns
-   '', so it can never be matched to one. */
+   '', so it can never be matched to one.
+
+   A PARENTHETICAL NOTE GOES FIRST. "232 (B13)" is batch 232, not batch 13 —
+   left in, the trailing-digits rule below reads the "13" inside the note and
+   files the row under a batch nobody meant. That is not hypothetical: it is
+   the bug _mvBatchKey() in operation_reports.html records having hit, on a
+   delivery order whose batch field read "232 (B13)". This is the same split
+   mjm_plot_key already does for its own notes.
+   SHARED RULE - _mvBatchKey() in operation_reports.html and batchKey() in
+   the FC portal's plotBatches.js. Change one, change the others. */
 CREATE OR REPLACE FUNCTION mjm_batch_key(v text)
 RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
   SELECT CASE
@@ -66,7 +75,10 @@ RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
          END
   FROM (
     SELECT (regexp_match(
-              regexp_replace(btrim(coalesce(v, '')), '[^0-9A-Za-z]+$', ''),
+              regexp_replace(
+                -- cut at the first space, bracket or comma: the note goes
+                regexp_replace(btrim(coalesce(v, '')), '[[:space:](,\[].*$', ''),
+                '[^0-9A-Za-z]+$', ''),
               '(\d+)$'))[1] AS d
   ) x;
 $$;
