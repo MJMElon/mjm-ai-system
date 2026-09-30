@@ -7331,8 +7331,22 @@ function renderWorkEditor() {
   const m = getMonth(), iso = monthISO(m), days = daysInMonthLabel(m);
   const work = WORKS.find(w => w.key === kind);
   const weeks = weeksOf(n, m, kind);
-  const plots = NURSERY_PLOTS[n] || [];
   ensureRounds(n, m);   // no week without a round behind it
+
+  /* Only plots with a capacity on record get a row — a plot whose capacity
+     reads "—" on Setting (the -R reserve plots, mostly) holds nothing to
+     spray and only pads the list (asked off, Sep 2026). Its figures were
+     already nothing: capacityOf() is what every total below reads. The one
+     exception is a plot that already carries a tick in this month — that
+     row stays visible whatever its capacity, so recorded work can never
+     silently vanish from the editor. */
+  const _s0 = getState(n, m);
+  const _hasTick = (p) => weeks.some(w => {
+    const cs = weCols(kind, w.slot, n, m) || [];
+    // The same (slot, ci) addressing the tick cells themselves render with.
+    return (cs.length ? cs : [{ ci: 0 }]).some(c => weColTicked(kind, w.slot, c.ci, p, _s0));
+  });
+  const plots = (NURSERY_PLOTS[n] || []).filter(p => capacityOf(n, p) > 0 || _hasTick(p));
 
   document.getElementById('we-title').textContent = `${stockLabel(n)} \u00b7 ${work.label}`;
   document.getElementById('we-sub').textContent = weeks.length
