@@ -188,11 +188,74 @@
 
      So the 2nd culling counts only while no 3rd culling has been recorded yet.
      Before the 3rd, it is the live deduction; after it, it is already inside
-     the figure that replaced it. */
+     the figure that replaced it.
+
+     This is the STANDING count, and it is not what a maintenance work record
+     is worth — see plotCapacity below. It stays because it is what the
+     Movement Report quotes, and anything comparing itself to that report has
+     to be able to ask for the same number. */
   function liveCount(evs) {
     const superseded = evs.some(e => e.type === '3rd_Culling');
     return evs.reduce((sum, e) =>
       sum + (superseded && e.type === '2nd_Culling' ? 0 : signed(e.type, e.qty)), 0);
+  }
+
+  /* ── WHAT A PLOT IS WORTH TO MAINTAIN ──────────────────────────────────
+
+     Not the standing count. A worker sprays, weeds or manures the seedlings
+     that are IN the plot; what happens to them afterwards is not their
+     business and must not change what they are paid for the morning.
+
+     Two figures, and only two:
+
+       the plot's transplanted quantity — everything that arrived in this
+       plot and batch — and,
+
+       ONCE A 2ND CULLING HAS BEEN RECORDED, the balance it left behind:
+       that quantity less what the 2nd culling took. Which is exactly the
+       "Alive" the 2nd Culling tab counts and writes into its own remark
+       (`Alive: N, Dead: M ... Transplanted: T`, saveTab5 in
+       operation_batch_detail.html), derived here from the ledger rather
+       than parsed out of the text so a row saved before that wording still
+       answers.
+
+     AS AT THE WORK DATE, like everything else here: a 2nd culling dated
+     after the morning being claimed had not happened yet, so the plot was
+     still carrying the full transplanted quantity that day.
+
+     WHAT DELIBERATELY DOES NOT REDUCE IT:
+
+       the 3rd culling — a plot 3rd-culled at the end of the month was
+       maintained all month, and the 3rd culling figure is cumulative
+       against the original transplanted quantity anyway, so subtracting it
+       routinely drove plots to nought and paid nobody;
+
+       sales — a plot sold down on the 28th still had to be sprayed on the
+       4th;
+
+       transfers — they move seedlings between plots of the same batch, so
+       they count on both sides: a plot filled entirely by a transfer (the
+       -R plots are) has a capacity, and a plot that sent its seedlings
+       away no longer carries them.
+
+     Seed damage takes no part: it is recorded against the batch with no
+     plot at all, so it never reaches a plot's figure to begin with. */
+  function plotCapacity(evs) {
+    let arrived = 0, culled2 = 0;
+    for (const e of evs) {
+      switch (e.type) {
+        case 'Seeds_Received': case 'Planted': case 'Transplanted':
+        case 'Transplanted_Premium': case 'Transplanted_DoubleTone':
+        case 'Cull3_Transfer_In':
+          arrived += Math.abs(Number(e.qty || 0)); break;
+        case 'Cull3_Transfer_Out':
+          arrived -= Math.abs(Number(e.qty || 0)); break;
+        case '2nd_Culling':
+          culled2 += Math.abs(Number(e.qty || 0)); break;
+        default: break;   // 3rd culling, Sold, Damaged_Seeds: no part in this
+      }
+    }
+    return culled2 > 0 ? arrived - culled2 : arrived;
   }
 
   /* The linked quantity for one work record.
@@ -216,18 +279,27 @@
       if (ev.ms > cutoff) continue;
       (per[ev.batchKey] ||= { evs: [], label: ev.batch }).evs.push(ev);
     }
-    Object.values(per).forEach(b => { b.closing = liveCount(b.evs); });
+    /* closing is the STANDING count, kept for anything that wants to quote
+       the Movement Report. capacity is what the work record is worth, and is
+       what this returns. */
+    Object.values(per).forEach(b => {
+      b.closing  = liveCount(b.evs);
+      b.capacity = plotCapacity(b.evs);
+    });
 
     const keys = Object.keys(per);
     if (!keys.length) return null;
-    let raw = 0;
-    keys.forEach(k => { raw += per[k].closing; });
+    let raw = 0, standing = 0;
+    keys.forEach(k => { raw += per[k].capacity; standing += per[k].closing; });
     return {
-      // NOT floored at zero: the movement report shows a negative closing
-      // because it is a figure to look into, and a work record quoting 0 for
-      // the same plot and batch would be quietly disagreeing with it.
+      // NOT floored at zero: a negative here means more was culled or
+      // transferred away than ever arrived, which is a figure to look into
+      // rather than one to round up and pay on.
       qty: Math.round(raw),
       raw: Math.round(raw),
+      // What the Movement Report would say is standing there now. Not used
+      // for pay; carried so a screen can show both and say why they differ.
+      standing: Math.round(standing),
       batches: keys.map(k => per[k].label),
       allBatches: wanted.length === 0,
       asOf: asOf == null ? null : tarikh
@@ -249,6 +321,6 @@
     error: () => _err,
     events: () => _events,
     parseDate, logDate, plotKey, batchKey, batchList,
-    signed, liveCount, linkedQty, recQty
+    signed, liveCount, plotCapacity, linkedQty, recQty
   };
 })(window);
