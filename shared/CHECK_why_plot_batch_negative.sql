@@ -13,7 +13,10 @@ mv AS (
          mjm_batch_key(l.batch_name) AS bk,
          l.transaction_type          AS t,
          sum(abs(coalesce(l.quantity_change, 0)))      AS q,
-         sum(coalesce(l.quantity_change, 0))           AS q_signed,
+         sum(coalesce(l.quantity_change, 0)) FILTER (
+           WHERE coalesce(l.remark,'') ~ '\[APPROVED by [^\]]+ on [^\]]+\]')  AS q_approved,
+         sum(coalesce(l.quantity_change, 0)) FILTER (
+           WHERE coalesce(l.remark,'') !~ '\[APPROVED by [^\]]+ on [^\]]+\]') AS q_pending,
          count(*)                                      AS n
   FROM   shared_inventory_logs l
   GROUP  BY 1, 2, 3
@@ -49,7 +52,12 @@ g AS (
          coalesce(sum(m.q) FILTER (WHERE m.t = '1st_Culling'), 0)                        AS cull1,
          coalesce(sum(m.q) FILTER (WHERE m.t = '2nd_Culling'), 0)                        AS cull2,
          coalesce(sum(m.q) FILTER (WHERE m.t = '3rd_Culling'), 0)                        AS cull3,
-         coalesce(sum(m.q_signed) FILTER (WHERE m.t = 'Stock_Calibration'), 0)           AS calib_all,
+         -- Split, because the VIEW counts approved ones only. Lumping them
+         -- made the two N11 rows read as though 1,358 had gone missing when
+         -- what had actually happened was a pending adjustment being shown
+         -- as though it had moved a figure.
+         coalesce(sum(m.q_approved) FILTER (WHERE m.t = 'Stock_Calibration'), 0)          AS calib_ok,
+         coalesce(sum(m.q_pending)  FILTER (WHERE m.t = 'Stock_Calibration'), 0)          AS calib_pending,
          coalesce(max(d.q), 0)                                                           AS sold
   FROM   neg n
   LEFT   JOIN mv    m ON m.pk = n.plot_key AND m.bk = n.batch_key
@@ -59,7 +67,14 @@ g AS (
 )
 SELECT plot_name AS plot, batch_name AS batch, qty AS balance,
        pre_in, transplanted, prem_dtone, transfer_in, transfer_out,
-       damaged, cull1, cull2, cull3, calib_all AS calibration, sold,
+       damaged, cull1, cull2, cull3,
+       calib_ok AS calibration_approved, calib_pending AS calibration_pending, sold,
+       -- The columns added up. It MUST equal balance; anything else means
+       -- this query and the view have drifted apart and the columns below
+       -- are not the whole story.
+       (pre_in + transplanted + prem_dtone + transfer_in - transfer_out
+        - damaged - cull1 - CASE WHEN cull3 > 0 THEN 0 ELSE cull2 END - cull3
+        + calib_ok - sold) AS columns_add_up_to,
        -- Whether the 2nd culling deducted at all: after a 3rd it does not,
        -- because the 3rd already contains it.
        CASE WHEN cull3 > 0 THEN 0 ELSE cull2 END AS cull2_counted,
