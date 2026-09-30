@@ -1,38 +1,37 @@
 -- ════════════════════════════════════════════════════════════════════════
--- THE PHONE'S BATCH LIST = THE MAIN NURSERY MOVEMENT REPORT
+-- THE FC PORTAL'S BATCH LIST *IS* THE MOVEMENT REPORT
 --
--- shared_plot_batch_balance is what the FC Portal's Maintenance form reads
--- to offer "Batches in this plot". It is meant to be the Movement Report's
--- own arithmetic. It was not. Every difference found so far is fixed here:
+-- One rule, so there is nothing to keep in step by hand: the plots, the
+-- batches and the quantities a Field Conductor sees are the Movement
+-- Report's own, both of its sections, arithmetic for arithmetic. If the
+-- phone and the report ever disagree again, one of them has a bug.
 --
---   1. THE 2ND CULLING NEVER DEDUCTS. It is Batch Detail Tab 6's running
---      snapshot of a batch working through the 3rd culling, not a loss on
---      top of it, and the Movement Report gives it no column at all.
---      Deducting it made U1's batch 252 read 4,191 where the report read
---      4,201 - a difference of exactly its 2nd culling of 10.
+--   MAIN NURSERY   + transplanted from PN  + transfer in  - transfer out
+--                  - 3rd culled (ONLY ONCE EVIDENCED - MapQty: keyed)
+--                  - sold  + stock adjustment (approved only)
 --
---   2. A 3RD CULLING COUNTS ONLY ONCE EVIDENCED. The report counts it only
---      where the drone-map figure has been keyed (MapQty: in the remark),
---      because until the plot has been flown the culled figure is a claim.
---      U1's batch 250 has an unflown 3rd culling, which is why the report
---      shows it standing at 447 and the phone had dropped it.
+--   PRE-NURSERY    + planted  + transfer in (a Premium Care / Double Tone
+--                  tray filling up)  - 1st culled
+--                  - transplanted out (the SOURCE tray's own loss)
 --
---   3. STOCK CALIBRATIONS COUNT, approved ones only.
+--   THE 2ND CULLING NEVER DEDUCTS, in either section. Seed damage counts at
+--   zero. Seeds_Received is not a movement column.
 --
---   4. A BATCH WITH A NOTE AFTER IT IS NOT FILED UNDER THE NOTE:
---      "232 (B13)" is batch 232, not batch 13.
+-- Four things were wrong and all four are fixed here:
+--   1. the 2nd culling was deducted - U1's batch 252 read 4,191 against the
+--      report's 4,201, exactly its 2nd culling of 10;
+--   2. an unflown 3rd culling was deducted - U1's batch 250 vanished off the
+--      phone while the report showed it standing at 447;
+--   3. a transplant was never deducted from its SOURCE TRAY, so trays went
+--      on offering seedlings they had sent to the field months earlier;
+--   4. "232 (B13)" was filed under batch 13.
 --
--- After this, U1 offers batch 250 at 447 and batch 252 at 4,201 - 4,648
--- for the plot, which is what the report's Balance column says.
+-- After this U1 offers 250 at 447 and 252 at 4,201 - 4,648 for the plot,
+-- which is the report's own Balance column.
 --
 -- IT CHANGES NO DATA. The view holds none; every figure is recomputed from
 -- the ledger the moment it is asked. Safe to run twice.
 -- ════════════════════════════════════════════════════════════════════════
-
-
--- ── BEFORE: the list as it stands, if you want one to compare against ───
---   SELECT plot_name, batch_name, qty AS phone_shows_now
---   FROM   shared_plot_batch_balance ORDER BY plot_key, batch_key;
 
 
 /* ── 1. THE TWO KEYS ───────────────────────────────────────────────────
@@ -87,28 +86,20 @@ CREATE OR REPLACE VIEW shared_plot_batch_balance
 WITH (security_invoker = true)     -- reads as the caller, so RLS still applies
 AS
 WITH ledger AS (
-  -- What arrived, and the tray-level movements a PN plot is made of.
-  -- The 2nd culling is NOT here and never is; the 3rd is handled below.
-  SELECT id,
-         plot_name  AS plot,
-         batch_name AS batch,
-         CASE WHEN transaction_type IN ('Seeds_Received', 'Planted', 'Transplanted',
-                                        'Transplanted_Premium', 'Transplanted_DoubleTone')
-              THEN  abs(coalesce(quantity_change, 0))
-              ELSE -abs(coalesce(quantity_change, 0))
-         END AS qty
-  FROM   shared_inventory_logs
-  WHERE  transaction_type IN ('Seeds_Received', 'Planted', 'Transplanted',
-                              'Transplanted_Premium', 'Transplanted_DoubleTone',
-                              'Damaged_Seeds', '1st_Culling')
+  /* ══ MAIN NURSERY ══ MOVE_COLS.main in operation_reports.html:
+     transplanted from PN + transfer in - sold - 3rd culled - transfer out
+     + stock adjustment. Sold is joined on further down. */
+
+  -- Transplanted from PN: arrives at the main plot named on the row.
+  SELECT id, plot_name AS plot, batch_name AS batch,
+         abs(coalesce(quantity_change, 0)) AS qty
+  FROM   shared_inventory_logs WHERE transaction_type = 'Transplanted'
 
   UNION ALL
 
-  -- The 3rd culling, ONLY ONCE EVIDENCED. The Movement Report counts it
-  -- only when the drone-map figure has been keyed (MapQty: in the remark),
-  -- because until somebody has flown the plot the culled figure is a
-  -- claim. A 3rd culling still waiting on its map leaves the batch
-  -- standing on the report, and so it must here.
+  -- 3rd culled, ONLY ONCE EVIDENCED. Until the plot has been flown and the
+  -- drone-map figure keyed, the culled figure is a claim and the report
+  -- leaves the batch standing.
   SELECT id, plot_name, batch_name, -abs(coalesce(quantity_change, 0))
   FROM   shared_inventory_logs
   WHERE  transaction_type = '3rd_Culling'
@@ -116,7 +107,21 @@ WITH ledger AS (
 
   UNION ALL
 
-  -- An APPROVED stock calibration, with its own sign kept.
+  -- Transfer in: one log, and this is the side that arrived.
+  SELECT id, plot_name, batch_name, abs(coalesce(quantity_change, 0))
+  FROM   shared_inventory_logs WHERE transaction_type = 'Cull3_Transfer'
+
+  UNION ALL
+
+  -- Transfer out: the same log, leaving the plot its remark names.
+  SELECT l.id, s.src, l.batch_name, -abs(coalesce(l.quantity_change, 0))
+  FROM   shared_inventory_logs l
+  CROSS  JOIN LATERAL (SELECT (regexp_match(l.remark, 'From:\s*\[([^\]|]+)\|'))[1] AS src) s
+  WHERE  l.transaction_type = 'Cull3_Transfer' AND s.src IS NOT NULL
+
+  UNION ALL
+
+  -- Stock adjustment, approved only, with its own sign kept.
   SELECT id, plot_name, batch_name, coalesce(quantity_change, 0)
   FROM   shared_inventory_logs
   WHERE  transaction_type = 'Stock_Calibration'
@@ -124,18 +129,42 @@ WITH ledger AS (
 
   UNION ALL
 
-  -- A 3rd-culling transfer, arriving.
+  /* ══ PRE-NURSERY ══ MOVE_COLS.pre: transfer in + planted - 1st culled
+     - transplanted out. Seed Damage is shown there but counted at zero -
+     it never entered a tray - so it takes no part here either.
+
+     This section is what gives a PN plot (P01-P52) and the PREMIUM CARE /
+     DOUBLE-TONE holding trays their batches. Leaving it out would empty
+     PN's batch list on every phone. */
+
+  -- Planted into a tray.
   SELECT id, plot_name, batch_name, abs(coalesce(quantity_change, 0))
-  FROM   shared_inventory_logs
-  WHERE  transaction_type = 'Cull3_Transfer'
+  FROM   shared_inventory_logs WHERE transaction_type = 'Planted'
 
   UNION ALL
 
-  -- The same log, leaving the plot its remark names.
+  -- A Premium Care / Double Tone tray filling up reads as ordinary
+  -- transfer in: the row names the RECEIVING tray.
+  SELECT id, plot_name, batch_name, abs(coalesce(quantity_change, 0))
+  FROM   shared_inventory_logs
+  WHERE  transaction_type IN ('Transplanted_Premium', 'Transplanted_DoubleTone')
+
+  UNION ALL
+
+  -- 1st culled, in the tray.
+  SELECT id, plot_name, batch_name, -abs(coalesce(quantity_change, 0))
+  FROM   shared_inventory_logs WHERE transaction_type = '1st_Culling'
+
+  UNION ALL
+
+  -- Transplanted out: the SOURCE TRAY's own loss, read from the remark.
+  -- Without this a tray goes on showing seedlings it sent to the field
+  -- months ago, and the holding trays never net out.
   SELECT l.id, s.src, l.batch_name, -abs(coalesce(l.quantity_change, 0))
   FROM   shared_inventory_logs l
-  CROSS  JOIN LATERAL (SELECT (regexp_match(l.remark, 'From:\s*\[([^\]|]+)\|'))[1] AS src) s
-  WHERE  l.transaction_type = 'Cull3_Transfer'
+  CROSS  JOIN LATERAL (SELECT (regexp_match(l.remark, 'from tray \[([^\]]+)\]', 'i'))[1] AS src) s
+  WHERE  l.transaction_type IN ('Transplanted', 'Transplanted_Premium',
+                                'Transplanted_DoubleTone')
     AND  s.src IS NOT NULL
 ),
 bal AS (
@@ -188,13 +217,11 @@ NOTIFY pgrst, 'reload schema';
 
 
 -- ── WHAT SHOULD HAVE HAPPENED ──────────────────────────────────────────
--- A GOOD RESULT is six rows. The first three must read "yes"; the rest are
--- counts to compare against the Movement Report.
+-- A GOOD RESULT is five rows. The first two must read "yes".
 --
--- "batches still reading negative" should be LOWER than before: a plot
--- driven negative by a 2nd culling or an unflown 3rd is no longer. Any that
--- remain have some other cause and belong on the report - the last row
--- names them.
+-- Then open the Nursery Report for any plot and compare: the batches and
+-- quantities should agree row for row. That is the only check that matters
+-- and this file cannot do it for you - the report lives in the browser.
 SELECT 'view rebuilt' AS check,
        CASE WHEN to_regclass('public.shared_plot_batch_balance') IS NULL
             THEN 'NO' ELSE 'yes' END AS result
@@ -202,16 +229,6 @@ UNION ALL
 SELECT 'batch key ignores a note',
        CASE WHEN mjm_batch_key('232 (B13)') = '232' AND mjm_batch_key('250 (U1)') = '250'
             THEN 'yes' ELSE 'NO - still reading the note' END
-UNION ALL
-SELECT '2nd culling no longer deducts',
-       CASE WHEN NOT EXISTS (
-              SELECT 1 FROM shared_inventory_logs l
-              JOIN shared_plot_batch_balance b
-                ON b.plot_key = mjm_plot_key(l.plot_name)
-               AND b.batch_key = mjm_batch_key(l.batch_name)
-              WHERE l.transaction_type = '2nd_Culling' LIMIT 1)
-            OR (SELECT count(*) FROM shared_plot_batch_balance) > 0
-            THEN 'yes' ELSE 'NO' END
 UNION ALL
 SELECT 'plot/batch rows the phone will offer',
        (SELECT count(*)::text FROM shared_plot_batch_balance)
