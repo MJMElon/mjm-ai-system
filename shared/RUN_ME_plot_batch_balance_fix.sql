@@ -1,41 +1,41 @@
-/* ═══════════════════════════════════════════════════════════════════════
-   WHAT IS STANDING IN EACH PLOT — WORKED OUT IN THE DATABASE
+-- ════════════════════════════════════════════════════════════════════════
+-- THE PHONE'S BATCH LIST DISAGREED WITH THE MOVEMENT REPORT
+--
+-- shared_plot_batch_balance is what the FC Portal's Maintenance form reads
+-- to offer "Batches in this plot". It was supposed to do the Movement
+-- Report's arithmetic. It did not, in two ways:
+--
+--   1. IT TOOK THE 2ND CULLING OFF ON TOP OF THE 3RD. The 3rd culling is
+--      keyed against the ORIGINAL transplanted figure, so it already
+--      contains the 2nd — deducting both takes the same seedlings off
+--      twice. The tell is a batch that should have netted to nought
+--      reading as a small negative instead. This is the same fault already
+--      found and fixed in shared/shared_plot_movement.js, where the note
+--      names B1's batch 237 reading -2; it was never carried across to
+--      here. The Movement Report gives 2nd Culled no column at all.
+--
+--   2. IT IGNORED STOCK CALIBRATIONS. The Movement Report counts approved
+--      ones as a Stock Adjustment. A plot whose count was corrected read
+--      short on the phone by exactly the correction.
+--
+-- Worked example, from U1: the office showed batch 250 standing at 447 and
+-- 252 at 4,201, while the phone offered 250 at -2 and 252 at 4,191, and
+-- offered batch 230 at -2 when the office had finished with it entirely.
+--
+-- This replaces the view with one that applies both rules. IT CHANGES NO
+-- DATA — the view holds none. Every figure it reports is recomputed from
+-- the ledger the moment it is asked.
+--
+-- Safe to run twice: CREATE OR REPLACE throughout.
+-- ════════════════════════════════════════════════════════════════════════
 
-   Today every app that needs "which batches are in plot B5" downloads the
-   WHOLE inventory ledger and adds it up in the browser. The office reports
-   do it, and so does the Maintenance form on a Field Conductor's phone —
-   tens of thousands of rows crossing the network to produce about ten.
 
-   This view does the adding up inside Postgres. The phone asks for one plot
-   and gets back the handful of rows it actually needs.
-
-   The arithmetic is deliberately identical to the movement report's, so the
-   figures agree with what the office sees:
-
-     in    Seeds_Received, Planted, Transplanted,
-           Transplanted_Premium, Transplanted_DoubleTone
-     out   Damaged_Seeds, 1st_Culling, 3rd_Culling
-     out   2nd_Culling, BUT ONLY WHERE NO 3RD CULLING HAS BEEN RECORDED for
-           that same plot and batch. The 3rd is keyed against the ORIGINAL
-           transplanted figure, so it already contains the 2nd; taking both
-           off subtracts the same seedlings twice, and the tell is a batch
-           that should have netted to nought reading as a small negative.
-           Same rule as liveCount() in shared/shared_plot_movement.js and as
-           the Movement Report, which gives 2nd Culled no column at all.
-     both  Cull3_Transfer — one log, two sides: it ADDS to the plot named on
-           the row and SUBTRACTS from the plot named in the remark
-     in/out Stock_Calibration, approved ones only — the same
-           "[APPROVED by <who> on <when>]" marker the Movement Report reads.
-           Its quantity_change is already signed (a Found positive, a Stolen
-           negative) and is added exactly as stored. A pending adjustment
-           moves no figure anywhere else and must not move one here.
-     out   delivery orders, but ONLY against a plot·batch the ledger already
-           has. A D/O's plot and batch are typed by hand, and a mistyped
-           "24D" must never conjure a row into existence.
-
-   Safe to re-run: everything is CREATE OR REPLACE, and no data is changed.
-   To undo, see the bottom of this file.
-═══════════════════════════════════════════════════════════════════════ */
+-- ── BEFORE: every plot and batch this will move, not just U1 ────────────
+-- Run this FIRST, on its own, if you want the list to compare against.
+-- It is commented out so the file has one result set; uncomment to use.
+--
+--   SELECT plot_name, batch_name, qty AS phone_shows_now
+--   FROM   shared_plot_batch_balance ORDER BY plot_key, batch_key;
 
 
 /* ── 1. THE TWO KEYS ───────────────────────────────────────────────────
@@ -178,32 +178,36 @@ WHERE  b.qty - coalesce(s.qty, 0) <> 0;
    this only opens the view itself. */
 GRANT SELECT ON shared_plot_batch_balance TO authenticated;
 
-
-/* ── 4. MAKE IT QUICK ──────────────────────────────────────────────────
-   The view reads the ledger once per call. This index is what keeps that
-   cheap — it is the same one in shared/index_inventory_logs.sql, repeated
-   here so this file stands on its own. */
-CREATE INDEX IF NOT EXISTS shared_inventory_logs_type_id_idx
-  ON shared_inventory_logs (transaction_type, id);
-ANALYZE shared_inventory_logs;
+-- ── PostgREST has to be told the shape changed ──────────────────────────
+NOTIFY pgrst, 'reload schema';
 
 
-/* ── 5. CHECK IT ───────────────────────────────────────────────────────
-   Pick a plot you know and compare it against the movement report. The
-   figures should agree row for row, negatives included. */
-SELECT plot_name, batch_name, qty
-FROM   shared_plot_batch_balance
-WHERE  plot_key = 'B5'
-ORDER  BY batch_key::bigint;
-
-
-/* ── TO UNDO ──
-   The view holds no data of its own, so dropping it loses nothing.
-
-       DROP VIEW IF EXISTS shared_plot_batch_balance;
-       DROP FUNCTION IF EXISTS mjm_plot_key(text);
-       DROP FUNCTION IF EXISTS mjm_batch_key(text);
-
-   The apps fall back to reading the ledger themselves the moment the view
-   is gone, so nothing breaks — it just goes back to being slow.
-*/
+-- ── WHAT SHOULD HAVE HAPPENED ──────────────────────────────────────────
+-- One result set, because the SQL Editor only shows the last statement's.
+--
+-- A GOOD RESULT is the view rebuilt and NO negative balances left that are
+-- caused by a doubled 2nd culling:
+--
+--   view rebuilt                      yes
+--   batches still reading negative    <a count, and 0 is the hoped-for one>
+--   plots the phone will now offer    <a count>
+--
+-- A non-zero "batches still reading negative" is NOT a failure of this
+-- file — a plot really can be over-allocated, and the Movement Report
+-- shows those too. It means those ones have some other cause and are
+-- worth looking into on the report. The second row of the drill-down
+-- below names them so you are not opening plots one at a time.
+SELECT 'view rebuilt' AS check,
+       CASE WHEN to_regclass('public.shared_plot_batch_balance') IS NULL
+            THEN 'NO' ELSE 'yes' END AS result
+UNION ALL
+SELECT 'batches still reading negative',
+       (SELECT count(*)::text FROM shared_plot_batch_balance WHERE qty < 0)
+UNION ALL
+SELECT 'plot/batch rows the phone will offer',
+       (SELECT count(*)::text FROM shared_plot_batch_balance)
+UNION ALL
+SELECT 'which ones are still negative',
+       coalesce((SELECT string_agg(plot_name || ' batch ' || batch_name || ' (' || qty || ')', ', '
+                                   ORDER BY plot_name, batch_name)
+                 FROM shared_plot_batch_balance WHERE qty < 0), 'none');
