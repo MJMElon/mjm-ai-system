@@ -12,23 +12,29 @@
    The arithmetic is deliberately identical to the movement report's, so the
    figures agree with what the office sees:
 
+   The arithmetic is the Movement Report's Main Nursery rules, written out
+   at the top of runLifeOfPlot() in operation_reports.html. Those rules and
+   these must not drift — the phone offering a batch the report says is
+   gone, or hiding one it says is there, is the whole failure mode:
+
      in    Seeds_Received, Planted, Transplanted,
            Transplanted_Premium, Transplanted_DoubleTone
-     out   Damaged_Seeds, 1st_Culling, 3rd_Culling
-     out   2nd_Culling, BUT ONLY WHERE NO 3RD CULLING HAS BEEN RECORDED for
-           that same plot and batch. The 3rd is keyed against the ORIGINAL
-           transplanted figure, so it already contains the 2nd; taking both
-           off subtracts the same seedlings twice, and the tell is a batch
-           that should have netted to nought reading as a small negative.
-           Same rule as liveCount() in shared/shared_plot_movement.js and as
-           the Movement Report, which gives 2nd Culled no column at all.
+     out   Damaged_Seeds, 1st_Culling
+     out   3rd_Culling, BUT ONLY ONCE EVIDENCED — the report counts it only
+           where the drone-map figure has been keyed (MapQty: in the
+           remark), because until the plot has been flown the culled figure
+           is a claim. One still waiting on its map leaves the batch
+           standing on the report, so it leaves it standing here.
+     --    2nd_Culling NEVER DEDUCTS. It is Tab 6's running snapshot of a
+           batch working through the 3rd culling, not a loss on top of it,
+           and the Movement Report gives it no column at all. Deducting it
+           is what made U1's batch 252 read 4,191 where the report read
+           4,201 — a difference of exactly its 2nd culling.
      both  Cull3_Transfer — one log, two sides: it ADDS to the plot named on
            the row and SUBTRACTS from the plot named in the remark
      in/out Stock_Calibration, approved ones only — the same
-           "[APPROVED by <who> on <when>]" marker the Movement Report reads.
-           Its quantity_change is already signed (a Found positive, a Stolen
-           negative) and is added exactly as stored. A pending adjustment
-           moves no figure anywhere else and must not move one here.
+           "[APPROVED by <who> on <when>]" marker the report reads. Its
+           quantity_change is already signed and is added as stored.
      out   delivery orders, but ONLY against a plot·batch the ledger already
            has. A D/O's plot and batch are typed by hand, and a mistyped
            "24D" must never conjure a row into existence.
@@ -90,8 +96,8 @@ CREATE OR REPLACE VIEW shared_plot_batch_balance
 WITH (security_invoker = true)     -- reads as the caller, so RLS still applies
 AS
 WITH ledger AS (
-  -- Straight movements: in and out of the plot named on the row. The 2nd
-  -- culling is NOT here; it is added back conditionally further down.
+  -- What arrived, and the tray-level movements a PN plot is made of.
+  -- The 2nd culling is NOT here and never is; the 3rd is handled below.
   SELECT id,
          plot_name  AS plot,
          batch_name AS batch,
@@ -103,22 +109,19 @@ WITH ledger AS (
   FROM   shared_inventory_logs
   WHERE  transaction_type IN ('Seeds_Received', 'Planted', 'Transplanted',
                               'Transplanted_Premium', 'Transplanted_DoubleTone',
-                              'Damaged_Seeds', '1st_Culling', '3rd_Culling')
+                              'Damaged_Seeds', '1st_Culling')
 
   UNION ALL
 
-  -- The 2nd culling, but only for a plot and batch with no 3rd culling
-  -- against it. See the header: after a 3rd, the 2nd is already inside the
-  -- figure that replaced it, and deducting both is how a finished batch ends
-  -- up reading -2 on a Field Conductor's phone.
-  SELECT c.id, c.plot_name, c.batch_name, -abs(coalesce(c.quantity_change, 0))
-  FROM   shared_inventory_logs c
-  WHERE  c.transaction_type = '2nd_Culling'
-    AND  NOT EXISTS (
-           SELECT 1 FROM shared_inventory_logs t
-           WHERE  t.transaction_type = '3rd_Culling'
-             AND  mjm_plot_key(t.plot_name)   = mjm_plot_key(c.plot_name)
-             AND  mjm_batch_key(t.batch_name) = mjm_batch_key(c.batch_name))
+  -- The 3rd culling, ONLY ONCE EVIDENCED. The Movement Report counts it
+  -- only when the drone-map figure has been keyed (MapQty: in the remark),
+  -- because until somebody has flown the plot the culled figure is a
+  -- claim. A 3rd culling still waiting on its map leaves the batch
+  -- standing on the report, and so it must here.
+  SELECT id, plot_name, batch_name, -abs(coalesce(quantity_change, 0))
+  FROM   shared_inventory_logs
+  WHERE  transaction_type = '3rd_Culling'
+    AND  coalesce(remark, '') ~ 'MapQty:\s*\d+'
 
   UNION ALL
 

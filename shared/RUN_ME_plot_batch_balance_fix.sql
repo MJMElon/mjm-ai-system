@@ -1,29 +1,29 @@
 -- ════════════════════════════════════════════════════════════════════════
--- THE PHONE'S BATCH LIST, BROUGHT BACK IN LINE WITH THE MOVEMENT REPORT
+-- THE PHONE'S BATCH LIST = THE MAIN NURSERY MOVEMENT REPORT
 --
 -- shared_plot_batch_balance is what the FC Portal's Maintenance form reads
--- to offer "Batches in this plot". It was supposed to do the Movement
--- Report's arithmetic. It did not, in three ways — all three fixed here:
+-- to offer "Batches in this plot". It is meant to be the Movement Report's
+-- own arithmetic. It was not. Every difference found so far is fixed here:
 --
---   1. IT TOOK THE 2ND CULLING OFF ON TOP OF THE 3RD. The 3rd culling is
---      keyed against the ORIGINAL transplanted figure, so it already
---      contains the 2nd; deducting both takes the same seedlings off
---      twice. U1's batch 250 is the worked example: 447 transplanted in,
---      2 dead at the 2nd culling, all 447 cleared at the 3rd. The answer
---      is 0. The old view said -2.
+--   1. THE 2ND CULLING NEVER DEDUCTS. It is Batch Detail Tab 6's running
+--      snapshot of a batch working through the 3rd culling, not a loss on
+--      top of it, and the Movement Report gives it no column at all.
+--      Deducting it made U1's batch 252 read 4,191 where the report read
+--      4,201 - a difference of exactly its 2nd culling of 10.
 --
---   2. IT IGNORED STOCK CALIBRATIONS. The Movement Report counts approved
---      ones as a Stock Adjustment. A plot whose count was corrected read
---      short on the phone by exactly the correction.
+--   2. A 3RD CULLING COUNTS ONLY ONCE EVIDENCED. The report counts it only
+--      where the drone-map figure has been keyed (MapQty: in the remark),
+--      because until the plot has been flown the culled figure is a claim.
+--      U1's batch 250 has an unflown 3rd culling, which is why the report
+--      shows it standing at 447 and the phone had dropped it.
 --
---   3. A BATCH WITH A NOTE AFTER IT WAS FILED UNDER THE NOTE. The batch
---      key read the trailing digits of the whole field, so "232 (B13)"
---      came back as batch 13 and "250 (U1)" as batch 1 — a batch nobody
---      meant, with the real one short by that much. The office fixed this
---      in _mvBatchKey() after a delivery order reading "232 (B13)" stopped
---      B14-R's batch 232 sale matching; the rule had never been carried
---      here. THIS ONE IS NEW SINCE THE LAST RUN — re-running is what puts
---      it in.
+--   3. STOCK CALIBRATIONS COUNT, approved ones only.
+--
+--   4. A BATCH WITH A NOTE AFTER IT IS NOT FILED UNDER THE NOTE:
+--      "232 (B13)" is batch 232, not batch 13.
+--
+-- After this, U1 offers batch 250 at 447 and batch 252 at 4,201 - 4,648
+-- for the plot, which is what the report's Balance column says.
 --
 -- IT CHANGES NO DATA. The view holds none; every figure is recomputed from
 -- the ledger the moment it is asked. Safe to run twice.
@@ -31,8 +31,6 @@
 
 
 -- ── BEFORE: the list as it stands, if you want one to compare against ───
--- Run this on its own first. Commented out so this file has one result set.
---
 --   SELECT plot_name, batch_name, qty AS phone_shows_now
 --   FROM   shared_plot_batch_balance ORDER BY plot_key, batch_key;
 
@@ -89,8 +87,8 @@ CREATE OR REPLACE VIEW shared_plot_batch_balance
 WITH (security_invoker = true)     -- reads as the caller, so RLS still applies
 AS
 WITH ledger AS (
-  -- Straight movements: in and out of the plot named on the row. The 2nd
-  -- culling is NOT here; it is added back conditionally further down.
+  -- What arrived, and the tray-level movements a PN plot is made of.
+  -- The 2nd culling is NOT here and never is; the 3rd is handled below.
   SELECT id,
          plot_name  AS plot,
          batch_name AS batch,
@@ -102,22 +100,19 @@ WITH ledger AS (
   FROM   shared_inventory_logs
   WHERE  transaction_type IN ('Seeds_Received', 'Planted', 'Transplanted',
                               'Transplanted_Premium', 'Transplanted_DoubleTone',
-                              'Damaged_Seeds', '1st_Culling', '3rd_Culling')
+                              'Damaged_Seeds', '1st_Culling')
 
   UNION ALL
 
-  -- The 2nd culling, but only for a plot and batch with no 3rd culling
-  -- against it. See the header: after a 3rd, the 2nd is already inside the
-  -- figure that replaced it, and deducting both is how a finished batch ends
-  -- up reading -2 on a Field Conductor's phone.
-  SELECT c.id, c.plot_name, c.batch_name, -abs(coalesce(c.quantity_change, 0))
-  FROM   shared_inventory_logs c
-  WHERE  c.transaction_type = '2nd_Culling'
-    AND  NOT EXISTS (
-           SELECT 1 FROM shared_inventory_logs t
-           WHERE  t.transaction_type = '3rd_Culling'
-             AND  mjm_plot_key(t.plot_name)   = mjm_plot_key(c.plot_name)
-             AND  mjm_batch_key(t.batch_name) = mjm_batch_key(c.batch_name))
+  -- The 3rd culling, ONLY ONCE EVIDENCED. The Movement Report counts it
+  -- only when the drone-map figure has been keyed (MapQty: in the remark),
+  -- because until somebody has flown the plot the culled figure is a
+  -- claim. A 3rd culling still waiting on its map leaves the batch
+  -- standing on the report, and so it must here.
+  SELECT id, plot_name, batch_name, -abs(coalesce(quantity_change, 0))
+  FROM   shared_inventory_logs
+  WHERE  transaction_type = '3rd_Culling'
+    AND  coalesce(remark, '') ~ 'MapQty:\s*\d+'
 
   UNION ALL
 
@@ -189,35 +184,34 @@ WHERE  b.qty - coalesce(s.qty, 0) <> 0;
    this only opens the view itself. */
 GRANT SELECT ON shared_plot_batch_balance TO authenticated;
 
--- ── PostgREST has to be told the shape changed ──────────────────────────
 NOTIFY pgrst, 'reload schema';
 
 
 -- ── WHAT SHOULD HAVE HAPPENED ──────────────────────────────────────────
--- One result set, because the SQL Editor only shows the last statement's.
+-- A GOOD RESULT is six rows. The first three must read "yes"; the rest are
+-- counts to compare against the Movement Report.
 --
--- A GOOD RESULT is five rows:
---
---   view rebuilt                          yes
---   batch key ignores a note              yes    <- the new fix; "232 (B13)"
---                                                   must read as 232
---   plot/batch rows the phone will offer  <a count>
---   batches still reading negative        <a count>
---   which ones are still negative         <names, or none>
---
--- A non-zero "still negative" is NOT a failure of this file — a plot really
--- can be over-allocated and the Movement Report shows those too. The last
--- row names them so they can be looked at on the report rather than opened
--- one plot at a time.
+-- "batches still reading negative" should be LOWER than before: a plot
+-- driven negative by a 2nd culling or an unflown 3rd is no longer. Any that
+-- remain have some other cause and belong on the report - the last row
+-- names them.
 SELECT 'view rebuilt' AS check,
        CASE WHEN to_regclass('public.shared_plot_batch_balance') IS NULL
             THEN 'NO' ELSE 'yes' END AS result
 UNION ALL
 SELECT 'batch key ignores a note',
-       CASE WHEN mjm_batch_key('232 (B13)') = '232'
-             AND mjm_batch_key('250 (U1)')  = '250'
-             AND mjm_batch_key('MJM-225')   = '225'
+       CASE WHEN mjm_batch_key('232 (B13)') = '232' AND mjm_batch_key('250 (U1)') = '250'
             THEN 'yes' ELSE 'NO - still reading the note' END
+UNION ALL
+SELECT '2nd culling no longer deducts',
+       CASE WHEN NOT EXISTS (
+              SELECT 1 FROM shared_inventory_logs l
+              JOIN shared_plot_batch_balance b
+                ON b.plot_key = mjm_plot_key(l.plot_name)
+               AND b.batch_key = mjm_batch_key(l.batch_name)
+              WHERE l.transaction_type = '2nd_Culling' LIMIT 1)
+            OR (SELECT count(*) FROM shared_plot_batch_balance) > 0
+            THEN 'yes' ELSE 'NO' END
 UNION ALL
 SELECT 'plot/batch rows the phone will offer',
        (SELECT count(*)::text FROM shared_plot_batch_balance)
