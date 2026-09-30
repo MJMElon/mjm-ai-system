@@ -69,6 +69,7 @@
   }
 
   let _events = null;      // [{plotKey, batchKey, batch, type, qty, ms}]
+  let _cull2Verified = new Set();   // `plotKey|batchKey` of signed-off 2nd cullings
   let _ready  = false;
   let _err    = null;
   let _inFlight = null;
@@ -106,7 +107,11 @@
               // A transfer plot (-R) is filled entirely by these. Without them
               // such a plot has no movement at all, and every quantity on it
               // reads as a dash.
-              'Cull3_Transfer'])
+              'Cull3_Transfer',
+              // Not a movement — the signature on a 2nd-culling row. Its
+              // plot_name is 'cull_2::<PLOT>' and it carries no quantity, so
+              // it is pulled out below rather than pushed as an event.
+              'Row_Verification'])
           .order('id', { ascending: true })),
         // Sold comes from the customer DO system, exactly as the report does it.
         fetchAll(() => supabase.from('shared_do_records')
@@ -116,7 +121,21 @@
       if (logsRes.error) throw logsRes.error;
 
       const evs = [];
+      /* Which 2nd-culling rows have been signed off, as `plotKey|batchKey`.
+         operation_batch_detail.html writes one Row_Verification log per
+         verified row, with plot_name 'cull_2::<PLOT>' — see verifyRow() and
+         STAGE_BY_TAB there. */
+      const verified = new Set();
       (logsRes.data || []).forEach(l => {
+        if (l.transaction_type !== 'Row_Verification') return;
+        const m = /^cull_2::(.+)$/i.exec(String(l.plot_name || ''));
+        if (!m) return;
+        verified.add(plotKey(m[1]) + '|' + batchKey(l.batch_name));
+      });
+      _cull2Verified = verified;
+
+      (logsRes.data || []).forEach(l => {
+        if (l.transaction_type === 'Row_Verification') return;
         const ms = parseDate(logDate(l));
         if (ms == null) return;
         evs.push({
@@ -202,45 +221,36 @@
 
   /* ── WHAT A PLOT IS WORTH TO MAINTAIN ──────────────────────────────────
 
-     Not the standing count. A worker sprays, weeds or manures the seedlings
-     that are IN the plot; what happens to them afterwards is not their
-     business and must not change what they are paid for the morning.
+     One source: the main nursery movement data. What ARRIVED in this plot
+     and batch — transplanted in, plus transfers in, less transfers out.
+     That is the plot as the Movement Report describes it.
 
-     Two figures, and only two:
+     Then one refinement, and only one. A 2ND CULLING THAT HAS BEEN VERIFIED
+     replaces it with the balance it left: the "Alive" the 2nd Culling tab
+     counts, which is the transplanted figure less the dead. Somebody has
+     walked the plot, counted, and signed their name to it — that is a better
+     number than the one the transplanting recorded, and it is the figure the
+     3rd Culling tab itself then calls "Remaining Balance".
 
-       the plot's transplanted quantity — everything that arrived in this
-       plot and batch — and,
-
-       ONCE A 2ND CULLING HAS BEEN RECORDED, the balance it left behind:
-       that quantity less what the 2nd culling took. Which is exactly the
-       "Alive" the 2nd Culling tab counts and writes into its own remark
-       (`Alive: N, Dead: M ... Transplanted: T`, saveTab5 in
-       operation_batch_detail.html), derived here from the ledger rather
-       than parsed out of the text so a row saved before that wording still
-       answers.
+     UNVERIFIED, IT DOES NOT COUNT YET. A 2nd culling nobody has signed off
+     is a count still being checked, and the plot goes on being worth what
+     arrived until it is. That is what the Verify button on each row of the
+     2nd Culling tab means, and it is the only thing that switches this.
 
      AS AT THE WORK DATE, like everything else here: a 2nd culling dated
-     after the morning being claimed had not happened yet, so the plot was
-     still carrying the full transplanted quantity that day.
+     after the morning being claimed had not happened yet.
 
-     WHAT DELIBERATELY DOES NOT REDUCE IT:
+     WHAT TAKES NO PART: the 3rd culling, because a plot culled at the end of
+     the month was maintained all month and the figure is cumulative against
+     the original transplanted quantity anyway; and sales, because a plot
+     sold down on the 28th still had to be sprayed on the 4th. Whether a
+     batch is still OFFERED in a plot is a different question, answered by
+     shared_plot_batch_balance — once nothing is standing it stops appearing
+     on the phone, and no new work can be recorded against it.
 
-       the 3rd culling — a plot 3rd-culled at the end of the month was
-       maintained all month, and the 3rd culling figure is cumulative
-       against the original transplanted quantity anyway, so subtracting it
-       routinely drove plots to nought and paid nobody;
-
-       sales — a plot sold down on the 28th still had to be sprayed on the
-       4th;
-
-       transfers — they move seedlings between plots of the same batch, so
-       they count on both sides: a plot filled entirely by a transfer (the
-       -R plots are) has a capacity, and a plot that sent its seedlings
-       away no longer carries them.
-
-     Seed damage takes no part: it is recorded against the batch with no
-     plot at all, so it never reaches a plot's figure to begin with. */
-  function plotCapacity(evs) {
+     Seed damage never reaches a plot: it is recorded against the batch with
+     no plot at all. */
+  function plotCapacity(evs, cull2Verified) {
     let arrived = 0, culled2 = 0;
     for (const e of evs) {
       switch (e.type) {
@@ -255,7 +265,7 @@
         default: break;   // 3rd culling, Sold, Damaged_Seeds: no part in this
       }
     }
-    return culled2 > 0 ? arrived - culled2 : arrived;
+    return (cull2Verified && culled2 > 0) ? arrived - culled2 : arrived;
   }
 
   /* The linked quantity for one work record.
@@ -284,7 +294,7 @@
        what this returns. */
     Object.values(per).forEach(b => {
       b.closing  = liveCount(b.evs);
-      b.capacity = plotCapacity(b.evs);
+      b.capacity = plotCapacity(b.evs, _cull2Verified.has(pk + '|' + b.evs[0].batchKey));
     });
 
     const keys = Object.keys(per);
@@ -321,6 +331,7 @@
     error: () => _err,
     events: () => _events,
     parseDate, logDate, plotKey, batchKey, batchList,
-    signed, liveCount, plotCapacity, linkedQty, recQty
+    signed, liveCount, plotCapacity, linkedQty, recQty,
+    cull2Verified: (plot, batch) => _cull2Verified.has(plotKey(plot) + '|' + batchKey(batch))
   };
 })(window);
