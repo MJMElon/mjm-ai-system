@@ -25,7 +25,7 @@
      three copies of it. -->
 <script src="../shared/shared_worker_locations.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="npayroll_styles.css?v=12">
+<link rel="stylesheet" href="npayroll_styles.css?v=13">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -93,11 +93,13 @@
           <div class="bar-sub" id="maint-sub"></div>
         </div>
         <div class="bar-actions">
-          <!-- Filled from Facility Management's nursery register by
-               fillMaintNurseries(). The four below are what shows before that
-               read lands, and what stays if it cannot be made — a dropdown
-               with nothing in it would be worse than a slightly old one. -->
-          <select id="maint-nursery" class="sel" onchange="renderMaint()">
+          <!-- The circles are drawn by renderClaimPills(); this select is the
+               value every other line on the page reads, and is hidden. The
+               four options below are what stands before the register read
+               lands, and what stays if it cannot be made — a picker with
+               nothing in it would be worse than a slightly old one. -->
+          <div class="nsel" id="maint-nursery-pills"></div>
+          <select id="maint-nursery" class="sel cf-skip" style="display:none;" onchange="renderMaint()">
             <option value="PN">PN — Pre Nursery</option>
             <option value="BNN" selected>BNN — Batu Niah</option>
             <option value="UNN1">UNN1 — Ulu Niah 1</option>
@@ -119,8 +121,13 @@
           <div class="bar-sub" id="transpl-sub">What each worker did, from the FC Portal. The rate comes from Piece Rate.</div>
         </div>
         <div class="bar-actions">
-          <select id="transpl-section" class="sel" onchange="renderEntries('transplanting')"></select>
-          <button class="btn btn-primary" onclick="openEntry('transplanting')">+ Add Entry</button>
+          <!-- Circles, same as Work Maintenance — one office reads both
+               claims, and two pickers for the same question is one to
+               learn twice. The select behind them is the value. -->
+          <div class="nsel" id="transpl-section-pills"></div>
+          <select id="transpl-section" class="sel cf-skip" style="display:none;" onchange="renderEntries('transplanting')"></select>
+          <button class="btn btn-primary" onclick="downloadTransplantPDF()">⬇ Salary Claim Form (PDF)</button>
+          <button class="btn btn-primary" data-add onclick="openEntry('transplanting')">+ Add Entry</button>
         </div>
       </div>
       <!-- The claim: workers down, the four jobs across, the same shape as
@@ -147,7 +154,7 @@
         </div>
         <div class="bar-actions">
           <select id="seedling-section" class="sel" onchange="renderEntries('seedlings')"></select>
-          <button class="btn btn-primary" onclick="openEntry('seedlings')">+ Add Entry</button>
+          <button class="btn btn-primary" data-add onclick="openEntry('seedlings')">+ Add Entry</button>
         </div>
       </div>
             <div class="verify-bar" id="vb-seedling"></div>
@@ -163,7 +170,7 @@
         </div>
         <div class="bar-actions">
           <select id="other-section" class="sel" onchange="renderEntries('other')"></select>
-          <button class="btn btn-primary" onclick="openEntry('other')">+ Add Entry</button>
+          <button class="btn btn-primary" data-add onclick="openEntry('other')">+ Add Entry</button>
         </div>
       </div>
             <div class="verify-bar" id="vb-other"></div>
@@ -345,7 +352,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=28"></script>
+<script src="npayroll_script.js?v=30"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->
