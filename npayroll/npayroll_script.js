@@ -367,7 +367,14 @@ function maintWorkerNames(nursery, ym) {
   }).map(w => String(w.full_name).trim());
 }
 
-const money = v => 'RM ' + (Number(v) || 0).toFixed(2);
+/* "RM 1,000.00", not "RM 1000.00". A payroll sheet is read down a column at
+   speed and four digits with no break in them is where a 1,000 and a 10,000
+   start looking alike. Two decimals always — money with a ragged number of
+   them does not line up. moneyFig is the same figure without the prefix, for
+   the PDF, so the printed form and the screen group their digits the same. */
+const moneyFig = v => (Number(v) || 0).toLocaleString('en-MY',
+  { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = v => 'RM ' + moneyFig(v);
 /* A rate may carry more than two decimals (0.015). Printing it as "0.01"
    next to money worked out from 0.015 makes the sheet look wrong. */
 function rateTxt(v) {
@@ -881,8 +888,11 @@ function capCell(sheet, page, section, name, code, worked) {
   const canEdit = mayAdjust(page) && !sheetLocked(page) && !!worked;
   const d = capDelta(sheet, section, name, code, worked);
   const tip = d ? `The field divided out ${capFmt(worked)}` : '';
-  // nowrap, or the stepper drops to a line of its own under the figure.
-  return `<td style="white-space:nowrap;"${tip ? ` title="${esc(tip)}"` : ''}>${capFmt(shown)}`
+  /* The stepper goes UNDER the figure, not beside it. Beside it, the number
+     moved left as the buttons appeared on hover and the column stopped
+     lining up down the sheet; under it, the figure holds its place and the
+     buttons are a bigger target for a thumb. */
+  return `<td${tip ? ` title="${esc(tip)}"` : ''}>${capFmt(shown)}`
        + (canEdit ? calStepHtml(sheet, page, section, name, capCode(code), worked) : '')
        + '</td>';
 }
@@ -2009,11 +2019,14 @@ function workdoneCell(cap, rate, claimed) {
      on purpose, so it is not called a shortfall — but it is still a
      difference, and a difference between two totals on one form has to be
      accounted for or somebody will spend the afternoon on it. */
+  /* On its own line UNDER the total, not trailing after it. The two are
+     different figures — what the work came to, and what is missing from the
+     claim for it — and on one line the second reads as part of the first. */
   const gap = Math.abs(short) < 0.005 ? '' :
-    `<span style="color:var(--danger,#c0392b);font-weight:800;"> &middot; ${
-      short > 0 ? money(short) + ' not claimed' : money(-short) + ' over'}</span>`;
+    `<div style="color:var(--danger,#c0392b);font-weight:800;margin-top:2px;">${
+      short > 0 ? money(short) + ' not claimed' : money(-short) + ' over'}</div>`;
   return `<th ${span} title="${esc(capFmt(cap2(cap)))} at ${esc(rateTxt(rate))}"
-           >Total Workdone (RM) : ${money(total)}${gap}</th>`;
+           ><div>Total Workdone (RM) : ${money(total)}</div>${gap}</th>`;
 }
 
 function renderMaint() {
@@ -2246,9 +2259,19 @@ function lockAllows(sheet) {
     ? `${m} is locked, so nothing on any payroll sheet for that month can be changed.\n\n`
       + 'Somebody with Lock Controls can re-open it under System Setting.'
     : `${LOCK_SHEETS[sheet].label} for ${scopeLabel(sheet, lockScope(sheet))} was verified by `
-      + `${why.by || 'somebody'} on ${fmtStamp(why.at)}, so it is closed.\n\n`
-      + 'Re-opening the month under System Setting takes that verification back.');
+      + `${whoName(why.by)} on ${fmtStamp(why.at)}, so it is closed.\n\n`
+      + 'Unlock it on the strip above the sheet, or re-open the whole month under '
+      + 'System Setting.');
   return false;
+}
+
+/* Who, as a name. MJMPeople is loaded at boot; if it is not there — an old
+   cached copy of the page — the email still shows, which is the thing it was
+   before and not a failure. */
+function whoName(v) {
+  if (!v) return 'somebody';
+  try { return (typeof MJMPeople !== 'undefined' ? MJMPeople.name(v) : v) || v; }
+  catch (_) { return v; }
 }
 
 function fmtStamp(t) {
@@ -2283,8 +2306,20 @@ function renderVerifyBar(sheet) {
     el.className = 'verify-bar verify-done';
     el.innerHTML = `<span>✔ Verified — ${esc(what)}</span>`
                  + `<span class="vb-spacer"></span>`
-                 + `<span class="vb-who">${esc(why.by || 'somebody')}</span>`
-                 + `<span>${esc(fmtStamp(why.at))}</span>`;
+                 + `<span class="vb-who">${esc(whoName(why.by))}</span>`
+                 + `<span>${esc(fmtStamp(why.at))}</span>`
+                 /* ── 2. Taking it back ──
+                    A sheet verified by mistake used to need somebody with
+                    Lock Controls to re-open the WHOLE month — every other
+                    sheet of it with it — which is a sledgehammer for one
+                    wrong press. This undoes the one sheet and nothing else.
+                    Its own permission, because it is not the same question
+                    as being allowed to verify: the person who signs a sheet
+                    is not automatically the person who may unsign it. */
+                 + (may(sheet, 'unverify')
+                     ? `<button class="btn btn-sm" style="margin-left:10px;"
+                          onclick="unverifySheet('${sheet}')">\u21ba Unlock</button>`
+                     : '');
     return;
   }
   el.className = 'verify-bar verify-open';
@@ -2306,10 +2341,45 @@ async function verifySheet(sheet) {
   }
   const ym = monthValue(), scope = lockScope(sheet);
   if (!confirm(`Verify ${LOCK_SHEETS[sheet].label} for ${scopeLabel(sheet, scope)}, ${monthLabel(ym)}?\n\n`
-             + 'It locks straight away and cannot be changed after this. Only somebody with Lock '
-             + 'Controls can re-open the month.')) return;
+             + 'It locks straight away and nothing on it can be changed after that. Somebody with '
+             + 'the Unlock tick can take it back; otherwise it needs Lock Controls and the whole '
+             + 'month.')) return;
   const error = await MJMPayrollLock.verify(_supabase, ym, sheet, scope, userEmail || null);
   if (error) { alert('Could not verify: ' + error.message); return; }
+  refreshPayrollTab();
+  if (typeof renderLockCalendar === 'function' && $('tab-locks')) renderLockCalendar();
+}
+
+/* Taking one sheet's verification back, and nothing else with it.
+
+   Separate from Lock Controls on purpose. That re-opens the whole MONTH —
+   every sheet of it, every nursery — which is the right tool for a month
+   that has to be re-run and much too big for one sheet signed in error.
+
+   Its own permission for the same reason verifying has one: being trusted
+   to say a sheet is right is not the same as being trusted to unsay it. */
+async function unverifySheet(sheet) {
+  if (!mayDo(sheet, 'unverify',
+      'You do not have permission to unlock this sheet. Ask an admin to grant it in User Access.')) return;
+  if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) {
+    alert('Lock Controls are not set up yet — run shared/RUN_ME_npayroll_locks.sql first.');
+    return;
+  }
+  const ym = monthValue(), scope = lockScope(sheet);
+  const v  = MJMPayrollLock.verificationOf(ym, sheet, scope);
+  if (!v) { refreshPayrollTab(); return; }
+  /* The verification that closes this sheet may have been filed with NO
+     scope — somebody verifying with the picker on "All sections" closes
+     every section at once. Taking it off re-opens all of them, so say so
+     rather than letting one nursery's unlock quietly open three. */
+  const wide = !String(v.scope || '').trim();
+  if (!confirm(`Unlock ${LOCK_SHEETS[sheet].label} for ${scopeLabel(sheet, scope)}, ${monthLabel(ym)}?\n\n`
+             + `It was verified by ${whoName(v.verified_by)} on ${fmtStamp(v.verified_at)}.`
+             + (wide ? '\n\nThat verification covers EVERY section of this sheet, so this re-opens '
+                     + 'all of them, not only the one on screen.' : '')
+             + '\n\nThe sheet becomes editable again and will have to be verified a second time.')) return;
+  const error = await MJMPayrollLock.unverify(_supabase, ym, sheet, v.scope || '');
+  if (error) { alert('Could not unlock: ' + error.message); return; }
   refreshPayrollTab();
   if (typeof renderLockCalendar === 'function' && $('tab-locks')) renderLockCalendar();
 }
@@ -2660,6 +2730,25 @@ function calibrationText(capD, rmD) {
   ].filter(Boolean).join('  \u00b7  ');
 }
 
+/* Who signed this sheet off, printed under the total.
+
+   The form is what goes for payment, so the signature belongs ON it rather
+   than only on the screen it was produced from. A sheet not yet verified
+   says so plainly — a printed claim with no line here would look the same
+   as one where the line simply did not fit. */
+function pdfVerifiedNote(doc, y, sheet, scope) {
+  let line = 'Not yet verified.';
+  try {
+    if (typeof MJMPayrollLock !== 'undefined' && MJMPayrollLock.ready()) {
+      const v = MJMPayrollLock.verificationOf(monthValue(), sheet, scope);
+      if (v) line = `Verified by ${whoName(v.verified_by)} on ${fmtStamp(v.verified_at)}`;
+    }
+  } catch (_) {}
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(60, 60, 60);
+  doc.text(line, 25, y + 6);
+  return y + 6;
+}
+
 function pdfFooterNote(doc, y) {
   doc.setFont('helvetica', 'italic'); doc.setFontSize(8.5); doc.setTextColor(110, 110, 110);
   doc.text('This salary claim form is automatically generated by the MJM Nursery AI system.', 105, y + 12, { align: 'center' });
@@ -2756,6 +2845,7 @@ function downloadMaintPDF() {
   pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH + 1, 'RM ' + wk.reduce((s, w) => s + earned(w), 0).toFixed(2),
           { bold: true, size: 9, nowrap: true, fill: TF });
   y += RH + 1;
+  y = pdfVerifiedNote(doc, y, 'maint', n);
   pdfFooterNote(doc, y);
   doc.save(`Salary_Claim_Work_Maintenance_${n}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
 }
@@ -2931,6 +3021,7 @@ function downloadTransplantPDF() {
 
   y = drawTransplantPlots(doc, y, plotRows, secTxt, monthTxt);
 
+  y = pdfVerifiedNote(doc, y, 'transpl', sec);
   pdfFooterNote(doc, y);
   doc.save(`Salary_Claim_Transplanting_${sec === NO_SECTION ? 'No_Section' : (sec || 'All')}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
 }
@@ -3253,6 +3344,14 @@ $('global-month').addEventListener('change', async () => {
        invited somebody to start keying. */
     await MJMPayrollLock.load(_supabase);
     initLockControls();
+    /* Names for every "verified by" on the page. Not awaited: a sheet that
+       has to wait on a lookup table before it will draw is a sheet that does
+       not draw when the table is missing. The strips repaint when it lands. */
+    try {
+      if (typeof MJMPeople !== 'undefined') {
+        MJMPeople.load(_supabase).then(() => { try { refreshPayrollTab(); } catch (_) {} });
+      }
+    } catch (_) {}
 
     applyPageAccess();
 
