@@ -703,12 +703,147 @@ function earnedCell(sheet, page, section, name, code, jobLabel, worked) {
       + ' style="cursor:pointer;" title="Adjust what this job earned"'
     : '';
   if (!a && !worked) return `<td${open}>—</td>`;
-  return `<td class="money"${open}>${money(shown)}`
+  /* THE PENNY STEPPER.
+     A capacity divided among seven people does not land on a whole cent, so
+     a cell comes out a cent or two from the field's own total. Nudging it
+     meant opening a form, typing a figure and writing a reason for ONE CENT,
+     which is why the cent never got nudged and the two totals never agreed.
+     So the cell carries minus and plus, and each press is RM 0.01.
+
+     The AMOUNT is still the way to the full form: an adjustment that is a
+     real decision still wants its own figure and its own reason. That has
+     not moved; it has only stopped being the only way in. Which is why the
+     buttons stop the click rather than letting it reach the cell. */
+  const step = canEdit ? calStepHtml(sheet, page, section, name, code, worked) : '';
+  return `<td class="money"${open}>${money(shown)}${step}`
        + (a ? `<div style="font-size:.7rem;font-weight:600;color:var(--danger,#c0392b);white-space:nowrap;"
                 title="${esc(a.reason || '')}${a.adjusted_by ? ' — ' + esc(a.adjusted_by) : ''}"
                 >adjusted · was ${money(worked)}</div>` : '')
-       + (canEdit && !a ? '<span style="color:var(--text-faint);font-size:.7rem;"> \u270e</span>' : '')
        + '</td>';
+}
+
+function calStepHtml(sheet, page, section, name, code, worked) {
+  const go = (dir) => `calibrateStep('${sheet}','${page}','${_esc1(section)}','${_esc1(name)}',`
+                    + `'${_esc1(code)}',${Number(worked || 0)},${dir})`;
+  return '<span class="cal-step">'
+    + `<button type="button" class="cal-btn" title="Take RM 0.01 off"`
+    + ` onclick="event.stopPropagation();${go(-1)}">\u2212</button>`
+    + `<button type="button" class="cal-btn" title="Add RM 0.01"`
+    + ` onclick="event.stopPropagation();${go(1)}">+</button>`
+    + '</span>';
+}
+
+/* ════════════ CALIBRATING BY THE CENT ════════════
+   One press is one cent on one job. Applied HERE first and written to the
+   database a moment later, because the office presses it four or five times
+   in a row to close a gap, and a round trip per press is a sheet that limps.
+
+   What gets written is an ordinary earn adjustment — the same row in the same
+   table as the form writes — so a calibrated cent reads back exactly like any
+   other adjustment and the monthly claim picks it up without having to know
+   the difference. Its reason says what it is, because the reason is required
+   and that IS the reason.
+
+   Stepping back onto the figure the sheet worked out REMOVES the override
+   rather than storing an adjustment to the same number. */
+const _round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+const _calTimers = {};
+
+function calibrateStep(sheet, page, section, name, code, worked, dir) {
+  /* The same two questions the cell asked before it drew the buttons, asked
+     again at the press — the two must not be able to disagree. */
+  if (!mayAdjust(page)) {
+    alert('You do not have permission to change what a job earned.\n\n'
+        + 'Ask an admin to grant Adjust Pay in User Access.');
+    return;
+  }
+  if (!lockAllows(page)) return;
+
+  const a = adjOf(sheet, section, name, code);
+  const back = _round2(worked);
+  const from = a ? Number(a.amount || 0) : back;
+  const next = _round2(from + dir * 0.01);
+  // Nothing is paid below nothing: a stepper that walks past zero into a
+  // negative wage is a keystroke nobody meant.
+  if (next < 0) return;
+
+  const key = _adjKey(sheet, section, name, code);
+  earnAdj = earnAdj.filter(x =>
+    _adjKey(x.sheet, x.section, x.worker_name, x.work_code) !== key);
+  if (next !== back) {
+    earnAdj.push({
+      month: monthValue(), sheet, section: section || '', worker_name: name, work_code: code,
+      amount: next, reason: calReason(back),
+      adjusted_by: userEmail || null, adjusted_at: new Date().toISOString()
+    });
+  }
+  redrawClaim(page);
+
+  /* Written once the pressing stops. Five presses are one row either way —
+     it is keyed on (month, sheet, section, worker, job), so every press would
+     upsert the same one. */
+  clearTimeout(_calTimers[key]);
+  _calTimers[key] = setTimeout(function () {
+    _calSave(sheet, page, section, name, code, next, back);
+  }, 500);
+}
+
+const calReason = (worked) => `Calibrated to the cent (sheet worked out ${money(worked)})`;
+
+async function _calSave(sheet, page, section, name, code, amount, worked) {
+  try {
+    let error;
+    if (amount === worked) {
+      ({ error } = await _supabase.from('mjmnpayroll_earn_adjustments').delete()
+        .eq('month', monthValue()).eq('sheet', sheet).eq('section', section || '')
+        .eq('worker_name', name).eq('work_code', code));
+    } else {
+      ({ error } = await _supabase.from('mjmnpayroll_earn_adjustments').upsert({
+        month: monthValue(), sheet, section: section || '', worker_name: name, work_code: code,
+        amount, reason: calReason(worked),
+        adjusted_by: userEmail || null, adjusted_at: new Date().toISOString()
+      }, { onConflict: 'month,sheet,section,worker_name,work_code' }));
+    }
+    if (error) throw error;
+  } catch (e) {
+    /* The screen is showing a figure the database does not hold. Put it back
+       to what IS held rather than leaving one nobody will be paid. */
+    alert('That calibration did not save, so it has been put back.\n\n' + (e.message || e));
+    await loadEarnAdj();
+    redrawClaim(page);
+  }
+}
+
+/* Redraw one claim without losing where it was scrolled to. These tables are
+   wider than the screen and the cent being nudged is usually off to the
+   right — a redraw that jumps back to the left takes the cell with it. */
+function redrawClaim(page) {
+  const wrap = document.querySelector(`#sub-${page} .tbl-wrap`);
+  const x = wrap ? wrap.scrollLeft : 0;
+  if (page === 'maint') renderMaint(); else renderTransplantClaim();
+  const after = document.querySelector(`#sub-${page} .tbl-wrap`);
+  if (after) after.scrollLeft = x;
+}
+
+/* What this worker's cents come to on this sheet: everything paid, less
+   everything the sheet worked out. */
+function calibrationOf(sheet, section, name, codes, workedOf) {
+  return _round2(codes.reduce((s, c) => {
+    const a = adjOf(sheet, section, name, c);
+    return s + (a ? Number(a.amount || 0) - Number(workedOf(c) || 0) : 0);
+  }, 0));
+}
+
+/* …and that figure as the line under the worker's name, which is where
+   somebody checking a payslip looks for "why is this not what I worked out".
+   Nothing where nothing has been changed: a column of "calibrate RM0.00" is
+   a column of noise. */
+function calibrationLine(d) {
+  if (!d) return '';
+  const colour = d > 0 ? '#0d7a47' : 'var(--danger,#c0392b)';
+  return `<div class="cal-line" style="color:${colour};"
+            title="The cents added to or taken off this worker's jobs on this sheet"
+            >calibrate ${d > 0 ? '' : '-'}RM${Math.abs(d).toFixed(2)}</div>`;
 }
 /* A value going into a JS string inside an HTML attribute crosses TWO
    quotings, and needs both. The four transplanting jobs are literally named
@@ -1367,7 +1502,9 @@ function renderTransplantClaim() {
     <tr>
       <td style="color:var(--text-faint);">${i + 1}</td>
       <td class="l" style="font-weight:700;color:var(--text-head);">${esc(n)}${
-        knownOf(n) ? '' : '<span title="Not on the worker register — add them in Worker System, or the claim cannot pay this" style="color:var(--danger,#c0392b);"> &#9888;</span>'}</td>
+        knownOf(n) ? '' : '<span title="Not on the worker register — add them in Worker System, or the claim cannot pay this" style="color:var(--danger,#c0392b);"> &#9888;</span>'}${
+        calibrationLine(calibrationOf('transplanting', secOf(n), n,
+                                      TRANSPLANT_JOBS.map(j => j.key), (k) => rmOf(n, k)))}</td>
       ${TRANSPLANT_JOBS.map(j => {
         const c = capOf(n, j.key);
         return `<td>${capFmt(c)}</td>` + earnedCell('transplanting', 'transpl', secOf(n), n, j.key,
@@ -1874,7 +2011,9 @@ function renderMaint() {
   const body = wk.map((w, i) => `
     <tr>
       <td style="color:var(--text-faint);">${i + 1}</td>
-      <td class="l" style="font-weight:700;color:var(--text-head);">${esc(w)}</td>
+      <td class="l" style="font-weight:700;color:var(--text-head);">${esc(w)}${
+        calibrationLine(calibrationOf('maint', n, w, MAINT_TYPES.map(t => t.code),
+                                      (c) => rmOf(w, c)))}</td>
       ${MAINT_TYPES.map(t => {
         const c = capOf(w, t.code);
         return `<td>${capFmt(c)}</td>` + earnedCell('maint', 'maint', n, w, t.code, t.label,
