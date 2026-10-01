@@ -72,7 +72,10 @@ const LEDGER = [
   // batch is what tells one flight from another
   log('N3',  '101', 'https://files.test/maps/old.jpg', '2024-01-05'),
   // N7 was transplanted but nobody flew it
-  log('N7',  '253', '',                                `${YM}-09`)
+  log('N7',  '253', '',                                `${YM}-09`),
+  /* The same flight twice on one plot — two trays fed N3 and the office
+     pasted the one map on both rows. */
+  log('N3',  '252', 'https://files.test/maps/n3.jpg',  `${YM}-06`)
 ];
 
 async function boot(browser, field, ledger) {
@@ -402,6 +405,10 @@ const read = (page) => page.evaluate(() => {
     check('EVERY MAP IS HEADED WITH ITS PLOT', order.length, 3);
     check('…and the order is BNN, then UNN 1, then UNN 2',
           order, ['B3', 'N3', 'N9']);
+    /* The same map reaches the sheet twice — two trays fed N3 and the one
+       flight was pasted on both rows. One picture, one sheet of paper. */
+    check('the same map is not printed twice',
+          (html.match(/files\.test\/maps\/n3\.jpg/g) || []).length, 1);
     checkTrue('…with the nursery, batch and quantity beside the plot',
               /Batu Niah/.test(html) && /Batch 260/.test(html) && /2,405|6,685/.test(html));
     checkTrue('it is every nursery, not the circle on screen',
@@ -413,6 +420,43 @@ const read = (page) => page.evaluate(() => {
     checkTrue('…and the ones that can are images', /<img src="https:\/\/files\.test\/maps\/n3\.jpg"/.test(html));
     checkTrue('it waits for the maps to arrive before printing',
               /window\.print/.test(html) && /addEventListener\('load'/.test(html));
+    await page.close();
+  }
+
+  console.log('\nOne flight over two plots');
+  {
+    /* One map covering B3 and B4 — the drone flew the pair, and the office
+       put the same file on both rows. Printing it twice is a wasted sheet
+       and a second look at a picture already read; printing it once and
+       losing B4 would be worse. */
+    const field = [rec({ nursery_name: 'BNN', plot_name: 'B3', source_qty: 800, batch_name: '260' }),
+                   rec({ nursery_name: 'BNN', plot_name: 'B4', source_qty: 600, batch_name: '260' })];
+    const ledger = [log('B3', '260', 'https://files.test/maps/pair.jpg', `${YM}-04`),
+                    log('B4', '260', 'https://files.test/maps/pair.jpg', `${YM}-04`)];
+    const page = await boot(browser, field, ledger);
+    await page.evaluate(() => {
+      window.__PRINTED = '';
+      window.open = () => ({ document: { write(h) { window.__PRINTED += h; }, close() {} },
+                             focus() {}, print() {} });
+    });
+    await page.evaluate(() => printTransplantMaps());
+    const html = await page.evaluate(() => window.__PRINTED);
+
+    check('the picture is printed once', (html.match(/maps\/pair\.jpg/g) || []).length, 1);
+    check('…on one card', (html.match(/<figure class="map">/g) || []).length, 1);
+    const head = (html.match(/<span class="plot">([^<]+)<\/span>/) || [])[1] || '';
+    checkTrue('…headed with BOTH plots, so neither is lost off the sheet',
+              /B3/.test(head) && /B4/.test(head));
+    checkTrue('…and the quantity is the two added up, because the card is '
+            + 'about both', /1,400 transplanted/.test(html));
+
+    /* The table is per plot, so each still carries its own. */
+    await pick(page, 'BNN');
+    const rows = await page.$$eval('#transpl-plots-table tbody tr', (trs) =>
+      trs.map((tr) => ({ plot: (tr.children[1].textContent || '').trim(),
+                         n: tr.children[2].querySelectorAll('a.tp-map').length })));
+    check('…while on the table each plot still shows it on its own row',
+          rows.map((r) => [r.plot, r.n]), [['B3', 1], ['B4', 1]]);
     await page.close();
   }
 

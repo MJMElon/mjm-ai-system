@@ -1416,16 +1416,37 @@ function printTransplantMaps() {
   const secName = (c) => NURSERY_FULL[c] ? `${c} — ${NURSERY_FULL[c]}` : c;
 
   /* One card per MAP, not per plot: a plot filled from two trays on two days
-     was flown twice, and both are the evidence. */
-  const cards = [];
+     was flown twice, and both are the evidence.
+
+     AND ONE CARD PER PICTURE. The same map file reaches the sheet more than
+     once — one flight covering two plots, the same URL pasted on both rows,
+     a plot carried across two batches. Printing it twice is a wasted sheet of
+     paper and a second look at a picture somebody has already read, so the
+     repeats are folded into the first and every plot it covers is named on
+     it. Nothing is lost: a plot that shares a map still appears, on the card
+     that holds its map. */
+  const byUrl = new Map();
   CLAIM_NURSERIES.forEach((code) => {
     transplantPlotRows(code).forEach((r) => {
       mapsForPlot(r.plot, r.batches).forEach((m) => {
-        cards.push({ nursery: code, plot: r.plot, qty: r.qty,
-                     batch: m.batch || (r.batches || []).join(', '), date: m.date, url: m.url });
+        let c = byUrl.get(m.url);
+        if (!c) {
+          c = { url: m.url, plots: [], nurseries: [], batches: [], dates: [], qty: 0 };
+          byUrl.set(m.url, c);
+        }
+        if (!c.plots.includes(r.plot)) c.plots.push(r.plot);
+        if (!c.nurseries.includes(code)) c.nurseries.push(code);
+        const b = m.batch || (r.batches || []).join(', ');
+        if (b && !c.batches.includes(b)) c.batches.push(b);
+        if (m.date && !c.dates.includes(m.date)) c.dates.push(m.date);
+        /* The quantity is the plots' added up, because the card is now about
+           all of them. A map covering one plot is that plot's figure, which
+           is what it always was. */
+        if (r.qty != null) c.qty += Number(r.qty);
       });
     });
   });
+  const cards = [...byUrl.values()];
 
   if (!cards.length) {
     alert(`No drone map is on any transplanting record for ${monthTxt}.\n\n`
@@ -1439,15 +1460,18 @@ function printTransplantMaps() {
   const card = (c) => `
     <figure class="map">
       <figcaption>
-        <span class="plot">${esc2(c.plot)}</span>
-        <span class="meta">${[secName(c.nursery), c.batch ? 'Batch ' + c.batch : '',
-          c.qty == null ? '' : num(c.qty) + ' transplanted',
-          c.date ? fmtDay(c.date) : ''].filter(Boolean).map(esc2).join('  \u00b7  ')}</span>
+        <span class="plot">${esc2(c.plots.join('  \u00b7  '))}</span>
+        <span class="meta">${[
+          c.nurseries.map(secName).join(', '),
+          c.batches.length ? 'Batch ' + c.batches.join(', ') : '',
+          c.qty ? num(c.qty) + ' transplanted' : '',
+          c.dates.length ? c.dates.slice().sort().map(fmtDay).join(', ') : ''
+        ].filter(Boolean).map(esc2).join('  \u00b7  ')}</span>
       </figcaption>
       ${_isPdfUrl(c.url)
         ? `<div class="pdf">This map is a PDF and cannot be printed with the others.
              <br><span class="u">${esc2(c.url)}</span></div>`
-        : `<img src="${esc2(c.url)}" alt="Drone map of plot ${esc2(c.plot)}">`}
+        : `<img src="${esc2(c.url)}" alt="Drone map of plot ${esc2(c.plots.join(', '))}">`}
     </figure>`;
 
   // Two to a page, each pair in its own sheet so the break never lands
