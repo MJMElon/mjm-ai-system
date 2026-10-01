@@ -1317,6 +1317,210 @@ function transplantEmptyLead(secFilter) {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   THE DRONE MAP OF EACH PLOT
+
+   Every transplanting row in the ledger carries the map that was flown for
+   it, as `MapUrl:` on its remark — written by the Seedling Stock batch
+   report when the plot was filled, and the only evidence of what actually
+   went in. The claim beside it is paying for that work, so the map belongs
+   where the work is being signed off, not two systems away.
+
+   READ ON ITS OWN, not off PlotMovement: that module keeps the ledger's
+   arithmetic — plot, batch, quantity, date — and drops the remark, which is
+   where the map is. One narrow read of the transplanting rows is cheaper
+   than widening what every page holds.
+   ══════════════════════════════════════════════════════════════ */
+let transplantMaps = {};     // plotKey → [{ url, batch, date }], newest first
+
+async function loadTransplantMaps() {
+  try {
+    const res = await PlotMovement.fetchAll(() => _supabase.from('shared_inventory_logs')
+      .select('plot_name, batch_name, remark, transaction_date, created_at')
+      .in('transaction_type',
+          ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone'])
+      .order('id', { ascending: true }));
+    if (res.error) throw res.error;
+    const by = {};
+    (res.data || []).forEach(l => {
+      const m = String(l.remark || '').match(/MapUrl:(\S+)/i);
+      if (!m) return;
+      const k = _tpKey(l.plot_name);
+      if (!k) return;
+      (by[k] || (by[k] = [])).push({
+        url: m[1],
+        batch: (l.batch_name || '').trim(),
+        date: String(l.transaction_date || l.created_at || '').slice(0, 10)
+      });
+    });
+    // Newest first, and one line per map however many rows name it.
+    Object.keys(by).forEach(k => {
+      const seen = new Set();
+      by[k] = by[k].sort((a, b) => String(b.date).localeCompare(String(a.date)))
+                   .filter(x => (seen.has(x.url) ? false : (seen.add(x.url), true)));
+    });
+    transplantMaps = by;
+  } catch (e) {
+    /* No maps is not no work. The table draws without the column rather than
+       not at all, and says nothing it cannot answer. */
+    console.warn('[payroll] drone maps could not be read:', (e && e.message) || e);
+    transplantMaps = {};
+  }
+}
+
+/* The maps for one plot — this month's batches where they match, and the
+   plot's own newest otherwise. A plot is re-used across batches over the
+   years, so the batch is what tells one flight from another. */
+function mapsForPlot(plot, batches) {
+  const all = transplantMaps[_tpKey(plot)] || [];
+  if (!all.length) return [];
+  const want = (batches || []).map(b => String(b).trim()).filter(Boolean);
+  if (!want.length) return all.slice(0, 1);
+  const hit = all.filter(m => want.some(b => _tpKey(b) === _tpKey(m.batch)));
+  return hit.length ? hit : all.slice(0, 1);
+}
+
+const _isPdfUrl = (u) => /\.pdf(\?|$)/i.test(String(u || ''));
+
+/* One plot's maps, as something to open. A new tab rather than a box on this
+   page: that is what prints, which is half of what the map is wanted for. */
+function mapCellHtml(plot, batches) {
+  const maps = mapsForPlot(plot, batches);
+  if (!maps.length) return '<span style="color:var(--text-faint);">—</span>';
+  return maps.map(m => {
+    const pdf = _isPdfUrl(m.url);
+    const tip = ['Drone map', plot, m.batch ? 'batch ' + m.batch : '', m.date]
+      .filter(Boolean).join(' \u00b7 ');
+    return `<a class="tp-map${pdf ? ' is-pdf' : ''}" href="${esc(m.url)}"
+      target="_blank" rel="noopener" title="${esc(tip)} — opens in a new tab, where it prints"
+      ${pdf ? '' : `style="background-image:url('${esc(m.url)}')"`}>${pdf ? '\u{1F4C4}' : ''}</a>`;
+  }).join('');
+}
+
+/* ── THE MAPS, PRINTED ──────────────────────────────────────────────────
+   Every nursery's plots for the month, TWO TO AN A4 PAGE, each one headed
+   with its plot. Half a page each is the point: a drone map at thumbnail
+   size shows nothing, and the reason to print one is to stand in the plot
+   and compare it with what is there.
+
+   A PRINT WINDOW rather than a PDF built here. The maps are images on
+   storage; drawing them into a PDF means fetching each one through the
+   canvas, which turns on every cross-origin question there is — and the
+   browser's own print dialogue already makes the PDF, at the paper size the
+   page asks for. Nothing is downloaded and nothing can fail halfway.
+
+   BNN, then UNN 1, then UNN 2 — the order the nurseries are worked, and the
+   order the circles are in. Every nursery, not the one on screen: this is the
+   month's maps to carry out, not the sheet being read. */
+function printTransplantMaps() {
+  const monthTxt = monthLabel(monthValue());
+  const secName = (c) => NURSERY_FULL[c] ? `${c} — ${NURSERY_FULL[c]}` : c;
+
+  /* One card per MAP, not per plot: a plot filled from two trays on two days
+     was flown twice, and both are the evidence. */
+  const cards = [];
+  CLAIM_NURSERIES.forEach((code) => {
+    transplantPlotRows(code).forEach((r) => {
+      mapsForPlot(r.plot, r.batches).forEach((m) => {
+        cards.push({ nursery: code, plot: r.plot, qty: r.qty,
+                     batch: m.batch || (r.batches || []).join(', '), date: m.date, url: m.url });
+      });
+    });
+  });
+
+  if (!cards.length) {
+    alert(`No drone map is on any transplanting record for ${monthTxt}.\n\n`
+        + 'The map is written on the plot when the batch report fills it, in '
+        + 'Seedling Stock. A plot with no map there has none to print.');
+    return;
+  }
+
+  const esc2 = (v) => String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const card = (c) => `
+    <figure class="map">
+      <figcaption>
+        <span class="plot">${esc2(c.plot)}</span>
+        <span class="meta">${[secName(c.nursery), c.batch ? 'Batch ' + c.batch : '',
+          c.qty == null ? '' : num(c.qty) + ' transplanted',
+          c.date ? fmtDay(c.date) : ''].filter(Boolean).map(esc2).join('  \u00b7  ')}</span>
+      </figcaption>
+      ${_isPdfUrl(c.url)
+        ? `<div class="pdf">This map is a PDF and cannot be printed with the others.
+             <br><span class="u">${esc2(c.url)}</span></div>`
+        : `<img src="${esc2(c.url)}" alt="Drone map of plot ${esc2(c.plot)}">`}
+    </figure>`;
+
+  // Two to a page, each pair in its own sheet so the break never lands
+  // inside a map.
+  let pages = '';
+  for (let i = 0; i < cards.length; i += 2) {
+    pages += `<section class="page">${cards.slice(i, i + 2).map(card).join('')}</section>`;
+  }
+
+  const w = window.open('', '_blank');
+  if (!w) { alert('The print window was blocked. Allow pop-ups for this site and try again.'); return; }
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8">
+<title>Drone Maps — ${esc2(monthTxt)}</title>
+<style>
+  /* A4 with a thin margin: the maps are the page, not an illustration on it. */
+  @page { size: A4 portrait; margin: 9mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #111; }
+  .hd { padding: 0 0 6mm; }
+  .hd h1 { margin: 0; font-size: 15pt; letter-spacing: .02em; }
+  .hd p  { margin: 2mm 0 0; font-size: 9.5pt; color: #555; }
+  /* Two to a page, each taking half of what is left of it. */
+  .page { height: 279mm; display: flex; flex-direction: column; gap: 5mm;
+          page-break-after: always; break-after: page; }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+  .map { flex: 1 1 0; min-height: 0; margin: 0; display: flex; flex-direction: column;
+         border: 1.2pt solid #333; border-radius: 2mm; overflow: hidden;
+         page-break-inside: avoid; break-inside: avoid; }
+  figcaption { padding: 2.5mm 4mm; border-bottom: 1pt solid #333; background: #f2f2f2;
+               display: flex; align-items: baseline; gap: 5mm; flex-wrap: wrap; }
+  .plot { font-size: 17pt; font-weight: 800; letter-spacing: .03em; }
+  .meta { font-size: 9pt; color: #444; }
+  .map img { flex: 1 1 auto; min-height: 0; width: 100%; object-fit: contain;
+             background: #fff; padding: 2mm; }
+  .pdf { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center;
+         justify-content: center; font-size: 10pt; color: #a83020; text-align: center;
+         padding: 6mm; }
+  .pdf .u { font-size: 8pt; color: #555; word-break: break-all; }
+  @media screen {
+    body { background: #e9e9ef; padding: 8mm; }
+    .page { background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,.18); padding: 9mm;
+            margin: 0 auto 8mm; width: 210mm; }
+    .hd { width: 210mm; margin: 0 auto; }
+  }
+</style></head><body>
+<div class="hd"><h1>Drone Maps — Transplanting</h1>
+  <p>${esc2(monthTxt)} \u00b7 ${cards.length} map${cards.length === 1 ? '' : 's'}
+     \u00b7 ${esc2(CLAIM_NURSERIES.map(secName).join('  \u00b7  '))}</p></div>
+${pages}
+<script>
+  /* Print once every map has actually arrived — a print fired first puts
+     empty boxes on the paper, and the one thing this page is for is the
+     picture. An image that will not load stops counting rather than
+     holding the whole sheet. */
+  (function () {
+    var imgs = Array.prototype.slice.call(document.images);
+    var left = imgs.length;
+    function go() { setTimeout(function () { window.focus(); window.print(); }, 150); }
+    if (!left) return go();
+    imgs.forEach(function (im) {
+      if (im.complete) { if (--left === 0) go(); return; }
+      im.addEventListener('load',  function () { if (--left === 0) go(); });
+      im.addEventListener('error', function () { if (--left === 0) go(); });
+    });
+    // Never wait for ever on a map storage will not hand over.
+    setTimeout(function () { if (left > 0) { left = 0; go(); } }, 12000);
+  })();
+<\/script>
+</body></html>`);
+  w.document.close();
+}
+
+/* ══════════════════════════════════════════════════════════════
    WHAT WAS TRANSPLANTED, PLOT BY PLOT
 
    The claim says what each worker is owed. This says what the work was: one
@@ -1385,7 +1589,7 @@ function renderTransplantByPlot(secFilter) {
   }
 
   if (!rows.length) {
-    table.innerHTML = `<tbody><tr><td class="empty">
+    table.innerHTML = `<tbody><tr><td class="empty" colspan="4">
       Nothing transplanted in ${esc(secName(secFilter))} for ${esc(monthLabel(monthValue()))}.
     </td></tr></tbody>`;
     $('transpl-plots-note').textContent = '';
@@ -1402,6 +1606,7 @@ function renderTransplantByPlot(secFilter) {
     <tr>
       <td style="color:var(--text-faint);width:44px;">${i + 1}</td>
       <td class="l" style="font-weight:800;color:var(--text-head);">${esc(r.plot)}</td>
+      <td style="white-space:nowrap;">${mapCellHtml(r.plot, r.batches)}</td>
       <td style="font-weight:800;${r.qty == null ? 'color:var(--text-faint);' : ''}">${
         r.qty == null ? '—' : num(r.qty)}${
         r.disagrees ? ' <span title="This plot’s jobs were keyed against different figures"'
@@ -1412,11 +1617,15 @@ function renderTransplantByPlot(secFilter) {
     <thead><tr>
       <th style="width:44px;">No.</th>
       <th class="l">Plot</th>
+      <!-- What was flown over the plot when it was filled. The claim is
+           paying for that work; the evidence of it should not be two
+           systems away. -->
+      <th style="width:120px;">Drone Map</th>
       <th style="width:180px;">Transplanted</th>
     </tr></thead>
     <tbody>${body}</tbody>
     <tfoot><tr>
-      <td class="l" colspan="2">TOTAL — ${esc(secName(secFilter))} · ${esc(monthLabel(monthValue()))}</td>
+      <td class="l" colspan="3">TOTAL — ${esc(secName(secFilter))} · ${esc(monthLabel(monthValue()))}</td>
       <td>${num(total)}</td>
     </tr></tfoot>`;
 
@@ -3237,7 +3446,7 @@ $('global-month').addEventListener('change', async () => {
        all read it, so everything after this should see the real list. */
     await loadNurseryRegister();
     await Promise.all([loadWorkers(), loadRates(), loadEntries(), loadMaint(),
-                       loadTransplantField(), loadEarnAdj()]);
+                       loadTransplantField(), loadEarnAdj(), loadTransplantMaps()]);
     resolveMaintWorkers();
 
     /* The batch-report ledger is a much larger read than anything above, and

@@ -405,3 +405,16 @@ tr:hover .cal-btn, .cal-btn:focus-visible { opacity: 1; }
    fault, not a place, so it does not dress like the nurseries. */
 .npill.npill-odd { border-style: dashed; border-color: var(--red-bd, #fda4af); color: var(--red, #c0392b); }
 .npill.npill-odd.on { background: var(--red, #c0392b); border-color: var(--red, #c0392b); color: #fff; }
+
+
+/* ── THE DRONE MAP ON THE BY-PLOT TABLE ──────────────────────────────────
+   A thumbnail of what was flown over the plot when it was filled, opening
+   in a new tab — which is where it can be looked at properly and where the
+   browser will print it. The sheet of all of them, two to an A4 page, is
+   the button on the bar. */
+.tp-map{display:inline-block;width:46px;height:34px;border-radius:7px;margin-right:5px;
+  border:1.5px solid var(--line,#e2e8f0);background:#f8fafc center/cover no-repeat;
+  vertical-align:middle;transition:border-color .13s,transform .13s;}
+.tp-map:hover{border-color:var(--brand,#4f46e5);transform:translateY(-1px);}
+.tp-map.is-pdf{display:inline-flex;align-items:center;justify-content:center;font-size:16px;
+  background:#f8fafc;}
