@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=77">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=78">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -122,6 +122,26 @@
           <button class="btn btn-primary" onclick="openRecModal()" data-i18n="btn.addRecord">+ Add Record</button>
           <button class="btn" onclick="syncRecordsFromSchedule()" data-i18n="btn.sync">↺ Sync from Schedule</button>
         </div>
+
+        <!-- ── TWO PARTS, AND WHY ────────────────────────────────────────
+             A Field Conductor going through the morning's submissions in the
+             Verify Hub gives one of two answers, and until now this page only
+             ever saw one of them. Approved work flows into the table below —
+             it fills in the date, the batches, the quantity and the walk on
+             the scheduled row it belongs to. A record sent back went nowhere
+             at all: loadFieldRecords reads verified rows and nothing else, so
+             the refusal was invisible here and the only way to undo one was to
+             find the record again on a phone.
+
+             So the list is in two parts. This one is the schedule with the
+             approved work on it. The one underneath is what was sent back,
+             with the reason showing and the conductor's answer open to change
+             — see renderRejectedSubmissions in plot_maintenance_script.js. -->
+        <div class="rec-part-head">
+          <span class="rec-part-ico ok">✓</span>
+          <span data-i18n="rec.partApproved">Approved work records</span>
+          <span class="rec-part-sub" data-i18n="rec.partApprovedSub">The month's scheduled jobs, with the submissions a Field Conductor has signed off filled in</span>
+        </div>
         <div class="card"><div class="tbl-wrap">
           <table class="rec-table">
             <!-- The columns are PINNED here rather than left to the browser.
@@ -192,6 +212,56 @@
               <th></th>
             </tr></thead>
             <tbody id="rec-body"></tbody>
+          </table>
+        </div></div>
+
+        <!-- ── SENT BACK ─────────────────────────────────────────────────
+             The submissions a Field Conductor refused, with the reason he
+             gave. The row is still in the database and the work may well
+             have been done — what was refused is the RECORD of it, which is
+             why the buttons here are Approve, Edit and Del rather than the
+             Check / Edit / Del of the table above: Check locks an OFFICE row,
+             Approve answers a WORKER's record.
+
+             Deleting one takes the scheduled row it was paired to with it —
+             the pairing is a rule, not a foreign key (see shared_maint_field.js),
+             so the confirm names the row that will go and refuses to guess
+             when the pairing is ambiguous. -->
+        <div class="rec-part-head" style="margin-top:22px;">
+          <span class="rec-part-ico bad">⛔</span>
+          <span data-i18n="rec.partRejected">Sent back</span>
+          <span class="rec-part-sub" data-i18n="rec.partRejectedSub">Records a Field Conductor refused — approve one and it flows back into the list above</span>
+          <span class="rec-part-count" id="rej-count"></span>
+        </div>
+        <div class="card"><div class="tbl-wrap">
+          <table class="rec-table rej-table">
+            <!-- Pinned the same way and for the same reason as the table
+                 above: see the note on its colgroup. -->
+            <colgroup>
+              <col style="width:90px;" ><!-- Date        -->
+              <col style="width:96px;" ><!-- Work Type   -->
+              <col style="width:150px;"><!-- Chemical    -->
+              <col style="width:52px;" ><!-- Plot        -->
+              <col style="width:104px;"><!-- Batch       -->
+              <col style="width:70px;" ><!-- Quantity    -->
+              <col style="width:104px;"><!-- Worked by   -->
+              <col style="width:170px;"><!-- Reason sent back -->
+              <col style="width:104px;"><!-- Sent back by -->
+              <col style="width:158px;"><!-- Approve / Edit / Del -->
+            </colgroup>
+            <thead><tr>
+              <th class="th-left"            data-i18n="rec.tarikh">Tarikh</th>
+              <th class="th-left"            data-i18n="rec.jenis">Jenis Kerja</th>
+              <th class="th-left"            data-i18n="rec.racun">Racun / Chemical</th>
+              <th style="text-align:center;" data-i18n="rec.plot">Plot</th>
+              <th style="text-align:center;" data-i18n="rec.batch">Batch</th>
+              <th style="text-align:center;" data-i18n="rec.qty">Quantity</th>
+              <th style="text-align:center;" data-i18n="rej.workedBy">Worked By</th>
+              <th class="th-left"            data-i18n="rej.reason">Reason Sent Back</th>
+              <th style="text-align:center;" data-i18n="rej.by">Sent Back By</th>
+              <th></th>
+            </tr></thead>
+            <tbody id="rej-body"></tbody>
           </table>
         </div></div>
       </div>
@@ -543,6 +613,54 @@
   </div>
 </div>
 
+<!-- ═══ EDIT A SENT-BACK SUBMISSION ═══
+     The worker's own record, not an office row — which is why it is a
+     separate modal from Add/Edit Record above and writes straight to
+     nops_maint_field_records. A record is usually sent back because one
+     thing on it is wrong; this is where that one thing gets fixed, and
+     saving does NOT approve it — the Approve button on the row still has to
+     be pressed, so a correction and a sign-off stay two decisions. -->
+<div class="modal-overlay" id="rej-modal">
+  <div class="modal">
+    <div class="modal-top">
+      <div class="modal-title" data-i18n="rej.editTitle">Edit Sent-Back Record</div>
+      <button class="modal-close" onclick="closeRejModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <!-- Why it came back, in the conductor's words. Read-only: it is a
+           record of what was said, not a field to tidy up. -->
+      <div id="rej-modal-why" style="background:#fdeaea;border:1.5px solid #f3c9c9;border-radius:var(--r-sm);
+           padding:9px 12px;margin-bottom:14px;font-size:11.5px;font-weight:700;color:#a83020;line-height:1.45;"></div>
+      <div class="frow"><label data-i18n="mod.tarikh">Date</label><input type="date" id="rj-date"></div>
+      <div class="frow"><label data-i18n="mod.jenis">Work Type</label>
+        <select id="rj-jenis">
+          <option value="Penyemburan racun kulat dan serangga" data-i18n="jenis.pd">Penyemburan racun kulat dan serangga</option>
+          <option value="Meracun rumput secara selingan" data-i18n="jenis.interrow">Meracun rumput secara selingan</option>
+          <option value="Merumput" data-i18n="jenis.weeding">Merumput</option>
+          <option value="Membaja" data-i18n="jenis.manuring">Membaja</option>
+        </select>
+      </div>
+      <div class="frow"><label data-i18n="mod.racun">Chemical</label><input type="text" id="rj-chemical" placeholder="e.g. Manzate 50gm + Bond 15mL"></div>
+      <div class="grid2">
+        <div class="frow"><label data-i18n="mod.plot">Plot</label><input type="text" id="rj-plot" placeholder="e.g. B1"></div>
+        <div class="frow"><label data-i18n="mod.batch">Batch No.</label><input type="text" id="rj-batch" placeholder="e.g. 252, 253"></div>
+      </div>
+      <div class="grid2">
+        <div class="frow"><label data-i18n="mod.qty">Quantity</label><input type="number" min="0" id="rj-qty"></div>
+        <div class="frow"><label data-i18n="rej.workedBy">Worked By</label><input type="text" id="rj-worked" placeholder="Comma-separated"></div>
+      </div>
+      <div class="frow"><label data-i18n="mod.remark">Remark</label><textarea id="rj-remark" placeholder="Optional remarks…"></textarea></div>
+      <!-- Said out loud because it is the surprising half: changing the date
+           moves which week and month the record is paired against. -->
+      <div id="rej-modal-note" style="font-size:11px;font-weight:600;color:var(--text-faint);line-height:1.45;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeRejModal()" data-i18n="btn.cancel">Cancel</button>
+      <button class="btn btn-primary" onclick="saveRejSubmission()" data-i18n="rej.saveOnly">Save (still sent back)</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ PDF DOWNLOAD MODAL ═══ -->
 <div class="modal-overlay" id="pdf-modal">
   <div class="modal" style="width:420px;">
@@ -591,7 +709,7 @@
 <script src="../shared/shared_maint_field.js?v=1"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="plot_maintenance_script.js?v=102"></script>
+<script src="plot_maintenance_script.js?v=103"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

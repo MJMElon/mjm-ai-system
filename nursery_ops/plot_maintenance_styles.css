@@ -239,6 +239,38 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
    thing this table has just been straightened out of. */
 .rec-table tbody td .date-multi{white-space:normal;cursor:help;
   text-decoration:underline dotted var(--green-mid);text-underline-offset:3px;}
+/* ── THE TWO PARTS OF THE WORK MAINTENANCE LIST ──────────────────────────
+   Approved work above, sent back below. A heading each, because two tables
+   with the same columns and different buttons under one title is a screen
+   nobody can read the second half of.
+
+   The headings are plain rows of text rather than cards: they sit directly
+   on the page background between two cards, so a box around them would be a
+   third box in a stack of boxes. */
+.rec-part-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+  margin:0 0 10px;font-size:13px;font-weight:800;color:var(--text-head);
+  letter-spacing:.02em;}
+.rec-part-ico{display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;border-radius:6px;font-size:12px;line-height:1;flex:0 0 auto;}
+.rec-part-ico.ok{background:var(--green-light);color:var(--green-text);}
+.rec-part-ico.bad{background:#fdeaea;color:#a83020;}
+.rec-part-sub{font-size:11px;font-weight:600;color:var(--text-faint);
+  letter-spacing:0;text-transform:none;}
+/* How many were sent back, beside the heading — the one number somebody
+   scanning the page is looking for. Hidden when it is zero: a "0" badge is a
+   thing to read that says nothing happened. */
+.rec-part-count{font-size:10.5px;font-weight:800;letter-spacing:.06em;
+  text-transform:uppercase;color:#a83020;background:#fdeaea;
+  border:1.5px solid #f3c9c9;border-radius:999px;padding:2px 9px;}
+/* The sent-back table carries a NAME in its ninth column where the one above
+   carries the Audit verdict, so it opts out of that column's nowrap — a
+   conductor with three names is two lines, not a spill across the buttons. */
+.rej-table tbody td:nth-child(9){white-space:normal;overflow-wrap:anywhere;}
+/* The reason, in the conductor's own words. Kept legible rather than
+   squeezed: it is the whole point of the row. */
+.rej-why{color:#a83020;font-weight:700;line-height:1.4;}
+.rej-none{text-align:center;padding:2.2rem;color:var(--text-faint);
+  font-size:12px;font-weight:600;}
 .rec-table tbody tr:last-child td{border-bottom:none;}
 .rec-table tbody tr:nth-child(even) td{background:var(--bg-row-alt);}
 .rec-table tbody tr:hover td{background:var(--green-bg);}
