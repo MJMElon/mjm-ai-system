@@ -126,10 +126,11 @@
                learn twice. The select behind them is the value. -->
           <div class="nsel" id="transpl-section-pills"></div>
           <select id="transpl-section" class="sel cf-skip" style="display:none;" onchange="renderEntries('transplanting')"></select>
-          <!-- Every nursery's drone maps for the month, two to an A4 page.
-               Not the circle on screen: this is the month's maps to carry
-               out to the plots, in the order the nurseries are worked. -->
-          <button class="btn" onclick="printTransplantMaps()">🗺️ Drone Maps (Print)</button>
+          <!-- One button and one file: the claim, the plot summary, and every
+               nursery's drone maps on the end of it, two to an A4 page and a
+               nursery to a page. They had a button of their own beside this
+               one, which was two things to press and two things to file for
+               one month's work. -->
           <button class="btn btn-primary" onclick="downloadTransplantPDF()">⬇ Salary Claim Form (PDF)</button>
           <button class="btn btn-primary" data-add onclick="openEntry('transplanting')">+ Add Entry</button>
         </div>
@@ -380,7 +381,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=41"></script>
+<script src="npayroll_script.js?v=42"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->
