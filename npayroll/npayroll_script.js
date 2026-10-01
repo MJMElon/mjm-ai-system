@@ -1511,33 +1511,48 @@ async function drawDroneMaps(doc, monthTxt) {
     const cards = mapCardsFor(code);
     if (!cards.length) continue;
 
+    /* THE GEOMETRY IS WORKED OUT, NOT GUESSED. The first pass put the two
+       cards at a fixed 117mm each under a title that leaves 59mm gone, which
+       comes to 305 on a page 297 tall — the second map ran off the bottom.
+       So the page says how much room there is and the two cards divide it. */
+    const X = 25, W = 160;                    // the same column the claim uses
+    const BOTTOM = 297 - 12;                  // the foot of the page
+    const GAP = 6, CAP = 9;                   // between the cards, and the name strip
+
     // A nursery to a page, always starting a fresh one.
     for (let i = 0; i < cards.length; i += 2) {
       doc.addPage();
-      let y = pdfTitle(doc, ['DRONE MAPS — TRANSPLANTING', secName(code), `Month ${monthTxt}`]);
+      const TOP = pdfTitle(doc, ['DRONE MAPS — TRANSPLANTING', secName(code), `Month ${monthTxt}`]);
+      const CARD = (BOTTOM - TOP - GAP) / 2;  // two of them, whatever the title left
+      const BOX = CARD - CAP;
 
-      for (const c of cards.slice(i, i + 2)) {
-        const CAP = 9;                       // the strip the plot name sits in
-        const BOX = 108;                     // what is left for the picture
-        pdfCell(doc, 25, y, 160, CAP, '', { fill: [232, 236, 252] });
+      const pair = cards.slice(i, i + 2);
+      for (let j = 0; j < pair.length; j++) {
+        const c = pair[j];
+        let y = TOP + j * (CARD + GAP);
+
+        pdfCell(doc, X, y, W, CAP, '', { fill: [232, 236, 252] });
         doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(0, 0, 0);
-        doc.text(c.plots.join('  ·  '), 28, y + CAP - 3);
+        doc.text(c.plots.join('  ·  '), X + 3, y + CAP - 2.8, { maxWidth: W * 0.55 });
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70, 70, 70);
         doc.text([c.batches.length ? 'Batch ' + c.batches.join(', ') : '',
                   c.dates.slice().sort().map(fmtDay).join(', ')]
-                   .filter(Boolean).join('   ·   '), 182, y + CAP - 3, { align: 'right' });
+                   .filter(Boolean).join('   ·   '),
+                 X + W - 3, y + CAP - 2.8, { align: 'right', maxWidth: W * 0.42 });
         doc.setTextColor(0, 0, 0);
         y += CAP;
 
         doc.setDrawColor(80, 80, 80); doc.setLineWidth(0.2);
-        doc.rect(25, y, 160, BOX);
+        doc.rect(X, y, W, BOX);
 
         const im = _isPdfUrl(c.url) ? null : await loadMapImage(c.url);
         if (im) {
-          // Fitted inside the box, whole, whatever shape it was flown in.
-          const k = Math.min((160 - 4) / im.naturalWidth, (BOX - 4) / im.naturalHeight);
+          /* Fitted INSIDE the box, whole, whatever shape it was flown in —
+             the smaller of the two scales, so neither edge can pass the
+             frame however wide or tall the picture is. */
+          const k = Math.min((W - 4) / im.naturalWidth, (BOX - 4) / im.naturalHeight);
           const w = im.naturalWidth * k, h = im.naturalHeight * k;
-          doc.addImage(im, _pdfImgFormat(c.url), 25 + (160 - w) / 2, y + (BOX - h) / 2, w, h);
+          doc.addImage(im, _pdfImgFormat(c.url), X + (W - w) / 2, y + (BOX - h) / 2, w, h);
         } else {
           missed.push(c.plots.join(', ')
             + (c.batches.length ? ' (batch ' + c.batches.join(', ') + ')' : ''));
@@ -1545,12 +1560,12 @@ async function drawDroneMaps(doc, monthTxt) {
           doc.text(_isPdfUrl(c.url)
             ? 'This map is a PDF and cannot be printed with the others.'
             : 'This map could not be read. Open it from the Transplanting sheet.',
-            105, y + BOX / 2, { align: 'center', maxWidth: 150 });
+            X + W / 2, y + BOX / 2, { align: 'center', maxWidth: W - 10 });
           doc.setFontSize(7); doc.setTextColor(90, 90, 90);
-          doc.text(String(c.url), 105, y + BOX / 2 + 6, { align: 'center', maxWidth: 150 });
+          doc.text(String(c.url), X + W / 2, y + BOX / 2 + 6,
+                   { align: 'center', maxWidth: W - 10 });
           doc.setTextColor(0, 0, 0);
         }
-        y += BOX + 6;
       }
     }
   }

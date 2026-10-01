@@ -97,11 +97,12 @@ async function boot(browser, field, ledger) {
        order, with the page it landed on. */
     window.__PDF = null;
     window.jspdf = { jsPDF: class {
-      constructor() { this.page = 1; this.lines = []; this.images = []; this.saved = null;
-                      window.__PDF = this; }
+      constructor() { this.page = 1; this.lines = []; this.images = []; this.rects = [];
+                      this.saved = null; window.__PDF = this; }
       setFont() {} setFontSize(n) { this._s = n; } setTextColor() {}
       setFillColor() {} setDrawColor() {} setLineWidth() {}
-      rect() {} line() {}
+      rect(x, y, w, h) { this.rects.push({ x, y, w, h, page: this.page }); }
+      line() {}
       addPage() { this.page++; }
       getTextWidth(t) { return String(t).length * (this._s || 9) * 0.5; }
       splitTextToSize(t) { return [String(t)]; }
@@ -413,7 +414,7 @@ const read = (page) => page.evaluate(() => {
       window.__PDF = null;
       await downloadTransplantPDF();
       const d = window.__PDF;
-      return { lines: d.lines, images: d.images, pages: d.page, saved: d.saved };
+      return { lines: d.lines, images: d.images, rects: d.rects, pages: d.page, saved: d.saved };
     });
 
     const txt = pdf.lines.map((l) => l.t);
@@ -446,7 +447,66 @@ const read = (page) => page.evaluate(() => {
               pdf.images.length === 2 && pdf.images[0].page !== pdf.images[1].page);
     checkTrue('a map that is a PDF says so rather than leaving an empty box',
               txt.some((t) => /cannot be printed with the others/.test(t)));
+
+    /* NOTHING RUNS OFF THE PAGE. The first pass put two fixed-height cards
+       under a title, which came to 305mm on a page 297 tall — the second map
+       hung off the bottom. A4 is 210 × 297. */
+    const over = pdf.images.filter((i) =>
+      i.x < 0 || i.y < 0 || i.x + i.w > 210 || i.y + i.h > 297);
+    check('every map is inside the paper', over, []);
+    const mapRects = pdf.rects.filter((r) => mapPages.has(r.page));
+    check('…and so is every frame round one',
+          mapRects.filter((r) => r.y + r.h > 297 - 6 || r.x + r.w > 210 - 6), []);
+    /* …and inside its OWN frame, which is the other half of the complaint. */
+    const outside = pdf.images.filter((im) => !mapRects.some((r) =>
+      im.x >= r.x - 0.01 && im.y >= r.y - 0.01
+      && im.x + im.w <= r.x + r.w + 0.01 && im.y + im.h <= r.y + r.h + 0.01));
+    check('every map is inside the frame drawn round it', outside, []);
+    /* The two on a page do not sit on top of each other either. */
+    const byPage = {};
+    pdf.images.forEach((i) => { (byPage[i.page] || (byPage[i.page] = [])).push(i); });
+    const overlap = Object.values(byPage).filter((g) => g.length === 2
+      && g[0].y + g[0].h > g[1].y && g[1].y + g[1].h > g[0].y);
+    check('…and two on a page do not overlap', overlap, []);
     checkTrue('…and the batch is on the card', txt.some((t) => /Batch 252/.test(t)));
+    await page.close();
+  }
+
+  console.log('\nTwo maps on one page, inside the paper');
+  {
+    /* The first pass put two fixed-height cards under a title: 59mm gone to
+       the title and 117mm a card comes to 305 on a page 297 tall, so the
+       SECOND map hung off the bottom. One image per page would never have
+       shown it — this is two. */
+    const field = [rec({ plot_name: 'N3', source_qty: 1000, batch_name: '252' }),
+                   rec({ plot_name: 'N5', source_qty: 2000, batch_name: '254' })];
+    const ledger = [log('N3', '252', 'https://files.test/maps/a.jpg', `${YM}-03`),
+                    log('N5', '254', 'https://files.test/maps/b.jpg', `${YM}-05`)];
+    const page = await boot(browser, field, ledger);
+    await pick(page, 'UNN2');
+    const pdf = await page.evaluate(async () => {
+      window.__PDF = null;
+      await downloadTransplantPDF();
+      const d = window.__PDF;
+      return { images: d.images, rects: d.rects, lines: d.lines };
+    });
+
+    check('both maps are drawn', pdf.images.length, 2);
+    check('…on the one page', pdf.images[0].page, pdf.images[1].page);
+    check('…and BOTH ARE INSIDE THE PAPER — A4 is 210 by 297',
+          pdf.images.filter((i) => i.x < 0 || i.y < 0
+                                || i.x + i.w > 210 || i.y + i.h > 297), []);
+    const mapPage = pdf.images[0].page;
+    const frames = pdf.rects.filter((r) => r.page === mapPage && r.w > 100);
+    check('…as is every frame round one',
+          frames.filter((r) => r.y + r.h > 297 - 6), []);
+    check('each map is inside its own frame',
+          pdf.images.filter((im) => !frames.some((r) =>
+            im.x >= r.x - 0.01 && im.y >= r.y - 0.01
+            && im.x + im.w <= r.x + r.w + 0.01 && im.y + im.h <= r.y + r.h + 0.01)), []);
+    checkFalse('…and the two do not sit on top of each other',
+               pdf.images[0].y + pdf.images[0].h > pdf.images[1].y
+               && pdf.images[1].y + pdf.images[1].h > pdf.images[0].y);
     await page.close();
   }
 
