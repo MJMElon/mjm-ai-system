@@ -1773,7 +1773,9 @@ const I18N = {
     'rec.partApprovedSub':'The month’s scheduled jobs, with the submissions a Field Conductor has signed off filled in',
     'rec.partRejected':'Rejected',
     'rec.partRejectedSub':'Records a Field Conductor refused — approve one and it flows back into the approved section',
-    'rej.workedBy':'Worked By', 'rej.reason':'Reason Sent Back', 'rej.by':'Sent Back By',
+    'rej.workedBy':'Worked By', 'rej.reportedBy':'Reported By',
+    'rej.reason':'Reason Sent Back', 'rej.by':'Sent Back By',
+    'rej.whoNote':'The phone, the payroll and the list above all credit the work to Worked By where there is one, and to Reported By where there is not. Correcting a name here corrects it everywhere.',
     'rej.count':'{n} sent back', 'rej.noReason':'No reason was given',
     'rej.none':'Nothing has been sent back for this nursery.',
     'rej.approve':'Approve', 'rej.approveTip':'Accept this record — it moves up into the approved list',
@@ -1885,7 +1887,9 @@ const I18N = {
     'rec.partApprovedSub':'Kerja berjadual bulan ini, bersama rekod yang telah disahkan oleh Field Conductor',
     'rec.partRejected':'Ditolak',
     'rec.partRejectedSub':'Rekod yang ditolak Field Conductor — luluskan dan ia kembali ke bahagian diluluskan',
-    'rej.workedBy':'Dibuat Oleh', 'rej.reason':'Sebab Dihantar Balik', 'rej.by':'Dihantar Balik Oleh',
+    'rej.workedBy':'Dibuat Oleh', 'rej.reportedBy':'Dilapor Oleh',
+    'rej.reason':'Sebab Dihantar Balik', 'rej.by':'Dihantar Balik Oleh',
+    'rej.whoNote':'Telefon, payroll dan senarai di atas mengkredit kerja kepada Dibuat Oleh jika ada, dan kepada Dilapor Oleh jika tiada. Membetulkan nama di sini membetulkannya di semua tempat.',
     'rej.count':'{n} dihantar balik', 'rej.noReason':'Tiada sebab diberi',
     'rej.none':'Tiada rekod dihantar balik untuk nurseri ini.',
     'rej.approve':'Luluskan', 'rej.approveTip':'Terima rekod ini — ia naik ke senarai yang diluluskan',
@@ -4846,6 +4850,9 @@ function editSubmission(id) {
   set('rj-batch', f.batch_name || '');
   set('rj-qty', f.qty == null ? '' : f.qty);
   set('rj-worked', f.worked_by || '');
+  set('rj-reported', f.reported_by || '');
+  const who = document.getElementById('rej-who-note');
+  if (who) who.textContent = t('rej.whoNote');
   set('rj-remark', f.remark || '');
   document.getElementById('rej-modal').classList.add('open');
 }
@@ -4881,7 +4888,12 @@ async function saveRejSubmission() {
     chemical: val('rj-chemical') || null,
     qty: qtyRaw === '' ? null : Math.max(0, parseInt(qtyRaw, 10) || 0),
     remark: val('rj-remark') || null,
-    worked_by: val('rj-worked') || null
+    worked_by: val('rj-worked') || null,
+    /* The name the work is credited to when nobody is named in Worked By —
+       which is most records, because a worker recording his own morning IS
+       the credit. Without this the office could correct every field on a
+       record except the one it was sent back for. */
+    reported_by: val('rj-reported') || null
   };
   /* The week and the month FOLLOW THE DATE. The phone sends the week its
      board was showing, which is right when the phone is right — but a record

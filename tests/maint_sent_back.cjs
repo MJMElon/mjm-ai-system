@@ -454,6 +454,8 @@ const recText = (page) => page.evaluate(() =>
       batch: document.getElementById('rj-batch').value,
       qty:   document.getElementById('rj-qty').value,
       worked:document.getElementById('rj-worked').value,
+      reported:document.getElementById('rj-reported').value,
+      whoNote:(document.getElementById('rej-who-note').textContent || '').trim(),
       remark:document.getElementById('rj-remark').value,
       save:  (document.querySelector('#rej-modal .modal-footer .btn-primary').textContent || '').trim()
     }));
@@ -467,6 +469,13 @@ const recText = (page) => page.evaluate(() =>
     check('…the batch', open.batch, '252');
     check('…the quantity', open.qty, '1400');
     check('…who worked it', open.worked, 'Ali Bin Hassan');
+    /* The name the work is credited to where nobody is in Worked By — which
+       is most records, and the one field a record sent back for the wrong
+       name could not be corrected on. */
+    check('…AND WHO REPORTED IT, which is the name the phone shows',
+          open.reported, 'Nelos FC');
+    checkTrue('…with the form saying which of the two answers',
+              /Worked By where there is one/i.test(open.whoNote));
     check('…and the remark', open.remark, 'Sprayed both sides');
     checkTrue('the save button says the record stays sent back',
               /still sent back/i.test(open.save));
@@ -483,6 +492,8 @@ const recText = (page) => page.evaluate(() =>
       };
       set('rj-plot', 'B9');
       set('rj-qty', '1200');
+      set('rj-reported', 'Ali Bin Hassan');
+      set('rj-worked', '');
       set('rj-date', d);
       saveRejSubmission();
     }, fixedDate);
@@ -492,6 +503,10 @@ const recText = (page) => page.evaluate(() =>
     const w = await page.evaluate(() => window.__WRITES.find(
       (x) => x.table === 'nops_maint_field_records' && x.op === 'update').patch);
     check('the corrected plot is written', w.plot_name, 'B9');
+    check('THE CORRECTED NAME IS WRITTEN — the same column the phone\u2019s '
+        + 'history card and the salary claim both read', w.reported_by, 'Ali Bin Hassan');
+    check('…and a Worked By cleared out is cleared, not left standing',
+          w.worked_by, null);
     check('…the corrected quantity', w.qty, 1200);
     check('…the corrected date', w.work_date, fixedDate);
     check('…and the WEEK follows the date rather than staying on the old one',
@@ -510,6 +525,7 @@ const recText = (page) => page.evaluate(() =>
     const rows = await rejRows(page);
     checkTrue('and the row is still in the sent-back part, now reading B9',
               rows.length === 1 && rows[0][3] === 'B9');
+    check('…credited to the corrected name', rows[0][6], 'Ali Bin Hassan');
     await page.close();
   }
 

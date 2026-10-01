@@ -653,10 +653,26 @@
         <div class="frow"><label data-i18n="mod.plot">Plot</label><input type="text" id="rj-plot" placeholder="e.g. B1"></div>
         <div class="frow"><label data-i18n="mod.batch">Batch No.</label><input type="text" id="rj-batch" placeholder="e.g. 252, 253"></div>
       </div>
+      <div class="frow"><label data-i18n="mod.qty">Quantity</label><input type="number" min="0" id="rj-qty"></div>
+
+      <!-- ── WHO ───────────────────────────────────────────────────────
+           Two names, and which one answers matters. The phone, the payroll
+           and the table behind this form all read WORKED BY where there is
+           one and REPORTED BY where there is not — see MJMMaintField.credits
+           in shared/shared_maint_field.js, which both repositories use.
+
+           Reported by was not on this form, which is why a record sent back
+           for being credited to the wrong person could not be corrected here:
+           the name on the phone's history card and on the salary claim was
+           the one field the office could not reach. -->
       <div class="grid2">
-        <div class="frow"><label data-i18n="mod.qty">Quantity</label><input type="number" min="0" id="rj-qty"></div>
-        <div class="frow"><label data-i18n="rej.workedBy">Worked By</label><input type="text" id="rj-worked" placeholder="Comma-separated"></div>
+        <div class="frow"><label data-i18n="rej.reportedBy">Reported By</label>
+          <input type="text" id="rj-reported" placeholder="Who keyed it on the phone"></div>
+        <div class="frow"><label data-i18n="rej.workedBy">Worked By</label>
+          <input type="text" id="rj-worked" placeholder="Comma-separated"></div>
       </div>
+      <div id="rej-who-note" style="font-size:11px;font-weight:600;color:var(--text-faint);
+           line-height:1.45;margin:-6px 0 12px;"></div>
       <div class="frow"><label data-i18n="mod.remark">Remark</label><textarea id="rj-remark" placeholder="Optional remarks…"></textarea></div>
       <!-- Said out loud because it is the surprising half: changing the date
            moves which week and month the record is paired against. -->
@@ -717,7 +733,7 @@
 <script src="../shared/shared_maint_field.js?v=1"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="plot_maintenance_script.js?v=107"></script>
+<script src="plot_maintenance_script.js?v=108"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->
