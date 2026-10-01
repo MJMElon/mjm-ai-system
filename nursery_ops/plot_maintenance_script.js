@@ -1768,6 +1768,18 @@ const I18N = {
     'rec.nelosNa':'A case is raised on Nelos when the auditor marks a job Unsatisfied. This one has not been.',
     'rec.repairedNa':'Closed by the Field Conductor once the repair is done — after a case has been opened.',
     'rec.donePct':'Done %', 'rec.none':'No records found.',
+    /* The two parts of the list — approved work, and what was sent back. */
+    'rec.partApproved':'Approved work records',
+    'rec.partApprovedSub':'The month’s scheduled jobs, with the submissions a Field Conductor has signed off filled in',
+    'rec.partRejected':'Sent back',
+    'rec.partRejectedSub':'Records a Field Conductor refused — approve one and it flows back into the list above',
+    'rej.workedBy':'Worked By', 'rej.reason':'Reason Sent Back', 'rej.by':'Sent Back By',
+    'rej.count':'{n} sent back', 'rej.noReason':'No reason was given',
+    'rej.none':'Nothing has been sent back for this nursery.',
+    'rej.approve':'Approve', 'rej.approveTip':'Accept this record — it moves up into the approved list',
+    'rej.editTitle':'Edit Sent-Back Record', 'rej.saveOnly':'Save (still sent back)',
+    'rej.delTip':'Delete this record from the database, and the scheduled row it is paired to',
+    'rej.dateNote':'Changing the date moves which week and month this record is paired against — the schedule row it lands on follows the date.',
     'jenis.pd':'P & D Spraying', 'jenis.interrow':'Interrow Spraying',
     'jenis.weeding':'Weeding', 'jenis.manuring':'Manuring',
     /* Add / Edit Record modal */
@@ -1868,6 +1880,18 @@ const I18N = {
     'rec.nelosNa':'Kes dibuka di Nelos apabila juruaudit menanda kerja Tidak Memuaskan. Kerja ini belum ditanda.',
     'rec.repairedNa':'Ditutup oleh Field Conductor selepas pembaikan siap \u2014 selepas kes dibuka.',
     'rec.donePct':'% Selesai', 'rec.none':'Tiada rekod dijumpai.',
+    /* Dua bahagian senarai — kerja yang diluluskan, dan yang dihantar balik. */
+    'rec.partApproved':'Rekod kerja diluluskan',
+    'rec.partApprovedSub':'Kerja berjadual bulan ini, bersama rekod yang telah disahkan oleh Field Conductor',
+    'rec.partRejected':'Dihantar balik',
+    'rec.partRejectedSub':'Rekod yang ditolak Field Conductor — luluskan dan ia kembali ke senarai di atas',
+    'rej.workedBy':'Dibuat Oleh', 'rej.reason':'Sebab Dihantar Balik', 'rej.by':'Dihantar Balik Oleh',
+    'rej.count':'{n} dihantar balik', 'rej.noReason':'Tiada sebab diberi',
+    'rej.none':'Tiada rekod dihantar balik untuk nurseri ini.',
+    'rej.approve':'Luluskan', 'rej.approveTip':'Terima rekod ini — ia naik ke senarai yang diluluskan',
+    'rej.editTitle':'Sunting Rekod Dihantar Balik', 'rej.saveOnly':'Simpan (masih dihantar balik)',
+    'rej.delTip':'Hapus rekod ini dari pangkalan data, berserta baris jadual yang dipadankan dengannya',
+    'rej.dateNote':'Menukar tarikh menukar minggu dan bulan rekod ini dipadankan — baris jadual yang dipadankan mengikut tarikh.',
     'jenis.pd':'Penyemburan racun kulat dan serangga', 'jenis.interrow':'Meracun rumput secara selingan',
     'jenis.weeding':'Merumput', 'jenis.manuring':'Membaja',
     /* Borang Tambah / Sunting Rekod */
@@ -2580,6 +2604,62 @@ async function loadFieldRecords() {
     }
     fieldRecords = res.data || [];
   } catch (e) { console.warn('[maint] field records unavailable:', e); }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   THE OTHER ANSWER — RECORDS A CONDUCTOR SENT BACK
+
+   loadFieldRecords above reads verified work and nothing else, on purpose:
+   an unverified record is not evidence and must not fill in a schedule row.
+   But a record that was REFUSED is not the same as one nobody has looked at,
+   and it had nowhere to appear on this page at all — the conductor's refusal
+   was invisible to the office, and undoing one meant finding the record
+   again on a phone.
+
+   So they are read separately into their own list and shown in their own
+   part of the Work Maintenance List. They are deliberately NOT merged into
+   fieldRecords: everything downstream of that array — the dates, the
+   batches, the quantities, the payroll ticks — treats a member as work that
+   happened, and a sent-back record is exactly the one thing that has not
+   been agreed yet.
+   ══════════════════════════════════════════════════════════════ */
+let rejectedFieldRecords = [];
+const _rejectedOnly = (q) => q.not('rejected_at', 'is', null);
+
+async function loadRejectedFieldRecords() {
+  if (!_supabase) return;
+  const cols = 'id, work_date, plot_name, work_type, jenis, chemical, batch_name, '
+             + 'week_no, schedule_month, qty, remark, worked_by, reported_by, '
+             + 'nursery_name, rejected_at, rejected_by, reject_reason';
+  try {
+    let res = await _mvFetchAll(() => _rejectedOnly(
+      _supabase.from('nops_maint_field_records').select(cols)).order('id', { ascending: true }));
+    // The batch columns arrive with shared/add_maint_field_batch.sql; without
+    // them the select 400s, so fall back to what every copy of the table has.
+    if (res.error && /column .* does not exist|schema cache/i.test(String(res.error.message || ''))) {
+      res = await _mvFetchAll(() => _rejectedOnly(
+        _supabase.from('nops_maint_field_records')
+          .select('id, work_date, plot_name, work_type, jenis, chemical, qty, remark, '
+                + 'worked_by, reported_by, nursery_name, rejected_at, rejected_by, reject_reason'))
+        .order('id', { ascending: true }));
+    }
+    if (res.error) {
+      /* No rejected_at means this database predates
+         shared/add_maint_field_reject.sql — nothing has been sent back
+         because nothing CAN be, so an empty list is the true answer and the
+         section says so rather than reporting a failure. */
+      if (/rejected_at|reject_reason/i.test(String(res.error.message || ''))) {
+        console.warn('[maint] this database has no rejected_at column on '
+          + 'nops_maint_field_records, so nothing can have been sent back. '
+          + 'Run shared/add_maint_field_reject.sql.');
+        rejectedFieldRecords = [];
+        return;
+      }
+      console.warn('[maint] sent-back records unavailable:', res.error.message);
+      return;
+    }
+    rejectedFieldRecords = res.data || [];
+  } catch (e) { console.warn('[maint] sent-back records unavailable:', e); }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -4389,6 +4469,14 @@ function renderRecords() {
   const dF   = document.getElementById('rf-filter-date').value.trim().toLowerCase();
   const nF   = getNursery();   // always follows topbar nursery selector
 
+  /* The second part of this list — the submissions that were sent back —
+     answers the same question under the same filters, so it is redrawn from
+     here rather than from its own set of callers. Before the early return
+     below: a month with no scheduled rows can still have a record waiting to
+     be approved, and that is exactly when somebody is looking for it. */
+  try { renderRejectedSubmissions({ nursery: nF, jenis: jF, plot: pF, date: dF }); }
+  catch (e) { console.warn('[maint] sent-back list could not be drawn:', e); }
+
   // Only show records whose plot belongs to the current nursery
   const nurseryPlots = NURSERY_PLOTS[nF];
 
@@ -4509,6 +4597,301 @@ function renderRecords() {
   });
   tbody.innerHTML = html;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   THE SECOND PART OF THE LIST — WHAT WAS SENT BACK
+
+   A Field Conductor going through the morning's submissions in the Verify
+   Hub gives one of two answers. The approved ones flow into the table above:
+   they fill in the date, the batches, the quantity and the walk on the
+   scheduled row they belong to. The refused ones used to go nowhere — this
+   page read verified records and nothing else — so the refusal was invisible
+   to the office and the only way to undo one was to find the record again on
+   a phone.
+
+   Three buttons, and the difference from the table above matters:
+
+     APPROVE  answers the WORKER's record. Check, up there, locks an OFFICE
+              row — a different thing with a similar-looking button, which is
+              why this one is not called Check.
+     EDIT     fixes the one thing that was wrong, without approving it. A
+              correction and a sign-off are two decisions.
+     DEL      removes the record from the database, and the scheduled row it
+              was paired to with it.
+
+   Filtered by the same three filters as the table above and by the nursery
+   on the topbar, so the two parts always answer the same question.
+   ══════════════════════════════════════════════════════════════ */
+const _rejJenis = (f) => f.jenis || MJMMaintField.JENIS[f.work_type] || '';
+const _rejWorkedBy = (f) => (MJMMaintField.credits(f) || []).join(', ');
+
+function _rejSentBackCell(f) {
+  const who  = String(f.rejected_by || '').trim();
+  const when = String(f.rejected_at || '').slice(0, 10);
+  if (!who && !when) return '<span style="color:var(--text-faint);">—</span>';
+  return `${esc(who || '—')}${when ? `<br><span style="color:var(--text-faint);font-size:10.5px;">${esc(_tarikhDisplay(when))}</span>` : ''}`;
+}
+
+function renderRejectedSubmissions(f) {
+  const body = document.getElementById('rej-body');
+  if (!body) return;
+  const pk    = MJMMaintField.plotKey;
+  const plots = new Set((NURSERY_PLOTS[f.nursery] || []).map(pk));
+
+  // This nursery's, whatever the three filters say — the badge counts what
+  // was sent back, not what is currently being looked at.
+  const mine = rejectedFieldRecords.filter((r) => plots.has(pk(r.plot_name)));
+
+  const badge = document.getElementById('rej-count');
+  if (badge) {
+    badge.textContent = mine.length ? t('rej.count', { n: mine.length }) : '';
+    badge.style.display = mine.length ? '' : 'none';
+  }
+
+  const shown = mine.filter((r) => {
+    if (f.jenis && _rejJenis(r) !== f.jenis) return false;
+    if (f.plot  && pk(r.plot_name) !== pk(f.plot)) return false;
+    if (f.date) {
+      const d = r.work_date || '';
+      if (!`${d} ${_tarikhDisplay(d)}`.toLowerCase().includes(f.date)) return false;
+    }
+    return true;
+  }).sort((a, b) => String(b.work_date || '').localeCompare(String(a.work_date || ''))
+                 || (b.id || 0) - (a.id || 0));
+
+  if (!shown.length) {
+    body.innerHTML = `<tr><td colspan="10" class="rej-none">${
+      mine.length ? t('rec.none') : t('rej.none')}</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = shown.map((r) => {
+    const jenis = _rejJenis(r);
+    const worked = _rejWorkedBy(r);
+    return `<tr>
+      <td style="font-weight:600;color:var(--green-text);">${esc(_tarikhDisplay(r.work_date))}</td>
+      <td>${esc(jenisLabel(jenis) || '—')}</td>
+      <td><span class="pill ${pillCls(jenis)}">${esc(r.chemical || '—')}</span></td>
+      <td style="text-align:center;font-weight:700;color:var(--green-text);">${esc(r.plot_name || '—')}</td>
+      <td style="text-align:center;color:var(--text-muted);">${esc(r.batch_name || '—')}</td>
+      <td style="text-align:center;font-weight:700;color:var(--text-head);">${
+        r.qty == null || r.qty === '' ? '—' : Number(r.qty).toLocaleString()}</td>
+      <td style="text-align:center;">${esc(worked || '—')}</td>
+      <td class="rej-why">${esc(r.reject_reason || t('rej.noReason'))}</td>
+      <td style="text-align:center;">${_rejSentBackCell(r)}</td>
+      <td>
+        <button class="btn btn-sm btn-check" onclick="approveSubmission(${r.id})"
+                title="${esc(t('rej.approveTip'))}">✓ ${esc(t('rej.approve'))}</button>
+        <button class="btn btn-sm" onclick="editSubmission(${r.id})">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteSubmission(${r.id})"
+                title="${esc(t('rej.delTip'))}">Del</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+/* WHICH SCHEDULED ROW THIS SUBMISSION BELONGS TO.
+
+   There is no foreign key between a field record and an office row — the two
+   sides identify the same job differently and the link is a RULE, which lives
+   in shared/shared_maint_field.js so that the payroll module reaches the same
+   answer. That rule is reused here rather than re-stated: the record is
+   indexed on its own, paired against the office rows for its own plot, and
+   the answer is accepted only when exactly ONE row comes back.
+
+   Nothing, or more than one, returns null — and the caller says so rather
+   than deleting on a guess. Deleting the wrong round's row is not something
+   a confirm box can take back. */
+function _submissionScheduleRow(f) {
+  if (!f || typeof MJMMaintField === 'undefined') return null;
+  const month = f.schedule_month || MJMMaintField.isoMonthLabel(f.work_date);
+  if (!month) return null;
+  const pk   = MJMMaintField.plotKey;
+  const pool = records.filter((r) => pk(r.plot) === pk(f.plot_name));
+  if (!pool.length) return null;
+  const idx  = MJMMaintField.index([f], month);
+  // skipChecked:false on purpose — a CHECKED row is one the office has
+  // settled, and this is the office asking which row it settled.
+  const { pairs } = MJMMaintField.pair(pool, idx, { skipChecked: false });
+  const ids = Object.keys(pairs);
+  if (ids.length !== 1) return null;
+  return pool.find((r) => String(r.id) === ids[0]) || null;
+}
+
+/* How that row reads in a confirm box — enough to recognise it by. */
+function _scheduleRowLabel(r) {
+  return [r.jenis ? jenisLabel(r.jenis) : '', r.racun || '', `Plot ${r.plot}`,
+          r.tarikh && r.tarikh !== '-' ? _tarikhDisplay(r.tarikh) : '']
+         .filter(Boolean).join(' · ');
+}
+
+function _submissionById(id) {
+  return rejectedFieldRecords.find((x) => String(x.id) === String(id)) || null;
+}
+
+/* Whoever is signing. full_name where the profile has one, the login
+   otherwise — the same two in the same order as the Verify Hub's signature,
+   so one record's history does not change name halfway through. */
+function _signingAs() {
+  try {
+    const u = (typeof MJMAccess !== 'undefined' && MJMAccess.user && MJMAccess.user()) || null;
+    return String((u && (u.full_name || u.email)) || '').trim();
+  } catch (_) { return ''; }
+}
+
+/* Re-read both halves and redraw. Both, because every action here moves a
+   record from one of them to the other or out of both, and a list rebuilt
+   from a stale array shows the row still sitting where it was. */
+async function _reloadSubmissions() {
+  await Promise.all([loadFieldRecords(), loadRejectedFieldRecords()]);
+  try { applyFieldRecords(getNursery(), getMonth()); }
+  catch (e) { console.warn('[maint] field sync failed:', e); }
+  renderRecords();
+  persistRecords();
+}
+
+/* APPROVE — the conductor's answer, changed.
+
+   Rejecting cleared verified_at/verified_by and verifying clears the reject
+   trio, because a record is in exactly one of three states (waiting,
+   verified, sent back) and two of them being true at once is a record no
+   screen can read. See shared/add_maint_field_reject.sql. */
+async function approveSubmission(id) {
+  const f = _submissionById(id);
+  if (!f) return;
+  if (!_supabase) { alert('Not connected to the database.'); return; }
+  const where = `${jenisLabel(_rejJenis(f)) || _rejJenis(f)} · Plot ${f.plot_name} · ${_tarikhDisplay(f.work_date)}`;
+  if (!confirm(`Approve this record?\n\n${where}\n\n`
+             + `It moves up into the approved list and counts towards the week.`)) return;
+  const { error } = await _supabase.from('nops_maint_field_records')
+    .update({ verified_at: new Date().toISOString(), verified_by: _signingAs() || null,
+              rejected_at: null, rejected_by: null, reject_reason: null })
+    .eq('id', f.id);
+  if (error) { alert('Could not approve it: ' + (error.message || error)); return; }
+  await _reloadSubmissions();
+}
+
+/* DELETE — the record, and the scheduled row it was paired to.
+
+   Both, because the office asked for both: a submission that was refused and
+   then deleted is a job that is not happening, and leaving its scheduled row
+   behind puts it back on next month's list as outstanding work. The pairing
+   is a rule rather than a key, so the confirm NAMES the row that will go, and
+   where the rule cannot pick out exactly one row it says so and deletes only
+   the submission. */
+async function deleteSubmission(id) {
+  const f = _submissionById(id);
+  if (!f) return;
+  if (!_supabase) { alert('Not connected to the database.'); return; }
+  const row  = _submissionScheduleRow(f);
+  const what = `${jenisLabel(_rejJenis(f)) || _rejJenis(f)} · Plot ${f.plot_name} · ${_tarikhDisplay(f.work_date)}`;
+  const tail = row
+    ? `AND the scheduled row it is paired to:\n\n    ${_scheduleRowLabel(row)}\n\n`
+      + `Both go. This cannot be undone.`
+    : `The scheduled row it belongs to could NOT be identified — either this `
+      + `plot has no matching row this month, or more than one row matches and `
+      + `guessing would delete the wrong round. Only the worker's record will `
+      + `be deleted; the schedule is left alone.`;
+  if (!confirm(`Delete this record from the database?\n\n    ${what}\n\n${tail}`)) return;
+
+  const { error } = await _supabase.from('nops_maint_field_records').delete().eq('id', f.id);
+  if (error) { alert('Could not delete it: ' + (error.message || error)); return; }
+  // The schedule lives in one JSONB row, so this is a local edit that
+  // persistRecords writes back — done only after the record itself is gone,
+  // so a failed delete does not take a scheduled row with it.
+  if (row) records = records.filter((r) => r.id !== row.id);
+  await _reloadSubmissions();
+}
+
+/* EDIT — fix the one thing that was wrong. Still sent back afterwards. */
+let _rejEditId = null;
+function editSubmission(id) {
+  const f = _submissionById(id);
+  if (!f) return;
+  _rejEditId = f.id;
+  const why = document.getElementById('rej-modal-why');
+  if (why) {
+    const who = String(f.rejected_by || '').trim();
+    why.innerHTML = `⛔ ${esc(f.reject_reason || t('rej.noReason'))}`
+      + (who ? `<br><span style="font-weight:600;">${esc(t('rej.by'))}: ${esc(who)}</span>` : '');
+  }
+  const note = document.getElementById('rej-modal-note');
+  if (note) note.textContent = t('rej.dateNote');
+  const set = (elId, v) => { const el = document.getElementById(elId); if (el) el.value = v; };
+  set('rj-date', String(f.work_date || '').slice(0, 10));
+  set('rj-jenis', _rejJenis(f) || 'Penyemburan racun kulat dan serangga');
+  set('rj-chemical', f.chemical || '');
+  set('rj-plot', f.plot_name || '');
+  set('rj-batch', f.batch_name || '');
+  set('rj-qty', f.qty == null ? '' : f.qty);
+  set('rj-worked', f.worked_by || '');
+  set('rj-remark', f.remark || '');
+  document.getElementById('rej-modal').classList.add('open');
+}
+function closeRejModal() {
+  _rejEditId = null;
+  document.getElementById('rej-modal').classList.remove('open');
+}
+
+/* The office's wording back to the phone's key, so work_type and jenis do not
+   end up disagreeing about the same job. */
+const _WORK_TYPE_BY_JENIS = Object.keys(MJMMaintField.JENIS).reduce((acc, k) => {
+  acc[MJMMaintField.JENIS[k]] = k;
+  return acc;
+}, {});
+
+async function saveRejSubmission() {
+  const f = _submissionById(_rejEditId);
+  if (!f) { closeRejModal(); return; }
+  if (!_supabase) { alert('Not connected to the database.'); return; }
+  const val = (elId) => String((document.getElementById(elId) || {}).value || '').trim();
+  const date  = val('rj-date');
+  const plot  = val('rj-plot');
+  const jenis = val('rj-jenis');
+  if (!date) { alert('Please key the date the work was done.'); return; }
+  if (!plot) { alert('Please key the plot.'); return; }
+  const qtyRaw = val('rj-qty');
+
+  const patch = {
+    work_date: date,
+    plot_name: plot,
+    jenis,
+    work_type: _WORK_TYPE_BY_JENIS[jenis] || f.work_type,
+    chemical: val('rj-chemical') || null,
+    qty: qtyRaw === '' ? null : Math.max(0, parseInt(qtyRaw, 10) || 0),
+    remark: val('rj-remark') || null,
+    worked_by: val('rj-worked') || null
+  };
+  /* The week and the month FOLLOW THE DATE. The phone sends the week its
+     board was showing, which is right when the phone is right — but a record
+     dated the 3rd of September cannot belong to the August sheet, and leaving
+     the old answer in place would pair the correction against the month it
+     was being corrected out of. */
+  const extra = {
+    batch_name: val('rj-batch') || null,
+    week_no: MJMMaintField.weekOfDate(date) || null,
+    schedule_month: MJMMaintField.isoMonthLabel(date) || null
+  };
+
+  let res = await _supabase.from('nops_maint_field_records')
+    .update(Object.assign({}, patch, extra)).eq('id', f.id);
+  // Without shared/add_maint_field_batch.sql those three columns do not
+  // exist. Save the rest rather than saving nothing, and say which part did
+  // not go — silently dropping the batch number is how a corrected record
+  // comes back still wrong.
+  if (res.error && /column .* does not exist|schema cache|batch_name|week_no|schedule_month/i
+        .test(String(res.error.message || ''))) {
+    res = await _supabase.from('nops_maint_field_records').update(patch).eq('id', f.id);
+    if (!res.error) {
+      alert('Saved — except the batch number, which this database has no column '
+          + 'for yet. Run shared/add_maint_field_batch.sql to keep it.');
+    }
+  }
+  if (res.error) { alert('Could not save it: ' + (res.error.message || res.error)); return; }
+  closeRejModal();
+  await _reloadSubmissions();
+}
+
 let _recSaveTimer = null;
 function _afterRecordChange() { try { renderPayroll(); } catch(_) {} }
 function persistRecords() {
@@ -5379,6 +5762,10 @@ async function initDb() {
       // What the Field Conductors have already recorded — read alongside the
       // rest so the first paint of Work Record already carries their dates.
       loadFieldRecords(),
+      // And what they sent back, for the second part of that list — read
+      // beside it rather than on demand, so the refusals are on screen the
+      // first time the page paints instead of a beat later.
+      loadRejectedFieldRecords(),
       // And what the auditor made of them, for the Audit column.
       loadMaintAudits(),
       // The Setting tab's own four lists, and the plot names they hang off.
