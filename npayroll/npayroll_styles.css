@@ -157,7 +157,7 @@ tfoot td.l { text-align: left; }
    point — the form existed, and nobody was going to open it, type a figure
    and write a reason for one cent. Faint until the row is under the pointer,
    so eight rows of them do not read as eight rows of buttons. */
-.cal-step { display: inline-flex; gap: 2px; margin-left: 6px; vertical-align: middle; }
+.cal-step { display: flex; gap: 4px; justify-content: center; margin: 3px 0 0; }
 .cal-btn {
   width: 17px; height: 17px; line-height: 1; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
