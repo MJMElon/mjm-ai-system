@@ -130,9 +130,33 @@
           <button class="btn btn-primary" data-add onclick="openEntry('transplanting')">+ Add Entry</button>
         </div>
       </div>
+      <div class="verify-bar" id="vb-transpl"></div>
+
+      <!-- ── WHAT WAS TRANSPLANTED, PLOT BY PLOT ──────────────────────
+           The claim below divides this month's work among the people who
+           did it. This says what the work WAS: a line per plot and, at the
+           foot, the nursery's total for the month.
+
+           It is not the claim's totals added up a different way. The claim
+           is per worker per job, and a plot carries the same quantity on all
+           four of its jobs — adding those would report the nursery at four
+           times its size. Each plot is counted once here, which is what
+           "how many were transplanted" means.
+
+           It is also the only place a plot shows at all when nobody was
+           credited on it: a record with no crew produces no claim line, and
+           the plot would otherwise vanish from the month. -->
+      <div id="transpl-plots-wrap" style="margin-bottom:1.1rem;">
+        <div class="bar-sub" style="padding:0 .2rem .4rem;font-weight:700;" id="transpl-plots-head">
+          Transplanting by plot</div>
+        <div class="card"><div class="tbl-wrap"><table id="transpl-plots-table"></table></div></div>
+        <div id="transpl-plots-note" class="bar-sub"
+             style="padding:.5rem .2rem 0;white-space:normal;"></div>
+      </div>
+
       <!-- The claim: workers down, the four jobs across, the same shape as
            Work Maintenance so one sheet is read the way the other is. -->
-      <div class="verify-bar" id="vb-transpl"></div>
+      <div class="bar-sub" style="padding:0 .2rem .4rem;font-weight:700;">Salary claim</div>
       <div class="card"><div class="tbl-wrap"><table id="transpl-table"></table></div></div>
       <div id="transpl-note" class="bar-sub" style="padding:.6rem .2rem 0;white-space:normal;"></div>
       <!-- Anything the field could not express, keyed by hand. Hidden until
@@ -352,7 +376,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=31"></script>
+<script src="npayroll_script.js?v=32"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

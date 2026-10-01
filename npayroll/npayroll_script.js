@@ -1114,6 +1114,138 @@ function transplantEmptyLead(secFilter) {
        + `but ${mine.length === 1 ? 'it produces' : 'none of them produces'} a line on this claim.`;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   WHAT WAS TRANSPLANTED, PLOT BY PLOT
+
+   The claim says what each worker is owed. This says what the work was: one
+   line per plot, and the nursery's total for the month at the foot.
+
+   COUNTED ONCE PER PLOT, and that is the whole care of it. A plot carries
+   four jobs — blanket spray, lining, polybag filling, transplanting — and
+   every one of them records the SAME figure, the number the operation report
+   says went into that plot. Adding the four, or adding the claim's lines,
+   reports the nursery at four times its size. So the plot's own figure is
+   taken once, from its newest record, which is the rule summarise() in
+   shared_maint_field.js already pays by for the same reason.
+
+   Where the four disagree — the report moved between one job being keyed and
+   the next — the newest wins and the disagreement is said out loud, because
+   the records that are left are paying on the old number.
+
+   A plot with no crew on it still appears here. It produces no claim line at
+   all, so this is the only place the work shows.
+   ══════════════════════════════════════════════════════════════ */
+function transplantPlotRows(secFilter) {
+  const by = new Map();
+  transplantField.forEach(rec => {
+    if (secFilter && !inSection(secFilter, _tpSection(rec.nursery_name))) return;
+    const key = _tpKey(rec.plot_name);
+    if (!by.has(key)) {
+      by.set(key, { plot: rec.plot_name || '—', batches: new Set(), dates: [],
+                    jobs: new Set(), seen: new Set(), newest: null, crew: 0 });
+    }
+    const p = by.get(key);
+    String(rec.batch_name || '').split(',').map(s => s.trim()).filter(Boolean)
+      .forEach(b => p.batches.add(b));
+    if (rec.work_date) p.dates.push(String(rec.work_date).slice(0, 10));
+    if (rec.work_type) p.jobs.add(rec.work_type);
+    if (rec.source_qty != null && rec.source_qty !== '') p.seen.add(Number(rec.source_qty));
+    p.crew += (Array.isArray(rec.workers) ? rec.workers.filter(w => w && w.name).length : 0);
+    // The newest record decides the figure: same record, same rule, as the
+    // group quantity everywhere else in this system.
+    const a = String(rec.work_date || '');
+    const b = String((p.newest || {}).work_date || '');
+    if (!p.newest || a > b) p.newest = rec;
+  });
+
+  return [...by.values()].map(p => ({
+    plot:    p.plot,
+    batches: [...p.batches],
+    from:    p.dates.length ? p.dates.slice().sort()[0] : '',
+    jobs:    p.jobs.size,
+    crew:    p.crew,
+    qty:     p.newest && p.newest.source_qty != null && p.newest.source_qty !== ''
+               ? Number(p.newest.source_qty) : null,
+    // More than one figure across this plot's four jobs.
+    disagrees: p.seen.size > 1 ? [...p.seen].sort((x, y) => x - y) : null
+  })).sort((a, b) => String(a.plot).localeCompare(String(b.plot),
+                       undefined, { numeric: true, sensitivity: 'base' }));
+}
+
+function renderTransplantByPlot(secFilter) {
+  const table = $('transpl-plots-table');
+  if (!table) return;
+  const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
+  const rows = transplantPlotRows(secFilter);
+  const head = $('transpl-plots-head');
+  if (head) {
+    head.textContent = `Transplanting by plot — ${secName(secFilter)} · ${monthLabel(monthValue())}`;
+  }
+
+  if (!rows.length) {
+    table.innerHTML = `<tbody><tr><td class="empty">
+      Nothing transplanted in ${esc(secName(secFilter))} for ${esc(monthLabel(monthValue()))}.
+    </td></tr></tbody>`;
+    $('transpl-plots-note').textContent = '';
+    return;
+  }
+
+  const total = rows.reduce((s, r) => s + (r.qty || 0), 0);
+  const body = rows.map((r, i) => `
+    <tr>
+      <td style="color:var(--text-faint);width:44px;">${i + 1}</td>
+      <td class="l" style="font-weight:800;color:var(--text-head);">${esc(r.plot)}</td>
+      <td class="l">${r.batches.length ? esc(r.batches.join(', ')) : '—'}</td>
+      <td>${r.from ? fmtDay(r.from) : '—'}</td>
+      <td>${r.jobs} / ${TRANSPLANT_JOBS.length}</td>
+      <td style="font-weight:800;${r.qty == null ? 'color:var(--text-faint);' : ''}">${
+        r.qty == null ? '—' : num(r.qty)}${
+        r.disagrees ? ' <span title="This plot’s jobs were keyed against different figures"'
+                    + ' style="color:#c0392b;">&#9888;</span>' : ''}</td>
+    </tr>`).join('');
+
+  table.innerHTML = `
+    <thead><tr>
+      <th style="width:44px;">No.</th>
+      <th class="l" style="width:120px;">Plot</th>
+      <!-- The batch takes the slack: a plot is "N3" and a plot with five
+           batches in it is "252, 253, 254, 257, 259". -->
+      <th class="l">Batch</th>
+      <th style="width:110px;">First worked</th>
+      <!-- How much of the plot is recorded. A plot at 1/4 is work still to
+           come, not a short month. -->
+      <th style="width:90px;">Jobs</th>
+      <th style="width:140px;">Transplanted</th>
+    </tr></thead>
+    <tbody>${body}</tbody>
+    <tfoot><tr>
+      <td class="l" colspan="5">TOTAL — ${esc(secName(secFilter))} · ${esc(monthLabel(monthValue()))}</td>
+      <td>${num(total)}</td>
+    </tr></tfoot>`;
+
+  /* Anything that makes the total wrong, or looks wrong and is not. */
+  const notes = [];
+  const moved = rows.filter(r => r.disagrees);
+  if (moved.length) {
+    notes.push(`${moved.map(r => `${esc(r.plot)} (${r.disagrees.map(n => num(n)).join(' and ')})`).join(', ')
+      } ${moved.length === 1 ? 'was' : 'were'} keyed against more than one figure — the report `
+      + `moved between one job being recorded and the next. The newest is counted here; `
+      + `the jobs keyed on the old one are still paying it.`);
+  }
+  const noQty = rows.filter(r => r.qty == null);
+  if (noQty.length) {
+    notes.push(`${noQty.map(r => esc(r.plot)).join(', ')} ${noQty.length === 1 ? 'has' : 'have'} `
+      + `no quantity on the record, so ${noQty.length === 1 ? 'it adds' : 'they add'} nothing to the total.`);
+  }
+  const noCrew = rows.filter(r => !r.crew);
+  if (noCrew.length) {
+    notes.push(`${noCrew.map(r => esc(r.plot)).join(', ')} ${noCrew.length === 1 ? 'names' : 'name'} `
+      + `nobody, so ${noCrew.length === 1 ? 'it is' : 'they are'} on this table but on no claim line.`);
+  }
+  $('transpl-plots-note').innerHTML = notes.map(t =>
+    `<div style="color:var(--danger,#c0392b);font-weight:600;margin-bottom:.25rem;">${t}</div>`).join('');
+}
+
 /* ════════════ TRANSPLANTING / SEEDLINGS ════════════ */
 const SHEET = {
   transplanting: { table:'transpl-table',  section:'transpl-section',  title:'Transplanting' },
@@ -1137,6 +1269,14 @@ const SHEET = {
  */
 function renderTransplantClaim() {
   const secFilter = $('transpl-section').value || '';
+
+  /* What was transplanted, plot by plot — drawn from here so it is drawn
+     whatever the claim does, including the early return below. A month whose
+     records name nobody has no claim lines at all, and that is precisely the
+     month somebody needs to see the plots. */
+  try { renderTransplantByPlot(secFilter); }
+  catch (e) { console.warn('[payroll] the by-plot table could not be drawn:', e); }
+
   const lines = transplantFieldLines()
     .filter(l => !secFilter || inSection(secFilter, l.section));
 
