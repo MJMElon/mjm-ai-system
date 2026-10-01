@@ -971,6 +971,12 @@ function transplantFieldLines() {
         // nursery otherwise, so an unmatched name still lands in the right
         // block rather than in none.
         section: (known && known.section) || _tpSection(rec.nursery_name),
+        /* Where the WORK was, as against where the worker is registered.
+           Kept beside it because the two differ often enough to be the
+           reason a nursery's sheet looks empty, and a sheet that cannot say
+           "they are filed under UNN 1" can only say "nothing happened". */
+        plotSection: _tpSection(rec.nursery_name),
+        nursery: rec.nursery_name || '',
         job_desc: (job && job.label) || rec.jenis || rec.work_type,
         plot: rec.plot_name,
         qty,
@@ -1021,6 +1027,93 @@ function _tpSection(nursery) {
   return hit ? hit.code : '';
 }
 
+/* ══════════════════════════════════════════════════════════════
+   WHY A NURSERY'S TRANSPLANTING SHEET IS EMPTY
+
+   "No transplanting recorded in the FC Portal" is one answer out of five,
+   and it was being printed for all five. A conductor who has spent the
+   month keying records reads it as the office losing his work, and there
+   was nothing on the screen to tell him which of these it was:
+
+     · nothing was recorded anywhere this month
+     · records were recorded, but on another nursery's plots
+     · records are on this nursery's plots and NOBODY IS NAMED on them —
+       a crew of nobody divides into no lines, so the whole record is
+       silent even though the work and its quantity are in the database
+     · the plot's nursery name matches no payroll section at all, so the
+       work is filed under "No section"
+     · the lines exist but are filed under the section the REGISTER puts
+       those workers in, which is deliberate and documented on
+       transplantWorkdone — but invisible from the circle they are missing
+       from
+
+   So the empty cell says which. Nothing here changes what is paid; it
+   changes what the screen admits to knowing.
+   ══════════════════════════════════════════════════════════════ */
+const _tpCrew = (rec) => (Array.isArray(rec.workers) ? rec.workers.filter(w => w && w.name) : []);
+const _plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + 's')}`;
+
+/* This section's records that name nobody, and the lines whose work was here
+   but whose money is filed elsewhere. Both are faults the claim should say
+   out loud whether or not it has rows to show. */
+function transplantSectionNotes(secFilter) {
+  const notes = [];
+  const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
+
+  const mine = transplantField.filter(r => inSection(secFilter, _tpSection(r.nursery_name)));
+  const noCrew = mine.filter(r => !_tpCrew(r).length);
+  if (noCrew.length) {
+    const where = [...new Set(noCrew.map(r => r.plot_name).filter(Boolean))];
+    notes.push(`${_plural(noCrew.length, 'record')} on ${esc(secName(secFilter))}’s plots `
+      + `name nobody${where.length ? ' — ' + where.map(esc).join(', ') : ''}. `
+      + `A record with no crew cannot be paid to anyone, so it produces no line here at all. `
+      + `Open it in the FC Portal under Maintenance → Transplanting Job and add who did the work.`);
+  }
+
+  /* Work done on this nursery's plots whose lines went to another circle,
+     because the register has those workers there. Named rather than left as
+     a gap: the gap is the thing that reads as lost work. */
+  const away = {};
+  transplantFieldLines().forEach(l => {
+    if (!inSection(secFilter, l.plotSection)) return;
+    if (l.section === secFilter) return;
+    const k = l.section || NO_SECTION;
+    (away[k] || (away[k] = new Set())).add(l.worker_name);
+  });
+  Object.keys(away).forEach(k => {
+    const who = [...away[k]].sort();
+    notes.push(`Work on ${esc(secName(secFilter))}’s plots by ${who.map(esc).join(', ')} `
+      + `is filed under ${esc(secName(k))}, because that is where the worker register has `
+      + `${who.length === 1 ? 'them' : 'them'}. The money is on that circle, not this one.`);
+  });
+  return notes;
+}
+
+/* The lead sentence of an empty sheet — what the office actually knows. */
+function transplantEmptyLead(secFilter) {
+  const month = esc(monthLabel(monthValue()));
+  const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
+  const here = esc(secName(secFilter));
+
+  if (!transplantField.length) {
+    return `No transplanting was recorded in the FC Portal for ${month} — in any nursery. `
+         + `A conductor records it under Maintenance &rarr; Transplanting Job.`;
+  }
+  const mine = transplantField.filter(r => inSection(secFilter, _tpSection(r.nursery_name)));
+  if (!mine.length) {
+    /* Where they ARE. A nursery name the payroll sections do not know is
+       shown as itself, because that is the thing somebody has to go and fix
+       in Facility Management rather than a code they can look up. */
+    const where = [...new Set(transplantField.map(r =>
+      _tpSection(r.nursery_name) ? secName(_tpSection(r.nursery_name))
+                                 : `“${r.nursery_name || '(no nursery)'}”, which matches no payroll section`))];
+    return `${_plural(transplantField.length, 'transplanting record')} reached the office for `
+         + `${month}, but none on ${here}’s plots — they are on ${where.map(esc).join('; ')}.`;
+  }
+  return `${_plural(mine.length, 'transplanting record')} on ${here}’s plots for ${month}, `
+       + `but ${mine.length === 1 ? 'it produces' : 'none of them produces'} a line on this claim.`;
+}
+
 /* ════════════ TRANSPLANTING / SEEDLINGS ════════════ */
 const SHEET = {
   transplanting: { table:'transpl-table',  section:'transpl-section',  title:'Transplanting' },
@@ -1053,10 +1146,15 @@ function renderTransplantClaim() {
                            + ` \u00b7 ${monthLabel(monthValue())}`;
 
   if (!lines.length) {
+    /* Which of the five reasons it is — see transplantEmptyLead. An empty
+       sheet that asserts nothing was recorded, when the records are sitting
+       in the database with no crew on them, is the office telling a
+       conductor his month's work never arrived. */
+    const why = transplantSectionNotes(secFilter);
     $('transpl-table').innerHTML = `<tbody><tr><td class="empty">
-      No transplanting recorded in the FC Portal for ${esc(monthLabel(monthValue()))}${
-      secFilter ? ' in ' + esc(secName(secFilter)) : ''}.
-      A conductor records it under Maintenance &rarr; Transplanting Job.
+      ${transplantEmptyLead(secFilter)}
+      ${why.map(n => `<div style="color:var(--danger,#c0392b);font-weight:600;
+        margin-top:.6rem;text-align:left;">${n}</div>`).join('')}
     </td></tr></tbody>`;
     $('transpl-note').textContent = '';
     return;
@@ -1155,6 +1253,10 @@ function renderTransplantClaim() {
   /* Anything that would make the claim short is said FIRST, because a claim
      missing work looks exactly like a quiet month. */
   const notes = [];
+  /* A record with nobody on it, and work whose money is filed under another
+     circle. Both make THIS sheet short, and both are just as true when there
+     are rows as when there are none — see transplantSectionNotes. */
+  transplantSectionNotes(secFilter).forEach(n => notes.push(n));
   const unknown = names.filter(n => !knownOf(n));
   if (unknown.length) {
     const held = unknown.reduce((s, n) => s + earned(n), 0);
