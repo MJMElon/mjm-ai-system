@@ -5075,7 +5075,114 @@ function refreshLinkedQty() {
 }
 function closeRecModal(){ document.getElementById('rec-modal').classList.remove('open'); }
 function editRec(id){ const r=records.find(x=>x.id===id); if(_recLocked(r)) return _denyLocked(); openRecModal(r); }
-function deleteRec(id){ const r=records.find(x=>x.id===id); if(_recLocked(r)) return _denyLocked(); if(!confirm('Delete this record?')) return; records=records.filter(x=>x.id!==id); renderRecords(); persistRecords(); }
+/* ── DELETING A ROW THE SCHEDULE STILL ASKS FOR ──────────────────────────
+   This list is not a list somebody keyed. It is REBUILT from the schedule —
+   autoSyncRecords runs on every page load and on every ↺ Sync from Schedule,
+   and replaces this nursery's rows with exactly the rows the schedule's ticks
+   call for. So deleting a row the schedule still plans took it off the screen
+   until the next rebuild, and then it came back, with nothing saying why.
+
+   So Del now asks the schedule too. Where the row is one the schedule
+   produces, the tick that produces it is cleared with it — which is the only
+   way the row can stay deleted, and is what deleting a planned job means.
+   The confirm says so, because the schedule is also what the Field
+   Conductors' week board is built from: a job unticked here stops being asked
+   of them.
+
+   A row the schedule does NOT produce — keyed by hand with + Add Record, or
+   left over from a chemical that has since been changed — is deleted and
+   stays deleted, as it always did. */
+
+/* Walk the same four programs autoSyncRecords generates from, and hand back
+   the ticks that would produce this row. Generated rather than parsed: the
+   racun string is built by that function, and a second place that takes it
+   apart is a second place to get it wrong. */
+function _scheduleTicksFor(rec, n, m) {
+  const s = getState(n, m);
+  const plots = NURSERY_PLOTS[n] || [];
+  if (!plots.includes(rec.plot)) return [];
+  const key = (jenis, racun) => `${jenis}||${racun}||${rec.plot}`;
+  const want = key(rec.jenis, rec.racun);
+  const hits = [];
+
+  const cfg = s.pdConfig;
+  weekKeys(n, m, 'W').forEach(w => {
+    const c = cfg[w];
+    if (!c) return;
+    if (s.pd[w]?.[rec.plot]?.P && c.P !== '—') {
+      const st = c.P_sticker && c.P_sticker !== '—'
+        ? ` + ${c.P_sticker} ${c.P_sticker_dose}${c.P_sticker_unit}` : '';
+      if (key('Penyemburan racun kulat dan serangga',
+              `Round ${w[1]}: ${c.P} ${c.P_dose}${c.P_unit}${st}`) === want) {
+        hits.push({ what: 'P & D spraying', clear: () => { s.pd[w][rec.plot].P = 0; } });
+      }
+    }
+    if (s.pd[w]?.[rec.plot]?.D && c.D !== '—') {
+      const st = c.D_sticker && c.D_sticker !== '—'
+        ? ` + ${c.D_sticker} ${c.D_sticker_dose}${c.D_sticker_unit}` : '';
+      if (key('Penyemburan racun kulat dan serangga',
+              `Round ${w[1]}: ${c.D} ${c.D_dose}${c.D_unit}${st}`) === want) {
+        hits.push({ what: 'P & D spraying', clear: () => { s.pd[w][rec.plot].D = 0; } });
+      }
+    }
+  });
+  (s.manuringConfig || []).forEach((round, ri) => {
+    round.forEach((c, ci) => {
+      if (!s.manuring[rec.plot]?.[ri]?.[ci]) return;
+      if (key('Membaja', `Round ${ri + 1}: ${c.name} ${c.dose}${c.unit}`) === want) {
+        hits.push({ what: 'manuring', clear: () => { s.manuring[rec.plot][ri][ci] = 0; } });
+      }
+    });
+  });
+  weekKeys(n, m, 'R').forEach(r => {
+    if (!s.weeding[rec.plot]?.[r]) return;
+    if (key('Merumput', `Round ${r[1]}: Merumput dalam polibeg`) === want) {
+      hits.push({ what: 'weeding', clear: () => { s.weeding[rec.plot][r] = 0; } });
+    }
+  });
+  (s.interrowConfig || []).forEach((round, ri) => {
+    round.forEach((c, ci) => {
+      if (!s.interrow[rec.plot]?.[ri]?.[ci]) return;
+      if (key('Meracun rumput secara selingan',
+              `Round ${ri + 1}: ${c.chem} ${c.chem_dose}${c.chem_unit} + ${
+                interrowAct(c)} ${c.activator_dose}${c.activator_unit}`) === want) {
+        hits.push({ what: 'interrow spraying', clear: () => { s.interrow[rec.plot][ri][ci] = 0; } });
+      }
+    });
+  });
+  return hits;
+}
+
+function deleteRec(id){
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+  if (_recLocked(r)) return _denyLocked();
+
+  const n = getNursery(), m = getMonth();
+  let ticks = [];
+  try { ticks = _scheduleTicksFor(r, n, m); }
+  catch (e) { console.warn('[maint] the schedule could not be asked about this row:', e); }
+
+  const what = `${jenisLabel(r.jenis)} · ${r.racun || ''} · Plot ${r.plot}`;
+  if (ticks.length) {
+    if (!confirm(`Delete this row?\n\n    ${what}\n\n`
+      + `THIS JOB IS ON ${m}'s SCHEDULE, which is what this list is rebuilt `
+      + `from — so deleting the row alone would bring it straight back the next `
+      + `time the list is synced.\n\n`
+      + `Its ${ticks[0].what} tick on plot ${r.plot} will be cleared as well. `
+      + `That also takes the job off the Field Conductors' week board.`)) return;
+    ticks.forEach(t => { try { t.clear(); } catch (_) {} });
+    try { persistStateSoon(n, m); } catch (e) { console.warn('[maint] schedule not saved:', e); }
+  } else {
+    if (!confirm(`Delete this row?\n\n    ${what}`)) return;
+  }
+
+  records = records.filter(x => x.id !== id);
+  renderRecords();
+  persistRecords();
+  // The schedule's own screens are showing a tick that has just gone.
+  try { renderAll(); } catch (_) {}
+}
 function saveRec(){
   const obj={
     // The picker yields YYYY-MM-DD; blank means the work is not dated yet.
