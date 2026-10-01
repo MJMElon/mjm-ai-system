@@ -873,7 +873,9 @@ function capTotalCell(sheet, page, section, code, worked) {
   const d = capTotalDelta(sheet, section, code, worked);
   const canEdit = mayAdjust(page) && !sheetLocked(page);
   const tip = d ? `The workers' shares add to ${capFmt(worked)}` : '';
-  return `<td${tip ? ` title="${esc(tip)}"` : ''}>${capFmt(shown)}`
+  /* nowrap, or the stepper drops to a line of its own under the figure and
+     the Grand Total row grows a step in the middle of itself. */
+  return `<td style="white-space:nowrap;"${tip ? ` title="${esc(tip)}"` : ''}>${capFmt(shown)}`
        + (canEdit ? calStepHtml(sheet, page, section, CAP_TOTAL_ROW, capCode(code), worked) : '')
        + calibrationLine(d, 'cap')
        + '</td>';
@@ -1561,7 +1563,9 @@ function renderTransplantClaim() {
     <tr>
       <td style="color:var(--text-faint);">${i + 1}</td>
       <td class="l" style="font-weight:700;color:var(--text-head);">${esc(n)}${
-        knownOf(n) ? '' : '<span title="Not on the worker register — add them in Worker System, or the claim cannot pay this" style="color:var(--danger,#c0392b);"> &#9888;</span>'}</td>
+        knownOf(n) ? '' : '<span title="Not on the worker register — add them in Worker System, or the claim cannot pay this" style="color:var(--danger,#c0392b);"> &#9888;</span>'}${
+        calibrationLine(calibrationOf('transplanting', secOf(n), n,
+                                      TRANSPLANT_JOBS.map(j => j.key), (k) => rmOf(n, k)))}</td>
       ${TRANSPLANT_JOBS.map(j => {
         const c = capOf(n, j.key);
         return `<td>${capFmt(c)}</td>` + earnedCell('transplanting', 'transpl', secOf(n), n, j.key,
@@ -2070,7 +2074,9 @@ function renderMaint() {
   const body = wk.map((w, i) => `
     <tr>
       <td style="color:var(--text-faint);">${i + 1}</td>
-      <td class="l" style="font-weight:700;color:var(--text-head);">${esc(w)}</td>
+      <td class="l" style="font-weight:700;color:var(--text-head);">${esc(w)}${
+        calibrationLine(calibrationOf('maint', n, w, MAINT_TYPES.map(t => t.code),
+                                      (c) => rmOf(w, c)))}</td>
       ${MAINT_TYPES.map(t => {
         const c = capOf(w, t.code);
         return `<td>${capFmt(c)}</td>` + earnedCell('maint', 'maint', n, w, t.code, t.label,

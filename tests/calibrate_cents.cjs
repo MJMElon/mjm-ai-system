@@ -232,19 +232,15 @@ const press = async (page, which, times) => {
     const page = await boot(browser, JSON.parse(JSON.stringify(DB)));
     await press(page, '+');
     check('the cell goes up by a cent', await cellText(page), 'RM 250.01');
-    /* The line under the name is on the PAPER and not here. The screen is
-       where the pressing happens, and a red line under every one of eight
-       names while somebody is still pressing is eight lines of working out;
-       the paper is what gets signed, and whoever reads that is not adjusting
-       anything and does need to know RM 6.96 is not RM 6.97 by arithmetic. */
-    check('…and the screen puts no line under the worker’s name',
-          await calLine(page), null);
+    check('…and the worker’s name says so', await calLine(page), 'calibrate RM0.01');
 
     await press(page, '+', 2);
     check('three presses, three cents', await cellText(page), 'RM 250.03');
+    check('…counted under the name', await calLine(page), 'calibrate RM0.03');
 
     await press(page, '-', 4);
     check('and down the other way, past where it started', await cellText(page), 'RM 249.99');
+    check('…which reads as a minus', await calLine(page), 'calibrate -RM0.01');
 
     console.log('\n…and the sheet follows it');
     const foot = await page.$eval('#transpl-table tfoot tr', (tr) =>
@@ -255,6 +251,8 @@ const press = async (page, which, times) => {
     console.log('\nStepping back onto the sheet’s own figure');
     await press(page, '+');
     check('the cell is back where it started', await cellText(page), 'RM 250.00');
+    check('…and the line goes with it, rather than reading RM0.00',
+          await calLine(page), null);
     await page.close();
   }
 
@@ -355,6 +353,7 @@ const press = async (page, which, times) => {
               await page.evaluate(() => /did not save/i.test(window.__ALERTS[0] || '')));
     check('…and puts the cell back to what the database actually holds',
           await cellText(page), 'RM 250.00');
+    check('…with nothing left under the name', await calLine(page), null);
     await page.close();
   }
 
@@ -375,7 +374,7 @@ const press = async (page, which, times) => {
     await press(page, '-', 1);
     await page.waitForTimeout(50);
     const after = await pdfOf();
-    checkTrue('ONE CENT OFF, AND THE PAPER SAYS SO UNDER THE NAME',
+    checkTrue('THE PAPER SAYS IT TOO, under the name',
               after.includes('calibrate -RM0.01'));
     checkTrue('…the worker is still named above it', after.includes(WORKER));
     checkTrue('…and the figure printed is the calibrated one',
