@@ -61,7 +61,20 @@ async function boot(browser, db) {
     window.__DB = seed;
     window.__WRITES = [];
     window.__FAIL = false;
-    window.jspdf = { jsPDF: class { constructor() {} save() {} } };
+    /* A recording jsPDF. The real one is on a blocked CDN, and what is being
+       checked is what the form SAYS. */
+    window.__PDF = null;
+    window.jspdf = { jsPDF: class {
+      constructor() { this.page = 1; this.lines = []; this.saved = null; window.__PDF = this; }
+      setFont() {} setFontSize(n) { this._s = n; } setTextColor() {}
+      setFillColor() {} setDrawColor() {} setLineWidth() {}
+      rect() {} line() {}
+      addPage() { this.page++; }
+      getTextWidth(t) { return String(t).length * (this._s || 9) * 0.5; }
+      splitTextToSize(t) { return [String(t)]; }
+      text(t, x, y) { this.lines.push({ t: String(t), x, y, page: this.page }); }
+      save(name) { this.saved = name; }
+    } };
     function makeQuery(table) {
       const st = { eqs: [], single: false, op: 'select', row: null };
       const rows = () => {
@@ -219,15 +232,19 @@ const press = async (page, which, times) => {
     const page = await boot(browser, JSON.parse(JSON.stringify(DB)));
     await press(page, '+');
     check('the cell goes up by a cent', await cellText(page), 'RM 250.01');
-    check('…and the worker’s name says so', await calLine(page), 'calibrate RM0.01');
+    /* The line under the name is on the PAPER and not here. The screen is
+       where the pressing happens, and a red line under every one of eight
+       names while somebody is still pressing is eight lines of working out;
+       the paper is what gets signed, and whoever reads that is not adjusting
+       anything and does need to know RM 6.96 is not RM 6.97 by arithmetic. */
+    check('…and the screen puts no line under the worker’s name',
+          await calLine(page), null);
 
     await press(page, '+', 2);
     check('three presses, three cents', await cellText(page), 'RM 250.03');
-    check('…counted under the name', await calLine(page), 'calibrate RM0.03');
 
     await press(page, '-', 4);
     check('and down the other way, past where it started', await cellText(page), 'RM 249.99');
-    check('…which reads as a minus', await calLine(page), 'calibrate -RM0.01');
 
     console.log('\n…and the sheet follows it');
     const foot = await page.$eval('#transpl-table tfoot tr', (tr) =>
@@ -238,8 +255,6 @@ const press = async (page, which, times) => {
     console.log('\nStepping back onto the sheet’s own figure');
     await press(page, '+');
     check('the cell is back where it started', await cellText(page), 'RM 250.00');
-    check('…and the line under the name goes, rather than reading RM0.00',
-          await calLine(page), null);
     await page.close();
   }
 
@@ -340,7 +355,37 @@ const press = async (page, which, times) => {
               await page.evaluate(() => /did not save/i.test(window.__ALERTS[0] || '')));
     check('…and puts the cell back to what the database actually holds',
           await cellText(page), 'RM 250.00');
-    check('…with nothing left under the name', await calLine(page), null);
+    await page.close();
+  }
+
+  console.log('\nWhat the printed claim form carries');
+  {
+    const page = await boot(browser, JSON.parse(JSON.stringify(DB)));
+    const pdfOf = () => page.evaluate(() => {
+      window.__PDF = null;
+      downloadTransplantPDF();
+      return window.__PDF ? window.__PDF.lines.map((l) => l.t) : null;
+    });
+
+    const before = await pdfOf();
+    checkTrue('with nothing calibrated the form says nothing about it',
+              !before.some((l) => /calibrate/.test(l)));
+    checkTrue('…and the worker is on it', before.includes(WORKER));
+
+    await press(page, '-', 1);
+    await page.waitForTimeout(50);
+    const after = await pdfOf();
+    checkTrue('ONE CENT OFF, AND THE PAPER SAYS SO UNDER THE NAME',
+              after.includes('calibrate -RM0.01'));
+    checkTrue('…the worker is still named above it', after.includes(WORKER));
+    checkTrue('…and the figure printed is the calibrated one',
+              after.includes('RM 249.99'));
+
+    await press(page, '+', 3);
+    await page.waitForTimeout(50);
+    const up = await pdfOf();
+    checkTrue('two cents on reads as a plus, with no sign',
+              up.includes('calibrate RM0.02'));
     await page.close();
   }
 
