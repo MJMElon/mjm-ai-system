@@ -55,7 +55,30 @@ const FIELD = [
 
 const REGISTER = [{ id: 1, full_name: 'Ali Bin Hassan', section: 'UNN2', status: 'active' }];
 
-async function boot(browser, field) {
+/* The ledger's transplanting rows, each carrying the map that was flown for
+   the plot when the batch report filled it — `MapUrl:` on the remark, which
+   is where it has always been written. */
+const log = (plot, batch, url, date) => ({
+  plot_name: plot, batch_name: batch, transaction_type: 'Transplanted',
+  transaction_date: date, created_at: date + 'T02:00:00Z',
+  remark: `Transplanted from tray [P4] to Main Plot [${plot}]. Date: ${date}`
+        + (url ? ` MapUrl:${url}` : '')
+});
+const LEDGER = [
+  log('N3',  '252', 'https://files.test/maps/n3.jpg',  `${YM}-02`),
+  log('N9',  '252', 'https://files.test/maps/n9.pdf',  `${YM}-08`),
+  log('B3',  '260', 'https://files.test/maps/b3.jpg',  `${YM}-04`),
+  // a map for N3 from another batch, years ago — a plot is re-used, and the
+  // batch is what tells one flight from another
+  log('N3',  '101', 'https://files.test/maps/old.jpg', '2024-01-05'),
+  // N7 was transplanted but nobody flew it
+  log('N7',  '253', '',                                `${YM}-09`),
+  /* The same flight twice on one plot — two trays fed N3 and the office
+     pasted the one map on both rows. */
+  log('N3',  '252', 'https://files.test/maps/n3.jpg',  `${YM}-06`)
+];
+
+async function boot(browser, field, ledger) {
   const page = await browser.newPage({ viewport: { width: 1600, height: 1200 } });
   page.on('dialog', (d) => d.accept().catch(() => {}));
   page.on('pageerror', (e) => console.log('  [page error] ' + e.message));
@@ -113,7 +136,8 @@ async function boot(browser, field) {
       channel: () => ({ on() { return this; }, subscribe() { return this; } }),
       removeChannel: () => {}
     }) };
-  }, { mjmnpayroll_workers: REGISTER, nops_transplant_field_records: field });
+  }, { mjmnpayroll_workers: REGISTER, nops_transplant_field_records: field,
+       shared_inventory_logs: ledger === undefined ? LEDGER : ledger });
 
   await page.route('**/shared_access.js', (r) => r.fulfill({
     status: 200, contentType: 'application/javascript',
@@ -134,7 +158,8 @@ async function boot(browser, field) {
     status: 200, contentType: 'application/json', body: '[]' }));
 
   await page.goto('http://localhost:8777/npayroll/npayroll_dashboard.html', { waitUntil: 'load' });
-  await page.waitForFunction(() => typeof window.renderTransplantByPlot === 'function',
+  await page.waitForFunction(() => typeof window.renderTransplantByPlot === 'function'
+                                && typeof window.printTransplantMaps === 'function',
                              { timeout: 20000 });
   await page.click('[data-sub="transpl"]');
   await page.waitForFunction(() => {
@@ -177,8 +202,8 @@ const read = (page) => page.evaluate(() => {
 
     checkTrue('the section is headed with the nursery and the month',
               t.head.includes('UNN2') && t.head.includes(MONTH));
-    check('the columns — the plot and the amount, and nothing else to read '
-        + 'past on the way to them', t.cols, ['No.', 'Plot', 'Transplanted']);
+    check('the columns — the plot, its batches, their maps and the amount',
+          t.cols, ['No.', 'Plot', 'Batch', 'Drone Map', 'Transplanted']);
 
     check('three plots, in plot order', t.body.map((r) => r[1]), ['N3', 'N7', 'N9']);
     checkFalse('and not the other nursery’s',
@@ -186,9 +211,9 @@ const read = (page) => page.evaluate(() => {
 
     const n3 = t.body.find((r) => r[1] === 'N3');
     check('N3 IS ONE LINE, not four — its four jobs all carry the same figure',
-          n3[2], '6,685');
+          n3[4], '6,685');
     check('a plot with only one of its four jobs recorded still carries its '
-        + 'quantity', t.body.find((r) => r[1] === 'N7')[2], '900');
+        + 'quantity', t.body.find((r) => r[1] === 'N7')[4], '900');
 
     console.log('\nThe total under it');
     checkTrue('the footer is the nursery and the month',
@@ -202,7 +227,7 @@ const read = (page) => page.evaluate(() => {
               /N9/.test(t.note) && /more than one figure/i.test(t.note));
     checkTrue('…with both figures', /1,200/.test(t.note) && /1,300/.test(t.note));
     check('…and the newest is the one counted',
-          t.body.find((r) => r[1] === 'N9')[2].replace(/[^0-9,]/g, ''), '1,300');
+          t.body.find((r) => r[1] === 'N9')[4].replace(/[^0-9,]/g, ''), '1,300');
     checkTrue('a plot that names nobody is named too',
               /N7/.test(t.note) && /on no claim line/i.test(t.note));
 
@@ -245,7 +270,7 @@ const read = (page) => page.evaluate(() => {
     await pick(page, 'UNN2');
     const t = await read(page);
     check('it is listed', t.body.map((r) => r[1]), ['N5']);
-    check('…with a dash rather than a nought', t.body[0][2], '—');
+    check('…with a dash rather than a nought', t.body[0][4], '—');
     check('…and adds nothing to the total', t.foot[0][1], '0');
     checkTrue('…which is said, not left to be noticed',
               /no quantity on the record/i.test(t.note));
@@ -314,6 +339,154 @@ const read = (page) => page.evaluate(() => {
     checkTrue('…and carrying the plots that were worked',
               ['N3', 'N7', 'N9'].every((p) => pdf.lines.includes(p))
               && pdf.lines.includes('8,885'));
+    await page.close();
+  }
+
+  console.log('\nThe drone map, on the table');
+  {
+    const page = await boot(browser, FIELD);
+    await pick(page, 'UNN2');
+    const maps = await page.$$eval('#transpl-plots-table tbody tr', (trs) =>
+      trs.map((tr) => ({
+        plot: (tr.children[1].textContent || '').trim(),
+        batch: (tr.children[2].textContent || '').trim(),
+        links: [...tr.children[3].querySelectorAll('a.tp-map')].map((a) => ({
+          href: a.getAttribute('href'), pdf: a.classList.contains('is-pdf'),
+          tab: a.getAttribute('target'), title: a.title,
+          bg: a.getAttribute('style') || '' })),
+        labels: [...tr.children[3].querySelectorAll('.tp-map-b')].map((e) => e.textContent.trim()),
+        none: tr.children[3].querySelectorAll('.tp-map.is-none').length,
+        txt: (tr.children[3].textContent || '').replace(/\s+/g, ' ').trim()
+      })));
+
+    const n3 = maps.find((m) => m.plot === 'N3');
+    check('the plot\u2019s map is on its row', n3.links.length, 1);
+    check('…the one flown for THIS batch, not the one from years ago',
+          n3.links[0].href, 'https://files.test/maps/n3.jpg');
+    checkTrue('…shown as the map itself', n3.links[0].bg.includes('n3.jpg'));
+    check('…opening in a new tab, which is where it prints', n3.links[0].tab, '_blank');
+    checkTrue('…and saying what it is', /Drone map/.test(n3.links[0].title)
+                                     && /N3/.test(n3.links[0].title)
+                                     && /252/.test(n3.links[0].title));
+
+    const n9 = maps.find((m) => m.plot === 'N9');
+    checkTrue('a map that is a PDF cannot be a thumbnail, so it is a document',
+              n9.links.length === 1 && n9.links[0].pdf && /\u{1F4C4}/u.test(n9.txt));
+
+    check('the batch is on the row, because the map is per batch',
+          n3.batch, '252');
+    check('…and the thumbnail is labelled with it', n3.labels, ['252']);
+
+    checkTrue('…and a map from another batch years ago is NOT on this month\u2019s '
+            + 'row', !maps.some((m) => m.links.some((l) => /old\.jpg/.test(l.href))));
+
+    const n7 = maps.find((m) => m.plot === 'N7');
+    check('a batch nobody flew keeps its place, greyed, rather than leaving a '
+        + 'gap that names nothing', [n7.links.length, n7.none, n7.labels], [0, 1, ['253']]);
+    await page.close();
+  }
+
+  console.log('\nThe maps, printed');
+  {
+    const page = await boot(browser, FIELD);
+    /* The print window is opened, written to and told to print. Caught here
+       so what it was given can be read. */
+    await page.evaluate(() => {
+      window.__PRINTED = '';
+      window.open = () => ({
+        document: { write(h) { window.__PRINTED += h; }, close() {} },
+        focus() {}, print() {}
+      });
+    });
+    await page.evaluate(() => printTransplantMaps());
+    const html = await page.evaluate(() => window.__PRINTED);
+
+    checkTrue('a sheet is produced', html.length > 500);
+    checkTrue('…on A4, portrait', /@page\s*\{\s*size:\s*A4 portrait/.test(html));
+
+    const pages = (html.match(/<section class="page">/g) || []).length;
+    const cards = (html.match(/<figure class="map">/g) || []).length;
+    check('every map is on it — three plots were flown', cards, 3);
+    check('…TWO TO A PAGE', pages, Math.ceil(cards / 2));
+    checkTrue('…and each page breaks after itself',
+              /page-break-after:\s*always/.test(html));
+
+    const order = [...html.matchAll(/<span class="plot">([^<]+)<\/span>/g)].map((m) => m[1]);
+    check('EVERY MAP IS HEADED WITH ITS PLOT', order.length, 3);
+    check('…and the order is BNN, then UNN 1, then UNN 2',
+          order, ['B3', 'N3', 'N9']);
+    /* The same map reaches the sheet twice — two trays fed N3 and the one
+       flight was pasted on both rows. One picture, one sheet of paper. */
+    check('the same map is not printed twice',
+          (html.match(/files\.test\/maps\/n3\.jpg/g) || []).length, 1);
+    checkTrue('…with the nursery, batch and quantity beside the plot',
+              /Batu Niah/.test(html) && /Batch 260/.test(html) && /2,405|6,685/.test(html));
+    checkTrue('it is every nursery, not the circle on screen',
+              /B3/.test(html) && /N3/.test(html));
+    checkTrue('a map that is a PDF says it cannot be printed with the others, '
+            + 'rather than printing an empty box',
+              /cannot be printed with the others/.test(html)
+              && /n9\.pdf/.test(html));
+    checkTrue('…and the ones that can are images', /<img src="https:\/\/files\.test\/maps\/n3\.jpg"/.test(html));
+    checkTrue('it waits for the maps to arrive before printing',
+              /window\.print/.test(html) && /addEventListener\('load'/.test(html));
+    await page.close();
+  }
+
+  console.log('\nOne flight over two plots');
+  {
+    /* One map covering B3 and B4 — the drone flew the pair, and the office
+       put the same file on both rows. Printing it twice is a wasted sheet
+       and a second look at a picture already read; printing it once and
+       losing B4 would be worse. */
+    const field = [rec({ nursery_name: 'BNN', plot_name: 'B3', source_qty: 800, batch_name: '260' }),
+                   rec({ nursery_name: 'BNN', plot_name: 'B4', source_qty: 600, batch_name: '260' })];
+    const ledger = [log('B3', '260', 'https://files.test/maps/pair.jpg', `${YM}-04`),
+                    log('B4', '260', 'https://files.test/maps/pair.jpg', `${YM}-04`)];
+    const page = await boot(browser, field, ledger);
+    await page.evaluate(() => {
+      window.__PRINTED = '';
+      window.open = () => ({ document: { write(h) { window.__PRINTED += h; }, close() {} },
+                             focus() {}, print() {} });
+    });
+    await page.evaluate(() => printTransplantMaps());
+    const html = await page.evaluate(() => window.__PRINTED);
+
+    check('the picture is printed once', (html.match(/maps\/pair\.jpg/g) || []).length, 1);
+    check('…on one card', (html.match(/<figure class="map">/g) || []).length, 1);
+    const head = (html.match(/<span class="plot">([^<]+)<\/span>/) || [])[1] || '';
+    checkTrue('…headed with BOTH plots, so neither is lost off the sheet',
+              /B3/.test(head) && /B4/.test(head));
+    checkTrue('…and the quantity is the two added up, because the card is '
+            + 'about both', /1,400 transplanted/.test(html));
+
+    /* The table is per plot, so each still carries its own. */
+    await pick(page, 'BNN');
+    const rows = await page.$$eval('#transpl-plots-table tbody tr', (trs) =>
+      trs.map((tr) => ({ plot: (tr.children[1].textContent || '').trim(),
+                         n: tr.children[3].querySelectorAll('a.tp-map').length })));
+    check('…while on the table each plot still shows it on its own row',
+          rows.map((r) => [r.plot, r.n]), [['B3', 1], ['B4', 1]]);
+    await page.close();
+  }
+
+  console.log('\nA month nobody flew');
+  {
+    const page = await boot(browser, FIELD.map((r) => r), []);
+    const said = await page.evaluate(() => {
+      let msg = null;
+      const a = window.alert; window.alert = (m) => { msg = m; };
+      window.__OPENED = false;
+      const o = window.open; window.open = () => { window.__OPENED = true; return null; };
+      printTransplantMaps();
+      window.alert = a; window.open = o;
+      return { msg, opened: window.__OPENED };
+    });
+    checkTrue('it says so rather than opening a blank sheet',
+              /No drone map/i.test(String(said.msg || '')));
+    checkFalse('…and opens nothing', said.opened);
+    checkTrue('…and says where a map comes from',
+              /Seedling Stock/.test(String(said.msg || '')));
     await page.close();
   }
 

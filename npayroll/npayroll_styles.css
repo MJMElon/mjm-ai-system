@@ -405,3 +405,26 @@ tr:hover .cal-btn, .cal-btn:focus-visible { opacity: 1; }
    fault, not a place, so it does not dress like the nurseries. */
 .npill.npill-odd { border-style: dashed; border-color: var(--red-bd, #fda4af); color: var(--red, #c0392b); }
 .npill.npill-odd.on { background: var(--red, #c0392b); border-color: var(--red, #c0392b); color: #fff; }
+
+
+/* ── THE DRONE MAP ON THE BY-PLOT TABLE ──────────────────────────────────
+   A thumbnail of what was flown over the plot when it was filled, opening
+   in a new tab — which is where it can be looked at properly and where the
+   browser will print it. The sheet of all of them, two to an A4 page, is
+   the button on the bar. */
+/* One thumbnail per BATCH, each labelled with it — a plot filled from two
+   batches was flown twice and the batch is what tells the pictures apart. */
+.tp-maps{display:inline-flex;gap:8px;align-items:flex-start;}
+.tp-map-w{display:inline-flex;flex-direction:column;align-items:center;gap:2px;}
+.tp-map-b{font-size:9.5px;font-weight:800;letter-spacing:.04em;color:var(--ink-soft,#64748b);}
+/* A batch whose flight is missing keeps its place and says so: the gap names
+   the batch, which an absent thumbnail cannot. */
+.tp-map.is-none{display:inline-flex;align-items:center;justify-content:center;
+  color:#cbd5e1;background:#f8fafc;border-style:dashed;cursor:default;}
+.tp-map.is-none:hover{border-color:var(--line,#e2e8f0);transform:none;}
+.tp-map{display:inline-block;width:46px;height:34px;border-radius:7px;
+  border:1.5px solid var(--line,#e2e8f0);background:#f8fafc center/cover no-repeat;
+  vertical-align:middle;transition:border-color .13s,transform .13s;}
+.tp-map:hover{border-color:var(--brand,#4f46e5);transform:translateY(-1px);}
+.tp-map.is-pdf{display:inline-flex;align-items:center;justify-content:center;font-size:16px;
+  background:#f8fafc;}
