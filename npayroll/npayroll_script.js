@@ -1450,9 +1450,10 @@ function mapCellHtml(plot, batches) {
    across six plots used to be six identical sheets of paper. One card, with
    every plot it covers named on it.
 
-   A NURSERY TO A PAGE, in the order they are worked. BNN's maps never run on
-   from the foot of UNN 1's, so a nursery's sheets can be pulled out and
-   carried on their own.
+   THIS NURSERY'S MAPS AND NO OTHER. The claim form is one nursery's — the
+   circle on the bar decides it — so the evidence stapled to it is that
+   nursery's too. It carried all three for a while, which made BNN's claim a
+   folder with UNN 1's and UNN 2's plots in the back of it.
 
    TWO TO A PAGE, because half an A4 is the smallest a drone map is worth
    printing at — the reason to print one is to stand in the plot and compare
@@ -1503,11 +1504,11 @@ const _pdfImgFormat = (u) => (/\.png(\?|$)/i.test(String(u)) ? 'PNG' : 'JPEG');
 
 /* Draws every nursery's maps onto the end of the claim form. Returns what it
    could not draw, so the caller can say so rather than leaving a gap. */
-async function drawDroneMaps(doc, monthTxt) {
+async function drawDroneMaps(doc, monthTxt, sec) {
   const secName = (c) => (NURSERY_FULL[c] ? `${c} — ${NURSERY_FULL[c]}` : c);
   const missed = [];
 
-  for (const code of CLAIM_NURSERIES) {
+  for (const code of (sec ? [sec] : CLAIM_NURSERIES)) {
     const cards = mapCardsFor(code);
     if (!cards.length) continue;
 
@@ -3284,7 +3285,7 @@ async function downloadTransplantPDF() {
   if (btn) { btn.disabled = true; btn.innerHTML = 'Fetching the drone maps…'; }
   let missed = [];
   try {
-    missed = await drawDroneMaps(doc, monthTxt);
+    missed = await drawDroneMaps(doc, monthTxt, sec);
   } catch (e) {
     console.warn('[payroll] the drone maps could not be drawn:', e);
     missed = ['every map — ' + ((e && e.message) || e)];

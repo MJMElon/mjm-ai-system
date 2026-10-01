@@ -424,13 +424,15 @@ const read = (page) => page.evaluate(() => {
     checkTrue('…with the plot summary on it', txt.some((t) => /TRANSPLANTING BY PLOT/.test(t)));
     checkTrue('…AND THE DRONE MAPS', txt.some((t) => t === 'DRONE MAPS — TRANSPLANTING'));
 
-    /* A nursery to a page: every map page is headed with the nursery whose
-       maps are on it, and BNN's never run on from the foot of UNN 2's. */
+    /* THIS NURSERY'S MAPS AND NO OTHER. The claim form is one nursery's, so
+       the evidence stapled to it is that nursery's — it carried all three
+       for a while, which made BNN's claim a folder with UNN 1's and UNN 2's
+       plots in the back of it. */
     const heads = pdf.lines.filter((l) => l.t === 'DRONE MAPS — TRANSPLANTING')
       .map((l) => { const n = pdf.lines.find((x) => x.page === l.page && /^(BNN|UNN1|UNN2) —/.test(x.t));
                     return n ? n.t.split(' —')[0] : '?'; });
-    check('a nursery to a page, in the order they are worked',
-          heads, ['BNN', 'UNN2']);
+    check('every map page is headed with the nursery on the bar, and only it',
+          heads, ['UNN2']);
 
     // Only the map pages: the plot summary names the same plots in a column
     // of its own, and a check that cannot tell the two apart proves nothing.
@@ -439,12 +441,14 @@ const read = (page) => page.evaluate(() => {
     const caps = pdf.lines.filter((l) => mapPages.has(l.page) && /^(B3|N3|N9)/.test(l.t))
                           .map((l) => l.t);
     check('one card per BATCH, naming the plots it covers — not one per plot',
-          caps, ['B3', 'N3', 'N9']);
-    check('…and every map that can be drawn IS drawn', pdf.images.length, 2);
+          caps, ['N3', 'N9']);
+    checkFalse('…and another nursery\u2019s plot is not among them',
+               caps.includes('B3'));
+    check('…and every map that can be drawn IS drawn', pdf.images.length, 1);
     checkTrue('…as the map itself',
               pdf.images.every((i) => /files\.test\/maps\//.test(i.src)));
-    checkTrue('…one above the other, two to a page',
-              pdf.images.length === 2 && pdf.images[0].page !== pdf.images[1].page);
+    checkTrue('…and it is this nursery\u2019s',
+              /files\.test\/maps\/n3\.jpg/.test(pdf.images[0].src));
     checkTrue('a map that is a PDF says so rather than leaving an empty box',
               txt.some((t) => /cannot be printed with the others/.test(t)));
 
@@ -469,6 +473,25 @@ const read = (page) => page.evaluate(() => {
       && g[0].y + g[0].h > g[1].y && g[1].y + g[1].h > g[0].y);
     check('…and two on a page do not overlap', overlap, []);
     checkTrue('…and the batch is on the card', txt.some((t) => /Batch 252/.test(t)));
+    await page.close();
+  }
+
+  console.log('\nAnother nursery\u2019s claim form');
+  {
+    const page = await boot(browser, FIELD);
+    await pick(page, 'BNN');
+    const pdf = await page.evaluate(async () => {
+      window.__PDF = null;
+      await downloadTransplantPDF();
+      return { lines: window.__PDF.lines, images: window.__PDF.images };
+    });
+    const mapPages = new Set(pdf.lines.filter((l) => l.t === 'DRONE MAPS — TRANSPLANTING')
+                                      .map((l) => l.page));
+    const caps = pdf.lines.filter((l) => mapPages.has(l.page) && /^(B3|N3|N9)/.test(l.t))
+                          .map((l) => l.t);
+    check('BNN\u2019s claim carries BNN\u2019s map', caps, ['B3']);
+    check('…and one picture, not three', pdf.images.length, 1);
+    checkTrue('…which is B3\u2019s', /maps\/b3\.jpg/.test(pdf.images[0].src));
     await page.close();
   }
 
@@ -560,6 +583,7 @@ const read = (page) => page.evaluate(() => {
   console.log('\nA map that will not load');
   {
     const page = await boot(browser, FIELD);
+    await pick(page, 'UNN2');
     await page.route('https://files.test/**', (r) => r.abort());
     const pdf = await page.evaluate(async () => {
       window.__ALERT = null;
