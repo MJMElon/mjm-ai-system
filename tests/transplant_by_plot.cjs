@@ -62,7 +62,21 @@ async function boot(browser, field) {
 
   await page.addInitScript((seed) => {
     window.__DB = seed;
-    window.jspdf = { jsPDF: class { constructor() {} } };
+    /* A recording jsPDF. The real one is on a blocked CDN, and what is being
+       checked is what the form SAYS — every string it puts on the page, in
+       order, with the page it landed on. */
+    window.__PDF = null;
+    window.jspdf = { jsPDF: class {
+      constructor() { this.page = 1; this.lines = []; this.saved = null; window.__PDF = this; }
+      setFont() {} setFontSize(n) { this._s = n; } setTextColor() {}
+      setFillColor() {} setDrawColor() {} setLineWidth() {}
+      rect() {} line() {}
+      addPage() { this.page++; }
+      getTextWidth(t) { return String(t).length * (this._s || 9) * 0.5; }
+      splitTextToSize(t) { return [String(t)]; }
+      text(t, x, y) { this.lines.push({ t: String(t), x, y, page: this.page }); }
+      save(name) { this.saved = name; }
+    } };
     function makeQuery(table) {
       const st = { eqs: [], single: false };
       const rows = () => {
@@ -163,8 +177,8 @@ const read = (page) => page.evaluate(() => {
 
     checkTrue('the section is headed with the nursery and the month',
               t.head.includes('UNN2') && t.head.includes(MONTH));
-    check('the columns', t.cols,
-          ['No.', 'Plot', 'Batch', 'First worked', 'Jobs', 'Transplanted']);
+    check('the columns — the plot and the amount, and nothing else to read '
+        + 'past on the way to them', t.cols, ['No.', 'Plot', 'Transplanted']);
 
     check('three plots, in plot order', t.body.map((r) => r[1]), ['N3', 'N7', 'N9']);
     checkFalse('and not the other nursery’s',
@@ -172,14 +186,9 @@ const read = (page) => page.evaluate(() => {
 
     const n3 = t.body.find((r) => r[1] === 'N3');
     check('N3 IS ONE LINE, not four — its four jobs all carry the same figure',
-          n3[5], '6,685');
-    check('…and says how much of the plot is recorded', n3[4], '4 / 4');
-    check('…carrying its batch', n3[2], '252');
-    checkTrue('…and the day it was first worked', /0?3/.test(n3[3]));
-
-    const n7 = t.body.find((r) => r[1] === 'N7');
-    check('a plot with one job of four says so', n7[4], '1 / 4');
-    check('…and still carries its quantity', n7[5], '900');
+          n3[2], '6,685');
+    check('a plot with only one of its four jobs recorded still carries its '
+        + 'quantity', t.body.find((r) => r[1] === 'N7')[2], '900');
 
     console.log('\nThe total under it');
     checkTrue('the footer is the nursery and the month',
@@ -193,7 +202,7 @@ const read = (page) => page.evaluate(() => {
               /N9/.test(t.note) && /more than one figure/i.test(t.note));
     checkTrue('…with both figures', /1,200/.test(t.note) && /1,300/.test(t.note));
     check('…and the newest is the one counted',
-          t.body.find((r) => r[1] === 'N9')[5].replace(/[^0-9,]/g, ''), '1,300');
+          t.body.find((r) => r[1] === 'N9')[2].replace(/[^0-9,]/g, ''), '1,300');
     checkTrue('a plot that names nobody is named too',
               /N7/.test(t.note) && /on no claim line/i.test(t.note));
 
@@ -236,10 +245,75 @@ const read = (page) => page.evaluate(() => {
     await pick(page, 'UNN2');
     const t = await read(page);
     check('it is listed', t.body.map((r) => r[1]), ['N5']);
-    check('…with a dash rather than a nought', t.body[0][5], '—');
+    check('…with a dash rather than a nought', t.body[0][2], '—');
     check('…and adds nothing to the total', t.foot[0][1], '0');
     checkTrue('…which is said, not left to be noticed',
               /no quantity on the record/i.test(t.note));
+    await page.close();
+  }
+
+  console.log('\nThe summary on the downloaded claim form');
+  {
+    const page = await boot(browser, FIELD);
+    await pick(page, 'UNN2');
+    const pdf = await page.evaluate(() => {
+      downloadTransplantPDF();
+      const d = window.__PDF;
+      return d ? { lines: d.lines.map((l) => l.t), saved: d.saved,
+                   pages: d.page } : null;
+    });
+    checkTrue('a file is produced', !!(pdf && pdf.saved));
+    checkTrue('…named for the nursery and the month',
+              /Salary_Claim_Transplanting_UNN2/.test(pdf.saved) && pdf.saved.includes(MONTH.split(' ')[0]));
+    const txt = pdf.lines.join(' | ');
+    checkTrue('the claim form is still the claim form',
+              /SALARY CLAIM FORM/.test(txt) && /Grand Total/.test(txt));
+    checkTrue('AND THE PLOT SUMMARY IS ON IT',
+              /TRANSPLANTING BY PLOT/.test(txt));
+    checkTrue('…headed with the nursery and the month',
+              pdf.lines.some((l) => /TRANSPLANTING BY PLOT/.test(l)
+                                 && /UNN2/.test(l) && l.includes(MONTH)));
+    check('…its columns are the plot and the amount',
+          ['No.', 'Plot', 'Transplanted'].filter((c) => pdf.lines.includes(c)),
+          ['No.', 'Plot', 'Transplanted']);
+    checkFalse('…and not the ones that came off the screen',
+               pdf.lines.includes('Batch') || pdf.lines.includes('First worked')
+               || pdf.lines.includes('Jobs'));
+    checkTrue('every plot is on it',
+              ['N3', 'N7', 'N9'].every((p) => pdf.lines.includes(p)));
+    checkTrue('…with its amount', ['6,685', '900'].every((n) => pdf.lines.includes(n))
+                               && pdf.lines.some((l) => l.indexOf('1,300') === 0));
+    checkTrue('…and the nursery total under them',
+              pdf.lines.some((l) => /^TOTAL — /.test(l) && /UNN2/.test(l))
+              && pdf.lines.includes('8,885'));
+    checkTrue('the plot keyed against two figures is marked and explained',
+              pdf.lines.some((l) => /^\* N9/.test(l) && /more than one figure/.test(l)));
+    checkTrue('…and the one that names nobody',
+              pdf.lines.some((l) => /^N7 — names nobody/.test(l)));
+    await page.close();
+  }
+
+  console.log('\nA month whose records name nobody still downloads');
+  {
+    const page = await boot(browser, FIELD.filter((r) => r.nursery_name === 'UNN 2')
+      .map((r) => Object.assign({}, r, { workers: [] })));
+    await pick(page, 'UNN2');
+    const pdf = await page.evaluate(() => {
+      window.__ALERT = null;
+      const a = window.alert; window.alert = (m) => { window.__ALERT = m; };
+      downloadTransplantPDF();
+      window.alert = a;
+      const d = window.__PDF;
+      return { alert: window.__ALERT, lines: d ? d.lines.map((l) => l.t) : null,
+               saved: d ? d.saved : null };
+    });
+    check('it is not refused', pdf.alert, null);
+    checkTrue('a file is still produced', !!pdf.saved);
+    checkTrue('…saying the claim is empty and why',
+              pdf.lines.some((l) => /NOTHING TO CLAIM/.test(l) && /name nobody/.test(l)));
+    checkTrue('…and carrying the plots that were worked',
+              ['N3', 'N7', 'N9'].every((p) => pdf.lines.includes(p))
+              && pdf.lines.includes('8,885'));
     await page.close();
   }
 

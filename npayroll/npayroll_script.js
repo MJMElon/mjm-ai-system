@@ -1191,13 +1191,15 @@ function renderTransplantByPlot(secFilter) {
   }
 
   const total = rows.reduce((s, r) => s + (r.qty || 0), 0);
+  /* TWO ANSWERS PER LINE: which plot, and how many went into it. The batch,
+     the day it was first worked and how many of its four jobs are recorded
+     were all on this table and all came off again — they are on the FC
+     Portal's own screen, and what this one is read for is the column on the
+     right and the total under it. */
   const body = rows.map((r, i) => `
     <tr>
       <td style="color:var(--text-faint);width:44px;">${i + 1}</td>
       <td class="l" style="font-weight:800;color:var(--text-head);">${esc(r.plot)}</td>
-      <td class="l">${r.batches.length ? esc(r.batches.join(', ')) : '—'}</td>
-      <td>${r.from ? fmtDay(r.from) : '—'}</td>
-      <td>${r.jobs} / ${TRANSPLANT_JOBS.length}</td>
       <td style="font-weight:800;${r.qty == null ? 'color:var(--text-faint);' : ''}">${
         r.qty == null ? '—' : num(r.qty)}${
         r.disagrees ? ' <span title="This plot’s jobs were keyed against different figures"'
@@ -1207,19 +1209,12 @@ function renderTransplantByPlot(secFilter) {
   table.innerHTML = `
     <thead><tr>
       <th style="width:44px;">No.</th>
-      <th class="l" style="width:120px;">Plot</th>
-      <!-- The batch takes the slack: a plot is "N3" and a plot with five
-           batches in it is "252, 253, 254, 257, 259". -->
-      <th class="l">Batch</th>
-      <th style="width:110px;">First worked</th>
-      <!-- How much of the plot is recorded. A plot at 1/4 is work still to
-           come, not a short month. -->
-      <th style="width:90px;">Jobs</th>
-      <th style="width:140px;">Transplanted</th>
+      <th class="l">Plot</th>
+      <th style="width:180px;">Transplanted</th>
     </tr></thead>
     <tbody>${body}</tbody>
     <tfoot><tr>
-      <td class="l" colspan="5">TOTAL — ${esc(secName(secFilter))} · ${esc(monthLabel(monthValue()))}</td>
+      <td class="l" colspan="2">TOTAL — ${esc(secName(secFilter))} · ${esc(monthLabel(monthValue()))}</td>
       <td>${num(total)}</td>
     </tr></tfoot>`;
 
@@ -2516,7 +2511,18 @@ function downloadTransplantPDF() {
   const lines = transplantFieldLines().filter(l => !sec || inSection(sec, l.section));
   const names = [...new Set(lines.filter(l => l.known).map(l => l.worker_name))]
     .sort((a, b) => a.localeCompare(b));
-  if (!names.length) { alert('Nothing to claim for this nursery this month.'); return; }
+  /* The same table the screen opens with: what was transplanted, plot by
+     plot, and the nursery's total. It travels with the claim because the
+     claim cannot answer it — a plot carries the same figure on all four of
+     its jobs, so adding the claim's lines reports the nursery at four times
+     its size. */
+  const plotRows = transplantPlotRows(sec);
+  /* Nothing to claim AND nothing recorded is nothing to print. Records with
+     nobody credited still print: the plot summary is the only page they ever
+     appear on, and it is exactly the month somebody is looking for them. */
+  if (!names.length && !plotRows.length) {
+    alert('Nothing recorded for this nursery this month.'); return;
+  }
 
   /* Same fallback the screen uses: a nursery can have records this form shows
      no line for, and Total Workdone still has to price them. */
@@ -2628,9 +2634,103 @@ function downloadTransplantPDF() {
              25, y + 6, { maxWidth: 160 });
     y += 8;
   }
+  /* A claim with no names on it is not a quiet month — it is work recorded
+     with nobody credited, and the form has to say which it is or it reads as
+     a nursery that did nothing. */
+  if (!names.length) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(150, 30, 30);
+    doc.text('NOTHING TO CLAIM — the records for this nursery name nobody. '
+           + 'The work is on the plot summary overleaf; add who did it in the FC Portal.',
+             25, y + 6, { maxWidth: 160 });
+    y += 10;
+  }
+
+  y = drawTransplantPlots(doc, y, plotRows, secTxt, monthTxt);
 
   pdfFooterNote(doc, y);
   doc.save(`Salary_Claim_Transplanting_${sec === NO_SECTION ? 'No_Section' : (sec || 'All')}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
+}
+
+/* THE PLOT SUMMARY, ON THE CLAIM FORM.
+
+   One line per plot and the nursery's total, printed under the claim — or on
+   a page of its own where the claim has filled this one. Same figures and
+   same rule as the table on screen: each plot counted ONCE, from its newest
+   record, because its four jobs all carry the one figure.
+
+   Returns the y it finished at, so the footer note goes under it. */
+function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
+  if (!rows || !rows.length) return y;
+
+  // No. · Plot · Transplanted — 160mm across, the same width as the claim
+  // above it. The same three columns the screen shows.
+  const COL = [14, 106, 40];
+  const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, 25);
+  const HF = [232, 236, 252], TF = [222, 228, 250];
+  const BOTTOM = 297 - 25 - 30;
+  const RH = 8;
+
+  const heading = () => {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
+    doc.text(`TRANSPLANTING BY PLOT — ${secTxt} · ${monthTxt}`, 25, y + 6);
+    y += 9;
+    const H = 9;
+    ['No.', 'Plot', 'Transplanted'].forEach((t, i) => {
+      pdfCell(doc, X[i], y, COL[i], H, t, { bold: true, size: 7.5, nowrap: true, fill: HF });
+    });
+    y += H;
+  };
+
+  // Started on this page where a few lines fit, on the next where they do not.
+  if (y + 9 + 9 + RH * 2 > BOTTOM) { doc.addPage(); y = 25; }
+  else y += 4;
+  heading();
+
+  rows.forEach((r, i) => {
+    if (y + RH > BOTTOM) { doc.addPage(); y = 25; heading(); }
+    const z = i % 2 ? [250, 250, 253] : null;
+    const cells = [
+      String(i + 1),
+      r.plot,
+      (r.qty == null ? '—' : num(r.qty)) + (r.disagrees ? ' *' : '')
+    ];
+    cells.forEach((t, c) => pdfCell(doc, X[c], y, COL[c], RH, t,
+      { size: 8.5, nowrap: true, bold: c > 0, fill: z }));
+    y += RH;
+  });
+
+  const total = rows.reduce((s, r) => s + (r.qty || 0), 0);
+  pdfCell(doc, X[0], y, COL[0] + COL[1], RH + 1,
+          `TOTAL — ${secTxt} · ${monthTxt}`, { bold: true, size: 8.5, fill: TF });
+  pdfCell(doc, X[2], y, COL[2], RH + 1, num(total), { bold: true, size: 9, nowrap: true, fill: TF });
+  y += RH + 1;
+
+  /* The same three things the screen says, printed — the form is what goes
+     for payment, and a figure somebody has to trust must carry what is
+     doubtful about it. */
+  const say = (txt) => {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(150, 30, 30);
+    doc.text(txt, 25, y + 5, { maxWidth: 160 });
+    y += 4 + Math.ceil(doc.getTextWidth(txt) / 160) * 4;
+  };
+  const moved = rows.filter(r => r.disagrees);
+  if (moved.length) {
+    say('* ' + moved.map(r => `${r.plot} (${r.disagrees.map(n => num(n)).join(' and ')})`).join(', ')
+      + ' — keyed against more than one figure. The newest is counted here; '
+      + 'the jobs keyed on the old one are still paying it.');
+  }
+  const noQty = rows.filter(r => r.qty == null);
+  if (noQty.length) {
+    say(noQty.map(r => r.plot).join(', ') + ' — no quantity on the record, so '
+      + 'nothing is added to the total.');
+  }
+  const noCrew = rows.filter(r => !r.crew);
+  if (noCrew.length) {
+    say(noCrew.map(r => r.plot).join(', ') + ' — names nobody, so on this summary '
+      + 'but on no claim line above.');
+  }
+  doc.setTextColor(0, 0, 0);
+  return y;
 }
 
 function downloadMonthlyPDF() {
