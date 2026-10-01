@@ -3188,12 +3188,14 @@ function autoSyncRecords() {
         const pStick = c.P_sticker && c.P_sticker !== '—' ? ` + ${c.P_sticker} ${c.P_sticker_dose}${c.P_sticker_unit}` : '';
         newRecs.push({id:id++, tarikh:'-', jenis:'Penyemburan racun kulat dan serangga',
           racun:`Round ${w[1]}: ${c.P} ${c.P_dose}${c.P_unit}${pStick}`,
+          _src:`pd|${w}|P|${plot}`,
           plot, batch:'', qty:null, carlos:0, gaia:0, remark:''});
       }
       if (s.pd[w]?.[plot]?.D && c.D!=='—') {
         const dStick = c.D_sticker && c.D_sticker !== '—' ? ` + ${c.D_sticker} ${c.D_sticker_dose}${c.D_sticker_unit}` : '';
         newRecs.push({id:id++, tarikh:'-', jenis:'Penyemburan racun kulat dan serangga',
           racun:`Round ${w[1]}: ${c.D} ${c.D_dose}${c.D_unit}${dStick}`,
+          _src:`pd|${w}|D|${plot}`,
           plot, batch:'', qty:null, carlos:0, gaia:0, remark:''});
       }
     });
@@ -3203,6 +3205,7 @@ function autoSyncRecords() {
       plots.filter(p=>s.manuring[p]?.[ri]?.[ci]).forEach(plot => {
         newRecs.push({id:id++, tarikh:'-', jenis:'Membaja',
           racun:`Round ${ri+1}: ${c.name} ${c.dose}${c.unit}`,
+          _src:`mn|${ri}|${ci}|${plot}`,
           plot, batch:'', qty:null, carlos:0, gaia:0, remark:''});
       });
     });
@@ -3211,6 +3214,7 @@ function autoSyncRecords() {
     plots.filter(p=>s.weeding[p]?.[r]).forEach(plot=>{
       newRecs.push({id:id++, tarikh:'-', jenis:'Merumput',
         racun:`Round ${r[1]}: Merumput dalam polibeg`,
+        _src:`wd|${r}|${plot}`,
         plot, batch:'', qty:null, carlos:0, gaia:0, remark:''});
     });
   });
@@ -3219,21 +3223,70 @@ function autoSyncRecords() {
       plots.filter(p=>s.interrow[p]?.[ri]?.[ci]).forEach(plot=>{
         newRecs.push({id:id++, tarikh:'-', jenis:'Meracun rumput secara selingan',
           racun:`Round ${ri+1}: ${c.chem} ${c.chem_dose}${c.chem_unit} + ${interrowAct(c)} ${c.activator_dose}${c.activator_unit}`,
+          _src:`ir|${ri}|${ci}|${plot}`,
           plot, batch:'', qty:null, carlos:0, gaia:0, remark:''});
       });
     });
   });
 
-  // Merge: keep existing records that have been filled in (tarikh/batch/carlos/gaia),
-  // add new ones that don't exist yet
+  /* ── MERGING THE SCHEDULE INTO THE LIST ────────────────────────────────
+     This used to be `records = the schedule's rows`, which destroyed two
+     things every time it ran:
+
+       · a row somebody ADDED by hand was not among the schedule's rows, so
+         it was thrown away — B3-R and B4-R vanished between one page load
+         and the next, with nothing said
+       · a row somebody EDITED no longer matched by chemical, so the edit was
+         thrown away and the schedule's original put back beside it
+
+     Both because the only thing tying a row to the schedule was the CHEMICAL
+     TEXT, which is the one part of it a person changes. So a generated row
+     now carries the SLOT it came from — the program, the round, the plot —
+     which nothing on this screen can edit. Then:
+
+       · a row holding a slot the schedule still ticks is kept, with
+         everything in it, and only its chemical brought up to date
+       · a row holding a slot the schedule no longer ticks goes, which is
+         what unticking it (or Del) means
+       · a row holding NO slot is somebody's own and is never touched
+
+     Rows saved before slots existed are adopted on the first pass by the old
+     chemical match, so nothing is duplicated the once. */
   const existingKey = r => `${r.jenis}||${r.racun}||${r.plot}`;
-  const existingMap = {};
-  records.filter(r => NURSERY_PLOTS[n].includes(r.plot)).forEach(r => {
-    existingMap[existingKey(r)] = r;
+  const mine  = records.filter(r => NURSERY_PLOTS[n].includes(r.plot));
+  const other = records.filter(r => !NURSERY_PLOTS[n].includes(r.plot));
+
+  const bySrc = new Map(), byKey = new Map();
+  mine.forEach(r => {
+    if (r._src) { if (!bySrc.has(r._src)) bySrc.set(r._src, r); }
+    else if (!byKey.has(existingKey(r))) byKey.set(existingKey(r), r);
   });
-  const otherNurseryRecs = records.filter(r => !NURSERY_PLOTS[n].includes(r.plot));
-  const merged = newRecs.map(r => existingMap[existingKey(r)] || r);
-  records = [...otherNurseryRecs, ...merged];
+
+  const claimed = new Set();
+  const merged = newRecs.map(fresh => {
+    let row = bySrc.get(fresh._src);
+    if (!row) {
+      // Saved before slots existed: adopt it rather than duplicating it.
+      row = byKey.get(existingKey(fresh));
+      if (row && row._src) row = null;
+    }
+    if (!row) return fresh;
+    claimed.add(row);
+    row._src = fresh._src;
+    row.jenis = fresh.jenis;
+    /* The schedule owns the chemical of a job it plans — a round renamed
+       there renames the row rather than leaving the old one and adding the
+       new one beside it. UNLESS somebody typed over it here, in which case
+       their answer is the later one and it stands. */
+    if (!row._racunByHand) row.racun = fresh.racun;
+    return row;
+  });
+
+  /* Everything of this nursery the schedule did not claim. A row with a slot
+     has lost its tick and goes; a row without one was never the schedule's
+     to take away. */
+  const kept = mine.filter(r => !claimed.has(r) && !r._src);
+  records = [...other, ...merged, ...kept];
   // Fill the date and batch of anything the field has already reported.
   try { applyFieldRecords(n, m); } catch (e) { console.warn('[maint] field sync failed:', e); }
   renderRecords();
@@ -5199,7 +5252,13 @@ function saveRec(){
   if(editRecId){
     const i=records.findIndex(r=>r.id===editRecId);
     if(_recLocked(records[i])) { closeRecModal(); return _denyLocked(); }
+    /* Typing over the chemical of a scheduled row is the person disagreeing
+       with the schedule about this one plot. Marked, so the next sync leaves
+       it alone instead of putting the schedule's wording back. */
+    const byHand = records[i]._racunByHand
+      || (records[i]._src && String(obj.racun || '') !== String(records[i].racun || ''));
     records[i]={...records[i],...obj};
+    if (byHand) records[i]._racunByHand = 1;
   }
   else records.push({id:Date.now(),...obj});
   closeRecModal(); renderRecords(); persistRecords();

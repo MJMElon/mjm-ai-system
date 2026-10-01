@@ -33,7 +33,12 @@ async function boot(browser) {
   await page.addInitScript(() => {
     try { localStorage.setItem('mjm_maint_nursery', 'BNN');
           localStorage.removeItem('mjm_maint_month'); } catch (_) {}
-    window.__DB = { nops_maint_records: [{ id: 1, records: [] }] };
+    /* A saved blob, so the page's own demo seed is replaced. One row, on a
+       plot no nursery claims, so it is never drawn and never in the way. */
+    window.__DB = { nops_maint_records: [{ id: 1, records: [
+      { id: 1, tarikh: '-', jenis: 'Merumput', racun: 'offstage', plot: 'ZZ',
+        batch: '', qty: null, carlos: 0, gaia: 0, remark: '' }
+    ] }] };
     window.__WRITES = [];
     window.Chart = class { constructor() {} update() {} destroy() {} resize() {} };
     function makeQuery(table) {
@@ -239,6 +244,95 @@ const ticked = (page, plot) => page.evaluate((p) => {
     await page.evaluate(() => autoSyncRecords());
     await page.waitForTimeout(120);
     check('…so B2’s row survives the next sync', (await rows(page)).length, 1);
+    await page.close();
+  }
+
+  console.log('\nA record somebody added by hand');
+  {
+    /* It used to be thrown away: the sync replaced the nursery's rows with
+       the schedule's, and a row nobody scheduled was not among them. B3-R and
+       B4-R vanished between one page load and the next. */
+    const { page } = await boot(browser);
+    await planAndSync(page, 'B1', 'Antracol');
+    await page.evaluate(() => {
+      openRecModal();
+      const set = (id, v) => { const el = document.getElementById(id);
+                               el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); };
+      set('rf-tarikh', ''); set('rf-jenis', 'Merumput');
+      set('rf-racun', 'Keyed by hand'); set('rf-plot', 'B3');
+      set('rf-batch', '268'); set('rf-qty', '4755');
+      saveRec();
+    });
+    await page.waitForTimeout(120);
+    checkTrue('it is on the list', (await rows(page)).includes('Keyed by hand'));
+
+    await page.evaluate(() => autoSyncRecords());
+    await page.waitForTimeout(120);
+    checkTrue('IT IS STILL THERE AFTER A SYNC', (await rows(page)).includes('Keyed by hand'));
+    const kept = await page.evaluate(() => {
+      const r = [...document.querySelectorAll('#rec-body tr')]
+        .find((tr) => tr.children.length > 3 && /Keyed by hand/.test(tr.textContent));
+      return r ? [...r.children].slice(3, 6).map((td) => td.textContent.replace(/\s+/g, ' ').trim()) : null;
+    });
+    check('…with what was keyed into it', kept, ['B3', '268', '4,755']);
+    await page.close();
+  }
+
+  console.log('\nA chemical changed by hand');
+  {
+    const { page } = await boot(browser);
+    await planAndSync(page, 'B1', 'Antracol');
+    await page.evaluate(() => {
+      const r = [...document.querySelectorAll('#rec-body tr')]
+        .find((tr) => tr.children.length > 3 && /Antracol/.test(tr.textContent));
+      r.querySelector('.btn:not(.btn-danger):not(.btn-check)').click();
+      document.getElementById('rf-racun').value = 'Round 3: Monex 200mL + Activator 15mL';
+      saveRec();
+    });
+    await page.waitForTimeout(120);
+    check('the change is on the list', await rows(page),
+          ['Round 3: Monex 200mL + Activator 15mL']);
+
+    await page.evaluate(() => autoSyncRecords());
+    await page.waitForTimeout(120);
+    check('IT IS STILL THE CHANGE AFTER A SYNC — and the schedule\u2019s wording '
+        + 'is not put back beside it', await rows(page),
+          ['Round 3: Monex 200mL + Activator 15mL']);
+    await page.close();
+  }
+
+  console.log('\nA chemical changed on the SCHEDULE');
+  {
+    const { page } = await boot(browser);
+    await planAndSync(page, 'B1', 'Antracol');
+    await planAndSync(page, 'B1', 'Becker');
+    const r = await rows(page);
+    check('the row follows the schedule…', r, ['Round 1: Becker 50gm']);
+    checkFalse('…and the old chemical is not left beside it',
+               r.some((x) => /Antracol/.test(x)));
+    await page.close();
+  }
+
+  console.log('\nWhat was filled in survives the schedule changing');
+  {
+    const { page } = await boot(browser);
+    await planAndSync(page, 'B1', 'Antracol');
+    await page.evaluate(() => {
+      const row = [...document.querySelectorAll('#rec-body tr')]
+        .find((tr) => tr.children.length > 3 && /Antracol/.test(tr.textContent));
+      row.querySelector('.btn:not(.btn-danger):not(.btn-check)').click();
+      document.getElementById('rf-batch').value = '268';
+      document.getElementById('rf-qty').value = '4755';
+      saveRec();
+    });
+    await page.waitForTimeout(120);
+    await planAndSync(page, 'B1', 'Becker');
+    const cells = await page.evaluate(() => {
+      const r = [...document.querySelectorAll('#rec-body tr')]
+        .find((tr) => tr.children.length > 3 && /Becker/.test(tr.textContent));
+      return r ? [...r.children].slice(3, 6).map((td) => td.textContent.replace(/\s+/g, ' ').trim()) : null;
+    });
+    check('the batch and the quantity are still on the row', cells, ['B1', '268', '4,755']);
     await page.close();
   }
 
