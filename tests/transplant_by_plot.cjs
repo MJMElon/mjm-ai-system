@@ -202,8 +202,8 @@ const read = (page) => page.evaluate(() => {
 
     checkTrue('the section is headed with the nursery and the month',
               t.head.includes('UNN2') && t.head.includes(MONTH));
-    check('the columns — the plot, its map and the amount',
-          t.cols, ['No.', 'Plot', 'Drone Map', 'Transplanted']);
+    check('the columns — the plot, its batches, their maps and the amount',
+          t.cols, ['No.', 'Plot', 'Batch', 'Drone Map', 'Transplanted']);
 
     check('three plots, in plot order', t.body.map((r) => r[1]), ['N3', 'N7', 'N9']);
     checkFalse('and not the other nursery’s',
@@ -211,9 +211,9 @@ const read = (page) => page.evaluate(() => {
 
     const n3 = t.body.find((r) => r[1] === 'N3');
     check('N3 IS ONE LINE, not four — its four jobs all carry the same figure',
-          n3[3], '6,685');
+          n3[4], '6,685');
     check('a plot with only one of its four jobs recorded still carries its '
-        + 'quantity', t.body.find((r) => r[1] === 'N7')[3], '900');
+        + 'quantity', t.body.find((r) => r[1] === 'N7')[4], '900');
 
     console.log('\nThe total under it');
     checkTrue('the footer is the nursery and the month',
@@ -227,7 +227,7 @@ const read = (page) => page.evaluate(() => {
               /N9/.test(t.note) && /more than one figure/i.test(t.note));
     checkTrue('…with both figures', /1,200/.test(t.note) && /1,300/.test(t.note));
     check('…and the newest is the one counted',
-          t.body.find((r) => r[1] === 'N9')[3].replace(/[^0-9,]/g, ''), '1,300');
+          t.body.find((r) => r[1] === 'N9')[4].replace(/[^0-9,]/g, ''), '1,300');
     checkTrue('a plot that names nobody is named too',
               /N7/.test(t.note) && /on no claim line/i.test(t.note));
 
@@ -270,7 +270,7 @@ const read = (page) => page.evaluate(() => {
     await pick(page, 'UNN2');
     const t = await read(page);
     check('it is listed', t.body.map((r) => r[1]), ['N5']);
-    check('…with a dash rather than a nought', t.body[0][3], '—');
+    check('…with a dash rather than a nought', t.body[0][4], '—');
     check('…and adds nothing to the total', t.foot[0][1], '0');
     checkTrue('…which is said, not left to be noticed',
               /no quantity on the record/i.test(t.note));
@@ -349,11 +349,14 @@ const read = (page) => page.evaluate(() => {
     const maps = await page.$$eval('#transpl-plots-table tbody tr', (trs) =>
       trs.map((tr) => ({
         plot: (tr.children[1].textContent || '').trim(),
-        links: [...tr.children[2].querySelectorAll('a.tp-map')].map((a) => ({
+        batch: (tr.children[2].textContent || '').trim(),
+        links: [...tr.children[3].querySelectorAll('a.tp-map')].map((a) => ({
           href: a.getAttribute('href'), pdf: a.classList.contains('is-pdf'),
           tab: a.getAttribute('target'), title: a.title,
           bg: a.getAttribute('style') || '' })),
-        txt: (tr.children[2].textContent || '').trim()
+        labels: [...tr.children[3].querySelectorAll('.tp-map-b')].map((e) => e.textContent.trim()),
+        none: tr.children[3].querySelectorAll('.tp-map.is-none').length,
+        txt: (tr.children[3].textContent || '').replace(/\s+/g, ' ').trim()
       })));
 
     const n3 = maps.find((m) => m.plot === 'N3');
@@ -370,9 +373,16 @@ const read = (page) => page.evaluate(() => {
     checkTrue('a map that is a PDF cannot be a thumbnail, so it is a document',
               n9.links.length === 1 && n9.links[0].pdf && /\u{1F4C4}/u.test(n9.txt));
 
+    check('the batch is on the row, because the map is per batch',
+          n3.batch, '252');
+    check('…and the thumbnail is labelled with it', n3.labels, ['252']);
+
+    checkTrue('…and a map from another batch years ago is NOT on this month\u2019s '
+            + 'row', !maps.some((m) => m.links.some((l) => /old\.jpg/.test(l.href))));
+
     const n7 = maps.find((m) => m.plot === 'N7');
-    check('a plot nobody flew says so rather than offering nothing',
-          [n7.links.length, n7.txt], [0, '—']);
+    check('a batch nobody flew keeps its place, greyed, rather than leaving a '
+        + 'gap that names nothing', [n7.links.length, n7.none, n7.labels], [0, 1, ['253']]);
     await page.close();
   }
 
@@ -454,7 +464,7 @@ const read = (page) => page.evaluate(() => {
     await pick(page, 'BNN');
     const rows = await page.$$eval('#transpl-plots-table tbody tr', (trs) =>
       trs.map((tr) => ({ plot: (tr.children[1].textContent || '').trim(),
-                         n: tr.children[2].querySelectorAll('a.tp-map').length })));
+                         n: tr.children[3].querySelectorAll('a.tp-map').length })));
     check('…while on the table each plot still shows it on its own row',
           rows.map((r) => [r.plot, r.n]), [['B3', 1], ['B4', 1]]);
     await page.close();

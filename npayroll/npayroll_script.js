@@ -1381,19 +1381,52 @@ function mapsForPlot(plot, batches) {
 
 const _isPdfUrl = (u) => /\.pdf(\?|$)/i.test(String(u || ''));
 
+/* ONE BATCH, ONE MAP. A plot filled from two batches was flown twice and has
+   two maps, and which is which is the batch — so the row carries one
+   thumbnail per batch, each labelled with it.
+
+   A batch with no map keeps its place, greyed, saying so. The gap is the
+   useful part: it names the batch whose flight is missing, which an absent
+   thumbnail cannot. */
+function mapsByBatch(plot, batches) {
+  const all = transplantMaps[_tpKey(plot)] || [];
+  const want = (batches || []).map(b => String(b).trim()).filter(Boolean);
+  const out = [];
+  if (want.length) {
+    want.forEach(b => {
+      const m = all.find(x => _tpKey(x.batch) === _tpKey(b));
+      out.push({ batch: b, url: m ? m.url : '', date: m ? m.date : '' });
+    });
+    /* One per batch the record names, and NOTHING ELSE. A plot is re-used
+       over the years and carries every map ever flown over it; the ones
+       belonging to other batches are other months' work, and putting them
+       here is the table answering a question nobody asked of it. */
+    return out;
+  }
+  // No batch on the record: whatever the plot has, newest first.
+  return all.slice();
+}
+
 /* One plot's maps, as something to open. A new tab rather than a box on this
    page: that is what prints, which is half of what the map is wanted for. */
 function mapCellHtml(plot, batches) {
-  const maps = mapsForPlot(plot, batches);
+  const maps = mapsByBatch(plot, batches);
   if (!maps.length) return '<span style="color:var(--text-faint);">—</span>';
-  return maps.map(m => {
+  return `<span class="tp-maps">` + maps.map(m => {
+    const label = m.batch ? esc(m.batch) : '—';
+    if (!m.url) {
+      return `<span class="tp-map-w"><span class="tp-map is-none"
+        title="No drone map on this batch\u2019s transplanting record">\u2014</span>
+        <span class="tp-map-b">${label}</span></span>`;
+    }
     const pdf = _isPdfUrl(m.url);
     const tip = ['Drone map', plot, m.batch ? 'batch ' + m.batch : '', m.date]
       .filter(Boolean).join(' \u00b7 ');
-    return `<a class="tp-map${pdf ? ' is-pdf' : ''}" href="${esc(m.url)}"
+    return `<span class="tp-map-w"><a class="tp-map${pdf ? ' is-pdf' : ''}" href="${esc(m.url)}"
       target="_blank" rel="noopener" title="${esc(tip)} — opens in a new tab, where it prints"
-      ${pdf ? '' : `style="background-image:url('${esc(m.url)}')"`}>${pdf ? '\u{1F4C4}' : ''}</a>`;
-  }).join('');
+      ${pdf ? '' : `style="background-image:url('${esc(m.url)}')"`}>${pdf ? '\u{1F4C4}' : ''}</a>
+      <span class="tp-map-b">${label}</span></span>`;
+  }).join('') + `</span>`;
 }
 
 /* ── THE MAPS, PRINTED ──────────────────────────────────────────────────
@@ -1613,7 +1646,7 @@ function renderTransplantByPlot(secFilter) {
   }
 
   if (!rows.length) {
-    table.innerHTML = `<tbody><tr><td class="empty" colspan="4">
+    table.innerHTML = `<tbody><tr><td class="empty" colspan="5">
       Nothing transplanted in ${esc(secName(secFilter))} for ${esc(monthLabel(monthValue()))}.
     </td></tr></tbody>`;
     $('transpl-plots-note').textContent = '';
@@ -1630,6 +1663,7 @@ function renderTransplantByPlot(secFilter) {
     <tr>
       <td style="color:var(--text-faint);width:44px;">${i + 1}</td>
       <td class="l" style="font-weight:800;color:var(--text-head);">${esc(r.plot)}</td>
+      <td class="l">${r.batches.length ? esc(r.batches.join(', ')) : '—'}</td>
       <td style="white-space:nowrap;">${mapCellHtml(r.plot, r.batches)}</td>
       <td style="font-weight:800;${r.qty == null ? 'color:var(--text-faint);' : ''}">${
         r.qty == null ? '—' : num(r.qty)}${
@@ -1641,15 +1675,19 @@ function renderTransplantByPlot(secFilter) {
     <thead><tr>
       <th style="width:44px;">No.</th>
       <th class="l">Plot</th>
+      <!-- Back on the table, because the MAP is per batch: a plot filled from
+           two batches was flown twice, and the batch is what tells the two
+           pictures apart. -->
+      <th class="l" style="width:130px;">Batch</th>
       <!-- What was flown over the plot when it was filled. The claim is
            paying for that work; the evidence of it should not be two
            systems away. -->
-      <th style="width:120px;">Drone Map</th>
+      <th style="width:150px;">Drone Map</th>
       <th style="width:180px;">Transplanted</th>
     </tr></thead>
     <tbody>${body}</tbody>
     <tfoot><tr>
-      <td class="l" colspan="3">TOTAL — ${esc(secName(secFilter))} · ${esc(monthLabel(monthValue()))}</td>
+      <td class="l" colspan="4">TOTAL — ${esc(secName(secFilter))} · ${esc(monthLabel(monthValue()))}</td>
       <td>${num(total)}</td>
     </tr></tfoot>`;
 
