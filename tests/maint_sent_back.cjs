@@ -203,6 +203,10 @@ async function boot(opts) {
     const b = document.getElementById('rej-body');
     return b && b.children.length > 0;
   }, { timeout: 20000 });
+  // The page lands on the Schedule tab; the list being tested is behind
+  // Work Record, so go there the way a person does.
+  await page.click('.pn-tab[onclick*="\'record\'"]');
+  await page.waitForSelector('#recview-list', { state: 'visible', timeout: 10000 });
   return { page, dialogs };
 }
 
@@ -259,12 +263,36 @@ const recText = (page) => page.evaluate(() =>
     checkTrue('Edit is offered', /Edit/i.test(btns));
     checkTrue('…and Del', /Del/i.test(btns));
 
+    const secs = await page.evaluate(() => ({
+      approvedOpen: document.getElementById('recsec-approved').classList.contains('active'),
+      rejectedOpen: document.getElementById('recsec-rejected').classList.contains('active'),
+      tabs: [...document.querySelectorAll('#recview-list > .subtabs-bar .subtab-btn')]
+              .map((b) => (b.textContent || '').replace(/\s+/g, ' ').trim())
+    }));
+    check('the list has two sections, named on their own tabs',
+          secs.tabs, ['✓ Approved', '⛔ Rejected 1']);
+    checkTrue('…and opens on the approved one', secs.approvedOpen);
+    checkFalse('…with the sent-back one behind its tab, not stacked below',
+               secs.rejectedOpen);
+
     const badge = await page.evaluate(() => {
       const el = document.getElementById('rej-count');
-      return { text: (el.textContent || '').trim(), shown: el.style.display !== 'none' };
+      return { text: (el.textContent || '').trim(), shown: el.style.display !== 'none',
+               onTab: !!el.closest('#recsec-btn-rejected'),
+               tip: document.getElementById('recsec-btn-rejected').title };
     });
-    checkTrue('the heading says how many were sent back', /1 sent back/.test(badge.text));
-    checkTrue('…and the badge is showing', badge.shown);
+    check('the count is on the tab, so a refusal is seen from the other section',
+          [badge.text, badge.onTab, badge.shown], ['1', true, true]);
+    checkTrue('…and says what it is on hover', /1 sent back/.test(badge.tip));
+
+    await page.click('#recsec-btn-rejected');
+    const opened = await page.evaluate(() => ({
+      approved: document.getElementById('recsec-approved').classList.contains('active'),
+      rejected: document.getElementById('recsec-rejected').classList.contains('active'),
+      rowsVisible: document.getElementById('rej-body').offsetParent !== null
+    }));
+    check('the tab opens the sent-back section and closes the other',
+          [opened.rejected, opened.approved, opened.rowsVisible], [true, false, true]);
 
     checkTrue('the other nursery’s record is NOT on this screen',
               !(await page.evaluate(() => document.getElementById('rej-body').textContent)).includes('Wrong plot'));

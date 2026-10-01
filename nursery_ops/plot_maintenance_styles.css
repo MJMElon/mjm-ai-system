@@ -239,29 +239,29 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
    thing this table has just been straightened out of. */
 .rec-table tbody td .date-multi{white-space:normal;cursor:help;
   text-decoration:underline dotted var(--green-mid);text-underline-offset:3px;}
-/* ── THE TWO PARTS OF THE WORK MAINTENANCE LIST ──────────────────────────
-   Approved work above, sent back below. A heading each, because two tables
-   with the same columns and different buttons under one title is a screen
-   nobody can read the second half of.
+/* ── THE TWO SECTIONS OF THE WORK MAINTENANCE LIST ───────────────────────
+   Approved work and what was sent back, one at a time behind their own pair
+   of tabs. Not stacked: the sent-back part would sit below a table that is
+   often a hundred rows long, which is a place nobody scrolls to — and the
+   two have different buttons, so reading them as one table is the mistake
+   the layout should not invite.
 
-   The headings are plain rows of text rather than cards: they sit directly
-   on the page background between two cards, so a box around them would be a
-   third box in a stack of boxes. */
-.rec-part-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;
-  margin:0 0 10px;font-size:13px;font-weight:800;color:var(--text-head);
-  letter-spacing:.02em;}
-.rec-part-ico{display:inline-flex;align-items:center;justify-content:center;
-  width:22px;height:22px;border-radius:6px;font-size:12px;line-height:1;flex:0 0 auto;}
-.rec-part-ico.ok{background:var(--green-light);color:var(--green-text);}
-.rec-part-ico.bad{background:#fdeaea;color:#a83020;}
+   Same mechanics as .recview above, which is the List / Analytics pair this
+   sits inside. A line of grey under the tabs says what the open section is;
+   it is the caption, not a heading, because the tab already names it. */
+.recsec{display:none;animation:fadein .18s ease;min-width:0;width:100%;max-width:100%;}
+.recsec.active{display:block;}
 .rec-part-sub{font-size:11px;font-weight:600;color:var(--text-faint);
-  letter-spacing:0;text-transform:none;}
-/* How many were sent back, beside the heading — the one number somebody
-   scanning the page is looking for. Hidden when it is zero: a "0" badge is a
-   thing to read that says nothing happened. */
-.rec-part-count{font-size:10.5px;font-weight:800;letter-spacing:.06em;
-  text-transform:uppercase;color:#a83020;background:#fdeaea;
-  border:1.5px solid #f3c9c9;border-radius:999px;padding:2px 9px;}
+  letter-spacing:0;text-transform:none;line-height:1.45;}
+/* How many were sent back, ON THE TAB — so a refusal is visible from the
+   approved section without having to go and look. Hidden when it is zero: a
+   "0" badge is a thing to read that says nothing happened. */
+.rec-part-count{display:inline-block;margin-left:7px;font-size:10px;font-weight:800;
+  letter-spacing:.04em;color:#a83020;background:#fdeaea;
+  border:1.5px solid #f3c9c9;border-radius:999px;padding:1px 7px;vertical-align:1px;}
+/* On the open tab the badge sits on green, where a pale red pill disappears. */
+.subtab-btn.active .rec-part-count{color:#fff;background:rgba(255,255,255,.22);
+  border-color:rgba(255,255,255,.45);}
 /* The sent-back table carries a NAME in its ninth column where the one above
    carries the Audit verdict, so it opts out of that column's nowrap — a
    conductor with three names is two lines, not a spill across the buttons. */

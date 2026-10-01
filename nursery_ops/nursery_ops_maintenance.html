@@ -104,7 +104,33 @@
         <button class="subtab-btn"        id="subtab-chart" onclick="switchRecordView('chart',this)">📊 Analytics</button>
       </div>
       <div id="recview-list" class="recview active">
-      <!-- WORK RECORD -->
+      <!-- WORK RECORD —————————————————————————————————————————————
+           TWO SECTIONS, ONE AT A TIME.
+
+           A Field Conductor going through the morning's submissions in the
+           Verify Hub gives one of two answers, and until now this page only
+           ever saw one of them. Approved work flows into the schedule — it
+           fills in the date, the batches, the quantity and the walk on the
+           row it belongs to. A record sent back went nowhere at all:
+           loadFieldRecords reads verified rows and nothing else, so the
+           refusal was invisible here and the only way to undo one was to find
+           the record again on a phone.
+
+           They are SECTIONS rather than one list stacked on another. Stacked,
+           the sent-back part sat below a table that is often a hundred rows
+           long, which is a place nobody scrolls to — and the two have
+           different buttons, so reading them as one table is the mistake the
+           layout should not invite. The count rides on the tab, so a refusal
+           is visible from the approved section without leaving it.
+
+           The filters below belong to BOTH: whichever section is open
+           answers the same question about the same nursery. -->
+        <div class="subtabs-bar">
+          <button class="subtab-btn active" id="recsec-btn-approved"
+                  onclick="switchRecSection('approved',this)">✓ <span data-i18n="rec.partApproved">Approved</span></button>
+          <button class="subtab-btn" id="recsec-btn-rejected"
+                  onclick="switchRecSection('rejected',this)">⛔ <span data-i18n="rec.partRejected">Rejected</span> <span class="rec-part-count" id="rej-count"></span></button>
+        </div>
         <div class="toolbar">
           <select class="filter-sel" id="rf-filter-jenis" onchange="renderRecords()">
             <option value="" data-i18n="rec.allJenis">All Jenis Kerja</option>
@@ -123,25 +149,8 @@
           <button class="btn" onclick="syncRecordsFromSchedule()" data-i18n="btn.sync">↺ Sync from Schedule</button>
         </div>
 
-        <!-- ── TWO PARTS, AND WHY ────────────────────────────────────────
-             A Field Conductor going through the morning's submissions in the
-             Verify Hub gives one of two answers, and until now this page only
-             ever saw one of them. Approved work flows into the table below —
-             it fills in the date, the batches, the quantity and the walk on
-             the scheduled row it belongs to. A record sent back went nowhere
-             at all: loadFieldRecords reads verified rows and nothing else, so
-             the refusal was invisible here and the only way to undo one was to
-             find the record again on a phone.
-
-             So the list is in two parts. This one is the schedule with the
-             approved work on it. The one underneath is what was sent back,
-             with the reason showing and the conductor's answer open to change
-             — see renderRejectedSubmissions in plot_maintenance_script.js. -->
-        <div class="rec-part-head">
-          <span class="rec-part-ico ok">✓</span>
-          <span data-i18n="rec.partApproved">Approved work records</span>
-          <span class="rec-part-sub" data-i18n="rec.partApprovedSub">The month's scheduled jobs, with the submissions a Field Conductor has signed off filled in</span>
-        </div>
+        <div id="recsec-approved" class="recsec active">
+        <div class="rec-part-sub" style="margin:0 0 10px;" data-i18n="rec.partApprovedSub">The month's scheduled jobs, with the submissions a Field Conductor has signed off filled in</div>
         <div class="card"><div class="tbl-wrap">
           <table class="rec-table">
             <!-- The columns are PINNED here rather than left to the browser.
@@ -215,24 +224,22 @@
           </table>
         </div></div>
 
+        </div><!-- /recsec-approved -->
+
         <!-- ── SENT BACK ─────────────────────────────────────────────────
              The submissions a Field Conductor refused, with the reason he
              gave. The row is still in the database and the work may well
              have been done — what was refused is the RECORD of it, which is
              why the buttons here are Approve, Edit and Del rather than the
-             Check / Edit / Del of the table above: Check locks an OFFICE row,
-             Approve answers a WORKER's record.
+             Check / Edit / Del of the approved section: Check locks an
+             OFFICE row, Approve answers a WORKER's record.
 
              Deleting one takes the scheduled row it was paired to with it —
              the pairing is a rule, not a foreign key (see shared_maint_field.js),
              so the confirm names the row that will go and refuses to guess
              when the pairing is ambiguous. -->
-        <div class="rec-part-head" style="margin-top:22px;">
-          <span class="rec-part-ico bad">⛔</span>
-          <span data-i18n="rec.partRejected">Sent back</span>
-          <span class="rec-part-sub" data-i18n="rec.partRejectedSub">Records a Field Conductor refused — approve one and it flows back into the list above</span>
-          <span class="rec-part-count" id="rej-count"></span>
-        </div>
+        <div id="recsec-rejected" class="recsec">
+        <div class="rec-part-sub" style="margin:0 0 10px;" data-i18n="rec.partRejectedSub">Records a Field Conductor refused — approve one and it flows back into the approved section</div>
         <div class="card"><div class="tbl-wrap">
           <table class="rec-table rej-table">
             <!-- Pinned the same way and for the same reason as the table
@@ -264,6 +271,7 @@
             <tbody id="rej-body"></tbody>
           </table>
         </div></div>
+        </div><!-- /recsec-rejected -->
       </div>
       <div id="recview-chart" class="recview">
       <!-- ANALYTICS -->

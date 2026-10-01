@@ -1769,10 +1769,10 @@ const I18N = {
     'rec.repairedNa':'Closed by the Field Conductor once the repair is done — after a case has been opened.',
     'rec.donePct':'Done %', 'rec.none':'No records found.',
     /* The two parts of the list — approved work, and what was sent back. */
-    'rec.partApproved':'Approved work records',
+    'rec.partApproved':'Approved',
     'rec.partApprovedSub':'The month’s scheduled jobs, with the submissions a Field Conductor has signed off filled in',
-    'rec.partRejected':'Sent back',
-    'rec.partRejectedSub':'Records a Field Conductor refused — approve one and it flows back into the list above',
+    'rec.partRejected':'Rejected',
+    'rec.partRejectedSub':'Records a Field Conductor refused — approve one and it flows back into the approved section',
     'rej.workedBy':'Worked By', 'rej.reason':'Reason Sent Back', 'rej.by':'Sent Back By',
     'rej.count':'{n} sent back', 'rej.noReason':'No reason was given',
     'rej.none':'Nothing has been sent back for this nursery.',
@@ -1881,10 +1881,10 @@ const I18N = {
     'rec.repairedNa':'Ditutup oleh Field Conductor selepas pembaikan siap \u2014 selepas kes dibuka.',
     'rec.donePct':'% Selesai', 'rec.none':'Tiada rekod dijumpai.',
     /* Dua bahagian senarai — kerja yang diluluskan, dan yang dihantar balik. */
-    'rec.partApproved':'Rekod kerja diluluskan',
+    'rec.partApproved':'Diluluskan',
     'rec.partApprovedSub':'Kerja berjadual bulan ini, bersama rekod yang telah disahkan oleh Field Conductor',
-    'rec.partRejected':'Dihantar balik',
-    'rec.partRejectedSub':'Rekod yang ditolak Field Conductor — luluskan dan ia kembali ke senarai di atas',
+    'rec.partRejected':'Ditolak',
+    'rec.partRejectedSub':'Rekod yang ditolak Field Conductor — luluskan dan ia kembali ke bahagian diluluskan',
     'rej.workedBy':'Dibuat Oleh', 'rej.reason':'Sebab Dihantar Balik', 'rej.by':'Dihantar Balik Oleh',
     'rej.count':'{n} dihantar balik', 'rej.noReason':'Tiada sebab diberi',
     'rej.none':'Tiada rekod dihantar balik untuk nurseri ini.',
@@ -3358,6 +3358,22 @@ function switchRecordView(view, btn) {
   if (view === 'chart') renderCharts(); else renderRecords();
 }
 
+/* Inside the maintenance list: approved work, or what was sent back.
+
+   Both are drawn on every renderRecords() whichever is open — they are two
+   tables, not two queries, and keeping the hidden one current means the
+   count on the tab is right without the section having been visited. */
+let _recSection = 'approved';
+function switchRecSection(section, btn) {
+  _recSection = section;
+  const bar = btn ? btn.closest('.subtabs-bar') : null;
+  if (bar) bar.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.querySelectorAll('#recview-list .recsec').forEach(p => p.classList.remove('active'));
+  const el = document.getElementById('recsec-' + section);
+  if (el) el.classList.add('active');
+}
+
 /* Schedule sub-tabs: P&D / Manuring / Weeding / Interrow. */
 /* ══════════════════════════════════════════════════════════════
    THE SCHEDULE, ALL FOUR PROGRAMS ON ONE PAGE
@@ -4642,11 +4658,16 @@ function renderRejectedSubmissions(f) {
   // was sent back, not what is currently being looked at.
   const mine = rejectedFieldRecords.filter((r) => plots.has(pk(r.plot_name)));
 
+  /* The count rides on the TAB, so a refusal is visible from the approved
+     section without going to look for it. Just the number — the tab beside
+     it already says what they are. */
   const badge = document.getElementById('rej-count');
   if (badge) {
-    badge.textContent = mine.length ? t('rej.count', { n: mine.length }) : '';
+    badge.textContent = mine.length ? String(mine.length) : '';
     badge.style.display = mine.length ? '' : 'none';
   }
+  const tab = document.getElementById('recsec-btn-rejected');
+  if (tab) tab.title = mine.length ? t('rej.count', { n: mine.length }) : t('rej.none');
 
   const shown = mine.filter((r) => {
     if (f.jenis && _rejJenis(r) !== f.jenis) return false;
