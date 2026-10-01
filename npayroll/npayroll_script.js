@@ -698,10 +698,20 @@ function earnedCell(sheet, page, section, name, code, jobLabel, worked) {
      that invites an edit it will not take is worse than one that does not
      invite it. */
   const canEdit = mayAdjust(page) && !sheetLocked(page);
+  /* What the sheet worked out, where it is not what is being paid. It used to
+     be a red line under the figure, and on a sheet where every row carries a
+     cent of calibration that is eight red lines saying the same thing — the
+     line under the WORKER's name already says how much, which is the question
+     somebody asks. So it moved to the tooltip: still there, no longer in the
+     way of reading the column. */
+  const tip = a
+    ? `Sheet worked out ${money(worked)} — ${a.reason || 'adjusted'}`
+      + (a.adjusted_by ? ' (' + a.adjusted_by + ')' : '')
+    : 'Adjust what this job earned';
   const open  = canEdit
     ? ` onclick="openAdjust('${sheet}','${page}','${_esc1(section)}','${_esc1(name)}','${_esc1(code)}','${_esc1(jobLabel)}',${worked})"`
-      + ' style="cursor:pointer;" title="Adjust what this job earned"'
-    : '';
+      + ` style="cursor:pointer;" title="${esc(tip)}"`
+    : (a ? ` title="${esc(tip)}"` : '');
   if (!a && !worked) return `<td${open}>—</td>`;
   /* THE PENNY STEPPER.
      A capacity divided among seven people does not land on a whole cent, so
@@ -715,11 +725,7 @@ function earnedCell(sheet, page, section, name, code, jobLabel, worked) {
      not moved; it has only stopped being the only way in. Which is why the
      buttons stop the click rather than letting it reach the cell. */
   const step = canEdit ? calStepHtml(sheet, page, section, name, code, worked) : '';
-  return `<td class="money"${open}>${money(shown)}${step}`
-       + (a ? `<div style="font-size:.7rem;font-weight:600;color:var(--danger,#c0392b);white-space:nowrap;"
-                title="${esc(a.reason || '')}${a.adjusted_by ? ' — ' + esc(a.adjusted_by) : ''}"
-                >adjusted · was ${money(worked)}</div>` : '')
-       + '</td>';
+  return `<td class="money"${open}>${money(shown)}${step}</td>`;
 }
 
 function calStepHtml(sheet, page, section, name, code, worked) {
@@ -773,7 +779,7 @@ function calibrateStep(sheet, page, section, name, code, worked, dir) {
   if (next !== back) {
     earnAdj.push({
       month: monthValue(), sheet, section: section || '', worker_name: name, work_code: code,
-      amount: next, reason: calReason(back),
+      amount: next, reason: calReason(back, code),
       adjusted_by: userEmail || null, adjusted_at: new Date().toISOString()
     });
   }
@@ -788,7 +794,9 @@ function calibrateStep(sheet, page, section, name, code, worked, dir) {
   }, 500);
 }
 
-const calReason = (worked) => `Calibrated to the cent (sheet worked out ${money(worked)})`;
+const calReason = (worked, code) => isCapCode(code)
+  ? `Calibrated (the workers' shares add to ${capFmt(worked)})`
+  : `Calibrated to the cent (sheet worked out ${money(worked)})`;
 
 async function _calSave(sheet, page, section, name, code, amount, worked) {
   try {
@@ -800,7 +808,7 @@ async function _calSave(sheet, page, section, name, code, amount, worked) {
     } else {
       ({ error } = await _supabase.from('mjmnpayroll_earn_adjustments').upsert({
         month: monthValue(), sheet, section: section || '', worker_name: name, work_code: code,
-        amount, reason: calReason(worked),
+        amount, reason: calReason(worked, code),
         adjusted_by: userEmail || null, adjusted_at: new Date().toISOString()
       }, { onConflict: 'month,sheet,section,worker_name,work_code' }));
     }
@@ -825,6 +833,52 @@ function redrawClaim(page) {
   if (after) after.scrollLeft = x;
 }
 
+/* ── THE CAPACITY GRAND TOTAL, CALIBRATED ──────────────────────────────
+   A plot's capacity divided among eight workers lands on 696.63 each and
+   adds back to 5,573.04 where the field reported 5,573. The hundredths are
+   arithmetic, not work, and the claim form carries the total somebody is
+   asked to agree with — so the total can be nudged to the figure the field
+   actually reported.
+
+   ONLY THE TOTAL. The workers' own capacities are their shares of the plot
+   and stay exactly as the field divided them; nobody's share, and nobody's
+   money, moves because the total was rounded. Which means the column no
+   longer adds to the figure under it, so the figure under it SAYS SO — the
+   same `calibrate` line the workers carry, under the total it belongs to.
+   A total quietly not equal to its column is the thing this must not be.
+
+   Stored in the same table as the money overrides, under a worker name and a
+   job code neither of which can be a real one: the row is keyed on (month,
+   sheet, section, worker, job), the lookup is exact, and nothing in this file
+   walks that array without a key. So there is nothing new to run. */
+const CAP_TOTAL_ROW = '(grand total)';
+const capCode   = (code) => 'cap:' + code;
+const isCapCode = (code) => String(code == null ? '' : code).slice(0, 4) === 'cap:';
+
+/* The figure to show: the calibrated one where there is one. */
+function capTotalOf(sheet, section, code, worked) {
+  const a = adjOf(sheet, section, CAP_TOTAL_ROW, capCode(code));
+  return a ? Number(a.amount || 0) : Number(worked || 0);
+}
+/* …and by how much, for the line under it. */
+function capTotalDelta(sheet, section, code, worked) {
+  const a = adjOf(sheet, section, CAP_TOTAL_ROW, capCode(code));
+  return a ? _round2(Number(a.amount || 0) - Number(worked || 0)) : 0;
+}
+
+/* The Grand Total's capacity cell, with its stepper and whatever it has been
+   calibrated by. `worked` is the workers' columns added up. */
+function capTotalCell(sheet, page, section, code, worked) {
+  const shown = capTotalOf(sheet, section, code, worked);
+  const d = capTotalDelta(sheet, section, code, worked);
+  const canEdit = mayAdjust(page) && !sheetLocked(page);
+  const tip = d ? `The workers' shares add to ${capFmt(worked)}` : '';
+  return `<td${tip ? ` title="${esc(tip)}"` : ''}>${capFmt(shown)}`
+       + (canEdit ? calStepHtml(sheet, page, section, CAP_TOTAL_ROW, capCode(code), worked) : '')
+       + calibrationLine(d, 'cap')
+       + '</td>';
+}
+
 /* What this worker's cents come to on this sheet: everything paid, less
    everything the sheet worked out. */
 function calibrationOf(sheet, section, name, codes, workedOf) {
@@ -838,12 +892,17 @@ function calibrationOf(sheet, section, name, codes, workedOf) {
    somebody checking a payslip looks for "why is this not what I worked out".
    Nothing where nothing has been changed: a column of "calibrate RM0.00" is
    a column of noise. */
-function calibrationLine(d) {
+function calibrationLine(d, kind) {
   if (!d) return '';
   const colour = d > 0 ? '#0d7a47' : 'var(--danger,#c0392b)';
-  return `<div class="cal-line" style="color:${colour};"
-            title="The cents added to or taken off this worker's jobs on this sheet"
-            >calibrate ${d > 0 ? '' : '-'}RM${Math.abs(d).toFixed(2)}</div>`;
+  const sign = d > 0 ? '' : '-';
+  const txt = kind === 'cap' ? sign + Math.abs(d).toFixed(2)
+                             : sign + 'RM' + Math.abs(d).toFixed(2);
+  const tip = kind === 'cap'
+    ? "What this total has been nudged by. The workers' own shares are unchanged."
+    : "The cents added to or taken off this worker's jobs on this sheet";
+  return `<div class="cal-line" style="color:${colour};" title="${esc(tip)}"
+            >calibrate ${txt}</div>`;
 }
 /* A value going into a JS string inside an HTML attribute crosses TWO
    quotings, and needs both. The four transplanting jobs are literally named
@@ -1516,7 +1575,9 @@ function renderTransplantClaim() {
   const foot = `
     <tfoot><tr>
       <td colspan="2">Grand Total</td>
-      ${TRANSPLANT_JOBS.map(j => `<td>${capFmt(capSum(j.key))}</td><td>${money(rmSum(j.key))}</td>`).join('')}
+      ${TRANSPLANT_JOBS.map(j =>
+        capTotalCell('transplanting', 'transpl', secFilter, j.key, capSum(j.key))
+        + `<td>${money(rmSum(j.key))}</td>`).join('')}
       <td>${money(grand)}</td>
     </tr></tfoot>`;
 
@@ -2025,7 +2086,9 @@ function renderMaint() {
   const foot = `
     <tfoot><tr>
       <td colspan="2">Grand Total</td>
-      ${MAINT_TYPES.map(t => `<td>${capFmt(capSum(t.code))}</td><td>${money(rmSum(t.code))}</td>`).join('')}
+      ${MAINT_TYPES.map(t =>
+        capTotalCell('maint', 'maint', n, t.code, capSum(t.code))
+        + `<td>${money(rmSum(t.code))}</td>`).join('')}
       <td>${money(grand)}</td>
     </tr></tfoot>`;
 
@@ -2612,7 +2675,7 @@ function downloadMaintPDF() {
   pdfCell(doc, X[0], y, COL[0] + COL[1], RH + 1, 'Grand Total', { bold: true, size: 8.5, fill: TF });
   MAINT_TYPES.forEach((t, k) => {
     const c = PAIR(k);
-    const cs = wk.reduce((s, w) => s + capOf(w, t.code), 0);
+    const cs = capTotalOf('maint', n, t.code, wk.reduce((s, w) => s + capOf(w, t.code), 0));
     const rs = wk.reduce((s, w) => s + payOf(w, t.code), 0);
     pdfCell(doc, X[c],   y, COL[c],   RH + 1, capFmt(cs), { bold: true, size: 8, nowrap: true, fill: TF });
     pdfCell(doc, X[c+1], y, COL[c+1], RH + 1, 'RM ' + rs.toFixed(2), { bold: true, size: 7.5, nowrap: true, fill: TF });
@@ -2745,7 +2808,7 @@ function downloadTransplantPDF() {
   pdfCell(doc, X[0], y, COL[0] + COL[1], RH + 1, 'Grand Total', { bold: true, size: 8.5, fill: TF });
   TRANSPLANT_JOBS.forEach((j, k) => {
     const c = PAIR(k);
-    const cs = names.reduce((s, n) => s + capOf(n, j.key), 0);
+    const cs = capTotalOf('transplanting', sec, j.key, names.reduce((s, n) => s + capOf(n, j.key), 0));
     const rs = names.reduce((s, n) => s + payOf(n, j.key), 0);
     pdfCell(doc, X[c],   y, COL[c],   RH + 1, capFmt(cs), { bold: true, size: 8, nowrap: true, fill: TF });
     pdfCell(doc, X[c+1], y, COL[c+1], RH + 1, 'RM ' + rs.toFixed(2), { bold: true, size: 7.5, nowrap: true, fill: TF });

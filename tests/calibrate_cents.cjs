@@ -186,6 +186,21 @@ const press = async (page, which, times) => {
     check('…which say what they do', cell.titles, ['Take RM 0.01 off', 'Add RM 0.01']);
     checkFalse('and no pencil, which is what they replaced', /✎/.test(cell.text));
 
+    /* What the sheet worked out used to be a red line under every adjusted
+       figure. On a sheet where every row carries a cent that is eight red
+       lines saying the same thing, and the line under the WORKER's name
+       already answers how much. */
+    await press(page, '+');
+    const after = await page.$eval(CELL, (td) => ({
+      txt: (td.textContent || '').replace(/\s+/g, ' ').trim(),
+      title: td.title
+    }));
+    checkFalse('an adjusted cell does not print "adjusted - was" under itself',
+               /adjusted/i.test(after.txt));
+    checkTrue('…but still says so on hover, with what the sheet worked out',
+              /Sheet worked out RM 250\.00/.test(after.title));
+    await press(page, '-');
+
     const money = await page.$$eval('#transpl-table tbody tr:first-child td.money', (tds) =>
       tds.map((td) => ({ txt: (td.textContent || '').replace(/\s+/g, ' ').trim(),
                          n: td.querySelectorAll('.cal-btn').length })));
@@ -326,6 +341,58 @@ const press = async (page, which, times) => {
     check('…and puts the cell back to what the database actually holds',
           await cellText(page), 'RM 250.00');
     check('…with nothing left under the name', await calLine(page), null);
+    await page.close();
+  }
+
+  console.log('\nThe capacity Grand Total');
+  {
+    const page = await boot(browser, JSON.parse(JSON.stringify(DB)));
+    /* The foot opens with one cell spanning No. and Worker, so its columns
+       run two behind the body's: capacity for transplanting is the 8th. */
+    const CAPTOT = '#transpl-table tfoot tr td:nth-child(8)';
+    const capText = () => page.$eval(CAPTOT, (td) => (td.firstChild.textContent || '').trim());
+    const capLine = () => page.$eval(CAPTOT, (td) => {
+      const d = td.querySelector('.cal-line');
+      return d ? (d.textContent || '').replace(/\s+/g, ' ').trim() : null;
+    });
+    const capPress = async (which, times) => {
+      for (let i = 0; i < (times || 1); i++) {
+        await page.click(`${CAPTOT} .cal-btn:nth-child(${which === '+' ? 2 : 1})`);
+        await page.waitForTimeout(40);
+      }
+    };
+
+    check('it starts as the workers\u2019 shares added up', await capText(), '1,000');
+    check('…and it has a stepper of its own',
+          await page.$$eval(`${CAPTOT} .cal-btn`, (b) => b.map((x) => x.textContent.trim())),
+          ['\u2212', '+']);
+    check('…with nothing under it until something is nudged', await capLine(), null);
+
+    await capPress('-', 4);
+    check('four presses take four hundredths off the TOTAL', await capText(), '999.96');
+    check('…and it says by how much, in units and not in ringgit',
+          await capLine(), 'calibrate -0.04');
+
+    const rows = await page.$$eval('#transpl-table tbody tr td:nth-child(9)',
+      (tds) => tds.map((td) => (td.textContent || '').trim()));
+    check('THE WORKERS\u2019 OWN SHARES DO NOT MOVE — their share of the plot '
+        + 'is not a rounding', rows, ['1,000']);
+    const money = await page.$eval('#transpl-table tfoot tr td:nth-child(9)',
+      (td) => (td.textContent || '').trim());
+    check('…and neither does the money', money, 'RM 250.00');
+
+    await page.waitForFunction(() => window.__WRITES.length > 0, { timeout: 5000 });
+    await page.waitForTimeout(300);
+    const w = await page.evaluate(() => window.__WRITES[window.__WRITES.length - 1]);
+    check('one write, of the calibrated total', w.row.amount, 999.96);
+    check('…under a worker name and a job code that cannot be a real one',
+          [w.row.worker_name, w.row.work_code], ['(grand total)', 'cap:transplanting']);
+    checkTrue('…with a reason in the right units',
+              /shares add to 1,000/.test(w.row.reason) && !/RM/.test(w.row.reason));
+
+    await capPress('+', 4);
+    check('stepping back is the figure it started at', await capText(), '1,000');
+    check('…and the line goes', await capLine(), null);
     await page.close();
   }
 
