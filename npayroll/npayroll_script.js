@@ -724,8 +724,13 @@ function earnedCell(sheet, page, section, name, code, jobLabel, worked) {
      real decision still wants its own figure and its own reason. That has
      not moved; it has only stopped being the only way in. Which is why the
      buttons stop the click rather than letting it reach the cell. */
-  const step = canEdit ? calStepHtml(sheet, page, section, name, code, worked) : '';
-  return `<td class="money"${open}>${money(shown)}${step}</td>`;
+  /* No stepper here. The cents are nudged on the CAPACITY, where a share of
+     a plot divided among eight people actually lands on a hundredth — the
+     money then follows the capacity it is worked out from. A second stepper
+     on the money would be two ways to move the same figure, disagreeing. */
+  return `<td class="money"${open}>${money(shown)}`
+       + (canEdit && !a ? '<span style="color:var(--text-faint);font-size:.7rem;"> \u270e</span>' : '')
+       + '</td>';
 }
 
 function calStepHtml(sheet, page, section, name, code, worked) {
@@ -795,7 +800,7 @@ function calibrateStep(sheet, page, section, name, code, worked, dir) {
 }
 
 const calReason = (worked, code) => isCapCode(code)
-  ? `Calibrated (the workers' shares add to ${capFmt(worked)})`
+  ? `Calibrated (the field divided out ${capFmt(worked)})`
   : `Calibrated to the cent (sheet worked out ${money(worked)})`;
 
 async function _calSave(sheet, page, section, name, code, amount, worked) {
@@ -833,51 +838,52 @@ function redrawClaim(page) {
   if (after) after.scrollLeft = x;
 }
 
-/* ── THE CAPACITY GRAND TOTAL, CALIBRATED ──────────────────────────────
+/* ── A WORKER'S CAPACITY, CALIBRATED ───────────────────────────────────
    A plot's capacity divided among eight workers lands on 696.63 each and
    adds back to 5,573.04 where the field reported 5,573. The hundredths are
-   arithmetic, not work, and the claim form carries the total somebody is
-   asked to agree with — so the total can be nudged to the figure the field
-   actually reported.
+   arithmetic, not work, and the claim form carries a total somebody is asked
+   to agree with — so a worker's share can be nudged by a hundredth until the
+   column agrees with the field.
 
-   ONLY THE TOTAL. The workers' own capacities are their shares of the plot
-   and stay exactly as the field divided them; nobody's share, and nobody's
-   money, moves because the total was rounded. Which means the column no
-   longer adds to the figure under it, so the figure under it SAYS SO — the
-   same `calibrate` line the workers carry, under the total it belongs to.
-   A total quietly not equal to its column is the thing this must not be.
+   ON THE CAPACITY AND NOWHERE ELSE. The money is capacity times rate, so it
+   follows: nudge the share, the ringgit beside it and the column total and
+   the grand total all move with it, and the sheet goes on multiplying out.
+   A second stepper on the money would be two ways to move one figure, able
+   to disagree.
 
-   Stored in the same table as the money overrides, under a worker name and a
-   job code neither of which can be a real one: the row is keyed on (month,
-   sheet, section, worker, job), the lookup is exact, and nothing in this file
-   walks that array without a key. So there is nothing new to run. */
-const CAP_TOTAL_ROW = '(grand total)';
+   Stored in the same table as the money overrides the adjustment form
+   writes, under a job code that cannot be a real one (`cap:` and the job).
+   The row is keyed on (month, sheet, section, worker, job), the lookup is
+   exact, and nothing walks that array without a key — so there is nothing
+   new to run. */
 const capCode   = (code) => 'cap:' + code;
 const isCapCode = (code) => String(code == null ? '' : code).slice(0, 4) === 'cap:';
 
-/* The figure to show: the calibrated one where there is one. */
-function capTotalOf(sheet, section, code, worked) {
-  const a = adjOf(sheet, section, CAP_TOTAL_ROW, capCode(code));
+/* The capacity to use: the calibrated one where there is one. */
+function capPaid(sheet, section, name, code, worked) {
+  const a = adjOf(sheet, section, name, capCode(code));
   return a ? Number(a.amount || 0) : Number(worked || 0);
 }
-/* …and by how much, for the line under it. */
-function capTotalDelta(sheet, section, code, worked) {
-  const a = adjOf(sheet, section, CAP_TOTAL_ROW, capCode(code));
+/* …and by how much, for the line under the name. */
+function capDelta(sheet, section, name, code, worked) {
+  const a = adjOf(sheet, section, name, capCode(code));
   return a ? _round2(Number(a.amount || 0) - Number(worked || 0)) : 0;
 }
+/* What a worker's hundredths come to across this sheet. */
+function capCalibrationOf(sheet, section, name, codes, workedOf) {
+  return _round2(codes.reduce((t, c) => t + capDelta(sheet, section, name, c, workedOf(c)), 0));
+}
 
-/* The Grand Total's capacity cell, with its stepper and whatever it has been
-   calibrated by. `worked` is the workers' columns added up. */
-function capTotalCell(sheet, page, section, code, worked) {
-  const shown = capTotalOf(sheet, section, code, worked);
-  const d = capTotalDelta(sheet, section, code, worked);
-  const canEdit = mayAdjust(page) && !sheetLocked(page);
-  const tip = d ? `The workers' shares add to ${capFmt(worked)}` : '';
-  /* nowrap, or the stepper drops to a line of its own under the figure and
-     the Grand Total row grows a step in the middle of itself. */
+/* One capacity cell, with its stepper. `worked` is the share the field
+   divided out; `shown` is what is being paid on. */
+function capCell(sheet, page, section, name, code, worked) {
+  const shown = capPaid(sheet, section, name, code, worked);
+  const canEdit = mayAdjust(page) && !sheetLocked(page) && !!worked;
+  const d = capDelta(sheet, section, name, code, worked);
+  const tip = d ? `The field divided out ${capFmt(worked)}` : '';
+  // nowrap, or the stepper drops to a line of its own under the figure.
   return `<td style="white-space:nowrap;"${tip ? ` title="${esc(tip)}"` : ''}>${capFmt(shown)}`
-       + (canEdit ? calStepHtml(sheet, page, section, CAP_TOTAL_ROW, capCode(code), worked) : '')
-       + calibrationLine(d, 'cap')
+       + (canEdit ? calStepHtml(sheet, page, section, name, capCode(code), worked) : '')
        + '</td>';
 }
 
@@ -901,7 +907,7 @@ function calibrationLine(d, kind) {
   const txt = kind === 'cap' ? sign + Math.abs(d).toFixed(2)
                              : sign + 'RM' + Math.abs(d).toFixed(2);
   const tip = kind === 'cap'
-    ? "What this total has been nudged by. The workers' own shares are unchanged."
+    ? "The hundredths added to or taken off this worker's capacity on this sheet"
     : "The cents added to or taken off this worker's jobs on this sheet";
   return `<div class="cal-line" style="color:${colour};" title="${esc(tip)}"
             >calibrate ${txt}</div>`;
@@ -1517,9 +1523,14 @@ function renderTransplantClaim() {
   };
   /* Capacity to two places first, then priced — the same order renderMaint
      uses, so the row on screen multiplies out to the money beside it. */
-  const capOf = (n, key) => cap2(lines
+  /* The share the field divided out… */
+  const capWorked = (n, key) => cap2(lines
     .filter(l => l.worker_name === n && l.key === key)
     .reduce((s, l) => s + Number(l.qty || 0), 0));
+  /* …and the share being paid on, which is that one unless it has been
+     calibrated. Everything downstream — the money, the column total, the
+     grand total — is built from THIS, so the sheet goes on multiplying out. */
+  const capOf = (n, key) => capPaid('transplanting', secOf(n), n, key, capWorked(n, key));
   const rmOf = (n, key) => {
     const r = rateOf(key);
     if (r == null) return 0;
@@ -1564,12 +1575,15 @@ function renderTransplantClaim() {
       <td style="color:var(--text-faint);">${i + 1}</td>
       <td class="l" style="font-weight:700;color:var(--text-head);">${esc(n)}${
         knownOf(n) ? '' : '<span title="Not on the worker register — add them in Worker System, or the claim cannot pay this" style="color:var(--danger,#c0392b);"> &#9888;</span>'}${
+        calibrationLine(capCalibrationOf('transplanting', secOf(n), n,
+                                         TRANSPLANT_JOBS.map(j => j.key), (k) => capWorked(n, k)), 'cap')}${
         calibrationLine(calibrationOf('transplanting', secOf(n), n,
                                       TRANSPLANT_JOBS.map(j => j.key), (k) => rmOf(n, k)))}</td>
       ${TRANSPLANT_JOBS.map(j => {
         const c = capOf(n, j.key);
-        return `<td>${capFmt(c)}</td>` + earnedCell('transplanting', 'transpl', secOf(n), n, j.key,
-                                                    j.label, c ? rmOf(n, j.key) : 0);
+        return capCell('transplanting', 'transpl', secOf(n), n, j.key, capWorked(n, j.key))
+             + earnedCell('transplanting', 'transpl', secOf(n), n, j.key,
+                          j.label, c ? rmOf(n, j.key) : 0);
       }).join('')}
       <td class="money">${money(earned(n))}</td>
     </tr>`).join('');
@@ -1578,8 +1592,7 @@ function renderTransplantClaim() {
     <tfoot><tr>
       <td colspan="2">Grand Total</td>
       ${TRANSPLANT_JOBS.map(j =>
-        capTotalCell('transplanting', 'transpl', secFilter, j.key, capSum(j.key))
-        + `<td>${money(rmSum(j.key))}</td>`).join('')}
+        `<td>${capFmt(capSum(j.key))}</td><td>${money(rmSum(j.key))}</td>`).join('')}
       <td>${money(grand)}</td>
     </tr></tfoot>`;
 
@@ -2026,7 +2039,8 @@ function renderMaint() {
   }
 
   // Money from the capacity AS SHOWN, so the printed row multiplies out.
-  const capOf = (w, c) => cap2(per[w] ? per[w][c] : 0);
+  const capWorked = (w, c) => cap2(per[w] ? per[w][c] : 0);
+  const capOf = (w, c) => capPaid('maint', n, w, c, capWorked(w, c));
   const rmOf  = (w, c) => {
     const r = rateOf(c);
     if (r == null) return 0;
@@ -2075,12 +2089,15 @@ function renderMaint() {
     <tr>
       <td style="color:var(--text-faint);">${i + 1}</td>
       <td class="l" style="font-weight:700;color:var(--text-head);">${esc(w)}${
+        calibrationLine(capCalibrationOf('maint', n, w, MAINT_TYPES.map(t => t.code),
+                                         (c) => capWorked(w, c)), 'cap')}${
         calibrationLine(calibrationOf('maint', n, w, MAINT_TYPES.map(t => t.code),
                                       (c) => rmOf(w, c)))}</td>
       ${MAINT_TYPES.map(t => {
         const c = capOf(w, t.code);
-        return `<td>${capFmt(c)}</td>` + earnedCell('maint', 'maint', n, w, t.code, t.label,
-                                                    c ? rmOf(w, t.code) : 0);
+        return capCell('maint', 'maint', n, w, t.code, capWorked(w, t.code))
+             + earnedCell('maint', 'maint', n, w, t.code, t.label,
+                          c ? rmOf(w, t.code) : 0);
       }).join('')}
       <td class="money">${money(earned(w))}</td>
     </tr>`).join('');
@@ -2089,8 +2106,7 @@ function renderMaint() {
     <tfoot><tr>
       <td colspan="2">Grand Total</td>
       ${MAINT_TYPES.map(t =>
-        capTotalCell('maint', 'maint', n, t.code, capSum(t.code))
-        + `<td>${money(rmSum(t.code))}</td>`).join('')}
+        `<td>${capFmt(capSum(t.code))}</td><td>${money(rmSum(t.code))}</td>`).join('')}
       <td>${money(grand)}</td>
     </tr></tfoot>`;
 
@@ -2632,9 +2648,16 @@ function pdfWorkerCell(doc, x, y, w, h, name, cal, o) {
   doc.setTextColor(0, 0, 0);
 }
 
-/* "calibrate -RM0.01", or nothing where nothing was changed. */
-function calibrationText(d) {
-  return d ? `calibrate ${d > 0 ? '' : '-'}RM${Math.abs(d).toFixed(2)}` : '';
+/* What a worker was calibrated by, for the band under their name on the
+   printed form: the hundredths on their capacity, and the cents the
+   adjustment form put on their money. Usually one or neither; on one line
+   because the band is one line deep. */
+function calibrationText(capD, rmD) {
+  const sign = (d) => (d > 0 ? '' : '-');
+  return [
+    capD ? `calibrate ${sign(capD)}${Math.abs(capD).toFixed(2)}` : '',
+    rmD  ? `calibrate ${sign(rmD)}RM${Math.abs(rmD).toFixed(2)}` : ''
+  ].filter(Boolean).join('  \u00b7  ');
 }
 
 function pdfFooterNote(doc, y) {
@@ -2650,7 +2673,8 @@ function downloadMaintPDF() {
   if (!wk.length) { alert('No worker on the Work Maintenance list for this nursery.'); return; }
   const rateOf = c => (maint.rates[n] || {})[c];
   const per = maintTotals(n, monthTxt, month);
-  const capOf = (w, c) => cap2(per[w] ? per[w][c] : 0);
+  const capWorked = (w, c) => cap2(per[w] ? per[w][c] : 0);
+  const capOf = (w, c) => capPaid('maint', n, w, c, capWorked(w, c));
   const rmOf  = (w, c) => { const r = rateOf(c); return r == null ? 0 : Math.round(capOf(w, c) * Math.round(r * 100000) / 1000) / 100; };
   /* The printed claim is what gets signed and paid, so it prints the ADJUSTED
      figure — the same one the screen shows. A PDF that disagreed with the
@@ -2699,19 +2723,18 @@ function downloadMaintPDF() {
   };
 
   let y = drawHead();
+  const CODES = MAINT_TYPES.map(t => t.code);
+  const calTxtOf = (w) => calibrationText(
+    capCalibrationOf('maint', n, w, CODES, (c) => capWorked(w, c)),
+    calibrationOf('maint', n, w, CODES, (c) => rmOf(w, c)));
   /* A little taller where any row carries a calibration, so the band under
      the name does not squeeze the name itself. */
-  const anyCal = wk.some(w => calibrationOf('maint', n, w,
-                                MAINT_TYPES.map(t => t.code), (c) => rmOf(w, c)));
-  const RH = anyCal ? 11 : 9;
+  const RH = wk.some(w => calTxtOf(w)) ? 11 : 9;
   wk.forEach((w, i) => {
     if (y + RH > 297 - 25 - 40) { doc.addPage(); y = drawHead(); }
     const z = i % 2 ? [250, 250, 253] : null;
     pdfCell(doc, X[0], y, COL[0], RH, String(i + 1), { size: 8, nowrap: true, fill: z });
-    pdfWorkerCell(doc, X[1], y, COL[1], RH, w,
-      calibrationText(calibrationOf('maint', n, w,
-                                    MAINT_TYPES.map(t => t.code), (c) => rmOf(w, c))),
-      { size: 8.5, fill: z });
+    pdfWorkerCell(doc, X[1], y, COL[1], RH, w, calTxtOf(w), { size: 8.5, fill: z });
     MAINT_TYPES.forEach((t, k) => {
       const c = PAIR(k), cap = capOf(w, t.code);
       pdfCell(doc, X[c],   y, COL[c],   RH, capFmt(cap), { size: 8, nowrap: true, fill: z });
@@ -2725,7 +2748,7 @@ function downloadMaintPDF() {
   pdfCell(doc, X[0], y, COL[0] + COL[1], RH + 1, 'Grand Total', { bold: true, size: 8.5, fill: TF });
   MAINT_TYPES.forEach((t, k) => {
     const c = PAIR(k);
-    const cs = capTotalOf('maint', n, t.code, wk.reduce((s, w) => s + capOf(w, t.code), 0));
+    const cs = wk.reduce((s, w) => s + capOf(w, t.code), 0);
     const rs = wk.reduce((s, w) => s + payOf(w, t.code), 0);
     pdfCell(doc, X[c],   y, COL[c],   RH + 1, capFmt(cs), { bold: true, size: 8, nowrap: true, fill: TF });
     pdfCell(doc, X[c+1], y, COL[c+1], RH + 1, 'RM ' + rs.toFixed(2), { bold: true, size: 7.5, nowrap: true, fill: TF });
@@ -2789,9 +2812,14 @@ function downloadTransplantPDF() {
     const r = rateRowOf(key);
     return r ? rateTxt(r.rate) + (r.unit ? ' / ' + r.unit : '') : '—';
   };
-  const capOf = (n, key) => cap2(lines
+  /* The share the field divided out… */
+  const capWorked = (n, key) => cap2(lines
     .filter(l => l.worker_name === n && l.key === key)
     .reduce((s, l) => s + Number(l.qty || 0), 0));
+  /* …and the share being paid on, which is that one unless it has been
+     calibrated. Everything downstream — the money, the column total, the
+     grand total — is built from THIS, so the sheet goes on multiplying out. */
+  const capOf = (n, key) => capPaid('transplanting', secOf(n), n, key, capWorked(n, key));
   const rmOf = (n, key) => {
     const r = rateOf(key);
     return r == null ? 0 : Math.round(capOf(n, key) * Math.round(r * 100000) / 1000) / 100;
@@ -2838,17 +2866,16 @@ function downloadTransplantPDF() {
   };
 
   let y = drawHead();
-  const anyCal = names.some(n => calibrationOf('transplanting', secOf(n), n,
-                                  TRANSPLANT_JOBS.map(j => j.key), (k) => rmOf(n, k)));
-  const RH = anyCal ? 11 : 9;
+  const KEYS = TRANSPLANT_JOBS.map(j => j.key);
+  const calTxtOf = (n) => calibrationText(
+    capCalibrationOf('transplanting', secOf(n), n, KEYS, (k) => capWorked(n, k)),
+    calibrationOf('transplanting', secOf(n), n, KEYS, (k) => rmOf(n, k)));
+  const RH = names.some(n => calTxtOf(n)) ? 11 : 9;
   names.forEach((n, i) => {
     if (y + RH > 297 - 25 - 40) { doc.addPage(); y = drawHead(); }
     const z = i % 2 ? [250, 250, 253] : null;
     pdfCell(doc, X[0], y, COL[0], RH, String(i + 1), { size: 8, nowrap: true, fill: z });
-    pdfWorkerCell(doc, X[1], y, COL[1], RH, n,
-      calibrationText(calibrationOf('transplanting', secOf(n), n,
-                                    TRANSPLANT_JOBS.map(j => j.key), (k) => rmOf(n, k))),
-      { size: 8.5, fill: z });
+    pdfWorkerCell(doc, X[1], y, COL[1], RH, n, calTxtOf(n), { size: 8.5, fill: z });
     TRANSPLANT_JOBS.forEach((j, k) => {
       const c = PAIR(k), cap = capOf(n, j.key);
       pdfCell(doc, X[c],   y, COL[c],   RH, capFmt(cap), { size: 8, nowrap: true, fill: z });
@@ -2863,7 +2890,7 @@ function downloadTransplantPDF() {
   pdfCell(doc, X[0], y, COL[0] + COL[1], RH + 1, 'Grand Total', { bold: true, size: 8.5, fill: TF });
   TRANSPLANT_JOBS.forEach((j, k) => {
     const c = PAIR(k);
-    const cs = capTotalOf('transplanting', sec, j.key, names.reduce((s, n) => s + capOf(n, j.key), 0));
+    const cs = names.reduce((s, n) => s + capOf(n, j.key), 0);
     const rs = names.reduce((s, n) => s + payOf(n, j.key), 0);
     pdfCell(doc, X[c],   y, COL[c],   RH + 1, capFmt(cs), { bold: true, size: 8, nowrap: true, fill: TF });
     pdfCell(doc, X[c+1], y, COL[c+1], RH + 1, 'RM ' + rs.toFixed(2), { bold: true, size: 7.5, nowrap: true, fill: TF });

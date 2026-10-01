@@ -4851,11 +4851,84 @@ function editSubmission(id) {
   set('rj-qty', f.qty == null ? '' : f.qty);
   set('rj-worked', f.worked_by || '');
   set('rj-reported', f.reported_by || '');
+  renderRejWorkers();
   const who = document.getElementById('rej-who-note');
   if (who) who.textContent = t('rej.whoNote');
   set('rj-remark', f.remark || '');
   document.getElementById('rej-modal').classList.add('open');
 }
+/* ── WHO DID IT, PICKED FROM THE NURSERY'S OWN LIST ─────────────────────
+   Worked By was a comma-separated box. A name typed into one is a name the
+   worker register does not hold, and the salary claim cannot pay a name it
+   does not hold — so a record could be corrected and the money still go
+   nowhere, with nothing on either screen saying so.
+
+   The names offered are `workers[nursery]`, which is the nursery's general
+   workers off the payroll register where it answers and this module's own
+   list where it does not — the same list the Worker Record sheet ticks.
+
+   WHICH NURSERY FOLLOWS THE PLOT, not the record's stored nursery_name: the
+   plot is the thing being corrected on this form, and a record moved to
+   another nursery's plot has to offer that nursery's people. */
+function _rejNursery() {
+  const pk = MJMMaintField.plotKey;
+  const plot = pk((document.getElementById('rj-plot') || {}).value);
+  if (plot) {
+    const hit = Object.keys(NURSERY_PLOTS).find(n =>
+      (NURSERY_PLOTS[n] || []).some(p => pk(p) === plot));
+    if (hit) return hit;
+  }
+  // No plot keyed yet, or one no nursery claims: fall back to the record's own.
+  const f = _submissionById(_rejEditId);
+  const want = pk(f && f.nursery_name);
+  return Object.keys(NURSERY_PLOTS).find(n => pk(n) === want) || '';
+}
+
+const _rejPicked = () => String((document.getElementById('rj-worked') || {}).value || '')
+  .split(',').map(x => x.trim()).filter(Boolean);
+
+function renderRejWorkers() {
+  const host = document.getElementById('rj-worked-chips');
+  if (!host) return;
+  const n = _rejNursery();
+  const roster = (workers[n] || []).slice()
+    .sort((a, b) => String(a).localeCompare(String(b)));
+  const picked = _rejPicked();
+  const key = MJMMaintField.nameKey;
+  /* Anybody already credited whom this nursery's list does not hold. Kept,
+     and marked: dropping the name silently is how a correction loses the one
+     thing it was correcting. */
+  const extra = picked.filter(p => !roster.some(r => key(r) === key(p)));
+
+  if (!roster.length && !extra.length) {
+    host.innerHTML = `<div class="rj-chips-none">${
+      n ? `No workers are listed for ${esc(n)}. Add them on the payroll register, `
+        + `or leave this empty and the work stays credited to whoever reported it.`
+        : 'Key the plot above and this nursery\u2019s workers will be offered here.'}</div>`;
+    return;
+  }
+  const chip = (name, off) => {
+    const on = picked.some(p => key(p) === key(name));
+    return `<button type="button" class="rj-chip${on ? ' on' : ''}${off ? ' off-reg' : ''}"
+      ${off ? 'title="Not on this nursery\u2019s register — the salary claim cannot pay this name"' : ''}
+      onclick="toggleRejWorker('${esc(String(name).replace(/\\/g, '\\\\').replace(/'/g, "\\'"))}')"
+      >${esc(name)}</button>`;
+  };
+  host.innerHTML = roster.map(w => chip(w, false)).join('')
+                 + extra.map(w => chip(w, true)).join('');
+}
+
+function toggleRejWorker(name) {
+  const box = document.getElementById('rj-worked');
+  if (!box) return;
+  const key = MJMMaintField.nameKey;
+  const picked = _rejPicked();
+  const at = picked.findIndex(p => key(p) === key(name));
+  if (at >= 0) picked.splice(at, 1); else picked.push(name);
+  box.value = picked.join(', ');
+  renderRejWorkers();
+}
+
 function closeRejModal() {
   _rejEditId = null;
   document.getElementById('rej-modal').classList.remove('open');

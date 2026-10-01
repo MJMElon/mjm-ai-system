@@ -1334,3 +1334,30 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
    thing that must not happen is for that to look identical to being linked. */
 #payroll-hint.pay-hint-warn{color:#92400e;background:#fffbeb;
   border:1px solid #fde68a;border-radius:10px;padding:8px 11px;line-height:1.55;}
+
+
+/* ── PICKING WHO DID IT, ON A SENT-BACK RECORD ───────────────────────────
+   Worked By used to be a comma-separated box. A name typed into one is a
+   name the worker register does not know, and the salary claim cannot pay a
+   name it does not know — so the office corrected a record and the money
+   still went nowhere. These are the nursery's own general workers, tapped
+   on and off.
+
+   A name already on the record that is NOT on that register keeps its chip
+   and says so, because dropping it silently is how the correction loses the
+   very thing it was correcting. */
+.rj-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:4px;}
+.rj-chip{font-family:var(--font);font-size:12px;font-weight:700;letter-spacing:.01em;
+  padding:7px 13px;border-radius:999px;cursor:pointer;transition:all .13s;
+  border:1.5px solid var(--border);background:var(--bg-page);color:var(--text-muted);}
+.rj-chip:hover{border-color:var(--green-mid);color:var(--green-text);}
+.rj-chip.on{background:var(--green);border-color:var(--green);color:#fff;
+  box-shadow:0 2px 8px rgba(13,122,71,.28);}
+/* Somebody the register does not hold. Still tappable — they did the work —
+   but the colour says the claim will not be able to pay them. */
+.rj-chip.off-reg{border-color:#f3c9c9;color:#a83020;background:#fdeaea;}
+.rj-chip.off-reg.on{background:#a83020;border-color:#a83020;color:#fff;
+  box-shadow:0 2px 8px rgba(168,48,32,.28);}
+.rj-chips-none{font-size:11.5px;font-weight:600;color:#a16207;background:var(--gold-bg,#fffbeb);
+  border:1.5px solid var(--gold-border,#fcd34d);border-radius:var(--r-sm);padding:8px 11px;
+  line-height:1.45;}

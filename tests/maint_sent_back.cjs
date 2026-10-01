@@ -77,7 +77,13 @@ async function boot(opts) {
     } catch (_) {}
     window.__DB = {
       nops_maint_field_records: field,
-      nops_maint_records: [{ id: 1, records: [] }]
+      nops_maint_records: [{ id: 1, records: [] }],
+      /* BNN's own general workers, which is the list Worked By offers. */
+      nops_maint_workers: [
+        { nursery: 'BNN', name: 'Ali Bin Hassan' },
+        { nursery: 'BNN', name: 'Ramli Anak Juna' },
+        { nursery: 'UNN1', name: 'Somebody From UNN1' }
+      ]
     };
     window.__WRITES  = [];
     window.__MISSING = missing || [];
@@ -454,6 +460,9 @@ const recText = (page) => page.evaluate(() =>
       batch: document.getElementById('rj-batch').value,
       qty:   document.getElementById('rj-qty').value,
       worked:document.getElementById('rj-worked').value,
+      chips:[...document.querySelectorAll('#rj-worked-chips .rj-chip')].map((b) => ({
+        name: b.textContent.trim(), on: b.classList.contains('on'),
+        offReg: b.classList.contains('off-reg') })),
       reported:document.getElementById('rj-reported').value,
       whoNote:(document.getElementById('rej-who-note').textContent || '').trim(),
       remark:document.getElementById('rj-remark').value,
@@ -469,6 +478,36 @@ const recText = (page) => page.evaluate(() =>
     check('…the batch', open.batch, '252');
     check('…the quantity', open.qty, '1400');
     check('…who worked it', open.worked, 'Ali Bin Hassan');
+
+    /* Worked By is PICKED, not typed: a name typed by hand is a name the
+       worker register does not hold, and the claim cannot pay one of those. */
+    check('Worked By offers this nursery\u2019s own workers',
+          open.chips.map((c) => c.name), ['Ali Bin Hassan', 'Ramli Anak Juna']);
+    check('…with the one already credited turned on',
+          open.chips.filter((c) => c.on).map((c) => c.name), ['Ali Bin Hassan']);
+    checkFalse('…and nobody from another nursery',
+               open.chips.some((c) => /UNN1/.test(c.name)));
+
+    /* The list follows the PLOT, not the record's stored nursery: the plot is
+       what this form is correcting, and a record moved to another nursery's
+       plot has to offer that nursery's people. */
+    const moved = await page.evaluate(() => {
+      const el = document.getElementById('rj-plot');
+      el.value = 'U3';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      return [...document.querySelectorAll('#rj-worked-chips .rj-chip')]
+        .map((b) => ({ name: b.textContent.trim(), off: b.classList.contains('off-reg') }));
+    });
+    check('move the plot to another nursery and the list moves with it',
+          moved.map((c) => c.name).sort(), ['Ali Bin Hassan', 'Somebody From UNN1']);
+    checkTrue('…and the name already credited, whom THAT nursery does not hold, '
+            + 'keeps its chip and is marked rather than dropped',
+              moved.find((c) => c.name === 'Ali Bin Hassan').off === true);
+    await page.evaluate(() => {
+      const el = document.getElementById('rj-plot');
+      el.value = 'B8';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
     /* The name the work is credited to where nobody is in Worked By — which
        is most records, and the one field a record sent back for the wrong
        name could not be corrected on. */
@@ -493,7 +532,8 @@ const recText = (page) => page.evaluate(() =>
       set('rj-plot', 'B9');
       set('rj-qty', '1200');
       set('rj-reported', 'Ali Bin Hassan');
-      set('rj-worked', '');
+      // Tapped off, the way a person does it.
+      [...document.querySelectorAll('#rj-worked-chips .rj-chip.on')].forEach((b) => b.click());
       set('rj-date', d);
       saveRejSubmission();
     }, fixedDate);

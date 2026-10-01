@@ -650,7 +650,7 @@
       </div>
       <div class="frow"><label data-i18n="mod.racun">Chemical</label><input type="text" id="rj-chemical" placeholder="e.g. Manzate 50gm + Bond 15mL"></div>
       <div class="grid2">
-        <div class="frow"><label data-i18n="mod.plot">Plot</label><input type="text" id="rj-plot" placeholder="e.g. B1"></div>
+        <div class="frow"><label data-i18n="mod.plot">Plot</label><input type="text" id="rj-plot" placeholder="e.g. B1" oninput="renderRejWorkers()"></div>
         <div class="frow"><label data-i18n="mod.batch">Batch No.</label><input type="text" id="rj-batch" placeholder="e.g. 252, 253"></div>
       </div>
       <div class="frow"><label data-i18n="mod.qty">Quantity</label><input type="number" min="0" id="rj-qty"></div>
@@ -665,11 +665,17 @@
            for being credited to the wrong person could not be corrected here:
            the name on the phone's history card and on the salary claim was
            the one field the office could not reach. -->
-      <div class="grid2">
-        <div class="frow"><label data-i18n="rej.reportedBy">Reported By</label>
-          <input type="text" id="rj-reported" placeholder="Who keyed it on the phone"></div>
-        <div class="frow"><label data-i18n="rej.workedBy">Worked By</label>
-          <input type="text" id="rj-worked" placeholder="Comma-separated"></div>
+      <div class="frow"><label data-i18n="rej.reportedBy">Reported By</label>
+        <input type="text" id="rj-reported" placeholder="Who keyed it on the phone"></div>
+      <!-- Worked By is PICKED, not typed. The names are this nursery's
+           general workers off the payroll register — the same list the
+           Worker Record sheet ticks — because a name typed by hand is a name
+           the register does not know, and the claim cannot pay one of those.
+           Which nursery follows the PLOT above: change the plot to another
+           nursery's and the list changes with it. -->
+      <div class="frow"><label data-i18n="rej.workedBy">Worked By</label>
+        <input type="hidden" id="rj-worked">
+        <div id="rj-worked-chips" class="rj-chips"></div>
       </div>
       <div id="rej-who-note" style="font-size:11px;font-weight:600;color:var(--text-faint);
            line-height:1.45;margin:-6px 0 12px;"></div>

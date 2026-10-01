@@ -164,8 +164,10 @@ async function boot(browser, db) {
   return page;
 }
 
-/* The transplanting cell of the worker's row — the last Total (RM) column. */
-const CELL = '#transpl-table tbody tr:first-child td:nth-child(10)';
+/* The worker's row: capacity for transplanting is the 9th cell, the money
+   worked out from it the 10th. */
+const CELL = '#transpl-table tbody tr:first-child td:nth-child(9)';
+const RM   = '#transpl-table tbody tr:first-child td:nth-child(10)';
 const NAME = '#transpl-table tbody tr:first-child td:nth-child(2)';
 
 const cellText = (page) => page.$eval(CELL, (td) =>
@@ -181,108 +183,91 @@ const press = async (page, which, times) => {
   }
 };
 
+
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const DB = { mjmnpayroll_workers: REGISTER, nops_transplant_field_records: FIELD,
                mjmnpayroll_piece_rates: RATES, mjmnpayroll_earn_adjustments: [] };
 
-  console.log('\nThe buttons on the cell');
+  console.log('\nWhere the buttons are, and where they are not');
   {
     const page = await boot(browser, JSON.parse(JSON.stringify(DB)));
-    const cell = await page.$eval(CELL, (td) => ({
-      text: (td.textContent || '').replace(/\s+/g, ' ').trim(),
-      buttons: [...td.querySelectorAll('.cal-btn')].map((b) => b.textContent.trim()),
-      titles: [...td.querySelectorAll('.cal-btn')].map((b) => b.title)
-    }));
-    checkTrue('the cell shows what the sheet worked out', cell.text.startsWith('RM 250.00'));
-    check('…with a minus and a plus beside it', cell.buttons, ['−', '+']);
-    check('…which say what they do', cell.titles, ['Take RM 0.01 off', 'Add RM 0.01']);
-    checkFalse('and no pencil, which is what they replaced', /✎/.test(cell.text));
-
-    /* What the sheet worked out used to be a red line under every adjusted
-       figure. On a sheet where every row carries a cent that is eight red
-       lines saying the same thing, and the line under the WORKER's name
-       already answers how much. */
-    await press(page, '+');
-    const after = await page.$eval(CELL, (td) => ({
-      txt: (td.textContent || '').replace(/\s+/g, ' ').trim(),
-      title: td.title
-    }));
-    checkFalse('an adjusted cell does not print "adjusted - was" under itself',
-               /adjusted/i.test(after.txt));
-    checkTrue('…but still says so on hover, with what the sheet worked out',
-              /Sheet worked out RM 250\.00/.test(after.title));
-    await press(page, '-');
-
-    const money = await page.$$eval('#transpl-table tbody tr:first-child td.money', (tds) =>
+    const row = await page.$$eval('#transpl-table tbody tr:first-child td', (tds) =>
       tds.map((td) => ({ txt: (td.textContent || '').replace(/\s+/g, ' ').trim(),
+                         money: td.classList.contains('money'),
                          n: td.querySelectorAll('.cal-btn').length })));
-    check('every one of the four jobs has them, not just the first',
-          money.slice(0, 4).map((m) => m.n), [2, 2, 2, 2]);
-    /* The subtotal is the four added up. A stepper on it would have nowhere
-       to put the cent — which job did it go on? — so it does not get one. */
-    check('…and the subtotal does not, because it is the four added up',
-          money[money.length - 1].n, 0);
-    checkTrue('…which is the subtotal', /880\.00/.test(money[money.length - 1].txt));
+
+    const caps = row.filter((c) => !c.money && /[0-9]/.test(c.txt) && c.txt !== '1');
+    check('every capacity on the row has a minus and a plus',
+          caps.map((c) => c.n), [2, 2, 2, 2]);
+    check('…and the money worked out from them has none — one figure, one way '
+        + 'to move it', row.filter((c) => c.money).map((c) => c.n), [0, 0, 0, 0, 0]);
+    checkTrue('the money still offers the full adjustment form, as it always did',
+              row.some((c) => c.money && /✎/.test(c.txt)));
+
+    const foot = await page.$$eval('#transpl-table tfoot tr td',
+      (tds) => tds.map((td) => td.querySelectorAll('.cal-btn').length));
+    check('the Grand Total has none: it is the column added up, and it follows',
+          foot, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     await page.close();
   }
 
-  console.log('\nOne press is one cent');
+  console.log('\nOne press is one hundredth of a share');
   {
     const page = await boot(browser, JSON.parse(JSON.stringify(DB)));
-    await press(page, '+');
-    check('the cell goes up by a cent', await cellText(page), 'RM 250.01');
-    check('…and the worker’s name says so', await calLine(page), 'calibrate RM0.01');
+    check('it starts as the field divided it out', await cellText(page), '1,000');
+    check('…and the money is that times the rate',
+          await page.$eval(RM, (td) => (td.firstChild.textContent || '').trim()), 'RM 250.00');
 
-    await press(page, '+', 2);
-    check('three presses, three cents', await cellText(page), 'RM 250.03');
-    check('…counted under the name', await calLine(page), 'calibrate RM0.03');
+    await press(page, '-');
+    check('one press takes a hundredth off the share', await cellText(page), '999.99');
+    check('…and says so under the worker’s name', await calLine(page), 'calibrate -0.01');
 
-    await press(page, '-', 4);
-    check('and down the other way, past where it started', await cellText(page), 'RM 249.99');
-    check('…which reads as a minus', await calLine(page), 'calibrate -RM0.01');
+    await press(page, '-', 3);
+    check('four presses, four hundredths', await cellText(page), '999.96');
+    check('…counted under the name', await calLine(page), 'calibrate -0.04');
+    check('THE MONEY FOLLOWS THE SHARE IT IS WORKED OUT FROM',
+          await page.$eval(RM, (td) => (td.firstChild.textContent || '').trim()), 'RM 249.99');
 
-    console.log('\n…and the sheet follows it');
-    const foot = await page.$eval('#transpl-table tfoot tr', (tr) =>
-      [...tr.children].map((td) => (td.textContent || '').trim()));
-    checkTrue('the grand total is the calibrated figure, not the worked-out one',
-              foot.join(' ').includes('249.99'));
+    const foot = await page.$$eval('#transpl-table tfoot tr td',
+      (tds) => tds.map((td) => (td.textContent || '').trim()));
+    check('…and so does the column total', foot[7], '999.96');
+    check('…and the money total with it', foot[8], 'RM 249.99');
 
-    console.log('\nStepping back onto the sheet’s own figure');
-    await press(page, '+');
-    check('the cell is back where it started', await cellText(page), 'RM 250.00');
-    check('…and the line goes with it, rather than reading RM0.00',
-          await calLine(page), null);
+    await press(page, '+', 4);
+    check('stepping back is where it started', await cellText(page), '1,000');
+    check('…the money with it',
+          await page.$eval(RM, (td) => (td.firstChild.textContent || '').trim()), 'RM 250.00');
+    check('…and the line goes, rather than reading 0.00', await calLine(page), null);
     await page.close();
   }
 
   console.log('\nWhat reaches the database');
   {
     const page = await boot(browser, JSON.parse(JSON.stringify(DB)));
-    await press(page, '+', 5);
-    const during = await page.evaluate(() => window.__WRITES.length);
+    await press(page, '-', 5);
     check('five presses in a row write NOTHING while the pressing goes on',
-          during, 0);
+          await page.evaluate(() => window.__WRITES.length), 0);
 
     await page.waitForFunction(() => window.__WRITES.length > 0, { timeout: 5000 });
     await page.waitForTimeout(300);
     const w = await page.evaluate(() => window.__WRITES);
     check('…then one write, once it stops', w.length, 1);
-    check('…of the figure it ended on', w[0].row.amount, 250.05);
+    check('…of the share it ended on', w[0].row.amount, 999.95);
     check('…as an ordinary earn adjustment', [w[0].table, w[0].op],
           ['mjmnpayroll_earn_adjustments', 'upsert']);
-    check('…against this worker and this job',
+    check('…against this worker, under a job code that cannot be a real one',
           [w[0].row.worker_name, w[0].row.work_code, w[0].row.sheet, w[0].row.section],
-          [WORKER, 'transplanting', 'transplanting', 'UNN2']);
+          [WORKER, 'cap:transplanting', 'transplanting', 'UNN2']);
     check('…in this month', w[0].row.month, YM);
-    checkTrue('…carrying a reason, which the table requires',
-              /Calibrated to the cent/.test(w[0].row.reason)
-              && /250\.00/.test(w[0].row.reason));
+    checkTrue('…carrying a reason in the right units, which the table requires',
+              /the field divided out 1,000/.test(w[0].row.reason)
+              && !/RM/.test(w[0].row.reason));
     checkTrue('…and who did it', /elon/i.test(String(w[0].row.adjusted_by || '')));
 
     console.log('\n…and stepping all the way back removes the row');
     await page.evaluate(() => { window.__WRITES = []; });
-    await press(page, '-', 5);
+    await press(page, '+', 5);
     await page.waitForFunction(() => window.__WRITES.length > 0, { timeout: 5000 });
     await page.waitForTimeout(300);
     const back = await page.evaluate(() => window.__WRITES);
@@ -294,32 +279,28 @@ const press = async (page, which, times) => {
     await page.close();
   }
 
-  console.log('\nThe cell is still the way to the full form');
+  console.log('\nThe money cell is untouched by any of this');
   {
     const page = await boot(browser, JSON.parse(JSON.stringify(DB)));
-    await press(page, '+');
-    checkFalse('pressing a button does NOT open the adjustment form',
+    await press(page, '-');
+    checkFalse('pressing a capacity button does not open the adjustment form',
                await page.evaluate(() =>
                  document.getElementById('adjust-modal').classList.contains('open')));
-    await page.click(CELL, { position: { x: 20, y: 10 } });
-    checkTrue('clicking the amount still does',
+    await page.click(RM, { position: { x: 20, y: 10 } });
+    checkTrue('clicking the money still does',
               await page.evaluate(() =>
                 document.getElementById('adjust-modal').classList.contains('open')));
-    check('…carrying the calibrated figure, not the worked-out one',
-          await page.$eval('#adj-amount', (el) => el.value), '250.01');
     await page.close();
   }
 
   console.log('\nWhere it refuses');
   {
     const page = await boot(browser, JSON.parse(JSON.stringify(DB)));
-    // Nothing is paid below nothing.
-    const low = await page.evaluate(() => {
-      calibrateStep('transplanting', 'transpl', 'UNN2', 'Ali Bin Hassan', 'lining', 0, -1);
-      const a = earnAdjForTest ? null : null;
-      return (window.__DB.mjmnpayroll_earn_adjustments || []).length;
-    }).catch(() => 0);
-    check('a cell worth nothing cannot be stepped below nothing', low, 0);
+    const empty = await page.$$eval('#transpl-table tbody tr:first-child td', (tds) =>
+      tds.filter((td) => (td.textContent || '').trim() === '—')
+         .map((td) => td.querySelectorAll('.cal-btn').length));
+    checkTrue('a share the field never divided out has nothing to nudge',
+              empty.every((n) => n === 0));
 
     /* The permission is asked again at the press, not only when the cell was
        drawn — the two must not be able to disagree. */
@@ -328,7 +309,8 @@ const press = async (page, which, times) => {
       const a = window.alert; window.alert = (m) => { said = m; };
       const real = window.mayAdjust;
       window.mayAdjust = () => false;
-      calibrateStep('transplanting', 'transpl', 'UNN2', 'Ali Bin Hassan', 'transplanting', 250, 1);
+      calibrateStep('transplanting', 'transpl', 'UNN2', 'Ali Bin Hassan',
+                    'cap:transplanting', 1000, 1);
       window.mayAdjust = real; window.alert = a;
       return said;
     });
@@ -345,14 +327,14 @@ const press = async (page, which, times) => {
       window.__ALERTS = [];
       window.alert = (m) => { window.__ALERTS.push(m); };
     });
-    await press(page, '+', 2);
-    check('the screen shows it straight away', await cellText(page), 'RM 250.02');
+    await press(page, '-', 2);
+    check('the screen shows it straight away', await cellText(page), '999.98');
     await page.waitForFunction(() => (window.__ALERTS || []).length > 0, { timeout: 5000 });
     await page.waitForTimeout(200);
     checkTrue('…and says so when it does not save',
               await page.evaluate(() => /did not save/i.test(window.__ALERTS[0] || '')));
     check('…and puts the cell back to what the database actually holds',
-          await cellText(page), 'RM 250.00');
+          await cellText(page), '1,000');
     check('…with nothing left under the name', await calLine(page), null);
     await page.close();
   }
@@ -371,72 +353,14 @@ const press = async (page, which, times) => {
               !before.some((l) => /calibrate/.test(l)));
     checkTrue('…and the worker is on it', before.includes(WORKER));
 
-    await press(page, '-', 1);
+    await press(page, '-', 4);
     await page.waitForTimeout(50);
     const after = await pdfOf();
     checkTrue('THE PAPER SAYS IT TOO, under the name',
-              after.includes('calibrate -RM0.01'));
+              after.includes('calibrate -0.04'));
     checkTrue('…the worker is still named above it', after.includes(WORKER));
-    checkTrue('…and the figure printed is the calibrated one',
-              after.includes('RM 249.99'));
-
-    await press(page, '+', 3);
-    await page.waitForTimeout(50);
-    const up = await pdfOf();
-    checkTrue('two cents on reads as a plus, with no sign',
-              up.includes('calibrate RM0.02'));
-    await page.close();
-  }
-
-  console.log('\nThe capacity Grand Total');
-  {
-    const page = await boot(browser, JSON.parse(JSON.stringify(DB)));
-    /* The foot opens with one cell spanning No. and Worker, so its columns
-       run two behind the body's: capacity for transplanting is the 8th. */
-    const CAPTOT = '#transpl-table tfoot tr td:nth-child(8)';
-    const capText = () => page.$eval(CAPTOT, (td) => (td.firstChild.textContent || '').trim());
-    const capLine = () => page.$eval(CAPTOT, (td) => {
-      const d = td.querySelector('.cal-line');
-      return d ? (d.textContent || '').replace(/\s+/g, ' ').trim() : null;
-    });
-    const capPress = async (which, times) => {
-      for (let i = 0; i < (times || 1); i++) {
-        await page.click(`${CAPTOT} .cal-btn:nth-child(${which === '+' ? 2 : 1})`);
-        await page.waitForTimeout(40);
-      }
-    };
-
-    check('it starts as the workers\u2019 shares added up', await capText(), '1,000');
-    check('…and it has a stepper of its own',
-          await page.$$eval(`${CAPTOT} .cal-btn`, (b) => b.map((x) => x.textContent.trim())),
-          ['\u2212', '+']);
-    check('…with nothing under it until something is nudged', await capLine(), null);
-
-    await capPress('-', 4);
-    check('four presses take four hundredths off the TOTAL', await capText(), '999.96');
-    check('…and it says by how much, in units and not in ringgit',
-          await capLine(), 'calibrate -0.04');
-
-    const rows = await page.$$eval('#transpl-table tbody tr td:nth-child(9)',
-      (tds) => tds.map((td) => (td.textContent || '').trim()));
-    check('THE WORKERS\u2019 OWN SHARES DO NOT MOVE — their share of the plot '
-        + 'is not a rounding', rows, ['1,000']);
-    const money = await page.$eval('#transpl-table tfoot tr td:nth-child(9)',
-      (td) => (td.textContent || '').trim());
-    check('…and neither does the money', money, 'RM 250.00');
-
-    await page.waitForFunction(() => window.__WRITES.length > 0, { timeout: 5000 });
-    await page.waitForTimeout(300);
-    const w = await page.evaluate(() => window.__WRITES[window.__WRITES.length - 1]);
-    check('one write, of the calibrated total', w.row.amount, 999.96);
-    check('…under a worker name and a job code that cannot be a real one',
-          [w.row.worker_name, w.row.work_code], ['(grand total)', 'cap:transplanting']);
-    checkTrue('…with a reason in the right units',
-              /shares add to 1,000/.test(w.row.reason) && !/RM/.test(w.row.reason));
-
-    await capPress('+', 4);
-    check('stepping back is the figure it started at', await capText(), '1,000');
-    check('…and the line goes', await capLine(), null);
+    checkTrue('…and the figures printed are the calibrated ones',
+              after.includes('999.96') && after.includes('RM 249.99'));
     await page.close();
   }
 
