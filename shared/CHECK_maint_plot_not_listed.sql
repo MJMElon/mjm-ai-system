@@ -21,7 +21,7 @@
 --
 --    capacity a number greater than 0, and listed = yes
 --      -> the plot IS on the list and the rows should be drawing. If they
---         are not, the nursery name differs between the two tables; the
+--         are not, the nursery name differs between the two tables. The
 --         "nursery" columns below say which names are in play.
 --
 --    capacity 0 or (none), listed = yes
