@@ -22,6 +22,14 @@ What that SQL should be:
   it worked rather than hoping. Say what a good result looks like.
 - **One result set.** The SQL Editor shows only the LAST statement's result, so
   a file of nine queries answers eight questions into the void. UNION ALL them.
+- **Survives a paste.** The editor is not psql: it has choked on a regular
+  expression, on a backslash, and on `ERROR: 42601: syntax error at end of
+  input` with nothing to point at. So: no regex and no backslashes (`split_part`,
+  `position()`, `left()`, `LIKE` with no escapes do the same work); the file
+  ENDS at its last semicolon, with the explanation of what to look for ABOVE the
+  query rather than trailing after it; and no semicolon inside a comment. A
+  trailing comment block is a statement with no statement in it, which is what
+  that error reads like.
 - **Tested first.** There is a scratch Postgres 16 for this — see below. Run
   the SQL against a stubbed copy of the real tables before handing it over, and
   test it against the state the database is ACTUALLY in, not a fresh one.

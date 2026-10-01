@@ -17,6 +17,35 @@
 --  done and the month follows that date. This moves the records already
 --  filed under the wrong one.
 --
+-- ── What you should see ─────────────────────────────────────────────────
+-- The SQL Editor shows only the LAST statement's result, so this is one
+-- query. A line per record moved, a line per record that could not be, and
+-- a summary.
+--
+--   moved      N3 / transplant   qty 1200 - crew 2   now in Sep 2026
+--   moved      N3 / polybag      qty 1200 - crew 3   now in Sep 2026
+--   summary    moved             2                   from Oct 2026 to Sep 2026
+--
+-- One line per JOB, not per plot: a plot has four of them and each is its own
+-- record, so moving N3 moves every job recorded on N3 that month.
+--
+-- NO "moved" LINES AND A SUMMARY OF 0 on the first run means nothing matched
+-- -- check the nursery and plot spellings against what
+-- shared/CHECK_transplant_not_on_claim.sql prints.
+--
+-- A SECOND RUN prints only the summary, with 0 moved. That is the file
+-- working, not failing.
+--
+-- A "left behind" line means that plot's job is ALREADY recorded in the
+-- destination month. Two records for one job on one plot is not something
+-- this file can choose between -- open both in the FC Portal and delete the
+-- one that is wrong.
+--
+-- A record with "crew 0" has nobody named on it. Moving it puts it in the
+-- right month, but it still pays nobody until somebody is added to it in the
+-- FC Portal -- see shared/CHECK_transplant_not_on_claim.sql.
+-- ────────────────────────────────────────────────────────────────────────
+--
 --  SET THE FIVE VALUES BELOW. They are the whole of what this file does:
 --  the records of that nursery in FROM_MONTH move to TO_MONTH, and their
 --  work date is stamped with NEW_DATE.
@@ -77,34 +106,6 @@ moved AS (
                FROM jsonb_array_elements(COALESCE(t.workers, '[]'::jsonb)) w
               WHERE COALESCE(w ->> 'name', '') <> '') AS crew
 )
--- ── What you should see ─────────────────────────────────────────────────
--- The SQL Editor shows only the LAST statement's result, so this is one
--- query. A line per record moved, a line per record that could not be, and
--- a summary.
---
---   moved      N3 / transplant   qty 1200 - crew 2   now in Sep 2026
---   moved      N3 / polybag      qty 1200 - crew 3   now in Sep 2026
---   summary    moved             2                   from Oct 2026 to Sep 2026
---
--- One line per JOB, not per plot: a plot has four of them and each is its own
--- record, so moving N3 moves every job recorded on N3 that month.
---
--- NO "moved" LINES AND A SUMMARY OF 0 on the first run means nothing matched
--- -- check the nursery and plot spellings against what
--- shared/CHECK_transplant_not_on_claim.sql prints.
---
--- A SECOND RUN prints only the summary, with 0 moved. That is the file
--- working, not failing.
---
--- A "left behind" line means that plot's job is ALREADY recorded in the
--- destination month. Two records for one job on one plot is not something
--- this file can choose between -- open both in the FC Portal and delete the
--- one that is wrong.
---
--- A record with "crew 0" has nobody named on it. Moving it puts it in the
--- right month, but it still pays nobody until somebody is added to it in the
--- FC Portal -- see shared/CHECK_transplant_not_on_claim.sql.
--- ────────────────────────────────────────────────────────────────────────
 SELECT * FROM (
   SELECT 1 AS ord,
          'moved'                                         AS what,

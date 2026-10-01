@@ -22,6 +22,35 @@
 --
 --  This says which. It reads nothing but the records themselves.
 --
+-- WHAT TO LOOK FOR
+--
+--   NO "month in table" ROW SAYING "this is the month the page is showing"
+--   -> nothing was ever saved for that month. Either the work was recorded
+--      under another month, or it never reached the database at all. The
+--      other "month in table" rows say which months DO hold records.
+--
+--   "record" ROWS SAYING "NOBODY NAMED"
+--   -> the work and its quantity are in the database, but no worker is on
+--      the record. The claim pays per person, so it has nobody to pay and
+--      shows nothing. Open each plot named here in the FC Portal under
+--      Maintenance -> Transplanting Job and add who did the work. This is
+--      the usual answer when a conductor is sure he keyed it.
+--
+--   "record" ROWS SAYING "another nursery"
+--   -> they are filed under the nursery shown in detail_1. Click that
+--      circle on the claim.
+--
+--   ANY "nursery not a section" ROW
+--   -> that plot's nursery is spelled in a way the payroll does not know.
+--      The work is on the claim, but under the "No section" circle. Correct
+--      the plot's nursery in Facility Management.
+--
+--   EVERY "record" ROW SAYING "on the claim for this nursery", AND THE
+--   SHEET STILL EMPTY
+--   -> the lines exist but are filed under the section the WORKER REGISTER
+--      puts those people in. The claim itself now says so in red under the
+--      table. shared/CHECK_why_worker_missing.sql goes into that one.
+--
 --  CHANGE THE MONTH AND THE NURSERY ON THE NEXT TWO LINES if they are not
 --  Sep 2026 and UNN2. The month is spelled exactly as the page spells it:
 --  three letters, a space, four digits.
@@ -114,32 +143,3 @@ SELECT * FROM (
 
 ) x
 ORDER BY ord, detail_1, detail_2;
-
--- WHAT TO LOOK FOR
---
---   NO "month in table" ROW SAYING "this is the month the page is showing"
---   -> nothing was ever saved for that month. Either the work was recorded
---      under another month, or it never reached the database at all. The
---      other "month in table" rows say which months DO hold records.
---
---   "record" ROWS SAYING "NOBODY NAMED"
---   -> the work and its quantity are in the database, but no worker is on
---      the record. The claim pays per person, so it has nobody to pay and
---      shows nothing. Open each plot named here in the FC Portal under
---      Maintenance -> Transplanting Job and add who did the work. This is
---      the usual answer when a conductor is sure he keyed it.
---
---   "record" ROWS SAYING "another nursery"
---   -> they are filed under the nursery shown in detail_1. Click that
---      circle on the claim.
---
---   ANY "nursery not a section" ROW
---   -> that plot's nursery is spelled in a way the payroll does not know.
---      The work is on the claim, but under the "No section" circle. Correct
---      the plot's nursery in Facility Management.
---
---   EVERY "record" ROW SAYING "on the claim for this nursery", AND THE
---   SHEET STILL EMPTY
---   -> the lines exist but are filed under the section the WORKER REGISTER
---      puts those people in. The claim itself now says so in red under the
---      table; shared/CHECK_why_worker_missing.sql goes into that one.
