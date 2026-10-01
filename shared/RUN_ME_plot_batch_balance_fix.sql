@@ -1,33 +1,27 @@
-/* ═══════════════════════════════════════════════════════════════════════
-   WHAT IS STANDING IN EACH PLOT — THE MAIN NURSERY MOVEMENT REPORT
-
-   This view is what the FC Portal's Maintenance form reads to offer
-   "Batches in this plot". One rule and no exceptions: the batches a Field
-   Conductor is offered for a plot, and the quantity beside each, are the
-   Main Nursery Movement Report's own. MOVE_COLS.main in
-   operation_reports.html, column for column:
-
-     Balance = transplanted from PN + transfer in
-             - sold - 3rd culled - transfer out + stock adjustment
-
-   Two of those carry the report's own condition: a 3rd culling counts only
-   once the drone map has been keyed (MapQty:) — until the plot has been
-   flown the figure is a claim — and a stock calibration only once
-   [APPROVED …], with its own sign.
-
-   Everything else takes no part, because that report has no column for it:
-   the 1st and 2nd cullings, Planted, Seeds_Received and Seed Damage.
-
-   U1 is the worked example. The report prints batch 250 at 447 and batch
-   252 at 4,201, 4,648 for the plot. So does this.
-
-   A PN plot (P01–P52) has no main-nursery movement, so it offers no
-   batches. If maintenance is recorded on PN plots, the report's
-   Pre-Nursery section has to go back in beside this one.
-
-   Safe to re-run: everything is CREATE OR REPLACE, and no data is changed.
-   To undo, see the bottom of this file.
-═══════════════════════════════════════════════════════════════════════ */
+-- ════════════════════════════════════════════════════════════════════════
+-- THE FC PORTAL'S BATCH LIST IS THE MAIN NURSERY MOVEMENT REPORT
+--
+-- One rule and no exceptions. The batches a Field Conductor is offered for
+-- a plot, and the quantity beside each, are that report's own:
+--
+--   Balance = transplanted from PN + transfer in
+--           - sold - 3rd culled - transfer out + stock adjustment
+--
+-- Two carry the report's own condition: a 3rd culling counts only once the
+-- drone map has been keyed (MapQty:), and a stock calibration only once
+-- [APPROVED ...]. Everything else takes no part because the report has no
+-- column for it - the 1st and 2nd cullings, Planted, Seeds_Received and
+-- Seed Damage.
+--
+-- U1 is the worked example: the report prints batch 250 at 447 and batch
+-- 252 at 4,201, 4,648 for the plot. After this, so does the phone.
+--
+-- IT CHANGES NO DATA. Safe to run twice.
+--
+-- ONE THING TO KNOW: a PN plot (P01-P52) has no main-nursery movement, so
+-- it will offer no batches. If Field Conductors record maintenance on PN
+-- plots, say so and the report's Pre-Nursery section goes back in.
+-- ════════════════════════════════════════════════════════════════════════
 
 
 /* ── 1. THE TWO KEYS ───────────────────────────────────────────────────
@@ -177,32 +171,24 @@ WHERE  b.qty - coalesce(s.qty, 0) <> 0;
    this only opens the view itself. */
 GRANT SELECT ON shared_plot_batch_balance TO authenticated;
 
-
-/* ── 4. MAKE IT QUICK ──────────────────────────────────────────────────
-   The view reads the ledger once per call. This index is what keeps that
-   cheap — it is the same one in shared/index_inventory_logs.sql, repeated
-   here so this file stands on its own. */
-CREATE INDEX IF NOT EXISTS shared_inventory_logs_type_id_idx
-  ON shared_inventory_logs (transaction_type, id);
-ANALYZE shared_inventory_logs;
+NOTIFY pgrst, 'reload schema';
 
 
-/* ── 5. CHECK IT ───────────────────────────────────────────────────────
-   Pick a plot you know and compare it against the movement report. The
-   figures should agree row for row, negatives included. */
-SELECT plot_name, batch_name, qty
-FROM   shared_plot_batch_balance
-WHERE  plot_key = 'B5'
-ORDER  BY batch_key::bigint;
-
-
-/* ── TO UNDO ──
-   The view holds no data of its own, so dropping it loses nothing.
-
-       DROP VIEW IF EXISTS shared_plot_batch_balance;
-       DROP FUNCTION IF EXISTS mjm_plot_key(text);
-       DROP FUNCTION IF EXISTS mjm_batch_key(text);
-
-   The apps fall back to reading the ledger themselves the moment the view
-   is gone, so nothing breaks — it just goes back to being slow.
-*/
+-- ── WHAT SHOULD HAVE HAPPENED ──────────────────────────────────────────
+-- Then open the Nursery Report for any plot and compare. The batches and
+-- quantities should agree row for row - that is the check that matters and
+-- this file cannot do it for you.
+SELECT 'view rebuilt' AS check,
+       CASE WHEN to_regclass('public.shared_plot_batch_balance') IS NULL
+            THEN 'NO' ELSE 'yes' END AS result
+UNION ALL
+SELECT 'plot/batch rows the phone will offer',
+       (SELECT count(*)::text FROM shared_plot_batch_balance)
+UNION ALL
+SELECT 'batches still reading negative',
+       (SELECT count(*)::text FROM shared_plot_batch_balance WHERE qty < 0)
+UNION ALL
+SELECT 'which ones are still negative',
+       coalesce((SELECT string_agg(plot_name || ' batch ' || batch_name || ' (' || qty || ')', ', '
+                                   ORDER BY plot_name, batch_name)
+                 FROM shared_plot_batch_balance WHERE qty < 0), 'none');

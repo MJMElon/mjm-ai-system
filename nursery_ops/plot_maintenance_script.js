@@ -110,6 +110,10 @@ function getPlotQty(n, p){
 function setPlotQty(n, p, v){
   if (!plotQtyOverrides[n]) plotQtyOverrides[n] = {};
   plotQtyOverrides[n][p] = Math.max(0, +v || 0);
+  // A capacity keyed against a plot the schedules never knew makes it a
+  // plot of that nursery right away, not after the next reload — see
+  // _mergeCapacityPlots().
+  try { _mergeCapacityPlots(); } catch (_) {}
   if (_supabase) {
     _supabase.from('nops_maint_plot_qty')
       .upsert({ nursery: n, plot: p, qty: plotQtyOverrides[n][p], updated_at: new Date().toISOString() }, { onConflict: 'nursery,plot' })
@@ -571,6 +575,32 @@ function _mergeCustomPlots() {
   Object.keys(customPlots).forEach(n => {
     if (!NURSERY_PLOTS[n]) return;
     customPlots[n].forEach(p => { if (!NURSERY_PLOTS[n].includes(p)) NURSERY_PLOTS[n].push(p); });
+  });
+}
+
+/* Any plot with a capacity on record joins its nursery's list, exactly the
+   way a custom plot does. The Setting grid lists Seedling Stock's plots —
+   a larger list than the built-in one here — so a capacity keyed against a
+   plot this page never knew (B3-R, say) otherwise bought a row nowhere:
+   the capacity showed on Setting, and the weekly editors never offered the
+   plot. capacityOf() is the judge, so a Pre-Nursery plot counted in trays
+   qualifies the same way. Matching is on letters-and-digits, upper-cased —
+   the same rule every other crossing of this boundary uses. */
+function _mergeCapacityPlots() {
+  const norm = p => String(p || '').replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+  Object.keys(NURSERY_PLOTS).forEach(n => {
+    const have = new Set(NURSERY_PLOTS[n].map(norm));
+    const candidates = new Set();
+    const stock = qtyStockName(n);
+    [plotQtyOverrides[stock], plotQtyOverrides[n], aliasBucket(plotQtyOverrides, n),
+     plotTrays[stock], plotTrays[n], aliasBucket(plotTrays, n)].forEach(b => {
+      if (b) Object.keys(b).forEach(p => candidates.add(p));
+    });
+    candidates.forEach(p => {
+      const k = norm(p);
+      if (!k || have.has(k)) return;
+      if (capacityOf(n, p) > 0) { NURSERY_PLOTS[n].push(p); have.add(k); }
+    });
   });
 }
 
@@ -1585,6 +1615,9 @@ function persistState(n, m) {
       .upsert({ nursery: n, month: m, payload: _payload, updated_at: new Date().toISOString() }, { onConflict: 'nursery,month' })
       .then(({ error }) => { if (error) console.warn('[maint] schedule save failed:', error.message); });
   }
+  // Returned so saveSchedule() can copy the exact same payload into
+  // nops_maint_published — see publishSchedule()'s own comment.
+  return _payload;
 }
 
 /* Ticks used to live only in this browser's memory until someone pressed
@@ -4151,12 +4184,18 @@ function toggleAllInterrow(ri, ci){
    SAVE SCHEDULE — builds the flat task list and publishes it for the worker app.
    localStorage removed — publishSchedule() is the Supabase seam (TODO below).
 ════════════════════════════ */
-/* Publish the flat task list for the worker app to consume.
-   TODO(supabase): upsert `published_schedule` for (nursery, month) = tasks. */
-function publishSchedule(n, m, tasks) {
+/* Publishes BOTH the flat task list (tasks — kept for whatever still reads
+   it) and a full copy of the editable payload (payload — the SAME shape
+   nops_maint_state carries, built by persistState()). The worker app
+   (Barcode_Counter's loadSchedules()) reads nops_maint_published.payload,
+   not nops_maint_state, deliberately: a tick written to nops_maint_state
+   the moment it is made used to reach the field before anyone had pressed
+   Sync, which is the whole thing Sync was supposed to gate. Needs
+   nops_maint_published.payload — see RUN_ME_maint_published_payload.sql. */
+function publishSchedule(n, m, tasks, payload) {
   if (!_supabase) return;
   _supabase.from('nops_maint_published')
-    .upsert({ nursery: n, month: m, tasks: tasks, updated_at: new Date().toISOString() }, { onConflict: 'nursery,month' })
+    .upsert({ nursery: n, month: m, tasks: tasks, payload: payload, updated_at: new Date().toISOString() }, { onConflict: 'nursery,month' })
     .then(({ error }) => { if (error) console.warn('[maint] publish failed:', error.message); });
 }
 /* The button the Schedule tab actually presses: every nursery on the summary,
@@ -4246,14 +4285,17 @@ function saveSchedule(nursery, quiet) {
     });
   });
 
-  // Publish the flat task list for the worker app (Supabase seam)
-  publishSchedule(n, m, tasks);
+  // Persist the full editable state (Supabase seam) — captured here so the
+  // SAME payload can be copied into nops_maint_published below, rather
+  // than built twice and risking the two drifting apart.
+  const payload = persistState(n, m);
+
+  // Publish the flat task list AND the payload for the worker app
+  // (Supabase seam) — see publishSchedule()'s own comment.
+  publishSchedule(n, m, tasks, payload);
 
   // Snapshot pd state so post-save edits get the modified highlight
   snapshotPdSaved(s);
-
-  // Persist the full editable state (Supabase seam)
-  persistState(n, m);
 
   if (!quiet) showSaveToast(tasks.length);
   autoSyncRecords();
@@ -5794,6 +5836,9 @@ async function initDb() {
       if (!plotTrays[r.nursery]) plotTrays[r.nursery] = {};
       plotTrays[r.nursery][r.plot] = +r.trays || 0;
     });
+    // After BOTH capacity maps are filled — plots known only by their
+    // capacity row (see _mergeCapacityPlots) join their nursery's list.
+    _mergeCapacityPlots();
   } catch (e) { console.warn('[maint] initial DB load failed:', e); }
   _dbReady = true;
   /* Land on the tab the markup marks active, through switchTab, so the side
@@ -7718,8 +7763,22 @@ function renderWorkEditor() {
   const m = getMonth(), iso = monthISO(m), days = daysInMonthLabel(m);
   const work = WORKS.find(w => w.key === kind);
   const weeks = weeksOf(n, m, kind);
-  const plots = NURSERY_PLOTS[n] || [];
   ensureRounds(n, m);   // no week without a round behind it
+
+  /* Only plots with a capacity on record get a row — a plot whose capacity
+     reads "—" on Setting (the -R reserve plots, mostly) holds nothing to
+     spray and only pads the list (asked off, Sep 2026). Its figures were
+     already nothing: capacityOf() is what every total below reads. The one
+     exception is a plot that already carries a tick in this month — that
+     row stays visible whatever its capacity, so recorded work can never
+     silently vanish from the editor. */
+  const _s0 = getState(n, m);
+  const _hasTick = (p) => weeks.some(w => {
+    const cs = weCols(kind, w.slot, n, m) || [];
+    // The same (slot, ci) addressing the tick cells themselves render with.
+    return (cs.length ? cs : [{ ci: 0 }]).some(c => weColTicked(kind, w.slot, c.ci, p, _s0));
+  });
+  const plots = (NURSERY_PLOTS[n] || []).filter(p => capacityOf(n, p) > 0 || _hasTick(p));
 
   document.getElementById('we-title').textContent = `${stockLabel(n)} \u00b7 ${work.label}`;
   document.getElementById('we-sub').textContent = weeks.length
