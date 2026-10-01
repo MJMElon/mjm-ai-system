@@ -17,18 +17,22 @@
 --  done and the month follows that date. This moves the records already
 --  filed under the wrong one.
 --
---  SET THE FOUR VALUES BELOW. They are the whole of what this file does:
---  every record of that nursery in FROM_MONTH moves to TO_MONTH, and its
+--  SET THE FIVE VALUES BELOW. They are the whole of what this file does:
+--  the records of that nursery in FROM_MONTH move to TO_MONTH, and their
 --  work date is stamped with NEW_DATE.
+--
+--  PLOT narrows it to one plot. It is set to 'N3' because that is the one
+--  that was asked for. LEAVE IT EMPTY -- '' -- and every plot of that
+--  nursery in FROM_MONTH moves. Run it with one plot first and look at what
+--  comes back before widening it.
 --
 --  NEW_DATE is one date for all of them because the database has no record
 --  of the real ones -- the old code never stored a work date, only the day of
---  keying. Pick the day most of the work was done, or the last day of the
---  month. From now on each record carries its own, keyed on the phone, and
---  a conductor can correct any of these one by one there afterwards.
+--  keying. Pick the day the work was done, or the last day of the month.
 -- =====================================================================
 WITH q AS (
   SELECT 'UNN 2'::text      AS nursery,     -- as it is spelled on the records
+         'N3'::text         AS plot,        -- '' for every plot
          'Oct 2026'::text   AS from_month,
          'Sep 2026'::text   AS to_month,
          DATE '2026-09-30'  AS new_date
@@ -41,6 +45,11 @@ pick AS (
    WHERE t.schedule_month = q.from_month
      AND upper(replace(COALESCE(t.nursery_name, ''), ' ', ''))
        = upper(replace(q.nursery, ' ', ''))
+     -- One plot, or every plot when PLOT is left empty. Compared the same
+     -- way as the nursery, so "N3" and "n 3" are one plot.
+     AND (q.plot = ''
+          OR upper(replace(COALESCE(t.plot_name, ''), ' ', ''))
+           = upper(replace(q.plot, ' ', '')))
 ),
 -- The destination month already has this plot's job. One record per plot per
 -- job per month is a unique index, so moving this one would fail the whole
@@ -73,9 +82,16 @@ moved AS (
 -- query. A line per record moved, a line per record that could not be, and
 -- a summary.
 --
---   moved      N4 / transplant   qty 1200 · crew 2   now in Sep 2026
---   moved      N7 / polybag      qty 900  · crew 3   now in Sep 2026
+--   moved      N3 / transplant   qty 1200 - crew 2   now in Sep 2026
+--   moved      N3 / polybag      qty 1200 - crew 3   now in Sep 2026
 --   summary    moved             2                   from Oct 2026 to Sep 2026
+--
+-- One line per JOB, not per plot: a plot has four of them and each is its own
+-- record, so moving N3 moves every job recorded on N3 that month.
+--
+-- NO "moved" LINES AND A SUMMARY OF 0 on the first run means nothing matched
+-- -- check the nursery and plot spellings against what
+-- shared/CHECK_transplant_not_on_claim.sql prints.
 --
 -- A SECOND RUN prints only the summary, with 0 moved. That is the file
 -- working, not failing.
