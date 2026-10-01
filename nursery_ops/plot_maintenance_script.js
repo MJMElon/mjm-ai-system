@@ -1615,6 +1615,9 @@ function persistState(n, m) {
       .upsert({ nursery: n, month: m, payload: _payload, updated_at: new Date().toISOString() }, { onConflict: 'nursery,month' })
       .then(({ error }) => { if (error) console.warn('[maint] schedule save failed:', error.message); });
   }
+  // Returned so saveSchedule() can copy the exact same payload into
+  // nops_maint_published — see publishSchedule()'s own comment.
+  return _payload;
 }
 
 /* Ticks used to live only in this browser's memory until someone pressed
@@ -4101,12 +4104,18 @@ function toggleAllInterrow(ri, ci){
    SAVE SCHEDULE — builds the flat task list and publishes it for the worker app.
    localStorage removed — publishSchedule() is the Supabase seam (TODO below).
 ════════════════════════════ */
-/* Publish the flat task list for the worker app to consume.
-   TODO(supabase): upsert `published_schedule` for (nursery, month) = tasks. */
-function publishSchedule(n, m, tasks) {
+/* Publishes BOTH the flat task list (tasks — kept for whatever still reads
+   it) and a full copy of the editable payload (payload — the SAME shape
+   nops_maint_state carries, built by persistState()). The worker app
+   (Barcode_Counter's loadSchedules()) reads nops_maint_published.payload,
+   not nops_maint_state, deliberately: a tick written to nops_maint_state
+   the moment it is made used to reach the field before anyone had pressed
+   Sync, which is the whole thing Sync was supposed to gate. Needs
+   nops_maint_published.payload — see RUN_ME_maint_published_payload.sql. */
+function publishSchedule(n, m, tasks, payload) {
   if (!_supabase) return;
   _supabase.from('nops_maint_published')
-    .upsert({ nursery: n, month: m, tasks: tasks, updated_at: new Date().toISOString() }, { onConflict: 'nursery,month' })
+    .upsert({ nursery: n, month: m, tasks: tasks, payload: payload, updated_at: new Date().toISOString() }, { onConflict: 'nursery,month' })
     .then(({ error }) => { if (error) console.warn('[maint] publish failed:', error.message); });
 }
 /* The button the Schedule tab actually presses: every nursery on the summary,
@@ -4196,14 +4205,17 @@ function saveSchedule(nursery, quiet) {
     });
   });
 
-  // Publish the flat task list for the worker app (Supabase seam)
-  publishSchedule(n, m, tasks);
+  // Persist the full editable state (Supabase seam) — captured here so the
+  // SAME payload can be copied into nops_maint_published below, rather
+  // than built twice and risking the two drifting apart.
+  const payload = persistState(n, m);
+
+  // Publish the flat task list AND the payload for the worker app
+  // (Supabase seam) — see publishSchedule()'s own comment.
+  publishSchedule(n, m, tasks, payload);
 
   // Snapshot pd state so post-save edits get the modified highlight
   snapshotPdSaved(s);
-
-  // Persist the full editable state (Supabase seam)
-  persistState(n, m);
 
   if (!quiet) showSaveToast(tasks.length);
   autoSyncRecords();
