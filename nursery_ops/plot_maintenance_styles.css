@@ -1009,7 +1009,11 @@ th.we-plot,td.we-plot{text-align:left;font-size:12.5px;font-weight:700;
   padding:2px 9px;cursor:pointer;}
 .we-all:hover{background:#eaf7f0;}
 
-.we-tick{width:26px;height:26px;border-radius:var(--r-sm);border:1.5px solid var(--border);
+/* Circular, matching .ss-tick on the Monthly Scheduled Work summary — the
+   detailed sheet's own ticks used to be a rounded square, which read as a
+   different control on the same page rather than the same tick with more
+   detail behind it. */
+.we-tick{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);
   background:var(--bg-white);color:transparent;font-size:14px;font-weight:800;line-height:1;
   cursor:pointer;transition:all .12s;}
 .we-tick:hover{border-color:var(--green);}
@@ -1021,6 +1025,10 @@ th.we-plot,td.we-plot{text-align:left;font-size:12.5px;font-weight:700;
    Save button stay where they are. */
 #we-modal .modal{display:flex;flex-direction:column;overflow:hidden;}
 #we-modal .modal-top,#we-modal .modal-footer{flex:0 0 auto;}
+/* The same pale green .ss-head carries on the summary card this editor
+   opens from — scoped to #we-modal, not the shared .modal-top, so the
+   other popups (Track, Add Record, PDF) keep their plain white header. */
+#we-modal .modal-top{background:#f2f7f4;}
 #we-modal .modal-body{flex:1 1 auto;overflow-y:auto;min-height:0;}
 /* Two columns across a 760px modal leaves the ticks stranded in acres of
    space; the plot name only needs the width of a plot name. */
@@ -1199,7 +1207,12 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
    that scrolls, so the cap only has to stop the table from pushing the
    footer off — it does not have to be the scroller. */
 .we-scroll{overflow:auto;max-height:calc(94vh - 210px);}
-.we-wk{background:var(--green) !important;color:#fff !important;font-size:11.5px !important;
+/* Same pale green band as .ss-head on the Monthly Scheduled Work summary
+   card this editor opens from — it used to be solid dark green with white
+   text, a different header language on the same screen. The +/−/× controls
+   below were white-on-green to read against that; now the band is pale
+   they're restyled dark-on-light instead, same idea as .ss-btn. */
+.we-wk{background:#f2f7f4 !important;color:var(--green-text) !important;font-size:11.5px !important;
   white-space:nowrap;position:relative;padding:7px 10px !important;}
 .we-wk-n{font-weight:900;letter-spacing:.8px;}
 .we-wk-d{background:#eaf7f0 !important;color:var(--text-head) !important;
@@ -1216,23 +1229,25 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
    band, because × on the right takes the whole week and its ticks away, and
    three small buttons in a row is how the wrong one gets pressed. */
 .we-col-n{position:absolute;top:4px;left:5px;display:flex;gap:3px;}
+/* Dark-on-light now that .we-wk is the pale band .ss-head is — same
+   bordered-white-button look .ss-btn uses, green on hover. */
 .we-col-n button{width:20px;height:20px;padding:0;font-family:var(--font);
-  font-size:14px;font-weight:800;line-height:1;color:#fff;
-  background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.42);
+  font-size:14px;font-weight:800;line-height:1;color:var(--text-muted);
+  background:var(--bg-white);border:1.5px solid var(--border);
   border-radius:5px;cursor:pointer;}
-.we-col-n button:hover:not(:disabled){background:#fff;color:var(--green);border-color:#fff;}
+.we-col-n button:hover:not(:disabled){background:#eaf7f0;color:var(--green);border-color:var(--green);}
 /* Greyed rather than hidden at the ends: a control that disappears reads as
    a control that was never there, and the next press lands on whatever has
    slid into its place. */
 .we-col-n button:disabled{opacity:.32;cursor:default;}
 
 /* Removing a week takes its ticks with it, so it is the one control here
-   coloured like a consequence. On the dark week band it needs its own. */
+   coloured like a consequence. */
 .we-week-x{position:absolute;top:4px;right:5px;width:20px;height:20px;padding:0;
-  font-size:14px;line-height:1;font-family:var(--font);color:#fff;
-  background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.42);
+  font-size:14px;line-height:1;font-family:var(--font);color:var(--text-muted);
+  background:var(--bg-white);border:1.5px solid var(--border);
   border-radius:5px;cursor:pointer;}
-.we-week-x:hover{background:#fff;color:var(--red);border-color:#fff;}
+.we-week-x:hover{background:#fdecec;color:var(--red);border-color:var(--red);}
 /* The chemical for a column sits directly over the ticks it governs. */
 .we-col-l{font-size:10px;font-weight:900;letter-spacing:.6px;margin-bottom:4px;}
 .we-col-d{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:4px;}
