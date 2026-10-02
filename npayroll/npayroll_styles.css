@@ -49,10 +49,6 @@ body { font-family: 'Outfit', system-ui, sans-serif; background: var(--bg); colo
 .topbar-title { font-size: 14px; font-weight: 900; color: var(--text-head);
                 text-transform: uppercase; letter-spacing: .1em; white-space: nowrap;
                 overflow: hidden; text-overflow: ellipsis; }
-.topbar-badge { width: 32px; height: 32px; border-radius: var(--r-sm);
-                background: var(--ink); color: #fff; flex-shrink: 0;
-                display: flex; align-items: center; justify-content: center;
-                font-weight: 900; font-size: 12px; }
 .back-link { font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
              color: var(--text-muted); text-decoration: none; border: 1.5px solid #e2e8f0;
              border-radius: 99px; padding: 6px 14px; white-space: nowrap; transition: all .15s; }
