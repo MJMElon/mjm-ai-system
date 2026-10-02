@@ -18,7 +18,7 @@ for (const [y, m, how] of [
 
 // completed
 const start = src.indexOf('  // ── Derived figures ──');
-const end   = src.indexOf('  const rows = Object.values(rowsByBatch);', start);
+const end   = src.indexOf('  // Years/suppliers offered by their pickers', start);
 const derive = new Function('rowsByBatch','asAt','_losAgeMonths','_losAgeLabel',
   src.slice(start,end) + '\nreturn rowsByBatch;');
 const run = (f) => { const r = Object.assign({ planted:0,cull1:0,cull2:0,cull3:0,trans:0,

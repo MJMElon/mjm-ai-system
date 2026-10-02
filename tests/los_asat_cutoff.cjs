@@ -6,7 +6,7 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'operation', 'operation_r
 
 const i = src.indexOf('async function _losBuildAllRows(asAt) {');
 const body = src.slice(src.indexOf('  // ── One row per batch ──', i),
-                       src.indexOf('  const rows = Object.values(rowsByBatch);', i));
+                       src.indexOf('  // Years/suppliers offered by their pickers', i));
 
 // The log rows: everything about batch 268, before and after 30 Sep 2026.
 const logs = [
@@ -31,7 +31,7 @@ function build(asAt) {
     '_RE_LOS_SUPPLIER','_RE_LOS_MPOB','_RE_LOS_DONO','_RE_LOS_DO_QTY','_RE_LOS_FOC_PCT',
     '_RE_LOS_REPL','_RE_LOS_FROM_TRAY','_RE_LOS_FROM_PLOT','_RE_LOS_APPROVED',
     '_RE_LOS_CAL_REPORT','_RE_LOS_CAL_SIDE',
-    body + '\nreturn Object.values(rowsByBatch);');
+    body + '\nreturn rows;');
   const never = /NEVERMATCH_x([0-9])/;
   return fn(asAt, { data: logs }, { data: dos },
     (l) => l.transaction_date || null,
