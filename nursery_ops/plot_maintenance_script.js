@@ -3802,12 +3802,19 @@ function scrollToTop() {
   catch (_) { window.scrollTo(0, 0); }   // older WebView, no smooth
 }
 
+/* The panels long enough to need it: the maintenance records, and the worker
+   register with a row per worker per job. Named rather than "every panel",
+   because the schedule and Setting fit on a screen and a button offering to
+   take you to the top of what you are already looking at is clutter. */
+const TO_TOP_PANELS = ['tab-record', 'tab-payroll'];
+
 function syncToTopBtn() {
   const btn = document.getElementById('rec-to-top');
   if (!btn) return;
-  const onRecord = !!document.querySelector('#tab-record.tab-panel.active');
+  const onLong = TO_TOP_PANELS.some(id =>
+    !!document.querySelector('#' + id + '.tab-panel.active'));
   const scrolled = (window.pageYOffset || document.documentElement.scrollTop || 0) > 400;
-  btn.classList.toggle('is-on', onRecord && scrolled);
+  btn.classList.toggle('is-on', onLong && scrolled);
 }
 window.addEventListener('scroll', syncToTopBtn, { passive: true });
 window.addEventListener('resize', syncToTopBtn, { passive: true });
