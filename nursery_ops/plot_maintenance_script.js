@@ -2946,9 +2946,139 @@ function _trackCell(r) {
     const far = x.m != null ? (x.m >= 1000 ? (x.m / 1000).toFixed(2) + ' km'
                                            : Math.round(x.m) + ' m') : '';
     const tip = [x.who, far, x.n ? x.n + ' fixes' : ''].filter(Boolean).join(' · ');
+    /* The thumbnail is empty markup here and is filled in when the row comes
+       into view — see _trackMinis. The line itself is not in this table's
+       read (a month of walks is a million points), so it is fetched for the
+       rows somebody actually looks at and no others. */
     return `<button type="button" class="trk-btn" onclick="openTrack(${x.id})"
-             title="${esc(tip || t('rec.trackView'))}">🛰️ ${esc(far || t('rec.trackView'))}</button>`;
+             title="${esc(tip || t('rec.trackView'))}">
+              <svg class="trk-mini is-empty" data-trk="${x.id}" viewBox="0 0 62 30"
+                   aria-hidden="true"></svg>
+              <span class="trk-far">${esc(far || t('rec.trackView'))}</span>
+            </button>`;
   }).join('');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   THE WALK, DRAWN IN THE ROW
+
+   A thumbnail of the route's own shape, so the list says at a glance whether
+   the plot was covered or the phone sat in a pocket, instead of only how far
+   it was. Clicking it opens the real map, as before.
+
+   THE LINE IS NOT IN THE LIST'S READ, deliberately — loadFieldRecords takes
+   the GPS summary and never gps_track, because this page reads a whole month
+   and a walk is a thousand points. So the thumbnails are filled in lazily:
+   a row that scrolls into view queues its id, the queue is fetched in ONE
+   request a moment later, and what comes back is cached. A row nobody looks
+   at costs nothing.
+
+   No tiles. One Leaflet map per row would be a hundred tile requests on a
+   table of fifty, which is slower than the thing it is trying to illustrate.
+   ══════════════════════════════════════════════════════════════ */
+const _trkCache = new Map();     // id → [[lng,lat], …] (simplified) or null
+let _trkQueue = new Set();
+let _trkTimer = null;
+let _trkSeen = null;
+
+/* Thin a walk down to the shape of it. A thumbnail 62 pixels wide cannot
+   show a thousand fixes and does not need to; evenly spaced keeps the shape
+   and the ends, which is what the eye reads. */
+function _trkThin(pts, max) {
+  if (!Array.isArray(pts) || pts.length <= max) return pts || [];
+  const out = [], step = (pts.length - 1) / (max - 1);
+  for (let i = 0; i < max; i++) out.push(pts[Math.round(i * step)]);
+  return out;
+}
+
+function _trkDraw(el, pts) {
+  if (!el) return;
+  if (!Array.isArray(pts) || pts.length < 2) { el.classList.add('is-empty'); return; }
+  const W = 62, H = 30, PAD = 4;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  pts.forEach(p => {
+    const x = Number(p[0]), y = Number(p[1]);
+    if (!isFinite(x) || !isFinite(y)) return;
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+  });
+  if (!isFinite(minX) || !isFinite(minY)) { el.classList.add('is-empty'); return; }
+  /* One scale for both axes, so a walk up and down a row does not come out
+     looking like a walk across the plot. A track that never moved has no
+     span at all, which would divide by nought — it draws as a dot. */
+  const spanX = maxX - minX, spanY = maxY - minY;
+  const span = Math.max(spanX, spanY);
+  const k = span > 0 ? (Math.min(W, H) - PAD * 2) / span : 0;
+  const ox = (W - spanX * k) / 2, oy = (H - spanY * k) / 2;
+  // Latitude grows upward, SVG's y grows downward.
+  const sx = (x) => ox + (x - minX) * k;
+  const sy = (y) => H - (oy + (y - minY) * k);
+  const d = pts.map((p, i) => (i ? 'L' : 'M') + sx(Number(p[0])).toFixed(1)
+                                        + ' ' + sy(Number(p[1])).toFixed(1)).join(' ');
+  const a = pts[0], b = pts[pts.length - 1];
+  el.classList.remove('is-empty');
+  el.innerHTML = `<path d="${d}"></path>`
+    + `<circle cx="${sx(Number(a[0])).toFixed(1)}" cy="${sy(Number(a[1])).toFixed(1)}" r="1.8"></circle>`
+    + `<circle cx="${sx(Number(b[0])).toFixed(1)}" cy="${sy(Number(b[1])).toFixed(1)}" r="1.8"></circle>`;
+}
+
+async function _trkFlush() {
+  _trkTimer = null;
+  const ids = [..._trkQueue].filter(id => !_trkCache.has(id));
+  _trkQueue = new Set();
+  if (!ids.length || !_supabase) { _trkPaint(); return; }
+  try {
+    const res = await _supabase.from('nops_maint_field_records')
+      .select('id, gps_track').in('id', ids);
+    if (res.error) throw res.error;
+    (res.data || []).forEach(row => {
+      _trkCache.set(row.id, _trkThin(Array.isArray(row.gps_track) ? row.gps_track : [], 48));
+    });
+  } catch (e) {
+    // A read that failed leaves the hatched placeholder, which is honest:
+    // nothing is drawn because nothing was read. Marked so it is not asked
+    // for again on every scroll.
+    console.warn('[track] preview read failed:', e.message || e);
+    ids.forEach(id => { if (!_trkCache.has(id)) _trkCache.set(id, null); });
+  }
+  _trkPaint();
+}
+
+function _trkPaint() {
+  document.querySelectorAll('.trk-mini[data-trk]').forEach(el => {
+    const id = Number(el.dataset.trk);
+    if (!_trkCache.has(id)) return;
+    if (el.dataset.drawn === String(id)) return;
+    el.dataset.drawn = String(id);
+    _trkDraw(el, _trkCache.get(id));
+  });
+}
+
+/* Called after every render of the record list. */
+function _trackMinis() {
+  if (typeof IntersectionObserver === 'undefined') {
+    // No observer: draw whatever is already cached and leave the rest.
+    _trkPaint();
+    return;
+  }
+  if (!_trkSeen) {
+    _trkSeen = new IntersectionObserver((entries) => {
+      let queued = false;
+      entries.forEach(en => {
+        if (!en.isIntersecting) return;
+        _trkSeen.unobserve(en.target);
+        const id = Number(en.target.dataset.trk);
+        if (!id || _trkCache.has(id)) return;
+        _trkQueue.add(id); queued = true;
+      });
+      if (queued && !_trkTimer) _trkTimer = setTimeout(_trkFlush, 120);
+      _trkPaint();
+    }, { rootMargin: '200px' });
+  }
+  document.querySelectorAll('.trk-mini[data-trk]').forEach(el => {
+    if (_trkCache.has(Number(el.dataset.trk))) { _trkPaint(); return; }
+    _trkSeen.observe(el);
+  });
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -4957,6 +5087,8 @@ function renderRecords() {
     });
   });
   tbody.innerHTML = html;
+  /* The route thumbnails, for the rows that end up on screen. */
+  try { _trackMinis(); } catch (_) {}
 }
 
 /* ══════════════════════════════════════════════════════════════
