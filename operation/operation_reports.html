@@ -723,8 +723,16 @@ async function _losBuildAllRows(asAt) {
 
   (logsRes.data || []).forEach(l => {
     const name = l.batch_name; if (!name) return;
-    const r = rowFor(name);
     const d = _logDate(l);
+    /* AS AT CUTS THE LEDGER OFF.
+       It used to cut off only WHICH batches were listed and how old they
+       were; every figure beside them — planted, transplanted, culled, sold,
+       the balance — was counted to TODAY. So "as at September" put
+       September's batches under October's culling, and the report said as at
+       on a line that was not. Asked BEFORE the row is created, so a batch
+       nothing had happened to by then does not appear as a line of noughts. */
+    if (asAt && d && d > asAt) return;
+    const r = rowFor(name);
     const q = Math.abs(Number(l.quantity_change || 0));
     const t = l.transaction_type;
     // The log is the only thing that names the breed: operation_batches has
@@ -840,6 +848,10 @@ async function _losBuildAllRows(asAt) {
   });
   (dosRes.data || []).forEach(d => {
     if (d.status === 'Cancelled' || (d.remark && d.remark.includes('[CANCELLED]'))) return;
+    // The same cut-off. A delivery made after the As At date has not
+    // happened yet as far as this report is concerned.
+    const dDate = d.delivery_date ? String(d.delivery_date).slice(0, 10) : '';
+    if (asAt && dDate && dDate > asAt) return;
     for (let i = 1; i <= 5; i++) {
       const qty = Number(d['qty_' + i] || 0);
       if (!qty) continue;
