@@ -1361,3 +1361,22 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 .rj-chips-none{font-size:11.5px;font-weight:600;color:#a16207;background:var(--gold-bg,#fffbeb);
   border:1.5px solid var(--gold-border,#fcd34d);border-radius:var(--r-sm);padding:8px 11px;
   line-height:1.45;}
+
+/* ── Back to the top ──────────────────────────────────────────────────────
+   Only on the Work Record panel, and only once the page has been scrolled —
+   see syncToTopBtn(). Sits ABOVE the Nelos dock, which owns right:18px /
+   bottom:18px and is 58px tall; this clears it by 12px rather than landing
+   on top of it. Hidden by default so it can never flash in on load. */
+.to-top {
+  position: fixed; right: 18px; bottom: 88px; z-index: 400;
+  width: 46px; height: 46px; border-radius: 50%;
+  border: 1.5px solid var(--green-mid, #bfe3cd); background: var(--bg-white, #fff);
+  color: var(--green-deep, #136c3a); font-size: 20px; line-height: 1; cursor: pointer;
+  box-shadow: 0 6px 18px rgba(5, 40, 20, .18);
+  display: none; align-items: center; justify-content: center;
+  transition: transform .12s, background .12s;
+}
+.to-top.is-on { display: flex; }
+.to-top:hover { background: var(--green-light, #eaf7ef); transform: translateY(-2px); }
+.to-top:active { transform: translateY(0); }
+@media print { .to-top { display: none !important; } }

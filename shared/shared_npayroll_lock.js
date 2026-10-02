@@ -67,6 +67,14 @@
     locks.find(r => r.year === year && r.month === month) || null;
 
   function isMonthLocked(year, month) {
+    /* Nothing loaded, nothing locks. The computed default says a month locks
+       on the Nth of the next one, and applying that while the tables are
+       UNREADABLE locks every elapsed month with no way back: Lock Controls
+       cannot write an override it cannot read, so the override that would
+       re-open it can never be saved. That is the one thing the header of
+       this file promises will not happen. Once the tables are there this
+       changes nothing — ready() is true before the first paint. */
+    if (!ready) return false;
     const row = lockRow(year, month);
     if (row && row.manual_override !== null && row.manual_override !== undefined) {
       return !!row.manual_override;

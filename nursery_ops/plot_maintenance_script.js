@@ -1694,7 +1694,7 @@ const I18N = {
     'btn.reset':'↺ Reset to Defaults', 'btn.clearAll':'Clear All', 'btn.selectAll':'Select All',
     'sched.ticked':'ticked', 'sched.none':'not set yet',
     'tab.pd':'P & D — Spraying', 'tab.manuring':'Manuring', 'tab.weeding':'Weeding',
-    'tab.interrow':'Interrow Spray', 'tab.record':'Work Record', 'tab.chart':'Analytics', 'tab.schedule':'Monthly Scheduled Work', 'tab.payroll':'Worker Record', 'tab.setting':'Setting',
+    'tab.interrow':'Interrow Spray', 'tab.record':'Maintenance Work Record', 'tab.chart':'Analytics', 'tab.schedule':'Monthly Maintenance Schedule', 'tab.payroll':'Worker Record', 'tab.setting':'Setting',
     'pay.form':'Worker Record', 'pay.month':'Month', 'pay.date':'Date', 'pay.plot':'Plot',
     'pay.plotCap':'Plot Capacity (seedlings)', 'pay.perWorker':'Capacity per Worker (seedlings)',
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
@@ -1819,7 +1819,7 @@ const I18N = {
     'btn.reset':'↺ Set Semula', 'btn.clearAll':'Kosongkan', 'btn.selectAll':'Pilih Semua',
     'sched.ticked':'ditanda', 'sched.none':'belum ditetapkan',
     'tab.pd':'P & D — Racun', 'tab.manuring':'Membaja', 'tab.weeding':'Merumput',
-    'tab.interrow':'Racun Selingan', 'tab.record':'Rekod Kerja', 'tab.chart':'Analitik', 'tab.schedule':'Kerja Berjadual Bulanan', 'tab.payroll':'Rekod Pekerja', 'tab.setting':'Tetapan',
+    'tab.interrow':'Racun Selingan', 'tab.record':'Rekod Kerja Penyelenggaraan', 'tab.chart':'Analitik', 'tab.schedule':'Jadual Penyelenggaraan Bulanan', 'tab.payroll':'Rekod Pekerja', 'tab.setting':'Tetapan',
     'pay.form':'Rekod Pekerja', 'pay.month':'Bulan', 'pay.date':'Tarikh', 'pay.plot':'Plot',
     'pay.plotCap':'Kapasiti plot (bibit)', 'pay.perWorker':'Kapasiti Kerja Setiap Orang (bibit)',
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
@@ -3253,13 +3253,14 @@ function applyNopsAdminUI() {
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('#sm-nav .pn-tab').forEach(b => b.classList.remove('is-on'));
       /* The landing tab, named rather than "the first .tab-btn" — the tabs
-         have been reordered once and that selector silently pointed at a
-         different one than the panel below it. */
-      const land = document.getElementById('tab-schedule');
+         have been reordered twice now and that selector silently pointed at
+         a different one than the panel below it. Work Record is where the
+         page opens, which is what this has always said it was doing. */
+      const land = document.getElementById('tab-record');
       if (land) land.classList.add('active');
-      const landBtn = navTabFor('schedule');
+      const landBtn = navTabFor('record');
       if (landBtn) landBtn.classList.add('is-on');
-      renderSchedSummary();
+      renderRecords();
     }
   }
 }
@@ -3346,7 +3347,31 @@ function switchTab(name, btn) {
   if (name==='schedule') renderSchedSummary();
   if (name==='setting') renderSetting();
   if (name==='payroll') { renderPayroll(); refreshLinkedWorkers(); }
+  try { syncToTopBtn(); } catch (_) {}
 }
+
+/* ── BACK TO THE TOP ───────────────────────────────────────────────────
+   The record table runs to hundreds of rows, and everything used to steer it
+   — the filters, the month, the sub-tabs — is at the top. Getting back there
+   was a long scroll.
+
+   Shown only on the Work Record panel, and only once there is something to go
+   back up from: a button that is always there is one more thing in the corner
+   on a screen that already has the Nelos dock in it. */
+function scrollToTop() {
+  try { window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  catch (_) { window.scrollTo(0, 0); }   // older WebView, no smooth
+}
+
+function syncToTopBtn() {
+  const btn = document.getElementById('rec-to-top');
+  if (!btn) return;
+  const onRecord = !!document.querySelector('#tab-record.tab-panel.active');
+  const scrolled = (window.pageYOffset || document.documentElement.scrollTop || 0) > 400;
+  btn.classList.toggle('is-on', onRecord && scrolled);
+}
+window.addEventListener('scroll', syncToTopBtn, { passive: true });
+window.addEventListener('resize', syncToTopBtn, { passive: true });
 
 /* Work Record sub-views: the maintenance list and the analytics charts. */
 let _recordView = 'list';
