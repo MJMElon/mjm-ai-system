@@ -55,6 +55,13 @@ const FIELD = [
 
 const REGISTER = [{ id: 1, full_name: 'Ali Bin Hassan', section: 'UNN2', status: 'active' }];
 
+/* A real 8×8 PNG, served where the maps are. It has to decode: an image the
+   browser refuses is indistinguishable from one storage would not hand over,
+   and the check would pass for the wrong reason. */
+const MAP_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR4nGPQiNLAihiGlgQAm7gqgcKuZ38AAAAASUVORK5CYII=',
+  'base64');
+
 /* The ledger's transplanting rows, each carrying the map that was flown for
    the plot when the batch report filled it — `MapUrl:` on the remark, which
    is where it has always been written. */
@@ -90,14 +97,19 @@ async function boot(browser, field, ledger) {
        order, with the page it landed on. */
     window.__PDF = null;
     window.jspdf = { jsPDF: class {
-      constructor() { this.page = 1; this.lines = []; this.saved = null; window.__PDF = this; }
+      constructor() { this.page = 1; this.lines = []; this.images = []; this.rects = [];
+                      this.saved = null; window.__PDF = this; }
       setFont() {} setFontSize(n) { this._s = n; } setTextColor() {}
       setFillColor() {} setDrawColor() {} setLineWidth() {}
-      rect() {} line() {}
+      rect(x, y, w, h) { this.rects.push({ x, y, w, h, page: this.page }); }
+      line() {}
       addPage() { this.page++; }
       getTextWidth(t) { return String(t).length * (this._s || 9) * 0.5; }
       splitTextToSize(t) { return [String(t)]; }
       text(t, x, y) { this.lines.push({ t: String(t), x, y, page: this.page }); }
+      addImage(im, fmt, x, y, w, h) {
+        this.images.push({ src: (im && im.src) || '', fmt, x, y, w, h, page: this.page });
+      }
       save(name) { this.saved = name; }
     } };
     function makeQuery(table) {
@@ -156,10 +168,17 @@ async function boot(browser, field, ledger) {
   }
   await page.route('**://*.supabase.co/**', (r) => r.fulfill({
     status: 200, contentType: 'application/json', body: '[]' }));
+  /* The maps are drawn into the PDF, so they are actually loaded. A real
+     (tiny) PNG, served with the CORS header storage sends, so the canvas is
+     not tainted — which is the thing that would break the whole file. */
+  await page.route('https://files.test/**', (r) => r.fulfill({
+    status: 200,
+    headers: { 'content-type': 'image/png', 'access-control-allow-origin': '*' },
+    body: MAP_PNG }));
 
   await page.goto('http://localhost:8777/npayroll/npayroll_dashboard.html', { waitUntil: 'load' });
   await page.waitForFunction(() => typeof window.renderTransplantByPlot === 'function'
-                                && typeof window.printTransplantMaps === 'function',
+                                && typeof window.drawDroneMaps === 'function',
                              { timeout: 20000 });
   await page.click('[data-sub="transpl"]');
   await page.waitForFunction(() => {
@@ -202,8 +221,9 @@ const read = (page) => page.evaluate(() => {
 
     checkTrue('the section is headed with the nursery and the month',
               t.head.includes('UNN2') && t.head.includes(MONTH));
-    check('the columns — the plot, its batches, their maps and the amount',
-          t.cols, ['No.', 'Plot', 'Batch', 'Drone Map', 'Transplanted']);
+    check('the columns — the plot, its maps and the amount. No Batch column: '
+        + 'the label under each thumbnail already says which batch that map is',
+          t.cols, ['No.', 'Plot', 'Drone Map', 'Transplanted']);
 
     check('three plots, in plot order', t.body.map((r) => r[1]), ['N3', 'N7', 'N9']);
     checkFalse('and not the other nursery’s',
@@ -211,9 +231,9 @@ const read = (page) => page.evaluate(() => {
 
     const n3 = t.body.find((r) => r[1] === 'N3');
     check('N3 IS ONE LINE, not four — its four jobs all carry the same figure',
-          n3[4], '6,685');
+          n3[3], '6,685');
     check('a plot with only one of its four jobs recorded still carries its '
-        + 'quantity', t.body.find((r) => r[1] === 'N7')[4], '900');
+        + 'quantity', t.body.find((r) => r[1] === 'N7')[3], '900');
 
     console.log('\nThe total under it');
     checkTrue('the footer is the nursery and the month',
@@ -227,7 +247,7 @@ const read = (page) => page.evaluate(() => {
               /N9/.test(t.note) && /more than one figure/i.test(t.note));
     checkTrue('…with both figures', /1,200/.test(t.note) && /1,300/.test(t.note));
     check('…and the newest is the one counted',
-          t.body.find((r) => r[1] === 'N9')[4].replace(/[^0-9,]/g, ''), '1,300');
+          t.body.find((r) => r[1] === 'N9')[3].replace(/[^0-9,]/g, ''), '1,300');
     checkTrue('a plot that names nobody is named too',
               /N7/.test(t.note) && /on no claim line/i.test(t.note));
 
@@ -270,7 +290,7 @@ const read = (page) => page.evaluate(() => {
     await pick(page, 'UNN2');
     const t = await read(page);
     check('it is listed', t.body.map((r) => r[1]), ['N5']);
-    check('…with a dash rather than a nought', t.body[0][4], '—');
+    check('…with a dash rather than a nought', t.body[0][3], '—');
     check('…and adds nothing to the total', t.foot[0][1], '0');
     checkTrue('…which is said, not left to be noticed',
               /no quantity on the record/i.test(t.note));
@@ -281,8 +301,10 @@ const read = (page) => page.evaluate(() => {
   {
     const page = await boot(browser, FIELD);
     await pick(page, 'UNN2');
-    const pdf = await page.evaluate(() => {
-      downloadTransplantPDF();
+    // The download is async now: the maps are fetched before the file is
+    // written, so reading it before it has waited reads a file with no name.
+    const pdf = await page.evaluate(async () => {
+      await downloadTransplantPDF();
       const d = window.__PDF;
       return d ? { lines: d.lines.map((l) => l.t), saved: d.saved,
                    pages: d.page } : null;
@@ -323,16 +345,16 @@ const read = (page) => page.evaluate(() => {
     const page = await boot(browser, FIELD.filter((r) => r.nursery_name === 'UNN 2')
       .map((r) => Object.assign({}, r, { workers: [] })));
     await pick(page, 'UNN2');
-    const pdf = await page.evaluate(() => {
+    const pdf = await page.evaluate(async () => {
       window.__ALERT = null;
       const a = window.alert; window.alert = (m) => { window.__ALERT = m; };
-      downloadTransplantPDF();
+      await downloadTransplantPDF();
       window.alert = a;
       const d = window.__PDF;
       return { alert: window.__ALERT, lines: d ? d.lines.map((l) => l.t) : null,
                saved: d ? d.saved : null };
     });
-    check('it is not refused', pdf.alert, null);
+    checkFalse('it is not refused', /Nothing recorded/i.test(String(pdf.alert || '')));
     checkTrue('a file is still produced', !!pdf.saved);
     checkTrue('…saying the claim is empty and why',
               pdf.lines.some((l) => /NOTHING TO CLAIM/.test(l) && /name nobody/.test(l)));
@@ -349,14 +371,13 @@ const read = (page) => page.evaluate(() => {
     const maps = await page.$$eval('#transpl-plots-table tbody tr', (trs) =>
       trs.map((tr) => ({
         plot: (tr.children[1].textContent || '').trim(),
-        batch: (tr.children[2].textContent || '').trim(),
-        links: [...tr.children[3].querySelectorAll('a.tp-map')].map((a) => ({
+        links: [...tr.children[2].querySelectorAll('a.tp-map')].map((a) => ({
           href: a.getAttribute('href'), pdf: a.classList.contains('is-pdf'),
           tab: a.getAttribute('target'), title: a.title,
           bg: a.getAttribute('style') || '' })),
-        labels: [...tr.children[3].querySelectorAll('.tp-map-b')].map((e) => e.textContent.trim()),
-        none: tr.children[3].querySelectorAll('.tp-map.is-none').length,
-        txt: (tr.children[3].textContent || '').replace(/\s+/g, ' ').trim()
+        labels: [...tr.children[2].querySelectorAll('.tp-map-b')].map((e) => e.textContent.trim()),
+        none: tr.children[2].querySelectorAll('.tp-map.is-none').length,
+        txt: (tr.children[2].textContent || '').replace(/\s+/g, ' ').trim()
       })));
 
     const n3 = maps.find((m) => m.plot === 'N3');
@@ -373,9 +394,8 @@ const read = (page) => page.evaluate(() => {
     checkTrue('a map that is a PDF cannot be a thumbnail, so it is a document',
               n9.links.length === 1 && n9.links[0].pdf && /\u{1F4C4}/u.test(n9.txt));
 
-    check('the batch is on the row, because the map is per batch',
-          n3.batch, '252');
-    check('…and the thumbnail is labelled with it', n3.labels, ['252']);
+    check('the thumbnail is labelled with its batch, which is what a Batch '
+        + 'column would have said twice', n3.labels, ['252']);
 
     checkTrue('…and a map from another batch years ago is NOT on this month\u2019s '
             + 'row', !maps.some((m) => m.links.some((l) => /old\.jpg/.test(l.href))));
@@ -386,85 +406,155 @@ const read = (page) => page.evaluate(() => {
     await page.close();
   }
 
-  console.log('\nThe maps, printed');
+  console.log('\nThe maps, on the end of the claim form');
   {
     const page = await boot(browser, FIELD);
-    /* The print window is opened, written to and told to print. Caught here
-       so what it was given can be read. */
-    await page.evaluate(() => {
-      window.__PRINTED = '';
-      window.open = () => ({
-        document: { write(h) { window.__PRINTED += h; }, close() {} },
-        focus() {}, print() {}
-      });
+    await pick(page, 'UNN2');
+    const pdf = await page.evaluate(async () => {
+      window.__PDF = null;
+      await downloadTransplantPDF();
+      const d = window.__PDF;
+      return { lines: d.lines, images: d.images, rects: d.rects, pages: d.page, saved: d.saved };
     });
-    await page.evaluate(() => printTransplantMaps());
-    const html = await page.evaluate(() => window.__PRINTED);
 
-    checkTrue('a sheet is produced', html.length > 500);
-    checkTrue('…on A4, portrait', /@page\s*\{\s*size:\s*A4 portrait/.test(html));
+    const txt = pdf.lines.map((l) => l.t);
+    checkTrue('one file, and it is still the claim form',
+              /Salary_Claim_Transplanting/.test(pdf.saved)
+              && txt.includes('SALARY CLAIM FORM — TRANSPLANTING'));
+    checkTrue('…with the plot summary on it', txt.some((t) => /TRANSPLANTING BY PLOT/.test(t)));
+    checkTrue('…AND THE DRONE MAPS', txt.some((t) => t === 'DRONE MAPS — TRANSPLANTING'));
 
-    const pages = (html.match(/<section class="page">/g) || []).length;
-    const cards = (html.match(/<figure class="map">/g) || []).length;
-    check('every map is on it — three plots were flown', cards, 3);
-    check('…TWO TO A PAGE', pages, Math.ceil(cards / 2));
-    checkTrue('…and each page breaks after itself',
-              /page-break-after:\s*always/.test(html));
+    /* THIS NURSERY'S MAPS AND NO OTHER. The claim form is one nursery's, so
+       the evidence stapled to it is that nursery's — it carried all three
+       for a while, which made BNN's claim a folder with UNN 1's and UNN 2's
+       plots in the back of it. */
+    const heads = pdf.lines.filter((l) => l.t === 'DRONE MAPS — TRANSPLANTING')
+      .map((l) => { const n = pdf.lines.find((x) => x.page === l.page && /^(BNN|UNN1|UNN2) —/.test(x.t));
+                    return n ? n.t.split(' —')[0] : '?'; });
+    check('every map page is headed with the nursery on the bar, and only it',
+          heads, ['UNN2']);
 
-    const order = [...html.matchAll(/<span class="plot">([^<]+)<\/span>/g)].map((m) => m[1]);
-    check('EVERY MAP IS HEADED WITH ITS PLOT', order.length, 3);
-    check('…and the order is BNN, then UNN 1, then UNN 2',
-          order, ['B3', 'N3', 'N9']);
-    /* The same map reaches the sheet twice — two trays fed N3 and the one
-       flight was pasted on both rows. One picture, one sheet of paper. */
-    check('the same map is not printed twice',
-          (html.match(/files\.test\/maps\/n3\.jpg/g) || []).length, 1);
-    checkTrue('…with the nursery, batch and quantity beside the plot',
-              /Batu Niah/.test(html) && /Batch 260/.test(html) && /2,405|6,685/.test(html));
-    checkTrue('it is every nursery, not the circle on screen',
-              /B3/.test(html) && /N3/.test(html));
-    checkTrue('a map that is a PDF says it cannot be printed with the others, '
-            + 'rather than printing an empty box',
-              /cannot be printed with the others/.test(html)
-              && /n9\.pdf/.test(html));
-    checkTrue('…and the ones that can are images', /<img src="https:\/\/files\.test\/maps\/n3\.jpg"/.test(html));
-    checkTrue('it waits for the maps to arrive before printing',
-              /window\.print/.test(html) && /addEventListener\('load'/.test(html));
+    // Only the map pages: the plot summary names the same plots in a column
+    // of its own, and a check that cannot tell the two apart proves nothing.
+    const mapPages = new Set(pdf.lines.filter((l) => l.t === 'DRONE MAPS — TRANSPLANTING')
+                                      .map((l) => l.page));
+    const caps = pdf.lines.filter((l) => mapPages.has(l.page) && /^(B3|N3|N9)/.test(l.t))
+                          .map((l) => l.t);
+    check('one card per BATCH, naming the plots it covers — not one per plot',
+          caps, ['N3', 'N9']);
+    checkFalse('…and another nursery\u2019s plot is not among them',
+               caps.includes('B3'));
+    check('…and every map that can be drawn IS drawn', pdf.images.length, 1);
+    checkTrue('…as the map itself',
+              pdf.images.every((i) => /files\.test\/maps\//.test(i.src)));
+    checkTrue('…and it is this nursery\u2019s',
+              /files\.test\/maps\/n3\.jpg/.test(pdf.images[0].src));
+    checkTrue('a map that is a PDF says so rather than leaving an empty box',
+              txt.some((t) => /cannot be printed with the others/.test(t)));
+
+    /* NOTHING RUNS OFF THE PAGE. The first pass put two fixed-height cards
+       under a title, which came to 305mm on a page 297 tall — the second map
+       hung off the bottom. A4 is 210 × 297. */
+    const over = pdf.images.filter((i) =>
+      i.x < 0 || i.y < 0 || i.x + i.w > 210 || i.y + i.h > 297);
+    check('every map is inside the paper', over, []);
+    const mapRects = pdf.rects.filter((r) => mapPages.has(r.page));
+    check('…and so is every frame round one',
+          mapRects.filter((r) => r.y + r.h > 297 - 6 || r.x + r.w > 210 - 6), []);
+    /* …and inside its OWN frame, which is the other half of the complaint. */
+    const outside = pdf.images.filter((im) => !mapRects.some((r) =>
+      im.x >= r.x - 0.01 && im.y >= r.y - 0.01
+      && im.x + im.w <= r.x + r.w + 0.01 && im.y + im.h <= r.y + r.h + 0.01));
+    check('every map is inside the frame drawn round it', outside, []);
+    /* The two on a page do not sit on top of each other either. */
+    const byPage = {};
+    pdf.images.forEach((i) => { (byPage[i.page] || (byPage[i.page] = [])).push(i); });
+    const overlap = Object.values(byPage).filter((g) => g.length === 2
+      && g[0].y + g[0].h > g[1].y && g[1].y + g[1].h > g[0].y);
+    check('…and two on a page do not overlap', overlap, []);
+    checkTrue('…and the batch is on the card', txt.some((t) => /Batch 252/.test(t)));
+    await page.close();
+  }
+
+  console.log('\nAnother nursery\u2019s claim form');
+  {
+    const page = await boot(browser, FIELD);
+    await pick(page, 'BNN');
+    const pdf = await page.evaluate(async () => {
+      window.__PDF = null;
+      await downloadTransplantPDF();
+      return { lines: window.__PDF.lines, images: window.__PDF.images };
+    });
+    const mapPages = new Set(pdf.lines.filter((l) => l.t === 'DRONE MAPS — TRANSPLANTING')
+                                      .map((l) => l.page));
+    const caps = pdf.lines.filter((l) => mapPages.has(l.page) && /^(B3|N3|N9)/.test(l.t))
+                          .map((l) => l.t);
+    check('BNN\u2019s claim carries BNN\u2019s map', caps, ['B3']);
+    check('…and one picture, not three', pdf.images.length, 1);
+    checkTrue('…which is B3\u2019s', /maps\/b3\.jpg/.test(pdf.images[0].src));
+    await page.close();
+  }
+
+  console.log('\nTwo maps on one page, inside the paper');
+  {
+    /* The first pass put two fixed-height cards under a title: 59mm gone to
+       the title and 117mm a card comes to 305 on a page 297 tall, so the
+       SECOND map hung off the bottom. One image per page would never have
+       shown it — this is two. */
+    const field = [rec({ plot_name: 'N3', source_qty: 1000, batch_name: '252' }),
+                   rec({ plot_name: 'N5', source_qty: 2000, batch_name: '254' })];
+    const ledger = [log('N3', '252', 'https://files.test/maps/a.jpg', `${YM}-03`),
+                    log('N5', '254', 'https://files.test/maps/b.jpg', `${YM}-05`)];
+    const page = await boot(browser, field, ledger);
+    await pick(page, 'UNN2');
+    const pdf = await page.evaluate(async () => {
+      window.__PDF = null;
+      await downloadTransplantPDF();
+      const d = window.__PDF;
+      return { images: d.images, rects: d.rects, lines: d.lines };
+    });
+
+    check('both maps are drawn', pdf.images.length, 2);
+    check('…on the one page', pdf.images[0].page, pdf.images[1].page);
+    check('…and BOTH ARE INSIDE THE PAPER — A4 is 210 by 297',
+          pdf.images.filter((i) => i.x < 0 || i.y < 0
+                                || i.x + i.w > 210 || i.y + i.h > 297), []);
+    const mapPage = pdf.images[0].page;
+    const frames = pdf.rects.filter((r) => r.page === mapPage && r.w > 100);
+    check('…as is every frame round one',
+          frames.filter((r) => r.y + r.h > 297 - 6), []);
+    check('each map is inside its own frame',
+          pdf.images.filter((im) => !frames.some((r) =>
+            im.x >= r.x - 0.01 && im.y >= r.y - 0.01
+            && im.x + im.w <= r.x + r.w + 0.01 && im.y + im.h <= r.y + r.h + 0.01)), []);
+    checkFalse('…and the two do not sit on top of each other',
+               pdf.images[0].y + pdf.images[0].h > pdf.images[1].y
+               && pdf.images[1].y + pdf.images[1].h > pdf.images[0].y);
     await page.close();
   }
 
   console.log('\nOne flight over two plots');
   {
-    /* One map covering B3 and B4 — the drone flew the pair, and the office
-       put the same file on both rows. Printing it twice is a wasted sheet
-       and a second look at a picture already read; printing it once and
-       losing B4 would be worse. */
+    /* One batch filling two plots is one flight. It used to be one sheet of
+       A4 per plot — the same picture twice. */
     const field = [rec({ nursery_name: 'BNN', plot_name: 'B3', source_qty: 800, batch_name: '260' }),
                    rec({ nursery_name: 'BNN', plot_name: 'B4', source_qty: 600, batch_name: '260' })];
     const ledger = [log('B3', '260', 'https://files.test/maps/pair.jpg', `${YM}-04`),
                     log('B4', '260', 'https://files.test/maps/pair.jpg', `${YM}-04`)];
     const page = await boot(browser, field, ledger);
-    await page.evaluate(() => {
-      window.__PRINTED = '';
-      window.open = () => ({ document: { write(h) { window.__PRINTED += h; }, close() {} },
-                             focus() {}, print() {} });
-    });
-    await page.evaluate(() => printTransplantMaps());
-    const html = await page.evaluate(() => window.__PRINTED);
-
-    check('the picture is printed once', (html.match(/maps\/pair\.jpg/g) || []).length, 1);
-    check('…on one card', (html.match(/<figure class="map">/g) || []).length, 1);
-    const head = (html.match(/<span class="plot">([^<]+)<\/span>/) || [])[1] || '';
-    checkTrue('…headed with BOTH plots, so neither is lost off the sheet',
-              /B3/.test(head) && /B4/.test(head));
-    checkTrue('…and the quantity is the two added up, because the card is '
-            + 'about both', /1,400 transplanted/.test(html));
-
-    /* The table is per plot, so each still carries its own. */
     await pick(page, 'BNN');
+    const pdf = await page.evaluate(async () => {
+      window.__PDF = null;
+      await downloadTransplantPDF();
+      return { lines: window.__PDF.lines.map((l) => l.t), images: window.__PDF.images };
+    });
+    check('the picture is drawn once', pdf.images.length, 1);
+    const cap = pdf.lines.find((t) => /B3/.test(t) && /B4/.test(t));
+    checkTrue('…on one card headed with BOTH plots, so neither is lost', !!cap);
+
     const rows = await page.$$eval('#transpl-plots-table tbody tr', (trs) =>
       trs.map((tr) => ({ plot: (tr.children[1].textContent || '').trim(),
-                         n: tr.children[3].querySelectorAll('a.tp-map').length })));
+                         n: tr.children[2].querySelectorAll('a.tp-map').length })));
     check('…while on the table each plot still shows it on its own row',
           rows.map((r) => [r.plot, r.n]), [['B3', 1], ['B4', 1]]);
     await page.close();
@@ -472,21 +562,45 @@ const read = (page) => page.evaluate(() => {
 
   console.log('\nA month nobody flew');
   {
-    const page = await boot(browser, FIELD.map((r) => r), []);
-    const said = await page.evaluate(() => {
-      let msg = null;
-      const a = window.alert; window.alert = (m) => { msg = m; };
-      window.__OPENED = false;
-      const o = window.open; window.open = () => { window.__OPENED = true; return null; };
-      printTransplantMaps();
-      window.alert = a; window.open = o;
-      return { msg, opened: window.__OPENED };
+    const page = await boot(browser, FIELD, []);
+    const pdf = await page.evaluate(async () => {
+      window.__ALERT = null;
+      const a = window.alert; window.alert = (m) => { window.__ALERT = m; };
+      window.__PDF = null;
+      await downloadTransplantPDF();
+      window.alert = a;
+      return { alert: window.__ALERT, saved: window.__PDF.saved,
+               lines: window.__PDF.lines.map((l) => l.t), images: window.__PDF.images };
     });
-    checkTrue('it says so rather than opening a blank sheet',
-              /No drone map/i.test(String(said.msg || '')));
-    checkFalse('…and opens nothing', said.opened);
-    checkTrue('…and says where a map comes from',
-              /Seedling Stock/.test(String(said.msg || '')));
+    checkTrue('the claim form still comes out', !!pdf.saved);
+    checkFalse('…with no map pages on it',
+               pdf.lines.some((t) => t === 'DRONE MAPS — TRANSPLANTING'));
+    check('…and nothing drawn', pdf.images.length, 0);
+    check('…and no complaint, because nothing was missing', pdf.alert, null);
+    await page.close();
+  }
+
+  console.log('\nA map that will not load');
+  {
+    const page = await boot(browser, FIELD);
+    await pick(page, 'UNN2');
+    await page.route('https://files.test/**', (r) => r.abort());
+    const pdf = await page.evaluate(async () => {
+      window.__ALERT = null;
+      const a = window.alert; window.alert = (m) => { window.__ALERT = m; };
+      window.__PDF = null;
+      await downloadTransplantPDF();
+      window.alert = a;
+      return { alert: window.__ALERT, saved: window.__PDF.saved, images: window.__PDF.images };
+    });
+    checkTrue('the claim form is still produced', !!pdf.saved);
+    check('…without the map it could not read', pdf.images.length, 0);
+    checkTrue('…and it SAYS which, rather than coming out quietly short of '
+            + 'the evidence it was meant to carry',
+              /could not be put on it/i.test(String(pdf.alert || ''))
+              && /N3/.test(String(pdf.alert || '')));
+    checkTrue('…and where they still are',
+              /Drone Map column/i.test(String(pdf.alert || '')));
     await page.close();
   }
 

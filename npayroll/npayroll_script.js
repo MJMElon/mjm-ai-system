@@ -1439,152 +1439,138 @@ function mapCellHtml(plot, batches) {
   }).join('') + `</span>`;
 }
 
-/* ── THE MAPS, PRINTED ──────────────────────────────────────────────────
-   Every nursery's plots for the month, TWO TO AN A4 PAGE, each one headed
-   with its plot. Half a page each is the point: a drone map at thumbnail
-   size shows nothing, and the reason to print one is to stand in the plot
-   and compare it with what is there.
+/* ── THE MAPS, ON THE CLAIM FORM ────────────────────────────────────────
+   One button and one file. The maps used to open in a print window of their
+   own beside the claim's download, which is two things to press and two
+   things to file for one month's work — so they go on the end of the claim
+   form, where the form itself says what they are evidence of.
 
-   A PRINT WINDOW rather than a PDF built here. The maps are images on
-   storage; drawing them into a PDF means fetching each one through the
-   canvas, which turns on every cross-origin question there is — and the
-   browser's own print dialogue already makes the PDF, at the paper size the
-   page asks for. Nothing is downloaded and nothing can fail halfway.
+   ONE CARD PER BATCH, not per plot. The map is flown for a batch: the office
+   puts the same picture on every plot row that batch filled, so a batch
+   across six plots used to be six identical sheets of paper. One card, with
+   every plot it covers named on it.
 
-   BNN, then UNN 1, then UNN 2 — the order the nurseries are worked, and the
-   order the circles are in. Every nursery, not the one on screen: this is the
-   month's maps to carry out, not the sheet being read. */
-function printTransplantMaps() {
-  const monthTxt = monthLabel(monthValue());
-  const secName = (c) => NURSERY_FULL[c] ? `${c} — ${NURSERY_FULL[c]}` : c;
+   THIS NURSERY'S MAPS AND NO OTHER. The claim form is one nursery's — the
+   circle on the bar decides it — so the evidence stapled to it is that
+   nursery's too. It carried all three for a while, which made BNN's claim a
+   folder with UNN 1's and UNN 2's plots in the back of it.
 
-  /* One card per MAP, not per plot: a plot filled from two trays on two days
-     was flown twice, and both are the evidence.
+   TWO TO A PAGE, because half an A4 is the smallest a drone map is worth
+   printing at — the reason to print one is to stand in the plot and compare
+   it with what is there. */
 
-     AND ONE CARD PER PICTURE. The same map file reaches the sheet more than
-     once — one flight covering two plots, the same URL pasted on both rows,
-     a plot carried across two batches. Printing it twice is a wasted sheet of
-     paper and a second look at a picture somebody has already read, so the
-     repeats are folded into the first and every plot it covers is named on
-     it. Nothing is lost: a plot that shares a map still appears, on the card
-     that holds its map. */
-  const byUrl = new Map();
-  CLAIM_NURSERIES.forEach((code) => {
-    transplantPlotRows(code).forEach((r) => {
-      mapsForPlot(r.plot, r.batches).forEach((m) => {
-        let c = byUrl.get(m.url);
-        if (!c) {
-          c = { url: m.url, plots: [], nurseries: [], batches: [], dates: [], qty: 0 };
-          byUrl.set(m.url, c);
-        }
-        if (!c.plots.includes(r.plot)) c.plots.push(r.plot);
-        if (!c.nurseries.includes(code)) c.nurseries.push(code);
-        const b = m.batch || (r.batches || []).join(', ');
-        if (b && !c.batches.includes(b)) c.batches.push(b);
-        if (m.date && !c.dates.includes(m.date)) c.dates.push(m.date);
-        /* The quantity is the plots' added up, because the card is now about
-           all of them. A map covering one plot is that plot's figure, which
-           is what it always was. */
-        if (r.qty != null) c.qty += Number(r.qty);
-      });
+/* The cards for one nursery: one per batch that was flown, naming the plots
+   that batch filled. */
+function mapCardsFor(code) {
+  const byBatch = new Map();
+  transplantPlotRows(code).forEach((r) => {
+    mapsByBatch(r.plot, r.batches).forEach((m) => {
+      if (!m.url) return;                       // a batch nobody flew
+      /* Keyed on the PICTURE. A batch normally has one, and then this is one
+         card per batch — which is the point. Where a batch somehow carries
+         two different maps they stay two cards, because folding them would
+         throw one away; and where two plots or two batches share a picture
+         they fold into one, which is the repeat being deleted. */
+      let c = byBatch.get(m.url);
+      if (!c) { c = { batch: m.batch, url: m.url, plots: [], batches: [], dates: [] };
+                byBatch.set(m.url, c); }
+      if (!c.plots.includes(r.plot)) c.plots.push(r.plot);
+      if (m.batch && !c.batches.includes(m.batch)) c.batches.push(m.batch);
+      if (m.date && !c.dates.includes(m.date)) c.dates.push(m.date);
     });
   });
-  const cards = [...byUrl.values()];
+  return [...byBatch.values()];
+}
 
-  if (!cards.length) {
-    alert(`No drone map is on any transplanting record for ${monthTxt}.\n\n`
-        + 'The map is written on the plot when the batch report fills it, in '
-        + 'Seedling Stock. A plot with no map there has none to print.');
-    return;
+/* A map, fetched so it can be drawn into the PDF.
+
+   crossOrigin, because a canvas that has been given an image without it is
+   tainted and the whole file fails at the last step. Storage answers with
+   the header; anything that does not simply comes back null and is listed on
+   the page as missing, which is better than a download that produces
+   nothing. */
+function loadMapImage(url) {
+  return new Promise((done) => {
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    const t = setTimeout(() => { im.onload = im.onerror = null; done(null); }, 15000);
+    im.onload  = () => { clearTimeout(t); done(im.naturalWidth ? im : null); };
+    im.onerror = () => { clearTimeout(t); done(null); };
+    im.src = url;
+  });
+}
+
+const _pdfImgFormat = (u) => (/\.png(\?|$)/i.test(String(u)) ? 'PNG' : 'JPEG');
+
+/* Draws every nursery's maps onto the end of the claim form. Returns what it
+   could not draw, so the caller can say so rather than leaving a gap. */
+async function drawDroneMaps(doc, monthTxt, sec) {
+  const secName = (c) => (NURSERY_FULL[c] ? `${c} — ${NURSERY_FULL[c]}` : c);
+  const missed = [];
+
+  for (const code of (sec ? [sec] : CLAIM_NURSERIES)) {
+    const cards = mapCardsFor(code);
+    if (!cards.length) continue;
+
+    /* THE GEOMETRY IS WORKED OUT, NOT GUESSED. The first pass put the two
+       cards at a fixed 117mm each under a title that leaves 59mm gone, which
+       comes to 305 on a page 297 tall — the second map ran off the bottom.
+       So the page says how much room there is and the two cards divide it. */
+    const X = 25, W = 160;                    // the same column the claim uses
+    const BOTTOM = 297 - 12;                  // the foot of the page
+    const GAP = 6, CAP = 9;                   // between the cards, and the name strip
+
+    // A nursery to a page, always starting a fresh one.
+    for (let i = 0; i < cards.length; i += 2) {
+      doc.addPage();
+      const TOP = pdfTitle(doc, ['DRONE MAPS — TRANSPLANTING', secName(code), `Month ${monthTxt}`]);
+      const CARD = (BOTTOM - TOP - GAP) / 2;  // two of them, whatever the title left
+      const BOX = CARD - CAP;
+
+      const pair = cards.slice(i, i + 2);
+      for (let j = 0; j < pair.length; j++) {
+        const c = pair[j];
+        let y = TOP + j * (CARD + GAP);
+
+        pdfCell(doc, X, y, W, CAP, '', { fill: [232, 236, 252] });
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(0, 0, 0);
+        doc.text(c.plots.join('  ·  '), X + 3, y + CAP - 2.8, { maxWidth: W * 0.55 });
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70, 70, 70);
+        doc.text([c.batches.length ? 'Batch ' + c.batches.join(', ') : '',
+                  c.dates.slice().sort().map(fmtDay).join(', ')]
+                   .filter(Boolean).join('   ·   '),
+                 X + W - 3, y + CAP - 2.8, { align: 'right', maxWidth: W * 0.42 });
+        doc.setTextColor(0, 0, 0);
+        y += CAP;
+
+        doc.setDrawColor(80, 80, 80); doc.setLineWidth(0.2);
+        doc.rect(X, y, W, BOX);
+
+        const im = _isPdfUrl(c.url) ? null : await loadMapImage(c.url);
+        if (im) {
+          /* Fitted INSIDE the box, whole, whatever shape it was flown in —
+             the smaller of the two scales, so neither edge can pass the
+             frame however wide or tall the picture is. */
+          const k = Math.min((W - 4) / im.naturalWidth, (BOX - 4) / im.naturalHeight);
+          const w = im.naturalWidth * k, h = im.naturalHeight * k;
+          doc.addImage(im, _pdfImgFormat(c.url), X + (W - w) / 2, y + (BOX - h) / 2, w, h);
+        } else {
+          missed.push(c.plots.join(', ')
+            + (c.batches.length ? ' (batch ' + c.batches.join(', ') + ')' : ''));
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(150, 30, 30);
+          doc.text(_isPdfUrl(c.url)
+            ? 'This map is a PDF and cannot be printed with the others.'
+            : 'This map could not be read. Open it from the Transplanting sheet.',
+            X + W / 2, y + BOX / 2, { align: 'center', maxWidth: W - 10 });
+          doc.setFontSize(7); doc.setTextColor(90, 90, 90);
+          doc.text(String(c.url), X + W / 2, y + BOX / 2 + 6,
+                   { align: 'center', maxWidth: W - 10 });
+          doc.setTextColor(0, 0, 0);
+        }
+      }
+    }
   }
-
-  const esc2 = (v) => String(v == null ? '' : v)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  const card = (c) => `
-    <figure class="map">
-      <figcaption>
-        <span class="plot">${esc2(c.plots.join('  \u00b7  '))}</span>
-        <span class="meta">${[
-          c.nurseries.map(secName).join(', '),
-          c.batches.length ? 'Batch ' + c.batches.join(', ') : '',
-          c.qty ? num(c.qty) + ' transplanted' : '',
-          c.dates.length ? c.dates.slice().sort().map(fmtDay).join(', ') : ''
-        ].filter(Boolean).map(esc2).join('  \u00b7  ')}</span>
-      </figcaption>
-      ${_isPdfUrl(c.url)
-        ? `<div class="pdf">This map is a PDF and cannot be printed with the others.
-             <br><span class="u">${esc2(c.url)}</span></div>`
-        : `<img src="${esc2(c.url)}" alt="Drone map of plot ${esc2(c.plots.join(', '))}">`}
-    </figure>`;
-
-  // Two to a page, each pair in its own sheet so the break never lands
-  // inside a map.
-  let pages = '';
-  for (let i = 0; i < cards.length; i += 2) {
-    pages += `<section class="page">${cards.slice(i, i + 2).map(card).join('')}</section>`;
-  }
-
-  const w = window.open('', '_blank');
-  if (!w) { alert('The print window was blocked. Allow pop-ups for this site and try again.'); return; }
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8">
-<title>Drone Maps — ${esc2(monthTxt)}</title>
-<style>
-  /* A4 with a thin margin: the maps are the page, not an illustration on it. */
-  @page { size: A4 portrait; margin: 9mm; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #111; }
-  .hd { padding: 0 0 6mm; }
-  .hd h1 { margin: 0; font-size: 15pt; letter-spacing: .02em; }
-  .hd p  { margin: 2mm 0 0; font-size: 9.5pt; color: #555; }
-  /* Two to a page, each taking half of what is left of it. */
-  .page { height: 279mm; display: flex; flex-direction: column; gap: 5mm;
-          page-break-after: always; break-after: page; }
-  .page:last-child { page-break-after: auto; break-after: auto; }
-  .map { flex: 1 1 0; min-height: 0; margin: 0; display: flex; flex-direction: column;
-         border: 1.2pt solid #333; border-radius: 2mm; overflow: hidden;
-         page-break-inside: avoid; break-inside: avoid; }
-  figcaption { padding: 2.5mm 4mm; border-bottom: 1pt solid #333; background: #f2f2f2;
-               display: flex; align-items: baseline; gap: 5mm; flex-wrap: wrap; }
-  .plot { font-size: 17pt; font-weight: 800; letter-spacing: .03em; }
-  .meta { font-size: 9pt; color: #444; }
-  .map img { flex: 1 1 auto; min-height: 0; width: 100%; object-fit: contain;
-             background: #fff; padding: 2mm; }
-  .pdf { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center;
-         justify-content: center; font-size: 10pt; color: #a83020; text-align: center;
-         padding: 6mm; }
-  .pdf .u { font-size: 8pt; color: #555; word-break: break-all; }
-  @media screen {
-    body { background: #e9e9ef; padding: 8mm; }
-    .page { background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,.18); padding: 9mm;
-            margin: 0 auto 8mm; width: 210mm; }
-    .hd { width: 210mm; margin: 0 auto; }
-  }
-</style></head><body>
-<div class="hd"><h1>Drone Maps — Transplanting</h1>
-  <p>${esc2(monthTxt)} \u00b7 ${cards.length} map${cards.length === 1 ? '' : 's'}
-     \u00b7 ${esc2(CLAIM_NURSERIES.map(secName).join('  \u00b7  '))}</p></div>
-${pages}
-<script>
-  /* Print once every map has actually arrived — a print fired first puts
-     empty boxes on the paper, and the one thing this page is for is the
-     picture. An image that will not load stops counting rather than
-     holding the whole sheet. */
-  (function () {
-    var imgs = Array.prototype.slice.call(document.images);
-    var left = imgs.length;
-    function go() { setTimeout(function () { window.focus(); window.print(); }, 150); }
-    if (!left) return go();
-    imgs.forEach(function (im) {
-      if (im.complete) { if (--left === 0) go(); return; }
-      im.addEventListener('load',  function () { if (--left === 0) go(); });
-      im.addEventListener('error', function () { if (--left === 0) go(); });
-    });
-    // Never wait for ever on a map storage will not hand over.
-    setTimeout(function () { if (left > 0) { left = 0; go(); } }, 12000);
-  })();
-<\/script>
-</body></html>`);
-  w.document.close();
+  return missed;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -1656,7 +1642,7 @@ function renderTransplantByPlot(secFilter) {
   }
 
   if (!rows.length) {
-    table.innerHTML = `<tbody><tr><td class="empty" colspan="5">
+    table.innerHTML = `<tbody><tr><td class="empty" colspan="4">
       Nothing transplanted in ${esc(secName(secFilter))} for ${esc(monthLabel(monthValue()))}.
     </td></tr></tbody>`;
     $('transpl-plots-note').textContent = '';
@@ -1673,7 +1659,6 @@ function renderTransplantByPlot(secFilter) {
     <tr>
       <td style="color:var(--text-faint);width:44px;">${i + 1}</td>
       <td class="l" style="font-weight:800;color:var(--text-head);">${esc(r.plot)}</td>
-      <td class="l">${r.batches.length ? esc(r.batches.join(', ')) : '—'}</td>
       <td style="white-space:nowrap;">${mapCellHtml(r.plot, r.batches)}</td>
       <td style="font-weight:800;${r.qty == null ? 'color:var(--text-faint);' : ''}">${
         r.qty == null ? '—' : num(r.qty)}${
@@ -1685,19 +1670,16 @@ function renderTransplantByPlot(secFilter) {
     <thead><tr>
       <th style="width:44px;">No.</th>
       <th class="l">Plot</th>
-      <!-- Back on the table, because the MAP is per batch: a plot filled from
-           two batches was flown twice, and the batch is what tells the two
-           pictures apart. -->
-      <th class="l" style="width:130px;">Batch</th>
-      <!-- What was flown over the plot when it was filled. The claim is
-           paying for that work; the evidence of it should not be two
-           systems away. -->
-      <th style="width:150px;">Drone Map</th>
+      <!-- What was flown over the plot when it was filled, one picture per
+           batch with the batch written under it. No Batch column of its own:
+           the label under each thumbnail already says which batch that map
+           is, and a column repeating it is the same answer twice. -->
+      <th style="width:170px;">Drone Map</th>
       <th style="width:180px;">Transplanted</th>
     </tr></thead>
     <tbody>${body}</tbody>
     <tfoot><tr>
-      <td class="l" colspan="4">TOTAL — ${esc(secName(secFilter))} · ${esc(monthLabel(monthValue()))}</td>
+      <td class="l" colspan="3">TOTAL — ${esc(secName(secFilter))} · ${esc(monthLabel(monthValue()))}</td>
       <td>${num(total)}</td>
     </tr></tfoot>`;
 
@@ -3136,7 +3118,7 @@ function downloadMaintPDF() {
    matches nobody cannot be paid — the screen says so in red above the
    table — and a claim form that carried it would be a claim form for a
    person the payroll has no row for. */
-function downloadTransplantPDF() {
+async function downloadTransplantPDF() {
   if (!mayDo('transpl', 'export',
       'You do not have permission to download the salary claim form.')) return;
   const sec = $('transpl-section').value || '';
@@ -3294,6 +3276,31 @@ function downloadTransplantPDF() {
 
   y = pdfVerifiedNote(doc, y, 'transpl', sec);
   pdfFooterNote(doc, y);
+
+  /* …and every nursery's drone maps on the end of it. Fetching them takes a
+     moment — the button says so rather than appearing to have ignored the
+     press, and is shut while it does so two presses cannot make two files. */
+  const btn = document.querySelector('#sub-transpl .bar-actions .btn-primary');
+  const was = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Fetching the drone maps…'; }
+  let missed = [];
+  try {
+    missed = await drawDroneMaps(doc, monthTxt, sec);
+  } catch (e) {
+    console.warn('[payroll] the drone maps could not be drawn:', e);
+    missed = ['every map — ' + ((e && e.message) || e)];
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = was; }
+  /* Said out loud: a claim form that quietly came out short of the evidence
+     it was supposed to carry is worse than one that says which is missing. */
+  if (missed.length) {
+    alert(`The claim form is ready, but ${missed.length} drone map${
+      missed.length === 1 ? '' : 's'} could not be put on it:\n\n  `
+      + missed.join('\n  ')
+      + '\n\nThey are still on the Transplanting sheet — open them from the '
+      + 'Drone Map column and print them from there.');
+  }
+
   doc.save(`Salary_Claim_Transplanting_${sec === NO_SECTION ? 'No_Section' : (sec || 'All')}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
 }
 

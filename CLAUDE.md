@@ -58,6 +58,30 @@ batch-wide one has named a batch — `CHECK_which_batches_completed.sql` and
 `CHECK_batch_not_completed.sql` are that pair. The batch-wide one comes
 first.
 
+## Interrow spraying counts what was there BEFORE the 2nd culling
+
+Every other maintenance job is done TO the seedlings — P & D spraying,
+manuring, weeding — so a batch 2nd culled last week is that many fewer to
+treat, and the linked quantity takes the culling off.
+
+**Interrow spraying is the ground BETWEEN the rows.** A 2nd culling takes the
+dead seedling out of a polybag that is still sitting exactly where it was:
+same rows, same gaps, same walk, same spray. So an interrow row is worth the
+figure *before* the culling comes off — B5 in Sep 2026 reads 6,515 on the
+other three jobs and **6,788** on interrow, the difference being its 273 2nd
+culled.
+
+It is the quantity, so it is the piece-rate money: the Work Maintenance list,
+the Worker Record capacity totals and the payroll salary claim all quote it.
+The rule therefore lives in `PlotMovement.isInterrow` /
+`liveCount(evs, {keepCull2})` in `shared/shared_plot_movement.js`, and
+`recQty(record)` reads the work type off the record and applies it — so a new
+caller gets it without knowing it exists. Do not re-implement it in a page.
+
+The Nursery Movement Report and the phone's batch list still subtract the 2nd
+culling, because they answer "what is standing", which is a different
+question. That difference is deliberate and is written out in that file.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the
