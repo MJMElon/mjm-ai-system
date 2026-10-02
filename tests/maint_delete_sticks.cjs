@@ -336,6 +336,53 @@ const ticked = (page, plot) => page.evaluate((p) => {
     await page.close();
   }
 
+  console.log('\nChecking a row, and unchecking it again');
+  {
+    /* Anybody could tick a row and only an admin could untick it, so one
+       mis-click locked the row until somebody with the module admin tick
+       could be found. A one-way button is not a lock, it is a trap. */
+    const { page, asked } = await boot(browser);
+    await planAndSync(page, 'B1', 'Antracol');
+
+    const btns = () => page.evaluate(() => {
+      const r = [...document.querySelectorAll('#rec-body tr')]
+        .find((tr) => tr.children.length > 3 && /Antracol/.test(tr.textContent));
+      return r ? [...r.children[11].querySelectorAll('.btn, .rec-checked-badge')]
+        .map((b) => b.textContent.replace(/\s+/g, ' ').trim()) : null;
+    });
+    const isChecked = () => page.evaluate(() =>
+      /Checked/.test(document.querySelector('#rec-body').textContent));
+
+    check('an unchecked row offers Check, Edit and Del',
+          await btns(), ['✓ Check', 'Edit', 'Del']);
+
+    await page.evaluate(() => {
+      const r = [...document.querySelectorAll('#rec-body tr')]
+        .find((tr) => tr.children.length > 3 && /Antracol/.test(tr.textContent));
+      r.querySelector('.btn-check').click();
+    });
+    await page.waitForTimeout(120);
+    checkTrue('it checks', await isChecked());
+    checkTrue('…AND IT OFFERS UNCHECK, not a dead end',
+              (await btns()).includes('Uncheck'));
+
+    asked.length = 0;
+    await page.evaluate(() => {
+      const r = [...document.querySelectorAll('#rec-body tr')]
+        .find((tr) => tr.children.length > 3 && /Antracol/.test(tr.textContent));
+      [...r.querySelectorAll('.btn')].find((b) => /Uncheck/.test(b.textContent)).click();
+    });
+    await page.waitForTimeout(120);
+    checkTrue('it asks first, saying what unchecking undoes',
+              /back to unchecked/i.test(asked[0] || ''));
+    checkTrue('…including that the sync will fill it in again',
+              /fill its date, batch and quantity/i.test(asked[0] || ''));
+    checkFalse('AND IT IS UNCHECKED', await isChecked());
+    check('…back to the three buttons it started with',
+          await btns(), ['✓ Check', 'Edit', 'Del']);
+    await page.close();
+  }
+
   await browser.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

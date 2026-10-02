@@ -4655,11 +4655,22 @@ function renderRecords() {
         <td style="text-align:center;">${_flagCell(r, 'repaired', !!r.nelos, t('rec.repairedNa'))}</td>
         <td>
           ${r.checked
-            ? `<span class="rec-checked-badge" title="Checked — locked for normal users">✓ Checked</span>` +
-              (isNopsAdmin
+            /* UNCHECK IS OFFERED TO WHOEVER COULD CHECK. Anybody could tick a
+               row and only an admin could untick it, so one mis-click locked
+               the row — its date, its batch, its quantity — until somebody
+               with the module admin tick could be found. A one-way button is
+               not a lock, it is a trap.
+
+               The lock itself stays: a checked row still refuses Edit and Del
+               to anybody but an admin, and the field sync still leaves it
+               alone. Unticking first is now the way in, which is a deliberate
+               act and says on screen what it undoes. */
+            ? `<span class="rec-checked-badge" title="Checked — the office has settled this row, and the field sync leaves it alone">✓ Checked</span>`
+              + `<button class="btn btn-sm" onclick="toggleChecked(${r.id})"
+                   title="Put this row back to unchecked — it can be edited again, and the field sync will fill it in again">Uncheck</button>`
+              + (isNopsAdmin
                 ? `<button class="btn btn-sm" onclick="editRec(${r.id})">Edit</button>
-                   <button class="btn btn-sm btn-danger" onclick="deleteRec(${r.id})">Del</button>
-                   <button class="btn btn-sm" onclick="toggleChecked(${r.id})" title="Remove the checked lock">Uncheck</button>`
+                   <button class="btn btn-sm btn-danger" onclick="deleteRec(${r.id})">Del</button>`
                 : '')
             : `<button class="btn btn-sm btn-check" onclick="toggleChecked(${r.id})" title="Mark as checked — locks the row for normal users">✓ Check</button>
                <button class="btn btn-sm" onclick="editRec(${r.id})">Edit</button>
@@ -5071,7 +5082,13 @@ function _denyLocked(){ alert('This record is Checked. Only an admin can edit it
 function toggleChecked(id){
   const r = records.find(x=>x.id===id);
   if (!r) return;
-  if (r.checked && !isNopsAdmin) return _denyLocked();   // only admins may unlock
+  /* Both ways, for whoever can do either. It used to refuse the untick to
+     anybody but an admin, which made Check a one-way button on a row anybody
+     could press it on. Unticking takes nothing away and hides nothing — it
+     puts the row back where it was and says so. */
+  if (r.checked && !confirm('Put this row back to unchecked?\n\n'
+      + 'It can be edited again, and the next sync will fill its date, batch '
+      + 'and quantity in from the field records again.')) return;
   r.checked = r.checked ? 0 : 1;
   renderRecords(); persistRecords();
 }
