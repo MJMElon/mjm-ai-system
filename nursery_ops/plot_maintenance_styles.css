@@ -598,7 +598,10 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 
 /* Quantity derived from the batch report's movement data rather than keyed by
    hand — marked so a linked number is never mistaken for an entered one. */
-.qty-linked{color:var(--green-text);border-bottom:1px dotted var(--green-mid);cursor:help;}
+/* No help cursor. The dotted underline already says there is something to
+   hover, and a question mark over a figure reads as "this number is in
+   doubt" on a sheet that decides what people are paid. */
+.qty-linked{color:var(--green-text);border-bottom:1px dotted var(--green-mid);}
 
 /* ── Setting tab ──────────────────────────────────────────────────────────
    Four lists that are keyed in rarely and read from constantly, so they are
@@ -1380,3 +1383,20 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 .to-top:hover { background: var(--green-light, #eaf7ef); transform: translateY(-2px); }
 .to-top:active { transform: translateY(0); }
 @media print { .to-top { display: none !important; } }
+
+/* ── The walk, in the row ────────────────────────────────────────────────
+   A thumbnail of the route itself rather than a button that says how far it
+   was. Drawn as an inline SVG of the track's own shape — no tiles, because
+   one map per row is a hundred tile requests on a table of fifty, and the
+   shape of the walk is what tells somebody at a glance whether the plot was
+   covered or the phone sat in a pocket. The real map is one click away. */
+.trk-btn{display:inline-flex;align-items:center;gap:6px;}
+.trk-mini{display:block;width:62px;height:30px;border-radius:6px;
+          background:var(--green-light,#eaf7ef);border:1px solid var(--green-mid,#bfe3cd);}
+.trk-mini path{fill:none;stroke:var(--green-deep,#136c3a);stroke-width:1.6;
+               stroke-linejoin:round;stroke-linecap:round;}
+.trk-mini circle{fill:var(--green-deep,#136c3a);}
+/* Nothing drawn yet, or nothing to draw. */
+.trk-mini.is-empty{background:repeating-linear-gradient(45deg,
+  var(--green-light,#eaf7ef) 0 4px, #fff 4px 8px);}
+.trk-far{font-size:11px;font-weight:700;color:var(--green-text,#136c3a);white-space:nowrap;}
