@@ -2952,7 +2952,7 @@ function _trackCell(r) {
        rows somebody actually looks at and no others. */
     return `<button type="button" class="trk-btn" onclick="openTrack(${x.id})"
              title="${esc(tip || t('rec.trackView'))}">
-              <svg class="trk-mini is-empty" data-trk="${x.id}" viewBox="0 0 62 30"
+              <svg class="trk-mini is-empty" data-trk="${x.id}" viewBox="0 0 92 52"
                    aria-hidden="true"></svg>
               <span class="trk-far">${esc(far || t('rec.trackView'))}</span>
             </button>`;
@@ -2991,35 +2991,122 @@ function _trkThin(pts, max) {
   return out;
 }
 
-function _trkDraw(el, pts) {
-  if (!el) return;
-  if (!Array.isArray(pts) || pts.length < 2) { el.classList.add('is-empty'); return; }
-  const W = 62, H = 30, PAD = 4;
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  pts.forEach(p => {
-    const x = Number(p[0]), y = Number(p[1]);
-    if (!isFinite(x) || !isFinite(y)) return;
-    if (x < minX) minX = x; if (x > maxX) maxX = x;
-    if (y < minY) minY = y; if (y > maxY) maxY = y;
-  });
-  if (!isFinite(minX) || !isFinite(minY)) { el.classList.add('is-empty'); return; }
-  /* One scale for both axes, so a walk up and down a row does not come out
-     looking like a walk across the plot. A track that never moved has no
-     span at all, which would divide by nought — it draws as a dot. */
+/* ── THE THUMBNAIL, ON THE SATELLITE ───────────────────────────────────────
+   The same picture the expanded map gives — Google's imagery with the walk
+   in red over it — but as ONE tile image rather than a Leaflet map. A map
+   per row is a tile grid per row plus a library per row; a single <image>
+   is one request the browser then caches, and plots repeat down the list so
+   most rows after the first few cost nothing at all.
+
+   WEB MERCATOR, because that is what the tile is. The earlier version
+   stretched longitude and latitude straight onto the box, which is fine for
+   a bare shape and wrong the moment there is a photograph behind it — the
+   line would sit beside the rows it was walked down rather than on them.
+
+   The zoom is the closest one where the whole walk still falls inside a
+   single tile, so the imagery is as sharp as it can be without a second
+   request. A walk that straddles a tile edge drops a zoom until it does not.
+   The viewBox then crops that tile to the walk, which is why the thumbnail
+   can be a wide rectangle while the tile is square. */
+/* The floor is low on purpose. A record can cover several plots in one walk,
+   and a wide track that straddles a tile edge has to keep backing off until
+   it does not — stopping early would mean no picture at all for exactly the
+   walks that most want looking at. */
+const TRK_TILE = 256, TRK_ZMAX = 19, TRK_ZMIN = 4;
+const TRK_W = 92, TRK_H = 52;
+const _trkTileUrl = (x, y, z) => `https://mt1.google.com/vt/lyrs=s&x=${x}&y=${y}&z=${z}`;
+
+function _trkWorld(lng, lat, z) {
+  const n = TRK_TILE * Math.pow(2, z);
+  const s = Math.max(-0.9999, Math.min(0.9999, Math.sin(lat * Math.PI / 180)));
+  return [ (lng + 180) / 360 * n,
+           (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * n ];
+}
+
+/* The closest zoom at which every point of the walk is inside one tile. */
+function _trkFit(pts) {
+  for (let z = TRK_ZMAX; z >= TRK_ZMIN; z--) {
+    const w = pts.map(p => _trkWorld(Number(p[0]), Number(p[1]), z));
+    const xs = w.map(p => p[0]), ys = w.map(p => p[1]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const tx = Math.floor(((minX + maxX) / 2) / TRK_TILE);
+    const ty = Math.floor(((minY + maxY) / 2) / TRK_TILE);
+    const ox = tx * TRK_TILE, oy = ty * TRK_TILE;
+    if (minX >= ox && maxX <= ox + TRK_TILE && minY >= oy && maxY <= oy + TRK_TILE) {
+      return { z, tx, ty, pts: w.map(p => [p[0] - ox, p[1] - oy]),
+               box: [minX - ox, minY - oy, maxX - ox, maxY - oy] };
+    }
+  }
+  return null;
+}
+
+/* The walk with no imagery behind it: normalised to the box, one scale for
+   both axes. The fallback for a track no single tile can hold. */
+function _trkDrawBare(el, pts) {
+  const W = TRK_W, H = TRK_H, PAD = 4;
+  const xs = pts.map(p => Number(p[0])), ys = pts.map(p => Number(p[1]));
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
   const spanX = maxX - minX, spanY = maxY - minY;
   const span = Math.max(spanX, spanY);
   const k = span > 0 ? (Math.min(W, H) - PAD * 2) / span : 0;
   const ox = (W - spanX * k) / 2, oy = (H - spanY * k) / 2;
-  // Latitude grows upward, SVG's y grows downward.
   const sx = (x) => ox + (x - minX) * k;
   const sy = (y) => H - (oy + (y - minY) * k);
   const d = pts.map((p, i) => (i ? 'L' : 'M') + sx(Number(p[0])).toFixed(1)
                                         + ' ' + sy(Number(p[1])).toFixed(1)).join(' ');
-  const a = pts[0], b = pts[pts.length - 1];
   el.classList.remove('is-empty');
-  el.innerHTML = `<path d="${d}"></path>`
-    + `<circle cx="${sx(Number(a[0])).toFixed(1)}" cy="${sy(Number(a[1])).toFixed(1)}" r="1.8"></circle>`
-    + `<circle cx="${sx(Number(b[0])).toFixed(1)}" cy="${sy(Number(b[1])).toFixed(1)}" r="1.8"></circle>`;
+  el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  el.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  el.innerHTML = `<path d="${d}" stroke="#f43f5e" stroke-width="1.6"></path>`;
+}
+
+function _trkDraw(el, pts) {
+  if (!el) return;
+  const clean = (Array.isArray(pts) ? pts : []).filter(p =>
+    Array.isArray(p) && isFinite(Number(p[0])) && isFinite(Number(p[1])));
+  if (clean.length < 2) { el.classList.add('is-empty'); el.innerHTML = ''; return; }
+
+  const fit = _trkFit(clean);
+  /* No zoom holds it — a walk spanning the country, which is a GPS fault
+     rather than a morning's work. The shape still draws, on the pale
+     background, because "this track is wrong" is worth seeing and a blank
+     cell says nothing at all. */
+  if (!fit) { _trkDrawBare(el, clean); return; }
+
+  /* Crop the tile to the walk, with room round it, at the thumbnail's own
+     shape so nothing is squashed. A walk with no extent at all still gets a
+     window, or the viewBox would have no size. */
+  const [bx0, by0, bx1, by1] = fit.box;
+  const PAD = 6;
+  let vw = Math.max(bx1 - bx0, 1) + PAD * 2;
+  let vh = Math.max(by1 - by0, 1) + PAD * 2;
+  const aspect = TRK_W / TRK_H;
+  if (vw / vh < aspect) vw = vh * aspect; else vh = vw / aspect;
+  let vx = (bx0 + bx1) / 2 - vw / 2;
+  let vy = (by0 + by1) / 2 - vh / 2;
+  // Keep the window on the tile we fetched; nothing outside it is drawn.
+  vx = Math.max(0, Math.min(vx, TRK_TILE - Math.min(vw, TRK_TILE)));
+  vy = Math.max(0, Math.min(vy, TRK_TILE - Math.min(vh, TRK_TILE)));
+
+  const d = fit.pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const a = fit.pts[0], b = fit.pts[fit.pts.length - 1];
+  /* The line is drawn twice — a pale casing under a red core — so it reads
+     against both the dark green of a planted plot and the glare of bare
+     ground. Scaled with the window, or a crop of 30 pixels would hide the
+     walk under its own stroke. */
+  const wk = Math.max(1, vw / 40);
+  el.classList.remove('is-empty');
+  el.setAttribute('viewBox', `${vx.toFixed(2)} ${vy.toFixed(2)} ${vw.toFixed(2)} ${vh.toFixed(2)}`);
+  el.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+  el.innerHTML =
+      `<image href="${_trkTileUrl(fit.tx, fit.ty, fit.z)}" x="0" y="0" `
+    + `width="${TRK_TILE}" height="${TRK_TILE}" preserveAspectRatio="none"></image>`
+    + `<path d="${d}" stroke="#ffffff" stroke-opacity=".75" stroke-width="${(wk * 2.1).toFixed(2)}"></path>`
+    + `<path d="${d}" stroke="#f43f5e" stroke-width="${wk.toFixed(2)}"></path>`
+    + `<circle cx="${a[0].toFixed(1)}" cy="${a[1].toFixed(1)}" r="${(wk * 1.1).toFixed(2)}" fill="#ffffff"></circle>`
+    + `<circle cx="${b[0].toFixed(1)}" cy="${b[1].toFixed(1)}" r="${(wk * 1.1).toFixed(2)}" fill="#f43f5e"></circle>`;
 }
 
 async function _trkFlush() {

@@ -1385,18 +1385,19 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 @media print { .to-top { display: none !important; } }
 
 /* ── The walk, in the row ────────────────────────────────────────────────
-   A thumbnail of the route itself rather than a button that says how far it
-   was. Drawn as an inline SVG of the track's own shape — no tiles, because
-   one map per row is a hundred tile requests on a table of fifty, and the
-   shape of the walk is what tells somebody at a glance whether the plot was
-   covered or the phone sat in a pocket. The real map is one click away. */
-.trk-btn{display:inline-flex;align-items:center;gap:6px;}
-.trk-mini{display:block;width:62px;height:30px;border-radius:6px;
-          background:var(--green-light,#eaf7ef);border:1px solid var(--green-mid,#bfe3cd);}
-.trk-mini path{fill:none;stroke:var(--green-deep,#136c3a);stroke-width:1.6;
-               stroke-linejoin:round;stroke-linecap:round;}
-.trk-mini circle{fill:var(--green-deep,#136c3a);}
-/* Nothing drawn yet, or nothing to draw. */
+   The same picture the expanded map gives — the satellite with the route in
+   red on it — from a single tile image rather than a map per row. The shape
+   of the walk against the plot it was walked on is what tells somebody at a
+   glance whether the ground was covered; the distance beside it is the
+   detail. One click opens the real thing. */
+.trk-btn{display:inline-flex;align-items:center;gap:7px;}
+.trk-mini{display:block;width:92px;height:52px;border-radius:7px;
+          background:var(--green-light,#eaf7ef);border:1px solid var(--green-mid,#bfe3cd);
+          overflow:hidden;}
+.trk-mini path{fill:none;stroke-linejoin:round;stroke-linecap:round;}
+/* Nothing read yet, or no track to draw. */
 .trk-mini.is-empty{background:repeating-linear-gradient(45deg,
   var(--green-light,#eaf7ef) 0 4px, #fff 4px 8px);}
 .trk-far{font-size:11px;font-weight:700;color:var(--green-text,#136c3a);white-space:nowrap;}
+.trk-btn:hover .trk-mini{border-color:var(--green-deep,#136c3a);}
+@media print { .trk-mini{break-inside:avoid;} }
