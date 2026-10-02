@@ -598,6 +598,23 @@ function _mergeCustomPlots() {
     if (!NURSERY_PLOTS[n]) return;
     customPlots[n].forEach(p => { if (!NURSERY_PLOTS[n].includes(p)) NURSERY_PLOTS[n].push(p); });
   });
+  _sortNurseryPlots();
+}
+
+/* A plot that joins a nursery's list is APPENDED to it — a custom plot, a
+   transfer plot that earned its place by its capacity or by having rows. So
+   B3-R landed after B14, and every screen built from this list drew it there:
+   the four schedule editors, the Worker Record, the PDF, the work list.
+
+   Put it where its name says it goes instead. plotOrder is the rule Seedling
+   Stock's own lists use — letters, then the number AS A NUMBER, then whatever
+   follows it — so B3-R sits behind B3, and B10 behind B9 rather than behind
+   B1. The built-in lists are already in that order, so this moves nothing
+   that was already right. */
+function _sortNurseryPlots() {
+  Object.keys(NURSERY_PLOTS).forEach(n => {
+    if (Array.isArray(NURSERY_PLOTS[n])) NURSERY_PLOTS[n].sort(plotOrder);
+  });
 }
 
 /* Any plot with a capacity on record joins its nursery's list, exactly the
@@ -625,6 +642,7 @@ function _mergeCapacityPlots() {
     });
   });
   _mergePlotsWithRows(norm);
+  _sortNurseryPlots();
 }
 
 /* A plot the SAVED LIST already has rows for joins its nursery's list too,
@@ -680,7 +698,7 @@ function addCustomPlot(n, name) {
   if (NURSERY_PLOTS[n] && NURSERY_PLOTS[n].includes(name)) { alert(`Plot "${name}" already exists in this nursery.`); return; }
   if (!customPlots[n]) customPlots[n] = [];
   customPlots[n].push(name);
-  if (NURSERY_PLOTS[n]) NURSERY_PLOTS[n].push(name);
+  if (NURSERY_PLOTS[n]) { NURSERY_PLOTS[n].push(name); _sortNurseryPlots(); }
   persistCustomPlot(n, name, false);
   renderAll(); autoSyncRecords();
 }
@@ -4735,15 +4753,22 @@ function renderRecords() {
     return;
   }
 
-  // Group by plot — sort plots in NURSERY_PLOTS order
-  const allPlots = Object.values(NURSERY_PLOTS).flat();
-  const plotOrder = p => { const i = allPlots.indexOf(p); return i === -1 ? 9999 : i; };
+  /* Group by plot, in plot-name order — B3, B3-R, B4, B4-R, B5.
+
+     This used to be NURSERY_PLOTS' own order, which is the order the four
+     schedules were written in and then whatever was APPENDED to it: a
+     transfer plot joins that list from its capacity row or from having rows
+     of its own (_mergeCapacityPlots), so it went on the end, and B3-R drew
+     after B14 instead of beside the plot it came off. plotOrder is the rule
+     Seedling Stock's own lists use — letters, then the number as a number,
+     then anything after it — so B3-R sits behind B3 here the same way it does
+     there. */
   const plotGroups = {};
   filtered.forEach(r => {
     if (!plotGroups[r.plot]) plotGroups[r.plot] = [];
     plotGroups[r.plot].push(r);
   });
-  const sortedPlots = Object.keys(plotGroups).sort((a,b) => plotOrder(a) - plotOrder(b));
+  const sortedPlots = Object.keys(plotGroups).sort(plotOrder);
 
   let html = '';
   sortedPlots.forEach(plot => {

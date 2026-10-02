@@ -54,7 +54,15 @@ const SEED = [
   row(PD, '-', 'Round 5: Not done yet'),
   // Another plot, to prove the sort is per plot and not across the table.
   row(IR, '2026-09-01', 'Round 1: Monex 200mL + Activator 15mL', 'B2'),
-  row(PD, '2026-09-30', 'Round 4: Daconil 50gm + Bond 15mL', 'B2')
+  row(PD, '2026-09-30', 'Round 4: Daconil 50gm + Bond 15mL', 'B2'),
+  /* The transfer plots. These join the nursery's list by being added to it,
+     so they used to land at the END of it and draw after B14 — B3-R is a
+     plot that came off B3 and belongs beside it. B10 is here too: its number
+     has to sort as a number, or it goes between B1 and B2. */
+  row(MN, '2026-09-07', 'Round 1: Organic Matter 180gm', 'B3-R'),
+  row(MN, '2026-09-07', 'Round 1: Yaramila 30gm', 'B4-R'),
+  row(WD, '2026-09-08', 'Round 1: Merumput dalam polibeg', 'B10'),
+  row(WD, '2026-09-08', 'Round 1: Merumput dalam polibeg', 'B3')
 ];
 
 async function boot(browser) {
@@ -65,7 +73,14 @@ async function boot(browser) {
   await page.addInitScript((seed) => {
     try { localStorage.setItem('mjm_maint_nursery', 'BNN');
           localStorage.removeItem('mjm_maint_month'); } catch (_) {}
-    window.__DB = { nops_maint_records: [{ id: 1, records: seed }] };
+    window.__DB = {
+      nops_maint_records: [{ id: 1, records: seed }],
+      /* The transfer plots are BNN's, which is the only thing that puts them
+         on its list — see _mergePlotsWithRows. */
+      shared_plots: ['B1', 'B2', 'B3', 'B3-R', 'B4-R', 'B10']
+        .map((p) => ({ nursery_name: 'BNN', plot_name: p })),
+      operation_nurseries: [{ name: 'BNN' }]
+    };
     window.__WRITES = [];
     window.Chart = class { constructor() {} update() {} destroy() {} resize() {} };
     function makeQuery(table) {
@@ -174,8 +189,25 @@ const table = (page) => page.evaluate(() =>
       'Interrow Spraying 24 Sep 2026',
       '📍 PLOT B2 2 TASKS · 0 DONE',
       'P & D Spraying 30 Sep 2026',
-      'Interrow Spraying 01 Sep 2026'
+      'Interrow Spraying 01 Sep 2026',
+      // B3-R behind B3, B4-R where B4 would be, and B10 after both — not
+      // between B1 and B2, and not stranded at the end of the table.
+      '📍 PLOT B3 1 TASK · 0 DONE',
+      'Weeding 08 Sep 2026',
+      '📍 PLOT B3-R 1 TASK · 0 DONE',
+      'Manuring 07 Sep 2026',
+      '📍 PLOT B4-R 1 TASK · 0 DONE',
+      'Manuring 07 Sep 2026',
+      '📍 PLOT B10 1 TASK · 0 DONE',
+      'Weeding 08 Sep 2026'
     ]);
+
+    /* The list every other screen is built from — the four schedule editors,
+       the Worker Record, the PDF — carries the same order, so a transfer plot
+       is beside its parent there too and not appended after B14. */
+    check('the nursery\'s own plot list is in order too', await page.evaluate(() =>
+      NURSERY_PLOTS.BNN.slice(0, 8)),
+      ['B1', 'B2', 'B3', 'B3-R', 'B4', 'B4-R', 'B5', 'B6']);
 
     /* Two rows on 04 Sep: Round 1 Becker and Round 1 Antracol. Same job, same
        day, same round — they keep a settled order rather than swapping about
@@ -214,6 +246,10 @@ const table = (page) => page.evaluate(() =>
       '📍 PLOT B2 1 TASK · 0 DONE',
       'Interrow Spraying 01 Sep 2026'
     ]);
+    check('the plot filter offers them in order too', await page.evaluate(() =>
+      [...document.querySelectorAll('#rf-filter-plot option')]
+        .map((o) => o.value).filter(Boolean)),
+      ['B1', 'B2', 'B3', 'B3-R', 'B4-R', 'B10']);
     await page.close();
   }
 
