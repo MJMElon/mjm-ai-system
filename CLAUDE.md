@@ -71,12 +71,27 @@ figure *before* the culling comes off — B5 in Sep 2026 reads 6,515 on the
 other three jobs and **6,788** on interrow, the difference being its 273 2nd
 culled.
 
+**And it is the WHOLE PLOT.** The schedule ticks a plot for interrow, not a
+batch, because the worker walks the whole thing in one go — so a batch name
+written on an interrow row says which batch is standing there, not which part
+of the morning was worked. Narrowing the figure to that batch paid for a
+fraction of a job done in full.
+
 It is the quantity, so it is the piece-rate money: the Work Maintenance list,
 the Worker Record capacity totals and the payroll salary claim all quote it.
-The rule therefore lives in `PlotMovement.isInterrow` /
+The rule therefore lives in `PlotMovement.isInterrow` / `qtyOpts(record)` /
 `liveCount(evs, {keepCull2})` in `shared/shared_plot_movement.js`, and
-`recQty(record)` reads the work type off the record and applies it — so a new
-caller gets it without knowing it exists. Do not re-implement it in a page.
+`recQty(record)` / `recBatches(record)` read the work type off the record and
+apply it — so a new caller gets it without knowing it exists. Do not
+re-implement it in a page.
+
+**The job is the `jenis`, never the chemical.** The chemical changes round to
+round — Monex one round, something else the next — and says nothing about
+which job it is.
+
+A quantity KEYED BY HAND still wins over all of this, which is the one way an
+interrow row can go on showing the old smaller number;
+`shared/CHECK_interrow_qty_keyed.sql` names those rows on every plot.
 
 The Nursery Movement Report and the phone's batch list still subtract the 2nd
 culling, because they answer "what is standing", which is a different

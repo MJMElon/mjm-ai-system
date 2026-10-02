@@ -54,13 +54,20 @@ const RECORDS = [
   row(IR, '2026-09-02', 'Round 0: Monex 200mL + Activator 15mL')
 ];
 
+/* B5 is the screenshot's plot, one batch. B6 holds two — 300 and 301 — so a
+   row naming one of them can be told apart from a row covering the plot. */
+const log = (id, type, date, plot, batch, qty) => ({
+  id, transaction_type: type, transaction_date: date,
+  created_at: date + 'T00:00:00Z', remark: '',
+  plot_name: plot, batch_name: batch, quantity_change: qty
+});
 const LOGS = [
-  { id: 1, transaction_type: 'Transplanted', transaction_date: '2026-09-01',
-    created_at: '2026-09-01T00:00:00Z', remark: '', plot_name: 'B5',
-    batch_name: '253', quantity_change: 6788 },
-  { id: 2, transaction_type: '2nd_Culling', transaction_date: '2026-09-05',
-    created_at: '2026-09-05T00:00:00Z', remark: '', plot_name: 'B5',
-    batch_name: '253', quantity_change: 273 }
+  log(1, 'Transplanted', '2026-09-01', 'B5', '253', 6788),
+  log(2, '2nd_Culling',  '2026-09-05', 'B5', '253', 273),
+  log(3, 'Transplanted', '2026-09-01', 'B6', '300', 4000),
+  log(4, 'Transplanted', '2026-09-01', 'B6', '301', 1500),
+  log(5, '2nd_Culling',  '2026-09-04', 'B6', '300', 100),
+  log(6, '2nd_Culling',  '2026-09-04', 'B6', '301', 50)
 ];
 
 async function boot(browser) {
@@ -266,6 +273,67 @@ const table = (page) => page.evaluate(() =>
               PlotMovement.liveCount(evs, { keepCull2: true })];
     });
     check('liveCount unchanged unless asked', plain, [6515, 6515, 6788]);
+    await page.close();
+  }
+
+  console.log('\nB6 — two batches, and a batch written on the row');
+  {
+    /* P & D on one named batch is that batch. Interrow naming the same batch
+       is still the whole plot, because the worker walked the whole plot. */
+    const page = await boot(browser);
+    const got = await page.evaluate(() => {
+      const mk = (jenis, batch) => ({ id: 1, plot: 'B6', jenis, batch,
+                                      tarikh: '2026-09-10', racun: 'Round 1: X', qty: null });
+      const read = (r) => {
+        const q = PlotMovement.recQty(r), b = PlotMovement.recBatches(r);
+        return [q.value, b.value, !!(q.info && q.info.wholePlot)];
+      };
+      return {
+        pdOneBatch:  read(mk('Membaja', '300')),
+        pdNoBatch:   read(mk('Membaja', '')),
+        irOneBatch:  read(mk('Meracun rumput secara selingan', '300')),
+        irNoBatch:   read(mk('Meracun rumput secara selingan', ''))
+      };
+    });
+
+    // 300 after its culling.
+    check('manuring on batch 300 is batch 300', got.pdOneBatch, [3900, '300', false]);
+    // 3900 + 1450, both batches, both culled.
+    check('manuring with no batch is every batch', got.pdNoBatch, [5350, '300, 301', false]);
+    // 4000 + 1500 — the whole plot, both cullings kept.
+    check('INTERROW ON BATCH 300 IS STILL THE WHOLE PLOT',
+          got.irOneBatch, [5500, '300, 301', true]);
+    check('…and so is interrow with no batch', got.irNoBatch, [5500, '300, 301', false]);
+    await page.close();
+  }
+
+  console.log('\nThe batch column fills itself in');
+  {
+    const page = await boot(browser);
+    /* Every record in the fixture has an empty batch cell, which means every
+       batch on the plot — the quantity beside it has always counted them, and
+       the cell drew a dash. */
+    const cells = await page.evaluate(() =>
+      [...document.querySelectorAll('#rec-body tr')]
+        .filter((tr) => tr.children.length > 3)
+        .map((tr) => (tr.children[4].textContent || '').replace(/\s+/g, ' ').trim()));
+    check('no dashes left where the ledger knows the answer',
+          cells, ['🔗 253', '🔗 253', '🔗 253', '🔗 253', '🔗 253', '🔗 253', '🔗 253']);
+
+    const keyed = await page.evaluate(() => {
+      const r = { id: 1, plot: 'B5', jenis: 'Membaja', batch: 'KEYED BY HAND',
+                  tarikh: '2026-09-10', racun: 'Round 1: X', qty: null };
+      const b = PlotMovement.recBatches(r);
+      return [b.value, b.linked];
+    });
+    check('a keyed batch still wins', keyed, ['KEYED BY HAND', false]);
+
+    const none = await page.evaluate(() => {
+      const r = { id: 1, plot: 'ZZ', jenis: 'Membaja', batch: '',
+                  tarikh: '2026-09-10', racun: 'Round 1: X', qty: null };
+      return PlotMovement.recBatches(r).value;
+    });
+    check('a plot the ledger has nothing for is left empty', none, '');
     await page.close();
   }
 

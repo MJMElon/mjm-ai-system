@@ -238,11 +238,27 @@
      payroll salary claim alike, which is why the rule lives here rather than
      in any one of them.
 
+     AND IT IS THE WHOLE PLOT. The schedule ticks a PLOT for interrow, not a
+     batch, because the worker walks the whole thing in one go — so a batch
+     name written on an interrow row says which batch is standing there, not
+     which part of the morning was worked. Filtering the figure down to that
+     batch paid for a fraction of a job that was done in full.
+
      The maintenance list writes "Meracun rumput secara selingan"; anything
-     carrying the word interrow is the same job under another spelling. */
+     carrying the word interrow is the same job under another spelling. The job
+     is read off the record's JENIS and never off its chemical: the chemical
+     changes round to round — Monex one round, something else the next — and
+     says nothing about which job it is. */
   function isInterrow(jenis) {
     const s = String(jenis == null ? '' : jenis).toLowerCase();
     return s.indexOf('rumput secara selingan') >= 0 || s.indexOf('interrow') >= 0;
+  }
+
+  /* How a record's quantity is to be counted. One place, so the quantity, the
+     batch names and every caller agree. */
+  function qtyOpts(r) {
+    const ir = isInterrow(r && (r.jenis || r.work_type));
+    return { keepCull2: ir, wholePlot: ir };
   }
 
   /* What one plot and batch is worth, up to a date. Every event already
@@ -265,7 +281,8 @@
     if (!_ready || !_events || !plot) return null;
     const pk = plotKey(plot);
     if (!pk) return null;
-    const wanted = batchList(batchStr);
+    // opts.wholePlot ignores the batch written on the row — see isInterrow.
+    const wanted = (opts && opts.wholePlot) ? [] : batchList(batchStr);
     // No date keyed yet ("-") → stand at today, the plot's current standing count.
     const asOf = parseDate(tarikh);
     const cutoff = asOf == null ? Infinity : asOf;
@@ -297,8 +314,11 @@
       // the same plot and batch would be quietly disagreeing with it.
       qty: Math.round(raw),
       raw: Math.round(raw),
-      batches: keys.map(k => per[k].label),
+      batches: keys.map(k => per[k].label).sort((a, b) => String(a).localeCompare(String(b), 'en', { numeric: true })),
       allBatches: wanted.length === 0,
+      /* The row names a batch and the figure covers the plot anyway — the
+         screen has to say so, or it reads as the wrong batch's number. */
+      wholePlot: !!(opts && opts.wholePlot) && batchList(batchStr).length > 0,
       asOf: asOf == null ? null : tarikh,
       /* How much 2nd culling this figure is carrying, and whether it was left
          standing — so a screen can say WHY an interrow row reads higher than
@@ -316,10 +336,29 @@
      gets the interrow rule without having to know it exists. */
   function recQty(r) {
     if (r && (r.qty === 0 || r.qty)) return { value: Number(r.qty), linked: false };
-    const opts = { keepCull2: isInterrow(r && (r.jenis || r.work_type)) };
-    const link = linkedQty(r && r.plot, r && r.batch, r && r.tarikh, opts);
+    const link = linkedQty(r && r.plot, r && r.batch, r && r.tarikh, qtyOpts(r));
     if (!link) return { value: null, linked: false };
     return { value: link.qty, linked: true, info: link };
+  }
+
+  /* WHICH BATCHES A RECORD COVERS.
+
+     An empty batch cell is not "unknown", it is EVERY batch standing on that
+     plot that day — that is what leaving it blank has always meant, and it is
+     what the quantity beside it is already counting. So the names are answered
+     from the ledger instead of drawn as a dash, which read as nobody knowing
+     while the answer sat in the batch report.
+
+     Keyed wins, exactly as the quantity does. */
+  function recBatches(r) {
+    const keyed = String((r && r.batch) || '').trim();
+    const opts = qtyOpts(r);
+    if (keyed && !opts.wholePlot) return { value: keyed, linked: false };
+    const link = linkedQty(r && r.plot, r && r.batch, r && r.tarikh, opts);
+    if (!link || !link.batches.length) return { value: keyed, linked: false };
+    const shown = link.batches.filter(b => b && b !== '—').join(', ');
+    if (!shown) return { value: keyed, linked: false };
+    return { value: shown, linked: shown !== keyed, info: link };
   }
 
   global.PlotMovement = {
@@ -328,6 +367,6 @@
     error: () => _err,
     events: () => _events,
     parseDate, logDate, plotKey, batchKey, batchList,
-    signed, liveCount, linkedQty, recQty, isInterrow
+    signed, liveCount, linkedQty, recQty, recBatches, isInterrow, qtyOpts
   };
 })(window);
