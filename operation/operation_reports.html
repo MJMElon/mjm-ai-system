@@ -247,8 +247,12 @@
      table is not a page of links; the underline is what says it will do
      something. Pointing at one shows what it is made of; clicking opens the
      same records in a window you can filter and read at length. */
+  /* `pointer`, not `help`. The question-mark cursor says "there is an
+     explanation here"; this is a figure that OPENS — pointing shows what it
+     is made of and clicking opens the records in full — and a pointer is what
+     every other openable thing on the page uses. */
   .los-fig { background:none; border:none; padding:0; font:inherit; color:inherit;
-             cursor:help; text-decoration:underline; text-decoration-style:dotted;
+             cursor:pointer; text-decoration:underline; text-decoration-style:dotted;
              text-underline-offset:3px; text-decoration-color:#d9cdb6; }
   .los-fig:hover { text-decoration-style:solid; text-decoration-color:currentColor; }
   .los-fig:focus-visible { outline:2px solid #6aa83c; outline-offset:2px; border-radius:4px; }
@@ -705,7 +709,12 @@ async function _losBuildAllRows(asAt) {
     damaged: 0, planted: 0,
     trans: 0, premium: 0, dtone: 0,
     cull1: 0, cull2: 0, cull3: 0,
-    transfer: 0, sales: 0, calibration: 0,
+    /* Of the sales and the calibration, the part that happened in the
+       PRE-NURSERY. Seedlings can leave a tray without ever being
+       transplanted — sold straight out of it, or written off by an approved
+       calibration against it — and until these existed neither came off the
+       pre-nursery figure. See preBalance below for what that cost. */
+    transfer: 0, sales: 0, salesPre: 0, calibration: 0, calibrationPre: 0,
     preBalance: 0,
     rec: { received: [], damaged: [], planted: [], trans: [], premium: [], dtone: [],
            cull1: [], cull2: [], cull3: [], transfer: [], sales: [], calibration: [] }
@@ -809,6 +818,9 @@ async function _losBuildAllRows(asAt) {
       const side = body.match(_RE_LOS_CAL_SIDE);
       const signed = Number(l.quantity_change || 0);
       if (ok) r.calibration += signed;
+      // Which side of the nursery it adjusts. A tray is pre-nursery; so is a
+      // row keyed against 'Pre-Nursery' itself.
+      if (ok && nurseryOf(l.plot_name) === 'Pre-Nursery') r.calibrationPre += signed;
       r.rec.calibration.push({ date: d, batch: name, place: l.plot_name || '—',
         report: rep ? rep[1].trim() : '—', side: side ? side[1].toLowerCase() : 'seed',
         approved: ok, qty: signed, note: body.replace(_RE_LOS_CAL_REPORT, '').replace(_RE_LOS_CAL_SIDE, '').trim() });
@@ -833,10 +845,15 @@ async function _losBuildAllRows(asAt) {
       if (!qty) continue;
       const r = byBatchKey[_mvBatchKey(d['batch_' + i])];
       if (!r) continue;
+      const soldFrom = nurseryOf(d['plot_' + i]);
       r.sales += qty;
+      // A small-polybag sale straight out of the tray never reaches the
+      // field, so it has to come off the pre-nursery figure and not the
+      // main one.
+      if (soldFrom === 'Pre-Nursery') r.salesPre += qty;
       r.rec.sales.push({ date: d.delivery_date || null, batch: r.batch,
         dono: d.do_number || '—', place: d['plot_' + i] || '—',
-        nursery: nurseryOf(d['plot_' + i]), qty });
+        nursery: soldFrom, qty });
     }
   });
 
@@ -849,17 +866,43 @@ async function _losBuildAllRows(asAt) {
     r.cullTotal  = r.cull1 + r.postCull;
     r.variance   = r.planted - (r.received - r.damaged);
     r.balance    = r.planted - r.cullTotal - r.sales + r.calibration;
-    // Where the batch is standing NOW, which is what the Pre / Main filter
-    // asks. Pre-nursery holds whatever was planted and has not been culled in
-    // the tray or transplanted out of it; the rest is in the field.
-    r.preBalance  = r.planted - r.cull1 - r.trans;
+    /* Where the batch is standing NOW, which is what the Pre / Main filter
+       asks. Pre-nursery holds whatever was planted and has not left the tray:
+       culled in it, transplanted out of it, SOLD out of it, or written off
+       against it by an approved calibration.
+
+       The last two were missing, and the error did not stop at the
+       pre-nursery column. mainBalance is the rest of the balance, so whatever
+       pre-nursery over-counted, the field under-counted by the same amount —
+       a batch sold entirely out of the tray reported 1,000 standing in
+       pre-nursery and MINUS 400 standing in a nursery it had never reached.
+       And because the Nursery Type filter keeps a batch on the strength of
+       preBalance > 0, such a batch was listed under Pre-Nursery long after
+       the last of it had gone.
+
+       mainBalance stays a subtraction on purpose: it is the one way the two
+       halves cannot drift from the balance they split. */
+    r.preBalance  = r.planted - r.cull1 - r.trans - r.salesPre + r.calibrationPre;
     r.mainBalance = r.balance - r.preBalance;
     r.ageMonths   = _losAgeMonths(r.seedsDate, asAt);
     r.age         = _losAgeLabel(r.ageMonths);
-    // Completed: it went out to the field and there is nothing of it left.
-    // A batch that has not been transplanted yet also nets to nought at the
-    // start of its life and is very much active, so that is guarded for.
-    r.completed   = r.trans > 0 && r.balance <= 0;
+    /* Completed: something has actually left the batch, and there is nothing
+       of it standing anywhere.
+
+       The guard matters and is the reason this is not simply `balance <= 0`:
+       a batch received but not yet planted nets to nought at the start of its
+       life and is very much active.
+
+       But the guard used to be `trans > 0` — transplanted out — which asks
+       whether the batch reached the FIELD, and that is not the only way a
+       batch finishes. One sold entirely as small polybags out of the tray,
+       and one culled entirely in the tray, both reach nought having never
+       been transplanted; both stayed "Active" on this report for ever, and
+       the Status filter never offered them under Completed. Asking whether
+       anything left at all catches those and still guards the new batch,
+       which has had nothing leave it by any route. */
+    r.anyOut      = r.trans > 0 || r.sales > 0 || r.cullTotal > 0;
+    r.completed   = r.anyOut && r.balance <= 0;
   });
 
   const rows = Object.values(rowsByBatch);
@@ -1386,7 +1429,13 @@ function _losSyncOptions(id, values, allLabel) {
     + values.map(v => `<option value="${_losEsc(v)}">${_losEsc(v)}</option>`).join('');
   sel.value = values.includes(keep) ? keep : '';
 }
-function _losSyncYearOptions(years)       { _losSyncOptions('f-los-year', years, 'All years'); }
+function _losSyncYearOptions(years)       {
+  _losSyncOptions('f-los-year', years, 'All years');
+  // The year picker is filled from the data AFTER the page opens, so the
+  // month's enabled state has to be settled again here or it would be stuck
+  // at whatever it was before the years arrived.
+  try { _losSyncMonthEnabled(); } catch (_) {}
+}
 function _losSyncSupplierOptions(suppliers) { _losSyncOptions('f-los-supplier', suppliers, 'All suppliers'); }
 // ── Report menu ───────────────────────────────────────────────────────────
 // One flat row — every report is a tab, no Category tier to click through
@@ -2130,11 +2179,29 @@ document.getElementById('f-run').addEventListener('click', () => {
    read a table that is answering the previous question. Status goes through
    syncFilterVisibility() first so the Year picker appears (or goes) in the
    same breath as the choice that governs it. */
+/* As At is a year, optionally narrowed to a month — so a month on its own
+   has nothing to narrow. _losAsAt() returns no cut-off at all without a year,
+   which meant picking September under "All years" changed precisely nothing
+   and the picker looked broken rather than inapplicable. A control that
+   cannot do anything should not look settable, so the month is disabled
+   until a year is chosen, and reset when the year goes back to All. */
+function _losSyncMonthEnabled() {
+  const y = document.getElementById('f-los-year');
+  const m = document.getElementById('f-los-month');
+  if (!y || !m) return;
+  const off = !y.value;
+  if (off && m.value) m.value = '';
+  m.disabled = off;
+  m.title = off ? 'Pick a year first — As At is a year, optionally narrowed to a month' : '';
+  m.style.opacity = off ? '.55' : '';
+}
+
 ['f-los-nursery', 'f-los-status', 'f-los-month', 'f-los-year', 'f-los-age', 'f-los-supplier', 'f-breed']
   .forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', () => {
       if (id === 'f-breed') _rememberBreed(el.value);
+      if (id === 'f-los-year') _losSyncMonthEnabled();
       syncFilterVisibility(); runReport();
     });
   });
