@@ -962,7 +962,22 @@ async function _losBuildAllRows(asAt) {
     r.completed   = r.anyOut && r.balance <= 0;
   });
 
-  const rows = Object.values(rowsByBatch);
+  /* A BATCH IS A ROW ONLY IF SOMETHING OF IT EXISTS.
+
+     rowFor() makes a row for any ledger line carrying a batch name, and some
+     lines carry one while contributing nothing: an unapproved stock
+     calibration, a transfer of nought, a line keyed and zeroed. The batch
+     then appeared as a row of dashes and noughts — no date, no breed, no
+     supplier, nothing received — which reads as a batch that exists and has
+     nothing in it. It is not a batch; it is one stray ledger line.
+
+     Kept if it was ever received (a Seeds_Received row sets seedsDate even
+     when its quantity is nought, so a genuine keying error stays visible), or
+     if anything at all has moved. Only a batch with neither goes. */
+  const _losMoved = (r) => !!(r.received || r.damaged || r.planted || r.trans ||
+    r.premium || r.dtone || r.cull1 || r.cull2 || r.cull3 || r.transfer ||
+    r.sales || r.calibration);
+  const rows = Object.values(rowsByBatch).filter(r => r.seedsDate || _losMoved(r));
 
   // Years/suppliers offered by their pickers come from the data, so there
   // is never a choice offered that has no batch behind it. Cheap enough to
