@@ -150,20 +150,27 @@
     }
   }
 
+  /* ── WHEN, ACCORDING TO WHOM ────────────────────────────────────────────
+     No timestamp is sent from here, on purpose. These rows say when a payroll
+     month was closed and when a sheet was signed off, and a figure taken from
+     the BROWSER's clock is only as right as that device is — a phone an hour
+     out stamps a verification an hour out, and nothing downstream can tell.
+     The database stamps them instead, from one clock, in
+     RUN_ME_npayroll_lock_stamps.sql. On an upsert that lands on an existing
+     row a column DEFAULT does not fire, which is why that file uses a trigger
+     rather than relying on the defaults the tables already carry. */
   async function setManualOverride(supabase, year, month, locked, who) {
     const { error } = await supabase.from('mjmnpayroll_month_locks')
-      .upsert({ year, month, manual_override: locked,
-                updated_at: new Date().toISOString(), updated_by: who || null },
+      .upsert({ year, month, manual_override: locked, updated_by: who || null },
               { onConflict: 'year,month' });
     if (!error) await load(supabase);
     return error;
   }
 
   async function setManualOverrideForYear(supabase, year, locked, who) {
-    const now = new Date().toISOString();
     const rows = [];
     for (let month = 1; month <= 12; month++) {
-      rows.push({ year, month, manual_override: locked, updated_at: now, updated_by: who || null });
+      rows.push({ year, month, manual_override: locked, updated_by: who || null });
     }
     const { error } = await supabase.from('mjmnpayroll_month_locks')
       .upsert(rows, { onConflict: 'year,month' });
@@ -177,10 +184,9 @@
      against everywhere else. It clears the override back to the computed
      default, which already means "locked if its date has passed". */
   async function clearManualOverrideForYear(supabase, year, who) {
-    const now = new Date().toISOString();
     const rows = [];
     for (let month = 1; month <= 12; month++) {
-      rows.push({ year, month, manual_override: null, updated_at: now, updated_by: who || null });
+      rows.push({ year, month, manual_override: null, updated_by: who || null });
     }
     const { error } = await supabase.from('mjmnpayroll_month_locks')
       .upsert(rows, { onConflict: 'year,month' });
@@ -192,10 +198,13 @@
      changing it twice in one month replaces rather than duplicates, and every
      earlier month keeps whatever already governed it. */
   async function setLockDay(supabase, day, who) {
+    /* WHICH month it takes effect from is still the browser's date, and has
+       to be: it is the month the person is sitting in, not a database fact.
+       WHEN it was set is the database's. */
     const n = new Date();
     const { error } = await supabase.from('mjmnpayroll_lock_days')
       .upsert({ effective_year: n.getFullYear(), effective_month: n.getMonth() + 1,
-                lock_day: day, updated_at: n.toISOString(), updated_by: who || null },
+                lock_day: day, updated_by: who || null },
               { onConflict: 'effective_year,effective_month' });
     if (!error) await load(supabase);
     return error;
@@ -203,8 +212,7 @@
 
   async function verify(supabase, ym, sheet, scope, who) {
     const { error } = await supabase.from('mjmnpayroll_verifications')
-      .upsert({ month: ym, sheet, scope: scope || '',
-                verified_at: new Date().toISOString(), verified_by: who || null },
+      .upsert({ month: ym, sheet, scope: scope || '', verified_by: who || null },
               { onConflict: 'month,sheet,scope' });
     if (!error) await load(supabase);
     return error;
