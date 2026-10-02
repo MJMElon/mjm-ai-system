@@ -3137,7 +3137,8 @@ function applyFieldRecords(nursery, monthLbl) {
 
   records.forEach(r => {
     if (!plots.includes(r.plot) || r.checked) return;
-    const week = _recRound(r.racun);
+    // The slot's week, not the label — see MJMMaintField.srcWeek.
+    const week = MJMMaintField.rowWeek(r);
     let key = week ? _fieldKey(r.jenis, r.plot, week) : null;
     let g = key ? idx[key] : null;
     /* The round did not find it. Try the chemical — the office scheduled
@@ -3264,10 +3265,91 @@ function applyFieldRecords(nursery, monthLbl) {
   }
 }
 
+/* ── WHICH ROUND THIS IS ─────────────────────────────────────────────────
+   The number is the position among the weeks the schedule ACTUALLY uses, not
+   the week it lands in. Weeks 1 and 3 ticked is Round 1 and Round 2; weeks 2
+   and 3 is also Round 1 and Round 2; weeks 1, 2 and 4 is three rounds. A
+   nursery that sprays twice a month has a first round and a second one, and
+   calling the second "Round 3" because of where it falls in the calendar is
+   a number nobody in the field uses.
+
+   THE WEEK HAS NOT GONE ANYWHERE. It is in the slot on every generated row —
+   pd|W3|P|B1, ir|2|0|B1 — which nothing on this screen can edit, and that is
+   what the payroll pairs a field record against, through
+   MJMMaintField.srcWeek(). The label and the week used to be one number and
+   are now two questions; anything wanting the week asks the slot.
+
+   A week counts as used when ANY plot of the nursery has something ticked in
+   it. A column the schedule draws but nobody filled is not a round. */
+function roundMaps(n, m, s) {
+  const plots = NURSERY_PLOTS[n] || [];
+  const num = (k) => parseInt(String(k).replace(/[^0-9]/g, ''), 10) || 0;
+  /* PER PLOT, not per nursery. A round belongs to the plot it is walked on:
+     B1 ticked in weeks 1 and 3 has two rounds whatever its neighbours do,
+     and numbering it off the nursery would hand B1 a "Round 3" again the
+     moment some other plot was ticked in week 2. */
+  const blank = () => plots.reduce((o, p) => { o[p] = []; return o; }, {});
+  const pd = blank(), mn = blank(), wd = blank(), ir = blank();
+
+  weekKeys(n, m, 'W').forEach(w => {
+    const c = (s.pdConfig || {})[w] || {};
+    plots.forEach(p => {
+      if ((s.pd?.[w]?.[p]?.P && c.P !== '\u2014') || (s.pd?.[w]?.[p]?.D && c.D !== '\u2014')) pd[p].push(num(w));
+    });
+  });
+  (s.manuringConfig || []).forEach((round, ri) => {
+    plots.forEach(p => { if (round.some((c, ci) => s.manuring?.[p]?.[ri]?.[ci])) mn[p].push(ri + 1); });
+  });
+  weekKeys(n, m, 'R').forEach(r => {
+    plots.forEach(p => { if (s.weeding?.[p]?.[r]) wd[p].push(num(r)); });
+  });
+  (s.interrowConfig || []).forEach((round, ri) => {
+    plots.forEach(p => { if (round.some((c, ci) => s.interrow?.[p]?.[ri]?.[ci])) ir[p].push(ri + 1); });
+  });
+
+  /* Each plot's used weeks, in order, numbered from one. A plot with nothing
+     ticked keeps the week as its number, so a schedule being filled in for
+     the first time still labels its rows while it is half done. */
+  const rank = (byPlot) => {
+    const out = {};
+    plots.forEach(p => {
+      const used = [...new Set(byPlot[p])].filter(Boolean).sort((a, b) => a - b);
+      const map = {};
+      if (used.length) used.forEach((w, i) => { map[w] = i + 1; });
+      else [1, 2, 3, 4].forEach(w => { map[w] = w; });
+      out[p] = map;
+    });
+    return { get: (plot, week) => ((out[plot] || {})[week]) || week };
+  };
+  return { pd: rank(pd), mn: rank(mn), wd: rank(wd), ir: rank(ir), num };
+}
+
+/* THE ROUND ON A RECORD SOMEBODY ADDS BY HAND.
+
+   An extra pass is the next round after the ones already there: a plot with
+   two scheduled interrow rounds gets Round 3, and a second extra gets Round
+   4. Counted off the rows this plot and job already hold, scheduled and
+   hand-added alike, because that is the list the person is looking at when
+   they call it another round.
+
+   Only when they have not said which themselves — "Round 5: ..." typed out
+   in full is somebody telling the system, and it stands. */
+function nextRoundFor(jenis, plot) {
+  const key = (v) => String(v == null ? '' : v).trim().toUpperCase();
+  let top = 0;
+  (records || []).forEach(r => {
+    if (r.jenis !== jenis || key(r.plot) !== key(plot)) return;
+    const n = MJMMaintField.recRound(r.racun);
+    if (n > top) top = n;
+  });
+  return top + 1;
+}
+
 /* Auto-sync: silently regenerate records from current schedule (no confirm, no alert) */
 function autoSyncRecords() {
   const n=getNursery(), m=getMonth(), s=getState(n,m), cfg=s.pdConfig;
   const plots=NURSERY_PLOTS[n];
+  const R=roundMaps(n,m,s);
   const newRecs=[]; let id=Date.now();
 
   weekKeys(n, m, 'W').forEach(w=>{
@@ -3276,14 +3358,14 @@ function autoSyncRecords() {
       if (s.pd[w]?.[plot]?.P && c.P!=='—') {
         const pStick = c.P_sticker && c.P_sticker !== '—' ? ` + ${c.P_sticker} ${c.P_sticker_dose}${c.P_sticker_unit}` : '';
         newRecs.push({id:id++, tarikh:'-', jenis:'Penyemburan racun kulat dan serangga',
-          racun:`Round ${w[1]}: ${c.P} ${c.P_dose}${c.P_unit}${pStick}`,
+          racun:`Round ${R.pd.get(plot, R.num(w))}: ${c.P} ${c.P_dose}${c.P_unit}${pStick}`,
           _src:`pd|${w}|P|${plot}`,
           plot, batch:'', qty:null, carlos:0, gaia:0, remark:''});
       }
       if (s.pd[w]?.[plot]?.D && c.D!=='—') {
         const dStick = c.D_sticker && c.D_sticker !== '—' ? ` + ${c.D_sticker} ${c.D_sticker_dose}${c.D_sticker_unit}` : '';
         newRecs.push({id:id++, tarikh:'-', jenis:'Penyemburan racun kulat dan serangga',
-          racun:`Round ${w[1]}: ${c.D} ${c.D_dose}${c.D_unit}${dStick}`,
+          racun:`Round ${R.pd.get(plot, R.num(w))}: ${c.D} ${c.D_dose}${c.D_unit}${dStick}`,
           _src:`pd|${w}|D|${plot}`,
           plot, batch:'', qty:null, carlos:0, gaia:0, remark:''});
       }
@@ -3293,7 +3375,7 @@ function autoSyncRecords() {
     round.forEach((c, ci) => {
       plots.filter(p=>s.manuring[p]?.[ri]?.[ci]).forEach(plot => {
         newRecs.push({id:id++, tarikh:'-', jenis:'Membaja',
-          racun:`Round ${ri+1}: ${c.name} ${c.dose}${c.unit}`,
+          racun:`Round ${R.mn.get(plot, ri+1)}: ${c.name} ${c.dose}${c.unit}`,
           _src:`mn|${ri}|${ci}|${plot}`,
           plot, batch:'', qty:null, carlos:0, gaia:0, remark:''});
       });
@@ -3302,7 +3384,7 @@ function autoSyncRecords() {
   weekKeys(n, m, 'R').forEach(r=>{
     plots.filter(p=>s.weeding[p]?.[r]).forEach(plot=>{
       newRecs.push({id:id++, tarikh:'-', jenis:'Merumput',
-        racun:`Round ${r[1]}: Merumput dalam polibeg`,
+        racun:`Round ${R.wd.get(plot, R.num(r))}: Merumput dalam polibeg`,
         _src:`wd|${r}|${plot}`,
         plot, batch:'', qty:null, carlos:0, gaia:0, remark:''});
     });
@@ -3311,7 +3393,7 @@ function autoSyncRecords() {
     round.forEach((c, ci) => {
       plots.filter(p=>s.interrow[p]?.[ri]?.[ci]).forEach(plot=>{
         newRecs.push({id:id++, tarikh:'-', jenis:'Meracun rumput secara selingan',
-          racun:`Round ${ri+1}: ${c.chem} ${c.chem_dose}${c.chem_unit} + ${interrowAct(c)} ${c.activator_dose}${c.activator_unit}`,
+          racun:`Round ${R.ir.get(plot, ri+1)}: ${c.chem} ${c.chem_dose}${c.chem_unit} + ${interrowAct(c)} ${c.activator_dose}${c.activator_unit}`,
           _src:`ir|${ri}|${ci}|${plot}`,
           plot, batch:'', qty:null, carlos:0, gaia:0, remark:''});
       });
@@ -4415,6 +4497,9 @@ function weekKeys(n, m, prefix) {
 function saveSchedule(nursery, quiet) {
   const n = nursery || getNursery(), m = getMonth(), s = getState(n, m);
   const plots = NURSERY_PLOTS[n];
+  /* The same numbering the records get, so a task and the row it becomes
+     call the round by one name. */
+  const RM = roundMaps(n, m, s);
   const tasks = [];
   let id = 1;
 
@@ -4446,28 +4531,28 @@ function saveSchedule(nursery, quiet) {
   s.manuringConfig.forEach((round, ri) => {
     round.forEach((c, ci) => {
       plots.filter(p => s.manuring[p]?.[ri]?.[ci]).forEach(plot => {
-        tasks.push({ id:id++, type:'manuring', plot, round:`Round ${ri+1}`,
+        tasks.push({ id:id++, type:'manuring', plot, round:`Round ${RM.mn.get(plot, ri+1)}`,
           jenis:'Membaja',
           chemical:`${c.name} ${c.dose}${c.unit}`,
-          detail:`Manuring Round ${ri+1}` });
+          detail:`Manuring Round ${RM.mn.get(plot, ri+1)}` });
       });
     });
   });
   weekKeys(n, m, 'R').forEach(r => {
     plots.filter(p => s.weeding[p]?.[r]).forEach(plot => {
-      tasks.push({ id:id++, type:'weeding', plot, round:`Round ${r[1]}`,
+      tasks.push({ id:id++, type:'weeding', plot, round:`Round ${RM.wd.get(plot, RM.num(r))}`,
         jenis:'Merumput',
         chemical:'Merumput dalam polibeg',
-        detail:`Weeding Round ${r[1]}` });
+        detail:`Weeding Round ${RM.wd.get(plot, RM.num(r))}` });
     });
   });
   s.interrowConfig.forEach((round, ri) => {
     round.forEach((c, ci) => {
       plots.filter(p => s.interrow[p]?.[ri]?.[ci]).forEach(plot => {
-        tasks.push({ id:id++, type:'interrow', plot, round:`Round ${ri+1}`,
+        tasks.push({ id:id++, type:'interrow', plot, round:`Round ${RM.ir.get(plot, ri+1)}`,
           jenis:'Meracun rumput secara selingan',
           chemical:`${c.chem} ${c.chem_dose}${c.chem_unit} + ${interrowAct(c)} ${c.activator_dose}${c.activator_unit}`,
-          detail:`Interrow Spray Round ${ri+1}` });
+          detail:`Interrow Spray Round ${RM.ir.get(plot, ri+1)}` });
       });
     });
   });
@@ -5385,6 +5470,9 @@ function _scheduleTicksFor(rec, n, m) {
   const key = (jenis, racun) => `${jenis}||${racun}||${rec.plot}`;
   const want = key(rec.jenis, rec.racun);
   const hits = [];
+  /* This rebuilds each slot's chemical text and compares it to the row's, so
+     it has to number the rounds exactly as autoSyncRecords does. */
+  const RM = roundMaps(n, m, s);
 
   const cfg = s.pdConfig;
   weekKeys(n, m, 'W').forEach(w => {
@@ -5394,7 +5482,7 @@ function _scheduleTicksFor(rec, n, m) {
       const st = c.P_sticker && c.P_sticker !== '—'
         ? ` + ${c.P_sticker} ${c.P_sticker_dose}${c.P_sticker_unit}` : '';
       if (key('Penyemburan racun kulat dan serangga',
-              `Round ${w[1]}: ${c.P} ${c.P_dose}${c.P_unit}${st}`) === want) {
+              `Round ${RM.pd.get(rec.plot, RM.num(w))}: ${c.P} ${c.P_dose}${c.P_unit}${st}`) === want) {
         hits.push({ what: 'P & D spraying', clear: () => { s.pd[w][rec.plot].P = 0; } });
       }
     }
@@ -5402,7 +5490,7 @@ function _scheduleTicksFor(rec, n, m) {
       const st = c.D_sticker && c.D_sticker !== '—'
         ? ` + ${c.D_sticker} ${c.D_sticker_dose}${c.D_sticker_unit}` : '';
       if (key('Penyemburan racun kulat dan serangga',
-              `Round ${w[1]}: ${c.D} ${c.D_dose}${c.D_unit}${st}`) === want) {
+              `Round ${RM.pd.get(rec.plot, RM.num(w))}: ${c.D} ${c.D_dose}${c.D_unit}${st}`) === want) {
         hits.push({ what: 'P & D spraying', clear: () => { s.pd[w][rec.plot].D = 0; } });
       }
     }
@@ -5410,14 +5498,14 @@ function _scheduleTicksFor(rec, n, m) {
   (s.manuringConfig || []).forEach((round, ri) => {
     round.forEach((c, ci) => {
       if (!s.manuring[rec.plot]?.[ri]?.[ci]) return;
-      if (key('Membaja', `Round ${ri + 1}: ${c.name} ${c.dose}${c.unit}`) === want) {
+      if (key('Membaja', `Round ${RM.mn.get(rec.plot, ri + 1)}: ${c.name} ${c.dose}${c.unit}`) === want) {
         hits.push({ what: 'manuring', clear: () => { s.manuring[rec.plot][ri][ci] = 0; } });
       }
     });
   });
   weekKeys(n, m, 'R').forEach(r => {
     if (!s.weeding[rec.plot]?.[r]) return;
-    if (key('Merumput', `Round ${r[1]}: Merumput dalam polibeg`) === want) {
+    if (key('Merumput', `Round ${RM.wd.get(rec.plot, RM.num(r))}: Merumput dalam polibeg`) === want) {
       hits.push({ what: 'weeding', clear: () => { s.weeding[rec.plot][r] = 0; } });
     }
   });
@@ -5425,7 +5513,7 @@ function _scheduleTicksFor(rec, n, m) {
     round.forEach((c, ci) => {
       if (!s.interrow[rec.plot]?.[ri]?.[ci]) return;
       if (key('Meracun rumput secara selingan',
-              `Round ${ri + 1}: ${c.chem} ${c.chem_dose}${c.chem_unit} + ${
+              `Round ${RM.ir.get(rec.plot, ri + 1)}: ${c.chem} ${c.chem_dose}${c.chem_unit} + ${
                 interrowAct(c)} ${c.activator_dose}${c.activator_unit}`) === want) {
         hits.push({ what: 'interrow spraying', clear: () => { s.interrow[rec.plot][ri][ci] = 0; } });
       }
@@ -5477,6 +5565,15 @@ function saveRec(){
     remark:document.getElementById('rf-remark').value,
   };
   if(!obj.plot){ alert('Please enter a plot number.'); return; }
+  /* A new row nobody has numbered is the next round on this plot and job —
+     an extra pass after the scheduled ones. Only on a NEW row, and only when
+     no round was typed: editing must never renumber a row underneath
+     somebody, and a round written out in full is their answer. */
+  if (!editRecId && !/^\s*Round\s+\d+\s*:/i.test(obj.racun || '')) {
+    const rn = nextRoundFor(obj.jenis, obj.plot);
+    const rest = String(obj.racun || '').trim();
+    obj.racun = rest ? `Round ${rn}: ${rest}` : `Round ${rn}`;
+  }
   if(editRecId){
     const i=records.findIndex(r=>r.id===editRecId);
     if(_recLocked(records[i])) { closeRecModal(); return _denyLocked(); }
