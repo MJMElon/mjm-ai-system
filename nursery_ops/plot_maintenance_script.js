@@ -602,6 +602,47 @@ function _mergeCapacityPlots() {
       if (capacityOf(n, p) > 0) { NURSERY_PLOTS[n].push(p); have.add(k); }
     });
   });
+  _mergePlotsWithRows(norm);
+}
+
+/* A plot the SAVED LIST already has rows for joins its nursery's list too,
+   whatever its capacity.
+
+   A capacity greater than nought is the right test for the SCHEDULES — a
+   dosage cannot be worked out without a quantity — and it is the wrong test
+   for Work Record. B4-R had two rows keyed, saved, and invisible: the row was
+   in the data the whole time, and the only thing standing between it and the
+   screen was that nobody had typed B4-R's capacity. A row that is saved must
+   never be a row that cannot be seen; the office has no way of guessing that
+   a capacity is what is being asked for.
+
+   Seedling Stock says whose plot it is, so there is no guessing here either —
+   only plots shared_plots assigns to this nursery are taken, and the plot is
+   added under the spelling the ROW uses, because that is the string the list
+   matches on. */
+function _mergePlotsWithRows(norm) {
+  let rows;
+  try { rows = records; } catch (_) { return; }   // `let records` is below this
+  if (!Array.isArray(rows) || !rows.length) return;
+
+  const spelt = new Map();
+  rows.forEach(r => {
+    const k = norm(r && r.plot);
+    if (k && !spelt.has(k)) spelt.set(k, r.plot);
+  });
+  if (!spelt.size) return;
+
+  Object.keys(stockPlots || {}).forEach(stockName => {
+    const n = schedKey(stockName);
+    if (!n || !NURSERY_PLOTS[n]) return;
+    const have = new Set(NURSERY_PLOTS[n].map(norm));
+    (stockPlots[stockName] || []).forEach(p => {
+      const k = norm(p);
+      if (!k || have.has(k) || !spelt.has(k)) return;
+      NURSERY_PLOTS[n].push(spelt.get(k));
+      have.add(k);
+    });
+  });
 }
 
 /* Blank inline row: the user keys the plot name themselves. */
