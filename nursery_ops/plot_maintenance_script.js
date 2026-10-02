@@ -107,6 +107,28 @@ function getPlotQty(n, p){
   const def = aliasBucket(DEFAULT_PLOT_QTY, n);
   return (def && +def[p]) || 0;
 }
+/* What is ON RECORD for this plot, and nothing else — null when nobody has
+   ever keyed it. getPlotQty above answers with the hardcoded default in that
+   case, which is right for a dosage and wrong for deciding what to SAVE:
+   writing the default back makes a figure nobody chose look like a figure
+   somebody chose. See saveCapEdit. */
+function savedPlotQty(n, p){
+  const ov = plotQtyOverrides;
+  const stock = qtyStockName(n);
+  for (const key of [stock, n]) {
+    if (key && ov[key] && ov[key][p] !== undefined && ov[key][p] !== null) return +ov[key][p] || 0;
+  }
+  const b = aliasBucket(ov, n);
+  return (b && b[p] !== undefined && b[p] !== null) ? +b[p] || 0 : null;
+}
+function savedPlotTrays(n, p){
+  const stock = qtyStockName(n);
+  for (const key of [stock, n]) {
+    if (key && plotTrays[key] && plotTrays[key][p] != null) return +plotTrays[key][p] || 0;
+  }
+  const b = aliasBucket(plotTrays, n);
+  return (b && b[p] != null) ? +b[p] || 0 : null;
+}
 function setPlotQty(n, p, v){
   if (!plotQtyOverrides[n]) plotQtyOverrides[n] = {};
   plotQtyOverrides[n][p] = Math.max(0, +v || 0);
@@ -3129,7 +3151,10 @@ function applyFieldRecords(nursery, monthLbl) {
     r._fieldIds = g.ids.slice();
     // The walks on those records, for the Track Record column.
     r._fieldTracks = (g.tracks || []).slice();
-    if (!r.tarikh || r.tarikh === '-' || r._fromFieldDate) {
+    /* _tarikhByHand / _batchByHand / _qtyByHand: the office typed this cell
+       themselves, so the field does not write it again — not with a figure,
+       and not with a blank. See saveRec. */
+    if (!r._tarikhByHand && (!r.tarikh || r.tarikh === '-' || r._fromFieldDate)) {
       /* tarikh stays ONE date — the earliest. Everything downstream reads it
          as a date and would choke on a list: the month timeline, the Worker
          Record, the filter box, the Auditor Portal's own copy of this row.
@@ -3143,14 +3168,15 @@ function applyFieldRecords(nursery, monthLbl) {
       // the field's other days beside it would be this page arguing with them.
       delete r._fieldDates;
     }
-    if (g.batches.length && (!r.batch || r._fromFieldBatch)) {
+    if (g.batches.length && !r._batchByHand && (!r.batch || r._fromFieldBatch)) {
       r.batch = g.batches.join(', ');
       r._fromFieldBatch = 1;
     }
     // The field counted the batches it ticked, so the quantity is already
     // answered — leaving the cell to fall back to the linked figure asked the
     // batch report a question the record had already settled.
-    if (g.qty != null && g.qty !== '' && (r.qty == null || r._fromFieldQty)) {
+    if (g.qty != null && g.qty !== '' && !r._qtyByHand
+        && (r.qty == null || r._fromFieldQty)) {
       r.qty = Number(g.qty);
       r._fromFieldQty = 1;
     }
@@ -5313,10 +5339,35 @@ function saveRec(){
     /* Typing over the chemical of a scheduled row is the person disagreeing
        with the schedule about this one plot. Marked, so the next sync leaves
        it alone instead of putting the schedule's wording back. */
-    const byHand = records[i]._racunByHand
-      || (records[i]._src && String(obj.racun || '') !== String(records[i].racun || ''));
-    records[i]={...records[i],...obj};
-    if (byHand) records[i]._racunByHand = 1;
+    const was = records[i];
+    const byHand = was._racunByHand
+      || (was._src && String(obj.racun || '') !== String(was.racun || ''));
+    /* And the same for the three cells the FIELD fills — the date, the batch
+       and the quantity.
+
+       _fromFieldDate / _fromFieldBatch / _fromFieldQty mark a cell this page
+       filled from a verified field record. That mark is also the licence to
+       fill it AGAIN, so typing over one and leaving it on had the next sync
+       put the field's figure straight back: a quantity keyed as 4755 read
+       something else by the time somebody looked, and read blank once the
+       field record went (loadFieldRecords clears a marked cell whose record
+       has gone). Nothing on either screen said why, and nobody had touched it.
+
+       Same trap as the chemical, same answer: the mark comes off the cell that
+       changed, and a mark of the person's own goes on — which is also what
+       makes a cell they deliberately CLEARED stay clear, instead of reading as
+       "empty, so ask the field". */
+    const typed = (k) => String(obj[k] == null ? '' : obj[k])
+                       !== String(was[k] == null ? '' : was[k]);
+    const mineDate  = was._tarikhByHand || typed('tarikh');
+    const mineBatch = was._batchByHand  || typed('batch');
+    const mineQty   = was._qtyByHand    || typed('qty');
+    records[i]={...was,...obj};
+    const row = records[i];
+    if (byHand) row._racunByHand = 1;
+    if (mineDate)  { row._tarikhByHand = 1; delete row._fromFieldDate; }
+    if (mineBatch) { row._batchByHand  = 1; delete row._fromFieldBatch; }
+    if (mineQty)   { row._qtyByHand    = 1; delete row._fromFieldQty; }
   }
   else records.push({id:Date.now(),...obj});
   closeRecModal(); renderRecords(); persistRecords();
@@ -6433,6 +6484,18 @@ function derivedText(n, p) {
    to be undoable by walking away. Edit takes in every nursery at once,
    because that is the job. */
 function startCapEdit() {
+  /* Not before the capacities have been READ. The boxes are filled from
+     getPlotQty, which answers with the hardcoded default for a plot it has
+     nothing saved for — so opening the editor on a page whose read had not
+     landed showed the defaults, and Save wrote them over everybody's real
+     figures. That is the whole of "nobody touched the capacity and it changed
+     by itself". */
+  if (!_dbReady) {
+    alert('The saved capacities have not been read yet — give it a moment and '
+        + 'press Edit again.\n\nOpening the editor now would show the built-in '
+        + 'figures instead of yours, and saving would write them over yours.');
+    return;
+  }
   capDraft = {};
   capNurseries().forEach(n => {
     const pre = isPreNursery(n);
@@ -6496,23 +6559,48 @@ async function saveCapEdit() {
   for (const n of nurseries) {
     const pre = isPreNursery(n);
     const stamp = new Date().toISOString();
+    /* ONLY the plots whose figure actually changed.
+       This used to write every plot of every nursery on every Save. Two things
+       came of that, both of them a number changing with nobody having changed
+       it:
+         · a plot nobody had keyed was saved with the HARDCODED DEFAULT, so a
+           figure nobody chose became a figure on record — and the defaults are
+           years old
+         · and on a page whose read had not landed, that default went over the
+           real one
+       A box left alone is a question nobody answered. It stays unanswered. */
+    const perTray = +capDraft[n].perTray || 0;
+    /* A pre nursery's seedlings is trays × this, so changing it changes the
+       seedling figure of every plot that has trays — those rows go too, or
+       they keep yesterday's product. */
+    const perTrayChanged = pre && perTray !== (+traySize[n] || 0);
+
     const rows = capPlots(n).map(p => {
       const v = capDraft[n].plots[p] === '' ? 0 : +capDraft[n].plots[p] || 0;
+      const was = pre ? savedPlotTrays(n, p) : savedPlotQty(n, p);
+      const changed = was !== v
+        /* Nothing on record and the box still shows the built-in figure — the
+           box was never touched, so there is nothing to save. */
+        && !(was === null && v === (pre ? trayQty(n, p) : getPlotQty(n, p)));
+      if (!changed && !(perTrayChanged && v)) return null;
       return pre
-        ? { nursery: n, plot: p, trays: v, qty: v * (+capDraft[n].perTray || 0), updated_at: stamp }
+        ? { nursery: n, plot: p, trays: v, qty: v * perTray, updated_at: stamp }
         : { nursery: n, plot: p, qty: v, updated_at: stamp };
-    });
+    }).filter(Boolean);
 
-    let { error } = await _supabase.from('nops_maint_plot_qty')
-      .upsert(rows, { onConflict: 'nursery,plot' }).then(r => r, e => ({ error: e }));
-
-    /* No trays column → migration_nops_maint_settings.sql has not been run.
-       The seedling figure is the one everything else reads, so it is saved
-       without the trays rather than not at all. */
-    if (error && pre && /trays/i.test(error.message || '')) {
-      const flat = rows.map(r => ({ nursery: r.nursery, plot: r.plot, qty: r.qty, updated_at: r.updated_at }));
+    let error = null;
+    if (rows.length) {
       ({ error } = await _supabase.from('nops_maint_plot_qty')
-        .upsert(flat, { onConflict: 'nursery,plot' }).then(r => r, e => ({ error: e })));
+        .upsert(rows, { onConflict: 'nursery,plot' }).then(r => r, e => ({ error: e })));
+
+      /* No trays column → migration_nops_maint_settings.sql has not been run.
+         The seedling figure is the one everything else reads, so it is saved
+         without the trays rather than not at all. */
+      if (error && pre && /trays/i.test(error.message || '')) {
+        const flat = rows.map(r => ({ nursery: r.nursery, plot: r.plot, qty: r.qty, updated_at: r.updated_at }));
+        ({ error } = await _supabase.from('nops_maint_plot_qty')
+          .upsert(flat, { onConflict: 'nursery,plot' }).then(r => r, e => ({ error: e })));
+      }
     }
 
     if (!error && pre) {
