@@ -113,6 +113,12 @@ const SEEDS_ROW = {
   const ran = [];
   await page.exposeFunction('__note', n => { ran.push(n); });
 
+  const modalOpen = () => page.evaluate(() =>
+    !document.getElementById('unsaved-modal').classList.contains('hidden'));
+  const listed = () => page.evaluate(() =>
+    Array.from(document.querySelectorAll('#unsaved-modal-list .unsaved-row'))
+         .map(r => r.querySelector('span').textContent.trim()));
+
   console.log('\nNothing typed, nothing asked');
   await page.evaluate(() => window.closeBatchRecord());
   await page.waitForTimeout(250);
@@ -124,6 +130,61 @@ const SEEDS_ROW = {
   await page.waitForTimeout(400);
   await catchToasts();
 
+  console.log('\nCounting seeds counts as unsaved work');
+  /* A seed count is a file input, and _markTabDirty skips those -- picking a
+     drone map is not a change to the record until the row is saved with it.
+     A seed count IS: the photo is read, the AI counts it, and the figure is
+     on screen, having never reached the database. That state is flagged by
+     _seedAuditDirty, which the close dialog knew nothing about -- so counting
+     eight bags and pressing X closed the batch without a word.
+
+     Driven through the page's own path: a real row, a real file on the real
+     input, with only the AI call and the two canvas steps stubbed. */
+  await page.evaluate(() => {
+    window._seedCallGemini = async () => ({
+      seeds: Array.from({ length: 250 }, (_, i) => [i, i]), confidence: 'high'
+    });
+    window._seedCompressImage = async (d) => d;
+    window._seedDrawDotsOnImage = async (d) => d;
+    window.addSeedAuditRow();
+  });
+  const bagRow = await page.evaluate(() =>
+    (document.querySelector('.t8-bag-row') || {}).id || '');
+  checkTrue('there is a bag row to count', !!bagRow);
+  check('nothing is unsaved before the count',
+        await page.evaluate(() => window._dirtyTabNames()), []);
+
+  await page.setInputFiles(`#${bagRow}-photo`, {
+    name: 'bag.jpg', mimeType: 'image/jpeg',
+    buffer: Buffer.from('ffd8ffe000104a46494600', 'hex')
+  });
+  await page.waitForFunction(() => window._dirtyTabNames().indexOf('Seed Audit') >= 0,
+                             { timeout: 8000 });
+  check('counting a bag makes Seed Audit unsaved',
+        await page.evaluate(() => window._dirtyTabNames()), ['Seed Audit']);
+
+  await page.evaluate(() => window.closeBatchRecord());
+  await page.waitForTimeout(200);
+  check('pressing X asks about it', await modalOpen(), true);
+  check('…naming it', await listed(), ['Seed Audit']);
+  check('no browser confirm box', dialogs.length, 0);
+  check('still on the page',
+        new URL(page.url()).pathname.endsWith('operation_batch_detail.html'), true);
+
+  ran.length = 0;
+  await page.evaluate(() => {
+    window.saveSeedAudit = function () { window.__note('saveSeedAudit'); window.showToast('Saved.', 'success'); };
+    window._trackTabSave('saveSeedAudit', 8);
+  });
+  await page.evaluate(() => window.saveOneUnsaved(8));
+  await page.waitForTimeout(500);
+  check('Save on its row runs the seed audit save', ran.slice(), ['saveSeedAudit']);
+  check('…and Seed Audit stops being listed, own flag and all',
+        await page.evaluate(() => window._dirtyTabNames()), []);
+  await page.evaluate(() => window.closeUnsavedModal());
+  await page.waitForTimeout(100);
+
+  console.log('\nA value the page writes is not somebody typing');
   console.log('\nA value the page writes is not somebody typing');
   await page.evaluate(() => {
     const el = document.querySelector('#tab-3 input, #tab-3 select');
@@ -139,11 +200,6 @@ const SEEDS_ROW = {
     el.dispatchEvent(new Event('input',  { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
   }, [sel, val]);
-  const modalOpen = () => page.evaluate(() =>
-    !document.getElementById('unsaved-modal').classList.contains('hidden'));
-  const listed = () => page.evaluate(() =>
-    Array.from(document.querySelectorAll('#unsaved-modal-list .unsaved-row'))
-         .map(r => r.querySelector('span').textContent.trim()));
 
   await type('#t3-dtone-nursery-qty', '1234');
   check('the tab typed into is the one that goes dirty',
@@ -168,6 +224,7 @@ const SEEDS_ROW = {
   check('…and the typing is still there', await page.inputValue('#t3-dtone-nursery-qty'), '1234');
   check('…and the tab still dirty', await page.evaluate(() => window._dirtyTabNames()), ['Transplanting']);
 
+  console.log('\nEvery dirty tab is listed, in tab order');
   console.log('\nEvery dirty tab is listed, in tab order');
   await type('#t2-gap-note', 'short by a few');
   await page.evaluate(() => {

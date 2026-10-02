@@ -76,6 +76,9 @@
     <script src="../shared/shared_supabase.js"></script>
     <script src="../shared/shared_access.js"></script>
     <script src="../shared/shared_nelos.js"></script>
+    <!-- The paper audit sheet an empty-hole case carries. See
+         shared/shared_empty_hole_report.js. -->
+    <script src="../shared/shared_empty_hole_report.js?v=1"></script>
     <!-- Tray occupancy — the same rule the batch list's Tray Status tab uses. -->
     <script src="../shared/shared_tray_stock.js"></script>
     <!-- Month Lock Calendar — same lock DO/AL use, keyed to each row's own date. -->
@@ -4306,10 +4309,12 @@
             if (!isNaN(n)) _tabDirty[n] = true;
         }
 
+        /* Through _dirtyTabIndices, so there is ONE answer to "what is not
+           saved". These read the flags separately once, and the day Seed
+           Audit's own flag was folded into the indices the names went on
+           without it — which is the whole bug this is guarding against. */
         function _dirtyTabNames() {
-            return Object.keys(_tabDirty)
-                .filter(n => _tabDirty[n])
-                .map(n => TAB_TITLES[n] || ('Tab ' + n));
+            return _dirtyTabIndices().map(n => TAB_TITLES[n] || ('Tab ' + n));
         }
 
         /* Runs a tab's save and clears that tab only if nothing reported an
@@ -4322,7 +4327,16 @@
                 let sawError = false;
                 const realToast = window.showToast;
                 window.showToast = function (m, t) { if (t === 'error') sawError = true; return realToast.apply(this, arguments); };
-                const done = () => { window.showToast = realToast; if (!sawError) _tabDirty[tabIdx] = false; };
+                const done = () => {
+                    window.showToast = realToast;
+                    if (sawError) return;
+                    _tabDirty[tabIdx] = false;
+                    /* Seed Audit keeps its own flag for the bag counts, which
+                       are not typed into anything. saveSeedAudit clears it
+                       itself, but clearing it here as well keeps ONE place
+                       that decides a tab is saved. */
+                    if (tabIdx === 8) _seedAuditDirty = false;
+                };
                 let out;
                 try { out = orig.apply(this, arguments); }
                 catch (err) { done(); throw err; }
@@ -4341,8 +4355,20 @@
             5: 'saveTab5', 6: 'saveTab6', 7: 'saveCalibration', 8: 'saveSeedAudit'
         };
 
+        /* SEED AUDIT COUNTS AS ITS OWN, and it has to be asked for by name.
+
+           Counting a bag is a file input, and _markTabDirty skips those —
+           picking a drone map is not a change to the record until it is
+           saved with the row. But a seed count is: the photo is read, the AI
+           counts it, and the figure is on screen. That state lives in
+           seedAuditPhotoState and is flagged by _seedAuditDirty, which the
+           close dialog knew nothing about — so counting eight bags and
+           pressing the X closed the batch without a word and the counts were
+           gone, having never reached the database at all. */
         function _dirtyTabIndices() {
-            return Object.keys(_tabDirty).filter(n => _tabDirty[n]).map(Number);
+            const out = Object.keys(_tabDirty).filter(n => _tabDirty[n]).map(Number);
+            if (_seedAuditDirty && out.indexOf(8) < 0) out.push(8);
+            return out.sort((a, b) => a - b);
         }
 
         function _leaveBatchRecord() {
@@ -6856,41 +6882,104 @@
 
            Deduped: a case raised twice for the same batch is one job, and
            this button is pressed by whoever happens to be looking. */
+        /* WHO AN EMPTY HOLE CASE GOES TO.
+           Always the same two answers, because it is always the same job:
+           the Pre Nursery auditor walks the trays and ticks the sheet. Named
+           here rather than left to Nelos's category routing, which has
+           nothing to route on — the case is raised under "Other", carrying
+           the batch number as its title, so there is no category for a rule
+           to match. The person is matched by NAME, not by id: ids are this
+           database's, and the name is what the seat is called on screen. */
+        const EH_CASE = {
+            dest:    'audit',
+            pic:     'Pre Nursery Auditor + Drone Operator',
+            nursery: 'PN',                       // seeds are planted in Pre Nursery
+            remark:  'Check empty hole'
+        };
+
+        /* Open the Nelos case form, filled in, with the audit sheet attached.
+
+           It used to raise the case outright, which gave the office no sight
+           of what was being sent and nowhere to put the sheet. Now the sheet
+           is drawn from the batch's own records — see
+           shared/shared_empty_hole_report.js — and handed to the Nelos form
+           along with the rest of the answers, so the person presses Save on
+           a case they can read.
+
+           The photo is why this is a hand-off through sessionStorage rather
+           than a longer link: a picture does not fit in a query string. */
         async function raiseEmptyHoleCase() {
             const batch = (document.getElementById('f-batchno')?.value || '').trim();
             if (!batch) { showToast('Save Tab 1 first to assign a batch number.', 'error'); return; }
             const total = t2EhTotal();
             if (!total) { showToast('No empty hole recorded yet.', 'error'); return; }
-            if (typeof MJMNelos === 'undefined' || !MJMNelos.raise) {
-                showToast('Nelos is not loaded on this page.', 'error'); return;
+            if (typeof MJMEmptyHoleReport === 'undefined') {
+                showToast('The empty hole report could not be loaded on this page.', 'error'); return;
             }
-
-            const trays = t2EhTrays().filter(t => t2EhCountFor(t) > 0);
-            const detail = trays.map(tray => {
-                const recs = t2_emptyHoles[_ehKey(tray)];
-                const where = recs.map(r => `Row ${r.row} · Hole ${r.hole}${r.note ? ` (${r.note})` : ''}`).join('\n    ');
-                return `${tray} — ${recs.length} empty hole${recs.length === 1 ? '' : 's'}\n    ${where}`;
-            }).join('\n\n');
 
             const btn = document.getElementById('t2-eh-nelos-btn');
             const original = btn ? btn.innerText : '';
             if (btn) { btn.disabled = true; btn.innerText = 'Opening…'; }
-            const { data, error, deduped } = await MJMNelos.raise({
-                title: `Batch ${batch}: ${total} empty hole${total === 1 ? '' : 's'} to refill`,
-                description: `Recorded on the Planting report's Empty Hole tab.\n\n${detail}`,
-                category: 'Empty Hole',
-                priority: 'normal',
-                source: 'operation',
-                sourceRef: `../operation/operation_batch_detail.html?id=${encodeURIComponent(batch)}`,
-                batch,
-                // One tray named on the case itself; the rest are in the
-                // description, which is where a list belongs.
-                plot: trays.length === 1 ? trays[0] : null,
-                dedupe: true
-            });
-            if (btn) { btn.disabled = false; btn.innerText = original || '🐛 Open Nelos Case'; }
-            if (error) { showToast('Could not open the case: ' + error.message, 'error'); return; }
-            showToast(deduped ? 'An open case for this batch already exists.' : 'Nelos case opened.', 'success');
+            try {
+                /* Every figure on the sheet is the batch's own. "Sebenar Biji
+                   Tanam" is what was ACTUALLY planted — the total less the
+                   empty holes — which is the number the tray totals already
+                   show under that name. */
+                const trays = t2EhTrays().filter(t => t2EhCountFor(t) > 0).map(tray => ({
+                    tray,
+                    holes: (t2_emptyHoles[_ehKey(tray)] || []).map(r => ({ row: r.row, hole: r.hole }))
+                }));
+                const sheet = MJMEmptyHoleReport.draw({
+                    batch,
+                    breed: (document.getElementById('f-brand')?.value || '').trim(),
+                    actualPlanted: _ehDigits(document.getElementById('t2-tot-actual')?.innerText),
+                    // The day the case is opened, which is the day the audit
+                    // is being asked for — not the day the holes were keyed.
+                    date: new Date().toISOString().slice(0, 10),
+                    auditor: EH_CASE.pic,
+                    trays
+                });
+
+                const handed = typeof MJMNelos !== 'undefined' && MJMNelos.handOff
+                    && MJMNelos.handOff({
+                        dest:    EH_CASE.dest,
+                        pic:     EH_CASE.pic,
+                        nursery: EH_CASE.nursery,
+                        source:  'operation',
+                        batch,
+                        // The case is named after the batch, under "Other" —
+                        // which is what the screen shows and what the sheet
+                        // attached to it is about.
+                        title:   `Batch ${batch}`,
+                        desc:    EH_CASE.remark,
+                        photo:   { name: sheet.name, type: 'image/png', dataUrl: sheet.dataUrl }
+                    });
+                if (!handed) {
+                    showToast('This browser would not carry the report over — '
+                            + 'the form will open without it.', 'error');
+                }
+
+                /* The link carries the same answers, so a form that cannot
+                   read the hand-off still opens on the right case. Only the
+                   picture is lost, and the toast above has said so. */
+                const q = new URLSearchParams({
+                    new: '1', source: 'operation', batch,
+                    nursery: EH_CASE.nursery, title: `Batch ${batch}`,
+                    dest: EH_CASE.dest, pic: EH_CASE.pic, desc: EH_CASE.remark
+                });
+                window.location.href = '../nelos/nelos_dashboard.html?' + q.toString();
+            } catch (e) {
+                console.warn('[empty hole] the case could not be prepared:', e);
+                showToast('Could not prepare the case: ' + (e.message || e), 'error');
+                if (btn) { btn.disabled = false; btn.innerText = original || '🐛 Open Nelos Case'; }
+            }
+        }
+
+        /* "10,457" off the screen, back to 10457. The totals are rendered for
+           reading, and this is the one place a number has to travel. */
+        function _ehDigits(txt) {
+            const n = parseInt(String(txt == null ? '' : txt).replace(/[^0-9-]/g, ''), 10);
+            return Number.isFinite(n) ? n : null;
         }
 
         function removeTrayRow(rowId) {

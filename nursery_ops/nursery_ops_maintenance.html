@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=77">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=80">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -14,7 +14,7 @@
      middle, Welcome / Portal / Sign Out on the right. Mounted here rather
      than hand-built, so this page cannot drift from the others. -->
 <div id="mjm-ribbon" data-brand="MJM Nursery AI System"
-     data-center="Schedule &amp; Maintenance"
+     data-center="Nursery Maintenance Schedule &amp; Work Record"
      data-sub="Monthly Work Planning &amp; Record System" data-logo="off"></div>
 <script src="../shared/shared_ribbon.js"></script>
 
@@ -42,20 +42,22 @@
       <button type="button" id="sm-nav-toggle" class="sm-nav-toggle"
               onclick="toggleNav()" aria-controls="sm-nav" aria-expanded="true"
               title="Hide the menu"><span id="sm-nav-toggle-ico">&#10094;</span></button>
-      <nav aria-label="Schedule &amp; Maintenance">
+      <nav aria-label="Nursery Maintenance Schedule &amp; Work Record">
         <a class="pn-out" href="nursery_ops_dashboard.html">
           <span aria-hidden="true">&#8592;</span>
           <span>Back to Operation Manage Page</span>
         </a>
         <div class="pn-group">
-          <div class="pn-cap">Schedule &amp; Maintenance</div>
-          <!-- Monthly Scheduled Work lands first: it is what the page is
-               for. Worker Record is last because it may be leaving. -->
-          <button type="button" class="pn-tab is-on" onclick="switchTab('schedule',this)" data-i18n="tab.schedule">Monthly Scheduled Work</button>
-          <button type="button" class="pn-tab"       onclick="switchTab('record',this)"   data-i18n="tab.record">Work Record</button>
-          <!-- Hidden until MJMAccess confirms an admin (see applyNopsAdminUI). -->
-          <button type="button" class="pn-tab" id="tab-btn-setting" style="display:none;" onclick="switchTab('setting',this)" data-i18n="tab.setting">Setting</button>
+          <div class="pn-cap">Nursery Maintenance Schedule &amp; Work Record</div>
+          <!-- Maintenance Work Record lands first and is what the page
+               opens on: the schedule is set once a month, the records are
+               what somebody is here for on any other day. Setting is last
+               and is hidden until MJMAccess confirms an admin (see
+               applyNopsAdminUI). -->
+          <button type="button" class="pn-tab is-on" onclick="switchTab('record',this)"   data-i18n="tab.record">Maintenance Work Record</button>
+          <button type="button" class="pn-tab"       onclick="switchTab('schedule',this)" data-i18n="tab.schedule">Monthly Maintenance Schedule</button>
           <button type="button" class="pn-tab"       onclick="switchTab('payroll',this)"  data-i18n="tab.payroll">Worker Record</button>
+          <button type="button" class="pn-tab" id="tab-btn-setting" style="display:none;" onclick="switchTab('setting',this)" data-i18n="tab.setting">Setting</button>
         </div>
       </nav>
     </aside>
@@ -68,7 +70,7 @@
            Both hide themselves on a panel that has no use for them:
            Schedule shows every nursery at once, Setting has no month. -->
       <div class="sm-head">
-        <div class="sm-title" id="sm-title">Monthly Scheduled Work</div>
+        <div class="sm-title" id="sm-title">Maintenance Work Record</div>
         <div class="sm-tools">
           <div class="top-ctrl" id="top-nursery-ctrl">
             <select id="global-nursery" style="display:none;" onchange="onNurseryChange()">
@@ -96,7 +98,7 @@
       </div>
 
     <!-- WORK RECORD (default) — headline metrics + List / Analytics sub-views -->
-    <div id="tab-record" class="tab-panel">
+    <div id="tab-record" class="tab-panel active">
       <div class="page-hdr"><div class="page-hdr-title" id="record-nursery-line"></div></div>
       <div id="rec-metrics" class="metrics-big"></div>
       <div class="subtabs-bar">
@@ -104,7 +106,33 @@
         <button class="subtab-btn"        id="subtab-chart" onclick="switchRecordView('chart',this)">📊 Analytics</button>
       </div>
       <div id="recview-list" class="recview active">
-      <!-- WORK RECORD -->
+      <!-- WORK RECORD —————————————————————————————————————————————
+           TWO SECTIONS, ONE AT A TIME.
+
+           A Field Conductor going through the morning's submissions in the
+           Verify Hub gives one of two answers, and until now this page only
+           ever saw one of them. Approved work flows into the schedule — it
+           fills in the date, the batches, the quantity and the walk on the
+           row it belongs to. A record sent back went nowhere at all:
+           loadFieldRecords reads verified rows and nothing else, so the
+           refusal was invisible here and the only way to undo one was to find
+           the record again on a phone.
+
+           They are SECTIONS rather than one list stacked on another. Stacked,
+           the sent-back part sat below a table that is often a hundred rows
+           long, which is a place nobody scrolls to — and the two have
+           different buttons, so reading them as one table is the mistake the
+           layout should not invite. The count rides on the tab, so a refusal
+           is visible from the approved section without leaving it.
+
+           The filters below belong to BOTH: whichever section is open
+           answers the same question about the same nursery. -->
+        <div class="subtabs-bar">
+          <button class="subtab-btn active" id="recsec-btn-approved"
+                  onclick="switchRecSection('approved',this)">✓ <span data-i18n="rec.partApproved">Approved</span></button>
+          <button class="subtab-btn" id="recsec-btn-rejected"
+                  onclick="switchRecSection('rejected',this)">⛔ <span data-i18n="rec.partRejected">Rejected</span> <span class="rec-part-count" id="rej-count"></span></button>
+        </div>
         <div class="toolbar">
           <select class="filter-sel" id="rf-filter-jenis" onchange="renderRecords()">
             <option value="" data-i18n="rec.allJenis">All Jenis Kerja</option>
@@ -122,6 +150,9 @@
           <button class="btn btn-primary" onclick="openRecModal()" data-i18n="btn.addRecord">+ Add Record</button>
           <button class="btn" onclick="syncRecordsFromSchedule()" data-i18n="btn.sync">↺ Sync from Schedule</button>
         </div>
+
+        <div id="recsec-approved" class="recsec active">
+        <div class="rec-part-sub" style="margin:0 0 10px;" data-i18n="rec.partApprovedSub">The month's scheduled jobs, with the submissions a Field Conductor has signed off filled in</div>
         <div class="card"><div class="tbl-wrap">
           <table class="rec-table">
             <!-- The columns are PINNED here rather than left to the browser.
@@ -194,6 +225,55 @@
             <tbody id="rec-body"></tbody>
           </table>
         </div></div>
+
+        </div><!-- /recsec-approved -->
+
+        <!-- ── SENT BACK ─────────────────────────────────────────────────
+             The submissions a Field Conductor refused, with the reason he
+             gave. The row is still in the database and the work may well
+             have been done — what was refused is the RECORD of it, which is
+             why the buttons here are Approve, Edit and Del rather than the
+             Check / Edit / Del of the approved section: Check locks an
+             OFFICE row, Approve answers a WORKER's record.
+
+             Deleting one takes the scheduled row it was paired to with it —
+             the pairing is a rule, not a foreign key (see shared_maint_field.js),
+             so the confirm names the row that will go and refuses to guess
+             when the pairing is ambiguous. -->
+        <div id="recsec-rejected" class="recsec">
+        <div class="rec-part-sub" style="margin:0 0 10px;" data-i18n="rec.partRejectedSub">Records a Field Conductor refused — approve one and it flows back into the approved section</div>
+        <div class="card"><div class="tbl-wrap">
+          <table class="rec-table rej-table">
+            <!-- Pinned the same way and for the same reason as the table
+                 above: see the note on its colgroup. -->
+            <colgroup>
+              <col style="width:90px;" ><!-- Date        -->
+              <col style="width:96px;" ><!-- Work Type   -->
+              <col style="width:150px;"><!-- Chemical    -->
+              <col style="width:52px;" ><!-- Plot        -->
+              <col style="width:104px;"><!-- Batch       -->
+              <col style="width:70px;" ><!-- Quantity    -->
+              <col style="width:104px;"><!-- Worked by   -->
+              <col style="width:170px;"><!-- Reason sent back -->
+              <col style="width:104px;"><!-- Sent back by -->
+              <col style="width:158px;"><!-- Approve / Edit / Del -->
+            </colgroup>
+            <thead><tr>
+              <th class="th-left"            data-i18n="rec.tarikh">Tarikh</th>
+              <th class="th-left"            data-i18n="rec.jenis">Jenis Kerja</th>
+              <th class="th-left"            data-i18n="rec.racun">Racun / Chemical</th>
+              <th style="text-align:center;" data-i18n="rec.plot">Plot</th>
+              <th style="text-align:center;" data-i18n="rec.batch">Batch</th>
+              <th style="text-align:center;" data-i18n="rec.qty">Quantity</th>
+              <th style="text-align:center;" data-i18n="rej.workedBy">Worked By</th>
+              <th class="th-left"            data-i18n="rej.reason">Reason Sent Back</th>
+              <th style="text-align:center;" data-i18n="rej.by">Sent Back By</th>
+              <th></th>
+            </tr></thead>
+            <tbody id="rej-body"></tbody>
+          </table>
+        </div></div>
+        </div><!-- /recsec-rejected -->
       </div>
       <div id="recview-chart" class="recview">
       <!-- ANALYTICS -->
@@ -249,10 +329,10 @@
          were hiding three quarters of what you were about to save.
          One page, one toolbar, one Save — and the four programs stacked in
          the order they are worked. -->
-    <div id="tab-schedule" class="tab-panel active">
+    <div id="tab-schedule" class="tab-panel">
       <!-- No Save and no PDF here. Saving is what every tick already does,
            and publishing to the worker app happens when the Edit popup's
-           Save is pressed — see saveWorkEditor(). -->
+           Reviewed & Sync is pressed — see saveWorkEditor(). -->
 
       <!-- ── SUMMARY ────────────────────────────────────────────────
            Every nursery, every week, the four works. A tick means that work
@@ -474,7 +554,7 @@
       <button class="btn schedule-edit-ctrl" id="we-add-week" onclick="weAddWeek()"
         style="margin-right:auto;">&#65291; Add Week</button>
       <button class="btn" onclick="cancelWorkEditor()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveWorkEditor()">Save</button>
+      <button class="btn btn-primary" onclick="saveWorkEditor()">Reviewed &amp; Sync</button>
     </div>
   </div>
 </div>
@@ -543,6 +623,76 @@
   </div>
 </div>
 
+<!-- ═══ EDIT A SENT-BACK SUBMISSION ═══
+     The worker's own record, not an office row — which is why it is a
+     separate modal from Add/Edit Record above and writes straight to
+     nops_maint_field_records. A record is usually sent back because one
+     thing on it is wrong; this is where that one thing gets fixed, and
+     saving does NOT approve it — the Approve button on the row still has to
+     be pressed, so a correction and a sign-off stay two decisions. -->
+<div class="modal-overlay" id="rej-modal">
+  <div class="modal">
+    <div class="modal-top">
+      <div class="modal-title" data-i18n="rej.editTitle">Edit Sent-Back Record</div>
+      <button class="modal-close" onclick="closeRejModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <!-- Why it came back, in the conductor's words. Read-only: it is a
+           record of what was said, not a field to tidy up. -->
+      <div id="rej-modal-why" style="background:#fdeaea;border:1.5px solid #f3c9c9;border-radius:var(--r-sm);
+           padding:9px 12px;margin-bottom:14px;font-size:11.5px;font-weight:700;color:#a83020;line-height:1.45;"></div>
+      <div class="frow"><label data-i18n="mod.tarikh">Date</label><input type="date" id="rj-date"></div>
+      <div class="frow"><label data-i18n="mod.jenis">Work Type</label>
+        <select id="rj-jenis">
+          <option value="Penyemburan racun kulat dan serangga" data-i18n="jenis.pd">Penyemburan racun kulat dan serangga</option>
+          <option value="Meracun rumput secara selingan" data-i18n="jenis.interrow">Meracun rumput secara selingan</option>
+          <option value="Merumput" data-i18n="jenis.weeding">Merumput</option>
+          <option value="Membaja" data-i18n="jenis.manuring">Membaja</option>
+        </select>
+      </div>
+      <div class="frow"><label data-i18n="mod.racun">Chemical</label><input type="text" id="rj-chemical" placeholder="e.g. Manzate 50gm + Bond 15mL"></div>
+      <div class="grid2">
+        <div class="frow"><label data-i18n="mod.plot">Plot</label><input type="text" id="rj-plot" placeholder="e.g. B1" oninput="renderRejWorkers()"></div>
+        <div class="frow"><label data-i18n="mod.batch">Batch No.</label><input type="text" id="rj-batch" placeholder="e.g. 252, 253"></div>
+      </div>
+      <div class="frow"><label data-i18n="mod.qty">Quantity</label><input type="number" min="0" id="rj-qty"></div>
+
+      <!-- ── WHO ───────────────────────────────────────────────────────
+           Two names, and which one answers matters. The phone, the payroll
+           and the table behind this form all read WORKED BY where there is
+           one and REPORTED BY where there is not — see MJMMaintField.credits
+           in shared/shared_maint_field.js, which both repositories use.
+
+           Reported by was not on this form, which is why a record sent back
+           for being credited to the wrong person could not be corrected here:
+           the name on the phone's history card and on the salary claim was
+           the one field the office could not reach. -->
+      <div class="frow"><label data-i18n="rej.reportedBy">Reported By</label>
+        <input type="text" id="rj-reported" placeholder="Who keyed it on the phone"></div>
+      <!-- Worked By is PICKED, not typed. The names are this nursery's
+           general workers off the payroll register — the same list the
+           Worker Record sheet ticks — because a name typed by hand is a name
+           the register does not know, and the claim cannot pay one of those.
+           Which nursery follows the PLOT above: change the plot to another
+           nursery's and the list changes with it. -->
+      <div class="frow"><label data-i18n="rej.workedBy">Worked By</label>
+        <input type="hidden" id="rj-worked">
+        <div id="rj-worked-chips" class="rj-chips"></div>
+      </div>
+      <div id="rej-who-note" style="font-size:11px;font-weight:600;color:var(--text-faint);
+           line-height:1.45;margin:-6px 0 12px;"></div>
+      <div class="frow"><label data-i18n="mod.remark">Remark</label><textarea id="rj-remark" placeholder="Optional remarks…"></textarea></div>
+      <!-- Said out loud because it is the surprising half: changing the date
+           moves which week and month the record is paired against. -->
+      <div id="rej-modal-note" style="font-size:11px;font-weight:600;color:var(--text-faint);line-height:1.45;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeRejModal()" data-i18n="btn.cancel">Cancel</button>
+      <button class="btn btn-primary" onclick="saveRejSubmission()" data-i18n="rej.saveOnly">Save (still sent back)</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ PDF DOWNLOAD MODAL ═══ -->
 <div class="modal-overlay" id="pdf-modal">
   <div class="modal" style="width:420px;">
@@ -582,16 +732,25 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="../shared/shared_plot_movement.js?v=1"></script>
+<script src="../shared/shared_plot_movement.js?v=4"></script>
 <!-- Which nursery a plot belongs to. Shared with the payroll module's salary
      claim, which has to put a work record back under its nursery. -->
 <script src="../shared/shared_maint_plots.js?v=1"></script>
 <!-- Pairing the field's work to a schedule row. Shared with the payroll
      module's salary claim, which prices what this page ticks. -->
-<script src="../shared/shared_maint_field.js?v=1"></script>
+<script src="../shared/shared_maint_field.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="plot_maintenance_script.js?v=102"></script>
+<script src="plot_maintenance_script.js?v=118"></script>
+
+<!-- Back to the top of the Work Record list. The record table runs to
+     hundreds of rows and the filters, the month picker and the sub-tabs are
+     all at the top of it, so getting back there was a long scroll or the
+     keyboard. Sits ABOVE the Nelos dock (right:18, bottom:18, 58px tall),
+     not on top of it, and only appears once there is something to go back
+     up from. -->
+<button type="button" id="rec-to-top" class="to-top" title="Back to the top"
+        aria-label="Back to the top" onclick="scrollToTop()">&#8679;</button>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

@@ -1935,7 +1935,58 @@ async function openNew(prefill) {
   fillPlots();
   if (prefill && prefill.plot) $('c-plot').value = prefill.plot;
 
+  /* A module that knows where its case has to go says so, and that answer
+     beats the routing default — routing matches on a category, and a case
+     raised under "Other" has none for a rule to find. destTouched, because
+     this IS somebody choosing, just not with the mouse. */
+  if (prefill && prefill.dest && [...$('c-dest').options].some(o => o.value === prefill.dest)) {
+    destTouched = true;
+    fillDest(prefill.dest);
+    fillPics();
+  }
+  /* The person, matched BY NAME. A module cannot carry a user id — ids
+     belong to this database and the module is naming a seat, "the Pre
+     Nursery auditor". Compared on letters and digits, so a rename that adds
+     a comma does not quietly drop the case back to nobody. */
+  if (prefill && prefill.pic) {
+    const want = _picKey(prefill.pic);
+    const hit = [...$('c-pic').options].find(o => o.value && _picKey(_picName(o.textContent)) === want);
+    if (hit) { $('c-pic').value = hit.value; fillPics(); }
+    else console.warn('[nelos] no person in charge called "' + prefill.pic + '" in this system');
+  }
+  if (prefill && prefill.desc) $('c-desc').value = prefill.desc;
+
+  /* A picture the module drew — the audit sheet an empty-hole case is
+     about. Put into the file box exactly as a chosen file would be, so Save
+     uploads it down the same path as a photo somebody took. */
+  if (prefill && prefill.photo && prefill.photo.dataUrl) {
+    attachPrefilledPhoto(prefill.photo);
+  }
+
   setTimeout(() => $('c-dest').focus(), 60);
+}
+
+/* "#2 Pre Nursery Auditor + Drone Operator" → the name, without the seat. */
+const _picName = (label) => String(label || '').replace(/^\s*#\S*\s*/, '').trim();
+const _picKey  = (v) => String(v == null ? '' : v).replace(/[^a-z0-9]/gi, '').toUpperCase();
+
+/* A data URL into the photo box. DataTransfer rather than a variable of our
+   own, because then Save, Remove and the thumbnail all go on working
+   through the one path they already have. */
+function attachPrefilledPhoto(photo) {
+  try {
+    const bin = atob(String(photo.dataUrl).split(',')[1] || '');
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const file = new File([bytes], photo.name || 'report.png',
+                          { type: photo.type || 'image/png' });
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    $('c-photo').files = dt.files;
+    setPhoto(URL.createObjectURL(file), file.name);
+  } catch (e) {
+    console.warn('[nelos] the attached report could not be read:', e);
+  }
 }
 
 /* The same drawer, filled in. Priority, due date and batch are not fields
@@ -2363,15 +2414,27 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && openFBtn) 
     $('loading').classList.add('hidden');
     $('main').classList.remove('hidden');
 
-    // Deep link from another module's To-Do widget:
-    //   nelos_dashboard.html?new=1&source=operation&batch=264
+    /* Deep link from another module's To-Do widget:
+         nelos_dashboard.html?new=1&source=operation&batch=264
+
+       A module may also hand over a whole filled-in case through
+       sessionStorage — see MJMNelos.handOff. That is for the one thing a
+       link cannot carry, a photo, and it is taken BEFORE the query is read
+       so the two cannot both open a form. Whatever the link says wins where
+       both answer, because the link is what the person can see. */
     const qs = new URLSearchParams(location.search);
-    if (qs.get('new')) {
-      openNew({
-        source:  qs.get('source'), batch: qs.get('batch'),
-        plot:    qs.get('plot'),   nursery: qs.get('nursery'),
-        title:   qs.get('title')
-      });
+    const handed = (MJMNelos.takeHandOff && MJMNelos.takeHandOff()) || null;
+    if (qs.get('new') || handed) {
+      openNew(Object.assign({}, handed, {
+        source:  qs.get('source')  || (handed && handed.source),
+        batch:   qs.get('batch')   || (handed && handed.batch),
+        plot:    qs.get('plot')    || (handed && handed.plot),
+        nursery: qs.get('nursery') || (handed && handed.nursery),
+        title:   qs.get('title')   || (handed && handed.title),
+        dest:    qs.get('dest')    || (handed && handed.dest),
+        pic:     qs.get('pic')     || (handed && handed.pic),
+        desc:    qs.get('desc')    || (handed && handed.desc)
+      }));
     }
   } catch (e) {
     console.warn(e);

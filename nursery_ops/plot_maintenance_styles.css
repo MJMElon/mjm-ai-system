@@ -239,6 +239,38 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
    thing this table has just been straightened out of. */
 .rec-table tbody td .date-multi{white-space:normal;cursor:help;
   text-decoration:underline dotted var(--green-mid);text-underline-offset:3px;}
+/* ── THE TWO SECTIONS OF THE WORK MAINTENANCE LIST ───────────────────────
+   Approved work and what was sent back, one at a time behind their own pair
+   of tabs. Not stacked: the sent-back part would sit below a table that is
+   often a hundred rows long, which is a place nobody scrolls to — and the
+   two have different buttons, so reading them as one table is the mistake
+   the layout should not invite.
+
+   Same mechanics as .recview above, which is the List / Analytics pair this
+   sits inside. A line of grey under the tabs says what the open section is;
+   it is the caption, not a heading, because the tab already names it. */
+.recsec{display:none;animation:fadein .18s ease;min-width:0;width:100%;max-width:100%;}
+.recsec.active{display:block;}
+.rec-part-sub{font-size:11px;font-weight:600;color:var(--text-faint);
+  letter-spacing:0;text-transform:none;line-height:1.45;}
+/* How many were sent back, ON THE TAB — so a refusal is visible from the
+   approved section without having to go and look. Hidden when it is zero: a
+   "0" badge is a thing to read that says nothing happened. */
+.rec-part-count{display:inline-block;margin-left:7px;font-size:10px;font-weight:800;
+  letter-spacing:.04em;color:#a83020;background:#fdeaea;
+  border:1.5px solid #f3c9c9;border-radius:999px;padding:1px 7px;vertical-align:1px;}
+/* On the open tab the badge sits on green, where a pale red pill disappears. */
+.subtab-btn.active .rec-part-count{color:#fff;background:rgba(255,255,255,.22);
+  border-color:rgba(255,255,255,.45);}
+/* The sent-back table carries a NAME in its ninth column where the one above
+   carries the Audit verdict, so it opts out of that column's nowrap — a
+   conductor with three names is two lines, not a spill across the buttons. */
+.rej-table tbody td:nth-child(9){white-space:normal;overflow-wrap:anywhere;}
+/* The reason, in the conductor's own words. Kept legible rather than
+   squeezed: it is the whole point of the row. */
+.rej-why{color:#a83020;font-weight:700;line-height:1.4;}
+.rej-none{text-align:center;padding:2.2rem;color:var(--text-faint);
+  font-size:12px;font-weight:600;}
 .rec-table tbody tr:last-child td{border-bottom:none;}
 .rec-table tbody tr:nth-child(even) td{background:var(--bg-row-alt);}
 .rec-table tbody tr:hover td{background:var(--green-bg);}
@@ -1009,7 +1041,11 @@ th.we-plot,td.we-plot{text-align:left;font-size:12.5px;font-weight:700;
   padding:2px 9px;cursor:pointer;}
 .we-all:hover{background:#eaf7f0;}
 
-.we-tick{width:26px;height:26px;border-radius:var(--r-sm);border:1.5px solid var(--border);
+/* Circular, matching .ss-tick on the Monthly Scheduled Work summary — the
+   detailed sheet's own ticks used to be a rounded square, which read as a
+   different control on the same page rather than the same tick with more
+   detail behind it. */
+.we-tick{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--border);
   background:var(--bg-white);color:transparent;font-size:14px;font-weight:800;line-height:1;
   cursor:pointer;transition:all .12s;}
 .we-tick:hover{border-color:var(--green);}
@@ -1021,6 +1057,10 @@ th.we-plot,td.we-plot{text-align:left;font-size:12.5px;font-weight:700;
    Save button stay where they are. */
 #we-modal .modal{display:flex;flex-direction:column;overflow:hidden;}
 #we-modal .modal-top,#we-modal .modal-footer{flex:0 0 auto;}
+/* The same pale green .ss-head carries on the summary card this editor
+   opens from — scoped to #we-modal, not the shared .modal-top, so the
+   other popups (Track, Add Record, PDF) keep their plain white header. */
+#we-modal .modal-top{background:#f2f7f4;}
 #we-modal .modal-body{flex:1 1 auto;overflow-y:auto;min-height:0;}
 /* Two columns across a 760px modal leaves the ticks stranded in acres of
    space; the plot name only needs the width of a plot name. */
@@ -1199,7 +1239,12 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
    that scrolls, so the cap only has to stop the table from pushing the
    footer off — it does not have to be the scroller. */
 .we-scroll{overflow:auto;max-height:calc(94vh - 210px);}
-.we-wk{background:var(--green) !important;color:#fff !important;font-size:11.5px !important;
+/* Same pale green band as .ss-head on the Monthly Scheduled Work summary
+   card this editor opens from — it used to be solid dark green with white
+   text, a different header language on the same screen. The +/−/× controls
+   below were white-on-green to read against that; now the band is pale
+   they're restyled dark-on-light instead, same idea as .ss-btn. */
+.we-wk{background:#f2f7f4 !important;color:var(--green-text) !important;font-size:11.5px !important;
   white-space:nowrap;position:relative;padding:7px 10px !important;}
 .we-wk-n{font-weight:900;letter-spacing:.8px;}
 .we-wk-d{background:#eaf7f0 !important;color:var(--text-head) !important;
@@ -1216,23 +1261,25 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
    band, because × on the right takes the whole week and its ticks away, and
    three small buttons in a row is how the wrong one gets pressed. */
 .we-col-n{position:absolute;top:4px;left:5px;display:flex;gap:3px;}
+/* Dark-on-light now that .we-wk is the pale band .ss-head is — same
+   bordered-white-button look .ss-btn uses, green on hover. */
 .we-col-n button{width:20px;height:20px;padding:0;font-family:var(--font);
-  font-size:14px;font-weight:800;line-height:1;color:#fff;
-  background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.42);
+  font-size:14px;font-weight:800;line-height:1;color:var(--text-muted);
+  background:var(--bg-white);border:1.5px solid var(--border);
   border-radius:5px;cursor:pointer;}
-.we-col-n button:hover:not(:disabled){background:#fff;color:var(--green);border-color:#fff;}
+.we-col-n button:hover:not(:disabled){background:#eaf7f0;color:var(--green);border-color:var(--green);}
 /* Greyed rather than hidden at the ends: a control that disappears reads as
    a control that was never there, and the next press lands on whatever has
    slid into its place. */
 .we-col-n button:disabled{opacity:.32;cursor:default;}
 
 /* Removing a week takes its ticks with it, so it is the one control here
-   coloured like a consequence. On the dark week band it needs its own. */
+   coloured like a consequence. */
 .we-week-x{position:absolute;top:4px;right:5px;width:20px;height:20px;padding:0;
-  font-size:14px;line-height:1;font-family:var(--font);color:#fff;
-  background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.42);
+  font-size:14px;line-height:1;font-family:var(--font);color:var(--text-muted);
+  background:var(--bg-white);border:1.5px solid var(--border);
   border-radius:5px;cursor:pointer;}
-.we-week-x:hover{background:#fff;color:var(--red);border-color:#fff;}
+.we-week-x:hover{background:#fdecec;color:var(--red);border-color:var(--red);}
 /* The chemical for a column sits directly over the ticks it governs. */
 .we-col-l{font-size:10px;font-weight:900;letter-spacing:.6px;margin-bottom:4px;}
 .we-col-d{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:4px;}
@@ -1287,3 +1334,49 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
    thing that must not happen is for that to look identical to being linked. */
 #payroll-hint.pay-hint-warn{color:#92400e;background:#fffbeb;
   border:1px solid #fde68a;border-radius:10px;padding:8px 11px;line-height:1.55;}
+
+
+/* ── PICKING WHO DID IT, ON A SENT-BACK RECORD ───────────────────────────
+   Worked By used to be a comma-separated box. A name typed into one is a
+   name the worker register does not know, and the salary claim cannot pay a
+   name it does not know — so the office corrected a record and the money
+   still went nowhere. These are the nursery's own general workers, tapped
+   on and off.
+
+   A name already on the record that is NOT on that register keeps its chip
+   and says so, because dropping it silently is how the correction loses the
+   very thing it was correcting. */
+.rj-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:4px;}
+.rj-chip{font-family:var(--font);font-size:12px;font-weight:700;letter-spacing:.01em;
+  padding:7px 13px;border-radius:999px;cursor:pointer;transition:all .13s;
+  border:1.5px solid var(--border);background:var(--bg-page);color:var(--text-muted);}
+.rj-chip:hover{border-color:var(--green-mid);color:var(--green-text);}
+.rj-chip.on{background:var(--green);border-color:var(--green);color:#fff;
+  box-shadow:0 2px 8px rgba(13,122,71,.28);}
+/* Somebody the register does not hold. Still tappable — they did the work —
+   but the colour says the claim will not be able to pay them. */
+.rj-chip.off-reg{border-color:#f3c9c9;color:#a83020;background:#fdeaea;}
+.rj-chip.off-reg.on{background:#a83020;border-color:#a83020;color:#fff;
+  box-shadow:0 2px 8px rgba(168,48,32,.28);}
+.rj-chips-none{font-size:11.5px;font-weight:600;color:#a16207;background:var(--gold-bg,#fffbeb);
+  border:1.5px solid var(--gold-border,#fcd34d);border-radius:var(--r-sm);padding:8px 11px;
+  line-height:1.45;}
+
+/* ── Back to the top ──────────────────────────────────────────────────────
+   Only on the Work Record panel, and only once the page has been scrolled —
+   see syncToTopBtn(). Sits ABOVE the Nelos dock, which owns right:18px /
+   bottom:18px and is 58px tall; this clears it by 12px rather than landing
+   on top of it. Hidden by default so it can never flash in on load. */
+.to-top {
+  position: fixed; right: 18px; bottom: 88px; z-index: 400;
+  width: 46px; height: 46px; border-radius: 50%;
+  border: 1.5px solid var(--green-mid, #bfe3cd); background: var(--bg-white, #fff);
+  color: var(--green-deep, #136c3a); font-size: 20px; line-height: 1; cursor: pointer;
+  box-shadow: 0 6px 18px rgba(5, 40, 20, .18);
+  display: none; align-items: center; justify-content: center;
+  transition: transform .12s, background .12s;
+}
+.to-top.is-on { display: flex; }
+.to-top:hover { background: var(--green-light, #eaf7ef); transform: translateY(-2px); }
+.to-top:active { transform: translateY(0); }
+@media print { .to-top { display: none !important; } }

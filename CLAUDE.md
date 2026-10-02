@@ -22,6 +22,14 @@ What that SQL should be:
   it worked rather than hoping. Say what a good result looks like.
 - **One result set.** The SQL Editor shows only the LAST statement's result, so
   a file of nine queries answers eight questions into the void. UNION ALL them.
+- **Survives a paste.** The editor is not psql: it has choked on a regular
+  expression, on a backslash, and on `ERROR: 42601: syntax error at end of
+  input` with nothing to point at. So: no regex and no backslashes (`split_part`,
+  `position()`, `left()`, `LIKE` with no escapes do the same work); the file
+  ENDS at its last semicolon, with the explanation of what to look for ABOVE the
+  query rather than trailing after it; and no semicolon inside a comment. A
+  trailing comment block is a statement with no statement in it, which is what
+  that error reads like.
 - **Tested first.** There is a scratch Postgres 16 for this — see below. Run
   the SQL against a stubbed copy of the real tables before handing it over, and
   test it against the state the database is ACTUALLY in, not a fresh one.
@@ -49,6 +57,46 @@ A per-batch query still earns its place as the drill-down once the
 batch-wide one has named a batch — `CHECK_which_batches_completed.sql` and
 `CHECK_batch_not_completed.sql` are that pair. The batch-wide one comes
 first.
+
+## Interrow spraying counts what was there BEFORE the 2nd culling
+
+Every other maintenance job is done TO the seedlings — P & D spraying,
+manuring, weeding — so a batch 2nd culled last week is that many fewer to
+treat, and the linked quantity takes the culling off.
+
+**Interrow spraying is the ground BETWEEN the rows.** A 2nd culling takes the
+dead seedling out of a polybag that is still sitting exactly where it was:
+same rows, same gaps, same walk, same spray. So an interrow row is worth the
+figure *before* the culling comes off — B5 in Sep 2026 reads 6,515 on the
+other three jobs and **6,788** on interrow, the difference being its 273 2nd
+culled.
+
+**A batch keyed on the row still decides, interrow included.** Interrow is
+usually the whole plot — the worker walks the lot in one go — and leaving the
+batch cell empty is how that is said, because an empty batch cell has always
+meant every batch standing there. Somebody who writes a batch on the row has
+answered the question, and this rule does not overrule them: it is about the
+2nd culling and nothing else.
+
+It is the quantity, so it is the piece-rate money: the Work Maintenance list,
+the Worker Record capacity totals and the payroll salary claim all quote it.
+The rule therefore lives in `PlotMovement.isInterrow` / `qtyOpts(record)` /
+`liveCount(evs, {keepCull2})` in `shared/shared_plot_movement.js`, and
+`recQty(record)` / `recBatches(record)` read the work type off the record and
+apply it — so a new caller gets it without knowing it exists. Do not
+re-implement it in a page.
+
+**The job is the `jenis`, never the chemical.** The chemical changes round to
+round — Monex one round, something else the next — and says nothing about
+which job it is.
+
+A quantity KEYED BY HAND still wins over all of this, which is the one way an
+interrow row can go on showing the old smaller number;
+`shared/CHECK_interrow_qty_keyed.sql` names those rows on every plot.
+
+The Nursery Movement Report and the phone's batch list still subtract the 2nd
+culling, because they answer "what is standing", which is a different
+question. That difference is deliberate and is written out in that file.
 
 ## A permission that is saved but not obeyed is worse than no permission
 

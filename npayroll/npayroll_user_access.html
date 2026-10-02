@@ -32,31 +32,37 @@ MJMModuleAccess.init({
           desc:'Type over the money on any worker\u2019s Earned cell, with a reason. The figure the '
              + 'sheet worked out stays visible underneath, and the reason is kept with it',
           adminOnly:true, highlight:true, chip:'Adjust Pay' },
-        { key:'verify', label:'Verify & lock the month', desc:'Say this sheet is checked and right. It locks straight away and only Lock Controls can re-open it', highlight:true, chip:'Verify' }
+        { key:'verify', label:'Verify & lock the month', desc:'Say this sheet is checked and right. It locks straight away', highlight:true, chip:'Verify' },
+        { key:'unverify', label:'Unlock a verified sheet', desc:'Take one sheet\u2019s verification back so it can be corrected and signed again. It does NOT re-open the month \u2014 that is Lock Controls', highlight:true, chip:'Unlock' }
       ]},
     { key:'transpl', label:'Payroll · Transplanting', desc:'What each worker transplanted, and what it pays',
       actions:[
+        { key:'export', label:'Download the salary claim form', desc:'Produce the PDF that goes for payment' },
         { key:'manage', label:'Add, edit & delete entries', desc:'Key in transplanting work against a worker' },
         { key:'adjust', label:'Adjust what a job earned',
           desc:'Type over the money on any worker\u2019s Earned cell, with a reason. The figure the '
              + 'sheet worked out stays visible underneath, and the reason is kept with it',
           adminOnly:true, highlight:true, chip:'Adjust Pay' },
-        { key:'verify', label:'Verify & lock the month', desc:'Say this sheet is checked and right. It locks straight away and only Lock Controls can re-open it', highlight:true, chip:'Verify' }
+        { key:'verify', label:'Verify & lock the month', desc:'Say this sheet is checked and right. It locks straight away', highlight:true, chip:'Verify' },
+        { key:'unverify', label:'Unlock a verified sheet', desc:'Take one sheet\u2019s verification back so it can be corrected and signed again. It does NOT re-open the month \u2014 that is Lock Controls', highlight:true, chip:'Unlock' }
       ]},
     { key:'seedling', label:'Payroll · Seedlings Collection', desc:'What each worker collected, and what it pays',
       actions:[
         { key:'manage', label:'Add, edit & delete entries', desc:'Key in collection work against a worker' },
-        { key:'verify', label:'Verify & lock the month', desc:'Say this sheet is checked and right. It locks straight away and only Lock Controls can re-open it', highlight:true, chip:'Verify' }
+        { key:'verify', label:'Verify & lock the month', desc:'Say this sheet is checked and right. It locks straight away', highlight:true, chip:'Verify' },
+        { key:'unverify', label:'Unlock a verified sheet', desc:'Take one sheet\u2019s verification back so it can be corrected and signed again. It does NOT re-open the month \u2014 that is Lock Controls', highlight:true, chip:'Unlock' }
       ]},
     { key:'other', label:'Payroll · Others', desc:'Piece work that is none of the three sheets above',
       actions:[
         { key:'manage', label:'Add, edit & delete entries', desc:'Key in other piece work against a worker' },
-        { key:'verify', label:'Verify & lock the month', desc:'Say this sheet is checked and right. It locks straight away and only Lock Controls can re-open it', highlight:true, chip:'Verify' }
+        { key:'verify', label:'Verify & lock the month', desc:'Say this sheet is checked and right. It locks straight away', highlight:true, chip:'Verify' },
+        { key:'unverify', label:'Unlock a verified sheet', desc:'Take one sheet\u2019s verification back so it can be corrected and signed again. It does NOT re-open the month \u2014 that is Lock Controls', highlight:true, chip:'Unlock' }
       ]},
     { key:'monthly', label:'Payroll · Monthly Payroll', desc:'Everything a worker earned this month, from all sheets',
       actions:[
         { key:'export', label:'Download the monthly payroll', desc:'Produce the month’s payroll PDF' },
-        { key:'verify', label:'Verify & lock the month', desc:'Say this sheet is checked and right. It locks straight away and only Lock Controls can re-open it', highlight:true, chip:'Verify' }
+        { key:'verify', label:'Verify & lock the month', desc:'Say this sheet is checked and right. It locks straight away', highlight:true, chip:'Verify' },
+        { key:'unverify', label:'Unlock a verified sheet', desc:'Take one sheet\u2019s verification back so it can be corrected and signed again. It does NOT re-open the month \u2014 that is Lock Controls', highlight:true, chip:'Unlock' }
       ]},
     { key:'workers', label:'Worker System', desc:'The worker register — the one the tick sheets read',
       actions:[
