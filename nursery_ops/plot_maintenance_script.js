@@ -4603,6 +4603,49 @@ function _qtyCell(r) {
   return `<span class="qty-linked" title="${tip.replace(/"/g, '&quot;')}">🔗 ${txt}</span>`;
 }
 
+/* P & D, Manuring, Weeding, Interrow — PAYROLL_TYPES' own order, which is the
+   order every other list of the four on this page uses. Taken from there
+   rather than written out again, so a work type added to that table does not
+   quietly sort itself to the bottom here.
+   A jenis none of them matches sorts after the four, by its own text, so a
+   row is never dropped out of sight by not being recognised. */
+let _jenisRankCache = null;
+function _jenisRank(j) {
+  if (!_jenisRankCache) {
+    _jenisRankCache = {};
+    Object.keys(PAYROLL_TYPES).forEach((k, i) => {
+      const key = jenisKey(PAYROLL_TYPES[k].jenis);
+      if (key && _jenisRankCache[key] === undefined) _jenisRankCache[key] = i;
+    });
+  }
+  const r = _jenisRankCache[jenisKey(j)];
+  return r === undefined ? 99 : r;
+}
+
+/* Work type, then the day it was done. A row with no date yet has not
+   happened, so it sits at the end of its own work type rather than at the
+   top — '-' would sort before every real date. Two rows on one day are put in
+   round order, which is the order they were planned in. */
+function _recRowOrder(a, b) {
+  const ja = _jenisRank(a.jenis), jb = _jenisRank(b.jenis);
+  if (ja !== jb) return ja - jb;
+  if (ja === 99) {
+    const na = String(a.jenis || ''), nb = String(b.jenis || '');
+    if (na !== nb) return na < nb ? -1 : 1;
+  }
+  const day = r => {
+    const d = String(r.tarikh || '').trim();
+    return (!d || d === '-') ? '9999-99-99' : d;
+  };
+  const da = day(a), db = day(b);
+  if (da !== db) return da < db ? -1 : 1;
+  const ra = _recRound(a.racun), rb = _recRound(b.racun);
+  if (ra !== rb) return ra - rb;
+  const ca = String(a.racun || ''), cb = String(b.racun || '');
+  if (ca !== cb) return ca < cb ? -1 : 1;
+  return (a.id || 0) - (b.id || 0);
+}
+
 function renderRecords() {
   const jF   = document.getElementById('rf-filter-jenis').value;
   const pF   = document.getElementById('rf-filter-plot').value;
@@ -4695,7 +4738,15 @@ function renderRecords() {
 
   let html = '';
   sortedPlots.forEach(plot => {
-    const recs = plotGroups[plot];
+    /* Inside a plot: the four jobs in the order the rest of the page already
+       puts them, and inside each job the days in the order they happened.
+       The list is BUILT in the order the schedule generates it — every P & D
+       round, then every manuring round, and so on — so it came out grouped by
+       accident, and anything added afterwards (a row keyed by hand, a round
+       ticked later) landed at the bottom and broke the grouping. Sorting it
+       here rather than reordering `records` keeps the saved list alone: this
+       is how the office reads a plot, not what the plot is. */
+    const recs = plotGroups[plot].slice().sort(_recRowOrder);
     html += `<tr class="plot-group-row">
       <td colspan="12" class="rec-group-cell" style="padding:12px 14px 9px;font-weight:700;letter-spacing:1px;
         text-transform:uppercase;color:var(--green-text);background:var(--green-light);
