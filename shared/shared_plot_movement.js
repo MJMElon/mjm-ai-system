@@ -238,11 +238,12 @@
      payroll salary claim alike, which is why the rule lives here rather than
      in any one of them.
 
-     AND IT IS THE WHOLE PLOT. The schedule ticks a PLOT for interrow, not a
-     batch, because the worker walks the whole thing in one go — so a batch
-     name written on an interrow row says which batch is standing there, not
-     which part of the morning was worked. Filtering the figure down to that
-     batch paid for a fraction of a job that was done in full.
+     A BATCH KEYED ON THE ROW STILL DECIDES, interrow included. Interrow is
+     usually the whole plot — the worker walks the lot in one go — and leaving
+     the batch cell empty is how that is said, because empty has always meant
+     every batch standing there. But somebody who writes a batch on the row
+     has answered the question, and this does not overrule them: the rule
+     above is about the 2nd culling and nothing else.
 
      The maintenance list writes "Meracun rumput secara selingan"; anything
      carrying the word interrow is the same job under another spelling. The job
@@ -257,8 +258,7 @@
   /* How a record's quantity is to be counted. One place, so the quantity, the
      batch names and every caller agree. */
   function qtyOpts(r) {
-    const ir = isInterrow(r && (r.jenis || r.work_type));
-    return { keepCull2: ir, wholePlot: ir };
+    return { keepCull2: isInterrow(r && (r.jenis || r.work_type)) };
   }
 
   /* What one plot and batch is worth, up to a date. Every event already
@@ -281,8 +281,7 @@
     if (!_ready || !_events || !plot) return null;
     const pk = plotKey(plot);
     if (!pk) return null;
-    // opts.wholePlot ignores the batch written on the row — see isInterrow.
-    const wanted = (opts && opts.wholePlot) ? [] : batchList(batchStr);
+    const wanted = batchList(batchStr);
     // No date keyed yet ("-") → stand at today, the plot's current standing count.
     const asOf = parseDate(tarikh);
     const cutoff = asOf == null ? Infinity : asOf;
@@ -316,9 +315,6 @@
       raw: Math.round(raw),
       batches: keys.map(k => per[k].label).sort((a, b) => String(a).localeCompare(String(b), 'en', { numeric: true })),
       allBatches: wanted.length === 0,
-      /* The row names a batch and the figure covers the plot anyway — the
-         screen has to say so, or it reads as the wrong batch's number. */
-      wholePlot: !!(opts && opts.wholePlot) && batchList(batchStr).length > 0,
       asOf: asOf == null ? null : tarikh,
       /* How much 2nd culling this figure is carrying, and whether it was left
          standing — so a screen can say WHY an interrow row reads higher than
@@ -349,12 +345,12 @@
      from the ledger instead of drawn as a dash, which read as nobody knowing
      while the answer sat in the batch report.
 
-     Keyed wins, exactly as the quantity does. */
+     Keyed wins, exactly as the quantity does — for every job, interrow
+     included. */
   function recBatches(r) {
     const keyed = String((r && r.batch) || '').trim();
-    const opts = qtyOpts(r);
-    if (keyed && !opts.wholePlot) return { value: keyed, linked: false };
-    const link = linkedQty(r && r.plot, r && r.batch, r && r.tarikh, opts);
+    if (keyed) return { value: keyed, linked: false };
+    const link = linkedQty(r && r.plot, r && r.batch, r && r.tarikh, qtyOpts(r));
     if (!link || !link.batches.length) return { value: keyed, linked: false };
     const shown = link.batches.filter(b => b && b !== '—').join(', ');
     if (!shown) return { value: keyed, linked: false };
