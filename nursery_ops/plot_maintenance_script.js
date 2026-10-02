@@ -1869,6 +1869,7 @@ const I18N = {
     'link.overridden':'Linked value is {x} — your {y} overrides it',
     'link.basis':'movement report closing balance',
     'link.negative':'Batch report nets to {x} here — check that plot\'s records.',
+    'link.interrow':'Interrow keeps the 2nd culling in — {x} culled seedlings counted, because their rows are still sprayed.',
     /* Piece rate save / lock */
     'rate.saveLock':'Save & Lock', 'rate.unlock':'Unlock to edit',
     'rate.lockedMsg':'Locked — these rates are in use by Monthly Payroll.',
@@ -1983,6 +1984,7 @@ const I18N = {
     'link.overridden':'Nilai dari laporan ialah {x} — {y} yang anda isi mengatasinya',
     'link.basis':'baki akhir laporan pergerakan',
     'link.negative':'Laporan batch menunjukkan {x} di sini — sila semak rekod plot itu.',
+    'link.interrow':'Selingan mengekalkan pembuangan ke-2 — {x} anak benih dikira, kerana barisnya masih disembur.',
     /* Simpan / kunci kadar upah */
     'rate.saveLock':'Simpan & Kunci', 'rate.unlock':'Buka untuk sunting',
     'rate.lockedMsg':'Terkunci — kadar ini sedang digunakan oleh Gaji Bulanan.',
@@ -4599,7 +4601,14 @@ function _qtyCell(r) {
     ? `all batches in plot ${r.plot}`
     : `batch ${i.batches.join(', ')}`;
   const when = i.asOf ? `as at ${i.asOf}` : 'standing today (no date keyed)';
-  const tip = `Linked from the batch report — ${scope}, ${when}. This is the Nursery Movement Report's closing balance for the same plot, batch and date. Key a number here to override.`;
+  /* Interrow sprays the ground between the rows, which a 2nd culling does not
+     shrink — so its figure keeps the culled seedlings in, and is higher than
+     the P & D row beside it on the same plot. Said here, because a number
+     that differs from the one above it with no explanation reads as a fault. */
+  const plus = i.keptCull2
+    ? ` Interrow spraying keeps the 2nd culling in — ${i.cull2.toLocaleString()} culled seedlings are counted, because the rows they stood in are still sprayed.`
+    : '';
+  const tip = `Linked from the batch report — ${scope}, ${when}. This is the Nursery Movement Report's closing balance for the same plot, batch and date.${plus} Key a number here to override.`;
   return `<span class="qty-linked" title="${tip.replace(/"/g, '&quot;')}">🔗 ${txt}</span>`;
 }
 
@@ -5243,7 +5252,12 @@ function refreshLinkedQty() {
       : t('link.loading');
     return;
   }
-  const link = linkedPlotQty(plot, batch, tarikh);
+  /* The job matters to the figure: interrow keeps the 2nd culling in. The
+     preview is live while the record is being keyed, so it reads the job out
+     of the form rather than off a saved row. */
+  const link = linkedPlotQty(plot, batch, tarikh, {
+    keepCull2: PlotMovement.isInterrow(document.getElementById('rf-jenis').value)
+  });
   if (!link) {
     const where = `${plot}${batch ? ` / ${batch}` : ''}`;
     box.innerHTML = `<span style="color:#a16207;">${t('link.none').replace('{x}', where)}</span>`;
@@ -5259,7 +5273,9 @@ function refreshLinkedQty() {
                           .replace('{y}', Number(typed).toLocaleString());
   const warn = link.raw < 0
     ? `<br><span style="color:#a83020;">${t('link.negative').replace('{x}', link.raw.toLocaleString())}</span>` : '';
-  box.innerHTML = `🔗 ${head}<br>${scope}, ${when} · ${t('link.basis')}${warn}`;
+  const plus = link.keptCull2
+    ? `<br><span style="color:var(--green-text);">${t('link.interrow').replace('{x}', link.cull2.toLocaleString())}</span>` : '';
+  box.innerHTML = `🔗 ${head}<br>${scope}, ${when} · ${t('link.basis')}${plus}${warn}`;
 }
 function closeRecModal(){ document.getElementById('rec-modal').classList.remove('open'); }
 function editRec(id){ const r=records.find(x=>x.id===id); if(_recLocked(r)) return _denyLocked(); openRecModal(r); }
