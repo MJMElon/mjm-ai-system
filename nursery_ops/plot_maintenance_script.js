@@ -1888,7 +1888,6 @@ const I18N = {
     'link.basis':'movement report closing balance',
     'link.negative':'Batch report nets to {x} here — check that plot\'s records.',
     'link.interrow':'Interrow keeps the 2nd culling in — {x} culled seedlings counted, because their rows are still sprayed.',
-    'link.wholePlot':'Interrow sprays the WHOLE of plot {x} in one go, so every batch on it counts — not only the one named on this row.',
     /* Piece rate save / lock */
     'rate.saveLock':'Save & Lock', 'rate.unlock':'Unlock to edit',
     'rate.lockedMsg':'Locked — these rates are in use by Monthly Payroll.',
@@ -2004,7 +2003,6 @@ const I18N = {
     'link.basis':'baki akhir laporan pergerakan',
     'link.negative':'Laporan batch menunjukkan {x} di sini — sila semak rekod plot itu.',
     'link.interrow':'Selingan mengekalkan pembuangan ke-2 — {x} anak benih dikira, kerana barisnya masih disembur.',
-    'link.wholePlot':'Selingan menyembur SELURUH plot {x} sekali gus, jadi semua batch di atasnya dikira — bukan hanya yang ditulis pada baris ini.',
     /* Simpan / kunci kadar upah */
     'rate.saveLock':'Simpan & Kunci', 'rate.unlock':'Buka untuk sunting',
     'rate.lockedMsg':'Terkunci — kadar ini sedang digunakan oleh Gaji Bulanan.',
@@ -4653,12 +4651,7 @@ function _qtyCell(r) {
   const plus = i.keptCull2
     ? ` Interrow spraying keeps the 2nd culling in — ${i.cull2.toLocaleString()} culled seedlings are counted, because the rows they stood in are still sprayed.`
     : '';
-  /* The row names a batch and the figure covers the plot anyway. Said out
-     loud, or it reads as the wrong batch's number. */
-  const whole = i.wholePlot
-    ? ` Interrow sprays the WHOLE PLOT in one go, so every batch on ${r.plot} counts, not only the one named on this row.`
-    : '';
-  const tip = `Linked from the batch report — ${scope}, ${when}. This is the Nursery Movement Report's closing balance for the same plot, batch and date.${whole}${plus} Key a number here to override.`;
+  const tip = `Linked from the batch report — ${scope}, ${when}. This is the Nursery Movement Report's closing balance for the same plot, batch and date.${plus} Key a number here to override.`;
   return `<span class="qty-linked" title="${tip.replace(/"/g, '&quot;')}">🔗 ${txt}</span>`;
 }
 
@@ -4673,9 +4666,7 @@ function _batchCell(r) {
   if (!b.value) return '—';
   if (!b.linked) return esc(b.value);
   const when = b.info && b.info.asOf ? `as at ${b.info.asOf}` : 'standing today';
-  const tip = b.info && b.info.wholePlot
-    ? `Interrow sprays the whole plot, so this row covers every batch on ${r.plot} ${when} — not only the ${esc(String(r.batch || '').trim())} written on it.`
-    : `No batch keyed, so this row covers every batch standing on plot ${r.plot} ${when}, which is what the quantity beside it counts. Key a batch here to narrow it.`;
+  const tip = `No batch keyed, so this row covers every batch standing on plot ${r.plot} ${when}, which is what the quantity beside it counts. Key a batch here to narrow it — a batch you type decides the figure, on every job.`;
   return `<span class="qty-linked" title="${tip.replace(/"/g, '&quot;')}">🔗 ${esc(b.value)}</span>`;
 }
 
@@ -5350,9 +5341,7 @@ function refreshLinkedQty() {
     ? `<br><span style="color:#a83020;">${t('link.negative').replace('{x}', link.raw.toLocaleString())}</span>` : '';
   const plus = link.keptCull2
     ? `<br><span style="color:var(--green-text);">${t('link.interrow').replace('{x}', link.cull2.toLocaleString())}</span>` : '';
-  const whole = link.wholePlot
-    ? `<br><span style="color:var(--green-text);">${t('link.wholePlot').replace('{x}', plot)}</span>` : '';
-  box.innerHTML = `🔗 ${head}<br>${scope}, ${when} · ${t('link.basis')}${whole}${plus}${warn}`;
+  box.innerHTML = `🔗 ${head}<br>${scope}, ${when} · ${t('link.basis')}${plus}${warn}`;
 }
 function closeRecModal(){ document.getElementById('rec-modal').classList.remove('open'); }
 function editRec(id){ const r=records.find(x=>x.id===id); if(_recLocked(r)) return _denyLocked(); openRecModal(r); }

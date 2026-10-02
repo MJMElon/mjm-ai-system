@@ -71,11 +71,12 @@ figure *before* the culling comes off — B5 in Sep 2026 reads 6,515 on the
 other three jobs and **6,788** on interrow, the difference being its 273 2nd
 culled.
 
-**And it is the WHOLE PLOT.** The schedule ticks a plot for interrow, not a
-batch, because the worker walks the whole thing in one go — so a batch name
-written on an interrow row says which batch is standing there, not which part
-of the morning was worked. Narrowing the figure to that batch paid for a
-fraction of a job done in full.
+**A batch keyed on the row still decides, interrow included.** Interrow is
+usually the whole plot — the worker walks the lot in one go — and leaving the
+batch cell empty is how that is said, because an empty batch cell has always
+meant every batch standing there. Somebody who writes a batch on the row has
+answered the question, and this rule does not overrule them: it is about the
+2nd culling and nothing else.
 
 It is the quantity, so it is the piece-rate money: the Work Maintenance list,
 the Worker Record capacity totals and the payroll salary claim all quote it.

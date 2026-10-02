@@ -278,15 +278,18 @@ const table = (page) => page.evaluate(() =>
 
   console.log('\nB6 — two batches, and a batch written on the row');
   {
-    /* P & D on one named batch is that batch. Interrow naming the same batch
-       is still the whole plot, because the worker walked the whole plot. */
+    /* A BATCH TYPED ON THE ROW DECIDES, interrow included. Interrow is
+       usually the whole plot, and the way that is said is leaving the batch
+       cell empty — empty has always meant every batch standing there. The
+       2nd-culling rule is about the culling and nothing else; it does not
+       overrule somebody who answered the batch question. */
     const page = await boot(browser);
     const got = await page.evaluate(() => {
       const mk = (jenis, batch) => ({ id: 1, plot: 'B6', jenis, batch,
                                       tarikh: '2026-09-10', racun: 'Round 1: X', qty: null });
       const read = (r) => {
         const q = PlotMovement.recQty(r), b = PlotMovement.recBatches(r);
-        return [q.value, b.value, !!(q.info && q.info.wholePlot)];
+        return [q.value, b.value];
       };
       return {
         pdOneBatch:  read(mk('Membaja', '300')),
@@ -296,14 +299,15 @@ const table = (page) => page.evaluate(() =>
       };
     });
 
-    // 300 after its culling.
-    check('manuring on batch 300 is batch 300', got.pdOneBatch, [3900, '300', false]);
+    // 4000 less its 100 culled.
+    check('manuring on batch 300 is batch 300', got.pdOneBatch, [3900, '300']);
     // 3900 + 1450, both batches, both culled.
-    check('manuring with no batch is every batch', got.pdNoBatch, [5350, '300, 301', false]);
+    check('manuring with no batch is every batch', got.pdNoBatch, [5350, '300, 301']);
+    // 4000 — batch 300 only, with its culling kept.
+    check('INTERROW ON BATCH 300 IS BATCH 300', got.irOneBatch, [4000, '300']);
     // 4000 + 1500 — the whole plot, both cullings kept.
-    check('INTERROW ON BATCH 300 IS STILL THE WHOLE PLOT',
-          got.irOneBatch, [5500, '300, 301', true]);
-    check('…and so is interrow with no batch', got.irNoBatch, [5500, '300, 301', false]);
+    check('…and interrow with no batch is the whole plot',
+          got.irNoBatch, [5500, '300, 301']);
     await page.close();
   }
 
