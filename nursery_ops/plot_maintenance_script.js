@@ -771,9 +771,25 @@ function payrollRowsFor(type) {
   const n = getNursery();
   const plots = NURSERY_PLOTS[n] || [];
   const jenis = PAYROLL_TYPES[type].jenis;
+  /* Plot, then the day the work was done.
+
+     It used to sort on the plot ALONE, and a sort with nothing to say about
+     two rows of the same plot leaves them in the order they happen to be in
+     — which here is the order the schedule generated them, every P & D round
+     before every manuring round and anything added later on the end. So one
+     plot's dates came out shuffled, on the screen and on the printed sheet
+     alike: both are this one function.
+
+     A sheet is one work type, so the work type cannot separate two rows here
+     and only the day can. Same rule as the Work Record's — see
+     _recDayOrder. */
   return records
     .filter(r => r.jenis === jenis && plots.includes(r.plot))
-    .sort((a, b) => plots.indexOf(a.plot) - plots.indexOf(b.plot));
+    .sort((a, b) => {
+      const pa = plots.indexOf(a.plot), pb = plots.indexOf(b.plot);
+      if (pa !== pb) return pa - pb;
+      return _recDayOrder(a, b);
+    });
 }
 function payrollRows() { return payrollRowsFor(_payrollView); }
 
@@ -5011,17 +5027,19 @@ function _jenisRank(j) {
   return r === undefined ? 99 : r;
 }
 
-/* Work type, then the day it was done. A row with no date yet has not
-   happened, so it sits at the end of its own work type rather than at the
-   top — '-' would sort before every real date. Two rows on one day are put in
-   round order, which is the order they were planned in. */
-function _recRowOrder(a, b) {
-  const ja = _jenisRank(a.jenis), jb = _jenisRank(b.jenis);
-  if (ja !== jb) return ja - jb;
-  if (ja === 99) {
-    const na = String(a.jenis || ''), nb = String(b.jenis || '');
-    if (na !== nb) return na < nb ? -1 : 1;
-  }
+/* THE DAY IT WAS DONE, then the round, then something settled.
+
+   A row with no date yet has not happened, so it sits at the end rather than
+   the top — '-' would sort before every real date. Two rows on one day go in
+   round order, which is the order they were planned in, and the last two
+   tests only exist so the order cannot wobble between one render and the
+   next.
+
+   Pulled out on its own because the Work Record and the WORKER RECORD want
+   the same answer under different headings: one groups by work type, the
+   other is one sheet per work type and groups by plot. Both then want the
+   days in the order they happened. */
+function _recDayOrder(a, b) {
   const day = r => {
     const d = String(r.tarikh || '').trim();
     return (!d || d === '-') ? '9999-99-99' : d;
@@ -5033,6 +5051,17 @@ function _recRowOrder(a, b) {
   const ca = String(a.racun || ''), cb = String(b.racun || '');
   if (ca !== cb) return ca < cb ? -1 : 1;
   return (a.id || 0) - (b.id || 0);
+}
+
+/* Work type, then the day it was done. */
+function _recRowOrder(a, b) {
+  const ja = _jenisRank(a.jenis), jb = _jenisRank(b.jenis);
+  if (ja !== jb) return ja - jb;
+  if (ja === 99) {
+    const na = String(a.jenis || ''), nb = String(b.jenis || '');
+    if (na !== nb) return na < nb ? -1 : 1;
+  }
+  return _recDayOrder(a, b);
 }
 
 function renderRecords() {
