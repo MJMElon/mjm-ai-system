@@ -135,6 +135,14 @@ be divided (the division not coming out whole is how it is told apart), and
 a later clean save writes the remark's Transplanted back correct while
 leaving the doubled Dead — wiping the fingerprint but not the fault.
 
+**And the fingerprint undercounts.** Save rewrites that Transplanted every
+time, so it only ever records the multiple of the LAST save, while the Dead
+compounds across them: 252's U10 went 2 → 4 → 8 with the remark saying
+"times 2" each time. Dividing once left it at 4. There is nothing in the data
+that says how many saves a row went through, so the second division has to
+come from the office or the paper — `RUN_ME_undouble_cull2_252_again.sql`
+names its two rows rather than guessing a rule.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the
