@@ -4947,6 +4947,14 @@ function _qtyCell(r) {
   const q = recQty(r);
   if (q.value === null) return '—';
   const txt = q.value.toLocaleString();
+  /* Held, not live. A checked row's figure was written down when it was
+     checked and no longer follows the batch report — said on the cell, or a
+     number that has stopped moving looks like one that is still moving. */
+  if (q.frozen) {
+    const tip = `Held at ${txt} when this row was checked, so the batch report `
+              + 'no longer moves it. Uncheck the row to put it back to live.';
+    return `<span class="qty-frozen" title="${tip.replace(/"/g, '&quot;')}">🔒 ${txt}</span>`;
+  }
   if (!q.linked) return txt;
   const i = q.info;
   const scope = i.allBatches
@@ -4973,6 +4981,11 @@ function _qtyCell(r) {
 function _batchCell(r) {
   const b = PlotMovement.recBatches(r);
   if (!b.value) return '—';
+  if (b.frozen) {
+    const tip = `Held when this row was checked. Uncheck it to read the batch `
+              + 'report again.';
+    return `<span class="qty-frozen" title="${tip.replace(/"/g, '&quot;')}">🔒 ${esc(b.value)}</span>`;
+  }
   if (!b.linked) return esc(b.value);
   const when = b.info && b.info.asOf ? `as at ${b.info.asOf}` : 'standing today';
   const tip = `No batch keyed, so this row covers every batch standing on plot ${r.plot} ${when}, which is what the quantity beside it counts. Key a batch here to narrow it — a batch you type decides the figure, on every job.`;
@@ -5590,10 +5603,54 @@ function toggleChecked(id){
      could press it on. Unticking takes nothing away and hides nothing — it
      puts the row back where it was and says so. */
   if (r.checked && !confirm('Put this row back to unchecked?\n\n'
-      + 'It can be edited again, and the next sync will fill its date, batch '
-      + 'and quantity in from the field records again.')) return;
-  r.checked = r.checked ? 0 : 1;
+      + 'Its quantity goes back to being read live from the batch report '
+      + 'instead of the figure held when it was checked, and the next sync '
+      + 'will fill its date, batch and quantity in from the field records '
+      + 'again.')) return;
+  if (r.checked) {
+    /* Unchecking gives the row back to the ledger. */
+    delete r.qtyFrozen;
+    delete r.batchFrozen;
+    r.checked = 0;
+  } else {
+    /* CHECKED STOPS THE FIGURE BEING A FORMULA.
+       A linked quantity is a live sum of the batch ledger — a sale, a 3rd
+       culling, an adjustment on that plot all move it, and they move it on
+       rows settled months ago. Checked means the office has been through
+       this row and agreed it, so what it was reading at that moment is
+       written down. Unchecking throws it away again. */
+    Object.assign(r, MJMMovementFreeze(r));
+    r.checked = 1;
+  }
   renderRecords(); persistRecords();
+}
+
+/* PlotMovement.freezeFor, through a name this file can stub in a test. */
+function MJMMovementFreeze(r) {
+  try { return PlotMovement.freezeFor(r) || {}; }
+  catch (e) { console.warn('[maint] could not freeze the row:', e); return {}; }
+}
+
+/* ROWS CHECKED BEFORE THE FIGURE COULD BE FROZEN.
+   Every one of them is still reading a live sum, which is the thing Checked
+   is supposed to stop. They are frozen once, at what they read now — nothing
+   recorded what they read on the day somebody checked them, and today's
+   reading is at least the one the office last saw on the screen.
+   Runs after the batch ledger lands, writes once if anything changed, and
+   never touches a row that already carries a figure of its own. */
+function freezeCheckedRows() {
+  if (!PlotMovement.ready()) return 0;
+  let n = 0;
+  records.forEach(r => {
+    if (!r || !r.checked) return;
+    if (r.qtyFrozen != null || r.batchFrozen != null) return;
+    const f = MJMMovementFreeze(r);
+    if (!Object.keys(f).length) return;
+    Object.assign(r, f);
+    n++;
+  });
+  if (n) persistRecords();
+  return n;
 }
 function togRec(id,f){ const r=records.find(x=>x.id===id); if(_recLocked(r)) return _denyLocked(); r[f]=r[f]?0:1; renderRecords(); persistRecords(); }
 function openRecModal(pre) {
@@ -6697,6 +6754,7 @@ async function initDb() {
   // on it. Repaint the pieces that show a linked quantity once it lands.
   loadMovementData().then(() => {
     if (!PlotMovement.ready()) return;
+    try { freezeCheckedRows(); } catch (e) { console.warn('[maint] freeze pass failed:', e); }
     try { renderRecords(); } catch (_) {}
     try { renderPayroll(); } catch (_) {}
     try { refreshLinkedQty(); } catch (_) {}

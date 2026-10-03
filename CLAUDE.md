@@ -143,6 +143,25 @@ that says how many saves a row went through, so the second division has to
 come from the office or the paper — `RUN_ME_undouble_cull2_252_again.sql`
 names its two rows rather than guessing a rule.
 
+## Checked stops a figure being a formula
+
+A linked quantity on the Work Maintenance list is a live sum of the batch
+ledger — a sale, a 3rd culling, a stock adjustment on that plot all move it,
+and they move it on rows settled months ago. A culling keyed a week late but
+DATED before the work is the ordinary case, so a settled row's figure moves
+after it was agreed.
+
+So ticking Checked writes down what the row was reading (`qtyFrozen`, and
+`batchFrozen` for the batch names the same ledger supplies), and unticking
+throws it away and the link comes back. The order `recQty` answers in is:
+a figure the office KEYED, then the frozen one, then the link.
+
+It lives in `shared_plot_movement.js` because it is the piece-rate money as
+well as the screen — the Worker Record capacity totals and the payroll salary
+claim read the same function. A row checked before this existed is frozen
+once, on the next load, at what it reads then: nothing recorded what it read
+on the day, and that is the figure the office last saw.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the

@@ -204,7 +204,12 @@ const ticked = (page, plot) => page.evaluate((p) => {
       saveRec();
     });
     await page.waitForTimeout(120);
-    check('it is on the list', await rows(page), ['Keyed by hand']);
+/* A hand-keyed chemical is drawn with the round in front of it now -- see
+   "A round is the Nth the plot does, not the week it falls in". The row and
+   what was keyed into it are what this is about, so the chemical is matched
+   by what was typed rather than by the whole cell. */
+    checkTrue('it is on the list',
+              (await rows(page)).some((c) => c.includes('Keyed by hand')));
 
     asked.length = 0;
     await page.evaluate(() => {
@@ -264,11 +269,17 @@ const ticked = (page, plot) => page.evaluate((p) => {
       saveRec();
     });
     await page.waitForTimeout(120);
-    checkTrue('it is on the list', (await rows(page)).includes('Keyed by hand'));
+/* A hand-keyed chemical is drawn with the round in front of it now -- see
+   "A round is the Nth the plot does, not the week it falls in". The row and
+   what was keyed into it are what this is about, so the chemical is matched
+   by what was typed rather than by the whole cell. */
+    checkTrue('it is on the list',
+              (await rows(page)).some((c) => c.includes('Keyed by hand')));
 
     await page.evaluate(() => autoSyncRecords());
     await page.waitForTimeout(120);
-    checkTrue('IT IS STILL THERE AFTER A SYNC', (await rows(page)).includes('Keyed by hand'));
+    checkTrue('IT IS STILL THERE AFTER A SYNC',
+              (await rows(page)).some((c) => c.includes('Keyed by hand')));
     const kept = await page.evaluate(() => {
       const r = [...document.querySelectorAll('#rec-body tr')]
         .find((tr) => tr.children.length > 3 && /Keyed by hand/.test(tr.textContent));
