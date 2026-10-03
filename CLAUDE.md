@@ -98,6 +98,33 @@ The Nursery Movement Report and the phone's batch list still subtract the 2nd
 culling, because they answer "what is standing", which is a different
 question. That difference is deliberate and is written out in that file.
 
+## A tab's sync must never run twice at once
+
+The batch detail tabs all have one shape: clear the tab's array, `await` two
+database reads, then push the rows in. `switchTab` fires that sync **without
+awaiting it**, and `prewarmAllTabs` runs the same syncs at page load. Click a
+tab while the page is still warming up and the two runs interleave — the
+second pushes its rows onto the array the first has already merged, and
+`_t5MergeByPlot` **sums** the saved figures of rows it merges.
+
+Every figure on 2nd Culling came out **double**, and nothing said so: the row
+arithmetic still agreed with itself (5,949 − 486 = 5,463). Then Save writes
+what is on screen, so one open-and-save wrote the doubled figure into the
+ledger and the next open doubled that — 10 → 20 → 40, over weeks, with a
+person's name against every save.
+
+So every call goes through `syncOnce(tab, fn)`, which chains them, and a sync
+builds its rows in a list of its own and assigns at the end. Two rules for
+anything of this shape:
+
+1. **Never fire an async rebuild without serialising it.** A function that
+   clears shared state, awaits, and then writes to it is a race with itself.
+2. **A merge that SUMS is a loaded gun.** If the same row can arrive twice it
+   will, and summing hides it behind arithmetic that still adds up.
+
+`tests/cull2_not_doubled.cjs` reproduces it — on the previous code two
+overlapping runs give 486 / 34 / 6 and five give ×5.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the
