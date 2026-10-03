@@ -125,6 +125,16 @@ anything of this shape:
 `tests/cull2_not_doubled.cjs` reproduces it — on the previous code two
 overlapping runs give 486 / 34 / 6 and five give ×5.
 
+What was already saved is found by its own fingerprint: the doubling summed
+the TRANSPLANTED quantity too, and `saveTab5` writes that into the remark,
+while the real total is the sum of the plot's `Transplanted` rows — which
+that tab cannot touch. `shared/CHECK_cull2_doubled_sweep.sql` and
+`shared/RUN_ME_undouble_cull2.sql` are that pair. Two limits worth knowing:
+a Dead somebody TYPED in the doubled session was saved as typed and must not
+be divided (the division not coming out whole is how it is told apart), and
+a later clean save writes the remark's Transplanted back correct while
+leaving the doubled Dead — wiping the fingerprint but not the fault.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the
