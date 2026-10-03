@@ -29,7 +29,8 @@
 --    ord 2, 'MOVED'
 --      -> these are the ones that used to be at the end of their nursery's
 --         list and now sit in name order. The line says where each one now
---         sits.
+--         sits -- and says so plainly when the plot it is named after does
+--         not exist, because then there is nowhere for it to sit but the end.
 --
 --    ord 3, 'did not move'
 --      -> counted only, because they are every ordinary plot.
@@ -73,12 +74,23 @@ SELECT * FROM (
 
   UNION ALL
 
-  SELECT 2, 'MOVED', nursery, plot,
-         'was at the end of ' || nursery || ', now sits in name order'
-           || CASE WHEN right(plot, 2) = '-R'
-                   THEN ' - behind ' || left(plot, length(plot) - 2)
-                   ELSE '' END
-    FROM f WHERE NOT built_in
+  SELECT 2, 'MOVED', f.nursery, f.plot,
+         'was at the end of ' || f.nursery || ', now sits in name order'
+           || CASE
+                WHEN right(f.plot, 2) <> '-R' THEN ''
+                /* Only claim a parent that EXISTS. UP-R and NP-R have none --
+                   there is no plot called UP or NP -- so they sort after
+                   every numbered plot of their nursery, which is the end,
+                   which is where they already were. */
+                WHEN EXISTS (SELECT 1 FROM p q
+                              WHERE q.nursery = f.nursery
+                                AND q.plot = left(f.plot, length(f.plot) - 2))
+                THEN ' - behind ' || left(f.plot, length(f.plot) - 2)
+                ELSE ' - no plot called ' || left(f.plot, length(f.plot) - 2)
+                     || ', so it sorts after every numbered plot: the end of '
+                     || f.nursery || ', where it already was'
+              END
+    FROM f WHERE NOT f.built_in
 
   UNION ALL
 
