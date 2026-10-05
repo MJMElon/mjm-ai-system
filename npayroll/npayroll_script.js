@@ -3526,8 +3526,12 @@ async function loadMaint() {
      UNN 2 work record matched no nursery, its capacity was dropped, and the
      claim showed a page of dashes indistinguishable from a quiet month. Hand-
      added plots were unknown to it entirely, so work on one paid nothing. */
-  const customPlots = await MJMMaintPlots.loadCustom(_supabase);
-  maint.plotIndex = MJMMaintPlots.index(customPlots);
+  /* loadAll, not loadCustom: a transfer plot ("-R") is in no hardcoded list
+     and nobody adds it by hand -- it is made by a 3rd-culling transfer and
+     Seedling Stock is where it says which nursery it is in. Without it every
+     maintenance record on one resolved to no nursery and paid nobody. */
+  const extraPlots = await MJMMaintPlots.loadAll(_supabase);
+  maint.plotIndex = MJMMaintPlots.index(extraPlots);
 
   const recs = (recRes && recRes.data && Array.isArray(recRes.data.records)) ? recRes.data.records : [];
   maint.records = recs.map(r => ({ ...r, __nursery: MJMMaintPlots.nurseryOfPlot(r.plot, maint.plotIndex) }));
