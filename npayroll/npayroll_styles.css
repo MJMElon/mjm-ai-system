@@ -424,3 +424,18 @@ tr:hover .cal-btn, .cal-btn:focus-visible { opacity: 1; }
 .tp-map:hover{border-color:var(--brand,#4f46e5);transform:translateY(-1px);}
 .tp-map.is-pdf{display:inline-flex;align-items:center;justify-content:center;font-size:16px;
   background:#f8fafc;}
+
+/* ── Work Maintenance — all four jobs' totals at once ──────────────────
+   Same reading as the claim form's own "Total Capacity" line under each
+   header (workdoneCell), just all four side by side above the table instead
+   of one at a time per column. Reads maint.why[code].capAll, which
+   maintTotals() already works out for the header line — never recomputed,
+   so this can't disagree with it. */
+.pt-glance{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:10px;margin-bottom:14px;}
+.pt-card{background:var(--white);border:1.5px solid var(--border);border-radius:var(--r-md);
+  padding:10px 14px;}
+.pt-label{font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;
+  color:var(--text-muted);}
+.pt-val{font-size:20px;font-weight:800;color:var(--green);margin-top:3px;
+  font-variant-numeric:tabular-nums;}

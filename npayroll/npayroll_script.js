@@ -2243,6 +2243,24 @@ function maintWhyEmpty(code) {
        + (PlotMovement.ready() ? '.' : ', and the batch report has not loaded (reload the page).');
 }
 
+/* All four jobs' whole-of-job capacity together, for this nursery and
+   month — maintTotals() already works each one out as maint.why[code].capAll
+   while building the header line workdoneCell() reads, so this just reads
+   it four times rather than recomputing anything that could disagree with
+   the column it sits above. */
+function renderMaintGlance() {
+  const box = document.getElementById('maint-glance');
+  if (!box) return;
+  const why = maint.why || {};
+  box.innerHTML = MAINT_TYPES.map(t => {
+    const capAll = (why[t.code] || {}).capAll || 0;
+    return `<div class="pt-card">
+        <div class="pt-label">${esc(t.label)}</div>
+        <div class="pt-val">${capFmt(capAll)}</div>
+      </div>`;
+  }).join('');
+}
+
 /* ── TOTAL WORKDONE ────────────────────────────────────────────────────────
 
    The whole of a job's capacity for this nursery and month, priced at its
@@ -2296,6 +2314,7 @@ function renderMaint() {
   const wk = maintWorkerNames(n, ym);
   const rateOf = c => (maint.rates[n] || {})[c];
   const per = maintTotals(n, monthTxt, ym);
+  renderMaintGlance();
 
   // The two things a claim form has to say about itself, and no preamble.
   $('maint-sub').textContent = `${NURSERY_FULL[n] || n} · ${monthTxt}`;

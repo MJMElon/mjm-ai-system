@@ -26,7 +26,7 @@
      three copies of it. -->
 <script src="../shared/shared_worker_locations.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="npayroll_styles.css?v=17">
+<link rel="stylesheet" href="npayroll_styles.css?v=18">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -109,6 +109,10 @@
         </div>
       </div>
             <div class="verify-bar" id="vb-maint"></div>
+      <!-- All four jobs' total capacity for this nursery and month together,
+           so seeing them all is not four separate column headers to scroll
+           to — see renderMaintGlance(). -->
+      <div id="maint-glance" class="pt-glance"></div>
       <div class="card"><div class="tbl-wrap"><table id="maint-table"></table></div></div>
       <p class="foot-note" id="maint-note"></p>
     </div>
@@ -381,7 +385,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=46"></script>
+<script src="npayroll_script.js?v=47"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->
