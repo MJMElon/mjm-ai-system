@@ -26,7 +26,7 @@
      three copies of it. -->
 <script src="../shared/shared_worker_locations.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="npayroll_styles.css?v=20">
+<link rel="stylesheet" href="npayroll_styles.css?v=21">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -59,10 +59,23 @@
           <rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>
         </svg>
       </span>
-      <span class="date-pill-label">Selection of Date</span>
       <input type="month" id="global-month">
     </label>
     <div class="topbar-icons">
+      <!-- Payroll is the default page — it gets the one visible label (the
+           other two stay icon-only, by name in the request) and sits
+           first, left of Settings and Access. data-tab="payroll" is what
+           applyPageAccess() now hides this by instead of the old (removed)
+           tab button, when this user has no work-type sub-tab open to
+           them at all. -->
+      <button type="button" class="icon-btn icon-btn-payroll" id="icon-btn-payroll" data-tab="payroll"
+              onclick="switchTab('payroll')" title="Payroll" aria-label="Payroll">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+          <rect x="2" y="6" width="20" height="12" rx="2.5" stroke="#fff" stroke-width="2"/>
+          <circle cx="12" cy="12" r="2.6" fill="#fff"/>
+        </svg>
+        <span>Payroll</span>
+      </button>
       <button type="button" class="icon-btn icon-btn-settings hidden" id="tab-btn-locks"
               onclick="switchTab('locks')" title="Settings" aria-label="Settings">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
@@ -437,7 +450,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=56"></script>
+<script src="npayroll_script.js?v=57"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

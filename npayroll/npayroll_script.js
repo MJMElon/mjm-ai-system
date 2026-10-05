@@ -444,7 +444,7 @@ function applyPageAccess() {
   });
   const payrollSubs = ['maint', 'transpl', 'seedling', 'other', 'monthly'];
   if (!payrollSubs.some(may)) {
-    const b = document.querySelector('.tab[data-tab="payroll"]');
+    const b = $('icon-btn-payroll');
     if (b) b.style.display = 'none';
   }
 }
