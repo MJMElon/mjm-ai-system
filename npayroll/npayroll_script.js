@@ -45,6 +45,15 @@ const NURSERY_FULL = new Proxy({}, {
   has: (_, k) => k in NURSERY_FULL_BUILTIN || k in NURSERY_REGISTER,
 });
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+/* Full names, for the one place a short month reads wrong: the printed
+   claim's own title block. Everywhere else — tabs, keys, the "Sep 2026" on
+   screen — stays MONTHS_SHORT; this is additive, not a replacement. */
+const MONTHS_FULL = ['January','February','March','April','May','June','July',
+                      'August','September','October','November','December'];
+function monthLabelFull(m) {
+  const [y, mo] = String(m).split('-');
+  return `${MONTHS_FULL[+mo - 1] || mo} ${y}`;
+}
 
 let workers   = [];    // mjmnpayroll_workers
 let rates     = [];    // mjmnpayroll_piece_rates
@@ -2274,20 +2283,17 @@ function maintWhyEmpty(code) {
 }
 
 /* All four jobs' whole-of-job capacity, and what that capacity prices out
-   to, together — for this nursery and month. maintTotals() already works
-   capacity out as maint.why[code].capAll (the header line used to read it
-   from there too, before it moved up here), and workdoneCell priced it the
-   same way; the formula is repeated rather than shared because the two no
-   longer render into the same element. */
-function renderMaintGlance() {
+   to, together — for this nursery and month. Reads whichever view
+   renderMaint() is showing (live or frozen — see maintLiveView /
+   maintViewFromSnapshot) rather than maint.why directly, so a verified
+   claim's ribbon freezes with everything else on it instead of going on
+   reading Worker Record on its own. */
+function renderMaintGlance(view) {
   const box = document.getElementById('maint-glance');
   if (!box) return;
-  const n = $('maint-nursery').value;
-  const why = maint.why || {};
-  const rateOf = c => (maint.rates[n] || {})[c];
   box.innerHTML = MAINT_TYPES.map(t => {
-    const capAll = (why[t.code] || {}).capAll || 0;
-    const rate = rateOf(t.code);
+    const capAll = view.capAll(t.code);
+    const rate = view.rateOf(t.code);
     const wd = rate == null ? null
       : Math.round(cap2(capAll) * Math.round(rate * 100000) / 1000) / 100;
     return `<div class="pt-card">
@@ -2296,6 +2302,99 @@ function renderMaintGlance() {
         <div class="pt-wd">Total Workdone (RM) : ${wd == null ? '&mdash;' : money(wd)}</div>
       </div>`;
   }).join('');
+}
+
+/* ════════════ A VERIFIED CLAIM STOPS READING WORKER RECORD ════════════
+
+   Everything below answers one question: once somebody has verified Work
+   Maintenance for a nursery and month, does ticking a different worker on
+   Worker Record afterward change what the claim shows? It used to — the
+   "lock" only ever stopped edits made ON the payroll screen itself
+   (calibration, Sync); the figures were always read live off Worker
+   Record's own records and ticks, with no check against the lock at all.
+   A claim marked "✔ Verified" could still move under the signature.
+
+   maintLiveView() and maintViewFromSnapshot() return the same shape — wk,
+   rateOf, capWorked, capOf, rmOf, payOf, earned, capSum, rmSum, grand,
+   capAll — so renderMaint(), renderMaintGlance() and downloadMaintPDF() do
+   not need to know or care which one they were handed; only the three
+   functions here know that one reads live and the other reads a frozen
+   snapshot. buildMaintSnapshot() is what "Verify & lock" calls, once, on
+   the live view, to make that snapshot in the first place. Worker Record
+   stays exactly as editable as it always was — this is the claim choosing
+   to stop listening to it, not Worker Record being shut. */
+
+function maintSnapshotFor(n, ym) {
+  if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) return null;
+  const v = MJMPayrollLock.verificationOf(ym, 'maint', n);
+  return (v && v.snapshot) ? v.snapshot : null;
+}
+
+function maintViewFromSnapshot(s) {
+  return {
+    wk: s.workers || [],
+    rateOf:    c => (s.rate   || {})[c],
+    capWorked: (w, c) => ((s.cap[w] || {})[c]) || 0,
+    capOf:     (w, c) => ((s.cap[w] || {})[c]) || 0,
+    rmOf:      (w, c) => ((s.rm[w]  || {})[c]) || 0,
+    payOf:     (w, c) => ((s.rm[w]  || {})[c]) || 0,
+    earned:    w => (s.earned || {})[w] || 0,
+    capSum:    c => (s.capSum || {})[c] || 0,
+    rmSum:     c => (s.rmSum  || {})[c] || 0,
+    grand:     s.grand || 0,
+    capAll:    c => (s.capAll || {})[c] || 0
+  };
+}
+
+function maintLiveView(n, ym, monthTxt) {
+  const wk = maintWorkerNames(n, ym);
+  const rateOf = c => (maint.rates[n] || {})[c];
+  const per = maintTotals(n, monthTxt, ym);
+  // Money from the capacity AS SHOWN, so the printed row multiplies out.
+  const capWorked = (w, c) => cap2(per[w] ? per[w][c] : 0);
+  const capOf = (w, c) => capPaid('maint', n, w, c, capWorked(w, c));
+  const rmOf  = (w, c) => {
+    const r = rateOf(c);
+    if (r == null) return 0;
+    return Math.round(capOf(w, c) * Math.round(r * 100000) / 1000) / 100;
+  };
+  /* What the cell PAYS — the worked-out figure, or the one somebody typed
+     over it. Every total on this sheet is built from payOf rather than rmOf,
+     so an adjusted cell carries through to the row, the column and the grand
+     total. A sheet whose parts were adjusted and whose total was not is the
+     one thing worse than no adjustment at all. The adjustment is filed under
+     the NURSERY, which is what this sheet is scoped by and what the Monthly
+     Payroll re-reads it under. */
+  const payOf  = (w, c) => { const a = adjOf('maint', n, w, c); return a ? Number(a.amount || 0) : rmOf(w, c); };
+  const earned = w => MAINT_TYPES.reduce((s, t) => s + payOf(w, t.code), 0);
+  const capSum = c => wk.reduce((s, w) => s + capOf(w, c), 0);
+  const rmSum  = c => wk.reduce((s, w) => s + payOf(w, c), 0);
+  const grand  = wk.reduce((s, w) => s + earned(w), 0);
+  /* The whole job's capacity off the Worker Record — every work record for
+     this job in this nursery, ticked or not. maintTotals counts it while it
+     is already walking those records. */
+  const capAll = c => ((maint.why || {})[c] || {}).capAll || 0;
+  return { wk, rateOf, capWorked, capOf, rmOf, payOf, earned, capSum, rmSum, grand, capAll };
+}
+
+/* Read off the live view at the moment "Verify & lock" is pressed — every
+   figure the claim needs to redraw itself without touching Worker Record
+   again, in the exact shape maintViewFromSnapshot() hands back out. */
+function buildMaintSnapshot(view) {
+  const cap = {}, rm = {}, earned = {};
+  view.wk.forEach(w => {
+    cap[w] = {}; rm[w] = {};
+    MAINT_TYPES.forEach(t => { cap[w][t.code] = view.capOf(w, t.code); rm[w][t.code] = view.payOf(w, t.code); });
+    earned[w] = view.earned(w);
+  });
+  const capAll = {}, rate = {}, capSum = {}, rmSum = {};
+  MAINT_TYPES.forEach(t => {
+    capAll[t.code] = view.capAll(t.code);
+    rate[t.code]   = view.rateOf(t.code);
+    capSum[t.code] = view.capSum(t.code);
+    rmSum[t.code]  = view.rmSum(t.code);
+  });
+  return { workers: view.wk.slice(), cap, rm, earned, capAll, rate, capSum, rmSum, grand: view.grand };
 }
 
 /* ── TOTAL WORKDONE ────────────────────────────────────────────────────────
@@ -2356,10 +2455,15 @@ function renderMaint() {
   const n = $('maint-nursery').value;
   const ym = monthValue();
   const monthTxt = maintMonthLabel(ym);               // "Apr 2026"
-  const wk = maintWorkerNames(n, ym);
-  const rateOf = c => (maint.rates[n] || {})[c];
-  const per = maintTotals(n, monthTxt, ym);
-  renderMaintGlance();
+
+  /* A claim verified for this nursery and month reads its own frozen
+     snapshot instead of Worker Record from here on — see the block above
+     renderMaintGlance. Live and frozen hand back the same shape, so nothing
+     past this line needs to ask which one it got. */
+  const frozen = maintSnapshotFor(n, ym);
+  const view = frozen ? maintViewFromSnapshot(frozen) : maintLiveView(n, ym, monthTxt);
+  renderMaintGlance(view);
+  const { wk, rateOf, capWorked, capOf, rmOf, payOf, earned, capSum, rmSum, grand, capAll } = view;
 
   // The two things a claim form has to say about itself, and no preamble.
   $('maint-sub').textContent = `${NURSERY_FULL[n] || n} · ${monthTxt}`;
@@ -2374,32 +2478,6 @@ function renderMaint() {
     $('maint-note').textContent = '';
     return;
   }
-
-  // Money from the capacity AS SHOWN, so the printed row multiplies out.
-  const capWorked = (w, c) => cap2(per[w] ? per[w][c] : 0);
-  const capOf = (w, c) => capPaid('maint', n, w, c, capWorked(w, c));
-  const rmOf  = (w, c) => {
-    const r = rateOf(c);
-    if (r == null) return 0;
-    return Math.round(capOf(w, c) * Math.round(r * 100000) / 1000) / 100;
-  };
-  /* What the cell PAYS — the worked-out figure, or the one somebody typed
-     over it. Every total on this sheet is built from payOf rather than rmOf,
-     so an adjusted cell carries through to the row, the column and the grand
-     total. A sheet whose parts were adjusted and whose total was not is the
-     one thing worse than no adjustment at all. The adjustment is filed under
-     the NURSERY, which is what this sheet is scoped by and what the Monthly
-     Payroll re-reads it under. */
-  const payOf  = (w, c) => { const a = adjOf('maint', n, w, c); return a ? Number(a.amount || 0) : rmOf(w, c); };
-  const earned = w => MAINT_TYPES.reduce((s, t) => s + payOf(w, t.code), 0);
-
-  const capSum = c => wk.reduce((s, w) => s + capOf(w, c), 0);
-  const rmSum  = c => wk.reduce((s, w) => s + payOf(w, c), 0);
-  const grand  = wk.reduce((s, w) => s + earned(w), 0);
-  /* The whole job's capacity off the Worker Record — every work record for
-     this job in this nursery, ticked or not. maintTotals counts it while it
-     is already walking those records. */
-  const capAll = c => ((maint.why || {})[c] || {}).capAll || 0;
 
   /* The office's own claim form, four header rows: the work, the rate it
      pays, what the whole of it comes to, then Capacity and Total under it.
@@ -2455,6 +2533,13 @@ function renderMaint() {
     </tr></tfoot>`;
 
   $('maint-table').innerHTML = head + `<tbody>${body}</tbody>` + foot;
+
+  /* A frozen claim's notes would be about whatever Worker Record looks like
+     NOW — missing rates, stray names, a batch report still loading — none
+     of which this screen is reading any more. renderVerifyBar already says
+     who verified it and when; repeating live diagnostics under a claim that
+     has stopped listening to them would just be confusing. */
+  if (frozen) { $('maint-note').textContent = ''; return; }
 
   /* ONLY WHAT IS WRONG.
      This used to carry a paragraph explaining where the names and the capacity
@@ -2675,7 +2760,15 @@ async function verifySheet(sheet) {
              + 'It locks straight away and nothing on it can be changed after that. Somebody with '
              + 'the Unlock tick can take it back; otherwise it needs Lock Controls and the whole '
              + 'month.')) return;
-  const error = await MJMPayrollLock.verify(_supabase, ym, sheet, scope, userEmail || null);
+  /* Work Maintenance is priced off Worker Record, a screen this lock does
+     not reach — so verifying it also freezes what the claim shows (see the
+     block above renderMaintGlance), not only what can be edited here.
+     Worker Record stays exactly as live and editable as always; this is the
+     claim choosing to stop reading it. */
+  const snapshot = sheet === 'maint'
+    ? buildMaintSnapshot(maintLiveView(scope, ym, maintMonthLabel(ym)))
+    : null;
+  const error = await MJMPayrollLock.verify(_supabase, ym, sheet, scope, userEmail || null, snapshot);
   if (error) { alert('Could not verify: ' + error.message); return; }
   refreshPayrollTab();
   if (typeof renderLockCalendar === 'function' && $('tab-locks')) renderLockCalendar();
@@ -3089,18 +3182,18 @@ function downloadMaintPDF() {
   if (!mayDo('maint', 'export',
       'You do not have permission to download the salary claim form.')) return;
   const n = $('maint-nursery').value, month = monthValue(), monthTxt = maintMonthLabel(month);
-  const wk = maintWorkerNames(n, month);
+  /* The printed claim is what gets signed and paid, so it reads whichever
+     view the screen is showing — live, or a verified claim's frozen
+     snapshot (see the block above renderMaintGlance) — rather than
+     recomputing its own, slightly different, copy of the same question. A
+     PDF that disagreed with the screen would be found out at the counter,
+     and a verified claim's PDF drifting from what was actually signed would
+     be worse. */
+  const view = maintSnapshotFor(n, month)
+    ? maintViewFromSnapshot(maintSnapshotFor(n, month))
+    : maintLiveView(n, month, monthTxt);
+  const { wk, rateOf, capWorked, capOf, rmOf, payOf, earned, capSum, rmSum, grand, capAll } = view;
   if (!wk.length) { alert('No worker on the Work Maintenance list for this nursery.'); return; }
-  const rateOf = c => (maint.rates[n] || {})[c];
-  const per = maintTotals(n, monthTxt, month);
-  const capWorked = (w, c) => cap2(per[w] ? per[w][c] : 0);
-  const capOf = (w, c) => capPaid('maint', n, w, c, capWorked(w, c));
-  const rmOf  = (w, c) => { const r = rateOf(c); return r == null ? 0 : Math.round(capOf(w, c) * Math.round(r * 100000) / 1000) / 100; };
-  /* The printed claim is what gets signed and paid, so it prints the ADJUSTED
-     figure — the same one the screen shows. A PDF that disagreed with the
-     screen would be found out at the counter. */
-  const payOf  = (w, c) => { const a = adjOf('maint', n, w, c); return a ? Number(a.amount || 0) : rmOf(w, c); };
-  const earned = w => MAINT_TYPES.reduce((s, t) => s + payOf(w, t.code), 0);
 
   const doc = pdfDoc();
   const COL = [7, 30, 11, 15, 11, 15, 11, 15, 11, 15, 19];
@@ -3136,7 +3229,7 @@ function downloadMaintPDF() {
       const x = X[0] + i * (cardW + GAP);
       doc.setDrawColor(190, 195, 230); doc.setLineWidth(0.25);
       doc.setFillColor(255, 255, 255); doc.rect(x, y, cardW, cardH, 'FD');
-      const cap = ((maint.why || {})[t.code] || {}).capAll || 0;
+      const cap = capAll(t.code);
       const r = rateOf(t.code);
       const wd = r == null ? null : Math.round(cap2(cap) * Math.round(r * 100000) / 1000) / 100;
       doc.setFont('helvetica', 'bold'); doc.setTextColor(110, 110, 130);
@@ -3146,7 +3239,7 @@ function downloadMaintPDF() {
       fitLine(capFmt(cap), maxW, 11.5, 7);
       doc.text(capFmt(cap), x + padX, y + 13);
       doc.setFont('helvetica', 'normal'); doc.setTextColor(49, 46, 129);
-      const wdTxt = `Total Workdone (RM) : ${wd == null ? '—' : 'RM ' + wd.toFixed(2)}`;
+      const wdTxt = `Total Workdone (RM) : ${wd == null ? '—' : money(wd)}`;
       fitLine(wdTxt, maxW, 6.5, 4);
       doc.text(wdTxt, x + padX, y + 17.5);
     });
@@ -3154,7 +3247,8 @@ function downloadMaintPDF() {
   };
 
   const drawHead = () => {
-    let y = pdfTitle(doc, ['SALARY CLAIM FORM — WORK MAINTENANCE', `${NURSERY_FULL[n] || n} (${n})`, `Month ${monthTxt}`]);
+    let y = pdfTitle(doc, ['SALARY CLAIM FORM — WORK MAINTENANCE', `${NURSERY_FULL[n] || n} (${n})`,
+                            `Month ${monthLabelFull(month)}`]);
     y = drawCapRibbon(y);
     const H1 = 9, H2 = 7, H3 = 7, HT = H1 + H2 + H3;
     pdfCell(doc, X[0], y, COL[0], HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
@@ -3188,21 +3282,19 @@ function downloadMaintPDF() {
       const c = PAIR(k), cap = capOf(w, t.code);
       pdfCell(doc, X[c],   y, COL[c],   RH, capFmt(cap), { size: 8, nowrap: true, fill: z });
       pdfCell(doc, X[c+1], y, COL[c+1], RH, (cap || adjOf('maint', n, w, t.code))
-              ? 'RM ' + payOf(w, t.code).toFixed(2) : '—', { size: 7.5, nowrap: true, fill: z });
+              ? money(payOf(w, t.code)) : '—', { size: 7.5, nowrap: true, fill: z });
     });
-    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH, 'RM ' + earned(w).toFixed(2), { bold: true, size: 8.5, nowrap: true, fill: z });
+    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH, money(earned(w)), { bold: true, size: 8.5, nowrap: true, fill: z });
     y += RH;
   });
 
   pdfCell(doc, X[0], y, COL[0] + COL[1], RH + 1, 'Grand Total', { bold: true, size: 8.5, fill: TF });
   MAINT_TYPES.forEach((t, k) => {
     const c = PAIR(k);
-    const cs = wk.reduce((s, w) => s + capOf(w, t.code), 0);
-    const rs = wk.reduce((s, w) => s + payOf(w, t.code), 0);
-    pdfCell(doc, X[c],   y, COL[c],   RH + 1, capFmt(cs), { bold: true, size: 8, nowrap: true, fill: TF });
-    pdfCell(doc, X[c+1], y, COL[c+1], RH + 1, 'RM ' + rs.toFixed(2), { bold: true, size: 7.5, nowrap: true, fill: TF });
+    pdfCell(doc, X[c],   y, COL[c],   RH + 1, capFmt(capSum(t.code)), { bold: true, size: 8, nowrap: true, fill: TF });
+    pdfCell(doc, X[c+1], y, COL[c+1], RH + 1, money(rmSum(t.code)), { bold: true, size: 7.5, nowrap: true, fill: TF });
   });
-  pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH + 1, 'RM ' + wk.reduce((s, w) => s + earned(w), 0).toFixed(2),
+  pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH + 1, money(grand),
           { bold: true, size: 9, nowrap: true, fill: TF });
   y += RH + 1;
   y = pdfVerifiedNote(doc, y, 'maint', n);
