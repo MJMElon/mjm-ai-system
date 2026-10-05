@@ -26,7 +26,7 @@
      three copies of it. -->
 <script src="../shared/shared_worker_locations.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="npayroll_styles.css?v=19">
+<link rel="stylesheet" href="npayroll_styles.css?v=20">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -98,26 +98,28 @@
     <div class="warn-detail" id="setup-err"></div>
   </div>
 
+  <!-- Five equal pills, edge to edge — the primary navigation now, so it
+       stays on screen whichever top-level panel (Payroll or Settings) is
+       open rather than disappearing with the Payroll panel it used to live
+       inside. Clicking one always returns to Payroll (switchSub). Labels
+       here only; data-sub/switchSub and every "Seedlings Collection" /
+       "Others" elsewhere (bar titles, CAT_LABEL, Monthly Payroll's own
+       columns) are untouched, so this is a display name, not a rename of
+       the thing itself. -->
+  <nav class="subtabs">
+    <button class="subtab active" data-sub="maint"    onclick="switchSub('maint')">Work Maintenance</button>
+    <button class="subtab"        data-sub="transpl"  onclick="switchSub('transpl')">Transplanting</button>
+    <button class="subtab"        data-sub="seedling" onclick="switchSub('seedling')">Loading Seedlings</button>
+    <button class="subtab"        data-sub="monthly"  onclick="switchSub('monthly')">Monthly Payroll</button>
+    <!-- Everything that is paid by the piece and is none of the three above.
+         Its own sheet rather than a fourth guess at what to call it: the
+         Piece Rate screen has always offered "Other" as a Used For, and
+         until now there was nowhere to key the work that rate priced. -->
+    <button class="subtab"        data-sub="other"    onclick="switchSub('other')">Other</button>
+  </nav>
+
   <!-- ═══════════ PAYROLL ═══════════ -->
   <section id="tab-payroll" class="panel active">
-    <!-- Five equal pills, edge to edge — the only tab row left now that
-         Settings and User Access moved to the icon row above (see the
-         header). Labels here only; data-sub/switchSub and every "Seedlings
-         Collection" / "Others" elsewhere (bar titles, CAT_LABEL, Monthly
-         Payroll's own columns) are untouched, so this is a display name,
-         not a rename of the thing itself. -->
-    <nav class="subtabs">
-      <button class="subtab active" data-sub="maint"    onclick="switchSub('maint')">Work Maintenance</button>
-      <button class="subtab"        data-sub="transpl"  onclick="switchSub('transpl')">Transplanting</button>
-      <button class="subtab"        data-sub="seedling" onclick="switchSub('seedling')">Loading Seedlings</button>
-      <button class="subtab"        data-sub="monthly"  onclick="switchSub('monthly')">Monthly Payroll</button>
-      <!-- Everything that is paid by the piece and is none of the three above.
-           Its own sheet rather than a fourth guess at what to call it: the
-           Piece Rate screen has always offered "Other" as a Used For, and
-           until now there was nowhere to key the work that rate priced. -->
-      <button class="subtab"        data-sub="other"    onclick="switchSub('other')">Other</button>
-    </nav>
-
     <!-- ── Work Maintenance: the salary claim form, read from Work Maintenance ── -->
     <div id="sub-maint" class="subpanel active">
       <div class="bar">
@@ -263,32 +265,23 @@
     </div>
   </section>
 
-  <!-- ═══════════ SETTINGS — PIECE RATE + LOCK CONTROLS ═══════════
-       One tab, two sections that used to be two tabs. They stay on their
-       own permissions (rates / locks) — applyPageAccess() shows or hides
-       each section by its own id, independently of the other. -->
+  <!-- ═══════════ SETTINGS — LOCK CONTROLS + PIECE RATE ═══════════
+       One tab, two sections that used to be two tabs, switched by their
+       own menu below rather than shown stacked — Lock Controls first,
+       Piece Rate second, as asked. They stay on their own permissions
+       (rates / locks): applyPageAccess() hides whichever pill AND section
+       a permission doesn't allow; switchSettingsSection() picks which of
+       the ones left shows. -->
   <section id="tab-locks" class="panel">
-
-    <!-- ═══════════ PIECE RATE ═══════════ -->
-    <div id="settings-rate-section">
-      <div class="bar">
-        <div>
-          <div class="bar-title">Piece Rate</div>
-          <div class="bar-sub">What each job pays, per unit, grouped MN · PN · Machinery.
-            Add a job from its own group below and the group is already filled in.</div>
-        </div>
-      </div>
-      <div id="rate-setup" class="warn hidden">
-        <b>⚠️ Grouping is not switched on yet.</b>
-        Run <code>shared/fix_npayroll_rate_groups.sql</code> in the Supabase SQL Editor, then reload.
-        Jobs still save; they just cannot be filed under MN, PN or Machinery until then.
-      </div>
-      <div id="rate-groups"></div>
-      <p class="foot-note">A rate is copied onto a work entry when it is keyed, so changing it here never restates a month already paid.</p>
-    </div>
+    <nav class="settings-menu">
+      <button class="settings-menu-btn active" id="settings-tab-lock"
+              onclick="switchSettingsSection('lock')">🔒 Lock Controls</button>
+      <button class="settings-menu-btn" id="settings-tab-rate"
+              onclick="switchSettingsSection('rate')">🏷️ Piece Rate</button>
+    </nav>
 
     <!-- ═══════════ LOCK CONTROLS ═══════════ -->
-    <div id="settings-lock-section" style="margin-top:30px;padding-top:24px;border-top:1.5px solid var(--border);">
+    <div id="settings-lock-section" class="settings-section active">
       <div class="bar">
         <div>
           <div class="bar-title">🔒 Lock Controls</div>
@@ -322,6 +315,24 @@
         <div id="lk-months" class="lock-grid"></div>
         <p class="foot-note" id="lk-note"></p>
       </div>
+    </div>
+
+    <!-- ═══════════ PIECE RATE ═══════════ -->
+    <div id="settings-rate-section" class="settings-section">
+      <div class="bar">
+        <div>
+          <div class="bar-title">Piece Rate</div>
+          <div class="bar-sub">What each job pays, per unit, grouped MN · PN · Machinery.
+            Add a job from its own group below and the group is already filled in.</div>
+        </div>
+      </div>
+      <div id="rate-setup" class="warn hidden">
+        <b>⚠️ Grouping is not switched on yet.</b>
+        Run <code>shared/fix_npayroll_rate_groups.sql</code> in the Supabase SQL Editor, then reload.
+        Jobs still save; they just cannot be filed under MN, PN or Machinery until then.
+      </div>
+      <div id="rate-groups"></div>
+      <p class="foot-note">A rate is copied onto a work entry when it is keyed, so changing it here never restates a month already paid.</p>
     </div>
   </section>
 
@@ -426,7 +437,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=55"></script>
+<script src="npayroll_script.js?v=56"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

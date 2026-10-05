@@ -429,10 +429,12 @@ function applyPageAccess() {
   const canRates = may('rates'), canLocks = may('locks');
   const lk = $('tab-btn-locks');
   if (lk) lk.classList.toggle('hidden', !(canRates || canLocks));
-  const rs = $('settings-rate-section');
+  const rs = $('settings-rate-section'), rb = $('settings-tab-rate');
   if (rs) rs.classList.toggle('hidden', !canRates);
-  const ls = $('settings-lock-section');
+  if (rb) rb.classList.toggle('hidden', !canRates);
+  const ls = $('settings-lock-section'), lb = $('settings-tab-lock');
   if (ls) ls.classList.toggle('hidden', !canLocks);
+  if (lb) lb.classList.toggle('hidden', !canLocks);
   const tabPages = { workers: 'workers' };
   Object.entries(tabPages).forEach(([tab, page]) => {
     if (!may(page)) {
@@ -459,10 +461,28 @@ function switchTab(name) {
   $('tab-' + name).classList.add('active');
   try { localStorage.setItem('npayroll_tab', name); } catch (_) {}
   if (name === 'payroll') refreshPayrollTab();
-  // Piece Rate and Lock Controls both live on this one tab now, so opening
-  // it refreshes both — whichever of the two this user can see is the one
-  // applyPageAccess() left showing.
-  if (name === 'locks')   { renderRates(); renderLockCalendar(); }
+  // Lock Controls and Piece Rate both live on this one tab now, switched by
+  // their own menu — reopen whichever this user had open last (or Lock
+  // Controls first, then Piece Rate, if neither is remembered or the
+  // remembered one is no longer theirs to see).
+  if (name === 'locks') {
+    let sec = null;
+    try { sec = localStorage.getItem('npayroll_settings_sub'); } catch (_) {}
+    if (!sec || !may(sec === 'lock' ? 'locks' : 'rates')) sec = may('locks') ? 'lock' : 'rate';
+    switchSettingsSection(sec);
+  }
+}
+/* Settings' own menu — Lock Controls and Piece Rate, switched like the
+   work-type pills are, just one level in. */
+function switchSettingsSection(which) {
+  document.querySelectorAll('.settings-menu-btn').forEach(b =>
+    b.classList.toggle('active', b.id === 'settings-tab-' + which));
+  document.querySelectorAll('.settings-section').forEach(s => s.classList.remove('active'));
+  const el = $('settings-' + which + '-section');
+  if (el) el.classList.add('active');
+  try { localStorage.setItem('npayroll_settings_sub', which); } catch (_) {}
+  if (which === 'lock') renderLockCalendar();
+  if (which === 'rate') renderRates();
 }
 function switchSub(name) {
   /* The five work-type pills are the only tab row now — Settings opens

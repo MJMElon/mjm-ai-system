@@ -113,6 +113,22 @@ body { font-family: 'Outfit', system-ui, sans-serif; background: var(--bg); colo
   .subtab { font-size: 11px; padding: 12px 4px; }
 }
 
+/* ── Settings' own menu — a second-level nav, deliberately NOT the same
+   full-width segmented look as the five work-type pills above, so the two
+   read as different levels rather than two primary rows stacked. This is
+   the compact rounded-box style that row used to wear before it went
+   full-width. */
+.settings-menu { display: flex; gap: 4px; background: var(--white); border: 1.5px solid var(--border);
+                 border-radius: var(--r-md); padding: 4px; box-shadow: var(--shadow-sm);
+                 width: fit-content; max-width: 100%; margin-bottom: 20px; }
+.settings-menu-btn { font-family: inherit; font-size: 13px; font-weight: 700; color: var(--text-muted);
+                      background: transparent; border: none; cursor: pointer; padding: 9px 18px;
+                      border-radius: 8px; transition: all .14s; }
+.settings-menu-btn:hover { background: var(--ink-light); color: var(--ink-dark); }
+.settings-menu-btn.active { background: var(--ink); color: #fff; box-shadow: 0 2px 8px rgba(79,70,229,.3); }
+.settings-section { display: none; }
+.settings-section.active { display: block; }
+
 /* ── Section bar ── */
 .bar { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px;
        flex-wrap: wrap; margin-bottom: 14px; }
