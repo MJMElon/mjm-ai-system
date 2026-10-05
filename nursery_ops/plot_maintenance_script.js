@@ -771,9 +771,25 @@ function payrollRowsFor(type) {
   const n = getNursery();
   const plots = NURSERY_PLOTS[n] || [];
   const jenis = PAYROLL_TYPES[type].jenis;
+  /* Plot, then the day the work was done.
+
+     It used to sort on the plot ALONE, and a sort with nothing to say about
+     two rows of the same plot leaves them in the order they happen to be in
+     — which here is the order the schedule generated them, every P & D round
+     before every manuring round and anything added later on the end. So one
+     plot's dates came out shuffled, on the screen and on the printed sheet
+     alike: both are this one function.
+
+     A sheet is one work type, so the work type cannot separate two rows here
+     and only the day can. Same rule as the Work Record's — see
+     _recDayOrder. */
   return records
     .filter(r => r.jenis === jenis && plots.includes(r.plot))
-    .sort((a, b) => plots.indexOf(a.plot) - plots.indexOf(b.plot));
+    .sort((a, b) => {
+      const pa = plots.indexOf(a.plot), pb = plots.indexOf(b.plot);
+      if (pa !== pb) return pa - pb;
+      return _recDayOrder(a, b);
+    });
 }
 function payrollRows() { return payrollRowsFor(_payrollView); }
 
@@ -4947,6 +4963,14 @@ function _qtyCell(r) {
   const q = recQty(r);
   if (q.value === null) return '—';
   const txt = q.value.toLocaleString();
+  /* Held, not live. A checked row's figure was written down when it was
+     checked and no longer follows the batch report — said on the cell, or a
+     number that has stopped moving looks like one that is still moving. */
+  if (q.frozen) {
+    const tip = `Held at ${txt} when this row was checked, so the batch report `
+              + 'no longer moves it. Uncheck the row to put it back to live.';
+    return `<span class="qty-frozen" title="${tip.replace(/"/g, '&quot;')}">🔒 ${txt}</span>`;
+  }
   if (!q.linked) return txt;
   const i = q.info;
   const scope = i.allBatches
@@ -4973,6 +4997,11 @@ function _qtyCell(r) {
 function _batchCell(r) {
   const b = PlotMovement.recBatches(r);
   if (!b.value) return '—';
+  if (b.frozen) {
+    const tip = `Held when this row was checked. Uncheck it to read the batch `
+              + 'report again.';
+    return `<span class="qty-frozen" title="${tip.replace(/"/g, '&quot;')}">🔒 ${esc(b.value)}</span>`;
+  }
   if (!b.linked) return esc(b.value);
   const when = b.info && b.info.asOf ? `as at ${b.info.asOf}` : 'standing today';
   const tip = `No batch keyed, so this row covers every batch standing on plot ${r.plot} ${when}, which is what the quantity beside it counts. Key a batch here to narrow it — a batch you type decides the figure, on every job.`;
@@ -4998,17 +5027,19 @@ function _jenisRank(j) {
   return r === undefined ? 99 : r;
 }
 
-/* Work type, then the day it was done. A row with no date yet has not
-   happened, so it sits at the end of its own work type rather than at the
-   top — '-' would sort before every real date. Two rows on one day are put in
-   round order, which is the order they were planned in. */
-function _recRowOrder(a, b) {
-  const ja = _jenisRank(a.jenis), jb = _jenisRank(b.jenis);
-  if (ja !== jb) return ja - jb;
-  if (ja === 99) {
-    const na = String(a.jenis || ''), nb = String(b.jenis || '');
-    if (na !== nb) return na < nb ? -1 : 1;
-  }
+/* THE DAY IT WAS DONE, then the round, then something settled.
+
+   A row with no date yet has not happened, so it sits at the end rather than
+   the top — '-' would sort before every real date. Two rows on one day go in
+   round order, which is the order they were planned in, and the last two
+   tests only exist so the order cannot wobble between one render and the
+   next.
+
+   Pulled out on its own because the Work Record and the WORKER RECORD want
+   the same answer under different headings: one groups by work type, the
+   other is one sheet per work type and groups by plot. Both then want the
+   days in the order they happened. */
+function _recDayOrder(a, b) {
   const day = r => {
     const d = String(r.tarikh || '').trim();
     return (!d || d === '-') ? '9999-99-99' : d;
@@ -5020,6 +5051,17 @@ function _recRowOrder(a, b) {
   const ca = String(a.racun || ''), cb = String(b.racun || '');
   if (ca !== cb) return ca < cb ? -1 : 1;
   return (a.id || 0) - (b.id || 0);
+}
+
+/* Work type, then the day it was done. */
+function _recRowOrder(a, b) {
+  const ja = _jenisRank(a.jenis), jb = _jenisRank(b.jenis);
+  if (ja !== jb) return ja - jb;
+  if (ja === 99) {
+    const na = String(a.jenis || ''), nb = String(b.jenis || '');
+    if (na !== nb) return na < nb ? -1 : 1;
+  }
+  return _recDayOrder(a, b);
 }
 
 function renderRecords() {
@@ -5590,10 +5632,54 @@ function toggleChecked(id){
      could press it on. Unticking takes nothing away and hides nothing — it
      puts the row back where it was and says so. */
   if (r.checked && !confirm('Put this row back to unchecked?\n\n'
-      + 'It can be edited again, and the next sync will fill its date, batch '
-      + 'and quantity in from the field records again.')) return;
-  r.checked = r.checked ? 0 : 1;
+      + 'Its quantity goes back to being read live from the batch report '
+      + 'instead of the figure held when it was checked, and the next sync '
+      + 'will fill its date, batch and quantity in from the field records '
+      + 'again.')) return;
+  if (r.checked) {
+    /* Unchecking gives the row back to the ledger. */
+    delete r.qtyFrozen;
+    delete r.batchFrozen;
+    r.checked = 0;
+  } else {
+    /* CHECKED STOPS THE FIGURE BEING A FORMULA.
+       A linked quantity is a live sum of the batch ledger — a sale, a 3rd
+       culling, an adjustment on that plot all move it, and they move it on
+       rows settled months ago. Checked means the office has been through
+       this row and agreed it, so what it was reading at that moment is
+       written down. Unchecking throws it away again. */
+    Object.assign(r, MJMMovementFreeze(r));
+    r.checked = 1;
+  }
   renderRecords(); persistRecords();
+}
+
+/* PlotMovement.freezeFor, through a name this file can stub in a test. */
+function MJMMovementFreeze(r) {
+  try { return PlotMovement.freezeFor(r) || {}; }
+  catch (e) { console.warn('[maint] could not freeze the row:', e); return {}; }
+}
+
+/* ROWS CHECKED BEFORE THE FIGURE COULD BE FROZEN.
+   Every one of them is still reading a live sum, which is the thing Checked
+   is supposed to stop. They are frozen once, at what they read now — nothing
+   recorded what they read on the day somebody checked them, and today's
+   reading is at least the one the office last saw on the screen.
+   Runs after the batch ledger lands, writes once if anything changed, and
+   never touches a row that already carries a figure of its own. */
+function freezeCheckedRows() {
+  if (!PlotMovement.ready()) return 0;
+  let n = 0;
+  records.forEach(r => {
+    if (!r || !r.checked) return;
+    if (r.qtyFrozen != null || r.batchFrozen != null) return;
+    const f = MJMMovementFreeze(r);
+    if (!Object.keys(f).length) return;
+    Object.assign(r, f);
+    n++;
+  });
+  if (n) persistRecords();
+  return n;
 }
 function togRec(id,f){ const r=records.find(x=>x.id===id); if(_recLocked(r)) return _denyLocked(); r[f]=r[f]?0:1; renderRecords(); persistRecords(); }
 function openRecModal(pre) {
@@ -6697,6 +6783,7 @@ async function initDb() {
   // on it. Repaint the pieces that show a linked quantity once it lands.
   loadMovementData().then(() => {
     if (!PlotMovement.ready()) return;
+    try { freezeCheckedRows(); } catch (e) { console.warn('[maint] freeze pass failed:', e); }
     try { renderRecords(); } catch (_) {}
     try { renderPayroll(); } catch (_) {}
     try { refreshLinkedQty(); } catch (_) {}

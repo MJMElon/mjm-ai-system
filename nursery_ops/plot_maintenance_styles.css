@@ -602,6 +602,10 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
    hover, and a question mark over a figure reads as "this number is in
    doubt" on a sheet that decides what people are paid. */
 .qty-linked{color:var(--green-text);border-bottom:1px dotted var(--green-mid);}
+/* Held at what it read when the row was checked. Solid underline rather
+   than dotted: the dots say "this is worked out and still moving", and
+   this one has stopped. */
+.qty-frozen{color:var(--text-head);border-bottom:1px solid var(--border);}
 
 /* ── Setting tab ──────────────────────────────────────────────────────────
    Four lists that are keyed in rarely and read from constantly, so they are

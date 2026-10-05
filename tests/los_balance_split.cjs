@@ -4,7 +4,7 @@ const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname, '..', 'operation', 'operation_reports.html'), 'utf8');
 
 const start = src.indexOf('  // ── Derived figures ──');
-const end   = src.indexOf('  const rows = Object.values(rowsByBatch);', start);
+const end   = src.indexOf('  // Years/suppliers offered by their pickers', start);
 if (start < 0 || end < 0) { console.log('could not find the block'); process.exit(1); }
 const block = src.slice(start, end);
 

@@ -361,15 +361,27 @@
           <label class="label-style !mb-1" id="f-to-label">As At</label>
           <input id="f-to" type="date" class="input-style">
         </div>
-        <!-- Life of Seedlings reads its As At as a month and a year rather
-             than a day. A batch's life is months long, so "as at the 25th"
-             was a precision the report never had anything to say about, and
-             the day picker made "all of it" impossible to ask for. Both
-             start at All, which is what asks for every batch ever received —
-             pick a year alone for the whole of that year, or a year and a
-             month for up to the end of that month. -->
-        <div class="f-los hidden w-32">
-          <label class="label-style !mb-1">As At — Month</label>
+        <!-- TWO As Ats, because the two Statuses ask different questions.
+
+             Looking at what is STILL GOING, the question is "what was
+             standing on this day", and a day is what answers it — left
+             empty it means today, which is what the report opens on.
+
+             Looking at what has FINISHED, the day is meaningless: a batch
+             that ended in September ended whether you ask on the 23rd or
+             the 30th. The question there is WHEN it finished, so the month
+             and the year come back and mean exactly that — batches whose
+             last movement falls inside that month (or that year), not
+             everything ever finished up to its end.
+
+             So the day shows for Active and for Active & completed, and the
+             month/year show only for Completed. -->
+        <div class="f-los-active hidden w-[9.5rem]">
+          <label class="label-style !mb-1">As At — Date</label>
+          <input id="f-los-date" type="date" class="input-style">
+        </div>
+        <div class="f-los-done hidden w-32">
+          <label class="label-style !mb-1">Completed — Month</label>
           <select id="f-los-month" class="input-style">
             <option value="">All months</option>
             <option value="0">January</option>
@@ -386,8 +398,8 @@
             <option value="11">December</option>
           </select>
         </div>
-        <div class="f-los hidden w-32">
-          <label class="label-style !mb-1">As At — Year</label>
+        <div class="f-los-done hidden w-32">
+          <label class="label-style !mb-1">Completed — Year</label>
           <select id="f-los-year" class="input-style">
             <option value="">All years</option>
           </select>
@@ -428,7 +440,14 @@
             <option value="">All breeds</option>
           </select>
         </div>
-        <div class="f-los-shared hidden w-56">
+        <!-- Life of PLOT only (.f-lifeplot), not Life of Seedling. A
+             seedling batch has exactly one supplier — it is a column on its
+             own row and the report is already grouped by breed — so the
+             dropdown only ever took rows away without telling the reader
+             anything the table was not already saying. A plot carries
+             batches from several suppliers over its life, which is a
+             question worth asking, so it stays there. -->
+        <div class="f-lifeplot hidden w-56">
           <label class="label-style !mb-1">Supplier</label>
           <select id="f-los-supplier" class="input-style">
             <option value="">All suppliers</option>
@@ -623,12 +642,30 @@ function _losAsAt(year, month) {
   return `${last.getFullYear()}-${pad(last.getMonth() + 1)}-${pad(last.getDate())}`;
 }
 
-/* How that cut-off reads on the report's own scope line. */
+/* The window a Completed batch has to have FINISHED inside. A year on its
+   own is the whole year; a year and a month, that month. */
+function _losFinishedWindow(year, month) {
+  if (!year) return null;
+  const y = Number(year);
+  const from = month === '' ? new Date(y, 0, 1)  : new Date(y, Number(month), 1);
+  const to   = month === '' ? new Date(y, 12, 0) : new Date(y, Number(month) + 1, 0);
+  const pad = (n) => String(n).padStart(2, '0');
+  const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return { from: fmt(from), to: fmt(to) };
+}
+
+/* How each of the two As Ats reads on the report's own scope line. */
 const _LOS_MONTHS_LONG = ['January','February','March','April','May','June',
   'July','August','September','October','November','December'];
-function _losAsAtLabel(year, month) {
-  if (!year) return 'all dates';
-  return 'as at ' + (month === '' ? year : _LOS_MONTHS_LONG[Number(month)] + ' ' + year);
+function _losFinishedLabel(year, month) {
+  if (!year) return 'finished at any time';
+  return 'finished in ' + (month === '' ? year : _LOS_MONTHS_LONG[Number(month)] + ' ' + year);
+}
+function _losDayLabel(day) {
+  if (!day) return 'as at today';
+  const d = new Date(day + 'T00:00:00');
+  if (isNaN(d.getTime())) return 'as at ' + day;
+  return 'as at ' + d.getDate() + ' ' + _LOS_MONTHS_LONG[d.getMonth()] + ' ' + d.getFullYear();
 }
 
 /* The age bands the Age filter offers. Open-ended at the top so a batch never
@@ -714,6 +751,10 @@ async function _losBuildAllRows(asAt) {
        transplanted — sold straight out of it, or written off by an approved
        calibration against it — and until these existed neither came off the
        pre-nursery figure. See preBalance below for what that cost. */
+    /* The day the batch last moved. For one that has finished, that IS the
+       day it finished — the movement that took the last of it away is the
+       last movement there is. It is what Status → Completed filters on. */
+    lastDate: null,
     transfer: 0, sales: 0, salesPre: 0, calibration: 0, calibrationPre: 0,
     preBalance: 0,
     rec: { received: [], damaged: [], planted: [], trans: [], premium: [], dtone: [],
@@ -733,6 +774,7 @@ async function _losBuildAllRows(asAt) {
        nothing had happened to by then does not appear as a line of noughts. */
     if (asAt && d && d > asAt) return;
     const r = rowFor(name);
+    if (d && (!r.lastDate || d > r.lastDate)) r.lastDate = d;
     const q = Math.abs(Number(l.quantity_change || 0));
     const t = l.transaction_type;
     // The log is the only thing that names the breed: operation_batches has
@@ -858,6 +900,9 @@ async function _losBuildAllRows(asAt) {
       const r = byBatchKey[_mvBatchKey(d['batch_' + i])];
       if (!r) continue;
       const soldFrom = nurseryOf(d['plot_' + i]);
+      // A delivery is a movement too, and for a batch sold out it is usually
+      // the LAST one — so it has to count towards when the batch finished.
+      if (dDate && (!r.lastDate || dDate > r.lastDate)) r.lastDate = dDate;
       r.sales += qty;
       // A small-polybag sale straight out of the tray never reaches the
       // field, so it has to come off the pre-nursery figure and not the
@@ -917,7 +962,22 @@ async function _losBuildAllRows(asAt) {
     r.completed   = r.anyOut && r.balance <= 0;
   });
 
-  const rows = Object.values(rowsByBatch);
+  /* A BATCH IS A ROW ONLY IF SOMETHING OF IT EXISTS.
+
+     rowFor() makes a row for any ledger line carrying a batch name, and some
+     lines carry one while contributing nothing: an unapproved stock
+     calibration, a transfer of nought, a line keyed and zeroed. The batch
+     then appeared as a row of dashes and noughts — no date, no breed, no
+     supplier, nothing received — which reads as a batch that exists and has
+     nothing in it. It is not a batch; it is one stray ledger line.
+
+     Kept if it was ever received (a Seeds_Received row sets seedsDate even
+     when its quantity is nought, so a genuine keying error stays visible), or
+     if anything at all has moved. Only a batch with neither goes. */
+  const _losMoved = (r) => !!(r.received || r.damaged || r.planted || r.trans ||
+    r.premium || r.dtone || r.cull1 || r.cull2 || r.cull3 || r.transfer ||
+    r.sales || r.calibration);
+  const rows = Object.values(rowsByBatch).filter(r => r.seedsDate || _losMoved(r));
 
   // Years/suppliers offered by their pickers come from the data, so there
   // is never a choice offered that has no batch behind it. Cheap enough to
@@ -937,17 +997,26 @@ async function _losBuildAllRows(asAt) {
 // Returns null if the fetch failed (already reported by _losBuildAllRows()).
 async function _losBuildData() {
   const breed    = document.getElementById('f-breed').value;
-  const supplier = (document.getElementById('f-los-supplier') || {}).value || '';
   const nursery  = (document.getElementById('f-los-nursery')  || {}).value || '';
   const status   = (document.getElementById('f-los-status')   || {}).value || '';
-  const year     = (document.getElementById('f-los-year')     || {}).value || '';
-  const month    = (document.getElementById('f-los-month')    || {}).value || '';
   const ageBand  = (document.getElementById('f-los-age')      || {}).value || '';
-  /* As At, from the month and year pickers. No year means no cut-off at all
-     — every batch ever received, which is what "All years" is for. A year on
-     its own runs to the last day of December; a year and a month to the last
-     day of that month. */
-  const asAt = _losAsAt(year, month);
+  const done     = status === 'completed';
+  /* The As At that is on screen, and only that one. Asking the hidden pair
+     as well is how a picker nobody can see goes on filtering — the Pre-
+     Nursery culling chip had exactly that bug. */
+  const dayPick  = done ? '' : ((document.getElementById('f-los-date') || {}).value || '');
+  const year     = done ? ((document.getElementById('f-los-year')  || {}).value || '') : '';
+  const month    = done ? ((document.getElementById('f-los-month') || {}).value || '') : '';
+
+  /* Looking at what is still going: the day picked, or no cut-off at all,
+     which is everything up to today.
+
+     Looking at what has finished: the month or year picked is WHEN it
+     finished, so the cut-off is the end of it — a batch that ended inside
+     the window has nothing after it to leave out anyway, and one that ended
+     later is not in the window at all. `fin` below is the window itself. */
+  const asAt = done ? _losAsAt(year, month) : dayPick;
+  const fin  = done && year ? _losFinishedWindow(year, month) : null;
 
   const allRows = await _losBuildAllRows(asAt);
   if (!allRows) return null;
@@ -958,9 +1027,16 @@ async function _losBuildData() {
   const band = LOS_AGE_BANDS.find(b => b.value === ageBand);
   let rows = allRows.filter(r => {
     if (breed && r.breed !== breed) return false;
-    if (supplier && r.supplier !== supplier) return false;
-    if (status === 'active'    && r.completed) return false;
-    if (status === 'completed' && !r.completed) return false;
+    if (status === 'active' && r.completed) return false;
+    if (done && !r.completed) return false;
+    /* Finished INSIDE the window, not merely finished by the end of it.
+       "Completed · September" is a question about September — a batch that
+       ended in August is not an answer to it, and listing it turns the month
+       picker back into the cut-off the day picker already was. */
+    if (fin) {
+      const f = r.lastDate ? String(r.lastDate).slice(0, 10) : '';
+      if (!f || f < fin.from || f > fin.to) return false;
+    }
     /* Compared as YYYY-MM-DD text, not as timestamps. Both sides are already
        that shape, the ordering is the same either way, and it leaves no
        midnight for a batch to slip through: parsing "2025-05-31" and adding
@@ -989,14 +1065,14 @@ async function _losBuildData() {
   window._losData = { rows, asAt };
 
   const scope = [
-    _losAsAtLabel(year, month),
-    status === 'active' ? 'active' : status === 'completed' ? 'completed' : 'active & completed',
+    done ? _losFinishedLabel(year, month) : _losDayLabel(dayPick),
+    status === 'active' ? 'active' : done ? 'completed' : 'active & completed',
     nursery === 'pre' ? 'pre-nursery' : nursery === 'main' ? 'main nursery' : '',
     band ? band.label.replace(/\s/g, ' ') : '',
-    breed, supplier === '—' ? '' : supplier
+    breed
   ].filter(Boolean).join(' · ');
 
-  return { rows, tot, scope, breed, supplier };
+  return { rows, tot, scope, breed };
 }
 
 async function runLifeOfSeedlings() {
@@ -1007,7 +1083,7 @@ async function runLifeOfSeedlings() {
 
   const built = await _losBuildData();
   if (!built) return; // error already shown by _losBuildData()
-  const { rows, tot, scope, breed, supplier } = built;
+  const { rows, tot, scope, breed } = built;
 
   loading.classList.add('hidden');
   out.classList.remove('hidden');
@@ -2044,14 +2120,21 @@ function syncFilterVisibility() {
   // from 1st Culling/All Stages doesn't silently keep filtering through a
   // chip nobody can see) whenever one of them is picked.
   _cullingSyncPreNurseryChip(isCulling);
-  /* Life of Seedling's own four: nursery type, As At as a month and a
-     year, age (breed and status are shared — see .f-los-shared and the
-     markup's own comment). Its As At is its own pair of pickers, not the
-     shared day picker, so .f-range is off for it. Seed In Report reads
-     the shared day picker and Locations instead (both handled above), not
-     this set. */
+  /* Life of Seedling's own: nursery type and age (.f-los), status shared
+     with Life of Plot (.f-los-shared), supplier for Life of Plot alone
+     (.f-lifeplot). Its As At is its own, not the shared day picker, so
+     .f-range is off for it. Seed In Report reads the shared day picker and
+     Locations instead (both handled above), not this set. */
   document.querySelectorAll('.f-los').forEach(el           => el.classList.toggle('hidden', !isLife));
   document.querySelectorAll('.f-los-shared').forEach(el    => el.classList.toggle('hidden', !(isLife || isLifePlot)));
+  document.querySelectorAll('.f-lifeplot').forEach(el      => el.classList.toggle('hidden', !isLifePlot));
+  /* And its As At, which follows the Status beside it: a DAY while the
+     question is what is still standing, a month and a year once the
+     question is what finished and when. Never both — two As Ats on screen
+     at once is two answers to one question. */
+  const losDone = isLife && (document.getElementById('f-los-status') || {}).value === 'completed';
+  document.querySelectorAll('.f-los-active').forEach(el    => el.classList.toggle('hidden', !(isLife && !losDone)));
+  document.querySelectorAll('.f-los-done').forEach(el      => el.classList.toggle('hidden', !losDone));
   document.querySelectorAll('.f-sales-mode').forEach(el    => el.classList.toggle('hidden', !isSales));
   document.querySelectorAll('.f-sales-years').forEach(el   => el.classList.toggle('hidden', !isSalesChart));
 }
@@ -2208,7 +2291,8 @@ function _losSyncMonthEnabled() {
   m.style.opacity = off ? '.55' : '';
 }
 
-['f-los-nursery', 'f-los-status', 'f-los-month', 'f-los-year', 'f-los-age', 'f-los-supplier', 'f-breed']
+['f-los-nursery', 'f-los-status', 'f-los-month', 'f-los-year', 'f-los-date',
+ 'f-los-age', 'f-los-supplier', 'f-breed']
   .forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', () => {
