@@ -3253,7 +3253,7 @@ function downloadMaintPDF() {
   };
   const drawCapRibbon = (y) => {
     const W = COL.reduce((s, w) => s + w, 0), GAP = 3;
-    const cardW = (W - GAP * 3) / 4, cardH = 20, padX = 3, maxW = cardW - padX * 2;
+    const cardW = (W - GAP * 3) / 4, cardH = 18, padX = 3, maxW = cardW - padX * 2;
     MAINT_TYPES.forEach((t, i) => {
       const x = X[0] + i * (cardW + GAP);
       doc.setDrawColor(190, 195, 230); doc.setLineWidth(0.25);
@@ -3263,36 +3263,42 @@ function downloadMaintPDF() {
       const wd = r == null ? null : Math.round(cap2(cap) * Math.round(r * 100000) / 1000) / 100;
       doc.setFont('helvetica', 'bold'); doc.setTextColor(110, 110, 130);
       fitLine(t.label.toUpperCase(), maxW, 6.5, 4.5);
-      doc.text(t.label.toUpperCase(), x + padX, y + 5.5);
+      doc.text(t.label.toUpperCase(), x + padX, y + 5);
       doc.setTextColor(67, 56, 202);
-      fitLine(capFmt(cap), maxW, 11.5, 7);
-      doc.text(capFmt(cap), x + padX, y + 13);
+      fitLine(capFmt(cap), maxW, 10.5, 7);
+      doc.text(capFmt(cap), x + padX, y + 11.5);
       doc.setFont('helvetica', 'normal'); doc.setTextColor(49, 46, 129);
       const wdTxt = `Total Workdone (RM) : ${wd == null ? '—' : money(wd)}`;
       fitLine(wdTxt, maxW, 6.5, 4);
-      doc.text(wdTxt, x + padX, y + 17.5);
+      doc.text(wdTxt, x + padX, y + 15.5);
     });
-    return y + cardH + 4;
+    return y + cardH + 3;
   };
 
+  /* Landscape has a fifth of the height portrait did to spare, so the head
+     (ribbon + the job/rate/column-label rows) and each worker's row are a
+     little tighter than the portrait form ever needed to be — see the sizes
+     below. A nursery's whole claim is meant to read as one page, the same
+     promise downloadTransplantPDF's drone maps now keep one map-page per
+     nursery; this is that same promise for the claim table itself. */
+  const H1 = 7, H2 = 6, H3 = 6, HEAD_HT = H1 + H2 + H3;
   const drawHead = () => {
     let y = pdfTitle(doc, ['SALARY CLAIM FORM — WORK MAINTENANCE', `${NURSERY_FULL[n] || n} (${n})`,
                             `Month ${monthLabelFull(month)}`],
                       { centerX: CENTER_X, lineLeft: MARGIN, lineRight: CONTENT_R });
     y = drawCapRibbon(y);
-    const H1 = 9, H2 = 7, H3 = 7, HT = H1 + H2 + H3;
-    pdfCell(doc, X[0], y, COL[0], HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
-    pdfCell(doc, X[1], y, COL[1], HT, 'Worker', { bold: true, size: 8.5, fill: HF });
+    pdfCell(doc, X[0], y, COL[0], HEAD_HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
+    pdfCell(doc, X[1], y, COL[1], HEAD_HT, 'Worker', { bold: true, size: 8.5, fill: HF });
     MAINT_TYPES.forEach((t, i) => {
       const c = PAIR(i);
-      pdfCell(doc, X[c], y, COL[c] + COL[c+1], H1, t.label, { bold: true, size: 7.5, fill: HF });
+      pdfCell(doc, X[c], y, COL[c] + COL[c+1], H1, t.label, { bold: true, size: 7, fill: HF });
       pdfCell(doc, X[c], y + H1, COL[c] + COL[c+1], H2, maintRateTxt(t, rateOf(t.code)),
-              { size: 7, nowrap: true, fill: HF });
-      pdfCell(doc, X[c],   y + H1 + H2, COL[c],   H3, 'Capacity',  { bold: true, size: 6.5, nowrap: true, fill: HF });
-      pdfCell(doc, X[c+1], y + H1 + H2, COL[c+1], H3, 'Total (RM)', { bold: true, size: 6.5, nowrap: true, fill: HF });
+              { size: 6.5, nowrap: true, fill: HF });
+      pdfCell(doc, X[c],   y + H1 + H2, COL[c],   H3, 'Capacity',  { bold: true, size: 6, nowrap: true, fill: HF });
+      pdfCell(doc, X[c+1], y + H1 + H2, COL[c+1], H3, 'Total (RM)', { bold: true, size: 6, nowrap: true, fill: HF });
     });
-    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], HT, 'Subtotal (RM)', { bold: true, size: 7.5, fill: HF });
-    return y + HT;
+    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], HEAD_HT, 'Subtotal (RM)', { bold: true, size: 7.5, fill: HF });
+    return y + HEAD_HT;
   };
 
   let y = drawHead();
@@ -3300,33 +3306,41 @@ function downloadMaintPDF() {
   const calTxtOf = (w) => calibrationText(
     capCalibrationOf('maint', n, w, CODES, (c) => capWorked(w, c)),
     calibrationOf('maint', n, w, CODES, (c) => rmOf(w, c)));
-  /* A little taller where any row carries a calibration, so the band under
-     the name does not squeeze the name itself. */
-  const RH = wk.some(w => calTxtOf(w)) ? 11 : 9;
+  /* Each row is as tall as IT needs — a little taller only where there is a
+     calibration band to fit under the name — rather than every row paying
+     for the tallest one, which is most of why eight rows used to spill onto
+     a second page for the sake of one calibrated cent. */
+  const ROW_H = 8, ROW_H_CAL = 9.5;
+  const FOOT_H = ROW_H + 1;             // Grand Total's own row
+  /* What has to fit under the last row before the page runs out: Grand
+     Total, the verified line, and the footer note (drawn 12mm below where
+     it's given, so that much has to still be on the page after it). */
+  const FOOT_RESERVE = FOOT_H + 6 + 12 + 3;
   wk.forEach((w, i) => {
-    if (y + RH > PAGE_H - MARGIN - 40) { doc.addPage(); y = drawHead(); }
+    const rh = calTxtOf(w) ? ROW_H_CAL : ROW_H;
+    if (y + rh > PAGE_H - FOOT_RESERVE) { doc.addPage(); y = drawHead(); }
     const z = i % 2 ? [250, 250, 253] : null;
-    pdfCell(doc, X[0], y, COL[0], RH, String(i + 1), { size: 8, nowrap: true, fill: z });
-    pdfWorkerCell(doc, X[1], y, COL[1], RH, w, calTxtOf(w), { size: 8.5, fill: z });
+    pdfCell(doc, X[0], y, COL[0], rh, String(i + 1), { size: 8, nowrap: true, fill: z });
+    pdfWorkerCell(doc, X[1], y, COL[1], rh, w, calTxtOf(w), { size: 8, fill: z });
     MAINT_TYPES.forEach((t, k) => {
       const c = PAIR(k), cap = capOf(w, t.code);
-      pdfCell(doc, X[c],   y, COL[c],   RH, capFmt(cap), { size: 8, nowrap: true, fill: z });
-      pdfCell(doc, X[c+1], y, COL[c+1], RH, (cap || adjOf('maint', n, w, t.code))
-              ? money(payOf(w, t.code)) : '—', { size: 7.5, nowrap: true, fill: z });
+      pdfCell(doc, X[c],   y, COL[c],   rh, capFmt(cap), { size: 7.5, nowrap: true, fill: z });
+      pdfCell(doc, X[c+1], y, COL[c+1], rh, (cap || adjOf('maint', n, w, t.code))
+              ? money(payOf(w, t.code)) : '—', { size: 7, nowrap: true, fill: z });
     });
-    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH, money(earned(w)), { bold: true, size: 8.5, nowrap: true, fill: z });
-    y += RH;
+    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], rh, money(earned(w)), { bold: true, size: 8, nowrap: true, fill: z });
+    y += rh;
   });
 
-  pdfCell(doc, X[0], y, COL[0] + COL[1], RH + 1, 'Grand Total', { bold: true, size: 8.5, fill: TF });
+  pdfCell(doc, X[0], y, COL[0] + COL[1], FOOT_H, 'Grand Total', { bold: true, size: 8.5, fill: TF });
   MAINT_TYPES.forEach((t, k) => {
     const c = PAIR(k);
-    pdfCell(doc, X[c],   y, COL[c],   RH + 1, capFmt(capSum(t.code)), { bold: true, size: 8, nowrap: true, fill: TF });
-    pdfCell(doc, X[c+1], y, COL[c+1], RH + 1, money(rmSum(t.code)), { bold: true, size: 7.5, nowrap: true, fill: TF });
+    pdfCell(doc, X[c],   y, COL[c],   FOOT_H, capFmt(capSum(t.code)), { bold: true, size: 8, nowrap: true, fill: TF });
+    pdfCell(doc, X[c+1], y, COL[c+1], FOOT_H, money(rmSum(t.code)), { bold: true, size: 7.5, nowrap: true, fill: TF });
   });
-  pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH + 1, money(grand),
+  pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], FOOT_H, money(grand),
           { bold: true, size: 9, nowrap: true, fill: TF });
-  y += RH + 1;
+  y += FOOT_H;
   y = pdfVerifiedNote(doc, y, 'maint', n);
   pdfFooterNote(doc, y, CENTER_X);
   doc.save(`Salary_Claim_Work_Maintenance_${n}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
