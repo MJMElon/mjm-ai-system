@@ -828,6 +828,21 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
   .lst-row > .lst-tick { grid-column:span 1; }
 }
 
+/* ── Worker Record — all four work types' totals at once ──────────────
+   payrollTotalsFor() already works out any one work type's total capacity
+   regardless of which sub-tab is open (the PDF export uses it for all four
+   at once); this reads it four times rather than making someone switch
+   sub-tabs to see each one. A pale reading surface, same reasoning as the
+   schedule summary below: you come here to see a figure, not to set one. */
+.pt-glance{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:10px;margin-bottom:14px;}
+.pt-card{background:var(--bg-white);border:1.5px solid var(--border);border-radius:var(--r-md);
+  padding:10px 14px;}
+.pt-label{font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;
+  color:var(--text-muted);}
+.pt-val{font-size:20px;font-weight:800;color:var(--green-text);margin-top:3px;
+  font-variant-numeric:tabular-nums;}
+
 /* ══════════════════════════════════════════════════════════════
    MONTHLY SCHEDULED WORK — THIS MONTH AT A GLANCE
 
