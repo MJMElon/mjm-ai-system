@@ -33,10 +33,6 @@
   .tool-btn.ghost { opacity:.25; }
   .tool-btn-access { background:#fff1f2; color:#9f1239; border-color:#fecdd3; }
   .tool-btn-access:hover { background:#ffe4e6; }
-  /* Another module, so it reads as one — lime, the colour its own tile and
-     its own dashboard carry, rather than this module's teal. */
-  .tool-btn-stock { background:#f7fee7; color:#4d7c0f; border-color:#d9f99d; }
-  .tool-btn-stock:hover { background:#ecfccb; }
   .hidden { display:none !important; }
 
   /* ── Chalkboard ─────────────────────────────────────────── */
@@ -154,7 +150,7 @@
          replaces carried: a module somebody has never been granted is not a
          door they were already through, and offering it only to bounce them
          at the other end is worse than not offering it. -->
-    <a draggable="false" class="tool-btn tool-btn-stock hidden" data-page="stock" data-module="stock"
+    <a draggable="false" class="tool-btn hidden" data-page="stock" data-module="stock"
        href="../stock/stock_dashboard.html"><span class="tl">Stock Inventory System</span></a>
     <!-- Shown only to users who may change other people's access. It carries
          a data-page like the rest so it drags and is remembered with them;

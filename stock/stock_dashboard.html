@@ -29,6 +29,12 @@
   .tool-btn:hover { background:#ecfccb; transform:translateY(-2px); }
   .tool-btn-access { background:#fff1f2; color:#9f1239; border-color:#fecdd3; }
   .tool-btn-access:hover { background:#ffe4e6; }
+  /* The way back, in the shape every other module's inner page uses. */
+  .pn-out { display:inline-flex; align-items:center; gap:8px; font-size:10px; font-weight:800;
+            letter-spacing:.12em; text-transform:uppercase; color:#4d7c0f; text-decoration:none;
+            background:white; border:1.5px solid #d9f99d; border-radius:99px;
+            padding:8px 16px; transition:background .15s, border-color .15s; }
+  .pn-out:hover { background:#ecfccb; border-color:#bef264; }
 
   /* Nothing has been built into this module yet, and the page says so in
      plain words rather than showing tabs and tables with no numbers behind
@@ -48,6 +54,16 @@
 <div id="loading" class="max-w-[980px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Checking access…</div>
 
 <div id="main" class="max-w-[980px] mx-auto px-4 md:px-6 py-8 hidden">
+
+  <!-- Back to where this module is now reached FROM. The tile moved off the
+       portal and into Nursery Operation Manage, so this is the way back up —
+       without it the only route out was the browser's own button or the
+       ribbon's brand mark, which goes to the portal instead and lands
+       somebody a level further out than they came from. -->
+  <a class="pn-out mb-6" href="../nursery_ops/nursery_ops_dashboard.html">
+    <span aria-hidden="true">&#8592;</span>
+    <span>Back to Operation Main Page</span>
+  </a>
 
   <!-- Where a Nelos case raised against this module will appear, the same
        way it does on every other module's main page. hideIfEmpty, so a
