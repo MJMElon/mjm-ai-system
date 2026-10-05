@@ -143,6 +143,28 @@ that says how many saves a row went through, so the second division has to
 come from the office or the paper — `RUN_ME_undouble_cull2_252_again.sql`
 names its two rows rather than guessing a rule.
 
+## A plot the salary claim does not know pays nobody
+
+A work record names its PLOT and nothing else, so the plot is what puts it
+back under a nursery. `shared/shared_maint_plots.js` is the one list both the
+schedule and the salary claim read, and a plot missing from it is capacity
+dropped on the floor — the claim shows dashes, which look exactly like a
+quiet month.
+
+It has now happened twice. First UNN 2 drawn as V1-V40 on one side and N1-N20
+on the other. Then the **transfer plots**: a "-R" plot is made by a
+3rd-culling transfer and is in no hardcoded list anywhere. The schedule grew
+ways to draw one (a capacity keyed against it, rows of its own); the claim
+never did, so every maintenance record on B3-R fell onto the orphan list.
+
+`loadAll()` reads both `nops_maint_custom_plots` and **`shared_plots`** —
+Seedling Stock, where the office says which nursery a plot is in, and the
+same table the Setting page's capacity grid is built from. It spells the
+nursery its own way ("UNN 1"), so the match is on letters and digits.
+
+**When a new kind of plot appears, this file is the second place to change.**
+The orphan list on the claim is what says it has not been.
+
 ## The field fills an empty cell. It never writes over a full one.
 
 A verified field record fills a row's date, batch and quantity. It used to
