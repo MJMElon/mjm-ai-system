@@ -1524,15 +1524,21 @@ async function drawDroneMaps(doc, monthTxt, sec) {
     /* THE GEOMETRY IS WORKED OUT, NOT GUESSED. The first pass put the two
        cards at a fixed 117mm each under a title that leaves 59mm gone, which
        comes to 305 on a page 297 tall — the second map ran off the bottom.
-       So the page says how much room there is and the two cards divide it. */
-    const X = 25, W = 160;                    // the same column the claim uses
-    const BOTTOM = 297 - 12;                  // the foot of the page
+       So the page says how much room there is and the two cards divide it.
+       The claim this travels with went landscape (see downloadTransplantPDF)
+       and these pages follow it — doc.addPage() with no format of its own
+       inherits the document's, so they already print landscape; X/W/BOTTOM
+       just have to say so too, or the page would be the right shape with a
+       160mm-wide card stranded in the left half of it. */
+    const X = 25, W = 247;                    // the same column the claim uses
+    const BOTTOM = 210 - 12;                  // the foot of the page
     const GAP = 6, CAP = 9;                   // between the cards, and the name strip
 
     // A nursery to a page, always starting a fresh one.
     for (let i = 0; i < cards.length; i += 2) {
       doc.addPage();
-      const TOP = pdfTitle(doc, ['DRONE MAPS — TRANSPLANTING', secName(code), `Month ${monthTxt}`]);
+      const TOP = pdfTitle(doc, ['DRONE MAPS — TRANSPLANTING', secName(code), `Month ${monthTxt}`],
+                            { centerX: 148.5, lineLeft: 25, lineRight: 272 });
       const CARD = (BOTTOM - TOP - GAP) / 2;  // two of them, whatever the title left
       const BOX = CARD - CAP;
 
@@ -1860,7 +1866,7 @@ function renderTransplantClaim() {
     <thead>
       <tr>
         <th rowspan="4" style="width:44px;">No.</th>
-        <th rowspan="4" class="l">Worker</th>
+        <th rowspan="4" class="l" style="width:165px;">Worker</th>
         ${TRANSPLANT_JOBS.map(j => `<th colspan="2">${esc(j.label)}</th>`).join('')}
         <th rowspan="4" style="width:120px;">Subtotal (RM)</th>
       </tr>
@@ -1868,8 +1874,15 @@ function renderTransplantClaim() {
         `<th colspan="2" style="font-weight:600;font-size:12px;">${esc(rateCell(j.key))}</th>`).join('')}</tr>
       <tr>${TRANSPLANT_JOBS.map(j =>
         workdoneCell(workdone[j.key] || 0, rateOf(j.key), rmSum(j.key), { compact: true })).join('')}</tr>
-      <tr>${TRANSPLANT_JOBS.map(() =>
-        '<th style="width:90px;">Capacity</th><th style="width:110px;">Total (RM)</th>').join('')}</tr>
+      <!-- Worker is bounded (above) so the job columns sit beside it instead
+           of at the far end of whatever space Worker didn't use, and each
+           group's Capacity column beyond the first is a bit wider than it
+           needs — centred text-align spends that extra width as space on
+           both sides, which is what reads as a gap before the NEXT group
+           starts. Same fix, same reasoning, as Work Maintenance's own
+           table. -->
+      <tr>${TRANSPLANT_JOBS.map((j, i) =>
+        `<th style="width:${i ? 112 : 90}px;">Capacity</th><th style="width:110px;">Total (RM)</th>`).join('')}</tr>
     </thead>`;
 
   const body = names.map((n, i) => `
@@ -3388,11 +3401,17 @@ async function downloadTransplantPDF() {
   };
   const earned = n => TRANSPLANT_JOBS.reduce((s, j) => s + payOf(n, j.key), 0);
 
-  const doc = pdfDoc();
-  const COL = [7, 30, 11, 15, 11, 15, 11, 15, 11, 15, 19];
-  const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, 25);
+  /* Landscape, same shape as Work Maintenance's own claim form — same
+     25mm margin both sides, same columns scaled up by 247/160. See
+     downloadMaintPDF for the reasoning; this is deliberately the same
+     geometry, not a second one to keep in step with it by hand. */
+  const doc = pdfDoc('landscape');
+  const PAGE_W = 297, PAGE_H = 210, MARGIN = 25;
+  const COL = [11, 47, 17, 23, 17, 23, 17, 23, 17, 23, 29];
+  const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, MARGIN);
   const PAIR = i => 2 + i * 2, I_TOTAL = COL.length - 1;
   const HF = [232, 236, 252], TF = [222, 228, 250];
+  const CONTENT_R = MARGIN + COL.reduce((s, w) => s + w, 0), CENTER_X = PAGE_W / 2;
 
   /* The FC's own totals for this nursery, priced — the same figure the screen
      puts under the rate. */
@@ -3405,7 +3424,8 @@ async function downloadTransplantPDF() {
   };
 
   const drawHead = () => {
-    let y = pdfTitle(doc, ['SALARY CLAIM FORM — TRANSPLANTING', secTxt, `Month ${monthTxt}`]);
+    let y = pdfTitle(doc, ['SALARY CLAIM FORM — TRANSPLANTING', secTxt, `Month ${monthTxt}`],
+                      { centerX: CENTER_X, lineLeft: MARGIN, lineRight: CONTENT_R });
     const H1 = 9, H2 = 7, HW = 7, H3 = 7, HT = H1 + H2 + HW + H3;
     pdfCell(doc, X[0], y, COL[0], HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
     pdfCell(doc, X[1], y, COL[1], HT, 'Worker', { bold: true, size: 8.5, fill: HF });
@@ -3429,7 +3449,7 @@ async function downloadTransplantPDF() {
     calibrationOf('transplanting', secOf(n), n, KEYS, (k) => rmOf(n, k)));
   const RH = names.some(n => calTxtOf(n)) ? 11 : 9;
   names.forEach((n, i) => {
-    if (y + RH > 297 - 25 - 40) { doc.addPage(); y = drawHead(); }
+    if (y + RH > PAGE_H - MARGIN - 40) { doc.addPage(); y = drawHead(); }
     const z = i % 2 ? [250, 250, 253] : null;
     pdfCell(doc, X[0], y, COL[0], RH, String(i + 1), { size: 8, nowrap: true, fill: z });
     pdfWorkerCell(doc, X[1], y, COL[1], RH, n, calTxtOf(n), { size: 8.5, fill: z });
@@ -3472,7 +3492,7 @@ async function downloadTransplantPDF() {
     }, 0);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(150, 30, 30);
     doc.text(`NOT CLAIMED — not on the worker register: ${lost.join(', ')} (RM ${held.toFixed(2)})`,
-             25, y + 6, { maxWidth: 160 });
+             MARGIN, y + 6, { maxWidth: CONTENT_R - MARGIN });
     y += 8;
   }
   /* A claim with no names on it is not a quiet month — it is work recorded
@@ -3482,14 +3502,14 @@ async function downloadTransplantPDF() {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(150, 30, 30);
     doc.text('NOTHING TO CLAIM — the records for this nursery name nobody. '
            + 'The work is on the plot summary overleaf; add who did it in the FC Portal.',
-             25, y + 6, { maxWidth: 160 });
+             MARGIN, y + 6, { maxWidth: CONTENT_R - MARGIN });
     y += 10;
   }
 
   y = drawTransplantPlots(doc, y, plotRows, secTxt, monthTxt);
 
   y = pdfVerifiedNote(doc, y, 'transpl', sec);
-  pdfFooterNote(doc, y);
+  pdfFooterNote(doc, y, CENTER_X);
 
   /* …and every nursery's drone maps on the end of it. Fetching them takes a
      moment — the button says so rather than appearing to have ignored the
@@ -3529,12 +3549,13 @@ async function downloadTransplantPDF() {
 function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
   if (!rows || !rows.length) return y;
 
-  // No. · Plot · Transplanted — 160mm across, the same width as the claim
-  // above it. The same three columns the screen shows.
-  const COL = [14, 106, 40];
+  // No. · Plot · Transplanted — 247mm across, the same landscape width as
+  // the claim above it (see downloadTransplantPDF). The same three columns
+  // the screen shows, the old 14/106/40 scaled up the same way.
+  const COL = [22, 163, 62];
   const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, 25);
   const HF = [232, 236, 252], TF = [222, 228, 250];
-  const BOTTOM = 297 - 25 - 30;
+  const BOTTOM = 210 - 25 - 30;
   const RH = 8;
 
   const heading = () => {
@@ -3577,8 +3598,8 @@ function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
      doubtful about it. */
   const say = (txt) => {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(150, 30, 30);
-    doc.text(txt, 25, y + 5, { maxWidth: 160 });
-    y += 4 + Math.ceil(doc.getTextWidth(txt) / 160) * 4;
+    doc.text(txt, 25, y + 5, { maxWidth: 247 });
+    y += 4 + Math.ceil(doc.getTextWidth(txt) / 247) * 4;
   };
   const moved = rows.filter(r => r.disagrees);
   if (moved.length) {
