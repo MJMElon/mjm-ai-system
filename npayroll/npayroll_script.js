@@ -1727,8 +1727,38 @@ const SHEET = {
  * Every figure is the FC Portal's, priced here. What each worker did is
  * theirs; what it comes to is this page's.
  */
+/* Transplanting's own ribbon — same shape as Work Maintenance's
+   renderMaintGlance(), reading transplantWorkdone() instead of
+   maint.why[code].capAll: that function already works out each of the four
+   jobs' whole capacity (ticked or not) for whichever section is picked,
+   which is the same figure workdoneCell used to price in the column header
+   before that header went compact. */
+function renderTransplGlance(secFilter) {
+  const box = document.getElementById('transpl-glance');
+  if (!box) return;
+  const workdone = transplantWorkdone(secFilter);
+  const rateOf = key => {
+    const l = transplantFieldLines().find(x => x.key === key && x.rate != null);
+    if (l) return l.rate;
+    const r = transplantRate({ work_type: key, jenis: (TRANSPLANT_JOB[key] || {}).jenis });
+    return r ? Number(r.rate || 0) : null;
+  };
+  box.innerHTML = TRANSPLANT_JOBS.map(j => {
+    const cap = workdone[j.key] || 0;
+    const rate = rateOf(j.key);
+    const wd = rate == null ? null
+      : Math.round(cap2(cap) * Math.round(rate * 100000) / 1000) / 100;
+    return `<div class="pt-card">
+        <div class="pt-label">${esc(j.label)}</div>
+        <div class="pt-val">${capFmt(cap)}</div>
+        <div class="pt-wd">Total Workdone (RM) : ${wd == null ? '&mdash;' : money(wd)}</div>
+      </div>`;
+  }).join('');
+}
+
 function renderTransplantClaim() {
   const secFilter = $('transpl-section').value || '';
+  renderTransplGlance(secFilter);
 
   /* What was transplanted, plot by plot — drawn from here so it is drawn
      whatever the claim does, including the early return below. A month whose
@@ -1828,7 +1858,7 @@ function renderTransplantClaim() {
       <tr>${TRANSPLANT_JOBS.map(j =>
         `<th colspan="2" style="font-weight:600;font-size:12px;">${esc(rateCell(j.key))}</th>`).join('')}</tr>
       <tr>${TRANSPLANT_JOBS.map(j =>
-        workdoneCell(workdone[j.key] || 0, rateOf(j.key), rmSum(j.key))).join('')}</tr>
+        workdoneCell(workdone[j.key] || 0, rateOf(j.key), rmSum(j.key), { compact: true })).join('')}</tr>
       <tr>${TRANSPLANT_JOBS.map(() =>
         '<th style="width:90px;">Capacity</th><th style="width:110px;">Total (RM)</th>').join('')}</tr>
     </thead>`;
@@ -2380,7 +2410,7 @@ function renderMaint() {
     <thead>
       <tr>
         <th rowspan="4" style="width:44px;">No.</th>
-        <th rowspan="4" class="l">Worker</th>
+        <th rowspan="4" class="l" style="width:165px;">Worker</th>
         ${MAINT_TYPES.map(t => `<th colspan="2">${esc(t.label)}</th>`).join('')}
         <th rowspan="4" style="width:120px;">Subtotal (RM)</th>
       </tr>
@@ -2388,8 +2418,15 @@ function renderMaint() {
         `<th colspan="2" style="font-weight:600;font-size:12px;">${maintRateTxt(t, rateOf(t.code))}</th>`).join('')}</tr>
       <tr>${MAINT_TYPES.map(t =>
         workdoneCell(capAll(t.code), rateOf(t.code), rmSum(t.code), { compact: true })).join('')}</tr>
-      <tr>${MAINT_TYPES.map(() =>
-        `<th style="width:90px;">Capacity</th><th style="width:110px;">Total (RM)</th>`).join('')}</tr>
+      <!-- Worker is now bounded (above) so the job columns sit beside it
+           instead of at the far end of whatever space Worker didn't use, and
+           each group's Capacity column is a bit wider than it needs for its
+           own number — centred text-align spends that extra width as space
+           on both sides, which is what reads as a gap before the NEXT group
+           starts. The first group needs none: there is nothing to its left
+           but Worker, already bounded. -->
+      <tr>${MAINT_TYPES.map((t, i) =>
+        `<th style="width:${i ? 112 : 90}px;">Capacity</th><th style="width:110px;">Total (RM)</th>`).join('')}</tr>
     </thead>`;
 
   const body = wk.map((w, i) => `
@@ -3072,23 +3109,42 @@ function downloadMaintPDF() {
   const HF = [232, 236, 252], TF = [222, 228, 250];
 
   /* The printed form, laid out like the screen: the work, the rate it pays,
-     then Capacity and Total under it. The rate is INSIDE the work's column
-     group, not on a band of its own across the sheet — the same three rows
-     the office's own claim form has. */
-  /* The whole job's capacity off the Worker Record, priced — the same figure
-     the screen puts under the rate, so the printed form and the screen agree
-     on what the work came to as well as on what is being claimed. */
-  const workdoneTxt = t => {
-    const r = rateOf(t.code);
-    if (r == null) return 'Total Workdone (RM) : —';
-    const cap = ((maint.why || {})[t.code] || {}).capAll || 0;
-    return 'Total Workdone (RM) : RM '
-         + (Math.round(cap2(cap) * Math.round(r * 100000) / 1000) / 100).toFixed(2);
+     then Capacity under it. The rate is INSIDE the work's column group, not
+     on a band of its own across the sheet — the same two rows the office's
+     own claim form has.
+
+     Total Capacity and Total Workdone (RM) — the whole job's capacity off
+     the Worker Record, priced, same as the screen's ribbon puts under it —
+     used to be a line stamped inside each column's own header instead,
+     which repeated on paper the same clutter the screen was carrying before
+     renderMaintGlance() moved it up into its own band. drawCapRibbon() is
+     that band's paper equivalent: four cards, same figures, same formula
+     (cap2/rate rounding), drawn once under the title rather than once per
+     column. */
+  const drawCapRibbon = (y) => {
+    const W = COL.reduce((s, w) => s + w, 0), GAP = 3;
+    const cardW = (W - GAP * 3) / 4, cardH = 20;
+    MAINT_TYPES.forEach((t, i) => {
+      const x = X[0] + i * (cardW + GAP);
+      doc.setDrawColor(190, 195, 230); doc.setLineWidth(0.25);
+      doc.setFillColor(255, 255, 255); doc.rect(x, y, cardW, cardH, 'FD');
+      const cap = ((maint.why || {})[t.code] || {}).capAll || 0;
+      const r = rateOf(t.code);
+      const wd = r == null ? null : Math.round(cap2(cap) * Math.round(r * 100000) / 1000) / 100;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(110, 110, 130);
+      doc.text(t.label.toUpperCase(), x + 3, y + 5.5);
+      doc.setFontSize(11.5); doc.setTextColor(67, 56, 202);
+      doc.text(capFmt(cap), x + 3, y + 13);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(49, 46, 129);
+      doc.text(`Total Workdone (RM) : ${wd == null ? '—' : 'RM ' + wd.toFixed(2)}`, x + 3, y + 17.5);
+    });
+    return y + cardH + 4;
   };
 
   const drawHead = () => {
     let y = pdfTitle(doc, ['SALARY CLAIM FORM — WORK MAINTENANCE', `${NURSERY_FULL[n] || n} (${n})`, `Month ${monthTxt}`]);
-    const H1 = 9, H2 = 7, HW = 7, H3 = 7, HT = H1 + H2 + HW + H3;
+    y = drawCapRibbon(y);
+    const H1 = 9, H2 = 7, H3 = 7, HT = H1 + H2 + H3;
     pdfCell(doc, X[0], y, COL[0], HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
     pdfCell(doc, X[1], y, COL[1], HT, 'Worker', { bold: true, size: 8.5, fill: HF });
     MAINT_TYPES.forEach((t, i) => {
@@ -3096,10 +3152,8 @@ function downloadMaintPDF() {
       pdfCell(doc, X[c], y, COL[c] + COL[c+1], H1, t.label, { bold: true, size: 7.5, fill: HF });
       pdfCell(doc, X[c], y + H1, COL[c] + COL[c+1], H2, maintRateTxt(t, rateOf(t.code)),
               { size: 7, nowrap: true, fill: HF });
-      pdfCell(doc, X[c], y + H1 + H2, COL[c] + COL[c+1], HW, workdoneTxt(t),
-              { bold: true, size: 6.5, nowrap: true, fill: HF });
-      pdfCell(doc, X[c],   y + H1 + H2 + HW, COL[c],   H3, 'Capacity',  { bold: true, size: 6.5, nowrap: true, fill: HF });
-      pdfCell(doc, X[c+1], y + H1 + H2 + HW, COL[c+1], H3, 'Total (RM)', { bold: true, size: 6.5, nowrap: true, fill: HF });
+      pdfCell(doc, X[c],   y + H1 + H2, COL[c],   H3, 'Capacity',  { bold: true, size: 6.5, nowrap: true, fill: HF });
+      pdfCell(doc, X[c+1], y + H1 + H2, COL[c+1], H3, 'Total (RM)', { bold: true, size: 6.5, nowrap: true, fill: HF });
     });
     pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], HT, 'Subtotal (RM)', { bold: true, size: 7.5, fill: HF });
     return y + HT;
