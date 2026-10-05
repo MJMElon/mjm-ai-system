@@ -2262,9 +2262,16 @@ function maintWhyEmpty(code) {
    worked out. */
 function workdoneCell(cap, rate, claimed) {
   const span = 'colspan="2" style="font-weight:700;font-size:11px;"';
+  /* The capacity itself, printed rather than left in the title tooltip —
+     it used to only be readable by hovering, which on a form meant for
+     printing (and for a worker checking a figure, not a mouse) was nowhere
+     at all. Same cap2()/capFmt() the hover text and the per-worker columns
+     already use, so it can't disagree with either. */
+  const capLine = `<div style="font-weight:600;color:var(--text-muted);">`
+    + `Total Capacity : ${esc(capFmt(cap2(cap)))}</div>`;
   if (rate == null) {
     return `<th ${span} title="No piece rate for this job, so its work cannot be priced."
-             >Total Workdone (RM) : &mdash;</th>`;
+             >${capLine}<div>Total Workdone (RM) : &mdash;</div></th>`;
   }
   const total = Math.round(cap2(cap) * Math.round(rate * 100000) / 1000) / 100;
   const short = Math.round((total - (claimed || 0)) * 100) / 100;
@@ -2279,7 +2286,7 @@ function workdoneCell(cap, rate, claimed) {
     `<div style="color:var(--danger,#c0392b);font-weight:800;margin-top:2px;">${
       short > 0 ? money(short) + ' not claimed' : money(-short) + ' over'}</div>`;
   return `<th ${span} title="${esc(capFmt(cap2(cap)))} at ${esc(rateTxt(rate))}"
-           ><div>Total Workdone (RM) : ${money(total)}</div>${gap}</th>`;
+           >${capLine}<div>Total Workdone (RM) : ${money(total)}</div>${gap}</th>`;
 }
 
 function renderMaint() {
