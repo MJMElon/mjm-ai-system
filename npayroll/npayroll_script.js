@@ -421,11 +421,19 @@ function applyPageAccess() {
   document.querySelectorAll('.subtab[data-sub]').forEach(b => {
     if (!may(b.dataset.sub)) b.style.display = 'none';
   });
-  // System Setting is hidden rather than shown disabled: it is one screen with
-  // one job, and an empty one would only invite the question.
+  /* Settings is hidden rather than shown disabled: it is two screens with
+     one job each, and an empty one would only invite the question. The TAB
+     shows if either Piece Rate or Lock Controls is open; each section
+     inside it then shows or hides on its own permission, so someone with
+     only one of the two sees only that one. */
+  const canRates = may('rates'), canLocks = may('locks');
   const lk = $('tab-btn-locks');
-  if (lk) lk.classList.toggle('hidden', !may('locks'));
-  const tabPages = { workers: 'workers', rates: 'rates', locks: 'locks' };
+  if (lk) lk.classList.toggle('hidden', !(canRates || canLocks));
+  const rs = $('settings-rate-section');
+  if (rs) rs.classList.toggle('hidden', !canRates);
+  const ls = $('settings-lock-section');
+  if (ls) ls.classList.toggle('hidden', !canLocks);
+  const tabPages = { workers: 'workers' };
   Object.entries(tabPages).forEach(([tab, page]) => {
     if (!may(page)) {
       const b = document.querySelector(`.tab[data-tab="${tab}"]`);
@@ -442,13 +450,19 @@ function applyPageAccess() {
 function firstOpen(candidates) { return candidates.find(may) || null; }
 
 function switchTab(name) {
+  // A tab remembered from before Piece Rate moved into Settings — see
+  // applyPageAccess() — opens Settings instead of a panel that no longer
+  // exists on its own.
+  if (name === 'rates') name = 'locks';
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   $('tab-' + name).classList.add('active');
   try { localStorage.setItem('npayroll_tab', name); } catch (_) {}
-  if (name === 'rates')   renderRates();
   if (name === 'payroll') refreshPayrollTab();
-  if (name === 'locks')   renderLockCalendar();
+  // Piece Rate and Lock Controls both live on this one tab now, so opening
+  // it refreshes both — whichever of the two this user can see is the one
+  // applyPageAccess() left showing.
+  if (name === 'locks')   { renderRates(); renderLockCalendar(); }
 }
 function switchSub(name) {
   document.querySelectorAll('.subtab').forEach(b => b.classList.toggle('active', b.dataset.sub === name));
@@ -3890,12 +3904,16 @@ $('global-month').addEventListener('change', async () => {
 
     let tab = 'payroll', sub = 'maint';
     try { tab = localStorage.getItem('npayroll_tab') || tab; sub = localStorage.getItem('npayroll_sub') || sub; } catch (_) {}
+    // A remembered 'rates' tab is from before Piece Rate moved into
+    // Settings (see switchTab) — same remap, so the open-check below asks
+    // about the tab that now actually exists.
+    if (tab === 'rates') tab = 'locks';
     // A remembered tab this user may no longer open would leave them on a
     // blank screen, so fall back to the first one they can.
     if (!may(sub)) sub = firstOpen(['maint', 'transpl', 'seedling', 'other', 'monthly']) || sub;
     const tabOpen = { payroll: !!firstOpen(['maint','transpl','seedling','other','monthly']),
-                      workers: may('workers'), rates: may('rates'), locks: may('locks') };
-    if (!tabOpen[tab]) tab = ['payroll','workers','rates','locks'].find(t => tabOpen[t]) || tab;
+                      workers: may('workers'), locks: may('rates') || may('locks') };
+    if (!tabOpen[tab]) tab = ['payroll','workers','locks'].find(t => tabOpen[t]) || tab;
     if ($('sub-' + sub)) switchSub(sub);
     if ($('tab-' + tab)) switchTab(tab);
 

@@ -58,11 +58,11 @@
   <!-- ═══ TOP TABS ═══ -->
   <nav class="tabs">
     <button class="tab active" data-tab="payroll" onclick="switchTab('payroll')">💵 Payroll</button>
-    <button class="tab"        data-tab="rates"   onclick="switchTab('rates')">🏷️ Piece Rate</button>
-    <!-- Shown only to users who may change other people's access. -->
-    <!-- Shown only to somebody with Lock Controls. It is the one screen that
-         can re-open a month that has been verified and paid. -->
-    <button class="tab hidden" id="tab-btn-locks" data-tab="locks" onclick="switchTab('locks')">⚙️ System Setting</button>
+    <!-- Piece Rate and Lock Controls, as two independently-permissioned
+         sections of one tab rather than two tabs — see applyPageAccess()
+         and the sections' own ids inside #tab-locks. Shown if either is
+         open; each section inside shows or hides on its own. -->
+    <button class="tab hidden" id="tab-btn-locks" data-tab="locks" onclick="switchTab('locks')">⚙️ Settings</button>
     <a class="tab tab-access hidden" id="user-access-tab" href="npayroll_user_access.html">🔐 User Access</a>
   </nav>
 
@@ -231,59 +231,65 @@
     </div>
   </section>
 
-  <!-- ═══════════ WORKER SYSTEM ═══════════ -->
-    <!-- ═══════════ PIECE RATE ═══════════ -->
-  <section id="tab-rates" class="panel">
-    <div class="bar">
-      <div>
-        <div class="bar-title">Piece Rate</div>
-        <div class="bar-sub">What each job pays, per unit, grouped MN · PN · Machinery.
-          Add a job from its own group below and the group is already filled in.</div>
-      </div>
-    </div>
-    <div id="rate-setup" class="warn hidden">
-      <b>⚠️ Grouping is not switched on yet.</b>
-      Run <code>shared/fix_npayroll_rate_groups.sql</code> in the Supabase SQL Editor, then reload.
-      Jobs still save; they just cannot be filed under MN, PN or Machinery until then.
-    </div>
-    <div id="rate-groups"></div>
-    <p class="foot-note">A rate is copied onto a work entry when it is keyed, so changing it here never restates a month already paid.</p>
-  </section>
-
-  <!-- ═══════════ SYSTEM SETTING — LOCK CONTROLS ═══════════ -->
+  <!-- ═══════════ SETTINGS — PIECE RATE + LOCK CONTROLS ═══════════
+       One tab, two sections that used to be two tabs. They stay on their
+       own permissions (rates / locks) — applyPageAccess() shows or hides
+       each section by its own id, independently of the other. -->
   <section id="tab-locks" class="panel">
-    <div class="bar">
-      <div>
-        <div class="bar-title">🔒 Lock Controls</div>
-        <div class="bar-sub">A payroll month closes one of two ways: somebody verifies a sheet, or the
-          month itself locks. This calendar is the second, and the only thing that re-opens the first.</div>
+
+    <!-- ═══════════ PIECE RATE ═══════════ -->
+    <div id="settings-rate-section">
+      <div class="bar">
+        <div>
+          <div class="bar-title">Piece Rate</div>
+          <div class="bar-sub">What each job pays, per unit, grouped MN · PN · Machinery.
+            Add a job from its own group below and the group is already filled in.</div>
+        </div>
       </div>
+      <div id="rate-setup" class="warn hidden">
+        <b>⚠️ Grouping is not switched on yet.</b>
+        Run <code>shared/fix_npayroll_rate_groups.sql</code> in the Supabase SQL Editor, then reload.
+        Jobs still save; they just cannot be filed under MN, PN or Machinery until then.
+      </div>
+      <div id="rate-groups"></div>
+      <p class="foot-note">A rate is copied onto a work entry when it is keyed, so changing it here never restates a month already paid.</p>
     </div>
-    <div id="lock-setup" class="warn hidden">
-      <b>⚠️ Lock Controls are not switched on yet.</b>
-      Run <code>shared/RUN_ME_npayroll_locks.sql</code> in the Supabase SQL Editor, then reload.
-      Until then nothing locks and nothing can be verified.
-    </div>
-    <div class="card" style="padding:20px;">
-      <div class="lock-head">
-        <div class="lock-title">Month Lock Calendar</div>
-        <div class="lock-why">Each month auto-locks every payroll sheet on the day below, next month.
-          Click a month to force it locked or unlocked by hand instead. Re-opening a month also takes
-          back the verifications on it — the sheets go back to being editable, and whoever checked them
-          has to check them again.</div>
+
+    <!-- ═══════════ LOCK CONTROLS ═══════════ -->
+    <div id="settings-lock-section" style="margin-top:30px;padding-top:24px;border-top:1.5px solid var(--border);">
+      <div class="bar">
+        <div>
+          <div class="bar-title">🔒 Lock Controls</div>
+          <div class="bar-sub">A payroll month closes one of two ways: somebody verifies a sheet, or the
+            month itself locks. This calendar is the second, and the only thing that re-opens the first.</div>
+        </div>
       </div>
-      <div class="lock-ctrls">
-        <label class="lock-field"><span>Year</span>
-          <select id="lk-year" class="sel" onchange="renderLockCalendar()"></select></label>
-        <label class="lock-field"><span>Lock day</span>
-          <input type="number" id="lk-day" class="sel" min="1" max="28" style="width:5.5rem;"></label>
-        <button class="btn" id="lk-day-save" onclick="saveLockDay()">Save</button>
-        <span class="lock-hint">of the following month — applies from this month onward</span>
-        <span style="flex:1"></span>
-        <button class="btn" id="lk-toggle-all" onclick="toggleLockYear()"></button>
+      <div id="lock-setup" class="warn hidden">
+        <b>⚠️ Lock Controls are not switched on yet.</b>
+        Run <code>shared/RUN_ME_npayroll_locks.sql</code> in the Supabase SQL Editor, then reload.
+        Until then nothing locks and nothing can be verified.
       </div>
-      <div id="lk-months" class="lock-grid"></div>
-      <p class="foot-note" id="lk-note"></p>
+      <div class="card" style="padding:20px;">
+        <div class="lock-head">
+          <div class="lock-title">Month Lock Calendar</div>
+          <div class="lock-why">Each month auto-locks every payroll sheet on the day below, next month.
+            Click a month to force it locked or unlocked by hand instead. Re-opening a month also takes
+            back the verifications on it — the sheets go back to being editable, and whoever checked them
+            has to check them again.</div>
+        </div>
+        <div class="lock-ctrls">
+          <label class="lock-field"><span>Year</span>
+            <select id="lk-year" class="sel" onchange="renderLockCalendar()"></select></label>
+          <label class="lock-field"><span>Lock day</span>
+            <input type="number" id="lk-day" class="sel" min="1" max="28" style="width:5.5rem;"></label>
+          <button class="btn" id="lk-day-save" onclick="saveLockDay()">Save</button>
+          <span class="lock-hint">of the following month — applies from this month onward</span>
+          <span style="flex:1"></span>
+          <button class="btn" id="lk-toggle-all" onclick="toggleLockYear()"></button>
+        </div>
+        <div id="lk-months" class="lock-grid"></div>
+        <p class="foot-note" id="lk-note"></p>
+      </div>
     </div>
   </section>
 
@@ -388,7 +394,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=53"></script>
+<script src="npayroll_script.js?v=54"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->
