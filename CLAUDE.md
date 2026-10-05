@@ -168,6 +168,44 @@ empty cell with the mark on it is not a question.
 To take a corrected field record's date, clear the cell — then it is a
 question again and the field answers it.
 
+## An unverified figure is shown, and says it is unverified
+
+Life of Seedlings is eighteen live sums of the batch ledger, and the ledger
+is filled in BEFORE anybody checks it. A figure keyed this morning and one
+signed off last week looked exactly alike.
+
+Both ways of fixing that are wrong. Hiding the unverified batch leaves the
+report answering a question nobody asked. **Zeroing an unverified stage is
+worse**: a batch with Seed Received in and Actual Planted silently at nought
+reports a Variance of minus the whole delivery — a wrong number wearing a
+right number's clothes. So the figure is shown, and it carries a ⧗ saying
+nobody has signed it, and the derived figures above it (Variance, Total
+Culling, Balance) carry whichever of their parts is unsigned.
+
+Three things to know before touching `LOS_GROUP_OF_TYPE` in
+`operation/operation_reports.html`:
+
+- **The unit is the COLUMN, not the tab.** 3rd Culling and Transfer are both
+  signed on Tab 6; Transplanting Qty, Double Tone and premium care are three
+  figures on Tab 3. A tally kept per tab puts a warning on figures somebody
+  HAS signed, and a marker that cries over fine figures is one nobody reads.
+  `LOS_STAGE_OF_GROUP` is the column→tab map that keeps the two apart.
+- **A sign-off comes two ways** and either counts: one signature over a whole
+  tab in `operation_batch_verifications`, or — on a tab verified row by row —
+  a `Row_Verification` log per row, keyed `<stage>::<rowKey>`. The rowKey
+  starts with the plot and only that part is matched, except a transfer card,
+  which keeps its `|transfer`. `rowsAllSigned()` in
+  `operation_batch_detail.html` draws the tab's tick by the same rule and
+  `CHECK_which_batches_completed.sql` asks it of the record. Change one,
+  change all three.
+- **If the sign-off tables cannot be read, nothing is marked** and the report
+  says so. Marking everything is not the cautious answer, it is a
+  systematically wrong one — the same reason access fails open.
+
+The As At date cuts the LINES off and never the signatures: a line dated
+after it is in no figure on screen, while "has anybody checked this" is a
+question about now.
+
 ## Checked stops a figure being a formula
 
 A linked quantity on the Work Maintenance list is a live sum of the batch

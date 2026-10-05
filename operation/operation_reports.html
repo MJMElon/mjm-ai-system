@@ -256,9 +256,23 @@
              text-underline-offset:3px; text-decoration-color:#d9cdb6; }
   .los-fig:hover { text-decoration-style:solid; text-decoration-color:currentColor; }
   .los-fig:focus-visible { outline:2px solid #6aa83c; outline-offset:2px; border-radius:4px; }
+  /* ── A FIGURE NOBODY HAS VERIFIED YET ──────────────────────────────────
+     An unverified figure is still the best answer there is, so it is shown
+     in full and not greyed into illegibility — what changes is that it no
+     longer LOOKS like a settled number. The amber wash and the left tick
+     mark the cell; the ⧗ beside the figure carries the explanation, and
+     survives printing, photocopying and anybody reading the table in black
+     and white, which a background colour alone does not. */
+  .los-table td.los-unver { background:#fdf6e8; box-shadow:inset 2px 0 0 #e0a62e; }
+  .los-table tbody tr:nth-child(even) td.los-unver { background:#fbf1dd; }
+  .los-unver-mark { margin-left:3px; font-size:9px; font-weight:900; color:#c07820;
+                    vertical-align:super; line-height:1; cursor:help; }
   @media print {
     .los-fig { text-decoration:none; }
     .los-table thead th { position:static; }
+    /* Printed in grey: the colour wash may not come out, so the cell keeps
+       its rule and the ⧗ keeps its place. */
+    .los-table td.los-unver { background:transparent; box-shadow:inset 2px 0 0 #999; }
   }
 
   /* Nursery multi-select chips */
@@ -402,6 +416,19 @@
           <label class="label-style !mb-1">Completed — Year</label>
           <select id="f-los-year" class="input-style">
             <option value="">All years</option>
+          </select>
+        </div>
+        <!-- Only the batches somebody has signed off, or only the ones still
+             waiting. Life of Seedling-only: it is the report whose every
+             column is a live sum of a batch report tab, and so the only one
+             where "has anybody checked this" is a question about every
+             figure on the row. See LOS_GROUP_OF_TYPE. -->
+        <div class="f-los hidden w-44">
+          <label class="label-style !mb-1">Verification</label>
+          <select id="f-los-verified" class="input-style">
+            <option value="">Verified &amp; unverified</option>
+            <option value="verified">Verified only</option>
+            <option value="pending">Awaiting verification</option>
           </select>
         </div>
         <div class="f-los hidden w-40">
@@ -604,6 +631,230 @@ const _RE_LOS_CAL_SIDE   = /Side:\s*(seed|plot)\s*\.\s*/i;
 const _RE_LOS_FROM_TRAY  = /from tray \[([^\]]+)\]/i;
 const _RE_LOS_FROM_PLOT  = /From:\s*\[([^\]|]+)\|/i;
 
+/* ═══ WHICH FIGURES SOMEBODY HAS ACTUALLY CHECKED ═══════════════════════════
+
+   Every figure on this report is a live sum of the batch ledger, and the
+   ledger is filled in BEFORE anybody verifies it. So a column could read
+   with complete confidence off a tab still sitting on PENDING VERIFICATION
+   — a figure keyed this morning and a figure signed off last week looked
+   exactly alike, and the reader had no way to tell which was which.
+
+   They are not alike. An unverified figure is the field's first answer:
+   it may be incomplete (half the plots keyed), it may be wrong (a typo
+   nobody has looked at yet), and the derived figures beside it — Variance,
+   Total Culling, Balance — inherit whichever of those it is.
+
+   So every figure now carries its stage's verification state, and one that
+   nobody has signed SAYS SO rather than reading as settled. Nothing is
+   hidden and nothing is zeroed: the figure is the best answer there is, and
+   the marker is what stops it being mistaken for a final one. Zeroing an
+   unverified stage would have been worse than showing it — a batch with
+   Seed Received in and Actual Planted silently at nought reports a Variance
+   of minus the whole delivery, which is a wrong number wearing a right
+   number's clothes.
+
+   ── Where the signatures live ──
+   A stage signed as a WHOLE is a row in operation_batch_verifications
+   (batch_name, stage) — one signature over every row on that tab.
+   A tab verified ROW BY ROW (Transplanting, 1st/2nd/3rd Culling) has no such
+   row; each row's sign-off is a Row_Verification log whose plot_name is
+   `<stage>::<rowKey>`. Either is a sign-off — see rowsAllSigned() in
+   operation/operation_batch_detail.html, which draws the tab's tick by the
+   same rule, and shared/CHECK_which_batches_completed.sql, which asks the
+   same question of the record.
+
+   ── Matching a ledger line to a row sign-off ──
+   A rowKey begins with the PLOT (or tray) the row is about and may carry
+   more after a pipe: `U7|main`, `U7|main|P4|2026-09-18`, `P4`. Only the part
+   before the first pipe is matched, deliberately — which dest type or tray
+   the tab happened to merge the row under has nothing to do with whether
+   somebody looked at that plot. CHECK_which_batches_completed.sql matches
+   cull_3 the same way and says so.
+
+   The one exception is a 3rd-culling TRANSFER, which is a card of its own on
+   Tab 6 and signs off as `<SOURCE PLOT>|transfer` — kept whole so that
+   verifying where a plot's seedlings went and verifying its culling stay
+   separate answers, exactly as that tab keeps them.
+
+   ── What is NOT gated here, and why ──
+   Total Sales comes from the delivery orders, which are approved in the D/O
+   module and never appear on a batch report tab. Stock Calibration already
+   counts only once somebody has approved it (_RE_LOS_APPROVED above). Both
+   are signed off, just not here — so they carry no marker, while Balance,
+   which contains them, carries the marker of the stages that ARE verified on
+   a tab.
+
+   ── The as-at date does not cut the signatures off ──
+   The ledger is cut off at As At because "as at September" is a question
+   about September's figures. Whether somebody has since checked them is not:
+   it is a question about the record as it stands now, which is when the
+   reader is reading it. A sign-off given in October therefore still counts
+   towards a September report.
+
+   ── A COLUMN, not a tab, is the unit ──
+   The tally is kept per FIGURE GROUP rather than per stage, and the two are
+   not the same thing: 3rd Culling and Transfer are both signed off on Tab 6,
+   so a stage-wide tally would have let an unsigned transfer card mark the
+   culling figure beside it — a warning on a figure that is in fact checked.
+   One batch is the example and never the scope, and nor is one tab: a marker
+   that cries over figures that are fine is a marker nobody reads.
+
+   WHICH TRANSACTION TYPE BELONGS TO WHICH TAB — this mirrors TAB_TXN_TYPES
+   in operation/operation_batch_detail.html. Change one, change the other.
+   (Cull3_Transfer is not in that map — it is saved by Tab 6 but has no
+   last-edit stamp of its own — and is here because its figure is a column on
+   this report.) */
+const LOS_GROUP_OF_TYPE = {
+  Seeds_Received:          'seeds_in',
+  Planted:                 'planting',
+  Damaged_Seeds:           'planting',
+  Transplanted:            'transplanting',
+  Transplanted_DoubleTone: 'dtone',
+  Transplanted_Premium:    'premium',
+  '1st_Culling':           'cull_1',
+  '2nd_Culling':           'cull_2',
+  '3rd_Culling':           'cull_3',
+  Cull3_Transfer:          'transfer'
+};
+
+/* Which tab's signature covers a figure group. Four of these groups share
+   two tabs, because this report has a column for each of them and a column
+   is what gets marked: Transplanting Qty, Double Tone and the premium-care
+   transplants are three figures on the Transplanting tab, and 3rd Culling
+   and Transfer are two on the 3rd Culling tab. Rolling them up per TAB is
+   what made an unsigned transfer card put a warning on a culling figure
+   somebody had signed.
+
+   premium-care transplanting has no column of its own here (it is a holding
+   tray, and its seedlings reach a plot later as ordinary Transplanted rows,
+   so counting it would count them twice). It is still tallied and still
+   named in the row's verdict: a batch with an unchecked premium row has
+   unchecked transplanting, and calling it "verified" because the unchecked
+   part happens to be off-screen is the kind of quiet lie this whole thing
+   exists to stop. */
+const LOS_STAGE_OF_GROUP = {
+  seeds_in: 'seeds_in', planting: 'planting',
+  transplanting: 'transplanting', dtone: 'transplanting', premium: 'transplanting',
+  cull_1: 'cull_1', cull_2: 'cull_2', cull_3: 'cull_3', transfer: 'cull_3'
+};
+
+// Tabs that are verified row by row rather than with one signature at the
+// top — mirrors ROW_TAB_CONFIG in operation_batch_detail.html. A stage NOT
+// listed here can only be signed off as a whole, so its lines are verified
+// if and only if operation_batch_verifications carries the stage.
+const LOS_ROW_STAGES = { transplanting: 1, cull_1: 1, cull_2: 1, cull_3: 1 };
+
+// What a group is called when the report has to name it to the reader.
+const LOS_GROUP_NAMES = {
+  seeds_in: 'seed in', planting: 'planting', transplanting: 'transplanting',
+  dtone: 'double tone', premium: 'premium care',
+  cull_1: '1st culling', cull_2: '2nd culling', cull_3: '3rd culling',
+  transfer: '3rd-culling transfer'
+};
+const LOS_GROUP_ORDER = ['seeds_in', 'planting', 'transplanting', 'dtone', 'premium',
+                         'cull_1', 'cull_2', 'cull_3', 'transfer'];
+
+/* WHICH GROUPS A DERIVED FIGURE IS MADE OF. The same rule the figure itself
+   follows — see postCull/cullTotal/balance in _losBuildAllRows(): once a 3rd
+   culling exists the 2nd takes no part in the total, so an unsigned 2nd
+   culling must not mark a total it is not in, and while no 3rd exists it
+   must. */
+const LOS_CULLTOTAL_GROUPS = (r) => ['cull_1', r.cull3 > 0 ? 'cull_3' : 'cull_2'];
+/* Balance is planted − total culling − sales + approved calibration. Sales
+   and calibration are signed off elsewhere (the D/O module, the calibration
+   approval) and carry no group here, so what is left to mark is the planting
+   and the cullings. A transfer moves seedlings between two plots of the same
+   batch and is not in the Balance at all, so it does not mark it. */
+const LOS_BALANCE_GROUPS = (r) => ['planting'].concat(LOS_CULLTOTAL_GROUPS(r));
+
+/* Which groups each openable figure is made of, by the `kind` the drilldown
+   knows it as — so the records window can carry the same answer the cell
+   does. Sales and the calibration are absent on purpose: neither is signed
+   off on a batch report tab. */
+const LOS_GROUPS_OF_KIND = {
+  received: () => ['seeds_in'],
+  damaged:  () => ['planting'],
+  planted:  () => ['planting'],
+  variance: () => ['seeds_in', 'planting'],
+  trans:    () => ['transplanting'],
+  dtone:    () => ['dtone'],
+  cull1:    () => ['cull_1'],
+  cull2:    () => ['cull_2'],
+  cull3:    () => ['cull_3'],
+  cullTotal: LOS_CULLTOTAL_GROUPS,
+  transfer: () => ['transfer'],
+  balance:  LOS_BALANCE_GROUPS
+};
+
+const _losPlotKey = (p) => String(p == null ? '' : p).trim().toUpperCase();
+
+/* The part of a row sign-off's key that names the plot. `cull_2::U7` →
+   'U7'; `transplanting::U7|main|P4|2026-09-18` → 'U7'. A transfer card's
+   key keeps its suffix ('U7|TRANSFER') — see the note above. Sliced at the
+   first pipe rather than split on purpose: a plot name is whatever somebody
+   typed, and everything after the first pipe is the tab's own bookkeeping. */
+function _losVerKey(mapKey) {
+  const i = String(mapKey || '').indexOf('::');
+  if (i < 0) return { stage: '', key: '' };
+  const stage = String(mapKey).slice(0, i);
+  const rest  = String(mapKey).slice(i + 2);
+  const bar   = rest.indexOf('|');
+  const head  = bar < 0 ? rest : rest.slice(0, bar);
+  const tail  = bar < 0 ? '' : rest.slice(bar + 1).toLowerCase();
+  return { stage, key: _losPlotKey(head) + (tail === 'transfer' ? '|TRANSFER' : '') };
+}
+
+/* The state of one figure group on one batch:
+     'ok'   every line behind it is signed off
+     'part' some are, some are not
+     'no'   none is
+     'n/a'  the batch has no line of that group at all — nothing to verify,
+            so nothing to warn about. */
+function _losStageState(tally) {
+  if (!tally || !tally.lines) return 'n/a';
+  if (tally.signed >= tally.lines) return 'ok';
+  return tally.signed ? 'part' : 'no';
+}
+
+// The worst state across the groups a figure is made of. A figure built from
+// a verified group and an unverified one is an unverified figure.
+function _losWorst(r, groups) {
+  let worst = 'n/a';
+  const rank = { 'n/a': 0, ok: 1, part: 2, no: 3 };
+  groups.filter(Boolean).forEach(g => {
+    const st = _losStageState(r.ver && r.ver[g]);
+    if (rank[st] > rank[worst]) worst = st;
+  });
+  return worst;
+}
+
+// Which of a figure's groups are still outstanding, named for the reader.
+function _losPendingNames(r, groups) {
+  return LOS_GROUP_ORDER
+    .filter(g => groups.indexOf(g) >= 0)
+    .filter(g => { const st = _losStageState(r.ver && r.ver[g]); return st === 'part' || st === 'no'; })
+    .map(g => {
+      const t = (r.ver && r.ver[g]) || { lines: 0, signed: 0 };
+      const left = Math.max(0, t.lines - t.signed);
+      return LOS_GROUP_NAMES[g] + (t.signed ? ' (' + left + ' of ' + t.lines + ' rows left)' : '');
+    });
+}
+
+/* The marker that goes beside an unverified figure. Amber hourglass for
+   "keyed, nobody has checked it"; the title says what is outstanding. It is
+   a <span> and not a title on the cell so that pointing at the FIGURE still
+   opens the records behind it — the two do not fight over the pointer. */
+function _losVerMark(r, groups) {
+  const state = _losWorst(r, groups);
+  if (state === 'ok' || state === 'n/a') return '';
+  const names = _losPendingNames(r, groups);
+  const what  = names.length ? names.join(', ') : 'this stage';
+  const title = state === 'part'
+    ? 'Part verified. Still waiting on ' + what + ' — this figure may be incomplete.'
+    : 'Not verified yet: ' + what + '. The figure is what the field has keyed, not a checked total.';
+  return `<span class="los-unver-mark" title="${_losEsc(title)}" aria-label="${_losEsc(title)}">⧗</span>`;
+}
+
 function _losEsc(s) {
   return String(s == null ? '' : s).replace(/[<>"'&]/g,
     c => ({ '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;', '&':'&amp;' }[c]));
@@ -708,7 +959,7 @@ async function _losBuildAllRows(asAt) {
   const out = document.getElementById('report-output');
   const loading = document.getElementById('loading');
 
-  const [logsRes, dosRes, plotsRes, traysRes] = await Promise.all([
+  const [logsRes, dosRes, plotsRes, traysRes, stageVerRes, rowVerRes] = await Promise.all([
     fetchAllRows(() => _supabase.from('shared_inventory_logs')
       .select('batch_name, breed_name, transaction_type, transaction_date, created_at, remark, plot_name, quantity_change')
       .in('transaction_type', ['Seeds_Received', 'Damaged_Seeds', 'Planted',
@@ -720,7 +971,23 @@ async function _losBuildAllRows(asAt) {
       .select('do_number, delivery_date, status, remark, plot_1, qty_1, batch_1, plot_2, qty_2, batch_2, plot_3, qty_3, batch_3, plot_4, qty_4, batch_4, plot_5, qty_5, batch_5')
       .order('id', { ascending: true })),
     _supabase.from('shared_plots').select('plot_name, nursery_name'),
-    _supabase.from('operation_trays').select('tray_name, nursery_name').then(r => r, () => ({ data: [] }))
+    _supabase.from('operation_trays').select('tray_name, nursery_name').then(r => r, () => ({ data: [] })),
+    /* WHO HAS SIGNED WHAT — see the note above LOS_GROUP_OF_TYPE. A stage
+       signed as a whole, and a tab signed row by row, are two tables and one
+       question. Both are read for EVERY batch and are never cut off at the
+       As At date, because "has anybody checked this" is a question about now.
+
+       Failing soft on purpose: if either read is refused, every figure keeps
+       the state it had before this existed — shown, unmarked. A report that
+       cannot tell verified from unverified must not therefore announce the
+       whole nursery unverified. */
+    fetchAllRows(() => _supabase.from('operation_batch_verifications')
+      .select('batch_name, stage')
+      .order('id', { ascending: true })).then(r => r, () => ({ data: [], error: true })),
+    fetchAllRows(() => _supabase.from('shared_inventory_logs')
+      .select('batch_name, plot_name')
+      .eq('transaction_type', 'Row_Verification')
+      .order('id', { ascending: true })).then(r => r, () => ({ data: [], error: true }))
   ]);
 
   if (logsRes.error) {
@@ -736,6 +1003,29 @@ async function _losBuildAllRows(asAt) {
   const isTray    = (n) => trayNames.has(n);
   const nurseryOf = (plot) => !plot ? 'Unassigned'
     : (isTray(plot) ? 'Pre-Nursery' : (plotToLoc[plot] || 'Unassigned'));
+
+  /* ── The sign-off lookups ──
+     stageSigned: `batch::stage`           → one signature over the whole tab
+     rowSigned:   `batch::stage::PLOTKEY`  → that one row signed
+     verReadable needs BOTH reads, and it is an AND rather than an OR on
+     purpose. Either table missing on its own is not a partial answer, it is
+     a systematically wrong one: without the stage table every whole-tab
+     signature disappears and Seed In and Planting read unverified on every
+     batch in the nursery; without the row sign-offs the same happens to the
+     four tabs that are signed row by row. A marker that cries over hundreds
+     of figures that are fine teaches the reader to ignore it, so when either
+     read fails no figure is marked at all and the report says why. */
+  const stageSigned  = new Set();
+  const rowSigned    = new Set();
+  const verReadable  = !(stageVerRes && stageVerRes.error) && !(rowVerRes && rowVerRes.error);
+  (((stageVerRes && stageVerRes.data) || [])).forEach(v => {
+    if (v && v.batch_name && v.stage) stageSigned.add(v.batch_name + '::' + v.stage);
+  });
+  (((rowVerRes && rowVerRes.data) || [])).forEach(v => {
+    if (!v || !v.batch_name || !v.plot_name) return;
+    const k = _losVerKey(v.plot_name);
+    if (k.stage && k.key) rowSigned.add(v.batch_name + '::' + k.stage + '::' + k.key);
+  });
 
   // ── One row per batch ──
   const rowsByBatch = {};
@@ -757,6 +1047,11 @@ async function _losBuildAllRows(asAt) {
     lastDate: null,
     transfer: 0, sales: 0, salesPre: 0, calibration: 0, calibrationPre: 0,
     preBalance: 0,
+    /* stage → { lines, signed }: how many of that stage's ledger lines this
+       batch has, and how many of them somebody has signed off. Filled by
+       _losApplyVerification() at the end of the build, and read by the
+       report's ⧗ markers — see _losStageState(). */
+    ver: {},
     rec: { received: [], damaged: [], planted: [], trans: [], premium: [], dtone: [],
            cull1: [], cull2: [], cull3: [], transfer: [], sales: [], calibration: [] }
   });
@@ -989,7 +1284,81 @@ async function _losBuildAllRows(asAt) {
   _losSyncYearOptions(years);
   _losSyncSupplierOptions([...new Set(rows.map(r => r.supplier).filter(s => s && s !== '—'))].sort());
 
+  /* HAS ANYBODY CHECKED THESE FIGURES? A second walk of the same ledger,
+     deliberately kept out of the figure-building above: the figures are one
+     question and the signatures are another, and a reader of either half
+     should not have to step over the other. Sets r.ver / r.verKnown /
+     r.verStages / r.verPending — see _losApplyVerification(). */
+  _losApplyVerification(rows, logsRes.data, { stageSigned, rowSigned, verReadable, asAt });
+
   return rows;
+}
+
+/* ── The verification pass ─────────────────────────────────────────────────
+   One walk of the ledger counting, per batch and per stage, how many lines
+   there are and how many of them somebody has signed off. The figures above
+   are untouched: nothing is zeroed, nothing is hidden, and a reader who
+   ignores all of this gets exactly the report they got before. What it adds
+   is the ability to say which figures are settled.
+
+   The AS AT cut-off applies to the LINES, because a line dated after it
+   takes no part in any figure on screen and so has no bearing on whether
+   that figure is checked. It does NOT apply to the signatures — see the long
+   note above LOS_GROUP_OF_TYPE.
+
+   Called with the row array AFTER the phantom-batch filter, so a stray
+   ledger line that is not a batch cannot conjure a verification state for a
+   batch that is not on the report. */
+function _losApplyVerification(rows, logs, ctx) {
+  const byBatch = {};
+  rows.forEach(r => {
+    // Rebuilt from nothing each pass: a stale tally from a previous run of
+    // the report would be a figure claiming a signature it no longer has.
+    r.ver = {};
+    byBatch[r.batch] = r;
+  });
+
+  const signed = (batch, stage, rowKey) => {
+    if (ctx.stageSigned.has(batch + '::' + stage)) return true;
+    if (!LOS_ROW_STAGES[stage]) return false;
+    return !!rowKey && ctx.rowSigned.has(batch + '::' + stage + '::' + rowKey);
+  };
+
+  (logs || []).forEach(l => {
+    const r = byBatch[l && l.batch_name]; if (!r) return;
+    const group = LOS_GROUP_OF_TYPE[l.transaction_type]; if (!group) return;
+    const d = _logDate(l);
+    if (ctx.asAt && d && d > ctx.asAt) return;
+    /* A transfer card signs off under the plot the seedlings LEFT, which the
+       line names in its remark and not in plot_name — everything else signs
+       off under its own plot. */
+    let rowKey;
+    if (l.transaction_type === 'Cull3_Transfer') {
+      const from = (l.remark || '').match(_RE_LOS_FROM_PLOT);
+      rowKey = from ? _losPlotKey(from[1]) + '|TRANSFER' : '';
+    } else {
+      rowKey = _losPlotKey(l.plot_name);
+    }
+    const tal = r.ver[group] || (r.ver[group] = { lines: 0, signed: 0 });
+    tal.lines++;
+    if (signed(r.batch, LOS_STAGE_OF_GROUP[group], rowKey)) tal.signed++;
+  });
+
+  /* verKnown is false when neither sign-off table could be read. Every
+     figure then reads exactly as it did before any of this existed, and the
+     report SAYS it could not tell — it does not quietly call the whole
+     nursery unverified, and it does not quietly call it verified either.
+
+     verStages are the groups a batch actually has data for: one not yet
+     transplanted is not "awaiting transplanting verification", it has
+     nothing to verify there. verPending is whichever of those nobody has
+     finished signing. */
+  rows.forEach(r => {
+    r.verKnown = !!ctx.verReadable;
+    if (!r.verKnown) r.ver = {};
+    r.verStages  = LOS_GROUP_ORDER.filter(g => _losStageState(r.ver[g]) !== 'n/a');
+    r.verPending = r.verStages.filter(g => _losStageState(r.ver[g]) !== 'ok');
+  });
 }
 
 // Life of Seedling's own filtering on top of _losBuildAllRows() — nursery
@@ -1000,6 +1369,7 @@ async function _losBuildData() {
   const nursery  = (document.getElementById('f-los-nursery')  || {}).value || '';
   const status   = (document.getElementById('f-los-status')   || {}).value || '';
   const ageBand  = (document.getElementById('f-los-age')      || {}).value || '';
+  const verPick  = (document.getElementById('f-los-verified') || {}).value || '';
   const done     = status === 'completed';
   /* The As At that is on screen, and only that one. Asking the hidden pair
      as well is how a picker nobody can see goes on filtering — the Pre-
@@ -1046,6 +1416,17 @@ async function _losBuildData() {
     if (nursery === 'pre'  && r.preBalance  <= 0) return false;
     if (nursery === 'main' && r.mainBalance <= 0) return false;
     if (band && (r.ageMonths == null || r.ageMonths < band.min || r.ageMonths > band.max)) return false;
+    /* VERIFIED / AWAITING. Asked of the batch's stages that have data, so a
+       batch not yet transplanted is not held back for a transplanting
+       signature it cannot have.
+
+       Skipped entirely when verKnown is false — the sign-off tables could
+       not be read, and a filter that cannot tell the two apart must not
+       answer as though it could. The report says so above the table. */
+    if (verPick && r.verKnown) {
+      if (verPick === 'verified' && (!r.verStages.length || r.verPending.length)) return false;
+      if (verPick === 'pending'  && !r.verPending.length) return false;
+    }
     return true;
   });
 
@@ -1069,6 +1450,7 @@ async function _losBuildData() {
     status === 'active' ? 'active' : done ? 'completed' : 'active & completed',
     nursery === 'pre' ? 'pre-nursery' : nursery === 'main' ? 'main nursery' : '',
     band ? band.label.replace(/\s/g, ' ') : '',
+    verPick === 'verified' ? 'verified only' : verPick === 'pending' ? 'awaiting verification' : '',
     breed
   ].filter(Boolean).join(' · ');
 
@@ -1178,6 +1560,78 @@ function _losCell(kind, batch, value, cls) {
   return `<td>${_losFig(kind, batch, fmtNum(value), cls)}</td>`;
 }
 
+/* The same cell, with its verification state on it. `stages` are the stages
+   the figure is made of — one for a plain column, several for a derived one
+   like Balance, which is only as checked as the least-checked thing in it.
+
+   A nought still shows as a nought, but it is marked too when the stage
+   behind it is unsigned: "0 culled" and "0 culled so far as anybody has
+   keyed" are different claims, and on a tab nobody has checked it is the
+   second one. A nought with no line behind it at all stays plain — there is
+   nothing to verify about a stage the batch has not reached. */
+function _losCellV(kind, r, value, cls, stages) {
+  const mark = _losVerMark(r, stages);
+  if (!value) {
+    return mark ? `<td class="text-[#8a7a68] los-unver">0${mark}</td>`
+                : `<td class="text-[#8a7a68]">0</td>`;
+  }
+  return `<td${mark ? ' class="los-unver"' : ''}>${_losFig(kind, r.batch, fmtNum(value), cls)}${mark}</td>`;
+}
+
+/* The line under a batch's name saying whether anybody has checked it. The
+   whole point of the markers scattered across the row is lost if the reader
+   has to collect them by eye, so the row says its own verdict once.
+
+   Two names at most. The Batch / Breed column is one of eighteen and six
+   stage names in it turn a table row into a paragraph — past two it counts
+   them instead and keeps the list in the tooltip, where somebody who wants
+   it can still read it. */
+function _losVerdictLine(r) {
+  if (!r.verKnown) return '';
+  if (!r.verStages.length) return '';
+  if (!r.verPending.length) {
+    return `<div class="text-[9px] font-bold text-[#4a7a2e]">✓ verified</div>`;
+  }
+  const names = r.verPending.map(g => LOS_GROUP_NAMES[g]).join(', ');
+  const label = r.verPending.length > 2
+    ? r.verPending.length + ' stages unverified'
+    : names + ' unverified';
+  const title = 'These figures are what the field has keyed and nobody has signed off yet, '
+              + 'so they may be incomplete or uncorrected: ' + names + '.';
+  return `<div class="text-[9px] font-bold text-[#c07820]" title="${_losEsc(title)}">⧗ ${_losEsc(label)}</div>`;
+}
+
+/* The same answer again, at the top of the records window a figure opens
+   into. A reader who clicks a marked figure to find out what is behind it
+   should not have to go back to the table to be reminded why it was marked
+   — and for the TOTAL row, where the figure is made of many batches, this
+   is the only place the count can be given at all. */
+function _losDrillVerNote(kind, batch) {
+  const D = window._losData; if (!D) return '';
+  const of = LOS_GROUPS_OF_KIND[kind]; if (!of) return '';
+  const rows = batch === '*' ? D.rows : D.rows.filter(r => r.batch === batch);
+  const known = rows.filter(r => r.verKnown);
+  if (!known.length) return '';
+  const short = (r) => _losWorst(r, of(r));
+  const bad = known.filter(r => { const s = short(r); return s === 'part' || s === 'no'; });
+  const box = (cls, text) =>
+    `<div class="${cls} border rounded-xl px-3 py-2 mb-3 text-[10px] font-bold">${text}</div>`;
+  if (!bad.length) {
+    return box('bg-[#eef7e4] border-[#cfe3b4] text-[#3f6b23]',
+      '✓ Verified — somebody has signed off every record behind this figure.');
+  }
+  if (batch === '*') {
+    return box('bg-[#fdf6e8] border-[#e8d4a8] text-[#8a5a10]',
+      '⧗ ' + fmtNum(bad.length) + ' of ' + fmtNum(known.length) + ' batch' +
+      (known.length === 1 ? '' : 'es') + ' behind this total are not verified. ' +
+      'The records are listed all the same — an unverified record is what the field has keyed.');
+  }
+  const names = _losPendingNames(known[0], of(known[0])).join(', ');
+  return box('bg-[#fdf6e8] border-[#e8d4a8] text-[#8a5a10]',
+    '⧗ Not verified yet: ' + _losEsc(names) + '. These records are what the field has ' +
+    'keyed — they may be incomplete, or uncorrected.');
+}
+
 /* How the eighteen columns share the width. Fixed layout means these are
    what the browser uses rather than a hint it may ignore, which is what
    gets all eighteen onto the page at once — see .los-table in <style>. The
@@ -1192,35 +1646,49 @@ function _losSummaryHtml(rows, tot, scope) {
       <td>
         <div class="font-black text-[#3d2610]">${_losEsc(r.batch)}</div>
         <div class="text-[9px] font-bold text-[#8a7a68]">${_losEsc(r.breed)}</div>
+        ${_losVerdictLine(r)}
       </td>
       <td>
         <div class="text-[10px] font-bold text-[#3d2610]">${_losEsc(r.supplier)}</div>
         <div class="text-[9px] font-bold text-[#8a7a68]">${_losEsc(r.mpob)}</div>
       </td>
       <td class="text-[#8a7a68]">${r.age}</td>
-      <td>
-        ${_losFig('received', r.batch, fmtNum(r.received), 'text-[#c07820] font-black')}
+      <td${_losVerMark(r, ['seeds_in']) ? ' class="los-unver"' : ''}>
+        ${_losFig('received', r.batch, fmtNum(r.received), 'text-[#c07820] font-black')}${_losVerMark(r, ['seeds_in'])}
         ${_losFocSplit(r)}
       </td>
-      ${_losCell('damaged', r.batch, r.damaged, 'text-[#a83020] font-black')}
-      ${_losCell('planted', r.batch, r.planted, 'font-black')}
-      <td>${_losFig('variance', r.batch,
+      ${_losCellV('damaged', r, r.damaged, 'text-[#a83020] font-black', ['planting'])}
+      ${_losCellV('planted', r, r.planted, 'font-black', ['planting'])}
+      <td${_losVerMark(r, ['seeds_in', 'planting']) ? ' class="los-unver"' : ''}>${_losFig('variance', r.batch,
         (r.variance > 0 ? '+' : r.variance < 0 ? '−' : '') + fmtNum(Math.abs(r.variance)),
-        r.variance < 0 ? 'text-[#a83020] font-black' : r.variance > 0 ? 'text-[#4a7a2e] font-black' : 'text-[#8a7a68]')}</td>
-      ${_losCell('trans', r.batch, r.trans, 'text-[#3a7ab4] font-black')}
-      ${_losCell('dtone', r.batch, r.dtone, 'text-[#7c3aed] font-black')}
-      ${_losCell('cull1', r.batch, r.cull1, 'text-[#a83020]')}
-      ${_losCell('cull2', r.batch, r.cull2, 'text-[#a83020]')}
-      ${_losCell('cull3', r.batch, r.cull3, 'text-[#a83020]')}
-      ${_losCell('cullTotal', r.batch, r.cullTotal, 'text-[#a83020] font-black')}
-      ${_losCell('transfer', r.batch, r.transfer, 'font-black')}
+        r.variance < 0 ? 'text-[#a83020] font-black' : r.variance > 0 ? 'text-[#4a7a2e] font-black' : 'text-[#8a7a68]')}${_losVerMark(r, ['seeds_in', 'planting'])}</td>
+      ${_losCellV('trans', r, r.trans, 'text-[#3a7ab4] font-black', ['transplanting'])}
+      ${_losCellV('dtone', r, r.dtone, 'text-[#7c3aed] font-black', ['dtone'])}
+      ${_losCellV('cull1', r, r.cull1, 'text-[#a83020]', ['cull_1'])}
+      ${_losCellV('cull2', r, r.cull2, 'text-[#a83020]', ['cull_2'])}
+      ${_losCellV('cull3', r, r.cull3, 'text-[#a83020]', ['cull_3'])}
+      ${_losCellV('cullTotal', r, r.cullTotal, 'text-[#a83020] font-black', LOS_CULLTOTAL_GROUPS(r))}
+      ${_losCellV('transfer', r, r.transfer, 'font-black', ['transfer'])}
       ${_losCell('sales', r.batch, r.sales, 'text-[#4a7a2e] font-black')}
       <td>${r.rec.calibration.length
         ? _losFig('calibration', r.batch, fmtSigned(r.calibration), 'font-black')
         : '<span class="text-[#8a7a68]">0</span>'}</td>
-      <td>${_losFig('balance', r.batch, fmtNum(r.balance),
-        r.balance < 0 ? 'text-[#a83020] font-black' : 'text-[#4a7a2e] font-black')}</td>
+      <td${_losVerMark(r, LOS_BALANCE_GROUPS(r)) ? ' class="los-unver"' : ''}>${_losFig('balance', r.batch, fmtNum(r.balance),
+        r.balance < 0 ? 'text-[#a83020] font-black' : 'text-[#4a7a2e] font-black')}${_losVerMark(r, LOS_BALANCE_GROUPS(r))}</td>
     </tr>`).join('');
+
+  /* How many rows on screen carry a figure nobody has signed off. Said once
+     above the table, because a reader who takes a total away needs to know
+     the total contains unchecked work — the per-row markers answer "which
+     one", this answers "is there any". */
+  const known   = rows.filter(r => r.verKnown);
+  const pending = known.filter(r => r.verPending.length);
+  const verNote = !rows.length ? ''
+    : !known.length
+      ? `<div class="text-[10px] font-bold text-[#a83020] mb-3">Verification state could not be read, so no figure below is marked. Every figure is the live ledger, checked or not.</div>`
+      : pending.length
+        ? `<div class="text-[10px] font-bold text-[#c07820] mb-3">⧗ ${fmtNum(pending.length)} of ${fmtNum(known.length)} batch${known.length === 1 ? '' : 'es'} carry figures nobody has verified yet — marked ⧗ below, and included in the totals. An unverified figure is what the field has keyed: it may be incomplete, or uncorrected.</div>`
+        : `<div class="text-[10px] font-bold text-[#4a7a2e] mb-3">✓ Every figure below comes from a stage somebody has verified.</div>`;
 
   return `
     <div class="glass-panel p-6 rounded-[2rem]">
@@ -1229,6 +1697,7 @@ function _losSummaryHtml(rows, tot, scope) {
         <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} batch${rows.length === 1 ? '' : 'es'}${scope ? ' · ' + _losEsc(scope) : ''}</div>
       </div>
       <div class="text-[10px] font-bold text-[#8a7a68] mb-3 no-print">Point at any figure to see the records behind it — click to open them in full.</div>
+      ${verNote}
       <div class="los-wrap">
         <table class="report-table los-table">
           <colgroup>${LOS_COL_WIDTHS.map(w => `<col style="width:${w}%">`).join('')}</colgroup>
@@ -1283,7 +1752,7 @@ function _losSummaryHtml(rows, tot, scope) {
             <td>${_losFig('sales', '*', fmtNum(tot.sales), 'text-[#4a7a2e] font-black')}</td>
             <td>${_losFig('calibration', '*', fmtSigned(tot.calibration), 'font-black')}</td>
             <td>${_losFig('balance', '*', fmtNum(tot.balance), 'text-[#4a7a2e] font-black')}</td>
-          </tr></tfoot>` : ''}
+          </tr>${pending.length ? `<tr><td colspan="18" class="text-left text-[9px] font-bold text-[#c07820] bg-[#fdf6e8]">⧗ These totals include ${fmtNum(pending.length)} batch${pending.length === 1 ? '' : 'es'} whose figures are not verified.</td></tr>` : ''}</tfoot>` : ''}
         </table>
       </div>
     </div>`;
@@ -2292,7 +2761,7 @@ function _losSyncMonthEnabled() {
 }
 
 ['f-los-nursery', 'f-los-status', 'f-los-month', 'f-los-year', 'f-los-date',
- 'f-los-age', 'f-los-supplier', 'f-breed']
+ 'f-los-age', 'f-los-verified', 'f-los-supplier', 'f-breed']
   .forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', () => {
@@ -4306,7 +4775,8 @@ function _losDrillRender() {
   if (kind === 'balance' || kind === 'variance') {
     document.getElementById('los-drill-title').textContent =
       (kind === 'balance' ? 'Balance' : 'Variance Seed In') + ' · ' + who;
-    document.getElementById('los-drill-body').innerHTML = _losReconcile(kind, batch);
+    document.getElementById('los-drill-body').innerHTML =
+      _losDrillVerNote(kind, batch) + _losReconcile(kind, batch);
     return;
   }
 
@@ -4344,6 +4814,7 @@ function _losDrillRender() {
 
   document.getElementById('los-drill-title').textContent = spec.title + ' · ' + who;
   document.getElementById('los-drill-body').innerHTML =
+    _losDrillVerNote(kind, batch) +
     _losDrillFilterBar(all) +
     `<div class="text-[10px] font-black text-[#8a7a68] uppercase tracking-widest mb-2">${
        fmtNum(list.length)} record${list.length === 1 ? '' : 's'}${
