@@ -31,16 +31,17 @@
 </head>
 <body>
 
-<!-- Standardised MJM Nursery AI ribbon — see shared/shared_ribbon.js -->
-<div id="mjm-ribbon"></div>
+<!-- Standardised MJM Nursery AI ribbon — see shared/shared_ribbon.js.
+     The module's own name is centred IN the ribbon, between the wordmark
+     and Welcome/Portal/Sign Out, the same way Nursery Maintenance Schedule
+     & Work Record's does — not repeated again on the strip below. -->
+<div id="mjm-ribbon" data-center="Nursery Payroll System"></div>
 <script src="../shared/shared_ribbon.js"></script>
 
-<!-- Page sub-header: the module's name, then the month it is showing, the
-     signed-in name and the module badge — the same strip, in the same
-     order, that Nursery Operation Manage carries under the ribbon. -->
+<!-- Page sub-header: just the month it is showing now — the title moved up
+     into the ribbon above. -->
 <header class="topbar">
   <div class="topbar-inner">
-    <span class="topbar-title">Nursery Payroll System</span>
     <div class="topbar-right">
       <label class="month-ctrl">
         <span>Month</span>
