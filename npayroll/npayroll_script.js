@@ -1521,10 +1521,14 @@ async function drawDroneMaps(doc, monthTxt, sec) {
     const cards = mapCardsFor(code);
     if (!cards.length) continue;
 
-    /* THE GEOMETRY IS WORKED OUT, NOT GUESSED. The first pass put the two
-       cards at a fixed 117mm each under a title that leaves 59mm gone, which
-       comes to 305 on a page 297 tall — the second map ran off the bottom.
-       So the page says how much room there is and the two cards divide it.
+    /* THE GEOMETRY IS WORKED OUT, NOT GUESSED. The first pass fixed two
+       cards at 117mm each under a title that leaves 59mm gone, which came to
+       305 on a page 297 tall — the second map ran off the bottom. Then it
+       was one page per TWO cards, so a nursery with five maps printed on
+       three pages, split in the middle of nowhere in particular. A nursery
+       is one page now, however many maps it has: the page says how much
+       room there is, and all of that nursery's cards divide it between
+       them, the same way two of them used to.
        The claim this travels with went landscape (see downloadTransplantPDF)
        and these pages follow it — doc.addPage() with no format of its own
        inherits the document's, so they already print landscape; X/W/BOTTOM
@@ -1534,54 +1538,52 @@ async function drawDroneMaps(doc, monthTxt, sec) {
     const BOTTOM = 210 - 12;                  // the foot of the page
     const GAP = 6, CAP = 9;                   // between the cards, and the name strip
 
-    // A nursery to a page, always starting a fresh one.
-    for (let i = 0; i < cards.length; i += 2) {
-      doc.addPage();
-      const TOP = pdfTitle(doc, ['DRONE MAPS — TRANSPLANTING', secName(code), `Month ${monthTxt}`],
-                            { centerX: 148.5, lineLeft: 25, lineRight: 272 });
-      const CARD = (BOTTOM - TOP - GAP) / 2;  // two of them, whatever the title left
-      const BOX = CARD - CAP;
+    // One page, this nursery's own.
+    doc.addPage();
+    const TOP = pdfTitle(doc, ['DRONE MAPS — TRANSPLANTING', secName(code), `Month ${monthTxt}`],
+                          { centerX: 148.5, lineLeft: 25, lineRight: 272 });
+    const N = cards.length;
+    const CARD = (BOTTOM - TOP - GAP * (N - 1)) / N;  // all of them, whatever the title left
+    const BOX = CARD - CAP;
 
-      const pair = cards.slice(i, i + 2);
-      for (let j = 0; j < pair.length; j++) {
-        const c = pair[j];
-        let y = TOP + j * (CARD + GAP);
+    for (let j = 0; j < N; j++) {
+      const c = cards[j];
+      let y = TOP + j * (CARD + GAP);
 
-        pdfCell(doc, X, y, W, CAP, '', { fill: [232, 236, 252] });
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(0, 0, 0);
-        doc.text(c.plots.join('  ·  '), X + 3, y + CAP - 2.8, { maxWidth: W * 0.55 });
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70, 70, 70);
-        doc.text([c.batches.length ? 'Batch ' + c.batches.join(', ') : '',
-                  c.dates.slice().sort().map(fmtDay).join(', ')]
-                   .filter(Boolean).join('   ·   '),
-                 X + W - 3, y + CAP - 2.8, { align: 'right', maxWidth: W * 0.42 });
+      pdfCell(doc, X, y, W, CAP, '', { fill: [232, 236, 252] });
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(0, 0, 0);
+      doc.text(c.plots.join('  ·  '), X + 3, y + CAP - 2.8, { maxWidth: W * 0.55 });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70, 70, 70);
+      doc.text([c.batches.length ? 'Batch ' + c.batches.join(', ') : '',
+                c.dates.slice().sort().map(fmtDay).join(', ')]
+                 .filter(Boolean).join('   ·   '),
+               X + W - 3, y + CAP - 2.8, { align: 'right', maxWidth: W * 0.42 });
+      doc.setTextColor(0, 0, 0);
+      y += CAP;
+
+      doc.setDrawColor(80, 80, 80); doc.setLineWidth(0.2);
+      doc.rect(X, y, W, BOX);
+
+      const im = _isPdfUrl(c.url) ? null : await loadMapImage(c.url);
+      if (im) {
+        /* Fitted INSIDE the box, whole, whatever shape it was flown in —
+           the smaller of the two scales, so neither edge can pass the
+           frame however wide or tall the picture is. */
+        const k = Math.min((W - 4) / im.naturalWidth, (BOX - 4) / im.naturalHeight);
+        const w = im.naturalWidth * k, h = im.naturalHeight * k;
+        doc.addImage(im, _pdfImgFormat(c.url), X + (W - w) / 2, y + (BOX - h) / 2, w, h);
+      } else {
+        missed.push(c.plots.join(', ')
+          + (c.batches.length ? ' (batch ' + c.batches.join(', ') + ')' : ''));
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(150, 30, 30);
+        doc.text(_isPdfUrl(c.url)
+          ? 'This map is a PDF and cannot be printed with the others.'
+          : 'This map could not be read. Open it from the Transplanting sheet.',
+          X + W / 2, y + BOX / 2, { align: 'center', maxWidth: W - 10 });
+        doc.setFontSize(7); doc.setTextColor(90, 90, 90);
+        doc.text(String(c.url), X + W / 2, y + BOX / 2 + 6,
+                 { align: 'center', maxWidth: W - 10 });
         doc.setTextColor(0, 0, 0);
-        y += CAP;
-
-        doc.setDrawColor(80, 80, 80); doc.setLineWidth(0.2);
-        doc.rect(X, y, W, BOX);
-
-        const im = _isPdfUrl(c.url) ? null : await loadMapImage(c.url);
-        if (im) {
-          /* Fitted INSIDE the box, whole, whatever shape it was flown in —
-             the smaller of the two scales, so neither edge can pass the
-             frame however wide or tall the picture is. */
-          const k = Math.min((W - 4) / im.naturalWidth, (BOX - 4) / im.naturalHeight);
-          const w = im.naturalWidth * k, h = im.naturalHeight * k;
-          doc.addImage(im, _pdfImgFormat(c.url), X + (W - w) / 2, y + (BOX - h) / 2, w, h);
-        } else {
-          missed.push(c.plots.join(', ')
-            + (c.batches.length ? ' (batch ' + c.batches.join(', ') + ')' : ''));
-          doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(150, 30, 30);
-          doc.text(_isPdfUrl(c.url)
-            ? 'This map is a PDF and cannot be printed with the others.'
-            : 'This map could not be read. Open it from the Transplanting sheet.',
-            X + W / 2, y + BOX / 2, { align: 'center', maxWidth: W - 10 });
-          doc.setFontSize(7); doc.setTextColor(90, 90, 90);
-          doc.text(String(c.url), X + W / 2, y + BOX / 2 + 6,
-                   { align: 'center', maxWidth: W - 10 });
-          doc.setTextColor(0, 0, 0);
-        }
       }
     }
   }
