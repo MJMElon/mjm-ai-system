@@ -26,7 +26,7 @@
      three copies of it. -->
 <script src="../shared/shared_worker_locations.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="npayroll_styles.css?v=23">
+<link rel="stylesheet" href="npayroll_styles.css?v=24">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -54,11 +54,21 @@
   <div class="topbar-inner topbar-grid">
     <div></div>
     <label class="date-pill" title="Selection of Date">
-      <span class="date-pill-icon" aria-hidden="true">
+      <!-- Decorative before this opened nothing of its own — clicking it
+           only ever focused the input via the surrounding label element,
+           which does not open a month input's picker in any browser.
+           showPicker() is what the native calendar glyph on the right
+           already does; this just gives the left icon the same job.
+           Wrapped in try/catch since showPicker() is not universal — a
+           browser without it still focuses the input via the label,
+           same as before. -->
+      <button type="button" class="date-pill-icon"
+              onclick="try { $('global-month').showPicker(); } catch (_) {}"
+              title="Selection of Date" aria-label="Open the date picker">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>
         </svg>
-      </span>
+      </button>
       <input type="month" id="global-month">
     </label>
     <div class="topbar-icons">

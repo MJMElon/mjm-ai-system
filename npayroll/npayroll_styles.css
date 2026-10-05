@@ -57,7 +57,9 @@ body { font-family: 'Outfit', system-ui, sans-serif; background: var(--bg); colo
 .date-pill { display: inline-flex; align-items: center; gap: 10px; background: var(--white);
              border: 1.5px solid var(--border); border-radius: 999px; padding: 11px 22px;
              box-shadow: var(--shadow-sm); cursor: pointer; justify-self: center; }
-.date-pill-icon { display: flex; color: var(--ink); flex-shrink: 0; }
+.date-pill-icon { display: flex; align-items: center; color: var(--ink); flex-shrink: 0;
+                   background: none; border: none; padding: 0; cursor: pointer; border-radius: 50%; }
+.date-pill-icon:hover { color: var(--ink-dark); }
 .date-pill input[type="month"] { border: none; outline: none; background: transparent; cursor: pointer;
   font-family: inherit; font-size: 13px; font-weight: 700; color: var(--ink-deep); }
 
