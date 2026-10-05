@@ -736,10 +736,27 @@ function payrollTotalsFor(type) {
   return { perWorker, capTotal };
 }
 
+/* All four work types' total capacity together — payrollTotalsFor() already
+   works this out for any one type regardless of which sub-tab is open (the
+   Salary Claim PDF reads all four for its own totals row), so this just
+   reads it four times rather than switching views for each figure. */
+function renderPayrollGlance() {
+  const box = document.getElementById('payroll-glance');
+  if (!box) return;
+  box.innerHTML = Object.keys(PAYROLL_TYPES).map(type => {
+    const { capTotal } = payrollTotalsFor(type);
+    return `<div class="pt-card">
+        <div class="pt-label">${t(PAYROLL_TYPES[type].label)}</div>
+        <div class="pt-val">${capTotal ? capTotal.toLocaleString() : '—'}</div>
+      </div>`;
+  }).join('');
+}
+
 function renderPayroll() {
   const tbl = document.getElementById('payroll-table');
   if (!tbl) return;
   resolveWorkers();                      // the month decides who has a column
+  renderPayrollGlance();
   const n = getNursery(), m = getMonth();
   const cfg = PAYROLL_TYPES[_payrollView];
   const line = document.getElementById('payroll-form-line');
