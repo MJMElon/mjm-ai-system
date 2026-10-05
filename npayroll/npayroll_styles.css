@@ -62,30 +62,26 @@ body { font-family: 'Outfit', system-ui, sans-serif; background: var(--bg); colo
   font-family: inherit; font-size: 13px; font-weight: 700; color: var(--ink-deep); }
 
 .topbar-icons { display: flex; align-items: center; gap: 10px; justify-self: end; }
-/* Colour vector icon buttons — a solid-filled shape with a white glyph, the
-   same treatment the ribbon's own "AI" badge already uses, so these read as
-   part of the same design rather than a new one: Settings in the app's own
-   ink, Access in the ribbon badge's green. Payroll is the one with a
-   visible label (it is the default page; the other two stay icon-only) so
-   it is a pill rather than a circle — same colour, same height, just wide
-   enough for the word beside the icon. */
+/* Colour vector icon buttons — a solid-filled circle with a white glyph,
+   the same treatment the ribbon's own "AI" badge already uses, so these
+   read as part of the same design rather than a new one. All three icon-
+   only now, each its own colour off one adjacent stretch of the palette
+   (indigo → violet → emerald) rather than three unrelated hues, so they
+   read as a matched set: Payroll keeps the app's own ink, Settings moves
+   to violet (ink's neighbour) so it no longer doubles Payroll's colour,
+   Access stays the ribbon badge's green. */
 .icon-btn { height: 42px; width: 42px; border-radius: 50%; display: flex; align-items: center;
             justify-content: center; border: none; cursor: pointer; box-shadow: var(--shadow-sm);
             transition: transform .14s, box-shadow .14s; text-decoration: none; flex-shrink: 0; }
 .icon-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
-.icon-btn-settings { background: var(--ink); }
+.icon-btn-payroll  { background: var(--ink); }
+.icon-btn-settings { background: #7c3aed; }
 .icon-btn-access   { background: #10b981; }
-.icon-btn-payroll  { background: var(--ink); width: auto; border-radius: 999px; padding: 0 20px 0 16px;
-                      gap: 8px; }
-.icon-btn-payroll span { color: #fff; font-family: inherit; font-size: 13px; font-weight: 800;
-                          letter-spacing: .02em; white-space: nowrap; }
 
 @media (max-width: 640px) {
   .topbar-grid { grid-template-columns: auto 1fr; }
   .topbar-grid > div:first-child { display: none; }
   .date-pill { padding: 10px 16px; }
-  .icon-btn-payroll span { display: none; }
-  .icon-btn-payroll { padding: 0; width: 42px; }
 }
 
 .loading { max-width: 900px; margin: 0 auto; padding: 70px 24px; text-align: center;
