@@ -73,7 +73,13 @@
         <div class="sm-title" id="sm-title">Maintenance Work Record</div>
         <div class="sm-tools">
           <div class="top-ctrl" id="top-nursery-ctrl">
-            <select id="global-nursery" style="display:none;" onchange="onNurseryChange()">
+            <!-- Backing store for the circle buttons below, not its own
+                 control — cf-skip keeps shared_cf_select.js from skinning
+                 it into a second, redundant "UNN 2 ⌄" dropdown beside them.
+                 style="display:none" alone didn't stop that: the auto-skin
+                 script skins every <select> regardless of its own display,
+                 inserting a visible replacement next to it either way. -->
+            <select id="global-nursery" class="cf-skip" style="display:none;" onchange="onNurseryChange()">
               <option value="PN">PN</option><option value="BNN">BNN</option>
               <option value="UNN1">UNN 1</option><option value="UNN2">UNN 2</option>
             </select>
