@@ -208,8 +208,13 @@ const editRow = (page, plot, vals) => page.evaluate(([p, v]) => {
     await pull(page);
     check('IT IS NOT BLANKED WHEN THE FIELD RECORD GOES',
           (await cell(page, 'B1')).qty, 4755);
-    check('…while B2’s, which was the field’s, is cleared with it',
-          (await cell(page, 'B2')).qty, null);
+    /* And B2's is NOT cleared either. A figure that is in the cell is an
+       answer somebody is reading; the field record going does not make it
+       untrue, and blanking it is how a corrected date went empty and then
+       filled itself back in with the field's. The LINK goes, the value
+       stays. */
+    check('…and neither is B2’s, which the field had filled',
+          (await cell(page, 'B2')).qty, 200);
     await page.close();
   }
 
@@ -234,6 +239,70 @@ const editRow = (page, plot, vals) => page.evaluate(([p, v]) => {
     const b2 = await cell(page, 'B2');
     check('a quantity cleared on purpose stays clear', b2.qty, null);
     check('…and a batch cleared on purpose stays clear', b2.batch, '');
+    await page.close();
+  }
+
+  console.log('\nWhen a field record stops pairing with its row');
+  {
+    /* The round numbering changed under the office this week, and pairing
+       asks the round. A record that paired with a row yesterday can pair with
+       a different one today -- and the row it left used to be BLANKED and
+       then filled again from whatever else matched. Nobody touched anything
+       and the date moved. */
+    const page = await boot(browser);
+    const month = await planTwoRows(page);
+    await page.evaluate((rows) => { window.__DB.nops_maint_field_records = rows; },
+      [fieldRow(901, 'B1', month, 100), fieldRow(902, 'B2', month, 200)]);
+    await pull(page);
+    const ym = new Date(Date.parse(month + ' 1')).toISOString().slice(0, 7);
+    check('B1 has the field\u2019s answer', await cell(page, 'B1'),
+          { tarikh: ym + '-03', batch: 'BATCH-B1', qty: 100 });
+
+    // The record is re-filed under another round, so it no longer pairs here.
+    await page.evaluate(() => {
+      const f = window.__DB.nops_maint_field_records.find((x) => x.plot_name === 'B1');
+      f.week_no = 4;
+    });
+    await pull(page);
+    check('THE ROW KEEPS WHAT IT HAD', await cell(page, 'B1'),
+          { tarikh: ym + '-03', batch: 'BATCH-B1', qty: 100 });
+    await page.close();
+  }
+
+  console.log('\nTHE COMPLAINT: the worker\u2019s date is wrong, the office fixes it');
+  {
+    /* The field says the 19th, the office knows it was the 27th and types it.
+       The field record is NOT corrected -- it still says the 19th, which is
+       the whole point: the office\u2019s answer has to outlive it. */
+    const page = await boot(browser);
+    const month = await planTwoRows(page);
+    await page.evaluate((rows) => { window.__DB.nops_maint_field_records = rows; },
+      [fieldRow(901, 'B1', month, 100), fieldRow(902, 'B2', month, 200)]);
+    await pull(page);
+
+    const ym = new Date(Date.parse(month + ' 1')).toISOString().slice(0, 7);
+    check('the field put its own day on the row', (await cell(page, 'B1')).tarikh,
+          ym + '-03');
+
+    await editRow(page, 'B1', { tarikh: ym + '-27', qty: '4755' });
+    check('the office corrects both', await cell(page, 'B1'),
+          { tarikh: ym + '-27', batch: 'BATCH-B1', qty: 4755 });
+
+    /* Every page load runs this. It used to put the field\u2019s day back on
+       every single one of them. */
+    for (let i = 0; i < 5; i++) await pull(page);
+    check('FIVE SYNCS LATER IT IS STILL THE OFFICE\u2019S', await cell(page, 'B1'),
+          { tarikh: ym + '-27', batch: 'BATCH-B1', qty: 4755 });
+
+    check('and the field record still says what it always said',
+          await page.evaluate(() => window.__DB.nops_maint_field_records
+            .filter((f) => f.plot_name === 'B1').map((f) => f.work_date + '/' + f.qty)),
+          [ym + '-03/100']);
+
+    /* A row the office has never touched is still filled from the field --
+       that is what makes the portal worth having. */
+    check('a row nobody corrected still takes the field\u2019s answer',
+          (await cell(page, 'B2')).tarikh, ym + '-03');
     await page.close();
   }
 

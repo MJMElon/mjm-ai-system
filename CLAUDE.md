@@ -143,6 +143,31 @@ that says how many saves a row went through, so the second division has to
 come from the office or the paper — `RUN_ME_undouble_cull2_252_again.sql`
 names its two rows rather than guessing a rule.
 
+## The field fills an empty cell. It never writes over a full one.
+
+A verified field record fills a row's date, batch and quantity. It used to
+keep OWNERSHIP of what it had filled — `_fromFieldDate` on the row meant
+"mine, I may write it again" — and the same mark let a sync BLANK the cell
+when the record stopped pairing. Both of those changed figures nobody had
+touched:
+
+- the office corrected a worker's wrong date, and the next page load put the
+  worker's back, every load, for ever;
+- the round numbering changed, pairing moved, and rows the record left were
+  emptied and then filled from whatever else matched.
+
+So `applyFieldRecords` now fills only a cell that is EMPTY, and when a record
+stops pairing it drops the LINKS (`_fieldIds`, `_fieldDates`, `_fieldTracks`,
+the ticks) and leaves the VALUES alone. A worker's answer is the first
+answer, not the last word.
+
+The `_tarikhByHand` / `_batchByHand` / `_qtyByHand` marks stay, for the other
+direction: a cell the office deliberately CLEARED is their answer too, and an
+empty cell with the mark on it is not a question.
+
+To take a corrected field record's date, clear the cell — then it is a
+question again and the field answers it.
+
 ## Checked stops a figure being a formula
 
 A linked quantity on the Work Maintenance list is a live sum of the batch

@@ -3384,13 +3384,17 @@ function applyFieldRecords(nursery, monthLbl) {
     }
     if (g) usedKeys.add(key);
     if (!g) {
-      // A cell this sync filled before whose field records have gone —
-      // deleted, unverified again, or the month on screen has moved on. Put
-      // it back the way it was found rather than leaving another month's
-      // answer sitting in it.
-      if (r._fromFieldDate)  { r.tarikh = '-'; delete r._fromFieldDate; }
-      if (r._fromFieldBatch) { r.batch  = '';  delete r._fromFieldBatch; }
-      if (r._fromFieldQty)   { r.qty    = null; delete r._fromFieldQty; }
+      /* The LINKS go, because they point at field records that are no longer
+         there — deleted, unverified again, or a month the screen has moved
+         past — and a verdict pointing at nothing is worse than none.
+
+         THE VALUES STAY. A date, a batch or a quantity that is in the cell is
+         an answer somebody is reading, and this page does not take an answer
+         back. Blanking them is how a date the office had corrected went empty
+         and then filled itself in again with the field's. */
+      delete r._fromFieldDate;
+      delete r._fromFieldBatch;
+      delete r._fromFieldQty;
       delete r._fieldDates;
       delete r._fieldIds;
       delete r._fieldTracks;
@@ -3405,10 +3409,22 @@ function applyFieldRecords(nursery, monthLbl) {
     r._fieldIds = g.ids.slice();
     // The walks on those records, for the Track Record column.
     r._fieldTracks = (g.tracks || []).slice();
-    /* _tarikhByHand / _batchByHand / _qtyByHand: the office typed this cell
-       themselves, so the field does not write it again — not with a figure,
-       and not with a blank. See saveRec. */
-    if (!r._tarikhByHand && (!r.tarikh || r.tarikh === '-' || r._fromFieldDate)) {
+    /* THE FIELD FILLS AN EMPTY CELL. IT NEVER WRITES OVER A FULL ONE.
+
+       It used to keep ownership of a cell it had filled — _fromFieldDate on
+       the row meant "mine, I may write it again" — so a date the office
+       corrected was put back to the field's on the very next sync, every time
+       the page loaded, with nothing said. The office typed 27, the worker's
+       record said 19, and 19 won for ever.
+
+       A worker's date is a first answer, not the last word. Once it is on the
+       screen anybody may correct it, and the correction is the answer. If the
+       worker's own record is later fixed, the office can take the new date by
+       clearing the cell — an empty cell is still a question, and the field
+       still answers it — unless the office cleared it ON PURPOSE, which
+       _tarikhByHand records, because an empty cell somebody emptied is their
+       answer too. */
+    if (!r._tarikhByHand && (!r.tarikh || r.tarikh === '-')) {
       /* tarikh stays ONE date — the earliest. Everything downstream reads it
          as a date and would choke on a list: the month timeline, the Worker
          Record, the filter box, the Auditor Portal's own copy of this row.
@@ -3422,15 +3438,14 @@ function applyFieldRecords(nursery, monthLbl) {
       // the field's other days beside it would be this page arguing with them.
       delete r._fieldDates;
     }
-    if (g.batches.length && !r._batchByHand && (!r.batch || r._fromFieldBatch)) {
+    if (g.batches.length && !r._batchByHand && !String(r.batch || '').trim()) {
       r.batch = g.batches.join(', ');
       r._fromFieldBatch = 1;
     }
     // The field counted the batches it ticked, so the quantity is already
     // answered — leaving the cell to fall back to the linked figure asked the
     // batch report a question the record had already settled.
-    if (g.qty != null && g.qty !== '' && !r._qtyByHand
-        && (r.qty == null || r._fromFieldQty)) {
+    if (g.qty != null && g.qty !== '' && !r._qtyByHand && r.qty == null) {
       r.qty = Number(g.qty);
       r._fromFieldQty = 1;
     }
@@ -5633,9 +5648,8 @@ function toggleChecked(id){
      puts the row back where it was and says so. */
   if (r.checked && !confirm('Put this row back to unchecked?\n\n'
       + 'Its quantity goes back to being read live from the batch report '
-      + 'instead of the figure held when it was checked, and the next sync '
-      + 'will fill its date, batch and quantity in from the field records '
-      + 'again.')) return;
+      + 'instead of the figure held when it was checked. The date and the '
+      + 'batch stay as they are.')) return;
   if (r.checked) {
     /* Unchecking gives the row back to the ledger. */
     delete r.qtyFrozen;

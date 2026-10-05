@@ -386,8 +386,11 @@ const ticked = (page, plot) => page.evaluate((p) => {
     await page.waitForTimeout(120);
     checkTrue('it asks first, saying what unchecking undoes',
               /back to unchecked/i.test(asked[0] || ''));
-    checkTrue('…including that the sync will fill it in again',
-              /fill its date, batch and quantity/i.test(asked[0] || ''));
+    /* Unchecking gives the QUANTITY back to the batch report. It no longer
+       says the sync will fill the date and batch in again, because it will
+       not: the field fills an empty cell and never writes over a full one. */
+    checkTrue('…including that the quantity goes back to being read live',
+              /read live from the batch report/i.test(asked[0] || ''))
     checkFalse('AND IT IS UNCHECKED', await isChecked());
     check('…back to the three buttons it started with',
           await btns(), ['✓ Check', 'Edit', 'Del']);
