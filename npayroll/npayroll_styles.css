@@ -62,6 +62,11 @@ body { font-family: 'Outfit', system-ui, sans-serif; background: var(--bg); colo
 .date-pill-icon:hover { color: var(--ink-dark); }
 .date-pill input[type="month"] { border: none; outline: none; background: transparent; cursor: pointer;
   font-family: inherit; font-size: 13px; font-weight: 700; color: var(--ink-deep); }
+/* The browser's own black calendar glyph, redundant now that the purple
+   icon on the left opens the same picker (showPicker()) — one button for
+   the one job, not two. Chromium/WebKit only; a browser without this
+   pseudo-element just keeps its own icon, which still works. */
+.date-pill input[type="month"]::-webkit-calendar-picker-indicator { display: none; }
 
 .topbar-icons { display: flex; align-items: center; gap: 10px; justify-self: end; }
 /* Colour vector icon buttons — a solid-filled circle with a white glyph,
