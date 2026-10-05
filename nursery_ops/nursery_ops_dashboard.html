@@ -33,6 +33,10 @@
   .tool-btn.ghost { opacity:.25; }
   .tool-btn-access { background:#fff1f2; color:#9f1239; border-color:#fecdd3; }
   .tool-btn-access:hover { background:#ffe4e6; }
+  /* Another module, so it reads as one — lime, the colour its own tile and
+     its own dashboard carry, rather than this module's teal. */
+  .tool-btn-stock { background:#f7fee7; color:#4d7c0f; border-color:#d9f99d; }
+  .tool-btn-stock:hover { background:#ecfccb; }
   .hidden { display:none !important; }
 
   /* ── Chalkboard ─────────────────────────────────────────── */
@@ -138,6 +142,20 @@
          rather than as four separate ones that gave no hint they belonged
          together. The PALMS pages carry their own tab strip. -->
     <a draggable="false" class="tool-btn" data-page="palms_board"  href="nursery_ops_palms_board.html"><span class="tl">PALMS</span></a>
+    <!-- Stock Inventory is its OWN MODULE, reached from here rather than from
+         the portal: somebody counting what is in the store is doing nursery
+         operation work, and it was a tile on the front page away from
+         everything it belongs with.
+
+         GATED DIFFERENTLY FROM THE REST. The others ask
+         canDo('nursery_ops', page) and fail OPEN, which is right for a switch
+         added over a door that was already open. This one asks
+         canAccess('stock') and fails SHUT, the same rule the portal tile it
+         replaces carried: a module somebody has never been granted is not a
+         door they were already through, and offering it only to bounce them
+         at the other end is worse than not offering it. -->
+    <a draggable="false" class="tool-btn tool-btn-stock hidden" data-page="stock" data-module="stock"
+       href="../stock/stock_dashboard.html"><span class="tl">Stock Inventory System</span></a>
     <!-- Shown only to users who may change other people's access. It carries
          a data-page like the rest so it drags and is remembered with them;
          being hidden is about the right to open it, not about where it sits. -->
@@ -346,7 +364,13 @@ $('next-month').addEventListener('click', () => { boardMonth = shiftMonth(boardM
       const may = (page, act) => typeof MJMAccess.canDo !== 'function' ||
                                  MJMAccess.canDo('nursery_ops', page, act || 'view');
       document.querySelectorAll('.tool-btn[data-page]').forEach(a => {
+        // A tile for another module answers to that module, not to a page
+        // permission of this one — and never fails open. See the stock tile.
+        if (a.dataset.module) return;
         if (!may(a.dataset.page)) a.style.display = 'none';
+      });
+      document.querySelectorAll('.tool-btn[data-module]').forEach(a => {
+        if (MJMAccess.canAccess(a.dataset.module)) a.classList.remove('hidden');
       });
       if (!may('schedule', 'edit_schedule')) {
         const eb = document.getElementById('edit-btn');
