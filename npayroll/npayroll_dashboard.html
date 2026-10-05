@@ -26,7 +26,7 @@
      three copies of it. -->
 <script src="../shared/shared_worker_locations.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="npayroll_styles.css?v=18">
+<link rel="stylesheet" href="npayroll_styles.css?v=19">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -34,19 +34,56 @@
 <!-- Standardised MJM Nursery AI ribbon — see shared/shared_ribbon.js.
      The module's own name is centred IN the ribbon, between the wordmark
      and Welcome/Portal/Sign Out, the same way Nursery Maintenance Schedule
-     & Work Record's does — not repeated again on the strip below. -->
+     & Work Record's does — not repeated again on the strip below.
+     Restyled into a rounded pill bar below (npayroll_styles.css,
+     "#mjm-ribbon .mjm-rb-bar") without touching the shared file: the
+     ribbon's own markup and logic (Welcome name, Portal, Sign Out) are
+     untouched, only its look on this one page is overridden. -->
 <div id="mjm-ribbon" data-center="Nursery Payroll System" data-center-scale="0.75"></div>
 <script src="../shared/shared_ribbon.js"></script>
 
-<!-- Page sub-header: just the month it is showing now — the title moved up
-     into the ribbon above. -->
+<!-- Second row: what used to be three top tabs (Payroll / Settings / User
+     Access) is now the date picker plus two icon shortcuts — Settings and
+     User Access move here as colour icon buttons, and Payroll itself has
+     no button of its own any more, because clicking any of the five work
+     tabs below (switchSub) already returns to it. tab-btn-locks and
+     user-access-tab keep their ids and onclick/visibility wiring exactly
+     as the old tab buttons had it — applyPageAccess() still shows or hides
+     them by the same permissions, just as icons instead of text pills now. -->
 <header class="topbar">
-  <div class="topbar-inner">
-    <div class="topbar-right">
-      <label class="month-ctrl">
-        <span>Month</span>
-        <input type="month" id="global-month">
-      </label>
+  <div class="topbar-inner topbar-grid">
+    <div></div>
+    <label class="date-pill" title="Selection of Date">
+      <span class="date-pill-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>
+        </svg>
+      </span>
+      <span class="date-pill-label">Selection of Date</span>
+      <input type="month" id="global-month">
+    </label>
+    <div class="topbar-icons">
+      <button type="button" class="icon-btn icon-btn-settings hidden" id="tab-btn-locks"
+              onclick="switchTab('locks')" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+          <circle cx="12" cy="12" r="6" stroke="#fff" stroke-width="3.4"/>
+          <g fill="#fff">
+            <rect x="10.3" y="0.8" width="3.4" height="3.6" rx="1"/>
+            <rect x="10.3" y="0.8" width="3.4" height="3.6" rx="1" transform="rotate(60 12 12)"/>
+            <rect x="10.3" y="0.8" width="3.4" height="3.6" rx="1" transform="rotate(120 12 12)"/>
+            <rect x="10.3" y="0.8" width="3.4" height="3.6" rx="1" transform="rotate(180 12 12)"/>
+            <rect x="10.3" y="0.8" width="3.4" height="3.6" rx="1" transform="rotate(240 12 12)"/>
+            <rect x="10.3" y="0.8" width="3.4" height="3.6" rx="1" transform="rotate(300 12 12)"/>
+          </g>
+        </svg>
+      </button>
+      <a class="icon-btn icon-btn-access hidden" id="user-access-tab" href="npayroll_user_access.html"
+         title="User Access" aria-label="User Access">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+          <circle cx="12" cy="8.2" r="3.6" fill="#fff"/>
+          <path d="M4.2 20c0-4.3 3.5-6.8 7.8-6.8s7.8 2.5 7.8 6.8" fill="#fff"/>
+        </svg>
+      </a>
     </div>
   </div>
 </header>
@@ -54,17 +91,6 @@
 <div id="loading" class="loading">Checking access…</div>
 
 <main id="main" class="page hidden">
-
-  <!-- ═══ TOP TABS ═══ -->
-  <nav class="tabs">
-    <button class="tab active" data-tab="payroll" onclick="switchTab('payroll')">💵 Payroll</button>
-    <!-- Piece Rate and Lock Controls, as two independently-permissioned
-         sections of one tab rather than two tabs — see applyPageAccess()
-         and the sections' own ids inside #tab-locks. Shown if either is
-         open; each section inside shows or hides on its own. -->
-    <button class="tab hidden" id="tab-btn-locks" data-tab="locks" onclick="switchTab('locks')">⚙️ Settings</button>
-    <a class="tab tab-access hidden" id="user-access-tab" href="npayroll_user_access.html">🔐 User Access</a>
-  </nav>
 
   <div id="setup" class="warn hidden">
     <b>⚠️ Database not set up yet.</b>
@@ -74,16 +100,22 @@
 
   <!-- ═══════════ PAYROLL ═══════════ -->
   <section id="tab-payroll" class="panel active">
+    <!-- Five equal pills, edge to edge — the only tab row left now that
+         Settings and User Access moved to the icon row above (see the
+         header). Labels here only; data-sub/switchSub and every "Seedlings
+         Collection" / "Others" elsewhere (bar titles, CAT_LABEL, Monthly
+         Payroll's own columns) are untouched, so this is a display name,
+         not a rename of the thing itself. -->
     <nav class="subtabs">
       <button class="subtab active" data-sub="maint"    onclick="switchSub('maint')">Work Maintenance</button>
       <button class="subtab"        data-sub="transpl"  onclick="switchSub('transpl')">Transplanting</button>
-      <button class="subtab"        data-sub="seedling" onclick="switchSub('seedling')">Seedlings Collection</button>
+      <button class="subtab"        data-sub="seedling" onclick="switchSub('seedling')">Loading Seedlings</button>
+      <button class="subtab"        data-sub="monthly"  onclick="switchSub('monthly')">Monthly Payroll</button>
       <!-- Everything that is paid by the piece and is none of the three above.
            Its own sheet rather than a fourth guess at what to call it: the
            Piece Rate screen has always offered "Other" as a Used For, and
            until now there was nowhere to key the work that rate priced. -->
-      <button class="subtab"        data-sub="other"    onclick="switchSub('other')">Others</button>
-      <button class="subtab"        data-sub="monthly"  onclick="switchSub('monthly')">Monthly Payroll</button>
+      <button class="subtab"        data-sub="other"    onclick="switchSub('other')">Other</button>
     </nav>
 
     <!-- ── Work Maintenance: the salary claim form, read from Work Maintenance ── -->
@@ -394,7 +426,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=54"></script>
+<script src="npayroll_script.js?v=55"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

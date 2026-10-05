@@ -465,6 +465,14 @@ function switchTab(name) {
   if (name === 'locks')   { renderRates(); renderLockCalendar(); }
 }
 function switchSub(name) {
+  /* The five work-type pills are the only tab row now — Settings opens
+     from its own icon, not a tab button, so there is no separate "back to
+     Payroll" control any more. Clicking any of these returns to Payroll
+     the same way switchTab('payroll') would, since that is the only other
+     place they could be clicked from. */
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  const pp = $('tab-payroll'); if (pp) pp.classList.add('active');
+  try { localStorage.setItem('npayroll_tab', 'payroll'); } catch (_) {}
   document.querySelectorAll('.subtab').forEach(b => b.classList.toggle('active', b.dataset.sub === name));
   document.querySelectorAll('.subpanel').forEach(p => p.classList.remove('active'));
   $('sub-' + name).classList.add('active');
