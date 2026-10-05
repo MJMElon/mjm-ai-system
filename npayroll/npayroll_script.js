@@ -2243,20 +2243,27 @@ function maintWhyEmpty(code) {
        + (PlotMovement.ready() ? '.' : ', and the batch report has not loaded (reload the page).');
 }
 
-/* All four jobs' whole-of-job capacity together, for this nursery and
-   month — maintTotals() already works each one out as maint.why[code].capAll
-   while building the header line workdoneCell() reads, so this just reads
-   it four times rather than recomputing anything that could disagree with
-   the column it sits above. */
+/* All four jobs' whole-of-job capacity, and what that capacity prices out
+   to, together — for this nursery and month. maintTotals() already works
+   capacity out as maint.why[code].capAll (the header line used to read it
+   from there too, before it moved up here), and workdoneCell priced it the
+   same way; the formula is repeated rather than shared because the two no
+   longer render into the same element. */
 function renderMaintGlance() {
   const box = document.getElementById('maint-glance');
   if (!box) return;
+  const n = $('maint-nursery').value;
   const why = maint.why || {};
+  const rateOf = c => (maint.rates[n] || {})[c];
   box.innerHTML = MAINT_TYPES.map(t => {
     const capAll = (why[t.code] || {}).capAll || 0;
+    const rate = rateOf(t.code);
+    const wd = rate == null ? null
+      : Math.round(cap2(capAll) * Math.round(rate * 100000) / 1000) / 100;
     return `<div class="pt-card">
         <div class="pt-label">${esc(t.label)}</div>
         <div class="pt-val">${capFmt(capAll)}</div>
+        <div class="pt-wd">Total Workdone (RM) : ${wd == null ? '&mdash;' : money(wd)}</div>
       </div>`;
   }).join('');
 }
@@ -2278,18 +2285,25 @@ function renderMaintGlance() {
 
    Shown to the cent both ways, so the gap can be read off rather than
    worked out. */
-function workdoneCell(cap, rate, claimed) {
+/* opts.compact drops the Total Capacity / Total Workdone lines, leaving only
+   the shortfall ("not claimed"/"over") line when there is one — for Work
+   Maintenance, where those two now sit in the glance ribbon above the table
+   instead (renderMaintGlance) and repeating them here would just be the same
+   two figures twice. Transplanting/Seedlings still call this plain, with no
+   ribbon of their own, so they keep the full header unchanged. */
+function workdoneCell(cap, rate, claimed, opts) {
+  const compact = !!(opts && opts.compact);
   const span = 'colspan="2" style="font-weight:700;font-size:11px;"';
   /* The capacity itself, printed rather than left in the title tooltip —
      it used to only be readable by hovering, which on a form meant for
      printing (and for a worker checking a figure, not a mouse) was nowhere
      at all. Same cap2()/capFmt() the hover text and the per-worker columns
      already use, so it can't disagree with either. */
-  const capLine = `<div style="font-weight:600;color:var(--text-muted);">`
+  const capLine = compact ? '' : `<div style="font-weight:600;color:var(--text-muted);">`
     + `Total Capacity : ${esc(capFmt(cap2(cap)))}</div>`;
   if (rate == null) {
     return `<th ${span} title="No piece rate for this job, so its work cannot be priced."
-             >${capLine}<div>Total Workdone (RM) : &mdash;</div></th>`;
+             >${capLine}${compact ? '' : '<div>Total Workdone (RM) : &mdash;</div>'}</th>`;
   }
   const total = Math.round(cap2(cap) * Math.round(rate * 100000) / 1000) / 100;
   const short = Math.round((total - (claimed || 0)) * 100) / 100;
@@ -2303,8 +2317,9 @@ function workdoneCell(cap, rate, claimed) {
   const gap = Math.abs(short) < 0.005 ? '' :
     `<div style="color:var(--danger,#c0392b);font-weight:800;margin-top:2px;">${
       short > 0 ? money(short) + ' not claimed' : money(-short) + ' over'}</div>`;
+  const wdLine = compact ? '' : `<div>Total Workdone (RM) : ${money(total)}</div>`;
   return `<th ${span} title="${esc(capFmt(cap2(cap)))} at ${esc(rateTxt(rate))}"
-           >${capLine}<div>Total Workdone (RM) : ${money(total)}</div>${gap}</th>`;
+           >${capLine}${wdLine}${gap}</th>`;
 }
 
 function renderMaint() {
@@ -2372,7 +2387,7 @@ function renderMaint() {
       <tr>${MAINT_TYPES.map(t =>
         `<th colspan="2" style="font-weight:600;font-size:12px;">${maintRateTxt(t, rateOf(t.code))}</th>`).join('')}</tr>
       <tr>${MAINT_TYPES.map(t =>
-        workdoneCell(capAll(t.code), rateOf(t.code), rmSum(t.code))).join('')}</tr>
+        workdoneCell(capAll(t.code), rateOf(t.code), rmSum(t.code), { compact: true })).join('')}</tr>
       <tr>${MAINT_TYPES.map(() =>
         `<th style="width:90px;">Capacity</th><th style="width:110px;">Total (RM)</th>`).join('')}</tr>
     </thead>`;
