@@ -1823,8 +1823,10 @@ function renderTransplantClaim() {
 
   const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
   const sub = $('transpl-sub');
-  if (sub) sub.textContent = `From the FC Portal${secFilter ? ' \u00b7 ' + secName(secFilter) : ''}`
-                           + ` \u00b7 ${monthLabel(monthValue())}`;
+  // Same "Nursery \u00b7 Month" shape Work Maintenance's own sub-line reads \u2014
+  // "All Sections" fills the nursery's place when the picker is left on
+  // every section at once, since there is then no one nursery to name.
+  if (sub) sub.textContent = `${secFilter ? secName(secFilter) : 'All Sections'} \u00b7 ${monthLabelFull(monthValue())}`;
 
   if (!lines.length) {
     /* Which of the five reasons it is — see transplantEmptyLead. An empty
@@ -2001,6 +2003,16 @@ function renderEntries(category) {
   const addBtn = document.querySelector(`#sub-${sheet} .bar-actions [data-add]`);
   if (addBtn) { addBtn.disabled = locked; addBtn.title = locked ? 'This month is closed.' : ''; }
   const secFilter = $(cfg.section).value || '';
+  /* "Nursery · Month", the same shape every sheet's sub-line reads now —
+     Transplanting sets its own (renderTransplantClaim, called below for
+     that category), so only Seedlings Collection and Others need it here. */
+  if (sheet !== 'transpl') {
+    const subEl = $(sheet + '-sub');
+    if (subEl) {
+      const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
+      subEl.textContent = `${secFilter ? secName(secFilter) : 'All Sections'} · ${monthLabelFull(monthValue())}`;
+    }
+  }
   const list = entries
     .filter(e => e.category === category)
     .filter(e => !secFilter || inSection(secFilter, e.section))
@@ -2515,7 +2527,11 @@ function renderMaint() {
   const { wk, rateOf, capWorked, capOf, rmOf, payOf, earned, capSum, rmSum, grand, capAll } = view;
 
   // The two things a claim form has to say about itself, and no preamble.
-  $('maint-sub').textContent = `${NURSERY_FULL[n] || n} · ${monthTxt}`;
+  // monthTxt stays short-form — it is also the key maintLiveView() matches
+  // schedule rows by, not just display text; monthLabelFull() is display
+  // only, so the full name shows here without touching what the data is
+  // matched against.
+  $('maint-sub').textContent = `${NURSERY_FULL[n] || n} · ${monthLabelFull(ym)}`;
   // The nursery picker changes which claim is being asked about.
   try { renderVerifyBar('maint'); } catch (_) {}
 
@@ -3082,6 +3098,13 @@ function monthlyRows() {
 
 function renderMonthly() {
   try { renderVerifyBar('monthly'); } catch (_) {}
+  // Same "Nursery · Month" shape every sheet's sub-line reads now.
+  const subEl = $('monthly-sub');
+  if (subEl) {
+    const secFilter = $('monthly-section').value || '';
+    const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
+    subEl.textContent = `${secFilter ? secName(secFilter) : 'All Sections'} · ${monthLabelFull(monthValue())}`;
+  }
   const list = monthlyRows();
   const rows = list.length ? list.map((r, i) => `
     <tr>

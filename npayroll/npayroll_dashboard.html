@@ -176,8 +176,8 @@
     <div id="sub-transpl" class="subpanel">
       <div class="bar">
         <div>
-          <div class="bar-title">Transplanting</div>
-          <div class="bar-sub" id="transpl-sub">What each worker did, from the FC Portal. The rate comes from Piece Rate.</div>
+          <div class="bar-title">Transplanting — Salary Claim</div>
+          <div class="bar-sub" id="transpl-sub"></div>
         </div>
         <div class="bar-actions">
           <!-- Circles, same as Work Maintenance — one office reads both
@@ -239,8 +239,8 @@
     <div id="sub-seedling" class="subpanel">
       <div class="bar">
         <div>
-          <div class="bar-title">Seedlings Collection</div>
-          <div class="bar-sub">Key what each worker collected. The rate comes from Piece Rate.</div>
+          <div class="bar-title">Seedlings Collection — Salary Claim</div>
+          <div class="bar-sub" id="seedling-sub"></div>
         </div>
         <div class="bar-actions">
           <select id="seedling-section" class="sel" onchange="renderEntries('seedlings')"></select>
@@ -255,8 +255,8 @@
     <div id="sub-other" class="subpanel">
       <div class="bar">
         <div>
-          <div class="bar-title">Others</div>
-          <div class="bar-sub">Piece work that is none of the three sheets above. The rate comes from Piece Rate — set its Used For to Other.</div>
+          <div class="bar-title">Others — Salary Claim</div>
+          <div class="bar-sub" id="other-sub"></div>
         </div>
         <div class="bar-actions">
           <select id="other-section" class="sel" onchange="renderEntries('other')"></select>
@@ -271,8 +271,8 @@
     <div id="sub-monthly" class="subpanel">
       <div class="bar">
         <div>
-          <div class="bar-title">Monthly Payroll</div>
-          <div class="bar-sub">Everything a worker earned this month, from all three sheets.</div>
+          <div class="bar-title">Monthly Payroll — Salary Claim</div>
+          <div class="bar-sub" id="monthly-sub"></div>
         </div>
         <div class="bar-actions">
           <select id="monthly-section" class="sel" onchange="renderMonthly()"></select>
@@ -457,7 +457,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=58"></script>
+<script src="npayroll_script.js?v=59"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->
