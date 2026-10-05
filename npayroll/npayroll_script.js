@@ -3121,9 +3121,17 @@ function downloadMaintPDF() {
      that band's paper equivalent: four cards, same figures, same formula
      (cap2/rate rounding), drawn once under the title rather than once per
      column. */
+  /* Shrinks to fit inside maxW, the same rule pdfCell's own nowrap branch
+     uses — a label or figure too wide for its card is a card with its own
+     numbers spilling past its border, which is worse than one a little
+     smaller but still inside it. */
+  const fitLine = (str, maxW, size, minSize) => {
+    for (;;) { doc.setFontSize(size); if (doc.getTextWidth(str) <= maxW || size <= minSize) break; size -= 0.25; }
+    return size;
+  };
   const drawCapRibbon = (y) => {
     const W = COL.reduce((s, w) => s + w, 0), GAP = 3;
-    const cardW = (W - GAP * 3) / 4, cardH = 20;
+    const cardW = (W - GAP * 3) / 4, cardH = 20, padX = 3, maxW = cardW - padX * 2;
     MAINT_TYPES.forEach((t, i) => {
       const x = X[0] + i * (cardW + GAP);
       doc.setDrawColor(190, 195, 230); doc.setLineWidth(0.25);
@@ -3131,12 +3139,16 @@ function downloadMaintPDF() {
       const cap = ((maint.why || {})[t.code] || {}).capAll || 0;
       const r = rateOf(t.code);
       const wd = r == null ? null : Math.round(cap2(cap) * Math.round(r * 100000) / 1000) / 100;
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(110, 110, 130);
-      doc.text(t.label.toUpperCase(), x + 3, y + 5.5);
-      doc.setFontSize(11.5); doc.setTextColor(67, 56, 202);
-      doc.text(capFmt(cap), x + 3, y + 13);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(49, 46, 129);
-      doc.text(`Total Workdone (RM) : ${wd == null ? '—' : 'RM ' + wd.toFixed(2)}`, x + 3, y + 17.5);
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(110, 110, 130);
+      fitLine(t.label.toUpperCase(), maxW, 6.5, 4.5);
+      doc.text(t.label.toUpperCase(), x + padX, y + 5.5);
+      doc.setTextColor(67, 56, 202);
+      fitLine(capFmt(cap), maxW, 11.5, 7);
+      doc.text(capFmt(cap), x + padX, y + 13);
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(49, 46, 129);
+      const wdTxt = `Total Workdone (RM) : ${wd == null ? '—' : 'RM ' + wd.toFixed(2)}`;
+      fitLine(wdTxt, maxW, 6.5, 4);
+      doc.text(wdTxt, x + padX, y + 17.5);
     });
     return y + cardH + 4;
   };
