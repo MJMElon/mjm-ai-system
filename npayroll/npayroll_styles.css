@@ -49,10 +49,6 @@ body { font-family: 'Outfit', system-ui, sans-serif; background: var(--bg); colo
 .topbar-title { font-size: 14px; font-weight: 900; color: var(--text-head);
                 text-transform: uppercase; letter-spacing: .1em; white-space: nowrap;
                 overflow: hidden; text-overflow: ellipsis; }
-.topbar-badge { width: 32px; height: 32px; border-radius: var(--r-sm);
-                background: var(--ink); color: #fff; flex-shrink: 0;
-                display: flex; align-items: center; justify-content: center;
-                font-weight: 900; font-size: 12px; }
 .back-link { font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
              color: var(--text-muted); text-decoration: none; border: 1.5px solid #e2e8f0;
              border-radius: 99px; padding: 6px 14px; white-space: nowrap; transition: all .15s; }
@@ -147,6 +143,31 @@ tfoot td { padding: 11px 12px; background: var(--ink-light); font-size: 13px; fo
 tfoot td.l { text-align: left; }
 .empty { text-align: center; color: var(--text-faint); padding: 42px 14px; font-size: 13px; }
 .money { font-weight: 800; color: var(--ink-deep); white-space: nowrap; }
+
+/* ── CALIBRATING A CELL BY THE CENT ─────────────────────────────────────
+   A capacity divided among seven people does not land on a whole cent, so a
+   cell comes out a penny or two from the field's own total. These two
+   buttons are how that penny gets nudged: one press, RM 0.01.
+
+   They sit on the cell rather than in a form because that is the whole
+   point — the form existed, and nobody was going to open it, type a figure
+   and write a reason for one cent. Faint until the row is under the pointer,
+   so eight rows of them do not read as eight rows of buttons. */
+.cal-step { display: flex; gap: 4px; justify-content: center; margin: 3px 0 0; }
+.cal-btn {
+  width: 17px; height: 17px; line-height: 1; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: inherit; font-size: 12px; font-weight: 900;
+  color: var(--ink-soft, #64748b); background: #fff;
+  border: 1.4px solid var(--line, #e2e8f0); border-radius: 5px;
+  cursor: pointer; opacity: .45; transition: opacity .12s, background .12s, color .12s;
+}
+tr:hover .cal-btn, .cal-btn:focus-visible { opacity: 1; }
+.cal-btn:hover { background: var(--brand-soft, #eef2ff); color: var(--brand, #4f46e5);
+                 border-color: var(--brand, #4f46e5); }
+.cal-btn:active { transform: translateY(1px); }
+/* What those presses come to for this worker, under their name. */
+.cal-line { font-size: .68rem; font-weight: 700; white-space: nowrap; margin-top: 2px; }
 .pill { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 10px; font-weight: 900; letter-spacing: .04em; }
 .pill-on  { background: var(--green-bg); color: #166534; }
 .pill-off { background: #f1f5f9; color: var(--text-muted); }
@@ -380,3 +401,26 @@ tfoot td.l { text-align: left; }
    fault, not a place, so it does not dress like the nurseries. */
 .npill.npill-odd { border-style: dashed; border-color: var(--red-bd, #fda4af); color: var(--red, #c0392b); }
 .npill.npill-odd.on { background: var(--red, #c0392b); border-color: var(--red, #c0392b); color: #fff; }
+
+
+/* ── THE DRONE MAP ON THE BY-PLOT TABLE ──────────────────────────────────
+   A thumbnail of what was flown over the plot when it was filled, opening
+   in a new tab — which is where it can be looked at properly and where the
+   browser will print it. The sheet of all of them, two to an A4 page, is
+   the button on the bar. */
+/* One thumbnail per BATCH, each labelled with it — a plot filled from two
+   batches was flown twice and the batch is what tells the pictures apart. */
+.tp-maps{display:inline-flex;gap:8px;align-items:flex-start;}
+.tp-map-w{display:inline-flex;flex-direction:column;align-items:center;gap:2px;}
+.tp-map-b{font-size:9.5px;font-weight:800;letter-spacing:.04em;color:var(--ink-soft,#64748b);}
+/* A batch whose flight is missing keeps its place and says so: the gap names
+   the batch, which an absent thumbnail cannot. */
+.tp-map.is-none{display:inline-flex;align-items:center;justify-content:center;
+  color:#cbd5e1;background:#f8fafc;border-style:dashed;cursor:default;}
+.tp-map.is-none:hover{border-color:var(--line,#e2e8f0);transform:none;}
+.tp-map{display:inline-block;width:46px;height:34px;border-radius:7px;
+  border:1.5px solid var(--line,#e2e8f0);background:#f8fafc center/cover no-repeat;
+  vertical-align:middle;transition:border-color .13s,transform .13s;}
+.tp-map:hover{border-color:var(--brand,#4f46e5);transform:translateY(-1px);}
+.tp-map.is-pdf{display:inline-flex;align-items:center;justify-content:center;font-size:16px;
+  background:#f8fafc;}

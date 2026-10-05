@@ -220,17 +220,64 @@
     }
   }
 
+  /* ── INTERROW SPRAYING COUNTS WHAT WAS THERE BEFORE THE 2ND CULLING ─────
+
+     Every other job is paid on what is standing: spraying P & D, manuring and
+     weeding all happen TO the seedlings, so a batch 2nd culled the week before
+     is that many fewer to treat.
+
+     Interrow spraying is not done to the seedlings. It is the ground BETWEEN
+     the rows, and a 2nd culling takes the dead seedling out of a polybag that
+     is still sitting exactly where it was — same rows, same gaps, same walk,
+     same spray. So the quantity for an interrow row is the one BEFORE the 2nd
+     culling comes off, and the office has been keying it over by hand on every
+     interrow row of every plot.
+
+     It is the quantity, so it is also the piece-rate money: this is read by
+     the Work Maintenance list, the Worker Record capacity totals and the
+     payroll salary claim alike, which is why the rule lives here rather than
+     in any one of them.
+
+     A BATCH KEYED ON THE ROW STILL DECIDES, interrow included. Interrow is
+     usually the whole plot — the worker walks the lot in one go — and leaving
+     the batch cell empty is how that is said, because empty has always meant
+     every batch standing there. But somebody who writes a batch on the row
+     has answered the question, and this does not overrule them: the rule
+     above is about the 2nd culling and nothing else.
+
+     The maintenance list writes "Meracun rumput secara selingan"; anything
+     carrying the word interrow is the same job under another spelling. The job
+     is read off the record's JENIS and never off its chemical: the chemical
+     changes round to round — Monex one round, something else the next — and
+     says nothing about which job it is. */
+  function isInterrow(jenis) {
+    const s = String(jenis == null ? '' : jenis).toLowerCase();
+    return s.indexOf('rumput secara selingan') >= 0 || s.indexOf('interrow') >= 0;
+  }
+
+  /* How a record's quantity is to be counted. One place, so the quantity, the
+     batch names and every caller agree. */
+  function qtyOpts(r) {
+    return { keepCull2: isInterrow(r && (r.jenis || r.work_type)) };
+  }
+
   /* What one plot and batch is worth, up to a date. Every event already
      carries its own sign and the ones that take no part never became
-     events, so this is a plain sum. */
-  function liveCount(evs) {
-    return evs.reduce((sum, e) => sum + signed(e.type, e.qty), 0);
+     events, so this is a plain sum.
+
+     opts.keepCull2 leaves the 2nd culling standing — see isInterrow above. */
+  function liveCount(evs, opts) {
+    const keep2 = !!(opts && opts.keepCull2);
+    return evs.reduce((sum, e) => {
+      if (keep2 && e.type === '2nd_Culling') return sum;
+      return sum + signed(e.type, e.qty);
+    }, 0);
   }
 
   /* The linked quantity for one work record.
      Returns null when it cannot be resolved (data not loaded, no plot, or the
      plot/batch has no movement at all) so the caller can fall back gracefully. */
-  function linkedQty(plot, batchStr, tarikh) {
+  function linkedQty(plot, batchStr, tarikh, opts) {
     if (!_ready || !_events || !plot) return null;
     const pk = plotKey(plot);
     if (!pk) return null;
@@ -248,31 +295,103 @@
       if (ev.ms > cutoff) continue;
       (per[ev.batchKey] ||= { evs: [], label: ev.batch }).evs.push(ev);
     }
-    Object.values(per).forEach(b => { b.closing = liveCount(b.evs); });
+    const keep2 = !!(opts && opts.keepCull2);
+    Object.values(per).forEach(b => { b.closing = liveCount(b.evs, opts); });
 
     const keys = Object.keys(per);
     if (!keys.length) return null;
-    let raw = 0;
-    keys.forEach(k => { raw += per[k].closing; });
+    let raw = 0, cull2 = 0;
+    keys.forEach(k => {
+      raw += per[k].closing;
+      per[k].evs.forEach(e => {
+        if (e.type === '2nd_Culling') cull2 += Math.abs(Number(e.qty || 0));
+      });
+    });
     return {
       // NOT floored at zero: the movement report shows a negative balance
       // because it is a figure to look into, and a work record quoting 0 for
       // the same plot and batch would be quietly disagreeing with it.
       qty: Math.round(raw),
       raw: Math.round(raw),
-      batches: keys.map(k => per[k].label),
+      batches: keys.map(k => per[k].label).sort((a, b) => String(a).localeCompare(String(b), 'en', { numeric: true })),
       allBatches: wanted.length === 0,
-      asOf: asOf == null ? null : tarikh
+      asOf: asOf == null ? null : tarikh,
+      /* How much 2nd culling this figure is carrying, and whether it was left
+         standing — so a screen can say WHY an interrow row reads higher than
+         the P & D row beside it on the same plot and the same day. */
+      cull2: Math.round(cull2),
+      keptCull2: keep2 && cull2 > 0
     };
   }
 
   /* Quantity shown for a record: a keyed value always wins; otherwise the
-     linked one. */
+     linked one.
+
+     The work type is read off the record here rather than asked for, so every
+     caller — the maintenance list, the capacity totals, the salary claim —
+     gets the interrow rule without having to know it exists. */
+  /* ── CHECKED FREEZES THE FIGURE ──────────────────────────────────────
+
+     A linked quantity is a live sum of the batch ledger: a sale, a 3rd
+     culling, a stock adjustment on that plot all move it, and they move it
+     on rows that were settled months ago. Checked means the office has gone
+     through the row and agreed it. After that the figure must stop being a
+     formula and become a number — otherwise what was signed off is not what
+     anybody reads later, and the piece-rate money moves with it.
+
+     So checking a row writes what it was reading at that moment into
+     qtyFrozen, and unchecking throws it away and the link comes back. The
+     order is: a figure the office KEYED, then the frozen one, then the link.
+     Keyed still wins, because that was always somebody's own answer.
+
+     batchFrozen does the same for the batch names, which are drawn from the
+     same ledger and would otherwise go on changing under a settled row. */
   function recQty(r) {
     if (r && (r.qty === 0 || r.qty)) return { value: Number(r.qty), linked: false };
-    const link = linkedQty(r && r.plot, r && r.batch, r && r.tarikh);
+    if (r && r.qtyFrozen != null && r.qtyFrozen !== '')
+      return { value: Number(r.qtyFrozen), linked: false, frozen: true };
+    const link = linkedQty(r && r.plot, r && r.batch, r && r.tarikh, qtyOpts(r));
     if (!link) return { value: null, linked: false };
     return { value: link.qty, linked: true, info: link };
+  }
+
+  /* What to write into a row being checked, and nothing at all for a row
+     whose figure is already the office's own or cannot be resolved. Returns
+     the fields to set, so the caller does not have to know the names. */
+  function freezeFor(r) {
+    const out = {};
+    if (!r) return out;
+    if (!(r.qty === 0 || r.qty)) {
+      const link = linkedQty(r.plot, r.batch, r.tarikh, qtyOpts(r));
+      if (link && link.qty != null) out.qtyFrozen = link.qty;
+    }
+    if (!String(r.batch || '').trim()) {
+      const b = recBatches(r);
+      if (b && b.linked && b.value) out.batchFrozen = b.value;
+    }
+    return out;
+  }
+
+  /* WHICH BATCHES A RECORD COVERS.
+
+     An empty batch cell is not "unknown", it is EVERY batch standing on that
+     plot that day — that is what leaving it blank has always meant, and it is
+     what the quantity beside it is already counting. So the names are answered
+     from the ledger instead of drawn as a dash, which read as nobody knowing
+     while the answer sat in the batch report.
+
+     Keyed wins, exactly as the quantity does — for every job, interrow
+     included. */
+  function recBatches(r) {
+    const keyed = String((r && r.batch) || '').trim();
+    if (keyed) return { value: keyed, linked: false };
+    const frozen = String((r && r.batchFrozen) || '').trim();
+    if (frozen) return { value: frozen, linked: false, frozen: true };
+    const link = linkedQty(r && r.plot, r && r.batch, r && r.tarikh, qtyOpts(r));
+    if (!link || !link.batches.length) return { value: keyed, linked: false };
+    const shown = link.batches.filter(b => b && b !== '—').join(', ');
+    if (!shown) return { value: keyed, linked: false };
+    return { value: shown, linked: shown !== keyed, info: link };
   }
 
   global.PlotMovement = {
@@ -281,6 +400,7 @@
     error: () => _err,
     events: () => _events,
     parseDate, logDate, plotKey, batchKey, batchList,
-    signed, liveCount, linkedQty, recQty
+    signed, liveCount, linkedQty, recQty, recBatches, freezeFor,
+    isInterrow, qtyOpts
   };
 })(window);

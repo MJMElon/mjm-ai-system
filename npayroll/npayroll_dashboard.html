@@ -9,23 +9,24 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_access.js"></script>
-<script src="../shared/shared_plot_movement.js?v=1"></script>
+<script src="../shared/shared_plot_movement.js?v=5"></script>
 <!-- Which nursery a plot belongs to. Shared with the Work Maintenance
      schedule, so a work record lands under the nursery it was drawn in. -->
 <script src="../shared/shared_maint_plots.js?v=1"></script>
 <!-- Pairing the field's work to a schedule row, so the claim prices what a
      worker recorded whether or not the office screen has been opened. -->
-<script src="../shared/shared_maint_field.js?v=1"></script>
+<script src="../shared/shared_maint_field.js?v=2"></script>
 <!-- When a payroll month stops being editable: verification per sheet, and
      the month lock calendar behind it. -->
-<script src="../shared/shared_npayroll_lock.js?v=1"></script>
+<script src="../shared/shared_npayroll_lock.js?v=2"></script>
+<script src="../shared/shared_people.js?v=1"></script>
 <!-- Which location a section sits in — Pre Nursery, Main Nursery, Estate.
      The same file System Setting's Location card and the Team Board read, so
      the Estate is kept off the maintenance sheets by one rule rather than by
      three copies of it. -->
 <script src="../shared/shared_worker_locations.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="npayroll_styles.css?v=13">
+<link rel="stylesheet" href="npayroll_styles.css?v=17">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -45,7 +46,6 @@
         <span>Month</span>
         <input type="month" id="global-month">
       </label>
-      <div class="topbar-badge">NP</div>
     </div>
   </div>
 </header>
@@ -126,13 +126,42 @@
                learn twice. The select behind them is the value. -->
           <div class="nsel" id="transpl-section-pills"></div>
           <select id="transpl-section" class="sel cf-skip" style="display:none;" onchange="renderEntries('transplanting')"></select>
+          <!-- One button and one file: the claim, the plot summary, and every
+               nursery's drone maps on the end of it, two to an A4 page and a
+               nursery to a page. They had a button of their own beside this
+               one, which was two things to press and two things to file for
+               one month's work. -->
           <button class="btn btn-primary" onclick="downloadTransplantPDF()">⬇ Salary Claim Form (PDF)</button>
           <button class="btn btn-primary" data-add onclick="openEntry('transplanting')">+ Add Entry</button>
         </div>
       </div>
+      <div class="verify-bar" id="vb-transpl"></div>
+
+      <!-- ── WHAT WAS TRANSPLANTED, PLOT BY PLOT ──────────────────────
+           The claim below divides this month's work among the people who
+           did it. This says what the work WAS: a line per plot and, at the
+           foot, the nursery's total for the month.
+
+           It is not the claim's totals added up a different way. The claim
+           is per worker per job, and a plot carries the same quantity on all
+           four of its jobs — adding those would report the nursery at four
+           times its size. Each plot is counted once here, which is what
+           "how many were transplanted" means.
+
+           It is also the only place a plot shows at all when nobody was
+           credited on it: a record with no crew produces no claim line, and
+           the plot would otherwise vanish from the month. -->
+      <div id="transpl-plots-wrap" style="margin-bottom:1.1rem;">
+        <div class="bar-sub" style="padding:0 .2rem .4rem;font-weight:700;" id="transpl-plots-head">
+          Transplanting by plot</div>
+        <div class="card"><div class="tbl-wrap"><table id="transpl-plots-table"></table></div></div>
+        <div id="transpl-plots-note" class="bar-sub"
+             style="padding:.5rem .2rem 0;white-space:normal;"></div>
+      </div>
+
       <!-- The claim: workers down, the four jobs across, the same shape as
            Work Maintenance so one sheet is read the way the other is. -->
-      <div class="verify-bar" id="vb-transpl"></div>
+      <div class="bar-sub" style="padding:0 .2rem .4rem;font-weight:700;">Salary claim</div>
       <div class="card"><div class="tbl-wrap"><table id="transpl-table"></table></div></div>
       <div id="transpl-note" class="bar-sub" style="padding:.6rem .2rem 0;white-space:normal;"></div>
       <!-- Anything the field could not express, keyed by hand. Hidden until
@@ -352,7 +381,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=30"></script>
+<script src="npayroll_script.js?v=45"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

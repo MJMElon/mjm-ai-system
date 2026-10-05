@@ -22,6 +22,16 @@
 --  UNTIL THIS IS RUN nothing changes for anybody: the solve form takes
 --  one photo as before, because the pages ask the database whether it
 --  has this column and quietly do without it when it has not.
+--
+-- WHAT A GOOD RESULT LOOKS LIKE
+--   One row. column_present is 1 and result says "Ready."
+--
+--   cases_solved_with_a_photo is whatever it was — this file touches no
+--   rows, and every case already solved keeps the photo it was solved
+--   with.
+--
+--   cases_with_several is 0 the first time. It grows as people solve
+--   cases with more than one photo from now on.
 -- =====================================================================
 
 ALTER TABLE nelos_cases ADD COLUMN IF NOT EXISTS resolution_photo_urls jsonb;
@@ -31,11 +41,11 @@ COMMENT ON COLUMN nelos_cases.resolution_photo_urls IS
   'bucket. The FIRST of them is also in resolution_photo_url, which stays for '
   'every reader that wants one photo.';
 
--- PostgREST caches the table shape; without this it goes on serving the
+-- PostgREST caches the table shape. Without this it goes on serving the
 -- old picture and the new column looks as though it was never added.
 NOTIFY pgrst, 'reload schema';
 
-/* ONE result set — the SQL Editor only shows the last statement's. */
+-- ONE result set, because the SQL Editor only shows the last statement's.
 SELECT
   (SELECT count(*) FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'nelos_cases'
@@ -52,13 +62,3 @@ SELECT
        ELSE 'BLOCKED: the column was not added. Send back whatever error the '
             || 'ALTER TABLE line above printed.'
   END                                                             AS result;
-
--- WHAT A GOOD RESULT LOOKS LIKE
---   One row. column_present is 1 and result says "Ready."
---
---   cases_solved_with_a_photo is whatever it was — this file touches no
---   rows, and every case already solved keeps the photo it was solved
---   with.
---
---   cases_with_several is 0 the first time. It grows as people solve
---   cases with more than one photo from now on.

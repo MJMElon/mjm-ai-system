@@ -77,7 +77,13 @@ async function boot(opts) {
     } catch (_) {}
     window.__DB = {
       nops_maint_field_records: field,
-      nops_maint_records: [{ id: 1, records: [] }]
+      nops_maint_records: [{ id: 1, records: [] }],
+      /* BNN's own general workers, which is the list Worked By offers. */
+      nops_maint_workers: [
+        { nursery: 'BNN', name: 'Ali Bin Hassan' },
+        { nursery: 'BNN', name: 'Ramli Anak Juna' },
+        { nursery: 'UNN1', name: 'Somebody From UNN1' }
+      ]
     };
     window.__WRITES  = [];
     window.__MISSING = missing || [];
@@ -203,6 +209,10 @@ async function boot(opts) {
     const b = document.getElementById('rej-body');
     return b && b.children.length > 0;
   }, { timeout: 20000 });
+  // The page lands on the Schedule tab; the list being tested is behind
+  // Work Record, so go there the way a person does.
+  await page.click('.pn-tab[onclick*="\'record\'"]');
+  await page.waitForSelector('#recview-list', { state: 'visible', timeout: 10000 });
   return { page, dialogs };
 }
 
@@ -259,12 +269,36 @@ const recText = (page) => page.evaluate(() =>
     checkTrue('Edit is offered', /Edit/i.test(btns));
     checkTrue('…and Del', /Del/i.test(btns));
 
+    const secs = await page.evaluate(() => ({
+      approvedOpen: document.getElementById('recsec-approved').classList.contains('active'),
+      rejectedOpen: document.getElementById('recsec-rejected').classList.contains('active'),
+      tabs: [...document.querySelectorAll('#recview-list > .subtabs-bar .subtab-btn')]
+              .map((b) => (b.textContent || '').replace(/\s+/g, ' ').trim())
+    }));
+    check('the list has two sections, named on their own tabs',
+          secs.tabs, ['✓ Approved', '⛔ Rejected 1']);
+    checkTrue('…and opens on the approved one', secs.approvedOpen);
+    checkFalse('…with the sent-back one behind its tab, not stacked below',
+               secs.rejectedOpen);
+
     const badge = await page.evaluate(() => {
       const el = document.getElementById('rej-count');
-      return { text: (el.textContent || '').trim(), shown: el.style.display !== 'none' };
+      return { text: (el.textContent || '').trim(), shown: el.style.display !== 'none',
+               onTab: !!el.closest('#recsec-btn-rejected'),
+               tip: document.getElementById('recsec-btn-rejected').title };
     });
-    checkTrue('the heading says how many were sent back', /1 sent back/.test(badge.text));
-    checkTrue('…and the badge is showing', badge.shown);
+    check('the count is on the tab, so a refusal is seen from the other section',
+          [badge.text, badge.onTab, badge.shown], ['1', true, true]);
+    checkTrue('…and says what it is on hover', /1 sent back/.test(badge.tip));
+
+    await page.click('#recsec-btn-rejected');
+    const opened = await page.evaluate(() => ({
+      approved: document.getElementById('recsec-approved').classList.contains('active'),
+      rejected: document.getElementById('recsec-rejected').classList.contains('active'),
+      rowsVisible: document.getElementById('rej-body').offsetParent !== null
+    }));
+    check('the tab opens the sent-back section and closes the other',
+          [opened.rejected, opened.approved, opened.rowsVisible], [true, false, true]);
 
     checkTrue('the other nursery’s record is NOT on this screen',
               !(await page.evaluate(() => document.getElementById('rej-body').textContent)).includes('Wrong plot'));
@@ -426,6 +460,11 @@ const recText = (page) => page.evaluate(() =>
       batch: document.getElementById('rj-batch').value,
       qty:   document.getElementById('rj-qty').value,
       worked:document.getElementById('rj-worked').value,
+      chips:[...document.querySelectorAll('#rj-worked-chips .rj-chip')].map((b) => ({
+        name: b.textContent.trim(), on: b.classList.contains('on'),
+        offReg: b.classList.contains('off-reg') })),
+      reported:document.getElementById('rj-reported').value,
+      whoNote:(document.getElementById('rej-who-note').textContent || '').trim(),
       remark:document.getElementById('rj-remark').value,
       save:  (document.querySelector('#rej-modal .modal-footer .btn-primary').textContent || '').trim()
     }));
@@ -439,6 +478,43 @@ const recText = (page) => page.evaluate(() =>
     check('…the batch', open.batch, '252');
     check('…the quantity', open.qty, '1400');
     check('…who worked it', open.worked, 'Ali Bin Hassan');
+
+    /* Worked By is PICKED, not typed: a name typed by hand is a name the
+       worker register does not hold, and the claim cannot pay one of those. */
+    check('Worked By offers this nursery\u2019s own workers',
+          open.chips.map((c) => c.name), ['Ali Bin Hassan', 'Ramli Anak Juna']);
+    check('…with the one already credited turned on',
+          open.chips.filter((c) => c.on).map((c) => c.name), ['Ali Bin Hassan']);
+    checkFalse('…and nobody from another nursery',
+               open.chips.some((c) => /UNN1/.test(c.name)));
+
+    /* The list follows the PLOT, not the record's stored nursery: the plot is
+       what this form is correcting, and a record moved to another nursery's
+       plot has to offer that nursery's people. */
+    const moved = await page.evaluate(() => {
+      const el = document.getElementById('rj-plot');
+      el.value = 'U3';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      return [...document.querySelectorAll('#rj-worked-chips .rj-chip')]
+        .map((b) => ({ name: b.textContent.trim(), off: b.classList.contains('off-reg') }));
+    });
+    check('move the plot to another nursery and the list moves with it',
+          moved.map((c) => c.name).sort(), ['Ali Bin Hassan', 'Somebody From UNN1']);
+    checkTrue('…and the name already credited, whom THAT nursery does not hold, '
+            + 'keeps its chip and is marked rather than dropped',
+              moved.find((c) => c.name === 'Ali Bin Hassan').off === true);
+    await page.evaluate(() => {
+      const el = document.getElementById('rj-plot');
+      el.value = 'B8';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    /* The name the work is credited to where nobody is in Worked By — which
+       is most records, and the one field a record sent back for the wrong
+       name could not be corrected on. */
+    check('…AND WHO REPORTED IT, which is the name the phone shows',
+          open.reported, 'Nelos FC');
+    checkTrue('…with the form saying which of the two answers',
+              /Worked By where there is one/i.test(open.whoNote));
     check('…and the remark', open.remark, 'Sprayed both sides');
     checkTrue('the save button says the record stays sent back',
               /still sent back/i.test(open.save));
@@ -455,6 +531,9 @@ const recText = (page) => page.evaluate(() =>
       };
       set('rj-plot', 'B9');
       set('rj-qty', '1200');
+      set('rj-reported', 'Ali Bin Hassan');
+      // Tapped off, the way a person does it.
+      [...document.querySelectorAll('#rj-worked-chips .rj-chip.on')].forEach((b) => b.click());
       set('rj-date', d);
       saveRejSubmission();
     }, fixedDate);
@@ -464,6 +543,10 @@ const recText = (page) => page.evaluate(() =>
     const w = await page.evaluate(() => window.__WRITES.find(
       (x) => x.table === 'nops_maint_field_records' && x.op === 'update').patch);
     check('the corrected plot is written', w.plot_name, 'B9');
+    check('THE CORRECTED NAME IS WRITTEN — the same column the phone\u2019s '
+        + 'history card and the salary claim both read', w.reported_by, 'Ali Bin Hassan');
+    check('…and a Worked By cleared out is cleared, not left standing',
+          w.worked_by, null);
     check('…the corrected quantity', w.qty, 1200);
     check('…the corrected date', w.work_date, fixedDate);
     check('…and the WEEK follows the date rather than staying on the old one',
@@ -482,6 +565,7 @@ const recText = (page) => page.evaluate(() =>
     const rows = await rejRows(page);
     checkTrue('and the row is still in the sent-back part, now reading B9',
               rows.length === 1 && rows[0][3] === 'B9');
+    check('…credited to the corrected name', rows[0][6], 'Ali Bin Hassan');
     await page.close();
   }
 

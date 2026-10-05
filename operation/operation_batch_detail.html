@@ -76,6 +76,9 @@
     <script src="../shared/shared_supabase.js"></script>
     <script src="../shared/shared_access.js"></script>
     <script src="../shared/shared_nelos.js"></script>
+    <!-- The paper audit sheet an empty-hole case carries. See
+         shared/shared_empty_hole_report.js. -->
+    <script src="../shared/shared_empty_hole_report.js?v=1"></script>
     <!-- Tray occupancy — the same rule the batch list's Tray Status tab uses. -->
     <script src="../shared/shared_tray_stock.js"></script>
     <!-- Month Lock Calendar — same lock DO/AL use, keyed to each row's own date. -->
@@ -2561,13 +2564,49 @@
             document.getElementById('tab-' + tabIndex).classList.add('active');
             const activeBtn = document.getElementById('tab-btn-' + tabIndex);
             activeBtn.classList.remove('stage-tab-inactive'); activeBtn.classList.add('stage-tab-active');
-            if(tabIndex === 2) syncTab2();
-            if(tabIndex === 3) syncTab3();
-            if(tabIndex === 4) syncTab4();
-            if(tabIndex === 5) syncTab5();
-            if(tabIndex === 6) syncTab6();
-            if(tabIndex === 7) syncTab7();
-            if(tabIndex === 8) syncTab8();
+            if(tabIndex === 2) syncOnce(2, syncTab2);
+            if(tabIndex === 3) syncOnce(3, syncTab3);
+            if(tabIndex === 4) syncOnce(4, syncTab4);
+            if(tabIndex === 5) syncOnce(5, syncTab5);
+            if(tabIndex === 6) syncOnce(6, syncTab6);
+            if(tabIndex === 7) syncOnce(7, syncTab7);
+            if(tabIndex === 8) syncOnce(8, syncTab8);
+        }
+
+        /* ONE SYNC AT A TIME, PER TAB — THIS IS WHY EVERY 2ND CULLING
+           FIGURE CAME OUT DOUBLE.
+
+           A tab's sync clears its plot array, awaits two database reads, and
+           only then pushes its rows in. switchTab fires that sync WITHOUT
+           awaiting it, and prewarmAllTabs runs the very same syncs at load.
+           So clicking 2nd Culling while the page was still warming up ran
+           syncTab5 twice at once, and the two runs interleaved:
+
+             run A  t5_plotData = []        · awaits its reads
+             run B  t5_plotData = []        · awaits its reads
+             run A  pushes its 3 rows       · merges them · assigns the array
+             run B  pushes its 3 rows INTO THE ARRAY A JUST MERGED
+             run B  merges again — and _t5MergeByPlot SUMS the saved Dead of
+                    rows it merges, so 243 became 486 and 3 became 6
+
+           Every figure on the tab doubled, and nothing said so: the row
+           arithmetic still agreed with itself (5,949 − 486 = 5,463). Then
+           Save writes WHAT IS ON SCREEN, so one open-and-save wrote the
+           doubled figure into the ledger, and the next open doubled that:
+           10 → 20 → 40.
+
+           Serialising is the fix rather than a flag on tab 5, because every
+           tab here has the same shape — clear, await, push — and the next
+           one to grow a merge would have grown the same bug. A second call
+           now waits for the first and then runs properly, so the tab still
+           ends up showing the latest data. */
+        const _tabSyncChain = {};
+        function syncOnce(key, run) {
+            const prev = _tabSyncChain[key] || Promise.resolve();
+            const next = prev.then(() => run(), () => run());
+            // Never let a rejected run block the tab for the rest of the session.
+            _tabSyncChain[key] = next.then(() => {}, () => {});
+            return next;
         }
 
         /* Work out every tab's figures once, at load, instead of the first
@@ -2588,12 +2627,14 @@
             if (_tabsPrewarmed) return;
             _tabsPrewarmed = true;
             const steps = [
-                ['Planting',      () => syncTab2()],
-                ['Seed Audit',    () => syncTab8()],
-                ['Transplanting', () => syncTab3()],
-                ['1st Culling',   () => syncTab4()],
-                ['2nd Culling',   () => syncTab5()],
-                ['3rd Culling',   () => syncTab6()]
+                /* Through the same queue switchTab uses, or the pre-warm and
+                   a click on the tab are two runs of one sync at once. */
+                ['Planting',      () => syncOnce(2, syncTab2)],
+                ['Seed Audit',    () => syncOnce(8, syncTab8)],
+                ['Transplanting', () => syncOnce(3, syncTab3)],
+                ['1st Culling',   () => syncOnce(4, syncTab4)],
+                ['2nd Culling',   () => syncOnce(5, syncTab5)],
+                ['3rd Culling',   () => syncOnce(6, syncTab6)]
             ];
             for (const [name, run] of steps) {
                 try { await run(); }
@@ -3128,7 +3169,7 @@
             if (made.error) { showToast('Could not write it: ' + made.error, 'error'); return; }
             showToast(`${cal.plot} has its transplanting record again.`, 'success');
             _t7TxLogs = null;
-            await syncTab3();
+            await syncOnce(3, syncTab3);
             syncAdjustmentBars((row.batch_name || '').trim());
         }
 
@@ -4029,7 +4070,7 @@
                drawn, so a row written a moment ago was not among them — the
                plot went on reading as having no record until somebody reloaded
                the page, which is exactly how it looked like nothing happened. */
-            if (wroteRow) { _t7TxLogs = null; await syncTab3(); }
+            if (wroteRow) { _t7TxLogs = null; await syncOnce(3, syncTab3); }
             // …and the same rows on the report each was raised against.
             syncAdjustmentBars(batchId);
         }
@@ -5249,7 +5290,7 @@
                 if (!all || !all[idx]) { alert('Record not found.'); return; }
                 const { error } = await _supabase.from('shared_inventory_logs').delete().eq('id', all[idx].id);
                 if (error) throw error;
-                await syncTab3();
+                await syncOnce(3, syncTab3);
             } catch(e) { alert('❌ Error deleting: ' + e.message); }
         }
 
@@ -5345,7 +5386,7 @@
             showToast('Source tray changed to ' + tray + '.', 'success');
             toggleT3AdjTray(idx);
             _t7TxLogs = null;
-            await syncTab3();
+            await syncOnce(3, syncTab3);
             const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
             syncAdjustmentBars(batchId);
         }
@@ -5395,7 +5436,7 @@
                 setEditMetaUI(3, new Date().toISOString(), window.currentUserEmail);
                 alert('✅ Record updated!');
                 toggleT3EditRow(idx);
-                await syncTab3();
+                await syncOnce(3, syncTab3);
             } catch(e) { alert('❌ Error saving edit: ' + e.message); }
         }
 
@@ -6456,7 +6497,7 @@
                 }
 
                 // Refresh UI immediately — rebuilds saved rows table and clears form rows
-                await syncTab3();
+                await syncOnce(3, syncTab3);
 
                 // Advance lifecycle to Main Nursery stage
                 updateTracker(2);
@@ -6879,41 +6920,104 @@
 
            Deduped: a case raised twice for the same batch is one job, and
            this button is pressed by whoever happens to be looking. */
+        /* WHO AN EMPTY HOLE CASE GOES TO.
+           Always the same two answers, because it is always the same job:
+           the Pre Nursery auditor walks the trays and ticks the sheet. Named
+           here rather than left to Nelos's category routing, which has
+           nothing to route on — the case is raised under "Other", carrying
+           the batch number as its title, so there is no category for a rule
+           to match. The person is matched by NAME, not by id: ids are this
+           database's, and the name is what the seat is called on screen. */
+        const EH_CASE = {
+            dest:    'audit',
+            pic:     'Pre Nursery Auditor + Drone Operator',
+            nursery: 'PN',                       // seeds are planted in Pre Nursery
+            remark:  'Check empty hole'
+        };
+
+        /* Open the Nelos case form, filled in, with the audit sheet attached.
+
+           It used to raise the case outright, which gave the office no sight
+           of what was being sent and nowhere to put the sheet. Now the sheet
+           is drawn from the batch's own records — see
+           shared/shared_empty_hole_report.js — and handed to the Nelos form
+           along with the rest of the answers, so the person presses Save on
+           a case they can read.
+
+           The photo is why this is a hand-off through sessionStorage rather
+           than a longer link: a picture does not fit in a query string. */
         async function raiseEmptyHoleCase() {
             const batch = (document.getElementById('f-batchno')?.value || '').trim();
             if (!batch) { showToast('Save Tab 1 first to assign a batch number.', 'error'); return; }
             const total = t2EhTotal();
             if (!total) { showToast('No empty hole recorded yet.', 'error'); return; }
-            if (typeof MJMNelos === 'undefined' || !MJMNelos.raise) {
-                showToast('Nelos is not loaded on this page.', 'error'); return;
+            if (typeof MJMEmptyHoleReport === 'undefined') {
+                showToast('The empty hole report could not be loaded on this page.', 'error'); return;
             }
-
-            const trays = t2EhTrays().filter(t => t2EhCountFor(t) > 0);
-            const detail = trays.map(tray => {
-                const recs = t2_emptyHoles[_ehKey(tray)];
-                const where = recs.map(r => `Row ${r.row} · Hole ${r.hole}${r.note ? ` (${r.note})` : ''}`).join('\n    ');
-                return `${tray} — ${recs.length} empty hole${recs.length === 1 ? '' : 's'}\n    ${where}`;
-            }).join('\n\n');
 
             const btn = document.getElementById('t2-eh-nelos-btn');
             const original = btn ? btn.innerText : '';
             if (btn) { btn.disabled = true; btn.innerText = 'Opening…'; }
-            const { data, error, deduped } = await MJMNelos.raise({
-                title: `Batch ${batch}: ${total} empty hole${total === 1 ? '' : 's'} to refill`,
-                description: `Recorded on the Planting report's Empty Hole tab.\n\n${detail}`,
-                category: 'Empty Hole',
-                priority: 'normal',
-                source: 'operation',
-                sourceRef: `../operation/operation_batch_detail.html?id=${encodeURIComponent(batch)}`,
-                batch,
-                // One tray named on the case itself; the rest are in the
-                // description, which is where a list belongs.
-                plot: trays.length === 1 ? trays[0] : null,
-                dedupe: true
-            });
-            if (btn) { btn.disabled = false; btn.innerText = original || '🐛 Open Nelos Case'; }
-            if (error) { showToast('Could not open the case: ' + error.message, 'error'); return; }
-            showToast(deduped ? 'An open case for this batch already exists.' : 'Nelos case opened.', 'success');
+            try {
+                /* Every figure on the sheet is the batch's own. "Sebenar Biji
+                   Tanam" is what was ACTUALLY planted — the total less the
+                   empty holes — which is the number the tray totals already
+                   show under that name. */
+                const trays = t2EhTrays().filter(t => t2EhCountFor(t) > 0).map(tray => ({
+                    tray,
+                    holes: (t2_emptyHoles[_ehKey(tray)] || []).map(r => ({ row: r.row, hole: r.hole }))
+                }));
+                const sheet = MJMEmptyHoleReport.draw({
+                    batch,
+                    breed: (document.getElementById('f-brand')?.value || '').trim(),
+                    actualPlanted: _ehDigits(document.getElementById('t2-tot-actual')?.innerText),
+                    // The day the case is opened, which is the day the audit
+                    // is being asked for — not the day the holes were keyed.
+                    date: new Date().toISOString().slice(0, 10),
+                    auditor: EH_CASE.pic,
+                    trays
+                });
+
+                const handed = typeof MJMNelos !== 'undefined' && MJMNelos.handOff
+                    && MJMNelos.handOff({
+                        dest:    EH_CASE.dest,
+                        pic:     EH_CASE.pic,
+                        nursery: EH_CASE.nursery,
+                        source:  'operation',
+                        batch,
+                        // The case is named after the batch, under "Other" —
+                        // which is what the screen shows and what the sheet
+                        // attached to it is about.
+                        title:   `Batch ${batch}`,
+                        desc:    EH_CASE.remark,
+                        photo:   { name: sheet.name, type: 'image/png', dataUrl: sheet.dataUrl }
+                    });
+                if (!handed) {
+                    showToast('This browser would not carry the report over — '
+                            + 'the form will open without it.', 'error');
+                }
+
+                /* The link carries the same answers, so a form that cannot
+                   read the hand-off still opens on the right case. Only the
+                   picture is lost, and the toast above has said so. */
+                const q = new URLSearchParams({
+                    new: '1', source: 'operation', batch,
+                    nursery: EH_CASE.nursery, title: `Batch ${batch}`,
+                    dest: EH_CASE.dest, pic: EH_CASE.pic, desc: EH_CASE.remark
+                });
+                window.location.href = '../nelos/nelos_dashboard.html?' + q.toString();
+            } catch (e) {
+                console.warn('[empty hole] the case could not be prepared:', e);
+                showToast('Could not prepare the case: ' + (e.message || e), 'error');
+                if (btn) { btn.disabled = false; btn.innerText = original || '🐛 Open Nelos Case'; }
+            }
+        }
+
+        /* "10,457" off the screen, back to 10457. The totals are rendered for
+           reading, and this is the one place a number has to travel. */
+        function _ehDigits(txt) {
+            const n = parseInt(String(txt == null ? '' : txt).replace(/[^0-9-]/g, ''), 10);
+            return Number.isFinite(n) ? n : null;
         }
 
         function removeTrayRow(rowId) {
@@ -9958,6 +10062,15 @@ Thank you.`;
                 };
             });
             t5_plotData = [];
+            /* THIS RUN'S ROWS, IN A LIST OF ITS OWN.
+               They used to be pushed straight onto t5_plotData across two
+               awaited reads, so a second run of this function could push its
+               rows onto the list the first had already merged — and the merge
+               SUMS the saved Dead, which is what doubled every figure on the
+               tab. syncOnce() stops the two runs overlapping; building here
+               and assigning at the end means an overlap could not do this
+               even if something called this function outside that queue. */
+            const built = [];
 
             // Build saved 2nd_Culling map keyed by (plot, destType) so the same
             // plot under MAIN and D-TONE doesn't collide. Older logs that
@@ -10013,7 +10126,7 @@ Thank you.`;
                             const queue = legacyCullQueue[log.plot_name];
                             saved = (queue && queue.length) ? queue.shift() : {};
                         }
-                        t5_plotData.push({
+                        built.push({
                             plot: log.plot_name,
                             qty: log.quantity_change,
                             destType,
@@ -10028,7 +10141,7 @@ Thank you.`;
                     // merge only ran on the Tab 3 DOM-scrape fallback path,
                     // so DB-loaded transplant rows kept appearing as two
                     // entries — e.g. U1 with 427 and 20 instead of 447.)
-                    t5_plotData = _t5MergeByPlot(t5_plotData);
+                    t5_plotData = _t5MergeByPlot(built);
                     _t5RestoreTyped(typedT5);
                     renderT5PlotRows();
                     return;
@@ -10043,12 +10156,12 @@ Thank you.`;
                 const qty      = parseInt(row.querySelector('.t3-qty').value) || 0;
                 const dateVal  = row.querySelector('.t3-date').value;
                 if (destPlot && qty > 0) {
-                    t5_plotData.push({ plot: destPlot, qty, destType, transplantDate: dateVal, savedDead: null, savedCullDate: null });
+                    built.push({ plot: destPlot, qty, destType, transplantDate: dateVal, savedDead: null, savedCullDate: null });
                 }
             });
 
             // Same merge for the DOM-scrape fallback path.
-            t5_plotData = _t5MergeByPlot(t5_plotData);
+            t5_plotData = _t5MergeByPlot(built);
             _t5RestoreTyped(typedT5);
 
             renderT5PlotRows();
@@ -13748,7 +13861,7 @@ Thank you.`;
                     if (error) throw error;
                 }
                 showToast(`Transfer to ${p.plot} deleted.`, 'success');
-                await syncTab6();
+                await syncOnce(6, syncTab6);
             } catch (e) {
                 showToast('Failed to delete transfer: ' + (e.message || e), 'error');
             }
@@ -13813,7 +13926,7 @@ Thank you.`;
                 }
                 if (error) throw error;
                 showToast(`Transfer updated → ${newPlot} (${newQty.toLocaleString()}).`, 'success');
-                await syncTab6();
+                await syncOnce(6, syncTab6);
             } catch (e) {
                 showToast('Failed to edit transfer: ' + (e.message || e), 'error');
             }
@@ -14067,7 +14180,7 @@ Thank you.`;
                 }
                 btn.innerText = originalText; btn.disabled = false;
                 // Re-sync so newly-transferred plots appear as their own rows.
-                await syncTab6();
+                await syncOnce(6, syncTab6);
             } catch(e) {
                 showToast('Error saving: ' + e.message, 'error');
                 btn.innerText = originalText; btn.disabled = false;

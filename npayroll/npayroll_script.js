@@ -367,7 +367,14 @@ function maintWorkerNames(nursery, ym) {
   }).map(w => String(w.full_name).trim());
 }
 
-const money = v => 'RM ' + (Number(v) || 0).toFixed(2);
+/* "RM 1,000.00", not "RM 1000.00". A payroll sheet is read down a column at
+   speed and four digits with no break in them is where a 1,000 and a 10,000
+   start looking alike. Two decimals always — money with a ragged number of
+   them does not line up. moneyFig is the same figure without the prefix, for
+   the PDF, so the printed form and the screen group their digits the same. */
+const moneyFig = v => (Number(v) || 0).toLocaleString('en-MY',
+  { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = v => 'RM ' + moneyFig(v);
 /* A rate may carry more than two decimals (0.015). Printing it as "0.01"
    next to money worked out from 0.015 makes the sheet look wrong. */
 function rateTxt(v) {
@@ -698,17 +705,222 @@ function earnedCell(sheet, page, section, name, code, jobLabel, worked) {
      that invites an edit it will not take is worse than one that does not
      invite it. */
   const canEdit = mayAdjust(page) && !sheetLocked(page);
+  /* What the sheet worked out, where it is not what is being paid. It used to
+     be a red line under the figure, and on a sheet where every row carries a
+     cent of calibration that is eight red lines saying the same thing — the
+     line under the WORKER's name already says how much, which is the question
+     somebody asks. So it moved to the tooltip: still there, no longer in the
+     way of reading the column. */
+  const tip = a
+    ? `Sheet worked out ${money(worked)} — ${a.reason || 'adjusted'}`
+      + (a.adjusted_by ? ' (' + a.adjusted_by + ')' : '')
+    : 'Adjust what this job earned';
   const open  = canEdit
     ? ` onclick="openAdjust('${sheet}','${page}','${_esc1(section)}','${_esc1(name)}','${_esc1(code)}','${_esc1(jobLabel)}',${worked})"`
-      + ' style="cursor:pointer;" title="Adjust what this job earned"'
-    : '';
+      + ` style="cursor:pointer;" title="${esc(tip)}"`
+    : (a ? ` title="${esc(tip)}"` : '');
   if (!a && !worked) return `<td${open}>—</td>`;
+  /* THE PENNY STEPPER.
+     A capacity divided among seven people does not land on a whole cent, so
+     a cell comes out a cent or two from the field's own total. Nudging it
+     meant opening a form, typing a figure and writing a reason for ONE CENT,
+     which is why the cent never got nudged and the two totals never agreed.
+     So the cell carries minus and plus, and each press is RM 0.01.
+
+     The AMOUNT is still the way to the full form: an adjustment that is a
+     real decision still wants its own figure and its own reason. That has
+     not moved; it has only stopped being the only way in. Which is why the
+     buttons stop the click rather than letting it reach the cell. */
+  /* No stepper here. The cents are nudged on the CAPACITY, where a share of
+     a plot divided among eight people actually lands on a hundredth — the
+     money then follows the capacity it is worked out from. A second stepper
+     on the money would be two ways to move the same figure, disagreeing. */
   return `<td class="money"${open}>${money(shown)}`
-       + (a ? `<div style="font-size:.7rem;font-weight:600;color:var(--danger,#c0392b);white-space:nowrap;"
-                title="${esc(a.reason || '')}${a.adjusted_by ? ' — ' + esc(a.adjusted_by) : ''}"
-                >adjusted · was ${money(worked)}</div>` : '')
        + (canEdit && !a ? '<span style="color:var(--text-faint);font-size:.7rem;"> \u270e</span>' : '')
        + '</td>';
+}
+
+function calStepHtml(sheet, page, section, name, code, worked) {
+  const go = (dir) => `calibrateStep('${sheet}','${page}','${_esc1(section)}','${_esc1(name)}',`
+                    + `'${_esc1(code)}',${Number(worked || 0)},${dir})`;
+  return '<span class="cal-step">'
+    + `<button type="button" class="cal-btn" title="Take RM 0.01 off"`
+    + ` onclick="event.stopPropagation();${go(-1)}">\u2212</button>`
+    + `<button type="button" class="cal-btn" title="Add RM 0.01"`
+    + ` onclick="event.stopPropagation();${go(1)}">+</button>`
+    + '</span>';
+}
+
+/* ════════════ CALIBRATING BY THE CENT ════════════
+   One press is one cent on one job. Applied HERE first and written to the
+   database a moment later, because the office presses it four or five times
+   in a row to close a gap, and a round trip per press is a sheet that limps.
+
+   What gets written is an ordinary earn adjustment — the same row in the same
+   table as the form writes — so a calibrated cent reads back exactly like any
+   other adjustment and the monthly claim picks it up without having to know
+   the difference. Its reason says what it is, because the reason is required
+   and that IS the reason.
+
+   Stepping back onto the figure the sheet worked out REMOVES the override
+   rather than storing an adjustment to the same number. */
+const _round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+const _calTimers = {};
+
+function calibrateStep(sheet, page, section, name, code, worked, dir) {
+  /* The same two questions the cell asked before it drew the buttons, asked
+     again at the press — the two must not be able to disagree. */
+  if (!mayAdjust(page)) {
+    alert('You do not have permission to change what a job earned.\n\n'
+        + 'Ask an admin to grant Adjust Pay in User Access.');
+    return;
+  }
+  if (!lockAllows(page)) return;
+
+  const a = adjOf(sheet, section, name, code);
+  const back = _round2(worked);
+  const from = a ? Number(a.amount || 0) : back;
+  const next = _round2(from + dir * 0.01);
+  // Nothing is paid below nothing: a stepper that walks past zero into a
+  // negative wage is a keystroke nobody meant.
+  if (next < 0) return;
+
+  const key = _adjKey(sheet, section, name, code);
+  earnAdj = earnAdj.filter(x =>
+    _adjKey(x.sheet, x.section, x.worker_name, x.work_code) !== key);
+  if (next !== back) {
+    earnAdj.push({
+      month: monthValue(), sheet, section: section || '', worker_name: name, work_code: code,
+      amount: next, reason: calReason(back, code),
+      adjusted_by: userEmail || null, adjusted_at: new Date().toISOString()
+    });
+  }
+  redrawClaim(page);
+
+  /* Written once the pressing stops. Five presses are one row either way —
+     it is keyed on (month, sheet, section, worker, job), so every press would
+     upsert the same one. */
+  clearTimeout(_calTimers[key]);
+  _calTimers[key] = setTimeout(function () {
+    _calSave(sheet, page, section, name, code, next, back);
+  }, 500);
+}
+
+const calReason = (worked, code) => isCapCode(code)
+  ? `Calibrated (the field divided out ${capFmt(worked)})`
+  : `Calibrated to the cent (sheet worked out ${money(worked)})`;
+
+async function _calSave(sheet, page, section, name, code, amount, worked) {
+  try {
+    let error;
+    if (amount === worked) {
+      ({ error } = await _supabase.from('mjmnpayroll_earn_adjustments').delete()
+        .eq('month', monthValue()).eq('sheet', sheet).eq('section', section || '')
+        .eq('worker_name', name).eq('work_code', code));
+    } else {
+      ({ error } = await _supabase.from('mjmnpayroll_earn_adjustments').upsert({
+        month: monthValue(), sheet, section: section || '', worker_name: name, work_code: code,
+        amount, reason: calReason(worked, code),
+        adjusted_by: userEmail || null, adjusted_at: new Date().toISOString()
+      }, { onConflict: 'month,sheet,section,worker_name,work_code' }));
+    }
+    if (error) throw error;
+  } catch (e) {
+    /* The screen is showing a figure the database does not hold. Put it back
+       to what IS held rather than leaving one nobody will be paid. */
+    alert('That calibration did not save, so it has been put back.\n\n' + (e.message || e));
+    await loadEarnAdj();
+    redrawClaim(page);
+  }
+}
+
+/* Redraw one claim without losing where it was scrolled to. These tables are
+   wider than the screen and the cent being nudged is usually off to the
+   right — a redraw that jumps back to the left takes the cell with it. */
+function redrawClaim(page) {
+  const wrap = document.querySelector(`#sub-${page} .tbl-wrap`);
+  const x = wrap ? wrap.scrollLeft : 0;
+  if (page === 'maint') renderMaint(); else renderTransplantClaim();
+  const after = document.querySelector(`#sub-${page} .tbl-wrap`);
+  if (after) after.scrollLeft = x;
+}
+
+/* ── A WORKER'S CAPACITY, CALIBRATED ───────────────────────────────────
+   A plot's capacity divided among eight workers lands on 696.63 each and
+   adds back to 5,573.04 where the field reported 5,573. The hundredths are
+   arithmetic, not work, and the claim form carries a total somebody is asked
+   to agree with — so a worker's share can be nudged by a hundredth until the
+   column agrees with the field.
+
+   ON THE CAPACITY AND NOWHERE ELSE. The money is capacity times rate, so it
+   follows: nudge the share, the ringgit beside it and the column total and
+   the grand total all move with it, and the sheet goes on multiplying out.
+   A second stepper on the money would be two ways to move one figure, able
+   to disagree.
+
+   Stored in the same table as the money overrides the adjustment form
+   writes, under a job code that cannot be a real one (`cap:` and the job).
+   The row is keyed on (month, sheet, section, worker, job), the lookup is
+   exact, and nothing walks that array without a key — so there is nothing
+   new to run. */
+const capCode   = (code) => 'cap:' + code;
+const isCapCode = (code) => String(code == null ? '' : code).slice(0, 4) === 'cap:';
+
+/* The capacity to use: the calibrated one where there is one. */
+function capPaid(sheet, section, name, code, worked) {
+  const a = adjOf(sheet, section, name, capCode(code));
+  return a ? Number(a.amount || 0) : Number(worked || 0);
+}
+/* …and by how much, for the line under the name. */
+function capDelta(sheet, section, name, code, worked) {
+  const a = adjOf(sheet, section, name, capCode(code));
+  return a ? _round2(Number(a.amount || 0) - Number(worked || 0)) : 0;
+}
+/* What a worker's hundredths come to across this sheet. */
+function capCalibrationOf(sheet, section, name, codes, workedOf) {
+  return _round2(codes.reduce((t, c) => t + capDelta(sheet, section, name, c, workedOf(c)), 0));
+}
+
+/* One capacity cell, with its stepper. `worked` is the share the field
+   divided out; `shown` is what is being paid on. */
+function capCell(sheet, page, section, name, code, worked) {
+  const shown = capPaid(sheet, section, name, code, worked);
+  const canEdit = mayAdjust(page) && !sheetLocked(page) && !!worked;
+  const d = capDelta(sheet, section, name, code, worked);
+  const tip = d ? `The field divided out ${capFmt(worked)}` : '';
+  /* The stepper goes UNDER the figure, not beside it. Beside it, the number
+     moved left as the buttons appeared on hover and the column stopped
+     lining up down the sheet; under it, the figure holds its place and the
+     buttons are a bigger target for a thumb. */
+  return `<td${tip ? ` title="${esc(tip)}"` : ''}>${capFmt(shown)}`
+       + (canEdit ? calStepHtml(sheet, page, section, name, capCode(code), worked) : '')
+       + '</td>';
+}
+
+/* What this worker's cents come to on this sheet: everything paid, less
+   everything the sheet worked out. */
+function calibrationOf(sheet, section, name, codes, workedOf) {
+  return _round2(codes.reduce((s, c) => {
+    const a = adjOf(sheet, section, name, c);
+    return s + (a ? Number(a.amount || 0) - Number(workedOf(c) || 0) : 0);
+  }, 0));
+}
+
+/* …and that figure as the line under the worker's name, which is where
+   somebody checking a payslip looks for "why is this not what I worked out".
+   Nothing where nothing has been changed: a column of "calibrate RM0.00" is
+   a column of noise. */
+function calibrationLine(d, kind) {
+  if (!d) return '';
+  const colour = d > 0 ? '#0d7a47' : 'var(--danger,#c0392b)';
+  const sign = d > 0 ? '' : '-';
+  const txt = kind === 'cap' ? sign + Math.abs(d).toFixed(2)
+                             : sign + 'RM' + Math.abs(d).toFixed(2);
+  const tip = kind === 'cap'
+    ? "The hundredths added to or taken off this worker's capacity on this sheet"
+    : "The cents added to or taken off this worker's jobs on this sheet";
+  return `<div class="cal-line" style="color:${colour};" title="${esc(tip)}"
+            >calibrate ${txt}</div>`;
 }
 /* A value going into a JS string inside an HTML attribute crosses TWO
    quotings, and needs both. The four transplanting jobs are literally named
@@ -971,6 +1183,12 @@ function transplantFieldLines() {
         // nursery otherwise, so an unmatched name still lands in the right
         // block rather than in none.
         section: (known && known.section) || _tpSection(rec.nursery_name),
+        /* Where the WORK was, as against where the worker is registered.
+           Kept beside it because the two differ often enough to be the
+           reason a nursery's sheet looks empty, and a sheet that cannot say
+           "they are filed under UNN 1" can only say "nothing happened". */
+        plotSection: _tpSection(rec.nursery_name),
+        nursery: rec.nursery_name || '',
         job_desc: (job && job.label) || rec.jenis || rec.work_type,
         plot: rec.plot_name,
         qty,
@@ -1021,6 +1239,473 @@ function _tpSection(nursery) {
   return hit ? hit.code : '';
 }
 
+/* ══════════════════════════════════════════════════════════════
+   WHY A NURSERY'S TRANSPLANTING SHEET IS EMPTY
+
+   "No transplanting recorded in the FC Portal" is one answer out of five,
+   and it was being printed for all five. A conductor who has spent the
+   month keying records reads it as the office losing his work, and there
+   was nothing on the screen to tell him which of these it was:
+
+     · nothing was recorded anywhere this month
+     · records were recorded, but on another nursery's plots
+     · records are on this nursery's plots and NOBODY IS NAMED on them —
+       a crew of nobody divides into no lines, so the whole record is
+       silent even though the work and its quantity are in the database
+     · the plot's nursery name matches no payroll section at all, so the
+       work is filed under "No section"
+     · the lines exist but are filed under the section the REGISTER puts
+       those workers in, which is deliberate and documented on
+       transplantWorkdone — but invisible from the circle they are missing
+       from
+
+   So the empty cell says which. Nothing here changes what is paid; it
+   changes what the screen admits to knowing.
+   ══════════════════════════════════════════════════════════════ */
+const _tpCrew = (rec) => (Array.isArray(rec.workers) ? rec.workers.filter(w => w && w.name) : []);
+const _plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + 's')}`;
+
+/* This section's records that name nobody, and the lines whose work was here
+   but whose money is filed elsewhere. Both are faults the claim should say
+   out loud whether or not it has rows to show. */
+function transplantSectionNotes(secFilter) {
+  const notes = [];
+  const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
+
+  const mine = transplantField.filter(r => inSection(secFilter, _tpSection(r.nursery_name)));
+  const noCrew = mine.filter(r => !_tpCrew(r).length);
+  if (noCrew.length) {
+    const where = [...new Set(noCrew.map(r => r.plot_name).filter(Boolean))];
+    notes.push(`${_plural(noCrew.length, 'record')} on ${esc(secName(secFilter))}’s plots `
+      + `name nobody${where.length ? ' — ' + where.map(esc).join(', ') : ''}. `
+      + `A record with no crew cannot be paid to anyone, so it produces no line here at all. `
+      + `Open it in the FC Portal under Maintenance → Transplanting Job and add who did the work.`);
+  }
+
+  /* Work done on this nursery's plots whose lines went to another circle,
+     because the register has those workers there. Named rather than left as
+     a gap: the gap is the thing that reads as lost work. */
+  const away = {};
+  transplantFieldLines().forEach(l => {
+    if (!inSection(secFilter, l.plotSection)) return;
+    if (l.section === secFilter) return;
+    const k = l.section || NO_SECTION;
+    (away[k] || (away[k] = new Set())).add(l.worker_name);
+  });
+  Object.keys(away).forEach(k => {
+    const who = [...away[k]].sort();
+    notes.push(`Work on ${esc(secName(secFilter))}’s plots by ${who.map(esc).join(', ')} `
+      + `is filed under ${esc(secName(k))}, because that is where the worker register has `
+      + `${who.length === 1 ? 'them' : 'them'}. The money is on that circle, not this one.`);
+  });
+  return notes;
+}
+
+/* The lead sentence of an empty sheet — what the office actually knows. */
+function transplantEmptyLead(secFilter) {
+  const month = esc(monthLabel(monthValue()));
+  const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
+  const here = esc(secName(secFilter));
+
+  if (!transplantField.length) {
+    return `No transplanting was recorded in the FC Portal for ${month} — in any nursery. `
+         + `A conductor records it under Maintenance &rarr; Transplanting Job.`;
+  }
+  const mine = transplantField.filter(r => inSection(secFilter, _tpSection(r.nursery_name)));
+  if (!mine.length) {
+    /* Where they ARE. A nursery name the payroll sections do not know is
+       shown as itself, because that is the thing somebody has to go and fix
+       in Facility Management rather than a code they can look up. */
+    const where = [...new Set(transplantField.map(r =>
+      _tpSection(r.nursery_name) ? secName(_tpSection(r.nursery_name))
+                                 : `“${r.nursery_name || '(no nursery)'}”, which matches no payroll section`))];
+    return `${_plural(transplantField.length, 'transplanting record')} reached the office for `
+         + `${month}, but none on ${here}’s plots — they are on ${where.map(esc).join('; ')}.`;
+  }
+  return `${_plural(mine.length, 'transplanting record')} on ${here}’s plots for ${month}, `
+       + `but ${mine.length === 1 ? 'it produces' : 'none of them produces'} a line on this claim.`;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   THE DRONE MAP OF EACH PLOT
+
+   Every transplanting row in the ledger carries the map that was flown for
+   it, as `MapUrl:` on its remark — written by the Seedling Stock batch
+   report when the plot was filled, and the only evidence of what actually
+   went in. The claim beside it is paying for that work, so the map belongs
+   where the work is being signed off, not two systems away.
+
+   READ ON ITS OWN, not off PlotMovement: that module keeps the ledger's
+   arithmetic — plot, batch, quantity, date — and drops the remark, which is
+   where the map is. One narrow read of the transplanting rows is cheaper
+   than widening what every page holds.
+   ══════════════════════════════════════════════════════════════ */
+let transplantMaps = {};     // plotKey → [{ url, batch, date }], newest first
+
+async function loadTransplantMaps() {
+  try {
+    const res = await PlotMovement.fetchAll(() => _supabase.from('shared_inventory_logs')
+      .select('plot_name, batch_name, remark, transaction_date, created_at')
+      .in('transaction_type',
+          ['Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone'])
+      .order('id', { ascending: true }));
+    if (res.error) throw res.error;
+    const by = {};
+    (res.data || []).forEach(l => {
+      const m = String(l.remark || '').match(/MapUrl:(\S+)/i);
+      if (!m) return;
+      const k = _tpKey(l.plot_name);
+      if (!k) return;
+      (by[k] || (by[k] = [])).push({
+        url: m[1],
+        batch: (l.batch_name || '').trim(),
+        date: String(l.transaction_date || l.created_at || '').slice(0, 10)
+      });
+    });
+    // Newest first, and one line per map however many rows name it.
+    Object.keys(by).forEach(k => {
+      const seen = new Set();
+      by[k] = by[k].sort((a, b) => String(b.date).localeCompare(String(a.date)))
+                   .filter(x => (seen.has(x.url) ? false : (seen.add(x.url), true)));
+    });
+    transplantMaps = by;
+  } catch (e) {
+    /* No maps is not no work. The table draws without the column rather than
+       not at all, and says nothing it cannot answer. */
+    console.warn('[payroll] drone maps could not be read:', (e && e.message) || e);
+    transplantMaps = {};
+  }
+}
+
+/* The maps for one plot — this month's batches where they match, and the
+   plot's own newest otherwise. A plot is re-used across batches over the
+   years, so the batch is what tells one flight from another. */
+function mapsForPlot(plot, batches) {
+  const all = transplantMaps[_tpKey(plot)] || [];
+  if (!all.length) return [];
+  const want = (batches || []).map(b => String(b).trim()).filter(Boolean);
+  if (!want.length) return all.slice(0, 1);
+  const hit = all.filter(m => want.some(b => _tpKey(b) === _tpKey(m.batch)));
+  return hit.length ? hit : all.slice(0, 1);
+}
+
+const _isPdfUrl = (u) => /\.pdf(\?|$)/i.test(String(u || ''));
+
+/* ONE BATCH, ONE MAP. A plot filled from two batches was flown twice and has
+   two maps, and which is which is the batch — so the row carries one
+   thumbnail per batch, each labelled with it.
+
+   A batch with no map keeps its place, greyed, saying so. The gap is the
+   useful part: it names the batch whose flight is missing, which an absent
+   thumbnail cannot. */
+function mapsByBatch(plot, batches) {
+  const all = transplantMaps[_tpKey(plot)] || [];
+  const want = (batches || []).map(b => String(b).trim()).filter(Boolean);
+  const out = [];
+  if (want.length) {
+    want.forEach(b => {
+      const m = all.find(x => _tpKey(x.batch) === _tpKey(b));
+      out.push({ batch: b, url: m ? m.url : '', date: m ? m.date : '' });
+    });
+    /* One per batch the record names, and NOTHING ELSE. A plot is re-used
+       over the years and carries every map ever flown over it; the ones
+       belonging to other batches are other months' work, and putting them
+       here is the table answering a question nobody asked of it. */
+    return out;
+  }
+  // No batch on the record: whatever the plot has, newest first.
+  return all.slice();
+}
+
+/* One plot's maps, as something to open. A new tab rather than a box on this
+   page: that is what prints, which is half of what the map is wanted for. */
+function mapCellHtml(plot, batches) {
+  const maps = mapsByBatch(plot, batches);
+  if (!maps.length) return '<span style="color:var(--text-faint);">—</span>';
+  return `<span class="tp-maps">` + maps.map(m => {
+    const label = m.batch ? esc(m.batch) : '—';
+    if (!m.url) {
+      return `<span class="tp-map-w"><span class="tp-map is-none"
+        title="No drone map on this batch\u2019s transplanting record">\u2014</span>
+        <span class="tp-map-b">${label}</span></span>`;
+    }
+    const pdf = _isPdfUrl(m.url);
+    const tip = ['Drone map', plot, m.batch ? 'batch ' + m.batch : '', m.date]
+      .filter(Boolean).join(' \u00b7 ');
+    return `<span class="tp-map-w"><a class="tp-map${pdf ? ' is-pdf' : ''}" href="${esc(m.url)}"
+      target="_blank" rel="noopener" title="${esc(tip)} — opens in a new tab, where it prints"
+      ${pdf ? '' : `style="background-image:url('${esc(m.url)}')"`}>${pdf ? '\u{1F4C4}' : ''}</a>
+      <span class="tp-map-b">${label}</span></span>`;
+  }).join('') + `</span>`;
+}
+
+/* ── THE MAPS, ON THE CLAIM FORM ────────────────────────────────────────
+   One button and one file. The maps used to open in a print window of their
+   own beside the claim's download, which is two things to press and two
+   things to file for one month's work — so they go on the end of the claim
+   form, where the form itself says what they are evidence of.
+
+   ONE CARD PER BATCH, not per plot. The map is flown for a batch: the office
+   puts the same picture on every plot row that batch filled, so a batch
+   across six plots used to be six identical sheets of paper. One card, with
+   every plot it covers named on it.
+
+   THIS NURSERY'S MAPS AND NO OTHER. The claim form is one nursery's — the
+   circle on the bar decides it — so the evidence stapled to it is that
+   nursery's too. It carried all three for a while, which made BNN's claim a
+   folder with UNN 1's and UNN 2's plots in the back of it.
+
+   TWO TO A PAGE, because half an A4 is the smallest a drone map is worth
+   printing at — the reason to print one is to stand in the plot and compare
+   it with what is there. */
+
+/* The cards for one nursery: one per batch that was flown, naming the plots
+   that batch filled. */
+function mapCardsFor(code) {
+  const byBatch = new Map();
+  transplantPlotRows(code).forEach((r) => {
+    mapsByBatch(r.plot, r.batches).forEach((m) => {
+      if (!m.url) return;                       // a batch nobody flew
+      /* Keyed on the PICTURE. A batch normally has one, and then this is one
+         card per batch — which is the point. Where a batch somehow carries
+         two different maps they stay two cards, because folding them would
+         throw one away; and where two plots or two batches share a picture
+         they fold into one, which is the repeat being deleted. */
+      let c = byBatch.get(m.url);
+      if (!c) { c = { batch: m.batch, url: m.url, plots: [], batches: [], dates: [] };
+                byBatch.set(m.url, c); }
+      if (!c.plots.includes(r.plot)) c.plots.push(r.plot);
+      if (m.batch && !c.batches.includes(m.batch)) c.batches.push(m.batch);
+      if (m.date && !c.dates.includes(m.date)) c.dates.push(m.date);
+    });
+  });
+  return [...byBatch.values()];
+}
+
+/* A map, fetched so it can be drawn into the PDF.
+
+   crossOrigin, because a canvas that has been given an image without it is
+   tainted and the whole file fails at the last step. Storage answers with
+   the header; anything that does not simply comes back null and is listed on
+   the page as missing, which is better than a download that produces
+   nothing. */
+function loadMapImage(url) {
+  return new Promise((done) => {
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    const t = setTimeout(() => { im.onload = im.onerror = null; done(null); }, 15000);
+    im.onload  = () => { clearTimeout(t); done(im.naturalWidth ? im : null); };
+    im.onerror = () => { clearTimeout(t); done(null); };
+    im.src = url;
+  });
+}
+
+const _pdfImgFormat = (u) => (/\.png(\?|$)/i.test(String(u)) ? 'PNG' : 'JPEG');
+
+/* Draws every nursery's maps onto the end of the claim form. Returns what it
+   could not draw, so the caller can say so rather than leaving a gap. */
+async function drawDroneMaps(doc, monthTxt, sec) {
+  const secName = (c) => (NURSERY_FULL[c] ? `${c} — ${NURSERY_FULL[c]}` : c);
+  const missed = [];
+
+  for (const code of (sec ? [sec] : CLAIM_NURSERIES)) {
+    const cards = mapCardsFor(code);
+    if (!cards.length) continue;
+
+    /* THE GEOMETRY IS WORKED OUT, NOT GUESSED. The first pass put the two
+       cards at a fixed 117mm each under a title that leaves 59mm gone, which
+       comes to 305 on a page 297 tall — the second map ran off the bottom.
+       So the page says how much room there is and the two cards divide it. */
+    const X = 25, W = 160;                    // the same column the claim uses
+    const BOTTOM = 297 - 12;                  // the foot of the page
+    const GAP = 6, CAP = 9;                   // between the cards, and the name strip
+
+    // A nursery to a page, always starting a fresh one.
+    for (let i = 0; i < cards.length; i += 2) {
+      doc.addPage();
+      const TOP = pdfTitle(doc, ['DRONE MAPS — TRANSPLANTING', secName(code), `Month ${monthTxt}`]);
+      const CARD = (BOTTOM - TOP - GAP) / 2;  // two of them, whatever the title left
+      const BOX = CARD - CAP;
+
+      const pair = cards.slice(i, i + 2);
+      for (let j = 0; j < pair.length; j++) {
+        const c = pair[j];
+        let y = TOP + j * (CARD + GAP);
+
+        pdfCell(doc, X, y, W, CAP, '', { fill: [232, 236, 252] });
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(0, 0, 0);
+        doc.text(c.plots.join('  ·  '), X + 3, y + CAP - 2.8, { maxWidth: W * 0.55 });
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70, 70, 70);
+        doc.text([c.batches.length ? 'Batch ' + c.batches.join(', ') : '',
+                  c.dates.slice().sort().map(fmtDay).join(', ')]
+                   .filter(Boolean).join('   ·   '),
+                 X + W - 3, y + CAP - 2.8, { align: 'right', maxWidth: W * 0.42 });
+        doc.setTextColor(0, 0, 0);
+        y += CAP;
+
+        doc.setDrawColor(80, 80, 80); doc.setLineWidth(0.2);
+        doc.rect(X, y, W, BOX);
+
+        const im = _isPdfUrl(c.url) ? null : await loadMapImage(c.url);
+        if (im) {
+          /* Fitted INSIDE the box, whole, whatever shape it was flown in —
+             the smaller of the two scales, so neither edge can pass the
+             frame however wide or tall the picture is. */
+          const k = Math.min((W - 4) / im.naturalWidth, (BOX - 4) / im.naturalHeight);
+          const w = im.naturalWidth * k, h = im.naturalHeight * k;
+          doc.addImage(im, _pdfImgFormat(c.url), X + (W - w) / 2, y + (BOX - h) / 2, w, h);
+        } else {
+          missed.push(c.plots.join(', ')
+            + (c.batches.length ? ' (batch ' + c.batches.join(', ') + ')' : ''));
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(150, 30, 30);
+          doc.text(_isPdfUrl(c.url)
+            ? 'This map is a PDF and cannot be printed with the others.'
+            : 'This map could not be read. Open it from the Transplanting sheet.',
+            X + W / 2, y + BOX / 2, { align: 'center', maxWidth: W - 10 });
+          doc.setFontSize(7); doc.setTextColor(90, 90, 90);
+          doc.text(String(c.url), X + W / 2, y + BOX / 2 + 6,
+                   { align: 'center', maxWidth: W - 10 });
+          doc.setTextColor(0, 0, 0);
+        }
+      }
+    }
+  }
+  return missed;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   WHAT WAS TRANSPLANTED, PLOT BY PLOT
+
+   The claim says what each worker is owed. This says what the work was: one
+   line per plot, and the nursery's total for the month at the foot.
+
+   COUNTED ONCE PER PLOT, and that is the whole care of it. A plot carries
+   four jobs — blanket spray, lining, polybag filling, transplanting — and
+   every one of them records the SAME figure, the number the operation report
+   says went into that plot. Adding the four, or adding the claim's lines,
+   reports the nursery at four times its size. So the plot's own figure is
+   taken once, from its newest record, which is the rule summarise() in
+   shared_maint_field.js already pays by for the same reason.
+
+   Where the four disagree — the report moved between one job being keyed and
+   the next — the newest wins and the disagreement is said out loud, because
+   the records that are left are paying on the old number.
+
+   A plot with no crew on it still appears here. It produces no claim line at
+   all, so this is the only place the work shows.
+   ══════════════════════════════════════════════════════════════ */
+function transplantPlotRows(secFilter) {
+  const by = new Map();
+  transplantField.forEach(rec => {
+    if (secFilter && !inSection(secFilter, _tpSection(rec.nursery_name))) return;
+    const key = _tpKey(rec.plot_name);
+    if (!by.has(key)) {
+      by.set(key, { plot: rec.plot_name || '—', batches: new Set(), dates: [],
+                    jobs: new Set(), seen: new Set(), newest: null, crew: 0 });
+    }
+    const p = by.get(key);
+    String(rec.batch_name || '').split(',').map(s => s.trim()).filter(Boolean)
+      .forEach(b => p.batches.add(b));
+    if (rec.work_date) p.dates.push(String(rec.work_date).slice(0, 10));
+    if (rec.work_type) p.jobs.add(rec.work_type);
+    if (rec.source_qty != null && rec.source_qty !== '') p.seen.add(Number(rec.source_qty));
+    p.crew += (Array.isArray(rec.workers) ? rec.workers.filter(w => w && w.name).length : 0);
+    // The newest record decides the figure: same record, same rule, as the
+    // group quantity everywhere else in this system.
+    const a = String(rec.work_date || '');
+    const b = String((p.newest || {}).work_date || '');
+    if (!p.newest || a > b) p.newest = rec;
+  });
+
+  return [...by.values()].map(p => ({
+    plot:    p.plot,
+    batches: [...p.batches],
+    from:    p.dates.length ? p.dates.slice().sort()[0] : '',
+    jobs:    p.jobs.size,
+    crew:    p.crew,
+    qty:     p.newest && p.newest.source_qty != null && p.newest.source_qty !== ''
+               ? Number(p.newest.source_qty) : null,
+    // More than one figure across this plot's four jobs.
+    disagrees: p.seen.size > 1 ? [...p.seen].sort((x, y) => x - y) : null
+  })).sort((a, b) => String(a.plot).localeCompare(String(b.plot),
+                       undefined, { numeric: true, sensitivity: 'base' }));
+}
+
+function renderTransplantByPlot(secFilter) {
+  const table = $('transpl-plots-table');
+  if (!table) return;
+  const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
+  const rows = transplantPlotRows(secFilter);
+  const head = $('transpl-plots-head');
+  if (head) {
+    head.textContent = `Transplanting by plot — ${secName(secFilter)} · ${monthLabel(monthValue())}`;
+  }
+
+  if (!rows.length) {
+    table.innerHTML = `<tbody><tr><td class="empty" colspan="4">
+      Nothing transplanted in ${esc(secName(secFilter))} for ${esc(monthLabel(monthValue()))}.
+    </td></tr></tbody>`;
+    $('transpl-plots-note').textContent = '';
+    return;
+  }
+
+  const total = rows.reduce((s, r) => s + (r.qty || 0), 0);
+  /* TWO ANSWERS PER LINE: which plot, and how many went into it. The batch,
+     the day it was first worked and how many of its four jobs are recorded
+     were all on this table and all came off again — they are on the FC
+     Portal's own screen, and what this one is read for is the column on the
+     right and the total under it. */
+  const body = rows.map((r, i) => `
+    <tr>
+      <td style="color:var(--text-faint);width:44px;">${i + 1}</td>
+      <td class="l" style="font-weight:800;color:var(--text-head);">${esc(r.plot)}</td>
+      <td style="white-space:nowrap;">${mapCellHtml(r.plot, r.batches)}</td>
+      <td style="font-weight:800;${r.qty == null ? 'color:var(--text-faint);' : ''}">${
+        r.qty == null ? '—' : num(r.qty)}${
+        r.disagrees ? ' <span title="This plot’s jobs were keyed against different figures"'
+                    + ' style="color:#c0392b;">&#9888;</span>' : ''}</td>
+    </tr>`).join('');
+
+  table.innerHTML = `
+    <thead><tr>
+      <th style="width:44px;">No.</th>
+      <th class="l">Plot</th>
+      <!-- What was flown over the plot when it was filled, one picture per
+           batch with the batch written under it. No Batch column of its own:
+           the label under each thumbnail already says which batch that map
+           is, and a column repeating it is the same answer twice. -->
+      <th style="width:170px;">Drone Map</th>
+      <th style="width:180px;">Transplanted</th>
+    </tr></thead>
+    <tbody>${body}</tbody>
+    <tfoot><tr>
+      <td class="l" colspan="3">TOTAL — ${esc(secName(secFilter))} · ${esc(monthLabel(monthValue()))}</td>
+      <td>${num(total)}</td>
+    </tr></tfoot>`;
+
+  /* Anything that makes the total wrong, or looks wrong and is not. */
+  const notes = [];
+  const moved = rows.filter(r => r.disagrees);
+  if (moved.length) {
+    notes.push(`${moved.map(r => `${esc(r.plot)} (${r.disagrees.map(n => num(n)).join(' and ')})`).join(', ')
+      } ${moved.length === 1 ? 'was' : 'were'} keyed against more than one figure — the report `
+      + `moved between one job being recorded and the next. The newest is counted here; `
+      + `the jobs keyed on the old one are still paying it.`);
+  }
+  const noQty = rows.filter(r => r.qty == null);
+  if (noQty.length) {
+    notes.push(`${noQty.map(r => esc(r.plot)).join(', ')} ${noQty.length === 1 ? 'has' : 'have'} `
+      + `no quantity on the record, so ${noQty.length === 1 ? 'it adds' : 'they add'} nothing to the total.`);
+  }
+  const noCrew = rows.filter(r => !r.crew);
+  if (noCrew.length) {
+    notes.push(`${noCrew.map(r => esc(r.plot)).join(', ')} ${noCrew.length === 1 ? 'names' : 'name'} `
+      + `nobody, so ${noCrew.length === 1 ? 'it is' : 'they are'} on this table but on no claim line.`);
+  }
+  $('transpl-plots-note').innerHTML = notes.map(t =>
+    `<div style="color:var(--danger,#c0392b);font-weight:600;margin-bottom:.25rem;">${t}</div>`).join('');
+}
+
 /* ════════════ TRANSPLANTING / SEEDLINGS ════════════ */
 const SHEET = {
   transplanting: { table:'transpl-table',  section:'transpl-section',  title:'Transplanting' },
@@ -1044,6 +1729,14 @@ const SHEET = {
  */
 function renderTransplantClaim() {
   const secFilter = $('transpl-section').value || '';
+
+  /* What was transplanted, plot by plot — drawn from here so it is drawn
+     whatever the claim does, including the early return below. A month whose
+     records name nobody has no claim lines at all, and that is precisely the
+     month somebody needs to see the plots. */
+  try { renderTransplantByPlot(secFilter); }
+  catch (e) { console.warn('[payroll] the by-plot table could not be drawn:', e); }
+
   const lines = transplantFieldLines()
     .filter(l => !secFilter || inSection(secFilter, l.section));
 
@@ -1053,10 +1746,15 @@ function renderTransplantClaim() {
                            + ` \u00b7 ${monthLabel(monthValue())}`;
 
   if (!lines.length) {
+    /* Which of the five reasons it is — see transplantEmptyLead. An empty
+       sheet that asserts nothing was recorded, when the records are sitting
+       in the database with no crew on them, is the office telling a
+       conductor his month's work never arrived. */
+    const why = transplantSectionNotes(secFilter);
     $('transpl-table').innerHTML = `<tbody><tr><td class="empty">
-      No transplanting recorded in the FC Portal for ${esc(monthLabel(monthValue()))}${
-      secFilter ? ' in ' + esc(secName(secFilter)) : ''}.
-      A conductor records it under Maintenance &rarr; Transplanting Job.
+      ${transplantEmptyLead(secFilter)}
+      ${why.map(n => `<div style="color:var(--danger,#c0392b);font-weight:600;
+        margin-top:.6rem;text-align:left;">${n}</div>`).join('')}
     </td></tr></tbody>`;
     $('transpl-note').textContent = '';
     return;
@@ -1088,9 +1786,14 @@ function renderTransplantClaim() {
   };
   /* Capacity to two places first, then priced — the same order renderMaint
      uses, so the row on screen multiplies out to the money beside it. */
-  const capOf = (n, key) => cap2(lines
+  /* The share the field divided out… */
+  const capWorked = (n, key) => cap2(lines
     .filter(l => l.worker_name === n && l.key === key)
     .reduce((s, l) => s + Number(l.qty || 0), 0));
+  /* …and the share being paid on, which is that one unless it has been
+     calibrated. Everything downstream — the money, the column total, the
+     grand total — is built from THIS, so the sheet goes on multiplying out. */
+  const capOf = (n, key) => capPaid('transplanting', secOf(n), n, key, capWorked(n, key));
   const rmOf = (n, key) => {
     const r = rateOf(key);
     if (r == null) return 0;
@@ -1134,11 +1837,16 @@ function renderTransplantClaim() {
     <tr>
       <td style="color:var(--text-faint);">${i + 1}</td>
       <td class="l" style="font-weight:700;color:var(--text-head);">${esc(n)}${
-        knownOf(n) ? '' : '<span title="Not on the worker register — add them in Worker System, or the claim cannot pay this" style="color:var(--danger,#c0392b);"> &#9888;</span>'}</td>
+        knownOf(n) ? '' : '<span title="Not on the worker register — add them in Worker System, or the claim cannot pay this" style="color:var(--danger,#c0392b);"> &#9888;</span>'}${
+        calibrationLine(capCalibrationOf('transplanting', secOf(n), n,
+                                         TRANSPLANT_JOBS.map(j => j.key), (k) => capWorked(n, k)), 'cap')}${
+        calibrationLine(calibrationOf('transplanting', secOf(n), n,
+                                      TRANSPLANT_JOBS.map(j => j.key), (k) => rmOf(n, k)))}</td>
       ${TRANSPLANT_JOBS.map(j => {
         const c = capOf(n, j.key);
-        return `<td>${capFmt(c)}</td>` + earnedCell('transplanting', 'transpl', secOf(n), n, j.key,
-                                                    j.label, c ? rmOf(n, j.key) : 0);
+        return capCell('transplanting', 'transpl', secOf(n), n, j.key, capWorked(n, j.key))
+             + earnedCell('transplanting', 'transpl', secOf(n), n, j.key,
+                          j.label, c ? rmOf(n, j.key) : 0);
       }).join('')}
       <td class="money">${money(earned(n))}</td>
     </tr>`).join('');
@@ -1146,7 +1854,8 @@ function renderTransplantClaim() {
   const foot = `
     <tfoot><tr>
       <td colspan="2">Grand Total</td>
-      ${TRANSPLANT_JOBS.map(j => `<td>${capFmt(capSum(j.key))}</td><td>${money(rmSum(j.key))}</td>`).join('')}
+      ${TRANSPLANT_JOBS.map(j =>
+        `<td>${capFmt(capSum(j.key))}</td><td>${money(rmSum(j.key))}</td>`).join('')}
       <td>${money(grand)}</td>
     </tr></tfoot>`;
 
@@ -1155,6 +1864,10 @@ function renderTransplantClaim() {
   /* Anything that would make the claim short is said FIRST, because a claim
      missing work looks exactly like a quiet month. */
   const notes = [];
+  /* A record with nobody on it, and work whose money is filed under another
+     circle. Both make THIS sheet short, and both are just as true when there
+     are rows as when there are none — see transplantSectionNotes. */
+  transplantSectionNotes(secFilter).forEach(n => notes.push(n));
   const unknown = names.filter(n => !knownOf(n));
   if (unknown.length) {
     const held = unknown.reduce((s, n) => s + earned(n), 0);
@@ -1559,11 +2272,14 @@ function workdoneCell(cap, rate, claimed) {
      on purpose, so it is not called a shortfall — but it is still a
      difference, and a difference between two totals on one form has to be
      accounted for or somebody will spend the afternoon on it. */
+  /* On its own line UNDER the total, not trailing after it. The two are
+     different figures — what the work came to, and what is missing from the
+     claim for it — and on one line the second reads as part of the first. */
   const gap = Math.abs(short) < 0.005 ? '' :
-    `<span style="color:var(--danger,#c0392b);font-weight:800;"> &middot; ${
-      short > 0 ? money(short) + ' not claimed' : money(-short) + ' over'}</span>`;
+    `<div style="color:var(--danger,#c0392b);font-weight:800;margin-top:2px;">${
+      short > 0 ? money(short) + ' not claimed' : money(-short) + ' over'}</div>`;
   return `<th ${span} title="${esc(capFmt(cap2(cap)))} at ${esc(rateTxt(rate))}"
-           >Total Workdone (RM) : ${money(total)}${gap}</th>`;
+           ><div>Total Workdone (RM) : ${money(total)}</div>${gap}</th>`;
 }
 
 function renderMaint() {
@@ -1589,7 +2305,8 @@ function renderMaint() {
   }
 
   // Money from the capacity AS SHOWN, so the printed row multiplies out.
-  const capOf = (w, c) => cap2(per[w] ? per[w][c] : 0);
+  const capWorked = (w, c) => cap2(per[w] ? per[w][c] : 0);
+  const capOf = (w, c) => capPaid('maint', n, w, c, capWorked(w, c));
   const rmOf  = (w, c) => {
     const r = rateOf(c);
     if (r == null) return 0;
@@ -1637,11 +2354,16 @@ function renderMaint() {
   const body = wk.map((w, i) => `
     <tr>
       <td style="color:var(--text-faint);">${i + 1}</td>
-      <td class="l" style="font-weight:700;color:var(--text-head);">${esc(w)}</td>
+      <td class="l" style="font-weight:700;color:var(--text-head);">${esc(w)}${
+        calibrationLine(capCalibrationOf('maint', n, w, MAINT_TYPES.map(t => t.code),
+                                         (c) => capWorked(w, c)), 'cap')}${
+        calibrationLine(calibrationOf('maint', n, w, MAINT_TYPES.map(t => t.code),
+                                      (c) => rmOf(w, c)))}</td>
       ${MAINT_TYPES.map(t => {
         const c = capOf(w, t.code);
-        return `<td>${capFmt(c)}</td>` + earnedCell('maint', 'maint', n, w, t.code, t.label,
-                                                    c ? rmOf(w, t.code) : 0);
+        return capCell('maint', 'maint', n, w, t.code, capWorked(w, t.code))
+             + earnedCell('maint', 'maint', n, w, t.code, t.label,
+                          c ? rmOf(w, t.code) : 0);
       }).join('')}
       <td class="money">${money(earned(w))}</td>
     </tr>`).join('');
@@ -1649,7 +2371,8 @@ function renderMaint() {
   const foot = `
     <tfoot><tr>
       <td colspan="2">Grand Total</td>
-      ${MAINT_TYPES.map(t => `<td>${capFmt(capSum(t.code))}</td><td>${money(rmSum(t.code))}</td>`).join('')}
+      ${MAINT_TYPES.map(t =>
+        `<td>${capFmt(capSum(t.code))}</td><td>${money(rmSum(t.code))}</td>`).join('')}
       <td>${money(grand)}</td>
     </tr></tfoot>`;
 
@@ -1789,9 +2512,19 @@ function lockAllows(sheet) {
     ? `${m} is locked, so nothing on any payroll sheet for that month can be changed.\n\n`
       + 'Somebody with Lock Controls can re-open it under System Setting.'
     : `${LOCK_SHEETS[sheet].label} for ${scopeLabel(sheet, lockScope(sheet))} was verified by `
-      + `${why.by || 'somebody'} on ${fmtStamp(why.at)}, so it is closed.\n\n`
-      + 'Re-opening the month under System Setting takes that verification back.');
+      + `${whoName(why.by)} on ${fmtStamp(why.at)}, so it is closed.\n\n`
+      + 'Unlock it on the strip above the sheet, or re-open the whole month under '
+      + 'System Setting.');
   return false;
+}
+
+/* Who, as a name. MJMPeople is loaded at boot; if it is not there — an old
+   cached copy of the page — the email still shows, which is the thing it was
+   before and not a failure. */
+function whoName(v) {
+  if (!v) return 'somebody';
+  try { return (typeof MJMPeople !== 'undefined' ? MJMPeople.name(v) : v) || v; }
+  catch (_) { return v; }
 }
 
 function fmtStamp(t) {
@@ -1826,8 +2559,20 @@ function renderVerifyBar(sheet) {
     el.className = 'verify-bar verify-done';
     el.innerHTML = `<span>✔ Verified — ${esc(what)}</span>`
                  + `<span class="vb-spacer"></span>`
-                 + `<span class="vb-who">${esc(why.by || 'somebody')}</span>`
-                 + `<span>${esc(fmtStamp(why.at))}</span>`;
+                 + `<span class="vb-who">${esc(whoName(why.by))}</span>`
+                 + `<span>${esc(fmtStamp(why.at))}</span>`
+                 /* ── 2. Taking it back ──
+                    A sheet verified by mistake used to need somebody with
+                    Lock Controls to re-open the WHOLE month — every other
+                    sheet of it with it — which is a sledgehammer for one
+                    wrong press. This undoes the one sheet and nothing else.
+                    Its own permission, because it is not the same question
+                    as being allowed to verify: the person who signs a sheet
+                    is not automatically the person who may unsign it. */
+                 + (may(sheet, 'unverify')
+                     ? `<button class="btn btn-sm" style="margin-left:10px;"
+                          onclick="unverifySheet('${sheet}')">\u21ba Unlock</button>`
+                     : '');
     return;
   }
   el.className = 'verify-bar verify-open';
@@ -1849,10 +2594,45 @@ async function verifySheet(sheet) {
   }
   const ym = monthValue(), scope = lockScope(sheet);
   if (!confirm(`Verify ${LOCK_SHEETS[sheet].label} for ${scopeLabel(sheet, scope)}, ${monthLabel(ym)}?\n\n`
-             + 'It locks straight away and cannot be changed after this. Only somebody with Lock '
-             + 'Controls can re-open the month.')) return;
+             + 'It locks straight away and nothing on it can be changed after that. Somebody with '
+             + 'the Unlock tick can take it back; otherwise it needs Lock Controls and the whole '
+             + 'month.')) return;
   const error = await MJMPayrollLock.verify(_supabase, ym, sheet, scope, userEmail || null);
   if (error) { alert('Could not verify: ' + error.message); return; }
+  refreshPayrollTab();
+  if (typeof renderLockCalendar === 'function' && $('tab-locks')) renderLockCalendar();
+}
+
+/* Taking one sheet's verification back, and nothing else with it.
+
+   Separate from Lock Controls on purpose. That re-opens the whole MONTH —
+   every sheet of it, every nursery — which is the right tool for a month
+   that has to be re-run and much too big for one sheet signed in error.
+
+   Its own permission for the same reason verifying has one: being trusted
+   to say a sheet is right is not the same as being trusted to unsay it. */
+async function unverifySheet(sheet) {
+  if (!mayDo(sheet, 'unverify',
+      'You do not have permission to unlock this sheet. Ask an admin to grant it in User Access.')) return;
+  if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) {
+    alert('Lock Controls are not set up yet — run shared/RUN_ME_npayroll_locks.sql first.');
+    return;
+  }
+  const ym = monthValue(), scope = lockScope(sheet);
+  const v  = MJMPayrollLock.verificationOf(ym, sheet, scope);
+  if (!v) { refreshPayrollTab(); return; }
+  /* The verification that closes this sheet may have been filed with NO
+     scope — somebody verifying with the picker on "All sections" closes
+     every section at once. Taking it off re-opens all of them, so say so
+     rather than letting one nursery's unlock quietly open three. */
+  const wide = !String(v.scope || '').trim();
+  if (!confirm(`Unlock ${LOCK_SHEETS[sheet].label} for ${scopeLabel(sheet, scope)}, ${monthLabel(ym)}?\n\n`
+             + `It was verified by ${whoName(v.verified_by)} on ${fmtStamp(v.verified_at)}.`
+             + (wide ? '\n\nThat verification covers EVERY section of this sheet, so this re-opens '
+                     + 'all of them, not only the one on screen.' : '')
+             + '\n\nThe sheet becomes editable again and will have to be verified a second time.')) return;
+  const error = await MJMPayrollLock.unverify(_supabase, ym, sheet, v.scope || '');
+  if (error) { alert('Could not unlock: ' + error.message); return; }
   refreshPayrollTab();
   if (typeof renderLockCalendar === 'function' && $('tab-locks')) renderLockCalendar();
 }
@@ -2155,6 +2935,73 @@ function pdfTitle(doc, lines) {
   doc.line(25, y + 29, 185, y + 29); doc.setLineWidth(0.2);
   return y + 34;
 }
+/* A worker's cell on a claim form, with what their cents came to under the
+   name.
+
+   ON THE PAPER AND NOT ON THE SCREEN, which is deliberate. The screen is
+   where the cents are being pressed, and a red line under every one of eight
+   names while somebody is still pressing is eight lines of working out. The
+   PAPER is what gets signed and filed: whoever reads it is not adjusting
+   anything and does need to know that RM 6.96 is not RM 6.97 by arithmetic.
+
+   One box, not two stacked: the name is placed in the upper part of the cell
+   and the line in a band at its foot, so the row keeps the single rule round
+   it that every other cell has. */
+function pdfWorkerCell(doc, x, y, w, h, name, cal, o) {
+  const opts = Object.assign({ size: 8.5, bold: false, fill: null }, o || {});
+  if (!cal) { pdfCell(doc, x, y, w, h, name, opts); return; }
+  pdfCell(doc, x, y, w, h, '', opts);          // the box and its fill, nothing in it
+  const BAND = 2.9;
+  doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
+  doc.setTextColor(0, 0, 0);
+  let size = opts.size, lines;
+  for (;;) {
+    doc.setFontSize(size);
+    lines = doc.splitTextToSize(String(name == null ? '' : name), w - 3);
+    if (lines.length * size * 0.3528 * 1.15 <= h - BAND - 1 || size <= 5) break;
+    size -= 0.4;
+  }
+  doc.setFontSize(size);
+  const lh = size * 0.3528 * 1.15;
+  let ty = y + (h - BAND - lines.length * lh) / 2 + lh * 0.78;
+  lines.forEach(l => { doc.text(l, x + w / 2, ty, { align: 'center' }); ty += lh; });
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(5.8);
+  doc.setTextColor(150, 30, 30);
+  doc.text(cal, x + w / 2, y + h - 1.1, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
+}
+
+/* What a worker was calibrated by, for the band under their name on the
+   printed form: the hundredths on their capacity, and the cents the
+   adjustment form put on their money. Usually one or neither; on one line
+   because the band is one line deep. */
+function calibrationText(capD, rmD) {
+  const sign = (d) => (d > 0 ? '' : '-');
+  return [
+    capD ? `calibrate ${sign(capD)}${Math.abs(capD).toFixed(2)}` : '',
+    rmD  ? `calibrate ${sign(rmD)}RM${Math.abs(rmD).toFixed(2)}` : ''
+  ].filter(Boolean).join('  \u00b7  ');
+}
+
+/* Who signed this sheet off, printed under the total.
+
+   The form is what goes for payment, so the signature belongs ON it rather
+   than only on the screen it was produced from. A sheet not yet verified
+   says so plainly — a printed claim with no line here would look the same
+   as one where the line simply did not fit. */
+function pdfVerifiedNote(doc, y, sheet, scope) {
+  let line = 'Not yet verified.';
+  try {
+    if (typeof MJMPayrollLock !== 'undefined' && MJMPayrollLock.ready()) {
+      const v = MJMPayrollLock.verificationOf(monthValue(), sheet, scope);
+      if (v) line = `Verified by ${whoName(v.verified_by)} on ${fmtStamp(v.verified_at)}`;
+    }
+  } catch (_) {}
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(60, 60, 60);
+  doc.text(line, 25, y + 6);
+  return y + 6;
+}
+
 function pdfFooterNote(doc, y) {
   doc.setFont('helvetica', 'italic'); doc.setFontSize(8.5); doc.setTextColor(110, 110, 110);
   doc.text('This salary claim form is automatically generated by the MJM Nursery AI system.', 105, y + 12, { align: 'center' });
@@ -2168,7 +3015,8 @@ function downloadMaintPDF() {
   if (!wk.length) { alert('No worker on the Work Maintenance list for this nursery.'); return; }
   const rateOf = c => (maint.rates[n] || {})[c];
   const per = maintTotals(n, monthTxt, month);
-  const capOf = (w, c) => cap2(per[w] ? per[w][c] : 0);
+  const capWorked = (w, c) => cap2(per[w] ? per[w][c] : 0);
+  const capOf = (w, c) => capPaid('maint', n, w, c, capWorked(w, c));
   const rmOf  = (w, c) => { const r = rateOf(c); return r == null ? 0 : Math.round(capOf(w, c) * Math.round(r * 100000) / 1000) / 100; };
   /* The printed claim is what gets signed and paid, so it prints the ADJUSTED
      figure — the same one the screen shows. A PDF that disagreed with the
@@ -2217,12 +3065,18 @@ function downloadMaintPDF() {
   };
 
   let y = drawHead();
-  const RH = 9;
+  const CODES = MAINT_TYPES.map(t => t.code);
+  const calTxtOf = (w) => calibrationText(
+    capCalibrationOf('maint', n, w, CODES, (c) => capWorked(w, c)),
+    calibrationOf('maint', n, w, CODES, (c) => rmOf(w, c)));
+  /* A little taller where any row carries a calibration, so the band under
+     the name does not squeeze the name itself. */
+  const RH = wk.some(w => calTxtOf(w)) ? 11 : 9;
   wk.forEach((w, i) => {
     if (y + RH > 297 - 25 - 40) { doc.addPage(); y = drawHead(); }
     const z = i % 2 ? [250, 250, 253] : null;
     pdfCell(doc, X[0], y, COL[0], RH, String(i + 1), { size: 8, nowrap: true, fill: z });
-    pdfCell(doc, X[1], y, COL[1], RH, w, { size: 8.5, fill: z });
+    pdfWorkerCell(doc, X[1], y, COL[1], RH, w, calTxtOf(w), { size: 8.5, fill: z });
     MAINT_TYPES.forEach((t, k) => {
       const c = PAIR(k), cap = capOf(w, t.code);
       pdfCell(doc, X[c],   y, COL[c],   RH, capFmt(cap), { size: 8, nowrap: true, fill: z });
@@ -2244,6 +3098,7 @@ function downloadMaintPDF() {
   pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH + 1, 'RM ' + wk.reduce((s, w) => s + earned(w), 0).toFixed(2),
           { bold: true, size: 9, nowrap: true, fill: TF });
   y += RH + 1;
+  y = pdfVerifiedNote(doc, y, 'maint', n);
   pdfFooterNote(doc, y);
   doc.save(`Salary_Claim_Work_Maintenance_${n}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
 }
@@ -2263,7 +3118,7 @@ function downloadMaintPDF() {
    matches nobody cannot be paid — the screen says so in red above the
    table — and a claim form that carried it would be a claim form for a
    person the payroll has no row for. */
-function downloadTransplantPDF() {
+async function downloadTransplantPDF() {
   if (!mayDo('transpl', 'export',
       'You do not have permission to download the salary claim form.')) return;
   const sec = $('transpl-section').value || '';
@@ -2274,7 +3129,18 @@ function downloadTransplantPDF() {
   const lines = transplantFieldLines().filter(l => !sec || inSection(sec, l.section));
   const names = [...new Set(lines.filter(l => l.known).map(l => l.worker_name))]
     .sort((a, b) => a.localeCompare(b));
-  if (!names.length) { alert('Nothing to claim for this nursery this month.'); return; }
+  /* The same table the screen opens with: what was transplanted, plot by
+     plot, and the nursery's total. It travels with the claim because the
+     claim cannot answer it — a plot carries the same figure on all four of
+     its jobs, so adding the claim's lines reports the nursery at four times
+     its size. */
+  const plotRows = transplantPlotRows(sec);
+  /* Nothing to claim AND nothing recorded is nothing to print. Records with
+     nobody credited still print: the plot summary is the only page they ever
+     appear on, and it is exactly the month somebody is looking for them. */
+  if (!names.length && !plotRows.length) {
+    alert('Nothing recorded for this nursery this month.'); return;
+  }
 
   /* Same fallback the screen uses: a nursery can have records this form shows
      no line for, and Total Workdone still has to price them. */
@@ -2289,9 +3155,14 @@ function downloadTransplantPDF() {
     const r = rateRowOf(key);
     return r ? rateTxt(r.rate) + (r.unit ? ' / ' + r.unit : '') : '—';
   };
-  const capOf = (n, key) => cap2(lines
+  /* The share the field divided out… */
+  const capWorked = (n, key) => cap2(lines
     .filter(l => l.worker_name === n && l.key === key)
     .reduce((s, l) => s + Number(l.qty || 0), 0));
+  /* …and the share being paid on, which is that one unless it has been
+     calibrated. Everything downstream — the money, the column total, the
+     grand total — is built from THIS, so the sheet goes on multiplying out. */
+  const capOf = (n, key) => capPaid('transplanting', secOf(n), n, key, capWorked(n, key));
   const rmOf = (n, key) => {
     const r = rateOf(key);
     return r == null ? 0 : Math.round(capOf(n, key) * Math.round(r * 100000) / 1000) / 100;
@@ -2338,12 +3209,16 @@ function downloadTransplantPDF() {
   };
 
   let y = drawHead();
-  const RH = 9;
+  const KEYS = TRANSPLANT_JOBS.map(j => j.key);
+  const calTxtOf = (n) => calibrationText(
+    capCalibrationOf('transplanting', secOf(n), n, KEYS, (k) => capWorked(n, k)),
+    calibrationOf('transplanting', secOf(n), n, KEYS, (k) => rmOf(n, k)));
+  const RH = names.some(n => calTxtOf(n)) ? 11 : 9;
   names.forEach((n, i) => {
     if (y + RH > 297 - 25 - 40) { doc.addPage(); y = drawHead(); }
     const z = i % 2 ? [250, 250, 253] : null;
     pdfCell(doc, X[0], y, COL[0], RH, String(i + 1), { size: 8, nowrap: true, fill: z });
-    pdfCell(doc, X[1], y, COL[1], RH, n, { size: 8.5, fill: z });
+    pdfWorkerCell(doc, X[1], y, COL[1], RH, n, calTxtOf(n), { size: 8.5, fill: z });
     TRANSPLANT_JOBS.forEach((j, k) => {
       const c = PAIR(k), cap = capOf(n, j.key);
       pdfCell(doc, X[c],   y, COL[c],   RH, capFmt(cap), { size: 8, nowrap: true, fill: z });
@@ -2386,9 +3261,129 @@ function downloadTransplantPDF() {
              25, y + 6, { maxWidth: 160 });
     y += 8;
   }
+  /* A claim with no names on it is not a quiet month — it is work recorded
+     with nobody credited, and the form has to say which it is or it reads as
+     a nursery that did nothing. */
+  if (!names.length) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(150, 30, 30);
+    doc.text('NOTHING TO CLAIM — the records for this nursery name nobody. '
+           + 'The work is on the plot summary overleaf; add who did it in the FC Portal.',
+             25, y + 6, { maxWidth: 160 });
+    y += 10;
+  }
 
+  y = drawTransplantPlots(doc, y, plotRows, secTxt, monthTxt);
+
+  y = pdfVerifiedNote(doc, y, 'transpl', sec);
   pdfFooterNote(doc, y);
+
+  /* …and every nursery's drone maps on the end of it. Fetching them takes a
+     moment — the button says so rather than appearing to have ignored the
+     press, and is shut while it does so two presses cannot make two files. */
+  const btn = document.querySelector('#sub-transpl .bar-actions .btn-primary');
+  const was = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Fetching the drone maps…'; }
+  let missed = [];
+  try {
+    missed = await drawDroneMaps(doc, monthTxt, sec);
+  } catch (e) {
+    console.warn('[payroll] the drone maps could not be drawn:', e);
+    missed = ['every map — ' + ((e && e.message) || e)];
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = was; }
+  /* Said out loud: a claim form that quietly came out short of the evidence
+     it was supposed to carry is worse than one that says which is missing. */
+  if (missed.length) {
+    alert(`The claim form is ready, but ${missed.length} drone map${
+      missed.length === 1 ? '' : 's'} could not be put on it:\n\n  `
+      + missed.join('\n  ')
+      + '\n\nThey are still on the Transplanting sheet — open them from the '
+      + 'Drone Map column and print them from there.');
+  }
+
   doc.save(`Salary_Claim_Transplanting_${sec === NO_SECTION ? 'No_Section' : (sec || 'All')}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
+}
+
+/* THE PLOT SUMMARY, ON THE CLAIM FORM.
+
+   One line per plot and the nursery's total, printed under the claim — or on
+   a page of its own where the claim has filled this one. Same figures and
+   same rule as the table on screen: each plot counted ONCE, from its newest
+   record, because its four jobs all carry the one figure.
+
+   Returns the y it finished at, so the footer note goes under it. */
+function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
+  if (!rows || !rows.length) return y;
+
+  // No. · Plot · Transplanted — 160mm across, the same width as the claim
+  // above it. The same three columns the screen shows.
+  const COL = [14, 106, 40];
+  const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, 25);
+  const HF = [232, 236, 252], TF = [222, 228, 250];
+  const BOTTOM = 297 - 25 - 30;
+  const RH = 8;
+
+  const heading = () => {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
+    doc.text(`TRANSPLANTING BY PLOT — ${secTxt} · ${monthTxt}`, 25, y + 6);
+    y += 9;
+    const H = 9;
+    ['No.', 'Plot', 'Transplanted'].forEach((t, i) => {
+      pdfCell(doc, X[i], y, COL[i], H, t, { bold: true, size: 7.5, nowrap: true, fill: HF });
+    });
+    y += H;
+  };
+
+  // Started on this page where a few lines fit, on the next where they do not.
+  if (y + 9 + 9 + RH * 2 > BOTTOM) { doc.addPage(); y = 25; }
+  else y += 4;
+  heading();
+
+  rows.forEach((r, i) => {
+    if (y + RH > BOTTOM) { doc.addPage(); y = 25; heading(); }
+    const z = i % 2 ? [250, 250, 253] : null;
+    const cells = [
+      String(i + 1),
+      r.plot,
+      (r.qty == null ? '—' : num(r.qty)) + (r.disagrees ? ' *' : '')
+    ];
+    cells.forEach((t, c) => pdfCell(doc, X[c], y, COL[c], RH, t,
+      { size: 8.5, nowrap: true, bold: c > 0, fill: z }));
+    y += RH;
+  });
+
+  const total = rows.reduce((s, r) => s + (r.qty || 0), 0);
+  pdfCell(doc, X[0], y, COL[0] + COL[1], RH + 1,
+          `TOTAL — ${secTxt} · ${monthTxt}`, { bold: true, size: 8.5, fill: TF });
+  pdfCell(doc, X[2], y, COL[2], RH + 1, num(total), { bold: true, size: 9, nowrap: true, fill: TF });
+  y += RH + 1;
+
+  /* The same three things the screen says, printed — the form is what goes
+     for payment, and a figure somebody has to trust must carry what is
+     doubtful about it. */
+  const say = (txt) => {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(150, 30, 30);
+    doc.text(txt, 25, y + 5, { maxWidth: 160 });
+    y += 4 + Math.ceil(doc.getTextWidth(txt) / 160) * 4;
+  };
+  const moved = rows.filter(r => r.disagrees);
+  if (moved.length) {
+    say('* ' + moved.map(r => `${r.plot} (${r.disagrees.map(n => num(n)).join(' and ')})`).join(', ')
+      + ' — keyed against more than one figure. The newest is counted here; '
+      + 'the jobs keyed on the old one are still paying it.');
+  }
+  const noQty = rows.filter(r => r.qty == null);
+  if (noQty.length) {
+    say(noQty.map(r => r.plot).join(', ') + ' — no quantity on the record, so '
+      + 'nothing is added to the total.');
+  }
+  const noCrew = rows.filter(r => !r.crew);
+  if (noCrew.length) {
+    say(noCrew.map(r => r.plot).join(', ') + ' — names nobody, so on this summary '
+      + 'but on no claim line above.');
+  }
+  doc.setTextColor(0, 0, 0);
+  return y;
 }
 
 function downloadMonthlyPDF() {
@@ -2611,7 +3606,7 @@ $('global-month').addEventListener('change', async () => {
        all read it, so everything after this should see the real list. */
     await loadNurseryRegister();
     await Promise.all([loadWorkers(), loadRates(), loadEntries(), loadMaint(),
-                       loadTransplantField(), loadEarnAdj()]);
+                       loadTransplantField(), loadEarnAdj(), loadTransplantMaps()]);
     resolveMaintWorkers();
 
     /* The batch-report ledger is a much larger read than anything above, and
@@ -2627,6 +3622,14 @@ $('global-month').addEventListener('change', async () => {
        invited somebody to start keying. */
     await MJMPayrollLock.load(_supabase);
     initLockControls();
+    /* Names for every "verified by" on the page. Not awaited: a sheet that
+       has to wait on a lookup table before it will draw is a sheet that does
+       not draw when the table is missing. The strips repaint when it lands. */
+    try {
+      if (typeof MJMPeople !== 'undefined') {
+        MJMPeople.load(_supabase).then(() => { try { refreshPayrollTab(); } catch (_) {} });
+      }
+    } catch (_) {}
 
     applyPageAccess();
 
