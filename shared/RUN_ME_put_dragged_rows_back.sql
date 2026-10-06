@@ -39,6 +39,15 @@
 --   slot carries its plot inside it, so the join bought nothing and cost a
 --   nursery.
 --
+--
+-- A BLANK DATE IS '-', NOT AN EMPTY STRING
+--
+-- The sync writes a generated row with tarikh:'-' and the page tests
+-- (!r.tarikh || r.tarikh === '-'). The first version of this file asked for
+-- tarikh = '' and so matched NO blank row anywhere: it reported 0 pairs on a
+-- nursery full of them. That is the same class of mistake as the shared_plots
+-- join below -- a test that measures nothing reads exactly like good news.
+--
 -- HOW A ROW IS FOUND
 --   One schedule slot in two places at once: a DATED row stamped the later
 --   month, and an UNDATED, unkeyed, unchecked row of the SAME slot stamped
@@ -77,12 +86,13 @@ mine AS (
 ),
 dragged AS (
   SELECT m.* FROM mine m, params p
-   WHERE m.stamp = p.got_month AND m.tarikh <> ''
+   WHERE m.stamp = p.got_month AND m.tarikh <> '' AND m.tarikh <> '-'
 ),
 blanks AS (
   SELECT m.* FROM mine m, params p
    WHERE m.stamp = p.lost_month
-     AND m.tarikh = '' AND m.qty_keyed = '' AND m.qty_frozen = '' AND m.checked = 0
+     AND (m.tarikh = '' OR m.tarikh = '-')
+     AND m.qty_keyed = '' AND m.qty_frozen = '' AND m.checked = 0
 ),
 pairs AS (
   SELECT DISTINCT d.ord AS drag_ord, b.ord AS blank_ord
