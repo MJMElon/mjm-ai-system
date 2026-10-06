@@ -570,9 +570,13 @@ function renderRates() {
         <td class="money">${rateTxt(r.rate)}</td>
         <td>${esc(CAT_LABEL[r.category || ''] || r.category)}${
           r.category === 'maintenance'
-            ? `<div style="color:var(--danger,#c0392b);font-weight:700;font-size:10.5px;margin-top:2px;"
-                    title="Work Maintenance's claim prices off nops_maint_piece_rates, a different table set at Nursery Operation → Work Maintenance → Setting → Piece Rate. This row has never priced it.">
-                 ⚠ not linked — set at Nursery Operation</div>`
+            ? (maintRateIsLinked(r)
+                ? `<div style="color:var(--green,#16a34a);font-weight:700;font-size:10.5px;margin-top:2px;"
+                        title="Matched by its job description to ${esc((MAINT_TYPES.find(t => t.code === maintRateCode(r.job_desc)) || {}).label || '')} and used ahead of Nursery Operation's own rate for ${maintRateGroupOf(r.group_code) === 'PN' ? 'Pre Nursery' : 'Batu Niah / Ulu Niah 1 / Ulu Niah 2'}.">
+                     ✓ linked — prices the claim</div>`
+                : `<div style="color:var(--danger,#c0392b);font-weight:700;font-size:10.5px;margin-top:2px;"
+                        title="Either its job description does not clearly name one of the four jobs, two rows in the same group name the same one, or it is filed under Machinery/ungrouped — none of which this is matched by. Falls back to nops_maint_piece_rates, set at Nursery Operation → Work Maintenance → Setting → Piece Rate.">
+                     ⚠ not linked — check job wording and group</div>`)
             : ''}</td>
         <td><span class="pill ${r.active === false ? 'pill-off' : 'pill-on'}">${r.active === false ? 'Inactive' : 'Active'}</span></td>
         <td class="r" style="white-space:nowrap;">
@@ -2185,13 +2189,81 @@ async function removeEntry(id) {
    form — "RM 0.01 / Bag". The maintenance module's rate table is
    (nursery, work_type, rate) and carries no unit, and all four of these are
    paid per polybag, so it is named here rather than invented at the point of
-   printing. A work paid by something else gets its own word here. */
+   printing. A work paid by something else gets its own word here.
+
+   `mark` is for matching a Piece Rate row filed under "Work Maintenance" —
+   see maintRateCode() below — to one of these four. Chosen so no one job's
+   text can match another's, the same rule TRANSPLANT_JOBS' own marks
+   follow. */
 const MAINT_TYPES = [
-  { code:'pd',       label:'P & D Spraying', unit:'Bag', jenis:'Penyemburan racun kulat dan serangga' },
-  { code:'manuring', label:'Manuring',       unit:'Bag', jenis:'Membaja' },
-  { code:'weeding',  label:'Weeding',        unit:'Bag', jenis:'Merumput' },
-  { code:'interrow', label:'Interrow Spray', unit:'Bag', jenis:'Meracun rumput secara selingan' }
+  { code:'pd',       label:'P & D Spraying', unit:'Bag', jenis:'Penyemburan racun kulat dan serangga',
+    mark:['p&d', 'serangga'] },
+  { code:'manuring', label:'Manuring',       unit:'Bag', jenis:'Membaja',
+    mark:['manuring', 'membaja'] },
+  { code:'weeding',  label:'Weeding',        unit:'Bag', jenis:'Merumput',
+    mark:['weeding', 'merumput'] },
+  { code:'interrow', label:'Interrow Spray', unit:'Bag', jenis:'Meracun rumput secara selingan',
+    mark:['interrow', 'selingan'] }
 ];
+
+/* ── A Work Maintenance row on the Piece Rate screen, actually linked ──────
+   mjmnpayroll_piece_rates (this screen) carries no field naming which of
+   the four jobs a row prices, unlike MAINT_TYPES' own jenis — job_desc is
+   free text an office types ("P&D Spraying", "P & D Spraying", …), so it is
+   matched the same way transplantRate() matches a Transplanting row: by
+   mark, and nothing guessed between two candidates.
+
+   The nursery side is the Pre Nursery / Main Nursery split
+   shared_worker_locations.js already draws for every other nursery-shaped
+   grouping on this page (it is loaded here already) — RATE_GROUPS' own
+   PN/MN codes line up with it exactly, so a row filed under "PN — Pre
+   Nursery" reaches Pre Nursery's claim and one filed under "MN — Main
+   Nursery" reaches Batu Niah/Ulu Niah 1/Ulu Niah 2's. Machinery and an
+   ungrouped row reach no Work Maintenance nursery and are left alone. */
+function _maintMarkNorm(s) { return String(s || '').toLowerCase().replace(/\s+/g, ''); }
+function maintRateCode(jobDesc) {
+  const d = _maintMarkNorm(jobDesc);
+  const hits = MAINT_TYPES.filter(t => (t.mark || []).some(m => d.includes(_maintMarkNorm(m))));
+  return hits.length === 1 ? hits[0].code : null;
+}
+function maintRateGroupOf(groupCode) {
+  return (groupCode === 'PN' || groupCode === 'MN') ? groupCode : null;
+}
+function maintRateNurseryGroup(nursery) {
+  const loc = (typeof MJMWorkerLocations !== 'undefined') ? MJMWorkerLocations.locationOf(nursery) : null;
+  return (loc && loc.key === 'pre') ? 'PN' : 'MN';
+}
+/* Whether THIS row is the one unambiguous rate for its job and nursery
+   group — read both to price the claim (maintRateFromSettings) and to say,
+   on the Piece Rate screen itself, whether a row filed under Work
+   Maintenance does anything (renderRates()). */
+function maintRateIsLinked(r) {
+  if (r.category !== 'maintenance' || r.active === false) return false;
+  const code = maintRateCode(r.job_desc), group = maintRateGroupOf(r.group_code);
+  if (!code || !group) return false;
+  const rivals = rates.filter(x => x.id !== r.id && x.active !== false && x.category === 'maintenance'
+    && maintRateCode(x.job_desc) === code && maintRateGroupOf(x.group_code) === group);
+  return rivals.length === 0;
+}
+/* The rate this screen gives one of the four jobs for one nursery, or null
+   when nothing here unambiguously prices it. */
+function maintRateFromSettings(nursery, code) {
+  const wantGroup = maintRateNurseryGroup(nursery);
+  const hits = rates.filter(r => maintRateIsLinked(r) && maintRateCode(r.job_desc) === code
+    && maintRateGroupOf(r.group_code) === wantGroup);
+  return hits.length === 1 ? Number(hits[0].rate || 0) : null;
+}
+/* The rate a Work Maintenance claim actually prices a job at: this screen's
+   Piece Rate when it unambiguously names one, else nops_maint_piece_rates
+   (Nursery Operation → Work Maintenance → Setting → Piece Rate) — so a
+   nursery or job not yet filed here keeps pricing exactly as it always
+   has. The one function both call sites (maintLiveView, Monthly Payroll's
+   own Work Maintenance total) read, so the two cannot price the same job
+   differently. */
+function maintRateOf(nursery, code) {
+  const fromSettings = maintRateFromSettings(nursery, code);
+  return fromSettings != null ? fromSettings : (maint.rates[nursery] || {})[code];
+}
 
 /* The rate as the claim form writes it: "RM 0.01 / Bag", or a dash where no
    rate has been set. */
@@ -2414,7 +2486,7 @@ function maintViewFromSnapshot(s) {
 
 function maintLiveView(n, ym, monthTxt) {
   const wk = maintWorkerNames(n, ym);
-  const rateOf = c => (maint.rates[n] || {})[c];
+  const rateOf = c => maintRateOf(n, c);
   const per = maintTotals(n, monthTxt, ym);
   // Money from the capacity AS SHOWN, so the printed row multiplies out.
   const capWorked = (w, c) => cap2(per[w] ? per[w][c] : 0);
@@ -3030,7 +3102,7 @@ function monthlyRows() {
     const wk = maintWorkerNames(n, month);
     if (!wk.length) return;
     const per = maintTotals(n, monthTxt, month);
-    const rateOf = c => (maint.rates[n] || {})[c];
+    const rateOf = c => maintRateOf(n, c);
     wk.forEach(w => {
       const known = byName.get(String(w).trim().toLowerCase());
       const section = known ? (known.section || '') : n;
