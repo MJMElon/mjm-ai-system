@@ -37,6 +37,7 @@ const SWEPT = [
   'RUN_ME_worker_previous_names.sql',
   'RUN_ME_worker_name_was.sql',
   'CHECK_worker_names_with_no_column.sql',
+  'CHECK_claim_vs_worker_record.sql',
 ];
 
 const isComment = (line) => line.trimStart().startsWith('--');
