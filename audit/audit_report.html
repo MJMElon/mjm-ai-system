@@ -249,6 +249,9 @@ input.input:focus{border-color:var(--green);background:var(--card);
        white-space:nowrap;flex-shrink:0}
 .badge-plot{background:#e8f5e9;color:var(--pn)}
 .badge-height{background:#e0f2fe;color:#0369a1}
+/* A cell that covers a whole run of rows sits in the middle of it,
+   so it reads as belonging to the block rather than to its top line. */
+.rec-table td.grp{vertical-align:middle;background:#fbfdff}
 .badge-papan{background:#fff3e0;color:var(--papan)}
 .badge-maint{background:#fce4ec;color:var(--maint)}
 .no-data{text-align:center;padding:26px 16px;color:var(--ink3);font-size:12.5px;font-weight:600}
@@ -675,7 +678,10 @@ const MOD_COLS={
     {h:'S2 (cm)',  v:r=>r.sample_2||'—',           num:true},
     {h:'S3 (cm)',  v:r=>r.sample_3||'—',           num:true},
     {h:'Avg (cm)', v:r=>`<b>${esc(r.avg_height||'—')}</b>`, raw:true, num:true},
+    /* One cell for the whole group, not the same figure on every line --
+       see `group` in buildModTable. */
     {h:'Plot Avg (cm)', label:'Plot average that day',
+     group:r=>String(r.date||'')+'|'+String(r.plot||'').trim().toUpperCase(),
      v:(r,i,rows)=>`<b>${_heightPlotAvg(r,rows)}</b>`, raw:true, num:true}
   ],
   papan:[
@@ -705,7 +711,17 @@ const MOD_COLS={
 // falls through to plot-only ordering for that one.
 function _auditPlotBatchSort(rows){
   const natCmp=(a,b)=>String(a??'').localeCompare(String(b??''),undefined,{numeric:true,sensitivity:'base'});
-  return rows.slice().sort((a,b)=>natCmp(a.plot,b.plot)||natCmp(a.batch??a.batch_no,b.batch??b.batch_no));
+  /* Plot, then the DAY, then batch.
+     The day was not in here, so a plot audited twice in a month came out
+     interleaved by batch -- the 5th and the 19th alternating down the page,
+     which is two visits read as one. It also made the plot average
+     unmergeable: a figure about a day can only be drawn once over the rows it
+     covers if those rows are together.
+     Dates are ISO in this table, so comparing them as text is comparing them
+     as dates. */
+  return rows.slice().sort((a,b)=>natCmp(a.plot,b.plot)
+                               ||natCmp(a.date,b.date)
+                               ||natCmp(a.batch??a.batch_no,b.batch??b.batch_no));
 }
 
 /* THE PLOT'S AVERAGE FOR THAT DAY.
@@ -749,16 +765,44 @@ function buildModTable(mod, rows){
   rows=_auditPlotBatchSort(rows);
 
   const head='<tr>'+cols.map(c=>`<th>${esc(c.h)}</th>`).join('')+'</tr>';
+
+  /* A COLUMN THAT IS ONE CELL FOR A WHOLE GROUP.
+     The plot average is one figure about seven rows, and seven copies of it
+     is seven chances to read it as seven different measurements. A column
+     with `group` is drawn once, on the first row of its run, spanning the
+     rest -- so the table says plainly that the figure belongs to the block
+     beside it and not to any one line of it.
+
+     The run has to be CONSECUTIVE, which it is: the rows are sorted by plot
+     and batch before this, so a plot's rows for a day sit together. Keyed off
+     the sorted array for that reason, not off the data. */
+  const spans=cols.map(c=>{
+    if(!c.group) return null;
+    const out=new Array(rows.length).fill(0);
+    let i=0;
+    while(i<rows.length){
+      let j=i;
+      while(j+1<rows.length && c.group(rows[j+1])===c.group(rows[i])) j++;
+      out[i]=j-i+1;
+      i=j+1;
+    }
+    return out;
+  });
+
   let body='';
   rows.forEach((r,i)=>{
-    body+='<tr>'+cols.map(c=>{
+    body+='<tr>'+cols.map((c,ci)=>{
+      // A row inside a group that is not its first draws no cell at all.
+      if(spans[ci] && !spans[ci][i]) return '';
       /* rows as well as the row: a column can be a figure about the GROUP
          this row is in -- see _heightPlotAvg. */
       const val=c.v(r,i,rows);
+      const span=spans[ci] && spans[ci][i]>1 ? ` rowspan="${spans[ci][i]}"` : '';
+      const cls=[c.num?'num':'', spans[ci]?'grp':''].filter(Boolean).join(' ');
       /* c.label is what the cell announces itself as on a phone, where
          it is a card row rather than a column: "#" is a column heading
          and says nothing on its own once the heading row is gone. */
-      return `<td data-label="${esc(c.label||c.h)}"${c.num?' class="num"':''}>${c.raw?val:esc(val)}</td>`;
+      return `<td data-label="${esc(c.label||c.h)}"${cls?` class="${cls}"`:''}${span}>${c.raw?val:esc(val)}</td>`;
     }).join('')+'</tr>';
   });
   body+=`<tr class="total-row"><td colspan="${cols.length}" data-label="">Total: ${fmtNum(rows.length)} record${rows.length!==1?'s':''}</td></tr>`;

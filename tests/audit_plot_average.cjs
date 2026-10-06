@@ -100,7 +100,11 @@ const HEIGHT = [
     const body = [...d.querySelectorAll('tbody tr')]
       .filter((tr) => !tr.classList.contains('total-row'))
       .map((tr) => [...tr.children].map((td) => td.textContent.trim()));
-    return { head, body };
+    /* The merged column, as cells rather than as rows: what it says and how
+       many rows each cell covers. */
+    const plotAvg = [...d.querySelectorAll('tbody td[data-label="Plot average that day"]')]
+      .map((td) => ({ txt: td.textContent.trim(), span: +(td.getAttribute('rowspan') || 1) }));
+    return { head, body, plotAvg };
   });
 
   console.log('\nThe column is there');
@@ -114,17 +118,35 @@ const HEIGHT = [
   };
   const b01oct5 = table.body.filter((r) => r[2] === 'B01' && r[1].includes('05 Oct'));
   check('B01 on 5 Oct has seven rows', b01oct5.length, 7);
-  check('EVERY ONE OF THEM READS 72.9', col(b01oct5, 'Plot Avg (cm)'),
-        ['72.9', '72.9', '72.9', '72.9', '72.9', '72.9', '72.9']);
+
+  /* ONE CELL, not seven copies of a figure: seven copies read as seven
+     measurements. The cell covers the seven rows it is about. */
+  check('ONE CELL READING 72.9, COVERING ALL SEVEN', table.plotAvg[0],
+        { txt: '72.9', span: 7 });
 
   console.log('\nIt is the plot AND the day');
-  const b01oct19 = table.body.filter((r) => r[2] === 'B01' && r[1].includes('19 Oct'));
-  check('the same plot a fortnight later is its own figure',
-        col(b01oct19, 'Plot Avg (cm)'), ['105', '105']);
-  const b02 = table.body.filter((r) => r[2] === 'B02');
-  check('B02 is its own two rows', col(b02, 'Plot Avg (cm)'), ['163.4', '163.4']);
-  const b03 = table.body.filter((r) => r[2] === 'B03');
-  check('a plot with one reading is that reading', col(b03, 'Plot Avg (cm)'), ['40']);
+  check('every group has exactly one cell, and it covers that group',
+        table.plotAvg, [
+          { txt: '72.9',  span: 7 },   // B01, 5 Oct
+          { txt: '105',   span: 2 },   // B01, 19 Oct -- its own reading
+          { txt: '163.4', span: 2 },   // B02
+          { txt: '40',    span: 1 }    // B03, one reading
+        ]);
+  check('one cell per group, not one per row',
+        [table.plotAvg.length, table.body.length], [4, 12]);
+
+  console.log('\nA plot audited twice in a month is two blocks, not interleaved');
+  {
+    const b01 = table.body.filter((r) => r[2] === 'B01');
+    check('its rows sit day by day', b01.map((r) => r[1]), [
+      '05 Oct 2026', '05 Oct 2026', '05 Oct 2026', '05 Oct 2026',
+      '05 Oct 2026', '05 Oct 2026', '05 Oct 2026',
+      '19 Oct 2026', '19 Oct 2026'
+    ]);
+    check('…and batch still orders within the day',
+          b01.slice(0, 7).map((r) => r[3]),
+          ['252', '253', '254', '256', '257', '261', '268']);
+  }
 
   console.log('\nAnd the row average is untouched');
   check('the Avg column still reads per batch', col(b01oct5, 'Avg (cm)'),
