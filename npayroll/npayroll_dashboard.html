@@ -30,7 +30,7 @@
      three copies of it. -->
 <script src="../shared/shared_worker_locations.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="npayroll_styles.css?v=25">
+<link rel="stylesheet" href="npayroll_styles.css?v=26">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -164,7 +164,13 @@
             <option value="UNN1">UNN1 — Ulu Niah 1</option>
             <option value="UNN2">UNN2 — Ulu Niah 2</option>
           </select>
-          <button class="btn btn-primary" onclick="downloadMaintPDF()">⬇ Salary Claim Form (PDF)</button>
+          <button class="btn btn-icon-dl" onclick="downloadMaintPDF()" title="Salary Claim Form (PDF)" aria-label="Download Salary Claim Form (PDF)">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none">
+              <path d="M12 3v10.5" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
+              <path d="M7.3 9.3L12 14l4.7-4.7" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M5 18.5h14" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
+            </svg>
+          </button>
         </div>
       </div>
             <div class="verify-bar" id="vb-maint"></div>
@@ -194,7 +200,13 @@
                nursery to a page. They had a button of their own beside this
                one, which was two things to press and two things to file for
                one month's work. -->
-          <button class="btn btn-primary" onclick="downloadTransplantPDF()">⬇ Salary Claim Form (PDF)</button>
+          <button class="btn btn-icon-dl" onclick="downloadTransplantPDF()" title="Salary Claim Form (PDF)" aria-label="Download Salary Claim Form (PDF)">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none">
+              <path d="M12 3v10.5" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
+              <path d="M7.3 9.3L12 14l4.7-4.7" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M5 18.5h14" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
+            </svg>
+          </button>
           <button class="btn btn-primary" data-add onclick="openEntry('transplanting')">+ Add Entry</button>
         </div>
       </div>
@@ -280,7 +292,13 @@
         </div>
         <div class="bar-actions">
           <select id="monthly-section" class="sel" onchange="renderMonthly()"></select>
-          <button class="btn btn-primary" onclick="downloadMonthlyPDF()">⬇ Monthly Payroll (PDF)</button>
+          <button class="btn btn-icon-dl" onclick="downloadMonthlyPDF()" title="Monthly Payroll (PDF)" aria-label="Download Monthly Payroll (PDF)">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none">
+              <path d="M12 3v10.5" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
+              <path d="M7.3 9.3L12 14l4.7-4.7" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M5 18.5h14" stroke="#fff" stroke-width="2.3" stroke-linecap="round"/>
+            </svg>
+          </button>
         </div>
       </div>
             <div class="verify-bar" id="vb-monthly"></div>
