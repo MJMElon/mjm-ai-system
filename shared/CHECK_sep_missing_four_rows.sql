@@ -30,8 +30,8 @@
 -- "generated" in the last column means the row carries a schedule slot
 -- (_src). A row with no slot was ADDED BY HAND, which matters: the sync
 -- rebuilds a missing generated row by itself but never re-creates a
--- hand-added one. BNN B1's two manuring entries are 599 and 1,754, which
--- add to 2,353 -- B1's whole capacity split in two -- so one of that pair
+-- hand-added one. BNN B1s two manuring entries are 599 and 1,754, which
+-- add to 2,353 -- B1s whole capacity split in two -- so one of that pair
 -- is almost certainly hand-added.
 --
 -- Section 2 counts what each pair has in Sep 2026 against what the sheet

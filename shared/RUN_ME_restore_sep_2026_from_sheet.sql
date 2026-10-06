@@ -21,7 +21,7 @@
 -- Checked. It also rewrites the worker ticks for the month from the sheet.
 --
 -- WHY THE FROZEN FIGURE. A ticked row is meant to stop being a live sum --
--- that is what Checked does -- so the sheet's capacity is written to
+-- that is what Checked does -- so the sheets capacity is written to
 -- qtyFrozen and any hand-keyed qty that disagreed with the sheet is cleared,
 -- because a hand-keyed figure beats the frozen one and would hide it.
 --
@@ -605,7 +605,7 @@ raw AS (
 ),
 
 -- September only, ranked within its plot by the day the work was done -- the
--- Worker Record's own order. A row with no date sorts last, the way the page
+-- Worker Records own order. A row with no date sorts last, the way the page
 -- sorts it.
 sep AS (
   SELECT r.ord, r.rec,

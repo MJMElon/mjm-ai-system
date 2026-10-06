@@ -10,14 +10,14 @@
 -- WHY THIS EXISTS
 --
 -- Work records live as one JSONB list, and each row carries the month it
--- belongs to. The stamping used to take a NURSERY's majority month and put
--- every row under it, dated rows included — so a month's rows could end up
+-- belongs to. The stamping used to take a NURSERYs majority month and put
+-- every row under it, dated rows included — so a months rows could end up
 -- stamped under another month. A sync of the real month then matched nothing,
 -- and built FRESH BLANK ROWS beside them: no date, no keyed quantity, no
 -- Checked.
 --
 -- The originals were not deleted. They are in the list under the other
--- month's stamp, with their dates, their hand-keyed quantities and their
+-- months stamp, with their dates, their hand-keyed quantities and their
 -- Checked still on them. That is what this finds.
 --
 -- WHAT THE RESULT MEANS

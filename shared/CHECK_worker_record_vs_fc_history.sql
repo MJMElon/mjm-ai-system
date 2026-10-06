@@ -9,9 +9,9 @@
 --
 -- TWO ANSWERS TO ONE QUESTION
 --
--- The office's Worker Record says who it has TICKED on a row, and that tick
--- is what the salary claim divides the plot's capacity among. The FC Portal's
--- history says who actually DID the work, out of the conductor's own record:
+-- The offices Worker Record says who it has TICKED on a row, and that tick
+-- is what the salary claim divides the plots capacity among. The FC Portals
+-- history says who actually DID the work, out of the conductors own record:
 -- worked_by where he named the crew, and the person who reported it when he
 -- did not.
 --
@@ -23,7 +23,7 @@
 --
 --   agree                both sides name the same people, on the SAME DAY
 --   NOT ON THE CLAIM     the field recorded who did it and the office has
---                        ticked nobody, so the plot's capacity is paid to
+--                        ticked nobody, so the plots capacity is paid to
 --                        nobody at all. This is the one that costs money
 --   office only          ticked here, nothing in the FC Portal for it — an
 --                        office record of work the phone never carried

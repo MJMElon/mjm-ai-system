@@ -30,8 +30,8 @@
 --   exactly as it is.
 --
 -- WHY THERE IS NO NURSERY HERE ANY MORE
---   The first version resolved a row's nursery by joining shared_plots. That
---   table is Seedling Stock and does NOT hold UNN 2's N1-N20 — the list
+--   The first version resolved a rows nursery by joining shared_plots. That
+--   table is Seedling Stock and does NOT hold UNN 2s N1-N20 — the list
 --   those pages really use is the hardcoded BASE in
 --   shared/shared_maint_plots.js, merged with nops_maint_custom_plots AND
 --   shared_plots. So for UNN 2 the join matched nothing and the file
@@ -40,11 +40,11 @@
 --   nursery.
 --
 --
--- A BLANK DATE IS '-', NOT AN EMPTY STRING
+-- A BLANK DATE IS -, NOT AN EMPTY STRING
 --
--- The sync writes a generated row with tarikh:'-' and the page tests
--- (!r.tarikh || r.tarikh === '-'). The first version of this file asked for
--- tarikh = '' and so matched NO blank row anywhere: it reported 0 pairs on a
+-- The sync writes a generated row with tarikh:- and the page tests
+-- (!r.tarikh || r.tarikh === -). The first version of this file asked for
+-- tarikh =  and so matched NO blank row anywhere: it reported 0 pairs on a
 -- nursery full of them. That is the same class of mistake as the shared_plots
 -- join below -- a test that measures nothing reads exactly like good news.
 --

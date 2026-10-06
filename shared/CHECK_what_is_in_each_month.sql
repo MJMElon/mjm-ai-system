@@ -5,11 +5,11 @@
 -- Read-only. Nothing is created, changed or deleted. Run the whole file.
 -- It joins nothing and sweeps every nursery at once.
 --
--- A BLANK DATE IS '-', NOT AN EMPTY STRING
+-- A BLANK DATE IS -, NOT AN EMPTY STRING
 --
--- The sync writes a generated row with tarikh:'-' and the page tests
--- (!r.tarikh || r.tarikh === '-'). The first version of this file asked for
--- tarikh = '' and so found NO blank rows anywhere -- it reported "0 with no
+-- The sync writes a generated row with tarikh:- and the page tests
+-- (!r.tarikh || r.tarikh === -). The first version of this file asked for
+-- tarikh =  and so found NO blank rows anywhere -- it reported "0 with no
 -- date" for every month, and the repair that used the same test found no
 -- pairs to put back. Both were measuring nothing. The rule is here, once, in
 -- has_date.
@@ -17,7 +17,7 @@
 -- A SLOT IN TWO MONTHS IS NORMAL. WHICH HALF IS DATED IS THE QUESTION.
 --
 -- A generated slot is the SAME string in every month -- "pd|W1|P|N15" is
--- September's row and October's row alike. So a slot appearing in two months
+-- Septembers row and Octobers row alike. So a slot appearing in two months
 -- is the ordinary state and counting those tells you nothing. What matters is
 -- which half carries the work:
 --
@@ -69,7 +69,7 @@ mine AS (
     FROM raw r
 ),
 
--- The page's own rule: a date is a date unless it is missing or a dash.
+-- The pages own rule: a date is a date unless it is missing or a dash.
 -- A figure counts only when the string is nothing but digits, so a dash or a
 -- stray letter is none.
 graded AS (

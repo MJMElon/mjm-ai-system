@@ -17,7 +17,7 @@
 --
 --   one record       an unambiguous date, safe to fill in
 --   more than one    the plot was worked more than once that month, so which
---                    row takes which date is the office's to say
+--                    row takes which date is the offices to say
 --   nothing          nobody recorded it. No date exists to recover, and only
 --                    the office or the paper knows what it should be
 --

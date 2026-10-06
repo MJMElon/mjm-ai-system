@@ -4,7 +4,17 @@
 --
 -- Paste the WHOLE file into the Supabase SQL Editor and press Run.
 -- ONE statement. Safe to run twice: the second run changes nothing.
--- No regular expressions and no backslashes. Creates no table.
+-- No regular expressions, no backslashes, no table created.
+--
+-- NO APOSTROPHE APPEARS IN ANY COMMENT IN THIS FILE, ON PURPOSE.
+-- The first version of it failed with
+--     ERROR: 42601: syntax error at end of input   LINE 0:
+-- pointing at nothing. psql strips a dash-dash comment before parsing, so it
+-- ran here. The SQL Editor counts quotes FIRST, so one apostrophe in a word
+-- like Septembers possessive form opened a string literal that never closed,
+-- swallowed the rest of the file, and left a statement with no statement in
+-- it. An EVEN number happens to survive, which is worse, because it makes
+-- the rule look like it does not exist. So: none at all, in any comment.
 --
 -- THIS FILE NAMES ITS ROWS. It is a one-time repair for four rows found by
 -- shared/CHECK_sep_missing_four_rows.sql, not a rule. Do not re-point it at
@@ -12,38 +22,39 @@
 --
 -- WHAT THE CHECK FOUND, AND WHY THEY ARE NOT ALL THE SAME REPAIR
 --
--- UNN 2  N2  Merumput -- September's Round 1 row is SITTING IN OCTOBER.
+-- UNN 2  N2  Merumput -- the Round 1 row of September is SITTING IN OCTOBER.
 --   Slot wd|R1|N2, id 1791256452854, carrying the date 2026-10-02 and
 --   nothing else: no quantity, no tick. The signed sheet puts that round on
---   04 Sep at 4,962. So it is MOVED back, not re-created, which keeps its id
---   and so keeps any tick already hung on it. Its date is set at the same
---   time, because the restore pairs rows by day and a row still reading
---   October would sort last and take the wrong line of the sheet.
---   October keeps its own wd|R3|N2 blank and the next sync rebuilds an
+--   04 Sep at 4,962. So it is MOVED, not re-created, which keeps its id and
+--   so keeps any tick already hung on it. The date is set at the same time,
+--   because the restore pairs rows by day and a row still reading October
+--   would sort last and take the wrong line of the sheet.
+--   October keeps its own wd|R3|N2 blank, and the next sync rebuilds an
 --   October R1 blank by itself.
 --
 -- BNN B1 Membaja, BNN B3 interrow, UNN 2 N3 P & D -- these are NOWHERE.
---   N3's five October rows are October's own new blanks, not September's
---   row: every one of them is undated, unkeyed and unticked. So September's
---   row is gone and has to be written from the sheet.
+--   The five October rows on N3 are the new blanks of October, not the row
+--   that September lost: every one of them is undated, unkeyed and
+--   unticked. So that row is gone and has to be written from the sheet.
 --
 -- THE CREATED ROWS CARRY NO SLOT, AND THAT IS DELIBERATE
 --
---   const kept = mine.filter(r => !claimed.has(r) and no r._src)
+--   const kept = mine.filter(r => not claimed.has(r) and no r._src)
 --
--- A row WITH a slot that the month's schedule does not claim is DELETED by
--- the next sync. A row without one is kept. September's schedule already
--- generates every slot it knows about -- that is why these three are extra
--- -- so giving them a slot would invent one the schedule will not claim,
--- and the next person to open September would silently lose them again.
+-- A row WITH a slot that the schedule of the month does not claim is
+-- DELETED by the next sync. A row without one is kept. September already
+-- generates every slot it knows about, which is why these three are extra,
+-- so giving them a slot would invent one the schedule will not claim and the
+-- next person to open September would silently lose them again.
 --
 -- WHAT IS GUESSED, AND WHAT IS NOT
 --
--- The date, the quantity and the plot are the signed sheet's and are not
--- guessed. The CHEMICAL is: B1 and B3 take the wording already on that same
--- plot's other rows, and N3's is left EMPTY rather than invented. None of
--- them affects a figure -- the job is the jenis, never the chemical -- and
--- each row carries a remark saying where it came from.
+-- The date, the quantity and the plot come from the signed sheet and are not
+-- guessed. The CHEMICAL is: B1 and B3 take the wording already on the other
+-- rows of that same plot, and the one on N3 is left EMPTY rather than
+-- invented. None of it affects a figure, because the job is the jenis and
+-- never the chemical, and each row carries a remark saying where it came
+-- from.
 --
 -- AFTER THIS, RUN shared/RUN_ME_restore_sep_2026_from_sheet.sql AGAIN.
 -- The counts then agree, so it will stop skipping those four plots and will

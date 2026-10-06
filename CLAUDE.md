@@ -30,6 +30,17 @@ What that SQL should be:
   query rather than trailing after it; and no semicolon inside a comment. A
   trailing comment block is a statement with no statement in it, which is what
   that error reads like.
+- **No apostrophe in a comment, ever.** Same error, same empty caret, and it
+  cost a paste after everything else on this list was already obeyed. psql
+  strips a `--` comment BEFORE parsing, so the file runs fine on the scratch
+  Postgres; the editor counts quotes FIRST, so one apostrophe — the possessive
+  of a month, a "doesn't" — opens a string literal that never closes, swallows
+  the rest of the file, and leaves a statement with no statement in it. An
+  EVEN number survives by luck, which is worse than failing, because it makes
+  the rule look like it does not exist: 95 files in `shared/` carried an odd
+  count the day this was found. Write "the September row" and "does not".
+  `tests/sql_pastes_into_the_editor.cjs` holds the swept files to it and
+  prints what is left.
 - **Tested first.** There is a scratch Postgres 16 for this — see below. Run
   the SQL against a stubbed copy of the real tables before handing it over, and
   test it against the state the database is ACTUALLY in, not a fresh one.
