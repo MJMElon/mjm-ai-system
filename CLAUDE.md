@@ -226,6 +226,42 @@ empty cell with the mark on it is not a question.
 To take a corrected field record's date, clear the cell — then it is a
 question again and the field answers it.
 
+## A batch's height is a join, because the form never asked for the batch
+
+Seedling Height in the Pre-Nursery is audited **plot by plot** — the form has
+no batch box on it at all, deliberately (`audit_script.js` says why: a PN plot
+holds one lot, so the batch layer was a second tap for nothing). So "how tall
+is batch 268" cannot be read off the height records. It is the ledger that
+answers the first half.
+
+`buildBatchHeight()` in `audit/audit_report.html` is that join, and three
+things in it are easy to get wrong:
+
+- **The batch tests are the Batch Record page's own**, not new ones. Age is
+  anchored on the KEYED `transaction_date` of `Seeds_Received` and never on
+  the row's insert time, and any of the three Transplanted types means the
+  batch has gone out. Two pages answering "is this batch still in the
+  Pre-Nursery" differently is how a batch ends up on one list and not the
+  other. `operation_batch_record.html`'s `processBatchLogic` is the original.
+- **Three plain means, one per level** — a plot is its readings on its LAST
+  audit day, a batch is the mean of its plots, an age group is the mean of its
+  batches. A batch standing in three plots is ONE batch in its group's figure.
+  Averaging every reading instead quietly weights the group by how many plots
+  each batch happens to sit in.
+- **As at the month, not as at today.** A batch is however old it was at the
+  end of the month being reported, and one transplanted afterwards was still
+  standing in it — so September reads the same in December as it did in
+  September. Same rule the As At date follows on Life of Seedlings.
+
+`shared_plot_batch_balance` is no help here and must not be reached for: it is
+the MAIN nursery movement, and its own file says Planted takes no part in it.
+The PN plots come from the `Planted` logs.
+
+A batch with no `Planted` log, or a plot nobody measured, is **shown saying
+so** rather than dropped — a batch missing from the ledger is the thing
+somebody needs to see, and the section counts how many have no reading
+underneath the four averages. `tests/batch_height_by_age.cjs` holds all of it.
+
 ## An unverified figure is shown, and says it is unverified
 
 Life of Seedlings is eighteen live sums of the batch ledger, and the ledger
