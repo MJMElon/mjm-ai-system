@@ -159,6 +159,15 @@ body { font-family: 'Outfit', system-ui, sans-serif; background: var(--bg); colo
 .btn-danger { border-color: var(--red-bd); color: var(--red); }
 .btn-danger:hover { background: #fef2f2; }
 .btn-sm { padding: 5px 11px; font-size: 11px; }
+/* The PDF download, as a round icon button rather than a text pill — same
+   indigo .btn-primary already was, same circle shape as .icon-btn in the
+   topbar, just scaled down to sit beside the nursery circles. The file it
+   downloads is named by its title/aria-label, not by wording on the button. */
+.btn-icon-dl { height: 38px; width: 38px; min-width: 38px; padding: 0; border-radius: 50%;
+               background: var(--ink); border-color: var(--ink); color: #fff;
+               display: inline-flex; align-items: center; justify-content: center;
+               box-shadow: var(--shadow-sm); }
+.btn-icon-dl:hover { background: var(--ink-dark); transform: translateY(-1px); }
 .sel { height: 38px; padding: 0 11px; border: 1.5px solid var(--border); border-radius: var(--r-sm);
        font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-head); background: var(--white);
        outline: none; cursor: pointer; }
@@ -433,11 +442,16 @@ tr:hover .cal-btn, .cal-btn:focus-visible { opacity: 1; }
    renderClaimPills. Everything else on the page asks that select what is
    chosen, and a picker that changed shape must not also change what they
    read. */
-.nsel { display: inline-flex; align-items: center; gap: 7px; }
-.npill { font-family: inherit; font-size: 12px; font-weight: 800; letter-spacing: .03em;
-         height: 38px; min-width: 38px; padding: 0 16px; border-radius: 999px;
-         border: 1.5px solid var(--border); background: var(--white); color: var(--text-muted);
-         cursor: pointer; transition: .12s; white-space: nowrap; }
+.nsel { display: inline-flex; align-items: center; gap: 10px; }
+/* A true circle (width = height, text centred), not a pill — the label is
+   what tells two nurseries apart, same as the office's own nursery picker on
+   Nursery Operation, just kept in this page's own indigo rather than copied
+   over in its green. */
+.npill { font-family: inherit; font-size: 11px; font-weight: 800; letter-spacing: .01em;
+         height: 52px; width: 52px; min-width: 52px; padding: 0 3px; border-radius: 50%;
+         display: inline-flex; align-items: center; justify-content: center; text-align: center;
+         border: 2px solid var(--border); background: var(--white); color: var(--text-muted);
+         cursor: pointer; transition: .12s; white-space: nowrap; line-height: 1.1; }
 .npill:hover { border-color: var(--ink-mid); color: var(--ink-dark); background: var(--ink-light); }
 .npill.on { background: var(--ink); border-color: var(--ink); color: #fff; box-shadow: var(--shadow-sm); }
 .npill.on:hover { background: var(--ink-dark); color: #fff; }
