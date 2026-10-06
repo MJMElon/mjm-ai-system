@@ -343,7 +343,10 @@
         <div>
           <div class="bar-title">Piece Rate</div>
           <div class="bar-sub">What each job pays, per unit, grouped MN · PN · Machinery.
-            Add a job from its own group below and the group is already filled in.</div>
+            Add a job from its own group below and the group is already filled in.
+            Work Maintenance's own rate is set elsewhere — Nursery Operation → Work
+            Maintenance → Setting → Piece Rate — a row filed under "Work Maintenance"
+            here does not price it.</div>
         </div>
       </div>
       <div id="rate-setup" class="warn hidden">
@@ -387,11 +390,20 @@
       </div>
       <div class="grid2">
         <div class="frow"><label>Used For</label>
+          <!-- "Work Maintenance" stays an option so a row already filed
+               under it (from before this was understood) still shows its
+               real category when edited rather than silently blanking to
+               "Any sheet" the moment someone opens it — but it is labelled
+               for what it actually is: filing a job here has never priced
+               a Work Maintenance claim. That rate is
+               nops_maint_piece_rates, a different table, set at Nursery
+               Operation → Work Maintenance → Setting → Piece Rate — see
+               the same note on the row itself in renderRates(). -->
           <select id="rf-cat">
             <option value="">Any sheet</option>
             <option value="transplanting">Transplanting</option>
             <option value="seedlings">Seedlings Collection</option>
-            <option value="maintenance">Work Maintenance</option>
+            <option value="maintenance">Work Maintenance (does not price it — set that at Nursery Operation)</option>
             <option value="other">Other</option>
           </select></div>
         <div class="frow"><label>Status</label>
@@ -457,7 +469,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=59"></script>
+<script src="npayroll_script.js?v=60"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

@@ -568,7 +568,12 @@ function renderRates() {
         <td class="l" style="font-weight:700;color:var(--text-head);">${esc(r.job_desc)}</td>
         <td>${esc(r.unit || '—')}</td>
         <td class="money">${rateTxt(r.rate)}</td>
-        <td>${esc(CAT_LABEL[r.category || ''] || r.category)}</td>
+        <td>${esc(CAT_LABEL[r.category || ''] || r.category)}${
+          r.category === 'maintenance'
+            ? `<div style="color:var(--danger,#c0392b);font-weight:700;font-size:10.5px;margin-top:2px;"
+                    title="Work Maintenance's claim prices off nops_maint_piece_rates, a different table set at Nursery Operation → Work Maintenance → Setting → Piece Rate. This row has never priced it.">
+                 ⚠ not linked — set at Nursery Operation</div>`
+            : ''}</td>
         <td><span class="pill ${r.active === false ? 'pill-off' : 'pill-on'}">${r.active === false ? 'Inactive' : 'Active'}</span></td>
         <td class="r" style="white-space:nowrap;">
           <button class="btn btn-sm" onclick="openRate(${r.id})">Edit</button>
