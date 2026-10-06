@@ -5126,23 +5126,26 @@ function stampRecordMonths() {
     const top = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
     const clear = !!top && tally[top] * 2 > dated;
 
+    /* ONLY A NURSERY THAT IS NOT MONTH-AWARE YET IS REPAIRED.
+
+       This is a repair for one fault and one only: rows that predate months,
+       and rows the first version stamped all alike inside the sync. Both
+       leave a nursery whose rows carry ONE stamp, or none, while the dates
+       say something else.
+
+       A nursery already carrying more than one month has been through a sync
+       since and knows its own months. Touching it is how a September row
+       WORKED ON THE 2nd OF OCTOBER gets dragged into October — and the row it
+       leaves behind in September is then rebuilt blank by the next sync, so
+       the month grows a duplicate with no date and a live quantity. A job
+       done late belongs to the month whose schedule asked for it.
+
+       I had this per-row for a while, which is precisely that mistake. */
+    const stamps = new Set(rows.map(r => r && r._month).filter(Boolean));
+    if (stamps.size > 1) return;
+
     rows.forEach(r => {
-      /* A ROW KNOWS ITS OWN MONTH, AND IT IS THE ROW'S, NOT THE NURSERY'S.
-
-         This used to hand `top` — the nursery's majority month — to EVERY row
-         in the nursery, dated or not. A nursery part-way through a handover is
-         mostly last month, so last month wins the majority and this month's
-         rows are stamped into it and disappear from the month they were
-         worked in. Then the new month becomes the majority and the old one
-         disappears the same way. It runs on every load and it SAVES, so it
-         compounded, and the console line said it was putting rows back under
-         the month their dates say — while doing the opposite.
-
-         The majority is still what decides for a row with NO date — planned,
-         never done — because such a row came out of that nursery's schedule
-         in the same pass and has nothing of its own to go on. */
-      const own = MJMMaintField.isoMonthLabel(_tarikhToISO(r.tarikh));
-      const want = own || (clear ? top : (r._month || top || onScreen || null));
+      const want = clear ? top : (r._month || top || onScreen || null);
       if (!want || r._month === want) return;
       r._month = want;
       moved++;
