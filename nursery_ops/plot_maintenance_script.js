@@ -5074,46 +5074,67 @@ function _jenisRank(j) {
    have been gone for good. */
 function _recInMonth(r, m) { return !!r && r._month === m; }
 
-/* THE ROWS THAT PREDATE MONTHS, STAMPED ONCE.
+/* WHICH MONTH A SAVED ROW REALLY BELONGS TO.
 
-   The list held one month at a time, so every row in it belongs to ONE month
-   per nursery: the one it was last synced for. Its own rows say which -- the
-   dates on them. The month MOST of a nursery's dated rows fall in is that
-   nursery's month, and its undated rows (work planned, not yet done) came out
-   of the same schedule in the same pass, so they take it too.
+   Two jobs, one rule.
 
-   Not each row by its own date: a September round recorded on the 1st of
-   October belongs to September's schedule, and reading the date alone would
-   move it to a month whose schedule never asked for it.
+   The rows that predate months carry no stamp at all. And a worse case: the
+   first version of this shipped the stamping INSIDE the sync, so opening
+   October stamped every one of September rows "Oct 2026" -- the list then
+   read October at the top and September down the page, which is what the
+   office saw.
 
-   A nursery with no dated row at all has nothing to go on and takes the month
-   on screen, which is what it was already being treated as. */
+   A row knows its own month: the day the work was done. So a nursery whose
+   rows are stamped one month while a CLEAR MAJORITY of its dated rows fall in
+   another is stamped wrong, and the dates win. Undated rows -- planned, never
+   done -- ride with their nursery, because they came out of that same
+   schedule in the same pass.
+
+   A clear majority, not any majority, so one job done late cannot drag a
+   month with it: a September row worked on the 2nd of October stays in
+   September, which is where its schedule asked for it.
+
+   Self-correcting and then still: once the stamps agree with the dates,
+   nothing moves on any later load. */
 function stampRecordMonths() {
   const onScreen = (() => { try { return getMonth(); } catch (_) { return null; } })();
-  const need = records.filter(r => r && !r._month);
-  if (!need.length) return 0;
-
   const nurseryOf = (plot) => Object.keys(NURSERY_PLOTS)
     .find(n => (NURSERY_PLOTS[n] || []).includes(plot)) || '(none)';
 
-  const tally = {};
-  need.forEach(r => {
-    const lbl = MJMMaintField.isoMonthLabel(_tarikhToISO(r.tarikh));
-    if (!lbl) return;
+  const byNursery = {};
+  records.forEach(r => {
+    if (!r) return;
     const n = nurseryOf(r.plot);
-    (tally[n] || (tally[n] = {}))[lbl] = (tally[n][lbl] || 0) + 1;
+    (byNursery[n] || (byNursery[n] = [])).push(r);
   });
 
-  const monthFor = {};
-  Object.keys(tally).forEach(n => {
-    monthFor[n] = Object.keys(tally[n])
-      .sort((a, b) => tally[n][b] - tally[n][a] || (a < b ? 1 : -1))[0];
+  let moved = 0;
+  const said = {};
+  Object.keys(byNursery).forEach(n => {
+    const rows = byNursery[n];
+    const tally = {};
+    let dated = 0;
+    rows.forEach(r => {
+      const lbl = MJMMaintField.isoMonthLabel(_tarikhToISO(r.tarikh));
+      if (!lbl) return;
+      dated++;
+      tally[lbl] = (tally[lbl] || 0) + 1;
+    });
+    const top = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
+    const clear = !!top && tally[top] * 2 > dated;
+
+    rows.forEach(r => {
+      const want = clear ? top : (r._month || top || onScreen || null);
+      if (!want || r._month === want) return;
+      r._month = want;
+      moved++;
+      said[n] = want;
+    });
   });
 
-  need.forEach(r => { r._month = monthFor[nurseryOf(r.plot)] || onScreen || null; });
-  console.info('[maint] stamped ' + need.length + ' rows with the month they belong to:',
-               monthFor);
-  return need.length;
+  if (moved) console.info('[maint] ' + moved + ' rows put back under the month their '
+                        + 'dates say they belong to:', said);
+  return moved;
 }
 
 /* THE DAY IT WAS DONE, then the round, then something settled.

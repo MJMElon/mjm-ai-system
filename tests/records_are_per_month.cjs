@@ -258,7 +258,7 @@ const typeInto = (page, chem, vals) => page.evaluate(([c, v]) => {
       stampRecordMonths();
       renderAll();
     });
-    check('every one of them was stamped September',
+    check('every one of them was put under September',
           await page.evaluate(() => records.map((r) => r._month || '(none)')),
           ['Sep 2026', 'Sep 2026', 'Sep 2026']);
     check('OCTOBER DOES NOT SHOW THEM', await drawn(page), []);
@@ -271,6 +271,44 @@ const typeInto = (page, chem, vals) => page.evaluate(([c, v]) => {
 
     check('September still has all three', await goMonth(page, '2026-09'), 'Sep 2026');
     check('…on the screen', (await drawn(page)).length, 3);
+    await page.close();
+  }
+
+  console.log('\nA list wrongly stamped with the month somebody opened it in');
+  {
+    /* What the first version of this did: opening October stamped every one
+       of September rows "Oct 2026". The page then read October at the top and
+       September down the page. The dates say otherwise, so the dates win. */
+    const page = await boot(browser);
+    await page.evaluate(() => {
+      records = [
+        { id: 1, _month: 'Oct 2026', tarikh: '2026-09-04', jenis: 'Merumput', plot: 'B1',
+          racun: 'Round 1: Merumput dalam polibeg', batch: '', qty: 10, carlos: 0, gaia: 0, remark: '' },
+        { id: 2, _month: 'Oct 2026', tarikh: '2026-09-13', jenis: 'Merumput', plot: 'B1',
+          racun: 'Round 2: Merumput dalam polibeg', batch: '', qty: 11, carlos: 0, gaia: 0, remark: '' },
+        { id: 3, _month: 'Oct 2026', tarikh: '2026-09-18', jenis: 'Membaja', plot: 'B2',
+          racun: 'Round 1: Yaramila 30gm', batch: '', qty: 12, carlos: 0, gaia: 0, remark: '' },
+        // Planned, never done. It rides with its nursery.
+        { id: 4, _month: 'Oct 2026', tarikh: '-', jenis: 'Membaja', plot: 'B3',
+          racun: 'Round 2: Yaramila 30gm', batch: '', qty: null, carlos: 0, gaia: 0, remark: '' },
+        /* One job done on the 2nd of October against SEPTEMBER schedule. One
+           late day must not drag the month with it. */
+        { id: 5, _month: 'Oct 2026', tarikh: '2026-10-02', jenis: 'Merumput', plot: 'B4',
+          racun: 'Round 3: Merumput dalam polibeg', batch: '', qty: 13, carlos: 0, gaia: 0, remark: '' }
+      ];
+      document.getElementById('global-month').value = '2026-10';
+      stampRecordMonths();
+      renderAll();
+    });
+    check('THE DATES WIN', await page.evaluate(() => records.map((r) => r._month)),
+          ['Sep 2026', 'Sep 2026', 'Sep 2026', 'Sep 2026', 'Sep 2026']);
+    check('so October is empty', await drawn(page), []);
+    check('and September has all five', await goMonth(page, '2026-09'), 'Sep 2026');
+    check('…drawn', (await drawn(page)).length, 5);
+
+    /* Run it again on a list that already agrees: nothing may move. */
+    check('a second pass moves nothing',
+          await page.evaluate(() => stampRecordMonths()), 0);
     await page.close();
   }
 

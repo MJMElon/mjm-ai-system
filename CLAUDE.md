@@ -189,10 +189,14 @@ Letting a row with no month answer yes to any month looked like the safe way
 to carry the old data over. It was not: every old row then appeared in every
 month, so October opened full of September — and the next sync would have
 stamped them all October and lost September for good.
-`stampRecordMonths()` runs once, before the first draw, and gives each
-nursery's unstamped rows the month MOST of its dated rows fall in. Not each
-row by its own date: a September round recorded on the 1st of October belongs
-to September's schedule, and the undated rows came out of that same pass.
+`stampRecordMonths()` runs before the first draw. **A row knows its own
+month: the day the work was done.** A nursery whose rows are stamped one
+month while a CLEAR MAJORITY of its dated rows fall in another is stamped
+wrong, and the dates win — which also repairs the first version of this,
+which stamped inside the sync and so turned September into October the moment
+somebody opened October. A clear majority, not any majority, so one job done
+late cannot drag a month with it; undated rows ride with their nursery. Once
+the stamps agree with the dates nothing moves again.
 
 **Anything new that reads `records` must ask the month.** A reader that does
 not will quietly mix every month together.
