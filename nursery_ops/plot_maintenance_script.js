@@ -1590,7 +1590,38 @@ async function loadLinkedWorkers() {
   // nursery sheet, so matching the nursery keeps them out on its own.
   _registerRows = res.data || [];
   _linkedRows = generalWorkersByNursery(_registerRows);
+  // A name corrected since this page opened: re-resolve the ticks too, or the
+  // sheet would go on showing the old spelling with no column.
+  try { _canonicalisePayrollNames(); } catch (e) { console.warn('[maint] worker names:', e); }
   resolveWorkers();
+}
+
+/* EVERY TICK EVER MADE UNDER A NAME THE REGISTER HAS SINCE CHANGED.
+
+   The ticks are keyed by NAME, because a column header is a name. Correct a
+   name on the register and every earlier tick is orphaned: no column, the
+   capacity out of the totals, the claim no longer paying it, and not a word
+   on screen. "Fauzan" became "Muhamad Fauzan" and his earlier months read as
+   a worker who does not exist.
+
+   The register ROW is the person -- an edit keeps its id whatever is done to
+   the name or the PIN -- so the row remembers what it has been called and any
+   of those names resolves to it. See shared/shared_maint_workers.js for why a
+   name claimed by two different rows resolves to neither.
+
+   Done in memory on every load rather than written back, so nothing is
+   rewritten on the strength of a register that failed to read. It is saved
+   the ordinary way the next time somebody ticks that sheet. */
+function _canonicalisePayrollNames() {
+  if (!window.MJMMaintWorkers || !_registerRows || !_registerRows.length) return 0;
+  const idx = MJMMaintWorkers.index(_registerRows);
+  let moved = 0;
+  Object.keys(payrollData).forEach((k) => {
+    const res = MJMMaintWorkers.canonicalStore(idx, payrollData[k]);
+    if (res.moved) { payrollData[k] = res.store; moved += res.moved; }
+  });
+  if (moved) console.info(`[maint] ${moved} tick row(s) read under a name the register has since changed`);
+  return moved;
 }
 
 /* WHY THIS NAME HAS NO COLUMN. One of five answers, off the register itself:
@@ -6943,6 +6974,9 @@ async function initDb() {
     ((payRes && payRes.data) || []).forEach(r => {
       payrollData[payrollKey(r.nursery, r.month, r.work_type)] = r.data || {};
     });
+    // Both halves are in now, so a tick saved under an older spelling finds
+    // its column before anything is drawn or totalled.
+    try { _canonicalisePayrollNames(); } catch (e) { console.warn('[maint] worker names:', e); }
     ((lockRes && lockRes.data) || []).forEach(r => { rateLocks[r.nursery] = !!r.locked; });
     ((qtyRes && qtyRes.data) || []).forEach(r => {
       if (r.trays == null) return;

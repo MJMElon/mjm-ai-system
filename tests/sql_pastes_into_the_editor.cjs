@@ -34,6 +34,9 @@ const SWEPT = [
   'CHECK_bnn_sep_what_survived.sql',
   'CHECK_undated_rows_vs_field.sql',
   'CHECK_worker_record_vs_fc_history.sql',
+  'RUN_ME_worker_previous_names.sql',
+  'RUN_ME_worker_name_was.sql',
+  'CHECK_worker_names_with_no_column.sql',
 ];
 
 const isComment = (line) => line.trimStart().startsWith('--');

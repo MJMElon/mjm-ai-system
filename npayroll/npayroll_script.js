@@ -308,7 +308,35 @@ function onMaintSheet(w) {
    whether somebody belongs on THIS month's claim depends on when they left —
    see maintWorkerNames() below. maint.workers[n] stays as the plain name
    list for anything that wants every name the nursery has. */
+/* THE TICKS ARE KEYED BY NAME, AND A NAME ON THE REGISTER CAN BE CORRECTED.
+
+   The register ROW is the person: an edit keeps its id whatever is done to
+   the name or the PIN. So a tick saved under an older spelling has to resolve
+   to whoever that row is today, or the claim stops paying work that was done
+   -- "Fauzan" became "Muhamad Fauzan" and every month before the correction
+   read as a worker who does not exist.
+
+   SHARED RULE. The Work Maintenance Worker Record resolves the same ticks
+   through the same file, because those two disagreeing is one plot divided
+   among different numbers of people on the sheet and on the claim. See
+   shared/shared_maint_workers.js.
+
+   Here rather than in loadMaint because that runs in the same Promise.all as
+   loadWorkers, so the register is not in yet when the ticks land. */
+function canonicaliseMaintTicks() {
+  if (!window.MJMMaintWorkers || !workers || !workers.length) return 0;
+  const idx = MJMMaintWorkers.index(workers);
+  let moved = 0;
+  Object.keys(maint.ticks || {}).forEach((k) => {
+    const res = MJMMaintWorkers.canonicalStore(idx, maint.ticks[k]);
+    if (res.moved) { maint.ticks[k] = res.store; moved += res.moved; }
+  });
+  if (moved) console.info(`[claim] ${moved} tick row(s) read under a name the register has since changed`);
+  return moved;
+}
+
 function resolveMaintWorkers() {
+  try { canonicaliseMaintTicks(); } catch (e) { console.warn('[claim] worker names:', e); }
   maint.workers = {};
   maint.rows    = {};
   maint.linked  = {};
@@ -3940,10 +3968,25 @@ async function loadMaint() {
     const targets = r.nursery ? [r.nursery] : ['PN','BNN','UNN1','UNN2'];
     targets.forEach(n => { (maint.rates[n] ||= {})[r.work_type] = r.rate; });
   });
+  /* THE TICKS ARE KEYED BY NAME, AND A NAME ON THE REGISTER CAN BE CORRECTED.
+
+     The register ROW is the person: editing it keeps its id whatever is done
+     to the name or the PIN. So a tick saved under an older spelling has to
+     resolve to whoever that row is today, or the claim stops paying work that
+     was done -- "Fauzan" became "Muhamad Fauzan" and every month before the
+     correction read as a worker who does not exist.
+
+     SHARED RULE. The Work Maintenance Worker Record resolves the same ticks
+     through the same file, because the two of them disagreeing is one plot
+     divided among different numbers of people on the sheet and on the claim.
+     See shared/shared_maint_workers.js. */
   maint.ticks = {};
   ((tickRes && tickRes.data) || []).forEach(r => {
     maint.ticks[`${r.nursery}_${r.month}_${r.work_type}`] = r.data || {};
   });
+  /* The names are resolved in resolveMaintWorkers, NOT here: loadWorkers and
+     loadMaint are in one Promise.all, so the register is very likely still
+     empty at this point and an index built now would resolve nothing. */
 
   /* A record names its plot and nothing else, so the plot is what puts it
      back under a nursery. The list comes from shared/shared_maint_plots.js —

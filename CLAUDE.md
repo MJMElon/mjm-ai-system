@@ -406,6 +406,54 @@ A locked row still SHOWS its ticks — who did the work is what the sheet is for
 `tests/payroll_ticks_locked_when_checked.cjs` sends a saved row through both
 paths.
 
+## A worker is the register ROW, not the name on it
+
+The Worker Record keys its ticks by NAME, because a column header is a name:
+`nops_maint_payroll.data` is `{ recordId: { "Andi Rosmini": 1 } }`. Correct a
+name on the payroll register and every tick ever made under the old spelling
+is orphaned — no column on the sheet, the capacity out of the totals, the
+salary claim no longer paying it. Nothing is deleted and nothing says a word.
+
+It has happened: **"Fauzan" was registered first and later corrected to
+"Muhamad Fauzan"** — the same person, the same row, the same id, because the
+office EDITED the row rather than making a second one. Every month before the
+correction read as a worker who does not exist.
+
+`mjmnpayroll_workers.id` is a BIGSERIAL and an edit keeps it, whatever is done
+to the name, the PIN, the bank account or the role. **So the row remembers
+what it has been called** — `previous_names`, appended by a database TRIGGER
+rather than by a screen, because the register is edited from the office
+module, the Worker Portal Manage page and by hand in Supabase, and a rule
+living in one screen is a rule the other two do not obey.
+
+`shared/shared_maint_workers.js` is the one resolver, read by the Work
+Maintenance page AND by the claim that prices it — two copies disagreeing is
+one plot divided among different numbers of people on the sheet and on the
+claim. Four things in it:
+
+- **Matching is on letters and digits, uppercase**, the same rule as
+  `nurseryKey`/`plotKey`. It cannot merge two people: two names differing by a
+  letter or digit give different keys.
+- **A name claimed by two different ROWS resolves to neither.** Two people
+  really can be "Ahmad" and "Ahmad Bin Ali", and picking one moves somebody's
+  money to somebody else. It stays unresolved and shows as a name with no
+  column, which is the thing the office needs to see.
+- **A row ticked under BOTH names is ONE tick**, not two — two would divide
+  the plot among one more worker than did the work and cut everybody else's
+  share. Where a hand tick meets a field tick, the hand one wins.
+- **It resolves on READ and writes nothing back**, so a register that failed
+  to load cannot rewrite anything. The data heals the next time somebody ticks
+  that sheet.
+
+The trigger cannot know about renames from before it existed, because nothing
+recorded them. `shared/CHECK_worker_names_with_no_column.sql` finds those —
+every tick name the register cannot place, with the capacity that is not being
+paid — and suggests a match only where exactly one register name carries the
+orphan as a whole word. **That suggestion is never applied by anything.** The
+office confirms, and `shared/RUN_ME_worker_name_was.sql` names its pairs.
+
+`tests/worker_is_the_register_row.cjs` holds all of it.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the
