@@ -923,14 +923,20 @@ function renderPayroll() {
       // Plot capacity follows the record's Quantity, linked or keyed.
       const cap    = recQty(r).value || 0;
       const ticked = wk.filter(w => cells[w]);
-      const share  = ticked.length ? cap / ticked.length : 0;   // capacity ÷ ticks
+      const share  = ticked.length ? cap / ticked.length : 0;   // capacity / ticks
       ticked.forEach(w => { totals[w] += share; });
       capTotal += cap;
-      h += `<tr>
+      /* Checked on the Work Maintenance list locks this row's workers too --
+         see _denyPayrollLocked. A locked row still SHOWS its ticks, because
+         who did the work is the thing the sheet is for; it just will not take
+         a new one. The cell keeps an onclick so pressing it says why rather
+         than doing nothing, which reads as a broken page. */
+      const locked = _recLocked(r);
+      h += `<tr${locked ? ' class="pay-row-locked"' : ''}>
         <td style="font-weight:600;white-space:nowrap;">${_tarikhDisplay(r.tarikh)}</td>
         <td class="plot-td">${r.plot}</td>
         <td>${cap ? cap.toLocaleString() : '—'}</td>
-        ${wk.map(w => `<td class="check-td${cells[w] ? ' ticked' : ''}" onclick="togglePayrollTick(${r.id},'${String(w).replace(/'/g, "\\'")}')" title="${w}"></td>`).join('')}
+        ${wk.map(w => `<td class="check-td${cells[w] ? ' ticked' : ''}${locked ? ' locked' : ''}" onclick="${locked ? '_denyPayrollLocked()' : `togglePayrollTick(${r.id},'${String(w).replace(/'/g, "\\'")}')`}" title="${locked ? t('pay.lockedTitle') + ' — ' + w : w}"></td>`).join('')}
         <td style="font-weight:700;">${capFmt(share)}</td>
       </tr>`;
     });
@@ -951,9 +957,32 @@ function renderPayroll() {
   tbl.innerHTML = h;
 }
 
+/* Why a checked row cannot be ticked here either.
+
+   The Work Maintenance list locks a Checked row because Checked is what sends
+   it to the payroll claim. The Worker Record decides something the claim reads
+   just as directly: the row's capacity is split among the workers ticked on
+   it, so adding or removing one tick changes what everybody else on that row
+   is paid, without the row's own figure moving a seedling.
+
+   So the SAME rule, row by row: Checked locks the ticks too. Uncheck the row
+   on the Work Maintenance list first — that is one press, it says on screen
+   what it undoes, and it puts the quantity back to live at the same time. */
+function _denyPayrollLocked() {
+  alert('This row is Checked, so its workers are locked.\n\n'
+    + 'Its capacity is shared between the workers ticked on it, so changing a '
+    + 'tick changes what the others are paid.\n\n'
+    + 'Uncheck the row on the Work Maintenance list first.');
+}
+
 /* Tick / untick a worker on a payroll row. */
 function togglePayrollTick(recId, worker) {
   const n = getNursery(), m = getMonth();
+  /* Gated on the RECORD, not on what the cell was drawn as. A cell drawn
+     before the row was checked still carries its old onclick, and the lock
+     has to hold for the write and not only for the pointer. */
+  const rec = records.find(x => x.id === recId);
+  if (_recLocked(rec)) { _denyPayrollLocked(); return; }
   const k = payrollKey(n, m, _payrollView);
   if (!payrollData[k]) payrollData[k] = {};
   if (!payrollData[k][recId]) payrollData[k][recId] = {};
@@ -1824,6 +1853,7 @@ const I18N = {
     'pay.unpaired':'⚠ Verified in the field but matched no row on this month\u2019s schedule, so it was not ticked and is not paid. Add the row to the schedule for this month, then Sync from Schedule:',
     'pay.roundN':'Round {n}',
     'pay.noRows':'No records for this nursery and month yet — tick the schedule, then Sync from Schedule.',
+    'pay.lockedTitle':'Checked — locked',
     'pay.tickHint':'Tick each worker who did the job. Capacity per worker = plot capacity ÷ number of ticks on that row. Pay is worked out from this record in the Nursery Payroll System.',
     /* Salary claim form (PDF) */
     'pay.no':'No.', 'pay.worker':'Worker Name', 'pay.workersRange':'Workers', 'pay.ofTotal':'of',
@@ -1946,6 +1976,7 @@ const I18N = {
     'pay.autoNote':'Rekod pekerja ini dijana secara automatik oleh sistem MJM Nursery AI.',
     'btn.claimPdf':'⬇ Rekod Pekerja (PDF)',
     'pay.noRows':'Tiada rekod untuk nurseri dan bulan ini — tandakan jadual, kemudian Sync from Schedule.',
+    'pay.lockedTitle':'Checked — dikunci',
     'pay.tickHint':'Tandakan setiap pekerja yang membuat kerja. Kapasiti setiap pekerja = kapasiti plot ÷ bilangan tanda pada baris itu. Gaji dikira daripada rekod ini di Sistem Penggajian Nurseri.',
     
     'badge.pd':'JADUAL PENYEMBURAN RACUN KULAT DAN SERANGGA', 'badge.manuring':'JADUAL MEMBAJA',
@@ -3324,6 +3355,11 @@ function applyFieldRecords(nursery, monthLbl) {
   const syncTicks = (rec, group) => {
     const type = _PAYROLL_TYPE_BY_JENIS[rec.jenis];
     if (!type) return;
+    /* A Checked row is settled, and the field does not reopen it. Without
+       this the lock would be only on the screen: the next page load would
+       re-sync and move the ticks under a row the office has agreed, which is
+       the piece-rate money moving after the fact. */
+    if (_recLocked(rec)) return;
     const k = payrollKey(nursery, monthLbl, type);
     const store = payrollData[k] || (payrollData[k] = {});
     const cells = store[rec.id] || {};

@@ -387,6 +387,25 @@ claim read the same function. A row checked before this existed is frozen
 once, on the next load, at what it reads then: nothing recorded what it read
 on the day, and that is the figure the office last saw.
 
+**And Checked locks the Worker Record's ticks on that row, not just the Work
+Maintenance row.** A row's capacity is SHARED between the workers ticked on
+it, so adding or removing one tick changes what everybody else on that row is
+paid while the row's own figure does not move a seedling. Locking the figure
+and leaving the split open would settle half of it.
+
+There are two ways a tick is written and a lock on one of them is decoration:
+`togglePayrollTick` when somebody presses the cell, and `syncTicks` inside
+`applyFieldRecords`, which runs on every page load. The second is the one that
+matters — without it the next load would quietly move the ticks under a row
+the office has agreed. Both are gated on `_recLocked(rec)`, read off the
+RECORD rather than off what the cell was drawn as, because a cell drawn before
+the row was checked still carries its old handler.
+
+A locked row still SHOWS its ticks — who did the work is what the sheet is for
+— and pressing one says why rather than doing nothing.
+`tests/payroll_ticks_locked_when_checked.cjs` sends a saved row through both
+paths.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the
