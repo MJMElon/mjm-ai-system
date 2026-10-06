@@ -674,7 +674,9 @@ const MOD_COLS={
     {h:'S1 (cm)',  v:r=>r.sample_1||'—',           num:true},
     {h:'S2 (cm)',  v:r=>r.sample_2||'—',           num:true},
     {h:'S3 (cm)',  v:r=>r.sample_3||'—',           num:true},
-    {h:'Avg (cm)', v:r=>`<b>${esc(r.avg_height||'—')}</b>`, raw:true, num:true}
+    {h:'Avg (cm)', v:r=>`<b>${esc(r.avg_height||'—')}</b>`, raw:true, num:true},
+    {h:'Plot Avg (cm)', label:'Plot average that day',
+     v:(r,i,rows)=>`<b>${_heightPlotAvg(r,rows)}</b>`, raw:true, num:true}
   ],
   papan:[
     {h:'#',        v:(r,i)=>i+1, label:'Record', num:true},
@@ -706,6 +708,40 @@ function _auditPlotBatchSort(rows){
   return rows.slice().sort((a,b)=>natCmp(a.plot,b.plot)||natCmp(a.batch??a.batch_no,b.batch??b.batch_no));
 }
 
+/* THE PLOT'S AVERAGE FOR THAT DAY.
+
+   An auditor walks a plot and measures several batches standing in it, one
+   row each. The height that describes the PLOT is the mean of those rows, and
+   until now the report had every batch and no plot figure at all, so it was
+   worked out by hand off the paper.
+
+   The mean of the row averages, which is what was asked for and what the Avg
+   column already shows. Grouped on the day as well as the plot, because the
+   same plot measured a fortnight later is a different reading, not more of
+   the same one.
+
+   Repeated on every row of the group rather than written once against the
+   first: this table is read and printed a row at a time, and a figure that
+   appears only on a group's first line is a figure that goes missing the
+   moment the group breaks across a page. */
+function _heightPlotAvg(r, rows){
+  const key=(x)=>String(x.date||'')+'|'+String(x.plot||'').trim().toUpperCase();
+  const k=key(r);
+  /* An EMPTY reading is not a zero. Number(null) is 0 and 0 is a finite
+     number, so a row the auditor left blank would have been averaged in as a
+     seedling of no height and pulled the plot down. A real 0 still counts --
+     it is the blank that is thrown away, tested for before anything is
+     converted. */
+  const vals=(rows||[]).filter(x=>key(x)===k)
+                       .map(x=>x.avg_height)
+                       .filter(v=>v!==null&&v!==undefined&&String(v).trim()!=='')
+                       .map(Number)
+                       .filter(v=>Number.isFinite(v));
+  if(!vals.length) return '—';
+  const mean=vals.reduce((a,b)=>a+b,0)/vals.length;
+  return (Math.round(mean*10)/10).toLocaleString();
+}
+
 function buildModTable(mod, rows){
   if(!rows||!rows.length) return '<div class="no-data">No records found.</div>';
   const cols=MOD_COLS[mod];
@@ -716,7 +752,9 @@ function buildModTable(mod, rows){
   let body='';
   rows.forEach((r,i)=>{
     body+='<tr>'+cols.map(c=>{
-      const val=c.v(r,i);
+      /* rows as well as the row: a column can be a figure about the GROUP
+         this row is in -- see _heightPlotAvg. */
+      const val=c.v(r,i,rows);
       /* c.label is what the cell announces itself as on a phone, where
          it is a card row rather than a column: "#" is a column heading
          and says nothing on its own once the heading row is gone. */
