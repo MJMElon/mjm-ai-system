@@ -21,7 +21,7 @@
 --
 -- WHAT EACH VERDICT MEANS
 --
---   agree                both sides name the same people
+--   agree                both sides name the same people, on the SAME DAY
 --   NOT ON THE CLAIM     the field recorded who did it and the office has
 --                        ticked nobody, so the plot's capacity is paid to
 --                        nobody at all. This is the one that costs money
@@ -91,6 +91,7 @@ office AS (
 field_raw AS (
   SELECT upper(replace(replace(replace(btrim(f.plot_name), ' ', ''), '-', ''), '_', '')) AS pk,
          lower(btrim(COALESCE(f.jenis, '')))  AS jenis_l,
+         to_char(f.work_date, 'YYYY-MM-DD') AS whn,
          btrim(unnest(string_to_array(
            CASE WHEN btrim(COALESCE(f.worked_by, '')) <> '' THEN f.worked_by
                 ELSE COALESCE(f.reported_by, '') END, ','))) AS worker
@@ -100,7 +101,19 @@ field_raw AS (
      AND to_char(f.work_date, 'YYYY-MM') = pa.ym
 ),
 
-field AS (
+/* BY THE DAY, not by the month.
+   This used to group the field's names per plot and job for the whole month,
+   so a plot sprayed five times showed the union of everybody who did ANY of
+   the five against EVERY one of them — and five rounds each ticked to one man
+   all read DIFFERENT NAMES against a crew of three. A round is compared with
+   the round that was worked that day. */
+field_day AS (
+  SELECT pk, jenis_l, whn, string_agg(DISTINCT worker, ', ' ORDER BY worker) AS names
+    FROM field_raw WHERE worker <> '' GROUP BY pk, jenis_l, whn
+),
+/* Only for a row with NO date, which cannot be matched to a day. The whole
+   month is the best that can be said, and the verdict says so. */
+field_month AS (
   SELECT pk, jenis_l, string_agg(DISTINCT worker, ', ' ORDER BY worker) AS names
     FROM field_raw WHERE worker <> '' GROUP BY pk, jenis_l
 ),
@@ -108,21 +121,33 @@ field AS (
 joined AS (
   SELECT r.plot, r.jenis, r.tarikh, r.checked,
          COALESCE(o.names, '') AS office_names,
-         COALESCE(f.names, '') AS field_names
+         COALESCE(CASE WHEN r.tarikh = '' THEN fm.names ELSE fd.names END, '') AS field_names,
+         (r.tarikh = '') AS undated,
+         (r.tarikh <> '' AND fd.names IS NULL AND fm.names IS NOT NULL) AS day_missed
     FROM recs r
     LEFT JOIN office o ON o.rec_id = r.rec_id
-    LEFT JOIN field  f
-      ON f.pk = upper(replace(replace(replace(r.plot, ' ', ''), '-', ''), '_', ''))
-     AND f.jenis_l = lower(r.jenis)
+    LEFT JOIN field_day fd
+      ON fd.pk = upper(replace(replace(replace(r.plot, ' ', ''), '-', ''), '_', ''))
+     AND fd.jenis_l = lower(r.jenis)
+     AND fd.whn = left(r.tarikh, 10)
+    LEFT JOIN field_month fm
+      ON fm.pk = upper(replace(replace(replace(r.plot, ' ', ''), '-', ''), '_', ''))
+     AND fm.jenis_l = lower(r.jenis)
 ),
 
 verdicted AS (
   SELECT j.*,
          CASE
            WHEN j.office_names = '' AND j.field_names = '' THEN 'nobody either side'
+           WHEN j.office_names = '' AND j.undated
+             THEN 'NOT ON THE CLAIM — undated, so the names are the whole month'
            WHEN j.office_names = '' THEN 'NOT ON THE CLAIM — the field knows who, the office has ticked nobody'
+           WHEN j.day_missed THEN 'office only — the FC Portal has nothing on that DAY'
            WHEN j.field_names  = '' THEN 'office only — nothing in the FC Portal for it'
+           WHEN j.office_names = j.field_names AND j.undated
+             THEN 'agree, but undated — matched on the month'
            WHEN j.office_names = j.field_names THEN 'agree'
+           WHEN j.undated THEN 'DIFFERENT NAMES — undated, so the names are the whole month'
            ELSE 'DIFFERENT NAMES'
          END AS verdict
     FROM joined j
@@ -139,10 +164,10 @@ SELECT * FROM (
 
   UNION ALL
   SELECT 9, 'VERDICT', '-',
-         (SELECT count(*)::text FROM verdicted WHERE verdict = 'agree') || ' agree',
+         (SELECT count(*)::text FROM verdicted WHERE verdict LIKE 'agree%') || ' agree',
          (SELECT count(*)::text FROM verdicted
            WHERE verdict LIKE 'NOT ON THE CLAIM%') || ' paid to nobody',
-         ((SELECT count(*)::text FROM verdicted WHERE verdict = 'DIFFERENT NAMES')
+         ((SELECT count(*)::text FROM verdicted WHERE verdict LIKE 'DIFFERENT NAMES%')
           || ' with different names, '
           || (SELECT count(*)::text FROM verdicted WHERE verdict = 'nobody either side')
           || ' with nothing on either side')::text
