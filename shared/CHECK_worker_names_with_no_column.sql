@@ -19,9 +19,16 @@
 --
 -- WHAT EACH SECTION SAYS
 --
--- 1 ORPHAN   one line per name with no register row, with how many ticks
---            carry it, how much capacity those rows are worth, and which
---            months. The capacity is what is NOT being paid.
+-- 1 ORPHAN   one line per name with no register row: how many ticks carry it,
+--            the capacity OF THEIR OWN that is not being paid, the capacity of
+--            the rows in all, and which months.
+--
+--            The two figures are different and the difference matters. A row
+--            is divided between the workers ticked on it, so a plot of 4,636
+--            shared by nine is 515 each. The first figure is that share summed
+--            -- what this person is owed. The second is the whole rows, which
+--            is how much work is affected but is NOT a sum of money, because
+--            the other eight on each row were paid their part of it.
 -- 2 MAYBE    a register name that contains the orphan as a whole word and is
 --            the ONLY one that does -- Fauzan inside Muhamad Fauzan. This is
 --            a SUGGESTION and nothing more. It is never applied by anything:
@@ -35,8 +42,12 @@
 -- ════════════════════════════════════════════════════════════════════════
 
 WITH tick AS (
+  -- on_row is how many workers share that row, because the capacity of a row
+  -- is divided between them. Without it the figure below would be the whole
+  -- plot counted once per worker, which is not what anybody is owed.
   SELECT p.nursery, p.month, p.work_type,
-         e.rec_id, w.name AS worker
+         e.rec_id, w.name AS worker,
+         (SELECT count(*) FROM jsonb_object_keys(COALESCE(e.cells, '{}'::jsonb))) AS on_row
     FROM nops_maint_payroll p
     CROSS JOIN LATERAL jsonb_each(COALESCE(p.data, '{}'::jsonb)) AS e(rec_id, cells)
     CROSS JOIN LATERAL jsonb_object_keys(COALESCE(e.cells, '{}'::jsonb)) AS w(name)
@@ -98,6 +109,7 @@ recqty AS (
 summary AS (
   SELECT o.worker,
          count(*) AS ticks,
+         COALESCE(sum(q.cap / GREATEST(o.on_row, 1)), 0) AS share,
          COALESCE(sum(q.cap), 0) AS cap,
          string_agg(DISTINCT o.nursery, ', ' ORDER BY o.nursery) AS nurseries,
          string_agg(DISTINCT o.month, ', ' ORDER BY o.month) AS months
@@ -119,7 +131,8 @@ maybe AS (
 SELECT * FROM (
   SELECT 1 AS ord, '1 ORPHAN'::text AS section, s.worker::text AS item,
          s.ticks::text AS n,
-         (to_char(s.cap, 'FM999G999G999') || ' capacity, in ' || s.nurseries
+         (to_char(round(s.share), 'FM999G999G999') || ' capacity of their OWN, on rows worth '
+          || to_char(s.cap, 'FM999G999G999') || ' in all, in ' || s.nurseries
           || ', months ' || s.months)::text AS detail
     FROM summary s
 
@@ -135,7 +148,9 @@ SELECT * FROM (
   UNION ALL
   SELECT 9, '9 TOTAL', 'names with no column',
          (SELECT count(*)::text FROM summary),
-         ('capacity not being paid: '
-          || to_char(COALESCE((SELECT sum(cap) FROM summary), 0), 'FM999G999G999'))::text
+         ('capacity of their own not being paid: '
+          || to_char(round(COALESCE((SELECT sum(share) FROM summary), 0)), 'FM999G999G999')
+          || ', on rows worth '
+          || to_char(COALESCE((SELECT sum(cap) FROM summary), 0), 'FM999G999G999') || ' in all')::text
 ) z
 ORDER BY ord, item, detail;
