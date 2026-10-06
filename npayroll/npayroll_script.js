@@ -3613,7 +3613,7 @@ function downloadMaintPDF() {
           { bold: true, size: 9, nowrap: true, fill: TF });
   y += FOOT_H;
   y = pdfVerifiedNote(doc, y, 'maint', n, CONTENT_R);
-  pdfFooterNote(doc, y, CENTER_X, CONTENT_R, 5);
+  pdfFooterNote(doc, y, CENTER_X, CONTENT_R, 4);
   doc.save(`Salary_Claim_Work_Maintenance_${n}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
 }
 
@@ -3796,7 +3796,7 @@ async function downloadTransplantPDF() {
   y = drawTransplantPlots(doc, y, plotRows, secTxt, monthTxt);
 
   y = pdfVerifiedNote(doc, y, 'transpl', sec, CONTENT_R);
-  pdfFooterNote(doc, y, CENTER_X, CONTENT_R, 5);
+  pdfFooterNote(doc, y, CENTER_X, CONTENT_R, 4);
 
   /* …and every nursery's drone maps on the end of it. Fetching them takes a
      moment — the button says so rather than appearing to have ignored the
