@@ -264,6 +264,29 @@ The As At date cuts the LINES off and never the signatures: a line dated
 after it is in no figure on screen, while "has anybody checked this" is a
 question about now.
 
+## Which nursery a record is in: the PLOT decides
+
+The plot is the thing that is somewhere. A maintenance record is wherever its
+plot is, whatever the record's own `nursery_name` happens to say — which may
+be empty, or spelt the way the office types it rather than the way
+`shared_plots` does.
+
+The office has always read it that way (`_rejNursery`). The phone's History
+did not: it compared the record's stored `nursery_name` against the nursery
+picked at the top, letter for letter. So a job the office could see — signed
+off, with the walk drawn beside it — was not in History at all, and a job
+that cannot be found is a job somebody does twice.
+
+Every nursery comparison in either repository goes through
+`nurseryKey`/`plotKey` (strip everything but letters and digits, uppercase).
+That includes the User Access tick list: it is typed by hand and says "UNN1"
+where `shared_plots` says "UNN 1". It cannot widen access — two names with
+different letters or digits give different keys.
+
+`Barcode_Counter`'s `recordNurseryKey` and this file's `_rejNursery` are the
+two copies. `shared/CHECK_why_not_in_phone_history.sql` names any record
+whose stored nursery disagrees with its plot's, on every plot.
+
 ## Checked stops a figure being a formula
 
 A linked quantity on the Work Maintenance list is a live sum of the batch
