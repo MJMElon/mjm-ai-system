@@ -2314,6 +2314,26 @@ function maintRateTxt(t, rate) {
    the five it is. This runs inside maintTotals rather than beside it because
    a second pass over the same records is a second chance to disagree with the
    figure it is explaining. */
+/* A MONTH KEEPS ITS OWN WORK RECORDS, AND THIS CLAIM IS A READER OF THAT LIST.
+
+   nops_maint_records is ONE list for the whole system and every row carries
+   _month. The Work Maintenance page asks for it in all three of its readers
+   -- renderRecords, payrollRowsFor and applyFieldRecords -- through
+   _recInMonth, which is EXACT.
+
+   This claim is the fourth reader and it never asked. So it summed every
+   month at once: UNN 1 weeding read 191,515 against the 183,996 on its own
+   Worker Record, the difference being one U18 row stamped Aug 2026 that
+   September has no business counting. It was invisible while no other month
+   held a CHECKED row, and the moment one did it walked onto the claim.
+
+   SHARED RULE with _recInMonth in nursery_ops/plot_maintenance_script.js.
+   EXACT on purpose: a row with no month answers NO month rather than every
+   month, because the alternative was tried and put every old row into every
+   month at once. Rows it turns away are counted and said below, never
+   dropped in silence. */
+function _maintInMonth(r, m) { return !!r && r._month === m; }
+
 function maintTotals(nursery, month, ym) {
   const wk = maintWorkerNames(nursery, ym || monthValue());
   const per = {};                       // worker → { code: capacity }
@@ -2345,6 +2365,8 @@ function maintTotals(nursery, month, ym) {
       noCap: 0,         // ticked, but the quantity came to nothing
       unchecked: 0,     // rows the office has not settled, so held back
       uncheckedCap: 0,  // and what they come to, so the holding is visible
+      otherMonth: 0,    // rows of this nursery and job that belong to another month
+      noMonth: 0,       // rows carrying no month at all, so they answer to none
       stray: new Set(), // tick names with no row on this claim
       orphanTicks: 0,   // ticks against a record id this month's list has not got
       fromField: 0,     // rows priced from the field because nothing was saved
@@ -2366,6 +2388,13 @@ function maintTotals(nursery, month, ym) {
     maint.records
       .filter(r => r.jenis === t.jenis && (r.__nursery === nursery))
       .forEach(r => {
+        /* THIS MONTH ONLY. Counted first, so a row turned away here is
+           reported rather than quietly missing -- the same reason an
+           unchecked row is counted below. */
+        if (!_maintInMonth(r, month)) {
+          if (!r._month) d.noMonth++; else d.otherMonth++;
+          return;
+        }
         if (!r.checked) {
           /* Counted and said, never silently dropped. Capacity that leaves a
              claim without a word is the thing this file is most careful
@@ -2775,6 +2804,21 @@ function renderMaint() {
       + `${rows === 1 ? 'it has' : 'they have'} not been ticked Checked — `
       + held.map(x => `${esc(x.t.label)} ${capFmt(x.d.uncheckedCap)}`).join(', ')
       + `, ${capFmt(cap)} in all. Tick them in Work Maintenance and they price here.`);
+  }
+  /* A ROW WITH NO MONTH ANSWERS TO NONE OF THEM, so it is on no claim at all.
+     Said here because that is a row somebody worked and nobody is paying for,
+     and the cure is to open Work Maintenance for its nursery -- stampRecordMonths
+     runs before the first draw and gives it a month. Rows of ANOTHER month are
+     not mentioned: they are on their own claim and nothing is wrong with them. */
+  const unstamped = MAINT_TYPES
+    .map(t => ({ t, d: (maint.why || {})[t.code] || {} }))
+    .filter(x => x.d.noMonth);
+  if (unstamped.length) {
+    const n = unstamped.reduce((a, x) => a + x.d.noMonth, 0);
+    notes.push(`${n} work record${n === 1 ? '' : 's'} carr${n === 1 ? 'ies' : 'y'} no month, `
+      + `so ${n === 1 ? 'it is' : 'they are'} on no claim at all — `
+      + unstamped.map(x => `${esc(x.t.label)} ${x.d.noMonth}`).join(', ')
+      + '. Open Work Maintenance for this nursery once and they are stamped.');
   }
   /* Work priced straight from the field. Said out loud because it is the one
      figure on this sheet that nobody has been asked to confirm: the office's

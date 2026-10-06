@@ -2,15 +2,20 @@
    claim says what it is holding back. The real maintTotals is lifted out. */
 const fs = require('fs'), path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'npayroll', 'npayroll_script.js'), 'utf8');
-const i = src.indexOf('function maintTotals(');
-const body = src.slice(i, src.indexOf('\n}\n', i) + 3);
+/* Sliced from _maintInMonth, not from maintTotals: the month test lives just
+   above it now and maintTotals calls it on every row. See
+   tests/claim_asks_the_month.cjs for why the claim has to ask the month. */
+const i = src.indexOf('function _maintInMonth(');
+const body = src.slice(i, src.indexOf('\n  return per;\n}', i) + '\n  return per;\n}'.length);
 
 const MAINT_TYPES = [
   { code: 'weeding',  label: 'Weeding',        jenis: 'Merumput' },
   { code: 'interrow', label: 'Interrow Spray', jenis: 'Meracun rumput secara selingan' },
 ];
+/* _month matters now: the claim reads one month, so a row without it is on no
+   claim at all. These are all September, which is the month asked for below. */
 const rec = (id, jenis, qty, checked) =>
-  ({ id, jenis, qty, checked, plot: 'B1', __nursery: 'BNN' });
+  ({ id, jenis, qty, checked, plot: 'B1', __nursery: 'BNN', _month: 'Sep 2026' });
 
 const records = [
   rec(1, 'Merumput', 2353, 1),                        // checked → pays

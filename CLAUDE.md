@@ -212,6 +212,18 @@ the stamps agree with the dates nothing moves again.
 **Anything new that reads `records` must ask the month.** A reader that does
 not will quietly mix every month together.
 
+It then happened a fourth time, in the other repository folder: the salary
+claim's `maintTotals` in `npayroll/npayroll_script.js` filtered on `jenis` and
+nursery and nothing else, so it summed every month at once. UNN 1 weeding read
+**191,515** on the claim card against **183,996** on its own Worker Record —
+one U18 row stamped `Aug 2026` that September has no business counting. It was
+invisible for as long as no other month held a CHECKED row, and the moment one
+did it walked onto the claim and was priced. `_maintInMonth` is that file's
+copy of the test, EXACT for the same reason, and the rows it turns away are
+counted: another month is normal and says nothing, while a row with **no**
+month is on no claim at all and is named under the total.
+`tests/claim_asks_the_month.cjs` holds it.
+
 ## The field fills an empty cell. It never writes over a full one.
 
 A verified field record fills a row's date, batch and quantity. It used to
