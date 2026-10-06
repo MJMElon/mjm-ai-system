@@ -4995,7 +4995,10 @@ function _qtyCell(r) {
   if (q.frozen) {
     const tip = `Held at ${txt} when this row was checked, so the batch report `
               + 'no longer moves it. Uncheck the row to put it back to live.';
-    return `<span class="qty-frozen" title="${tip.replace(/"/g, '&quot;')}">🔒 ${txt}</span>`;
+    /* No padlock. The whole row is tinted and badged Checked, so the emoji
+       was a third copy of the same fact sitting in front of the one column
+       people read down for the number itself. */
+    return `<span class="qty-frozen" title="${tip.replace(/"/g, '&quot;')}">${txt}</span>`;
   }
   if (!q.linked) return txt;
   const i = q.info;
@@ -5026,7 +5029,7 @@ function _batchCell(r) {
   if (b.frozen) {
     const tip = `Held when this row was checked. Uncheck it to read the batch `
               + 'report again.';
-    return `<span class="qty-frozen" title="${tip.replace(/"/g, '&quot;')}">🔒 ${esc(b.value)}</span>`;
+    return `<span class="qty-frozen" title="${tip.replace(/"/g, '&quot;')}">${esc(b.value)}</span>`;
   }
   if (!b.linked) return esc(b.value);
   const when = b.info && b.info.asOf ? `as at ${b.info.asOf}` : 'standing today';
@@ -5124,7 +5127,22 @@ function stampRecordMonths() {
     const clear = !!top && tally[top] * 2 > dated;
 
     rows.forEach(r => {
-      const want = clear ? top : (r._month || top || onScreen || null);
+      /* A ROW KNOWS ITS OWN MONTH, AND IT IS THE ROW'S, NOT THE NURSERY'S.
+
+         This used to hand `top` — the nursery's majority month — to EVERY row
+         in the nursery, dated or not. A nursery part-way through a handover is
+         mostly last month, so last month wins the majority and this month's
+         rows are stamped into it and disappear from the month they were
+         worked in. Then the new month becomes the majority and the old one
+         disappears the same way. It runs on every load and it SAVES, so it
+         compounded, and the console line said it was putting rows back under
+         the month their dates say — while doing the opposite.
+
+         The majority is still what decides for a row with NO date — planned,
+         never done — because such a row came out of that nursery's schedule
+         in the same pass and has nothing of its own to go on. */
+      const own = MJMMaintField.isoMonthLabel(_tarikhToISO(r.tarikh));
+      const want = own || (clear ? top : (r._month || top || onScreen || null));
       if (!want || r._month === want) return;
       r._month = want;
       moved++;
@@ -5298,7 +5316,12 @@ function renderRecords() {
       </td>
     </tr>`;
     recs.forEach(r => {
-      html += `<tr>
+      /* Settled rows carry a tint. The badge alone is at the far right of a
+         wide table, so scanning down the middle of the sheet — the dates, the
+         quantities — gave no clue which rows were agreed and which were still
+         moving. The tint is very light on purpose: it marks the row without
+         fighting the figures on it. */
+      html += `<tr${r.checked ? ' class="rec-row-checked"' : ''}>
         <td style="font-weight:600;color:var(--green-text);">${_dateCell(r)}</td>
         <td>${jenisLabel(r.jenis)}</td>
         <td><span class="pill ${pillCls(r.jenis)}">${r.racun||'—'}</span></td>
@@ -5322,13 +5345,11 @@ function renderRecords() {
                to anybody but an admin, and the field sync still leaves it
                alone. Unticking first is now the way in, which is a deliberate
                act and says on screen what it undoes. */
-            ? `<span class="rec-checked-badge" title="Checked — the office has settled this row, and the field sync leaves it alone">✓ Checked</span>`
+            /* Uncheck and nothing else. Edit and Del used to sit here for an
+               admin, which is the lock not being a lock — see _recLocked. */
+            ? `<span class="rec-checked-badge" title="Checked and locked — this row is settled, the field sync leaves it alone, and it is what the payroll claim pays on">✓ Checked</span>`
               + `<button class="btn btn-sm" onclick="toggleChecked(${r.id})"
-                   title="Put this row back to unchecked — it can be edited again, and the field sync will fill it in again">Uncheck</button>`
-              + (isNopsAdmin
-                ? `<button class="btn btn-sm" onclick="editRec(${r.id})">Edit</button>
-                   <button class="btn btn-sm btn-danger" onclick="deleteRec(${r.id})">Del</button>`
-                : '')
+                   title="Put this row back to unchecked — it can be edited again, its quantity goes back to live, and it comes off the payroll claim">Uncheck</button>`
             : `<button class="btn btn-sm btn-check" onclick="toggleChecked(${r.id})" title="Mark as checked — locks the row for normal users">✓ Check</button>
                <button class="btn btn-sm" onclick="editRec(${r.id})">Edit</button>
                <button class="btn btn-sm btn-danger" onclick="deleteRec(${r.id})">Del</button>`}
@@ -5739,10 +5760,21 @@ function persistRecords() {
       .then(({ error }) => { if (error) console.warn('[maint] records save failed:', error.message); });
   }, 400);
 }
-/* A checked row is locked to everyone except an admin of the
-   Nursery Operation Manage module (User Access). */
-function _recLocked(r){ return !!(r && r.checked) && !isNopsAdmin; }
-function _denyLocked(){ alert('This record is Checked. Only an admin can edit it.'); }
+/* A CHECKED ROW IS LOCKED, AND THE ADMIN IS NOT AN EXCEPTION.
+
+   It used to let a Nursery Operation admin edit straight through the tick.
+   That made Checked mean two different things depending on who was looking:
+   settled for the office, still editable for whoever had the module. And
+   Checked is now what sends a row to the payroll claim — so editing through
+   the tick changes what somebody is paid, with the row still showing as
+   agreed.
+
+   Uncheck first. It is one press, it is offered to whoever could check, and
+   it says on screen what it undoes. */
+function _recLocked(r){ return !!(r && r.checked); }
+function _denyLocked(){ alert('This record is Checked, so it is locked.\n\n'
+  + 'Press Uncheck first — that puts its quantity back to live and lets the row '
+  + 'be edited again. A checked row is what the payroll claim pays on.'); }
 
 function toggleChecked(id){
   const r = records.find(x=>x.id===id);

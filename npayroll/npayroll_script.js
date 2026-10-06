@@ -2315,6 +2315,8 @@ function maintTotals(nursery, month, ym) {
          paid for, and the claim says so under the total. */
       capAll: 0,
       noCap: 0,         // ticked, but the quantity came to nothing
+      unchecked: 0,     // rows the office has not settled, so held back
+      uncheckedCap: 0,  // and what they come to, so the holding is visible
       stray: new Set(), // tick names with no row on this claim
       orphanTicks: 0,   // ticks against a record id this month's list has not got
       fromField: 0,     // rows priced from the field because nothing was saved
@@ -2322,9 +2324,28 @@ function maintTotals(nursery, month, ym) {
       tickRows: Object.keys(store).length
     };
     const seen = new Set();
+    /* ONLY A CHECKED ROW REACHES THE CLAIM.
+       Checked is the office saying it has been through the row and agreed it,
+       and that is now the one thing that sends it here. A row still being
+       worked on — a quantity the ledger is still moving, a date somebody is
+       about to correct — stays in the Work Maintenance record where it can be
+       changed, and arrives the moment it is ticked.
+
+       It replaces the other way round, where the PAYROLL's lock reached back
+       and froze the maintenance record. That put the decision at the wrong
+       end: the office had to settle a whole month's claim to settle one row,
+       and until they did, every row was already being priced. */
     maint.records
       .filter(r => r.jenis === t.jenis && (r.__nursery === nursery))
       .forEach(r => {
+        if (!r.checked) {
+          /* Counted and said, never silently dropped. Capacity that leaves a
+             claim without a word is the thing this file is most careful
+             about — it reads exactly like a quiet month. */
+          d.unchecked++;
+          d.uncheckedCap += PlotMovement.recQty(r).value || 0;
+          return;
+        }
         d.rows++;
         const cells = store[r.id] || {};
         seen.add(String(r.id));
@@ -2388,6 +2409,12 @@ function maintWhyEmpty(code) {
   if (!d) return '';
   if (d.paid) return '';
   if (!d.rows) {
+    /* Rows exist, none of them Checked: a different thing entirely from no
+       work at all, and the one the office can fix in a press. */
+    if (d.unchecked) {
+      return `${d.unchecked} work record${d.unchecked === 1 ? '' : 's'}, none ticked Checked — `
+           + `tick them in Work Maintenance and ${d.unchecked === 1 ? 'it prices' : 'they price'} here.`;
+    }
     return `no work record for this job in this nursery this month.`;
   }
   if (!d.ticked && d.noTaker.size) {
@@ -2704,6 +2731,23 @@ function renderMaint() {
     whyGroups.get(w).push(t.label);
   });
   whyGroups.forEach((labels, why) => notes.push(joinAnd(labels) + ': ' + why));
+  /* HELD BACK, AND SAID SO. A row the office has not ticked Checked is not on
+     this claim, and that is deliberate — but capacity that leaves a claim
+     without a word reads exactly like a quiet month, which is the mistake
+     this file exists to avoid. Named per job with what it comes to, so the
+     office can see how much is waiting on a tick rather than discovering it
+     at the end of the month. */
+  const held = MAINT_TYPES
+    .map(t => ({ t, d: (maint.why || {})[t.code] || {} }))
+    .filter(x => x.d.unchecked);
+  if (held.length) {
+    const rows = held.reduce((a, x) => a + x.d.unchecked, 0);
+    const cap  = held.reduce((a, x) => a + (x.d.uncheckedCap || 0), 0);
+    notes.push(`${rows} work record${rows === 1 ? '' : 's'} not on this claim because `
+      + `${rows === 1 ? 'it has' : 'they have'} not been ticked Checked — `
+      + held.map(x => `${esc(x.t.label)} ${capFmt(x.d.uncheckedCap)}`).join(', ')
+      + `, ${capFmt(cap)} in all. Tick them in Work Maintenance and they price here.`);
+  }
   /* Work priced straight from the field. Said out loud because it is the one
      figure on this sheet that nobody has been asked to confirm: the office's
      Worker Record has no tick saved against those rows, and what is being paid

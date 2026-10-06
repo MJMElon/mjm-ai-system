@@ -606,6 +606,13 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
    than dotted: the dots say "this is worked out and still moving", and
    this one has stopped. */
 .qty-frozen{color:var(--text-head);border-bottom:1px solid var(--border);}
+/* A settled row, tinted. Very light on purpose: it has to mark the row at a
+   glance while leaving the figures on it the most legible thing in the cell,
+   and the table is read down the middle where the Checked badge, out at the
+   right-hand end, cannot be seen. The hover keeps a tint of its own, or
+   pointing at a checked row would make it look unchecked. */
+.rec-table tbody tr.rec-row-checked > td{background:#f2fbf4;}
+.rec-table tbody tr.rec-row-checked:hover > td{background:#e7f6ec;}
 
 /* ── Setting tab ──────────────────────────────────────────────────────────
    Four lists that are keyed in rarely and read from constantly, so they are
