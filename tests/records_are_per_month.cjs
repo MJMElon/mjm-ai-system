@@ -232,25 +232,45 @@ const typeInto = (page, chem, vals) => page.evaluate(([c, v]) => {
     await page.close();
   }
 
-  console.log('\nRows saved before months existed are not lost');
+  console.log('\nRows saved before months existed go to the month they belong to');
   {
+    /* The state every list is in right now: rows with no month on them, and
+       the office opening OCTOBER. They must not show up there, and the sync
+       must not stamp them October, or September is gone for good.
+
+       A row with no date rides with its nursery: it came out of the same
+       schedule in the same pass. */
     const page = await boot(browser);
-    /* The state every list is in right now: rows with no month on them. They
-       belong to whatever is on screen until a sync stamps them. */
     await page.evaluate(() => {
-      records = [{ id: 1, tarikh: '2026-09-15', jenis: 'Merumput', plot: 'B1',
-                   racun: 'Round 1: Merumput dalam polibeg', batch: '', qty: 10,
-                   carlos: 0, gaia: 0, remark: '' }];
-      document.getElementById('global-month').value = '2026-09';
+      records = [
+        { id: 1, tarikh: '2026-09-15', jenis: 'Merumput', plot: 'B1',
+          racun: 'Round 1: Merumput dalam polibeg', batch: '', qty: 10,
+          carlos: 0, gaia: 0, remark: '' },
+        { id: 2, tarikh: '2026-09-21', jenis: 'Membaja', plot: 'B2',
+          racun: 'Round 1: Yaramila 30gm', batch: '', qty: 20,
+          carlos: 0, gaia: 0, remark: '' },
+        // Planned, never done: no date to read a month off.
+        { id: 3, tarikh: '-', jenis: 'Membaja', plot: 'B3',
+          racun: 'Round 2: Yaramila 30gm', batch: '', qty: null,
+          carlos: 0, gaia: 0, remark: '' }
+      ];
+      document.getElementById('global-month').value = '2026-10';
+      stampRecordMonths();
       renderAll();
     });
-    check('it is drawn', await drawn(page),
-          ['15 Sep 2026 / Round 1: Merumput dalam polibeg / 10']);
+    check('every one of them was stamped September',
+          await page.evaluate(() => records.map((r) => r._month || '(none)')),
+          ['Sep 2026', 'Sep 2026', 'Sep 2026']);
+    check('OCTOBER DOES NOT SHOW THEM', await drawn(page), []);
+
     await page.evaluate(() => autoSyncRecords());
     await page.waitForTimeout(120);
-    check('…and the sync stamps it rather than dropping it',
+    check('…and a sync on October leaves them where they are',
           await page.evaluate(() => records.map((r) => (r._month || '(none)') + ' ' + r.tarikh)),
-          ['Sep 2026 2026-09-15']);
+          ['Sep 2026 2026-09-15', 'Sep 2026 2026-09-21', 'Sep 2026 -']);
+
+    check('September still has all three', await goMonth(page, '2026-09'), 'Sep 2026');
+    check('…on the screen', (await drawn(page)).length, 3);
     await page.close();
   }
 

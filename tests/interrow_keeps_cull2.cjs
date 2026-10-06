@@ -77,7 +77,7 @@ async function boot(browser) {
 
   await page.addInitScript((seed) => {
     try { localStorage.setItem('mjm_maint_nursery', 'BNN');
-          localStorage.removeItem('mjm_maint_month'); } catch (_) {}
+          localStorage.setItem('mjm_maint_month', 'Sep 2026'); } catch (_) {}
     window.__DB = {
       nops_maint_records: [{ id: 1, records: seed.records }],
       shared_inventory_logs: seed.logs,

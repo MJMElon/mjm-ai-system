@@ -5066,9 +5066,55 @@ function _jenisRank(j) {
    month. Once a full cell stopped being overwritten, September's hand-keyed
    figures rode into October, which is the opposite of what a new month is.
 
-   A row saved before this existed answers yes to whatever month is on screen,
-   so nothing vanishes on the first load; the next sync stamps it. */
-function _recInMonth(r, m) { return !r || !r._month || r._month === m; }
+   Every row is stamped -- stampRecordMonths() does the ones that predate this
+   on the first load -- so the test is exact. It used to answer YES for a row
+   with no month, on the reasoning that nothing should vanish. That put every
+   old row in EVERY month: open October and September is still sitting there.
+   Worse, the sync would then have stamped them October and September would
+   have been gone for good. */
+function _recInMonth(r, m) { return !!r && r._month === m; }
+
+/* THE ROWS THAT PREDATE MONTHS, STAMPED ONCE.
+
+   The list held one month at a time, so every row in it belongs to ONE month
+   per nursery: the one it was last synced for. Its own rows say which -- the
+   dates on them. The month MOST of a nursery's dated rows fall in is that
+   nursery's month, and its undated rows (work planned, not yet done) came out
+   of the same schedule in the same pass, so they take it too.
+
+   Not each row by its own date: a September round recorded on the 1st of
+   October belongs to September's schedule, and reading the date alone would
+   move it to a month whose schedule never asked for it.
+
+   A nursery with no dated row at all has nothing to go on and takes the month
+   on screen, which is what it was already being treated as. */
+function stampRecordMonths() {
+  const onScreen = (() => { try { return getMonth(); } catch (_) { return null; } })();
+  const need = records.filter(r => r && !r._month);
+  if (!need.length) return 0;
+
+  const nurseryOf = (plot) => Object.keys(NURSERY_PLOTS)
+    .find(n => (NURSERY_PLOTS[n] || []).includes(plot)) || '(none)';
+
+  const tally = {};
+  need.forEach(r => {
+    const lbl = MJMMaintField.isoMonthLabel(_tarikhToISO(r.tarikh));
+    if (!lbl) return;
+    const n = nurseryOf(r.plot);
+    (tally[n] || (tally[n] = {}))[lbl] = (tally[n][lbl] || 0) + 1;
+  });
+
+  const monthFor = {};
+  Object.keys(tally).forEach(n => {
+    monthFor[n] = Object.keys(tally[n])
+      .sort((a, b) => tally[n][b] - tally[n][a] || (a < b ? 1 : -1))[0];
+  });
+
+  need.forEach(r => { r._month = monthFor[nurseryOf(r.plot)] || onScreen || null; });
+  console.info('[maint] stamped ' + need.length + ' rows with the month they belong to:',
+               monthFor);
+  return need.length;
+}
 
 /* THE DAY IT WAS DONE, then the round, then something settled.
 
@@ -6822,6 +6868,11 @@ async function initDb() {
   try { applyNav(); } catch (_) {}
   /* The schedules build their dropdowns from `chemicals` and `fertilisers`,
      neither of which existed at first paint. */
+  /* Before anything draws or syncs: the rows that predate months get the one
+     they belong to. The sync would otherwise stamp them all with the month on
+     screen, and a September list opened in October would become October. */
+  try { if (stampRecordMonths()) persistRecords(); }
+  catch (e) { console.warn('[maint] could not stamp the months:', e); }
   renderAll();
   autoSyncRecords();
 

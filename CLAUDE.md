@@ -183,8 +183,16 @@ So every row carries `_month`, the sync rebuilds only that month and leaves
 the rest of the list alone, and the three places that READ the list —
 `renderRecords`, `payrollRowsFor` (the Worker Record and its PDF) and
 `applyFieldRecords` — ask for the month too. `_recInMonth(r, m)` is the one
-test; a row with no month answers yes to whatever is on screen, so nothing
-vanished on the first load after this shipped and the next sync stamps it.
+test, and it is EXACT.
+
+Letting a row with no month answer yes to any month looked like the safe way
+to carry the old data over. It was not: every old row then appeared in every
+month, so October opened full of September — and the next sync would have
+stamped them all October and lost September for good.
+`stampRecordMonths()` runs once, before the first draw, and gives each
+nursery's unstamped rows the month MOST of its dated rows fall in. Not each
+row by its own date: a September round recorded on the 1st of October belongs
+to September's schedule, and the undated rows came out of that same pass.
 
 **Anything new that reads `records` must ask the month.** A reader that does
 not will quietly mix every month together.
