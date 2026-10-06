@@ -308,7 +308,35 @@ function onMaintSheet(w) {
    whether somebody belongs on THIS month's claim depends on when they left —
    see maintWorkerNames() below. maint.workers[n] stays as the plain name
    list for anything that wants every name the nursery has. */
+/* THE TICKS ARE KEYED BY NAME, AND A NAME ON THE REGISTER CAN BE CORRECTED.
+
+   The register ROW is the person: an edit keeps its id whatever is done to
+   the name or the PIN. So a tick saved under an older spelling has to resolve
+   to whoever that row is today, or the claim stops paying work that was done
+   -- "Fauzan" became "Muhamad Fauzan" and every month before the correction
+   read as a worker who does not exist.
+
+   SHARED RULE. The Work Maintenance Worker Record resolves the same ticks
+   through the same file, because those two disagreeing is one plot divided
+   among different numbers of people on the sheet and on the claim. See
+   shared/shared_maint_workers.js.
+
+   Here rather than in loadMaint because that runs in the same Promise.all as
+   loadWorkers, so the register is not in yet when the ticks land. */
+function canonicaliseMaintTicks() {
+  if (!window.MJMMaintWorkers || !workers || !workers.length) return 0;
+  const idx = MJMMaintWorkers.index(workers);
+  let moved = 0;
+  Object.keys(maint.ticks || {}).forEach((k) => {
+    const res = MJMMaintWorkers.canonicalStore(idx, maint.ticks[k]);
+    if (res.moved) { maint.ticks[k] = res.store; moved += res.moved; }
+  });
+  if (moved) console.info(`[claim] ${moved} tick row(s) read under a name the register has since changed`);
+  return moved;
+}
+
 function resolveMaintWorkers() {
+  try { canonicaliseMaintTicks(); } catch (e) { console.warn('[claim] worker names:', e); }
   maint.workers = {};
   maint.rows    = {};
   maint.linked  = {};
@@ -2286,6 +2314,26 @@ function maintRateTxt(t, rate) {
    the five it is. This runs inside maintTotals rather than beside it because
    a second pass over the same records is a second chance to disagree with the
    figure it is explaining. */
+/* A MONTH KEEPS ITS OWN WORK RECORDS, AND THIS CLAIM IS A READER OF THAT LIST.
+
+   nops_maint_records is ONE list for the whole system and every row carries
+   _month. The Work Maintenance page asks for it in all three of its readers
+   -- renderRecords, payrollRowsFor and applyFieldRecords -- through
+   _recInMonth, which is EXACT.
+
+   This claim is the fourth reader and it never asked. So it summed every
+   month at once: UNN 1 weeding read 191,515 against the 183,996 on its own
+   Worker Record, the difference being one U18 row stamped Aug 2026 that
+   September has no business counting. It was invisible while no other month
+   held a CHECKED row, and the moment one did it walked onto the claim.
+
+   SHARED RULE with _recInMonth in nursery_ops/plot_maintenance_script.js.
+   EXACT on purpose: a row with no month answers NO month rather than every
+   month, because the alternative was tried and put every old row into every
+   month at once. Rows it turns away are counted and said below, never
+   dropped in silence. */
+function _maintInMonth(r, m) { return !!r && r._month === m; }
+
 function maintTotals(nursery, month, ym) {
   const wk = maintWorkerNames(nursery, ym || monthValue());
   const per = {};                       // worker → { code: capacity }
@@ -2315,6 +2363,10 @@ function maintTotals(nursery, month, ym) {
          paid for, and the claim says so under the total. */
       capAll: 0,
       noCap: 0,         // ticked, but the quantity came to nothing
+      unchecked: 0,     // rows the office has not settled, so held back
+      uncheckedCap: 0,  // and what they come to, so the holding is visible
+      otherMonth: 0,    // rows of this nursery and job that belong to another month
+      noMonth: 0,       // rows carrying no month at all, so they answer to none
       stray: new Set(), // tick names with no row on this claim
       orphanTicks: 0,   // ticks against a record id this month's list has not got
       fromField: 0,     // rows priced from the field because nothing was saved
@@ -2322,9 +2374,35 @@ function maintTotals(nursery, month, ym) {
       tickRows: Object.keys(store).length
     };
     const seen = new Set();
+    /* ONLY A CHECKED ROW REACHES THE CLAIM.
+       Checked is the office saying it has been through the row and agreed it,
+       and that is now the one thing that sends it here. A row still being
+       worked on — a quantity the ledger is still moving, a date somebody is
+       about to correct — stays in the Work Maintenance record where it can be
+       changed, and arrives the moment it is ticked.
+
+       It replaces the other way round, where the PAYROLL's lock reached back
+       and froze the maintenance record. That put the decision at the wrong
+       end: the office had to settle a whole month's claim to settle one row,
+       and until they did, every row was already being priced. */
     maint.records
       .filter(r => r.jenis === t.jenis && (r.__nursery === nursery))
       .forEach(r => {
+        /* THIS MONTH ONLY. Counted first, so a row turned away here is
+           reported rather than quietly missing -- the same reason an
+           unchecked row is counted below. */
+        if (!_maintInMonth(r, month)) {
+          if (!r._month) d.noMonth++; else d.otherMonth++;
+          return;
+        }
+        if (!r.checked) {
+          /* Counted and said, never silently dropped. Capacity that leaves a
+             claim without a word is the thing this file is most careful
+             about — it reads exactly like a quiet month. */
+          d.unchecked++;
+          d.uncheckedCap += PlotMovement.recQty(r).value || 0;
+          return;
+        }
         d.rows++;
         const cells = store[r.id] || {};
         seen.add(String(r.id));
@@ -2388,6 +2466,12 @@ function maintWhyEmpty(code) {
   if (!d) return '';
   if (d.paid) return '';
   if (!d.rows) {
+    /* Rows exist, none of them Checked: a different thing entirely from no
+       work at all, and the one the office can fix in a press. */
+    if (d.unchecked) {
+      return `${d.unchecked} work record${d.unchecked === 1 ? '' : 's'}, none ticked Checked — `
+           + `tick them in Work Maintenance and ${d.unchecked === 1 ? 'it prices' : 'they price'} here.`;
+    }
     return `no work record for this job in this nursery this month.`;
   }
   if (!d.ticked && d.noTaker.size) {
@@ -2704,6 +2788,38 @@ function renderMaint() {
     whyGroups.get(w).push(t.label);
   });
   whyGroups.forEach((labels, why) => notes.push(joinAnd(labels) + ': ' + why));
+  /* HELD BACK, AND SAID SO. A row the office has not ticked Checked is not on
+     this claim, and that is deliberate — but capacity that leaves a claim
+     without a word reads exactly like a quiet month, which is the mistake
+     this file exists to avoid. Named per job with what it comes to, so the
+     office can see how much is waiting on a tick rather than discovering it
+     at the end of the month. */
+  const held = MAINT_TYPES
+    .map(t => ({ t, d: (maint.why || {})[t.code] || {} }))
+    .filter(x => x.d.unchecked);
+  if (held.length) {
+    const rows = held.reduce((a, x) => a + x.d.unchecked, 0);
+    const cap  = held.reduce((a, x) => a + (x.d.uncheckedCap || 0), 0);
+    notes.push(`${rows} work record${rows === 1 ? '' : 's'} not on this claim because `
+      + `${rows === 1 ? 'it has' : 'they have'} not been ticked Checked — `
+      + held.map(x => `${esc(x.t.label)} ${capFmt(x.d.uncheckedCap)}`).join(', ')
+      + `, ${capFmt(cap)} in all. Tick them in Work Maintenance and they price here.`);
+  }
+  /* A ROW WITH NO MONTH ANSWERS TO NONE OF THEM, so it is on no claim at all.
+     Said here because that is a row somebody worked and nobody is paying for,
+     and the cure is to open Work Maintenance for its nursery -- stampRecordMonths
+     runs before the first draw and gives it a month. Rows of ANOTHER month are
+     not mentioned: they are on their own claim and nothing is wrong with them. */
+  const unstamped = MAINT_TYPES
+    .map(t => ({ t, d: (maint.why || {})[t.code] || {} }))
+    .filter(x => x.d.noMonth);
+  if (unstamped.length) {
+    const n = unstamped.reduce((a, x) => a + x.d.noMonth, 0);
+    notes.push(`${n} work record${n === 1 ? '' : 's'} carr${n === 1 ? 'ies' : 'y'} no month, `
+      + `so ${n === 1 ? 'it is' : 'they are'} on no claim at all — `
+      + unstamped.map(x => `${esc(x.t.label)} ${x.d.noMonth}`).join(', ')
+      + '. Open Work Maintenance for this nursery once and they are stamped.');
+  }
   /* Work priced straight from the field. Said out loud because it is the one
      figure on this sheet that nobody has been asked to confirm: the office's
      Worker Record has no tick saved against those rows, and what is being paid
@@ -3896,10 +4012,25 @@ async function loadMaint() {
     const targets = r.nursery ? [r.nursery] : ['PN','BNN','UNN1','UNN2'];
     targets.forEach(n => { (maint.rates[n] ||= {})[r.work_type] = r.rate; });
   });
+  /* THE TICKS ARE KEYED BY NAME, AND A NAME ON THE REGISTER CAN BE CORRECTED.
+
+     The register ROW is the person: editing it keeps its id whatever is done
+     to the name or the PIN. So a tick saved under an older spelling has to
+     resolve to whoever that row is today, or the claim stops paying work that
+     was done -- "Fauzan" became "Muhamad Fauzan" and every month before the
+     correction read as a worker who does not exist.
+
+     SHARED RULE. The Work Maintenance Worker Record resolves the same ticks
+     through the same file, because the two of them disagreeing is one plot
+     divided among different numbers of people on the sheet and on the claim.
+     See shared/shared_maint_workers.js. */
   maint.ticks = {};
   ((tickRes && tickRes.data) || []).forEach(r => {
     maint.ticks[`${r.nursery}_${r.month}_${r.work_type}`] = r.data || {};
   });
+  /* The names are resolved in resolveMaintWorkers, NOT here: loadWorkers and
+     loadMaint are in one Promise.all, so the register is very likely still
+     empty at this point and an index built now would resolve nothing. */
 
   /* A record names its plot and nothing else, so the plot is what puts it
      back under a nursery. The list comes from shared/shared_maint_plots.js —

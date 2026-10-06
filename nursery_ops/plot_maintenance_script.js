@@ -923,14 +923,20 @@ function renderPayroll() {
       // Plot capacity follows the record's Quantity, linked or keyed.
       const cap    = recQty(r).value || 0;
       const ticked = wk.filter(w => cells[w]);
-      const share  = ticked.length ? cap / ticked.length : 0;   // capacity ÷ ticks
+      const share  = ticked.length ? cap / ticked.length : 0;   // capacity / ticks
       ticked.forEach(w => { totals[w] += share; });
       capTotal += cap;
-      h += `<tr>
+      /* Checked on the Work Maintenance list locks this row's workers too --
+         see _denyPayrollLocked. A locked row still SHOWS its ticks, because
+         who did the work is the thing the sheet is for; it just will not take
+         a new one. The cell keeps an onclick so pressing it says why rather
+         than doing nothing, which reads as a broken page. */
+      const locked = _recLocked(r);
+      h += `<tr${locked ? ' class="pay-row-locked"' : ''}>
         <td style="font-weight:600;white-space:nowrap;">${_tarikhDisplay(r.tarikh)}</td>
         <td class="plot-td">${r.plot}</td>
         <td>${cap ? cap.toLocaleString() : '—'}</td>
-        ${wk.map(w => `<td class="check-td${cells[w] ? ' ticked' : ''}" onclick="togglePayrollTick(${r.id},'${String(w).replace(/'/g, "\\'")}')" title="${w}"></td>`).join('')}
+        ${wk.map(w => `<td class="check-td${cells[w] ? ' ticked' : ''}${locked ? ' locked' : ''}" onclick="${locked ? '_denyPayrollLocked()' : `togglePayrollTick(${r.id},'${String(w).replace(/'/g, "\\'")}')`}" title="${locked ? t('pay.lockedTitle') + ' — ' + w : w}"></td>`).join('')}
         <td style="font-weight:700;">${capFmt(share)}</td>
       </tr>`;
     });
@@ -951,9 +957,32 @@ function renderPayroll() {
   tbl.innerHTML = h;
 }
 
+/* Why a checked row cannot be ticked here either.
+
+   The Work Maintenance list locks a Checked row because Checked is what sends
+   it to the payroll claim. The Worker Record decides something the claim reads
+   just as directly: the row's capacity is split among the workers ticked on
+   it, so adding or removing one tick changes what everybody else on that row
+   is paid, without the row's own figure moving a seedling.
+
+   So the SAME rule, row by row: Checked locks the ticks too. Uncheck the row
+   on the Work Maintenance list first — that is one press, it says on screen
+   what it undoes, and it puts the quantity back to live at the same time. */
+function _denyPayrollLocked() {
+  alert('This row is Checked, so its workers are locked.\n\n'
+    + 'Its capacity is shared between the workers ticked on it, so changing a '
+    + 'tick changes what the others are paid.\n\n'
+    + 'Uncheck the row on the Work Maintenance list first.');
+}
+
 /* Tick / untick a worker on a payroll row. */
 function togglePayrollTick(recId, worker) {
   const n = getNursery(), m = getMonth();
+  /* Gated on the RECORD, not on what the cell was drawn as. A cell drawn
+     before the row was checked still carries its old onclick, and the lock
+     has to hold for the write and not only for the pointer. */
+  const rec = records.find(x => x.id === recId);
+  if (_recLocked(rec)) { _denyPayrollLocked(); return; }
   const k = payrollKey(n, m, _payrollView);
   if (!payrollData[k]) payrollData[k] = {};
   if (!payrollData[k][recId]) payrollData[k][recId] = {};
@@ -1561,7 +1590,38 @@ async function loadLinkedWorkers() {
   // nursery sheet, so matching the nursery keeps them out on its own.
   _registerRows = res.data || [];
   _linkedRows = generalWorkersByNursery(_registerRows);
+  // A name corrected since this page opened: re-resolve the ticks too, or the
+  // sheet would go on showing the old spelling with no column.
+  try { _canonicalisePayrollNames(); } catch (e) { console.warn('[maint] worker names:', e); }
   resolveWorkers();
+}
+
+/* EVERY TICK EVER MADE UNDER A NAME THE REGISTER HAS SINCE CHANGED.
+
+   The ticks are keyed by NAME, because a column header is a name. Correct a
+   name on the register and every earlier tick is orphaned: no column, the
+   capacity out of the totals, the claim no longer paying it, and not a word
+   on screen. "Fauzan" became "Muhamad Fauzan" and his earlier months read as
+   a worker who does not exist.
+
+   The register ROW is the person -- an edit keeps its id whatever is done to
+   the name or the PIN -- so the row remembers what it has been called and any
+   of those names resolves to it. See shared/shared_maint_workers.js for why a
+   name claimed by two different rows resolves to neither.
+
+   Done in memory on every load rather than written back, so nothing is
+   rewritten on the strength of a register that failed to read. It is saved
+   the ordinary way the next time somebody ticks that sheet. */
+function _canonicalisePayrollNames() {
+  if (!window.MJMMaintWorkers || !_registerRows || !_registerRows.length) return 0;
+  const idx = MJMMaintWorkers.index(_registerRows);
+  let moved = 0;
+  Object.keys(payrollData).forEach((k) => {
+    const res = MJMMaintWorkers.canonicalStore(idx, payrollData[k]);
+    if (res.moved) { payrollData[k] = res.store; moved += res.moved; }
+  });
+  if (moved) console.info(`[maint] ${moved} tick row(s) read under a name the register has since changed`);
+  return moved;
 }
 
 /* WHY THIS NAME HAS NO COLUMN. One of five answers, off the register itself:
@@ -1824,6 +1884,7 @@ const I18N = {
     'pay.unpaired':'⚠ Verified in the field but matched no row on this month\u2019s schedule, so it was not ticked and is not paid. Add the row to the schedule for this month, then Sync from Schedule:',
     'pay.roundN':'Round {n}',
     'pay.noRows':'No records for this nursery and month yet — tick the schedule, then Sync from Schedule.',
+    'pay.lockedTitle':'Checked — locked',
     'pay.tickHint':'Tick each worker who did the job. Capacity per worker = plot capacity ÷ number of ticks on that row. Pay is worked out from this record in the Nursery Payroll System.',
     /* Salary claim form (PDF) */
     'pay.no':'No.', 'pay.worker':'Worker Name', 'pay.workersRange':'Workers', 'pay.ofTotal':'of',
@@ -1946,6 +2007,7 @@ const I18N = {
     'pay.autoNote':'Rekod pekerja ini dijana secara automatik oleh sistem MJM Nursery AI.',
     'btn.claimPdf':'⬇ Rekod Pekerja (PDF)',
     'pay.noRows':'Tiada rekod untuk nurseri dan bulan ini — tandakan jadual, kemudian Sync from Schedule.',
+    'pay.lockedTitle':'Checked — dikunci',
     'pay.tickHint':'Tandakan setiap pekerja yang membuat kerja. Kapasiti setiap pekerja = kapasiti plot ÷ bilangan tanda pada baris itu. Gaji dikira daripada rekod ini di Sistem Penggajian Nurseri.',
     
     'badge.pd':'JADUAL PENYEMBURAN RACUN KULAT DAN SERANGGA', 'badge.manuring':'JADUAL MEMBAJA',
@@ -3324,6 +3386,11 @@ function applyFieldRecords(nursery, monthLbl) {
   const syncTicks = (rec, group) => {
     const type = _PAYROLL_TYPE_BY_JENIS[rec.jenis];
     if (!type) return;
+    /* A Checked row is settled, and the field does not reopen it. Without
+       this the lock would be only on the screen: the next page load would
+       re-sync and move the ticks under a row the office has agreed, which is
+       the piece-rate money moving after the fact. */
+    if (_recLocked(rec)) return;
     const k = payrollKey(nursery, monthLbl, type);
     const store = payrollData[k] || (payrollData[k] = {});
     const cells = store[rec.id] || {};
@@ -4995,7 +5062,10 @@ function _qtyCell(r) {
   if (q.frozen) {
     const tip = `Held at ${txt} when this row was checked, so the batch report `
               + 'no longer moves it. Uncheck the row to put it back to live.';
-    return `<span class="qty-frozen" title="${tip.replace(/"/g, '&quot;')}">🔒 ${txt}</span>`;
+    /* No padlock. The whole row is tinted and badged Checked, so the emoji
+       was a third copy of the same fact sitting in front of the one column
+       people read down for the number itself. */
+    return `<span class="qty-frozen" title="${tip.replace(/"/g, '&quot;')}">${txt}</span>`;
   }
   if (!q.linked) return txt;
   const i = q.info;
@@ -5026,7 +5096,7 @@ function _batchCell(r) {
   if (b.frozen) {
     const tip = `Held when this row was checked. Uncheck it to read the batch `
               + 'report again.';
-    return `<span class="qty-frozen" title="${tip.replace(/"/g, '&quot;')}">🔒 ${esc(b.value)}</span>`;
+    return `<span class="qty-frozen" title="${tip.replace(/"/g, '&quot;')}">${esc(b.value)}</span>`;
   }
   if (!b.linked) return esc(b.value);
   const when = b.info && b.info.asOf ? `as at ${b.info.asOf}` : 'standing today';
@@ -5122,6 +5192,24 @@ function stampRecordMonths() {
     });
     const top = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
     const clear = !!top && tally[top] * 2 > dated;
+
+    /* ONLY A NURSERY THAT IS NOT MONTH-AWARE YET IS REPAIRED.
+
+       This is a repair for one fault and one only: rows that predate months,
+       and rows the first version stamped all alike inside the sync. Both
+       leave a nursery whose rows carry ONE stamp, or none, while the dates
+       say something else.
+
+       A nursery already carrying more than one month has been through a sync
+       since and knows its own months. Touching it is how a September row
+       WORKED ON THE 2nd OF OCTOBER gets dragged into October — and the row it
+       leaves behind in September is then rebuilt blank by the next sync, so
+       the month grows a duplicate with no date and a live quantity. A job
+       done late belongs to the month whose schedule asked for it.
+
+       I had this per-row for a while, which is precisely that mistake. */
+    const stamps = new Set(rows.map(r => r && r._month).filter(Boolean));
+    if (stamps.size > 1) return;
 
     rows.forEach(r => {
       const want = clear ? top : (r._month || top || onScreen || null);
@@ -5298,7 +5386,12 @@ function renderRecords() {
       </td>
     </tr>`;
     recs.forEach(r => {
-      html += `<tr>
+      /* Settled rows carry a tint. The badge alone is at the far right of a
+         wide table, so scanning down the middle of the sheet — the dates, the
+         quantities — gave no clue which rows were agreed and which were still
+         moving. The tint is very light on purpose: it marks the row without
+         fighting the figures on it. */
+      html += `<tr${r.checked ? ' class="rec-row-checked"' : ''}>
         <td style="font-weight:600;color:var(--green-text);">${_dateCell(r)}</td>
         <td>${jenisLabel(r.jenis)}</td>
         <td><span class="pill ${pillCls(r.jenis)}">${r.racun||'—'}</span></td>
@@ -5322,13 +5415,11 @@ function renderRecords() {
                to anybody but an admin, and the field sync still leaves it
                alone. Unticking first is now the way in, which is a deliberate
                act and says on screen what it undoes. */
-            ? `<span class="rec-checked-badge" title="Checked — the office has settled this row, and the field sync leaves it alone">✓ Checked</span>`
+            /* Uncheck and nothing else. Edit and Del used to sit here for an
+               admin, which is the lock not being a lock — see _recLocked. */
+            ? `<span class="rec-checked-badge" title="Checked and locked — this row is settled, the field sync leaves it alone, and it is what the payroll claim pays on">✓ Checked</span>`
               + `<button class="btn btn-sm" onclick="toggleChecked(${r.id})"
-                   title="Put this row back to unchecked — it can be edited again, and the field sync will fill it in again">Uncheck</button>`
-              + (isNopsAdmin
-                ? `<button class="btn btn-sm" onclick="editRec(${r.id})">Edit</button>
-                   <button class="btn btn-sm btn-danger" onclick="deleteRec(${r.id})">Del</button>`
-                : '')
+                   title="Put this row back to unchecked — it can be edited again, its quantity goes back to live, and it comes off the payroll claim">Uncheck</button>`
             : `<button class="btn btn-sm btn-check" onclick="toggleChecked(${r.id})" title="Mark as checked — locks the row for normal users">✓ Check</button>
                <button class="btn btn-sm" onclick="editRec(${r.id})">Edit</button>
                <button class="btn btn-sm btn-danger" onclick="deleteRec(${r.id})">Del</button>`}
@@ -5739,10 +5830,21 @@ function persistRecords() {
       .then(({ error }) => { if (error) console.warn('[maint] records save failed:', error.message); });
   }, 400);
 }
-/* A checked row is locked to everyone except an admin of the
-   Nursery Operation Manage module (User Access). */
-function _recLocked(r){ return !!(r && r.checked) && !isNopsAdmin; }
-function _denyLocked(){ alert('This record is Checked. Only an admin can edit it.'); }
+/* A CHECKED ROW IS LOCKED, AND THE ADMIN IS NOT AN EXCEPTION.
+
+   It used to let a Nursery Operation admin edit straight through the tick.
+   That made Checked mean two different things depending on who was looking:
+   settled for the office, still editable for whoever had the module. And
+   Checked is now what sends a row to the payroll claim — so editing through
+   the tick changes what somebody is paid, with the row still showing as
+   agreed.
+
+   Uncheck first. It is one press, it is offered to whoever could check, and
+   it says on screen what it undoes. */
+function _recLocked(r){ return !!(r && r.checked); }
+function _denyLocked(){ alert('This record is Checked, so it is locked.\n\n'
+  + 'Press Uncheck first — that puts its quantity back to live and lets the row '
+  + 'be edited again. A checked row is what the payroll claim pays on.'); }
 
 function toggleChecked(id){
   const r = records.find(x=>x.id===id);
@@ -6872,6 +6974,9 @@ async function initDb() {
     ((payRes && payRes.data) || []).forEach(r => {
       payrollData[payrollKey(r.nursery, r.month, r.work_type)] = r.data || {};
     });
+    // Both halves are in now, so a tick saved under an older spelling finds
+    // its column before anything is drawn or totalled.
+    try { _canonicalisePayrollNames(); } catch (e) { console.warn('[maint] worker names:', e); }
     ((lockRes && lockRes.data) || []).forEach(r => { rateLocks[r.nursery] = !!r.locked; });
     ((qtyRes && qtyRes.data) || []).forEach(r => {
       if (r.trays == null) return;

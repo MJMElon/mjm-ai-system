@@ -596,6 +596,26 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 #tab-payroll .sched-table tbody td{padding:8px 8px;}
 #tab-payroll .check-td{padding:8px 6px;}
 
+/* ── A Checked row is locked here too ─────────────────────────────────────
+   Same very light green the Work Maintenance list uses for a checked row, so
+   the two screens say "settled" the same way and nobody has to learn a second
+   colour.
+
+   The ticks are still DRAWN — who did the work is what the sheet is for — but
+   the cell stops offering itself: no pointer, no hover tint, and the box goes
+   grey-green so an empty locked cell cannot be mistaken for one waiting to be
+   filled. Pressing it still says why, which is why the cursor is default
+   rather than not-allowed: not-allowed reads as a dead page. */
+.sched-table tbody tr.pay-row-locked > td{background:#f2fbf4;}
+.sched-table tbody tr.pay-row-locked:hover > td{background:#e7f6ec;}
+td.check-td.locked{cursor:default;}
+td.check-td.locked:hover{background:transparent;}
+tr.pay-row-locked td.check-td.locked:hover{background:#e7f6ec;}
+td.check-td.locked::before{border-color:#cfe0d5;background:#f7faf8;}
+td.check-td.locked:hover::before{border-color:#cfe0d5;}
+td.check-td.locked.ticked::before{border-color:#7fae92;background:#7fae92;}
+td.check-td.locked.ticked:hover::before{border-color:#7fae92;}
+
 /* Quantity derived from the batch report's movement data rather than keyed by
    hand — marked so a linked number is never mistaken for an entered one. */
 /* No help cursor. The dotted underline already says there is something to
@@ -606,6 +626,13 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
    than dotted: the dots say "this is worked out and still moving", and
    this one has stopped. */
 .qty-frozen{color:var(--text-head);border-bottom:1px solid var(--border);}
+/* A settled row, tinted. Very light on purpose: it has to mark the row at a
+   glance while leaving the figures on it the most legible thing in the cell,
+   and the table is read down the middle where the Checked badge, out at the
+   right-hand end, cannot be seen. The hover keeps a tint of its own, or
+   pointing at a checked row would make it look unchecked. */
+.rec-table tbody tr.rec-row-checked > td{background:#f2fbf4;}
+.rec-table tbody tr.rec-row-checked:hover > td{background:#e7f6ec;}
 
 /* ── Setting tab ──────────────────────────────────────────────────────────
    Four lists that are keyed in rarely and read from constantly, so they are
