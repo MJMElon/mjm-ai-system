@@ -32,7 +32,7 @@
 --
 --    "record says X, the plot is in Y"  the record carries a nursery
 --        name the plot does not have. Pick X on the phone and it
---        appears; it will never appear under Y. This is the usual
+--        appears, and it will never appear under Y. This is the usual
 --        answer, and the repair is to set the record's nursery_name to
 --        the plot's own.
 --
@@ -43,8 +43,8 @@
 --        claims this plot, so neither screen can place it. Usually a
 --        plot keyed with a different spelling.
 --
---    "outside the phone's newest 500"  there are more than 500 records
---        newer than this one. Nothing is wrong with the record; the
+--    "outside the newest 500 the phone loads"  there are more than 500
+--        records newer than this one. Nothing is wrong with the record — the
 --        phone simply stops there.
 --
 --    not_verified = yes means the office list shows no tick, no batch
@@ -89,7 +89,7 @@ SELECT
     WHEN nursery_name <> plot_nursery
       THEN 'record says ' || nursery_name || ', the plot is in ' || plot_nursery
     WHEN newest_rank > 500
-      THEN 'outside the phone''s newest 500'
+      THEN 'outside the newest 500 the phone loads'
     ELSE 'the phone should show this'
   END                                                           AS verdict,
   CASE
