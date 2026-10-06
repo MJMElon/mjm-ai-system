@@ -18,7 +18,7 @@
 <script src="../shared/shared_maint_field.js?v=2"></script>
 <!-- When a payroll month stops being editable: verification per sheet, and
      the month lock calendar behind it. -->
-<script src="../shared/shared_npayroll_lock.js?v=2"></script>
+<script src="../shared/shared_npayroll_lock.js?v=3"></script>
 <script src="../shared/shared_people.js?v=1"></script>
 <!-- Which location a section sits in — Pre Nursery, Main Nursery, Estate.
      The same file System Setting's Location card and the Team Board read, so
@@ -26,26 +26,85 @@
      three copies of it. -->
 <script src="../shared/shared_worker_locations.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="npayroll_styles.css?v=17">
+<link rel="stylesheet" href="npayroll_styles.css?v=25">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
 
-<!-- Standardised MJM Nursery AI ribbon — see shared/shared_ribbon.js -->
-<div id="mjm-ribbon"></div>
+<!-- Standardised MJM Nursery AI ribbon — see shared/shared_ribbon.js.
+     The module's own name is centred IN the ribbon, between the wordmark
+     and Welcome/Portal/Sign Out, the same way Nursery Maintenance Schedule
+     & Work Record's does — not repeated again on the strip below.
+     Restyled into a rounded pill bar below (npayroll_styles.css,
+     "#mjm-ribbon .mjm-rb-bar") without touching the shared file: the
+     ribbon's own markup and logic (Welcome name, Portal, Sign Out) are
+     untouched, only its look on this one page is overridden. -->
+<div id="mjm-ribbon" data-center="Nursery Payroll System" data-center-scale="0.75"></div>
 <script src="../shared/shared_ribbon.js"></script>
 
-<!-- Page sub-header: the module's name, then the month it is showing, the
-     signed-in name and the module badge — the same strip, in the same
-     order, that Nursery Operation Manage carries under the ribbon. -->
+<!-- Second row: what used to be three top tabs (Payroll / Settings / User
+     Access) is now the date picker plus two icon shortcuts — Settings and
+     User Access move here as colour icon buttons, and Payroll itself has
+     no button of its own any more, because clicking any of the five work
+     tabs below (switchSub) already returns to it. tab-btn-locks and
+     user-access-tab keep their ids and onclick/visibility wiring exactly
+     as the old tab buttons had it — applyPageAccess() still shows or hides
+     them by the same permissions, just as icons instead of text pills now. -->
 <header class="topbar">
-  <div class="topbar-inner">
-    <span class="topbar-title">Nursery Payroll System</span>
-    <div class="topbar-right">
-      <label class="month-ctrl">
-        <span>Month</span>
-        <input type="month" id="global-month">
-      </label>
+  <div class="topbar-inner topbar-grid">
+    <div></div>
+    <label class="date-pill" title="Selection of Date">
+      <!-- Decorative before this opened nothing of its own — clicking it
+           only ever focused the input via the surrounding label element,
+           which does not open a month input's picker in any browser.
+           showPicker() is what the native calendar glyph on the right
+           already does; this just gives the left icon the same job.
+           Wrapped in try/catch since showPicker() is not universal — a
+           browser without it still focuses the input via the label,
+           same as before. -->
+      <button type="button" class="date-pill-icon"
+              onclick="try { $('global-month').showPicker(); } catch (_) {}"
+              title="Selection of Date" aria-label="Open the date picker">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>
+        </svg>
+      </button>
+      <input type="month" id="global-month">
+    </label>
+    <div class="topbar-icons">
+      <!-- Payroll is the default page, reached the same icon-only way as
+           Settings and Access now (no visible label on any of the three).
+           data-tab="payroll" is what applyPageAccess() hides this by
+           instead of the old (removed) tab button, when this user has no
+           work-type sub-tab open to them at all. -->
+      <button type="button" class="icon-btn icon-btn-payroll" id="icon-btn-payroll" data-tab="payroll"
+              onclick="switchTab('payroll')" title="Payroll" aria-label="Payroll">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+          <rect x="2" y="6" width="20" height="12" rx="2.5" stroke="#fff" stroke-width="2"/>
+          <circle cx="12" cy="12" r="2.6" fill="#fff"/>
+        </svg>
+      </button>
+      <button type="button" class="icon-btn icon-btn-settings hidden" id="tab-btn-locks"
+              onclick="switchTab('locks')" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+          <circle cx="12" cy="12" r="6" stroke="#fff" stroke-width="3.4"/>
+          <g fill="#fff">
+            <rect x="10.3" y="0.8" width="3.4" height="3.6" rx="1"/>
+            <rect x="10.3" y="0.8" width="3.4" height="3.6" rx="1" transform="rotate(60 12 12)"/>
+            <rect x="10.3" y="0.8" width="3.4" height="3.6" rx="1" transform="rotate(120 12 12)"/>
+            <rect x="10.3" y="0.8" width="3.4" height="3.6" rx="1" transform="rotate(180 12 12)"/>
+            <rect x="10.3" y="0.8" width="3.4" height="3.6" rx="1" transform="rotate(240 12 12)"/>
+            <rect x="10.3" y="0.8" width="3.4" height="3.6" rx="1" transform="rotate(300 12 12)"/>
+          </g>
+        </svg>
+      </button>
+      <a class="icon-btn icon-btn-access hidden" id="user-access-tab" href="npayroll_user_access.html"
+         title="User Access" aria-label="User Access">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+          <circle cx="12" cy="8.2" r="3.6" fill="#fff"/>
+          <path d="M4.2 20c0-4.3 3.5-6.8 7.8-6.8s7.8 2.5 7.8 6.8" fill="#fff"/>
+        </svg>
+      </a>
     </div>
   </div>
 </header>
@@ -53,17 +112,6 @@
 <div id="loading" class="loading">Checking access…</div>
 
 <main id="main" class="page hidden">
-
-  <!-- ═══ TOP TABS ═══ -->
-  <nav class="tabs">
-    <button class="tab active" data-tab="payroll" onclick="switchTab('payroll')">💵 Payroll</button>
-    <button class="tab"        data-tab="rates"   onclick="switchTab('rates')">🏷️ Piece Rate</button>
-    <!-- Shown only to users who may change other people's access. -->
-    <!-- Shown only to somebody with Lock Controls. It is the one screen that
-         can re-open a month that has been verified and paid. -->
-    <button class="tab hidden" id="tab-btn-locks" data-tab="locks" onclick="switchTab('locks')">⚙️ System Setting</button>
-    <a class="tab tab-access hidden" id="user-access-tab" href="npayroll_user_access.html">🔐 User Access</a>
-  </nav>
 
   <div id="setup" class="warn hidden">
     <b>⚠️ Database not set up yet.</b>
@@ -73,16 +121,23 @@
 
   <!-- ═══════════ PAYROLL ═══════════ -->
   <section id="tab-payroll" class="panel active">
+    <!-- Five equal pills, edge to edge — back inside the Payroll panel
+         (it left briefly so it would stay visible from Settings too, but
+         that read as two nav rows competing; Payroll and Settings now each
+         show only their own). Labels here only; data-sub/switchSub and
+         every "Seedlings Collection" / "Others" elsewhere (bar titles,
+         CAT_LABEL, Monthly Payroll's own columns) are untouched, so this
+         is a display name, not a rename of the thing itself. -->
     <nav class="subtabs">
       <button class="subtab active" data-sub="maint"    onclick="switchSub('maint')">Work Maintenance</button>
       <button class="subtab"        data-sub="transpl"  onclick="switchSub('transpl')">Transplanting</button>
-      <button class="subtab"        data-sub="seedling" onclick="switchSub('seedling')">Seedlings Collection</button>
+      <button class="subtab"        data-sub="seedling" onclick="switchSub('seedling')">Loading Seedlings</button>
+      <button class="subtab"        data-sub="monthly"  onclick="switchSub('monthly')">Monthly Payroll</button>
       <!-- Everything that is paid by the piece and is none of the three above.
            Its own sheet rather than a fourth guess at what to call it: the
            Piece Rate screen has always offered "Other" as a Used For, and
            until now there was nowhere to key the work that rate priced. -->
-      <button class="subtab"        data-sub="other"    onclick="switchSub('other')">Others</button>
-      <button class="subtab"        data-sub="monthly"  onclick="switchSub('monthly')">Monthly Payroll</button>
+      <button class="subtab"        data-sub="other"    onclick="switchSub('other')">Other</button>
     </nav>
 
     <!-- ── Work Maintenance: the salary claim form, read from Work Maintenance ── -->
@@ -109,6 +164,10 @@
         </div>
       </div>
             <div class="verify-bar" id="vb-maint"></div>
+      <!-- All four jobs' total capacity for this nursery and month together,
+           so seeing them all is not four separate column headers to scroll
+           to — see renderMaintGlance(). -->
+      <div id="maint-glance" class="pt-glance"></div>
       <div class="card"><div class="tbl-wrap"><table id="maint-table"></table></div></div>
       <p class="foot-note" id="maint-note"></p>
     </div>
@@ -117,8 +176,8 @@
     <div id="sub-transpl" class="subpanel">
       <div class="bar">
         <div>
-          <div class="bar-title">Transplanting</div>
-          <div class="bar-sub" id="transpl-sub">What each worker did, from the FC Portal. The rate comes from Piece Rate.</div>
+          <div class="bar-title">Transplanting — Salary Claim</div>
+          <div class="bar-sub" id="transpl-sub"></div>
         </div>
         <div class="bar-actions">
           <!-- Circles, same as Work Maintenance — one office reads both
@@ -162,6 +221,8 @@
       <!-- The claim: workers down, the four jobs across, the same shape as
            Work Maintenance so one sheet is read the way the other is. -->
       <div class="bar-sub" style="padding:0 .2rem .4rem;font-weight:700;">Salary claim</div>
+      <!-- Same ribbon as Work Maintenance's — see renderTransplGlance(). -->
+      <div id="transpl-glance" class="pt-glance"></div>
       <div class="card"><div class="tbl-wrap"><table id="transpl-table"></table></div></div>
       <div id="transpl-note" class="bar-sub" style="padding:.6rem .2rem 0;white-space:normal;"></div>
       <!-- Anything the field could not express, keyed by hand. Hidden until
@@ -178,8 +239,8 @@
     <div id="sub-seedling" class="subpanel">
       <div class="bar">
         <div>
-          <div class="bar-title">Seedlings Collection</div>
-          <div class="bar-sub">Key what each worker collected. The rate comes from Piece Rate.</div>
+          <div class="bar-title">Loading Seedlings — Salary Claim</div>
+          <div class="bar-sub" id="seedling-sub"></div>
         </div>
         <div class="bar-actions">
           <select id="seedling-section" class="sel" onchange="renderEntries('seedlings')"></select>
@@ -194,8 +255,8 @@
     <div id="sub-other" class="subpanel">
       <div class="bar">
         <div>
-          <div class="bar-title">Others</div>
-          <div class="bar-sub">Piece work that is none of the three sheets above. The rate comes from Piece Rate — set its Used For to Other.</div>
+          <div class="bar-title">Others — Salary Claim</div>
+          <div class="bar-sub" id="other-sub"></div>
         </div>
         <div class="bar-actions">
           <select id="other-section" class="sel" onchange="renderEntries('other')"></select>
@@ -210,8 +271,8 @@
     <div id="sub-monthly" class="subpanel">
       <div class="bar">
         <div>
-          <div class="bar-title">Monthly Payroll</div>
-          <div class="bar-sub">Everything a worker earned this month, from all three sheets.</div>
+          <div class="bar-title">Monthly Payroll — Salary Claim</div>
+          <div class="bar-sub" id="monthly-sub"></div>
         </div>
         <div class="bar-actions">
           <select id="monthly-section" class="sel" onchange="renderMonthly()"></select>
@@ -224,59 +285,74 @@
     </div>
   </section>
 
-  <!-- ═══════════ WORKER SYSTEM ═══════════ -->
-    <!-- ═══════════ PIECE RATE ═══════════ -->
-  <section id="tab-rates" class="panel">
-    <div class="bar">
-      <div>
-        <div class="bar-title">Piece Rate</div>
-        <div class="bar-sub">What each job pays, per unit, grouped MN · PN · Machinery.
-          Add a job from its own group below and the group is already filled in.</div>
-      </div>
-    </div>
-    <div id="rate-setup" class="warn hidden">
-      <b>⚠️ Grouping is not switched on yet.</b>
-      Run <code>shared/fix_npayroll_rate_groups.sql</code> in the Supabase SQL Editor, then reload.
-      Jobs still save; they just cannot be filed under MN, PN or Machinery until then.
-    </div>
-    <div id="rate-groups"></div>
-    <p class="foot-note">A rate is copied onto a work entry when it is keyed, so changing it here never restates a month already paid.</p>
-  </section>
-
-  <!-- ═══════════ SYSTEM SETTING — LOCK CONTROLS ═══════════ -->
+  <!-- ═══════════ SETTINGS — LOCK CONTROLS + PIECE RATE ═══════════
+       One tab, two sections that used to be two tabs, switched by their
+       own menu below rather than shown stacked — Lock Controls first,
+       Piece Rate second, as asked. They stay on their own permissions
+       (rates / locks): applyPageAccess() hides whichever pill AND section
+       a permission doesn't allow; switchSettingsSection() picks which of
+       the ones left shows. -->
   <section id="tab-locks" class="panel">
-    <div class="bar">
-      <div>
-        <div class="bar-title">🔒 Lock Controls</div>
-        <div class="bar-sub">A payroll month closes one of two ways: somebody verifies a sheet, or the
-          month itself locks. This calendar is the second, and the only thing that re-opens the first.</div>
+    <nav class="settings-menu">
+      <button class="settings-menu-btn active" id="settings-tab-lock"
+              onclick="switchSettingsSection('lock')">Lock Controls</button>
+      <button class="settings-menu-btn" id="settings-tab-rate"
+              onclick="switchSettingsSection('rate')">Piece Rate</button>
+    </nav>
+
+    <!-- ═══════════ LOCK CONTROLS ═══════════ -->
+    <div id="settings-lock-section" class="settings-section active">
+      <div class="bar">
+        <div>
+          <div class="bar-title">🔒 Lock Controls</div>
+          <div class="bar-sub">A payroll month closes one of two ways: somebody verifies a sheet, or the
+            month itself locks. This calendar is the second, and the only thing that re-opens the first.</div>
+        </div>
+      </div>
+      <div id="lock-setup" class="warn hidden">
+        <b>⚠️ Lock Controls are not switched on yet.</b>
+        Run <code>shared/RUN_ME_npayroll_locks.sql</code> in the Supabase SQL Editor, then reload.
+        Until then nothing locks and nothing can be verified.
+      </div>
+      <div class="card" style="padding:20px;">
+        <div class="lock-head">
+          <div class="lock-title">Month Lock Calendar</div>
+          <div class="lock-why">Each month auto-locks every payroll sheet on the day below, next month.
+            Click a month to force it locked or unlocked by hand instead. Re-opening a month also takes
+            back the verifications on it — the sheets go back to being editable, and whoever checked them
+            has to check them again.</div>
+        </div>
+        <div class="lock-ctrls">
+          <label class="lock-field"><span>Year</span>
+            <select id="lk-year" class="sel" onchange="renderLockCalendar()"></select></label>
+          <label class="lock-field"><span>Lock day</span>
+            <input type="number" id="lk-day" class="sel" min="1" max="28" style="width:5.5rem;"></label>
+          <button class="btn" id="lk-day-save" onclick="saveLockDay()">Save</button>
+          <span class="lock-hint">of the following month — applies from this month onward</span>
+          <span style="flex:1"></span>
+          <button class="btn" id="lk-toggle-all" onclick="toggleLockYear()"></button>
+        </div>
+        <div id="lk-months" class="lock-grid"></div>
+        <p class="foot-note" id="lk-note"></p>
       </div>
     </div>
-    <div id="lock-setup" class="warn hidden">
-      <b>⚠️ Lock Controls are not switched on yet.</b>
-      Run <code>shared/RUN_ME_npayroll_locks.sql</code> in the Supabase SQL Editor, then reload.
-      Until then nothing locks and nothing can be verified.
-    </div>
-    <div class="card" style="padding:20px;">
-      <div class="lock-head">
-        <div class="lock-title">Month Lock Calendar</div>
-        <div class="lock-why">Each month auto-locks every payroll sheet on the day below, next month.
-          Click a month to force it locked or unlocked by hand instead. Re-opening a month also takes
-          back the verifications on it — the sheets go back to being editable, and whoever checked them
-          has to check them again.</div>
+
+    <!-- ═══════════ PIECE RATE ═══════════ -->
+    <div id="settings-rate-section" class="settings-section">
+      <div class="bar">
+        <div>
+          <div class="bar-title">Piece Rate</div>
+          <div class="bar-sub">What each job pays, per unit, grouped MN · PN · Machinery.
+            Add a job from its own group below and the group is already filled in.</div>
+        </div>
       </div>
-      <div class="lock-ctrls">
-        <label class="lock-field"><span>Year</span>
-          <select id="lk-year" class="sel" onchange="renderLockCalendar()"></select></label>
-        <label class="lock-field"><span>Lock day</span>
-          <input type="number" id="lk-day" class="sel" min="1" max="28" style="width:5.5rem;"></label>
-        <button class="btn" id="lk-day-save" onclick="saveLockDay()">Save</button>
-        <span class="lock-hint">of the following month — applies from this month onward</span>
-        <span style="flex:1"></span>
-        <button class="btn" id="lk-toggle-all" onclick="toggleLockYear()"></button>
+      <div id="rate-setup" class="warn hidden">
+        <b>⚠️ Grouping is not switched on yet.</b>
+        Run <code>shared/fix_npayroll_rate_groups.sql</code> in the Supabase SQL Editor, then reload.
+        Jobs still save; they just cannot be filed under MN, PN or Machinery until then.
       </div>
-      <div id="lk-months" class="lock-grid"></div>
-      <p class="foot-note" id="lk-note"></p>
+      <div id="rate-groups"></div>
+      <p class="foot-note">A rate is copied onto a work entry when it is keyed, so changing it here never restates a month already paid.</p>
     </div>
   </section>
 
@@ -381,7 +457,7 @@
   </div>
 </div>
 
-<script src="npayroll_script.js?v=46"></script>
+<script src="npayroll_script.js?v=59"></script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

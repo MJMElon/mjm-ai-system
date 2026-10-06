@@ -34,68 +34,112 @@ html { font-size: 15px; overflow-y: scroll; scrollbar-gutter: stable; }
 body { font-family: 'Outfit', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
 .hidden { display: none !important; }
 
-/* ── Top bar ── */
-/* ── Module sub-header ──
-   The same strip Nursery Operation Management wears under the shared
-   ribbon: the module's name on the left in small caps, and on the right
-   whatever this page needs plus the name and the module's square badge.
-   Its values are that page's Tailwind, written out: px-6 py-3, a hairline
-   tint under it, a 14px/900 slate-800 title tracked at .1em, an 11px/700
-   slate-500 name, and a 32px rounded-lg badge. */
-.topbar { background: var(--white); border-bottom: 1px solid var(--ink-mid);
-          position: sticky; top: 0; z-index: 40; }
-.topbar-inner { max-width: 1500px; margin: 0 auto; padding: 12px 24px;
-                display: flex; align-items: center; justify-content: space-between; gap: 14px; }
-.topbar-title { font-size: 14px; font-weight: 900; color: var(--text-head);
-                text-transform: uppercase; letter-spacing: .1em; white-space: nowrap;
-                overflow: hidden; text-overflow: ellipsis; }
-.back-link { font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
-             color: var(--text-muted); text-decoration: none; border: 1.5px solid #e2e8f0;
-             border-radius: 99px; padding: 6px 14px; white-space: nowrap; transition: all .15s; }
-.back-link:hover { background: var(--ink-light); color: var(--ink-dark); border-color: var(--ink-mid); }
-.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-.month-ctrl { display: flex; align-items: center; gap: 8px; margin-right: 6px; }
-.month-ctrl span { font-size: 10px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted); }
-.month-ctrl input { height: 32px; padding: 0 10px; border: 1.5px solid var(--border); border-radius: var(--r-sm);
-                    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-head); outline: none; }
-.month-ctrl input:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
-@media (max-width: 560px) {
-  .topbar-inner { padding: 10px 14px; }
-  .month-ctrl span { display: none; }
+/* ── Ribbon, restyled into a rounded pill ──
+   shared_ribbon.js writes its own markup and inline styles (Welcome name,
+   Portal, Sign Out all live there, untouched) — this only overrides how
+   the bar it produces LOOKS on this one page, matching the rounded
+   nav-bar look the rest of this header now carries. Every rule needs
+   !important: an inline style outranks an external one regardless of
+   selector, and the ribbon writes its own sizing inline on purpose so it
+   renders the same with or without Tailwind on the page. */
+#mjm-ribbon .mjm-rb-bar { border-radius: 999px !important; margin: 14px auto 0 !important;
+  max-width: 1452px; box-shadow: var(--shadow-md) !important; border-bottom: none !important; }
+
+/* ── Second row: date selector (centre) + Settings/User Access icons (right) ──
+   A three-column grid, the same technique the ribbon itself uses to keep a
+   centred element on the bar's true centre line regardless of what either
+   side weighs — here that is an empty spacer on the left against the icon
+   pair on the right, which are not the same width. */
+.topbar { background: transparent; position: sticky; top: 0; z-index: 40; }
+.topbar-inner { max-width: 1500px; margin: 0 auto; padding: 14px 24px 0; }
+.topbar-grid { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px; }
+
+.date-pill { display: inline-flex; align-items: center; gap: 10px; background: var(--white);
+             border: 1.5px solid var(--border); border-radius: 999px; padding: 11px 22px;
+             box-shadow: var(--shadow-sm); cursor: pointer; justify-self: center; }
+.date-pill-icon { display: flex; align-items: center; color: var(--ink); flex-shrink: 0;
+                   background: none; border: none; padding: 0; cursor: pointer; border-radius: 50%; }
+.date-pill-icon:hover { color: var(--ink-dark); }
+.date-pill input[type="month"] { border: none; outline: none; background: transparent; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 700; color: var(--ink-deep); }
+/* The browser's own black calendar glyph, redundant now that the purple
+   icon on the left opens the same picker (showPicker()) — one button for
+   the one job, not two. Chromium/WebKit only; a browser without this
+   pseudo-element just keeps its own icon, which still works. */
+.date-pill input[type="month"]::-webkit-calendar-picker-indicator { display: none; }
+
+.topbar-icons { display: flex; align-items: center; gap: 10px; justify-self: end; }
+/* Colour vector icon buttons — a solid-filled circle with a white glyph,
+   the same treatment the ribbon's own "AI" badge already uses, so these
+   read as part of the same design rather than a new one. All three icon-
+   only now, each its own colour off one adjacent stretch of the palette
+   (indigo → violet → emerald) rather than three unrelated hues, so they
+   read as a matched set: Payroll keeps the app's own ink, Settings moves
+   to violet (ink's neighbour) so it no longer doubles Payroll's colour,
+   Access stays the ribbon badge's green. */
+.icon-btn { height: 42px; width: 42px; border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; border: none; cursor: pointer; box-shadow: var(--shadow-sm);
+            transition: transform .14s, box-shadow .14s; text-decoration: none; flex-shrink: 0; }
+.icon-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.icon-btn-payroll  { background: var(--ink); }
+.icon-btn-settings { background: #7c3aed; }
+.icon-btn-access   { background: #10b981; }
+
+@media (max-width: 640px) {
+  .topbar-grid { grid-template-columns: auto 1fr; }
+  .topbar-grid > div:first-child { display: none; }
+  .date-pill { padding: 10px 16px; }
 }
 
 .loading { max-width: 900px; margin: 0 auto; padding: 70px 24px; text-align: center;
            font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--text-faint); }
 
 /* ── Page ── */
-.page { width: 100%; max-width: 1500px; margin: 0 auto; padding: 24px 24px 60px; }
-
-/* ── Tabs ── */
-.tabs { display: flex; gap: 4px; background: var(--white); border: 1.5px solid var(--border);
-        border-radius: var(--r-md); padding: 5px; box-shadow: var(--shadow-sm); width: fit-content;
-        max-width: 100%; flex-wrap: wrap; margin-bottom: 20px; }
-.tab { font-family: inherit; font-size: 13px; font-weight: 700; letter-spacing: .02em; color: var(--text-muted);
-       background: transparent; border: none; cursor: pointer; padding: 9px 20px; border-radius: var(--r-sm); transition: all .14s; }
-.tab:hover { background: var(--ink-light); color: var(--ink-dark); }
-.tab.active { background: var(--ink); color: #fff; box-shadow: 0 2px 8px rgba(79,70,229,.3); }
-
-.tab-access { text-decoration: none; color: #9f1239; background: #fff1f2; }
-.tab-access:hover { background: #ffe4e6; color: #9f1239; }
+.page { width: 100%; max-width: 1500px; margin: 0 auto; padding: 18px 24px 60px; }
 
 .panel { display: none; animation: fade .18s ease; }
 .panel.active { display: block; }
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
-.subtabs { display: flex; gap: 4px; background: var(--white); border: 1.5px solid var(--border);
-           border-radius: var(--r-md); padding: 4px; box-shadow: var(--shadow-sm); width: fit-content;
-           max-width: 100%; flex-wrap: wrap; margin-bottom: 18px; }
-.subtab { font-family: inherit; font-size: 12px; font-weight: 600; color: var(--text-muted); background: transparent;
-          border: none; cursor: pointer; padding: 7px 15px; border-radius: 6px; transition: all .14s; }
+/* ── The one tab row left: five equal, edge-to-edge pills ──
+   Settings and User Access moved to the icon row above, so this is the
+   whole of the page's navigation now — width:100% and flex:1 on each
+   pill is what "symmetry" means here: same width regardless of label
+   length, the same segmented-control shape a rounded bar like this one
+   is meant to read as. */
+.subtabs { display: flex; background: var(--white); border: 1.5px solid var(--border);
+           border-radius: 999px; overflow: hidden; box-shadow: var(--shadow-sm);
+           width: 100%; margin-bottom: 18px; }
+.subtab { flex: 1; font-family: inherit; font-size: 13px; font-weight: 700; color: var(--text-muted);
+          background: transparent; border: none; border-right: 1.5px solid var(--border);
+          cursor: pointer; padding: 14px 10px; text-align: center; transition: all .14s; }
+.subtab:last-child { border-right: none; }
 .subtab:hover { background: var(--ink-light); color: var(--ink-dark); }
-.subtab.active { background: var(--ink-light); color: var(--ink-dark); font-weight: 800;
-                 box-shadow: inset 0 0 0 1.5px var(--ink-mid); }
+.subtab.active { background: var(--ink); color: #fff; font-weight: 800; }
 .subpanel { display: none; }
 .subpanel.active { display: block; }
+@media (max-width: 760px) {
+  .subtab { font-size: 11px; padding: 12px 4px; }
+}
+
+/* ── Settings' own menu — same full-width segmented look as the five
+   work-type pills (.subtabs/.subtab) above, same rule, kept as its own
+   class only so switchSettingsSection()/switchSub() can each query their
+   own row without the other's buttons getting caught in it. */
+.settings-menu { display: flex; background: var(--white); border: 1.5px solid var(--border);
+                 border-radius: 999px; overflow: hidden; box-shadow: var(--shadow-sm);
+                 width: 100%; margin-bottom: 20px; }
+.settings-menu-btn { flex: 1; font-family: inherit; font-size: 13px; font-weight: 700; color: var(--text-muted);
+                      background: transparent; border: none; border-right: 1.5px solid var(--border);
+                      cursor: pointer; padding: 14px 10px; text-align: center; transition: all .14s; }
+.settings-menu-btn:last-child { border-right: none; }
+.settings-menu-btn:hover { background: var(--ink-light); color: var(--ink-dark); }
+.settings-menu-btn.active { background: var(--ink); color: #fff; font-weight: 800; }
+.settings-section { display: none; }
+.settings-section.active { display: block; }
+@media (max-width: 760px) {
+  .settings-menu-btn { font-size: 11px; padding: 12px 4px; }
+}
 
 /* ── Section bar ── */
 .bar { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px;
@@ -424,3 +468,20 @@ tr:hover .cal-btn, .cal-btn:focus-visible { opacity: 1; }
 .tp-map:hover{border-color:var(--brand,#4f46e5);transform:translateY(-1px);}
 .tp-map.is-pdf{display:inline-flex;align-items:center;justify-content:center;font-size:16px;
   background:#f8fafc;}
+
+/* ── Work Maintenance — all four jobs' totals at once ──────────────────
+   Same reading as the claim form's own "Total Capacity" line under each
+   header (workdoneCell), just all four side by side above the table instead
+   of one at a time per column. Reads maint.why[code].capAll, which
+   maintTotals() already works out for the header line — never recomputed,
+   so this can't disagree with it. */
+.pt-glance{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:10px;margin-bottom:14px;}
+.pt-card{background:var(--white);border:1.5px solid var(--border);border-radius:var(--r-md);
+  padding:10px 14px;}
+.pt-label{font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;
+  color:var(--text-muted);}
+.pt-val{font-size:20px;font-weight:800;color:var(--ink-dark);margin-top:3px;
+  font-variant-numeric:tabular-nums;}
+.pt-wd{font-size:11px;font-weight:700;color:var(--ink-deep);margin-top:5px;
+  font-variant-numeric:tabular-nums;}

@@ -45,6 +45,15 @@ const NURSERY_FULL = new Proxy({}, {
   has: (_, k) => k in NURSERY_FULL_BUILTIN || k in NURSERY_REGISTER,
 });
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+/* Full names, for the one place a short month reads wrong: the printed
+   claim's own title block. Everywhere else — tabs, keys, the "Sep 2026" on
+   screen — stays MONTHS_SHORT; this is additive, not a replacement. */
+const MONTHS_FULL = ['January','February','March','April','May','June','July',
+                      'August','September','October','November','December'];
+function monthLabelFull(m) {
+  const [y, mo] = String(m).split('-');
+  return `${MONTHS_FULL[+mo - 1] || mo} ${y}`;
+}
 
 let workers   = [];    // mjmnpayroll_workers
 let rates     = [];    // mjmnpayroll_piece_rates
@@ -412,11 +421,21 @@ function applyPageAccess() {
   document.querySelectorAll('.subtab[data-sub]').forEach(b => {
     if (!may(b.dataset.sub)) b.style.display = 'none';
   });
-  // System Setting is hidden rather than shown disabled: it is one screen with
-  // one job, and an empty one would only invite the question.
+  /* Settings is hidden rather than shown disabled: it is two screens with
+     one job each, and an empty one would only invite the question. The TAB
+     shows if either Piece Rate or Lock Controls is open; each section
+     inside it then shows or hides on its own permission, so someone with
+     only one of the two sees only that one. */
+  const canRates = may('rates'), canLocks = may('locks');
   const lk = $('tab-btn-locks');
-  if (lk) lk.classList.toggle('hidden', !may('locks'));
-  const tabPages = { workers: 'workers', rates: 'rates', locks: 'locks' };
+  if (lk) lk.classList.toggle('hidden', !(canRates || canLocks));
+  const rs = $('settings-rate-section'), rb = $('settings-tab-rate');
+  if (rs) rs.classList.toggle('hidden', !canRates);
+  if (rb) rb.classList.toggle('hidden', !canRates);
+  const ls = $('settings-lock-section'), lb = $('settings-tab-lock');
+  if (ls) ls.classList.toggle('hidden', !canLocks);
+  if (lb) lb.classList.toggle('hidden', !canLocks);
+  const tabPages = { workers: 'workers' };
   Object.entries(tabPages).forEach(([tab, page]) => {
     if (!may(page)) {
       const b = document.querySelector(`.tab[data-tab="${tab}"]`);
@@ -425,7 +444,7 @@ function applyPageAccess() {
   });
   const payrollSubs = ['maint', 'transpl', 'seedling', 'other', 'monthly'];
   if (!payrollSubs.some(may)) {
-    const b = document.querySelector('.tab[data-tab="payroll"]');
+    const b = $('icon-btn-payroll');
     if (b) b.style.display = 'none';
   }
 }
@@ -433,13 +452,37 @@ function applyPageAccess() {
 function firstOpen(candidates) { return candidates.find(may) || null; }
 
 function switchTab(name) {
+  // A tab remembered from before Piece Rate moved into Settings — see
+  // applyPageAccess() — opens Settings instead of a panel that no longer
+  // exists on its own.
+  if (name === 'rates') name = 'locks';
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   $('tab-' + name).classList.add('active');
   try { localStorage.setItem('npayroll_tab', name); } catch (_) {}
-  if (name === 'rates')   renderRates();
   if (name === 'payroll') refreshPayrollTab();
-  if (name === 'locks')   renderLockCalendar();
+  // Lock Controls and Piece Rate both live on this one tab now, switched by
+  // their own menu — reopen whichever this user had open last (or Lock
+  // Controls first, then Piece Rate, if neither is remembered or the
+  // remembered one is no longer theirs to see).
+  if (name === 'locks') {
+    let sec = null;
+    try { sec = localStorage.getItem('npayroll_settings_sub'); } catch (_) {}
+    if (!sec || !may(sec === 'lock' ? 'locks' : 'rates')) sec = may('locks') ? 'lock' : 'rate';
+    switchSettingsSection(sec);
+  }
+}
+/* Settings' own menu — Lock Controls and Piece Rate, switched like the
+   work-type pills are, just one level in. */
+function switchSettingsSection(which) {
+  document.querySelectorAll('.settings-menu-btn').forEach(b =>
+    b.classList.toggle('active', b.id === 'settings-tab-' + which));
+  document.querySelectorAll('.settings-section').forEach(s => s.classList.remove('active'));
+  const el = $('settings-' + which + '-section');
+  if (el) el.classList.add('active');
+  try { localStorage.setItem('npayroll_settings_sub', which); } catch (_) {}
+  if (which === 'lock') renderLockCalendar();
+  if (which === 'rate') renderRates();
 }
 function switchSub(name) {
   document.querySelectorAll('.subtab').forEach(b => b.classList.toggle('active', b.dataset.sub === name));
@@ -1512,61 +1555,69 @@ async function drawDroneMaps(doc, monthTxt, sec) {
     const cards = mapCardsFor(code);
     if (!cards.length) continue;
 
-    /* THE GEOMETRY IS WORKED OUT, NOT GUESSED. The first pass put the two
-       cards at a fixed 117mm each under a title that leaves 59mm gone, which
-       comes to 305 on a page 297 tall — the second map ran off the bottom.
-       So the page says how much room there is and the two cards divide it. */
-    const X = 25, W = 160;                    // the same column the claim uses
-    const BOTTOM = 297 - 12;                  // the foot of the page
+    /* THE GEOMETRY IS WORKED OUT, NOT GUESSED. The first pass fixed two
+       cards at 117mm each under a title that leaves 59mm gone, which came to
+       305 on a page 297 tall — the second map ran off the bottom. Then it
+       was one page per TWO cards, so a nursery with five maps printed on
+       three pages, split in the middle of nowhere in particular. A nursery
+       is one page now, however many maps it has: the page says how much
+       room there is, and all of that nursery's cards divide it between
+       them, the same way two of them used to.
+       The claim this travels with went landscape (see downloadTransplantPDF)
+       and these pages follow it — doc.addPage() with no format of its own
+       inherits the document's, so they already print landscape; X/W/BOTTOM
+       just have to say so too, or the page would be the right shape with a
+       160mm-wide card stranded in the left half of it. */
+    const X = 25, W = 247;                    // the same column the claim uses
+    const BOTTOM = 210 - 12;                  // the foot of the page
     const GAP = 6, CAP = 9;                   // between the cards, and the name strip
 
-    // A nursery to a page, always starting a fresh one.
-    for (let i = 0; i < cards.length; i += 2) {
-      doc.addPage();
-      const TOP = pdfTitle(doc, ['DRONE MAPS — TRANSPLANTING', secName(code), `Month ${monthTxt}`]);
-      const CARD = (BOTTOM - TOP - GAP) / 2;  // two of them, whatever the title left
-      const BOX = CARD - CAP;
+    // One page, this nursery's own.
+    doc.addPage();
+    const TOP = pdfTitle(doc, ['DRONE MAPS — TRANSPLANTING', secName(code), `Month ${monthTxt}`],
+                          { centerX: 148.5, lineLeft: 25, lineRight: 272 });
+    const N = cards.length;
+    const CARD = (BOTTOM - TOP - GAP * (N - 1)) / N;  // all of them, whatever the title left
+    const BOX = CARD - CAP;
 
-      const pair = cards.slice(i, i + 2);
-      for (let j = 0; j < pair.length; j++) {
-        const c = pair[j];
-        let y = TOP + j * (CARD + GAP);
+    for (let j = 0; j < N; j++) {
+      const c = cards[j];
+      let y = TOP + j * (CARD + GAP);
 
-        pdfCell(doc, X, y, W, CAP, '', { fill: [232, 236, 252] });
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(0, 0, 0);
-        doc.text(c.plots.join('  ·  '), X + 3, y + CAP - 2.8, { maxWidth: W * 0.55 });
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70, 70, 70);
-        doc.text([c.batches.length ? 'Batch ' + c.batches.join(', ') : '',
-                  c.dates.slice().sort().map(fmtDay).join(', ')]
-                   .filter(Boolean).join('   ·   '),
-                 X + W - 3, y + CAP - 2.8, { align: 'right', maxWidth: W * 0.42 });
+      pdfCell(doc, X, y, W, CAP, '', { fill: [232, 236, 252] });
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(0, 0, 0);
+      doc.text(c.plots.join('  ·  '), X + 3, y + CAP - 2.8, { maxWidth: W * 0.55 });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(70, 70, 70);
+      doc.text([c.batches.length ? 'Batch ' + c.batches.join(', ') : '',
+                c.dates.slice().sort().map(fmtDay).join(', ')]
+                 .filter(Boolean).join('   ·   '),
+               X + W - 3, y + CAP - 2.8, { align: 'right', maxWidth: W * 0.42 });
+      doc.setTextColor(0, 0, 0);
+      y += CAP;
+
+      doc.setDrawColor(80, 80, 80); doc.setLineWidth(0.2);
+      doc.rect(X, y, W, BOX);
+
+      const im = _isPdfUrl(c.url) ? null : await loadMapImage(c.url);
+      if (im) {
+        /* Fitted INSIDE the box, whole, whatever shape it was flown in —
+           the smaller of the two scales, so neither edge can pass the
+           frame however wide or tall the picture is. */
+        const k = Math.min((W - 4) / im.naturalWidth, (BOX - 4) / im.naturalHeight);
+        const w = im.naturalWidth * k, h = im.naturalHeight * k;
+        doc.addImage(im, _pdfImgFormat(c.url), X + (W - w) / 2, y + (BOX - h) / 2, w, h);
+      } else {
+        missed.push(c.plots.join(', ')
+          + (c.batches.length ? ' (batch ' + c.batches.join(', ') + ')' : ''));
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(150, 30, 30);
+        doc.text(_isPdfUrl(c.url)
+          ? 'This map is a PDF and cannot be printed with the others.'
+          : 'This map could not be read. Open it from the Transplanting sheet.',
+          X + W / 2, y + BOX / 2, { align: 'center', maxWidth: W - 10 });
+        doc.setFontSize(7); doc.setTextColor(90, 90, 90);
+        doc.text(String(c.url), X + W / 2, y + BOX / 2 + 6,
+                 { align: 'center', maxWidth: W - 10 });
         doc.setTextColor(0, 0, 0);
-        y += CAP;
-
-        doc.setDrawColor(80, 80, 80); doc.setLineWidth(0.2);
-        doc.rect(X, y, W, BOX);
-
-        const im = _isPdfUrl(c.url) ? null : await loadMapImage(c.url);
-        if (im) {
-          /* Fitted INSIDE the box, whole, whatever shape it was flown in —
-             the smaller of the two scales, so neither edge can pass the
-             frame however wide or tall the picture is. */
-          const k = Math.min((W - 4) / im.naturalWidth, (BOX - 4) / im.naturalHeight);
-          const w = im.naturalWidth * k, h = im.naturalHeight * k;
-          doc.addImage(im, _pdfImgFormat(c.url), X + (W - w) / 2, y + (BOX - h) / 2, w, h);
-        } else {
-          missed.push(c.plots.join(', ')
-            + (c.batches.length ? ' (batch ' + c.batches.join(', ') + ')' : ''));
-          doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(150, 30, 30);
-          doc.text(_isPdfUrl(c.url)
-            ? 'This map is a PDF and cannot be printed with the others.'
-            : 'This map could not be read. Open it from the Transplanting sheet.',
-            X + W / 2, y + BOX / 2, { align: 'center', maxWidth: W - 10 });
-          doc.setFontSize(7); doc.setTextColor(90, 90, 90);
-          doc.text(String(c.url), X + W / 2, y + BOX / 2 + 6,
-                   { align: 'center', maxWidth: W - 10 });
-          doc.setTextColor(0, 0, 0);
-        }
       }
     }
   }
@@ -1727,8 +1778,38 @@ const SHEET = {
  * Every figure is the FC Portal's, priced here. What each worker did is
  * theirs; what it comes to is this page's.
  */
+/* Transplanting's own ribbon — same shape as Work Maintenance's
+   renderMaintGlance(), reading transplantWorkdone() instead of
+   maint.why[code].capAll: that function already works out each of the four
+   jobs' whole capacity (ticked or not) for whichever section is picked,
+   which is the same figure workdoneCell used to price in the column header
+   before that header went compact. */
+function renderTransplGlance(secFilter) {
+  const box = document.getElementById('transpl-glance');
+  if (!box) return;
+  const workdone = transplantWorkdone(secFilter);
+  const rateOf = key => {
+    const l = transplantFieldLines().find(x => x.key === key && x.rate != null);
+    if (l) return l.rate;
+    const r = transplantRate({ work_type: key, jenis: (TRANSPLANT_JOB[key] || {}).jenis });
+    return r ? Number(r.rate || 0) : null;
+  };
+  box.innerHTML = TRANSPLANT_JOBS.map(j => {
+    const cap = workdone[j.key] || 0;
+    const rate = rateOf(j.key);
+    const wd = rate == null ? null
+      : Math.round(cap2(cap) * Math.round(rate * 100000) / 1000) / 100;
+    return `<div class="pt-card">
+        <div class="pt-label">${esc(j.label)}</div>
+        <div class="pt-val">${capFmt(cap)}</div>
+        <div class="pt-wd">Total Workdone (RM) : ${wd == null ? '&mdash;' : money(wd)}</div>
+      </div>`;
+  }).join('');
+}
+
 function renderTransplantClaim() {
   const secFilter = $('transpl-section').value || '';
+  renderTransplGlance(secFilter);
 
   /* What was transplanted, plot by plot — drawn from here so it is drawn
      whatever the claim does, including the early return below. A month whose
@@ -1742,8 +1823,10 @@ function renderTransplantClaim() {
 
   const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
   const sub = $('transpl-sub');
-  if (sub) sub.textContent = `From the FC Portal${secFilter ? ' \u00b7 ' + secName(secFilter) : ''}`
-                           + ` \u00b7 ${monthLabel(monthValue())}`;
+  // Same "Nursery \u00b7 Month" shape Work Maintenance's own sub-line reads \u2014
+  // "All Sections" fills the nursery's place when the picker is left on
+  // every section at once, since there is then no one nursery to name.
+  if (sub) sub.textContent = `${secFilter ? secName(secFilter) : 'All Sections'} \u00b7 ${monthLabelFull(monthValue())}`;
 
   if (!lines.length) {
     /* Which of the five reasons it is — see transplantEmptyLead. An empty
@@ -1821,16 +1904,23 @@ function renderTransplantClaim() {
     <thead>
       <tr>
         <th rowspan="4" style="width:44px;">No.</th>
-        <th rowspan="4" class="l">Worker</th>
+        <th rowspan="4" class="l" style="width:165px;">Worker</th>
         ${TRANSPLANT_JOBS.map(j => `<th colspan="2">${esc(j.label)}</th>`).join('')}
         <th rowspan="4" style="width:120px;">Subtotal (RM)</th>
       </tr>
       <tr>${TRANSPLANT_JOBS.map(j =>
         `<th colspan="2" style="font-weight:600;font-size:12px;">${esc(rateCell(j.key))}</th>`).join('')}</tr>
       <tr>${TRANSPLANT_JOBS.map(j =>
-        workdoneCell(workdone[j.key] || 0, rateOf(j.key), rmSum(j.key))).join('')}</tr>
-      <tr>${TRANSPLANT_JOBS.map(() =>
-        '<th style="width:90px;">Capacity</th><th style="width:110px;">Total (RM)</th>').join('')}</tr>
+        workdoneCell(workdone[j.key] || 0, rateOf(j.key), rmSum(j.key), { compact: true })).join('')}</tr>
+      <!-- Worker is bounded (above) so the job columns sit beside it instead
+           of at the far end of whatever space Worker didn't use, and each
+           group's Capacity column beyond the first is a bit wider than it
+           needs — centred text-align spends that extra width as space on
+           both sides, which is what reads as a gap before the NEXT group
+           starts. Same fix, same reasoning, as Work Maintenance's own
+           table. -->
+      <tr>${TRANSPLANT_JOBS.map((j, i) =>
+        `<th style="width:${i ? 112 : 90}px;">Capacity</th><th style="width:110px;">Total (RM)</th>`).join('')}</tr>
     </thead>`;
 
   const body = names.map((n, i) => `
@@ -1913,6 +2003,16 @@ function renderEntries(category) {
   const addBtn = document.querySelector(`#sub-${sheet} .bar-actions [data-add]`);
   if (addBtn) { addBtn.disabled = locked; addBtn.title = locked ? 'This month is closed.' : ''; }
   const secFilter = $(cfg.section).value || '';
+  /* "Nursery · Month", the same shape every sheet's sub-line reads now —
+     Transplanting sets its own (renderTransplantClaim, called below for
+     that category), so only Seedlings Collection and Others need it here. */
+  if (sheet !== 'transpl') {
+    const subEl = $(sheet + '-sub');
+    if (subEl) {
+      const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
+      subEl.textContent = `${secFilter ? secName(secFilter) : 'All Sections'} · ${monthLabelFull(monthValue())}`;
+    }
+  }
   const list = entries
     .filter(e => e.category === category)
     .filter(e => !secFilter || inSection(secFilter, e.section))
@@ -2243,74 +2343,74 @@ function maintWhyEmpty(code) {
        + (PlotMovement.ready() ? '.' : ', and the batch report has not loaded (reload the page).');
 }
 
-/* ── TOTAL WORKDONE ────────────────────────────────────────────────────────
-
-   The whole of a job's capacity for this nursery and month, priced at its
-   rate. It sits in the header, under the rate, exactly where the office's own
-   claim form has it.
-
-   It is NOT the Grand Total below. That adds up the workers' columns, which
-   are shares of the rows somebody was ticked on. This adds up the WORK — a
-   plot nobody was ticked on, a record whose crew was left empty, a name the
-   register does not know — and prices all of it. The two agreeing means
-   every hour of work found a worker to pay. The two differing is the thing
-   worth seeing: the difference is work being done and nobody being paid for
-   it, which otherwise only shows up as a line of red text under the table
-   that is easy to read past.
-
-   Shown to the cent both ways, so the gap can be read off rather than
-   worked out. */
-function workdoneCell(cap, rate, claimed) {
-  const span = 'colspan="2" style="font-weight:700;font-size:11px;"';
-  /* The capacity itself, printed rather than left in the title tooltip —
-     it used to only be readable by hovering, which on a form meant for
-     printing (and for a worker checking a figure, not a mouse) was nowhere
-     at all. Same cap2()/capFmt() the hover text and the per-worker columns
-     already use, so it can't disagree with either. */
-  const capLine = `<div style="font-weight:600;color:var(--text-muted);">`
-    + `Total Capacity : ${esc(capFmt(cap2(cap)))}</div>`;
-  if (rate == null) {
-    return `<th ${span} title="No piece rate for this job, so its work cannot be priced."
-             >${capLine}<div>Total Workdone (RM) : &mdash;</div></th>`;
-  }
-  const total = Math.round(cap2(cap) * Math.round(rate * 100000) / 1000) / 100;
-  const short = Math.round((total - (claimed || 0)) * 100) / 100;
-  /* A claim that pays MORE than the work is an adjustment somebody typed in
-     on purpose, so it is not called a shortfall — but it is still a
-     difference, and a difference between two totals on one form has to be
-     accounted for or somebody will spend the afternoon on it. */
-  /* On its own line UNDER the total, not trailing after it. The two are
-     different figures — what the work came to, and what is missing from the
-     claim for it — and on one line the second reads as part of the first. */
-  const gap = Math.abs(short) < 0.005 ? '' :
-    `<div style="color:var(--danger,#c0392b);font-weight:800;margin-top:2px;">${
-      short > 0 ? money(short) + ' not claimed' : money(-short) + ' over'}</div>`;
-  return `<th ${span} title="${esc(capFmt(cap2(cap)))} at ${esc(rateTxt(rate))}"
-           >${capLine}<div>Total Workdone (RM) : ${money(total)}</div>${gap}</th>`;
+/* All four jobs' whole-of-job capacity, and what that capacity prices out
+   to, together — for this nursery and month. Reads whichever view
+   renderMaint() is showing (live or frozen — see maintLiveView /
+   maintViewFromSnapshot) rather than maint.why directly, so a verified
+   claim's ribbon freezes with everything else on it instead of going on
+   reading Worker Record on its own. */
+function renderMaintGlance(view) {
+  const box = document.getElementById('maint-glance');
+  if (!box) return;
+  box.innerHTML = MAINT_TYPES.map(t => {
+    const capAll = view.capAll(t.code);
+    const rate = view.rateOf(t.code);
+    const wd = rate == null ? null
+      : Math.round(cap2(capAll) * Math.round(rate * 100000) / 1000) / 100;
+    return `<div class="pt-card">
+        <div class="pt-label">${esc(t.label)}</div>
+        <div class="pt-val">${capFmt(capAll)}</div>
+        <div class="pt-wd">Total Workdone (RM) : ${wd == null ? '&mdash;' : money(wd)}</div>
+      </div>`;
+  }).join('');
 }
 
-function renderMaint() {
-  const n = $('maint-nursery').value;
-  const ym = monthValue();
-  const monthTxt = maintMonthLabel(ym);               // "Apr 2026"
+/* ════════════ A VERIFIED CLAIM STOPS READING WORKER RECORD ════════════
+
+   Everything below answers one question: once somebody has verified Work
+   Maintenance for a nursery and month, does ticking a different worker on
+   Worker Record afterward change what the claim shows? It used to — the
+   "lock" only ever stopped edits made ON the payroll screen itself
+   (calibration, Sync); the figures were always read live off Worker
+   Record's own records and ticks, with no check against the lock at all.
+   A claim marked "✔ Verified" could still move under the signature.
+
+   maintLiveView() and maintViewFromSnapshot() return the same shape — wk,
+   rateOf, capWorked, capOf, rmOf, payOf, earned, capSum, rmSum, grand,
+   capAll — so renderMaint(), renderMaintGlance() and downloadMaintPDF() do
+   not need to know or care which one they were handed; only the three
+   functions here know that one reads live and the other reads a frozen
+   snapshot. buildMaintSnapshot() is what "Verify & lock" calls, once, on
+   the live view, to make that snapshot in the first place. Worker Record
+   stays exactly as editable as it always was — this is the claim choosing
+   to stop listening to it, not Worker Record being shut. */
+
+function maintSnapshotFor(n, ym) {
+  if (typeof MJMPayrollLock === 'undefined' || !MJMPayrollLock.ready()) return null;
+  const v = MJMPayrollLock.verificationOf(ym, 'maint', n);
+  return (v && v.snapshot) ? v.snapshot : null;
+}
+
+function maintViewFromSnapshot(s) {
+  return {
+    wk: s.workers || [],
+    rateOf:    c => (s.rate   || {})[c],
+    capWorked: (w, c) => ((s.cap[w] || {})[c]) || 0,
+    capOf:     (w, c) => ((s.cap[w] || {})[c]) || 0,
+    rmOf:      (w, c) => ((s.rm[w]  || {})[c]) || 0,
+    payOf:     (w, c) => ((s.rm[w]  || {})[c]) || 0,
+    earned:    w => (s.earned || {})[w] || 0,
+    capSum:    c => (s.capSum || {})[c] || 0,
+    rmSum:     c => (s.rmSum  || {})[c] || 0,
+    grand:     s.grand || 0,
+    capAll:    c => (s.capAll || {})[c] || 0
+  };
+}
+
+function maintLiveView(n, ym, monthTxt) {
   const wk = maintWorkerNames(n, ym);
   const rateOf = c => (maint.rates[n] || {})[c];
   const per = maintTotals(n, monthTxt, ym);
-
-  // The two things a claim form has to say about itself, and no preamble.
-  $('maint-sub').textContent = `${NURSERY_FULL[n] || n} · ${monthTxt}`;
-  // The nursery picker changes which claim is being asked about.
-  try { renderVerifyBar('maint'); } catch (_) {}
-
-  if (!wk.length) {
-    $('maint-table').innerHTML = `<tbody><tr><td class="empty">
-      No general worker for ${esc(NURSERY_FULL[n] || n)} on the Worker System register.
-      Add them under Worker System and they appear on the Work Maintenance sheet too.
-    </td></tr></tbody>`;
-    $('maint-note').textContent = '';
-    return;
-  }
-
   // Money from the capacity AS SHOWN, so the printed row multiplies out.
   const capWorked = (w, c) => cap2(per[w] ? per[w][c] : 0);
   const capOf = (w, c) => capPaid('maint', n, w, c, capWorked(w, c));
@@ -2328,7 +2428,6 @@ function renderMaint() {
      Payroll re-reads it under. */
   const payOf  = (w, c) => { const a = adjOf('maint', n, w, c); return a ? Number(a.amount || 0) : rmOf(w, c); };
   const earned = w => MAINT_TYPES.reduce((s, t) => s + payOf(w, t.code), 0);
-
   const capSum = c => wk.reduce((s, w) => s + capOf(w, c), 0);
   const rmSum  = c => wk.reduce((s, w) => s + payOf(w, c), 0);
   const grand  = wk.reduce((s, w) => s + earned(w), 0);
@@ -2336,6 +2435,114 @@ function renderMaint() {
      this job in this nursery, ticked or not. maintTotals counts it while it
      is already walking those records. */
   const capAll = c => ((maint.why || {})[c] || {}).capAll || 0;
+  return { wk, rateOf, capWorked, capOf, rmOf, payOf, earned, capSum, rmSum, grand, capAll };
+}
+
+/* Read off the live view at the moment "Verify & lock" is pressed — every
+   figure the claim needs to redraw itself without touching Worker Record
+   again, in the exact shape maintViewFromSnapshot() hands back out. */
+function buildMaintSnapshot(view) {
+  const cap = {}, rm = {}, earned = {};
+  view.wk.forEach(w => {
+    cap[w] = {}; rm[w] = {};
+    MAINT_TYPES.forEach(t => { cap[w][t.code] = view.capOf(w, t.code); rm[w][t.code] = view.payOf(w, t.code); });
+    earned[w] = view.earned(w);
+  });
+  const capAll = {}, rate = {}, capSum = {}, rmSum = {};
+  MAINT_TYPES.forEach(t => {
+    capAll[t.code] = view.capAll(t.code);
+    rate[t.code]   = view.rateOf(t.code);
+    capSum[t.code] = view.capSum(t.code);
+    rmSum[t.code]  = view.rmSum(t.code);
+  });
+  return { workers: view.wk.slice(), cap, rm, earned, capAll, rate, capSum, rmSum, grand: view.grand };
+}
+
+/* ── TOTAL WORKDONE ────────────────────────────────────────────────────────
+
+   The whole of a job's capacity for this nursery and month, priced at its
+   rate. It sits in the header, under the rate, exactly where the office's own
+   claim form has it.
+
+   It is NOT the Grand Total below. That adds up the workers' columns, which
+   are shares of the rows somebody was ticked on. This adds up the WORK — a
+   plot nobody was ticked on, a record whose crew was left empty, a name the
+   register does not know — and prices all of it. The two agreeing means
+   every hour of work found a worker to pay. The two differing is the thing
+   worth seeing: the difference is work being done and nobody being paid for
+   it, which otherwise only shows up as a line of red text under the table
+   that is easy to read past.
+
+   Shown to the cent both ways, so the gap can be read off rather than
+   worked out. */
+/* opts.compact drops the Total Capacity / Total Workdone lines, leaving only
+   the shortfall ("not claimed"/"over") line when there is one — for Work
+   Maintenance, where those two now sit in the glance ribbon above the table
+   instead (renderMaintGlance) and repeating them here would just be the same
+   two figures twice. Transplanting/Seedlings still call this plain, with no
+   ribbon of their own, so they keep the full header unchanged. */
+function workdoneCell(cap, rate, claimed, opts) {
+  const compact = !!(opts && opts.compact);
+  const span = 'colspan="2" style="font-weight:700;font-size:11px;"';
+  /* The capacity itself, printed rather than left in the title tooltip —
+     it used to only be readable by hovering, which on a form meant for
+     printing (and for a worker checking a figure, not a mouse) was nowhere
+     at all. Same cap2()/capFmt() the hover text and the per-worker columns
+     already use, so it can't disagree with either. */
+  const capLine = compact ? '' : `<div style="font-weight:600;color:var(--text-muted);">`
+    + `Total Capacity : ${esc(capFmt(cap2(cap)))}</div>`;
+  if (rate == null) {
+    return `<th ${span} title="No piece rate for this job, so its work cannot be priced."
+             >${capLine}${compact ? '' : '<div>Total Workdone (RM) : &mdash;</div>'}</th>`;
+  }
+  const total = Math.round(cap2(cap) * Math.round(rate * 100000) / 1000) / 100;
+  const short = Math.round((total - (claimed || 0)) * 100) / 100;
+  /* A claim that pays MORE than the work is an adjustment somebody typed in
+     on purpose, so it is not called a shortfall — but it is still a
+     difference, and a difference between two totals on one form has to be
+     accounted for or somebody will spend the afternoon on it. */
+  /* On its own line UNDER the total, not trailing after it. The two are
+     different figures — what the work came to, and what is missing from the
+     claim for it — and on one line the second reads as part of the first. */
+  const gap = Math.abs(short) < 0.005 ? '' :
+    `<div style="color:var(--danger,#c0392b);font-weight:800;margin-top:2px;">${
+      short > 0 ? money(short) + ' not claimed' : money(-short) + ' over'}</div>`;
+  const wdLine = compact ? '' : `<div>Total Workdone (RM) : ${money(total)}</div>`;
+  return `<th ${span} title="${esc(capFmt(cap2(cap)))} at ${esc(rateTxt(rate))}"
+           >${capLine}${wdLine}${gap}</th>`;
+}
+
+function renderMaint() {
+  const n = $('maint-nursery').value;
+  const ym = monthValue();
+  const monthTxt = maintMonthLabel(ym);               // "Apr 2026"
+
+  /* A claim verified for this nursery and month reads its own frozen
+     snapshot instead of Worker Record from here on — see the block above
+     renderMaintGlance. Live and frozen hand back the same shape, so nothing
+     past this line needs to ask which one it got. */
+  const frozen = maintSnapshotFor(n, ym);
+  const view = frozen ? maintViewFromSnapshot(frozen) : maintLiveView(n, ym, monthTxt);
+  renderMaintGlance(view);
+  const { wk, rateOf, capWorked, capOf, rmOf, payOf, earned, capSum, rmSum, grand, capAll } = view;
+
+  // The two things a claim form has to say about itself, and no preamble.
+  // monthTxt stays short-form — it is also the key maintLiveView() matches
+  // schedule rows by, not just display text; monthLabelFull() is display
+  // only, so the full name shows here without touching what the data is
+  // matched against.
+  $('maint-sub').textContent = `${NURSERY_FULL[n] || n} · ${monthLabelFull(ym)}`;
+  // The nursery picker changes which claim is being asked about.
+  try { renderVerifyBar('maint'); } catch (_) {}
+
+  if (!wk.length) {
+    $('maint-table').innerHTML = `<tbody><tr><td class="empty">
+      No general worker for ${esc(NURSERY_FULL[n] || n)} on the Worker System register.
+      Add them under Worker System and they appear on the Work Maintenance sheet too.
+    </td></tr></tbody>`;
+    $('maint-note').textContent = '';
+    return;
+  }
 
   /* The office's own claim form, four header rows: the work, the rate it
      pays, what the whole of it comes to, then Capacity and Total under it.
@@ -2346,16 +2553,23 @@ function renderMaint() {
     <thead>
       <tr>
         <th rowspan="4" style="width:44px;">No.</th>
-        <th rowspan="4" class="l">Worker</th>
+        <th rowspan="4" class="l" style="width:165px;">Worker</th>
         ${MAINT_TYPES.map(t => `<th colspan="2">${esc(t.label)}</th>`).join('')}
         <th rowspan="4" style="width:120px;">Subtotal (RM)</th>
       </tr>
       <tr>${MAINT_TYPES.map(t =>
         `<th colspan="2" style="font-weight:600;font-size:12px;">${maintRateTxt(t, rateOf(t.code))}</th>`).join('')}</tr>
       <tr>${MAINT_TYPES.map(t =>
-        workdoneCell(capAll(t.code), rateOf(t.code), rmSum(t.code))).join('')}</tr>
-      <tr>${MAINT_TYPES.map(() =>
-        `<th style="width:90px;">Capacity</th><th style="width:110px;">Total (RM)</th>`).join('')}</tr>
+        workdoneCell(capAll(t.code), rateOf(t.code), rmSum(t.code), { compact: true })).join('')}</tr>
+      <!-- Worker is now bounded (above) so the job columns sit beside it
+           instead of at the far end of whatever space Worker didn't use, and
+           each group's Capacity column is a bit wider than it needs for its
+           own number — centred text-align spends that extra width as space
+           on both sides, which is what reads as a gap before the NEXT group
+           starts. The first group needs none: there is nothing to its left
+           but Worker, already bounded. -->
+      <tr>${MAINT_TYPES.map((t, i) =>
+        `<th style="width:${i ? 112 : 90}px;">Capacity</th><th style="width:110px;">Total (RM)</th>`).join('')}</tr>
     </thead>`;
 
   const body = wk.map((w, i) => `
@@ -2384,6 +2598,13 @@ function renderMaint() {
     </tr></tfoot>`;
 
   $('maint-table').innerHTML = head + `<tbody>${body}</tbody>` + foot;
+
+  /* A frozen claim's notes would be about whatever Worker Record looks like
+     NOW — missing rates, stray names, a batch report still loading — none
+     of which this screen is reading any more. renderVerifyBar already says
+     who verified it and when; repeating live diagnostics under a claim that
+     has stopped listening to them would just be confusing. */
+  if (frozen) { $('maint-note').textContent = ''; return; }
 
   /* ONLY WHAT IS WRONG.
      This used to carry a paragraph explaining where the names and the capacity
@@ -2604,7 +2825,15 @@ async function verifySheet(sheet) {
              + 'It locks straight away and nothing on it can be changed after that. Somebody with '
              + 'the Unlock tick can take it back; otherwise it needs Lock Controls and the whole '
              + 'month.')) return;
-  const error = await MJMPayrollLock.verify(_supabase, ym, sheet, scope, userEmail || null);
+  /* Work Maintenance is priced off Worker Record, a screen this lock does
+     not reach — so verifying it also freezes what the claim shows (see the
+     block above renderMaintGlance), not only what can be edited here.
+     Worker Record stays exactly as live and editable as always; this is the
+     claim choosing to stop reading it. */
+  const snapshot = sheet === 'maint'
+    ? buildMaintSnapshot(maintLiveView(scope, ym, maintMonthLabel(ym)))
+    : null;
+  const error = await MJMPayrollLock.verify(_supabase, ym, sheet, scope, userEmail || null, snapshot);
   if (error) { alert('Could not verify: ' + error.message); return; }
   refreshPayrollTab();
   if (typeof renderLockCalendar === 'function' && $('tab-locks')) renderLockCalendar();
@@ -2869,6 +3098,13 @@ function monthlyRows() {
 
 function renderMonthly() {
   try { renderVerifyBar('monthly'); } catch (_) {}
+  // Same "Nursery · Month" shape every sheet's sub-line reads now.
+  const subEl = $('monthly-sub');
+  if (subEl) {
+    const secFilter = $('monthly-section').value || '';
+    const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
+    subEl.textContent = `${secFilter ? secName(secFilter) : 'All Sections'} · ${monthLabelFull(monthValue())}`;
+  }
   const list = monthlyRows();
   const rows = list.length ? list.map((r, i) => `
     <tr>
@@ -2902,9 +3138,9 @@ function renderMonthly() {
 }
 
 /* ════════════ PDF ════════════ */
-function pdfDoc() {
+function pdfDoc(orientation) {
   const { jsPDF } = window.jspdf;
-  return new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  return new jsPDF({ orientation: orientation || 'portrait', unit: 'mm', format: 'a4' });
 }
 /* Shared cell drawer — centred both ways, shrunk to fit, never wrapping a number. */
 function pdfCell(doc, x, y, w, h, text, o) {
@@ -2929,17 +3165,22 @@ function pdfCell(doc, x, y, w, h, text, o) {
   let ty = y + (h - lines.length * lh) / 2 + lh * 0.78;
   lines.forEach(l => { doc.text(l, x + w / 2, ty, { align: 'center' }); ty += lh; });
 }
-function pdfTitle(doc, lines) {
+/* opts lets a landscape page keep the title centred on ITS page and the
+   rule under it spanning ITS content width — portrait's 105/25/185 stay the
+   default so every other caller (Transplanting, Monthly Payroll, the drone
+   map pages) is unaffected. */
+function pdfTitle(doc, lines, opts) {
+  const o = Object.assign({ centerX: 105, lineLeft: 25, lineRight: 185 }, opts || {});
   let y = 25;
   doc.setTextColor(0, 0, 0);
   doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
-  doc.text('MEGA JUTAMAS SDN BHD', 105, y + 5, { align: 'center' });
-  doc.setFontSize(12); doc.text(lines[0], 105, y + 12, { align: 'center' });
+  doc.text('MEGA JUTAMAS SDN BHD', o.centerX, y + 5, { align: 'center' });
+  doc.setFontSize(12); doc.text(lines[0], o.centerX, y + 12, { align: 'center' });
   doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
-  doc.text(lines[1], 105, y + 19, { align: 'center' });
-  doc.text(lines[2], 105, y + 25.5, { align: 'center' });
+  doc.text(lines[1], o.centerX, y + 19, { align: 'center' });
+  doc.text(lines[2], o.centerX, y + 25.5, { align: 'center' });
   doc.setDrawColor(79, 70, 229); doc.setLineWidth(0.6);
-  doc.line(25, y + 29, 185, y + 29); doc.setLineWidth(0.2);
+  doc.line(o.lineLeft, y + 29, o.lineRight, y + 29); doc.setLineWidth(0.2);
   return y + 34;
 }
 /* A worker's cell on a claim form, with what their cents came to under the
@@ -3009,66 +3250,112 @@ function pdfVerifiedNote(doc, y, sheet, scope) {
   return y + 6;
 }
 
-function pdfFooterNote(doc, y) {
+function pdfFooterNote(doc, y, centerX) {
   doc.setFont('helvetica', 'italic'); doc.setFontSize(8.5); doc.setTextColor(110, 110, 110);
-  doc.text('This salary claim form is automatically generated by the MJM Nursery AI system.', 105, y + 12, { align: 'center' });
+  doc.text('This salary claim form is automatically generated by the MJM Nursery AI system.',
+           centerX || 105, y + 12, { align: 'center' });
 }
 
 function downloadMaintPDF() {
   if (!mayDo('maint', 'export',
       'You do not have permission to download the salary claim form.')) return;
   const n = $('maint-nursery').value, month = monthValue(), monthTxt = maintMonthLabel(month);
-  const wk = maintWorkerNames(n, month);
+  /* The printed claim is what gets signed and paid, so it reads whichever
+     view the screen is showing — live, or a verified claim's frozen
+     snapshot (see the block above renderMaintGlance) — rather than
+     recomputing its own, slightly different, copy of the same question. A
+     PDF that disagreed with the screen would be found out at the counter,
+     and a verified claim's PDF drifting from what was actually signed would
+     be worse. */
+  const view = maintSnapshotFor(n, month)
+    ? maintViewFromSnapshot(maintSnapshotFor(n, month))
+    : maintLiveView(n, month, monthTxt);
+  const { wk, rateOf, capWorked, capOf, rmOf, payOf, earned, capSum, rmSum, grand, capAll } = view;
   if (!wk.length) { alert('No worker on the Work Maintenance list for this nursery.'); return; }
-  const rateOf = c => (maint.rates[n] || {})[c];
-  const per = maintTotals(n, monthTxt, month);
-  const capWorked = (w, c) => cap2(per[w] ? per[w][c] : 0);
-  const capOf = (w, c) => capPaid('maint', n, w, c, capWorked(w, c));
-  const rmOf  = (w, c) => { const r = rateOf(c); return r == null ? 0 : Math.round(capOf(w, c) * Math.round(r * 100000) / 1000) / 100; };
-  /* The printed claim is what gets signed and paid, so it prints the ADJUSTED
-     figure — the same one the screen shows. A PDF that disagreed with the
-     screen would be found out at the counter. */
-  const payOf  = (w, c) => { const a = adjOf('maint', n, w, c); return a ? Number(a.amount || 0) : rmOf(w, c); };
-  const earned = w => MAINT_TYPES.reduce((s, t) => s + payOf(w, t.code), 0);
 
-  const doc = pdfDoc();
-  const COL = [7, 30, 11, 15, 11, 15, 11, 15, 11, 15, 19];
-  const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, 25);
+  /* Landscape, and the same 25mm margin on both sides as the portrait forms
+     used — A4 landscape is 297mm wide, so that leaves 247mm of content
+     instead of 160mm, and every column below is the old one scaled up by
+     247/160 (rounded, the one millimetre that rounding lost put back onto
+     Worker) rather than redrawn from nothing, so the sheet is wider, not a
+     different shape. */
+  const doc = pdfDoc('landscape');
+  const PAGE_W = 297, PAGE_H = 210, MARGIN = 25;
+  const COL = [11, 47, 17, 23, 17, 23, 17, 23, 17, 23, 29];
+  const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, MARGIN);
   const PAIR = i => 2 + i * 2, I_TOTAL = COL.length - 1;
   const HF = [232, 236, 252], TF = [222, 228, 250];
+  const CONTENT_R = MARGIN + COL.reduce((s, w) => s + w, 0), CENTER_X = PAGE_W / 2;
 
   /* The printed form, laid out like the screen: the work, the rate it pays,
-     then Capacity and Total under it. The rate is INSIDE the work's column
-     group, not on a band of its own across the sheet — the same three rows
-     the office's own claim form has. */
-  /* The whole job's capacity off the Worker Record, priced — the same figure
-     the screen puts under the rate, so the printed form and the screen agree
-     on what the work came to as well as on what is being claimed. */
-  const workdoneTxt = t => {
-    const r = rateOf(t.code);
-    if (r == null) return 'Total Workdone (RM) : —';
-    const cap = ((maint.why || {})[t.code] || {}).capAll || 0;
-    return 'Total Workdone (RM) : RM '
-         + (Math.round(cap2(cap) * Math.round(r * 100000) / 1000) / 100).toFixed(2);
+     then Capacity under it. The rate is INSIDE the work's column group, not
+     on a band of its own across the sheet — the same two rows the office's
+     own claim form has.
+
+     Total Capacity and Total Workdone (RM) — the whole job's capacity off
+     the Worker Record, priced, same as the screen's ribbon puts under it —
+     used to be a line stamped inside each column's own header instead,
+     which repeated on paper the same clutter the screen was carrying before
+     renderMaintGlance() moved it up into its own band. drawCapRibbon() is
+     that band's paper equivalent: four cards, same figures, same formula
+     (cap2/rate rounding), drawn once under the title rather than once per
+     column. */
+  /* Shrinks to fit inside maxW, the same rule pdfCell's own nowrap branch
+     uses — a label or figure too wide for its card is a card with its own
+     numbers spilling past its border, which is worse than one a little
+     smaller but still inside it. */
+  const fitLine = (str, maxW, size, minSize) => {
+    for (;;) { doc.setFontSize(size); if (doc.getTextWidth(str) <= maxW || size <= minSize) break; size -= 0.25; }
+    return size;
+  };
+  const drawCapRibbon = (y) => {
+    const W = COL.reduce((s, w) => s + w, 0), GAP = 3;
+    const cardW = (W - GAP * 3) / 4, cardH = 18, padX = 3, maxW = cardW - padX * 2;
+    MAINT_TYPES.forEach((t, i) => {
+      const x = X[0] + i * (cardW + GAP);
+      doc.setDrawColor(190, 195, 230); doc.setLineWidth(0.25);
+      doc.setFillColor(255, 255, 255); doc.rect(x, y, cardW, cardH, 'FD');
+      const cap = capAll(t.code);
+      const r = rateOf(t.code);
+      const wd = r == null ? null : Math.round(cap2(cap) * Math.round(r * 100000) / 1000) / 100;
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(110, 110, 130);
+      fitLine(t.label.toUpperCase(), maxW, 6.5, 4.5);
+      doc.text(t.label.toUpperCase(), x + padX, y + 5);
+      doc.setTextColor(67, 56, 202);
+      fitLine(capFmt(cap), maxW, 10.5, 7);
+      doc.text(capFmt(cap), x + padX, y + 11.5);
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(49, 46, 129);
+      const wdTxt = `Total Workdone (RM) : ${wd == null ? '—' : money(wd)}`;
+      fitLine(wdTxt, maxW, 6.5, 4);
+      doc.text(wdTxt, x + padX, y + 15.5);
+    });
+    return y + cardH + 3;
   };
 
+  /* Landscape has a fifth of the height portrait did to spare, so the head
+     (ribbon + the job/rate/column-label rows) and each worker's row are a
+     little tighter than the portrait form ever needed to be — see the sizes
+     below. A nursery's whole claim is meant to read as one page, the same
+     promise downloadTransplantPDF's drone maps now keep one map-page per
+     nursery; this is that same promise for the claim table itself. */
+  const H1 = 7, H2 = 6, H3 = 6, HEAD_HT = H1 + H2 + H3;
   const drawHead = () => {
-    let y = pdfTitle(doc, ['SALARY CLAIM FORM — WORK MAINTENANCE', `${NURSERY_FULL[n] || n} (${n})`, `Month ${monthTxt}`]);
-    const H1 = 9, H2 = 7, HW = 7, H3 = 7, HT = H1 + H2 + HW + H3;
-    pdfCell(doc, X[0], y, COL[0], HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
-    pdfCell(doc, X[1], y, COL[1], HT, 'Worker', { bold: true, size: 8.5, fill: HF });
+    let y = pdfTitle(doc, ['SALARY CLAIM FORM — WORK MAINTENANCE', `${NURSERY_FULL[n] || n} (${n})`,
+                            `Month ${monthLabelFull(month)}`],
+                      { centerX: CENTER_X, lineLeft: MARGIN, lineRight: CONTENT_R });
+    y = drawCapRibbon(y);
+    pdfCell(doc, X[0], y, COL[0], HEAD_HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
+    pdfCell(doc, X[1], y, COL[1], HEAD_HT, 'Worker', { bold: true, size: 8.5, fill: HF });
     MAINT_TYPES.forEach((t, i) => {
       const c = PAIR(i);
-      pdfCell(doc, X[c], y, COL[c] + COL[c+1], H1, t.label, { bold: true, size: 7.5, fill: HF });
+      pdfCell(doc, X[c], y, COL[c] + COL[c+1], H1, t.label, { bold: true, size: 7, fill: HF });
       pdfCell(doc, X[c], y + H1, COL[c] + COL[c+1], H2, maintRateTxt(t, rateOf(t.code)),
-              { size: 7, nowrap: true, fill: HF });
-      pdfCell(doc, X[c], y + H1 + H2, COL[c] + COL[c+1], HW, workdoneTxt(t),
-              { bold: true, size: 6.5, nowrap: true, fill: HF });
-      pdfCell(doc, X[c],   y + H1 + H2 + HW, COL[c],   H3, 'Capacity',  { bold: true, size: 6.5, nowrap: true, fill: HF });
-      pdfCell(doc, X[c+1], y + H1 + H2 + HW, COL[c+1], H3, 'Total (RM)', { bold: true, size: 6.5, nowrap: true, fill: HF });
+              { size: 6.5, nowrap: true, fill: HF });
+      pdfCell(doc, X[c],   y + H1 + H2, COL[c],   H3, 'Capacity',  { bold: true, size: 6, nowrap: true, fill: HF });
+      pdfCell(doc, X[c+1], y + H1 + H2, COL[c+1], H3, 'Total (RM)', { bold: true, size: 6, nowrap: true, fill: HF });
     });
-    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], HT, 'Subtotal (RM)', { bold: true, size: 7.5, fill: HF });
-    return y + HT;
+    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], HEAD_HT, 'Subtotal (RM)', { bold: true, size: 7.5, fill: HF });
+    return y + HEAD_HT;
   };
 
   let y = drawHead();
@@ -3076,37 +3363,43 @@ function downloadMaintPDF() {
   const calTxtOf = (w) => calibrationText(
     capCalibrationOf('maint', n, w, CODES, (c) => capWorked(w, c)),
     calibrationOf('maint', n, w, CODES, (c) => rmOf(w, c)));
-  /* A little taller where any row carries a calibration, so the band under
-     the name does not squeeze the name itself. */
-  const RH = wk.some(w => calTxtOf(w)) ? 11 : 9;
+  /* Each row is as tall as IT needs — a little taller only where there is a
+     calibration band to fit under the name — rather than every row paying
+     for the tallest one, which is most of why eight rows used to spill onto
+     a second page for the sake of one calibrated cent. */
+  const ROW_H = 8, ROW_H_CAL = 9.5;
+  const FOOT_H = ROW_H + 1;             // Grand Total's own row
+  /* What has to fit under the last row before the page runs out: Grand
+     Total, the verified line, and the footer note (drawn 12mm below where
+     it's given, so that much has to still be on the page after it). */
+  const FOOT_RESERVE = FOOT_H + 6 + 12 + 3;
   wk.forEach((w, i) => {
-    if (y + RH > 297 - 25 - 40) { doc.addPage(); y = drawHead(); }
+    const rh = calTxtOf(w) ? ROW_H_CAL : ROW_H;
+    if (y + rh > PAGE_H - FOOT_RESERVE) { doc.addPage(); y = drawHead(); }
     const z = i % 2 ? [250, 250, 253] : null;
-    pdfCell(doc, X[0], y, COL[0], RH, String(i + 1), { size: 8, nowrap: true, fill: z });
-    pdfWorkerCell(doc, X[1], y, COL[1], RH, w, calTxtOf(w), { size: 8.5, fill: z });
+    pdfCell(doc, X[0], y, COL[0], rh, String(i + 1), { size: 8, nowrap: true, fill: z });
+    pdfWorkerCell(doc, X[1], y, COL[1], rh, w, calTxtOf(w), { size: 8, fill: z });
     MAINT_TYPES.forEach((t, k) => {
       const c = PAIR(k), cap = capOf(w, t.code);
-      pdfCell(doc, X[c],   y, COL[c],   RH, capFmt(cap), { size: 8, nowrap: true, fill: z });
-      pdfCell(doc, X[c+1], y, COL[c+1], RH, (cap || adjOf('maint', n, w, t.code))
-              ? 'RM ' + payOf(w, t.code).toFixed(2) : '—', { size: 7.5, nowrap: true, fill: z });
+      pdfCell(doc, X[c],   y, COL[c],   rh, capFmt(cap), { size: 7.5, nowrap: true, fill: z });
+      pdfCell(doc, X[c+1], y, COL[c+1], rh, (cap || adjOf('maint', n, w, t.code))
+              ? money(payOf(w, t.code)) : '—', { size: 7, nowrap: true, fill: z });
     });
-    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH, 'RM ' + earned(w).toFixed(2), { bold: true, size: 8.5, nowrap: true, fill: z });
-    y += RH;
+    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], rh, money(earned(w)), { bold: true, size: 8, nowrap: true, fill: z });
+    y += rh;
   });
 
-  pdfCell(doc, X[0], y, COL[0] + COL[1], RH + 1, 'Grand Total', { bold: true, size: 8.5, fill: TF });
+  pdfCell(doc, X[0], y, COL[0] + COL[1], FOOT_H, 'Grand Total', { bold: true, size: 8.5, fill: TF });
   MAINT_TYPES.forEach((t, k) => {
     const c = PAIR(k);
-    const cs = wk.reduce((s, w) => s + capOf(w, t.code), 0);
-    const rs = wk.reduce((s, w) => s + payOf(w, t.code), 0);
-    pdfCell(doc, X[c],   y, COL[c],   RH + 1, capFmt(cs), { bold: true, size: 8, nowrap: true, fill: TF });
-    pdfCell(doc, X[c+1], y, COL[c+1], RH + 1, 'RM ' + rs.toFixed(2), { bold: true, size: 7.5, nowrap: true, fill: TF });
+    pdfCell(doc, X[c],   y, COL[c],   FOOT_H, capFmt(capSum(t.code)), { bold: true, size: 8, nowrap: true, fill: TF });
+    pdfCell(doc, X[c+1], y, COL[c+1], FOOT_H, money(rmSum(t.code)), { bold: true, size: 7.5, nowrap: true, fill: TF });
   });
-  pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH + 1, 'RM ' + wk.reduce((s, w) => s + earned(w), 0).toFixed(2),
+  pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], FOOT_H, money(grand),
           { bold: true, size: 9, nowrap: true, fill: TF });
-  y += RH + 1;
+  y += FOOT_H;
   y = pdfVerifiedNote(doc, y, 'maint', n);
-  pdfFooterNote(doc, y);
+  pdfFooterNote(doc, y, CENTER_X);
   doc.save(`Salary_Claim_Work_Maintenance_${n}_${monthTxt.replace(/\s+/g, '_')}.pdf`);
 }
 
@@ -3181,11 +3474,17 @@ async function downloadTransplantPDF() {
   };
   const earned = n => TRANSPLANT_JOBS.reduce((s, j) => s + payOf(n, j.key), 0);
 
-  const doc = pdfDoc();
-  const COL = [7, 30, 11, 15, 11, 15, 11, 15, 11, 15, 19];
-  const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, 25);
+  /* Landscape, same shape as Work Maintenance's own claim form — same
+     25mm margin both sides, same columns scaled up by 247/160. See
+     downloadMaintPDF for the reasoning; this is deliberately the same
+     geometry, not a second one to keep in step with it by hand. */
+  const doc = pdfDoc('landscape');
+  const PAGE_W = 297, PAGE_H = 210, MARGIN = 25;
+  const COL = [11, 47, 17, 23, 17, 23, 17, 23, 17, 23, 29];
+  const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, MARGIN);
   const PAIR = i => 2 + i * 2, I_TOTAL = COL.length - 1;
   const HF = [232, 236, 252], TF = [222, 228, 250];
+  const CONTENT_R = MARGIN + COL.reduce((s, w) => s + w, 0), CENTER_X = PAGE_W / 2;
 
   /* The FC's own totals for this nursery, priced — the same figure the screen
      puts under the rate. */
@@ -3198,7 +3497,8 @@ async function downloadTransplantPDF() {
   };
 
   const drawHead = () => {
-    let y = pdfTitle(doc, ['SALARY CLAIM FORM — TRANSPLANTING', secTxt, `Month ${monthTxt}`]);
+    let y = pdfTitle(doc, ['SALARY CLAIM FORM — TRANSPLANTING', secTxt, `Month ${monthTxt}`],
+                      { centerX: CENTER_X, lineLeft: MARGIN, lineRight: CONTENT_R });
     const H1 = 9, H2 = 7, HW = 7, H3 = 7, HT = H1 + H2 + HW + H3;
     pdfCell(doc, X[0], y, COL[0], HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
     pdfCell(doc, X[1], y, COL[1], HT, 'Worker', { bold: true, size: 8.5, fill: HF });
@@ -3222,7 +3522,7 @@ async function downloadTransplantPDF() {
     calibrationOf('transplanting', secOf(n), n, KEYS, (k) => rmOf(n, k)));
   const RH = names.some(n => calTxtOf(n)) ? 11 : 9;
   names.forEach((n, i) => {
-    if (y + RH > 297 - 25 - 40) { doc.addPage(); y = drawHead(); }
+    if (y + RH > PAGE_H - MARGIN - 40) { doc.addPage(); y = drawHead(); }
     const z = i % 2 ? [250, 250, 253] : null;
     pdfCell(doc, X[0], y, COL[0], RH, String(i + 1), { size: 8, nowrap: true, fill: z });
     pdfWorkerCell(doc, X[1], y, COL[1], RH, n, calTxtOf(n), { size: 8.5, fill: z });
@@ -3265,7 +3565,7 @@ async function downloadTransplantPDF() {
     }, 0);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(150, 30, 30);
     doc.text(`NOT CLAIMED — not on the worker register: ${lost.join(', ')} (RM ${held.toFixed(2)})`,
-             25, y + 6, { maxWidth: 160 });
+             MARGIN, y + 6, { maxWidth: CONTENT_R - MARGIN });
     y += 8;
   }
   /* A claim with no names on it is not a quiet month — it is work recorded
@@ -3275,14 +3575,14 @@ async function downloadTransplantPDF() {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(150, 30, 30);
     doc.text('NOTHING TO CLAIM — the records for this nursery name nobody. '
            + 'The work is on the plot summary overleaf; add who did it in the FC Portal.',
-             25, y + 6, { maxWidth: 160 });
+             MARGIN, y + 6, { maxWidth: CONTENT_R - MARGIN });
     y += 10;
   }
 
   y = drawTransplantPlots(doc, y, plotRows, secTxt, monthTxt);
 
   y = pdfVerifiedNote(doc, y, 'transpl', sec);
-  pdfFooterNote(doc, y);
+  pdfFooterNote(doc, y, CENTER_X);
 
   /* …and every nursery's drone maps on the end of it. Fetching them takes a
      moment — the button says so rather than appearing to have ignored the
@@ -3322,12 +3622,13 @@ async function downloadTransplantPDF() {
 function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
   if (!rows || !rows.length) return y;
 
-  // No. · Plot · Transplanted — 160mm across, the same width as the claim
-  // above it. The same three columns the screen shows.
-  const COL = [14, 106, 40];
+  // No. · Plot · Transplanted — 247mm across, the same landscape width as
+  // the claim above it (see downloadTransplantPDF). The same three columns
+  // the screen shows, the old 14/106/40 scaled up the same way.
+  const COL = [22, 163, 62];
   const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, 25);
   const HF = [232, 236, 252], TF = [222, 228, 250];
-  const BOTTOM = 297 - 25 - 30;
+  const BOTTOM = 210 - 25 - 30;
   const RH = 8;
 
   const heading = () => {
@@ -3370,8 +3671,8 @@ function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
      doubtful about it. */
   const say = (txt) => {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(150, 30, 30);
-    doc.text(txt, 25, y + 5, { maxWidth: 160 });
-    y += 4 + Math.ceil(doc.getTextWidth(txt) / 160) * 4;
+    doc.text(txt, 25, y + 5, { maxWidth: 247 });
+    y += 4 + Math.ceil(doc.getTextWidth(txt) / 247) * 4;
   };
   const moved = rows.filter(r => r.disagrees);
   if (moved.length) {
@@ -3646,12 +3947,16 @@ $('global-month').addEventListener('change', async () => {
 
     let tab = 'payroll', sub = 'maint';
     try { tab = localStorage.getItem('npayroll_tab') || tab; sub = localStorage.getItem('npayroll_sub') || sub; } catch (_) {}
+    // A remembered 'rates' tab is from before Piece Rate moved into
+    // Settings (see switchTab) — same remap, so the open-check below asks
+    // about the tab that now actually exists.
+    if (tab === 'rates') tab = 'locks';
     // A remembered tab this user may no longer open would leave them on a
     // blank screen, so fall back to the first one they can.
     if (!may(sub)) sub = firstOpen(['maint', 'transpl', 'seedling', 'other', 'monthly']) || sub;
     const tabOpen = { payroll: !!firstOpen(['maint','transpl','seedling','other','monthly']),
-                      workers: may('workers'), rates: may('rates'), locks: may('locks') };
-    if (!tabOpen[tab]) tab = ['payroll','workers','rates','locks'].find(t => tabOpen[t]) || tab;
+                      workers: may('workers'), locks: may('rates') || may('locks') };
+    if (!tabOpen[tab]) tab = ['payroll','workers','locks'].find(t => tabOpen[t]) || tab;
     if ($('sub-' + sub)) switchSub(sub);
     if ($('tab-' + tab)) switchTab(tab);
 
