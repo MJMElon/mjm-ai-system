@@ -249,9 +249,14 @@ input.input:focus{border-color:var(--green);background:var(--card);
        white-space:nowrap;flex-shrink:0}
 .badge-plot{background:#e8f5e9;color:var(--pn)}
 .badge-height{background:#e0f2fe;color:#0369a1}
-/* A cell that covers a whole run of rows sits in the middle of it,
-   so it reads as belonging to the block rather than to its top line. */
-.rec-table td.grp{vertical-align:middle;background:#fbfdff}
+/* A cell that covers a whole run of rows sits in the middle of it, across
+   and down, so it reads as belonging to the block rather than to its top
+   line. Left-aligned it hangs off one edge of a tall empty box and looks
+   like a stray figure; centred, the box reads as the block's own. */
+.rec-table td.grp{vertical-align:middle;text-align:center;background:#fbfdff;
+                  border-left:1px solid var(--line);font-size:14px;
+                  font-variant-numeric:tabular-nums;color:var(--pn)}
+.rec-table th.grp{text-align:center;border-left:1px solid var(--line)}
 .badge-papan{background:#fff3e0;color:var(--papan)}
 .badge-maint{background:#fce4ec;color:var(--maint)}
 .no-data{text-align:center;padding:26px 16px;color:var(--ink3);font-size:12.5px;font-weight:600}
@@ -324,6 +329,9 @@ body.is-full #btn-full{display:none}
                         letter-spacing:.7px;text-transform:uppercase;color:var(--ink3);
                         text-align:left}
   .rec-table tbody tr:hover td{background:transparent}
+  /* A card row is a label on the left and its answer on the right; the
+     centring the table wants would put this one in neither place. */
+  .rec-table td.grp{text-align:right;border-left:none;font-size:inherit}
   /* The first cell becomes the card's header rather than just another
      row: without it a card of eight identical grey-label rows gives no
      answer to "where does one record stop and the next begin". */
@@ -764,7 +772,9 @@ function buildModTable(mod, rows){
   if(!cols) return '<div class="no-data">No records found.</div>';
   rows=_auditPlotBatchSort(rows);
 
-  const head='<tr>'+cols.map(c=>`<th>${esc(c.h)}</th>`).join('')+'</tr>';
+  /* A merged column's heading is centred over it, or the heading and the
+     figure it names sit at opposite ends of the same column. */
+  const head='<tr>'+cols.map(c=>`<th${c.group?' class="grp"':''}>${esc(c.h)}</th>`).join('')+'</tr>';
 
   /* A COLUMN THAT IS ONE CELL FOR A WHOLE GROUP.
      The plot average is one figure about seven rows, and seven copies of it

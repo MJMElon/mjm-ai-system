@@ -96,6 +96,9 @@ const HEIGHT = [
     const html = buildModTable('height', window.__HEIGHT);
     const d = document.createElement('div');
     d.innerHTML = html;
+    /* In the page itself, so the stylesheet actually applies and the
+       alignment below is the one a person sees. */
+    document.body.appendChild(d);
     const head = [...d.querySelectorAll('thead th')].map((t) => t.textContent.trim());
     const body = [...d.querySelectorAll('tbody tr')]
       .filter((tr) => !tr.classList.contains('total-row'))
@@ -104,7 +107,16 @@ const HEIGHT = [
        many rows each cell covers. */
     const plotAvg = [...d.querySelectorAll('tbody td[data-label="Plot average that day"]')]
       .map((td) => ({ txt: td.textContent.trim(), span: +(td.getAttribute('rowspan') || 1) }));
-    return { head, body, plotAvg };
+    /* A figure alone in a tall box has to sit in the middle of it, across
+       as well as down, and its heading has to sit over it. */
+    const cell = d.querySelector('tbody td[data-label="Plot average that day"]');
+    const th = [...d.querySelectorAll('thead th')]
+      .find((t) => t.textContent.trim() === 'Plot Avg (cm)');
+    const align = { cell: getComputedStyle(cell).textAlign,
+                    down: getComputedStyle(cell).verticalAlign,
+                    head: getComputedStyle(th).textAlign };
+    d.remove();
+    return { head, body, plotAvg, align };
   });
 
   console.log('\nThe column is there');
@@ -134,6 +146,12 @@ const HEIGHT = [
         ]);
   check('one cell per group, not one per row',
         [table.plotAvg.length, table.body.length], [4, 12]);
+
+  console.log('\nAnd it sits in the middle of the box it covers');
+  check('across, not hanging off the left edge', table.align.cell, 'center');
+  check('down the seven rows as well', table.align.down, 'middle');
+  check('with its heading over it, not at the other end of the column',
+        table.align.head, 'center');
 
   console.log('\nA plot audited twice in a month is two blocks, not interleaved');
   {
