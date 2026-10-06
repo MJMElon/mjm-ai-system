@@ -264,6 +264,40 @@ The As At date cuts the LINES off and never the signatures: a line dated
 after it is in no figure on screen, while "has anybody checked this" is a
 question about now.
 
+## A row count is not a window
+
+"Recent work is all a Field Conductor needs on a phone" was implemented as
+`.limit(500)`. At a hundred records a day that is **five days**, and in a
+quiet month it is two — nobody can tell which they are looking at, and
+nothing on screen says the list has been cut. Worse, the cut MOVES: every
+job saved pushes one off the end, so a record on the phone at breakfast is
+gone by lunch, and the day it falls in the middle of is a different day each
+morning. The office could see a job and the phone's History could not.
+
+It could not simply be raised, because the read was `select('*')` and that
+carries `gps_track` — every point walked, hundreds to a record. **That is
+what the cap was really protecting.** The worker portal had already worked
+this out: `worker_maint_records` lists its columns and says the track is
+deliberately not among them, and `worker_maint_track` fetches the line for
+the one record somebody opens.
+
+So both doors now do the same thing: the list carries the GPS **summary**
+(`gps_points`, `gps_distance_m`, start and end — stored beside the track for
+exactly this), the window is **92 days** rather than a row count, and the
+walk is fetched through `source.loadTrack(id)` when a map is opened. The row
+cap that remains is a seatbelt, far above what three months comes to.
+
+Two things that follow:
+
+- **A card asks `gps_points`, never `gps_track`, whether a walk exists.** A
+  record still in the outbox carries its own track and no id, so that one is
+  used as it stands.
+- **The offline cache has to hold the same window** (`MAX_RECORDS` in
+  `offline.js`), or a conductor with no signal is back where he started. It
+  strips the tracks, which is what makes a row small enough to.
+
+`tests/history_is_a_window_not_a_count.cjs` guards all of it.
+
 ## Which nursery a record is in: the PLOT decides
 
 The plot is the thing that is somewhere. A maintenance record is wherever its
