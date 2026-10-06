@@ -4,14 +4,14 @@
 --
 -- Read-only. Nothing is created, changed or deleted.
 --
--- Set the nursery and the two months on the lines marked below, then run the
--- whole file.
+-- Set the two months on the lines marked below, then run the whole file.
+-- EVERY NURSERY IS SWEPT AT ONCE -- there is no nursery to set.
 --
 -- WHAT WENT WRONG
 --
 -- A build of stampRecordMonths() put every dated row under the month of its
--- own date. A job done late — a September schedule row worked on the 2nd of
--- October — was therefore stamped October and left September. The next sync
+-- own date. A job done late -- a September schedule row worked on the 2nd of
+-- October -- was therefore stamped October and left September. The next sync
 -- found that slot missing and built a fresh row for it: no date, no keyed
 -- quantity, not checked, and a live quantity that moves with the ledger.
 --
@@ -25,16 +25,29 @@
 -- and an UNDATED blank of the same slot in the earlier one. A genuine row of
 -- the later month has no such twin, which is what makes this safe to act on.
 --
+-- WHY THERE IS NO NURSERY HERE ANY MORE
+--
+-- The first version of this file resolved each row's nursery by joining
+-- shared_plots. That table is Seedling Stock and does NOT hold UNN 2's
+-- N1-N20: the plot list those pages really use is the hardcoded BASE in
+-- shared/shared_maint_plots.js, merged with nops_maint_custom_plots AND
+-- shared_plots. So for UNN 2 the join matched nothing and the file answered
+-- 0 about an empty set, which reads exactly like good news.
+--
+-- A slot already carries its plot inside it -- "pd|W4|P|N19" -- so the join
+-- bought nothing and cost a nursery. It is gone, and with it the chance that
+-- a nursery spelt one way in one table hides a row.
+--
 -- WHAT TO LOOK FOR
 --
 -- Each line is one slot and names both halves. "dragged out" is the row to
--- put back, and "blank left behind" is the row to remove. The last line counts
--- the pairs and the capacity standing in them.
+-- put back, and "blank left behind" is the row to remove. The last line
+-- counts the pairs. VERDICT 0 now means there is genuinely nothing of this
+-- shape anywhere, not that a join came up empty.
 -- ════════════════════════════════════════════════════════════════════════
 
 WITH params AS (
-  SELECT 'UNN 2'::text    AS nursery,    -- the nursery, as shared_plots spells it
-         'Sep 2026'::text AS lost_month, -- the month that lost rows
+  SELECT 'Sep 2026'::text AS lost_month, -- the month that lost rows
          'Oct 2026'::text AS got_month   -- the month they were dragged into
 ),
 
@@ -44,13 +57,6 @@ raw AS (
     CROSS JOIN LATERAL jsonb_array_elements(COALESCE(m.records, '[]'::jsonb))
          WITH ORDINALITY AS e(rec, ord)
    WHERE m.id = 1
-),
-
-plots AS (
-  SELECT upper(replace(replace(replace(btrim(p.plot_name), ' ', ''), '-', ''), '_', '')) AS pk
-    FROM shared_plots p, params pa
-   WHERE upper(replace(replace(replace(COALESCE(p.nursery_name, ''), ' ', ''), '-', ''), '_', ''))
-       = upper(replace(replace(replace(pa.nursery, ' ', ''), '-', ''), '_', ''))
 ),
 
 mine AS (
@@ -64,8 +70,6 @@ mine AS (
          btrim(COALESCE(r.rec->>'qtyFrozen', '')) AS qty_frozen,
          CASE WHEN COALESCE(r.rec->>'checked', '0') IN ('1', 'true') THEN 1 ELSE 0 END AS checked
     FROM raw r
-    JOIN plots pl
-      ON pl.pk = upper(replace(replace(replace(btrim(COALESCE(r.rec->>'plot', '')), ' ', ''), '-', ''), '_', ''))
    WHERE COALESCE(r.rec->>'_src', '') <> ''
 ),
 

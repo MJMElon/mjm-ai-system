@@ -6,7 +6,8 @@
 -- Safe to run twice: the second run finds no pairs and changes nothing.
 -- ONE statement. No regular expressions and no backslashes.
 --
--- Set the nursery and the two months on the lines marked below. Run
+-- Set the two months on the lines marked below. EVERY NURSERY IS REPAIRED
+-- AT ONCE — there is no nursery to set. Run
 -- shared/CHECK_rows_dragged_out_of_month.sql first and read what it names —
 -- this acts on exactly those rows and no others.
 --
@@ -24,9 +25,19 @@
 --
 -- WHAT IT DOES NOT TOUCH
 --   the date, the batch, the quantity, Checked, the worker ticks (those live
---   in nops_maint_payroll, which this file never names), any other nursery,
---   any other month, and any October row that has no blank twin — a genuine
---   October row is left exactly as it is.
+--   in nops_maint_payroll, which this file never names), any other month, and
+--   any October row that has no blank twin — a genuine October row is left
+--   exactly as it is.
+--
+-- WHY THERE IS NO NURSERY HERE ANY MORE
+--   The first version resolved a row's nursery by joining shared_plots. That
+--   table is Seedling Stock and does NOT hold UNN 2's N1-N20 — the list
+--   those pages really use is the hardcoded BASE in
+--   shared/shared_maint_plots.js, merged with nops_maint_custom_plots AND
+--   shared_plots. So for UNN 2 the join matched nothing and the file
+--   reported 0 about an empty set, which reads exactly like good news. A
+--   slot carries its plot inside it, so the join bought nothing and cost a
+--   nursery.
 --
 -- HOW A ROW IS FOUND
 --   One schedule slot in two places at once: a DATED row stamped the later
@@ -41,8 +52,7 @@
 -- ════════════════════════════════════════════════════════════════════════
 
 WITH params AS (
-  SELECT 'UNN 2'::text    AS nursery,    -- the nursery, as shared_plots spells it
-         'Sep 2026'::text AS lost_month, -- the month that lost rows
+  SELECT 'Sep 2026'::text AS lost_month, -- the month that lost rows
          'Oct 2026'::text AS got_month   -- the month they were dragged into
 ),
 raw AS (
@@ -51,12 +61,6 @@ raw AS (
     CROSS JOIN LATERAL jsonb_array_elements(COALESCE(m.records, '[]'::jsonb))
          WITH ORDINALITY AS e(rec, ord)
    WHERE m.id = 1
-),
-plots AS (
-  SELECT upper(replace(replace(replace(btrim(p.plot_name), ' ', ''), '-', ''), '_', '')) AS pk
-    FROM shared_plots p, params pa
-   WHERE upper(replace(replace(replace(COALESCE(p.nursery_name, ''), ' ', ''), '-', ''), '_', ''))
-       = upper(replace(replace(replace(pa.nursery, ' ', ''), '-', ''), '_', ''))
 ),
 mine AS (
   SELECT r.ord,
@@ -69,8 +73,6 @@ mine AS (
          btrim(COALESCE(r.rec->>'qtyFrozen', '')) AS qty_frozen,
          CASE WHEN COALESCE(r.rec->>'checked', '0') IN ('1', 'true') THEN 1 ELSE 0 END AS checked
     FROM raw r
-    JOIN plots pl
-      ON pl.pk = upper(replace(replace(replace(btrim(COALESCE(r.rec->>'plot', '')), ' ', ''), '-', ''), '_', ''))
    WHERE COALESCE(r.rec->>'_src', '') <> ''
 ),
 dragged AS (
