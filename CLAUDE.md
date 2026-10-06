@@ -165,6 +165,42 @@ nursery its own way ("UNN 1"), so the match is on letters and digits.
 **When a new kind of plot appears, this file is the second place to change.**
 The orphan list on the claim is what says it has not been.
 
+## A month keeps its own work records
+
+The schedule has always been stored per (nursery, month) in `nops_maint_state`.
+The work RECORDS were not: ONE JSONB list for the whole system, and a
+generated row's slot — `pd|W1|P|N15` — is the same string in every month. So
+stepping to October and syncing matched October's round 1 against SEPTEMBER's
+row and reused it. Nothing was deleted; **September was relabelled as
+October**, which is why a month that has gone by could not be printed again,
+and why a printed sheet was the only copy of it.
+
+It was invisible while the field refilled the date and quantity every month.
+The moment a full cell stopped being overwritten, September's hand-keyed
+figures rode into October — the opposite of what a new month is.
+
+So every row carries `_month`, the sync rebuilds only that month and leaves
+the rest of the list alone, and the three places that READ the list —
+`renderRecords`, `payrollRowsFor` (the Worker Record and its PDF) and
+`applyFieldRecords` — ask for the month too. `_recInMonth(r, m)` is the one
+test, and it is EXACT.
+
+Letting a row with no month answer yes to any month looked like the safe way
+to carry the old data over. It was not: every old row then appeared in every
+month, so October opened full of September — and the next sync would have
+stamped them all October and lost September for good.
+`stampRecordMonths()` runs before the first draw. **A row knows its own
+month: the day the work was done.** A nursery whose rows are stamped one
+month while a CLEAR MAJORITY of its dated rows fall in another is stamped
+wrong, and the dates win — which also repairs the first version of this,
+which stamped inside the sync and so turned September into October the moment
+somebody opened October. A clear majority, not any majority, so one job done
+late cannot drag a month with it; undated rows ride with their nursery. Once
+the stamps agree with the dates nothing moves again.
+
+**Anything new that reads `records` must ask the month.** A reader that does
+not will quietly mix every month together.
+
 ## The field fills an empty cell. It never writes over a full one.
 
 A verified field record fills a row's date, batch and quantity. It used to
@@ -227,6 +263,63 @@ Three things to know before touching `LOS_GROUP_OF_TYPE` in
 The As At date cuts the LINES off and never the signatures: a line dated
 after it is in no figure on screen, while "has anybody checked this" is a
 question about now.
+
+## A row count is not a window
+
+"Recent work is all a Field Conductor needs on a phone" was implemented as
+`.limit(500)`. At a hundred records a day that is **five days**, and in a
+quiet month it is two — nobody can tell which they are looking at, and
+nothing on screen says the list has been cut. Worse, the cut MOVES: every
+job saved pushes one off the end, so a record on the phone at breakfast is
+gone by lunch, and the day it falls in the middle of is a different day each
+morning. The office could see a job and the phone's History could not.
+
+It could not simply be raised, because the read was `select('*')` and that
+carries `gps_track` — every point walked, hundreds to a record. **That is
+what the cap was really protecting.** The worker portal had already worked
+this out: `worker_maint_records` lists its columns and says the track is
+deliberately not among them, and `worker_maint_track` fetches the line for
+the one record somebody opens.
+
+So both doors now do the same thing: the list carries the GPS **summary**
+(`gps_points`, `gps_distance_m`, start and end — stored beside the track for
+exactly this), the window is **92 days** rather than a row count, and the
+walk is fetched through `source.loadTrack(id)` when a map is opened. The row
+cap that remains is a seatbelt, far above what three months comes to.
+
+Two things that follow:
+
+- **A card asks `gps_points`, never `gps_track`, whether a walk exists.** A
+  record still in the outbox carries its own track and no id, so that one is
+  used as it stands.
+- **The offline cache has to hold the same window** (`MAX_RECORDS` in
+  `offline.js`), or a conductor with no signal is back where he started. It
+  strips the tracks, which is what makes a row small enough to.
+
+`tests/history_is_a_window_not_a_count.cjs` guards all of it.
+
+## Which nursery a record is in: the PLOT decides
+
+The plot is the thing that is somewhere. A maintenance record is wherever its
+plot is, whatever the record's own `nursery_name` happens to say — which may
+be empty, or spelt the way the office types it rather than the way
+`shared_plots` does.
+
+The office has always read it that way (`_rejNursery`). The phone's History
+did not: it compared the record's stored `nursery_name` against the nursery
+picked at the top, letter for letter. So a job the office could see — signed
+off, with the walk drawn beside it — was not in History at all, and a job
+that cannot be found is a job somebody does twice.
+
+Every nursery comparison in either repository goes through
+`nurseryKey`/`plotKey` (strip everything but letters and digits, uppercase).
+That includes the User Access tick list: it is typed by hand and says "UNN1"
+where `shared_plots` says "UNN 1". It cannot widen access — two names with
+different letters or digits give different keys.
+
+`Barcode_Counter`'s `recordNurseryKey` and this file's `_rejNursery` are the
+two copies. `shared/CHECK_why_not_in_phone_history.sql` names any record
+whose stored nursery disagrees with its plot's, on every plot.
 
 ## Checked stops a figure being a formula
 
