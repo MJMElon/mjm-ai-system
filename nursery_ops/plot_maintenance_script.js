@@ -5478,7 +5478,13 @@ function editSubmission(id) {
 
    WHICH NURSERY FOLLOWS THE PLOT, not the record's stored nursery_name: the
    plot is the thing being corrected on this form, and a record moved to
-   another nursery's plot has to offer that nursery's people. */
+   another nursery's plot has to offer that nursery's people.
+
+   THE PHONE DOES THE SAME, and did not always — see recordNurseryKey in
+   Barcode_Counter's src/modules/maintenance/MaintenanceModule.jsx. It read
+   the record's own nursery_name and compared it spelling for spelling, so a
+   record with no nursery on it, or one spelt the office's way, was on this
+   list and nowhere in the phone's History. Change one, change the other. */
 function _rejNursery() {
   const pk = MJMMaintField.plotKey;
   const plot = pk((document.getElementById('rj-plot') || {}).value);
