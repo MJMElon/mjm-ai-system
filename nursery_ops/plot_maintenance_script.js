@@ -783,8 +783,9 @@ function payrollRowsFor(type) {
      A sheet is one work type, so the work type cannot separate two rows here
      and only the day can. Same rule as the Work Record's — see
      _recDayOrder. */
+  const m = getMonth();
   return records
-    .filter(r => r.jenis === jenis && plots.includes(r.plot))
+    .filter(r => r.jenis === jenis && plots.includes(r.plot) && _recInMonth(r, m))
     .sort((a, b) => {
       const pa = plots.indexOf(a.plot), pb = plots.indexOf(b.plot);
       if (pa !== pb) return pa - pb;
@@ -3368,6 +3369,8 @@ function applyFieldRecords(nursery, monthLbl) {
 
   records.forEach(r => {
     if (!plots.includes(r.plot) || r.checked) return;
+    // A month's field records fill that month's rows and no other.
+    if (!_recInMonth(r, monthLbl)) return;
     // The slot's week, not the label — see MJMMaintField.srcWeek.
     const week = MJMMaintField.rowWeek(r);
     let key = week ? _fieldKey(r.jenis, r.plot, week) : null;
@@ -3603,14 +3606,14 @@ function autoSyncRecords() {
     plots.forEach(plot=>{
       if (s.pd[w]?.[plot]?.P && c.P!=='—') {
         const pStick = c.P_sticker && c.P_sticker !== '—' ? ` + ${c.P_sticker} ${c.P_sticker_dose}${c.P_sticker_unit}` : '';
-        newRecs.push({id:id++, tarikh:'-', jenis:'Penyemburan racun kulat dan serangga',
+        newRecs.push({id:id++, _month:m, tarikh:'-', jenis:'Penyemburan racun kulat dan serangga',
           racun:`Round ${R.pd.get(plot, R.num(w))}: ${c.P} ${c.P_dose}${c.P_unit}${pStick}`,
           _src:`pd|${w}|P|${plot}`,
           plot, batch:'', qty:null, carlos:0, gaia:0, remark:''});
       }
       if (s.pd[w]?.[plot]?.D && c.D!=='—') {
         const dStick = c.D_sticker && c.D_sticker !== '—' ? ` + ${c.D_sticker} ${c.D_sticker_dose}${c.D_sticker_unit}` : '';
-        newRecs.push({id:id++, tarikh:'-', jenis:'Penyemburan racun kulat dan serangga',
+        newRecs.push({id:id++, _month:m, tarikh:'-', jenis:'Penyemburan racun kulat dan serangga',
           racun:`Round ${R.pd.get(plot, R.num(w))}: ${c.D} ${c.D_dose}${c.D_unit}${dStick}`,
           _src:`pd|${w}|D|${plot}`,
           plot, batch:'', qty:null, carlos:0, gaia:0, remark:''});
@@ -3620,7 +3623,7 @@ function autoSyncRecords() {
   s.manuringConfig.forEach((round, ri) => {
     round.forEach((c, ci) => {
       plots.filter(p=>s.manuring[p]?.[ri]?.[ci]).forEach(plot => {
-        newRecs.push({id:id++, tarikh:'-', jenis:'Membaja',
+        newRecs.push({id:id++, _month:m, tarikh:'-', jenis:'Membaja',
           racun:`Round ${R.mn.get(plot, ri+1)}: ${c.name} ${c.dose}${c.unit}`,
           _src:`mn|${ri}|${ci}|${plot}`,
           plot, batch:'', qty:null, carlos:0, gaia:0, remark:''});
@@ -3629,7 +3632,7 @@ function autoSyncRecords() {
   });
   weekKeys(n, m, 'R').forEach(r=>{
     plots.filter(p=>s.weeding[p]?.[r]).forEach(plot=>{
-      newRecs.push({id:id++, tarikh:'-', jenis:'Merumput',
+      newRecs.push({id:id++, _month:m, tarikh:'-', jenis:'Merumput',
         racun:`Round ${R.wd.get(plot, R.num(r))}: Merumput dalam polibeg`,
         _src:`wd|${r}|${plot}`,
         plot, batch:'', qty:null, carlos:0, gaia:0, remark:''});
@@ -3638,7 +3641,7 @@ function autoSyncRecords() {
   s.interrowConfig.forEach((round, ri) => {
     round.forEach((c, ci) => {
       plots.filter(p=>s.interrow[p]?.[ri]?.[ci]).forEach(plot=>{
-        newRecs.push({id:id++, tarikh:'-', jenis:'Meracun rumput secara selingan',
+        newRecs.push({id:id++, _month:m, tarikh:'-', jenis:'Meracun rumput secara selingan',
           racun:`Round ${R.ir.get(plot, ri+1)}: ${c.chem} ${c.chem_dose}${c.chem_unit} + ${interrowAct(c)} ${c.activator_dose}${c.activator_unit}`,
           _src:`ir|${ri}|${ci}|${plot}`,
           plot, batch:'', qty:null, carlos:0, gaia:0, remark:''});
@@ -3670,8 +3673,13 @@ function autoSyncRecords() {
      Rows saved before slots existed are adopted on the first pass by the old
      chemical match, so nothing is duplicated the once. */
   const existingKey = r => `${r.jenis}||${r.racun}||${r.plot}`;
-  const mine  = records.filter(r => NURSERY_PLOTS[n].includes(r.plot));
+  const ours  = records.filter(r => NURSERY_PLOTS[n].includes(r.plot));
   const other = records.filter(r => !NURSERY_PLOTS[n].includes(r.plot));
+  /* ONLY THIS MONTH'S ROWS ARE REBUILT. Another month of this same nursery is
+     left exactly as it is -- it is not the schedule on screen, and a figure
+     the office keyed into September is September's answer for ever. */
+  const mine     = ours.filter(r => _recInMonth(r, m));
+  const otherMth = ours.filter(r => !_recInMonth(r, m));
 
   const bySrc = new Map(), byKey = new Map();
   mine.forEach(r => {
@@ -3703,7 +3711,10 @@ function autoSyncRecords() {
      has lost its tick and goes; a row without one was never the schedule's
      to take away. */
   const kept = mine.filter(r => !claimed.has(r) && !r._src);
-  records = [...other, ...merged, ...kept];
+  // Every row this pass owns is stamped with the month it was built for.
+  merged.forEach(r => { r._month = m; });
+  kept.forEach(r => { r._month = m; });
+  records = [...other, ...otherMth, ...merged, ...kept];
   // Fill the date and batch of anything the field has already reported.
   try { applyFieldRecords(n, m); } catch (e) { console.warn('[maint] field sync failed:', e); }
   renderRecords();
@@ -5042,6 +5053,23 @@ function _jenisRank(j) {
   return r === undefined ? 99 : r;
 }
 
+/* WHICH MONTH A ROW BELONGS TO.
+
+   The schedule has always been stored per (nursery, month). The work RECORDS
+   were not: one JSONB list for the whole system, and a generated row's slot
+   -- pd|W1|P|N15 -- is the same string in every month. So stepping to October
+   and syncing matched October's round 1 against SEPTEMBER's row and reused
+   it. Nothing was deleted; September was RELABELLED as October, which is why
+   a month that has gone by cannot be printed again.
+
+   It was invisible while the field refilled the date and quantity every
+   month. Once a full cell stopped being overwritten, September's hand-keyed
+   figures rode into October, which is the opposite of what a new month is.
+
+   A row saved before this existed answers yes to whatever month is on screen,
+   so nothing vanishes on the first load; the next sync stamps it. */
+function _recInMonth(r, m) { return !r || !r._month || r._month === m; }
+
 /* THE DAY IT WAS DONE, then the round, then something settled.
 
    A row with no date yet has not happened, so it sits at the end rather than
@@ -5093,11 +5121,15 @@ function renderRecords() {
   try { renderRejectedSubmissions({ nursery: nF, jenis: jF, plot: pF, date: dF }); }
   catch (e) { console.warn('[maint] sent-back list could not be drawn:', e); }
 
-  // Only show records whose plot belongs to the current nursery
+  // Only show records whose plot belongs to the current nursery, and whose
+  // MONTH is the one on the topbar — the list holds every month now, not just
+  // the one last synced. See _recInMonth.
   const nurseryPlots = NURSERY_PLOTS[nF];
+  const mF = getMonth();
 
   const filtered = records.filter(r => {
     if (!nurseryPlots.includes(r.plot)) return false;
+    if (!_recInMonth(r, mF)) return false;
     if (jF && r.jenis !== jF) return false;
     if (pF && r.plot !== pF) return false;
     // Match either the stored value or the "20 Apr 2026" form on screen.
@@ -5113,7 +5145,7 @@ function renderRecords() {
   });
 
   // Metrics count only current nursery records
-  const nurseryRecs = records.filter(r => nurseryPlots.includes(r.plot));
+  const nurseryRecs = records.filter(r => nurseryPlots.includes(r.plot) && _recInMonth(r, mF));
   const total  = nurseryRecs.length;
   /* DONE means the field did it and the conductor signed it off.
      _fieldIds is only ever set from loadFieldRecords, which reads verified
@@ -5149,7 +5181,7 @@ function renderRecords() {
   // Repopulate plot filter — only plots from current nursery that have records
   const pSel = document.getElementById('rf-filter-plot');
   const curP = pSel.value;
-  const plotPool = nurseryPlots.filter(p => records.some(r => r.plot === p));
+  const plotPool = nurseryPlots.filter(p => records.some(r => r.plot === p && _recInMonth(r, mF)));
   pSel.innerHTML = `<option value="">${t('rec.allPlot')}</option>` +
     plotPool.map(p => `<option${p===curP?' selected':''}>${p}</option>`).join('');
 
@@ -5925,7 +5957,7 @@ function saveRec(){
     if (mineBatch) { row._batchByHand  = 1; delete row._fromFieldBatch; }
     if (mineQty)   { row._qtyByHand    = 1; delete row._fromFieldQty; }
   }
-  else records.push({id:Date.now(),...obj});
+  else records.push({id:Date.now(), _month:getMonth(), ...obj});
   closeRecModal(); renderRecords(); persistRecords();
 }
 

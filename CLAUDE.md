@@ -165,6 +165,30 @@ nursery its own way ("UNN 1"), so the match is on letters and digits.
 **When a new kind of plot appears, this file is the second place to change.**
 The orphan list on the claim is what says it has not been.
 
+## A month keeps its own work records
+
+The schedule has always been stored per (nursery, month) in `nops_maint_state`.
+The work RECORDS were not: ONE JSONB list for the whole system, and a
+generated row's slot — `pd|W1|P|N15` — is the same string in every month. So
+stepping to October and syncing matched October's round 1 against SEPTEMBER's
+row and reused it. Nothing was deleted; **September was relabelled as
+October**, which is why a month that has gone by could not be printed again,
+and why a printed sheet was the only copy of it.
+
+It was invisible while the field refilled the date and quantity every month.
+The moment a full cell stopped being overwritten, September's hand-keyed
+figures rode into October — the opposite of what a new month is.
+
+So every row carries `_month`, the sync rebuilds only that month and leaves
+the rest of the list alone, and the three places that READ the list —
+`renderRecords`, `payrollRowsFor` (the Worker Record and its PDF) and
+`applyFieldRecords` — ask for the month too. `_recInMonth(r, m)` is the one
+test; a row with no month answers yes to whatever is on screen, so nothing
+vanished on the first load after this shipped and the next sync stamps it.
+
+**Anything new that reads `records` must ask the month.** A reader that does
+not will quietly mix every month together.
+
 ## The field fills an empty cell. It never writes over a full one.
 
 A verified field record fills a row's date, batch and quantity. It used to
