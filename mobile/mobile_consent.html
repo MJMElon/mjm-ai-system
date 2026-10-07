@@ -426,6 +426,7 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
 //  STATE
 // ════════════════════════════════════════════════════════
 let alData = [];
+let completedData = []; // recently completed ALs, for the permanent Completed group at the bottom
 let liveMatches = [];     // completed/older ALs found by searchAll's live DB query
 let _liveSearchToken = 0; // discards a reply that lands after a newer search started
 let consentCountMap = {};
@@ -481,7 +482,39 @@ async function loadActiveALs() {
   renderCombined('');
 }
 
-window.addEventListener('DOMContentLoaded', () => { loadActiveALs(); });
+// Completed ALs for the permanent "Completed" group at the bottom of the
+// list — windowed on created_at (there is no completed/collected_at column
+// on shared_al_orders to window on instead) the same way History's own
+// 92-day window replaced a row count: a time window says plainly what it
+// covers and cannot silently truncate the way an unbounded fetch can.
+// Anything older than this window is still reachable — see searchAll()'s
+// live DB search, which queries Supabase directly rather than trusting
+// whatever loaded on page-open.
+const COMPLETED_WINDOW_DAYS = 90;
+async function loadCompletedALs() {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - COMPLETED_WINDOW_DAYS);
+  const { data, error } = await _supabase
+    .from('shared_al_orders')
+    .select('id,al_number,order_number,customer_name,product_name,quantity_ordered,balance_quantity,status,created_at')
+    .not('status', 'in', '("Cancelled","Collected")')
+    .lte('balance_quantity', 0)
+    .gte('created_at', cutoff.toISOString())
+    .order('created_at', { ascending: false });
+  if (error) { completedData = []; return; }
+  completedData = data || [];
+}
+
+async function loadAllData() {
+  await loadActiveALs();    // renders once on its own already
+  await loadCompletedALs();
+  // consentCountMap was built inside loadActiveALs() from EVERY consent
+  // record with no al_number filter, so completedData's counts are
+  // already in it — nothing extra to fetch before this re-render.
+  renderCombined(document.getElementById('input-search')?.value || '');
+}
+
+window.addEventListener('DOMContentLoaded', () => { loadAllData(); });
 
 // ════════════════════════════════════════════════════════
 //  BARCODE SCANNER
@@ -627,7 +660,7 @@ function renderCombined(q) {
   const lower = q.trim().toLowerCase();
   const isMobile = window.innerWidth < 640;
 
-  let matched = [], hasConsent = [], noneYet = [];
+  let matched = [], hasConsent = [], noneYet = [], completedGroup = [];
 
   alData.forEach(r => {
     const isMatch = lower.length >= 1 && (
@@ -642,22 +675,33 @@ function renderCombined(q) {
     else                 noneYet.push(r);
   });
 
-  // liveMatches (queueLiveSearch) is how a completed order — never part of
-  // alData at all — reaches Search Match. Deduped by id against what the
-  // loop above already found, since an outstanding order can legitimately
-  // match both the local list and the live query.
+  // completedData (loadCompletedALs, last COMPLETED_WINDOW_DAYS) is its own
+  // permanent group at the very bottom — a search match still pulls a row
+  // OUT of it and into Search Match instead, same rule alData's own rows
+  // follow above.
+  completedData.forEach(r => {
+    const isMatch = lower.length >= 1 && (
+      (r.al_number     || '').toLowerCase().includes(lower) ||
+      (r.order_number  || '').toLowerCase().includes(lower) ||
+      (r.customer_name || '').toLowerCase().includes(lower)
+    );
+    if (isMatch) matched.push(r);
+    else          completedGroup.push(r);
+  });
+
+  // liveMatches (queueLiveSearch) is how a completed order OLDER than the
+  // window above reaches Search Match. Deduped by id against what the two
+  // loops above already found.
   const matchedIds = new Set(matched.map(r => r.id));
   liveMatches.forEach(r => { if (!matchedIds.has(r.id)) matched.push(r); });
 
   let groups = [];
-  if (lower.length >= 1) {
-    if (matched.length)    groups.push({ label:'\ud83d\udd0d Search Match',                        rows: matched,    theme: 'amber'   });
-    if (hasConsent.length) groups.push({ label:'\u2705 Has Consent Records',                       rows: hasConsent, theme: 'emerald' });
-    if (noneYet.length)    groups.push({ label:'\ud83d\udccb Active AL \u2014 No Consent Yet',     rows: noneYet,    theme: 'blue'    });
-  } else {
-    if (hasConsent.length) groups.push({ label:'\u2705 Has Consent Records',                       rows: hasConsent, theme: 'emerald' });
-    if (noneYet.length)    groups.push({ label:'\ud83d\udccb Active AL \u2014 No Consent Yet',     rows: noneYet,    theme: 'blue'    });
+  if (lower.length >= 1 && matched.length) {
+    groups.push({ label:'\ud83d\udd0d Search Match',                        rows: matched,    theme: 'amber'   });
   }
+  if (hasConsent.length)     groups.push({ label:'\u2705 Has Consent Records',                       rows: hasConsent,    theme: 'emerald' });
+  if (noneYet.length)        groups.push({ label:'\ud83d\udccb Active AL \u2014 No Consent Yet',     rows: noneYet,       theme: 'blue'    });
+  if (completedGroup.length) groups.push({ label:'\u2714\ufe0f Completed (last ' + COMPLETED_WINDOW_DAYS + ' days)', rows: completedGroup, theme: 'slate' });
 
   if (!groups.length) {
     el.innerHTML = '<div class="text-center py-12"><div class="text-4xl mb-3">\ud83d\udced</div><div class="text-[11px] font-black text-slate-300 uppercase tracking-widest">No active approval letters found</div></div>';
@@ -668,6 +712,7 @@ function renderCombined(q) {
     amber:   { header:'bg-amber-50 text-amber-700 border-amber-200',      row:'bg-amber-50/60',   bal:'text-amber-700',   border:'border-l-4 border-amber-400'   },
     emerald: { header:'bg-emerald-50 text-emerald-700 border-emerald-200', row:'bg-emerald-50/50', bal:'text-emerald-700', border:'border-l-4 border-emerald-500' },
     blue:    { header:'bg-blue-50 text-blue-700 border-blue-200',          row:'bg-blue-50/50',    bal:'text-blue-700',    border:'border-l-4 border-blue-400'    },
+    slate:   { header:'bg-slate-100 text-slate-600 border-slate-300',      row:'bg-slate-50/60',   bal:'text-slate-500',   border:'border-l-4 border-slate-300'   },
   };
 
   if (isMobile) {
