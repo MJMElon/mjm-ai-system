@@ -78,14 +78,15 @@
          work on 18 Sep →  70   and the 25 sold, the same day counting
          work on 28 Sep →  70   nothing since
 
-     Two columns carry the report's own condition, applied where the events
-     are built because both need the remark: a 3rd culling counts only once
-     the drone map has been keyed (MapQty:) — until the plot has been flown
-     the figure is a claim — and a stock calibration only once [APPROVED …].
+     One column carries the report's own condition, applied where the events
+     are built because it needs the remark: a 3rd culling counts only once the
+     drone map has been keyed (MapQty:) — until the plot has been flown the
+     figure is a claim. A stock adjustment used to need [APPROVED …] as well
+     and no longer does; it counts as soon as it is saved.
 
-     Stock_Calibration is already signed when it reaches here — a Found is
-     positive, a Stolen negative — so it is returned as given rather than
-     forced in a direction. */
+     Stock_Calibration arrives already signed — a Found is positive, a Stolen
+     negative — so it is returned as given rather than forced in a
+     direction. */
   function signed(type, qty) {
     const q = Number(qty || 0);
     switch (type) {
@@ -150,15 +151,18 @@
 
       const evs = [];
       const EVIDENCED = /MapQty:\s*\d+/;
-      const APPROVED  = /\[APPROVED by [^\]]+ on [^\]]+\]/;
       (logsRes.data || []).forEach(l => {
         const t = l.transaction_type;
         // A 3rd culling nobody has flown yet is a claim, not a deduction —
         // the report leaves the batch standing, and so does this.
         if (t === '3rd_Culling' && !EVIDENCED.test(l.remark || '')) return;
-        // A pending adjustment has not been ruled on and moves no figure
-        // anywhere else in the system.
-        if (t === 'Stock_Calibration' && !APPROVED.test(l.remark || '')) return;
+        /* A stock adjustment counts from the moment it is saved. There used
+           to be an approval step and this skipped a row without one; the step
+           is gone — see the Adjustments tab in operation_batch_detail.html —
+           and a gate left here would make the piece-rate quantity the one
+           figure in the system still waiting for a signature nobody is asked
+           for. Rules shared with the office repository carry a comment saying
+           so in both copies. */
         const ms = parseDate(logDate(l));
         if (ms == null) return;
         evs.push({

@@ -73,10 +73,12 @@ const CAL_ROWS = [
   { id: 'c3', batch_name: BATCH, transaction_type: 'Stock_Calibration', plot_name: 'B11',
     quantity_change: -40, transaction_date: '2026-07-20', created_at: '2026-08-26T02:00:00Z',
     remark: 'Report: Transplanting. Plot: B11. Tray: P50. Stock calibration' + APPROVED },
-  // nobody has ruled on this one — it must move nothing
+  /* No approval marker on this one. There is no approval step any more, so
+     it counts exactly like the rest — a row written today never carries the
+     marker at all. */
   { id: 'c4', batch_name: BATCH, transaction_type: 'Stock_Calibration', plot_name: 'B4',
     quantity_change: -500, transaction_date: '2026-07-24', created_at: '2026-08-26T02:00:00Z',
-    remark: 'Report: Transplanting. Plot: B4. Tray: P51. Not approved yet' },
+    remark: 'Report: Transplanting. Plot: B4. Tray: P51. Never approved' },
   // another report — it belongs to 1st Culling, not here
   { id: 'c5', batch_name: BATCH, transaction_type: 'Stock_Calibration', plot_name: 'B4',
     quantity_change: -7, transaction_date: '2026-08-01', created_at: '2026-08-26T02:00:00Z',
@@ -182,13 +184,11 @@ const CAL_ROWS = [
   check('the three shares add up to the -127 on the strip',
         [-42, -45, -40].reduce((a, b) => a + b, 0), -127);
 
-  console.log('\nWhat must NOT land on a row');
-  check('a row nothing was raised against reads "—" and keeps its figure',
-        rows[3], { plot: 'B4', tray: 'P51', qty: '1000', adj: '—', final: '1,000' });
-  checkTrue('…so the unapproved -500 on that very row moved nothing',
-            rows[3].adj === '—' && rows[3].final === '1,000');
-  checkTrue('…and neither did the 1st Culling one on the same plot and tray',
-            !/-7/.test(rows[3].adj));
+  console.log('\nWhat lands on a row, and what must not');
+  check('a row carries its own adjustment with no approval needed',
+        rows[3], { plot: 'B4', tray: 'P51', qty: '1000', adj: '-500', final: '500' });
+  checkTrue('…and the 1st Culling one on the same plot and tray did NOT land here',
+            !/-507|-7\b/.test(rows[3].adj));
   check('the Premium Care holding row shows its own figures',
         rows[4], { plot: 'PREMIUM CARE', tray: 'P45', qty: '171', adj: '—', final: '171' });
 
@@ -202,9 +202,9 @@ const CAL_ROWS = [
   }));
   // 2478 + 2352 + 2286 + 1000 = 8116; Premium Care is not counted, as before
   check('Total Transplanted is unchanged', totals.qty, '8,116');
-  // -127 on B11's three rows, plus the -13 that matches no row
-  check('Total Adjustment is every approved one on this report', totals.adj, '-140');
-  check('Final is the total plus the adjustments', totals.final, '7,976');
+  // -127 on B11's three rows, the -500 on B4, plus the -13 that matches no row
+  check('Total Adjustment is every one on this report', totals.adj, '-640');
+  check('Final is the total plus the adjustments', totals.final, '7,476');
 
   console.log('\nAn adjustment that matches no row is still accounted for');
   check('the note is shown', totals.noteHidden, false);
@@ -212,26 +212,30 @@ const CAL_ROWS = [
   checkTrue('and where it was raised', /B4/.test(totals.note));
   checkTrue('and says it IS in the total', /included in the total/i.test(totals.note));
 
-  console.log('\nApproving changes what the rows show');
+  console.log('\nDeleting one takes it straight back off');
+  /* The other direction of the same rule. An adjustment moves a figure the
+     moment it exists, so removing it moves that figure back — which is why
+     Delete is admin-only and asks first. */
   await page.evaluate(() => {
-    // rule on the -500 that was pending
-    window.__CAL_ROWS = window.__CAL_ROWS.map(r => r.id === 'c4'
-      ? Object.assign({}, r, { remark: r.remark + ' [APPROVED by coco@mjm on 2026-09-01T00:00:00Z]' })
-      : r);
+    window.__CAL_ROWS = window.__CAL_ROWS.filter(r => r.id !== 'c4');
   });
   await page.evaluate(b => window.syncAdjustmentBars(b), BATCH);
   await page.waitForTimeout(400);
   const after = await read();
-  check('the row it names now shows it',
-        after[3], { plot: 'B4', tray: 'P51', qty: '1000', adj: '-500', final: '500' });
+  check('the row it named reads "—" again and keeps its figure',
+        after[3], { plot: 'B4', tray: 'P51', qty: '1000', adj: '—', final: '1,000' });
   check('and the Total follows',
         await page.evaluate(() => ({
           adj:   document.getElementById('t3-saved-total-adj').innerText.trim(),
           final: document.getElementById('t3-saved-total-final').innerText.trim()
         })),
-        { adj: '-640', final: '7,476' });
+        { adj: '-140', final: '7,976' });
   check('the untouched rows did not move', after.slice(0, 3).map(r => r.final),
         ['2,436', '2,307', '2,246']);
+  // Put it back, so the figures below are read against the full set.
+  await page.evaluate(c => { window.__CAL_ROWS = c; }, CAL_ROWS);
+  await page.evaluate(b => window.syncAdjustmentBars(b), BATCH);
+  await page.waitForTimeout(400);
 
   console.log('\nA row written by an adjustment: Qty 0, Adjustment +140, Final 140');
   /* B8 had no transplanting record at all. Approving the adjustment wrote one

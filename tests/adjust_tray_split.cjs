@@ -195,9 +195,14 @@ async function setPlot(page, plot) {
   check('each tray has its own adjustment box',
         await page.locator('#t7-cal-trays .t7-tray-adj').count(), 3);
 
-  console.log('\nThe Qty box becomes the running sum');
-  check('it is read-only while the trays are being keyed',
-        await page.getAttribute('#t7-cal-qty', 'readonly') !== null, true);
+  console.log('\nThe Qty box becomes the running sum, and stays typable');
+  /* The split is a CHOICE. It used to be forced -- pick a plot with trays and
+     the Qty box went read-only, so the only way to record the adjustment was
+     to name a tray. "B14 is 53 short" is a count of the plot, and a form that
+     will not take it until a tray is named is a form that gets a tray guessed
+     into it. */
+  check('it is not read-only -- a figure for the whole plot can be typed',
+        await page.getAttribute('#t7-cal-qty', 'readonly'), null);
   await page.locator('#t7-cal-trays .t7-tray-line[data-tray="T1"] .t7-tray-adj').fill('-40');
   await page.locator('#t7-cal-trays .t7-tray-line[data-tray="T7"] .t7-tray-adj').fill('-13');
   check('the total follows the lines', await page.inputValue('#t7-cal-qty'), '-53');
@@ -264,22 +269,29 @@ async function setPlot(page, plot) {
             /Nothing has been transplanted into U17/.test(await page.textContent('#t7-cal-trays')));
   check('and the Qty box is typable', await page.getAttribute('#t7-cal-qty', 'readonly'), null);
 
-  console.log('\nKeying no tray at all is refused');
+  console.log('\nKeying no tray at all adjusts the whole plot, on one row');
   await setSelect(page,'#t7-cal-report', 'Transplanting');
   await setPlot(page, 'N19');
   await page.waitForSelector('#t7-cal-trays .t7-tray-line', { timeout: 5000 });
   await page.fill('#t7-cal-reason', 'Something');
   await page.fill('#t7-cal-date', '2026-03-10');
+  await page.fill('#t7-cal-qty', '-18');
+  await page.evaluate(() => window.t7SumTrayAdj());
+  checkTrue('the panel says which of the two is about to be saved',
+            /recorded against the whole plot/i.test(await page.textContent('#t7-tray-verdict')));
   await page.evaluate(() => { window.__INSERTS = []; window.__TOASTS = []; });
   await page.evaluate(() => window.saveCalibration());
-  const refused = await page.evaluate(() => ({
-    inserts: window.__INSERTS.length,
-    toast: (window.__TOASTS.slice(-1)[0] || {}).m || '',
+  await page.waitForTimeout(300);
+  const whole = await page.evaluate(() => ({
+    inserts: window.__INSERTS.slice(),
     type:  (window.__TOASTS.slice(-1)[0] || {}).t || ''
   }));
-  check('nothing was written', refused.inserts, 0);
-  check('and it was an error', refused.type, 'error');
-  checkTrue('the message points at the trays', /against the tray it came from/i.test(refused.toast));
+  check('one row, not one per tray', whole.inserts.length, 1);
+  check('and it is not an error', whole.type, 'success');
+  check('the whole figure, against the plot',
+        { p: whole.inserts[0].plot_name, q: whole.inserts[0].quantity_change },
+        { p: 'N19', q: -18 });
+  checkTrue('and it names no tray', !/Tray:/.test(whole.inserts[0].remark));
 
   console.log('\nEditing a row that already names a tray');
   await page.evaluate(() => {
