@@ -712,32 +712,59 @@ async function saveAudit(){
   const remarks = remEl ? remEl.value.trim() : '';
   const user=JSON.parse(localStorage.getItem('mjm_user')||'{}');
   setLoading(true);
+  let result;
   try{
-    // The photo is compulsory for BOTH results now (see the validation
-    // above), so it is uploaded for both. These lines used to branch on
-    // `isUnsat` — a variable whose definition left with the old
-    // photo-only-when-Unsatisfied design — and the dangling reference
-    // threw before anything was written: every save, Satisfied or not,
-    // ended in "Save failed".
-    let photoUrl = formState.photo || null;
-    if (photoUrl && photoUrl.startsWith('data:'))
-      photoUrl = await sb.uploadPhoto('audit-photos','maint_'+t.plot+'_'+Date.now(),photoUrl);
+    /* The photo goes into the payload as the data: URL it already is, and
+       smartSave uploads it. It is NOT uploaded here first.
+
+       It used to be, and that quietly undid everything smartSave does for
+       a photo. sb.uploadPhoto returns null when storage refuses the write
+       — a missing audit-photos bucket, a policy saying no — so the record
+       saved photo-less, on a form that makes the photo compulsory. Worse,
+       it THROWS on a network error or a malformed data URL, and a throw
+       here lands in the catch below having written nothing and queued
+       nothing: the audit, the remark and the photo are all gone, and the
+       auditor is standing in the plot being told "Save failed".
+
+       smartSave fails the online save when an upload is rejected, keeps
+       the photo in IndexedDB, and retries it on the next sync. That is
+       the behaviour this screen is supposed to have. */
     const payload={
       task_id:parseInt(formTaskId),
       nursery:t.nursery,plot:t.plot,task_type:t.type,
       result:formState.result,
       // Remarks are optional on both branches — keep whatever was keyed.
       remarks: remarks || null,
-      photo_url: photoUrl,
+      photo_url: formState.photo || null,
       auditor_name:user.name||'',
       date:todayISO()
     };
-    const result=await smartSave('audit_maintenance_audits',editMode?'update':'insert',
+    result=await smartSave('audit_maintenance_audits',editMode?'update':'insert',
       editMode?payload:{...payload,audit_id:nextAuditID()},
       editMode?editId:null);
-    showToast(result?.offline?'📴 Saved offline — will sync later':editMode?'✓ Audit updated':'✓ Audit saved');
-    await loadAll();setView('list');
-  }catch(e){showToast('⚠ Save failed');console.error(e);setLoading(false);}
+  }catch(e){
+    /* smartSave does not throw — it queues instead — so anything caught
+       here happened before it. Say which: "Save failed" on its own sent
+       somebody to the database looking for a fault that was never there. */
+    console.error('Maintenance audit save failed', e);
+    const why = (typeof sb !== 'undefined' && sb.lastPhotoError) || e?.message || '';
+    showToast('⚠ Save failed' + (why ? ' — ' + String(why).slice(0, 80) : ''));
+    setLoading(false);
+    return;
+  }
+
+  showToast(result?.offline?'📴 Saved offline — will sync later':editMode?'✓ Audit updated':'✓ Audit saved');
+
+  /* Outside the try on purpose. This is the redraw AFTER the record is
+     safely away; a failure here is a stale list, not a lost audit, and
+     reporting it as "Save failed" over the top of the tick the auditor
+     just saw is how a saved record gets entered twice. */
+  try{
+    await loadAll();
+  }catch(e){
+    console.error('Saved, but the list could not be refreshed', e);
+  }
+  setView('list');
 }
 
 /* --- DETAIL --- */
