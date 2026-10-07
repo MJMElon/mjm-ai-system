@@ -296,70 +296,46 @@ so** rather than dropped — a batch missing from the ledger is the thing
 somebody needs to see, and the section counts how many have no reading
 underneath the four averages. `tests/batch_height_by_age.cjs` holds all of it.
 
-## A stock adjustment counts the moment it is saved
+## A stock adjustment counts once it is APPROVED, and that was tried the other way
 
-There used to be an Approve button on the Adjustments tab, and a figure did
-not move until somebody pressed it. The office asked for it the other way
-round, and they are right: the person keying the correction is the person who
+The approval step was taken out and put back inside one afternoon, and the
+reason it came back is worth more than the rule itself.
+
+Taking it out looked right: the person keying the correction is the person who
 went and counted, so holding their answer behind a second signature only meant
-a report that was KNOWN to be wrong went on being shown as right until
-somebody got round to it.
-
-So the gate is gone from all four readers, and they have to stay in step or
-one of them becomes the only place in the system still waiting for a signature
-nobody is asked for: `syncAdjustmentBars` and `paintT3Adjustments` in
+a report known to be wrong went on being shown as right. All four readers
+dropped the gate together — `syncAdjustmentBars` and `paintT3Adjustments` in
 `operation_batch_detail.html`, `shared/shared_plot_movement.js` (the piece-rate
-quantity), and `operation_reports.html` three times over — Movement Report,
-Life of Seedlings and the Transplanting Report.
+quantity), and `operation_reports.html` three times over.
 
-Four things that followed, and the first is the one to remember:
+Then the check that went with it came back: **206 of the ledger's 218
+adjustments have no approval at all**, and between them they come to
+**−196,777 seedlings**. They had been inert for as long as the gate stood.
+Dropping it moved the Movement Report, Life of Seedlings and the piece-rate
+quantity by that much, in one afternoon, with nothing on any screen saying so.
+The office's answer, once they could see the size of it, was to put the gate
+back.
 
-- **`[APPROVED by … on …]` is still STRIPPED and never read.** Rows written
-  before this carry it, and a parser that stops removing it puts it in the
-  Reason column. `_parseCalibration` is the one that knows the format.
-- **The Qty-0 transplant row is written by the SAVE now**, not by the
-  approval — see `saveCalibration`. The moment the adjustment exists is the
-  moment the plot has its record.
-- **Delete moves a report there and then**, so it is admin-only and asks
-  first. The old rule refused to delete an approved row at all; that was
-  about the signature, and there is no signature.
-- **The drone-map panel's "this difference is already accounted for, approve
-  it and the plot tallies" is gone.** It cannot happen: an adjustment against
-  the plot is already inside the figure, so it can never be what the
-  difference still is. Do not put it back.
+So: **a figure moves when somebody approves it.** Four readers, one rule, and
+they have to stay in step — a gate left out of one of them makes that reader
+the only place in the system where an unapproved figure counts.
 
-`shared/CHECK_adjustments_that_start_counting.sql` names the rows that were
-keyed and never approved — the ones this change put into the figures.
+Two things from the attempt are worth keeping in mind before anyone tries
+again:
 
-**AND NOTHING ELSE GATES IT EITHER — not the `Report:` label.** That check
-came back with **206 rows out of 218 carrying no `Report:` at all**: all
-negative, all dated within two days of each other, many in exact triplicate.
-Every row the Adjustments tab writes starts `Report: X. Plot: Y.`, so the
-obvious reading was that they were written in bulk by something else and were
-not adjustments anybody raised — and they were made inert on that reasoning
-for about an hour. **They are real.** The office confirmed them as plot
-corrections that have to count. A `Stock_Calibration` row is an adjustment
-because of what it IS, not because of how its remark happens to be worded.
+- **The check is what made it decidable.** The rule change took an hour; the
+  question "what does this actually move" took one query, and the answer
+  reversed the decision. Hand over the check with the change, every time.
+- **206 rows carry no `Report:` either**, and for an hour that was read as
+  "not an adjustment anybody raised" and used to gate them. It is not true —
+  the office confirmed them as real corrections. A `Stock_Calibration` row is
+  an adjustment because of what it IS, not because of how its remark is
+  worded. The label decides WHERE a figure lands on the batch tabs
+  (`ADJUST_APPLIES_TO`), never whether it is real. Do not gate on it.
 
-What the label still decides is **WHERE** a figure lands on the batch
-report's own tabs (`ADJUST_APPLIES_TO`), which is a different question: a row
-naming no report lands on no tab there, and still moves the plot's live
-count, the Movement Report and Life of Seedlings, because a seedling that is
-gone is gone whichever report noticed.
-
-So the net of those 206 — **−196,777 seedlings** — is now in the piece-rate
-quantity, the Movement Report and Life of Seedlings, and that is correct.
-
-**Many of them are exact triplicates** — 224's B13 at −337 three times, 225's
-B2 at −2,328 three times, all on one day — and they were put to the office,
-who said to leave the ledger exactly as it stands. **So all three count.**
-That is a decision, not an oversight: do not de-duplicate them, do not write
-a sweep that offers to, and do not raise it again.
-
-`tests/every_adjustment_counts.cjs` holds all three readers to it and fails if
-either gate is put back — it was proved by putting each one back and watching
-it go red. `shared/CHECK_what_wrote_these_adjustments.sql` groups the rows by
-the shape of their remark and counts the exact repeats.
+`shared/CHECK_adjustments_waiting_for_approval.sql` is the query that answered
+it, and `shared/CHECK_what_wrote_these_adjustments.sql` groups those rows by
+the wording of their remark.
 
 ## 1st Culling is not wrong when Transplanting was adjusted after it
 

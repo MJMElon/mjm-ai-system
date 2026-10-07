@@ -78,15 +78,14 @@
          work on 18 Sep →  70   and the 25 sold, the same day counting
          work on 28 Sep →  70   nothing since
 
-     One column carries the report's own condition, applied where the events
-     are built because it needs the remark: a 3rd culling counts only once the
-     drone map has been keyed (MapQty:) — until the plot has been flown the
-     figure is a claim. A stock adjustment used to need [APPROVED …] as well
-     and no longer does; it counts as soon as it is saved.
+     Two columns carry the report's own condition, applied where the events
+     are built because both need the remark: a 3rd culling counts only once
+     the drone map has been keyed (MapQty:) — until the plot has been flown
+     the figure is a claim — and a stock calibration only once [APPROVED …].
 
-     Stock_Calibration arrives already signed — a Found is positive, a Stolen
-     negative — so it is returned as given rather than forced in a
-     direction. */
+     Stock_Calibration is already signed when it reaches here — a Found is
+     positive, a Stolen negative — so it is returned as given rather than
+     forced in a direction. */
   function signed(type, qty) {
     const q = Number(qty || 0);
     switch (type) {
@@ -151,33 +150,15 @@
 
       const evs = [];
       const EVIDENCED = /MapQty:\s*\d+/;
+      const APPROVED  = /\[APPROVED by [^\]]+ on [^\]]+\]/;
       (logsRes.data || []).forEach(l => {
         const t = l.transaction_type;
         // A 3rd culling nobody has flown yet is a claim, not a deduction —
         // the report leaves the batch standing, and so does this.
         if (t === '3rd_Culling' && !EVIDENCED.test(l.remark || '')) return;
-        /* EVERY Stock_Calibration counts, whatever its remark says and
-           whether or not anybody approved it. Both gates that used to stand
-           here are gone and neither goes back:
-
-             the APPROVAL — the person keying the correction is the person who
-             went and counted, so holding the figure behind a second signature
-             only kept a known-wrong report looking right;
-
-             the "Report:" LABEL — 206 of this ledger's 218 adjustments carry
-             no report at all. They were checked with the office and they are
-             real plot corrections that have to count. A Stock_Calibration row
-             is an adjustment because of what it IS, not because of how its
-             remark happens to be worded.
-
-           What the label still decides is WHERE a figure lands on the batch
-           report's own tabs, which is a different question and lives in
-           ADJUST_APPLIES_TO. A row naming no report lands on no tab there and
-           still moves the plot here, because this is the plot's live count and
-           a seedling that is gone is gone whichever report noticed.
-
-           Rules shared with the office repository carry a comment saying so in
-           both copies. */
+        // A pending adjustment has not been ruled on and moves no figure
+        // anywhere else in the system.
+        if (t === 'Stock_Calibration' && !APPROVED.test(l.remark || '')) return;
         const ms = parseDate(logDate(l));
         if (ms == null) return;
         evs.push({

@@ -2906,7 +2906,7 @@
             const side = body.match(/Side:\s*(seed|plot)\s*\.\s*/i);
             /* An adjustment that is going to become — or has already become —
                a transplant row on a plot nothing reached. See the panel on
-               tab 7 and saveCalibration().
+               tab 7 and approveCalibration().
 
                TAKEN OUT OF THE BODY FIRST, and that order is load-bearing:
                "Tray:" is a substring of "TxTray:", so matching the plain one
@@ -3051,9 +3051,10 @@
             const cells = document.querySelectorAll('#t3-saved-rows-list .t3-adj-cell');
             if (!cells.length) return;
 
-            // plot|tray → net, from the Transplanting adjustments.
+            // plot|tray → net, from the approved Transplanting adjustments.
             const byPair = {}, byPairRows = {};
             (ADJUST_ROWS || []).forEach(r => {
+                if (!r.approved) return;
                 if (String(r.report || '').toLowerCase() !== 'transplanting') return;
                 /* An adjustment that WROTE its own row names its tray as TxTray
                    rather than Tray — it was answered on the panel, not split off
@@ -3188,6 +3189,21 @@
             syncAdjustmentBars((row.batch_name || '').trim());
         }
 
+        /* Would settling this adjustment move the 3rd Culling row? Used by the
+           drone-map panel, which must not offer an explanation that would not
+           actually change the figure it is standing next to. */
+        function _adjCouldMoveCull3(r) {
+            if (!r) return false;
+            /* Only a row whose report puts it on the 3rd Culling at all —
+               a 1st Culling adjustment is settled by the transplant record
+               that follows it and never reaches here. */
+            const lands = ADJUST_APPLIES_TO[String(r.report || '').toLowerCase()] || [];
+            if (lands.indexOf('3rd culling') < 0) return false;
+            // An approved one has already moved the row; it is not what is
+            // still standing between this plot and its drone map.
+            return !r.approved;
+        }
+
         async function syncAdjustmentBars(batchId) {
             const batch = (batchId || document.getElementById('f-batchno')?.value || '').trim();
             const bars = Object.keys(ADJUST_TAB_REPORT);
@@ -3221,19 +3237,9 @@
                 console.warn('[adjustments] not read:', (e && e.message) || e);
                 hideAll(); return;
             }
-            /* EVERY adjustment counts, from the moment it is saved.
-
-               There used to be an approval step, and a figure did not move
-               until somebody pressed Approve. It was asked for the other way
-               round: the person keying the correction is the person who went
-               and counted, so holding their answer behind a second signature
-               only meant a report that was known to be wrong went on being
-               shown as right until somebody got round to it.
-
-               The audit trail is the row itself — who keyed it and when, the
-               date it happened, the reason, all on the Adjustments tab and on
-               the strip of the report it was raised against. Edit and Delete
-               are still admin-only, so a figure cannot be changed quietly. */
+            /* Only the approved ones move a figure. The strips below still show
+               the unapproved ones, in amber, because "somebody has claimed
+               this" is worth seeing — it just is not an answer yet. */
             Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
             Object.keys(ADJUST_PLOT_LOSS_STAGE).forEach(k => delete ADJUST_PLOT_LOSS_STAGE[k]);
             /* INCLUDING the ones that wrote their own transplant row. That row
@@ -3241,7 +3247,7 @@
                into that plot, which is why it had none — so the figure lives
                here, in the adjustment, exactly as it did before the row
                existed. The row is only where it now lands. */
-            rows.forEach(r => {
+            rows.filter(r => r.approved).forEach(r => {
                 if (r.side === 'plot') {
                     // Belongs to the plot it names, not to the batch total,
                     // and only to the reports still measuring against a figure
@@ -3282,6 +3288,7 @@
                 const mine = rows.filter(r => r.report.toLowerCase() === want);
                 if (!mine.length) { el.classList.add('hidden'); el.innerHTML = ''; return; }
                 const net = mine.reduce((s, r) => s + r.qty, 0);
+                const open = mine.filter(r => !r.approved).length;
                 const lines = mine.map(r => `
                     <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-2 border-t border-[#e8dcc8]">
                         <span class="text-base font-black tabular-nums ${r.qty > 0 ? 'text-[#4a7a2e]' : 'text-[#a83020]'} min-w-[52px]">${r.qty > 0 ? '+' : ''}${r.qty.toLocaleString()}</span>
@@ -3289,18 +3296,21 @@
                         ${r.tray ? `<span class="shrink-0 text-[10px] font-bold text-[#8a7a68]" title="The tray this plot's share came from">← ${esc(r.tray)}</span>` : ''}
                         ${r.date ? `<span class="shrink-0 text-[10px] font-bold text-[#8a7a68] tabular-nums" title="The day this adjustment happened">${esc(formatAuditDate(r.date))}</span>` : ''}
                         <span class="text-[11px] font-bold text-[#8a7a68] flex-1 min-w-[160px]">${esc(r.reason) || '—'}</span>
-                        <span class="shrink-0 text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest bg-[#f0f8ec] border border-[#c3e6cb] rounded px-2 py-1"
-                              title="Counted in the figures on this report">In the figures</span>
+                        ${r.approved
+                            ? `<span class="shrink-0 text-[9px] font-black text-[#4a7a2e] uppercase tracking-widest bg-[#f0f8ec] border border-[#c3e6cb] rounded px-2 py-1">Approved${r.approvedBy ? ' · ' + esc(r.approvedBy) : ''}</span>`
+                            : `<span class="shrink-0 text-[9px] font-black text-[#c07820] uppercase tracking-widest bg-[#fffaf0] border border-[#fde68a] rounded px-2 py-1">Awaiting approval</span>`}
                     </div>`).join('');
+                const settled = open === 0;
                 el.innerHTML = `
-                    <div class="rounded-2xl border border-[#c3e6cb] bg-[#f7fbf4] overflow-hidden">
+                    <div class="rounded-2xl border ${settled ? 'border-[#c3e6cb] bg-[#f7fbf4]' : 'border-[#fde68a] bg-[#fffdf5]'} overflow-hidden">
                         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
-                            <span class="text-[10px] font-black uppercase tracking-widest text-[#4a7a2e]">
+                            <span class="text-[10px] font-black uppercase tracking-widest ${settled ? 'text-[#4a7a2e]' : 'text-[#c07820]'}">
                                 ${mine.length === 1 ? 'Adjustment on this report' : `${mine.length} adjustments on this report`}
                             </span>
                             <span class="text-[10px] font-bold text-[#8a7a68]">Net
                                 <strong class="tabular-nums ${net > 0 ? 'text-[#4a7a2e]' : net < 0 ? 'text-[#a83020]' : 'text-[#3d2610]'}">${net > 0 ? '+' : ''}${net.toLocaleString()}</strong>
                             </span>
+                            ${open ? `<span class="text-[10px] font-black text-[#c07820] uppercase tracking-widest">${open} awaiting approval</span>` : ''}
                             <button type="button" onclick="switchTab(7)"
                                 class="ml-auto shrink-0 px-3 py-1 rounded-lg border border-[#e8dcc8] bg-white text-[#3d2610]
                                        text-[9px] font-black uppercase tracking-widest hover:bg-[#f5efe4]">Open Adjustments</button>
@@ -3372,27 +3382,46 @@
                    put the new label into the Reason column. _parseCalibration
                    is the one that knows the format. */
                 const cal = _parseCalibration(r);
+                const isApproved = cal.approved;
+                const approvedBy = cal.approvedBy;
+                const approvedAt = cal.approvedAt;
                 const reportTxt  = cal.report;
                 const plotTxt    = cal.plot;
                 const reasonTxt  = cal.reason;
                 const sideTxt    = cal.side === 'plot' ? 'Plot stock' : 'Seed count';
-                /* ACTIONS, not a lock. There is no approval step any more —
-                   an adjustment counts from the moment it is saved — so every
-                   row offers the same two buttons and they are admin-only, as
-                   they always were. A non-admin sees the row and the figure
-                   and cannot change them.
+                // Lock column:
+                //   Approved (any user)              → green ✓ Approved pill
+                //   Not approved + admin             → Edit | Del | Approve
+                //   Not approved + non-admin         → 🔒 placeholder
+                let actionsCell;
+                if (isApproved) {
+                    const whoTxt = approvedBy ? ` <span class="text-[#4a7a2e]">${esc(approvedBy)}</span>` : '';
+                    const whenTxt = approvedAt ? ` · ${esc(formatAuditDate(approvedAt) || approvedAt)}` : '';
+                    /* An admin can still edit an approved adjustment — it is
+                       how a row raised against the wrong half of the sum gets
+                       put right, and the alternative was deleting the record
+                       and its history with it.
 
-                   Rows approved BEFORE this changed are not marked out: the
-                   signature on them answered a question nobody is asked now,
-                   and a pill saying "approved" on half the table would read as
-                   the other half being unapproved. _parseCalibration still
-                   strips the old marker so it stays out of the Reason. */
-                const actionsCell = adminActions
-                    ? `<td class="px-3 py-2 whitespace-nowrap">
+                       Editing RETURNS IT TO PENDING: the saved remark is
+                       rebuilt from the form and carries no approval suffix, so
+                       the figures stop moving until somebody approves it
+                       again. A signature has to belong to the numbers it was
+                       given for, and an admin quietly changing -53 to -500
+                       under somebody else's approval is exactly what that
+                       rule is for. */
+                    const editBtn = adminActions
+                        ? `<button type="button" onclick="editCalibration('${esc(r.id)}', ${q}, '${esc(reportTxt)}', '${esc(plotTxt)}', '${esc(reasonTxt)}', '${esc(cal.side)}', '${esc(cal.date)}', true)" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[9px] font-black uppercase rounded hover:bg-[#f0f8ff] ml-1" title="Edit this approved adjustment — it returns to pending and needs approving again">Edit</button>`
+                        : '';
+                    actionsCell = `<td class="px-3 py-2 whitespace-nowrap"><span class="inline-flex items-center gap-1 px-2 py-1 bg-[#f0f8ec] border border-[#c3e6cb] text-[#3d4f1e] text-[9px] font-black uppercase tracking-wider rounded" title="Approved${approvedBy ? ' by ' + approvedBy : ''}${approvedAt ? ' on ' + approvedAt : ''}">🔒 Approved${whoTxt}${whenTxt}</span>${editBtn}</td>`;
+                } else if (adminActions) {
+                    actionsCell = `<td class="px-3 py-2 whitespace-nowrap">
                         <button type="button" onclick="editCalibration('${esc(r.id)}', ${q}, '${esc(reportTxt)}', '${esc(plotTxt)}', '${esc(reasonTxt)}', '${esc(cal.side)}', '${esc(cal.date)}')" class="px-2 py-1 bg-white border border-[#e8dcc8] text-[#3d2610] text-[9px] font-black uppercase rounded hover:bg-[#f0f8ff] mr-1">Edit</button>
-                        <button type="button" onclick="deleteCalibration('${esc(r.id)}')" class="px-2 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[9px] font-black uppercase rounded hover:bg-[#fff5f5]">Del</button>
-                    </td>`
-                    : `<td class="px-3 py-2 text-[10px] text-[#8a7a68]" title="Only an operation admin can change an adjustment">🔒</td>`;
+                        <button type="button" onclick="deleteCalibration('${esc(r.id)}')" class="px-2 py-1 bg-white border border-[#f8d7da] text-[#a83020] text-[9px] font-black uppercase rounded hover:bg-[#fff5f5] mr-1">Del</button>
+                        <button type="button" onclick="approveCalibration('${esc(r.id)}')" class="px-2 py-1 bg-[#4a7a2e] text-white text-[9px] font-black uppercase rounded hover:bg-[#3d6624]">Approve</button>
+                    </td>`;
+                } else {
+                    actionsCell = `<td class="px-3 py-2 text-[10px] text-[#8a7a68]">🔒</td>`;
+                }
                 /* The day it HAPPENED, which is the column's job. Rows saved
                    before the Date field existed have none, so they go on
                    showing the day they were keyed — marked, so nobody reads a
@@ -3402,8 +3431,9 @@
                     ? `<td class="px-3 py-2 text-[11px] font-bold text-[#3d2610] whitespace-nowrap" title="Keyed in on ${esc(formatAuditDate(r.created_at))}">${formatAuditDate(cal.date)}</td>`
                     : `<td class="px-3 py-2 text-[11px] font-bold text-[#8a7a68] whitespace-nowrap" title="No date was recorded for this adjustment — this is the day it was keyed in. Edit it to set when it actually happened.">${formatAuditDate(r.created_at)} <span class="text-[9px] font-black uppercase tracking-wider text-[#c07820]">keyed</span></td>`;
                 /* The tray rides on the row rather than through
-                   editCalibration's argument list, which is already six long. */
-                return `<tr class="border-t border-[#e8dcc8]" data-cal-id="${esc(r.id)}" data-cal-tray="${esc(cal.tray)}">
+                   editCalibration's argument list, which is already seven long
+                   — and _t7IsRowApproved reads the same row the same way. */
+                return `<tr class="border-t border-[#e8dcc8]" data-cal-id="${esc(r.id)}" data-cal-approved="${isApproved ? '1' : '0'}" data-cal-tray="${esc(cal.tray)}">
                     ${dateCell}
                     <td class="px-3 py-2 text-sm font-black ${cls}">${sign}${q.toLocaleString()}</td>
                     <td class="px-3 py-2 text-[11px] text-[#3a7ab4] font-bold">${esc(reportTxt) || '—'}</td>
@@ -3450,6 +3480,26 @@
             } catch (_) { return false; }
         }
 
+        /* Does the row referenced by id carry the approval suffix?
+
+           Read off the row itself, which knows. It used to be inferred — "no
+           Edit button rendered for this id, so it must be approved" — and that
+           inference quietly inverted the day approved rows grew an Edit button
+           of their own, which would have unlocked Delete on every approved
+           adjustment without anybody asking for it.
+
+           Unknown id answers true: refusing to delete a row this table cannot
+           account for is the safe way to be wrong. */
+        function _t7IsRowApproved(id) {
+            const tr = document.querySelector(`#t7-cal-history tr[data-cal-id="${id}"]`);
+            if (!tr) return true;
+            return tr.dataset.calApproved === '1';
+        }
+
+        /* `wasApproved` comes from the row that drew the button, not from
+           guessing at the DOM: the old check read "no Edit button rendered" as
+           "approved", which stopped being true the moment approved rows grew
+           an Edit button of their own. */
         /* ── Which trays fed this plot ──────────────────────────────────────
 
            The Transplanted row records its source in the remark, the way
@@ -3549,12 +3599,12 @@
             });
 
             /* Keying a new one, the box follows the column — BUT ONLY ONCE A
-               TRAY HAS BEEN KEYED. The split is a choice now: somebody who
-               knows which tray the miscount came from keys it there and the
-               box adds it up; somebody who does not knows only that the plot
-               is out by N, types N in the box, and the column stays empty.
-               Clearing the box the moment the column is blank would make the
-               second of those impossible to type into. */
+               TRAY HAS BEEN KEYED. The split is a choice: somebody who knows
+               which tray the miscount came from keys it there and the box adds
+               it up; somebody who does not knows only that the plot is out by
+               N, types N in the box, and the column stays empty. Clearing the
+               box the moment the column is blank would make the second of
+               those impossible to type into. */
             if (_t7TrayMode && touched > 0) qtyEl.value = String(totCal);
 
             const set = (id, txt, cls) => {
@@ -3577,9 +3627,9 @@
 
             /* The verdict, so the sum is checked on screen and not in
                somebody's head — and so the CHOICE is said out loud. Splitting
-               by tray is optional now, so "one record for the whole plot" is
-               a thing somebody has decided rather than a thing they forgot,
-               and the line says which of the two is about to be saved.
+               by tray is optional, so "one record for the whole plot" is a
+               thing somebody has decided rather than a thing they forgot, and
+               the line says which of the two is about to be saved.
 
                Keying a new one the two cannot disagree: the column drives the
                box as soon as a tray is keyed. Only an edit can be off. */
@@ -3671,7 +3721,7 @@
                     ${esc(plot)} has no transplanting record — this will create one
                 </div>
                 <div class="px-4 pb-3 text-[11px] font-bold text-[#8a7a68]">
-                    Seedlings are standing in ${esc(plot)} that no transplant row accounts for. Saving this
+                    Seedlings are standing in ${esc(plot)} that no transplant row accounts for. Approving this
                     adjustment writes that row: the plot, the date and the quantity come from this form, so the
                     two things left are which tray they came out of and the drone map.
                 </div>
@@ -3887,7 +3937,7 @@
             t7SumTrayAdj();
         }
 
-        function editCalibration(id, qty, report, plot, reason, side, date) {
+        function editCalibration(id, qty, report, plot, reason, side, date, wasApproved) {
             if (!_t7IsAdmin()) {
                 showToast('Only admins can edit calibration entries.', 'error');
                 return;
@@ -3913,8 +3963,10 @@
             if (dateEl)   dateEl.value   = date   || '';
             if (btn)      btn.innerText  = 'Update Adjustment';
             const msg = document.getElementById('t7-cal-edit-msg');
-            if (msg) msg.innerText = '✏️ Editing an existing adjustment. Saving updates the record in '
-                                   + 'place, and every report reading it moves with it.';
+            if (msg) msg.innerText = wasApproved
+                ? '✏️ Editing an APPROVED adjustment. Saving returns it to pending — '
+                  + 'it stops moving any figure until somebody approves it again.'
+                : '✏️ Editing an existing adjustment. Saving will update the record in place.';
             if (banner)   banner.classList.remove('hidden');
             // …and the tray panel drops to read-only context for this row.
             t7SyncTrayPanel();
@@ -3954,14 +4006,15 @@
                 showToast('Only admins can delete calibration entries.', 'error');
                 return;
             }
-            /* Every adjustment is in the figures, so deleting one MOVES a
-               report there and then — which is the whole reason it is
-               admin-only and asks first. The old rule refused to delete an
-               approved row at all; there is no approval any more, and a rule
-               that let one kind of mistake be undone and not the other was
-               only ever about the signature. */
-            if (!confirm('Delete this adjustment? The reports reading it will move back by '
-                       + 'its quantity, and this cannot be undone.')) return;
+            /* Deleting an approved one is still refused. An admin can EDIT it
+               — that keeps the record and its history and sends it back for
+               approval — but a figure somebody signed for should not be able
+               to vanish. Edit it to nought if it was raised in error. */
+            if (_t7IsRowApproved(id)) {
+                showToast('This adjustment is approved. Edit it instead — it returns to pending and can be approved again.', 'error');
+                return;
+            }
+            if (!confirm('Delete this calibration adjustment? This cannot be undone.')) return;
             const { error } = await _supabase.from('shared_inventory_logs').delete().eq('id', id);
             if (error) { showToast('Failed to delete: ' + error.message, 'error'); return; }
             showToast('Calibration deleted.', 'success');
@@ -3971,27 +4024,110 @@
             syncAdjustmentBars(batchId);
         }
 
+        // Per-row Approve. Appends "[APPROVED by <email> on <ISO>]" to the
+        // remark so the history render flips the row's Lock column to a
+        // green pill and the Edit/Del buttons disappear. There is no
+        // unapprove path via UI — that's the explicit spec.
+        async function approveCalibration(id) {
+            if (!_t7IsAdmin()) {
+                showToast('Only admins can approve calibration entries.', 'error');
+                return;
+            }
+            if (!confirm('Approve and lock this adjustment? Once approved, no further edits are allowed for this row.')) return;
+            const { data: row, error: readErr } = await _supabase
+                .from('shared_inventory_logs')
+                .select('remark, plot_name, quantity_change, transaction_date, batch_name, created_at')
+                .eq('id', id)
+                .maybeSingle();
+            if (readErr) { showToast('Failed to read row: ' + readErr.message, 'error'); return; }
+            if (row && /\[APPROVED by [^\]]+\]/.test(row.remark || '')) {
+                showToast('This adjustment is already approved.', 'success');
+                const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
+                renderCalibrationHistory(batchId);
+            // …and the same rows on the report each was raised against.
+            syncAdjustmentBars(batchId);
+                return;
+            }
+            const u = (typeof MJMAccess !== 'undefined' && MJMAccess.user && MJMAccess.user()) || {};
+            const who = u.email || u.full_name || 'admin';
+            const stamp = new Date().toISOString();
+            const newRemark = ((row && row.remark) || '').trim() + ` [APPROVED by ${who} on ${stamp}]`;
+            const { error } = await _supabase
+                .from('shared_inventory_logs')
+                .update({ remark: newRemark })
+                .eq('id', id);
+            if (error) { showToast('Failed to approve: ' + error.message, 'error'); return; }
 
-        /* Writes the transplanting row an adjustment stands for, and links the
-           two. One copy, used by the save and by the rebuild button, so the
-           shape of the record cannot drift between them.
+            /* THE PLOT GETS ITS RECORD. An adjustment raised on a plot nothing
+               was ever transplanted into was keyed with the tray it came out of
+               and a drone map, and approving it is what turns that into a real
+               Transplanted row — the plot, the date and the quantity off the
+               adjustment, the tray and the map off the answers.
 
-           WRITTEN ON SAVE. It used to be written on approval, because until
-           then an adjustment nobody had ruled on moved no figure anywhere and
-           that had to include putting seedlings into a plot. There is no
-           approval step any more, so the moment the adjustment exists is the
-           moment the plot has its record.
+               Written on approval, not on save, because an adjustment nobody
+               has ruled on moves no figure anywhere else either, and that has
+               to include putting seedlings into a plot.
 
-           `stampOnto` is the remark to hang TxRow: off — the save passes the
-           remark it has just written; the rebuild passes nothing and the
-           adjustment's current remark is used, with any stale TxRow: replaced
-           rather than a second one appended. */
-        async function _createTxRowFromCalibration(calId, row, cal, keyedBy, stampOnto) {
+               THE ROW IS WRITTEN WITH A QUANTITY OF NOUGHT, and that is the
+               whole point of it. Nobody keyed a transplant into this plot —
+               that is why it had no record. What put the seedlings there is
+               the adjustment, so the adjustment is where the figure belongs:
+
+                   Qty 0  ·  Adjustment +140  ·  Final 140
+
+               Putting 140 in the Qty column instead would claim somebody
+               recorded a transplant that nobody recorded, and the adjustment
+               would then have to be hidden to stop the plot reading 280. This
+               way the adjustment goes on counting exactly as it always did and
+               the row is simply where it now lands. TxRow:<id> is kept as the
+               link back, so a second row is never created for the same one. */
+            const cal = _parseCalibration(Object.assign({ id }, row || {}));
+            let wroteRow = false;
+            if (cal.txTray) {
+                const made = await _createTxRowFromCalibration(id, row, cal, who, newRemark);
+                if (made.error) {
+                    /* The approval stands — it is already written — but say so
+                       plainly, because the figure is now approved WITHOUT the
+                       record it was supposed to create, and somebody has to
+                       know that rather than find out from a report. */
+                    showToast('Approved, but the transplanting record for ' + cal.plot
+                        + ' was NOT created: ' + made.error
+                        + '. Use "Add ' + cal.plot + '\'s row" under the Transplanting list to try again.', 'error');
+                } else {
+                    wroteRow = true;
+                    showToast(`Approved. ${cal.plot} now has a transplanting record, `
+                        + `from ${cal.txTray}.`, 'success');
+                }
+            } else {
+                showToast('Calibration approved and locked.', 'success');
+            }
+
+            const batchId = (document.getElementById('f-batchno')?.value || batchIdParam || '').trim();
+            renderCalibrationHistory(batchId);
+            /* THE TRANSPLANTING LIST IS REBUILT FROM THE DATABASE, not repainted.
+               syncAdjustmentBars only recolours the rows that are already
+               drawn, so a row written a moment ago was not among them — the
+               plot went on reading as having no record until somebody reloaded
+               the page, which is exactly how it looked like nothing happened. */
+            if (wroteRow) { _t7TxLogs = null; await syncOnce(3, syncTab3); }
+            // …and the same rows on the report each was raised against.
+            syncAdjustmentBars(batchId);
+        }
+
+        /* Writes the transplanting row an approved adjustment stands for, and
+           links the two. One copy, used by approval and by the rebuild button,
+           so the shape of the record cannot drift between them.
+
+           `stampOnto` is the remark to hang TxRow: off — approval passes the
+           one it has just built with the approval marker on it; the rebuild
+           passes nothing and the adjustment's current remark is used, with any
+           stale TxRow: replaced rather than a second one appended. */
+        async function _createTxRowFromCalibration(calId, row, cal, approvedBy, stampOnto) {
             const when = row.transaction_date || String(row.created_at || '').slice(0, 10);
             const txRemark = `Transplanted from tray [${cal.txTray}] to Main Plot [${cal.plot}]. `
                 + `Date: ${when}`
                 + (cal.txMap ? ` MapUrl:${cal.txMap}` : '')
-                + ` FromAdjustment:${calId} CalApprovedBy:${keyedBy || ''}`;
+                + ` FromAdjustment:${calId} CalApprovedBy:${approvedBy || ''}`;
             const { data: made, error: txErr } = await _supabase
                 .from('shared_inventory_logs')
                 .insert([withEditMeta({
@@ -4115,13 +4251,16 @@
                    a seed-count adjustment, which is what every row written
                    before this existed meant.
 
-                   Rebuilt from the form, so an old "[APPROVED by … on …]"
-                   is not carried across. There is no approval step any more;
-                   the marker is only ever read off rows written before that
-                   changed, to keep it out of the Reason column. */
+                   Rebuilt from the form, which is also what RETURNS AN EDITED
+                   ROW TO PENDING: any "[APPROVED by … on …]" the old remark
+                   carried is not copied across, so the adjustment stops moving
+                   figures until it is approved again. Deliberate — see the
+                   Edit button on approved rows. */
                 /* TxTray / TxMap ride along when this adjustment is going to
-                   become a transplant row. They are read back right after the
-                   insert below, which is where the row is written. */
+                   become a transplant row. They are read back by
+                   approveCalibration(), which is where the row is actually
+                   written — an adjustment nobody has ruled on moves nothing,
+                   and that has to include putting 140 seedlings into a plot. */
                 remark: `Report: ${report}. Plot: ${plot}. ${reason}${newPlotSuffix}`
             });
 
@@ -4152,14 +4291,17 @@
             }));
 
             let error;
-            let insertedIds = [];
             if (_t7EditingId) {
                 /* Edit path. With the column filled in, the row BECOMES the
                    split: the record being edited is updated to the first
                    tray's share and the rest are inserted beside it.
 
                    Updated, not deleted and replaced, so the row keeps its id
-                   and its place in the audit trail. */
+                   and its place in the audit trail — and its approval is not
+                   carried over, because the remark is rebuilt from the form,
+                   so every row of the split starts pending and has to be
+                   ruled on. A figure somebody signed for does not quietly
+                   become several. */
                 const head = editPayloads.length ? editPayloads[0] : payload;
                 const rest = editPayloads.slice(1);
                 ({ error } = await _supabase.from('shared_inventory_logs').update(head).eq('id', _t7EditingId));
@@ -4173,18 +4315,11 @@
                     }
                 }
             } else {
-                /* Insert path — first save, one row or one per tray. The ids
-                   come back because a new-plot adjustment has to write its
-                   transplanting row against the adjustment that stands for
-                   it, and that needs the id. */
-                let made;
-                ({ data: made, error } = await _supabase.from('shared_inventory_logs')
-                    .insert(payloads).select('id'));
+                // Insert path — first save, one row or one per tray.
+                ({ error } = await _supabase.from('shared_inventory_logs').insert(payloads));
                 if (error && isEditMetaColumnError && isEditMetaColumnError(error)) {
-                    ({ data: made, error } = await _supabase.from('shared_inventory_logs')
-                        .insert(stripEditMeta(payloads)).select('id'));
+                    ({ error } = await _supabase.from('shared_inventory_logs').insert(stripEditMeta(payloads)));
                 }
-                insertedIds = (made || []).map(m => m.id);
             }
 
             btn.disabled = false;
@@ -4193,47 +4328,6 @@
                 btn.innerText = _t7EditingId ? 'Update Adjustment' : 'Save Adjustment';
                 return;
             }
-
-            /* THE PLOT GETS ITS RECORD, NOW.
-
-               An adjustment raised on a plot nothing was ever transplanted
-               into was keyed with the tray it came out of and a drone map,
-               and that is what turns into a real Transplanted row — the plot,
-               the date and the quantity off the adjustment, the tray and the
-               map off the answers.
-
-               THE ROW IS WRITTEN WITH A QUANTITY OF NOUGHT, and that is the
-               whole point of it. Nobody keyed a transplant into this plot —
-               that is why it had no record. What put the seedlings there is
-               the adjustment, so the adjustment is where the figure belongs:
-
-                   Qty 0  ·  Adjustment +140  ·  Final 140
-
-               Putting 140 in the Qty column instead would claim somebody
-               recorded a transplant that nobody recorded, and the adjustment
-               would then have to be hidden to stop the plot reading 280. */
-            let wroteRow = false;
-            if (newPlotAsk && insertedIds.length) {
-                const calId = insertedIds[0];
-                const who = ((typeof MJMAccess !== 'undefined' && MJMAccess.user && MJMAccess.user()) || {}).email || '';
-                const stub = { batch_name: batchId, transaction_date: date, created_at: date,
-                               remark: payload.remark };
-                const cal = _parseCalibration(Object.assign({ id: calId }, stub));
-                const res = await _createTxRowFromCalibration(calId, stub, cal, who, payload.remark);
-                if (res.error) {
-                    /* The adjustment stands — it is already saved and already
-                       counting — but say so plainly, because the figure is in
-                       without the record it was supposed to create and
-                       somebody has to know that rather than find out from a
-                       report. */
-                    showToast('Saved, but the transplanting record for ' + plot
-                        + ' was NOT created: ' + res.error
-                        + '. Use "Add ' + plot + '\'s row" under the Transplanting list to try again.', 'error');
-                } else {
-                    wroteRow = true;
-                }
-            }
-
             const wasEditing = !!_t7EditingId;
             const splitCount = traySplit && traySplit.length ? traySplit.length
                              : editSplit.length;
@@ -4246,13 +4340,6 @@
                     ? `Calibration recorded across ${splitCount} trays: net ${qty > 0 ? '+' : ''}${qty}`
                     : `Calibration recorded: ${qty > 0 ? '+' : ''}${qty}`, 'success');
             renderCalibrationHistory(batchId);
-            /* THE TRANSPLANTING LIST IS REBUILT FROM THE DATABASE, not
-               repainted. syncAdjustmentBars only recolours rows that are
-               already drawn, so a row written a moment ago is not among them —
-               the plot would go on reading as having no record until somebody
-               reloaded the page, which is exactly how it looked like nothing
-               happened. */
-            if (wroteRow) { _t7TxLogs = null; await syncOnce(3, syncTab3); }
             // …and the same rows on the report each was raised against.
             syncAdjustmentBars(batchId);
         }
@@ -9896,7 +9983,10 @@ Thank you.`;
                Where the difference is EXACTLY the batch's Transplanting
                adjustments it is not one, and this says so — exactly, because
                a near-match is a coincidence and a note that guessed at one
-               would teach people to ignore the real thing. */
+               would teach people to ignore the real thing.
+
+               Only APPROVED adjustments reach adjustPlotLossTotal, so an
+               adjustment nobody has ruled on explains nothing here either. */
             const t4AdjNet = (typeof adjustPlotLossTotal === 'function')
                            ? adjustPlotLossTotal('Transplanting') : 0;
             const t4Explained = total > 0 && unaccounted !== 0 && t4AdjNet !== 0
@@ -13187,6 +13277,63 @@ Thank you.`;
             setTimeout(() => row.classList.remove('t6-row-flash'), 2200);
         }
 
+        /* IS THE DIFFERENCE ALREADY EXPLAINED SOMEWHERE ELSE ON THIS PAGE?
+
+           A drone map 53 short of the 3rd cull, and an adjustment of −53
+           against that same plot sitting on the Adjustments tab, are the same
+           53 seedlings. The row only moves when that adjustment is APPROVED
+           and filed as PLOT STOCK; until then it is a claim about the batch's
+           seed count, or a claim nobody has ruled on, and the plot goes on
+           reading the figure it was counted at.
+
+           That is a correct rule and a terrible thing to work out by eye. So
+           where the adjustments this plot has — the ones not already in its
+           arithmetic — come to exactly the difference, the panel says so, and
+           says which of the two things is in the way.
+
+           Exactly. A near-match is a coincidence, and a panel that guessed at
+           one would teach people to press the button without reading. */
+        function t6MismatchAdjustment(plot, diff) {
+            if (!diff || !Array.isArray(ADJUST_ROWS) || !ADJUST_ROWS.length) return null;
+            const key = _t6PlotKey(plot);
+            if (!key) return null;
+            const mine = ADJUST_ROWS.filter(r => _t6PlotKey(r.plot) === key && _adjCouldMoveCull3(r));
+            if (!mine.length) return null;
+            if (mine.reduce((s, r) => s + (r.qty || 0), 0) !== diff) return null;
+            const one = mine.length === 1 ? mine[0] : null;
+            /* There used to be a second reason — "filed against the seed
+               count" — and it cannot happen now: which count was wrong is
+               read off the report, so nothing is on the wrong side of it.
+               What is left is the one thing a person still has to do. */
+            const why = mine.length === 1
+                ? 'It is waiting for approval — an adjustment nobody has ruled on moves no figure. Approve it and this plot tallies.'
+                : 'They are waiting for approval — an adjustment nobody has ruled on moves no figure. Approve them and this plot tallies.';
+            return {
+                qty: diff,
+                count: mine.length,
+                id: one ? one.id : null,
+                reason: one ? one.reason : '',
+                why
+            };
+        }
+
+        /* Take me to it. The adjustment is on another tab in a table of its
+           own, and hunting for it is the same walk this panel's plot button
+           already saves in the other direction. */
+        function goToAdjustment(id) {
+            switchTab(7);
+            setTimeout(() => {
+                const tr = id ? document.querySelector(`#t7-cal-history tr[data-cal-id="${id}"]`) : null;
+                const el = tr || document.getElementById('t7-cal-history');
+                if (!el) return;
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (tr) {
+                    tr.classList.add('t6-row-flash');
+                    setTimeout(() => tr.classList.remove('t6-row-flash'), 2200);
+                }
+            }, 120);
+        }
+
         /* SALES THAT REACHED NO PLOT.
 
            Every collection line whose OWN batch number is this batch, checked
@@ -13313,12 +13460,24 @@ Thank you.`;
                                 <div class="text-base font-black ${diff > 0 ? 'text-[#c07820]' : 'text-[#a83020]'}">${diff > 0 ? '+' : ''}${diff.toLocaleString()}</div>
                             </div>
                         </div>
-                        <!-- There used to be a panel here saying "this difference
-                             is already accounted for, approve the adjustment and
-                             the plot tallies". It cannot happen any more: an
-                             adjustment counts the moment it is saved, so one
-                             against this plot is already inside the figure above
-                             and can never be what the difference still is. -->
+                        ${(() => {
+                            const a = t6MismatchAdjustment(m.plot, diff);
+                            if (!a) return '';
+                            const head = a.count === 1
+                                ? `There is an adjustment of ${a.qty > 0 ? '+' : ''}${a.qty.toLocaleString()} on ${_t6Esc(m.plot)}`
+                                : `${a.count} adjustments on ${_t6Esc(m.plot)} come to ${a.qty > 0 ? '+' : ''}${a.qty.toLocaleString()}`;
+                            return `
+                            <div class="mb-3 rounded-xl border border-[#bee3f8] bg-[#f0f8ff] px-4 py-3">
+                                <div class="text-[10px] font-black text-[#2b6cb0] uppercase tracking-widest mb-1">This difference is already accounted for</div>
+                                <div class="text-[12px] font-bold text-[#3d2610] leading-snug">
+                                    ${head}${a.reason ? ` — “${_t6Esc(a.reason)}”` : ''}. ${a.why}
+                                </div>
+                                <button type="button" onclick="goToAdjustment(${a.id ? `'${_escAttr(String(a.id))}'` : 'null'})"
+                                    class="mt-2 text-[10px] font-black text-[#2b6cb0] uppercase tracking-widest underline underline-offset-4 hover:text-[#1a4a80] bg-transparent border-0 p-0 cursor-pointer">
+                                    Open it on Adjustments →
+                                </button>
+                            </div>`;
+                        })()}
                         <label class="label-style !text-[#7a4a10]">Reason &amp; how to avoid it in future</label>
                         <!-- Saved is read-only until somebody presses Edit — see
                              syncT6MismatchLocks. A reason already written is a
