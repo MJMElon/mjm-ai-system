@@ -565,6 +565,36 @@ Two things that will cost an hour each if nobody tells you:
 - **`innerText` returns CSS-transformed text**, so `includes('This Week')`
   fails against `THIS WEEK`.
 
+## A page that caches cannot deliver a fix
+
+Every script on an office page is cache-busted with a `?v=` that lives **in
+that page**. So the page is the one thing that must never be served from
+cache: a stale copy goes on asking for the OLD script for ever, and a deploy
+reaches nobody.
+
+That is not theory. A PDF fix was written, tested, committed and pushed, and
+`origin/main` had it — and the office still downloaded the old form. The code
+was never the problem. `index.html` has carried
+
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+    <meta http-equiv="Pragma" content="no-cache"/>
+    <meta http-equiv="Expires" content="0"/>
+
+since it was written. **The module pages had not**, and that was the whole of
+it: 13 of the 19 pages that version a script were missing them.
+
+The site is GitHub Pages with a CNAME and no build step, so there is nowhere
+to set a real HTTP header — these metas are the only lever, and bumping a
+`?v=` is useless without them.
+
+**Any new page that loads a script with `?v=` needs all three.**
+`tests/pages_do_not_go_stale.cjs` fails if one is missing, and also catches a
+`?v=` left without a number.
+
+Still worth knowing: a browser that already holds a stale copy needs one hard
+reload (Ctrl/Cmd + Shift + R) to pick up the metas in the first place. After
+that it stays fresh by itself.
+
 ## Two repositories, one system
 
 - `mjm-ai-system` — the office, ai.mjmnursery.com. Static; served from the
