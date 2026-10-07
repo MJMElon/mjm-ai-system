@@ -501,7 +501,14 @@ async function loadActiveALs() {
 // DB search, which queries Supabase directly rather than trusting
 // whatever loaded on page-open.
 const COMPLETED_WINDOW_DAYS = 90;
+// Set whenever loadCompletedALs() could not finish — renderCombined() shows
+// this instead of silently rendering an empty Completed group, which is
+// indistinguishable on screen from "nothing is actually completed" and is
+// exactly what made the last two fixes impossible to tell apart from a
+// genuine empty result without opening the console.
+let completedLoadError = null;
 async function loadCompletedALs() {
+  completedLoadError = null;
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - COMPLETED_WINDOW_DAYS);
   const cutoffStr = cutoff.toISOString().slice(0, 10);
@@ -510,7 +517,13 @@ async function loadCompletedALs() {
     .from('shared_do_records')
     .select('al_number,delivery_date,status,do_number')
     .gte('delivery_date', cutoffStr);
-  if (doErr || !doRows) { completedData = []; return; }
+  if (doErr) {
+    console.warn('[Completed] shared_do_records read failed:', doErr);
+    completedLoadError = 'Could not read delivery records (' + doErr.message + ').';
+    completedData = [];
+    return;
+  }
+  if (!doRows) { completedData = []; return; }
 
   const recentAlNumbers = [...new Set(
     doRows
@@ -518,6 +531,7 @@ async function loadCompletedALs() {
       .map(d => d.al_number)
       .filter(Boolean)
   )];
+  console.log('[Completed] DO rows in window:', doRows.length, '-> distinct AL numbers:', recentAlNumbers.length);
   if (!recentAlNumbers.length) { completedData = []; return; }
 
   const { data, error } = await _supabase
@@ -527,7 +541,13 @@ async function loadCompletedALs() {
     .lte('balance_quantity', 0)
     .in('al_number', recentAlNumbers)
     .order('created_at', { ascending: false });
-  if (error) { completedData = []; return; }
+  if (error) {
+    console.warn('[Completed] shared_al_orders read failed:', error);
+    completedLoadError = 'Could not read the matching orders (' + error.message + ').';
+    completedData = [];
+    return;
+  }
+  console.log('[Completed] shared_al_orders rows with balance <= 0 among those AL numbers:', (data || []).length);
   completedData = data || [];
 }
 
@@ -729,8 +749,15 @@ function renderCombined(q) {
   if (noneYet.length)        groups.push({ label:'\ud83d\udccb Active AL \u2014 No Consent Yet',     rows: noneYet,       theme: 'blue'    });
   if (completedGroup.length) groups.push({ label:'\u2714\ufe0f Completed (last ' + COMPLETED_WINDOW_DAYS + ' days)', rows: completedGroup, theme: 'slate' });
 
+  // Shown above everything else when loadCompletedALs() could not finish \u2014
+  // an empty Completed group and a FAILED Completed group look identical
+  // otherwise, which is exactly what made this silent the last two times.
+  const errorBanner = completedLoadError
+    ? '<div class="mb-4 p-3 rounded-xl border border-rose-300 bg-rose-50 text-rose-700 text-xs font-bold">\u26a0\ufe0f Completed list: ' + completedLoadError + ' (open the browser console for the full error)</div>'
+    : '';
+
   if (!groups.length) {
-    el.innerHTML = '<div class="text-center py-12"><div class="text-4xl mb-3">\ud83d\udced</div><div class="text-[11px] font-black text-slate-300 uppercase tracking-widest">No active approval letters found</div></div>';
+    el.innerHTML = errorBanner + '<div class="text-center py-12"><div class="text-4xl mb-3">\ud83d\udced</div><div class="text-[11px] font-black text-slate-300 uppercase tracking-widest">No active approval letters found</div></div>';
     return;
   }
 
@@ -764,6 +791,7 @@ function renderCombined(q) {
       }).join('');
       return '<div class="mb-5"><div class="text-[9px] font-black uppercase tracking-widest px-3 py-2 rounded-xl border mb-3 ' + t.header + '">' + g.label + ' (' + g.rows.length + ')</div>' + cards + '</div>';
     }).join('');
+    el.innerHTML = errorBanner + el.innerHTML;
   } else {
     el.innerHTML = '<div class="rounded-2xl border border-slate-200 overflow-hidden overflow-x-auto"><table class="data-table"><thead><tr>' +
       '<th>Order No.</th><th>Customer</th><th>Qty Ordered</th><th>Balance</th><th>Consents</th><th>Action</th>' +
@@ -787,6 +815,7 @@ function renderCombined(q) {
         return headerRow + dataRows;
       }).join('') +
       '</tbody></table></div>';
+    el.innerHTML = errorBanner + el.innerHTML;
   }
 }
 
