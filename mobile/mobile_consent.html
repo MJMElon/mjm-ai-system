@@ -437,11 +437,16 @@ let barcodeStream = null;
 //  LOAD DATA
 // ════════════════════════════════════════════════════════
 async function loadActiveALs() {
+  // No balance filter here any more — a fully collected AL (balance 0)
+  // is still fetched, just kept out of the two default groups below
+  // (renderCombined) so the everyday list stays exactly what it was: only
+  // outstanding ALs. It is pulled back in the moment somebody SEARCHES for
+  // it, which is the only way to reach a completed order's signed-consent
+  // log (the "seal log") again — see renderCombined's isCompleted check.
   const { data, error } = await _supabase
     .from('shared_al_orders')
     .select('id,al_number,order_number,customer_name,product_name,quantity_ordered,balance_quantity,status,created_at')
     .not('status', 'in', '("Cancelled","Collected")')
-    .gt('balance_quantity', 0)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -577,10 +582,16 @@ function renderCombined(q) {
       (r.customer_name || '').toLowerCase().includes(lower)
     );
     const count = consentCountMap[r.al_number] || 0;
+    // A fully collected AL (nothing left to consent for) never appears in
+    // the everyday "Has Consent" / "Active AL" groups below — only a
+    // search can reach it, so its signed-consent log stays findable
+    // without permanently cluttering the default list with finished work.
+    const isCompleted = (Number(r.balance_quantity) || 0) <= 0;
 
-    if (isMatch)        matched.push(r);
-    else if (count > 0) hasConsent.push(r);
-    else                noneYet.push(r);
+    if (isMatch)              matched.push(r);
+    else if (isCompleted)     return;
+    else if (count > 0)       hasConsent.push(r);
+    else                      noneYet.push(r);
   });
 
   let groups = [];
@@ -609,6 +620,8 @@ function renderCombined(q) {
       const t = themeMap[g.theme];
       const cards = g.rows.map(r => {
         const count = consentCountMap[r.al_number] || 0;
+        const isCompleted = (Number(r.balance_quantity) || 0) <= 0;
+        const actionLabel = isCompleted ? '\ud83d\udcc3 View Consent Log' : '\u270d\ufe0f Sign Consent';
         return '<div class="bg-white rounded-2xl p-4 mb-2 shadow-sm border border-slate-200 ' + t.border + '">' +
           '<div class="flex justify-between items-start mb-2">' +
             '<div>' +
@@ -619,8 +632,8 @@ function renderCombined(q) {
               ? '<span class="badge-signed">' + count + ' Signed</span>'
               : '<span class="badge-pending">No Consent</span>') +
           '</div>' +
-          '<div class="text-xs font-bold text-slate-400 mb-3">Qty: ' + (r.quantity_ordered ?? '\u2014') + ' \u00b7 Bal: <span class="' + t.bal + ' font-black">' + (r.balance_quantity ?? '\u2014') + '</span></div>' +
-          '<button class="btn-consent w-full text-center" onclick="openConsentModal(\'' + r.al_number + '\')">\u270d\ufe0f Sign Consent</button>' +
+          '<div class="text-xs font-bold text-slate-400 mb-3">Qty: ' + (r.quantity_ordered ?? '\u2014') + ' \u00b7 Bal: <span class="' + t.bal + ' font-black">' + (r.balance_quantity ?? '\u2014') + '</span>' + (isCompleted ? ' <span class="text-emerald-600">(Completed)</span>' : '') + '</div>' +
+          '<button class="btn-consent w-full text-center" onclick="openConsentModal(\'' + r.al_number + '\')">' + actionLabel + '</button>' +
         '</div>';
       }).join('');
       return '<div class="mb-5"><div class="text-[9px] font-black uppercase tracking-widest px-3 py-2 rounded-xl border mb-3 ' + t.header + '">' + g.label + ' (' + g.rows.length + ')</div>' + cards + '</div>';
@@ -634,13 +647,15 @@ function renderCombined(q) {
         const headerRow = '<tr><td colspan="6" class="py-2 px-4 text-[9px] font-black uppercase tracking-widest ' + t.header + ' border-b">' + g.label + ' (' + g.rows.length + ')</td></tr>';
         const dataRows = g.rows.map(r => {
           const count = consentCountMap[r.al_number] || 0;
+          const isCompleted = (Number(r.balance_quantity) || 0) <= 0;
+          const actionLabel = isCompleted ? '\ud83d\udcc3 View Consent Log' : '\u270d\ufe0f Sign Consent';
           return '<tr class="' + t.row + '">' +
             '<td><span class="font-black text-slate-800">' + (r.al_number || r.order_number || '\u2014') + '</span></td>' +
             '<td>' + (r.customer_name || '\u2014') + '</td>' +
             '<td>' + (r.quantity_ordered ?? '\u2014') + '</td>' +
-            '<td><span class="font-black ' + t.bal + '">' + (r.balance_quantity ?? '\u2014') + '</span></td>' +
+            '<td><span class="font-black ' + t.bal + '">' + (r.balance_quantity ?? '\u2014') + '</span>' + (isCompleted ? ' <span class="text-[9px] font-black text-emerald-600 uppercase tracking-wider">Completed</span>' : '') + '</td>' +
             '<td>' + (count > 0 ? '<span class="badge-signed">' + count + ' signed</span>' : '<span class="badge-pending">None</span>') + '</td>' +
-            '<td><button class="btn-consent" onclick="openConsentModal(\'' + r.al_number + '\')">\u270d\ufe0f Sign Consent</button></td>' +
+            '<td><button class="btn-consent" onclick="openConsentModal(\'' + r.al_number + '\')">' + actionLabel + '</button></td>' +
           '</tr>';
         }).join('');
         return headerRow + dataRows;
