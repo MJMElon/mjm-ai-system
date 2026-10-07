@@ -1164,13 +1164,12 @@ async function _losBuildAllRows(asAt) {
       const rm = l.remark || '';
       const body = rm.replace(_RE_LOS_APPROVED, '').trim();
       const rep  = body.match(_RE_LOS_CAL_REPORT);
-      /* AN ADJUSTMENT NAMES THE REPORT IT WAS RAISED ON, and a row that names
-         none was not raised on the Adjustments tab — every row that tab has
-         ever written starts "Report: X. Plot: Y.". There are 206 such rows in
-         this database against 12 real ones, written in bulk and inert only
-         because none of them carried an approval. The test is the label, not
-         the signature. Same rule, same words, in shared_plot_movement.js. */
-      if (!rep) return;
+      /* EVERY Stock_Calibration counts — no approval, and no requirement that
+         the remark name a report. 206 of this ledger's 218 adjustments carry
+         no report; they were checked with the office and they are real plot
+         corrections. The label decides WHERE a figure lands on the batch
+         report's tabs, not whether it is real. Same rule, same words, in
+         shared_plot_movement.js and the Movement Report. */
       const signed = Number(l.quantity_change || 0);
       r.calibration += signed;
       // Which side of the nursery it adjusts. A tray is pre-nursery; so is a
@@ -3494,13 +3493,11 @@ async function runMovementReportCombined() {
       // for a signature nobody is asked for. The old marker is stripped
       // below, because rows written before the change carry one.
       //
-      // WHAT STILL GATES IT is the Report: label. Every row the Adjustments
-      // tab has ever written starts "Report: X. Plot: Y.", so one carrying
-      // none was not raised there and is not an adjustment anybody made —
-      // 206 such rows exist against 12 real ones, written in bulk, and they
-      // were inert only because none of them carried an approval. Same rule,
-      // same words, in shared_plot_movement.js and Life of Seedlings.
-      if (!/Report:\s*\S/.test(l.remark || '')) return;
+      // AND NOTHING ELSE GATES IT. A remark that names no report is still a
+      // real adjustment — 206 of this ledger's 218 carry none, and they were
+      // checked with the office. The label decides WHERE a figure lands on
+      // the batch report's own tabs, not whether it is real. Same rule in
+      // shared_plot_movement.js and Life of Seedlings.
       if (!passMain(l.plot_name)) return;
       // Its own signed value — a Found is positive, a Stolen or
       // over-allocation is negative — not Math.abs(quantity_change) like

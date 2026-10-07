@@ -1,8 +1,11 @@
 /* A ledger line can carry a batch name and contribute nothing — a
-   calibration of nought, a transfer of nought, a Stock_Calibration row that
-   names no report and is therefore not an adjustment at all. That must not
-   become a row of dashes and noughts on the report. The real builder is
-   lifted out. */
+   calibration of NOUGHT, a transfer of nought. That must not become a row of
+   dashes and noughts on the report.
+
+   What does NOT make a phantom: a calibration that names no report. 206 of
+   the real ledger's 218 carry none and they are real corrections, so a row
+   like that moved seedlings and its batch stays. The real builder is lifted
+   out. */
 const fs = require('fs'), path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'operation', 'operation_reports.html'), 'utf8');
 const i = src.indexOf('async function _losBuildAllRows(asAt) {');
@@ -25,11 +28,12 @@ const logs = [
   L('213','Seeds_Received','2026-02-02',0),
   // 214 — a real adjustment and nothing else. Something happened: KEEP.
   L('214','Stock_Calibration','2026-09-12',-5,'Report: 3rd Culling. Plot: B2. five short','B2'),
-  /* 215 — a Stock_Calibration row that NAMES NO REPORT. Every row the
-     Adjustments tab writes starts "Report: X. Plot: Y.", so this was not
-     raised there and moves no figure anywhere. Nothing happened to this
-     batch: it is a phantom like 211 and 212. There are 206 such rows in the
-     real database. */
+  /* 215 — a Stock_Calibration row that NAMES NO REPORT. 206 of the real
+     ledger's 218 adjustments look like this, and the office confirmed them as
+     real plot corrections, so this one COUNTS and the batch is kept: 337
+     seedlings came off a plot, which is something happening. The label
+     decides where a figure lands on the batch report's tabs, not whether it
+     is real. */
   L('215','Stock_Calibration','2026-09-12',-337,'Auto balance sweep for plot B2','B2'),
 ];
 
@@ -46,7 +50,7 @@ const rows = fn('', { data: logs }, { data: [] }, (l) => l.transaction_date || n
   /\[APPROVED by/, /Report:\s*([^.]+?)\s*\.\s*/i, never);
 
 const listed = rows.map(r => r.batch).sort();
-const want   = ['213', '214', '268'];
+const want   = ['213', '214', '215', '268'];
 console.log('  on the report :', listed.join(', '));
 console.log('  should be     :', want.join(', '));
 console.log('    268  a real batch                               ' + (listed.includes('268') ? 'listed  ok' : 'MISSING ✗'));
@@ -54,7 +58,7 @@ console.log('    213  received, quantity keyed as nought         ' + (listed.inc
 console.log('    214  a real adjustment and nothing else         ' + (listed.includes('214') ? 'listed  ok' : 'MISSING ✗'));
 console.log('    211  a calibration of nought only                ' + (listed.includes('211') ? 'LISTED ✗  (the phantom row)' : 'gone    ok'));
 console.log('    212  a transfer of nought                       ' + (listed.includes('212') ? 'LISTED ✗' : 'gone    ok'));
-console.log('    215  a calibration naming no report             ' + (listed.includes('215') ? 'LISTED ✗  (not an adjustment at all)' : 'gone    ok'));
+console.log('    215  a calibration naming no report             ' + (listed.includes('215') ? 'listed  ok' : 'MISSING ✗  (it still moved 337 seedlings)'));
 const ok = JSON.stringify(listed) === JSON.stringify(want);
 console.log('\n' + (ok ? 'all correct' : 'FAILED'));
 process.exit(ok ? 0 : 1);

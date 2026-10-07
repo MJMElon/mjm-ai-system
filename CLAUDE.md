@@ -331,25 +331,33 @@ Four things that followed, and the first is the one to remember:
 `shared/CHECK_adjustments_that_start_counting.sql` names the rows that were
 keyed and never approved — the ones this change put into the figures.
 
-**AND AN ADJUSTMENT NAMES THE REPORT IT WAS RAISED ON.** That check came back
-with **206 rows out of 218 carrying no `Report:` at all** — all negative, all
-dated within two days of each other, many in exact triplicate. Every row the
-Adjustments tab has ever written starts `Report: X. Plot: Y.`, so those were
-written in bulk by something else, and they had been inert only because not
-one of them carried an approval. Dropping the approval would have taken
-**196,777 seedlings** off the piece-rate quantity, the Movement Report and
-Life of Seedlings in one go — and said nothing, because the Adjustments tab
-reads the REPORT to decide where a figure lands, so the one screen somebody
-would have been looking at goes on showing no adjustment at all.
+**AND NOTHING ELSE GATES IT EITHER — not the `Report:` label.** That check
+came back with **206 rows out of 218 carrying no `Report:` at all**: all
+negative, all dated within two days of each other, many in exact triplicate.
+Every row the Adjustments tab writes starts `Report: X. Plot: Y.`, so the
+obvious reading was that they were written in bulk by something else and were
+not adjustments anybody raised — and they were made inert on that reasoning
+for about an hour. **They are real.** The office confirmed them as plot
+corrections that have to count. A `Stock_Calibration` row is an adjustment
+because of what it IS, not because of how its remark happens to be worded.
 
-So the three readers that do not already look at the report test for the
-label: `shared_plot_movement.js`, Life of Seedlings and the Movement Report.
-**The gate is the label, never the approval.** The Adjustments tab's history
-table still LISTS them, or the rows could not be found and deleted.
+What the label still decides is **WHERE** a figure lands on the batch
+report's own tabs (`ADJUST_APPLIES_TO`), which is a different question: a row
+naming no report lands on no tab there, and still moves the plot's live
+count, the Movement Report and Life of Seedlings, because a seedling that is
+gone is gone whichever report noticed.
 
-`tests/adjustment_names_its_report.cjs` holds all three readers to it, and
-`shared/CHECK_what_wrote_these_adjustments.sql` groups the rows by the shape
-of their remark, which is what says where they came from.
+So the net of those 206 — **−196,777 seedlings** — is now in the piece-rate
+quantity, the Movement Report and Life of Seedlings, and that is correct.
+**Many of them are exact triplicates** (224's B13 at −337 three times, 225's
+B2 at −2,328 three times, on one day); whether that is three real events or
+one thing written three times is the office's to answer, and nothing in the
+code may assume either.
+
+`tests/every_adjustment_counts.cjs` holds all three readers to it and fails if
+either gate is put back — it was proved by putting each one back and watching
+it go red. `shared/CHECK_what_wrote_these_adjustments.sql` groups the rows by
+the shape of their remark and counts the exact repeats.
 
 ## 1st Culling is not wrong when Transplanting was adjusted after it
 

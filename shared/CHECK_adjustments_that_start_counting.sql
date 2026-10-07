@@ -27,13 +27,15 @@
 --   1st Culling                            1st Culling only
 --   2nd Culling                            2nd Culling only
 --   3rd Culling                            3rd Culling only
---   (no report named)                      NOTHING, anywhere
+--   (no report named)                      the plot it names, on the Movement
+--                                          Report, Life of Seedlings and the
+--                                          piece-rate quantity. NOT the batch
+--                                          report tabs, which read the report
+--                                          to know which tab a figure is about.
 --
--- A row that names no report was not raised on the Adjustments tab at all --
--- every row that tab writes starts "Report: X. Plot: Y." -- so no report
--- reads it. There are a great many of those rows and they are not office
--- corrections; shared/CHECK_what_wrote_these_adjustments.sql is the one that
--- says where they came from.
+-- Most of the rows in this ledger name no report. They are real corrections
+-- and they count; shared/CHECK_what_wrote_these_adjustments.sql groups them
+-- by the wording of their remark and counts the exact repeats.
 
 WITH cal AS (
   SELECT id,

@@ -151,31 +151,33 @@
 
       const evs = [];
       const EVIDENCED = /MapQty:\s*\d+/;
-      /* AN ADJUSTMENT NAMES THE REPORT IT WAS RAISED ON. Every row the
-         Adjustments tab has ever written starts "Report: X. Plot: Y." — see
-         saveCalibration in operation_batch_detail.html — so a Stock_Calibration
-         row carrying no Report: was not raised there and is not an adjustment
-         anybody made.
-
-         There are 206 such rows in this database against 12 real ones, all
-         negative, all dated within two days of each other and many in exact
-         triplicate: something wrote them in bulk. They were inert for as long
-         as a figure needed an approval, because none of them has one — and the
-         day the approval step went they would have taken 196,777 seedlings off
-         the piece-rate quantity, the Movement Report and Life of Seedlings in
-         one go. The Adjustments tab itself never counted them (it reads the
-         report to decide where a figure lands, and they name none), which is
-         exactly why nothing said a word.
-
-         So the test is the Report: label, not the approval. Rules shared with
-         the office repository carry a comment saying so in both copies. */
-      const IS_ADJUSTMENT = /Report:\s*\S/;
       (logsRes.data || []).forEach(l => {
         const t = l.transaction_type;
         // A 3rd culling nobody has flown yet is a claim, not a deduction —
         // the report leaves the batch standing, and so does this.
         if (t === '3rd_Culling' && !EVIDENCED.test(l.remark || '')) return;
-        if (t === 'Stock_Calibration' && !IS_ADJUSTMENT.test(l.remark || '')) return;
+        /* EVERY Stock_Calibration counts, whatever its remark says and
+           whether or not anybody approved it. Both gates that used to stand
+           here are gone and neither goes back:
+
+             the APPROVAL — the person keying the correction is the person who
+             went and counted, so holding the figure behind a second signature
+             only kept a known-wrong report looking right;
+
+             the "Report:" LABEL — 206 of this ledger's 218 adjustments carry
+             no report at all. They were checked with the office and they are
+             real plot corrections that have to count. A Stock_Calibration row
+             is an adjustment because of what it IS, not because of how its
+             remark happens to be worded.
+
+           What the label still decides is WHERE a figure lands on the batch
+           report's own tabs, which is a different question and lives in
+           ADJUST_APPLIES_TO. A row naming no report lands on no tab there and
+           still moves the plot here, because this is the plot's live count and
+           a seedling that is gone is gone whichever report noticed.
+
+           Rules shared with the office repository carry a comment saying so in
+           both copies. */
         const ms = parseDate(logDate(l));
         if (ms == null) return;
         evs.push({
