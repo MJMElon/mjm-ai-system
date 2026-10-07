@@ -31,9 +31,18 @@ function walk(dir, out = []) {
 
 const pages = walk(ROOT).filter((p) =>
   /(?:src|href)="[^"]*\?v=\d/.test(fs.readFileSync(p, 'utf8')));
-let bad = 0;
 
-pages.forEach((p) => {
+/* ONLY THE MODULES THAT HAVE BEEN ASKED FOR.
+   The metas change how a live page is fetched, so they go on a module when
+   somebody wants that module current -- not across the site because a test
+   would be tidier. The rest are counted at the end so the next person can see
+   the same trap is still set for them. */
+const GUARDED = (p) => path.relative(ROOT, p).startsWith('npayroll/');
+
+let bad = 0;
+const guarded = pages.filter(GUARDED);
+
+guarded.forEach((p) => {
   const s = fs.readFileSync(p, 'utf8');
   const missing = META.filter(([, re]) => !re.test(s)).map(([n]) => n);
   if (missing.length) {
@@ -42,12 +51,12 @@ pages.forEach((p) => {
   }
 });
 
-if (!bad) console.log(`pass  all ${pages.length} page(s) that version a script refuse to be cached`);
+if (!bad) console.log(`pass  all ${guarded.length} payroll page(s) that version a script refuse to be cached`);
 
 /* And the other half of the bargain: a versioned script must actually carry a
    version, not ?v= with nothing after it. */
 let empty = 0;
-pages.forEach((p) => {
+guarded.forEach((p) => {
   const s = fs.readFileSync(p, 'utf8');
   // Only real attributes -- the comment above these metas says "?v=" itself.
   if (/(?:src|href)="[^"]*\?v=(?![0-9])/.test(s)) {
@@ -55,5 +64,16 @@ pages.forEach((p) => {
   }
 });
 if (!empty) console.log('pass  every ?v= carries a number');
+
+/* What is still exposed, so it is a decision rather than an oversight. */
+const rest = pages.filter((p) => !GUARDED(p)).filter((p) => {
+  const s = fs.readFileSync(p, 'utf8');
+  return META.some(([, re]) => !re.test(s));
+});
+if (rest.length) {
+  console.log(`\nnot guarded, and a deploy to them will not reach a browser that has`);
+  console.log(`already loaded them: ${rest.length} page(s) outside npayroll/`);
+  rest.forEach((p) => console.log(`   ${path.relative(ROOT, p)}`));
+}
 
 process.exit(bad || empty ? 1 : 0);

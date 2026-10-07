@@ -581,15 +581,25 @@ was never the problem. `index.html` has carried
     <meta http-equiv="Expires" content="0"/>
 
 since it was written. **The module pages had not**, and that was the whole of
-it: 13 of the 19 pages that version a script were missing them.
+it — 13 of the 19 pages that version a script were missing them.
 
 The site is GitHub Pages with a CNAME and no build step, so there is nowhere
 to set a real HTTP header — these metas are the only lever, and bumping a
 `?v=` is useless without them.
 
-**Any new page that loads a script with `?v=` needs all three.**
-`tests/pages_do_not_go_stale.cjs` fails if one is missing, and also catches a
-`?v=` left without a number.
+**Only the payroll module carries them**, because that is the module somebody
+asked to be current. The other 12 pages do not, and that is a decision rather
+than an oversight: these metas change how a live page is fetched on every
+load, so they go on a module when somebody wants a fix in that module to
+arrive — not across the site because a test would be tidier.
+`nursery_ops_maintenance.html` is the one to remember: the Work Maintenance
+changes are sitting behind its cache, so it needs the three metas on the day
+somebody wants them.
+
+**Any new page that loads a script with `?v=` needs all three** to be
+deliverable. `tests/pages_do_not_go_stale.cjs` fails if a payroll page is
+missing one, catches a `?v=` left without a number, and PRINTS THE UNGUARDED
+PAGES every run so the next person sees the same trap still set.
 
 Still worth knowing: a browser that already holds a stale copy needs one hard
 reload (Ctrl/Cmd + Shift + R) to pick up the metas in the first place. After
