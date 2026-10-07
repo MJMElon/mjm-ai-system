@@ -1164,9 +1164,13 @@ async function _losBuildAllRows(asAt) {
       const rm = l.remark || '';
       const body = rm.replace(_RE_LOS_APPROVED, '').trim();
       const rep  = body.match(_RE_LOS_CAL_REPORT);
-      /* Which count was wrong is read off the REPORT, the way Tab 7 reads it
-         — `Side:` is a marker that page stopped writing, so a row that still
-         carries one is answering a question nobody asks. Stripped, not read. */
+      /* AN ADJUSTMENT NAMES THE REPORT IT WAS RAISED ON, and a row that names
+         none was not raised on the Adjustments tab — every row that tab has
+         ever written starts "Report: X. Plot: Y.". There are 206 such rows in
+         this database against 12 real ones, written in bulk and inert only
+         because none of them carried an approval. The test is the label, not
+         the signature. Same rule, same words, in shared_plot_movement.js. */
+      if (!rep) return;
       const signed = Number(l.quantity_change || 0);
       r.calibration += signed;
       // Which side of the nursery it adjusts. A tray is pre-nursery; so is a
@@ -3489,6 +3493,14 @@ async function runMovementReportCombined() {
       // left here would make this the one place in the system still waiting
       // for a signature nobody is asked for. The old marker is stripped
       // below, because rows written before the change carry one.
+      //
+      // WHAT STILL GATES IT is the Report: label. Every row the Adjustments
+      // tab has ever written starts "Report: X. Plot: Y.", so one carrying
+      // none was not raised there and is not an adjustment anybody made —
+      // 206 such rows exist against 12 real ones, written in bulk, and they
+      // were inert only because none of them carried an approval. Same rule,
+      // same words, in shared_plot_movement.js and Life of Seedlings.
+      if (!/Report:\s*\S/.test(l.remark || '')) return;
       if (!passMain(l.plot_name)) return;
       // Its own signed value — a Found is positive, a Stolen or
       // over-allocation is negative — not Math.abs(quantity_change) like

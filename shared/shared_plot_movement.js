@@ -151,18 +151,31 @@
 
       const evs = [];
       const EVIDENCED = /MapQty:\s*\d+/;
+      /* AN ADJUSTMENT NAMES THE REPORT IT WAS RAISED ON. Every row the
+         Adjustments tab has ever written starts "Report: X. Plot: Y." — see
+         saveCalibration in operation_batch_detail.html — so a Stock_Calibration
+         row carrying no Report: was not raised there and is not an adjustment
+         anybody made.
+
+         There are 206 such rows in this database against 12 real ones, all
+         negative, all dated within two days of each other and many in exact
+         triplicate: something wrote them in bulk. They were inert for as long
+         as a figure needed an approval, because none of them has one — and the
+         day the approval step went they would have taken 196,777 seedlings off
+         the piece-rate quantity, the Movement Report and Life of Seedlings in
+         one go. The Adjustments tab itself never counted them (it reads the
+         report to decide where a figure lands, and they name none), which is
+         exactly why nothing said a word.
+
+         So the test is the Report: label, not the approval. Rules shared with
+         the office repository carry a comment saying so in both copies. */
+      const IS_ADJUSTMENT = /Report:\s*\S/;
       (logsRes.data || []).forEach(l => {
         const t = l.transaction_type;
         // A 3rd culling nobody has flown yet is a claim, not a deduction —
         // the report leaves the batch standing, and so does this.
         if (t === '3rd_Culling' && !EVIDENCED.test(l.remark || '')) return;
-        /* A stock adjustment counts from the moment it is saved. There used
-           to be an approval step and this skipped a row without one; the step
-           is gone — see the Adjustments tab in operation_batch_detail.html —
-           and a gate left here would make the piece-rate quantity the one
-           figure in the system still waiting for a signature nobody is asked
-           for. Rules shared with the office repository carry a comment saying
-           so in both copies. */
+        if (t === 'Stock_Calibration' && !IS_ADJUSTMENT.test(l.remark || '')) return;
         const ms = parseDate(logDate(l));
         if (ms == null) return;
         evs.push({
