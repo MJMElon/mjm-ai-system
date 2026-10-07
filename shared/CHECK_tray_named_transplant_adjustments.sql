@@ -18,7 +18,7 @@
 -- Pending moves and there is nothing to look at.
 --
 -- Then one line per BATCH: the net of its tray-named adjustments, which is
--- how much that batch's Pending changes, and the net of the ones naming no
+-- how much the Pending of that batch changes, and the net of the ones naming no
 -- tray, which changes nothing. A batch whose Pending was stuck at exactly
 -- its tray-named net is the one this was built for.
 --
