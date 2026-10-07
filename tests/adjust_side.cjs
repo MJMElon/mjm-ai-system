@@ -119,9 +119,8 @@ window.supabase = { createClient: function () {
 
 
 /* One batch, one adjustment per report, so each rule is read on its own.
-   Most carry the old "[APPROVED by ...]" marker because rows written before
-   the approval step was dropped still do; it decides nothing now, and the
-   row with no marker at all is tested last. */
+   Every one is APPROVED — an unapproved adjustment moves no figure and
+   that is tested last. */
 const cal = (n, report, plot, qty) => ({
   id: n, batch_name: '300', transaction_type: 'Stock_Calibration', quantity_change: qty,
   plot_name: plot, created_at: '2026-06-01T00:00:00Z',
@@ -146,12 +145,10 @@ const ROWS = {
     cal(22, '1st Culling',    'P60', -20),
     cal(23, '2nd Culling',    'U4',  -7),
     cal(24, '3rd Culling',    'U3',  -4),
-    /* NO APPROVAL MARKER AT ALL. There is no approval step any more, so this
-       counts exactly like the rest. On its own plot, so the rows that test
-       the stored marker being ignored are not reading it too. */
+    // and one nobody has ruled on
     { id: 25, batch_name: '300', transaction_type: 'Stock_Calibration', quantity_change: -99,
-      plot_name: 'U5', created_at: '2026-06-01T00:00:00Z',
-      remark: 'Report: 3rd Culling. Plot: U5. never approved' },
+      plot_name: 'U4', created_at: '2026-06-01T00:00:00Z',
+      remark: 'Report: 3rd Culling. Plot: U4. not approved yet' },
     /* A row written while the form still ASKED, filed on the wrong side:
        a 3rd Culling loss recorded against the seed count. The stored Side:
        is ignored now, so it corrects itself. */
@@ -217,7 +214,6 @@ const ROWS = {
         'U3 @3rd': adjustPlotLoss('U3', '3rd Culling'),
         'U4 @2nd': adjustPlotLoss('U4', '2nd Culling'),
         'U4 @3rd': adjustPlotLoss('U4', '3rd Culling'),
-        'U5 @3rd': adjustPlotLoss('U5', '3rd Culling'),
         'P60 @1st': adjustPlotLoss('P60', '1st Culling'),
         'P60 @2nd': adjustPlotLoss('P60', '2nd Culling'),
         'P60 @3rd': adjustPlotLoss('P60', '3rd Culling')
@@ -277,10 +273,8 @@ const ROWS = {
     ['a row filed against the seed count on a culling report is read the new way',
       L['U4 @3rd'] === -6 && read.total === -30],
 
-    /* ── and a row nobody approved moves its figure like any other.
-          The approval step is gone: the person keying the correction is the
-          person who went and counted. */
-    ['a row with no approval marker counts like every other', L['U5 @3rd'] === -99],
+    // ── and nothing unapproved moves anything
+    ['an adjustment nobody has ruled on moves no figure', L['U4 @3rd'] !== -105],
 
     ['no page errors beyond the harness\'s own MJMReview race',
       errs.every(e => /MJMReview is not defined/.test(e))],

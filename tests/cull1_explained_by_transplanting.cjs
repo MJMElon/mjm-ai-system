@@ -16,6 +16,9 @@
    Exactly: a near-match is a coincidence, and a note that guessed at one
    would teach people to wave real mistakes through.
 
+   Only APPROVED adjustments reach the figure the note is read off, so one
+   nobody has ruled on explains nothing here either.
+
    Run: NODE_PATH=/opt/node22/lib/node_modules node tests/cull1_explained_by_transplanting.cjs
 */
 const http = require('http');
@@ -123,6 +126,7 @@ const CAL_TRANSPLANTING = {
   id: 20, batch_name: '400', transaction_type: 'Stock_Calibration', quantity_change: -53,
   plot_name: 'U3', transaction_date: '2026-03-10', created_at: '2026-03-10T00:00:00Z',
   remark: 'Report: Transplanting. Plot: U3. 53 never reached the plot'
+       + ' [APPROVED by esther@mjmnursery.com on 2026-03-11]'
 };
 
 const BASE_LOGS = [

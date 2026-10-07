@@ -678,11 +678,11 @@ const _RE_LOS_FROM_PLOT  = /From:\s*\[([^\]|]+)\|/i;
 
    ── What is NOT gated here, and why ──
    Total Sales comes from the delivery orders, which are approved in the D/O
-   module and never appear on a batch report tab. Stock Calibration is keyed
-   by the person who went and counted and is admin-only to change, and has no
-   approval step of its own. Neither is verified HERE — so they carry no
-   marker, while Balance, which contains them, carries the marker of the
-   stages that ARE verified on a tab.
+   module and never appear on a batch report tab. Stock Calibration already
+   counts only once somebody has approved it (_RE_LOS_APPROVED above). Both
+   are signed off, just not here — so they carry no marker, while Balance,
+   which contains them, carries the marker of the stages that ARE verified on
+   a tab.
 
    ── The as-at date does not cut the signatures off ──
    The ledger is cut off at As At because "as at September" is a question
@@ -1156,35 +1156,19 @@ async function _losBuildAllRows(asAt) {
       return;
     }
     if (t === 'Stock_Calibration') {
-      /* EVERY adjustment counts, from the moment it is saved. It used to need
-         an approval and the Adjustments tab no longer asks for one, so a gate
-         left here would make this report the one place still waiting for a
-         signature. The old marker is still STRIPPED, because rows written
-         before the change carry it and it is not part of the reason. */
       const rm = l.remark || '';
+      const ok = _RE_LOS_APPROVED.test(rm);
       const body = rm.replace(_RE_LOS_APPROVED, '').trim();
       const rep  = body.match(_RE_LOS_CAL_REPORT);
-      /* Which count was wrong is read off the REPORT, the way Tab 7 reads it
-         — `Side:` is a marker that page stopped writing, so a row that still
-         carries one is answering a question nobody asks. Stripped, not read. */
+      const side = body.match(_RE_LOS_CAL_SIDE);
       const signed = Number(l.quantity_change || 0);
-      r.calibration += signed;
+      if (ok) r.calibration += signed;
       // Which side of the nursery it adjusts. A tray is pre-nursery; so is a
       // row keyed against 'Pre-Nursery' itself.
-      if (nurseryOf(l.plot_name) === 'Pre-Nursery') r.calibrationPre += signed;
-      const repTxt = rep ? rep[1].trim() : '';
-      /* Which count it was wrong about is READ OFF THE REPORT it was raised
-         on, never off a stored marker — ADJUST_SIDE_OF in
-         operation_batch_detail.html is the original and this is its copy.
-         Change one, change the other. Declared here rather than beside the
-         regexes above because this branch is lifted out whole and run on its
-         own by tests/los_phantom_batch.cjs. */
-      const seedReports = ['seeds received', 'planting', 'seed audit'];
+      if (ok && nurseryOf(l.plot_name) === 'Pre-Nursery') r.calibrationPre += signed;
       r.rec.calibration.push({ date: d, batch: name, place: l.plot_name || '—',
-        report: repTxt || '—',
-        side: seedReports.indexOf(repTxt.toLowerCase()) >= 0 ? 'seed' : 'plot',
-        approved: true, qty: signed,
-        note: body.replace(_RE_LOS_CAL_REPORT, '').replace(_RE_LOS_CAL_SIDE, '').trim() });
+        report: rep ? rep[1].trim() : '—', side: side ? side[1].toLowerCase() : 'seed',
+        approved: ok, qty: signed, note: body.replace(_RE_LOS_CAL_REPORT, '').replace(_RE_LOS_CAL_SIDE, '').trim() });
       return;
     }
   });
@@ -2214,12 +2198,11 @@ async function runLifeOfPlot() {
       return;
     }
     if (t === 'Stock_Calibration') {
-      // Counts from the moment it is saved — there is no approval step any
-      // more. The old marker is still stripped off rows that carry one.
-      if (!passLoc(l.plot_name)) return;
+      const approved = (l.remark || '').match(/\[APPROVED by [^\]]+ on [^\]]+\]/);
+      if (!approved || !passLoc(l.plot_name)) return;
       const signedQty = Number(l.quantity_change) || 0;
       if (!signedQty) return;
-      let reason = (l.remark || '').replace(/\[APPROVED by [^\]]+ on [^\]]+\]/, '').trim();
+      let reason = (l.remark || '').replace(approved[0], '').trim();
       reason = reason.replace(/Report:\s*[^.]+?\s*\.\s*/i, '')
                      .replace(/Plot:\s*[^.]+?\s*\.\s*/i, '')
                      .replace(/Side:\s*(seed|plot)\s*\.\s*/i, '').trim();
@@ -3484,23 +3467,25 @@ async function runMovementReportCombined() {
     }
 
     if (t === 'Stock_Calibration') {
-      // EVERY adjustment counts, from the moment it is saved — the approval
-      // step operation_batch_detail.html used to have is gone, and a gate
-      // left here would make this the one place in the system still waiting
-      // for a signature nobody is asked for. The old marker is stripped
-      // below, because rows written before the change carry one.
-      if (!passMain(l.plot_name)) return;
+      // Only an APPROVED adjustment ever counts — the same "[APPROVED by
+      // <who> on <when>]" marker operation_batch_detail.html's own
+      // _parseCalibration() reads. A pending one hasn't been ruled on yet
+      // and moves no figure there either; reading it here too would make
+      // this the one place in the system where an unapproved adjustment
+      // silently did.
+      const approved = (l.remark || '').match(/\[APPROVED by [^\]]+ on [^\]]+\]/);
+      if (!approved || !passMain(l.plot_name)) return;
       // Its own signed value — a Found is positive, a Stolen or
       // over-allocation is negative — not Math.abs(quantity_change) like
       // every other branch here, so the direction survives into the
-      // column and the balance exactly as it was keyed.
+      // column and the balance exactly as it was approved.
       const signedQty = Number(l.quantity_change) || 0;
       if (!signedQty) return;
       push('main', d, l.plot_name, b, 'adjust', signedQty);
       // Same reason-extraction as _parseCalibration(): strip the
-      // "Report: X. Plot: Y. Side: Z." prefix pieces and any [APPROVED…]
+      // "Report: X. Plot: Y. Side: Z." prefix pieces and the [APPROVED…]
       // marker, leaving just the reason someone actually wrote.
-      let reason = (l.remark || '').replace(/\[APPROVED by [^\]]+ on [^\]]+\]/, '').trim();
+      let reason = (l.remark || '').replace(approved[0], '').trim();
       reason = reason.replace(/Report:\s*[^.]+?\s*\.\s*/i, '')
                       .replace(/Plot:\s*[^.]+?\s*\.\s*/i, '')
                       .replace(/Side:\s*(seed|plot)\s*\.\s*/i, '').trim();
@@ -3912,16 +3897,16 @@ async function runTransplantingReport() {
   const batchBreed = {};
   (batchesRes.data || []).forEach(b => { if (b.breed_name) batchBreed[b.batch_name] = b.breed_name; });
 
-  // Calibrations filed against the Transplanting report, keyed by batch+plot
-  // so a row's Qty cell can be marked. Same "Report: X. Plot: Y." remark
-  // convention _parseCalibration() reads in operation_batch_detail.html — a
-  // lightweight read of the same shape, not a shared function, since this
-  // file has no import from that one. Every adjustment counts; the old
-  // [APPROVED …] marker is only stripped off rows that still carry one.
+  // Approved calibrations filed against the Transplanting report, keyed by
+  // batch+plot so a row's Qty cell can be marked. Same [APPROVED by … on
+  // …] / "Report: X. Plot: Y." remark convention _parseCalibration() reads
+  // in operation_batch_detail.html — a lightweight read of the same shape,
+  // not a shared function, since this file has no import from that one.
   const calByBatchPlot = {};
   (calRes.data || []).forEach(l => {
     const approved = (l.remark || '').match(/\[APPROVED by ([^\]]+) on ([^\]]+)\]/);
-    let body = (l.remark || '').replace(/\[APPROVED by [^\]]+ on [^\]]+\]/, '').trim();
+    if (!approved) return;
+    let body = (l.remark || '').replace(approved[0], '').trim();
     const repMatch = body.match(/Report:\s*([^.]+?)\s*\.\s*/i);
     if (!repMatch || repMatch[1].trim().toLowerCase() !== 'transplanting') return;
     const plotMatch = body.match(/Plot:\s*([^.]+?)\s*\.\s*/i);
@@ -3939,7 +3924,7 @@ async function runTransplantingReport() {
     (calByBatchPlot[k] = calByBatchPlot[k] || []).push({
       date: l.transaction_date || l.created_at,
       qty: Number(l.quantity_change) || 0,
-      label: reason || (approved ? 'Approved by ' + approved[1].trim() : 'Adjustment')
+      label: reason || ('Approved by ' + approved[1].trim())
     });
   });
 

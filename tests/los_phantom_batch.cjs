@@ -13,9 +13,7 @@ const L = (batch, type, date, qty, remark, plot) => ({ batch_name:batch, transac
 const logs = [
   // A real batch.
   L('268','Seeds_Received','2026-03-01',1000), L('268','Planted','2026-03-05',1000),
-  // 211 — nothing but a calibration of NOUGHT. Approval decides nothing
-  //       any more, so what makes this a phantom is the figure, not a missing
-  //       signature: nought adjusted is nothing happening.
+  // 211 — nothing but a calibration nobody approved.
   L('211','Stock_Calibration','2026-09-12',0,'Report: Life of Seedling. Plot: B2.','B2'),
   // 212 — a transfer of nought.
   L('212','Cull3_Transfer','2026-09-12',0,'','B2'),
@@ -44,7 +42,7 @@ console.log('  should be     :', want.join(', '));
 console.log('    268  a real batch                               ' + (listed.includes('268') ? 'listed  ok' : 'MISSING ✗'));
 console.log('    213  received, quantity keyed as nought         ' + (listed.includes('213') ? 'listed  ok' : 'MISSING ✗  (a keying error must stay visible)'));
 console.log('    214  an approved calibration and nothing else   ' + (listed.includes('214') ? 'listed  ok' : 'MISSING ✗'));
-console.log('    211  a calibration of nought only                ' + (listed.includes('211') ? 'LISTED ✗  (the phantom row)' : 'gone    ok'));
+console.log('    211  an UNAPPROVED calibration only             ' + (listed.includes('211') ? 'LISTED ✗  (the phantom row)' : 'gone    ok'));
 console.log('    212  a transfer of nought                       ' + (listed.includes('212') ? 'LISTED ✗' : 'gone    ok'));
 const ok = JSON.stringify(listed) === JSON.stringify(want);
 console.log('\n' + (ok ? 'all correct' : 'FAILED'));
