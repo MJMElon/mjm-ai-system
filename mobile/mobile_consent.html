@@ -484,23 +484,48 @@ async function loadActiveALs() {
 }
 
 // Completed ALs for the permanent "Completed" group at the bottom of the
-// list — windowed on created_at (there is no completed/collected_at column
-// on shared_al_orders to window on instead) the same way History's own
-// 92-day window replaced a row count: a time window says plainly what it
-// covers and cannot silently truncate the way an unbounded fetch can.
-// Anything older than this window is still reachable — see searchAll()'s
-// live DB search, which queries Supabase directly rather than trusting
+// list, windowed the same way History's own 92-day fix replaced a row
+// count — except the right date to window on here is NOT
+// shared_al_orders.created_at (when the AL was first raised). An AL can
+// sit open for months of partial deliveries before the LAST DO finally
+// brings its balance to zero, so an AL created long ago can still have
+// become "completed" only this week — windowing on created_at hid exactly
+// those, which is the ordinary case rather than the rare one. The date
+// that actually means "recently completed" is the most recent delivery
+// against it, so this windows shared_do_records.delivery_date instead and
+// only keeps the ALs that delivery activity touched, bounded by that
+// window rather than by every AL ever raised. A calibration DO (CAL-…) is
+// a stock correction, not a delivery, so it is excluded the same way
+// operation_stock_sales.js excludes it from "collected" everywhere else.
+// Anything outside the window is still reachable — see searchAll()'s live
+// DB search, which queries Supabase directly rather than trusting
 // whatever loaded on page-open.
 const COMPLETED_WINDOW_DAYS = 90;
 async function loadCompletedALs() {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - COMPLETED_WINDOW_DAYS);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+
+  const { data: doRows, error: doErr } = await _supabase
+    .from('shared_do_records')
+    .select('al_number,delivery_date,status,do_number')
+    .gte('delivery_date', cutoffStr);
+  if (doErr || !doRows) { completedData = []; return; }
+
+  const recentAlNumbers = [...new Set(
+    doRows
+      .filter(d => d.status !== 'Cancelled' && !/^CAL-/i.test(String(d.do_number || '')))
+      .map(d => d.al_number)
+      .filter(Boolean)
+  )];
+  if (!recentAlNumbers.length) { completedData = []; return; }
+
   const { data, error } = await _supabase
     .from('shared_al_orders')
     .select('id,al_number,order_number,customer_name,product_name,quantity_ordered,balance_quantity,status,created_at')
     .not('status', 'in', '("Cancelled","Collected")')
     .lte('balance_quantity', 0)
-    .gte('created_at', cutoff.toISOString())
+    .in('al_number', recentAlNumbers)
     .order('created_at', { ascending: false });
   if (error) { completedData = []; return; }
   completedData = data || [];
