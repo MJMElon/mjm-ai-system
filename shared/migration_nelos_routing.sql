@@ -16,7 +16,7 @@
 --
 --   1. A HANDLER is a person with one home module — "this person handles
 --      Nursery Operation cases". Nothing is added by hand: anybody granted
---      Nelos on the main portal's User Access appears in the list ready to
+--      Nelos on the main portals User Access appears in the list ready to
 --      be pinned.
 --
 --   2. ROUTING says where a case goes when it is raised. A case raised in
@@ -25,11 +25,11 @@
 --      the section, not of the person, so it lives on nelos_modules.
 --
 -- WHAT SOMEBODY SEES, ONCE PINNED
---   • every case sitting in their home module's queue, wherever they are
+--   • every case sitting in their home modules queue, wherever they are
 --     in the system, and
 --   • every case assigned to them personally, whatever queue it is in.
 -- So an auditor pinned to Audit still gets the To-Do dock on the Stock
--- system — showing Audit's queue plus anything with their name on it.
+-- system — showing Audit is queue plus anything with their name on it.
 --
 -- Not yet pinned → sees everything, as before. A person who has just been
 -- granted Nelos must not find an empty screen.
@@ -42,7 +42,7 @@
 
 -- ── PREFLIGHT ───────────────────────────────────────────────────
 -- Stop with a sentence somebody can act on, rather than letting the first
--- ALTER fail with a bare 'relation does not exist'. Requires: migration_nelos.sql then migration_nelos_modules.sql.
+-- ALTER fail with a bare relation does not exist. Requires: migration_nelos.sql then migration_nelos_modules.sql.
 DO $preflight$
 BEGIN
   IF to_regclass('public.nelos_cases') IS NULL THEN
@@ -111,7 +111,7 @@ UPDATE nelos_cases SET assigned_module = source_module
 -- ── Superseded by migration_nelos_roles.sql ─────────────────────
 -- That file redefines this trigger to be category-aware and widens both
 -- scope functions with a role column. Postgres will not let CREATE OR
--- REPLACE change a function's return type, so re-running THIS file after
+-- REPLACE change a functions return type, so re-running THIS file after
 -- that one used to fail outright — and, had it succeeded, would have
 -- quietly reverted the newer behaviour. So when nelos_roles exists, the
 -- later migration owns these three objects and this block stands down.
@@ -154,7 +154,7 @@ CREATE TABLE IF NOT EXISTS nelos_handlers (
   email           TEXT,
   full_name       TEXT,
 
-  -- The pin: which module's cases this person handles. NULL = not pinned
+  -- The pin: which modules cases this person handles. NULL = not pinned
   -- yet, which means unrestricted rather than blocked.
   primary_module  TEXT REFERENCES nelos_modules(key) ON UPDATE CASCADE ON DELETE SET NULL,
 

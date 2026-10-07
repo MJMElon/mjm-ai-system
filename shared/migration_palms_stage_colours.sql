@@ -20,7 +20,7 @@
 -- single key entry by itself, so grouping is just "give these three the same
 -- colour" -- no phase has to be defined anywhere.
 --
--- These five are the office's own choice. They validate with all pairs in
+-- These five are the offices own choice. They validate with all pairs in
 -- play on a light surface: worst normal-vision DeltaE 16.3, all inside the
 -- lightness band and over the chroma floor. Red against green is the one
 -- soft pair for a colourblind reader at DeltaE 7.2, allowed only with a
@@ -76,10 +76,10 @@ ORDER  BY sort_order, name;
    has since chosen their own in Settings.
 
    WITH want(pos, hex) AS (
-     VALUES (1,'#e34948'), (2,'#e34948'), (3,'#e34948'),
-            (4,'#2a78d6'), (5,'#2a78d6'), (6,'#2a78d6'),
-            (7,'#4a3aa7'), (8,'#4a3aa7'), (9,'#4a3aa7'),
-            (10,'#eda100'), (11,'#008300')
+     VALUES (1,#e34948), (2,#e34948), (3,#e34948),
+            (4,#2a78d6), (5,#2a78d6), (6,#2a78d6),
+            (7,#4a3aa7), (8,#4a3aa7), (9,#4a3aa7),
+            (10,#eda100), (11,#008300)
    ),
    ordered AS (
      SELECT id, row_number() OVER (ORDER BY sort_order, name) AS pos

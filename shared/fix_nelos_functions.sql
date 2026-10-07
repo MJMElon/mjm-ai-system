@@ -27,7 +27,7 @@
 --   functions to match, so it works whether or not migration_nelos_access
 --   .sql and migration_nelos_sees_all.sql were ever run. The shape they
 --   RETURN is always the same — a missing column comes back as its default
---   (false, '{}', NULL) rather than changing the answer's shape, because the
+--   (false, {}, NULL) rather than changing the answers shape, because the
 --   JavaScript reads these by name.
 --
 --   And it does the whole thing inside one DO block. A DO block is a single
@@ -91,7 +91,7 @@ BEGIN
                               AND column_name='access_modules')
               THEN 'COALESCE(h.access_modules, ''{}''::text[])' ELSE '''{}''::text[]' END;
 
-  -- sees_all is the HQ system's flag OR the person's own tick. Either may be
+  -- sees_all is the HQ systems flag OR the persons own tick. Either may be
   -- absent; false stands in for a missing one, so nobody GAINS sight of
   -- anything because a migration has not been run.
   sees := '(' ||
@@ -197,7 +197,7 @@ SELECT 'AFTER' AS when_,
        to_regprocedure('public.nelos_my_scope()') IS NOT NULL AS has_my_scope,
        to_regprocedure('public.nelos_people()')   IS NOT NULL AS has_people;
 
--- Run as yourself (not the SQL editor's service role) to see a real answer;
+-- Run as yourself (not the SQL editors service role) to see a real answer;
 -- from the editor auth.uid() is null, so an empty row here is expected and
 -- is not a failure.
 SELECT * FROM public.nelos_my_scope();

@@ -50,7 +50,7 @@ ORDER  BY i.row_no;
 --      • the same movement as a sheet row, recorded with a different plot,
 --        quantity or batch                                          → it is a
 --        duplicate, and the source plot is being deducted twice. Delete it
---        (section 4 below) rather than editing, since the sheet's version is
+--        (section 4 below) rather than editing, since the sheets version is
 --        already in place.
 -- ────────────────────────────────────────────────────────────────
 SELECT l.id,
@@ -127,7 +127,7 @@ ORDER  BY e.id, i.row_no;
 -- ────────────────────────────────────────────────────────────────
 -- DELETE FROM shared_inventory_logs
 -- WHERE  id = 0
---   AND  transaction_type = 'Cull3_Transfer';
+--   AND  transaction_type = Cull3_Transfer;
 
 
 -- ────────────────────────────────────────────────────────────────

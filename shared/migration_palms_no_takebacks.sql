@@ -4,7 +4,7 @@
 --
 -- WHY STATUSES WERE "CHANGING BY THEMSELVES"
 --
--- The phone app is built so a Field Conductor's record can never be lost:
+-- The phone app is built so a Field Conductors record can never be lost:
 -- sync pushes every local entry the server has not got. That is right for a
 -- phone that keyed records offline — and it is exactly wrong for a row the
 -- office DELETED on purpose. The server kept no memory of the delete, so the
@@ -20,17 +20,17 @@
 --   1. TOMBSTONES. Deleting a plot-log row now leaves its client_uid in
 --      fcportal_palms_tombstones (an AFTER DELETE trigger, so every delete
 --      counts: the seed, a cleanup, a hand-run statement). An INSERT of a
---      tombstoned client_uid is silently skipped — the phone's upsert
+--      tombstoned client_uid is silently skipped — the phones upsert
 --      succeeds and changes nothing. Phones also READ this table on sync and
 --      drop their dead local copies, so their own boards come clean.
 --
 --   2. NO REOPENING. An UPDATE that would turn a closed entry (end_date set)
 --      back into a running one (end_date NULL) keeps the close. That is a
 --      stale phone pushing the copy it held from before the office closed
---      the stage — the office's close is the record.
+--      the stage — the offices close is the record.
 --
 -- To deliberately restore a deleted row: remove its tombstone first, then
--- insert. (DELETE FROM fcportal_palms_tombstones WHERE client_uid = '…';)
+-- insert. (DELETE FROM fcportal_palms_tombstones WHERE client_uid = …;)
 --
 -- Run in the Supabase SQL Editor (main project: kibqjztozokohqmhqqqf).
 -- Safe to run twice. Nothing here deletes or changes any data.
@@ -86,9 +86,9 @@ CREATE TRIGGER palms_log_bury
 
 
 -- ── 3. A TOMBSTONED ROW DOES NOT COME BACK ──────────────────────
--- RETURN NULL skips the insert without an error: the phone's upsert
+-- RETURN NULL skips the insert without an error: the phones upsert
 -- "succeeds", sends nothing new, and the phone drops its copy on the next
--- pull. Raising an error instead would abort the phone's WHOLE batch —
+-- pull. Raising an error instead would abort the phones WHOLE batch —
 -- including genuinely new field records travelling in the same statement.
 CREATE OR REPLACE FUNCTION public.palms_log_stay_buried()
 RETURNS trigger
@@ -110,8 +110,8 @@ CREATE TRIGGER palms_log_stay_buried
 
 
 -- ── 4. CLOSED STAYS CLOSED ──────────────────────────────────────
--- Keeps ONLY the end_date. The rest of a stale phone's copy is identical to
--- what the office holds — the close was the office's one change — so the
+-- Keeps ONLY the end_date. The rest of a stale phones copy is identical to
+-- what the office holds — the close was the offices one change — so the
 -- update is otherwise harmless.
 CREATE OR REPLACE FUNCTION public.palms_log_keep_closed()
 RETURNS trigger

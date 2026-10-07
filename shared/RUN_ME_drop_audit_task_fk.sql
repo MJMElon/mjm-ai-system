@@ -7,7 +7,7 @@
 -- (batch or task) is missing" (Postgres error 23503, foreign key
 -- violation), and the record stayed stuck on the phone for ever.
 --
--- An audit's task_id can NOT be a real foreign key. Audit tasks come
+-- An audit is task_id can NOT be a real foreign key. Audit tasks come
 -- from two sources (see audit/audit_maintenance_script.js loadAll):
 --   1. nops_maint_field_records — real table rows, real BIGSERIAL ids;
 --   2. the office Maintenance schedule — rows INSIDE the JSONB blob of
@@ -17,11 +17,11 @@
 -- office-schedule task, which is exactly the stuck record. No repo
 -- migration ever created such a constraint — it was added directly in
 -- Supabase — so this file removes whatever foreign keys the table has.
--- The audit row's own nursery / plot / task_type / date columns are
+-- The audit rows own nursery / plot / task_type / date columns are
 -- the working link; nothing reads task_id through a join.
 --
 -- Safe to run twice: a second run finds no constraints and drops
--- nothing. After it runs, press OK on the phone's sync dialog and the
+-- nothing. After it runs, press OK on the phones sync dialog and the
 -- stuck audit goes through.
 -- =====================================================================
 

@@ -48,7 +48,7 @@ NOTIFY pgrst, 'reload schema';
 
 
 -- ── 4. What should have happened ────────────────────────────────────────
--- One result set, because the SQL Editor only shows the last statement's.
+-- One result set, because the SQL Editor only shows the last statements.
 --
 -- A GOOD RESULT is four rows:
 --   registered_on column      yes

@@ -14,7 +14,7 @@
 --   4. something is blocked behind a lock
 --   5. the working set no longer fits in memory
 --
--- ONE result set on purpose. The SQL Editor shows only the LAST statement's
+-- ONE result set on purpose. The SQL Editor shows only the LAST statements
 -- result, so a file of nine queries answers eight questions into the void.
 --
 -- Read the LOOK column first: ok, or a line beginning with >>> that needs
@@ -37,7 +37,7 @@ disk AS (
 ),
 
 -- ── 2. Connections ──────────────────────────────────────────────────────
--- Supabase's pooler has a fixed ceiling. "idle in transaction" is the one
+-- Supabases pooler has a fixed ceiling. "idle in transaction" is the one
 -- that actually kills a project: a client that opened a transaction and went
 -- away holds its connection AND its locks until something times it out.
 conns AS (
@@ -113,7 +113,7 @@ big AS (
    LIMIT 6
 ),
 
--- ── 7. And the two tables this month's work touched ─────────────────────
+-- ── 7. And the two tables this months work touched ─────────────────────
 -- Named rather than left to the size list, so their absence from it is
 -- itself an answer: if these are small, none of the recent changes is why.
 mine AS (

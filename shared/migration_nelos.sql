@@ -11,7 +11,7 @@
 --
 --   1. nelos_categories     — the kinds of case there are (Planting
 --                             Discrepancy, Height Shortfall, Pest, …).
---                             Editable from the module's Settings; nothing
+--                             Editable from the modules Settings; nothing
 --                             is hard-coded, the same way nops_work_types
 --                             works for Nursery Operation.
 --   2. nelos_cases          — one row per case. Carries WHERE it came from
@@ -24,8 +24,8 @@
 --                             written here too, so the history reads as one
 --                             list rather than being split across tables.
 --
--- Module access: permissions.modules.nelos = 'admin'|'normal'|'none',
--- granted on the main portal's User Access (JSONB — no DDL needed).
+-- Module access: permissions.modules.nelos = admin|normal|none,
+-- granted on the main portals User Access (JSONB — no DDL needed).
 -- What somebody sees once inside is decided by which linked modules and
 -- categories they are set up for — see migration_nelos_modules.sql and
 -- nelos/nelos_user_setting.html.
@@ -102,15 +102,15 @@ CREATE TABLE IF NOT EXISTS nelos_cases (
   description    TEXT,
   category       TEXT,               -- nelos_categories.name, by value not FK
                                      -- so renaming a category never orphans
-                                     -- a closed case's history
+                                     -- a closed cases history
   priority       TEXT NOT NULL DEFAULT 'normal',  -- low | normal | high | urgent
   status         TEXT NOT NULL DEFAULT 'open',    -- open | in_progress | resolved | closed
 
   -- Where it came from. source_module is what the To-Do widgets filter on;
   -- source_ref is a link back to the exact page that raised it, written as
-  -- seen from a module folder — i.e. starting '../', because the only page
+  -- seen from a module folder — i.e. starting ../, because the only page
   -- that follows it is nelos/nelos_case.html
-  -- (e.g. '../operation/operation_batch_detail.html?batch=264').
+  -- (e.g. ../operation/operation_batch_detail.html?batch=264).
   source_module  TEXT NOT NULL DEFAULT 'nelos',   -- operation | audit | scan | nursery_ops | nelos
   source_ref     TEXT,
 
@@ -334,4 +334,4 @@ SELECT 'nelos_case_comments',      count(*) FROM nelos_case_comments;
 --   DROP FUNCTION IF EXISTS public.nelos_assign_case_no();
 --   DROP SEQUENCE IF EXISTS nelos_case_no_seq;
 -- operation_follow_up_cases is untouched by this migration, so reverting
--- Batch Detail's insert target is all that is needed to go back.
+-- Batch Details insert target is all that is needed to go back.

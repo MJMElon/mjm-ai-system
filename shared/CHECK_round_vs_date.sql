@@ -6,7 +6,7 @@
 --  No regular expressions and no backslashes, so it survives a paste.
 --
 --  WHY
---  A plot's rounds happen in order: Round 4 cannot be worked before Round 3.
+--  A plots rounds happen in order: Round 4 cannot be worked before Round 3.
 --  So a round carrying an EARLIER date than the round before it is a date
 --  that is wrong -- keyed wrong, or paired to the wrong round when the field
 --  record came in.
@@ -18,8 +18,8 @@
 --
 --  WHAT TO LOOK FOR
 --
---    ord 1, 'summary'  -> how many plot-and-job groups have one.
---    ord 2, 'OUT OF STEP' -> the round, its date, and the round before it
+--    ord 1, summary  -> how many plot-and-job groups have one.
+--    ord 2, OUT OF STEP -> the round, its date, and the round before it
 --       with its date. One of those two dates is wrong. The drone map, the
 --       field record or the paper says which.
 --    Nothing listed means every round of every plot is dated after the one

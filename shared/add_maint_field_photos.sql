@@ -1,10 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════
    PHOTOS OF THE WORK
 
-   The FC Scan Portal's Maintenance form can now take or upload a photo when
+   The FC Scan Portals Maintenance form can now take or upload a photo when
    a job is recorded. The pictures themselves go to Supabase Storage — the
    `documents` bucket, under maint_photos/ — and only their links are kept
-   here, so the database's disk carries a few hundred characters per record
+   here, so the databases disk carries a few hundred characters per record
    rather than a few megabytes.
 
    They are shrunk on the phone before they are sent: scaled to 1280px wide
@@ -34,12 +34,12 @@ WHERE  table_name = 'nops_maint_field_records'
 /* ── The bucket ────────────────────────────────────────────────────────
    Nothing to create: `documents` is the bucket the delivery-order photos
    already use. If a photo ever fails to upload, the work record is still
-   saved without it — a dropped signal must not cost a morning's records.
+   saved without it — a dropped signal must not cost a mornings records.
 
    To see how much the photos are using:
 
        SELECT count(*)                                   AS files,
-              pg_size_pretty(sum((metadata->>'size')::bigint)) AS total
+              pg_size_pretty(sum((metadata->>size)::bigint)) AS total
        FROM   storage.objects
-       WHERE  bucket_id = 'documents' AND name LIKE 'maint_photos/%';
+       WHERE  bucket_id = documents AND name LIKE maint_photos/%;
 */

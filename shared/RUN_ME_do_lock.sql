@@ -1,9 +1,9 @@
 -- ════════════════════════════════════════════════════════════════════════
 -- DO & AL ENTRY LOCK — one cutoff date, and everything dated ON OR BEFORE
 -- it (the cutoff date itself included) can no longer be changed:
---   - shared_do_records: can't be edited or deleted (operation_delivery.html).
+--   - shared_do_records: cannot be edited or deleted (operation_delivery.html).
 --     New DOs can still be keyed in regardless of the cutoff.
---   - shared_al_orders: can't be edited, cancelled or restored
+--   - shared_al_orders: cannot be edited, cancelled or restored
 --     (operation_booking.html). A NEW AL dated on/before the cutoff is
 --     blocked too — an AL is the order intake record, so a backdated new
 --     one would sneak a "historical" order into a closed period the same

@@ -6,16 +6,16 @@
 --  it is safe to run twice.
 --
 --  WHAT THE FEATURE STORES
---  The Planting report's new Empty Hole tab writes ONE ROW PER HOLE into
+--  The Planting reports new Empty Hole tab writes ONE ROW PER HOLE into
 --  shared_inventory_logs — the same table and shape as every other fact
 --  on that page. No new table and no new column:
 --
---      transaction_type  'Empty_Hole'
+--      transaction_type  Empty_Hole
 --      batch_name        the batch
 --      plot_name         the tray
 --      quantity_change   1          (each record IS one hole, so a count
 --                                    is a count of rows, not a sum)
---      remark            'Empty hole. Row: <r>. Hole: <h>. <note>'
+--      remark            Empty hole. Row: <r>. Hole: <h>. <note>
 --
 --  FROM BATCH 276 ONWARDS, AND NOWHERE BEFORE IT
 --  Counting hole by hole is a change to how the field works, so it starts
@@ -26,13 +26,13 @@
 --  operation/operation_batch_detail.html.
 --
 --  So there is nothing to migrate. This file exists to PROVE that before
---  somebody keys a day's counting into a screen that cannot save it: if
+--  somebody keys a days counting into a screen that cannot save it: if
 --  transaction_type carries a CHECK constraint listing the allowed
---  values, 'Empty_Hole' has to be in it, and the check below says so
+--  values, Empty_Hole has to be in it, and the check below says so
 --  either way.
 -- =====================================================================
 
-/* Reading a batch's holes is "this batch, this type" — the same shape as
+/* Reading a batchs holes is "this batch, this type" — the same shape as
    every other read on the page, and the existing batch_name index already
    serves it. This narrows it further and costs nothing when there are no
    empty holes at all. IF NOT EXISTS, so a second run is a no-op. */
@@ -40,7 +40,7 @@ CREATE INDEX IF NOT EXISTS shared_inventory_logs_empty_hole_idx
   ON shared_inventory_logs (batch_name)
   WHERE transaction_type = 'Empty_Hole';
 
-/* ONE result set — the SQL Editor only shows the last statement's. */
+/* ONE result set — the SQL Editor only shows the last statements. */
 WITH constraint_check AS (
   SELECT COUNT(*) AS n,
          LEFT(COALESCE(STRING_AGG(pg_get_constraintdef(c.oid), ' | '), ''), 300) AS defs
@@ -83,7 +83,7 @@ SELECT (SELECT ok       FROM allows)            AS type_allowed,
 --   column says "Ready."
 --
 --   empty_hole_rows is 0 the first time — nothing has been keyed yet.
---   After somebody saves a tray's holes it is the number of holes, one
+--   After somebody saves a trays holes it is the number of holes, one
 --   row each.
 --
 --   type_allowed false is the one case that needs a person: copy the

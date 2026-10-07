@@ -1,7 +1,7 @@
 -- ════════════════════════════════════════════════════════════════════════
 -- nops_maint_published gets its own `payload` column, and worker_schedules()
 -- is pointed at that table instead of the live nops_maint_state — so a tick
--- made in the office's Work Editor only reaches the FC Portal / 555 Worker
+-- made in the offices Work Editor only reaches the FC Portal / 555 Worker
 -- Portal once "Sync" is actually pressed, not the moment the tick is made.
 --
 -- Before this: the office wrote every tick straight to nops_maint_state,
@@ -19,7 +19,7 @@
 --
 -- Safe to run twice. Ends in one check: every nursery/month currently in
 -- nops_maint_published, and whether it has a payload yet — a row reading
--- "f" here shows NOTHING to the field until somebody opens that nursery's
+-- "f" here shows NOTHING to the field until somebody opens that nurserys
 -- Work Editor and presses Sync. That includes whatever is sitting there for
 -- October 2026 right now, from before this fix — this migration does not
 -- backfill payload, on purpose.

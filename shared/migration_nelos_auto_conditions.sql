@@ -8,7 +8,7 @@
 -- do not reconcile and a case appears without anybody asking for one.
 --
 -- Those second ones were invisible. The condition lived in one line of one
--- module's JavaScript, and where the case went was decided by a routing row
+-- modules JavaScript, and where the case went was decided by a routing row
 -- nobody connected to it. This makes both readable, and the destination
 -- editable, on the Automate Cases page.
 --
@@ -25,7 +25,7 @@
 --
 -- WHAT IT DOES NOT DO
 --   It does not change when anything fires. The conditions are still the
---   module code's; this only writes down the ones that exist so they can be
+--   module codes; this only writes down the ones that exist so they can be
 --   read and re-pointed.
 --
 -- Requires migration_nelos_all.sql and migration_nelos_seats.sql.
@@ -59,7 +59,7 @@ COMMENT ON COLUMN public.nelos_categories.auto_condition IS
 --
 -- Alongside to_seat_no, not instead of it. A seat is a job ("Admin 1"); a
 -- PIC is a person. A rule may name either, both or neither — neither means
--- the whole system's queue, which is the default and stays the default.
+-- the whole systems queue, which is the default and stays the default.
 -- ────────────────────────────────────────────────────────────────
 ALTER TABLE nelos_routes ADD COLUMN IF NOT EXISTS to_user_id   UUID
   REFERENCES shared_profiles(id) ON DELETE SET NULL;
@@ -68,7 +68,7 @@ ALTER TABLE nelos_routes ADD COLUMN IF NOT EXISTS to_user_name TEXT;
 -- ────────────────────────────────────────────────────────────────
 -- PART 3: Put the PIC on the case
 --
--- migration_nelos_seats.sql's version, plus the assignee. Same rule as the
+-- migration_nelos_seats.sqls version, plus the assignee. Same rule as the
 -- rest of routing: what the case already says wins, so a case raised with a
 -- name on it keeps that name.
 -- ────────────────────────────────────────────────────────────────

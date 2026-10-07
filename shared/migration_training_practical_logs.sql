@@ -4,7 +4,7 @@
 -- ================================================================
 --
 -- Why:
---   The Training Center's Practical Record page now captures a photo,
+--   The Training Centers Practical Record page now captures a photo,
 --   GPS location, and timestamp every time a trainee taps "+" on an
 --   activity — proof that the practical work was really done.
 --   Photos are uploaded to the existing public `documents` bucket
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS training_practical_logs (
     user_id     uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     email       text,
     full_name   text,
-    activity    text NOT NULL,          -- MJM.ACTIVITIES key, e.g. 'watering'
+    activity    text NOT NULL,          -- MJM.ACTIVITIES key, e.g. watering
     taken_at    timestamptz NOT NULL DEFAULT now(),
     lat         double precision,       -- null when GPS unavailable/denied
     lng         double precision,
@@ -42,7 +42,7 @@ ON training_practical_logs FOR INSERT
 TO authenticated
 WITH CHECK (user_id = auth.uid());
 
--- Trainees read their own history; Manage Users admins read everyone's
+-- Trainees read their own history; Manage Users admins read everyones
 -- (for reviewing proof before certifying).
 DROP POLICY IF EXISTS "training logs — read own or admin" ON training_practical_logs;
 CREATE POLICY "training logs — read own or admin"

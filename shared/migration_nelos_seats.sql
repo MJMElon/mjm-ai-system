@@ -9,14 +9,14 @@
 -- anybody could hold one: a Roles tab, then a Handlers tab, then a pin on
 -- each. Two screens and a made-up word for something much simpler.
 --
--- A handler's role is just WHICH SYSTEM they answer for and WHICH NUMBER
+-- A handlers role is just WHICH SYSTEM they answer for and WHICH NUMBER
 -- they are in it. Pin somebody to the Admin Portal and they are Admin 1;
 -- pin the next person and they are Admin 2. Nothing to name, one list,
 -- and the routing page can then say "this category goes to Admin 2".
 --
 -- So:
 --   • nelos_modules.handler_label — what one person in this system is
---     called, singular. 'Admin' for the Admin Portal, 'Auditor' for the
+--     called, singular. Admin for the Admin Portal, Auditor for the
 --     Audit Portal. Combined with the number this is the whole role name.
 --   • nelos_handlers.seat_no      — their position in that system, 1, 2, 3…
 --   • nelos_routes.to_seat_no     — a rule may target a number, or leave it
@@ -34,7 +34,7 @@
 
 -- ── PREFLIGHT ───────────────────────────────────────────────────
 -- Stop with a sentence somebody can act on, rather than letting the first
--- ALTER fail with a bare 'relation does not exist'. Requires: the four earlier nelos migrations, in order.
+-- ALTER fail with a bare relation does not exist. Requires: the four earlier nelos migrations, in order.
 DO $preflight$
 BEGIN
   IF to_regclass('public.nelos_cases') IS NULL THEN
@@ -84,7 +84,7 @@ UPDATE nelos_modules SET handler_label = label
  WHERE handler_label IS NULL OR handler_label = '';
 
 -- ────────────────────────────────────────────────────────────────
--- PART 2: A handler's number inside their system
+-- PART 2: A handlers number inside their system
 -- ────────────────────────────────────────────────────────────────
 ALTER TABLE nelos_handlers ADD COLUMN IF NOT EXISTS seat_no INT;
 
@@ -102,7 +102,7 @@ CREATE INDEX IF NOT EXISTS nelos_cases_seat_idx ON nelos_cases (assigned_seat_no
 -- ────────────────────────────────────────────────────────────────
 -- PART 3: Carry nelos_roles across as numbers
 --
--- Each system's roles become 1, 2, 3… in the order they were listed, and
+-- Each systems roles become 1, 2, 3… in the order they were listed, and
 -- everything pointing at a role follows. Guarded on to_regclass so a
 -- database that never ran the roles migration skips the whole block.
 -- ────────────────────────────────────────────────────────────────

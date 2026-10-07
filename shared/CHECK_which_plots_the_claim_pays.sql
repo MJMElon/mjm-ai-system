@@ -22,19 +22,19 @@
 --
 --  WHAT TO LOOK FOR
 --
---    ord 1, 'summary'
+--    ord 1, summary
 --      -> how many plots carry work records, and how many of those still
 --         belong to nobody.
 --
---    ord 2, 'PAYS NOBODY'
+--    ord 2, PAYS NOBODY
 --      -> work on these is still not priced. Hopefully none. If a "-R" plot
 --         is here, Seedling Stock does not have it under any nursery this
 --         page knows -- add it there.
 --
---    ord 3, 'paid'
+--    ord 3, paid
 --      -> every plot that carries work, the nursery it pays into, how many
 --         rows it has, and which of the three placed it. The "-R" lines
---         reading 'Seedling Stock' are the ones that paid nobody before.
+--         reading Seedling Stock are the ones that paid nobody before.
 -- =====================================================================
 WITH rec AS (
   SELECT trim(COALESCE(r ->> 'plot', '')) AS plot, count(*) AS rows_on_it

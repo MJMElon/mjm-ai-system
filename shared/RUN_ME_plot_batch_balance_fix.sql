@@ -1,13 +1,13 @@
 -- ════════════════════════════════════════════════════════════════════════
--- THE FC PORTAL'S BATCH LIST IS THE MAIN NURSERY MOVEMENT REPORT
+-- THE FC PORTALS BATCH LIST IS THE MAIN NURSERY MOVEMENT REPORT
 --
 -- One rule and no exceptions. The batches a Field Conductor is offered for
--- a plot, and the quantity beside each, are that report's own:
+-- a plot, and the quantity beside each, are that reports own:
 --
 --   Balance = transplanted from PN + transfer in
 --           - sold - 3rd culled - transfer out + stock adjustment
 --
--- Two carry the report's own condition: a 3rd culling counts only once the
+-- Two carry the reports own condition: a 3rd culling counts only once the
 -- drone map has been keyed (MapQty:), and a stock calibration only once
 -- [APPROVED ...]. Everything else takes no part because the report has no
 -- column for it - the 1st and 2nd cullings, Planted, Seeds_Received and
@@ -20,13 +20,13 @@
 --
 -- ONE THING TO KNOW: a PN plot (P01-P52) has no main-nursery movement, so
 -- it will offer no batches. If Field Conductors record maintenance on PN
--- plots, say so and the report's Pre-Nursery section goes back in.
+-- plots, say so and the reports Pre-Nursery section goes back in.
 -- ════════════════════════════════════════════════════════════════════════
 
 
 /* ── 1. THE TWO KEYS ───────────────────────────────────────────────────
    The same normalising the apps do, so a plot or batch spelt loosely on a
-   delivery order still lands on the ledger's row. These are exact ports of
+   delivery order still lands on the ledgers row. These are exact ports of
    plotKey() and batchKey() in the FC portal — if you change one, change
    both, or the two will quietly disagree. */
 
@@ -42,7 +42,7 @@ $$;
 
 /* A batch is its trailing digits: "MJM-225", "225." and " 225 " are all 225.
    Something with no trailing digits ("24D") is no batch at all and returns
-   '', so it can never be matched to one.
+   , so it can never be matched to one.
 
    A PARENTHETICAL NOTE GOES FIRST. "232 (B13)" is batch 232, not batch 13 —
    left in, the trailing-digits rule below reads the "13" inside the note and
@@ -51,7 +51,7 @@ $$;
    delivery order whose batch field read "232 (B13)". This is the same split
    mjm_plot_key already does for its own notes.
    SHARED RULE - _mvBatchKey() in operation_reports.html and batchKey() in
-   the FC portal's plotBatches.js. Change one, change the others. */
+   the FC portals plotBatches.js. Change one, change the others. */
 CREATE OR REPLACE FUNCTION mjm_batch_key(v text)
 RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
   SELECT CASE
@@ -129,7 +129,7 @@ bal AS (
   SELECT mjm_plot_key(plot)   AS plot_key,
          mjm_batch_key(batch) AS batch_key,
          -- Spell them the way the ledger first spelt them, so the phone shows
-         -- the office's own wording rather than a normalised key.
+         -- the offices own wording rather than a normalised key.
          btrim((array_agg(plot  ORDER BY id))[1]) AS plot_name,
          btrim((array_agg(batch ORDER BY id))[1]) AS batch_name,
          sum(qty) AS qty
@@ -167,7 +167,7 @@ WHERE  b.qty - coalesce(s.qty, 0) <> 0;
 
 
 /* ── 3. WHO MAY READ IT ────────────────────────────────────────────────
-   security_invoker means the underlying tables' own policies still decide;
+   security_invoker means the underlying tables own policies still decide;
    this only opens the view itself. */
 GRANT SELECT ON shared_plot_batch_balance TO authenticated;
 

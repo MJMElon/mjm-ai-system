@@ -2,13 +2,13 @@
 -- WORK MAINTENANCE LIST — the Audit column
 --
 -- Paste the whole file into the Supabase SQL Editor and press Run. It adds
--- one read-only policy and changes no table, no data and nobody's ability to
+-- one read-only policy and changes no table, no data and nobodys ability to
 -- write anything. Safe to run twice.
 --
 -- ── Why it is needed ──
 --
 -- Nursery Operation Management -> Work Maintenance List now carries an Audit
--- column showing the Auditor Portal's verdict on each job: Satisfied,
+-- column showing the Auditor Portals verdict on each job: Satisfied,
 -- Unsatisfied, or a dash where nobody has audited it.
 --
 -- Those verdicts live in audit_maintenance_audits, and that table is closed
@@ -18,7 +18,7 @@
 --
 -- ── What it grants, and what it does not ──
 --
--- SELECT only, to signed-in staff, on the audit tables' verdicts. Filing,
+-- SELECT only, to signed-in staff, on the audit tables verdicts. Filing,
 -- changing and deleting an audit stay exactly where they are: the audit
 -- module. A nursery manager can see that a job passed. They still cannot
 -- pass one.
@@ -42,7 +42,7 @@
 -- user_type is read through to_jsonb rather than named directly, because a
 -- LANGUAGE sql body is checked the moment it is created: naming a column
 -- that a database has not got yet fails the whole file rather than the one
--- line. Absent reads as 'system', which is a member of staff - the same
+-- line. Absent reads as system, which is a member of staff - the same
 -- answer the rest of the system gives.
 CREATE OR REPLACE FUNCTION public._nops_may_read_audit()
 RETURNS boolean
@@ -61,8 +61,8 @@ GRANT  EXECUTE ON FUNCTION public._nops_may_read_audit() TO authenticated;
 
 -- ── 2. The read ─────────────────────────────────────────────────────────
 --
--- Its own policy with its own name rather than an edit to the audit module's.
--- Two reasons: re-running the audit module's own migration will not quietly
+-- Its own policy with its own name rather than an edit to the audit modules.
+-- Two reasons: re-running the audit modules own migration will not quietly
 -- undo this, and anybody reading the policy list can see at a glance that the
 -- operation side reads these and does not write them.
 --
@@ -92,7 +92,7 @@ NOTIFY pgrst, 'reload schema';
 
 -- ── 4. Check ────────────────────────────────────────────────────────────
 --
--- One result set: the SQL Editor only shows the last statement's, so a file
+-- One result set: the SQL Editor only shows the last statements, so a file
 -- of separate queries answers most of its questions into the void.
 SELECT 'the verdicts table exists' AS what,
        CASE WHEN to_regclass('public.audit_maintenance_audits') IS NOT NULL

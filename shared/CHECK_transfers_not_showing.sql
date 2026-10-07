@@ -4,13 +4,13 @@
 --  changes nothing, so it is safe to run as often as you like.
 --
 --  THE COMPLAINT
---  Batch 242's Transfer Data said "No transfer record" and P-R Culling
+--  Batch 242s Transfer Data said "No transfer record" and P-R Culling
 --  was empty, on a batch that plainly had both. One batch is the example,
 --  never the scope: this asks the same of EVERY batch.
 --
 --  HOW A TRANSFER IS STORED
 --  One Cull3_Transfer row per movement. Where the seedlings WENT is the
---  row's plot_name; where they LEFT is in the remark, as
+--  rows plot_name; where they LEFT is in the remark, as
 --
 --      3rd Culling transfer. From: [<PLOT>|main] To: [<PLOT>] Qty: N.
 --
@@ -129,7 +129,7 @@ report AS (
   FULL OUTER JOIN orphan_dests o ON o.batch_name = j.batch_name
 )
 
-/* ONE result set — the SQL Editor only shows the last statement's. The
+/* ONE result set — the SQL Editor only shows the last statements. The
    summary is the first row; everything under it is a batch to open. */
 SELECT 0                                                     AS sort,
        '— ALL BATCHES —'                                     AS batch,
@@ -157,7 +157,7 @@ ORDER BY sort, batch;
 
 -- WHAT A GOOD RESULT LOOKS LIKE
 --   The first row is the summary. If it says "Nothing to do" and there are
---   no rows under it, every batch's transfers are intact and showing.
+--   no rows under it, every batchs transfers are intact and showing.
 --
 --   RECOVERABLE is the good outcome: the records are in the database, the
 --   page no longer hides them, and no save will delete them. Open the
@@ -170,5 +170,5 @@ ORDER BY sort, batch;
 --   and dates on those plots are NOT affected; only the movement that put
 --   the seedlings there is missing.
 --
---   shown_before is how many of that batch's movements the report could
+--   shown_before is how many of that batchs movements the report could
 --   always place. transfers less shown_before is what was at risk.

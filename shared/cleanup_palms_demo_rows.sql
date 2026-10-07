@@ -6,7 +6,7 @@
 --
 -- A fresh install of the 555 FC Portal seeds itself with a made-up plot log so
 -- there is something on screen before anybody has keyed a day in. Every seeded
--- entry is stamped recorded_by = 'Contoh' and flagged demo on the device, and
+-- entry is stamped recorded_by = Contoh and flagged demo on the device, and
 -- sync.js refuses to send anything carrying that flag —
 -- src/modules/palms/sync.js: `if (e.uid && !e.demo)`.
 --
@@ -16,7 +16,7 @@
 -- that column is the real recorded_by, and for those rows the real answer is
 -- "nobody — this was generated".
 --
--- Nothing writes 'Contoh' any more. This clears what is already there.
+-- Nothing writes Contoh any more. This clears what is already there.
 --
 -- SAFE TO RE-RUN. Run the SELECT first and read it.
 -- Run in the Supabase SQL Editor (main project: kibqjztozokohqmhqqqf).
@@ -44,7 +44,7 @@ ORDER  BY count(*) DESC;
 
 
 -- ── 2. DELETE ────────────────────────────────────────────────────
--- Only exactly 'Contoh'. Not a LIKE, not case-insensitive: a real person
+-- Only exactly Contoh. Not a LIKE, not case-insensitive: a real person
 -- called something similar must not be caught by a tidy-up.
 BEGIN;
 
@@ -66,4 +66,4 @@ COMMIT;
 -- is cosmetic, but the Field Conductor sees plots that are not real.
 --
 -- On each such device: PALMS → Settings → clear the sample data, or clear the
--- site's storage. The next sync then pulls the real log down.
+-- sites storage. The next sync then pulls the real log down.

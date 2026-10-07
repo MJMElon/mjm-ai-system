@@ -12,7 +12,7 @@
 -- `scan_area_nurseries` are keys inside that JSON, the same way `modules` and
 -- `scan_actions` already were. Saving is a single-row UPDATE.
 --
--- So if saving broke somebody's access, it is not a missing table: it is what
+-- So if saving broke somebodys access, it is not a missing table: it is what
 -- got written into that JSON. Part 1 shows exactly that, per person.
 -- ════════════════════════════════════════════════════════════════════════
 
@@ -23,7 +23,7 @@
 -- person can always sign in; what this decides is what they see afterwards.
 -- So if nobody can LOG IN at all, the cause is not here.
 --
--- Read the CAN GET IN column. Anybody showing 'LOCKED OUT' has no module at
+-- Read the CAN GET IN column. Anybody showing LOCKED OUT has no module at
 -- all and will land on an empty hub.
 
 SELECT
@@ -45,8 +45,8 @@ SELECT
     ELSE 'ok'
   END                                                             AS "CAN GET IN",
 
-  -- The five doors, as Setting wrote them. '—' means nobody has saved this
-  -- person's row yet, and the old rule still answers for them.
+  -- The five doors, as Setting wrote them. — means nobody has saved this
+  -- persons row yet, and the old rule still answers for them.
   CASE WHEN p.permissions -> 'scan_areas' IS NULL THEN '— never saved here'
        ELSE concat_ws(' ',
          'manage='  || COALESCE(p.permissions #>> '{scan_areas,manage,view}',  '?'),
@@ -68,29 +68,29 @@ SELECT
 -- ── PART 2 · UNDO, if the five doors are the problem ────────────────────
 --
 -- This removes ONLY what the new Setting screen added. It does not touch
--- modules, manage_users, scan_actions or anything else, so nobody's real
+-- modules, manage_users, scan_actions or anything else, so nobodys real
 -- access is changed — every door simply goes back to the rule that governed
 -- it before, which is what an absent scan_areas already means.
 --
 -- Safe to run, and safe to run twice. Uncomment the two lines to use it.
 --
 -- UPDATE public.shared_profiles
---    SET permissions = (permissions - 'scan_areas') - 'scan_area_nurseries'
---  WHERE permissions ?| array['scan_areas', 'scan_area_nurseries'];
+--    SET permissions = (permissions - scan_areas) - scan_area_nurseries
+--  WHERE permissions ?| array[scan_areas, scan_area_nurseries];
 --
 --
 -- And for ONE person only, if it is just their row that went wrong — put
 -- their name in:
 --
 -- UPDATE public.shared_profiles
---    SET permissions = (permissions - 'scan_areas') - 'scan_area_nurseries'
---  WHERE full_name = 'PUT THE NAME HERE';
+--    SET permissions = (permissions - scan_areas) - scan_area_nurseries
+--  WHERE full_name = PUT THE NAME HERE;
 --
 --
 -- The emergency one: give somebody back Manage Users, when the person who
 -- had it can no longer open Setting to grant it.
 --
 -- UPDATE public.shared_profiles
---    SET permissions = jsonb_set(COALESCE(permissions, '{}'::jsonb),
---                                '{manage_users}', 'true'::jsonb)
---  WHERE email = 'PUT THE EMAIL HERE';
+--    SET permissions = jsonb_set(COALESCE(permissions, {}::jsonb),
+--                                {manage_users}, true::jsonb)
+--  WHERE email = PUT THE EMAIL HERE;

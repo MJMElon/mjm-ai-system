@@ -1,8 +1,8 @@
 -- ════════════════════════════════════════════════════════════════════════════
 -- Migration: Cash / Credit customer payment terms (May 2026)
 -- ----------------------------------------------------------------------------
--- Adds a payment_terms tag to every customer profile. Default is 'cash'
--- (pay-before-collection). Admins can switch a customer to 'credit' which:
+-- Adds a payment_terms tag to every customer profile. Default is cash
+-- (pay-before-collection). Admins can switch a customer to credit which:
 --   • Allows order placement to skip Billplz payment
 --   • Reserves stock immediately (already happens on order create today)
 --   • Routes the order into the monthly-billing workflow
@@ -25,7 +25,7 @@ ALTER TABLE shared_profiles
     ADD COLUMN IF NOT EXISTS credit_limit NUMERIC(12,2);
 
 -- 2. Order-level snapshot of the terms used at checkout ----------------------
--- We snapshot on the order so changing a customer's terms later doesn't
+-- We snapshot on the order so changing a customers terms later does not
 -- retroactively change historical orders.
 ALTER TABLE salesweb_customer_orders
     ADD COLUMN IF NOT EXISTS payment_terms TEXT NOT NULL DEFAULT 'cash';
@@ -37,7 +37,7 @@ ALTER TABLE salesweb_customer_orders
     CHECK (payment_terms IN ('cash','credit'));
 
 ALTER TABLE salesweb_customer_orders
-    ADD COLUMN IF NOT EXISTS credit_billing_period TEXT;  -- 'YYYY-MM' bucket
+    ADD COLUMN IF NOT EXISTS credit_billing_period TEXT;  -- YYYY-MM bucket
 ALTER TABLE salesweb_customer_orders
     ADD COLUMN IF NOT EXISTS credit_billed_at TIMESTAMPTZ;
 ALTER TABLE salesweb_customer_orders
@@ -45,7 +45,7 @@ ALTER TABLE salesweb_customer_orders
 
 -- 3. Self-update guard --------------------------------------------------------
 -- Customers can update their own profile but MUST NOT flip themselves to
--- 'credit'. Only admins (handled by admin-side write policy) can change terms.
+-- credit. Only admins (handled by admin-side write policy) can change terms.
 -- The RLS hardening migration already enforces "role + permissions unchanged"
 -- on self-update; we extend it to also pin payment_terms + credit_limit.
 DO $$

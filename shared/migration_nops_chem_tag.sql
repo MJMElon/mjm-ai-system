@@ -10,8 +10,8 @@
 -- sheet has a STICKER dropdown, and the Interrow sheet has its own chemical
 -- dropdown, and each of those has always shown a specific handful:
 --
---     PD_STICKER_OPTIONS    = ['Bond']
---     INTERROW_CHEM_OPTIONS = ['Basta', 'Monex', 'Acosta']
+--     PD_STICKER_OPTIONS    = [Bond]
+--     INTERROW_CHEM_OPTIONS = [Basta, Monex, Acosta]
 --
 -- Those lists are about to stop being hardcoded and start coming from this
 -- table. Without something to narrow them, the sticker dropdown would offer
@@ -20,7 +20,7 @@
 -- problem, so the distinction is kept.
 --
 -- It is a tag rather than a kind because a chemical is still Other; this
--- only says which of the schedule's dropdowns may show it. NULL means it
+-- only says which of the schedules dropdowns may show it. NULL means it
 -- appears in the Other list on the Setting page and in no schedule dropdown,
 -- which is true of the weedicides that have no dropdown of their own.
 -- ================================================================
@@ -65,7 +65,7 @@ END $tag$;
 
 
 -- ── Check it landed ─────────────────────────────────────────────
--- What each of the schedule's dropdowns will now offer. If one of these is
+-- What each of the schedules dropdowns will now offer. If one of these is
 -- empty the sheet it belongs to will have nothing to choose, which is worth
 -- seeing here rather than discovering on the sheet.
 DO $report$

@@ -7,13 +7,13 @@
 --
 -- migration_rls_hardening.sql replaced the audit policies with
 -- audit_module_read / audit_module_write, both TO authenticated and both
--- calling _mjm_has_module('audit', …). Two things then have to be true
+-- calling _mjm_has_module(audit, …). Two things then have to be true
 -- before a single row comes back:
 --
 --   1. the request must arrive as an authenticated user, and
 --   2. that user must have permissions.modules.audit set to admin/normal.
 --
--- The app now satisfies (1) — audit_supabase.js sends the login's access
+-- The app now satisfies (1) — audit_supabase.js sends the logins access
 -- token. But (2) was never set up: auditors sign up through the audit
 -- login, which creates a shared_profiles row with no permissions at all.
 -- So every read is still filtered to zero rows, silently, because RLS

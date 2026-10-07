@@ -26,9 +26,9 @@ DROP POLICY IF EXISTS "Read own profile"                  ON public.shared_profi
 DROP POLICY IF EXISTS "Manage users can read all profiles" ON public.shared_profiles;
 DROP POLICY IF EXISTS "Manage users can update permissions" ON public.shared_profiles;
 
--- Helper: returns true if the current authenticated user's profile has
+-- Helper: returns true if the current authenticated users profile has
 -- manage_users = true. SECURITY DEFINER lets it read shared_profiles
--- without re-triggering RLS, so policies that call it don't recurse.
+-- without re-triggering RLS, so policies that call it do not recurse.
 CREATE OR REPLACE FUNCTION public.current_user_can_manage_users()
 RETURNS boolean
 LANGUAGE sql
@@ -53,7 +53,7 @@ CREATE POLICY "Manage users can read all profiles" ON public.shared_profiles
   FOR SELECT TO authenticated
   USING (public.current_user_can_manage_users());
 
--- Manage-users folks can update any profile's permissions.
+-- Manage-users folks can update any profiles permissions.
 CREATE POLICY "Manage users can update permissions" ON public.shared_profiles
   FOR UPDATE TO authenticated
   USING (public.current_user_can_manage_users())

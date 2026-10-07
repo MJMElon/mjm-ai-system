@@ -12,8 +12,8 @@
 --  looking at, and nothing on the phone says the list has been cut — a job
 --  done last week simply is not there, which reads as a job never done.
 --
---  The FC portal's own read had the same fault and is fixed in the app.
---  This is the worker's half of it, and it has to be here because that
+--  The FC portals own read had the same fault and is fixed in the app.
+--  This is the workers half of it, and it has to be here because that
 --  phone reads nothing directly.
 --
 --  ── What it does instead ──
@@ -65,7 +65,7 @@ BEGIN
     -- INTEGER on this table and week_no is SMALLINT, and plpgsql wants the
     -- same type, not a convertible one — without the casts this raises
     -- "structure of query does not match function result type" and the
-    -- worker's whole board goes red.
+    -- workers whole board goes red.
     SELECT r.id::BIGINT, r.work_date, r.nursery_name::TEXT, r.plot_name::TEXT,
            r.work_type::TEXT, r.jenis::TEXT, r.chemical::TEXT, r.qty::NUMERIC,
            r.remark::TEXT, r.reported_by::TEXT,
@@ -74,7 +74,7 @@ BEGIN
            -- somebody whose phone was broken. NULL means reported_by did it.
            r.worked_by::TEXT,
            -- So a worker can see their morning has been checked off. Read
-           -- only: verifying is the conductor's signature, and nobody signs
+           -- only: verifying is the conductors signature, and nobody signs
            -- for their own work.
            r.verified_by::TEXT, r.verified_at,
            -- Where the track started, and how far it went. For the people the
@@ -84,7 +84,7 @@ BEGIN
            -- The TRACK ITSELF is deliberately not here, and that is what lets
            -- the window below be three months rather than five hundred rows:
            -- a thousand-point walk on each of them is tens of megabytes down
-           -- a nursery's signal to draw a list that only ever shows "820 m".
+           -- a nurserys signal to draw a list that only ever shows "820 m".
            -- worker_maint_track fetches the line for the one record somebody
            -- opens.
            r.gps_lat::NUMERIC, r.gps_lng::NUMERIC, r.gps_accuracy::NUMERIC,

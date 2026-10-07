@@ -2,12 +2,12 @@
 -- MJM AI POWERED SYSTEM — migration_plot_rounds.sql
 --
 -- PLOT ROUNDS: one row per production cycle of a plot (a full cycle
--- usually takes ~12 months). Powers the Life of Plot page's grouped
+-- usually takes ~12 months). Powers the Life of Plot pages grouped
 -- timeline: completed rounds collapse to a title, the current round
 -- shows expanded with all its work details.
 --
 -- Work records are assigned to rounds BY DATE (a work belongs to the
--- latest round whose started_on is on/before the work's date), so no
+-- latest round whose started_on is on/before the works date), so no
 -- change is needed anywhere works are created. A plot with no rounds
 -- row yet is treated as being in an implicit current Round 1.
 --

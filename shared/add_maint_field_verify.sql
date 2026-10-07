@@ -13,7 +13,7 @@
 -- WHY worked_by IS NOT reported_by
 -- reported_by is who keyed the record. Most of the time that is the same
 -- person, and this column stays NULL. It stops being the same person the day
--- a worker's phone breaks, or their PIN will not take, and the Field
+-- a workers phone breaks, or their PIN will not take, and the Field
 -- Conductor keys the morning on their behalf — and then the record has to
 -- say Ali did the work while remembering that the conductor wrote it down.
 -- Collapsing the two would either credit the conductor with work he did not
@@ -23,7 +23,7 @@
 -- perfectly good record: the work was still done and the week still counts
 -- it. This only says whether anybody has been out to look.
 --
--- Who may press the button is decided on the FC Scan Portal's User Access
+-- Who may press the button is decided on the FC Scan Portals User Access
 -- screen (scan/scan_user_access.html → Schedule Maintenance Work → Verify
 -- work done), not here. The column just holds the answer.
 --
@@ -35,7 +35,7 @@ ALTER TABLE nops_maint_field_records
   ADD COLUMN IF NOT EXISTS verified_by TEXT,
   ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
 
--- The Field Conductor's own screen asks "what still needs checking", which is
+-- The Field Conductors own screen asks "what still needs checking", which is
 -- this, filtered by nursery and date. Partial, because the rows that matter
 -- are the unverified ones and they are the minority once a month is closed.
 CREATE INDEX IF NOT EXISTS nops_maint_field_records_unverified
@@ -45,7 +45,7 @@ CREATE INDEX IF NOT EXISTS nops_maint_field_records_unverified
 -- ── What this is not ────────────────────────────────────────────────────
 -- Not an audit. The Nursery Audit module verifies whether the WORK was done
 -- properly — the right dose, the whole plot, the right week. This says only
--- that a conductor saw the record and recognised it as his crew's work, which
+-- that a conductor saw the record and recognised it as his crews work, which
 -- is the check that has to happen the same day and by the person standing
 -- nearest to it.
 -- ────────────────────────────────────────────────────────────────────────
@@ -53,7 +53,7 @@ CREATE INDEX IF NOT EXISTS nops_maint_field_records_unverified
 -- ── This does NOT feed the salary claim ─────────────────────────────────
 -- The office works pay out from its own tick sheet (nops_maint_payroll, on
 -- Nursery Operation → Work Maintenance → Worker Record), which is keyed on
--- the office's records rather than these. worked_by is what the field says
+-- the offices records rather than these. worked_by is what the field says
 -- happened; wiring the two together is a deliberate step, not a side effect
 -- of adding a column.
 -- ────────────────────────────────────────────────────────────────────────

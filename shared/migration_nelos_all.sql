@@ -59,7 +59,7 @@
 --
 --   1. nelos_categories     — the kinds of case there are (Planting
 --                             Discrepancy, Height Shortfall, Pest, …).
---                             Editable from the module's Settings; nothing
+--                             Editable from the modules Settings; nothing
 --                             is hard-coded, the same way nops_work_types
 --                             works for Nursery Operation.
 --   2. nelos_cases          — one row per case. Carries WHERE it came from
@@ -72,8 +72,8 @@
 --                             written here too, so the history reads as one
 --                             list rather than being split across tables.
 --
--- Module access: permissions.modules.nelos = 'admin'|'normal'|'none',
--- granted on the main portal's User Access (JSONB — no DDL needed).
+-- Module access: permissions.modules.nelos = admin|normal|none,
+-- granted on the main portals User Access (JSONB — no DDL needed).
 -- What somebody sees once inside is decided by which linked modules and
 -- categories they are set up for — see migration_nelos_modules.sql and
 -- nelos/nelos_user_setting.html.
@@ -150,15 +150,15 @@ CREATE TABLE IF NOT EXISTS nelos_cases (
   description    TEXT,
   category       TEXT,               -- nelos_categories.name, by value not FK
                                      -- so renaming a category never orphans
-                                     -- a closed case's history
+                                     -- a closed cases history
   priority       TEXT NOT NULL DEFAULT 'normal',  -- low | normal | high | urgent
   status         TEXT NOT NULL DEFAULT 'open',    -- open | in_progress | resolved | closed
 
   -- Where it came from. source_module is what the To-Do widgets filter on;
   -- source_ref is a link back to the exact page that raised it, written as
-  -- seen from a module folder — i.e. starting '../', because the only page
+  -- seen from a module folder — i.e. starting ../, because the only page
   -- that follows it is nelos/nelos_case.html
-  -- (e.g. '../operation/operation_batch_detail.html?batch=264').
+  -- (e.g. ../operation/operation_batch_detail.html?batch=264).
   source_module  TEXT NOT NULL DEFAULT 'nelos',   -- operation | audit | scan | nursery_ops | nelos
   source_ref     TEXT,
 
@@ -382,7 +382,7 @@ SELECT 'nelos_case_comments',      count(*) FROM nelos_case_comments;
 --   DROP FUNCTION IF EXISTS public.nelos_assign_case_no();
 --   DROP SEQUENCE IF EXISTS nelos_case_no_seq;
 -- operation_follow_up_cases is untouched by this migration, so reverting
--- Batch Detail's insert target is all that is needed to go back.
+-- Batch Details insert target is all that is needed to go back.
 
 -- ############################################################################
 -- ##  PART 2 of 17 — migration_nelos_modules.sql
@@ -391,17 +391,17 @@ SELECT 'nelos_case_comments',      count(*) FROM nelos_case_comments;
 -- ============================================================================
 -- MJM AI POWERED SYSTEM — migration_nelos_modules.sql
 --
--- NELOS — User Setting: who handles which module's cases.
+-- NELOS — User Setting: who handles which modules cases.
 --
 -- Nursery Case Log is linked to several modules. A case raised anywhere
--- lands in that module's block. This migration adds the two tables the
+-- lands in that modules block. This migration adds the two tables the
 -- User Setting page is built on:
 --
 --   1. nelos_modules         — the linked modules themselves. A row per
 --                              block on the User Setting page. Editable,
 --                              so a sixth module is a row rather than a
 --                              deploy.
---   2. nelos_module_members  — who handles each module's cases, by email,
+--   2. nelos_module_members  — who handles each modules cases, by email,
 --                              and (optionally) which categories they may
 --                              see.
 --
@@ -417,7 +417,7 @@ SELECT 'nelos_case_comments',      count(*) FROM nelos_case_comments;
 --     modules only, and within each module only the categories that row
 --     allows (an empty/NULL categories array means "all categories in
 --     this module").
---   • Nelos admins (permissions.modules.nelos = 'admin') always see
+--   • Nelos admins (permissions.modules.nelos = admin) always see
 --     everything, whatever their rows say. Without this an admin could
 --     lock themselves out of their own case log.
 --
@@ -428,7 +428,7 @@ SELECT 'nelos_case_comments',      count(*) FROM nelos_case_comments;
 
 -- ── PREFLIGHT ───────────────────────────────────────────────────
 -- Stop with a sentence somebody can act on, rather than letting the first
--- ALTER fail with a bare 'relation does not exist'. Requires: migration_nelos.sql.
+-- ALTER fail with a bare relation does not exist. Requires: migration_nelos.sql.
 DO $preflight$
 BEGIN
   IF to_regclass('public.nelos_cases') IS NULL THEN
@@ -510,10 +510,10 @@ UPDATE nelos_modules SET label = 'Audit Portal'
 --   1. nelos_cases.source_module   — every case already filed
 --   2. nelos_module_members.module_key — handled by ON UPDATE CASCADE below
 --   3. four hardcoded call sites that raise or filter cases:
---        operation/operation_batch_detail.html   source: 'operation'
---        operation/operation_dashboard.html      source: 'operation'
---        nursery_ops/nursery_ops_dashboard.html  source: 'nursery_ops'
---        audit/audit_admin.html                  source: 'audit'
+--        operation/operation_batch_detail.html   source: operation
+--        operation/operation_dashboard.html      source: operation
+--        nursery_ops/nursery_ops_dashboard.html  source: nursery_ops
+--        audit/audit_admin.html                  source: audit
 --      plus the SOURCE_LABEL fallback map in shared/shared_nelos.js
 --
 -- So a key rename is a code change AND a data change, and doing only one
@@ -521,8 +521,8 @@ UPDATE nelos_modules SET label = 'Audit Portal'
 -- matching any block, and vanish from the To-Do lists. To rename a key,
 -- change the call sites first, then run BOTH statements together:
 --
---   UPDATE nelos_modules SET key = 'new_key' WHERE key = 'old_key';
---   UPDATE nelos_cases SET source_module = 'new_key' WHERE source_module = 'old_key';
+--   UPDATE nelos_modules SET key = new_key WHERE key = old_key;
+--   UPDATE nelos_cases SET source_module = new_key WHERE source_module = old_key;
 --
 -- The member rows follow on their own.
 --
@@ -534,7 +534,7 @@ UPDATE nelos_modules SET label = 'Audit Portal'
 --  in PART 2, once nelos_module_members exists.)
 
 -- ────────────────────────────────────────────────────────────────
--- PART 2: Who handles each module's cases
+-- PART 2: Who handles each modules cases
 -- ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS nelos_module_members (
   id          BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
@@ -577,7 +577,7 @@ BEGIN
    WHERE conrelid  = 'public.nelos_module_members'::regclass
      AND contype   = 'f'
      AND confrelid = 'public.nelos_modules'::regclass
-     AND confupdtype <> 'c';          -- 'c' = already ON UPDATE CASCADE
+     AND confupdtype <> 'c';          -- c = already ON UPDATE CASCADE
   IF c IS NOT NULL THEN
     EXECUTE format('ALTER TABLE nelos_module_members DROP CONSTRAINT %I', c);
     ALTER TABLE nelos_module_members
@@ -642,7 +642,7 @@ GRANT EXECUTE ON FUNCTION public.nelos_lookup_user(TEXT) TO authenticated;
 -- for itself who is asking and returns NOTHING to anybody who is not a
 -- Nelos admin or a portal user-manager. That is the same test the User
 -- Setting page gates on, so the function cannot become a way for an
--- ordinary account to enumerate everyone's email address.
+-- ordinary account to enumerate everyones email address.
 CREATE OR REPLACE FUNCTION public.nelos_directory()
 RETURNS TABLE (id UUID, full_name TEXT, email TEXT)
 LANGUAGE sql
@@ -709,7 +709,7 @@ SELECT m.key, m.label, count(mm.id) AS members
 --
 --   1. A HANDLER is a person with one home module — "this person handles
 --      Nursery Operation cases". Nothing is added by hand: anybody granted
---      Nelos on the main portal's User Access appears in the list ready to
+--      Nelos on the main portals User Access appears in the list ready to
 --      be pinned.
 --
 --   2. ROUTING says where a case goes when it is raised. A case raised in
@@ -718,11 +718,11 @@ SELECT m.key, m.label, count(mm.id) AS members
 --      the section, not of the person, so it lives on nelos_modules.
 --
 -- WHAT SOMEBODY SEES, ONCE PINNED
---   • every case sitting in their home module's queue, wherever they are
+--   • every case sitting in their home modules queue, wherever they are
 --     in the system, and
 --   • every case assigned to them personally, whatever queue it is in.
 -- So an auditor pinned to Audit still gets the To-Do dock on the Stock
--- system — showing Audit's queue plus anything with their name on it.
+-- system — showing Audit is queue plus anything with their name on it.
 --
 -- Not yet pinned → sees everything, as before. A person who has just been
 -- granted Nelos must not find an empty screen.
@@ -735,7 +735,7 @@ SELECT m.key, m.label, count(mm.id) AS members
 
 -- ── PREFLIGHT ───────────────────────────────────────────────────
 -- Stop with a sentence somebody can act on, rather than letting the first
--- ALTER fail with a bare 'relation does not exist'. Requires: migration_nelos.sql then migration_nelos_modules.sql.
+-- ALTER fail with a bare relation does not exist. Requires: migration_nelos.sql then migration_nelos_modules.sql.
 DO $preflight$
 BEGIN
   IF to_regclass('public.nelos_cases') IS NULL THEN
@@ -804,7 +804,7 @@ UPDATE nelos_cases SET assigned_module = source_module
 -- ── Superseded by migration_nelos_roles.sql ─────────────────────
 -- That file redefines this trigger to be category-aware and widens both
 -- scope functions with a role column. Postgres will not let CREATE OR
--- REPLACE change a function's return type, so re-running THIS file after
+-- REPLACE change a functions return type, so re-running THIS file after
 -- that one used to fail outright — and, had it succeeded, would have
 -- quietly reverted the newer behaviour. So when nelos_roles exists, the
 -- later migration owns these three objects and this block stands down.
@@ -847,7 +847,7 @@ CREATE TABLE IF NOT EXISTS nelos_handlers (
   email           TEXT,
   full_name       TEXT,
 
-  -- The pin: which module's cases this person handles. NULL = not pinned
+  -- The pin: which modules cases this person handles. NULL = not pinned
   -- yet, which means unrestricted rather than blocked.
   primary_module  TEXT REFERENCES nelos_modules(key) ON UPDATE CASCADE ON DELETE SET NULL,
 
@@ -1030,20 +1030,20 @@ SELECT m.key,
 --
 -- HOW A NEW CASE IS ROUTED — first match wins:
 --      1. a rule for exactly this (source_module, category)
---      2. the section's default rule (category IS NULL)
+--      2. the sections default rule (category IS NULL)
 --      3. the section itself
 --   An assigned_module set by the caller always wins over all three:
 --   routing is the default, not a rule.
 --
 -- WHAT SOMEBODY SEES — unchanged except for the role step:
---      • their home module's queue, EXCEPT cases routed to a role that is
---        not theirs. A case with no role is the whole module's to take.
+--      • their home modules queue, EXCEPT cases routed to a role that is
+--        not theirs. A case with no role is the whole modules to take.
 --      • plus anything assigned to them personally, in any queue, past
 --        every filter.
 --      • unpinned, or Nelos admin → everything.
 --
 -- nelos_modules.route_to is SUPERSEDED by nelos_routes and is migrated into
--- it as each section's default rule. The column is left in place so this
+-- it as each sections default rule. The column is left in place so this
 -- stays reversible, but nothing reads it any more — see PART 4.
 --
 -- Requires migration_nelos.sql, migration_nelos_modules.sql and
@@ -1054,7 +1054,7 @@ SELECT m.key,
 
 -- ── PREFLIGHT ───────────────────────────────────────────────────
 -- Stop with a sentence somebody can act on, rather than letting the first
--- ALTER fail with a bare 'relation does not exist'. Requires: migration_nelos.sql, migration_nelos_modules.sql, migration_nelos_routing.sql.
+-- ALTER fail with a bare relation does not exist. Requires: migration_nelos.sql, migration_nelos_modules.sql, migration_nelos_routing.sql.
 DO $preflight$
 BEGIN
   IF to_regclass('public.nelos_cases') IS NULL THEN
@@ -1081,7 +1081,7 @@ END $preflight$;
 CREATE TABLE IF NOT EXISTS nelos_roles (
   id          BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
   module_key  TEXT NOT NULL REFERENCES nelos_modules(key) ON UPDATE CASCADE ON DELETE CASCADE,
-  name        TEXT NOT NULL,          -- 'Admin 1', 'Senior Auditor', …
+  name        TEXT NOT NULL,          -- Admin 1, Senior Auditor, …
   sort_order  INT  NOT NULL DEFAULT 0,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT nelos_roles_name_not_blank CHECK (btrim(name) <> '')
@@ -1112,7 +1112,7 @@ BEGIN
 END $$;
 
 -- No roles are seeded. A seat is a decision about how a team is organised,
--- and inventing "Admin 1"/"Admin 2" here would put words in the admin's
+-- and inventing "Admin 1"/"Admin 2" here would put words in the admins
 -- mouth. Until roles exist, every rule targets a whole module, which is
 -- exactly how routing behaved before this migration.
 
@@ -1124,9 +1124,9 @@ ALTER TABLE nelos_handlers
 
 CREATE INDEX IF NOT EXISTS nelos_handlers_role_idx ON nelos_handlers (role_id);
 
--- A role belongs to one module, so a handler's seat must be in the system
+-- A role belongs to one module, so a handlers seat must be in the system
 -- they are pinned to. Enforced in the app (the picker only offers that
--- module's roles); this cleans up anything left behind when somebody is
+-- modules roles); this cleans up anything left behind when somebody is
 -- moved to a different system.
 UPDATE nelos_handlers h
    SET role_id = NULL
@@ -1141,7 +1141,7 @@ CREATE TABLE IF NOT EXISTS nelos_routes (
   id             BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
   source_module  TEXT NOT NULL REFERENCES nelos_modules(key) ON UPDATE CASCADE ON DELETE CASCADE,
 
-  -- NULL = this section's default, used by any category without its own
+  -- NULL = this sections default, used by any category without its own
   -- rule. Stored by name, like nelos_cases.category, so renaming a
   -- category in Settings never orphans a rule silently.
   category       TEXT,
@@ -1204,7 +1204,7 @@ ALTER TABLE nelos_cases
 CREATE INDEX IF NOT EXISTS nelos_cases_role_idx ON nelos_cases (assigned_role_id);
 
 -- Routing, now category-aware. Replaces the version in
--- migration_nelos_routing.sql; that file's trigger is redefined here rather
+-- migration_nelos_routing.sql; that files trigger is redefined here rather
 -- than duplicated, so running the migrations in order leaves one rule.
 -- ── Superseded by migration_nelos_seats.sql ─────────────────────
 -- That file replaces named roles with a number inside each system, and
@@ -1370,14 +1370,14 @@ SELECT r.source_module AS raised_in,
 -- anybody could hold one: a Roles tab, then a Handlers tab, then a pin on
 -- each. Two screens and a made-up word for something much simpler.
 --
--- A handler's role is just WHICH SYSTEM they answer for and WHICH NUMBER
+-- A handlers role is just WHICH SYSTEM they answer for and WHICH NUMBER
 -- they are in it. Pin somebody to the Admin Portal and they are Admin 1;
 -- pin the next person and they are Admin 2. Nothing to name, one list,
 -- and the routing page can then say "this category goes to Admin 2".
 --
 -- So:
 --   • nelos_modules.handler_label — what one person in this system is
---     called, singular. 'Admin' for the Admin Portal, 'Auditor' for the
+--     called, singular. Admin for the Admin Portal, Auditor for the
 --     Audit Portal. Combined with the number this is the whole role name.
 --   • nelos_handlers.seat_no      — their position in that system, 1, 2, 3…
 --   • nelos_routes.to_seat_no     — a rule may target a number, or leave it
@@ -1395,7 +1395,7 @@ SELECT r.source_module AS raised_in,
 
 -- ── PREFLIGHT ───────────────────────────────────────────────────
 -- Stop with a sentence somebody can act on, rather than letting the first
--- ALTER fail with a bare 'relation does not exist'. Requires: the four earlier nelos migrations, in order.
+-- ALTER fail with a bare relation does not exist. Requires: the four earlier nelos migrations, in order.
 DO $preflight$
 BEGIN
   IF to_regclass('public.nelos_cases') IS NULL THEN
@@ -1445,7 +1445,7 @@ UPDATE nelos_modules SET handler_label = label
  WHERE handler_label IS NULL OR handler_label = '';
 
 -- ────────────────────────────────────────────────────────────────
--- PART 2: A handler's number inside their system
+-- PART 2: A handlers number inside their system
 -- ────────────────────────────────────────────────────────────────
 ALTER TABLE nelos_handlers ADD COLUMN IF NOT EXISTS seat_no INT;
 
@@ -1463,7 +1463,7 @@ CREATE INDEX IF NOT EXISTS nelos_cases_seat_idx ON nelos_cases (assigned_seat_no
 -- ────────────────────────────────────────────────────────────────
 -- PART 3: Carry nelos_roles across as numbers
 --
--- Each system's roles become 1, 2, 3… in the order they were listed, and
+-- Each systems roles become 1, 2, 3… in the order they were listed, and
 -- everything pointing at a role follows. Guarded on to_regclass so a
 -- database that never ran the roles migration skips the whole block.
 -- ────────────────────────────────────────────────────────────────
@@ -1794,7 +1794,7 @@ SELECT label AS system,
 -- as they are decided.
 --
 -- WHAT THIS CHANGES
---   • Case Routing lists only that system's own titles.
+--   • Case Routing lists only that systems own titles.
 --   • The raise form offers only the titles of the system it is raised in.
 --   • The Categories page groups by system and asks which one a new title
 --     belongs to.
@@ -1912,13 +1912,13 @@ SELECT m.label AS system,
 --   Work tables — nelos_cases, nelos_case_comments:
 --       read   any account holding Nelos
 --       write  any account holding Nelos      (raising, commenting,
---              claiming and resolving are everyone's job)
+--              claiming and resolving are everyones job)
 --       delete Nelos admins only              (a case is a record; the
 --              way to retire one is to close it)
 --
--- Reading is still deliberately not narrowed to a person's own scope. The
+-- Reading is still deliberately not narrowed to a persons own scope. The
 -- To-Do lists filter in the app, and pushing that into a policy would mean
--- a case moving queue could vanish from the raiser's own screen. What
+-- a case moving queue could vanish from the raisers own screen. What
 -- matters here is that somebody with no Nelos at all now gets nothing.
 --
 -- Requires the nelos tables to exist — run migration_nelos_all.sql first.
@@ -1940,7 +1940,7 @@ END $preflight$;
 -- PART 1: Two questions every policy asks
 --
 -- SECURITY DEFINER so the policy can read shared_profiles without the
--- caller needing to, and without recursing into that table's own policies.
+-- caller needing to, and without recursing into that tables own policies.
 -- ────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.nelos_has_access()
 RETURNS boolean
@@ -2059,9 +2059,9 @@ SELECT tablename,
 -- NELOS — adding somebody from Pending Allocation grants them Nelos.
 --
 -- Until now, putting a person to work in Nelos took two screens: grant them
--- the module on the main portal's User Access, then come to Nelos and tag
+-- the module on the main portals User Access, then come to Nelos and tag
 -- them to a system. Anybody who did only the second half was tagged but
--- could not open the module, which reads on screen as "why can't they see
+-- could not open the module, which reads on screen as "why cannot they see
 -- their cases".
 --
 -- The Pending Allocation section now searches everybody in the company by
@@ -2075,7 +2075,7 @@ SELECT tablename,
 --   on their behalf, and checks for itself that the caller is one or the
 --   other before touching anything.
 --
---   It grants 'normal', never 'admin', and never touches a person who
+--   It grants normal, never admin, and never touches a person who
 --   already has some level of Nelos — so it can only open the door, never
 --   widen or narrow what somebody already has.
 --
@@ -2098,7 +2098,7 @@ END $preflight$;
 -- Grant Nelos to one person.
 --
 -- Returns the level they hold afterwards, so the page can say what it did:
--- 'normal' when this call granted it, or whatever they already held.
+-- normal when this call granted it, or whatever they already held.
 -- ────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.nelos_grant_access(p_user_id UUID)
 RETURNS TEXT
@@ -2165,7 +2165,7 @@ SELECT p.proname, pg_get_function_result(p.oid) AS returns
 -- NELOS — a photo on a case, and who is allowed to edit, solve or delete one.
 --
 -- The case list now shows a row per case with View / Edit / Solve / Delete
--- beside it. Those last three are not everybody's to press, so each handler
+-- beside it. Those last three are not everybodys to press, so each handler
 -- carries three ticks set on the User Setting page:
 --
 --     may_solve    mark a case resolved            default ON
@@ -2313,7 +2313,7 @@ GRANT EXECUTE ON FUNCTION public.nelos_people() TO authenticated;
 -- migration_nelos_rls.sql left nelos_cases as "anybody with Nelos may
 -- change it, only an admin may delete it". Editing and deleting are now
 -- separate rights, so those two policies are replaced here. Reading and
--- inserting are untouched: raising a case is still everyone's job.
+-- inserting are untouched: raising a case is still everyones job.
 --
 -- Comments (nelos_case_comments) keep the old rule. Leaving a note is not
 -- editing a case.
@@ -2354,7 +2354,7 @@ BEGIN
   DROP POLICY IF EXISTS "nelos delete" ON public.nelos_cases;
 
   -- Changing a case at all needs one of the two rights that change a case.
-  -- Which columns each one may touch is the page's business; what matters
+  -- Which columns each one may touch is the pages business; what matters
   -- here is that somebody with neither cannot touch it through the API.
   CREATE POLICY "nelos update" ON public.nelos_cases
     FOR UPDATE TO authenticated
@@ -2445,14 +2445,14 @@ SELECT policyname, cmd FROM pg_policies
 --
 -- Closing is the one that matters. Solving says "I did the work";
 -- closing says "and it was done properly" — the second is somebody
--- else's judgement of the first, which is exactly why it wants its own
+-- elses judgement of the first, which is exactly why it wants its own
 -- right rather than riding along with may_solve. Until now only a Nelos
--- admin could close, which made every foreman's finished work wait on
+-- admin could close, which made every foremans finished work wait on
 -- one person.
 --
--- Defaults are chosen so running this changes nobody's day:
+-- Defaults are chosen so running this changes nobodys day:
 --   may_create true  — anybody holding Nelos could already raise a case
---                      from the dock and every module's To-Do widget.
+--                      from the dock and every modules To-Do widget.
 --   may_close  false — nobody but an admin could close before this, and
 --                      quietly handing it out would be a surprise. Tick
 --                      the people who should have it in User Setting.
@@ -2580,7 +2580,7 @@ SELECT 'nelos_cases.resolution_photo_url' AS what,
        ) AS ok
 ;
 
--- The bucket is case_tools' job; this only reports whether it is there,
+-- The bucket is case_tools job; this only reports whether it is there,
 -- because the solve photo has nowhere to go without it.
 --
 -- It has to ask through EXECUTE. A plain SELECT cannot: storage.buckets is
@@ -2700,8 +2700,8 @@ SELECT key, label, tier_label, handler_label
 --
 -- NELOS — which systems a person may use Nelos in.
 --
--- Somebody's HOME system says whose queue they work — "this person handles
--- Audit's cases". It has been doing a second job as well: deciding the only
+-- Somebodys HOME system says whose queue they work — "this person handles
+-- Audit is cases". It has been doing a second job as well: deciding the only
 -- queue they may see. That is too narrow for how people actually work. An
 -- auditor needs their own queue, and also to see FC Portal cases while
 -- standing in a plot, and Admin Portal cases when the office asks.
@@ -2754,7 +2754,7 @@ COMMENT ON COLUMN public.nelos_handlers.access_modules IS
 -- PART 2: What the signed-in person may see
 --
 -- Facts only — who they are and what is ticked. Which cases that adds up to
--- is shared/shared_nelos.js's job, so the rule lives in one place and the
+-- is shared/shared_nelos.jss job, so the rule lives in one place and the
 -- To-Do widgets, the dock and the case list cannot drift apart on it.
 -- ────────────────────────────────────────────────────────────────
 DROP FUNCTION IF EXISTS public.nelos_my_scope();
@@ -2899,10 +2899,10 @@ SELECT COALESCE(NULLIF(h.full_name, ''), h.email) AS person,
 --   on. The Nelos page calls it when it loads, which is enough on its own:
 --   somebody opens Nelos most days, and a case raised late is still raised.
 --   For it to fire with nobody watching, schedule the same function — the
---   Supabase dashboard's Integrations → Cron, once a day, is the whole
+--   Supabase dashboards Integrations → Cron, once a day, is the whole
 --   setup:
 --
---     select cron.schedule('nelos-automations', '0 1 * * *',
+--     select cron.schedule(nelos-automations, 0 1 * * *,
 --                          $$ select public.nelos_run_automations() $$);
 --
 --   It is safe either way. Due-ness is a date on the row, and raising
@@ -3038,7 +3038,7 @@ BEGIN
   END IF;
 
   -- Monthly: the chosen day of next month. Days are capped at 28 by the
-  -- table's constraint, so there is no month this cannot land in.
+  -- tables constraint, so there is no month this cannot land in.
   d := date_trunc('month', p_from)::date + INTERVAL '1 month';
   RETURN (date_trunc('month', d)::date + (LEAST(GREATEST(p_day, 1), 28) - 1));
 END $$;
@@ -3079,7 +3079,7 @@ BEGIN
                ON a.plot_name IS NULL AND p.nursery_name = a.nursery_name
        WHERE a.plot_name IS NOT NULL OR p.plot_name IS NOT NULL
     LOOP
-      -- Last time's case still open? Then this plot is not behind on the
+      -- Last times case still open? Then this plot is not behind on the
       -- work, it is behind on somebody doing it, and a second case says
       -- nothing the first did not.
       IF EXISTS (
@@ -3201,22 +3201,22 @@ SELECT 'monthly, 28th',       public.nelos_next_run(CURRENT_DATE, 'monthly', 28)
 -- The rest of the portal already draws this line. Every staff gate in the
 -- database reads
 --
---     COALESCE(user_type, 'system') <> 'customer'
+--     COALESCE(user_type, system) <> customer
 --
--- and the main portal's own User Access screen lists exactly
--- (user_type || 'system') === 'system' (shared/shared_module_access.js).
+-- and the main portals own User Access screen lists exactly
+-- (user_type || system) === system (shared/shared_module_access.js).
 -- This makes nelos_directory() agree with them, so the two screens that
 -- hand out access are looking at one list of people.
 --
 -- WHY COALESCE, AND WHAT IT DOES NOT CATCH
---   handle_new_user() defaults a missing user_type to 'system', so a NULL
+--   handle_new_user() defaults a missing user_type to system, so a NULL
 --   means staff — that is why every gate coalesces rather than testing
---   equality. The signup pages stamp 'customer' now, but any customer who
+--   equality. The signup pages stamp customer now, but any customer who
 --   registered before that landed with the default and still reads as
 --   staff. Those accounts will keep appearing here, as they do on every
 --   other staff screen; the fix is the same backfill for all of them:
 --
---     UPDATE shared_profiles SET user_type = 'customer'
+--     UPDATE shared_profiles SET user_type = customer
 --      WHERE id IN (…the customer accounts…);
 --
 --   It is deliberately not run from here. Which old accounts are customers
@@ -3309,7 +3309,7 @@ SELECT count(*)                                                            AS ev
 -- ############################################################################
 
 -- ================================================================
--- NELOS — a remark of the closer's own, and a real right to close with
+-- NELOS — a remark of the closers own, and a real right to close with
 -- Run in the Supabase SQL Editor (project kibqjztozokohqmhqqqf).
 -- Safe to re-run.
 --
@@ -3318,8 +3318,8 @@ SELECT count(*)                                                            AS ev
 -- The Close Case sheet used to write nothing but the status change —
 -- nowhere for whoever accepts the work to say why, if they wanted to.
 -- close_remark is that line, separate from nelos_cases.resolution:
--- resolution is the SOLVER's word on what was done, close_remark is
--- the CLOSER's on accepting it, and they can be two different people
+-- resolution is the SOLVERs word on what was done, close_remark is
+-- the CLOSERs on accepting it, and they can be two different people
 -- days apart. Neither overwrites the other.
 --
 -- The dock works without this column: it retries the close without the
@@ -3331,11 +3331,11 @@ SELECT count(*)                                                            AS ev
 -- migration_nelos_close_right.sql (an earlier file) gave handlers a
 -- may_close tick and a nelos_my_rights() that reports it — but never
 -- taught nelos_may(), the function the ROW-LEVEL SECURITY policy on
--- nelos_cases actually calls, to recognise 'close' as a right at all.
--- Asked for it, nelos_may('close') fell through to the CASE statement's
+-- nelos_cases actually calls, to recognise close as a right at all.
+-- Asked for it, nelos_may(close) fell through to the CASE statements
 -- ELSE and returned false for every single person, and the UPDATE
--- policy's WITH CHECK never named 'close' either — only 'edit' and
--- 'solve'. So the Close Case button has been showing to anyone with
+-- policys WITH CHECK never named close either — only edit and
+-- solve. So the Close Case button has been showing to anyone with
 -- may_close ticked, while Postgres would have refused the write for
 -- anyone whose may_solve was not ALSO true (which is most Nelos
 -- holders by default, so this went unnoticed) or explicitly false. A
@@ -3379,7 +3379,7 @@ COMMENT ON COLUMN public.nelos_cases.close_remark IS
   'both may be null.';
 
 -- ────────────────────────────────────────────────────────────────
--- PART 2: nelos_may('close') answers for real
+-- PART 2: nelos_may(close) answers for real
 --
 -- A scalar-returning function, so CREATE OR REPLACE is enough — this
 -- is not the RETURNS TABLE case that needs a DROP first.
@@ -3413,7 +3413,7 @@ $$;
 GRANT EXECUTE ON FUNCTION public.nelos_may(TEXT) TO authenticated;
 
 -- ────────────────────────────────────────────────────────────────
--- PART 3: the UPDATE policy recognises 'close' too
+-- PART 3: the UPDATE policy recognises close too
 --
 -- Same shape as migration_nelos_case_tools.sql, one right wider.
 -- ────────────────────────────────────────────────────────────────

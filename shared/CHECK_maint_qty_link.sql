@@ -5,9 +5,9 @@
 -- Read-only. Nothing is created, changed or deleted.
 --
 -- Set the plot and the month on the two lines marked below, or leave the
--- plot as '' to sweep every plot, then run the whole file.
+-- plot as  to sweep every plot, then run the whole file.
 --
--- A linked quantity is the plot's balance AS AT the work date, narrowed to
+-- A linked quantity is the plots balance AS AT the work date, narrowed to
 -- the batches KEYED on the row. Both halves move it:
 --
 --   * the DATE — a plot filled on the 23rd is nearly empty on the 5th, so
@@ -29,7 +29,7 @@
 -- ════════════════════════════════════════════════════════════════════════
 
 WITH params AS (
-  SELECT 'B1'::text      AS look_plot,     -- the plot, or '' for every plot
+  SELECT 'B1'::text      AS look_plot,     -- the plot, or  for every plot
          '2026-09'::text AS for_month      -- the month the rows are dated in
 ),
 

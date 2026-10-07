@@ -39,8 +39,19 @@ What that SQL should be:
   EVEN number survives by luck, which is worse than failing, because it makes
   the rule look like it does not exist: 95 files in `shared/` carried an odd
   count the day this was found. Write "the September row" and "does not".
-  `tests/sql_pastes_into_the_editor.cjs` holds the swept files to it and
-  prints what is left.
+  **All 219 files in `shared/` have now been swept** — 183 of them changed —
+  and `tests/sql_pastes_into_the_editor.cjs` holds every one of them to it.
+  `tools/sweep_sql_comment_apostrophes.py` is what did it, and the care is all
+  in finding a comment: a line beginning `--` INSIDE a string literal is DATA,
+  block comments count the same way, and a `$$ … $$` body is CODE with its own
+  comments and strings. A `startswith('--')` gets all three wrong. It was
+  proved by deleting every comment from the old and the new copy of each file
+  independently and comparing what was left: **0 files differed outside a
+  comment.**
+
+  Three paste rules are still owed across the older files, each its own
+  sweep, and the test prints the count every run: **142 carry a semicolon in a
+  comment**, 30 contain a backslash, and 46 do not end at a semicolon.
 - **Tested first.** There is a scratch Postgres 16 for this — see below. Run
   the SQL against a stubbed copy of the real tables before handing it over, and
   test it against the state the database is ACTUALLY in, not a fresh one.

@@ -6,7 +6,7 @@
 --  table. No regular expressions and no backslashes, so it survives a paste.
 --
 --  WHY
---  Two overlapping runs of the 2nd Culling tab's load made its merge SUM the
+--  Two overlapping runs of the 2nd Culling tabs load made its merge SUM the
 --  rows it joined -- both the Dead and the Transplanted. Save writes what is
 --  on screen, so a save made in that state wrote the doubled Dead into the
 --  row and the doubled Transplanted into its remark. The page is fixed; a
@@ -22,25 +22,25 @@
 --  WHAT IT DELIBERATELY LEAVES
 --    · a Dead that does NOT divide by the multiple. Somebody TYPED that
 --      figure in the doubled session, so it was saved as typed and is right
---      -- batch 252's N11, for one.
+--      -- batch 252s N11, for one.
 --    · anything whose remark and transplant rows already agree.
 --    · a plot transplanted in two goes, or carrying an approved adjustment:
 --      those disagree without being a whole multiple.
 --
 --  AND THE ONE IT CANNOT SEE. Open the tab again on a good day and save, and
---  the remark's Transplanted is written back correct while the doubled Dead
+--  the remarks Transplanted is written back correct while the doubled Dead
 --  stays -- the fingerprint is wiped and the wrong number is not. Batch 254
 --  is that case, so its two rows are named outright, from the figures
 --  CHECK_cull2_rows.sql read before the save that doubled them.
 --
---  Each row's drone map and cull date are carried over untouched. Only the
---  numbers are rewritten, and the remark's Alive and Transplanted are put
+--  Each rows drone map and cull date are carried over untouched. Only the
+--  numbers are rewritten, and the remarks Alive and Transplanted are put
 --  back in step with the ledger.
 --
 --  WHAT TO LOOK FOR
 --  The table at the end is every row this touched, with what it now holds.
---  Good means every line reads 'repaired' and the arithmetic adds up
---  (transplanted - dead = alive), and 'map kept' says yes wherever the row
+--  Good means every line reads repaired and the arithmetic adds up
+--  (transplanted - dead = alive), and map kept says yes wherever the row
 --  had one. Run it a second time: it prints the same rows and changes none.
 -- =====================================================================
 

@@ -14,14 +14,14 @@
 --
 -- Closing is the one that matters. Solving says "I did the work";
 -- closing says "and it was done properly" — the second is somebody
--- else's judgement of the first, which is exactly why it wants its own
+-- elses judgement of the first, which is exactly why it wants its own
 -- right rather than riding along with may_solve. Until now only a Nelos
--- admin could close, which made every foreman's finished work wait on
+-- admin could close, which made every foremans finished work wait on
 -- one person.
 --
--- Defaults are chosen so running this changes nobody's day:
+-- Defaults are chosen so running this changes nobodys day:
 --   may_create true  — anybody holding Nelos could already raise a case
---                      from the dock and every module's To-Do widget.
+--                      from the dock and every modules To-Do widget.
 --   may_close  false — nobody but an admin could close before this, and
 --                      quietly handing it out would be a surprise. Tick
 --                      the people who should have it in User Setting.

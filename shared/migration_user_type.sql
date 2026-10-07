@@ -10,13 +10,13 @@
 --   listed separately and pulled in on demand via "Add User".
 --
 -- This migration:
---   1. Adds shared_profiles.user_type ('system' | 'customer'), default
---      'system' so existing rows are treated as staff (the safe choice
+--   1. Adds shared_profiles.user_type (system | customer), default
+--      system so existing rows are treated as staff (the safe choice
 --      for current usage). Customers flagged manually post-rollout, or
 --      automatically on future salesweb signups.
---   2. Updates handle_new_user() to honour raw_user_meta_data->>'user_type'
---      from the signup payload — salesweb's signUp() passes 'customer',
---      everything else falls back to 'system'.
+--   2. Updates handle_new_user() to honour raw_user_meta_data->>user_type
+--      from the signup payload — saleswebs signUp() passes customer,
+--      everything else falls back to system.
 -- ----------------------------------------------------------------
 
 -- 1. Column with check constraint

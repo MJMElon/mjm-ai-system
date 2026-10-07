@@ -45,7 +45,7 @@ COMMENT ON COLUMN nelos_cases.resolution_photo_urls IS
 -- old picture and the new column looks as though it was never added.
 NOTIFY pgrst, 'reload schema';
 
--- ONE result set, because the SQL Editor only shows the last statement's.
+-- ONE result set, because the SQL Editor only shows the last statements.
 SELECT
   (SELECT count(*) FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'nelos_cases'

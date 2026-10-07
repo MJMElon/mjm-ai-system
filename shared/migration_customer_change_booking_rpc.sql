@@ -10,7 +10,7 @@
 --
 -- Guard rails inside the function:
 --   • booking must exist and not be cancelled
---   • supplied _order_number must match the booking's order_number (case-insensitive)
+--   • supplied _order_number must match the bookings order_number (case-insensitive)
 --   • _new_qty must be > 0
 --   • _new_end_time must be after _new_start_time
 --

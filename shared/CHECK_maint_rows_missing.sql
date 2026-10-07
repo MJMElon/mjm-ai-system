@@ -14,7 +14,7 @@
 --
 --  There is one case where nothing was lost and the row is simply not drawn:
 --  the list only shows plots that belong to the nursery on the topbar, so a
---  row on a plot that nursery's list does not hold -- a transfer plot like
+--  row on a plot that nurserys list does not hold -- a transfer plot like
 --  B3-R, a plot keyed with a space or a different case -- is IN the data and
 --  invisible on the screen. This says which rows those are.
 --

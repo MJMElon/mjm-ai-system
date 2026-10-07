@@ -9,7 +9,7 @@
 -- subject to a race condition between two concurrent buyers, which can
 -- oversell stock. Installing this RPC closes that race.
 --
--- The function is SECURITY DEFINER so the customer (anon JWT) doesn't
+-- The function is SECURITY DEFINER so the customer (anon JWT) does not
 -- need direct UPDATE access to salesweb_products. It validates inputs
 -- and only decrements when there is enough stock; otherwise it raises.
 -- ================================================================

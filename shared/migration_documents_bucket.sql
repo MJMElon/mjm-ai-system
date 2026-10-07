@@ -17,14 +17,14 @@
 -- Public so the public URLs returned by getPublicUrl() can be
 -- rendered in <img>/<iframe> tags without per-request signed URLs.
 -- Anyone with the URL can read; writes still require an RLS policy
--- (added below) so anonymous users can't dump junk into the bucket.
+-- (added below) so anonymous users cannot dump junk into the bucket.
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('documents', 'documents', true)
 ON CONFLICT (id) DO UPDATE SET public = true;
 
 -- ── 2. RLS policies on storage.objects ───────────────────────────
 -- storage.objects already has RLS enabled by Supabase. We add four
--- policies scoped to bucket_id = 'documents':
+-- policies scoped to bucket_id = documents:
 --   • SELECT for everyone (anon + authenticated) so public URLs work.
 --   • INSERT for authenticated users so logged-in admins can upload.
 --   • UPDATE for authenticated users so upsert: true works.

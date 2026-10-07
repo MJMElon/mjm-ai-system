@@ -37,7 +37,7 @@ BEGIN
 
   -- ── 1. migration_palms_rls.sql ────────────────────────────────
   -- Left behind: the palms_has_access() gate. to_regprocedure, NOT to_regproc:
-  -- to_regproc('x()') is always NULL because of the brackets, and a check
+  -- to_regproc(x()) is always NULL because of the brackets, and a check
   -- written that way silently says "missing" forever.
   IF to_regprocedure('public.palms_has_access()') IS NOT NULL
      AND to_regprocedure('public.palms_is_admin()') IS NOT NULL THEN
@@ -113,7 +113,7 @@ BEGIN
   END IF;
 
   -- ── 5. seed_palms_from_audit_2026_08_26.sql ───────────────────
-  -- Left behind: log rows stamped 'Audit 26-Aug-2026', and a backup table.
+  -- Left behind: log rows stamped Audit 26-Aug-2026, and a backup table.
   IF to_regclass('public.fcportal_palms_plot_logs') IS NULL THEN
     INSERT INTO what_i_have_run VALUES
       (5, 'seed_palms_from_audit_2026_08_26.sql', 'NOT RUN',
@@ -140,7 +140,7 @@ BEGIN
   END IF;
 
   -- ── 6. cleanup_palms_demo_rows.sql ────────────────────────────
-  -- Left behind: nothing. It is done when no 'Contoh' row survives.
+  -- Left behind: nothing. It is done when no Contoh row survives.
   IF to_regclass('public.fcportal_palms_plot_logs') IS NULL THEN
     INSERT INTO what_i_have_run VALUES
       (6, 'cleanup_palms_demo_rows.sql', 'NOT NEEDED', 'no PALMS log table');

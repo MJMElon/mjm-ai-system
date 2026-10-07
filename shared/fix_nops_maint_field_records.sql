@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS nops_maint_field_records (
   nursery_name TEXT,
   plot_name    TEXT NOT NULL,
   work_type    TEXT NOT NULL,            -- pd | manuring | weeding | interrow
-  jenis        TEXT,                     -- the office's own wording
+  jenis        TEXT,                     -- the offices own wording
   chemical     TEXT,
   qty          INTEGER,                  -- seedlings, when counted
   remark       TEXT,

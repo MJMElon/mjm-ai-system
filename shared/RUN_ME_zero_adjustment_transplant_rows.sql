@@ -27,7 +27,7 @@
 --
 --  WHAT IT TOUCHES
 --  ONLY rows this system wrote from an adjustment: transaction_type
---  'Transplanted' whose remark carries "FromAdjustment:", which nothing
+--  Transplanted whose remark carries "FromAdjustment:", which nothing
 --  else writes. A transplanting row somebody keyed by hand has no such
 --  marker and is never touched, whatever its quantity.
 --
@@ -49,7 +49,7 @@ UPDATE shared_inventory_logs
    AND position('FromAdjustment:' in COALESCE(remark, '')) > 0
    AND COALESCE(quantity_change, 0) <> 0;
 
--- ONE result set -- the SQL Editor only shows the last statement's.
+-- ONE result set -- the SQL Editor only shows the last statements.
 SELECT 0                                                       AS sort,
        'ROWS WRITTEN BY AN ADJUSTMENT'::text                    AS place,
        (SELECT count(*) FROM _mjm_adjrow_before)::int           AS rows_corrected,
@@ -82,7 +82,7 @@ ORDER BY sort, place;
 --   what it always did, Final is the same as before, and Total
 --   Transplanted has dropped by exactly qty_taken_out.
 --
---   FINAL MUST NOT CHANGE. If a plot's Final figure moves, stop and send
+--   FINAL MUST NOT CHANGE. If a plots Final figure moves, stop and send
 --   the batch back -- that would mean the adjustment beside it is not
 --   the one that wrote the row.
 --

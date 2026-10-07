@@ -9,7 +9,7 @@
 --
 --   1. THE RAISER          Row-level security lets an account insert a case
 --                          only when its Nelos module is something other than
---                          'none'. A Field Conductor without it is refused,
+--                          none. A Field Conductor without it is refused,
 --                          and the calculator says the case could not be
 --                          raised.
 --
@@ -28,7 +28,7 @@
 --                          source_module — which sends every culling case
 --                          back to the FC Portal queue it came from. The case
 --                          IS in the database; it is simply not in the
---                          auditors' list, which is where somebody is looking
+--                          auditors list, which is where somebody is looking
 --                          for it.
 --
 --   4. WHO CAN SEE IT      nelos_my_scope() pins a person to one module, and
@@ -57,7 +57,7 @@ BEGIN
   END IF;
 
   -- Which key the FC Portal goes by here. The modules have been renamed once
-  -- already, so it is matched on a word rather than assumed to be 'scan'.
+  -- already, so it is matched on a word rather than assumed to be scan.
   SELECT key INTO fc_key FROM public.nelos_modules
    WHERE active AND (lower(key) LIKE '%scan%' OR lower(key) LIKE '%fc%'
                      OR lower(label) LIKE '%fc%')

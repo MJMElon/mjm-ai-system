@@ -1,16 +1,16 @@
 -- =====================================================================
---  A JOB THE OFFICE CAN SEE AND THE PHONE'S HISTORY CANNOT
+--  A JOB THE OFFICE CAN SEE AND THE PHONES HISTORY CANNOT
 --  Paste into the Supabase SQL Editor and press Run. Read-only: it
 --  changes nothing, so it is safe to run as often as you like.
 --
 --  The two screens read the same table and ask different questions of
 --  it, and that is where a record goes missing from one of them.
 --
---    The OFFICE'S Work Maintenance List decides which nursery a job
+--    The OFFICES Work Maintenance List decides which nursery a job
 --    belongs to by looking at its PLOT. A record keyed against N14 is
---    UNN 2's because N14 is UNN 2's, whatever the record itself says.
+--    UNN 2s because N14 is UNN 2s, whatever the record itself says.
 --
---    The PHONE'S History compares the nursery WRITTEN ON THE RECORD
+--    The PHONES History compares the nursery WRITTEN ON THE RECORD
 --    with the nursery picked at the top of the screen, spelling for
 --    spelling. A record whose nursery_name is empty, or spelt any other
 --    way than shared_plots spells it, can never match that pick — so it
@@ -33,8 +33,8 @@
 --    "record says X, the plot is in Y"  the record carries a nursery
 --        name the plot does not have. Pick X on the phone and it
 --        appears, and it will never appear under Y. This is the usual
---        answer, and the repair is to set the record's nursery_name to
---        the plot's own.
+--        answer, and the repair is to set the records nursery_name to
+--        the plots own.
 --
 --    "no nursery on the record"  nursery_name is empty. The phone can
 --        match no pick at all, so History never shows it anywhere.

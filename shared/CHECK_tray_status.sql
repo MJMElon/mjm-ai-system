@@ -3,7 +3,7 @@
 --  Paste into the Supabase SQL Editor and press Run. Read-only: it
 --  changes nothing, so it is safe to run as often as you like.
 --
---  The batch list's Tray Status tab answers "how many holes are free in
+--  The batch lists Tray Status tab answers "how many holes are free in
 --  this tray, and whose seedlings are in the rest". This asks the
 --  database the same question with the same arithmetic, so the screen
 --  can be checked against the table behind it rather than trusted.
@@ -12,18 +12,18 @@
 --
 --  A tray holds no more than the batch still has standing:
 --
---      standing = everything that entered that batch's trays
+--      standing = everything that entered that batchs trays
 --               − everything that left its pre-nursery
 --
 --  Planted and Transplanted_Premium / _DoubleTone put seedlings INTO a
 --  tray. 1st Culling and every transplant take them OUT. The remark says
 --  WHICH tray a transplant came from ("tray [P6]"), and where it does
 --  not, the seedlings are gone all the same — so the shortfall still
---  comes off that batch's trays, largest first.
+--  comes off that batchs trays, largest first.
 --
 --  That is the fix for trays P4–P7 on batch 227: the field emptied them
 --  in May 2025, and they read as occupied for a year because the only
---  thing that could empty a tray was a remark worded the way today's
+--  thing that could empty a tray was a remark worded the way todays
 --  save words it.
 -- =====================================================================
 WITH
@@ -51,8 +51,8 @@ cull1 AS (
 moved AS (
   SELECT l.batch_name,
          TRIM(l.plot_name)                                                  AS dest,
-         -- The same loose pattern the batch report's Source Tray column
-         -- reads. Asking for the exact phrase today's save writes is what
+         -- The same loose pattern the batch reports Source Tray column
+         -- reads. Asking for the exact phrase todays save writes is what
          -- left the older rows unable to give their tray back.
          NULLIF(TRIM((REGEXP_MATCH(COALESCE(l.remark, ''),
                 'tray \[([^\]]+)\]', 'i'))[1]), '')                         AS src,
@@ -99,7 +99,7 @@ net AS (
   HAVING SUM(f.delta) > 0
 ),
 
-/* Where the two disagree, the batch's own total wins and the difference
+/* Where the two disagree, the batchs own total wins and the difference
    comes off its biggest tray first — the same order the page takes it in,
    so the two answers are the same answer. */
 ranked AS (
@@ -128,7 +128,7 @@ filled AS (
   GROUP BY 1, 2, 3
 )
 
-/* ONE result set — the SQL Editor only shows the last statement's.
+/* ONE result set — the SQL Editor only shows the last statements.
    The trays with no room left sort to the top. */
 SELECT tray_name                                   AS tray,
        nursery_name                                AS nursery,
@@ -152,7 +152,7 @@ ORDER BY (capacity - occupied) ASC, nursery_name, tray_name;
 --
 --   A tray whose batch has moved everything to the field reads "empty —
 --   ready to plant" with nobody named, however long ago that was and
---   however the transplant's remark was worded.
+--   however the transplants remark was worded.
 --
 --   occupied_by names every batch with seedlings still standing in the
 --   tray and how many each has. A tray listing two batches is not a

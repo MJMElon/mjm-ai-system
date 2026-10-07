@@ -7,15 +7,15 @@
 -- report; nothing is written until section 6. Safe to re-run.
 --
 -- WHAT THIS WRITES
---   * the office figure into Map Qty on each plot's 3rd Culling row, leaving
---     the 3rd Culled Qty as the report's own calculation
+--   * the office figure into Map Qty on each plots 3rd Culling row, leaving
+--     the 3rd Culled Qty as the reports own calculation
 --   * one Review_Rejection row per batch whose Map Qty and 3rd Culled Qty do
 --     not tally, which is what puts a batch in the "Amendment Needed" list
 --
 -- The page already treats these two disagreeing as something an admin has to
 -- explain -- saving such a plot prompts for a reason. This import does not
 -- write that reason, so the prompt still appears and the explanation is the
--- admin's, not a guess made here.
+-- admins, not a guess made here.
 -- ================================================================
 
 
@@ -151,7 +151,7 @@ FROM   tmp_c3_import;
 
 -- ----------------------------------------------------------------
 -- 2. ONE MAP QTY PER BATCH + PLOT
---    A plot's row carries a single Map Qty, but the sheet writes a plot on
+--    A plots row carries a single Map Qty, but the sheet writes a plot on
 --    more than one line when it was culled over several days (B10/232,
 --    B13/232, B14/234, N1/230). Those lines add up.
 -- ----------------------------------------------------------------
@@ -317,7 +317,7 @@ GROUP  BY s.batch_no ORDER BY s.batch_no;
 SELECT batch_no, string_agg(batch_name, ' | ' ORDER BY batch_name) AS candidates
 FROM   tmp_c3_batch WHERE name_choices > 1 GROUP BY batch_no ORDER BY batch_no;
 
--- (c) The plot has no row in that batch's 3rd Culling report -- it was never
+-- (c) The plot has no row in that batchs 3rd Culling report -- it was never
 --     transplanted for this batch and nothing was transferred into it, so
 --     there is no Map Qty box to put the figure in. Raised as an amendment.
 SELECT s.batch_no, b.batch_name, s.plot, s.map_qty
@@ -387,7 +387,7 @@ ORDER  BY c.batch_name, c.plot_name;
 
 -- ----------------------------------------------------------------
 -- 6. KEY THE MAP QTY IN
---    The 3rd Culled Qty stays the report's own calculation -- only Map Qty
+--    The 3rd Culled Qty stays the reports own calculation -- only Map Qty
 --    comes from the office sheet. An attached drone map, and any mismatch
 --    note an admin has already written, are carried across untouched.
 --    Re-running replaces rather than duplicates.
@@ -428,7 +428,7 @@ FROM   tmp_c3_sheet s
 JOIN   tmp_c3_batch b ON b.batch_no = s.batch_no AND b.name_choices = 1
 JOIN   tmp_c3_calc  c ON c.batch_name = b.batch_name AND c.plot_key = s.plot_key;
 
--- Out with the plot's old record...
+-- Out with the plots old record...
 DELETE FROM shared_inventory_logs l
 USING  tmp_c3_write w
 WHERE  l.transaction_type = '3rd_Culling'
@@ -486,7 +486,7 @@ JOIN   tmp_c3_batch b ON b.batch_no = s.batch_no AND b.name_choices = 1
 JOIN   tmp_c3_calc  c ON c.batch_name = b.batch_name AND c.plot_key = s.plot_key
 WHERE  s.map_qty <> c.auto_culled
 UNION ALL
--- the plot has no row in this batch's report at all
+-- the plot has no row in this batchs report at all
 SELECT b.batch_name,
        s.plot || ': map qty ' || s.map_qty
               || ', but this plot has no row in the batch''s 3rd Culling report'

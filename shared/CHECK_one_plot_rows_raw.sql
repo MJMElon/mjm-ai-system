@@ -1,5 +1,5 @@
 -- =====================================================================
---  ONE PLOT'S ROWS, EXACTLY AS THEY ARE SAVED
+--  ONE PLOTS ROWS, EXACTLY AS THEY ARE SAVED
 --
 --  Change the plot on the line marked PLOT below, paste the WHOLE file into
 --  the Supabase SQL Editor and press Run.
@@ -15,7 +15,7 @@
 --    · LINKED     nothing is saved at all. The batch report is summed live
 --                 every time the page draws, and drawn with a link.
 --
---  A LINKED figure is not floored at nought. If a plot's batches net below
+--  A LINKED figure is not floored at nought. If a plots batches net below
 --  zero in the ledger -- more sold, culled or transferred out than went in --
 --  the figure reads negative, and that is the batch report saying so rather
 --  than this page inventing a number. The same goes for the DATE: a date with

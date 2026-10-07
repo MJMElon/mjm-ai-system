@@ -12,9 +12,9 @@
 --
 -- "authenticated" is not "staff". mobile/mobile_landing.html and
 -- mobile/mobile_auth.html let anyone on the internet create an account, and
--- until today's fix that account was written into shared_profiles with
--- user_type 'system', because handle_new_user() defaults a missing
--- user_type to 'system'. So a stranger who signed up to book a collection
+-- until todays fix that account was written into shared_profiles with
+-- user_type system, because handle_new_user() defaults a missing
+-- user_type to system. So a stranger who signed up to book a collection
 -- held a token that these policies accept — on payroll, on maintenance
 -- records, on the FC portal, on nursery operations, on Nelos.
 --
@@ -29,9 +29,9 @@
 -- THE GATE
 -- --------
 -- _mjm_is_staff() already exists (migration_audit_rls_align.sql) and reads
--- user_type <> 'customer'. That is the right idea but it cannot be trusted
+-- user_type <> customer. That is the right idea but it cannot be trusted
 -- on its own yet: every account created by the mobile signup before today
--- is sitting in shared_profiles as 'system'.
+-- is sitting in shared_profiles as system.
 --
 -- So this migration gates on something those accounts cannot have:
 -- at least one module granted in shared_profiles.permissions. That is what
@@ -127,7 +127,7 @@ BEGIN
   EXECUTE format('DROP POLICY IF EXISTS %I ON %I', 'Authenticated read '  || _tag, _table);
   EXECUTE format('DROP POLICY IF EXISTS %I ON %I', 'Authenticated write ' || _tag, _table);
   EXECUTE format('DROP POLICY IF EXISTS %I ON %I', 'Authenticated full access',   _table);
-  -- and this migration's own, so it can be re-run
+  -- and this migrations own, so it can be re-run
   EXECUTE format('DROP POLICY IF EXISTS %I ON %I', 'staff read '  || _tag, _table);
   EXECUTE format('DROP POLICY IF EXISTS %I ON %I', 'staff write ' || _tag, _table);
 
@@ -233,7 +233,7 @@ END $$;
 --    roles, categories, handlers) writable by Nelos admins only, and delete
 --    admin-only because a case is a record.
 --
---    Do NOT also close them from here. Permissive policies are OR'd
+--    Do NOT also close them from here. Permissive policies are ORd
 --    together, so adding a second, looser "any staff" policy on top of
 --    those would widen the very thing that file narrows — the two would
 --    not conflict loudly, they would quietly cancel out.
@@ -276,16 +276,16 @@ SELECT tablename, policyname, cmd, qual
 -- ────────────────────────────────────────────────────────────────────────────
 -- AFTERWARDS — the accounts that were mis-tagged
 --
--- mobile_landing.html and mobile_auth.html now stamp user_type 'customer'
--- at signup. Accounts created before that are sitting as 'system'. Once
+-- mobile_landing.html and mobile_auth.html now stamp user_type customer
+-- at signup. Accounts created before that are sitting as system. Once
 -- section 0 has told you nobody in the list is staff, this tags them:
 --
 --   UPDATE shared_profiles p
---      SET user_type = 'customer'
---    WHERE COALESCE(p.user_type, 'system') <> 'customer'
+--      SET user_type = customer
+--    WHERE COALESCE(p.user_type, system) <> customer
 --      AND NOT EXISTS (
---            SELECT 1 FROM jsonb_each_text(COALESCE(p.permissions->'modules','{}'::jsonb)) AS m(k,v)
---             WHERE v IN ('admin','normal'));
+--            SELECT 1 FROM jsonb_each_text(COALESCE(p.permissions->modules,{}::jsonb)) AS m(k,v)
+--             WHERE v IN (admin,normal));
 --
 -- Read it as a SELECT first. It is reversible, but only if you know which
 -- rows it touched.
@@ -297,16 +297,16 @@ SELECT tablename, policyname, cmd, qual
 --   DECLARE r record; tbls text[]; t text;
 --   BEGIN
 --     SELECT array_agg(DISTINCT tablename) INTO tbls
---       FROM pg_policies WHERE schemaname='public' AND policyname LIKE 'staff %';
---     IF tbls IS NULL THEN RAISE NOTICE 'nothing to reopen'; RETURN; END IF;
+--       FROM pg_policies WHERE schemaname=public AND policyname LIKE staff %;
+--     IF tbls IS NULL THEN RAISE NOTICE nothing to reopen; RETURN; END IF;
 --     FOR r IN SELECT tablename, policyname FROM pg_policies
---               WHERE schemaname='public' AND policyname LIKE 'staff %' LOOP
---       EXECUTE format('DROP POLICY IF EXISTS %I ON %I', r.policyname, r.tablename);
+--               WHERE schemaname=public AND policyname LIKE staff % LOOP
+--       EXECUTE format(DROP POLICY IF EXISTS %I ON %I, r.policyname, r.tablename);
 --     END LOOP;
 --     FOREACH t IN ARRAY tbls LOOP
---       EXECUTE format('DROP POLICY IF EXISTS "Authenticated full access" ON %I', t);
---       EXECUTE format('CREATE POLICY "Authenticated full access" ON %I
---                       FOR ALL TO authenticated USING (true) WITH CHECK (true)', t);
+--       EXECUTE format(DROP POLICY IF EXISTS "Authenticated full access" ON %I, t);
+--       EXECUTE format(CREATE POLICY "Authenticated full access" ON %I
+--                       FOR ALL TO authenticated USING (true) WITH CHECK (true), t);
 --     END LOOP;
 --   END $$;
 --

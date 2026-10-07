@@ -22,10 +22,10 @@
 --   on. The Nelos page calls it when it loads, which is enough on its own:
 --   somebody opens Nelos most days, and a case raised late is still raised.
 --   For it to fire with nobody watching, schedule the same function — the
---   Supabase dashboard's Integrations → Cron, once a day, is the whole
+--   Supabase dashboards Integrations → Cron, once a day, is the whole
 --   setup:
 --
---     select cron.schedule('nelos-automations', '0 1 * * *',
+--     select cron.schedule(nelos-automations, 0 1 * * *,
 --                          $$ select public.nelos_run_automations() $$);
 --
 --   It is safe either way. Due-ness is a date on the row, and raising
@@ -161,7 +161,7 @@ BEGIN
   END IF;
 
   -- Monthly: the chosen day of next month. Days are capped at 28 by the
-  -- table's constraint, so there is no month this cannot land in.
+  -- tables constraint, so there is no month this cannot land in.
   d := date_trunc('month', p_from)::date + INTERVAL '1 month';
   RETURN (date_trunc('month', d)::date + (LEAST(GREATEST(p_day, 1), 28) - 1));
 END $$;
@@ -202,7 +202,7 @@ BEGIN
                ON a.plot_name IS NULL AND p.nursery_name = a.nursery_name
        WHERE a.plot_name IS NOT NULL OR p.plot_name IS NOT NULL
     LOOP
-      -- Last time's case still open? Then this plot is not behind on the
+      -- Last times case still open? Then this plot is not behind on the
       -- work, it is behind on somebody doing it, and a second case says
       -- nothing the first did not.
       IF EXISTS (

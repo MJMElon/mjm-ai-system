@@ -3,14 +3,14 @@
 --
 -- NELOS — the two cases the Culling Calculator raises.
 --
--- The FC Portal's Culling Calculator now opens a real Nelos case instead of
+-- The FC Portals Culling Calculator now opens a real Nelos case instead of
 -- saving a note on the phone. It raises exactly two, decided by the culling
 -- rate alone:
 --
 --   at or under 10%   Culling — Drone Flight   the plot is ready, fly it
 --   over 10%          Culling — Final Check     auditor to come and count
 --
--- Both are for the Site Auditor. The auditor's own count is keyed into Nelos
+-- Both are for the Site Auditor. The auditors own count is keyed into Nelos
 -- afterwards, so neither waits on it.
 --
 -- This file is what SENDS them to the auditors. The FC Portal deliberately
@@ -29,11 +29,11 @@
 --   The module keys have been renamed once already (scan → fc_portal,
 --   audit → audit_portal), so nothing below matches an exact key: it
 --   matches the key or the label on a word, the same way the tier labels
---   and the FC Portal's own lookup do.
+--   and the FC Portals own lookup do.
 --
 -- WHOEVER RAISES A CASE MUST HOLD NELOS. Row-level security allows the
 -- insert only for an account with modules.nelos set to something other than
--- 'none'. Field Conductors using the calculator therefore need Nelos —
+-- none. Field Conductors using the calculator therefore need Nelos —
 -- grant it on Nelos → User Setting → User Pending Allocation, which does it
 -- in one press. Without it the calculator still records the request on the
 -- phone and says the case could not be raised.
@@ -142,11 +142,11 @@ BEGIN
      SELECT 1 FROM public.nelos_routes r
       WHERE r.source_module = fc_key AND r.category = v.name);
 
-  -- migration_nelos_culling_route.sql seeded a 'Culling Calculator'
-  -- category before the calculator's real category names were known. The
+  -- migration_nelos_culling_route.sql seeded a Culling Calculator
+  -- category before the calculators real category names were known. The
   -- calculator raises the two above and never that one, so it is a dead
   -- entry in every category picker. Removed, with its rule — but only if
-  -- no case was ever filed under it, because a case's category is stored
+  -- no case was ever filed under it, because a cases category is stored
   -- by value and deleting a category somebody used would orphan nothing
   -- while still losing the name from the pickers.
   IF NOT EXISTS (SELECT 1 FROM public.nelos_cases WHERE category = 'Culling Calculator') THEN
@@ -216,5 +216,5 @@ BEGIN
 END $who$;
 
 -- ── Rollback (manual, if ever needed) ───────────────────────────
---   DELETE FROM nelos_routes     WHERE category IN ('Culling — Drone Flight','Culling — Final Check');
---   DELETE FROM nelos_categories WHERE name     IN ('Culling — Drone Flight','Culling — Final Check');
+--   DELETE FROM nelos_routes     WHERE category IN (Culling — Drone Flight,Culling — Final Check);
+--   DELETE FROM nelos_categories WHERE name     IN (Culling — Drone Flight,Culling — Final Check);

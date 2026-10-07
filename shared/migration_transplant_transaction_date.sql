@@ -31,5 +31,5 @@ CREATE INDEX IF NOT EXISTS idx_inventory_logs_type_txdate
 -- SELECT transaction_type, count(*) FILTER (WHERE transaction_date IS NULL) AS still_null,
 --        count(*) AS total
 -- FROM shared_inventory_logs
--- WHERE transaction_type LIKE 'Transplanted%'
+-- WHERE transaction_type LIKE Transplanted%
 -- GROUP BY transaction_type;

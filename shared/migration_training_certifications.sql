@@ -4,7 +4,7 @@
 -- ================================================================
 --
 -- Why:
---   The Training Center's certificate page is now the "MJM Group
+--   The Training Centers certificate page is now the "MJM Group
 --   Certified Board" — a leaderboard every staff member can see.
 --   When a trainee completes a course (all slides read + practical
 --   record fulfilled) they claim the certificate, which inserts one
@@ -17,8 +17,8 @@ CREATE TABLE IF NOT EXISTS training_certifications (
     user_id     uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     email       text,
     full_name   text NOT NULL,        -- name as shown on the certificate/board
-    cert_key    text NOT NULL,        -- e.g. 'nursery-grower'
-    cert_title  text NOT NULL,        -- e.g. 'MJM Certified Oil Palm Nursery Grower'
+    cert_key    text NOT NULL,        -- e.g. nursery-grower
+    cert_title  text NOT NULL,        -- e.g. MJM Certified Oil Palm Nursery Grower
     awarded_at  timestamptz NOT NULL DEFAULT now(),
     created_at  timestamptz NOT NULL DEFAULT now(),
     UNIQUE (user_id, cert_key)        -- one row per person per certification

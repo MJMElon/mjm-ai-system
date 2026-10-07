@@ -1,5 +1,5 @@
 -- ================================================================
--- NELOS — a remark of the closer's own, and a real right to close with
+-- NELOS — a remark of the closers own, and a real right to close with
 -- Run in the Supabase SQL Editor (project kibqjztozokohqmhqqqf).
 -- Safe to re-run.
 --
@@ -8,8 +8,8 @@
 -- The Close Case sheet used to write nothing but the status change —
 -- nowhere for whoever accepts the work to say why, if they wanted to.
 -- close_remark is that line, separate from nelos_cases.resolution:
--- resolution is the SOLVER's word on what was done, close_remark is
--- the CLOSER's on accepting it, and they can be two different people
+-- resolution is the SOLVERs word on what was done, close_remark is
+-- the CLOSERs on accepting it, and they can be two different people
 -- days apart. Neither overwrites the other.
 --
 -- The dock works without this column: it retries the close without the
@@ -21,11 +21,11 @@
 -- migration_nelos_close_right.sql (an earlier file) gave handlers a
 -- may_close tick and a nelos_my_rights() that reports it — but never
 -- taught nelos_may(), the function the ROW-LEVEL SECURITY policy on
--- nelos_cases actually calls, to recognise 'close' as a right at all.
--- Asked for it, nelos_may('close') fell through to the CASE statement's
+-- nelos_cases actually calls, to recognise close as a right at all.
+-- Asked for it, nelos_may(close) fell through to the CASE statements
 -- ELSE and returned false for every single person, and the UPDATE
--- policy's WITH CHECK never named 'close' either — only 'edit' and
--- 'solve'. So the Close Case button has been showing to anyone with
+-- policys WITH CHECK never named close either — only edit and
+-- solve. So the Close Case button has been showing to anyone with
 -- may_close ticked, while Postgres would have refused the write for
 -- anyone whose may_solve was not ALSO true (which is most Nelos
 -- holders by default, so this went unnoticed) or explicitly false. A
@@ -69,7 +69,7 @@ COMMENT ON COLUMN public.nelos_cases.close_remark IS
   'both may be null.';
 
 -- ────────────────────────────────────────────────────────────────
--- PART 2: nelos_may('close') answers for real
+-- PART 2: nelos_may(close) answers for real
 --
 -- A scalar-returning function, so CREATE OR REPLACE is enough — this
 -- is not the RETURNS TABLE case that needs a DROP first.
@@ -103,7 +103,7 @@ $$;
 GRANT EXECUTE ON FUNCTION public.nelos_may(TEXT) TO authenticated;
 
 -- ────────────────────────────────────────────────────────────────
--- PART 3: the UPDATE policy recognises 'close' too
+-- PART 3: the UPDATE policy recognises close too
 --
 -- Same shape as migration_nelos_case_tools.sql, one right wider.
 -- ────────────────────────────────────────────────────────────────

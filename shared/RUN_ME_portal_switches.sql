@@ -9,7 +9,7 @@
 -- What it does:
 --   1. shared_portal_settings gains `actions` — the function switches under
 --      each module on System Setting → Portal View & Function
---   2. those switches reach a worker's phone with the PIN sign-in
+--   2. those switches reach a workers phone with the PIN sign-in
 --   3. a worker can be given the "who did this work" tick list
 --
 -- Source of truth is the repository:
@@ -19,7 +19,7 @@
 -- ════════════════════════════════════════════════════════════════════════
 
 
--- ── 1. Where the company's switches live ────────────────────────────────
+-- ── 1. Where the companys switches live ────────────────────────────────
 --
 -- The table is created here too, so this file works whether or not
 -- create_scan_system_setting.sql has ever been run.
@@ -28,7 +28,7 @@
 --   actions  { "maintenance": { "gps": false, "remark": true } }
 --
 -- ABSENT IS NOT A VETO, for both. A module or function nobody has touched is
--- simply not being vetoed, so the person's own permission decides — and a
+-- simply not being vetoed, so the persons own permission decides — and a
 -- function added to the apps next month works without anybody visiting the
 -- panel first.
 
@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS public.shared_portal_settings (
 --
 -- Same rule as `modules`: a function ABSENT is not vetoed. New functions ship
 -- working rather than invisible until somebody remembers this screen, and the
--- person's own permission still decides whether they actually get it.
+-- persons own permission still decides whether they actually get it.
 ALTER TABLE public.shared_portal_settings
   ADD COLUMN IF NOT EXISTS actions JSONB NOT NULL DEFAULT '{}'::jsonb;
 
@@ -76,11 +76,11 @@ BEGIN
 END $$;
 
 
--- ── 2. Carrying them to a worker's phone ────────────────────────────────
+-- ── 2. Carrying them to a workers phone ────────────────────────────────
 --
 -- A PIN sign-in is `anon`, and shared_portal_settings is deliberately not
--- readable by anon: a straight grant would hand over the FC portal's row too,
--- which is none of a worker's business. So the worker's own switches ride
+-- readable by anon: a straight grant would hand over the FC portals row too,
+-- which is none of a workers business. So the workers own switches ride
 -- along with the sign-in instead.
 --
 -- Guarded twice, so this file and create_scan_system_setting.sql can be run
@@ -137,12 +137,12 @@ AS $$
                ),
     'modules',  public.worker_portal(w) -> 'modules',
     -- Which FUNCTIONS inside a module this worker gets — the schedule, the
-    -- record form, and the record form's own parts. The same switches, with
+    -- record form, and the record forms own parts. The same switches, with
     -- the same keys, that the office sets per Field Conductor on
-    -- ai.mjmnursery.com. Absent means the app's documented defaults, so a
+    -- ai.mjmnursery.com. Absent means the apps documented defaults, so a
     -- worker nobody has touched still gets the ordinary form.
     'actions',  public.worker_portal(w) -> 'actions',
-    /* The COMPANY's master switches for this portal — System Setting → Portal
+    /* The COMPANYs master switches for this portal — System Setting → Portal
        View & Function. Off there beats on anywhere else. */
     'company',  public.worker_company_switches(),
     'boundary', public.worker_portal(w) -> 'boundary'

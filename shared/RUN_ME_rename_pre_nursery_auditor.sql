@@ -11,9 +11,9 @@
 --  WHY THIS IS SQL AND NOT A CODE CHANGE
 --  That title is not written anywhere in the app -- it is a row somebody
 --  keyed, so it lives in the database and only the database can change
---  it. Which table it is in depends on where it was keyed: a person's
---  role, a seat's label, a job title. Rather than guess, this looks in
---  every label-ish column of this system's own tables, renames the ones
+--  it. Which table it is in depends on where it was keyed: a persons
+--  role, a seats label, a job title. Rather than guess, this looks in
+--  every label-ish column of this systems own tables, renames the ones
 --  that say exactly "Pre Nursery Auditor", and prints what it touched.
 --
 --  MATCHED EXACTLY, ignoring case and outer spaces. A row that says
@@ -22,7 +22,7 @@
 --  guessed at near misses would rename things nobody mentioned.
 --
 --  Views are skipped (renaming through one would write to the table
---  underneath twice), and so is every table that is not this system's.
+--  underneath twice), and so is every table that is not this systems.
 -- =====================================================================
 
 -- A scratch table for what was changed, so the last statement can print
@@ -51,7 +51,7 @@ BEGIN
      AND t.table_name   = c.table_name
      AND t.table_type   = 'BASE TABLE'          -- never a view
     WHERE c.table_schema = 'public'
-      -- This system's own tables only. left() rather than LIKE so there
+      -- This systems own tables only. left() rather than LIKE so there
       -- is no underscore to escape and no backslash in the file.
       AND (left(c.table_name,  6) = 'nelos_'
         OR left(c.table_name,  6) = 'audit_'
@@ -85,7 +85,7 @@ BEGIN
   END LOOP;
 END $$;
 
--- ONE result set -- the SQL Editor only shows the last statement's.
+-- ONE result set -- the SQL Editor only shows the last statements.
 SELECT 0                                              AS sort,
        'ALL PLACES THIS TITLE IS STORED'::text        AS place,
        (SELECT COALESCE(sum(rows_renamed),   0) FROM _mjm_rename_log)::int AS rows_renamed,
@@ -116,7 +116,7 @@ ORDER BY sort, place;
 
 -- WHAT A GOOD RESULT LOOKS LIKE
 --   A first row saying "Done.", with rows_renamed being how many rows
---   changed -- usually 1, sometimes 2 if the title is kept in a person's
+--   changed -- usually 1, sometimes 2 if the title is kept in a persons
 --   row and on a seat as well.
 --
 --   Under it, one row per place it is stored, naming the table and the

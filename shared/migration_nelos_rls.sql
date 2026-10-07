@@ -37,13 +37,13 @@
 --   Work tables — nelos_cases, nelos_case_comments:
 --       read   any account holding Nelos
 --       write  any account holding Nelos      (raising, commenting,
---              claiming and resolving are everyone's job)
+--              claiming and resolving are everyones job)
 --       delete Nelos admins only              (a case is a record; the
 --              way to retire one is to close it)
 --
--- Reading is still deliberately not narrowed to a person's own scope. The
+-- Reading is still deliberately not narrowed to a persons own scope. The
 -- To-Do lists filter in the app, and pushing that into a policy would mean
--- a case moving queue could vanish from the raiser's own screen. What
+-- a case moving queue could vanish from the raisers own screen. What
 -- matters here is that somebody with no Nelos at all now gets nothing.
 --
 -- Requires the nelos tables to exist — run migration_nelos_all.sql first.
@@ -65,7 +65,7 @@ END $preflight$;
 -- PART 1: Two questions every policy asks
 --
 -- SECURITY DEFINER so the policy can read shared_profiles without the
--- caller needing to, and without recursing into that table's own policies.
+-- caller needing to, and without recursing into that tables own policies.
 -- ────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.nelos_has_access()
 RETURNS boolean

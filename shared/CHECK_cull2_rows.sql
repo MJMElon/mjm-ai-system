@@ -23,23 +23,23 @@
 --
 --  WHAT TO LOOK FOR
 --
---    ord 1, 'summary'
+--    ord 1, summary
 --      -> how many 2nd culling rows there are, and how many batch+plot
 --         pairs have MORE THAN ONE.
 --
---    ord 2, 'TWO ROWS FOR ONE PLOT'
+--    ord 2, TWO ROWS FOR ONE PLOT
 --      -> these are the ones whose screen figure cannot be trusted. Open
---         that batch's 2nd Culling tab, key the right DEAD on each plot and
---         press Save once: the save clears the whole batch's rows first, so
+--         that batchs 2nd Culling tab, key the right DEAD on each plot and
+--         press Save once: the save clears the whole batchs rows first, so
 --         one save leaves exactly one row per plot and the doubling is gone.
 --
---    ord 3, 'row'
---      -> every row, newest save first. 'dead' is the figure the screen
---         shows. 'by' and 'at' are who saved it and when. If a figure is not
+--    ord 3, row
+--      -> every row, newest save first. dead is the figure the screen
+--         shows. by and at are who saved it and when. If a figure is not
 --         the one you keyed, that line says who it came from and the day --
 --         start there.
 --
---    A row whose 'by' is empty was saved before those columns existed, or by
+--    A row whose by is empty was saved before those columns existed, or by
 --    a database script. It is not a sign of anything on its own.
 -- =====================================================================
 WITH l AS (

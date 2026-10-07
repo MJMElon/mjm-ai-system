@@ -75,7 +75,7 @@ CREATE INDEX IF NOT EXISTS mjmnpayroll_piece_rates_group_idx ON mjmnpayroll_piec
 --    never silently restate a month that has already been paid.
 CREATE TABLE IF NOT EXISTS mjmnpayroll_work_entries (
   id         BIGSERIAL PRIMARY KEY,
-  month      TEXT NOT NULL,                      -- 'YYYY-MM'
+  month      TEXT NOT NULL,                      -- YYYY-MM
   category   TEXT NOT NULL,                      -- transplanting | seedlings
   section    TEXT,                               -- PN | BNN | UNN1 | UNN2 | UNE | Driver
   worker_id  BIGINT REFERENCES mjmnpayroll_workers(id) ON DELETE CASCADE,

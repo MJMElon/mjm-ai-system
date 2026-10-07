@@ -2,8 +2,8 @@
 -- Migration: Add is_fully_booked column to shared_date_overrides
 -- ----------------------------------------------------------------------------
 -- Lets the operations team mark a day as "fully booked" without closing it
--- entirely. Closed days are visually red and read as "we're not operating
--- that day"; fully-booked days show as amber and read as "we're operating,
+-- entirely. Closed days are visually red and read as "we are not operating
+-- that day"; fully-booked days show as amber and read as "we are operating,
 -- but every slot is taken". Both states block customer self-booking and
 -- both surface the existing external_note remark to customers.
 --
@@ -24,5 +24,5 @@ ALTER TABLE shared_date_overrides
 
 -- Existing rows default to NOT fully booked, which preserves all current
 -- behaviour. No backfill or RLS changes needed — the column is read by the
--- same SELECT-all policy the table already has, and the operations team's
+-- same SELECT-all policy the table already has, and the operations teams
 -- session already has write access via the existing override policy.

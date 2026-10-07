@@ -1,7 +1,7 @@
 -- ============================================================================
 -- MJM AI POWERED SYSTEM — migration_nelos_sees_all.sql
 --
--- NELOS — one person may be given sight of every system's cases.
+-- NELOS — one person may be given sight of every systems cases.
 --
 -- Seeing everything was a property of the SYSTEM: tag somebody to Nursery
 -- Operation, the HQ system (migration_nelos_hq.sql), and they saw every
@@ -11,7 +11,7 @@
 -- what they handle as well as what they see.
 --
 -- So it becomes a tick of its own, on the person, next to the rest of
--- their access. The system's own flag is untouched and still applies:
+-- their access. The systems own flag is untouched and still applies:
 -- somebody in an HQ system sees everything whether or not this is ticked.
 --
 --     sees_all  =  their system is HQ  OR  this tick
@@ -47,8 +47,8 @@ COMMENT ON COLUMN public.nelos_handlers.sees_all_cases IS
 -- ────────────────────────────────────────────────────────────────
 -- PART 2: What the signed-in person may see
 --
--- Identical to migration_nelos_access.sql's version but for the one OR.
--- Facts only — which cases that adds up to is shared_nelos.js's job.
+-- Identical to migration_nelos_access.sqls version but for the one OR.
+-- Facts only — which cases that adds up to is shared_nelos.jss job.
 -- ────────────────────────────────────────────────────────────────
 DROP FUNCTION IF EXISTS public.nelos_my_scope();
 

@@ -19,10 +19,10 @@
 -- --------------
 --   migration_rls_hardening.sql gates the audit_* tables on
 --
---     _mjm_has_module('audit', ARRAY['admin','normal'])
+--     _mjm_has_module(audit, ARRAY[admin,normal])
 --
---   which requires shared_profiles.permissions -> 'modules' ->> 'audit'
---   to be exactly 'admin' or 'normal'.
+--   which requires shared_profiles.permissions -> modules ->> audit
+--   to be exactly admin or normal.
 --
 --   The app does not agree. audit/audit_supabase.js gates pages on
 --   audit_actions / audit_pages and says so in its own comment:
@@ -65,7 +65,7 @@
 -- ────────────────────────────────────────────────────────────────
 
 -- A staff account: any profile that is not a customer. A missing
--- user_type counts as staff ('system'), matching how the existing
+-- user_type counts as staff (system), matching how the existing
 -- rows were created.
 CREATE OR REPLACE FUNCTION public._mjm_is_staff()
 RETURNS boolean
@@ -78,7 +78,7 @@ AS $fn$
   );
 $fn$;
 
--- An audit admin: role admin/administrator, or modules.audit = 'admin'.
+-- An audit admin: role admin/administrator, or modules.audit = admin.
 CREATE OR REPLACE FUNCTION public._mjm_is_audit_admin()
 RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public

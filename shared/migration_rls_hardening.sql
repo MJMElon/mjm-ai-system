@@ -11,7 +11,7 @@
 --   • any logged-in salesweb customer to read internal allocations,
 --     batch reviews, and audit history, and to delete those rows
 --   • any logged-in customer to elevate themselves to admin by upserting
---     `role = 'admin'` on their own shared_profiles row
+--     `role = admin` on their own shared_profiles row
 --
 -- This migration is idempotent: it DROPs the unsafe policies (if present)
 -- and CREATEs tighter replacements. Each section is independent so you can
@@ -20,7 +20,7 @@
 
 
 -- Helper: caller is an admin/normal user of a given module.
--- Reads the JSONB shape used elsewhere: permissions->'modules'->>'<mod>'.
+-- Reads the JSONB shape used elsewhere: permissions->modules->><mod>.
 CREATE OR REPLACE FUNCTION public._mjm_has_module(_module text, _levels text[])
 RETURNS boolean
 LANGUAGE sql
@@ -168,10 +168,10 @@ END $$;
 --
 -- The salesweb signup flow upserts shared_profiles from the anon JWT
 -- (the just-signed-up user). Without column-level constraints, a logged-in
--- customer can `update({ role: 'admin' })` on their own row and then
+-- customer can `update({ role: admin })` on their own row and then
 -- enter salesweb_admin.html, which gates purely on profile.role.
 --
--- We pin role='customer' and freeze permissions for self-updates. Admin
+-- We pin role=customer and freeze permissions for self-updates. Admin
 -- promotion can only happen via service-role (the operation_user_access
 -- admin tooling), which bypasses RLS.
 -- ────────────────────────────────────────────────────────────────

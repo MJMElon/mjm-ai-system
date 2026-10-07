@@ -3,8 +3,8 @@
 --
 -- NELOS — which systems a person may use Nelos in.
 --
--- Somebody's HOME system says whose queue they work — "this person handles
--- Audit's cases". It has been doing a second job as well: deciding the only
+-- Somebodys HOME system says whose queue they work — "this person handles
+-- Audit is cases". It has been doing a second job as well: deciding the only
 -- queue they may see. That is too narrow for how people actually work. An
 -- auditor needs their own queue, and also to see FC Portal cases while
 -- standing in a plot, and Admin Portal cases when the office asks.
@@ -57,7 +57,7 @@ COMMENT ON COLUMN public.nelos_handlers.access_modules IS
 -- PART 2: What the signed-in person may see
 --
 -- Facts only — who they are and what is ticked. Which cases that adds up to
--- is shared/shared_nelos.js's job, so the rule lives in one place and the
+-- is shared/shared_nelos.jss job, so the rule lives in one place and the
 -- To-Do widgets, the dock and the case list cannot drift apart on it.
 -- ────────────────────────────────────────────────────────────────
 DROP FUNCTION IF EXISTS public.nelos_my_scope();

@@ -3,9 +3,9 @@
 --
 -- The Stock Inventory System module.
 --
--- NOTHING HERE IS REQUIRED. The module needs no schema change: a person's
+-- NOTHING HERE IS REQUIRED. The module needs no schema change: a persons
 -- module access lives in shared_profiles.permissions, which is JSONB, and the
--- new `stock` key is granted from the main portal's User Access screen like
+-- new `stock` key is granted from the main portals User Access screen like
 -- every other module. If you are happy to grant it there, you can close this
 -- file — the tile appears for whoever you grant it to, and nobody else.
 --
@@ -16,12 +16,12 @@
 --
 --   PART 2  Tell Nelos the module exists, so a case can one day be filed
 --           against Stock Inventory System and land in its queue. The
---           module's page already carries a Nelos To-Do list, and without
+--           modules page already carries a Nelos To-Do list, and without
 --           this row that list has no system to belong to. Nothing raises a
 --           stock case yet, so this is groundwork, not a fix.
 --
 -- Safe to run twice. Both parts check for themselves first, and Part 1 only
--- ever adds the one key — everything else on a person's permissions is left
+-- ever adds the one key — everything else on a persons permissions is left
 -- exactly as it was.
 --
 -- Run in Supabase SQL Editor (main project: kibqjztozokohqmhqqqf).
@@ -31,7 +31,7 @@
 -- PART 1 — who may open it
 --
 -- EDIT THIS LIST. Emails of the people who should have the module, and the
--- level each gets: 'admin' or 'normal'. An email that is not a profile is
+-- level each gets: admin or normal. An email that is not a profile is
 -- reported at the end rather than silently doing nothing.
 --
 -- Leave the list empty to skip Part 1 entirely and grant on the screen.
@@ -43,8 +43,8 @@ DECLARE
   -- is a bare ARRAY[], and Postgres cannot infer the type of an empty array —
   -- it aborts the block before Part 1 can decide to skip itself.
   people TEXT[] := ARRAY[
-    -- 'esther@mjmnursery.com',
-    -- 'someone.else@mjmnursery.com'
+    -- esther@mjmnursery.com,
+    -- someone.else@mjmnursery.com
   ]::TEXT[];
   level  TEXT   := 'admin';
   -- ↑↑↑ ------------------------------------------ ↑↑↑
@@ -114,7 +114,7 @@ END $nelos$;
 
 -- ────────────────────────────────────────────────────────────────
 -- CHECK — one result set, because the SQL Editor shows only the last
--- statement's. Three lines, and what each should say:
+-- statements. Three lines, and what each should say:
 --
 --   who holds the module   the people you listed, one row each, with their
 --                          level. Nobody listed → "nobody yet — grant it on
@@ -160,6 +160,6 @@ END $report$;
 SELECT ord, item, result FROM _stock_check ORDER BY ord;
 
 -- ── Rollback ────────────────────────────────────────────────────
---   UPDATE shared_profiles SET permissions = permissions #- '{modules,stock}'
---    WHERE permissions->'modules' ? 'stock';
---   DELETE FROM nelos_modules WHERE key = 'stock';
+--   UPDATE shared_profiles SET permissions = permissions #- {modules,stock}
+--    WHERE permissions->modules ? stock;
+--   DELETE FROM nelos_modules WHERE key = stock;

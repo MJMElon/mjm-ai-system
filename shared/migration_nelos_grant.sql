@@ -4,9 +4,9 @@
 -- NELOS — adding somebody from Pending Allocation grants them Nelos.
 --
 -- Until now, putting a person to work in Nelos took two screens: grant them
--- the module on the main portal's User Access, then come to Nelos and tag
+-- the module on the main portals User Access, then come to Nelos and tag
 -- them to a system. Anybody who did only the second half was tagged but
--- could not open the module, which reads on screen as "why can't they see
+-- could not open the module, which reads on screen as "why cannot they see
 -- their cases".
 --
 -- The Pending Allocation section now searches everybody in the company by
@@ -20,7 +20,7 @@
 --   on their behalf, and checks for itself that the caller is one or the
 --   other before touching anything.
 --
---   It grants 'normal', never 'admin', and never touches a person who
+--   It grants normal, never admin, and never touches a person who
 --   already has some level of Nelos — so it can only open the door, never
 --   widen or narrow what somebody already has.
 --
@@ -43,7 +43,7 @@ END $preflight$;
 -- Grant Nelos to one person.
 --
 -- Returns the level they hold afterwards, so the page can say what it did:
--- 'normal' when this call granted it, or whatever they already held.
+-- normal when this call granted it, or whatever they already held.
 -- ────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.nelos_grant_access(p_user_id UUID)
 RETURNS TEXT

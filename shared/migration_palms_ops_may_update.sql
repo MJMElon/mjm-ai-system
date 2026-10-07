@@ -1,5 +1,5 @@
 -- ============================================================================
--- ANYONE WHO CAN OPEN A PALMS PAGE MAY SET A PLOT'S STATUS
+-- ANYONE WHO CAN OPEN A PALMS PAGE MAY SET A PLOTS STATUS
 --
 -- Safe to run twice. CREATE OR REPLACE throughout; no table is touched and no
 -- data is moved.
@@ -22,7 +22,7 @@
 --
 -- So it now answers yes for the Nursery Operation module too, at any level.
 -- That is exactly the test both PALMS pages already use to let somebody
--- through the door (canAccess('nursery_ops')), so the rule becomes: if you
+-- through the door (canAccess(nursery_ops)), so the rule becomes: if you
 -- can open the page, you can set a status.
 --
 -- WHAT DOES NOT CHANGE
@@ -97,12 +97,12 @@ NOTIFY pgrst, 'reload schema';
 
 
 -- ============================================================================
--- CHECK — who may set a plot's status now
+-- CHECK — who may set a plots status now
 --
 -- One row per staff account that can reach the PALMS pages. Every one should
 -- read "may set a status". The rule is spelled out here rather than calling
 -- palms_has_access(), because that function answers for whoever is RUNNING
--- this — the SQL Editor's service role — not for each person in the list.
+-- this — the SQL Editors service role — not for each person in the list.
 -- ============================================================================
 SELECT
   COALESCE(NULLIF(p.full_name, ''), p.email)                      AS "who",

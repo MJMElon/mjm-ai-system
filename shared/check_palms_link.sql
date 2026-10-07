@@ -8,8 +8,8 @@
 -- PALMS board both read and write the same plot log, and is anything
 -- actually in it?
 --
---   fcportal_palms_plot_logs   the ONE store of plot status. The phone's
---                              PALMS module writes it; the office board's
+--   fcportal_palms_plot_logs   the ONE store of plot status. The phones
+--                              PALMS module writes it; the office boards
 --                              Current Status dropdown writes it; the board,
 --                              Life of Plot and the motion study all read it.
 --   nops_plot_status_stages    the stage list both ends choose from. Kept on

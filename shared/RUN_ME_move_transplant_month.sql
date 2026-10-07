@@ -9,8 +9,8 @@
 --  Until now the FC Portal filed a transplanting record under the month its
 --  BOARD was showing, and saved the day it was keyed as the work date. That
 --  is right only while a conductor records a job in the same month he does
---  it. UNN 2's September work was keyed in October, so it filed itself under
---  October: September's salary claim was short by it and October's carries
+--  it. UNN 2s September work was keyed in October, so it filed itself under
+--  October: Septembers salary claim was short by it and Octobers carries
 --  work nobody did in October.
 --
 --  The portal no longer does this -- the job form now asks when the work was
@@ -18,7 +18,7 @@
 --  filed under the wrong one.
 --
 -- ── What you should see ─────────────────────────────────────────────────
--- The SQL Editor shows only the LAST statement's result, so this is one
+-- The SQL Editor shows only the LAST statements result, so this is one
 -- query. A line per record moved, a line per record that could not be, and
 -- a summary.
 --
@@ -36,7 +36,7 @@
 -- A SECOND RUN prints only the summary, with 0 moved. That is the file
 -- working, not failing.
 --
--- A "left behind" line means that plot's job is ALREADY recorded in the
+-- A "left behind" line means that plots job is ALREADY recorded in the
 -- destination month. Two records for one job on one plot is not something
 -- this file can choose between -- open both in the FC Portal and delete the
 -- one that is wrong.
@@ -50,8 +50,8 @@
 --  the records of that nursery in FROM_MONTH move to TO_MONTH, and their
 --  work date is stamped with NEW_DATE.
 --
---  PLOT narrows it to one plot. It is set to 'N3' because that is the one
---  that was asked for. LEAVE IT EMPTY -- '' -- and every plot of that
+--  PLOT narrows it to one plot. It is set to N3 because that is the one
+--  that was asked for. LEAVE IT EMPTY --  -- and every plot of that
 --  nursery in FROM_MONTH moves. Run it with one plot first and look at what
 --  comes back before widening it.
 --
@@ -61,7 +61,7 @@
 -- =====================================================================
 WITH q AS (
   SELECT 'UNN 2'::text      AS nursery,     -- as it is spelled on the records
-         'N3'::text         AS plot,        -- '' for every plot
+         'N3'::text         AS plot,        --  for every plot
          'Oct 2026'::text   AS from_month,
          'Sep 2026'::text   AS to_month,
          DATE '2026-09-30'  AS new_date
@@ -80,7 +80,7 @@ pick AS (
           OR upper(replace(COALESCE(t.plot_name, ''), ' ', ''))
            = upper(replace(q.plot, ' ', '')))
 ),
--- The destination month already has this plot's job. One record per plot per
+-- The destination month already has this plots job. One record per plot per
 -- job per month is a unique index, so moving this one would fail the whole
 -- statement -- and if it did not, one of the two would be lost without a
 -- word. Left where it is and reported at the end instead.

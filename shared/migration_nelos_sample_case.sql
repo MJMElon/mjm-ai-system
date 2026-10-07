@@ -14,7 +14,7 @@
 --
 -- THIS IS TEST DATA. When you are done looking at it:
 --
---     DELETE FROM nelos_cases WHERE case_no = 'NLS-SAMPLE';
+--     DELETE FROM nelos_cases WHERE case_no = NLS-SAMPLE;
 --
 -- or press Delete on the row, which is one of the things worth trying.
 --
@@ -134,4 +134,4 @@ SELECT case_no, status, priority, source_module, assigned_module,
  WHERE case_no = 'NLS-SAMPLE';
 
 -- ── Clean up when you are done ──────────────────────────────────
---   DELETE FROM nelos_cases WHERE case_no = 'NLS-SAMPLE';
+--   DELETE FROM nelos_cases WHERE case_no = NLS-SAMPLE;

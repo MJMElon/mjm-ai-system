@@ -7,9 +7,9 @@
 --
 -- ── What it does ──
 --
--- A new worker can key their name and a PIN on the portal's front door
+-- A new worker can key their name and a PIN on the portals front door
 -- instead of waiting for somebody in the office to add them. The row it makes
--- has no nursery and no section, so it lands in the Worker System board's
+-- has no nursery and no section, so it lands in the Worker System boards
 -- "Waiting to be allocated" strip until somebody drags it into a column.
 --
 -- ── The part that matters ──
@@ -57,7 +57,7 @@ AS $$
 $$;
 
 
--- ── 2. What a worker's row implies, with that in it ─────────────────────
+-- ── 2. What a workers row implies, with that in it ─────────────────────
 --
 -- The same function as before in every other respect — the defaults, the
 -- boundary fallback, the actions passed through as written. The only change
@@ -194,7 +194,7 @@ BEGIN
   END IF;
 
   /* No nursery and no section: that is what puts the name in the Worker
-     System board's "Waiting to be allocated" strip. The signup stamp is what
+     System boards "Waiting to be allocated" strip. The signup stamp is what
      worker_pending reads, and it is the only thing that makes this row
      different from one the office typed in. */
   INSERT INTO mjmnpayroll_workers (full_name, pin, active, portal, created_by)

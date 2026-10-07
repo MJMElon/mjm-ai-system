@@ -5,7 +5,7 @@
 
    ── How a tick actually gets there ──
 
-   The office's Work Record row and the phone's field record are two separate
+   The offices Work Record row and the phones field record are two separate
    things that have to be PAIRED before anything can flow between them. They
    pair on three facts, all three of which must agree:
 
@@ -17,7 +17,7 @@
                    …or, when those two disagree, the CHEMICAL, which is what
                       the job IS rather than what the office calls it
 
-   Pair them and the record fills the row's date, batch and quantity, and
+   Pair them and the record fills the rows date, batch and quantity, and
    ticks every worker it credits. Fail to pair and NOTHING happens — no date,
    no tick — and until now the page said nothing about it either.
 
@@ -30,8 +30,8 @@
    would pair with beside it. `verdict` says what happened:
 
      PAIRED ON ROUND          both agreed. If the tick is still missing, the
-                              worker's NAME is the problem, not the pairing;
-                              compare `credited` against the Worker Record's
+                              workers NAME is the problem, not the pairing;
+                              compare `credited` against the Worker Records
                               column headings
      PAIRED ON CHEMICAL       the rounds disagreed, but the office has this
                               exact spray on this exact plot, so it pairs on
@@ -60,7 +60,7 @@ WITH ask AS (
          -- BNN:  B1 … B14      UNN2: N1 … N20      PN: its own list
 ),
 
-/* The office's own rows, out of the JSON blob the Work Record saves. */
+/* The offices own rows, out of the JSON blob the Work Record saves. */
 office AS (
   SELECT r->>'jenis'                        AS jenis,
          upper(btrim(r->>'plot'))           AS plot,

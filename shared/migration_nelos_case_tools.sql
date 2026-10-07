@@ -4,7 +4,7 @@
 -- NELOS — a photo on a case, and who is allowed to edit, solve or delete one.
 --
 -- The case list now shows a row per case with View / Edit / Solve / Delete
--- beside it. Those last three are not everybody's to press, so each handler
+-- beside it. Those last three are not everybodys to press, so each handler
 -- carries three ticks set on the User Setting page:
 --
 --     may_solve    mark a case resolved            default ON
@@ -152,7 +152,7 @@ GRANT EXECUTE ON FUNCTION public.nelos_people() TO authenticated;
 -- migration_nelos_rls.sql left nelos_cases as "anybody with Nelos may
 -- change it, only an admin may delete it". Editing and deleting are now
 -- separate rights, so those two policies are replaced here. Reading and
--- inserting are untouched: raising a case is still everyone's job.
+-- inserting are untouched: raising a case is still everyones job.
 --
 -- Comments (nelos_case_comments) keep the old rule. Leaving a note is not
 -- editing a case.
@@ -193,7 +193,7 @@ BEGIN
   DROP POLICY IF EXISTS "nelos delete" ON public.nelos_cases;
 
   -- Changing a case at all needs one of the two rights that change a case.
-  -- Which columns each one may touch is the page's business; what matters
+  -- Which columns each one may touch is the pages business; what matters
   -- here is that somebody with neither cannot touch it through the API.
   CREATE POLICY "nelos update" ON public.nelos_cases
     FOR UPDATE TO authenticated

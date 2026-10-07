@@ -11,7 +11,7 @@
 
 -- 1. Piece rates become per-nursery.
 --    Any rate already saved is copied to all four nurseries so nothing
---    keyed in is lost; adjust each nursery's card afterwards.
+--    keyed in is lost; adjust each nurserys card afterwards.
 DO $$
 BEGIN
   -- (a) Table has never been created — make it in the final shape.

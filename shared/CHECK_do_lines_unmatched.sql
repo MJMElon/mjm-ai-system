@@ -3,8 +3,8 @@
 --  Paste into the Supabase SQL Editor and press Run. Read-only: it
 --  changes nothing, so it is safe to run as often as you like.
 --
---  A delivery note's Nursery Collection Details lines say which plot,
---  which batch and how many. Those lines are what a plot's Sales figure
+--  A delivery notes Nursery Collection Details lines say which plot,
+--  which batch and how many. Those lines are what a plots Sales figure
 --  is made of, and Sales is what its Balance and 3rd Culled are worked
 --  out from — so a line the report cannot place is a sale that never
 --  happened as far as the whole 3rd Culling tab is concerned. The plot
@@ -35,7 +35,7 @@ do_lines AS (
          COALESCE((ARRAY[d.qty_1, d.qty_2, d.qty_3, d.qty_4, d.qty_5])[i], 0)            AS raw_qty,
          d.total_qty,
          /* How many lines the note actually carries. The app reads a
-            blank quantity as the note's total ONLY when there is one
+            blank quantity as the notes total ONLY when there is one
             line to read it into; with two, it cannot guess, and skips. */
          (SELECT COUNT(*) FROM generate_series(1, 5) j
            WHERE NULLIF(TRIM((ARRAY[d.plot_1, d.plot_2, d.plot_3, d.plot_4, d.plot_5])[j]), '') IS NOT NULL) AS filled_lines
@@ -87,7 +87,7 @@ unmatched AS (
           WHERE p.batch_key = k.batch_key AND p.plot_key = k.plot_key)
 )
 
-/* ONE result set — the SQL Editor only shows the last statement's. */
+/* ONE result set — the SQL Editor only shows the last statements. */
 SELECT do_number                                   AS do,
        delivery_date                               AS delivered,
        line_no                                     AS line,
@@ -120,7 +120,7 @@ ORDER BY delivery_date DESC NULLS LAST, do_number, line_no;
 --   plot the batch actually has, so every sale is inside the Sales
 --   figure it belongs to.
 --
---   A row here is a sale the 3rd Culling tab cannot see. That plot's
+--   A row here is a sale the 3rd Culling tab cannot see. That plots
 --   Balance and 3rd Culled are HIGHER than the field by the quantity in
 --   seedlings_lost_to_the_report — the seedlings are sold and the report
 --   still expects somebody to go and cull them.

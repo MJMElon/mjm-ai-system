@@ -16,15 +16,15 @@
 -- So today a stranger who signed up on the booking page can open devtools
 -- and:
 --
---   • read every plot's activity for the whole company,
+--   • read every plots activity for the whole company,
 --   • rewrite the plot log, moving plots to whatever stage they like,
 --   • delete a year of field records outright,
---   • rewrite fcportal_palms_settings, which is the nursery's rules and
---     not a person's preference.
+--   • rewrite fcportal_palms_settings, which is the nurserys rules and
+--     not a persons preference.
 --
 -- The app never offers any of that, which is exactly the point: the UI is
 -- not a security boundary. The anon key is public by design and sits in
--- shared/shared_supabase.js and in the FC Portal's bundle, so anybody can
+-- shared/shared_supabase.js and in the FC Portals bundle, so anybody can
 -- call PostgREST directly. RLS is the only thing standing between a
 -- signed-in account and the data, and USING (true) is not standing
 -- anywhere.
@@ -39,11 +39,11 @@
 --   Field records — fcportal_palms_plot_logs, fcportal_palms_history,
 --   fcportal_palms_requests, fcportal_palms_culling:
 --       read   any account holding the scan module (the FC Portal)
---       write  the same — recording the day is every Field Conductor's job
+--       write  the same — recording the day is every Field Conductors job
 --       delete FC Portal admins only, because a plot log is a record; the
 --              way to correct one is to re-key it, not to make it vanish
 --
---   The nursery's rules — fcportal_palms_settings:
+--   The nurserys rules — fcportal_palms_settings:
 --       read   any account holding the scan module
 --       write  FC Portal admins and portal user-managers only. Plot
 --              layout, attention thresholds and the incentive floor decide
@@ -51,7 +51,7 @@
 --              Conductor had no business rewriting them and the app never
 --              asked to.
 --
--- Reading is deliberately not narrowed to a person's own nurseries. The
+-- Reading is deliberately not narrowed to a persons own nurseries. The
 -- screens filter by plot_status_nurseries in the app, and pushing that into
 -- a policy would mean a plot moving nursery could vanish from the record of
 -- the person who logged it. What matters here is that somebody with no FC
@@ -78,7 +78,7 @@ $preflight$;
 -- PART 1: Who counts as holding the FC Portal
 --
 -- SECURITY DEFINER so the check can read shared_profiles even though the
--- caller's own policy on that table may not let them read anybody else's
+-- callers own policy on that table may not let them read anybody elses
 -- row. STABLE so the planner calls it once per statement rather than once
 -- per row — this runs on every read of a table with a year of entries in it.
 -- ────────────────────────────────────────────────────────────────
@@ -156,7 +156,7 @@ BEGIN
          USING (public.palms_is_admin())', tbl);
   END LOOP;
 
-  -- The nursery's rules: everyone reads them, admins change them.
+  -- The nurserys rules: everyone reads them, admins change them.
   IF to_regclass('public.fcportal_palms_settings') IS NOT NULL THEN
     EXECUTE 'ALTER TABLE public.fcportal_palms_settings ENABLE ROW LEVEL SECURITY';
     EXECUTE 'DROP POLICY IF EXISTS "Authenticated read palms"  ON public.fcportal_palms_settings';
@@ -197,25 +197,25 @@ WHERE  p.schemaname = 'public' AND p.tablename LIKE 'fcportal\_palms\_%'
    Puts the tables back the way create_palms_tables.sql left them. Only do
    this if these policies are locking out somebody they should not — the
    answer to that is almost always to give that person the scan module on
-   the main portal's User Access, not to reopen the tables.
+   the main portals User Access, not to reopen the tables.
 
      DO $undo$
      DECLARE tbl TEXT;
      BEGIN
-       FOREACH tbl IN ARRAY ARRAY['fcportal_palms_plot_logs','fcportal_palms_history',
-                                  'fcportal_palms_requests','fcportal_palms_culling',
-                                  'fcportal_palms_settings']
+       FOREACH tbl IN ARRAY ARRAY[fcportal_palms_plot_logs,fcportal_palms_history,
+                                  fcportal_palms_requests,fcportal_palms_culling,
+                                  fcportal_palms_settings]
        LOOP
-         EXECUTE format('DROP POLICY IF EXISTS "palms read" ON public.%I', tbl);
-         EXECUTE format('DROP POLICY IF EXISTS "palms write" ON public.%I', tbl);
-         EXECUTE format('DROP POLICY IF EXISTS "palms update" ON public.%I', tbl);
-         EXECUTE format('DROP POLICY IF EXISTS "palms delete" ON public.%I', tbl);
-         EXECUTE format('DROP POLICY IF EXISTS "palms settings read" ON public.%I', tbl);
-         EXECUTE format('DROP POLICY IF EXISTS "palms settings write" ON public.%I', tbl);
-         EXECUTE format('CREATE POLICY "Authenticated read palms" ON public.%I
-                           FOR SELECT TO authenticated USING (true)', tbl);
-         EXECUTE format('CREATE POLICY "Authenticated write palms" ON public.%I
-                           FOR ALL TO authenticated USING (true) WITH CHECK (true)', tbl);
+         EXECUTE format(DROP POLICY IF EXISTS "palms read" ON public.%I, tbl);
+         EXECUTE format(DROP POLICY IF EXISTS "palms write" ON public.%I, tbl);
+         EXECUTE format(DROP POLICY IF EXISTS "palms update" ON public.%I, tbl);
+         EXECUTE format(DROP POLICY IF EXISTS "palms delete" ON public.%I, tbl);
+         EXECUTE format(DROP POLICY IF EXISTS "palms settings read" ON public.%I, tbl);
+         EXECUTE format(DROP POLICY IF EXISTS "palms settings write" ON public.%I, tbl);
+         EXECUTE format(CREATE POLICY "Authenticated read palms" ON public.%I
+                           FOR SELECT TO authenticated USING (true), tbl);
+         EXECUTE format(CREATE POLICY "Authenticated write palms" ON public.%I
+                           FOR ALL TO authenticated USING (true) WITH CHECK (true), tbl);
        END LOOP;
      END $undo$;
 */

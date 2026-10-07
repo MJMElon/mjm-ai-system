@@ -11,22 +11,22 @@
 -- The rest of the portal already draws this line. Every staff gate in the
 -- database reads
 --
---     COALESCE(user_type, 'system') <> 'customer'
+--     COALESCE(user_type, system) <> customer
 --
--- and the main portal's own User Access screen lists exactly
--- (user_type || 'system') === 'system' (shared/shared_module_access.js).
+-- and the main portals own User Access screen lists exactly
+-- (user_type || system) === system (shared/shared_module_access.js).
 -- This makes nelos_directory() agree with them, so the two screens that
 -- hand out access are looking at one list of people.
 --
 -- WHY COALESCE, AND WHAT IT DOES NOT CATCH
---   handle_new_user() defaults a missing user_type to 'system', so a NULL
+--   handle_new_user() defaults a missing user_type to system, so a NULL
 --   means staff — that is why every gate coalesces rather than testing
---   equality. The signup pages stamp 'customer' now, but any customer who
+--   equality. The signup pages stamp customer now, but any customer who
 --   registered before that landed with the default and still reads as
 --   staff. Those accounts will keep appearing here, as they do on every
 --   other staff screen; the fix is the same backfill for all of them:
 --
---     UPDATE shared_profiles SET user_type = 'customer'
+--     UPDATE shared_profiles SET user_type = customer
 --      WHERE id IN (…the customer accounts…);
 --
 --   It is deliberately not run from here. Which old accounts are customers

@@ -5,8 +5,8 @@
 -- Shows every login account and what it can actually do against the
 -- audit_* tables, under BOTH gates:
 --
---   old_gate  — modules.audit in ('admin','normal')      [migration_rls_hardening]
---   new_gate  — user_type <> 'customer'                  [migration_audit_rls_align]
+--   old_gate  — modules.audit in (admin,normal)      [migration_rls_hardening]
+--   new_gate  — user_type <> customer                  [migration_audit_rls_align]
 --
 -- Whichever gate is currently live is printed by the second query, so
 -- read that one first to know which column is the real answer today.
@@ -50,8 +50,8 @@ ORDER BY
 
 
 -- ── Which gate is actually live right now? ──────────────────────
--- 'audit_module_read/write' = the old strict gate, migration NOT run.
--- 'audit_staff_*'           = aligned gate, migration ran.
+-- audit_module_read/write = the old strict gate, migration NOT run.
+-- audit_staff_*           = aligned gate, migration ran.
 SELECT tablename,
        string_agg(policyname, ', ' ORDER BY policyname) AS policies_live
   FROM pg_policies

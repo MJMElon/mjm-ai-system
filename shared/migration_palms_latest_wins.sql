@@ -4,7 +4,7 @@
 --
 -- THE HOLE THIS CLOSES
 --
--- A Field Conductor's day report closes whatever it leaves out — but the
+-- A Field Conductors day report closes whatever it leaves out — but the
 -- phone could only close the entries it KNEW about when the report was
 -- keyed. An open entry it had not pulled yet (one the office set, one a
 -- seed loaded, one another phone pushed) sailed past the report and ran
@@ -14,12 +14,12 @@
 --
 -- THE RULE, stated once:
 --
---   A unit's single LATEST day report rules on every open entry that
---   STARTED BEFORE the report's date. In the report's list — still running.
+--   A unit is single LATEST day report rules on every open entry that
+--   STARTED BEFORE the reports date. In the reports list — still running.
 --   Not in it — it was already finished by then, and is closed at the
---   report's date.
+--   reports date.
 --
---   * Strictly BEFORE: an entry starting ON the report's date is never
+--   * Strictly BEFORE: an entry starting ON the reports date is never
 --     closed by it. An office correction made later the same day survives a
 --     report keyed from a screen that had not seen it yet.
 --   * Only the LATEST report rules. An old report replayed by an old phone
@@ -49,7 +49,7 @@ RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 BEGIN
-  -- Only the unit's latest report rules. A phone re-uploading months of
+  -- Only the unit is latest report rules. A phone re-uploading months of
   -- history fires this once per old row; every old row finds a newer one
   -- exists and does nothing.
   IF EXISTS (SELECT 1 FROM public.fcportal_palms_history h
@@ -77,7 +77,7 @@ CREATE TRIGGER palms_history_latest_wins
 
 -- ── 2. SETTLE THE LOG AS IT STANDS ──────────────────────────────
 -- The same rule, applied once to what is already in the table: for each
--- unit's latest report, close every open entry that started before it and
+-- unit is latest report, close every open entry that started before it and
 -- is not in it. This is what un-sticks the board TODAY.
 WITH latest AS (
   SELECT DISTINCT ON (unit_key) unit_key, at_date, COALESCE(acts, '{}'::smallint[]) AS acts

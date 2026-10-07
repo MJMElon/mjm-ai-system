@@ -47,7 +47,7 @@ WITH ranked AS (
 DELETE FROM shared_inventory_logs
  WHERE id IN (SELECT id FROM ranked WHERE copy_no > 1);
 
-/* ONE result set — the SQL Editor only shows the last statement's. */
+/* ONE result set — the SQL Editor only shows the last statements. */
 WITH still AS (
   SELECT l.batch_name, count(*) AS copies
   FROM shared_inventory_logs l

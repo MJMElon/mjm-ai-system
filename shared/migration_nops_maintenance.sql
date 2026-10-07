@@ -1,7 +1,7 @@
 -- ════════════════════════════════════════════════════════════════
 -- Nursery Ops — Work Maintenance module persistence (nops_maint_*)
 -- Backs nursery_ops/nursery_ops_maintenance.html, replacing the
--- module's former in-memory-only storage.
+-- modules former in-memory-only storage.
 -- Run once in Supabase SQL Editor (same database as mjm-ai-system).
 -- ════════════════════════════════════════════════════════════════
 
@@ -144,7 +144,7 @@ END $$;
 --    Only does anything if the table was created by an earlier run of
 --    section 6, when rates were shared by every nursery. Existing rates
 --    are copied to all four nurseries so nothing keyed in is lost; edit
---    each nursery's card afterwards to set them apart.
+--    each nurserys card afterwards to set them apart.
 --    Safe to re-run — it is a no-op once the column exists.
 -- ════════════════════════════════════════════════════════════════
 DO $$

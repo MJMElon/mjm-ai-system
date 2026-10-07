@@ -1,11 +1,11 @@
 -- =====================================================================
---  WHERE A BATCH'S CULLING RATE COMES FROM
+--  WHERE A BATCHS CULLING RATE COMES FROM
 --  Paste into the Supabase SQL Editor and press Run. Read-only.
 --
 --      culling rate = (1st culled + 3rd culled) / (transplanted + 1st culled)
 --      survival     = 100 - culling rate
 --
---  The 2nd cull is NOT added: a plot's 3rd culled figure is worked out as
+--  The 2nd cull is NOT added: a plots 3rd culled figure is worked out as
 --  "2nd culled + balance", so the second cull is already inside it and
 --  adding it again would count those seedlings twice. It is printed below
 --  for reference, as are the damaged seeds, which are not culling.

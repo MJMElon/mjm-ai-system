@@ -1,7 +1,7 @@
 -- ============================================================================
 -- MJM AI POWERED SYSTEM — migration_nelos_culling_rename.sql
 --
--- NELOS — the culling calculator's two cases, renamed to say where they
+-- NELOS — the culling calculators two cases, renamed to say where they
 -- came from.
 --
 --   Culling — Drone Flight   →  From Culling Calculator - Request Drone Flight
@@ -133,9 +133,9 @@ SELECT c.name AS work,
 -- ── Rollback ────────────────────────────────────────────────────
 --   Revert cullingActions.js in the same breath, or the calculator will
 --   file under names nothing routes.
---   UPDATE nelos_cases      SET category = 'Culling — Drone Flight' WHERE category = 'From Culling Calculator - Request Drone Flight';
---   UPDATE nelos_cases      SET category = 'Culling — Final Check'  WHERE category = 'From Culling Calculator - Request Final Check For Pokok Inang';
---   UPDATE nelos_routes     SET category = 'Culling — Drone Flight' WHERE category = 'From Culling Calculator - Request Drone Flight';
---   UPDATE nelos_routes     SET category = 'Culling — Final Check'  WHERE category = 'From Culling Calculator - Request Final Check For Pokok Inang';
---   UPDATE nelos_categories SET name     = 'Culling — Drone Flight' WHERE name     = 'From Culling Calculator - Request Drone Flight';
---   UPDATE nelos_categories SET name     = 'Culling — Final Check'  WHERE name     = 'From Culling Calculator - Request Final Check For Pokok Inang';
+--   UPDATE nelos_cases      SET category = Culling — Drone Flight WHERE category = From Culling Calculator - Request Drone Flight;
+--   UPDATE nelos_cases      SET category = Culling — Final Check  WHERE category = From Culling Calculator - Request Final Check For Pokok Inang;
+--   UPDATE nelos_routes     SET category = Culling — Drone Flight WHERE category = From Culling Calculator - Request Drone Flight;
+--   UPDATE nelos_routes     SET category = Culling — Final Check  WHERE category = From Culling Calculator - Request Final Check For Pokok Inang;
+--   UPDATE nelos_categories SET name     = Culling — Drone Flight WHERE name     = From Culling Calculator - Request Drone Flight;
+--   UPDATE nelos_categories SET name     = Culling — Final Check  WHERE name     = From Culling Calculator - Request Final Check For Pokok Inang;

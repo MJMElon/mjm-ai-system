@@ -15,7 +15,7 @@
 --    chemical and dose settings that go with them.
 CREATE TABLE IF NOT EXISTS nops_maint_state (
   nursery    TEXT NOT NULL,               -- PN | BNN | UNN1 | UNN2
-  month      TEXT NOT NULL,               -- 'Aug 2026'
+  month      TEXT NOT NULL,               -- Aug 2026
   payload    JSONB NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT now(),
   PRIMARY KEY (nursery, month)

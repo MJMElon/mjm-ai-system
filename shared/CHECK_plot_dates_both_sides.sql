@@ -1,5 +1,5 @@
 -- =====================================================================
---  ONE PLOT'S DATES, FROM BOTH SIDES
+--  ONE PLOTS DATES, FROM BOTH SIDES
 --
 --  Change the plot on the TWO lines marked PLOT below, paste the WHOLE file
 --  into the Supabase SQL Editor and press Run.
@@ -27,16 +27,16 @@
 --
 --  WHAT TO LOOK FOR
 --
---    ord 1, 'office row'
---      -> source = 'BY HAND'  : the office typed it and it is protected. If
+--    ord 1, office row
+--      -> source = BY HAND  : the office typed it and it is protected. If
 --         this says 19 and you typed 27, tell me -- that is a real fault and
 --         a different one.
---      -> source = 'FIELD'    : the office's 27 never reached this row as a
+--      -> source = FIELD    : the offices 27 never reached this row as a
 --         typed date. Either it was changed somewhere other than the Edit
 --         box, or it was typed and saved while the row was being rebuilt.
---      -> source = 'SCHEDULE' : never answered.
+--      -> source = SCHEDULE : never answered.
 --
---    ord 2, 'field record'
+--    ord 2, field record
 --      -> every verified record the phone holds for that plot, with the day
 --         the worker recorded and the round it was filed under. The office
 --         row takes the EARLIEST day of the group it pairs with.
