@@ -68,9 +68,15 @@ SELECT 1,
        tray_rows::text || ' tray-named, ' || gone_rows::text || ' not',
        CASE WHEN tray_net > 0 THEN '+' || tray_net::text ELSE tray_net::text END,
        CASE WHEN gone_net > 0 THEN '+' || gone_net::text ELSE gone_net::text END,
-       CASE WHEN tray_net = 0
-            THEN 'nothing tray-named, so this batch Pending does not move'
-            ELSE 'this batch Pending comes down by ' || tray_net::text
+       CASE WHEN tray_rows = 0
+              THEN 'nothing names a tray, so Pending does not move'
+            WHEN tray_net = 0
+              THEN 'the tray-named ones cancel out, so Pending does not move'
+            WHEN tray_net > 0
+              THEN 'Pending comes DOWN by ' || tray_net::text
+                   || ' -- that many more left the trays than the rows said'
+            ELSE 'Pending goes UP by ' || abs(tray_net)::text
+                 || ' -- that many are treated as still sitting in the trays'
        END
 FROM   per_batch
 UNION ALL
