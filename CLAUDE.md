@@ -349,10 +349,12 @@ gone is gone whichever report noticed.
 
 So the net of those 206 — **−196,777 seedlings** — is now in the piece-rate
 quantity, the Movement Report and Life of Seedlings, and that is correct.
-**Many of them are exact triplicates** (224's B13 at −337 three times, 225's
-B2 at −2,328 three times, on one day); whether that is three real events or
-one thing written three times is the office's to answer, and nothing in the
-code may assume either.
+
+**Many of them are exact triplicates** — 224's B13 at −337 three times, 225's
+B2 at −2,328 three times, all on one day — and they were put to the office,
+who said to leave the ledger exactly as it stands. **So all three count.**
+That is a decision, not an oversight: do not de-duplicate them, do not write
+a sweep that offers to, and do not raise it again.
 
 `tests/every_adjustment_counts.cjs` holds all three readers to it and fails if
 either gate is put back — it was proved by putting each one back and watching
