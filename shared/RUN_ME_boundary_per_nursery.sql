@@ -14,14 +14,14 @@
 -- and the nursery becomes what a row is filed under.
 --
 -- An outline already stored under id 1 belonged to no nursery in particular.
--- It is kept, filed under '' - which every phone reads as "all of them" - so
--- running this cannot take a line off anybody's map. Upload the three files
+-- It is kept, filed under  - which every phone reads as "all of them" - so
+-- running this cannot take a line off anybodys map. Upload the three files
 -- and then Remove that one on the Boundary panel if it is no longer wanted.
 --
 -- ── What a phone sees ──
 --
 -- worker_site_boundary() now answers with a LIST, filtered to the nurseries
--- inside that worker's own boundary: a worker confined to BNN gets BNN's
+-- inside that workers own boundary: a worker confined to BNN gets BNNs
 -- outline and not the other two. Not for secrecy - an estate outline is not a
 -- secret - but because drawing three nurseries behind one walked path is
 -- three-quarters noise on a phone in a plot, and the wrong one is worse than
@@ -73,7 +73,7 @@ SELECT setval('public.shared_site_boundary_id_seq',
 ALTER TABLE public.shared_site_boundary
   ALTER COLUMN id SET DEFAULT nextval('public.shared_site_boundary_id_seq');
 
--- What a row is filed under. '' means every nursery, which is what an outline
+-- What a row is filed under.  means every nursery, which is what an outline
 -- uploaded before this file existed meant, so nothing already stored is lost.
 ALTER TABLE public.shared_site_boundary
   ADD COLUMN IF NOT EXISTS nursery TEXT;
@@ -94,7 +94,7 @@ BEGIN
 END $$;
 
 
--- ── 2. The worker's door ────────────────────────────────────────────────
+-- ── 2. The workers door ────────────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION public.worker_site_boundary(p_token UUID)
 RETURNS JSONB

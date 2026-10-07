@@ -25,7 +25,7 @@
 --
 -- THE ORDER IS THE MEANING
 --
--- A stage's sort_order is the number the plot log stores against every
+-- A stages sort_order is the number the plot log stores against every
 -- entry (act_n). Stage 1 is Saringan Anak Bibit and stage 11 is Pengambilan
 -- because that is the order the work happens in. Renaming a stage is free.
 -- ADDING one at the end is free. REORDERING or INSERTING in the middle
@@ -92,7 +92,7 @@ HAVING count(*) > 1;
    list — with the table empty, that is exactly what it falls back to.
 
      DELETE FROM nops_plot_status_stages
-     WHERE name IN ('Saringan Anak Bibit','Tunggu buat culling','Culling','Membersih',
-                    'Meracun secara selingan','Angkat tanah','Isi polibeg','Lining',
-                    'Transplanting','Membesar','Pengambilan');
+     WHERE name IN (Saringan Anak Bibit,Tunggu buat culling,Culling,Membersih,
+                    Meracun secara selingan,Angkat tanah,Isi polibeg,Lining,
+                    Transplanting,Membesar,Pengambilan);
 */

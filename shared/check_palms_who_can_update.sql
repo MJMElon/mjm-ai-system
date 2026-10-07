@@ -1,5 +1,5 @@
 -- ============================================================================
--- WHO CAN CHANGE A PLOT'S STATUS FROM THE PALMS BOARD?
+-- WHO CAN CHANGE A PLOTS STATUS FROM THE PALMS BOARD?
 --
 -- Read-only. Nothing here creates, alters, updates or deletes anything.
 --
@@ -7,7 +7,7 @@
 -- an account that may write the plot log, and plain text for one that may
 -- not. One rule decides it, in two places that agree on purpose:
 --
---   the page   CAN_UPDATE  = modules.scan is set and not 'none'
+--   the page   CAN_UPDATE  = modules.scan is set and not none
 --                          OR manage_users
 --   the table  palms_has_access()  — the same test, as row-level security
 --

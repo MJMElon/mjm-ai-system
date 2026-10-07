@@ -23,7 +23,7 @@
 --
 -- ── Who may ──
 --
--- The Adjust Pay tick on the payroll's own User Access screen, per person and
+-- The Adjust Pay tick on the payrolls own User Access screen, per person and
 -- per sheet — admin-granted only. Not the same as being able to open the
 -- sheet: reading what a month pays and changing it are different jobs.
 --
@@ -36,17 +36,17 @@
 
 CREATE TABLE IF NOT EXISTS mjmnpayroll_earn_adjustments (
   id           BIGSERIAL PRIMARY KEY,
-  -- '2026-09', the same string the payroll's month picker uses.
+  -- 2026-09, the same string the payrolls month picker uses.
   month        TEXT        NOT NULL,
-  -- 'maint' | 'transplanting' — which claim the cell is on.
+  -- maint | transplanting — which claim the cell is on.
   sheet        TEXT        NOT NULL,
   -- The nursery or section the claim was showing. Part of the key: the same
   -- worker can earn the same job in two places in one month.
   section      TEXT        NOT NULL DEFAULT '',
-  -- The register's own spelling of the name, which is what both claims key
+  -- The registers own spelling of the name, which is what both claims key
   -- their rows on.
   worker_name  TEXT        NOT NULL,
-  -- The work type's code: a MAINT_TYPES code, or a TRANSPLANT_JOBS key.
+  -- The work types code: a MAINT_TYPES code, or a TRANSPLANT_JOBS key.
   work_code    TEXT        NOT NULL,
   -- What it pays INSTEAD. Not a delta: a delta has to be read together with
   -- a figure that can change underneath it, and then nobody can say what was
@@ -103,7 +103,7 @@ NOTIFY pgrst, 'reload schema';
 
 
 -- ── What you should see ─────────────────────────────────────────────────
--- The SQL Editor shows only the LAST statement's result, so this is one
+-- The SQL Editor shows only the LAST statements result, so this is one
 -- query. "policies" must be 2 or more; "adjustments" is 0 until somebody
 -- changes a figure.
 --

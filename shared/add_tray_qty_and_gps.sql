@@ -6,7 +6,7 @@
    both fail quietly rather than saying so:
 
      current_qty   The batch report adds premium-care and double-tone
-                   seedlings to a tray's count as they are transplanted in
+                   seedlings to a trays count as they are transplanted in
                    (operation_batch_detail.html). The read errors, the error
                    goes to console.warn, and the loop moves on — so the
                    count has never been kept. Nothing was lost; it was

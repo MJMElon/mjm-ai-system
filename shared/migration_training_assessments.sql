@@ -4,7 +4,7 @@
 --
 -- An ASSESSOR (any signed-in training user) records assessments FOR
 -- another user (the trainee): activity + photo proof + location +
--- time. Rows are immutable; counts per activity are the trainee's
+-- time. Rows are immutable; counts per activity are the trainees
 -- assessment progress toward qualifying for their role.
 -- ================================================================
 

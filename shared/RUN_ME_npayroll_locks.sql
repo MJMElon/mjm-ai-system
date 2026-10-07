@@ -18,12 +18,12 @@
 --
 -- ITS OWN TABLES, NOT shared_month_locks. That calendar governs Delivery
 -- Orders, Approval Letters and the Batch Record, and the two must be able
--- to move separately: closing September's payroll cannot be allowed to
--- close September's delivery orders, and re-opening a delivery order in
+-- to move separately: closing Septembers payroll cannot be allowed to
+-- close Septembers delivery orders, and re-opening a delivery order in
 -- October cannot re-open a payroll that has already been paid.
 --
 -- Nothing here decides WHO may verify or unlock. That is the Payroll
--- module's own User Access page (verify per sheet, Lock Controls for
+-- modules own User Access page (verify per sheet, Lock Controls for
 -- unlocking), read by the browser the same way every other permission in
 -- this module is.
 --
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS public.mjmnpayroll_lock_days (
 -- picker, so the unique index has something to hold.
 CREATE TABLE IF NOT EXISTS public.mjmnpayroll_verifications (
   id           BIGSERIAL PRIMARY KEY,
-  month        TEXT NOT NULL,             -- 'YYYY-MM'
+  month        TEXT NOT NULL,             -- YYYY-MM
   sheet        TEXT NOT NULL,
   scope        TEXT NOT NULL DEFAULT '',
   verified_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -115,7 +115,7 @@ NOTIFY pgrst, 'reload schema';
 
 
 -- ── 6. What should have happened ────────────────────────────────────────
--- One result set, because the SQL Editor only shows the last statement's.
+-- One result set, because the SQL Editor only shows the last statements.
 --
 -- A GOOD RESULT is four rows, every one reading "yes":
 --   month lock calendar        yes

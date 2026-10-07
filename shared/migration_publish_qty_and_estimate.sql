@@ -32,7 +32,7 @@
 CREATE TABLE IF NOT EXISTS salesweb_monthly_estimate_collection (
   id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   sell_year   INT  NOT NULL,
-  sell_month  TEXT NOT NULL,           -- 'January' .. 'December' to match salesweb_products.sell_month
+  sell_month  TEXT NOT NULL,           -- January .. December to match salesweb_products.sell_month
   qty         INT  NOT NULL DEFAULT 0,
   note        TEXT,
   updated_by  TEXT,                    -- email of the admin who last edited

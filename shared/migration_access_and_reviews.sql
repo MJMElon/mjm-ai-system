@@ -48,7 +48,7 @@ UPDATE shared_profiles
 -- Allow each user to read their own permissions (RLS-friendly).
 -- Admin-managed updates go through the User Access page; the
 -- manage_users check is wrapped in a SECURITY DEFINER helper so the
--- policy USING clause doesn't recurse against shared_profiles itself.
+-- policy USING clause does not recurse against shared_profiles itself.
 CREATE OR REPLACE FUNCTION public.current_user_can_manage_users()
 RETURNS boolean
 LANGUAGE sql
@@ -103,16 +103,16 @@ BEGIN
 END $$;
 
 -- IMPORTANT — Bootstrap the first super-admin manually after running
--- this migration. Replace the email below with the owner's email and
+-- this migration. Replace the email below with the owners email and
 -- run once. Without this, nobody can open the User Access admin page.
 --
 --   UPDATE shared_profiles
 --      SET permissions = jsonb_set(
 --            jsonb_set(
---              COALESCE(permissions, '{}'::jsonb),
---              '{manage_users}', 'true'::jsonb, true),
---            '{modules}', '{"operation":"admin","salesweb":"admin","audit":"admin","mobile":"admin"}'::jsonb, true)
---    WHERE email = 'OWNER_EMAIL_HERE';
+--              COALESCE(permissions, {}::jsonb),
+--              {manage_users}, true::jsonb, true),
+--            {modules}, {"operation":"admin","salesweb":"admin","audit":"admin","mobile":"admin"}::jsonb, true)
+--    WHERE email = OWNER_EMAIL_HERE;
 
 
 -- ────────────────────────────────────────────────────────────────

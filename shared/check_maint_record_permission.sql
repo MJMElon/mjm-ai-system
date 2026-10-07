@@ -3,20 +3,20 @@
 
    "You do not have permission to record maintenance work. Ask an admin in
    User Access." — on an account with full access, that is almost always the
-   app's fault rather than the row's, and the fix for that is deployed. This
+   apps fault rather than the rows, and the fix for that is deployed. This
    file is how to tell the two apart, and it CHANGES NOTHING: read only.
 
    ── The three things that can say no ──
 
    1. the company switch — System Setting → Portal View & Function, stored in
-      shared_portal_settings.actions->'maintenance'->>'record'. FALSE here
+      shared_portal_settings.actions->maintenance->>record. FALSE here
       vetoes everybody, whatever their own row says.
-   2. the person's own row — shared_profiles.permissions, under
-      scan_actions->'maintenance'. An explicit FALSE stays no, and is the one
+   2. the persons own row — shared_profiles.permissions, under
+      scan_actions->maintenance. An explicit FALSE stays no, and is the one
       case the deployed fix does not clear, because it is a decision somebody
       made and a deploy must not undo one.
    3. the Maintenance page itself being off for them — scan_actions ->
-      'maintenance' ->> 'view' = false. A closed page closes everything in it.
+      maintenance ->> view = false. A closed page closes everything in it.
 
    An ABSENT `record` is none of those. It used to read as no; it now reads as
    "nobody has been asked", which for recording work is the whole job.
@@ -76,12 +76,12 @@ SELECT * FROM (
    the default, which is on. Change the address, uncomment, run.
 
    Clearing it is right, and writing `true` is not: an absent answer is the
-   company switch's to decide, and a `true` would put this person permanently
+   company switchs to decide, and a `true` would put this person permanently
    beyond it.
 
 UPDATE public.shared_profiles
-   SET permissions = jsonb_set(permissions, '{scan_actions,maintenance}',
-         (permissions->'scan_actions'->'maintenance') - 'record')
- WHERE lower(email) = lower('adm.puigroups@gmail.com')
-   AND permissions->'scan_actions'->'maintenance' ? 'record';
+   SET permissions = jsonb_set(permissions, {scan_actions,maintenance},
+         (permissions->scan_actions->maintenance) - record)
+ WHERE lower(email) = lower(adm.puigroups@gmail.com)
+   AND permissions->scan_actions->maintenance ? record;
                                                                           */

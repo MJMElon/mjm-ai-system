@@ -12,7 +12,7 @@
 --        counter, later for the over-time alert function).
 --
 --   2. nops_plot_status_entries — one row per plot per day, keyed in by
---        the FC on the FC Portal's Plot Status module. Same-day re-entry
+--        the FC on the FC Portals Plot Status module. Same-day re-entry
 --        updates the existing row (UNIQUE plot_name + entry_date).
 --        Plots are the existing shared_plots (Seedling Stock Management
 --        settings).
@@ -20,7 +20,7 @@
 -- Per-user nursery visibility for the FC Portal module is stored on
 -- shared_profiles.permissions JSONB (no DDL needed):
 --   { "plot_status_nurseries": ["Nursery A", ...] }
---   key absent/null = user can see ALL nurseries' plot status.
+--   key absent/null = user can see ALL nurseries plot status.
 --
 -- Run in Supabase SQL Editor (main project: kibqjztozokohqmhqqqf).
 -- ============================================================================

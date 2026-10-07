@@ -1,5 +1,5 @@
 -- =====================================================================
---  WHY ONE PLOT'S BALANCE READS WHAT IT READS
+--  WHY ONE PLOTS BALANCE READS WHAT IT READS
 --
 --  Change the plot on the line marked PLOT below, paste the WHOLE file into
 --  the Supabase SQL Editor and press Run.
@@ -8,7 +8,7 @@
 --
 --  WHY
 --  A quantity on the Work Record with a link beside it is not stored
---  anywhere. It is the batch report's balance for that plot and those
+--  anywhere. It is the batch reports balance for that plot and those
 --  batches, summed fresh every time the page draws, up to the work date:
 --
 --      transplanted in + transferred in
@@ -25,13 +25,13 @@
 --
 --  WHAT TO LOOK FOR
 --
---    The 'balance' column is what a work record dated that day would show.
+--    The balance column is what a work record dated that day would show.
 --    Read down it until it goes somewhere it should not. The row that took
 --    it there is the one to look at: usually a Sold or a culling keyed
 --    against the wrong plot or the wrong batch, or a transplant row that was
 --    never written.
 --
---    'counts' says whether a row is in the sum at all. A 3rd culling with no
+--    counts says whether a row is in the sum at all. A 3rd culling with no
 --    drone map keyed, and a stock calibration nobody has approved, are both
 --    still claims and are left out -- the same rule the movement report uses.
 -- =====================================================================

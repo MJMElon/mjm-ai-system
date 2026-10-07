@@ -25,8 +25,8 @@
 --  WHAT IT LEAVES ALONE
 --  · Cases already resolved or closed — nothing to do.
 --  · Cases raised by hand, whatever they are about. The rule keys on the
---    category the automatic raise used ('Planting Discrepancy') AND on
---    the source module being 'operation', which is what that raise set.
+--    category the automatic raise used (Planting Discrepancy) AND on
+--    the source module being operation, which is what that raise set.
 --  · Every other Nelos case on the system, including the Empty Hole ones
 --    the Planting tab still raises when somebody presses the button.
 --    Those are a person asking for a job to be done, not an automatic
@@ -50,7 +50,7 @@ UPDATE nelos_cases
    AND source_module = 'operation'
    AND status IN ('open', 'in_progress');
 
-/* ONE result set — the SQL Editor only shows the last statement's. */
+/* ONE result set — the SQL Editor only shows the last statements. */
 SELECT
   (SELECT count(*) FROM nelos_cases
     WHERE category = 'Planting Discrepancy' AND source_module = 'operation')
@@ -77,7 +77,7 @@ SELECT
 --   planting_cases_in_total is however many were ever raised — they are
 --   kept, not deleted, so the history is still there to look at. now_closed
 --   should equal it (less any that were already resolved by hand, which
---   carry status 'resolved' and are left exactly as they were).
+--   carry status resolved and are left exactly as they were).
 --
 --   other_cases_still_open is every OTHER Nelos case still waiting. That
 --   number must not have moved — if it looks lower than you expect, stop

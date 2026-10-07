@@ -22,9 +22,9 @@
 -- Two access systems for one module, disagreeing.
 --
 -- migration_rls_hardening.sql gated the audit_* tables on
--- _mjm_has_module('audit', ARRAY['admin','normal']) — the caller's
--- shared_profiles.permissions -> 'modules' ->> 'audit' must be exactly
--- 'admin' or 'normal'.
+-- _mjm_has_module(audit, ARRAY[admin,normal]) — the callers
+-- shared_profiles.permissions -> modules ->> audit must be exactly
+-- admin or normal.
 --
 -- The app stopped asking that. audit/audit_supabase.js gates pages on
 -- audit_actions / audit_pages instead, and says why in its own comment:
@@ -52,10 +52,10 @@
 --
 -- It does not grant anybody the audit module, or any permission at all. An
 -- empty permissions column means "nobody has been asked", and writing
--- today's default into it would turn an unasked question into a decision.
+-- todays default into it would turn an unasked question into a decision.
 -- Accounts appear on User Access with what they already had.
 --
--- It does not touch a profile whose user_type is 'customer'. If a real
+-- It does not touch a profile whose user_type is customer. If a real
 -- auditor is marked as a customer, that is a wrong row and the last section
 -- prints it by name — fix it on User Access, do not loosen the policy.
 -- ════════════════════════════════════════════════════════════════════════
@@ -67,7 +67,7 @@
 -- recursing back into these checks.
 
 -- A staff account: any profile that is not a customer. A missing user_type
--- counts as staff ('system'), matching how the existing rows were created.
+-- counts as staff (system), matching how the existing rows were created.
 CREATE OR REPLACE FUNCTION public._mjm_is_staff()
 RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
@@ -79,7 +79,7 @@ AS $fn$
   );
 $fn$;
 
--- An audit admin: role admin/administrator, or modules.audit = 'admin'.
+-- An audit admin: role admin/administrator, or modules.audit = admin.
 CREATE OR REPLACE FUNCTION public._mjm_is_audit_admin()
 RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
@@ -99,7 +99,7 @@ GRANT EXECUTE ON FUNCTION public._mjm_is_audit_admin() TO authenticated;
 
 
 -- ── 2. EVERY ACCOUNT GETS A PROFILE ROW ─────────────────────────────────
--- Exactly what the signup trigger would have written, read from the signup's
+-- Exactly what the signup trigger would have written, read from the signups
 -- own metadata. ON CONFLICT DO NOTHING, so a second run adds nothing and no
 -- existing row is touched.
 INSERT INTO public.shared_profiles (id, email, full_name, user_type)
@@ -222,12 +222,12 @@ CREATE POLICY "audit_photos_update" ON storage.objects
   WITH CHECK (bucket_id = 'audit-photos');
 
 -- PostgREST answers from a cached picture of the schema; nudge it so the
--- phones are not told about yesterday's policies.
+-- phones are not told about yesterdays policies.
 NOTIFY pgrst, 'reload schema';
 
 
 -- ── 5. WHAT YOU SHOULD SEE ──────────────────────────────────────────────
--- The SQL Editor shows only the LAST statement's result, so this is one
+-- The SQL Editor shows only the LAST statements result, so this is one
 -- query. Read it top to bottom:
 --
 --   table      one row per audit table   "4 policies · module gate gone"

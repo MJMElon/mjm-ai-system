@@ -1,16 +1,16 @@
 -- =====================================================================
---  DRONE MAPS THAT DON'T TALLY — AND THE ADJUSTMENT THAT EXPLAINS THEM
+--  DRONE MAPS THAT do not TALLY — AND THE ADJUSTMENT THAT EXPLAINS THEM
 --  EVERY BATCH AT ONCE. Paste into the Supabase SQL Editor and press Run.
 --  Read-only: it changes nothing, so it is safe to run as often as you
 --  like.
 --
---  A plot's 3rd Culling record carries what was culled and what the drone
+--  A plots 3rd Culling record carries what was culled and what the drone
 --  map counted. When they disagree the batch sits in Amendment Needed
 --  until somebody writes a reason against the plot.
 --
 --  Very often the reason is already on the system: an adjustment against
 --  that same plot, for exactly that many seedlings. It only moves the
---  plot's figures when it is BOTH approved AND filed as PLOT STOCK —
+--  plots figures when it is BOTH approved AND filed as PLOT STOCK —
 --  "these reached the plot and then left it", which is what stolen, dead
 --  or miscounted means. Filed against the SEED COUNT it says something
 --  else entirely: that the batch never had them to plant, so it corrects
@@ -34,7 +34,7 @@ cull3 AS (
 
 /* Only the rows that were actually counted. A plot with no map keyed is
    not a plot that disagrees with its map — it is one nobody has counted
-   yet, and it belongs to the report's own progress, not here. */
+   yet, and it belongs to the reports own progress, not here. */
 mismatch AS (
   SELECT *, map_qty - culled AS difference
   FROM cull3
@@ -70,8 +70,8 @@ adj AS (
   WHERE l.transaction_type = 'Stock_Calibration'
 ),
 
-/* What that plot's adjustments come to, split by whether they are already
-   inside the plot's figures.
+/* What that plots adjustments come to, split by whether they are already
+   inside the plots figures.
 
    An adjustment raised against the 2ND CULLING is not, and never will be:
    that count settled it months before the drone flew for the 3rd, and
@@ -94,7 +94,7 @@ per_plot AS (
   GROUP BY 1, 2
 )
 
-/* ONE result set — the SQL Editor only shows the last statement's.
+/* ONE result set — the SQL Editor only shows the last statements.
    The ones somebody can settle in two clicks sort to the top. */
 SELECT m.batch_name                                  AS batch,
        m.plot,
@@ -121,7 +121,7 @@ SELECT m.batch_name                                  AS batch,
            THEN 'RE-SAVE IT: the adjustment is approved as plot stock, so the SCREEN already shows '
                 || 'this plot tallying — but the saved record still carries the old figure. Open '
                 || 'the batch, go to 3rd Culling and press Save.'
-         /* The saved record was written when the 2nd culling's adjustment
+         /* The saved record was written when the 2nd cullings adjustment
             was still being taken off the 3rd cull as well. It is not any
             more, so the SCREEN already tallies — the record is what is
             behind, and the batch list reads the record. */
@@ -146,11 +146,11 @@ ORDER BY (COALESCE(p.waiting_qty, 0) = m.difference) DESC,
          m.batch_name DESC, m.plot;
 
 -- WHAT A GOOD RESULT LOOKS LIKE
---   NO ROWS at all is the ideal: every plot's cull agrees with its map.
+--   NO ROWS at all is the ideal: every plots cull agrees with its map.
 --
 --   Rows saying SETTLE IT are the easy ones, and they sort to the top —
 --   the explanation already exists, it is just not in a form the report
---   can act on. Two clicks each on the batch's Adjustments tab.
+--   can act on. Two clicks each on the batchs Adjustments tab.
 --
 --   RE-SAVE IT means the screen and the saved record disagree: somebody
 --   approved the adjustment after the 3rd Culling report was saved, so

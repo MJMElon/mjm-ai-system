@@ -70,7 +70,7 @@ ORDER  BY table_name;
 
 
 -- ── 4. WOULD YOUR ACCOUNT PASS THE AUDIT CHECK ANYWAY ───────────
--- audit_module_read calls _mjm_has_module('audit', ...), which reads
+-- audit_module_read calls _mjm_has_module(audit, ...), which reads
 -- shared_profiles.permissions for the signed-in user. Even once the app
 -- authenticates properly, an account without the audit module still sees
 -- nothing. `has_audit_access` must be true for the people using the app.

@@ -19,7 +19,7 @@
 --
 -- One row per portal, holding a flag per module:
 --
---   portal   'fc' | 'worker'
+--   portal   fc | worker
 --   modules  { "palms": true, "culling": false, … }
 --
 -- This is a master switch, NOT a permission. It says what the portal
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS public.shared_portal_settings (
 --
 -- Same rule as `modules`: a function ABSENT is not vetoed. New functions ship
 -- working rather than invisible until somebody remembers this screen, and the
--- person's own permission still decides whether they actually get it.
+-- persons own permission still decides whether they actually get it.
 ALTER TABLE public.shared_portal_settings
   ADD COLUMN IF NOT EXISTS actions JSONB NOT NULL DEFAULT '{}'::jsonb;
 
@@ -77,7 +77,7 @@ END $$;
 -- The worker portal is reached with a PIN, not a Supabase login, so the
 -- phone holding it is `anon` and the policy above would hide this from it.
 -- worker_signin already answers that phone; giving anon a straight read of
--- this table would also hand it the FC portal's row, which is none of its
+-- this table would also hand it the FC portals row, which is none of its
 -- business. So: nothing granted to anon here. See the note at the foot of
 -- this file for what still has to be wired.
 
@@ -137,7 +137,7 @@ NOTIFY pgrst, 'reload schema';
 -- still to be decided. The upload screen says as much rather than letting an
 -- uploaded outline look live when it is not.
 --
--- The worker portal's phone is `anon` and cannot read either table. When the
+-- The worker portals phone is `anon` and cannot read either table. When the
 -- worker portal is taught to honour the module switches, or to draw the
 -- boundary, it needs them through worker_signin / worker_whoami — which
 -- already run as SECURITY DEFINER and already hand the phone its modules —

@@ -18,7 +18,7 @@
    its absence says that whole file never ran, and it carries three more
    things the Setting page already expects:
 
-     · kind = 'other'  — the third column on the Chemical List, where the
+     · kind = other  — the third column on the Chemical List, where the
        weedicides and stickers live. Until the CHECK constraint allows it,
        adding one is rejected by the database.
      · coverage may be NULL — meaning "follow the preset". Until the column
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS public.nops_maint_config (
 
 -- 800 is what the system has always sprayed to, so seeding it changes
 -- nothing today and makes it changeable tomorrow. Only when it is not
--- already there: re-running must not undo somebody's edit.
+-- already there: re-running must not undo somebodys edit.
 INSERT INTO public.nops_maint_config (key, num_value, note)
 SELECT 'pump_coverage', 800,
        'Seedlings one pump covers. A chemical with its own coverage overrides '
@@ -113,7 +113,7 @@ BEGIN
     'preset. NULL means follow nops_maint_config.pump_coverage. Per seedling '
     'is dose / whichever applies; 1 means the dose is already per seedling.' $c$;
 
-  -- 3b. 'other' becomes a kind.
+  -- 3b. other becomes a kind.
   --
   -- The CHECK has to be replaced rather than widened — there is no ALTER for
   -- adding a value to one. Until this runs, saving a weedicide is refused by
@@ -126,7 +126,7 @@ BEGIN
 
   -- 3c. Everything still sitting on the old hardcoded 800 starts following
   --     the preset — which is what 800 always meant. It was the default, not
-  --     a decision. Anything else (Asir's 1) IS a decision and is left alone.
+  --     a decision. Anything else (Asirs 1) IS a decision and is left alone.
   EXECUTE 'UPDATE public.nops_maint_chemicals SET coverage = NULL WHERE coverage = 800';
   GET DIAGNOSTICS n = ROW_COUNT;
   RAISE NOTICE 'chemicals now following the preset: %', n;
@@ -194,7 +194,7 @@ NOTIFY pgrst, 'reload schema';
                         nothing and the page looks exactly as it does now
    4  coverage nullable NULL is how "follow the preset" is written; while
                         the column is NOT NULL the preset moves nothing
-   5  Other allowed     the CHECK admits 'other', or saving a weedicide is
+   5  Other allowed     the CHECK admits other, or saving a weedicide is
                         refused by the database
 
    Row 5 also reports how many Other chemicals are on the list — 8 or 9

@@ -6,7 +6,7 @@
 --
 -- Safe to run more than once. It adds ONE column to ONE table and
 -- nothing else: no worker is deleted, no existing column is changed,
--- and nobody's name, section, role or status is touched.
+-- and nobodys name, section, role or status is touched.
 -- ════════════════════════════════════════════════════════════════
 
 -- ── Does this worker get a column on the Work Maintenance sheets? ─

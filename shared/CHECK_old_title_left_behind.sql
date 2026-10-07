@@ -73,7 +73,7 @@ BEGIN
   END LOOP;
 END $$;
 
--- ONE result set -- the SQL Editor only shows the last statement's.
+-- ONE result set -- the SQL Editor only shows the last statements.
 SELECT 0                                            AS sort,
        'OLD TITLE STILL WRITTEN IN OLD RECORDS'::text AS place,
        (SELECT COALESCE(sum(rows_found), 0) FROM _mjm_old_title_log)::int AS rows_found,

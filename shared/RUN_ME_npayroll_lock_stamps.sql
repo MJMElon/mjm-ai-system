@@ -4,12 +4,12 @@
 -- mjmnpayroll_verifications.verified_at says when somebody pressed
 -- "Verify & lock", and mjmnpayroll_month_locks.updated_at says when a month
 -- was held open or shut on the Lock Controls calendar. Both were being sent
--- from the BROWSER's clock, which is only as right as that device is: a
+-- from the BROWSERs clock, which is only as right as that device is: a
 -- phone or a laptop an hour out stamps a payroll sign-off an hour out, and
 -- nothing downstream can tell it happened.
 --
 -- These are the dates a payroll month is closed on. They should come from
--- one clock, and that clock is the database's.
+-- one clock, and that clock is the databases.
 --
 -- A COLUMN DEFAULT IS NOT ENOUGH. The tables already carry DEFAULT now(),
 -- and the screen now sends no timestamp at all - but both writes are

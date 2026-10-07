@@ -1,5 +1,5 @@
 -- =====================================================================
---  WHY A NURSERY'S TRANSPLANTING IS NOT ON THE SALARY CLAIM
+--  WHY A NURSERYS TRANSPLANTING IS NOT ON THE SALARY CLAIM
 --
 --  Paste the WHOLE file into the Supabase SQL Editor and press Run.
 --  READ-ONLY. It changes nothing.
@@ -11,11 +11,11 @@
 --  was printed for five different situations, and only one of them is
 --  "nothing was recorded". The other four are:
 --
---    · the records are there, but on another nursery's plots
---    · the records are on this nursery's plots and NOBODY IS NAMED on
+--    · the records are there, but on another nurserys plots
+--    · the records are on this nurserys plots and NOBODY IS NAMED on
 --      them -- the claim pays per worker, so a crew of nobody is no lines
 --      at all, however big the quantity
---    · the plot's nursery name is spelled in a way the payroll sections do
+--    · the plots nursery name is spelled in a way the payroll sections do
 --      not recognise, so the work lands under "No section"
 --    · the lines exist, but under the section the WORKER REGISTER puts
 --      those people in, not the one the plot is in
@@ -41,9 +41,9 @@
 --      circle on the claim.
 --
 --   ANY "nursery not a section" ROW
---   -> that plot's nursery is spelled in a way the payroll does not know.
+--   -> that plots nursery is spelled in a way the payroll does not know.
 --      The work is on the claim, but under the "No section" circle. Correct
---      the plot's nursery in Facility Management.
+--      the plots nursery in Facility Management.
 --
 --   EVERY "record" ROW SAYING "on the claim for this nursery", AND THE
 --   SHEET STILL EMPTY

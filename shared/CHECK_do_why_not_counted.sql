@@ -1,5 +1,5 @@
 -- =====================================================================
---  WHY DIDN'T THIS DO GO IN? — ONE DO AT A TIME
+--  WHY did not THIS DO GO IN? — ONE DO AT A TIME
 --  Paste into the Supabase SQL Editor and press Run. Read-only: it
 --  changes nothing, so it is safe to run as often as you like.
 --
@@ -71,7 +71,7 @@ batches AS (
   GROUP BY 1
 )
 
-/* ONE result set — the SQL Editor only shows the last statement's. */
+/* ONE result set — the SQL Editor only shows the last statements. */
 SELECT l.do_number                                   AS do,
        l.line_no                                     AS line,
        COALESCE(l.status, '')                        AS do_status,

@@ -4,7 +4,7 @@
 --  changes nothing, so it is safe to run as often as you like.
 --
 --  THE COMPLAINT
---  Batch 242's U17 shows two identical movements — 21 Aug 2026, U17-R,
+--  Batch 242s U17 shows two identical movements — 21 Aug 2026, U17-R,
 --  71 seedlings, twice — and Total Transferred reads 142 for 71 that
 --  moved. They were deleted once and came back.
 --
@@ -60,7 +60,7 @@ grouped AS (
   HAVING count(*) > 1
 )
 
-/* ONE result set — the SQL Editor only shows the last statement's. The
+/* ONE result set — the SQL Editor only shows the last statements. The
    summary is the first row; everything under it is a movement to look at. */
 SELECT 0                                              AS sort,
        '— ALL BATCHES —'                              AS batch,

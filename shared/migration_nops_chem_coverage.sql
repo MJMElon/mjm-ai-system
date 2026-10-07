@@ -11,7 +11,7 @@
 -- plot_maintenance_script.js has always known this:
 --
 --     const COVERAGE_PER_PUMP = 800;
---     const CHEMICAL_COVERAGE = { 'Asir': 1 };
+--     const CHEMICAL_COVERAGE = { Asir: 1 };
 --     const coverage = CHEMICAL_COVERAGE[chemName] || COVERAGE_PER_PUMP;
 --     const totalUnits = (seedlings / coverage) * dose;
 --
@@ -43,7 +43,7 @@ BEGIN
     'seedling (Asir). Was CHEMICAL_COVERAGE in plot_maintenance_script.js.' $c$;
 
   -- The one exception the script carried. Only where nobody has set it
-  -- since: a figure changed on screen is somebody's decision.
+  -- since: a figure changed on screen is somebodys decision.
   EXECUTE $q$
     UPDATE public.nops_maint_chemicals
        SET coverage = 1, updated_at = now()

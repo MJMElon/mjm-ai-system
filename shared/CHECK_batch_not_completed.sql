@@ -26,7 +26,7 @@ expected AS (
     AND COALESCE(TRIM(l.plot_name), '') <> ''
 ),
 
-/* What each plot's 3rd Culling record actually carries.
+/* What each plots 3rd Culling record actually carries.
 
    A plot is finished when NOTHING IS LEFT STANDING IN IT:
 
@@ -52,7 +52,7 @@ actual AS (
 /* …and who has signed it off. A plot whose culling is keyed but unchecked
    is not a finished plot — the 3rd Culling tab counts a row as done only
    once it is verified, and this check has to agree with it. Either the
-   row's own sign-off, stored against 'cull_3::<PLOT>|<dest>', or the whole
+   rows own sign-off, stored against cull_3::<PLOT>|<dest>, or the whole
    stage verified for the batch, which is one signature over every row. */
 row_signed AS (
   SELECT DISTINCT
@@ -92,7 +92,7 @@ verdict AS (
   LEFT JOIN row_signed rs ON rs.plot = e.plot
 )
 
-/* ONE result set — the SQL Editor only shows the last statement's. The
+/* ONE result set — the SQL Editor only shows the last statements. The
    summary sorts first, then the plots that are blocking, then the rest. */
 SELECT * FROM (
   SELECT 0 AS sort_order,

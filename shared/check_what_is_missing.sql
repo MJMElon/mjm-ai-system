@@ -15,7 +15,7 @@ WITH expected(ord, area, thing, kind, owner, file) AS (VALUES
   (1, 'GPS track',      'gps_track',       'column', 'nops_maint_field_records', 'RUN_ME_gps_track.sql'),
   (1, 'GPS track',      'gps_distance_m',  'column', 'nops_maint_field_records', 'RUN_ME_gps_track.sql'),
   (1, 'GPS track',      'gps_lat',         'column', 'nops_maint_field_records', 'RUN_ME_gps_track.sql'),
-  -- Signing off a worker's morning (also RUN_ME_gps_track.sql)
+  -- Signing off a workers morning (also RUN_ME_gps_track.sql)
   (2, 'verify',         'worked_by',       'column', 'nops_maint_field_records', 'RUN_ME_gps_track.sql'),
   (2, 'verify',         'verified_by',     'column', 'nops_maint_field_records', 'RUN_ME_gps_track.sql'),
   -- The company switches (RUN_ME_portal_switches.sql)

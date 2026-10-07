@@ -12,7 +12,7 @@
 --     Could not load: structure of query does not match function result type
 --
 -- and then "No plots to show — no nursery is open to you yet." Nothing was
--- wrong with the worker's access, the boundary, or the switches. The
+-- wrong with the workers access, the boundary, or the switches. The
 -- functions the phone asks were simply refusing to answer.
 --
 -- PL/pgSQL compares the columns a RETURN QUERY selects to the RETURNS TABLE
@@ -26,13 +26,13 @@
 -- INTEGER converts to NUMERIC everywhere else in SQL, which is why this
 -- looks impossible until you read the rule closely. RETURN QUERY does not
 -- convert. It refuses, and the refusal takes down the whole board rather
--- than one field, because the phone asks for the month's records in one
+-- than one field, because the phone asks for the months records in one
 -- call.
 --
 -- ── The fix ──
 --
 -- Every column is now cast to the type its function promised. Not by
--- changing the promises to match today's table — a cast keeps working when
+-- changing the promises to match todays table — a cast keeps working when
 -- somebody widens qty to NUMERIC next year, and the phone is reading these
 -- as numbers either way. The other four functions here were not failing;
 -- they carry the same casts so the next column somebody adds cannot do this
@@ -72,7 +72,7 @@ ALTER TABLE nops_maint_field_records
 
 -- ── 1. The functions ────────────────────────────────────────────────────
 --
--- Dropped rather than replaced: CREATE OR REPLACE refuses when a function's
+-- Dropped rather than replaced: CREATE OR REPLACE refuses when a functions
 -- OUT columns have changed, and this database may be carrying any of three
 -- earlier versions. Dropping takes the grants with it; section 2 puts them
 -- back.
@@ -102,12 +102,12 @@ BEGIN
   plt := b -> 'plots';
 
   -- Cast to the declared type rather than trusting the column to be it.
-  -- plpgsql compares the query's types to the RETURNS TABLE list exactly —
+  -- plpgsql compares the querys types to the RETURNS TABLE list exactly —
   -- not "can this be converted", the same type — and raises "structure of
   -- query does not match function result type" when they differ. A column
   -- somebody once declared VARCHAR, or an INTEGER where this says NUMERIC,
   -- then breaks the whole board rather than one field. The casts cost
-  -- nothing and make these functions independent of the table's spelling.
+  -- nothing and make these functions independent of the tables spelling.
   RETURN QUERY
     SELECT p.nursery_name::TEXT, p.plot_name::TEXT
       FROM shared_plots p
@@ -184,7 +184,7 @@ BEGIN
     -- INTEGER on this table and week_no is SMALLINT, and plpgsql wants the
     -- same type, not a convertible one — without the casts this raises
     -- "structure of query does not match function result type" and the
-    -- worker's whole board goes red.
+    -- workers whole board goes red.
     SELECT r.id::BIGINT, r.work_date, r.nursery_name::TEXT, r.plot_name::TEXT,
            r.work_type::TEXT, r.jenis::TEXT, r.chemical::TEXT, r.qty::NUMERIC,
            r.remark::TEXT, r.reported_by::TEXT,
@@ -193,7 +193,7 @@ BEGIN
            -- somebody whose phone was broken. NULL means reported_by did it.
            r.worked_by::TEXT,
            -- So a worker can see their morning has been checked off. Read
-           -- only: verifying is the conductor's signature, and nobody signs
+           -- only: verifying is the conductors signature, and nobody signs
            -- for their own work.
            r.verified_by::TEXT, r.verified_at,
            -- Where the track started, and how far it went. For the people the
@@ -202,7 +202,7 @@ BEGIN
            --
            -- The TRACK ITSELF is deliberately not here. This returns up to two
            -- thousand records to a phone, and a thousand-point walk on each of
-           -- them is tens of megabytes down a nursery's signal to draw a list
+           -- them is tens of megabytes down a nurserys signal to draw a list
            -- that only ever shows "820 m". The summary is stored beside the
            -- track exactly so this query does not have to carry it.
            r.gps_lat::NUMERIC, r.gps_lng::NUMERIC, r.gps_accuracy::NUMERIC,

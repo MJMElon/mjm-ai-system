@@ -15,7 +15,7 @@
 --
 -- Re-running replaces it rather than adding a second. When you are done:
 --
---     DELETE FROM nelos_cases WHERE case_no = 'NLS-TRIAL';
+--     DELETE FROM nelos_cases WHERE case_no = NLS-TRIAL;
 --
 -- or press Delete on the row, which is one of the things worth trying.
 --

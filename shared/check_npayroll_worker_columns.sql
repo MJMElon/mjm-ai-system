@@ -7,7 +7,7 @@
 -- guess.
 --
 -- ONE result set on purpose. The Supabase SQL Editor shows only the LAST
--- statement's result, so a file of four queries answers three questions into
+-- statements result, so a file of four queries answers three questions into
 -- the void. Everything below is a single UNION ALL.
 --
 -- The form writes a section TWICE, into `section` and `nursery`, and a role

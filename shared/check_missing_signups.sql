@@ -21,7 +21,7 @@
 --      that was your problem, and it is worth knowing either way.)
 --
 --   3. FILED AS A CUSTOMER.  The page opens on the System tab. A signup
---      carrying user_type 'customer' — which salesweb sends — is in the list,
+--      carrying user_type customer — which salesweb sends — is in the list,
 --      under Customers. Section 4 shows recent signups and which tab each is
 --      on.
 --
@@ -57,9 +57,9 @@ SELECT
 --
 -- To give one a profile by hand, matching what the trigger would have done:
 --   INSERT INTO public.shared_profiles (id, email, full_name, user_type)
---   SELECT u.id, u.email, u.raw_user_meta_data->>'full_name',
---          COALESCE(u.raw_user_meta_data->>'user_type', 'system')
---     FROM auth.users u WHERE u.email = 'them@example.com'
+--   SELECT u.id, u.email, u.raw_user_meta_data->>full_name,
+--          COALESCE(u.raw_user_meta_data->>user_type, system)
+--     FROM auth.users u WHERE u.email = them@example.com
 --   ON CONFLICT (id) DO NOTHING;
 SELECT u.email,
        u.created_at                                   AS signed_up,

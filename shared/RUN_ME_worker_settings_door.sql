@@ -2,7 +2,7 @@
 -- THE SETTINGS DOOR ON THE 555 WORKER PORTAL
 --
 -- Paste the whole file into the Supabase SQL Editor and press Run. Safe to
--- run twice. It changes ONE worker's row and reads nothing else.
+-- run twice. It changes ONE workers row and reads nothing else.
 --
 -- ── Why Settings is not showing ──
 --
@@ -11,8 +11,8 @@
 -- ever been given it, nobody ever can be — the circle has to be broken once,
 -- from here. After that every later change is made on the phone.
 --
--- Maintenance shows because its default is ON. Settings' default is OFF, on
--- purpose: it hands out access to other people's rows, and a door like that
+-- Maintenance shows because its default is ON. Settings default is OFF, on
+-- purpose: it hands out access to other peoples rows, and a door like that
 -- should be opened deliberately rather than by nobody having said anything.
 --
 -- ── How to use it ──
@@ -21,7 +21,7 @@
 --    can sign in, and what each of them can open today.
 -- 2. Put a name from that list on the `who :=` line below, and run it again.
 --
--- The name is matched on the payroll register's full name, ignoring case and
+-- The name is matched on the payroll registers full name, ignoring case and
 -- outer spaces. A name that matches nobody changes nothing and says so.
 -- ════════════════════════════════════════════════════════════════════════
 
@@ -31,13 +31,13 @@ CREATE TEMP TABLE settings_grant (ord INT, who TEXT, what TEXT);
 DO $$
 DECLARE
   ---------------------------------------------------------------------------
-  who TEXT := '';        -- ←←← PUT THE SUPERVISOR'S FULL NAME HERE
+  who TEXT := '';        -- ←←← PUT THE SUPERVISORS FULL NAME HERE
   ---------------------------------------------------------------------------
   hit INT;
   off BOOLEAN;
 BEGIN
   /* The company switch first. System Setting → Portal View & Function →
-     555 Worker Portal → Settings vetoes everybody, whatever a worker's own
+     555 Worker Portal → Settings vetoes everybody, whatever a workers own
      row says, so a row set here while that is off would look done and shut
      nothing. Read dynamically: the table may not exist on every database, and
      a plain reference to a missing one fails at PLAN time, before any guard
@@ -67,9 +67,9 @@ BEGIN
   END IF;
 
   /* Only the settings key is written. Not the whole `modules` object — `||`
-     on jsonb replaces it wholesale and would take Maintenance's answer with
+     on jsonb replaces it wholesale and would take Maintenances answer with
      it — and not maintenance itself, because absent means the default and
-     writing today's default into somebody's row turns a question nobody was
+     writing todays default into somebodys row turns a question nobody was
      asked into a decision. */
   UPDATE mjmnpayroll_workers
      SET portal = jsonb_set(

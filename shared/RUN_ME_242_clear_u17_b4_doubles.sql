@@ -6,7 +6,7 @@
 --
 --  This is the drill-down. shared/RUN_ME_clear_duplicate_transfers.sql
 --  does the same job for EVERY batch and every plot — run that when you
---  want the rest of them; this one touches batch 242's U17 and B4 only,
+--  want the rest of them; this one touches batch 242s U17 and B4 only,
 --  and nothing else on that batch either.
 --
 --  WHAT COUNTS AS A DOUBLE
@@ -62,8 +62,8 @@ ranked AS (
 DELETE FROM shared_inventory_logs
  WHERE id IN (SELECT id FROM ranked WHERE copy_no > 1);
 
-/* ONE result set — the SQL Editor only shows the last statement's. Every
-   movement left on batch 242's U17 and B4, so you can read the answer
+/* ONE result set — the SQL Editor only shows the last statements. Every
+   movement left on batch 242s U17 and B4, so you can read the answer
    rather than trust it. */
 WITH left_over AS (
   SELECT COALESCE(SUBSTRING(l.remark FROM 'From:\s*\[([^\]|]+)\|'), '— not recorded —') AS left_from,
@@ -117,7 +117,7 @@ ORDER BY sort, movement, moved_on;
 --   clean, 2 if both were doubled.
 --
 --   Under it, one row per movement that SURVIVED on U17 and B4, each
---   saying "kept — this one is on its own". Read them against the batch's
+--   saying "kept — this one is on its own". Read them against the batchs
 --   Transfer Data tab: they should be the same lines.
 --
 --   copies_removed 0 with "Done." means they were already clean — either

@@ -3,7 +3,7 @@
 -- Run in Supabase SQL Editor (main project: kibqjztozokohqmhqqqf)
 --
 -- Purpose: lets one matured-batch row be reserved across multiple
--- customers (e.g. plot 5A's 2,000 seedlings split between Customer A
+-- customers (e.g. plot 5As 2,000 seedlings split between Customer A
 -- 800, Customer B 600, Customer C 400). Replaces the single-customer
 -- shared_plot_allocations.reserved_for / reserved_qty model with a
 -- many-to-many table.

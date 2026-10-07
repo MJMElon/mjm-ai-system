@@ -16,18 +16,18 @@ ALTER TABLE nops_maint_field_records
   -- The batches standing in the plot when the work was done, as the
   -- Field Conductor ticked them: "MJM-234, MJM-237". Text rather than
   -- a join table because it is a note of what was there on the day,
-  -- not a live link — the plot's contents move on afterwards.
+  -- not a live link — the plots contents move on afterwards.
   ADD COLUMN IF NOT EXISTS batch_name     TEXT,
   -- Which seven-day block of the month the job belongs to: 1 = 1st-7th,
   -- 2 = 8th-14th, 3 = 15th-21st, 4 = 22nd to month end. Stored rather
   -- than worked out from the date, so a job recorded a day late still
   -- counts against the week it was scheduled for.
   ADD COLUMN IF NOT EXISTS week_no        SMALLINT,
-  -- The month the schedule was read from, in the office's own wording
+  -- The month the schedule was read from, in the offices own wording
   -- ("Apr 2026"), matching nops_maint_state.month.
   ADD COLUMN IF NOT EXISTS schedule_month TEXT;
 
--- Looking up "what has been done this month" is the timeline's whole job.
+-- Looking up "what has been done this month" is the timelines whole job.
 CREATE INDEX IF NOT EXISTS nops_maint_field_week_idx
   ON nops_maint_field_records (schedule_month, week_no, work_type);
 

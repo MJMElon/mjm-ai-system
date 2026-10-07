@@ -10,7 +10,7 @@
 --  and names the ones it is true of.
 --
 --  The report builds its rows out of the TRANSPLANT records, then looks
---  the saved culling record up by that plot's name. So a plot keyed one
+--  the saved culling record up by that plots name. So a plot keyed one
 --  way when it was transplanted and another way when it was culled —
 --  "U17" and "u17 " are the same plot in the field and two different
 --  strings here — matched nothing, and the row came back with empty
@@ -107,7 +107,7 @@ problems AS (
   FROM judged j
 )
 
-/* ONE result set — the SQL Editor only shows the last statement's. The
+/* ONE result set — the SQL Editor only shows the last statements. The
    summary is the first row; everything under it is a plot to look at. */
 SELECT 0                                                      AS sort,
        '— ALL BATCHES —'                                      AS batch,

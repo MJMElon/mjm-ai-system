@@ -13,7 +13,7 @@
 --    which is not how the rest of the Pest list works.
 --
 -- 3. 800 seedlings to a pump stops being a constant and becomes a setting.
---    A chemical's own coverage may now be NULL, meaning "whatever the
+--    A chemicals own coverage may now be NULL, meaning "whatever the
 --    preset says" — so changing the preset later moves every chemical that
 --    has not been given a figure of its own, which is the whole point of
 --    presetting it. Asir keeps its 1, because that is not the standard
@@ -24,7 +24,7 @@
 -- ── 1. The third kind ───────────────────────────────────────────
 --
 -- The CHECK has to be replaced rather than added to; there is no ALTER for
--- widening one. Dropped by name, then written again with 'other' in it.
+-- widening one. Dropped by name, then written again with other in it.
 DO $kind$
 BEGIN
   IF to_regclass('public.nops_maint_chemicals') IS NULL THEN
@@ -77,7 +77,7 @@ BEGIN
 
   -- Everything still sitting on the old hardcoded 800 becomes "follow the
   -- preset", which is what it always meant — it was the default, not a
-  -- decision. Anything else (Asir's 1) is a decision and is left alone.
+  -- decision. Anything else (Asirs 1) is a decision and is left alone.
   EXECUTE 'UPDATE public.nops_maint_chemicals SET coverage = NULL WHERE coverage = 800';
   GET DIAGNOSTICS n = ROW_COUNT;
   RAISE NOTICE '2. chemicals now following the preset: %.', n;

@@ -42,7 +42,7 @@ SELECT 'nelos_cases.resolution_photo_url' AS what,
        ) AS ok
 ;
 
--- The bucket is case_tools' job; this only reports whether it is there,
+-- The bucket is case_tools job; this only reports whether it is there,
 -- because the solve photo has nowhere to go without it.
 --
 -- It has to ask through EXECUTE. A plain SELECT cannot: storage.buckets is

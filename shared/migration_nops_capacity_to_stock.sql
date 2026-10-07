@@ -118,7 +118,7 @@ BEGIN
   -- 3. The plot name says where it belongs
   --
   -- A plot called B13-R exists in exactly one stock nursery, so a capacity
-  -- filed under any old code is unambiguously that plot's. Only when the
+  -- filed under any old code is unambiguously that plots. Only when the
   -- name is unique across the whole of shared_plots — a plot number reused
   -- in two nurseries decides nothing.
   ----------------------------------------------------------------

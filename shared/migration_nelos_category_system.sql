@@ -14,7 +14,7 @@
 -- as they are decided.
 --
 -- WHAT THIS CHANGES
---   • Case Routing lists only that system's own titles.
+--   • Case Routing lists only that systems own titles.
 --   • The raise form offers only the titles of the system it is raised in.
 --   • The Categories page groups by system and asks which one a new title
 --     belongs to.

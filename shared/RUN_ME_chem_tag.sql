@@ -8,7 +8,7 @@
 
    That is the Setting page telling the truth about a column that is not
    there. It writes name, dose, unit, coverage and TAG; PostgREST answers
-   "could not find the 'tag' column in the schema cache"; rather than lose
+   "could not find the tag column in the schema cache"; rather than lose
    the whole save over one field, the page drops that field, writes
    everything else, and says so. Nothing was lost — the tag was never
    stored, and still is not.
@@ -16,10 +16,10 @@
    ── What the tag is for, and what its absence is costing ──
 
    An Other chemical is still Other. The tag only says which of the
-   SCHEDULE's dropdowns may offer it:
+   SCHEDULEs dropdowns may offer it:
 
-       tag = 'sticker'   the P & D sheet's sticker rows   (Bond, Activator)
-       tag = 'interrow'  the Interrow sheet's chemical    (Basta, Monex, Acosta)
+       tag = sticker   the P & D sheets sticker rows   (Bond, Activator)
+       tag = interrow  the Interrow sheets chemical    (Basta, Monex, Acosta)
        tag = NULL        neither — true of the weedicides, which have no
                          dropdown of their own
 
@@ -37,7 +37,7 @@
 
    It is section 6 of shared/RUN_ME_maintenance_setting.sql, lifted out on
    its own. Everything else in that file is already in place — the table,
-   coverage, kind = 'other', the preset and the Other list all went in with
+   coverage, kind = other, the preset and the Other list all went in with
    RUN_ME_nops_maint_config.sql, which was run and checked. This is the one
    piece that was left behind.
 
@@ -96,7 +96,7 @@ END
 $tag$;
 
 -- Without this PostgREST goes on serving the old picture of the table, the
--- page goes on being told there is no 'tag' column, and the alert comes back
+-- page goes on being told there is no tag column, and the alert comes back
 -- on the next save even though the column is now there.
 NOTIFY pgrst, 'reload schema';
 
@@ -106,10 +106,10 @@ NOTIFY pgrst, 'reload schema';
 
    1  tag column      the column exists — this is the one the alert was about
    2  values allowed  the CHECK admits sticker and interrow
-   3  sticker list    what the P & D sheet's sticker dropdown will offer.
+   3  sticker list    what the P & D sheets sticker dropdown will offer.
                       Should read Activator, Bond. Empty means the dropdown
                       is still empty.
-   4  interrow list   what the Interrow sheet's chemical dropdown will offer.
+   4  interrow list   what the Interrow sheets chemical dropdown will offer.
                       Should read Acosta, Basta, Monex.
 
    Rows 3 and 4 are the ones worth reading twice: row 1 can say OK while both

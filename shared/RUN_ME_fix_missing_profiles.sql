@@ -37,7 +37,7 @@
 --   4. Prints what is left, which should be nothing.
 --
 -- NO PERMISSIONS ARE WRITTEN. An empty permissions column means "nobody has
--- been asked"; filling it with today's defaults would turn an unasked
+-- been asked"; filling it with todays defaults would turn an unasked
 -- question into a decision. Everyone appears on User Access with no access,
 -- and you grant what each of them needs from there.
 --
@@ -59,7 +59,7 @@ SELECT
 
 
 -- ── 2. CREATE THE MISSING ROWS ──────────────────────────────────
--- Exactly what handle_new_user() would have written, read from the signup's
+-- Exactly what handle_new_user() would have written, read from the signups
 -- own metadata. ON CONFLICT DO NOTHING so a second run adds nothing.
 INSERT INTO public.shared_profiles (id, email, full_name, user_type)
 SELECT u.id,
@@ -118,7 +118,7 @@ CREATE TRIGGER on_auth_user_created
 
 
 -- ── 4. AFTER ────────────────────────────────────────────────────
--- missing should be 0 and signup_trigger 'attached'. The two counts should
+-- missing should be 0 and signup_trigger attached. The two counts should
 -- now agree.
 SELECT
   (SELECT count(*) FROM auth.users)                     AS accounts,

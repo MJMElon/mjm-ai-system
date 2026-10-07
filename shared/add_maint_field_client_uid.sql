@@ -5,7 +5,7 @@
    signal and sends it when there is. That queue can be interrupted at the
    one moment that matters: after the server has written the row, but before
    the phone has been told and let go of it. The next attempt would then save
-   the same morning's work twice.
+   the same mornings work twice.
 
    So the phone gives every queued record an id of its own before it is sent,
    and that id is unique here. A repeat is refused by the index, the portal

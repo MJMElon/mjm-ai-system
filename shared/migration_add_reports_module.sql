@@ -1,5 +1,5 @@
 -- ================================================================
--- MJM System — Add 'reports' to shared_profiles.permissions.modules
+-- MJM System — Add reports to shared_profiles.permissions.modules
 -- Run in Supabase SQL Editor (main project: kibqjztozokohqmhqqqf)
 -- ================================================================
 --
@@ -10,12 +10,12 @@
 --   (operation/salesweb/audit/mobile) — reports is missing entirely.
 --
 --   With the JSONB key missing, the Reports card on the operation
---   dashboard would never show because canAccess('reports') reads
---   undefined → 'none'. This migration adds 'reports' = 'none' to any
---   row that doesn't already have it.
+--   dashboard would never show because canAccess(reports) reads
+--   undefined → none. This migration adds reports = none to any
+--   row that does not already have it.
 --
---   It's idempotent: rerunning it does nothing for rows that already
---   have a 'reports' key (regardless of its value).
+--   it is idempotent: rerunning it does nothing for rows that already
+--   have a reports key (regardless of its value).
 -- ----------------------------------------------------------------
 
 UPDATE public.shared_profiles

@@ -8,7 +8,7 @@
 --  WHY
 --  Bags were counted, Save was pressed more than once, and every row came
 --  back offering "Count Seeds" again. The app writes the count into the
---  row's remark as "AiCount:250." and reads it back from there, and that
+--  rows remark as "AiCount:250." and reads it back from there, and that
 --  round trip has been driven end to end and works -- so the answer is in
 --  what is actually stored.
 --
@@ -43,7 +43,7 @@ ORDER BY l.created_at, l.plot_name;
 --
 --   ai_count saying "-- NO COUNT STORED --"  → the save wrote the bag and
 --   the two quantities but not the count, which means the count was not in
---   the page's memory at the moment Save ran. written_at says when that
+--   the pages memory at the moment Save ran. written_at says when that
 --   save happened -- compare it with when the counting was done.
 --
 --   FEWER ROWS THAN BAGS, or bag_no blank → the row was written from a

@@ -18,19 +18,19 @@
 --
 --  WHAT TO LOOK FOR
 --
---    ord 1, 'summary'
+--    ord 1, summary
 --      -> how many plot-and-job groups there are, and how many of them were
 --         out of date order.
 --
---    ord 2, 'MOVED'
+--    ord 2, MOVED
 --      -> one line per plot and job whose rows the sorting reordered, with
 --         the dates as they were SAVED. Read it as: this group used to draw
 --         in this order, and now draws oldest first.
 --
---    ord 3, 'already in order'
+--    ord 3, already in order
 --      -> counted per nursery letter only. These look exactly as they did.
 --
---  A row with no date yet ('-') counts as the end of its group, because it
+--  A row with no date yet (-) counts as the end of its group, because it
 --  has not happened. In the saved order it could be anywhere.
 -- =====================================================================
 WITH r AS (

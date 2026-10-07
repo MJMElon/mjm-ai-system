@@ -6,11 +6,11 @@
 -- but the system already holds it as N18 → N18-R · 397.
 --
 -- Same physical movement, wrong destination. This corrects the existing
--- record in place rather than adding a second one, so N18's balance is
+-- record in place rather than adding a second one, so N18s balance is
 -- reduced by 397 once, not twice.
 --
 -- RUN THIS BEFORE shared/import_transfer_plot_records.sql. Once corrected,
--- the import's duplicate guard recognises sheet row 96 as already recorded
+-- the imports duplicate guard recognises sheet row 96 as already recorded
 -- and skips it — which is what we want.
 --
 -- Run in the Supabase SQL Editor, top to bottom. Section 1 only reads.
@@ -61,15 +61,15 @@ WHERE  transaction_type = 'Cull3_Transfer'
 --     Only the destination was asked for, so this is left switched off. The
 --     record currently carries whatever date it was keyed in on; the sheet
 --     says the movement happened on 19/01/2026. Remove the two leading
---     dashes below if you want the report to show the sheet's date instead.
+--     dashes below if you want the report to show the sheets date instead.
 -- ────────────────────────────────────────────────────────────────
 -- UPDATE shared_inventory_logs
--- SET    transaction_date = DATE '2026-01-19'
--- WHERE  transaction_type = 'Cull3_Transfer'
---   AND  batch_name ~ '(^|[^0-9])224[[:space:]]*$'
---   AND  plot_name = 'N1'
+-- SET    transaction_date = DATE 2026-01-19
+-- WHERE  transaction_type = Cull3_Transfer
+--   AND  batch_name ~ (^|[^0-9])224[[:space:]]*$
+--   AND  plot_name = N1
 --   AND  quantity_change = 397
---   AND  remark LIKE '%From: [N18|%';
+--   AND  remark LIKE %From: [N18|%;
 
 
 -- ────────────────────────────────────────────────────────────────

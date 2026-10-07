@@ -1,7 +1,7 @@
 -- ════════════════════════════════════════════════════════════════════════
 -- EVERY PLOT A TROUBLED BATCH TOUCHES
 --
--- A plot reading negative usually means the batch's intake was filed
+-- A plot reading negative usually means the batchs intake was filed
 -- somewhere its outgoings were not. This takes every batch that is
 -- negative in ANY plot and lays out EVERY plot that batch appears in,
 -- so the missing intake can be seen rather than guessed at.

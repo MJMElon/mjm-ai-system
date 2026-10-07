@@ -6,7 +6,7 @@
 --  No regular expressions and no backslashes, so it survives a paste.
 --
 --  WHY
---  When two runs of the 2nd Culling tab's load overlapped, the merge SUMMED
+--  When two runs of the 2nd Culling tabs load overlapped, the merge SUMMED
 --  the rows it joined -- both the DEAD figure and the TRANSPLANTED one. Save
 --  writes what is on screen, so a save made in that state wrote the doubled
 --  Dead into the row AND the doubled Transplanted into its remark.
@@ -24,26 +24,26 @@
 --  doubling an whole number, so it was keyed by hand and is right as it is.
 --
 --  AND IT ONLY SEES THE LAST SAVE. Open the tab again on a good day and save,
---  and the remark's Transplanted is written back correct while the doubled
+--  and the remarks Transplanted is written back correct while the doubled
 --  Dead stays -- the fingerprint is wiped and the wrong number is not. So a
 --  clean result here does NOT mean a batch was never doubled. Batch 254 is
 --  exactly that case and does not appear below.
 --
 --  WHAT TO LOOK FOR
 --
---    ord 1, 'summary'
+--    ord 1, summary
 --      -> the counts.
 --
---    ord 2, 'DEAD IS DOUBLED'
+--    ord 2, DEAD IS DOUBLED
 --      -> the multiple divides the Dead exactly. The line gives the figure
 --         it should be. Check one or two against the paper, then the repair
 --         can be written to sweep them.
 --
---    ord 3, 'keyed by hand that day'
+--    ord 3, keyed by hand that day
 --      -> same doubled save, but this Dead does not divide by the multiple,
 --         so somebody typed it in that session. It is RIGHT. Left alone.
 --
---    ord 4, 'transplanted differs, not a multiple'
+--    ord 4, transplanted differs, not a multiple
 --      -> the two numbers disagree but not by a whole multiple. NOT this
 --         fault: a plot transplanted in two goes, an approved adjustment, or
 --         a culling keyed before a later transplant all do it.

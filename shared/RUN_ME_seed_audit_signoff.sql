@@ -14,7 +14,7 @@
 --  The two sign-off tables were created when the batch report had six
 --  tabs, and their stage column carries a CHECK listing exactly those
 --  six — seeds_in, planting, transplanting, cull_1, cull_2, cull_3.
---  Seed Audit came later and signs off as 'seed_audit', which is not in
+--  Seed Audit came later and signs off as seed_audit, which is not in
 --  the list, so the database refuses the row. Nothing is wrong with the
 --  page: it is asking for something the table has never been told to
 --  accept.
@@ -68,7 +68,7 @@ END $$;
 -- shape, and this costs nothing.
 NOTIFY pgrst, 'reload schema';
 
-/* ONE result set — the SQL Editor only shows the last statement's. */
+/* ONE result set — the SQL Editor only shows the last statements. */
 SELECT cl.relname                                            AS table_name,
        con.conname                                           AS constraint_name,
        (pg_get_constraintdef(con.oid) ILIKE '%seed_audit%')  AS seed_audit_allowed,

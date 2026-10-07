@@ -4,7 +4,7 @@
 -- ================================================================
 --
 -- Adds the columns the new Promotions Designer needs:
---   scope             — 'line' (per matching item) or 'cart' (whole order)
+--   scope             — line (per matching item) or cart (whole order)
 --   min_order_rm      — minimum order RM to qualify
 --   min_qty           — minimum qty in cart to qualify
 --   max_uses          — total redemption cap (NULL = unlimited)
@@ -25,7 +25,7 @@ ALTER TABLE public.salesweb_promotions
   ADD COLUMN IF NOT EXISTS conversation_log JSONB    DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS updated_at       TIMESTAMPTZ DEFAULT now();
 
--- Drop any old CHECK on scope (if you've run this before with a stricter rule)
+-- Drop any old CHECK on scope (if youve run this before with a stricter rule)
 DO $$
 DECLARE c record;
 BEGIN

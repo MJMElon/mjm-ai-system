@@ -1,5 +1,5 @@
 -- =====================================================================
---  WHY A PLOT'S ROWS ARE NOT DRAWN ON THE WORK MAINTENANCE LIST
+--  WHY A PLOTS ROWS ARE NOT DRAWN ON THE WORK MAINTENANCE LIST
 --
 --  Paste the WHOLE file into the Supabase SQL Editor and press Run.
 --  READ-ONLY. It changes nothing.
@@ -8,7 +8,7 @@
 --  WHY
 --  CHECK_maint_rows_missing.sql found the rows: they are in the list, on
 --  plots the screen does not draw. A plot is drawn when it is on its
---  nursery's list, and a plot joins that list by having a CAPACITY GREATER
+--  nurserys list, and a plot joins that list by having a CAPACITY GREATER
 --  THAN NOUGHT recorded for that nursery -- Setting -> Plot Capacity. A
 --  transfer plot (-R) is not in the built-in list, so the capacity is the
 --  only thing that puts it there.

@@ -9,7 +9,7 @@
 
    That gap shows up wherever something reads the register rather than a
    hardcoded list: the Location card marks them "Not in the nursery list",
-   and the payroll's nursery dropdown now reads the register too. So they go
+   and the payrolls nursery dropdown now reads the register too. So they go
    on it.
 
    ── The licence is left empty, deliberately ──
@@ -22,7 +22,7 @@
    The names are the codes, spelt the way the register spells the others:
    uppercase, and the space where the existing rows have one. Every screen
    keys a nursery on its letters and digits alone, so "UNN 1" and UNN1 are
-   one nursery — but matching the register's own style keeps the card list
+   one nursery — but matching the registers own style keeps the card list
    looking like a list.
 
    Safe to run twice: neither row is added if a nursery of that name is
@@ -74,7 +74,7 @@ $add$;
    deliberately did not invent. Fill them in on Facility Management.
 
    `code` is what every other screen will call it: the name with the spaces
-   taken out. That is what a worker's section is matched against, so it is
+   taken out. That is what a workers section is matched against, so it is
    worth reading once — a nursery whose code is not what its people are filed
    under will show an empty sheet.                                        */
 SELECT name                                             AS "on the register",

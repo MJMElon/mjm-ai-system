@@ -9,24 +9,24 @@
 -- Not because a routing rule was missing. Because the cases were
 -- written under a module key that does not exist.
 --
--- The Culling Calculator raised them with source_module 'fc_portal'.
--- The FC Portal is 'scan' everywhere in Nelos — in nelos_modules, in
+-- The Culling Calculator raised them with source_module fc_portal.
+-- The FC Portal is scan everywhere in Nelos — in nelos_modules, in
 -- SOURCE_LABEL, and in nelos_routes.source_module, which is a FOREIGN
--- KEY to nelos_modules. So no rule for 'fc_portal' could be written
+-- KEY to nelos_modules. So no rule for fc_portal could be written
 -- even deliberately, nelos_route_case() matched nothing, and it fell
 -- through to its last line:
 --
 --     no matching row in nelos_routes  ->  assigned_module := source_module
 --
 -- Every case raised there was therefore assigned back to the people who
--- raised it. The app now sends 'scan' (see src/lib/nelos.js in the
+-- raised it. The app now sends scan (see src/lib/nelos.js in the
 -- Barcode_Counter repo); this file fixes the database side.
 --
 -- It changes no schema. It adds:
 --   1. the Culling Calculator category, under the FC Portal, so it can
 --      be picked when raising a case and named by a rule;
 --   2. the rule itself — that category goes to the auditors;
---   3. the FC Portal's section default, if it has none, so a culling
+--   3. the FC Portals section default, if it has none, so a culling
 --      case raised without that category still reaches the auditors;
 --   4. a repair for the rows already written under the old key.
 -- ================================================================
@@ -113,7 +113,7 @@ BEGIN
     RAISE NOTICE '2. FC Portal + Culling Calculator -> Audit: % row(s) added.', n;
 
     -- Only when the section has no default at all. An existing default is
-    -- somebody's decision and is left exactly as it is.
+    -- somebodys decision and is left exactly as it is.
     EXECUTE $q$
       INSERT INTO public.nelos_routes (source_module, category, to_module, updated_by)
       SELECT 'scan', NULL, 'audit', 'system (migration_nelos_culling_route)'
@@ -147,9 +147,9 @@ BEGIN
 
     -- Anything still POINTING at the old key gets spelled correctly
     -- rather than re-routed: a closed case is a record, and moving it to
-    -- the auditors would rewrite who dealt with it. 'scan' is the same
+    -- the auditors would rewrite who dealt with it. scan is the same
     -- place the row already named, in the spelling the rest of Nelos
-    -- reads — left as 'fc_portal' it renders as a module that does not
+    -- reads — left as fc_portal it renders as a module that does not
     -- exist, on every screen, forever.
     EXECUTE $q$ UPDATE public.nelos_cases SET assigned_module='scan'
                  WHERE assigned_module='fc_portal' $q$;

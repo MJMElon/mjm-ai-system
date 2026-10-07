@@ -306,7 +306,7 @@ BEGIN
   -- 3. The plot name says where it belongs
   --
   -- A plot called B13-R exists in exactly one stock nursery, so a capacity
-  -- filed under any old code is unambiguously that plot's. Only when the
+  -- filed under any old code is unambiguously that plots. Only when the
   -- name is unique across the whole of shared_plots — a plot number reused
   -- in two nurseries decides nothing.
   ----------------------------------------------------------------
@@ -606,7 +606,7 @@ END $report$;
 -- plot_maintenance_script.js has always known this:
 --
 --     const COVERAGE_PER_PUMP = 800;
---     const CHEMICAL_COVERAGE = { 'Asir': 1 };
+--     const CHEMICAL_COVERAGE = { Asir: 1 };
 --     const coverage = CHEMICAL_COVERAGE[chemName] || COVERAGE_PER_PUMP;
 --     const totalUnits = (seedlings / coverage) * dose;
 --
@@ -638,7 +638,7 @@ BEGIN
     'seedling (Asir). Was CHEMICAL_COVERAGE in plot_maintenance_script.js.' $c$;
 
   -- The one exception the script carried. Only where nobody has set it
-  -- since: a figure changed on screen is somebody's decision.
+  -- since: a figure changed on screen is somebodys decision.
   EXECUTE $q$
     UPDATE public.nops_maint_chemicals
        SET coverage = 1, updated_at = now()
@@ -665,7 +665,7 @@ END $cov$;
 --    which is not how the rest of the Pest list works.
 --
 -- 3. 800 seedlings to a pump stops being a constant and becomes a setting.
---    A chemical's own coverage may now be NULL, meaning "whatever the
+--    A chemicals own coverage may now be NULL, meaning "whatever the
 --    preset says" — so changing the preset later moves every chemical that
 --    has not been given a figure of its own, which is the whole point of
 --    presetting it. Asir keeps its 1, because that is not the standard
@@ -676,7 +676,7 @@ END $cov$;
 -- ── 1. The third kind ───────────────────────────────────────────
 --
 -- The CHECK has to be replaced rather than added to; there is no ALTER for
--- widening one. Dropped by name, then written again with 'other' in it.
+-- widening one. Dropped by name, then written again with other in it.
 DO $kind$
 BEGIN
   IF to_regclass('public.nops_maint_chemicals') IS NULL THEN
@@ -729,7 +729,7 @@ BEGIN
 
   -- Everything still sitting on the old hardcoded 800 becomes "follow the
   -- preset", which is what it always meant — it was the default, not a
-  -- decision. Anything else (Asir's 1) is a decision and is left alone.
+  -- decision. Anything else (Asirs 1) is a decision and is left alone.
   EXECUTE 'UPDATE public.nops_maint_chemicals SET coverage = NULL WHERE coverage = 800';
   GET DIAGNOSTICS n = ROW_COUNT;
   RAISE NOTICE '2. chemicals now following the preset: %.', n;
@@ -795,8 +795,8 @@ END $seed$;
 -- sheet has a STICKER dropdown, and the Interrow sheet has its own chemical
 -- dropdown, and each of those has always shown a specific handful:
 --
---     PD_STICKER_OPTIONS    = ['Bond']
---     INTERROW_CHEM_OPTIONS = ['Basta', 'Monex', 'Acosta']
+--     PD_STICKER_OPTIONS    = [Bond]
+--     INTERROW_CHEM_OPTIONS = [Basta, Monex, Acosta]
 --
 -- Those lists are about to stop being hardcoded and start coming from this
 -- table. Without something to narrow them, the sticker dropdown would offer
@@ -805,7 +805,7 @@ END $seed$;
 -- problem, so the distinction is kept.
 --
 -- It is a tag rather than a kind because a chemical is still Other; this
--- only says which of the schedule's dropdowns may show it. NULL means it
+-- only says which of the schedules dropdowns may show it. NULL means it
 -- appears in the Other list on the Setting page and in no schedule dropdown,
 -- which is true of the weedicides that have no dropdown of their own.
 -- ================================================================

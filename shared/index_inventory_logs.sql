@@ -15,7 +15,7 @@
    and they all read it the same way:
 
        SELECT ... FROM shared_inventory_logs
-       WHERE  transaction_type IN ('Transplanted', '1st_Culling', ...)
+       WHERE  transaction_type IN (Transplanted, 1st_Culling, ...)
        ORDER  BY id
        LIMIT  1000 OFFSET n
 

@@ -2,7 +2,7 @@
 -- WORKER PIN — mjmnpayroll_workers.pin
 --
 -- What a worker will key into the worker portal to sign in. Set from the
--- Payroll register (Workers tab): a box on each worker's row, and the same
+-- Payroll register (Workers tab): a box on each workers row, and the same
 -- field on the Add / Edit Worker form.
 --
 -- Safe to run more than once.
@@ -49,12 +49,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS mjmnpayroll_workers_pin_key
 -- A PIN here is a door number for the worker portal, nothing more. It is
 -- stored as it is keyed, so anyone who can read the payroll register can
 -- read it — which is right for the person handing PINs out, and the reason
--- a PIN must never be reused as anybody's password.
+-- a PIN must never be reused as anybodys password.
 --
 -- When the worker portal is built, check the PIN in the database (an RPC
 -- or an edge function that answers yes/no) rather than reading this column
 -- into the phone. A portal that downloads the PIN list to compare in the
--- browser has handed every worker everyone else's PIN.
+-- browser has handed every worker everyone elses PIN.
 -- ───────────────────────────────────────────────────────────────────────
 
 SELECT 'pin column ready' AS status,

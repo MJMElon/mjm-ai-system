@@ -1,5 +1,5 @@
 -- =====================================================================
---  BATCH 252's U10 AND U3 WERE DOUBLED TWICE, NOT ONCE
+--  BATCH 252s U10 AND U3 WERE DOUBLED TWICE, NOT ONCE
 --
 --  Paste the WHOLE file into the Supabase SQL Editor and press Run.
 --  Safe to run twice: the second run changes nothing and prints the same
@@ -20,19 +20,19 @@
 --  This names those two rows outright rather than dividing by a rule,
 --  because the rule cannot see how many times a row was saved and guessing
 --  a second division would be as wrong on a row that was only doubled once.
---  252's U1 (10) and N11 (1) are confirmed right and are left alone.
+--  252s U1 (10) and N11 (1) are confirmed right and are left alone.
 --
---  STILL TO CHECK BY HAND: batch 256's N5 now reads 8. If it too was saved
+--  STILL TO CHECK BY HAND: batch 256s N5 now reads 8. If it too was saved
 --  twice while doubling, it is 4. Nothing in the data can say which -- the
 --  paper or the drone map can.
 --
---  Each row's drone map and cull date are carried over untouched.
+--  Each rows drone map and cull date are carried over untouched.
 --
 --  WHAT TO LOOK FOR
---  The table at the end is batch 252's rows. Good means
+--  The table at the end is batch 252s rows. Good means
 --      N11 1, U1 10, U3 12, U10 2
---  with transplanted 1,405 / 4,201 / 1,813 / 1,416, every line's
---  transplanted minus dead equal to its alive, and 'map kept' yes.
+--  with transplanted 1,405 / 4,201 / 1,813 / 1,416, every lines
+--  transplanted minus dead equal to its alive, and map kept yes.
 --  Run it a second time and it prints the same thing.
 -- =====================================================================
 UPDATE shared_inventory_logs AS il

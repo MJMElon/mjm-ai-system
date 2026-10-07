@@ -7,7 +7,7 @@
 --
 --  WHAT IT ADDS
 --  Add New Case has taken a photo for a while. A photo is not always the
---  thing to attach: a delivery order, a lab result, a supplier's letter,
+--  thing to attach: a delivery order, a lab result, a suppliers letter,
 --  a spreadsheet of counts. So a case now also carries ONE DOCUMENT,
 --  alongside its photo rather than instead of it.
 --
@@ -79,7 +79,7 @@ END $$;
 -- old picture and the new columns look as though they were never added.
 NOTIFY pgrst, 'reload schema';
 
-/* ONE result set — the SQL Editor only shows the last statement's. */
+/* ONE result set — the SQL Editor only shows the last statements. */
 SELECT
   (SELECT count(*) FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'nelos_cases'

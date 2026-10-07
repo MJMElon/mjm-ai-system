@@ -50,7 +50,7 @@ ALTER TABLE nops_maint_field_records
   ADD COLUMN IF NOT EXISTS verified_by TEXT,
   ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
 
--- Finding the day's tracks without reading the rows that have none.
+-- Finding the days tracks without reading the rows that have none.
 CREATE INDEX IF NOT EXISTS nops_maint_field_records_gps_idx
   ON nops_maint_field_records (work_date DESC)
   WHERE gps_track IS NOT NULL;
@@ -59,7 +59,7 @@ CREATE INDEX IF NOT EXISTS nops_maint_field_records_gps_idx
 -- ── 2. The function switches, on their way to the phone ─────────────────
 --
 -- worker_portal() was building a fixed object and dropping `actions`, so a
--- supervisor's ticks were saved and then never read back. This is the fix,
+-- supervisors ticks were saved and then never read back. This is the fix,
 -- and it is why the switches do nothing until this file is run.
 
 CREATE OR REPLACE FUNCTION public.worker_portal(w mjmnpayroll_workers)
@@ -73,14 +73,14 @@ AS $$
       'settings',    COALESCE((w.portal #> '{modules,settings}')::boolean,    false)
     ),
     -- Which FUNCTIONS inside a module: the schedule, the record form, and the
-    -- record form's own parts. Passed through as it was written rather than
+    -- record forms own parts. Passed through as it was written rather than
     -- spelt out key by key like the modules above — the app owns that list
     -- (Barcode_Counter src/modules/maintenance/functions.js) and it grows, and
     -- naming the keys here would mean a switch added there being silently
     -- dropped on its way to the phone.
     --
     -- An empty object is the right answer for a worker nobody has set
-    -- switches for: absent means the app's documented default, which is the
+    -- switches for: absent means the apps documented default, which is the
     -- ordinary form.
     'actions', CASE
       WHEN jsonb_typeof(w.portal -> 'actions') = 'object' THEN w.portal -> 'actions'
@@ -88,7 +88,7 @@ AS $$
     END,
     'boundary', jsonb_build_object(
       -- null = every nursery. An absent setting falls back to the nursery on
-      -- the worker's own row; only a worker with no nursery at all sees the
+      -- the workers own row; only a worker with no nursery at all sees the
       -- whole estate by default.
       'nurseries', CASE
         WHEN w.portal #> '{boundary,nurseries}' IS NOT NULL
@@ -127,9 +127,9 @@ AS $$
                ),
     'modules',  public.worker_portal(w) -> 'modules',
     -- Which FUNCTIONS inside a module this worker gets — the schedule, the
-    -- record form, and the record form's own parts. The same switches, with
+    -- record form, and the record forms own parts. The same switches, with
     -- the same keys, that the office sets per Field Conductor on
-    -- ai.mjmnursery.com. Absent means the app's documented defaults, so a
+    -- ai.mjmnursery.com. Absent means the apps documented defaults, so a
     -- worker nobody has touched still gets the ordinary form.
     'actions',  public.worker_portal(w) -> 'actions',
     'boundary', public.worker_portal(w) -> 'boundary'
@@ -161,7 +161,7 @@ BEGIN
     RAISE EXCEPTION 'pick a plot' USING ERRCODE = '22023';
   END IF;
 
-  -- The boundary, checked where it cannot be argued with — and the plot's
+  -- The boundary, checked where it cannot be argued with — and the plots
   -- own spelling taken back from shared_plots rather than kept as it was
   -- keyed. The match is loose on purpose (a phone sends " b1 "), but the row
   -- must not be: the office adds these up by plot_name, and "b1" beside "B1"
@@ -188,7 +188,7 @@ BEGIN
      NULLIF(p_payload ->> 'qty', '')::numeric,
      NULLIF(btrim(COALESCE(p_payload ->> 'remark',    '')), ''),
      -- Not from the phone. A worker records their own work and nobody
-     -- else's, and the payroll register adds these up by this name.
+     -- elses, and the payroll register adds these up by this name.
      w.full_name,
      now())
   RETURNING id INTO new_id;
@@ -271,7 +271,7 @@ BEGIN
            -- somebody whose phone was broken. NULL means reported_by did it.
            r.worked_by::TEXT,
            -- So a worker can see their morning has been checked off. Read
-           -- only: verifying is the conductor's signature, and nobody signs
+           -- only: verifying is the conductors signature, and nobody signs
            -- for their own work.
            r.verified_by::TEXT, r.verified_at,
            -- Where the track started, and how far it went. For the people the
@@ -280,7 +280,7 @@ BEGIN
            --
            -- The TRACK ITSELF is deliberately not here. This returns up to two
            -- thousand records to a phone, and a thousand-point walk on each of
-           -- them is tens of megabytes down a nursery's signal to draw a list
+           -- them is tens of megabytes down a nurserys signal to draw a list
            -- that only ever shows "820 m". The summary is stored beside the
            -- track exactly so this query does not have to carry it.
            r.gps_lat::NUMERIC, r.gps_lng::NUMERIC, r.gps_accuracy::NUMERIC,
@@ -303,7 +303,7 @@ GRANT EXECUTE ON FUNCTION public.worker_submit_maint(UUID, JSONB) TO anon, authe
 
 -- The phone calls PostgREST, which answers from a cached picture of the
 -- schema. Until that is rebuilt, a column added here is "Could not find the
--- 'gps_track' column" to the app — which reads exactly like this file never
+-- gps_track column" to the app — which reads exactly like this file never
 -- having been run.
 NOTIFY pgrst, 'reload schema';
 

@@ -5,7 +5,7 @@
    into operation_batch_detail.html as a constant. Trays are not all the same
    size, so it becomes a figure keyed in per tray in Settings.
 
-   TOTAL vacant, not current: this is the tray's capacity when it is empty.
+   TOTAL vacant, not current: this is the trays capacity when it is empty.
    What is standing in it is worked out from the ledger — planted in, less
    transplanted and culled out — and the batch report shows
 
@@ -25,8 +25,8 @@ ALTER TABLE operation_trays
    The Quantity field that briefly stood in Settings wrote to current_qty, and
    the figures put there were tray sizes — that is what the box was being used
    for. current_qty only came into existence a day before this, so nothing in
-   it can be the batch report's accumulated seedling count; it is all typed by
-   hand. Take it as the tray's size rather than making it be keyed twice.
+   it can be the batch reports accumulated seedling count; it is all typed by
+   hand. Take it as the trays size rather than making it be keyed twice.
 
    Anything still without a size falls back to the 2,560 the system has been
    assuming, so the batch report reads exactly as it does today.

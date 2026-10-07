@@ -7,7 +7,7 @@
 
    That is fine for one person on one phone and wrong for everything else:
    a request raised for the Site Auditor is only seen by whoever is holding
-   THAT phone, the office cannot see a plot's activity at all, and a lost
+   THAT phone, the office cannot see a plots activity at all, and a lost
    or wiped phone takes its year of records with it.
 
    These are the tables that fix it. Prefix fcportal_palms_, the same way the
@@ -27,21 +27,21 @@
 /* ── 1. THE ACTIVITY LOG ────────────────────────────────────────────────
    One row per activity started on a plot — the heart of PALMS. A row per
    entry rather than one blob per device, because two Field Conductors
-   working different plots must not overwrite each other's day.
+   working different plots must not overwrite each others day.
 
    client_uid is minted on the phone before the row is sent, so a record
    made with no signal and sent later cannot be saved twice. */
 CREATE TABLE IF NOT EXISTS fcportal_palms_plot_logs (
   id           BIGSERIAL PRIMARY KEY,
-  client_uid   TEXT UNIQUE,                    -- the phone's own id for this entry
+  client_uid   TEXT UNIQUE,                    -- the phones own id for this entry
   nursery_name TEXT,                           -- BNN / UNN1 / UNN2
   plot_name    TEXT        NOT NULL,           -- B1, U7, N12 …
   act_n        SMALLINT    NOT NULL,           -- 1..11, see ACTIVITIES in data.js
   start_date   DATE        NOT NULL,
   end_date     DATE,                           -- NULL while the activity is open
-  ideal_days   SMALLINT,                       -- the stage's expected length when started
+  ideal_days   SMALLINT,                       -- the stages expected length when started
   recorded_by  TEXT,
-  seq_no       INTEGER,                        -- the device's own ordering within a plot
+  seq_no       INTEGER,                        -- the devices own ordering within a plot
   created_at   TIMESTAMPTZ DEFAULT now(),
   updated_at   TIMESTAMPTZ DEFAULT now()
 );
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS fcportal_palms_requests (
   plot_name    TEXT        NOT NULL,
   nursery_name TEXT,
   purpose      TEXT        NOT NULL DEFAULT 'Culling',
-  send_to      TEXT        NOT NULL,           -- 'auditor' | 'hq'
+  send_to      TEXT        NOT NULL,           -- auditor | hq
   raised_by    TEXT,
   at_date      DATE        NOT NULL,
   details      JSONB,
@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS fcportal_palms_culling (
 
 /* ── 5. SETTINGS ────────────────────────────────────────────────────────
    Plot layout, attention thresholds and incentive rules. One row: these
-   are the nursery's rules, not a person's preference, and everybody should
+   are the nurserys rules, not a persons preference, and everybody should
    be reading the same ones. */
 CREATE TABLE IF NOT EXISTS fcportal_palms_settings (
   id         SMALLINT PRIMARY KEY DEFAULT 1,

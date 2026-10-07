@@ -1,5 +1,5 @@
 -- Every movement of one plot and batch, in date order, with a running
--- balance. The last row's running total is what the phone will offer.
+-- balance. The last rows running total is what the phone will offer.
 -- Edit the two values on the first line.
 WITH want AS (SELECT 'U1'::text AS plot, '250'::text AS batch),
 -- Does a 3rd culling exist for this plot and batch? If it does, the 2nd

@@ -1,22 +1,22 @@
 -- ================================================================
--- MJM System — Allow 'no_status' as a plot_status value
+-- MJM System — Allow no_status as a plot_status value
 -- Run in Supabase SQL Editor (main project: kibqjztozokohqmhqqqf)
 -- ================================================================
 --
 -- Background:
---   The Maturity Allocation table now defaults a plot's status to
---   'No Status' until an admin opens it for collection. The existing
+--   The Maturity Allocation table now defaults a plots status to
+--   No Status until an admin opens it for collection. The existing
 --   shared_plot_allocations.plot_status CHECK constraint may only
---   allow 'open' | 'sisa' | 'finished', which would reject upserts
---   when the user picks 'No Status' from the dropdown.
+--   allow open | sisa | finished, which would reject upserts
+--   when the user picks No Status from the dropdown.
 --
 --   This migration:
 --     1. Drops the old CHECK constraint (if any).
---     2. Re-adds it with 'no_status' included.
---     3. Sets the column default to 'no_status' so freshly-inserted
+--     2. Re-adds it with no_status included.
+--     3. Sets the column default to no_status so freshly-inserted
 --        rows match what the UI shows.
 --
---   It's idempotent: rerunning is safe.
+--   it is idempotent: rerunning is safe.
 -- ----------------------------------------------------------------
 
 -- Make sure the table exists with the right shape; create it if not.
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS public.shared_plot_allocations (
   PRIMARY KEY (batch_name, plot_name)
 );
 
--- Drop and recreate the plot_status CHECK so 'no_status' is accepted.
+-- Drop and recreate the plot_status CHECK so no_status is accepted.
 DO $$
 DECLARE
   c record;

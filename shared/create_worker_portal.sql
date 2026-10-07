@@ -11,7 +11,7 @@
 -- through the functions below instead. They run as their owner
 -- (SECURITY DEFINER), they are the only thing granted to `anon`, and every
 -- one of them starts by turning a session token back into a worker. The
--- phone never sees a PIN, never sees another worker's row, and cannot reach
+-- phone never sees a PIN, never sees another workers row, and cannot reach
 -- a plot outside its boundary.
 --
 --   worker_signin(pin)                     → { token, worker, modules, boundary }
@@ -20,13 +20,13 @@
 --   worker_plots(token)                    → the plots inside the boundary
 --   worker_plot_batches(token)             → what is standing in them
 --   worker_submit_maint(token, payload)    → record a job
---   worker_my_records(token, limit)        → this worker's own recent jobs
+--   worker_my_records(token, limit)        → this workers own recent jobs
 --   worker_maint_records(token, limit)     → every record in the boundary
 --   worker_schedules(token)                → the office plan for those nurseries
 --   worker_maint_roster(token)             → the colleagues a job may be credited to
---   worker_site_boundary(token)            → the outlines for this worker's nurseries
+--   worker_site_boundary(token)            → the outlines for this workers nurseries
 --   worker_roster(token)                   → Settings: every worker, no PINs
---   worker_set_portal(token, id, portal)   → Settings: save one worker's access
+--   worker_set_portal(token, id, portal)   → Settings: save one workers access
 --
 -- Safe to run more than once.
 -- ════════════════════════════════════════════════════════════════════════
@@ -34,9 +34,9 @@
 
 -- ── 1. Per-worker portal settings ───────────────────────────────────────
 --
--- One JSONB column on the worker's own row rather than a table beside it:
+-- One JSONB column on the workers own row rather than a table beside it:
 -- it is read on every sign-in and written from one screen, and this way a
--- worker's access cannot outlive the worker.
+-- workers access cannot outlive the worker.
 --
 --   {
 --     "modules":  { "maintenance": true, "settings": false },
@@ -87,14 +87,14 @@ CREATE INDEX IF NOT EXISTS mjmnpayroll_worker_signin_fails_at
 ALTER TABLE mjmnpayroll_worker_signin_fails ENABLE ROW LEVEL SECURITY;
 
 
--- ── 4. The settings a worker's row implies ──────────────────────────────
+-- ── 4. The settings a workers row implies ──────────────────────────────
 
--- What one worker's row means, defaults filled in.
+-- What one workers row means, defaults filled in.
 --
 -- Defaults are deliberately the safe reading of "nobody has been through the
 -- Settings screen yet": the maintenance module on, because recording work is
 -- the reason the portal exists; Settings off, because it hands out access;
--- and the boundary set to the worker's own nursery, because that is the
+-- and the boundary set to the workers own nursery, because that is the
 -- nursery on their row and it is the one they work in.
 CREATE OR REPLACE FUNCTION public.worker_portal(w mjmnpayroll_workers)
 RETURNS JSONB
@@ -107,14 +107,14 @@ AS $$
       'settings',    COALESCE((w.portal #> '{modules,settings}')::boolean,    false)
     ),
     -- Which FUNCTIONS inside a module: the schedule, the record form, and the
-    -- record form's own parts. Passed through as it was written rather than
+    -- record forms own parts. Passed through as it was written rather than
     -- spelt out key by key like the modules above — the app owns that list
     -- (Barcode_Counter src/modules/maintenance/functions.js) and it grows, and
     -- naming the keys here would mean a switch added there being silently
     -- dropped on its way to the phone.
     --
     -- An empty object is the right answer for a worker nobody has set
-    -- switches for: absent means the app's documented default, which is the
+    -- switches for: absent means the apps documented default, which is the
     -- ordinary form.
     'actions', CASE
       WHEN jsonb_typeof(w.portal -> 'actions') = 'object' THEN w.portal -> 'actions'
@@ -122,7 +122,7 @@ AS $$
     END,
     'boundary', jsonb_build_object(
       -- null = every nursery. An absent setting falls back to the nursery on
-      -- the worker's own row; only a worker with no nursery at all sees the
+      -- the workers own row; only a worker with no nursery at all sees the
       -- whole estate by default.
       'nurseries', CASE
         WHEN w.portal #> '{boundary,nurseries}' IS NOT NULL
@@ -145,7 +145,7 @@ $$;
 
 -- Nurseries are spelt differently in different tables — shared_plots says
 -- "UNN 1", PALMS says "UNN1". Compare on letters and digits alone, the same
--- rule the portal's own access.js uses, so one tick governs both.
+-- rule the portals own access.js uses, so one tick governs both.
 CREATE OR REPLACE FUNCTION public.worker_key(s TEXT)
 RETURNS TEXT
 LANGUAGE sql
@@ -170,9 +170,9 @@ BEGIN
   -- Three things keep a session alive, and all three are things the office
   -- can take away from the Payroll register without touching this portal:
   -- the session has not expired, the worker is still Active, and they still
-  -- have a PIN. That last one matters — without it, clearing somebody's PIN
+  -- have a PIN. That last one matters — without it, clearing somebodys PIN
   -- stops them signing in TOMORROW while the phone in their pocket carries on
-  -- working for the next sixty days. Taking the PIN off a worker's row is
+  -- working for the next sixty days. Taking the PIN off a workers row is
   -- meant to be how you take the portal away from them, so it is.
   SELECT wk.* INTO w
     FROM mjmnpayroll_worker_sessions s
@@ -192,13 +192,13 @@ END;
 $$;
 
 
-/* The company's master switches for the worker portal.
+/* The companys master switches for the worker portal.
  *
  * Carried to the phone rather than read by it: a PIN sign-in is `anon`, and
  * shared_portal_settings is deliberately not readable by anon — a straight
- * grant would hand it the FC portal's row too, which is none of a worker's
+ * grant would hand it the FC portals row too, which is none of a workers
  * business. This runs inside worker_signin and worker_whoami, so the read
- * happens as the owner and only the worker's own row comes back.
+ * happens as the owner and only the workers own row comes back.
  *
  * Guarded twice, because the two files that make this system can be run in
  * either order and neither should need the other to have gone first:
@@ -257,12 +257,12 @@ AS $$
                ),
     'modules',  public.worker_portal(w) -> 'modules',
     -- Which FUNCTIONS inside a module this worker gets — the schedule, the
-    -- record form, and the record form's own parts. The same switches, with
+    -- record form, and the record forms own parts. The same switches, with
     -- the same keys, that the office sets per Field Conductor on
-    -- ai.mjmnursery.com. Absent means the app's documented defaults, so a
+    -- ai.mjmnursery.com. Absent means the apps documented defaults, so a
     -- worker nobody has touched still gets the ordinary form.
     'actions',  public.worker_portal(w) -> 'actions',
-    /* The COMPANY's master switches for this portal — System Setting → Portal
+    /* The COMPANYs master switches for this portal — System Setting → Portal
        View & Function. Off there beats on anywhere else. */
     'company',  public.worker_company_switches(),
     'boundary', public.worker_portal(w) -> 'boundary'
@@ -297,7 +297,7 @@ BEGIN
   -- A PIN may carry letters, and the register stores them as capitals (see
   -- shared/allow_npayroll_worker_pin_letters.sql). A worker keying ab12 on a
   -- phone means the AB12 on their slip, so match the two the same way rather
-  -- than turning a phone keyboard's idea of case into a PIN not recognised.
+  -- than turning a phone keyboards idea of case into a PIN not recognised.
   -- upper() on the keyed side only: what is stored is already capitals, so
   -- the unique index still does the finding.
   SELECT * INTO w
@@ -313,7 +313,7 @@ BEGIN
     RAISE EXCEPTION 'PIN not recognised' USING ERRCODE = '28000';
   END IF;
 
-  -- Tidy this worker's dead sessions while we are here. Nothing reads an
+  -- Tidy this workers dead sessions while we are here. Nothing reads an
   -- expired row — worker_from_token refuses it — so keeping them is only a
   -- table that grows and never shrinks. Scoped to this worker so the sweep
   -- stays as small as the sign-in that triggered it.
@@ -381,12 +381,12 @@ BEGIN
   plt := b -> 'plots';
 
   -- Cast to the declared type rather than trusting the column to be it.
-  -- plpgsql compares the query's types to the RETURNS TABLE list exactly —
+  -- plpgsql compares the querys types to the RETURNS TABLE list exactly —
   -- not "can this be converted", the same type — and raises "structure of
   -- query does not match function result type" when they differ. A column
   -- somebody once declared VARCHAR, or an INTEGER where this says NUMERIC,
   -- then breaks the whole board rather than one field. The casts cost
-  -- nothing and make these functions independent of the table's spelling.
+  -- nothing and make these functions independent of the tables spelling.
   RETURN QUERY
     SELECT p.nursery_name::TEXT, p.plot_name::TEXT
       FROM shared_plots p
@@ -402,7 +402,7 @@ $$;
 
 
 -- What is standing in those plots, so the worker ticks the batch they worked
--- on instead of typing it. Reads the office's balance view when it exists —
+-- on instead of typing it. Reads the offices balance view when it exists —
 -- see create_plot_batch_balance.sql — and simply returns nothing when it does
 -- not, which the screen shows as "no batches listed" rather than an error.
 CREATE OR REPLACE FUNCTION public.worker_plot_batches(p_token UUID)
@@ -431,8 +431,8 @@ $$;
 
 -- ── 8. Recording a job ──────────────────────────────────────────────────
 --
--- The same table the FC portal writes, so a worker's job and a Field
--- Conductor's job are one record and the office adds them up once. What the
+-- The same table the FC portal writes, so a workers job and a Field
+-- Conductors job are one record and the office adds them up once. What the
 -- phone is NOT allowed to decide is written here instead: who reported it,
 -- and whether the plot is inside the boundary.
 CREATE OR REPLACE FUNCTION public.worker_submit_maint(p_token UUID, p_payload JSONB)
@@ -457,7 +457,7 @@ BEGIN
     RAISE EXCEPTION 'pick a plot' USING ERRCODE = '22023';
   END IF;
 
-  -- The boundary, checked where it cannot be argued with — and the plot's
+  -- The boundary, checked where it cannot be argued with — and the plots
   -- own spelling taken back from shared_plots rather than kept as it was
   -- keyed. The match is loose on purpose (a phone sends " b1 "), but the row
   -- must not be: the office adds these up by plot_name, and "b1" beside "B1"
@@ -484,7 +484,7 @@ BEGIN
      NULLIF(p_payload ->> 'qty', '')::numeric,
      NULLIF(btrim(COALESCE(p_payload ->> 'remark',    '')), ''),
      -- Not from the phone. A worker records their own work and nobody
-     -- else's, and the payroll register adds these up by this name.
+     -- elses, and the payroll register adds these up by this name.
      w.full_name,
      now())
   RETURNING id INTO new_id;
@@ -537,9 +537,9 @@ END;
 $$;
 
 
--- This worker's own recent jobs — what the portal shows under the form so
+-- This workers own recent jobs — what the portal shows under the form so
 -- somebody can see the morning went in. Their own only: a worker has no
--- business reading the nursery's whole day.
+-- business reading the nurserys whole day.
 CREATE OR REPLACE FUNCTION public.worker_my_records(p_token UUID, p_limit INT DEFAULT 60)
 RETURNS TABLE (id BIGINT, work_date DATE, nursery_name TEXT, plot_name TEXT,
                work_type TEXT, qty NUMERIC, remark TEXT)
@@ -587,13 +587,13 @@ ALTER TABLE nops_maint_field_records
 -- ── 8b. What the maintenance board needs ────────────────────────────────
 --
 -- The worker portal shows the same Maintenance board as the FC Portal: this
--- week's outstanding plots, the month's weeks, the ticks against each job.
+-- weeks outstanding plots, the months weeks, the ticks against each job.
 -- That board counts WORK, not the worker — a plot sprayed by somebody else
 -- this morning is done, and showing it as outstanding would have two workers
 -- spray it twice.
 --
 -- So this returns every record inside the boundary, whoever recorded it,
--- while worker_my_records stays what it is: the worker's own list. Neither
+-- while worker_my_records stays what it is: the workers own list. Neither
 -- reaches past the boundary.
 -- The return type gained verified_by/verified_at, and Postgres will not
 -- REPLACE a function whose OUT columns changed. Dropped first so re-running
@@ -619,7 +619,7 @@ BEGIN
     -- INTEGER on this table and week_no is SMALLINT, and plpgsql wants the
     -- same type, not a convertible one — without the casts this raises
     -- "structure of query does not match function result type" and the
-    -- worker's whole board goes red.
+    -- workers whole board goes red.
     SELECT r.id::BIGINT, r.work_date, r.nursery_name::TEXT, r.plot_name::TEXT,
            r.work_type::TEXT, r.jenis::TEXT, r.chemical::TEXT, r.qty::NUMERIC,
            r.remark::TEXT, r.reported_by::TEXT,
@@ -628,7 +628,7 @@ BEGIN
            -- somebody whose phone was broken. NULL means reported_by did it.
            r.worked_by::TEXT,
            -- So a worker can see their morning has been checked off. Read
-           -- only: verifying is the conductor's signature, and nobody signs
+           -- only: verifying is the conductors signature, and nobody signs
            -- for their own work.
            r.verified_by::TEXT, r.verified_at,
            -- Where the track started, and how far it went. For the people the
@@ -637,7 +637,7 @@ BEGIN
            --
            -- The TRACK ITSELF is deliberately not here. This returns up to two
            -- thousand records to a phone, and a thousand-point walk on each of
-           -- them is tens of megabytes down a nursery's signal to draw a list
+           -- them is tens of megabytes down a nurserys signal to draw a list
            -- that only ever shows "820 m". The summary is stored beside the
            -- track exactly so this query does not have to carry it.
            r.gps_lat::NUMERIC, r.gps_lng::NUMERIC, r.gps_accuracy::NUMERIC,
@@ -651,7 +651,7 @@ END;
 $fn$;
 
 
--- The office's maintenance plan for the nurseries inside the boundary. The
+-- The offices maintenance plan for the nurseries inside the boundary. The
 -- board reads it to know which plots each week is asking for; without it the
 -- week cards have nothing to count against and simply say so.
 --
@@ -689,7 +689,7 @@ $fn$;
 --
 -- Open to a worker whose Settings module is on — a supervisor, in practice.
 -- The PIN column is never selected, so the screen that hands out access
--- still cannot read anybody's PIN.
+-- still cannot read anybodys PIN.
 CREATE OR REPLACE FUNCTION public.worker_roster(p_token UUID)
 RETURNS TABLE (id BIGINT, worker_no TEXT, name TEXT, nursery TEXT,
                job_title TEXT, has_pin BOOLEAN, portal JSONB)
@@ -725,21 +725,21 @@ $$;
  *                        Every worker in the company, with their portal
  *                        settings and whether they have a PIN.
  *
- *   worker_maint_roster  behind the Maintenance module's `workers` switch,
+ *   worker_maint_roster  behind the Maintenance modules `workers` switch,
  *                        for the tick list on a record form. NAMES ONLY, and
- *                        only inside this worker's own boundary.
+ *                        only inside this workers own boundary.
  *
  * It returns no PIN, no id anybody could act on, no portal settings — a name
  * and the nursery it belongs to, which is all the tick list draws. Somebody
- * who should not be handing out access must not get the roster screen's
+ * who should not be handing out access must not get the roster screens
  * answer just because the tick list was switched on for them.
  *
  * The boundary is the same one every other function here uses, so a worker
- * confined to BNN is offered BNN's crew and nobody else's.
+ * confined to BNN is offered BNNs crew and nobody elses.
  *
  * Whether it is OFFERED at all is a switch, in three places, and this
  * function does not decide it: System Setting → Portal View & Function for
- * the company, and the worker's own row in the Worker Portal's Settings.
+ * the company, and the workers own row in the Worker Portals Settings.
  * The app asks only when those say yes.
  */
 CREATE OR REPLACE FUNCTION public.worker_maint_roster(p_token UUID)
@@ -780,7 +780,7 @@ END;
 $fn$;
 
 
-/* The site outlines this worker's ground is drawn from, for the GPS track map.
+/* The site outlines this workers ground is drawn from, for the GPS track map.
  *
  * shared_site_boundary is readable by `authenticated` and a worker is `anon`,
  * so this is the door — the same shape as everything else here: the token is
@@ -790,7 +790,7 @@ $fn$;
  * a single shape drawn round all three would be a shape round nothing.
  *
  * So this DOES respect the boundary, unlike most of what a map shows: a
- * worker confined to BNN gets BNN's outline and not the other two. Not for
+ * worker confined to BNN gets BNNs outline and not the other two. Not for
  * secrecy — an estate outline is not a secret — but because drawing three
  * nurseries behind one walked path is three-quarters noise on a phone screen
  * in a plot, and the wrong one is worse than none.
@@ -800,7 +800,7 @@ $fn$;
  *
  * Returns a JSONB ARRAY, empty when nothing matches. Never null and never an
  * error: the table may not exist yet on this database, no file may have been
- * uploaded for this worker's nursery, and both mean the same thing to a map,
+ * uploaded for this workers nursery, and both mean the same thing to a map,
  * which is to draw no line.
  */
 CREATE OR REPLACE FUNCTION public.worker_site_boundary(p_token UUID)
@@ -923,9 +923,9 @@ NOTIFY pgrst, 'reload schema';
 -- Un-comment, put the real name in, run it.
 --
 --   UPDATE mjmnpayroll_workers
---      SET portal = COALESCE(portal, '{}'::jsonb)
---                   || '{"modules":{"maintenance":true,"settings":true}}'::jsonb
---    WHERE full_name = 'PUT THE SUPERVISOR''S NAME HERE';
+--      SET portal = COALESCE(portal, {}::jsonb)
+--                   || {"modules":{"maintenance":true,"settings":true}}::jsonb
+--    WHERE full_name = PUT THE SUPERVISORS NAME HERE;
 
 
 -- ── Check ───────────────────────────────────────────────────────────────

@@ -15,9 +15,9 @@
 --
 -- The report gives the ACTIVITY and its ESTIMATED END DATE. A PALMS entry
 -- stores the start, and the board works the end date back out as
--- start + the stage's ideal days. So the start is simply:
+-- start + the stages ideal days. So the start is simply:
 --
---     start_date = estimated end date − that stage's ideal_days
+--     start_date = estimated end date − that stages ideal_days
 --
 -- and the board then recomputes exactly the end date on the report. It is
 -- read from YOUR stage table, not hardcoded here, so if Membesar is 270 days
@@ -89,8 +89,8 @@ INSERT INTO palms_audit_2026_08_26 (plot, activity_en, ends) VALUES
   ('N19','Maturing','2027-01-08'), ('N20','Maturing','2026-12-22');
 
 
--- ── 2. THE REPORT'S WORDS → YOUR STAGE NAMES ────────────────────
--- The dashboard is in English and PALMS is in the nursery's own words.
+-- ── 2. THE REPORTS WORDS → YOUR STAGE NAMES ────────────────────
+-- The dashboard is in English and PALMS is in the nurserys own words.
 -- Edit the right-hand side if a stage is named differently for you.
 DROP TABLE IF EXISTS palms_activity_map;
 CREATE TEMP TABLE palms_activity_map (activity_en TEXT, stage_name TEXT);
@@ -133,16 +133,16 @@ ORDER  BY a.plot;
 -- ── 4. PLOTS THE OFFICE DOES NOT HAVE YET ───────────────────────
 -- The map draws from shared_plots, so a plot missing there has no shape and
 -- no row. These are added with the nursery of a plot that shares their
--- letter, falling back to the report's own nursery names. No map_top: draw
+-- letter, falling back to the reports own nursery names. No map_top: draw
 -- the boundary on the Plot Status Map when you get to it.
 INSERT INTO public.shared_plots (nursery_name, plot_name)
 SELECT COALESCE(
          -- 1. whatever a plot of the same letter already uses. Best answer:
-         --    it is this office's own spelling, whatever that is.
+         --    it is this offices own spelling, whatever that is.
          (SELECT p.nursery_name FROM public.shared_plots p
            WHERE left(p.plot_name, 1) = left(a.plot, 1) LIMIT 1),
          -- 2. failing that, a nursery the office has REGISTERED whose name
-         --    looks like the report's. The map draws by operation_nurseries
+         --    looks like the reports. The map draws by operation_nurseries
          --    name, so a plot filed under a name that is not in there gets no
          --    tab and never appears.
          (SELECT n.name FROM public.operation_nurseries n
@@ -151,7 +151,7 @@ SELECT COALESCE(
            WHERE left(a.plot, 1) = 'U' AND n.name ILIKE '%1%'    LIMIT 1),
          (SELECT n.name FROM public.operation_nurseries n
            WHERE left(a.plot, 1) = 'N' AND n.name ILIKE '%2%'    LIMIT 1),
-         -- 3. last resort: the report's own words, which step 7 will flag.
+         -- 3. last resort: the reports own words, which step 7 will flag.
          CASE left(a.plot, 1) WHEN 'B' THEN 'Batu Niah Nursery'
                               WHEN 'U' THEN 'Ulu Niah Nursery 1'
                               WHEN 'N' THEN 'Ulu Niah Nursery 2' END),
@@ -167,9 +167,9 @@ DELETE FROM public.fcportal_palms_plot_logs;
 DELETE FROM public.fcportal_palms_history;
 
 -- If migration_palms_no_takebacks.sql is in, the DELETE above just left a
--- tombstone for every row it removed — INCLUDING this file's own rows from a
+-- tombstone for every row it removed — INCLUDING this files own rows from a
 -- previous run, which would block the INSERT below from putting them back.
--- Clear this file's own ids (and no others: every other tombstone is doing
+-- Clear this files own ids (and no others: every other tombstone is doing
 -- its job, keeping the rows this seed is replacing from being resurrected
 -- by a phone that still holds them).
 DO $tomb$
@@ -225,8 +225,8 @@ SELECT count(*) AS plots_loaded FROM public.fcportal_palms_plot_logs;
 -- only plots whose nursery_name matches. Anything listed here has a log and
 -- a row in the table but will never appear on a map tab. Fix with one
 -- update, e.g.
---   UPDATE shared_plots SET nursery_name = 'UNN2'
---    WHERE nursery_name = 'Ulu Niah Nursery 2';
+--   UPDATE shared_plots SET nursery_name = UNN2
+--    WHERE nursery_name = Ulu Niah Nursery 2;
 SELECT p.nursery_name, count(*) AS plots, 'not in operation_nurseries' AS problem
 FROM   public.shared_plots p
 WHERE  NOT EXISTS (SELECT 1 FROM public.operation_nurseries n WHERE n.name = p.nursery_name)

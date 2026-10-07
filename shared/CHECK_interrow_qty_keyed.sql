@@ -21,15 +21,15 @@
 --
 --  WHAT TO LOOK FOR
 --
---    ord 1, 'summary'
+--    ord 1, summary
 --      -> how many interrow rows there are, and how many are blocked.
 --
---    ord 2, 'quantity keyed by hand'
+--    ord 2, quantity keyed by hand
 --      -> these are the ones reading the old number. Clear the Quantity cell
 --         on each. If the keyed figure is one you want to keep, leave it --
 --         a keyed number is a decision and the page will not overrule it.
 --
---    ord 3, 'links by itself'
+--    ord 3, links by itself
 --      -> nothing keyed, so these already show the whole plot before the 2nd
 --         culling. Nothing to do.
 --

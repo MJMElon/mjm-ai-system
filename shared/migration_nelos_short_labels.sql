@@ -5,7 +5,7 @@
 --
 -- nelos_modules.handler_label is the short name for one system — the half
 -- of "Admin 1" or "Auditor 2" that is not the number. It is also what the
--- raise form's "Assign to" list reads, so these are the words people pick
+-- raise forms "Assign to" list reads, so these are the words people pick
 -- from when they send a case somewhere.
 --
 -- migration_nelos_seats.sql seeded five of them, and two were too short to
@@ -24,7 +24,7 @@
 --
 -- Only where the value is still one this system seeded. A name somebody has
 -- since edited on the User Setting page is left alone — this fixes the
--- default, it does not stomp a decision. ('HQ' is listed as a from-value
+-- default, it does not stomp a decision. (HQ is listed as a from-value
 -- because an earlier build of this file set it.)
 --
 -- Run in Supabase SQL Editor (main project: kibqjztozokohqmhqqqf).
@@ -49,7 +49,7 @@ SELECT key, label, handler_label
  ORDER BY sort_order;
 
 -- ── Rollback ────────────────────────────────────────────────────
---   UPDATE nelos_modules SET handler_label = 'Stock'
---    WHERE key = 'operation'   AND handler_label = 'Seedling Stock';
---   UPDATE nelos_modules SET handler_label = 'Ops'
---    WHERE key = 'nursery_ops' AND handler_label = 'HQ Operation';
+--   UPDATE nelos_modules SET handler_label = Stock
+--    WHERE key = operation   AND handler_label = Seedling Stock;
+--   UPDATE nelos_modules SET handler_label = Ops
+--    WHERE key = nursery_ops AND handler_label = HQ Operation;

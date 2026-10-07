@@ -6,7 +6,7 @@
    shared/add_maint_field_reject.sql, and that file says what it is for:
 
        "the plot goes back on the list as still outstanding … so the job
-        reappears in the week's to-do for the worker to record again"
+        reappears in the weeks to-do for the worker to record again"
 
    It never reached the worker. Three things stood between them, and this
    file removes the one that is in the database:
@@ -14,10 +14,10 @@
      1. worker_maint_records does not return rejected_at / rejected_by /
         reject_reason at all, so the phone cannot know a record was refused.
         THAT IS WHAT THIS FILE FIXES.
-     2. the phone's own isDone() ignores those columns, so a sent-back job
+     2. the phones own isDone() ignores those columns, so a sent-back job
         stayed ticked. Fixed in the app.
      3. rejecting CLEARS verified_at — deliberately, a record is in exactly
-        one of three states — so the worker's job summary showed the most
+        one of three states — so the workers job summary showed the most
         reassuring of the three things it could say, and the only false one:
         "not checked yet". Also fixed in the app.
 
@@ -30,7 +30,7 @@
    Adding a column to a RETURNS TABLE means dropping the function, and doing
    that twice for two columns would be two outages instead of none.
 
-   ── Two things about changing a function's OUT columns ──
+   ── Two things about changing a functions OUT columns ──
 
    Postgres will NOT `CREATE OR REPLACE` a function whose result columns
    changed: it must be dropped first. The drop takes the grants with it, so
@@ -76,7 +76,7 @@ BEGIN
     -- INTEGER on this table and week_no is SMALLINT, and plpgsql wants the
     -- same type, not a convertible one — without the casts this raises
     -- "structure of query does not match function result type" and the
-    -- worker's whole board goes red.
+    -- workers whole board goes red.
     SELECT r.id::BIGINT, r.work_date, r.nursery_name::TEXT, r.plot_name::TEXT,
            r.work_type::TEXT, r.jenis::TEXT, r.chemical::TEXT, r.qty::NUMERIC,
            r.remark::TEXT, r.reported_by::TEXT,
@@ -85,7 +85,7 @@ BEGIN
            -- somebody whose phone was broken. NULL means reported_by did it.
            r.worked_by::TEXT,
            -- So a worker can see their morning has been checked off. Read
-           -- only: verifying is the conductor's signature, and nobody signs
+           -- only: verifying is the conductors signature, and nobody signs
            -- for their own work.
            r.verified_by::TEXT, r.verified_at,
            -- And the other answer. A record sent back is not a record nobody
@@ -103,7 +103,7 @@ BEGIN
            --
            -- The TRACK ITSELF is deliberately not here. This returns up to two
            -- thousand records to a phone, and a thousand-point walk on each of
-           -- them is tens of megabytes down a nursery's signal to draw a list
+           -- them is tens of megabytes down a nurserys signal to draw a list
            -- that only ever shows "820 m". The summary is stored beside the
            -- track exactly so this query does not have to carry it.
            r.gps_lat::NUMERIC, r.gps_lng::NUMERIC, r.gps_accuracy::NUMERIC,
@@ -128,7 +128,7 @@ NOTIFY pgrst, 'reload schema';
 
    1  reject columns    rejected_at / rejected_by / reject_reason on the table
    2  photo column      photo_urls on the table
-   3  function returns   the four new names are in the function's OUT list
+   3  function returns   the four new names are in the functions OUT list
    4  anon may call     the grant survived the drop — if this says MISSING the
                         worker portal is SHUT, so it is the one to look at
 

@@ -23,16 +23,16 @@
 --
 --  WHAT TO LOOK FOR
 --
---    ord 1, 'summary'
+--    ord 1, summary
 --      -> how many plots there are and how many of them moved.
 --
---    ord 2, 'MOVED'
---      -> these are the ones that used to be at the end of their nursery's
+--    ord 2, MOVED
+--      -> these are the ones that used to be at the end of their nurserys
 --         list and now sit in name order. The line says where each one now
 --         sits -- and says so plainly when the plot it is named after does
 --         not exist, because then there is nowhere for it to sit but the end.
 --
---    ord 3, 'did not move'
+--    ord 3, did not move
 --      -> counted only, because they are every ordinary plot.
 -- =====================================================================
 WITH p AS (

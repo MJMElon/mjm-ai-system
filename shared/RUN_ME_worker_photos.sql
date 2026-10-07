@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   PHOTOS — a face on a worker's record, and pictures of the work
+   PHOTOS — a face on a workers record, and pictures of the work
 
    Two things that both come down to a photograph, run together because they
    are one paste and neither is much on its own.
@@ -9,7 +9,7 @@
    `mjmnpayroll_workers.photo_url` — one picture per person, shown on their
    chip on the Worker System board and on their record. Set two ways:
 
-     · by the OFFICE, on the worker's record. Signed in as `authenticated`,
+     · by the OFFICE, on the workers record. Signed in as `authenticated`,
        so the documents bucket already takes that upload and there is no
        storage rule to add for it;
      · by the WORKER, on the registration page, so a name arriving in
@@ -47,7 +47,7 @@
 
      work  the pictures of a job. Behind the photos switch, and behind the
            Maintenance module, because that is what they belong to.
-     id    the worker's own face, from the registration page. NOT behind
+     id    the workers own face, from the registration page. NOT behind
            either — a worker who has just registered has every module
            switched off (that is what "waiting to be allocated" means), so
            asking the Maintenance switch about their passport photo would
@@ -65,7 +65,7 @@
    touch anything else under documents/.
 
    What this does NOT defend against, said out loud: the ticket is part of
-   the photo's public URL, so anybody who sees that URL within the ten
+   the photos public URL, so anybody who sees that URL within the ten
    minutes could put another file in the same folder. That is why the phone
    burns the ticket as soon as it is done with it, and why the window is ten
    minutes and not sixty. Nobody outside the office sees these URLs.
@@ -79,8 +79,8 @@ ALTER TABLE mjmnpayroll_workers
   ADD COLUMN IF NOT EXISTS photo_url TEXT;
 
 
--- worker_identity() is deliberately NOT touched here. Carrying the worker's
--- own face to their phone would be a nice thing to have and is one key's
+-- worker_identity() is deliberately NOT touched here. Carrying the workers
+-- own face to their phone would be a nice thing to have and is one keys
 -- worth of work — but that function is the gate every sign-in goes through,
 -- it has been rewritten twice already by other RUN_ME files, and re-stating
 -- it here is how one of those rewrites gets quietly undone. The office board
@@ -89,7 +89,7 @@ ALTER TABLE mjmnpayroll_workers
 
 -- Where the links to the work photos are kept. Already added by
 -- add_maint_field_photos.sql on most installs; stated again so a database
--- that never ran that one takes a worker's photos rather than dropping them
+-- that never ran that one takes a workers photos rather than dropping them
 -- silently — worker_submit_maint only writes the column if it is there.
 ALTER TABLE nops_maint_field_records
   ADD COLUMN IF NOT EXISTS photo_urls TEXT;
@@ -104,13 +104,13 @@ CREATE TABLE IF NOT EXISTS mjmnpayroll_worker_photo_tickets (
   worker_id  BIGINT NOT NULL REFERENCES mjmnpayroll_workers(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   -- Short on purpose. See the note at the top: the ticket is visible in the
-  -- photo's URL, so its life is the length of the window it opens.
+  -- photos URL, so its life is the length of the window it opens.
   expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + INTERVAL '10 minutes'
 );
 
 -- Which folder this ticket opens. Added as a column rather than a second
 -- table because it is one word about a row that is otherwise identical, and
--- the storage rule has to ask about it either way. 'work' is the default so
+-- the storage rule has to ask about it either way. work is the default so
 -- a ticket minted by an older build of the app still means what it meant.
 ALTER TABLE mjmnpayroll_worker_photo_tickets
   ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'work';
@@ -162,7 +162,7 @@ END;
 $$;
 
 
-/* A ticket to upload with — the phone's only way into the bucket.
+/* A ticket to upload with — the phones only way into the bucket.
  *
  * Raises rather than answering NULL when it says no. A phone that is told
  * "no ticket" and carries on would record the job with the photos quietly
@@ -202,7 +202,7 @@ END;
 $$;
 
 
-/* A ticket for the worker's OWN FACE — the registration page's photo.
+/* A ticket for the workers OWN FACE — the registration pages photo.
  *
  * Deliberately not behind the Maintenance module or the photos switch, and
  * this is the whole reason it is a separate function rather than an argument
@@ -244,14 +244,14 @@ END;
 $$;
 
 
-/* A worker putting their own face on their own row, and nobody else's.
+/* A worker putting their own face on their own row, and nobody elses.
  *
  * The URL is checked rather than trusted. Without this the function is a
  * "write any string you like into a column the office reads and renders",
  * which is a stored-content hole dressed as a photo. It has to look like a
- * public link to a .jpg under worker_id_photos/ in this project's documents
- * bucket — which covers both shapes that folder holds: the office's
- * worker_id_photos/w12-1234.jpg and the phone's
+ * public link to a .jpg under worker_id_photos/ in this projects documents
+ * bucket — which covers both shapes that folder holds: the offices
+ * worker_id_photos/w12-1234.jpg and the phones
  * worker_id_photos/<ticket>/1234_0.jpg.
  *
  * An empty URL clears it, so a worker can take a bad photo off again.
@@ -285,7 +285,7 @@ $$;
  * Not required for correctness — the ticket expires on its own — but it is
  * what turns a ten-minute window into a five-second one, which is the whole
  * defence. Only the worker who was given it may burn it, so a stranger who
- * has read a photo URL cannot close somebody else's upload half way through.
+ * has read a photo URL cannot close somebody elses upload half way through.
  */
 CREATE OR REPLACE FUNCTION public.worker_photo_done(p_token UUID, p_ticket UUID)
 RETURNS BOOLEAN
@@ -307,7 +307,7 @@ $$;
 /* What the storage rule asks, one folder name at a time.
  *
  * Takes TEXT, not UUID: it is handed a path segment, and a path segment can
- * be anything at all. Casting a stranger's `../etc` to UUID inside an RLS
+ * be anything at all. Casting a strangers `../etc` to UUID inside an RLS
  * check would raise, and an RLS check that raises is a 500 where a `false`
  * belonged.
  */
@@ -384,8 +384,8 @@ BEGIN
       AND (
         -- <folder>/<ticket>/<something>.jpg, and nothing else. The folder is
         -- pinned so a ticket cannot be used to write over a delivery note,
-        -- and the KIND is checked against it so a ticket for one job's
-        -- photographs cannot be spent on somebody's face or the other way
+        -- and the KIND is checked against it so a ticket for one jobs
+        -- photographs cannot be spent on somebodys face or the other way
         -- about.
         ((storage.foldername(name))[1] = 'worker_photos'
           AND public.worker_photo_ticket_live((storage.foldername(name))[2], 'work'))

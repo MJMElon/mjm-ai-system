@@ -63,7 +63,7 @@ every_batch AS (
   SELECT batch_name FROM misfiled
 )
 
-/* ONE result set — the SQL Editor only shows the last statement's.
+/* ONE result set — the SQL Editor only shows the last statements.
    The batches that need a person sort to the top. */
 SELECT b.batch_name                        AS batch,
        COALESCE(p.qty, 0)                  AS in_premium_care,

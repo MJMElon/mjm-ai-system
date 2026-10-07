@@ -18,23 +18,23 @@
 --
 --  WHAT TO LOOK FOR
 --
---    ord 1, 'summary'
+--    ord 1, summary
 --      -> how many capacities are saved, and how many of them match the
 --         built-in figure to the digit.
 --
---    ord 2, 'same as the built-in figure'
+--    ord 2, same as the built-in figure
 --      -> nobody chose these. The figure is whatever was hardcoded when the
 --         page was written, which for most plots is years old. Go through them
 --         in Setting -> Plot Capacity and key the real number. They are not
 --         wrong to leave as they are -- the dosages have been worked out from
 --         these figures all along -- but they are not measurements either.
 --
---    ord 3, 'keyed by somebody'
+--    ord 3, keyed by somebody
 --      -> differs from the built-in figure, so a person typed it. These are
 --         the ones to trust. If one of them is NOT what you remember typing,
 --         say so and say which plot: that is a different fault from this one.
 --
---    ord 4, 'no built-in figure'
+--    ord 4, no built-in figure
 --      -> a plot the page never had a default for, which is every transfer
 --         plot (-R) and anything added since. Saved means keyed.
 -- =====================================================================

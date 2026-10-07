@@ -24,9 +24,9 @@
 --
 -- The report gives the ACTIVITY and its ESTIMATED END DATE. A PALMS entry
 -- stores the start, and the board works the end date back out as
--- start + the stage's ideal days. So the start is simply:
+-- start + the stages ideal days. So the start is simply:
 --
---     start_date = estimated end date − that stage's ideal_days
+--     start_date = estimated end date − that stages ideal_days
 --
 -- read from YOUR stage table, not hardcoded here. The board then recomputes
 -- exactly the end date on your report.
@@ -96,8 +96,8 @@ INSERT INTO palms_report_2026_08_31 (plot, activity_en, ends) VALUES
   ('N19','Maturing','2027-01-08'), ('N20','Maturing','2026-12-22');
 
 
--- ── 2. THE REPORT'S WORDS → YOUR STAGE NAMES ────────────────────
--- The report is in English and PALMS is in the nursery's own words.
+-- ── 2. THE REPORTS WORDS → YOUR STAGE NAMES ────────────────────
+-- The report is in English and PALMS is in the nurserys own words.
 -- Edit the right-hand side if a stage is named differently for you.
 DROP TABLE IF EXISTS palms_activity_map;
 CREATE TEMP TABLE palms_activity_map (activity_en TEXT, stage_name TEXT);
@@ -130,7 +130,7 @@ WHERE NOT EXISTS (SELECT 1 FROM public.nops_plot_status_stages WHERE name = 'Up-
 --
 -- Every plot whose log disagrees with the report. A plot listed as running
 -- two or three stages is a duplicate this file is here to clear — that is
--- expected and fine. A plot on ONE stage that is simply not the report's is
+-- expected and fine. A plot on ONE stage that is simply not the reports is
 -- the interesting case: either the report is behind, or somebody corrected
 -- that plot on the board and this file is about to undo it.
 SELECT a.plot,
@@ -168,7 +168,7 @@ ORDER  BY a.plot;
 -- ── 5. PLOTS THE OFFICE DOES NOT HAVE YET ───────────────────────
 -- The map draws from shared_plots, so a plot missing there has no shape and
 -- no row. These are added with the nursery of a plot that shares their
--- letter, falling back to the report's own nursery names. No map_top: draw
+-- letter, falling back to the reports own nursery names. No map_top: draw
 -- the boundary on the Plot Status Map when you get to it.
 INSERT INTO public.shared_plots (nursery_name, plot_name)
 SELECT COALESCE(
@@ -220,7 +220,7 @@ COMMIT;
 -- ── 7. CHECK IT AGAINST THE REPORT ──────────────────────────────
 -- ends_on must match your "Estimated End date" column exactly. days_left is
 -- the "Dues in / Overdue" column, signed: positive is days still to run,
--- negative is days overdue — so B4's "Late 15" appears here as −15.
+-- negative is days overdue — so B4s "Late 15" appears here as −15.
 --
 -- Spot-check against the report: B1 260, B4 −15, B11 −31, B13 −32,
 --                                U4 −4, U17 3, N3 3, N13 −449, N15 24, N16 26.

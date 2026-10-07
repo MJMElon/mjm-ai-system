@@ -102,7 +102,7 @@ field_raw AS (
 ),
 
 /* BY THE DAY, not by the month.
-   This used to group the field's names per plot and job for the whole month,
+   This used to group the fields names per plot and job for the whole month,
    so a plot sprayed five times showed the union of everybody who did ANY of
    the five against EVERY one of them — and five rounds each ticked to one man
    all read DIFFERENT NAMES against a crew of three. A round is compared with

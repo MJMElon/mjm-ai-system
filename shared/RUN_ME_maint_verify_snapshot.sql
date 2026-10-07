@@ -1,11 +1,11 @@
--- Work Maintenance's "Verify & lock" used to only stop edits made ON the
+-- Work Maintenances "Verify & lock" used to only stop edits made ON the
 -- payroll screen itself (calibration, Sync). The figures it showed were
--- always read live off Worker Record's own records and ticks, with nothing
+-- always read live off Worker Records own records and ticks, with nothing
 -- checking the lock at all — so a claim marked "Verified" could still move
 -- under the signature if somebody ticked a different worker afterward.
 --
 -- This adds the column the app now writes a snapshot into at the moment of
--- verifying (everyone's capacity and money, the whole-job totals, the rate
+-- verifying (everyones capacity and money, the whole-job totals, the rate
 -- in force) and reads back from while the sheet stays locked, instead of
 -- recomputing those figures from Worker Record every time the page loads.
 -- Unlocking a sheet deletes its verification row as it always has, which

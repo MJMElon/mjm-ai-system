@@ -234,7 +234,7 @@ ORDER  BY i.row_no;
 --     duplicate guard in section 4 will NOT catch it, because it compares the
 --     target too. Anything listed here would be imported as a SECOND transfer,
 --     double-counting those seedlings out of the source plot.
---     Decide per row: correct the existing record's target, or delete the
+--     Decide per row: correct the existing records target, or delete the
 --     matching row from tmp_transfer_import before running section 4.
 --     The one known case — batch 224, N18, 397, recorded as N18-R but N1 on
 --     the sheet — is handled by shared/fix_n18_transfer_target.sql. Run that
@@ -272,7 +272,7 @@ ORDER  BY i.row_no;
 -- 4. THE IMPORT
 --    Only rows whose batch resolves to exactly one name. Duplicates are
 --    skipped, so running this twice does not double anything up.
---    breed_name is taken from the batch's own existing logs.
+--    breed_name is taken from the batchs own existing logs.
 -- ────────────────────────────────────────────────────────────────
 WITH resolved AS (
   SELECT i.*, b.batch_name

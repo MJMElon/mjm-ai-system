@@ -38,7 +38,7 @@ CREATE INDEX IF NOT EXISTS audit_changes_table_idx
 CREATE INDEX IF NOT EXISTS audit_changes_user_idx
   ON audit.changes (user_id, occurred_at DESC);
 
--- ── 2. Helper to read the caller's audit_trail level (RLS-friendly) ─
+-- ── 2. Helper to read the callers audit_trail level (RLS-friendly) ─
 CREATE OR REPLACE FUNCTION public.current_user_audit_trail_level()
 RETURNS TEXT
 LANGUAGE sql
@@ -181,4 +181,4 @@ ALTER TABLE public.shared_profiles
 
 -- ── 7. Helper to clear old logs (admins only via RLS) ─────────────
 -- Usage example from the UI / SQL editor:
---   DELETE FROM audit.changes WHERE occurred_at < now() - interval '30 days';
+--   DELETE FROM audit.changes WHERE occurred_at < now() - interval 30 days;

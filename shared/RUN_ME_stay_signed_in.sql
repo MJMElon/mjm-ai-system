@@ -1,10 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════
    A WORKER STAYS SIGNED IN WHILE THEY GO ON USING THE PORTAL
 
-   A worker's session is stamped with an expiry sixty days after the PIN was
+   A workers session is stamped with an expiry sixty days after the PIN was
    keyed, and that stamp never moves. So a worker who opens the portal every
    morning for two months is signed out on the sixty-first — mid-season, in a
-   plot, by a clock rather than by anybody's decision. Keying the PIN again
+   plot, by a clock rather than by anybodys decision. Keying the PIN again
    needs a signal, and the whole reason the phone caches its identity is that
    there often is none.
 
@@ -21,13 +21,13 @@
    of measuring how long ago somebody signed in.
 
    And the three things that end a session immediately are untouched, because
-   they are the office's and not a clock's:
+   they are the offices and not a clocks:
 
      · the session row is deleted            (Sign Out)
      · the worker is marked not Active       (Payroll register)
-     · the worker's PIN is cleared           (Payroll register)
+     · the workers PIN is cleared           (Payroll register)
 
-   Taking the PIN off somebody's row is still how you take the portal away
+   Taking the PIN off somebodys row is still how you take the portal away
    from them, and it still works within one call.
 
    Safe to run twice. No data is changed and nothing is dropped — this
@@ -41,7 +41,7 @@ LANGUAGE plpgsql
    so VOLATILE, the default. It writes: marking the session seen, and now
    moving its expiry. Declaring it STABLE makes Postgres refuse the UPDATE at
    RUN time with "UPDATE is not allowed in a non-volatile function", which is
-   every worker's every call — the whole portal, down, on a keyword. */
+   every workers every call — the whole portal, down, on a keyword. */
 SECURITY DEFINER
 SET search_path = public
 AS $fn$
@@ -51,9 +51,9 @@ BEGIN
   -- Three things keep a session alive, and all three are things the office
   -- can take away from the Payroll register without touching this portal:
   -- the session has not expired, the worker is still Active, and they still
-  -- have a PIN. That last one matters — without it, clearing somebody's PIN
+  -- have a PIN. That last one matters — without it, clearing somebodys PIN
   -- stops them signing in TOMORROW while the phone in their pocket carries on
-  -- working for the next sixty days. Taking the PIN off a worker's row is
+  -- working for the next sixty days. Taking the PIN off a workers row is
   -- meant to be how you take the portal away from them, so it is.
   SELECT wk.* INTO w
     FROM mjmnpayroll_worker_sessions s
@@ -99,7 +99,7 @@ NOTIFY pgrst, 'reload schema';
    2  it slides        the body pushes expires_at on every use — this is the
                        change itself, and row 1 can be OK while this is not
    3  sessions         how many live sessions there are, and the soonest one
-                       to expire. After a day's use every active worker's
+                       to expire. After a days use every active workers
                        session should be sixty days out; anything expiring
                        within a week is a phone nobody has opened in a while.
 

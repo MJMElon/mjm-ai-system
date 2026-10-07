@@ -8,13 +8,13 @@
 -- 1. The company switch was never stored, because shared_portal_settings has
 --    no `actions` column yet — RUN_ME_portal_switches.sql not run.
 --
--- 2. The person's own row says gps=false, and their own answer OUTRANKS the
+-- 2. The persons own row says gps=false, and their own answer OUTRANKS the
 --    company switch by design: the master decides for the people nobody has
 --    decided about, and does not overrule the ones somebody has.
 --
 --    Which would be right, except nobody decided it. Between about 03:40 and
---    07:20 this morning, merely OPENING somebody's row in Setting and pressing
---    Save wrote today's default for every function into their record — so GPS
+--    07:20 this morning, merely OPENING somebodys row in Setting and pressing
+--    Save wrote todays default for every function into their record — so GPS
 --    was written as an explicit "no" that nobody chose. The screen stopped
 --    doing that, but the rows it already wrote still say it, and an explicit
 --    no is exactly what the company switch is not allowed to override.
@@ -70,13 +70,13 @@ SELECT 'their own row leaves it open',
 -- Safe, and safe to run twice. Uncomment to use.
 --
 -- UPDATE public.shared_profiles
---    SET permissions = jsonb_set(permissions, '{scan_actions,maintenance}',
---          (permissions #> '{scan_actions,maintenance}') - 'gps')
---  WHERE permissions #>> '{scan_actions,maintenance,gps}' = 'false';
+--    SET permissions = jsonb_set(permissions, {scan_actions,maintenance},
+--          (permissions #> {scan_actions,maintenance}) - gps)
+--  WHERE permissions #>> {scan_actions,maintenance,gps} = false;
 --
 --
 -- Or give it to ONE person outright, without touching System Setting:
 --
 -- UPDATE public.shared_profiles
---    SET permissions = jsonb_set(permissions, '{scan_actions,maintenance,gps}', 'true'::jsonb)
---  WHERE full_name = 'PUT THE NAME HERE';
+--    SET permissions = jsonb_set(permissions, {scan_actions,maintenance,gps}, true::jsonb)
+--  WHERE full_name = PUT THE NAME HERE;

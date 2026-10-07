@@ -12,8 +12,8 @@
 --  AND somebody must have signed it off. A plot whose culling is keyed
 --  but unchecked is not a finished plot: the 3rd Culling tab counts a
 --  row as done only once it is verified, and this has to agree with it.
---  Either the row's own sign-off (a Row_Verification log against
---  'cull_3::<PLOT>|<dest>') or the whole stage verified for the batch,
+--  Either the rows own sign-off (a Row_Verification log against
+--  cull_3::<PLOT>|<dest>) or the whole stage verified for the batch,
 --  which is one signature over every row on the tab.
 -- =====================================================================
 WITH expected AS (
@@ -40,7 +40,7 @@ actual AS (
   GROUP BY 1, 2
 ),
 row_signed AS (
-  -- plot_name on a row sign-off is 'cull_3::<PLOT>|<dest>'; only the plot
+  -- plot_name on a row sign-off is cull_3::<PLOT>|<dest>; only the plot
   -- is matched, because which dest type the tab merged the row under has
   -- nothing to do with whether somebody looked at the plot.
   SELECT DISTINCT batch_name,
@@ -91,11 +91,11 @@ ORDER BY (plots_left = 0) DESC, batch_name DESC;
 -- WHAT A GOOD RESULT LOOKS LIKE
 --   The COMPLETED rows at the top should be only the batches you consider
 --   finished. If a batch you expect to be Active is listed as COMPLETED,
---   its plots_still_open is empty — look at that batch's plots in the
+--   its plots_still_open is empty — look at that batchs plots in the
 --   other check (CHECK_batch_not_completed.sql) to see the figures behind
 --   each one.
 --
---   plots_unsigned says how many of a batch's plots nobody has verified.
+--   plots_unsigned says how many of a batchs plots nobody has verified.
 --   A batch whose plots_left equals its plots_unsigned is finished in the
 --   field and waiting on a signature, not on more counting.
 --

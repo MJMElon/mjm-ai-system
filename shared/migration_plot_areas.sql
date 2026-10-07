@@ -15,8 +15,8 @@
 -- and shared_palms.js reads it. What was missing was anywhere to say WHERE on
 -- the map area A is. This table is that.
 --
---   plot_name  the plot, as in shared_plots.plot_name        e.g. 'B2'
---   area_key   the letter after the # in the PALMS unit key  e.g. 'A'
+--   plot_name  the plot, as in shared_plots.plot_name        e.g. B2
+--   area_key   the letter after the # in the PALMS unit key  e.g. A
 --   polygon    JSON [{x,y},…] in PERCENT of the nursery photo, exactly the
 --              format shared_plots.map_top already uses, so one renderer
 --              draws both
@@ -61,7 +61,7 @@ DO $areas$
 BEGIN
   -- to_regprocedure, not to_regproc: to_regproc takes a bare NAME and returns
   -- NULL for anything with parentheses in it, so the obvious-looking
-  -- to_regproc('…()') is always NULL and this guard would skip the policies
+  -- to_regproc(…()) is always NULL and this guard would skip the policies
   -- on a database that has the function.
   IF to_regprocedure('public.palms_has_access()') IS NULL THEN
     RAISE NOTICE 'palms_has_access() not found — run migration_palms_rls.sql first, then re-run this file.';

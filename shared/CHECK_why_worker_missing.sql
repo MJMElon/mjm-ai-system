@@ -6,8 +6,8 @@
 -- as many times as you like.
 --
 -- ── Set these two lines, then run the whole file ──
---   look_for   a piece of the name you are hunting, or '' for everybody
---   for_month  the month exactly as the payroll shows it, e.g. 'Sep 2026'
+--   look_for   a piece of the name you are hunting, or  for everybody
+--   for_month  the month exactly as the payroll shows it, e.g. Sep 2026
 --
 -- ── What it answers ──
 --
@@ -30,7 +30,7 @@
 -- ════════════════════════════════════════════════════════════════════════
 
 WITH params AS (
-  SELECT 'martini'::text AS look_for,          -- ← the name, or '' for all
+  SELECT 'martini'::text AS look_for,          -- ← the name, or  for all
          'Sep 2026'::text AS for_month         -- ← the month on the payroll
 ),
 

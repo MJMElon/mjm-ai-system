@@ -39,8 +39,19 @@ What that SQL should be:
   EVEN number survives by luck, which is worse than failing, because it makes
   the rule look like it does not exist: 95 files in `shared/` carried an odd
   count the day this was found. Write "the September row" and "does not".
-  `tests/sql_pastes_into_the_editor.cjs` holds the swept files to it and
-  prints what is left.
+  **All 219 files in `shared/` have now been swept** — 183 of them changed —
+  and `tests/sql_pastes_into_the_editor.cjs` holds every one of them to it.
+  `tools/sweep_sql_comment_apostrophes.py` is what did it, and the care is all
+  in finding a comment: a line beginning `--` INSIDE a string literal is DATA,
+  block comments count the same way, and a `$$ … $$` body is CODE with its own
+  comments and strings. A `startswith('--')` gets all three wrong. It was
+  proved by deleting every comment from the old and the new copy of each file
+  independently and comparing what was left: **0 files differed outside a
+  comment.**
+
+  Three paste rules are still owed across the older files, each its own
+  sweep, and the test prints the count every run: **142 carry a semicolon in a
+  comment**, 30 contain a backslash, and 46 do not end at a semicolon.
 - **Tested first.** There is a scratch Postgres 16 for this — see below. Run
   the SQL against a stubbed copy of the real tables before handing it over, and
   test it against the state the database is ACTUALLY in, not a fresh one.
@@ -553,6 +564,46 @@ Two things that will cost an hour each if nobody tells you:
 - **`page.goto()` with an identical hash is a no-op.** Use `reload()`.
 - **`innerText` returns CSS-transformed text**, so `includes('This Week')`
   fails against `THIS WEEK`.
+
+## A page that caches cannot deliver a fix
+
+Every script on an office page is cache-busted with a `?v=` that lives **in
+that page**. So the page is the one thing that must never be served from
+cache: a stale copy goes on asking for the OLD script for ever, and a deploy
+reaches nobody.
+
+That is not theory. A PDF fix was written, tested, committed and pushed, and
+`origin/main` had it — and the office still downloaded the old form. The code
+was never the problem. `index.html` has carried
+
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+    <meta http-equiv="Pragma" content="no-cache"/>
+    <meta http-equiv="Expires" content="0"/>
+
+since it was written. **The module pages had not**, and that was the whole of
+it — 13 of the 19 pages that version a script were missing them.
+
+The site is GitHub Pages with a CNAME and no build step, so there is nowhere
+to set a real HTTP header — these metas are the only lever, and bumping a
+`?v=` is useless without them.
+
+**Only the payroll module carries them**, because that is the module somebody
+asked to be current. The other 12 pages do not, and that is a decision rather
+than an oversight: these metas change how a live page is fetched on every
+load, so they go on a module when somebody wants a fix in that module to
+arrive — not across the site because a test would be tidier.
+`nursery_ops_maintenance.html` is the one to remember: the Work Maintenance
+changes are sitting behind its cache, so it needs the three metas on the day
+somebody wants them.
+
+**Any new page that loads a script with `?v=` needs all three** to be
+deliverable. `tests/pages_do_not_go_stale.cjs` fails if a payroll page is
+missing one, catches a `?v=` left without a number, and PRINTS THE UNGUARDED
+PAGES every run so the next person sees the same trap still set.
+
+Still worth knowing: a browser that already holds a stale copy needs one hard
+reload (Ctrl/Cmd + Shift + R) to pick up the metas in the first place. After
+that it stays fresh by itself.
 
 ## Two repositories, one system
 

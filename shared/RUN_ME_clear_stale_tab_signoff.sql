@@ -8,11 +8,11 @@
 --  A report tab can be signed off two ways: row by row, or the whole tab
 --  at once. The whole-tab signature covers every row on it — so a batch
 --  whose 3rd Culling was verified as a whole stays Complete no matter
---  which single row's sign-off is taken back. The row reads unverified
+--  which single rows sign-off is taken back. The row reads unverified
 --  and the batch list still calls it done.
 --
---  The app no longer leaves it that way: taking back a row's sign-off
---  now takes the tab's with it. But whole-tab signatures written BEFORE
+--  The app no longer leaves it that way: taking back a rows sign-off
+--  now takes the tabs with it. But whole-tab signatures written BEFORE
 --  that change are still in the database, on every batch they were
 --  pressed on, and this clears all of them in one go.
 --
@@ -43,7 +43,7 @@ expected AS (
     AND COALESCE(TRIM(plot_name), '') <> ''
 ),
 
-/* Row sign-offs. plot_name is 'cull_3::<PLOT>|<dest>'; only the plot is
+/* Row sign-offs. plot_name is cull_3::<PLOT>|<dest>; only the plot is
    matched, because which dest type the tab merged the row under has
    nothing to do with whether somebody looked at the plot. */
 row_signed AS (
@@ -98,7 +98,7 @@ kept AS (
     AND v.batch_name NOT IN (SELECT batch_name FROM stale)
 )
 
-/* ONE result set — the SQL Editor only shows the last statement's. */
+/* ONE result set — the SQL Editor only shows the last statements. */
 SELECT (SELECT n FROM before)                    AS batches_stale,
        (SELECT COUNT(*) FROM removed)            AS signatures_removed,
        (SELECT names FROM before)                AS batches,

@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════
--- LOOKING AT A FINISHED JOB'S WALK
+-- LOOKING AT A FINISHED JOBS WALK
 --
 -- Paste the whole file into the Supabase SQL Editor and press Run. It adds
 -- one read-only function and changes no data. Safe to run twice.
@@ -8,7 +8,7 @@
 --
 -- worker_maint_records deliberately does NOT return the walked track. It
 -- hands a phone up to two thousand records, and a thousand-point walk on each
--- of them is tens of megabytes down a nursery's signal to draw a list that
+-- of them is tens of megabytes down a nurserys signal to draw a list that
 -- only ever shows "820 m". The summary — how far, how many fixes, where it
 -- started — is stored beside the track exactly so that query does not have to
 -- carry it.

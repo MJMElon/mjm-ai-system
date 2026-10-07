@@ -5,7 +5,7 @@
 -- Read-only. Nothing is created, changed or deleted, and it is safe to run
 -- as many times as you like.
 --
--- Set the batch on the line marked below, or leave it as '' for the sweep
+-- Set the batch on the line marked below, or leave it as  for the sweep
 -- alone, then run the whole file.
 --
 -- A batch becomes a row on Life of Seedling because some ledger line carries

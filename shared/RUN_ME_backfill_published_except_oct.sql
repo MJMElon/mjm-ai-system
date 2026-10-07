@@ -7,7 +7,7 @@
 --
 -- Follows RUN_ME_maint_published_payload.sql, which added the payload
 -- column but deliberately left every row unsynced (payload NULL) — correct
--- for October, which hadn't been Synced under the old behaviour either, but
+-- for October, which had not been Synced under the old behaviour either, but
 -- too wide a net for months the field has already been working off for
 -- weeks. This narrows it back down to "only October 2026 is new".
 --
