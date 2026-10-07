@@ -426,6 +426,8 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
 //  STATE
 // ════════════════════════════════════════════════════════
 let alData = [];
+let liveMatches = [];     // completed/older ALs found by searchAll's live DB query
+let _liveSearchToken = 0; // discards a reply that lands after a newer search started
 let consentCountMap = {};
 let currentConsentAL = null;
 let selectedQty = 0;
@@ -440,16 +442,21 @@ let barcodeStream = null;
 //  LOAD DATA
 // ════════════════════════════════════════════════════════
 async function loadActiveALs() {
-  // No balance filter here any more — a fully collected AL (balance 0)
-  // is still fetched, just kept out of the two default groups below
-  // (renderCombined) so the everyday list stays exactly what it was: only
-  // outstanding ALs. It is pulled back in the moment somebody SEARCHES for
-  // it, which is the only way to reach a completed order's signed-consent
-  // log (the "seal log") again — see renderCombined's isCompleted check.
+  // Outstanding ALs only — same as it always was. Dropping this filter to
+  // reach completed orders by search was tried and reverted: PostgREST caps
+  // an unfiltered select at its project row limit, ordered by created_at,
+  // so an OLDER completed AL (which is exactly what somebody searches back
+  // for) can fall outside that window and never load at all — invisible to
+  // search no matter what is typed, and no amount of reloading fixes it,
+  // because the row was never fetched in the first place. searchAll() below
+  // reaches a completed AL a different way: a live, server-side filtered
+  // query for just what was typed, which cannot be capped out the same way
+  // because the filter runs in the database, not after an unbounded fetch.
   const { data, error } = await _supabase
     .from('shared_al_orders')
     .select('id,al_number,order_number,customer_name,product_name,quantity_ordered,balance_quantity,status,created_at')
     .not('status', 'in', '("Cancelled","Collected")')
+    .gt('balance_quantity', 0)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -540,6 +547,7 @@ function stopBarcodeScan() {
 function searchAll(q) {
   renderCombined(q || '');
   showSearchNotification(q || '');
+  queueLiveSearch(q || '');
 }
 
 function showSearchNotification(q) {
@@ -568,6 +576,49 @@ function showSearchNotification(q) {
   }
 }
 
+// A completed order (balance 0) is deliberately left OUT of the preloaded
+// alData — see loadActiveALs(). Reaching one by search instead runs a
+// live, server-side filtered query, debounced so it fires once typing
+// pauses rather than on every keystroke. _liveSearchToken discards a
+// reply that lands after the person has already typed something newer.
+let _liveSearchTimer = null;
+function queueLiveSearch(q) {
+  clearTimeout(_liveSearchTimer);
+  const lower = q.trim();
+  if (lower.length < 2) { liveMatches = []; return; }
+  _liveSearchTimer = setTimeout(() => liveSearchFallback(lower), 300);
+}
+
+async function liveSearchFallback(lower) {
+  const token = ++_liveSearchToken;
+  // % and _ are ILIKE wildcards; escaped so a typed one is matched literally.
+  const safe = lower.replace(/([%_])/g, '\\$1');
+  const { data, error } = await _supabase
+    .from('shared_al_orders')
+    .select('id,al_number,order_number,customer_name,product_name,quantity_ordered,balance_quantity,status,created_at')
+    .not('status', 'in', '("Cancelled","Collected")')
+    .or('al_number.ilike.%' + safe + '%,order_number.ilike.%' + safe + '%,customer_name.ilike.%' + safe + '%')
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (token !== _liveSearchToken) return; // a newer search is already in flight
+  if (error) { liveMatches = []; return; }
+  liveMatches = data || [];
+
+  const alNumbers = liveMatches.map(r => r.al_number).filter(Boolean);
+  if (alNumbers.length) {
+    const { data: consents } = await _supabase
+      .from('mobile_consent_records')
+      .select('al_number')
+      .in('al_number', alNumbers);
+    if (token !== _liveSearchToken) return;
+    alNumbers.forEach(n => {
+      consentCountMap[n] = (consents || []).filter(c => c.al_number === n).length;
+    });
+  }
+
+  renderCombined(document.getElementById('input-search').value || '');
+}
+
 // ════════════════════════════════════════════════════════
 //  RENDER LIST
 // ════════════════════════════════════════════════════════
@@ -585,17 +636,18 @@ function renderCombined(q) {
       (r.customer_name || '').toLowerCase().includes(lower)
     );
     const count = consentCountMap[r.al_number] || 0;
-    // A fully collected AL (nothing left to consent for) never appears in
-    // the everyday "Has Consent" / "Active AL" groups below — only a
-    // search can reach it, so its signed-consent log stays findable
-    // without permanently cluttering the default list with finished work.
-    const isCompleted = (Number(r.balance_quantity) || 0) <= 0;
 
-    if (isMatch)              matched.push(r);
-    else if (isCompleted)     return;
-    else if (count > 0)       hasConsent.push(r);
-    else                      noneYet.push(r);
+    if (isMatch)        matched.push(r);
+    else if (count > 0) hasConsent.push(r);
+    else                 noneYet.push(r);
   });
+
+  // liveMatches (queueLiveSearch) is how a completed order — never part of
+  // alData at all — reaches Search Match. Deduped by id against what the
+  // loop above already found, since an outstanding order can legitimately
+  // match both the local list and the live query.
+  const matchedIds = new Set(matched.map(r => r.id));
+  liveMatches.forEach(r => { if (!matchedIds.has(r.id)) matched.push(r); });
 
   let groups = [];
   if (lower.length >= 1) {
