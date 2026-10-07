@@ -83,47 +83,57 @@ culling 都还拿它当基数。1st Culling 不碰 —— 1st culling 发生在 
 
 ---
 
-## 4. 规则 C — 要 approve 才会动数字
+## 4. 规则 C — **不用 approve，存下去就算数**
 
-- **没批**：报表上面那条提示条用琥珀色写「Awaiting approval」，
-  **一个数字都不动**，全系统都一样。
-- **批了**：remark 尾巴加 `[APPROVED by <谁> on <时间>]`，这一刻起才算数。
-
-读这个标记的地方（四个，规则一致）：
+以前要按 Approve 数字才会动。**现在没有这一步了** —— 存下去那一刻，所有该动的
+报表就动了，全系统四个地方都一样：
 `operation_batch_detail.html` 的 `syncAdjustmentBars()`、
-`shared_plot_movement.js`、Movement Report、Life of Seedlings。
+`shared_plot_movement.js`（工人的计件数量）、Movement Report、Life of Seedlings。
+
+为什么：去数的是 keying 的那个人。把他的答案押在第二个签名后面，只是让一张
+已经知道是错的报表继续显示成对的，直到有人有空。
+
+**记录追踪靠这一行本身**：谁 key 的、什么时候、哪一天发生、什么原因，
+全部在 Tab 7 和各报表上面那条提示条。**Edit 和 Del 依旧只有 admin**，
+所以数字不会被安静地改掉。
+
+→ **Del 会当场把数字移回去**，所以它会先问一句。
 
 ---
 
-## 5. 规则 D — 改一笔已经批过的，会退回 pending
+## 5. 规则 D — 改一笔旧的，改完就算改完
 
-按 Edit 改一笔已 approve 的记录，存回去的时候 remark 是**从表单重建的**，
-approve 标记不会带过去 → 自动变回 pending，要重新批。
+按 Edit 改，存下去 remark 是从表单重建的，所有读它的报表跟着动。
+没有「退回 pending」这回事了，因为没有 pending。
 
-签过名的数字，不会在没人再签一次的情况下变成别的。
-
-同样的道理：编辑的时候把它**拆成几个 tray**，那一行会变成第一个 tray 的
-份额、其余插在旁边，而且**每一行都从 pending 开始**。
+编辑的时候把它**拆成几个 tray**，那一行会变成第一个 tray 的份额、其余插在旁边。
 
 ---
 
-## 6. 规则 E — Transplanting 的调整按 tray 拆
+
+## 6. 规则 E — Transplanting 的调整，**拆不拆由你决定**
 
 选 Report = Transplanting + 一个 plot，表单会自动读回所有送苗进这个 plot
-的 Transplanted 记录，列出每一个 tray 送了多少。
+的 Transplanted 记录，列出每一个 tray 送了多少。然后两条路：
 
-- 你**逐个 tray** key 差额，上面的 Qty 变成只读的合计。
-- 存成 **一个 tray 一行**（`Tray: <名字>.` 在 remark 里），各自能批、能改、
-  能单独读。
-- plot 的总数是它们的和 —— 这只是把记录拆开，**算法完全没变**。
-- 只有 Transplanting 有这个 —— 它是唯一一张「一个 plot 的数字由好几个 tray
-  凑出来」的报表。
-- 编辑一笔已存的、把 tray 栏填上，那几个 tray 的数字**必须加起来等于**正在
-  改的那个数量，不然存不下去。
+- **知道是哪个 tray** → 逐个 tray key，上面的 Qty 自动加总。存成
+  **一个 tray 一行**（`Tray: <名字>.` 在 remark 里），各自能改、能单独读。
+- **不知道** → tray 那一欄留空，直接在 Qty 打一个数字，整个 plot 调整，一行。
+
+以前是**强制拆**的（Qty 框变只读）。不对：「B14 少了 53」本来就是数 plot 数出来的，
+一个不填 tray 就不让存的表单，只会让人随便猜一个 tray 填进去。
+
+不管哪一条路，**plot 的总数一样，算法完全没变**。面板下面会写清楚这一笔
+现在是哪一种。
+
+只有 Transplanting 有这个 —— 它是唯一一张「一个 plot 的数字由好几个 tray
+凑出来」的报表。编辑一笔已存的、把 tray 欄填上，那几个 tray 的数字
+**必须加起来等于**正在改的那个数量。
 
 Tab 3 的已存清单上，每一行会画出 `Qty · Adjustment · Final`。
 
 ---
+
 
 ## 7. 规则 F — 一个从来没有 transplant 记录的 plot
 
@@ -133,10 +143,9 @@ Tab 3 的已存清单上，每一行会画出 `Qty · Adjustment · Final`。
 1. 这些苗从**哪个 tray** 出来
 2. **drone map**（照片）
 
-Map 在**按存的时候**就上传，不是批的时候 —— 中间很可能 reload 过，暂存的
-档案活不过去。（代价是：永远没被批的调整会留下一个没用的档案。）
+Map 在按存的时候上传 —— 中间很可能 reload 过，暂存的档案活不过去。
 
-**Approve 的时候**才写一条 `Transplanted` 记录，而且 **quantity_change = 0**：
+**存下去的时候**就写一条 `Transplanted` 记录，而且 **quantity_change = 0**：
 
 ```
 Qty 0   ·   Adjustment +140   ·   Final 140
@@ -173,7 +182,7 @@ Qty 0   ·   Adjustment +140   ·   Final 140
 
 ### Tab 3 Transplanting
 ```
-分配基数 = 已种总数 + D-Tone + (所有批过的 seed 侧调整) + Transplanting 的 plot 侧损失
+分配基数 = 已种总数 + D-Tone + (所有 seed 侧调整) + Transplanting 的 plot 侧损失
 实际站着 = 主 plot 总数 + Transplanting 的 plot 侧损失
 ```
 plot 侧的损失**两边同时减**，所以不会变成 over-allocated。
@@ -185,8 +194,31 @@ plot 侧的损失**两边同时减**，所以不会变成 over-allocated。
 ```
 tray 数量 = 记录的 tray 数量 + 这个 tray 的 1st Culling 调整   （下限 0）
 cull rate = 已 cull / tray 数量
-总数 = 已种 + D-Tone + (所有批过的 seed 侧调整)
+总数 = 已种 + D-Tone + (所有 seed 侧调整)
 ```
+
+**新增：** 如果这张报表的差额**刚好等于**这个 batch 的 Transplanting 调整，
+上面会浮一条说明（见第 9A 节），而且圈圈可以走到 100%。
+
+### 9A. 1st Culling 的「这不是你的错」说明
+
+一个 plot 可能 over-allocated：transplant 记录写 1,053 进 U3，实际只进了 1,000。
+办公室在 **Transplanting** 上登记 −53，Transplanting 那一边就平了。
+
+**1st Culling 不平，而且不应该平** —— 1st culling 发生在 tray 里，这些苗还没出去，
+把 plot 的损失也从它身上扣，就是同一笔损失扣两次。
+
+结果是一张算得对、却永远写着「Over by 53」的报表：圈圈走不满，打不了勾，
+而一个永远完成不了的阶段就是没人再看的阶段。
+
+所以：**当差额刚好等于这个 batch 的 Transplanting 调整时**，
+1st Culling 上面会浮一条蓝色说明，写清楚是哪个 plot、调了多少、为什么这里不扣，
+并给一个按钮跳去 Transplanting。同时**圈圈可以走到 100%，可以打勾**。
+
+**必须刚好相等。** 差不多就是巧合，一条会猜的提示只会教人把真的错也挥手放过。
+差额一旦不等于调整，说明立刻消失，报表照旧写 Over by N，圈圈停在 99%。
+
+`tests/cull1_explained_by_transplanting.cjs` 守着这一条。
 
 ### Tab 5 2nd Culling
 每一行读 `adjustPlotLoss(plot, '2nd Culling')`，在行上用咖啡色写
@@ -198,21 +230,20 @@ Balance = 转入数量 - 2nd cull dead - 已卖 - 转出 + 这个 plot 的 3rd C
 ```
 （下限 0）。正的调整（多找到）同样方向处理。
 
-**Drone map 面板的提示：** 如果这个 plot 的 drone map 和 3rd cull 差 N，而
-这个 plot **还没批**的调整刚好加起来等于 N，面板会讲出来，并且给一个按钮
-直接跳到那笔调整。**必须刚好相等** —— 差不多就是巧合，会教人不看就按。
+~~Drone map 面板的「这个差额已经有人解释了」提示~~ **已经拿掉**：调整一存下去
+就在数字里了，所以剩下的差额永远不可能是它。
 
 ### Movement Report（operation_reports.html）
-有一个「Stock Adjustment」栏，只收**批过的**、而且 plot 是主 plot 的。
-用它自己的正负号，不是绝对值。
+有一个「Stock Adjustment」栏，只收 plot 是主 plot 的。用它自己的正负号，
+不是绝对值。
 
 ### Life of Seedlings
-`calibration` 这一项加总所有批过的调整；plot 属于 Pre-Nursery 的另外算一个
+`calibration` 这一项加总所有调整；plot 属于 Pre-Nursery 的另外算一个
 `calibrationPre`。
 
 ### 维护工的计件数量（shared_plot_movement.js）
-plot 的 live count 会把批过的调整算进去（正负照原样）。
-**注意：这里不分 seed 侧 / plot 侧 —— 只要批过就算。**
+plot 的 live count 会把调整算进去（正负照原样）。
+**注意：这里不分 seed 侧 / plot 侧 —— 只要有就算。**（第 12 节第 2 条）
 
 ---
 
@@ -221,11 +252,11 @@ plot 的 live count 会把批过的调整算进去（正负照原样）。
 | 动作 | 谁 |
 |---|---|
 | Key 一笔新的调整 | 任何能开这一页的人 |
-| Edit / Del / Approve | **只有 operation admin** |
+| Edit / Del | **只有 operation admin** |
 | Add `<plot>`'s row / Fix Tray | **只有 operation admin** |
 
-权限是在页面画出来**之前**读的 —— 以前是之后才读，所以一开页 Edit 和
-Approve 按钮会不见，要存一次东西才出现。
+权限是在页面画出来**之前**读的 —— 以前是之后才读，所以一开页那些按钮会不见，
+要存一次东西才出现。
 
 ---
 

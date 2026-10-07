@@ -177,10 +177,16 @@ const read = page => page.evaluate(() => {
             await page.evaluate(() => window.__ACCESS_READY()));
   const admin = await read(page);
   check('the last column is headed Actions, not Lock', admin.lastHeader, 'Actions');
-  checkTrue('an approved adjustment carries its Edit button', /editCalibration\(/.test(admin.approvedRow));
-  checkTrue('a pending one carries Edit', /editCalibration\(/.test(admin.pendingRow));
+  /* Every row carries the same two buttons now. There is no approval step,
+     so there is no Approve to draw and no row that is "still pending" — the
+     fixture keeps one of each remark shape because rows written before the
+     change still carry the old marker. */
+  checkTrue('a row with the old approval marker carries its Edit button',
+            /editCalibration\(/.test(admin.approvedRow));
+  checkTrue('…and its Del', /deleteCalibration\(/.test(admin.approvedRow));
+  checkTrue('a row without one carries Edit', /editCalibration\(/.test(admin.pendingRow));
   checkTrue('…and Del', /deleteCalibration\(/.test(admin.pendingRow));
-  checkTrue('…and Approve', /approveCalibration\(/.test(admin.pendingRow));
+  check('and nothing offers to approve anything', /approveCalibration\(/.test(admin.pendingRow), false);
   checkTrue('Fix Tray shows on the row an adjustment wrote',
             /toggleT3AdjTray\(/.test(admin.t3Cell));
   checkTrue('the orphan line offers to write its row',
@@ -191,8 +197,8 @@ const read = page => page.evaluate(() => {
   const locked = await open(browser, { allowed: false });
   const plain = await read(locked);
   check('somebody who may not review sees Lock', plain.lastHeader, 'Lock');
-  check('…no Edit on an approved row', /editCalibration\(/.test(plain.approvedRow), false);
-  check('…no Del on a pending one', /deleteCalibration\(/.test(plain.pendingRow), false);
+  check('…no Edit on any row', /editCalibration\(/.test(plain.approvedRow), false);
+  check('…no Del on any row', /deleteCalibration\(/.test(plain.pendingRow), false);
   check('…no Fix Tray', /toggleT3AdjTray\(/.test(plain.t3Cell), false);
   check('…and no offer to write a row', /rebuildTxRow\(/.test(plain.note), false);
   await locked.close();

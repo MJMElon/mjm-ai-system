@@ -4,9 +4,10 @@
    all -- seedlings standing in a plot that nothing says how they got to.
    Filing that as an adjustment leaves the plot unattributed forever. So
    the form asks the two things it cannot work out -- which tray they came
-   out of, and the drone map -- and approving the adjustment writes the
-   row: plot, date and quantity off the adjustment, tray and map off the
-   answers.
+   out of, and the drone map -- and SAVING the adjustment writes the row:
+   plot, date and quantity off the adjustment, tray and map off the answers.
+   It used to be written on approval; there is no approval step any more, so
+   the moment the adjustment exists is the moment the plot has its record.
 
    What this drives, on the real tab 7 form:
      · a POSITIVE adjustment on a plot with no transplant row asks for a
@@ -18,7 +19,7 @@
      · a plot that HAS trays gets the split table, not this
      · the answers ride on the adjustment as TxTray / TxMap, and do not
        leak into the Reason column
-     · approving writes a Transplanted row with the right plot, date,
+     · saving writes a Transplanted row with the right plot, date,
        quantity, tray and map, and marks the adjustment TxRow:<id>
      · and that row THEN STOPS COUNTING AS AN ADJUSTMENT, or the same 140
        would be in B8 twice
@@ -144,7 +145,8 @@ const TX_ROWS = [
   await page.goto('http://localhost:8777/operation/operation_batch_detail.html?id=' + BATCH,
                   { waitUntil: 'load' });
   await page.waitForFunction(() => typeof window.saveCalibration === 'function'
-                                && typeof window.approveCalibration === 'function', { timeout: 15000 });
+                                && typeof window._createTxRowFromCalibration === 'function',
+                             { timeout: 15000 });
   await page.evaluate(() => {
     window._t7IsAdmin = () => true;
     window.mjmLoadNames = async () => {};
@@ -165,7 +167,7 @@ const TX_ROWS = [
   await page.waitForSelector('#t7-newplot-tray', { state: 'attached', timeout: 5000 });
   checkTrue('it says the plot has no transplanting record',
             /B8 has no transplanting record/i.test(await page.textContent('#t7-cal-trays')));
-  checkTrue('…and that approving will create one',
+  checkTrue('…and that saving will create one',
             /this will create one/i.test(await page.textContent('#t7-cal-trays')));
   check('it asks for a source tray', await page.locator('#t7-newplot-tray').count(), 1);
   check('and for a drone map', await page.locator('#t7-newplot-map-file').count(), 1);
@@ -219,98 +221,73 @@ const TX_ROWS = [
   check('no tray means nothing is written', res.ins, 0);
   checkTrue('naming the tray', /which tray/i.test(res.t.m));
 
-  console.log('\nSaving carries the answers on the adjustment');
+  console.log('\nSaving carries the answers, and writes the plot its record');
   await setSelect(page, '#t7-newplot-tray', 'P4');
-  await page.evaluate(() => { window.__INSERTS = []; window.__UPLOADS = []; window.__TOASTS = []; });
-  await page.evaluate(() => window.saveCalibration());
-  await page.waitForFunction(() => window.__INSERTS.length > 0, { timeout: 8000 });
-  const saved = await page.evaluate(() => ({ ins: window.__INSERTS, up: window.__UPLOADS }));
-  check('one adjustment row', saved.ins.length, 1);
-  check('…still a Stock_Calibration on the plot',
-        { t: saved.ins[0].transaction_type, p: saved.ins[0].plot_name, q: saved.ins[0].quantity_change },
-        { t: 'Stock_Calibration', p: 'B8', q: 140 });
-  check('the map was uploaded, not held in a variable', saved.up.length, 1);
-  checkTrue('…into the transplant maps folder', /^transplant_maps\/242\//.test(saved.up[0].path));
-  checkTrue('the remark carries the tray', /TxTray:P4\./.test(saved.ins[0].remark));
-  checkTrue('…and the map url', /TxMap:https:\/\/files\.test\//.test(saved.ins[0].remark));
-
-  const parsed = await page.evaluate(r =>
-    window._parseCalibration({ id: 'x', quantity_change: 140, remark: r }), saved.ins[0].remark);
-  check('none of it leaks into the Reason column', parsed.reason, 'Move to B8');
-  check('the tray is read back', parsed.txTray, 'P4');
-  check('nothing has been created yet', parsed.txRow, '');
-
-  console.log('\nApproving writes the transplanting row');
-  await page.evaluate(remark => {
-    window.__CAL_ROWS = [{
-      id: 'cal-b8', batch_name: '242', transaction_type: 'Stock_Calibration',
-      plot_name: 'B8', quantity_change: 140, transaction_date: '2025-06-20',
-      created_at: '2026-09-24T02:00:00Z', last_edited_by: null, remark
-    }];
-    window.__INSERTS = []; window.__UPDATES = []; window.__TOASTS = [];
-  }, saved.ins[0].remark);
   /* Spy on the list rebuild. syncAdjustmentBars only recolours rows that are
      already drawn; the transplanting list is rebuilt from the database by
      syncTab3, so without it a row written a moment ago is not on screen and it
      looks like nothing happened. */
   await page.evaluate(() => {
+    window.__INSERTS = []; window.__UPLOADS = []; window.__TOASTS = []; window.__UPDATES = [];
     window.__SYNCED = 0;
     const real = window.syncTab3;
     window.syncTab3 = async function () { window.__SYNCED++; return real && real.apply(this, arguments); };
   });
-  await page.evaluate(() => window.approveCalibration('cal-b8'));
-  await page.waitForFunction(() => window.__INSERTS.length > 0, { timeout: 8000 });
+  await page.evaluate(() => window.saveCalibration());
+  await page.waitForFunction(() => window.__INSERTS.length > 1, { timeout: 8000 });
   await page.waitForTimeout(300);
-  const made = await page.evaluate(() => ({ ins: window.__INSERTS, upd: window.__UPDATES }));
-  check('one transplanting row was written', made.ins.length, 1);
-  const tx = made.ins[0];
+  const saved = await page.evaluate(() => ({ ins: window.__INSERTS, up: window.__UPLOADS, upd: window.__UPDATES }));
+  const adj = saved.ins.filter(r => r.transaction_type === 'Stock_Calibration');
+  const txs = saved.ins.filter(r => r.transaction_type === 'Transplanted');
+
+  check('one adjustment row', adj.length, 1);
+  check('…still a Stock_Calibration on the plot',
+        { p: adj[0].plot_name, q: adj[0].quantity_change },
+        { p: 'B8', q: 140 });
+  check('the map was uploaded, not held in a variable', saved.up.length, 1);
+  checkTrue('…into the transplant maps folder', /^transplant_maps\/242\//.test(saved.up[0].path));
+  checkTrue('the remark carries the tray', /TxTray:P4\./.test(adj[0].remark));
+  checkTrue('…and the map url', /TxMap:https:\/\/files\.test\//.test(adj[0].remark));
+
+  const parsed = await page.evaluate(r =>
+    window._parseCalibration({ id: 'x', quantity_change: 140, remark: r }), adj[0].remark);
+  check('none of it leaks into the Reason column', parsed.reason, 'Move to B8');
+  check('the tray is read back', parsed.txTray, 'P4');
+
+  console.log('\nThe transplanting row is written by the SAVE, not by an approval');
+  check('one transplanting row was written', txs.length, 1);
   check('…of the right kind, plot and date',
-        { t: tx.transaction_type, p: tx.plot_name, d: tx.transaction_date },
-        { t: 'Transplanted', p: 'B8', d: '2025-06-20' });
-  /* NOUGHT, not 140. Nobody keyed a transplant into B8 — that is why it had
+        { p: txs[0].plot_name, d: txs[0].transaction_date },
+        { p: 'B8', d: '2025-06-20' });
+  /* NOUGHT, not 140. Nobody keyed a transplant into B8 -- that is why it had
      no record. The 140 is what the ADJUSTMENT put there, so it stays in the
      adjustment and the row is only where it lands:
          Qty 0 · Adjustment +140 · Final 140 */
-  check('…with a quantity of nought', tx.quantity_change, 0);
+  check('…with a quantity of nought', txs[0].quantity_change, 0);
   checkTrue('…naming the tray the way tab 3 reads it',
-            /Transplanted from tray \[P4\] to Main Plot \[B8\]\./.test(tx.remark));
-  checkTrue('…carrying the drone map', /MapUrl:https:\/\/files\.test\//.test(tx.remark));
-  checkTrue('…and saying which adjustment put it there', /FromAdjustment:cal-b8/.test(tx.remark));
-  checkTrue('…and who approved that', /CalApprovedBy:coco@mjmnursery\.com/.test(tx.remark));
+            /Transplanted from tray \[P4\] to Main Plot \[B8\]\./.test(txs[0].remark));
+  checkTrue('…carrying the drone map', /MapUrl:https:\/\/files\.test\//.test(txs[0].remark));
+  checkTrue('…and saying which adjustment put it there', /FromAdjustment:new-/.test(txs[0].remark));
 
-  const approvalUpd = made.upd.filter(u => u.id === 'cal-b8');
-  checkTrue('the adjustment is marked approved', approvalUpd.some(u => /APPROVED by/.test(u.row.remark || '')));
-  checkTrue('…and linked to the row it created', approvalUpd.some(u => /TxRow:new-/.test(u.row.remark || '')));
+  checkTrue('the adjustment is linked to the row it created',
+            saved.upd.some(u => /TxRow:new-/.test((u.row || {}).remark || '')));
+  checkTrue('…and no approval marker is written any more',
+            !saved.upd.some(u => /APPROVED by/.test((u.row || {}).remark || '')));
 
   console.log('\nAnd the list is rebuilt, so the row is on screen straight away');
-  check('the transplanting list was reloaded after approval',
+  check('the transplanting list was reloaded after saving',
         await page.evaluate(() => window.__SYNCED) > 0, true);
-  await page.waitForSelector('#t3-saved-rows-list .t3-adj-cell[data-plot="B8"]',
-                             { state: 'attached', timeout: 8000 });
-  const onScreen = await page.evaluate(() => {
-    const c = document.querySelector('#t3-saved-rows-list .t3-adj-cell[data-plot="B8"]');
-    const row = c.closest('[id^="t3-row-view-"]');
-    return {
-      tray: c.getAttribute('data-tray'),
-      qty:  c.getAttribute('data-qty'),
-      locked: /calibration approved by/i.test(row.lastElementChild.innerHTML
-                 .replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, ' '))
-    };
-  });
-  check('B8 is in the list, from P4, holding nought, and marked as the adjustment\'s',
-        onScreen, { tray: 'P4', qty: '0', locked: true });
 
   console.log('\nThe adjustment goes on counting — the row does not take it over');
   const counted = await page.evaluate(() => {
     const r = window._parseCalibration({ id: 'a', quantity_change: 140,
-      remark: 'Report: Transplanting. Plot: B8. Move to B8. TxTray:P4. TxMap:https://x/y.jpg TxRow:new-900 [APPROVED by coco@mjm on 2026-09-24]' });
-    return { txRow: r.txRow, txTray: r.txTray, approved: r.approved, qty: r.qty, plot: r.plot };
+      remark: 'Report: Transplanting. Plot: B8. Move to B8. TxTray:P4. TxMap:https://x/y.jpg TxRow:new-900' });
+    return { txRow: r.txRow, txTray: r.txTray, qty: r.qty, plot: r.plot };
   });
   check('the link back to its row is kept', counted.txRow, 'new-900');
   check('…so a second row is never created for it', counted.txRow !== '', true);
-  check('but it is still an approved adjustment of +140 on the plot',
-        { approved: counted.approved, qty: counted.qty, plot: counted.plot },
-        { approved: true, qty: 140, plot: 'B8' });
+  check('and it is still an adjustment of +140 on the plot',
+        { qty: counted.qty, plot: counted.plot }, { qty: 140, plot: 'B8' });
 
   /* The two places that decide whether an adjustment counts. Both must take
      it — the row it wrote carries 0, so nothing is counted twice, and hiding
@@ -318,8 +295,9 @@ const TX_ROWS = [
   const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'operation',
                                                               'operation_batch_detail.html'), 'utf8');
   check('the adjustment maps do not skip a row-writing adjustment',
-        /rows\.filter\(r => r\.approved && !r\.txRow\)/.test(src), false);
-  checkTrue('they take every approved one', /rows\.filter\(r => r\.approved\)\.forEach/.test(src));
+        /rows\.filter\(r => [^)]*txRow\)/.test(src), false);
+  checkTrue('they take every one there is', /rows\.forEach\(r => \{/.test(src));
+  check('…and none of them waits for an approval', /r\.approved/.test(src), false);
   check('and neither does the per-row painter', /if \(r\.txRow\) return;/.test(src), false);
   checkTrue('which pairs it with its row by the tray it answered',
             /_t3TrayKey\(r\.tray \|\| r\.txTray\)/.test(src));

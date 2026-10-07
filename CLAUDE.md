@@ -296,6 +296,63 @@ so** rather than dropped — a batch missing from the ledger is the thing
 somebody needs to see, and the section counts how many have no reading
 underneath the four averages. `tests/batch_height_by_age.cjs` holds all of it.
 
+## A stock adjustment counts the moment it is saved
+
+There used to be an Approve button on the Adjustments tab, and a figure did
+not move until somebody pressed it. The office asked for it the other way
+round, and they are right: the person keying the correction is the person who
+went and counted, so holding their answer behind a second signature only meant
+a report that was KNOWN to be wrong went on being shown as right until
+somebody got round to it.
+
+So the gate is gone from all four readers, and they have to stay in step or
+one of them becomes the only place in the system still waiting for a signature
+nobody is asked for: `syncAdjustmentBars` and `paintT3Adjustments` in
+`operation_batch_detail.html`, `shared/shared_plot_movement.js` (the piece-rate
+quantity), and `operation_reports.html` three times over — Movement Report,
+Life of Seedlings and the Transplanting Report.
+
+Four things that followed, and the first is the one to remember:
+
+- **`[APPROVED by … on …]` is still STRIPPED and never read.** Rows written
+  before this carry it, and a parser that stops removing it puts it in the
+  Reason column. `_parseCalibration` is the one that knows the format.
+- **The Qty-0 transplant row is written by the SAVE now**, not by the
+  approval — see `saveCalibration`. The moment the adjustment exists is the
+  moment the plot has its record.
+- **Delete moves a report there and then**, so it is admin-only and asks
+  first. The old rule refused to delete an approved row at all; that was
+  about the signature, and there is no signature.
+- **The drone-map panel's "this difference is already accounted for, approve
+  it and the plot tallies" is gone.** It cannot happen: an adjustment against
+  the plot is already inside the figure, so it can never be what the
+  difference still is. Do not put it back.
+
+`shared/CHECK_adjustments_that_start_counting.sql` names the rows that were
+keyed and never approved — the ones this change put into the figures.
+
+## 1st Culling is not wrong when Transplanting was adjusted after it
+
+A plot can be over-allocated: the transplant record counts 1,053 into U3 and
+only 1,000 went in. A Transplanting adjustment of −53 settles Transplanting.
+**1st Culling does not settle, and must not** — a 1st culling happens in the
+TRAY, before any of these seedlings go out, so taking the plot's loss off it
+as well subtracts one loss twice. That is `ADJUST_APPLIES_TO`, and it is
+right.
+
+What it leaves is a report whose arithmetic is correct and whose status line
+reads "Over Allocated by 53" for ever: the ring never fills, no tick can be
+given, and a stage that can never be finished is one people stop looking at.
+
+So where the difference is **EXACTLY** the batch's Transplanting adjustments,
+`calcCulling` floats a note saying so and `updateCullCompletion` lets the ring
+reach 100. Exactly, never nearly: a near-match is a coincidence, and a note
+that guessed at one would teach people to wave real mistakes through — the
+same reason the drone-map panel demanded an exact match.
+
+`tests/cull1_explained_by_transplanting.cjs` holds both halves, including that
+a difference which is NOT the adjustment still reads as over-allocated.
+
 ## An unverified figure is shown, and says it is unverified
 
 Life of Seedlings is eighteen live sums of the batch ledger, and the ledger
