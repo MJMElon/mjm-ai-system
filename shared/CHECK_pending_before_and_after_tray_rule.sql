@@ -43,7 +43,17 @@ cal AS (
   SELECT batch, plot, qty, remark,
          lower(btrim(split_part(split_part(remark, 'Report: ', 2), '.', 1))) AS report,
          (position('Tray:' in remark) > 0 OR position('TxTray:' in remark) > 0) AS names_tray,
-         btrim(split_part(split_part(remark, 'Tray: ', 2), '.', 1)) AS tray_label
+         /* THE TRAY NAME, out of either label. TxTray has no space after
+            its colon -- "TxTray:P4." -- so splitting on "Tray: " with the
+            space finds nothing in it, and a row that plainly names a tray
+            came back with an empty label. The longer label is taken first
+            because "Tray:" is a substring of "TxTray:". The page gets this
+            right already; only this file had it wrong. */
+         CASE WHEN position('TxTray:' in remark) > 0
+                THEN btrim(split_part(split_part(remark, 'TxTray:', 2), '.', 1))
+              WHEN position('Tray:' in remark) > 0
+                THEN btrim(split_part(split_part(remark, 'Tray:', 2), '.', 1))
+              ELSE '' END AS tray_label
   FROM   tx
   WHERE  t = 'Stock_Calibration'
     AND  position('[APPROVED by' in remark) > 0
