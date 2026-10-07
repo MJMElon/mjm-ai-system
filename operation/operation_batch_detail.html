@@ -3029,6 +3029,38 @@
             return Object.keys(mine).reduce((sum, k) => sum + (mine[k] || 0), 0);
         }
 
+        /* ── A TRANSPLANTING ADJUSTMENT THAT NAMES ITS TRAY IS A DIFFERENT
+              CORRECTION FROM ONE THAT DOES NOT ─────────────────────────────
+
+           Both say the plot does not hold what the transplant record claims.
+           They differ in WHERE the seedlings are now, and only the person who
+           raised it knows:
+
+             NAMES A TRAY — the count of what LEFT THE TRAY was wrong. The
+               seedlings are still in the tray (or six more went out than the
+               row says). The batch still has them; what is wrong is how many
+               have reached a main plot. The allocation BASE does not move.
+
+             NAMES NO TRAY — they reached the plot and then left it: stolen,
+               dead, miscounted on the ground. The batch does not have them any
+               more, so the base moves too, and the allocation is unchanged
+               because both sides drop by the same amount. That is the batch
+               234 rule and it stays.
+
+           Only the first kind can close a Pending that is exactly its own
+           size, which is what it looked like on 234: Pending read 6 with a
+           +6 adjustment sitting on the same screen, because the old sum put
+           the figure on both sides and cancelled it out.
+
+           The form says this out loud — see the tray panel's heading —
+           because naming a tray now changes a figure, and a rule nobody is
+           told about is a rule somebody trips over. */
+        const ADJUST_TRAY_NAMED = {};   // report → net of the ones naming a tray
+        function adjustTrayNamedTotal(report) {
+            const v = ADJUST_TRAY_NAMED[String(report || '').toLowerCase()];
+            return typeof v === 'number' ? v : 0;
+        }
+
         /* ── The adjustment, on the row it belongs to ────────────────────────
 
            A Transplanting adjustment is raised against a plot and split across
@@ -3214,6 +3246,7 @@
                    silently right for a reason nobody can see. */
                 Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
                 Object.keys(ADJUST_PLOT_LOSS_STAGE).forEach(k => delete ADJUST_PLOT_LOSS_STAGE[k]);
+                Object.keys(ADJUST_TRAY_NAMED).forEach(k => delete ADJUST_TRAY_NAMED[k]);
                 ADJUST_ROWS = [];
                 bars.forEach(n => {
                     const el = document.getElementById(`t${n}-adjust-bar`);
@@ -3242,6 +3275,7 @@
                this" is worth seeing — it just is not an answer yet. */
             Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
             Object.keys(ADJUST_PLOT_LOSS_STAGE).forEach(k => delete ADJUST_PLOT_LOSS_STAGE[k]);
+            Object.keys(ADJUST_TRAY_NAMED).forEach(k => delete ADJUST_TRAY_NAMED[k]);
             /* INCLUDING the ones that wrote their own transplant row. That row
                is written with a quantity of nought — nobody keyed a transplant
                into that plot, which is why it had none — so the figure lives
@@ -3258,6 +3292,14 @@
                         const m = ADJUST_PLOT_LOSS_STAGE[rep] = ADJUST_PLOT_LOSS_STAGE[rep] || {};
                         m[pk] = (m[pk] || 0) + r.qty;
                     });
+                    /* …and separately, the ones that NAME A TRAY. Those say
+                       the count of what left the tray was wrong, not that the
+                       plot lost seedlings it had, so the allocation base must
+                       not move with them. See adjustTrayNamedTotal. */
+                    if (r.tray || r.txTray) {
+                        const own = r.report.toLowerCase();
+                        ADJUST_TRAY_NAMED[own] = (ADJUST_TRAY_NAMED[own] || 0) + r.qty;
+                    }
                     return;
                 }
                 const k = r.report.toLowerCase();
@@ -3688,10 +3730,27 @@
                 <div id="t7-tray-tot-cal"   class="text-sm font-black tabular-nums text-right text-[#8a7a68]">—</div>
                 <div id="t7-tray-tot-final" class="text-sm font-black text-[#3d2610] tabular-nums text-right">0</div>
             </div>`;
+            /* WHAT NAMING A TRAY MEANS, said out loud on the form.
+
+               It used to be record-keeping: which tray the correction came
+               from, nice to have. It now changes a figure — a tray-named
+               adjustment moves the Transplanting tab's Pending, one that
+               names none does not — and a rule nobody is told about is a
+               rule somebody trips over. Only shown while the panel is being
+               keyed; reading an old row back, the choice has been made. */
+            const meaning = !editable ? '' : `
+                <div class="px-4 pb-2.5 -mt-1 text-[10px] font-bold text-[#8a7a68] leading-snug">
+                    <span class="text-[#3a7ab4] font-black">Key a tray</span> when the count of what
+                    LEFT that tray was wrong — the seedlings are still in the nursery, and the
+                    Transplanting tab stops looking for them.
+                    <span class="text-[#a83020] font-black">Leave the column empty</span> when they
+                    reached the plot and then went — stolen, dead, miscounted on the ground.
+                </div>`;
             return `<div class="rounded-xl border ${editable ? 'border-[#c8d9e8] bg-[#f7fbff]' : 'border-[#e8dcc8] bg-[#fdfaf4]'} overflow-hidden">
                 <div class="px-4 py-2.5 text-[10px] font-black uppercase tracking-widest ${editable ? 'text-[#3a7ab4]' : 'text-[#8a7a68]'}">
                     ${esc(plot)} was filled from ${n} tray${n === 1 ? '' : 's'}${note}
                 </div>
+                ${meaning}
                 ${head}${rows.map(t => _t7TrayLineHtml(t, editable, esc)).join('')}${total}
                 <div id="t7-tray-verdict" class="hidden"></div>
             </div>`;
@@ -6059,9 +6118,23 @@
                over-allocated; it makes both figures smaller by the same
                amount, and the balance is unchanged. */
             const plotLossT3 = adjustPlotLossTotal('Transplanting');
+            /* …OF WHICH, the ones that NAME A TRAY say the count of what left
+               the tray was wrong, not that the plot lost seedlings it had. The
+               batch still has them, so the BASE does not move with those — only
+               what is standing in the main plots does, and the difference is
+               exactly what Pending is for. See adjustTrayNamedTotal.
+
+               234 is why. Its Pending read 6 with a +6 adjustment sitting on
+               the same screen: six more had gone out of the tray than the row
+               said, the base carried the +6 as well, and the two cancelled, so
+               the tab went on looking for six seedlings that were already
+               standing in the plot. */
+            const trayLossT3 = adjustTrayNamedTotal('Transplanting');
+            const goneLossT3 = plotLossT3 - trayLossT3;   // the ones naming no tray
             const allocBase = totalPlantedRaw + getDtoneNurseryQty() + adjustNetTotal()
-                            + plotLossT3;
-            // What the main plots actually hold — Qty as recorded, less the loss.
+                            + goneLossT3;
+            // What the main plots actually hold — Qty as recorded, plus every
+            // adjustment against them, whichever kind.
             const mainStanding = totalMain + plotLossT3;
             /* The engine's headline figure IS this base — what the four
                percentages below are each a percentage of. Main plot plus

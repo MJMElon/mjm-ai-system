@@ -30,9 +30,16 @@ function checkTrue(name, got) { check(name, !!got, true); }
 
 /* The sum as the tab does it, lifted out so the balance can be exercised
    without a loaded batch. Mirrors calcTransplanting: base, what is
-   standing, and what is left over. */
-function balance({ planted, dtone = 0, seedAdj = 0, plotLoss = 0, totalMain, culled = 0 }) {
-  const allocBase     = planted + dtone + seedAdj + plotLoss;
+   standing, and what is left over.
+
+   `plotLoss` is EVERY approved Transplanting adjustment; `trayLoss` is the
+   subset of them that NAMES A TRAY. The two kinds are not the same
+   correction -- one says the seedlings are still in the nursery and only the
+   count of what left the tray was wrong, the other says they reached the
+   plot and then went -- so only the second moves the base. */
+function balance({ planted, dtone = 0, seedAdj = 0, plotLoss = 0, trayLoss = 0, totalMain, culled = 0 }) {
+  const goneLoss      = plotLoss - trayLoss;   // the ones naming no tray
+  const allocBase     = planted + dtone + seedAdj + goneLoss;
   const mainStanding  = totalMain + plotLoss;
   const fullyAccounted = mainStanding + culled;
   const rawPending    = allocBase - fullyAccounted;
@@ -67,6 +74,28 @@ function balance({ planted, dtone = 0, seedAdj = 0, plotLoss = 0, totalMain, cul
   const genuineWithLoss = balance({ planted: 1000, totalMain: 1053, plotLoss: -10 });
   check('…and a loss on top does not hide it', genuineWithLoss.over, 53);
 
+  console.log('\nA tray-named one moves what is standing and NOT the base');
+  /* Batch 234: six more left the tray than the row said. The batch still has
+     them -- what was wrong is how many reached a main plot -- so the base
+     stays and Pending closes by exactly six. The old sum put the +6 on both
+     sides and cancelled it, and the tab went on looking for six seedlings
+     that were already standing in the plot. */
+  const tray = balance({ planted: 15734, dtone: 190, totalMain: 14785, culled: 1133,
+                         plotLoss: 6, trayLoss: 6 });
+  check('the base is untouched', tray.allocBase, 15734 + 190);
+  check('what is standing carries the six', tray.mainStanding, 14785 + 6);
+  check('PENDING CLOSES', tray.rawPending, 0);
+  const trayNone = balance({ planted: 15734, dtone: 190, totalMain: 14785, culled: 1133 });
+  check('\u2026and without it, six are left unaccounted for', trayNone.rawPending, 6);
+
+  /* The same figure naming NO tray is the other correction and must not
+     close it: those six are gone, so both sides drop and Pending is what it
+     was. */
+  const trayless = balance({ planted: 15734, dtone: 190, totalMain: 14785, culled: 1133,
+                             plotLoss: -6 });
+  check('naming no tray takes it off the base as well', trayless.allocBase, 15734 + 190 - 6);
+  check('\u2026and leaves Pending exactly where it was', trayless.rawPending, 6);
+
   console.log('\nAnd a seed-count adjustment still moves the base on its own');
   /* A seed adjustment says there were never that many — it belongs to the
      base only, and nothing is standing that has to move with it. */
@@ -78,8 +107,12 @@ function balance({ planted, dtone = 0, seedAdj = 0, plotLoss = 0, totalMain, cul
                                         'operation_batch_detail.html'), 'utf8');
   checkTrue('the loss is taken once, into a name',
             /const plotLossT3 = adjustPlotLossTotal\('Transplanting'\)/.test(src));
-  checkTrue('the base uses it', /allocBase = totalPlantedRaw \+ getDtoneNurseryQty\(\) \+ adjustNetTotal\(\)\s*\n\s*\+ plotLossT3/.test(src));
-  checkTrue('what is standing uses it too',
+  checkTrue('\u2026and the tray-named subset of it is taken too',
+            /const trayLossT3 = adjustTrayNamedTotal\('Transplanting'\)/.test(src));
+  checkTrue('the base uses only the ones naming no tray',
+            /const goneLossT3 = plotLossT3 - trayLossT3/.test(src)
+         && /allocBase = totalPlantedRaw \+ getDtoneNurseryQty\(\) \+ adjustNetTotal\(\)\s*\n\s*\+ goneLossT3/.test(src));
+  checkTrue('what is standing uses every one of them',
             /const mainStanding = totalMain \+ plotLossT3/.test(src));
   checkTrue('the balance check is against what is standing',
             /const fullyAccounted = mainStanding \+ mockCullingTab4/.test(src));

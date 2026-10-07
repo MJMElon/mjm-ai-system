@@ -337,6 +337,43 @@ again:
 it, and `shared/CHECK_what_wrote_these_adjustments.sql` groups those rows by
 the wording of their remark.
 
+## Naming the tray on a Transplanting adjustment says WHERE the seedlings are
+
+Two corrections wear the same name. Both say the plot does not hold what the
+transplant record claims; they differ in where the seedlings are NOW, and
+only the person raising it knows:
+
+- **It names a tray** — the count of what LEFT the tray was wrong. The batch
+  still has them. The allocation BASE does not move; what is standing in the
+  main plots does, and Pending closes by that much.
+- **It names no tray** — they reached the plot and then went: stolen, dead,
+  miscounted on the ground. The base moves too, both sides drop by the same
+  amount, and Pending is unchanged. That is the batch 234 / 242 rule from
+  before and it is still right.
+
+`calcTransplanting` splits them: `plotLossT3` is all of them and goes on
+`mainStanding`, `trayLossT3` is the tray-named subset, and only
+`goneLossT3 = plotLossT3 − trayLossT3` reaches `allocBase`. The old sum put
+every adjustment on BOTH sides, so a tray-named one cancelled itself out.
+
+Batch 234 is what that looked like: Pending read **6** with a **+6**
+adjustment sitting on the same screen. Six more had gone out of the tray than
+the row said, the base carried the +6 as well, and the tab went on looking
+for six seedlings that were already standing in the plot — so its ring could
+never leave 99% and the stage could never be ticked off.
+
+**`ADJUST_APPLIES_TO` does not change.** The 2nd and 3rd Culling still take
+every Transplanting adjustment, tray-named or not: both are measuring what is
+standing in the plot, and six more that arrived are six more to cull.
+
+**And the form now says this out loud** (`_t7TrayTableHtml`), because naming a
+tray stopped being record-keeping and started changing a figure. A rule
+nobody is told about is a rule somebody trips over — and the tray column
+became optional on the same day, so both answers are one click apart.
+
+`tests/tray_named_adjustment_closes_pending.cjs` drives 234's own figures
+through the real page: ten of its assertions fail on the previous code.
+
 ## 1st Culling is not wrong when Transplanting was adjusted after it
 
 A plot can be over-allocated: the transplant record counts 1,053 into U3 and
