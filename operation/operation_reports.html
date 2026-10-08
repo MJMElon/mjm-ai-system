@@ -4051,8 +4051,8 @@ async function runTransplantingReport() {
                      the small print under it — and the hover still carries
                      the date and the reason somebody wrote. */
                   return `<td class="text-right font-black"><span class="cursor-help border-b border-dotted border-current"
-                    onmouseenter="mvShowDetailTip(this, ${idx})" onmouseleave="mvHideDetailTip()">${fmtNum(r.final)}</span>
-                    <div class="text-[9px] font-bold text-[#8a5a2b] uppercase tracking-wider whitespace-nowrap mt-0.5">${fmtNum(r.qty)} recorded · ${r.adj > 0 ? '+' : ''}${fmtNum(r.adj)} adjusted</div></td>`;
+                    onmouseenter="mvShowDetailTip(this, ${idx})" onmouseleave="mvHideDetailTip()">${fmtNum(r.final)}</span>${r.adj ? `
+                    <div class="text-[9px] font-bold text-[#8a5a2b] uppercase tracking-wider whitespace-nowrap mt-0.5">${fmtNum(r.qty)} recorded · ${r.adj > 0 ? '+' : ''}${fmtNum(r.adj)} adjusted</div>` : ''}</td>`;
                 })() : `<td class="text-right font-black">${fmtNum(r.qty)}</td>`}
               </tr>`).join('') : `<tr><td colspan="7" class="text-center py-10 text-[#8a7a68]">No transplant records match the selected filters.</td></tr>`}
           </tbody>

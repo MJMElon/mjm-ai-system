@@ -122,5 +122,15 @@ console.log('\nSeveral adjustments on one plot are summed');
   check('+1 +5 -2 is +4', byPlotDate(o), [['2025-12-19', 'N3', 6362, 4, 6366]]);
 }
 
+console.log('\nAdjustments that cancel leave the figure alone, and still say so');
+{
+  const o = run([R('2025-12-19', 'N3', '241', 6362, [40, -40])]);
+  /* The row prints no "recorded / adjusted" line when the net is nought --
+     there is nothing to tell apart -- but it keeps the dotted mark, because
+     two adjustments really were made against that plot. */
+  check('the figure does not move', byPlotDate(o), [['2025-12-19', 'N3', 6362, 0, 6362]]);
+  check('the hover still carries both', o.rows[0].cal.length, 2);
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
