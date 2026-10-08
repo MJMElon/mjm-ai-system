@@ -565,6 +565,43 @@ Four things in it:
 Diagnostics section 7 shows the same answer per table, and the red bar
 taps through to it.
 
+## An outbox is half of recording with no line. The LIST is the other half.
+
+The queue has always worked: an audit saved with no signal goes into
+IndexedDB and is sent when the line comes back. What nobody checked is
+whether there is anything on screen to record AGAINST.
+
+Plot Condition, Seedling Height and Papan Tanda each keep the PROCESSED
+list in localStorage and serve it when `navigator.onLine` is false, so
+with no signal the auditor still sees yesterday's plots and can work.
+**Maintenance had none of that.** Its `loadAll` fires three reads and the
+middle one, `audit_maintenance_audits`, carries no `.catch`, so one
+failure throws past the whole function: `tasks` is never set,
+`renderLists` never runs, and the screen reads "Failed to load" over an
+empty list. With no line that is every single time. The auditor is
+standing in the plot with the work in front of them and the app has
+nothing to offer — and the outbox underneath it, working perfectly, has
+nothing to put in it.
+
+So Maintenance now carries `_saveOfflineCache` / `_loadOfflineCache` and
+the same offline short-circuit, copied from `audit_script.js` rather than
+invented: **Plot Condition is the one to copy, it is the steadiest of the
+four.** Two things about the shape:
+
+- **Cache the PROCESSED state**, the same shape the renderer already
+  reads. Caching raw rows means re-deriving the plot placement on restore,
+  which is a second copy of the rule and a second thing to get wrong.
+- **A failed load WITH a line falls back to the cache too.** A flaky
+  tower or a refusal used to leave the same empty screen as no signal at
+  all. Yesterday's list is a better answer than nothing, and the toast
+  says which day it is from, so nobody mistakes it for live.
+
+`tests/every_audit_records_with_no_line.cjs` holds all four modules to the
+three things the office actually asked for — it can record the work, it
+can record with no line, it syncs when the line comes back — and reads the
+SHIPPED files, because the whole fault was one of four drifting out of
+step with the others and nothing saying so.
+
 ## A sweep with no timeout is a queue that stops for ever
 
 Seventy finished maintenance audits sat on an auditor phone. The first round
