@@ -66,7 +66,7 @@ checkTrue('and the Worker Record prints no money of its own',
                                     MNT.indexOf('function downloadPayrollPDF') + 9000)));
 
 console.log('\n3 · the month on a signed form is written out');
-const transplPdf = PAY.slice(PAY.indexOf('async function downloadTransplantPDF'),
+const transplPdf = PAY.slice(PAY.indexOf('async function _downloadTransplantPDF'),
                              PAY.indexOf('/* THE PLOT SUMMARY, ON THE CLAIM FORM'));
 checkTrue('the Transplanting claim takes the full month',
           /const monthTxt = monthLabelFull\(monthValue\(\)\)/.test(transplPdf));
@@ -95,7 +95,7 @@ checkTrue('the band is drawn on the first page and not after it',
    shape, so this is the one place they differ on purpose and the difference
    is worth a test of its own — otherwise the next person tidies one into
    line with the other. */
-const maintPdf = PAY.slice(PAY.indexOf('function downloadMaintPDF'),
+const maintPdf = PAY.slice(PAY.indexOf('function _downloadMaintPDF'),
                            PAY.indexOf('/* The Transplanting claim, on paper.'));
 checkTrue('Work Maintenance keeps its band on every page',
           /const drawHead = \(\) => \{/.test(maintPdf)
