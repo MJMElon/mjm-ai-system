@@ -434,6 +434,72 @@ The As At date cuts the LINES off and never the signatures: a line dated
 after it is in no figure on screen, while "has anybody checked this" is a
 question about now.
 
+## A sweep with no timeout is a queue that stops for ever
+
+Seventy finished maintenance audits sat on an auditor phone. The first round
+was real: the audit tables were gated on a module check the app had stopped
+asking for, so the database refused every row. That was repaired and PROVED —
+the repair ends by inserting as each auditor and rolling it back, and it came
+back 46 of 46.
+
+The phone still would not empty. The banner read **69 pending (1 stuck)** and
+did not move while it was watched, and the Sync pill said the last clean
+sweep had been a minute earlier. Those two facts together say it: the sweep
+is not FAILING, it is not FINISHING.
+
+`smartSave` had always wrapped its photo upload and its insert in a timeout.
+`syncNow` wrapped NEITHER. One stalled upload on a nursery signal held the
+for-loop on item one for ever; `_syncing` stayed true, so the 30-second timer
+and every tap after it answered "already syncing" and did nothing, and a
+reload started the same stall again. The tell is in the data and nowhere else:
+**none of the sixty-nine had been retried even once**, which is why none of
+them had reached the five-try park.
+
+Four rules, each the shape of a way a queue wedges:
+
+- **Every call inside a sweep gets a timeout.** A call that never answers must
+  end that ITEM, not the sweep. The item retries next time; the sweep carries
+  on to the sixty-eight behind it.
+- **The in-flight flag is released in a `finally`,** and a flag older than any
+  sweep can be is taken over. Without the takeover, a phone holding the
+  previous version of the file stays frozen until somebody clears site data —
+  nothing on the phone can clear a flag set by code that never came back.
+  Taking over is safe because an item is marked done only after the server has
+  taken it, and a second insert of a row already there comes back 23505, which
+  the loop already retires quietly.
+- **A photo url is written into the QUEUE ROW the moment it exists,** before
+  the photo is deleted from the phone and before the insert that may still
+  refuse. It used to live only in a local variable: upload succeeded, photo
+  deleted, insert refused, and the row went back to the queue still saying
+  `__IMG__`. The next sweep found no photo, read null, and saved the audit
+  photo-less — on a form that makes the photo compulsory.
+- **A count that does not move is, on a phone, the same thing as a stop.**
+  Sixty-nine audits with a photo each is minutes of work, so the badge counts
+  "Sending 12 of 69" through the sweep. The previous version refreshed the
+  badge once at each end and said the same number for the whole of it.
+
+And the instrument, which matters more than any of them. The only thing on
+screen about those seventy audits was a number in a green bar, so the question
+"refused, or waiting, or going up right now and slow?" could only be answered
+by sending a video of a number not moving. **`audit/audit_diagnostics.html`
+now reads the outbox straight out of IndexedDB** — how many wait, how many the
+server refused and the reason against each, which table, how old the oldest
+is, and how many tries the waiting ones have had. All on nought is the
+signature of a sweep that is not finishing, and the verdict says so in those
+words. It reads with plain `indexedDB`, never through
+`audit_dexie_offline.js`, for the same reason as the rest of that page: it has
+to answer when the file it is reporting on is the broken one. Nothing had ever
+linked to it, so the Administration row on `audit_admin.html` does, and the
+stuck-badge dialog offers it before it offers the delete.
+
+`tests/sync_cannot_wedge.cjs` holds all of it, through the real file in a real
+browser — six of its checks fail on the previous code.
+
+The audit module also joined `npayroll/` in carrying the three no-cache metas,
+because this was the second fix in a week that had to actually reach a phone.
+That is the condition the rule names: a module somebody wants current, not the
+whole site.
+
 ## A row count is not a window
 
 "Recent work is all a Field Conductor needs on a phone" was implemented as
