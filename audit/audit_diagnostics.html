@@ -43,6 +43,7 @@
 <div class="grp"><h2>4 · Your permissions</h2><div id="g-perm"></div></div>
 <div class="grp"><h2>5 · Service worker &amp; cache</h2><div id="g-sw"></div></div>
 <div class="grp"><h2>6 · What is still waiting to be sent</h2><div id="g-queue"></div></div>
+<div class="grp"><h2>7 · Can this login actually save</h2><div id="g-save"></div></div>
 
 <button class="b1" onclick="hardReset()">Force update — clear cache &amp; reload</button>
 <button class="b2" onclick="reLogin()">Sign out &amp; sign in again</button>
@@ -201,6 +202,7 @@ async function run() {
   } catch (e) { row('g-sw', 'failed', e.message, 'bad'); }
 
   await readQueue();
+  await askCanSave(sess);
 
   verdict(anonRead, userRead);
 }
@@ -295,6 +297,47 @@ async function readQueue() {
   try { db.close(); } catch (e) {}
 }
 
+/* ── 7. Would a save be taken, table by table ──────────────────────────
+   Section 4 reads the permission the OLD policy used to check. This asks
+   the database itself whether a row would be accepted right now, which is
+   the question an auditor about to start a round actually has, and the
+   one nothing asked until seventy finished audits had piled up on a phone
+   with nowhere to go.
+
+   Installed by shared/RUN_ME_audit_save_check.sql. Not installed is not a
+   no -- it says so and nothing else, the same way access fails open
+   everywhere else here. */
+async function askCanSave(sess) {
+  if (!sess || !sess.access_token) {
+    row('g-save', 'skipped', 'no session to ask with', 'warn');
+    return;
+  }
+  let rows = null, status = 0;
+  try {
+    const r = await fetch(SUPA_URL + '/rest/v1/rpc/audit_can_i_save', {
+      method: 'POST',
+      headers: { apikey: SUPA_KEY, Authorization: 'Bearer ' + sess.access_token,
+                 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    status = r.status;
+    if (r.ok) rows = await r.json();
+  } catch (e) { /* reported below */ }
+
+  if (!Array.isArray(rows)) {
+    row('g-save', 'the check', status === 404 || status === 0
+        ? 'not installed on this database -- run shared/RUN_ME_audit_save_check.sql'
+        : 'could not be asked (status ' + status + ')', 'warn');
+    row('g-save', 'what that means',
+        'unknown, not refused. Nothing is concluded from a question that could not be put.', 'dim');
+    return;
+  }
+  const no = rows.filter((r) => r && r.ok === false);
+  rows.forEach((r) => row('g-save', r.tbl, r.ok ? 'a row would be accepted' : 'REFUSED -- ' + (r.why || ''),
+                          r.ok ? 'ok' : 'bad'));
+  if (no.length) findings.push('CANNOT_SAVE');
+}
+
 function verdict(anonRead, userRead) {
   const el = document.getElementById('verdict');
   let title, body, good = false;
@@ -323,6 +366,11 @@ function verdict(anonRead, userRead) {
     body = 'modules.audit is not set to admin or normal in shared_profiles, so the RLS ' +
            'policy filters every row away. Grant the Audit module in User Access, or ' +
            'send this screen over for the SQL.';
+  } else if (findings.includes('CANNOT_SAVE')) {
+    title = 'This login cannot save - and would not have been told until it tried';
+    body = 'Section 7 names each audit the database would refuse and why. Nothing ' +
+           'recorded on this phone will reach the server until that is fixed, so do ' +
+           'not start a round on it. Send this screen over.';
   } else if (findings.includes('SWEEP_NOT_FINISHING')) {
     title = 'The records are not being refused - the sync is not finishing';
     body = 'There are records waiting that have never been tried once, which is what a ' +

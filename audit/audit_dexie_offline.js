@@ -1,4 +1,4 @@
-/* BUILD: 2026-10-08a */
+/* BUILD: 2026-10-08b */
 /* ================================================================
    MJM NURSERY AUDIT — OFFLINE STORAGE v5
    dexie_offline.js
@@ -708,6 +708,11 @@ async function refreshBadge(){
       b.style.cssText = 'position:fixed;top:0;left:0;right:0;margin:0 auto;width:fit-content;max-width:480px;padding:5px 18px;border-radius:0 0 12px 12px;font-size:11px;font-weight:700;z-index:99999;cursor:pointer;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.3);text-align:center;transition:background .15s';
       document.body.appendChild(b);
     }
+    /* Sits under the cannot-save warning when there is one. A record
+       waiting to go up matters; a login that can never send it matters
+       more, and the two must not be drawn on top of each other. */
+    const warn = document.getElementById('_save_check_bar');
+    b.style.top = warn ? (warn.offsetHeight + 'px') : '0';
     if(blocked>0 && n===0){
       // Nothing is going to happen on its own — say so, and prompt the
       // tap that surfaces the confirm dialog (reason + Delete option).
@@ -741,6 +746,96 @@ async function refreshBadge(){
   }catch(e){}
 }
 function showOfflineBadge(){ refreshBadge(); }
+
+/* ================================================================
+   ASK BEFORE THE WORK, NOT AFTER IT
+
+   Twice in one week an auditor filled in a day of audits and only then
+   found out the database would not take them — seventy of them on one
+   phone, and nobody in the office knew for days, because the only thing
+   that ever asked the question was the save itself.
+
+   So the phone asks at sign in. audit_can_i_save() answers per table by
+   reading the real policy out of the catalogue
+   (shared/RUN_ME_audit_save_check.sql), and if the answer is no this bar
+   says so before the first form is opened.
+
+   It FAILS OPEN, for the same reason everything else here does: a null
+   answer is the function not being there or the network being out, not a
+   refusal, and a check that cannot run must never take the module away
+   from somebody who was working fine a minute ago. Only an explicit no
+   from the database puts the bar up.
+================================================================ */
+const SAVE_CHECK_KEY = 'mjm_audit_save_check_v1';
+
+function _saveCheckBar(refused){
+  let b = document.getElementById('_save_check_bar');
+  if(!refused || !refused.length){ if(b){ b.remove(); refreshBadge(); } return; }
+  if(!b){
+    b = document.createElement('div');
+    b.id = '_save_check_bar';
+    b.setAttribute('role','alert');
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99998;padding:9px 14px;'
+      + 'background:#b91c1c;color:#fff;font-size:12px;font-weight:700;line-height:1.45;'
+      + 'text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.35);cursor:pointer';
+    /* Tapping goes where the detail is, rather than opening a dialog that
+       repeats the one sentence already on screen. */
+    b.onclick = ()=>{ location.href = 'audit_diagnostics.html'; };
+    document.body.appendChild(b);
+  }
+  /* The whole module, or one kind of audit: these read very differently
+     to somebody about to start a round, so they are said differently. */
+  const all = refused.length >= 6;
+  b.textContent = '⚠ This login cannot save '
+    + (all ? 'audits' : refused.map(r => _AUDIT_LABEL[r.tbl] || r.tbl).join(', '))
+    + ' — tell the office BEFORE you start. Nothing you record will reach the server. Tap for details.';
+  /* The queue badge lives at the top of the screen too. This one must not
+     be the one that gets covered, so the badge moves under it. */
+  refreshBadge();
+}
+
+const _AUDIT_LABEL = {
+  audit_plot_audits:        'plot condition audits',
+  audit_height_records:     'seedling height audits',
+  audit_papan_audits:       'papan tanda audits',
+  audit_batches:            'batch audits',
+  audit_maintenance_tasks:  'maintenance tasks',
+  audit_maintenance_audits: 'maintenance audits'
+};
+
+async function checkCanSave(){
+  /* Nobody signed in has nothing to be told. */
+  if(!localStorage.getItem('mjm_user')) { _saveCheckBar(null); return null; }
+  if(!navigator.onLine){
+    /* Offline is the normal state in a nursery and says nothing about
+       permission. Show the last answer if it was a no, so a conductor who
+       was told yesterday is still told today. */
+    try{
+      const last = JSON.parse(localStorage.getItem(SAVE_CHECK_KEY) || 'null');
+      if(last && last.refused && last.refused.length) _saveCheckBar(last.refused);
+    }catch(e){}
+    return null;
+  }
+  let rows = null;
+  try{ rows = await withTimeout(sb.canISave(), 10000); }catch(e){ rows = null; }
+  if(!rows){
+    /* Could not be answered. Not a no — leave whatever is on screen alone
+       and do not store an answer we do not have. */
+    console.log('[SaveCheck] no answer — failing open');
+    return null;
+  }
+  const refused = rows.filter(r => r && r.ok === false);
+  try{ localStorage.setItem(SAVE_CHECK_KEY, JSON.stringify({at:Date.now(), refused})); }catch(e){}
+  if(refused.length){
+    console.warn('[SaveCheck] this login cannot save:',
+                 refused.map(r => r.tbl + ' (' + (r.why||'') + ')').join('; '));
+  } else {
+    console.log('[SaveCheck] ✅ every audit table will take a row from this login');
+  }
+  _saveCheckBar(refused);
+  return refused;
+}
+window.checkCanSave = checkCanSave;
 
 /* ================================================================
    TOAST
@@ -831,12 +926,16 @@ async function initOffline(){
   // waiting to go up, so it is shown, not swept.
   refreshBadge();
   renderSyncPill();
+  /* Not awaited: a slow answer must not hold up the page an auditor is
+     trying to open. */
+  checkCanSave();
 
   window.addEventListener('online',()=>{
     console.log('[Net] Online');
     showToast('🔄 Back online — syncing...');
     refreshBadge();
     renderSyncPill();
+    checkCanSave();
     startSync();
   });
   window.addEventListener('offline',()=>{

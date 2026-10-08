@@ -56,6 +56,16 @@ window.__inserted = [];
 window.sb = {
   lastPhotoError: null,
   behaviour: {},            /* set per test */
+  async canISave(){
+    const b = sb.behaviour.canISave;
+    if (b === 'unreachable') return null;
+    if (b === 'hang') return await new Promise(()=>{});
+    if (b === 'refused') return [
+      {tbl:'audit_maintenance_audits', ok:false, why:'your login does not satisfy the insert policy on this table'},
+      {tbl:'audit_plot_audits', ok:true, why:''}
+    ];
+    return [{tbl:'audit_maintenance_audits', ok:true, why:''}];
+  },
   async uploadPhoto(bucket, name, data){
     window.__calls.push('upload:' + name);
     const b = sb.behaviour.upload || 'ok';
@@ -307,10 +317,13 @@ const pass = (m) => console.log('pass  ' + m);
       }));
     });
     await page.goto(`http://127.0.0.1:${port}/audit/audit_diagnostics.html`);
+    /* Wait for the verdict, not for section 6: the verdict is written
+       last, and reading it while the page is still working gives
+       "Checking..." rather than an answer. */
     await page.waitForFunction(
-      () => document.getElementById('g-queue') &&
-            document.getElementById('g-queue').children.length > 0,
-      null, { timeout: 30000 }).catch(()=>{});
+      () => { const v = document.getElementById('verdict');
+              return v && !/Checking/.test(v.textContent); },
+      null, { timeout: 40000 }).catch(()=>{});
     const txt = await page.evaluate(() => ({
       queue:   (document.getElementById('g-queue')||{}).innerText || '',
       verdict: (document.getElementById('verdict')||{}).innerText || ''
@@ -332,6 +345,75 @@ const pass = (m) => console.log('pass  ' + m);
     } else {
       fail('the verdict did not name the fault. It read: ' + JSON.stringify(txt.verdict.slice(0,200)));
     }
+    await ctx.close();
+  }
+
+  /* ── 7. THE PHONE ASKS BEFORE THE WORK, AND FAILS OPEN ────────────── */
+  {
+    const { ctx, page } = await fresh();
+    await page.evaluate(() => localStorage.setItem('mjm_user', JSON.stringify({email:'joyce@mjm.test'})));
+
+    const barText = async () => page.evaluate(() => {
+      const el = document.getElementById('_save_check_bar');
+      return el ? el.textContent : null;
+    });
+
+    /* A database that says no, before a single form has been opened. */
+    await page.evaluate(async () => { sb.behaviour.canISave = 'refused'; await checkCanSave(); });
+    const warned = await barText();
+    if (warned && /cannot save/i.test(warned) && /maintenance audits/i.test(warned)) {
+      pass('a login that cannot save is told so, and told which audits');
+    } else {
+      fail('nothing warned the auditor before the work: ' + JSON.stringify(warned));
+    }
+    if (warned && !/plot condition/i.test(warned)) {
+      pass('it names only what is refused, not the audits that are fine');
+    } else {
+      fail('the warning named an audit the database said yes to');
+    }
+
+    /* The queue badge must not be drawn on top of it. */
+    await page.evaluate(async () => { const db = await getDB();
+      await db.queue.add({table:'audit_maintenance_audits', method:'insert',
+        payload: JSON.stringify({plot:'U1'}), synced:0, retries:0, created_at: Date.now()});
+      await refreshBadge(); });
+    const stacked = await page.evaluate(() => {
+      const w = document.getElementById('_save_check_bar');
+      const b = document.getElementById('_offl_badge');
+      return w && b ? (parseInt(b.style.top||'0', 10) >= w.offsetHeight) : null;
+    });
+    if (stacked) pass('the queue badge sits under the warning rather than over it');
+    else fail('the two top bars overlap - the warning is the one that gets covered');
+
+    /* Access fails OPEN. A check that cannot be answered is not a no. */
+    for (const [mode, label] of [['unreachable', 'the function is not installed yet'],
+                                 ['hang', 'the server never answers']]) {
+      await page.evaluate(async (mode) => {
+        sb.behaviour.canISave = mode;
+        await checkCanSave();
+      }, mode);
+      const after = await barText();
+      if (after === null || !/cannot save/i.test(after)) {
+        fail(`${label}: the warning was cleared, so a stale no can linger — expected it LEFT ALONE`);
+      } else {
+        pass(`${label}: fails open, the previous answer is left alone and no new refusal is invented`);
+      }
+    }
+
+    /* And a yes takes it down again. */
+    await page.evaluate(async () => { sb.behaviour.canISave = 'ok'; await checkCanSave(); });
+    if (await barText() === null) pass('a yes from the database takes the warning down');
+    else fail('the warning stayed up after the database said yes');
+
+    /* Signed out: nothing to tell anybody. */
+    await page.evaluate(async () => {
+      sb.behaviour.canISave = 'refused';
+      localStorage.removeItem('mjm_user');
+      await checkCanSave();
+    });
+    if (await barText() === null) pass('nobody signed in is told nothing');
+    else fail('the login page carries a warning about a login that is not there');
+
     await ctx.close();
   }
 

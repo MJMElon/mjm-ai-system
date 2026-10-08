@@ -434,6 +434,56 @@ The As At date cuts the LINES off and never the signatures: a line dated
 after it is in no figure on screen, while "has anybody checked this" is a
 question about now.
 
+## The only thing that asked "can this login save" was the save
+
+Twice in one week an auditor filled in a day of work and found out
+afterwards that the database would not take it. The first time the audit
+tables were gated on a module check the app had stopped asking for; the
+second the sweep that empties the queue stalled on a photo. Both are
+fixed. **Neither was found by the system** — both were found by an
+auditor, days later, with seventy finished audits stranded on a phone and
+nothing in the office saying a word.
+
+That is the part that would have come back. A permission is checked at the
+moment of the save, which is the moment AFTER the work, and a phone with
+no answer looks exactly like a phone with a yes.
+
+So the phone asks at sign in. `public.audit_can_i_save()`
+(`shared/RUN_ME_audit_save_check.sql`) answers per table, and
+`checkCanSave()` puts a red bar up before the first form is opened:
+*"This login cannot save maintenance audits — tell the office BEFORE you
+start."*
+
+Four things in it:
+
+- **It reads the REAL policy out of `pg_policy` rather than keeping a
+  second copy of the rule.** A hand-written mirror of a policy is a thing
+  that drifts, and the drift is invisible until somebody trusts it.
+  Permissive policies are OR-ed and restrictive ones AND-ed, the way
+  Postgres does it, and the GRANT and the table being there are asked
+  separately — all three have failed on their own here, and the answer
+  says which.
+- **It was proved against a real insert, not against itself.** The scratch
+  Postgres runs every login against every table twice — once through the
+  function, once by actually inserting and rolling back — and compares.
+  It agrees on all eighteen pairs on a healthy database, with a grant
+  revoked, with a policy dropped, and with the module gate that caused the
+  original incident put back.
+- **It fails OPEN.** No answer is the function not being installed, or no
+  signal, or a timeout — never a refusal. A check that cannot run must not
+  take the module away from somebody who was working fine a minute ago,
+  and it must not clear a warning it cannot disprove either. Only an
+  explicit `ok=false` from the database raises the bar.
+- **Its own check does not ask as the owner.** The SQL Editor runs as the
+  database owner with no login attached, so every policy that asks who you
+  are answers no — six red lines on a database where every auditor is
+  fine. Row 1 asks as each auditor in turn and rows 3 onward count the
+  logins per table. The file beside this one had already made that mistake
+  once, reading "7 of 6 -- NOT OK" on a healthy database.
+
+Diagnostics section 7 shows the same answer per table, and the red bar
+taps through to it.
+
 ## A sweep with no timeout is a queue that stops for ever
 
 Seventy finished maintenance audits sat on an auditor phone. The first round
