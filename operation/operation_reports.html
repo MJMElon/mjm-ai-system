@@ -1033,6 +1033,10 @@ async function _losBuildAllRows(asAt) {
     batch: name, breed: '—', supplier: '—', mpob: '—',
     seedsDate: null,
     received: 0, doQty: 0, focPct: null, focQty: 0, replQty: 0,
+    /* How many Seeds_Received rows the batch has, and the stamp of the one
+       these figures came from. A batch is meant to have exactly one — see
+       the note in the Seeds_Received branch below. */
+    srRows: 0, srStamp: '',
     damaged: 0, planted: 0,
     trans: 0, premium: 0, dtone: 0,
     cull1: 0, cull2: 0, cull3: 0,
@@ -1095,14 +1099,46 @@ async function _losBuildAllRows(asAt) {
       // was keyed against.
       const focQty = focPct != null ? Math.round(doQty * (focPct / 100)) : 0;
       const repl   = rp ? parseInt(rp[1], 10) : 0;
-      if (!r.seedsDate || (d && d < r.seedsDate)) r.seedsDate = d;
-      if (r.supplier === '—' && sup && sup[1].trim()) r.supplier = sup[1].trim();
-      if (r.mpob === '—' && mp) r.mpob = mp[1].trim();
-      r.received += Number(l.quantity_change || 0);
-      r.doQty    += doQty;
-      r.focQty   += focQty;
-      r.replQty  += repl;
-      if (r.focPct == null && focPct != null) r.focPct = focPct;
+
+      /* ONE BATCH, ONE RECEPTION — THE NEWEST ROW WINS.
+
+         These figures used to be ADDED UP across every Seeds_Received row the
+         batch had, and a batch is only ever meant to have one. Saving the
+         Seeds In form twice used to leave a second (batch 261 went in seven
+         times, 260 twice), and the 224-241 range was damaged again by an
+         update keyed on created_at — both are named in the comments around
+         that form's save in operation_batch_detail.html.
+
+         So a batch carrying a stale row read as the SUM of the two. Batch 224
+         showed 997,500 seeds received against 9,920 planted and a Variance of
+         minus nine hundred and eighty-seven thousand, while the form it was
+         keyed on, and the batch list beside it, both read 10,500.
+
+         The other two readers had already settled this and this one had not:
+         operation_batch_detail.html loads the newest row with `.limit(1)`
+         ("Match the list page: newest row wins") and
+         operation_batch_record.html de-dupes to the newest per batch_name.
+         Three readers of one ledger, and this was the one disagreeing.
+
+         So: the newest row supplies the figures, the supplier, the licence
+         and the date — exactly what the form shows. EVERY row is still kept
+         in r.rec.received, because the drilldown is where somebody SEES the
+         duplicate, and srRows is counted so the report can SAY there is one
+         rather than quietly dropping it. shared/CHECK_duplicate_seeds_in.sql
+         names them on every batch. */
+      r.srRows += 1;
+      const stamp = String(l.created_at || l.transaction_date || '');
+      if (r.srRows === 1 || stamp >= r.srStamp) {
+        r.srStamp  = stamp;
+        r.seedsDate = d;
+        r.supplier = sup && sup[1].trim() ? sup[1].trim() : '—';
+        r.mpob     = mp ? mp[1].trim() : '—';
+        r.received = Number(l.quantity_change || 0);
+        r.doQty    = doQty;
+        r.focQty   = focQty;
+        r.replQty  = repl;
+        r.focPct   = focPct;
+      }
       r.rec.received.push({ date: d, batch: name, supplier: sup ? sup[1].trim() : '—',
         mpob: mp ? mp[1].trim() : '—', dono: dono ? dono[1].trim() : '—',
         doQty, focQty, repl, qty: Number(l.quantity_change || 0) });
@@ -1538,6 +1574,27 @@ function _losFocSplit(r) {
   return `<div class="text-[9px] font-bold text-[#8a7a68]">${fmtNum(r.doQty)} + FOC ${fmtNum(r.focQty)}</div>`;
 }
 
+/* A BATCH WITH MORE THAN ONE RECEPTION ROW SAYS SO.
+
+   The figure beside this is the newest row's, which is what the Seeds In
+   form and the batch list both show — but a batch is meant to have exactly
+   one reception row, and one that has two is a stale row left by a repeated
+   save or by the created_at update that damaged 224-241. Reading the newest
+   is the right answer and hiding the extra row would not be: nothing would
+   ever get it deleted, and the ledger would go on disagreeing with itself.
+
+   Click the figure to see them all — the drilldown lists every row, which is
+   how somebody tells which one is the real delivery. */
+function _losSeedsInDup(r) {
+  if (!r.srRows || r.srRows < 2) return '';
+  const title = r.srRows + ' Seeds In rows are stored for this batch, and a batch should have '
+              + 'one. The figure is the newest, the same one the Seeds In form and the batch '
+              + 'list show. Click it to see them all, and run '
+              + 'shared/CHECK_duplicate_seeds_in.sql to find every batch like this.';
+  return `<div class="text-[9px] font-black text-[#a83020]" title="${_losEsc(title)}">`
+       + `⚠ ${r.srRows} reception rows</div>`;
+}
+
 /* A figure that can be opened. Everything numeric on this report is one,
    except where there is nothing behind it to show.
 
@@ -1656,6 +1713,7 @@ function _losSummaryHtml(rows, tot, scope) {
       <td${_losVerMark(r, ['seeds_in']) ? ' class="los-unver"' : ''}>
         ${_losFig('received', r.batch, fmtNum(r.received), 'text-[#c07820] font-black')}${_losVerMark(r, ['seeds_in'])}
         ${_losFocSplit(r)}
+        ${_losSeedsInDup(r)}
       </td>
       ${_losCellV('damaged', r, r.damaged, 'text-[#a83020] font-black', ['planting'])}
       ${_losCellV('planted', r, r.planted, 'font-black', ['planting'])}

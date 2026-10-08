@@ -668,6 +668,31 @@ because this was the second fix in a week that had to actually reach a phone.
 That is the condition the rule names: a module somebody wants current, not the
 whole site.
 
+## One batch, one reception — the newest row wins
+
+A batch is meant to have exactly one `Seeds_Received` row. Two things left
+extras: the Seeds In form saving twice before its duplicate guard existed
+(261 went in seven times, 260 twice), and an update keyed on `created_at`
+rather than on the row id, which damaged the **224-241** range. Both are
+written up beside that form's save in `operation_batch_detail.html`.
+
+**Three readers of one ledger, and two of them already agreed.** The Seeds In
+form loads the newest row with `.limit(1)`; the batch list de-dupes to the
+newest per `batch_name`. Life of Seedlings **added them all up** — so batch
+224 showed 997,500 seeds received against 9,920 planted, a Variance of minus
+987,580, and dragged the report's own total down with it, while the form it
+was keyed on read 10,500.
+
+So the newest row now supplies LOS's figures, supplier, licence and date too.
+What it does **not** do is hide the extra: `srRows` counts them, the Seed
+Received cell says **⚠ 2 reception rows**, and the drilldown lists every one —
+because a figure that silently drops a ledger row is how the row stays there
+for ever. `shared/CHECK_duplicate_seeds_in.sql` names them on every batch and
+says which one is being kept.
+
+`tests/los_one_reception_per_batch.cjs` is batch 224 and batch 225 side by
+side: the one with a stale row and the one without.
+
 ## A row count is not a window
 
 "Recent work is all a Field Conductor needs on a phone" was implemented as
