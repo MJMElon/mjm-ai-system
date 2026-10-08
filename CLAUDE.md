@@ -670,11 +670,14 @@ whole site.
 
 ## One batch, one reception — the newest row wins
 
-A batch is meant to have exactly one `Seeds_Received` row. Two things left
-extras: the Seeds In form saving twice before its duplicate guard existed
-(261 went in seven times, 260 twice), and an update keyed on `created_at`
-rather than on the row id, which damaged the **224-241** range. Both are
-written up beside that form's save in `operation_batch_detail.html`.
+A batch is meant to have exactly one `Seeds_Received` row. **Batch 224 had
+ninety-five** — every one identical, same quantity, same remark, same
+`created_at` to the microsecond. That is one bulk insert that ran ninety-five
+times, not an edit somebody made twice. The other two known sources are the
+Seeds In form saving twice before its duplicate guard existed (261 went in
+seven times, 260 twice) and an update keyed on `created_at` rather than on the
+row id, which damaged the **224-241** range; both are written up beside that
+form's save in `operation_batch_detail.html`.
 
 **Three readers of one ledger, and two of them already agreed.** The Seeds In
 form loads the newest row with `.limit(1)`; the batch list de-dupes to the
@@ -689,6 +692,22 @@ Received cell says **⚠ 2 reception rows**, and the drilldown lists every one �
 because a figure that silently drops a ledger row is how the row stays there
 for ever. `shared/CHECK_duplicate_seeds_in.sql` names them on every batch and
 says which one is being kept.
+
+**The check gives ONE ROW PER BATCH, and that was learned the hard way:** the
+first version printed one row per LEDGER ROW, so batch 224 alone answered with
+ninety-five identical lines and the list could not be read at all. The
+batch-wide one comes first and
+`CHECK_duplicate_seeds_in_rows.sql` is the drill-down, for the only case that
+needs one — a batch whose rows genuinely DIFFER, where somebody has to say
+which is the real delivery.
+
+`shared/RUN_ME_dedupe_seeds_in.sql` is the repair, and it only ever deletes a
+row that is a COPY: two rows count as the same when every column matches
+except the id, the `created_at` and the last-edited stamps — compared off the
+whole row through `to_jsonb(l) - 'id' - …`, so a column added later is
+compared too instead of being quietly ignored. A batch whose rows differ is
+left alone and NAMED. It also drops its temp table first, because the SQL
+Editor reuses a connection and "safe to run twice" has to survive that.
 
 `tests/los_one_reception_per_batch.cjs` is batch 224 and batch 225 side by
 side: the one with a stale row and the one without.
