@@ -1,4 +1,4 @@
-/* BUILD: 2026-08-21k */
+/* BUILD: 2026-10-08a */
 /* ================================================================
    MJM NURSERY — SUPABASE SHARED CONFIG
    supabase.js
@@ -106,7 +106,18 @@ function canOpenAuditPage(page) {
     const p = u.permissions || {};
     // audit_actions is authoritative; audit_pages mirrors it.
     const acts = p.audit_actions && p.audit_actions[page];
-    if (acts) return !!acts.view;
+    /* `view` MISSING is not `view` false. User Access lists Record a new
+       audit and Edit and delete past audits for each page, so a saved row
+       can easily read { record:true, edit:false } with no `view` key in
+       it at all — and `!!acts.view` then denied the page to somebody the
+       office had just granted. Every module card vanished and the only
+       tile left on screen was the one not covered by this map.
+       Access fails OPEN here the way it does everywhere else: an absent
+       answer is nobody has been asked, and only an explicit false is a
+       no. */
+    if (acts && acts.view === false) return false;
+    if (acts && acts.view === true)  return true;
+    if (acts) return true;
     const lvl = p.audit_pages && p.audit_pages[page];
     if (lvl) return lvl !== 'none';
     // Nothing configured for this user: unchanged behaviour, everything open.
@@ -321,6 +332,29 @@ const sb = {
       }
       throw e;
     }
+  },
+  /* Can this login save at all? Asked at sign in, before an auditor
+     spends a day filling in forms the database is going to refuse.
+
+     It answers per table, reading the real policy out of the catalogue —
+     shared/RUN_ME_audit_save_check.sql installs it. A null answer means
+     the function is not there or could not be reached, and that is NOT a
+     no: access fails open here the way it does everywhere else in this
+     system, so a check that cannot run never takes the module away from
+     somebody who was working fine a minute ago. */
+  async canISave() {
+    try {
+      const token = await accessToken();
+      const res = await fetch(`${SUPA_URL}/rest/v1/rpc/audit_can_i_save`, {
+        method: 'POST',
+        headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${token || SUPA_KEY}`,
+                   'Content-Type': 'application/json' },
+        body: '{}'
+      });
+      if (!res.ok) return null;
+      const rows = await res.json();
+      return Array.isArray(rows) ? rows : null;
+    } catch (e) { return null; }
   },
   async insert(table, data) {
     return sbFetch(table, { method: 'POST', body: JSON.stringify(data), prefer: 'return=representation' });

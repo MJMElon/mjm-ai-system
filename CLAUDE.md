@@ -374,6 +374,87 @@ became optional on the same day, so both answers are one click apart.
 `tests/tray_named_adjustment_closes_pending.cjs` drives 234's own figures
 through the real page: ten of its assertions fail on the previous code.
 
+## An amendment is dated by the amendment, and it lands in the TOTAL
+
+The Transplanting Report lists one line per transplant record. An approved
+Stock Calibration against that report used to reach it only as a **dotted
+underline on the row of the plot it corrected** — hoverable, and worth
+nothing to the figure on screen.
+
+Two things were wrong with that, and the second is the one worth keeping.
+
+**A mark is not a figure.** Nobody hovers; the number on screen is the number
+that gets written down.
+
+**And it was dated by the wrong event.** The mark sat on the TRANSPLANT row,
+so it lived in the month the seedlings went out. Batch 225 went out in March
+and was amended in **December**, and a December range therefore showed one
+record of 6,362 and no sign of the amendment at all — while the office
+knew December had moved by 1. **The correction happened in December whatever
+month the seedlings went out in**, so an amendment belongs to the range that
+covers the CALIBRATION date, never the transplant date.
+
+Where it lands was decided after two wrong answers, and both are instructive:
+
+- **Added into the row** — then the row no longer says what was keyed on
+  the day, and a record that reads differently from the paper it was keyed
+  off is not a record.
+- **A line of its own** — then an amendment looks like a transplant, and
+  the record count on a report headed "1 RECORD" starts counting corrections.
+
+So: **the rows are untouched, and the amendment goes into the TOTAL** —
+the one figure on the page that claims to be how many went out. Where the
+total carries one it is **dotted**, and the hover names the calibration date,
+the batch, the plot and the amount of each. A total that is more than the rows
+above it add up to is exactly the kind of figure that has to say why.
+
+Two things fall out of it:
+
+- **The same filters apply.** An amendment on a UNN 1 plot is out of a UNN 2
+  report, and one of nought is not shown at all.
+- **A range with an amendment and no transplant still prints a Total.** Only
+  the rows were empty; the month really did move.
+
+`tests/transplanting_report_qty.cjs` holds all of it, both office figures
+included, and drives the real build rather than a copy.
+
+`shared/CHECK_transplanting_report_qty.sql` names any amendment whose `Plot:`
+text matches no transplant row — the report compares that text against
+the plot on the transplant row **letter for letter**, with none of the key
+normalising used everywhere else, so a stray space is enough to make an
+approved amendment invisible. It was 0 of 8 the day this was written.
+
+## Transplanting is not over-allocated by exactly its own adjustment
+
+The other side of the same coin, and it reads worse on screen because the
+engine says ERROR.
+
+A report that balanced to the seedling BEFORE a tray-named adjustment reads
+Over Allocated by exactly that adjustment after it, because the adjustment
+moves what is standing in the plot and deliberately leaves the batch total
+alone. Batch 225: 9,658 into its main plot, 815 first-culled, a base of
+10,473 — and a **+1** on N19, "found 1 more seedling when processing the 2nd
+culling", keyed against the tray it came out of. **Over Allocated by 1, ring
+stuck at 99%**, with the +1 sitting in the Adjustment column of the same
+screen. The one figure that accounted for the difference was the one being
+called an error.
+
+`rawPending` is the sum LESS the tray-named net, so **`rawPending ===
+−trayLossT3` is the same statement as "it balances on its own figures"** —
+there is nothing to compare, the test falls out of the arithmetic.
+`calcTransplanting` floats a note when it holds, the match box reads
+Satisfied, and `updateTransplantCompletion` takes `explained` so the ring may
+reach 100 (the drone-map condition is untouched — a missing map still holds
+it at 99 unless HQ has signed).
+
+Exactly, never nearly, for the reason below. And a difference that is NOT the
+adjustment still reads as an error: 51 out with a +1 adjustment is an
+over-allocation of 51.
+
+`tests/over_allocated_by_the_adjustment.cjs` holds it, including that the
+same +1 naming NO tray needs no note at all — that one moves both sides of
+the sum and the allocation never stopped balancing.
+
 ## 1st Culling is not wrong when Transplanting was adjusted after it
 
 A plot can be over-allocated: the transplant record counts 1,053 into U3 and
@@ -433,6 +514,184 @@ Three things to know before touching `LOS_GROUP_OF_TYPE` in
 The As At date cuts the LINES off and never the signatures: a line dated
 after it is in no figure on screen, while "has anybody checked this" is a
 question about now.
+
+## The only thing that asked "can this login save" was the save
+
+Twice in one week an auditor filled in a day of work and found out
+afterwards that the database would not take it. The first time the audit
+tables were gated on a module check the app had stopped asking for; the
+second the sweep that empties the queue stalled on a photo. Both are
+fixed. **Neither was found by the system** — both were found by an
+auditor, days later, with seventy finished audits stranded on a phone and
+nothing in the office saying a word.
+
+That is the part that would have come back. A permission is checked at the
+moment of the save, which is the moment AFTER the work, and a phone with
+no answer looks exactly like a phone with a yes.
+
+So the phone asks at sign in. `public.audit_can_i_save()`
+(`shared/RUN_ME_audit_save_check.sql`) answers per table, and
+`checkCanSave()` puts a red bar up before the first form is opened:
+*"This login cannot save maintenance audits — tell the office BEFORE you
+start."*
+
+Four things in it:
+
+- **It reads the REAL policy out of `pg_policy` rather than keeping a
+  second copy of the rule.** A hand-written mirror of a policy is a thing
+  that drifts, and the drift is invisible until somebody trusts it.
+  Permissive policies are OR-ed and restrictive ones AND-ed, the way
+  Postgres does it, and the GRANT and the table being there are asked
+  separately — all three have failed on their own here, and the answer
+  says which.
+- **It was proved against a real insert, not against itself.** The scratch
+  Postgres runs every login against every table twice — once through the
+  function, once by actually inserting and rolling back — and compares.
+  It agrees on all eighteen pairs on a healthy database, with a grant
+  revoked, with a policy dropped, and with the module gate that caused the
+  original incident put back.
+- **It fails OPEN.** No answer is the function not being installed, or no
+  signal, or a timeout — never a refusal. A check that cannot run must not
+  take the module away from somebody who was working fine a minute ago,
+  and it must not clear a warning it cannot disprove either. Only an
+  explicit `ok=false` from the database raises the bar.
+- **Its own check does not ask as the owner.** The SQL Editor runs as the
+  database owner with no login attached, so every policy that asks who you
+  are answers no — six red lines on a database where every auditor is
+  fine. Row 1 asks as each auditor in turn and rows 3 onward count the
+  logins per table. The file beside this one had already made that mistake
+  once, reading "7 of 6 -- NOT OK" on a healthy database.
+
+Diagnostics section 7 shows the same answer per table, and the red bar
+taps through to it.
+
+## An outbox is half of recording with no line. The LIST is the other half.
+
+The queue has always worked: an audit saved with no signal goes into
+IndexedDB and is sent when the line comes back. What nobody checked is
+whether there is anything on screen to record AGAINST.
+
+Plot Condition, Seedling Height and Papan Tanda each keep the PROCESSED
+list in localStorage and serve it when `navigator.onLine` is false, so
+with no signal the auditor still sees yesterday's plots and can work.
+**Maintenance had none of that.** Its `loadAll` fires three reads and the
+middle one, `audit_maintenance_audits`, carries no `.catch`, so one
+failure throws past the whole function: `tasks` is never set,
+`renderLists` never runs, and the screen reads "Failed to load" over an
+empty list. With no line that is every single time. The auditor is
+standing in the plot with the work in front of them and the app has
+nothing to offer — and the outbox underneath it, working perfectly, has
+nothing to put in it.
+
+So Maintenance now carries `_saveOfflineCache` / `_loadOfflineCache` and
+the same offline short-circuit, copied from `audit_script.js` rather than
+invented: **Plot Condition is the one to copy, it is the steadiest of the
+four.** Two things about the shape:
+
+- **Cache the PROCESSED state**, the same shape the renderer already
+  reads. Caching raw rows means re-deriving the plot placement on restore,
+  which is a second copy of the rule and a second thing to get wrong.
+- **A failed load WITH a line falls back to the cache too.** A flaky
+  tower or a refusal used to leave the same empty screen as no signal at
+  all. Yesterday's list is a better answer than nothing, and the toast
+  says which day it is from, so nobody mistakes it for live.
+
+`tests/every_audit_records_with_no_line.cjs` holds all four modules to the
+three things the office actually asked for — it can record the work, it
+can record with no line, it syncs when the line comes back — and reads the
+SHIPPED files, because the whole fault was one of four drifting out of
+step with the others and nothing saying so.
+
+## A sweep with no timeout is a queue that stops for ever
+
+Seventy finished maintenance audits sat on an auditor phone. The first round
+was real: the audit tables were gated on a module check the app had stopped
+asking for, so the database refused every row. That was repaired and PROVED —
+the repair ends by inserting as each auditor and rolling it back, and it came
+back 46 of 46.
+
+The phone still would not empty. The banner read **69 pending (1 stuck)** and
+did not move while it was watched, and the Sync pill said the last clean
+sweep had been a minute earlier. Those two facts together say it: the sweep
+is not FAILING, it is not FINISHING.
+
+`smartSave` had always wrapped its photo upload and its insert in a timeout.
+`syncNow` wrapped NEITHER. One stalled upload on a nursery signal held the
+for-loop on item one for ever; `_syncing` stayed true, so the 30-second timer
+and every tap after it answered "already syncing" and did nothing, and a
+reload started the same stall again. The tell is in the data and nowhere else:
+**none of the sixty-nine had been retried even once**, which is why none of
+them had reached the five-try park.
+
+Four rules, each the shape of a way a queue wedges:
+
+- **Every call inside a sweep gets a timeout.** A call that never answers must
+  end that ITEM, not the sweep. The item retries next time; the sweep carries
+  on to the sixty-eight behind it.
+- **The in-flight flag is released in a `finally`,** and a flag older than any
+  sweep can be is taken over. Without the takeover, a phone holding the
+  previous version of the file stays frozen until somebody clears site data —
+  nothing on the phone can clear a flag set by code that never came back.
+  Taking over is safe because an item is marked done only after the server has
+  taken it, and a second insert of a row already there comes back 23505, which
+  the loop already retires quietly.
+- **A photo url is written into the QUEUE ROW the moment it exists,** before
+  the photo is deleted from the phone and before the insert that may still
+  refuse. It used to live only in a local variable: upload succeeded, photo
+  deleted, insert refused, and the row went back to the queue still saying
+  `__IMG__`. The next sweep found no photo, read null, and saved the audit
+  photo-less — on a form that makes the photo compulsory.
+- **A count that does not move is, on a phone, the same thing as a stop.**
+  Sixty-nine audits with a photo each is minutes of work, so the badge counts
+  "Sending 12 of 69" through the sweep. The previous version refreshed the
+  badge once at each end and said the same number for the whole of it.
+
+And the instrument, which matters more than any of them. The only thing on
+screen about those seventy audits was a number in a green bar, so the question
+"refused, or waiting, or going up right now and slow?" could only be answered
+by sending a video of a number not moving. **`audit/audit_diagnostics.html`
+now reads the outbox straight out of IndexedDB** — how many wait, how many the
+server refused and the reason against each, which table, how old the oldest
+is, and how many tries the waiting ones have had. All on nought is the
+signature of a sweep that is not finishing, and the verdict says so in those
+words. It reads with plain `indexedDB`, never through
+`audit_dexie_offline.js`, for the same reason as the rest of that page: it has
+to answer when the file it is reporting on is the broken one. Nothing had ever
+linked to it, so the Administration row on `audit_admin.html` does, and the
+stuck-badge dialog offers it before it offers the delete.
+
+`tests/sync_cannot_wedge.cjs` holds all of it, through the real file in a real
+browser — six of its checks fail on the previous code.
+
+The audit module also joined `npayroll/` in carrying the three no-cache metas,
+because this was the second fix in a week that had to actually reach a phone.
+That is the condition the rule names: a module somebody wants current, not the
+whole site.
+
+## One batch, one reception — the newest row wins
+
+A batch is meant to have exactly one `Seeds_Received` row. Two things left
+extras: the Seeds In form saving twice before its duplicate guard existed
+(261 went in seven times, 260 twice), and an update keyed on `created_at`
+rather than on the row id, which damaged the **224-241** range. Both are
+written up beside that form's save in `operation_batch_detail.html`.
+
+**Three readers of one ledger, and two of them already agreed.** The Seeds In
+form loads the newest row with `.limit(1)`; the batch list de-dupes to the
+newest per `batch_name`. Life of Seedlings **added them all up** — so batch
+224 showed 997,500 seeds received against 9,920 planted, a Variance of minus
+987,580, and dragged the report's own total down with it, while the form it
+was keyed on read 10,500.
+
+So the newest row now supplies LOS's figures, supplier, licence and date too.
+What it does **not** do is hide the extra: `srRows` counts them, the Seed
+Received cell says **⚠ 2 reception rows**, and the drilldown lists every one —
+because a figure that silently drops a ledger row is how the row stays there
+for ever. `shared/CHECK_duplicate_seeds_in.sql` names them on every batch and
+says which one is being kept.
+
+`tests/los_one_reception_per_batch.cjs` is batch 224 and batch 225 side by
+side: the one with a stale row and the one without.
 
 ## A row count is not a window
 
