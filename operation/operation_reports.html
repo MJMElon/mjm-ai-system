@@ -3979,12 +3979,49 @@ async function runTransplantingReport() {
   });
   rows = [...merged.values()];
 
+  /* THE QTY IS THE ADJUSTED ONE, and the recorded figure sits under it.
+     Batch 241's N3 read 6,362 here and 6,363 on Tab 3 of the batch, with the
+     approved +1 showing only as a dotted underline nobody hovers. Two
+     screens quoting two figures for the same plot is how an afternoon goes
+     on finding out which is right, so this one now quotes what Tab 3
+     quotes — and says, on the row, what it was before the adjustment and
+     how much the adjustment was. Nothing is hidden by agreeing.
+
+     AN ADJUSTMENT BELONGS TO THE PLOT, NOT TO A TRANSPLANT DATE. It is
+     keyed against batch and plot, while this report splits a plot into one
+     line per date it was transplanted on. Adding it to each of those lines
+     would count it as many times as there are dates — and the mark already
+     did appear on all of them. So it lands on the LATEST line of that plot
+     still on screen, which is the one the correction was made against, and
+     the earlier lines carry their own figure with no mark.
+
+     Latest of the lines STILL ON SCREEN, deliberately: a date range that
+     cuts off the last transplant would otherwise drop the adjustment out of
+     the total of the range being looked at. */
+  const adjOwner = new Map();
+  rows.forEach(r => {
+    if (!r.cal || !r.cal.length) return;
+    const k = r.batch + '\x01' + r.plot;
+    const held = adjOwner.get(k);
+    if (!held || String(r.date || '') > String(held.date || '')) adjOwner.set(k, r);
+  });
+  rows.forEach(r => {
+    const owns = adjOwner.get(r.batch + '\x01' + r.plot) === r;
+    r.adj = owns ? r.cal.reduce((s, c) => s + (Number(c.qty) || 0), 0) : 0;
+    if (!owns) r.cal = null;
+    r.final = r.qty + r.adj;
+  });
+
   // Newest date first; same date, same plot sits together (natural order —
   // "B10" after "B9", not before it) instead of interleaving with whatever
   // other plots happened to share that date.
   const _tpNatCmp = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
   rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')) || _tpNatCmp(a.plot, c.plot));
-  const total = rows.reduce((s, r) => s + r.qty, 0);
+  const total = rows.reduce((s, r) => s + r.final, 0);
+  // What it would have come to before the adjustments, so the Total line can
+  // say so rather than quietly disagreeing with a figure somebody wrote down
+  // last week.
+  const totalRecorded = rows.reduce((s, r) => s + r.qty, 0);
 
   loading.classList.add('hidden');
   out.classList.remove('hidden');
@@ -4010,14 +4047,19 @@ async function runTransplantingReport() {
                 <td>${r.breed}</td>
                 ${r.cal && r.cal.length ? (() => {
                   const idx = _mvDetailPool.push({ title: 'Calibration', rows: r.cal }) - 1;
+                  /* The adjusted figure is the headline, the recorded one is
+                     the small print under it — and the hover still carries
+                     the date and the reason somebody wrote. */
                   return `<td class="text-right font-black"><span class="cursor-help border-b border-dotted border-current"
-                    onmouseenter="mvShowDetailTip(this, ${idx})" onmouseleave="mvHideDetailTip()">${fmtNum(r.qty)}</span></td>`;
+                    onmouseenter="mvShowDetailTip(this, ${idx})" onmouseleave="mvHideDetailTip()">${fmtNum(r.final)}</span>
+                    <div class="text-[9px] font-bold text-[#8a5a2b] uppercase tracking-wider whitespace-nowrap mt-0.5">${fmtNum(r.qty)} recorded · ${r.adj > 0 ? '+' : ''}${fmtNum(r.adj)} adjusted</div></td>`;
                 })() : `<td class="text-right font-black">${fmtNum(r.qty)}</td>`}
               </tr>`).join('') : `<tr><td colspan="7" class="text-center py-10 text-[#8a7a68]">No transplant records match the selected filters.</td></tr>`}
           </tbody>
           ${rows.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
             <td colspan="6" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
-            <td class="text-right text-[#3a7ab4]">${fmtNum(total)}</td>
+            <td class="text-right text-[#3a7ab4]">${fmtNum(total)}${total !== totalRecorded ? `
+              <div class="text-[9px] font-bold text-[#8a5a2b] uppercase tracking-wider whitespace-nowrap mt-0.5">${fmtNum(totalRecorded)} recorded · ${total - totalRecorded > 0 ? '+' : ''}${fmtNum(total - totalRecorded)} adjusted</div>` : ''}</td>
           </tr></tfoot>` : ''}
         </table>
       </div>
