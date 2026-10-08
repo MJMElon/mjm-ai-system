@@ -706,8 +706,15 @@ row that is a COPY: two rows count as the same when every column matches
 except the id, the `created_at` and the last-edited stamps — compared off the
 whole row through `to_jsonb(l) - 'id' - …`, so a column added later is
 compared too instead of being quietly ignored. A batch whose rows differ is
-left alone and NAMED. It also drops its temp table first, because the SQL
-Editor reuses a connection and "safe to run twice" has to survive that.
+left alone and NAMED, counted off the same snapshot the DELETE runs against —
+sound precisely because those are the rows it does not touch.
+
+**It is ONE statement and creates nothing.** The first version built a TEMP
+table, and the SQL Editor warned that a table was being created without Row
+Level Security. That is a false alarm — a temp table lives in the session and
+no anon or authenticated key can reach it — but a warning somebody has to
+click past is a bad thing to hand over, and the table was never needed: the
+count comes back from the DELETE through `RETURNING`.
 
 `tests/los_one_reception_per_batch.cjs` is batch 224 and batch 225 side by
 side: the one with a stale row and the one without.
