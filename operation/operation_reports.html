@@ -714,7 +714,8 @@ const LOS_GROUP_OF_TYPE = {
   Planted:                 'planting',
   Damaged_Seeds:           'planting',
   Transplanted:            'transplanting',
-  Transplanted_DoubleTone: 'dtone',
+  Transplanted_DoubleTone: 'dtone_tray',
+  DTone_Nursery_Qty:       'dtone',
   Transplanted_Premium:    'premium',
   '1st_Culling':           'cull_1',
   '2nd_Culling':           'cull_2',
@@ -739,7 +740,8 @@ const LOS_GROUP_OF_TYPE = {
    exists to stop. */
 const LOS_STAGE_OF_GROUP = {
   seeds_in: 'seeds_in', planting: 'planting',
-  transplanting: 'transplanting', dtone: 'transplanting', premium: 'transplanting',
+  transplanting: 'transplanting', dtone: 'transplanting',
+  dtone_tray: 'transplanting', premium: 'transplanting',
   cull_1: 'cull_1', cull_2: 'cull_2', cull_3: 'cull_3', transfer: 'cull_3'
 };
 
@@ -752,11 +754,11 @@ const LOS_ROW_STAGES = { transplanting: 1, cull_1: 1, cull_2: 1, cull_3: 1 };
 // What a group is called when the report has to name it to the reader.
 const LOS_GROUP_NAMES = {
   seeds_in: 'seed in', planting: 'planting', transplanting: 'transplanting',
-  dtone: 'double tone', premium: 'premium care',
+  dtone: 'double tone', dtone_tray: 'double-tone tray', premium: 'premium care',
   cull_1: '1st culling', cull_2: '2nd culling', cull_3: '3rd culling',
   transfer: '3rd-culling transfer'
 };
-const LOS_GROUP_ORDER = ['seeds_in', 'planting', 'transplanting', 'dtone', 'premium',
+const LOS_GROUP_ORDER = ['seeds_in', 'planting', 'transplanting', 'dtone', 'dtone_tray', 'premium',
                          'cull_1', 'cull_2', 'cull_3', 'transfer'];
 
 /* WHICH GROUPS A DERIVED FIGURE IS MADE OF. The same rule the figure itself
@@ -968,6 +970,7 @@ async function _losBuildAllRows(asAt) {
       .select('batch_name, breed_name, transaction_type, transaction_date, created_at, remark, plot_name, quantity_change')
       .in('transaction_type', ['Seeds_Received', 'Damaged_Seeds', 'Planted',
           'Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone',
+          'DTone_Nursery_Qty',
           '1st_Culling', '2nd_Culling', '3rd_Culling', 'Cull3_Transfer',
           'Stock_Calibration'])
       .order('id', { ascending: true })),
@@ -1042,7 +1045,11 @@ async function _losBuildAllRows(asAt) {
        the note in the Seeds_Received branch below. */
     srRows: 0, srStamp: '',
     damaged: 0, planted: 0,
-    trans: 0, premium: 0, dtone: 0,
+    trans: 0, premium: 0,
+    /* DOUBLE TONE IS THE KEYED FIGURE, NOT THE TRANSPLANT INTO THE TRAY —
+       see the DTone_Nursery_Qty branch below. dtoneTray is the other one,
+       kept so a batch that has only ever done that is still a batch. */
+    dtone: 0, dtStamp: '', dtRows: 0, dtoneTray: 0,
     cull1: 0, cull2: 0, cull3: 0,
     /* Of the sales and the calibration, the part that happened in the
        PRE-NURSERY. Seedlings can leave a tray without ever being
@@ -1060,7 +1067,7 @@ async function _losBuildAllRows(asAt) {
        _losApplyVerification() at the end of the build, and read by the
        report's ⧗ markers — see _losStageState(). */
     ver: {},
-    rec: { received: [], damaged: [], planted: [], trans: [], premium: [], dtone: [],
+    rec: { received: [], damaged: [], planted: [], trans: [], premium: [], dtone: [], dtoneTray: [],
            cull1: [], cull2: [], cull3: [], transfer: [], sales: [], calibration: [] }
   });
   const rowFor = (name) => rowsByBatch[name] || (rowsByBatch[name] = blank(name));
@@ -1167,10 +1174,43 @@ async function _losBuildAllRows(asAt) {
     }
     if (t === 'Transplanted_Premium' || t === 'Transplanted_DoubleTone') {
       const src = (l.remark || '').match(_RE_LOS_FROM_TRAY);
-      const key = t === 'Transplanted_Premium' ? 'premium' : 'dtone';
+      /* NOT the Double Tone column. This is the step that FILLS the D-Tone
+         tray out of the batch's own tray, and its seedlings leave again
+         later as ordinary Transplanted rows — the same reason it takes no
+         part in the Balance. The column is the figure below. */
+      const key = t === 'Transplanted_Premium' ? 'premium' : 'dtoneTray';
       r[key] += q;
       r.rec[key].push({ date: d, batch: name, from: src ? src[1].trim() : '—',
         place: l.plot_name || '—', qty: q });
+      return;
+    }
+
+    /* DOUBLE TONE IS THE FIGURE THE OFFICE KEYED.
+
+       The Transplanting tab has a box headed "Double Tone Quantity in
+       Nursery" — an admin counts the double-tone seedlings standing in the
+       nursery and keys the number, and Tabs 3 and 4 add it to the planted
+       total to get their allocation base. It is stored as ONE
+       DTone_Nursery_Qty row per batch and read back newest-first with
+       `.limit(1)`, exactly as loadDtoneNurseryQty() does it.
+
+       This column used to show Transplanted_DoubleTone instead — the
+       transplant INTO the d-tone tray, which is a different number and is
+       nought on most batches. So the report read 0 against batches the
+       office had keyed a figure for, on a column headed Double Tone.
+
+       Newest wins, like the form: a second keying is a correction, not a
+       second lot of seedlings. dtRows counts them so the report can say
+       when there is more than one, the same way the Seeds In column does. */
+    if (t === 'DTone_Nursery_Qty') {
+      r.dtRows += 1;
+      const stamp = String(l.created_at || l.transaction_date || '');
+      if (r.dtRows === 1 || stamp >= r.dtStamp) {
+        r.dtStamp = stamp;
+        r.dtone   = Number(l.quantity_change || 0);
+      }
+      r.rec.dtone.push({ date: d, batch: name, place: l.plot_name || '—',
+        note: l.remark || '', qty: Number(l.quantity_change || 0) });
       return;
     }
     if (t === '1st_Culling' || t === '2nd_Culling' || t === '3rd_Culling') {
@@ -1327,7 +1367,7 @@ async function _losBuildAllRows(asAt) {
      when its quantity is nought, so a genuine keying error stays visible), or
      if anything at all has moved. Only a batch with neither goes. */
   const _losMoved = (r) => !!(r.received || r.damaged || r.planted || r.trans ||
-    r.premium || r.dtone || r.cull1 || r.cull2 || r.cull3 || r.transfer ||
+    r.premium || r.dtone || r.dtoneTray || r.cull1 || r.cull2 || r.cull3 || r.transfer ||
     r.sales || r.calibration);
   const rows = Object.values(rowsByBatch).filter(r => r.seedsDate || _losMoved(r));
 
@@ -1387,12 +1427,17 @@ function _losApplyVerification(rows, logs, ctx) {
     const d = _logDate(l);
     if (ctx.asAt && d && d > ctx.asAt) return;
     /* A transfer card signs off under the plot the seedlings LEFT, which the
-       line names in its remark and not in plot_name — everything else signs
-       off under its own plot. */
+       line names in its remark and not in plot_name. The Double Tone
+       Quantity in Nursery box is not about a plot at all and signs off under
+       its own name — see ROW_TAB_CONFIG in operation_batch_detail.html,
+       where it is pushed with the key 'DTONE-NURSERY-QTY'. Everything else
+       signs off under its own plot. */
     let rowKey;
     if (l.transaction_type === 'Cull3_Transfer') {
       const from = (l.remark || '').match(_RE_LOS_FROM_PLOT);
       rowKey = from ? _losPlotKey(from[1]) + '|TRANSFER' : '';
+    } else if (l.transaction_type === 'DTone_Nursery_Qty') {
+      rowKey = 'DTONE-NURSERY-QTY';
     } else {
       rowKey = _losPlotKey(l.plot_name);
     }
@@ -4644,9 +4689,14 @@ const LOS_DRILL = {
     cols: [_losCol.date, _losCol.batch, _losCol.fromTray, _losCol.nursery, _losCol.plot,
       { ..._losQty('Qty', 'text-[#3a7ab4] font-black'), sum: x => x.qty }],
     roll: x => x.nursery },
-  dtone: { title: 'Double Tone', list: 'dtone',
-    tipLabel: x => x.batch + ' · ' + x.from + ' → ' + x.place,
-    cols: [_losCol.date, _losCol.batch, _losCol.fromTray, _losCol.tray,
+  /* The keyed Double Tone Quantity in Nursery, one row per keying. The
+     newest is the figure on the report — a second row is a correction, and
+     the window is where somebody sees that there was one. Summed all the
+     same, because a total that did not add up to its own rows would be the
+     more confusing of the two. */
+  dtone: { title: 'Double Tone Quantity in Nursery', list: 'dtone',
+    tipLabel: x => x.batch + ' · keyed ' + (x.date || '—'),
+    cols: [_losCol.date, _losCol.batch, _losCol.note,
       { ..._losQty('Qty', 'text-[#7c3aed] font-black'), sum: x => x.qty }] },
   cull1: { title: '1st Culling', list: 'cull1',
     tipLabel: x => x.batch + ' · ' + x.place,

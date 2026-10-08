@@ -668,6 +668,33 @@ because this was the second fix in a week that had to actually reach a phone.
 That is the condition the rule names: a module somebody wants current, not the
 whole site.
 
+## Two numbers wear the name Double Tone
+
+**`DTone_Nursery_Qty`** is the box on the Transplanting tab headed *"Double
+Tone Quantity in Nursery"*: an admin counts the double-tone seedlings standing
+in the nursery and keys the number, and Tabs 3 and 4 add it to the planted
+total to get their allocation base. One row per batch, newest wins
+(`loadDtoneNurseryQty`).
+
+**`Transplanted_DoubleTone`** is the batch pushing its own seedlings into the
+d-tone tray. A different number, nought on most batches, and it takes no part
+in the Balance because those seedlings leave the tray again later as ordinary
+`Transplanted` rows.
+
+Life of Seedlings' **Double Tone column showed the second one**, so it read 0
+against every batch the office had keyed a figure for. It now shows the keyed
+Quantity in Nursery, newest-wins, like the form — and the tray transplant
+keeps its own group (`dtone_tray`), which has no column but is still named in
+the row's verdict, exactly as premium care is.
+
+The box has its own sign-off on Tab 3 under the row key
+**`DTONE-NURSERY-QTY`** rather than a plot, so `_losApplyVerification`
+special-cases it the way it special-cases a transfer card.
+
+`shared/CHECK_double_tone_quantity.sql` puts the two numbers side by side on
+every batch and counts the ones that were reading nought.
+`tests/los_double_tone_is_the_keyed_figure.cjs` keeps a batch that has BOTH.
+
 ## The 2nd culling never deducts. Not even while no 3rd exists.
 
 Three readers, and Life of Seedlings was the odd one out again — this time on
