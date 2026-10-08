@@ -191,9 +191,17 @@ async function _rememberPhotoUrl(item, field, url){
   }
 }
 
-/* ── Timeout wrapper ── */
+/* ── Timeout wrapper ──
+   The timer is cleared when the work wins the race. It was not, which on
+   a sweep of sixty-nine records left sixty-nine live timers behind,
+   each still holding its closure for forty-five seconds after the thing
+   it was watching had finished. */
 function withTimeout(p, ms){
-  return Promise.race([p, new Promise((_,r)=>setTimeout(()=>r(new Error('timeout '+ms+'ms')),ms))]);
+  let t;
+  return Promise.race([
+    Promise.resolve(p).finally(()=>clearTimeout(t)),
+    new Promise((_,r)=>{ t = setTimeout(()=>r(new Error('timeout '+ms+'ms')), ms); })
+  ]);
 }
 
 /* ================================================================
