@@ -565,6 +565,43 @@ Four things in it:
 Diagnostics section 7 shows the same answer per table, and the red bar
 taps through to it.
 
+## An outbox is half of recording with no line. The LIST is the other half.
+
+The queue has always worked: an audit saved with no signal goes into
+IndexedDB and is sent when the line comes back. What nobody checked is
+whether there is anything on screen to record AGAINST.
+
+Plot Condition, Seedling Height and Papan Tanda each keep the PROCESSED
+list in localStorage and serve it when `navigator.onLine` is false, so
+with no signal the auditor still sees yesterday's plots and can work.
+**Maintenance had none of that.** Its `loadAll` fires three reads and the
+middle one, `audit_maintenance_audits`, carries no `.catch`, so one
+failure throws past the whole function: `tasks` is never set,
+`renderLists` never runs, and the screen reads "Failed to load" over an
+empty list. With no line that is every single time. The auditor is
+standing in the plot with the work in front of them and the app has
+nothing to offer — and the outbox underneath it, working perfectly, has
+nothing to put in it.
+
+So Maintenance now carries `_saveOfflineCache` / `_loadOfflineCache` and
+the same offline short-circuit, copied from `audit_script.js` rather than
+invented: **Plot Condition is the one to copy, it is the steadiest of the
+four.** Two things about the shape:
+
+- **Cache the PROCESSED state**, the same shape the renderer already
+  reads. Caching raw rows means re-deriving the plot placement on restore,
+  which is a second copy of the rule and a second thing to get wrong.
+- **A failed load WITH a line falls back to the cache too.** A flaky
+  tower or a refusal used to leave the same empty screen as no signal at
+  all. Yesterday's list is a better answer than nothing, and the toast
+  says which day it is from, so nobody mistakes it for live.
+
+`tests/every_audit_records_with_no_line.cjs` holds all four modules to the
+three things the office actually asked for — it can record the work, it
+can record with no line, it syncs when the line comes back — and reads the
+SHIPPED files, because the whole fault was one of four drifting out of
+step with the others and nothing saying so.
+
 ## A sweep with no timeout is a queue that stops for ever
 
 Seventy finished maintenance audits sat on an auditor phone. The first round
@@ -630,6 +667,86 @@ The audit module also joined `npayroll/` in carrying the three no-cache metas,
 because this was the second fix in a week that had to actually reach a phone.
 That is the condition the rule names: a module somebody wants current, not the
 whole site.
+
+## The 2nd culling never deducts. Not even while no 3rd exists.
+
+Three readers, and Life of Seedlings was the odd one out again — this time on
+the column headed **"Total Culling (1st + 3rd)"**, which it was computing as
+1st + **2nd** whenever no 3rd culling had been keyed yet. The heading said one
+thing and the code did another.
+
+The two it has to agree with both say so in their own words:
+
+- `netOfRow()` — *"2nd Culled never deducts here, B/F included — 2nd Culling is
+  Tab 6's own live snapshot as a batch works through 3rd Culling, not a
+  separate loss on top of it."*
+- the Batch Report's culling rate — `(cull1 + cull3) / (transplanted + cull1)`,
+  with cull2 *"carried for reference only — it is inside cull3"*.
+
+LOS's own comment claimed to be "the same rule as the Movement Report's
+netOfRow()". It was not, and a comment asserting agreement is not agreement —
+the test now compares the two formulas rather than restating either.
+
+So every batch 2nd culled and not yet 3rd culled had its **Total Culling
+overstated** and its **Balance understated**, by exactly its 2nd culling, on
+the one report the office reconciles against.
+
+The 2nd Culled **column stays**. It is worth seeing; it is simply not a loss
+to add on top of the 3rd. `shared/CHECK_second_culling_in_total.sql` names
+every batch that moves and by how much, and
+`tests/los_second_culling_never_deducts.cjs` holds the rule against the Batch
+Report's real formula, lifted out of its own file.
+
+## One batch, one reception — the newest row wins
+
+A batch is meant to have exactly one `Seeds_Received` row. **Batch 224 had
+ninety-five** — every one identical, same quantity, same remark, same
+`created_at` to the microsecond. That is one bulk insert that ran ninety-five
+times, not an edit somebody made twice. The other two known sources are the
+Seeds In form saving twice before its duplicate guard existed (261 went in
+seven times, 260 twice) and an update keyed on `created_at` rather than on the
+row id, which damaged the **224-241** range; both are written up beside that
+form's save in `operation_batch_detail.html`.
+
+**Three readers of one ledger, and two of them already agreed.** The Seeds In
+form loads the newest row with `.limit(1)`; the batch list de-dupes to the
+newest per `batch_name`. Life of Seedlings **added them all up** — so batch
+224 showed 997,500 seeds received against 9,920 planted, a Variance of minus
+987,580, and dragged the report's own total down with it, while the form it
+was keyed on read 10,500.
+
+So the newest row now supplies LOS's figures, supplier, licence and date too.
+What it does **not** do is hide the extra: `srRows` counts them, the Seed
+Received cell says **⚠ 2 reception rows**, and the drilldown lists every one —
+because a figure that silently drops a ledger row is how the row stays there
+for ever. `shared/CHECK_duplicate_seeds_in.sql` names them on every batch and
+says which one is being kept.
+
+**The check gives ONE ROW PER BATCH, and that was learned the hard way:** the
+first version printed one row per LEDGER ROW, so batch 224 alone answered with
+ninety-five identical lines and the list could not be read at all. The
+batch-wide one comes first and
+`CHECK_duplicate_seeds_in_rows.sql` is the drill-down, for the only case that
+needs one — a batch whose rows genuinely DIFFER, where somebody has to say
+which is the real delivery.
+
+`shared/RUN_ME_dedupe_seeds_in.sql` is the repair, and it only ever deletes a
+row that is a COPY: two rows count as the same when every column matches
+except the id, the `created_at` and the last-edited stamps — compared off the
+whole row through `to_jsonb(l) - 'id' - …`, so a column added later is
+compared too instead of being quietly ignored. A batch whose rows differ is
+left alone and NAMED, counted off the same snapshot the DELETE runs against —
+sound precisely because those are the rows it does not touch.
+
+**It is ONE statement and creates nothing.** The first version built a TEMP
+table, and the SQL Editor warned that a table was being created without Row
+Level Security. That is a false alarm — a temp table lives in the session and
+no anon or authenticated key can reach it — but a warning somebody has to
+click past is a bad thing to hand over, and the table was never needed: the
+count comes back from the DELETE through `RETURNING`.
+
+`tests/los_one_reception_per_batch.cjs` is batch 224 and batch 225 side by
+side: the one with a stale row and the one without.
 
 ## A row count is not a window
 
