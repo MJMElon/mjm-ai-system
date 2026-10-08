@@ -1076,6 +1076,24 @@ deliverable. `tests/pages_do_not_go_stale.cjs` fails if a payroll page is
 missing one, catches a `?v=` left without a number, and PRINTS THE UNGUARDED
 PAGES every run so the next person sees the same trap still set.
 
+**And the metas were never the whole lever.** They make the PAGE fresh
+enough to ask for a new number; somebody still has to put a new number
+there. It has now happened a second time, with the metas in place the whole
+while: seven changes to `npayroll_script.js` went up behind `?v=68`, the
+office opened the claim form and got the old one, and nothing anywhere said
+so — the page was being re-read on every load and faithfully asking for the
+file the browser already had.
+
+So the number is now tied to the file. `tests/asset_version_bumped.cjs`
+hashes every versioned asset and records the hash beside the version it was
+published under; an asset whose contents moved while its `?v=` stood still
+fails, and the failure names the page to edit and the number to write. The
+manifest is updated by a separate `--write` run on purpose, so the check
+cannot be silenced by the same keystroke that broke it.
+
+**Bump the `?v=` in the same commit as the script.** A commit that changes a
+versioned file and not its number is a commit that reaches nobody.
+
 Still worth knowing: a browser that already holds a stale copy needs one hard
 reload (Ctrl/Cmd + Shift + R) to pick up the metas in the first place. After
 that it stays fresh by itself.
