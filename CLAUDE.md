@@ -374,47 +374,55 @@ became optional on the same day, so both answers are one click apart.
 `tests/tray_named_adjustment_closes_pending.cjs` drives 234's own figures
 through the real page: ten of its assertions fail on the previous code.
 
-## A screen that marks an adjustment instead of applying it is a second figure
+## An amendment is dated by the amendment, and it lands in the TOTAL
 
-Two reports of the same thing arrived a day apart and they are one fault.
-Batch 241's N3 read **6,362** on the Transplanting Report and 6,363 on Tab 3
-of the batch; 234's U11 read **9,433** against 9,439. Both times an approved
-Transplanting adjustment was on the plot, and both times the report showed it
-as a **dotted underline you have to hover** rather than putting it in the
-figure.
+The Transplanting Report lists one line per transplant record. An approved
+Stock Calibration against that report used to reach it only as a **dotted
+underline on the row of the plot it corrected** — hoverable, and worth
+nothing to the figure on screen.
 
-A mark is not a figure. Nobody hovers, the number is what gets written down,
-and the office ends an afternoon finding out which of two screens was right.
-So: **where a screen shows an adjusted quantity, it shows the adjusted one**,
-with the recorded figure as small print underneath and the hover kept. The
-office compared it against Tab 3, so Tab 3's Final Qty is what it has to
-agree with — every approved Transplanting adjustment on that batch and plot,
-tray-named or not.
+Two things were wrong with that, and the second is the one worth keeping.
 
-Which leaves the recorded figure still on the row on purpose: a −53 "Stolen"
-means 1,053 really were transplanted and 53 went afterwards, so the transplant
-record was never wrong and the small print is the only place that still says
-so.
+**A mark is not a figure.** Nobody hovers; the number on screen is the number
+that gets written down.
 
-**And the counting trap, which is the part worth remembering.** An adjustment
-is keyed against a BATCH AND PLOT. The Transplanting Report splits a plot into
-one line per date it was transplanted on, and the same adjustment was attached
-to **every** one of those lines — the mark appeared on all of them and nobody
-noticed, because a mark adds nothing. The moment it became a figure, adding it
-to each line would have counted it once per date. Same shape as the Tab 5
-doubling: a sum whose arithmetic still agrees with itself.
+**And it was dated by the wrong event.** The mark sat on the TRANSPLANT row,
+so it lived in the month the seedlings went out. Batch 225 went out in March
+and was amended in **December**, and a December range therefore showed one
+record of 6,362 and no sign of the amendment at all — while the office
+knew December had moved by 1. **The correction happened in December whatever
+month the seedlings went out in**, so an amendment belongs to the range that
+covers the CALIBRATION date, never the transplant date.
 
-So it lands on the LATEST line of that plot **still on screen**, and nowhere
-else. Still on screen, because a date range that cuts off the last transplant
-would otherwise drop the adjustment out of the total of the range being read.
+Where it lands was decided after two wrong answers, and both are instructive:
 
-`tests/transplanting_report_qty.cjs` holds it, both office figures included.
-`shared/CHECK_transplanting_report_qty.sql` sweeps every batch for the pairs
-where the two screens differ, and names any adjustment whose `Plot:` text
-matches no transplant row — the report compares that text against the plot on
-the transplant row **letter for letter**, with none of the key normalising
-used everywhere else, so a stray space is enough to make an approved
-adjustment invisible. It was 0 of 8 the day this was written.
+- **Added into the row** — then the row no longer says what was keyed on
+  the day, and a record that reads differently from the paper it was keyed
+  off is not a record.
+- **A line of its own** — then an amendment looks like a transplant, and
+  the record count on a report headed "1 RECORD" starts counting corrections.
+
+So: **the rows are untouched, and the amendment goes into the TOTAL** —
+the one figure on the page that claims to be how many went out. Where the
+total carries one it is **dotted**, and the hover names the calibration date,
+the batch, the plot and the amount of each. A total that is more than the rows
+above it add up to is exactly the kind of figure that has to say why.
+
+Two things fall out of it:
+
+- **The same filters apply.** An amendment on a UNN 1 plot is out of a UNN 2
+  report, and one of nought is not shown at all.
+- **A range with an amendment and no transplant still prints a Total.** Only
+  the rows were empty; the month really did move.
+
+`tests/transplanting_report_qty.cjs` holds all of it, both office figures
+included, and drives the real build rather than a copy.
+
+`shared/CHECK_transplanting_report_qty.sql` names any amendment whose `Plot:`
+text matches no transplant row — the report compares that text against
+the plot on the transplant row **letter for letter**, with none of the key
+normalising used everywhere else, so a stray space is enough to make an
+approved amendment invisible. It was 0 of 8 the day this was written.
 
 ## Transplanting is not over-allocated by exactly its own adjustment
 
