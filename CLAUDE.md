@@ -1040,6 +1040,51 @@ which is the only honest place and also what stops it looking for ever for a
 page it would fit on. `payrollPlotPages` is pure — rows in, page numbers out
 — so the rule is driven directly instead of being inferred from a PDF.
 
+## A column list typed out in a row is a list that will be wrong
+
+The Work Maintenance claim form laid itself out with eleven numbers:
+
+    const COL = [11, 47, 17, 23, 17, 23, 17, 23, 17, 23, 29];
+
+No, Worker, **four** pairs of Capacity and Total, Subtotal — correct for
+exactly as long as there were four jobs. **Loading Seedlings made five.** The
+fifth pair asked for `COL[11]` on a list of eleven, `X[11]` came back
+undefined, and jsPDF answered *Invalid arguments passed to jsPDF.rect*.
+
+So the download button did **nothing at all**, and had done nothing since the
+day that job was added. Everything else about the sheet worked — the screen,
+the totals, the verification — and the one thing that produced the paper
+somebody signs was dead, silently, for however long it took the office to
+need a printout.
+
+Three things, each the shape of why it lasted:
+
+- **Count the columns off the list.** The fixed columns keep their widths and
+  the jobs divide what is left, in the 17:23 the pair has always been drawn
+  in — which gives the old eleven numbers back exactly when there are four
+  of them, so the fix is a fix and not a redesign. `MAINT_TYPES.length` and
+  `TRANSPLANT_JOBS.length` decide, and the bands above them divide by the
+  same count.
+- **An onclick that throws does nothing and says nothing.** Every builder is
+  wrapped now (`pdfGuard`): the console still gets the stack, the person gets
+  a message they can read down the phone. That message — copied out of the
+  dialog by the office — is what found this in one round instead of five.
+  `pdfDoc` also says its own piece when jsPDF has not loaded, which otherwise
+  reads as a broken form rather than a file that did not arrive.
+- **A stub that accepts anything will sign off a form that cannot be drawn.**
+  The harness jsPDF took every argument without looking, so every test passed
+  on a claim form that threw the moment a real one saw it. It is strict now:
+  a co-ordinate that is not a finite number is refused the way the real
+  library refuses it. `tests/claim_form_fits_its_jobs.cjs` drives both claim
+  forms with the office's five jobs, adds a sixth at run time, and on the old
+  code fails with the office's own words — *argument 3 is NaN*.
+
+**And a snapshot is whatever shape the version that verified it wrote.**
+`maintViewFromSnapshot` guarded `s.capAll` but read `s.cap[w]` bare, so a
+claim signed off before a field existed takes the whole form down over a
+month that is never going to be re-verified. Guard every field, not just the
+ones added last.
+
 ## A page that caches cannot deliver a fix
 
 Every script on an office page is cache-busted with a `?v=` that lives **in

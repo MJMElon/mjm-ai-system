@@ -3609,7 +3609,24 @@ function _downloadMaintPDF() {
      different shape. */
   const doc = pdfDoc('landscape');
   const PAGE_W = 297, PAGE_H = 210, MARGIN = 25;
-  const COL = [11, 47, 17, 23, 17, 23, 17, 23, 17, 23, 29];
+  /* THE COLUMNS ARE COUNTED OFF THE JOB LIST, NEVER TYPED OUT.
+
+     They used to be eleven numbers in a row -- No, Worker, four pairs of
+     Capacity and Total, Subtotal -- which was right for exactly as long as
+     there were four jobs. Loading Seedlings made five, and the fifth pair
+     asked for COL[11] on a list with eleven entries: X[11] came back
+     undefined and jsPDF answered "Invalid arguments passed to jsPDF.rect",
+     which the office saw as a download button that did nothing at all. The
+     claim form had been unprintable since the day that job was added.
+
+     So the fixed columns keep their widths and the jobs divide what is
+     left, in the 17:23 the pair has always been drawn in -- which gives the
+     old eleven numbers back exactly when there are four of them. */
+  const W_NO = 11, W_WORKER = 47, W_SUB = 29;
+  const PAIR_W = (PAGE_W - MARGIN * 2 - W_NO - W_WORKER - W_SUB) / MAINT_TYPES.length;
+  const W_CAP = PAIR_W * 0.425, W_TOT = PAIR_W - W_CAP;
+  const COL = [W_NO, W_WORKER].concat(
+    ...MAINT_TYPES.map(() => [W_CAP, W_TOT])).concat([W_SUB]);
   const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, MARGIN);
   const PAIR = i => 2 + i * 2, I_TOTAL = COL.length - 1;
   const HF = [232, 236, 252], TF = [222, 228, 250];
@@ -3638,7 +3655,8 @@ function _downloadMaintPDF() {
   };
   const drawCapRibbon = (y) => {
     const W = COL.reduce((s, w) => s + w, 0), GAP = 3;
-    const cardW = (W - GAP * 3) / 4, cardH = 18, padX = 3, maxW = cardW - padX * 2;
+    const N = MAINT_TYPES.length;
+    const cardW = (W - GAP * (N - 1)) / N, cardH = 18, padX = 3, maxW = cardW - padX * 2;
     MAINT_TYPES.forEach((t, i) => {
       const x = X[0] + i * (cardW + GAP);
       doc.setDrawColor(190, 195, 230); doc.setLineWidth(0.25);
@@ -3821,7 +3839,24 @@ async function _downloadTransplantPDF() {
      geometry, not a second one to keep in step with it by hand. */
   const doc = pdfDoc('landscape');
   const PAGE_W = 297, PAGE_H = 210, MARGIN = 25;
-  const COL = [11, 47, 17, 23, 17, 23, 17, 23, 17, 23, 29];
+  /* THE COLUMNS ARE COUNTED OFF THE JOB LIST, NEVER TYPED OUT.
+
+     They used to be eleven numbers in a row -- No, Worker, four pairs of
+     Capacity and Total, Subtotal -- which was right for exactly as long as
+     there were four jobs. Loading Seedlings made five, and the fifth pair
+     asked for COL[11] on a list with eleven entries: X[11] came back
+     undefined and jsPDF answered "Invalid arguments passed to jsPDF.rect",
+     which the office saw as a download button that did nothing at all. The
+     claim form had been unprintable since the day that job was added.
+
+     So the fixed columns keep their widths and the jobs divide what is
+     left, in the 17:23 the pair has always been drawn in -- which gives the
+     old eleven numbers back exactly when there are four of them. */
+  const W_NO = 11, W_WORKER = 47, W_SUB = 29;
+  const PAIR_W = (PAGE_W - MARGIN * 2 - W_NO - W_WORKER - W_SUB) / TRANSPLANT_JOBS.length;
+  const W_CAP = PAIR_W * 0.425, W_TOT = PAIR_W - W_CAP;
+  const COL = [W_NO, W_WORKER].concat(
+    ...TRANSPLANT_JOBS.map(() => [W_CAP, W_TOT])).concat([W_SUB]);
   const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, MARGIN);
   const PAIR = i => 2 + i * 2, I_TOTAL = COL.length - 1;
   const HF = [232, 236, 252], TF = [222, 228, 250];
@@ -3852,7 +3887,8 @@ async function _downloadTransplantPDF() {
   };
   const drawCapRibbon = (y) => {
     const W = COL.reduce((s, w) => s + w, 0), GAP = 3;
-    const cardW = (W - GAP * 3) / 4, cardH = 14, padX = 3, maxW = cardW - padX * 2;
+    const N = TRANSPLANT_JOBS.length;
+    const cardW = (W - GAP * (N - 1)) / N, cardH = 14, padX = 3, maxW = cardW - padX * 2;
     TRANSPLANT_JOBS.forEach((j, i) => {
       const x = X[0] + i * (cardW + GAP);
       doc.setDrawColor(190, 195, 230); doc.setLineWidth(0.25);
