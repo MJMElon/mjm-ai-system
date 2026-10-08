@@ -228,6 +228,18 @@ EXCEPTION WHEN insufficient_privilege THEN
   RAISE NOTICE 'could not set the storage policies from here - set them under Storage, Policies';
 END $$;
 
+-- The six this file repairs, named once so the check at the foot cannot
+-- drift from the repair above. A VIEW, not a table: the SQL Editor warns
+-- about any file that creates a table, and this one deliberately creates
+-- none.
+CREATE OR REPLACE VIEW public._mjm_audit_tables AS
+SELECT unnest(ARRAY['audit_plot_audits',
+                    'audit_height_records',
+                    'audit_papan_audits',
+                    'audit_batches',
+                    'audit_maintenance_tasks',
+                    'audit_maintenance_audits']) AS name;
+
 NOTIFY pgrst, 'reload schema';
 
 
@@ -306,18 +318,49 @@ SELECT 1 AS n, 'accounts with no profile row: ' ||
                    WHERE NOT EXISTS (SELECT 1 FROM public.shared_profiles p WHERE p.id = u.id)) = 0
             THEN ' -- OK' ELSE ' -- NOT OK' END AS result
 UNION ALL
-SELECT 2, 'audit tables with all four policies: ' || count(*)::text || ' of 6' ||
-       CASE WHEN count(*) = 6 THEN ' -- OK' ELSE ' -- NOT OK' END
-  FROM (SELECT tablename FROM pg_policies
-         WHERE schemaname='public' AND tablename LIKE 'audit%'
-           AND policyname IN ('audit_staff_read','audit_staff_insert','audit_staff_update','audit_admin_delete')
-         GROUP BY tablename HAVING count(*) = 4) q
+-- Counted over THE SIX TABLES THIS FILE REPAIRS, named one by one, never
+-- over everything beginning with audit. Matching on a prefix read 7 of 6
+-- and called it NOT OK on a database that was completely fine: there was
+-- simply a seventh audit_ table that this file does not claim and has no
+-- business counting. A check that cries over a healthy database is worse
+-- than no check, because the next real one gets waved through.
+--
+-- A table absent from the database is not counted against the total
+-- either, so a database that never had audit_maintenance_tasks is not
+-- told it is broken.
+SELECT 2, 'audit tables with all four policies: ' ||
+       (SELECT count(*)::text FROM _mjm_audit_tables t
+         WHERE to_regclass('public.' || t.name) IS NOT NULL
+           AND (SELECT count(*) FROM pg_policies pp
+                 WHERE pp.schemaname='public' AND pp.tablename = t.name
+                   AND pp.policyname IN ('audit_staff_read','audit_staff_insert',
+                                         'audit_staff_update','audit_admin_delete')) = 4) ||
+       ' of ' ||
+       (SELECT count(*)::text FROM _mjm_audit_tables t
+         WHERE to_regclass('public.' || t.name) IS NOT NULL) ||
+       COALESCE(' -- NOT OK, short: ' || (
+         SELECT string_agg(t.name, ', ') FROM _mjm_audit_tables t
+          WHERE to_regclass('public.' || t.name) IS NOT NULL
+            AND (SELECT count(*) FROM pg_policies pp
+                  WHERE pp.schemaname='public' AND pp.tablename = t.name
+                    AND pp.policyname IN ('audit_staff_read','audit_staff_insert',
+                                          'audit_staff_update','audit_admin_delete')) <> 4), ' -- OK')
 UNION ALL
-SELECT 3, 'audit tables granted to authenticated: ' || count(DISTINCT table_name)::text || ' of 6' ||
-       CASE WHEN count(DISTINCT table_name) = 6 THEN ' -- OK' ELSE ' -- NOT OK' END
-  FROM information_schema.role_table_grants
- WHERE table_schema='public' AND grantee='authenticated'
-   AND privilege_type='INSERT' AND table_name LIKE 'audit%'
+SELECT 3, 'audit tables granted to authenticated: ' ||
+       (SELECT count(*)::text FROM _mjm_audit_tables t
+         WHERE to_regclass('public.' || t.name) IS NOT NULL
+           AND EXISTS (SELECT 1 FROM information_schema.role_table_grants g
+                        WHERE g.table_schema='public' AND g.grantee='authenticated'
+                          AND g.privilege_type='INSERT' AND g.table_name = t.name)) ||
+       ' of ' ||
+       (SELECT count(*)::text FROM _mjm_audit_tables t
+         WHERE to_regclass('public.' || t.name) IS NOT NULL) ||
+       COALESCE(' -- NOT OK, short: ' || (
+         SELECT string_agg(t.name, ', ') FROM _mjm_audit_tables t
+          WHERE to_regclass('public.' || t.name) IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM information_schema.role_table_grants g
+                             WHERE g.table_schema='public' AND g.grantee='authenticated'
+                               AND g.privilege_type='INSERT' AND g.table_name = t.name)), ' -- OK')
 UNION ALL
 SELECT 4, 'foreign keys on audit_maintenance_audits: ' || count(*)::text ||
        CASE WHEN count(*) = 0 THEN ' -- OK' ELSE ' -- NOT OK' END
