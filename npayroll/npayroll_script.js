@@ -2629,10 +2629,16 @@ function maintViewFromSnapshot(s) {
   return {
     wk: s.workers || [],
     rateOf:    c => (s.rate   || {})[c],
-    capWorked: (w, c) => ((s.cap[w] || {})[c]) || 0,
-    capOf:     (w, c) => ((s.cap[w] || {})[c]) || 0,
-    rmOf:      (w, c) => ((s.rm[w]  || {})[c]) || 0,
-    payOf:     (w, c) => ((s.rm[w]  || {})[c]) || 0,
+    /* EVERY FIELD IS GUARDED, not just the ones added last.
+       A snapshot is whatever shape the version that verified it wrote, and a
+       claim verified before a field existed comes back without it. Reading
+       `s.cap[w]` on one of those throws, and the throw takes the whole form
+       down -- the screen and the download both -- over a month that was
+       signed off months ago and is never going to be re-verified. */
+    capWorked: (w, c) => (((s.cap || {})[w] || {})[c]) || 0,
+    capOf:     (w, c) => (((s.cap || {})[w] || {})[c]) || 0,
+    rmOf:      (w, c) => (((s.rm  || {})[w] || {})[c]) || 0,
+    payOf:     (w, c) => (((s.rm  || {})[w] || {})[c]) || 0,
     earned:    w => (s.earned || {})[w] || 0,
     capSum:    c => (s.capSum || {})[c] || 0,
     rmSum:     c => (s.rmSum  || {})[c] || 0,
@@ -3404,7 +3410,39 @@ function renderMonthly() {
 }
 
 /* ════════════ PDF ════════════ */
+
+/* A DOWNLOAD THAT FAILS HAS TO SAY SO.
+
+   Every one of these builders is an onclick, so anything it throws goes to
+   the console and the button simply does nothing. "I cannot download the
+   Work Maintenance one" is then the whole of what the office can report, and
+   from here that is indistinguishable from a permission, an empty month, a
+   blocked CDN and a fault in the form itself.
+
+   So each is wrapped: the console still gets the stack, and the person gets
+   the message, which is the thing they can read down the phone. */
+function pdfFailed(what, e) {
+  console.error('[payroll] ' + what + ' could not be produced:', e);
+  alert('The ' + what + ' could not be produced.\n\n'
+      + ((e && e.message) || e) + '\n\n'
+      + 'Tell the office exactly what this says — it names the fault.');
+}
+function pdfGuard(what, fn) {
+  try {
+    const r = fn();
+    return (r && typeof r.then === 'function') ? r.catch(e => pdfFailed(what, e)) : r;
+  } catch (e) { pdfFailed(what, e); }
+}
+
 function pdfDoc(orientation) {
+  /* jsPDF comes off a CDN. On a nursery office connection that request is
+     the one thing on the page that can quietly fail, and without this the
+     next line is "cannot destructure property jsPDF of undefined" — which
+     reads like a fault in the form rather than a file that did not arrive. */
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    throw new Error('The PDF library did not load. Check the connection and '
+                  + 'reload the page (Ctrl or Cmd + Shift + R).');
+  }
   const { jsPDF } = window.jspdf;
   return new jsPDF({ orientation: orientation || 'portrait', unit: 'mm', format: 'a4' });
 }
@@ -3544,6 +3582,9 @@ function pdfFooterNote(doc, y, centerX, rightX, gap) {
 }
 
 function downloadMaintPDF() {
+  return pdfGuard('Work Maintenance salary claim form', _downloadMaintPDF);
+}
+function _downloadMaintPDF() {
   if (!mayDo('maint', 'export',
       'You do not have permission to download the salary claim form.')) return;
   const n = $('maint-nursery').value, month = monthValue(), monthTxt = maintMonthLabel(month);
@@ -3710,7 +3751,10 @@ function downloadMaintPDF() {
    matches nobody cannot be paid — the screen says so in red above the
    table — and a claim form that carried it would be a claim form for a
    person the payroll has no row for. */
-async function downloadTransplantPDF() {
+function downloadTransplantPDF() {
+  return pdfGuard('Transplanting salary claim form', _downloadTransplantPDF);
+}
+async function _downloadTransplantPDF() {
   if (!mayDo('transpl', 'export',
       'You do not have permission to download the salary claim form.')) return;
   const sec = $('transpl-section').value || '';
@@ -4056,6 +4100,9 @@ function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
 }
 
 function downloadMonthlyPDF() {
+  return pdfGuard('Monthly Payroll', _downloadMonthlyPDF);
+}
+function _downloadMonthlyPDF() {
   if (!mayDo('monthly', 'export',
       'You do not have permission to download the monthly payroll.')) return;
   const list = monthlyRows().filter(r => r.total > 0);
