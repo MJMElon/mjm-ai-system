@@ -144,29 +144,56 @@ GRANT EXECUTE ON FUNCTION public.audit_can_i_save() TO authenticated;
 NOTIFY pgrst, 'reload schema';
 
 
+-- ── 2b. EVERY SIGN IN GETS A PROFILE ROW ────────────────────────────────
+-- The gate reads shared_profiles, so an account with no row there fails it
+-- because there is nothing to read -- and that is one of the two ways the
+-- phone gets REFUSED on all six tables at once. An account made after the
+-- last repair ran has no row, so this is not a one off.
+--
+-- Exactly what the signup trigger would have written, from the signups own
+-- metadata. NO permission is granted: an empty permissions column means
+-- nobody has been asked, and writing a default into it would turn an
+-- unasked question into a decision.
+INSERT INTO public.shared_profiles (id, email, full_name, user_type)
+SELECT u.id,
+       u.email,
+       NULLIF(TRIM(COALESCE(u.raw_user_meta_data->>'full_name', '')), ''),
+       CASE WHEN COALESCE(u.raw_user_meta_data->>'user_type', 'system') = 'customer'
+            THEN 'customer' ELSE 'system' END
+  FROM auth.users u
+ WHERE NOT EXISTS (SELECT 1 FROM public.shared_profiles p WHERE p.id = u.id)
+ON CONFLICT (id) DO NOTHING;
+
+
 -- ── 3. THE CHECK ────────────────────────────────────────────────────────
--- Read row 1 first. It asks the question as EVERY auditor in turn, the
--- same way the phone will, and counts the ones who get a yes on all six
--- tables. Anything other than "all of them" names the people and the
--- table, and those people cannot save an audit right now.
+-- IT ASKS EVERY ACCOUNT THAT CAN SIGN IN, which means auth.users and not
+-- shared_profiles.
 --
--- Row 2 says the function is callable by the portal at all. Rows 3 and
--- after are one line per table, counting the logins that may insert into
--- it, so a table that is wrong on its own is named rather than hidden
--- inside row 1.
+-- The first version of this looped over shared_profiles WHERE user_type is
+-- not customer, and reported 46 of 46 -- OK on a database where an auditor
+-- phone was being refused on all six tables at that moment. Both of the
+-- ways a login fails this gate are ways it DROPS OUT OF THAT LOOP:
 --
--- NOT the per table answer for whoever is running this. The SQL Editor
--- runs as the database owner with no login attached, so every policy
--- that asks who you are answers no, and that reads as six red lines on a
--- database where every auditor is fine. A check that cries over a
--- healthy database is worse than no check -- it is how the next real one
--- gets waved through, and it had already happened once on the file this
--- one sits beside.
+--   no shared_profiles row at all   -- the gate reads that table, so there
+--                                      is nothing to read and it says no,
+--                                      and the loop never saw the account
+--   marked user_type = customer     -- the gate says no, and the loop had
+--                                      already filtered them away
+--
+-- So it was asking the question only of the people who were never going to
+-- fail it. A check that cannot see the failure it exists to find is worse
+-- than no check: it is how the real one gets waved through. The same
+-- mistake, in a different costume, as the green result handed over on a
+-- database that refused every row.
+--
+-- Read row 1 first. Anything other than all of them names the people, and
+-- those people cannot save an audit right now. Rows 3 and after are one
+-- line per table.
 --
 -- A good result looks like:
---   1 | auditors who can save on every audit table: 46 of 46 -- OK
+--   1 | sign ins that can save on every audit table: 47 of 47 -- OK
 --   2 | the portal may call the check: yes -- OK
---   3 | audit_batches: 46 of 46 logins may save -- OK
+--   3 | audit_batches: 47 of 47 sign ins may save -- OK
 --   ... one line per table, all of them saying the same number twice
 SELECT set_config('mjm.cs_pass', '0', false),
        set_config('mjm.cs_total', '0', false),
@@ -175,21 +202,24 @@ SELECT set_config('mjm.cs_pass', '0', false),
 
 DO $$
 DECLARE
-  p    RECORD;
+  u    RECORD;
   bad  TEXT;
+  note TEXT;
 BEGIN
-  FOR p IN SELECT id, email FROM public.shared_profiles
-            WHERE COALESCE(user_type, 'system') <> 'customer' ORDER BY email LOOP
-    PERFORM set_config('request.jwt.claims',
-                       json_build_object('sub', p.id::text, 'role', 'authenticated')::text, true);
+  FOR u IN SELECT au.id, au.email,
+                  p.id IS NULL                                  AS no_profile,
+                  COALESCE(p.user_type, 'system') = 'customer'   AS is_customer
+             FROM auth.users au
+             LEFT JOIN public.shared_profiles p ON p.id = au.id
+            ORDER BY au.email LOOP
 
-    SELECT string_agg(c.tbl || ' (' || c.why || ')', ', ')
-      INTO bad
+    PERFORM set_config('request.jwt.claims',
+                       json_build_object('sub', u.id::text, 'role', 'authenticated')::text, true);
+
+    SELECT string_agg(c.tbl, ', ') INTO bad
       FROM public.audit_can_i_save() c
      WHERE NOT c.ok;
 
-    -- One tally per table, kept as text because this runs statement by
-    -- statement and a temp table is what the editor warns about.
     PERFORM set_config('mjm.cs_tbl',
                        COALESCE(NULLIF(current_setting('mjm.cs_tbl'), ''), '')
                        || COALESCE((SELECT string_agg(c.tbl, ',') FROM public.audit_can_i_save() c
@@ -201,15 +231,24 @@ BEGIN
     IF bad IS NULL THEN
       PERFORM set_config('mjm.cs_pass', (current_setting('mjm.cs_pass')::int + 1)::text, false);
     ELSE
+      -- Why, in the words of the thing to go and change, rather than the
+      -- policy language. These two are the whole of it.
+      note := CASE WHEN u.no_profile  THEN 'has NO shared_profiles row'
+                   WHEN u.is_customer THEN
+                     'is marked user_type customer -- if this is an auditor, run: '
+                     || 'UPDATE public.shared_profiles SET user_type = ''system'' WHERE id = '''
+                     || u.id::text || ''''
+                   ELSE 'the policy turns them away for some other reason' END;
       PERFORM set_config('mjm.cs_bad',
                          CASE WHEN COALESCE(current_setting('mjm.cs_bad'), '') = ''
                               THEN '' ELSE current_setting('mjm.cs_bad') || '; ' END
-                         || p.email || ' -- ' || bad, false);
+                         || COALESCE(u.email, u.id::text) || ' ' || note
+                         || ' -- refused on ' || bad, false);
     END IF;
   END LOOP;
 END $$;
 
-SELECT 1 AS n, 'auditors who can save on every audit table: ' ||
+SELECT 1 AS n, 'sign ins that can save on every audit table: ' ||
        current_setting('mjm.cs_pass') || ' of ' || current_setting('mjm.cs_total') ||
        CASE WHEN COALESCE(current_setting('mjm.cs_bad'), '') = '' THEN ' -- OK'
             ELSE ' -- NOT OK: ' || current_setting('mjm.cs_bad') END AS result
@@ -222,7 +261,7 @@ SELECT 3, t.name || ': ' ||
        ( length(current_setting('mjm.cs_tbl')) -
          length(replace(current_setting('mjm.cs_tbl'), t.name || ',', '')) )
        / ( length(t.name) + 1 ) || ' of ' || current_setting('mjm.cs_total') ||
-       ' logins may save' ||
+       ' sign ins may save' ||
        CASE WHEN ( length(current_setting('mjm.cs_tbl')) -
                    length(replace(current_setting('mjm.cs_tbl'), t.name || ',', '')) )
                  / ( length(t.name) + 1 ) = current_setting('mjm.cs_total')::int
