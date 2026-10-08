@@ -11,10 +11,17 @@
 
    Three rules it has to get right:
 
-     · FILLED means that stage's own records exist. Planting counts either a
-       Planted or a Damaged_Seeds record — one tab, two kinds of record.
-     · WAITING means nobody has signed the stage off in
-       operation_batch_verifications.
+     · FILLED means somebody put something in that stage — a quantity above
+       nought, or a date. A saved row carrying neither exists and says
+       nothing. Planting counts either a Planted or a Damaged_Seeds record
+       — one tab, two kinds of record. Seeds In is every batch (the
+       reception IS the report, nought included) and one Seed Audit row is
+       one bag counted.
+     · WAITING means nobody has signed it, EITHER WAY: the whole tab in one
+       signature in operation_batch_verifications, or every row on it with a
+       Row_Verification of its own. Transplanting and 1st Culling are the two
+       tabs signed row by row; the rowKey is matched on its first segment,
+       the plot or the tray.
      · A stage HQ has REJECTED is not waiting to be checked — it has been, and
        sent back. It belongs to Amendment Needed, and the two lists must not
        both ask for the same thing.
@@ -119,10 +126,19 @@ const rec = (batch) => ({ batch_name: batch, transaction_type: 'Seeds_Received',
                                                tab stays in Amendment Needed
    406  2nd and 3rd Culling keyed, nothing
         signed, Seeds In signed             → not on the list: those two are
-                                               out of scope                    */
+                                               out of scope
+   407  Transplanting over two plots, BOTH
+        rows signed one at a time; 1st
+        Culling over two trays, only ONE
+        signed                              → 1st Culling alone. Row by row is
+                                               a sign-off like any other, and
+                                               half of them is not
+   408  1st Culling saved with no quantity
+        and no date                         → a row that says nothing is not a
+                                               report somebody filled in       */
 const ROWS = {
   shared_inventory_logs: [
-    rec('401'), rec('402'), rec('403'), rec('404'), rec('405'), rec('406'),
+    rec('401'), rec('402'), rec('403'), rec('404'), rec('405'), rec('406'), rec('407'), rec('408'),
 
     { batch_name: '401', transaction_type: 'Seed_Audit', plot_name: 'bag-1', quantity_change: 500, remark: 'Seed audit.' },
     { batch_name: '401', transaction_type: 'Planted', plot_name: 'P1', quantity_change: 980 },
@@ -146,7 +162,25 @@ const ROWS = {
 
     { batch_name: '406', transaction_type: '2nd_Culling', plot_name: 'U6', quantity_change: 40 },
     { batch_name: '406', transaction_type: '3rd_Culling', plot_name: 'U6', quantity_change: 60,
-      remark: '3rd Culling. DestType: main MapQty: 60 CullDate:2026-06-01' }
+      remark: '3rd Culling. DestType: main MapQty: 60 CullDate:2026-06-01' },
+
+    // 407 — signed row by row rather than tab by tab.
+    { batch_name: '407', transaction_type: 'Planted', plot_name: 'P7', quantity_change: 500 },
+    { batch_name: '407', transaction_type: 'Planted', plot_name: 'P8', quantity_change: 500 },
+    { batch_name: '407', transaction_type: 'Transplanted', plot_name: 'U7', quantity_change: 480, remark: 'from tray [P7]' },
+    { batch_name: '407', transaction_type: 'Transplanted', plot_name: 'U8', quantity_change: 470, remark: 'from tray [P8]' },
+    { batch_name: '407', transaction_type: '1st_Culling', plot_name: 'P7', quantity_change: 20 },
+    { batch_name: '407', transaction_type: '1st_Culling', plot_name: 'P8', quantity_change: 30 },
+    // every transplant plot signed — the rowKey carries the dest, tray and
+    // date after the plot, and only the plot is matched
+    { batch_name: '407', transaction_type: 'Row_Verification', plot_name: 'transplanting::U7|main|P7|2026-01-05', quantity_change: 0 },
+    { batch_name: '407', transaction_type: 'Row_Verification', plot_name: 'transplanting::U8|main|P8|2026-01-06', quantity_change: 0 },
+    // one of the two culling trays signed, so that tab is NOT done
+    { batch_name: '407', transaction_type: 'Row_Verification', plot_name: 'cull_1::P7', quantity_change: 0 },
+
+    // 408 — a 1st Culling row that exists and says nothing.
+    { batch_name: '408', transaction_type: 'Planted', plot_name: 'P9', quantity_change: 400 },
+    { batch_name: '408', transaction_type: '1st_Culling', plot_name: 'P9', quantity_change: 0, remark: '1st culling.' }
   ],
   operation_batch_verifications: [
     { id: 1, batch_name: '402', stage: 'seeds_in' },
@@ -156,7 +190,10 @@ const ROWS = {
     { id: 5, batch_name: '402', stage: 'cull_1' },
     { id: 6, batch_name: '404', stage: 'seeds_in' },
     { id: 7, batch_name: '405', stage: 'seeds_in' },
-    { id: 8, batch_name: '406', stage: 'seeds_in' }
+    { id: 8, batch_name: '406', stage: 'seeds_in' },
+    { id: 9,  batch_name: '407', stage: 'seeds_in' },
+    { id: 10, batch_name: '408', stage: 'seeds_in' },
+    { id: 11, batch_name: '408', stage: 'planting' }
   ],
   shared_do_records: [],
   operation_trays: [],
@@ -274,10 +311,25 @@ const ROWS = {
     ['2nd and 3rd Culling are out of scope',
       JSON.stringify(computed['406']) === JSON.stringify([]) && !batchesListed.includes('406')],
 
+    // ── a sign-off comes two ways
+    ['a tab signed row by row is a tab somebody checked',
+      !computed['407'].includes('transplanting')],
+    ['\u2026and half its rows signed is not',
+      computed['407'].includes('cull_1')],
+    ['so that batch asks for 1st Culling alone',
+      JSON.stringify(computed['407']) === JSON.stringify(['planting', 'cull_1'])
+      && batchesListed.includes('407')
+      && cellOf('407').includes('1st Culling') && !cellOf('407').includes('Transplanting')],
+
+    // ── a row that says nothing is not a report
+    ['a culling row with no quantity and no date is not filled in',
+      JSON.stringify(computed['408']) === JSON.stringify([])],
+    ['so that batch is not on the list at all', !batchesListed.includes('408')],
+
     // ── the other tabs are untouched
     ['Amendment Needed still lists only the rejected batch',
       JSON.stringify(others.amend) === JSON.stringify(['405'])],
-    ['Active still lists every unfinished batch', others.active.length === 6],
+    ['Active still lists every unfinished batch', others.active.length === 8],
     ['and gets its own columns back', others.headBack.some(h => /planted/i.test(h))],
     ['no page errors', errs.length === 0],
   ];
