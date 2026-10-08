@@ -794,6 +794,46 @@ function payrollRowsFor(type) {
 }
 function payrollRows() { return payrollRowsFor(_payrollView); }
 
+/* A PLOT IS NOT BROKEN ACROSS TWO PAGES.
+
+   Rows come out of payrollRowsFor sorted by plot and then by the day, so a
+   plot is a RUN of consecutive rows. Breaking in the middle of one puts half
+   of N15 at the foot of a page and the rest overleaf, and whoever is checking
+   that plot has to carry a running total across the turn -- which is exactly
+   the adding up a printed sheet exists to save.
+
+   So the break is taken BEFORE a run, never inside it, and the whole plot
+   goes over together. A run too tall for a page of its own still has to split
+   somewhere, and the page edge is the only honest place; that is the second
+   test here, and it is also what keeps a long run from looping for ever
+   looking for a page it would fit on.
+
+   Pure on purpose: rows in, the page number each one lands on out, so the
+   rule can be driven without a PDF. tests/payroll_pdf_layout.cjs does. */
+function payrollPlotPages(rows, o) {
+  const rowH = o.rowH, floor = o.floor, freshY = o.freshY;
+  const runLen = [];
+  for (let i = rows.length - 1; i >= 0; i--) {
+    runLen[i] = (i + 1 < rows.length && rows[i + 1].plot === rows[i].plot)
+      ? runLen[i + 1] + 1 : 1;
+  }
+  const page = [];
+  let p = 0, y = o.firstY;
+  rows.forEach((r, i) => {
+    const startsRun = i === 0 || rows[i - 1].plot !== r.plot;
+    const runH = runLen[i] * rowH;
+    // The first row never forces a break: there is no page before it to break
+    // from, and a run too tall for any page would otherwise start on a blank.
+    if (i > 0 && ((startsRun && runLen[i] > 1 && y + runH > floor && freshY + runH <= floor)
+                  || y + rowH > floor)) {
+      p++; y = freshY;
+    }
+    page[i] = p;
+    y += rowH;
+  });
+  return page;
+}
+
 /* Capacity, as a figure somebody can check.
    A plot's quantity divided among the people who worked it rarely comes out
    whole — 2,200 across three is 733.33 — and rounding it to 733 on screen
@@ -1217,9 +1257,18 @@ function downloadPayrollPDF() {
         cell(MARGIN, y, CONTENT_W, 14, t('pay.noRows'), { size: 9 });
         y += 14;
       } else {
+        /* Where the page breaks fall, worked out before a single row is
+           drawn — see payrollPlotPages. FLOOR leaves room for the total row
+           and the footer note; FRESH_Y is where a new page starts its first
+           row, the title block and the column heads being redrawn on it. */
+        const pageOf = payrollPlotPages(rows, {
+          rowH:   ROW_H,
+          floor:  PH - MARGIN - 26,
+          firstY: y,
+          freshY: MARGIN + 27 + 9 + HEAD_H
+        });
         rows.forEach((r, ri) => {
-          // Reserve room for the total row and the footer note.
-          if (y + ROW_H > PH - MARGIN - 26) {
+          if (ri > 0 && pageOf[ri] !== pageOf[ri - 1]) {
             doc.addPage();
             y = titleBlock(t(cfg.label), part);
             drawHead();

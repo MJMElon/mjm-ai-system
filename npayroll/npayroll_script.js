@@ -417,8 +417,13 @@ const money = v => 'RM ' + moneyFig(v);
 function rateTxt(v) {
   if (v == null) return '—';
   const n = Number(v) || 0;
-  for (let d = 2; d <= 4; d++) if (Math.abs(n - Number(n.toFixed(d))) < 1e-9) return 'RM ' + n.toFixed(d);
-  return 'RM ' + n.toFixed(4);
+  // Grouped like every other figure on the sheet. A rate is rarely four
+  // digits, but the one that is must not be the only money on the page
+  // without a comma in it.
+  const grouped = (d) => n.toLocaleString('en-MY',
+    { minimumFractionDigits: d, maximumFractionDigits: d });
+  for (let d = 2; d <= 4; d++) if (Math.abs(n - Number(n.toFixed(d))) < 1e-9) return 'RM ' + grouped(d);
+  return 'RM ' + grouped(4);
 }
 const num   = v => (Number(v) || 0).toLocaleString();
 function monthValue() { return $('global-month').value || todayMonth(); }
@@ -995,7 +1000,7 @@ function calibrationLine(d, kind) {
   const colour = d > 0 ? '#0d7a47' : 'var(--danger,#c0392b)';
   const sign = d > 0 ? '' : '-';
   const txt = kind === 'cap' ? sign + Math.abs(d).toFixed(2)
-                             : sign + 'RM' + Math.abs(d).toFixed(2);
+                             : sign + 'RM' + moneyFig(Math.abs(d));
   const tip = kind === 'cap'
     ? "The hundredths added to or taken off this worker's capacity on this sheet"
     : "The cents added to or taken off this worker's jobs on this sheet";
@@ -1383,7 +1388,7 @@ function transplantSectionNotes(secFilter) {
 
 /* The lead sentence of an empty sheet — what the office actually knows. */
 function transplantEmptyLead(secFilter) {
-  const month = esc(monthLabel(monthValue()));
+  const month = esc(monthLabelFull(monthValue()));
   const secName = s => s === NO_SECTION ? 'No section' : (SECTION_NAME[s] || s);
   const here = esc(secName(secFilter));
 
@@ -1600,19 +1605,21 @@ async function drawDroneMaps(doc, monthTxt, sec) {
        is one page now, however many maps it has: the page says how much
        room there is, and all of that nursery's cards divide it between
        them, the same way two of them used to.
-       The claim this travels with went landscape (see downloadTransplantPDF)
-       and these pages follow it — doc.addPage() with no format of its own
-       inherits the document's, so they already print landscape; X/W/BOTTOM
-       just have to say so too, or the page would be the right shape with a
-       160mm-wide card stranded in the left half of it. */
-    const X = 25, W = 247;                    // the same column the claim uses
-    const BOTTOM = 210 - 12;                  // the foot of the page
+       THESE PAGES ARE PORTRAIT, and the claim they travel with is landscape.
+       A drone map is a picture of a plot and is read standing in it, so the
+       tall page is the one that gives a map its height; the claim is a wide
+       table and keeps the wide page. doc.addPage() with no format of its own
+       inherits the document's, which is how these came out landscape in the
+       first place — so the size and the orientation are both named here, and
+       X/W/BOTTOM are portrait's. */
+    const X = 25, W = 160;                    // portrait content width
+    const BOTTOM = 297 - 12;                  // the foot of a portrait page
     const GAP = 6, CAP = 9;                   // between the cards, and the name strip
 
     // One page, this nursery's own.
-    doc.addPage();
+    doc.addPage('a4', 'portrait');
     const TOP = pdfTitle(doc, ['DRONE MAPS — TRANSPLANTING', secName(code), `Month ${monthTxt}`],
-                          { centerX: 148.5, lineLeft: 25, lineRight: 272 });
+                          { centerX: 105, lineLeft: 25, lineRight: 185 });
     const N = cards.length;
     const CARD = (BOTTOM - TOP - GAP * (N - 1)) / N;  // all of them, whatever the title left
     const BOX = CARD - CAP;
@@ -1726,12 +1733,12 @@ function renderTransplantByPlot(secFilter) {
   const rows = transplantPlotRows(secFilter);
   const head = $('transpl-plots-head');
   if (head) {
-    head.textContent = `Transplanting by plot — ${secName(secFilter)} · ${monthLabel(monthValue())}`;
+    head.textContent = `Transplanting by plot — ${secName(secFilter)} · ${monthLabelFull(monthValue())}`;
   }
 
   if (!rows.length) {
     table.innerHTML = `<tbody><tr><td class="empty" colspan="4">
-      Nothing transplanted in ${esc(secName(secFilter))} for ${esc(monthLabel(monthValue()))}.
+      Nothing transplanted in ${esc(secName(secFilter))} for ${esc(monthLabelFull(monthValue()))}.
     </td></tr></tbody>`;
     $('transpl-plots-note').textContent = '';
     return;
@@ -1767,7 +1774,7 @@ function renderTransplantByPlot(secFilter) {
     </tr></thead>
     <tbody>${body}</tbody>
     <tfoot><tr>
-      <td class="l" colspan="3">TOTAL — ${esc(secName(secFilter))} · ${esc(monthLabel(monthValue()))}</td>
+      <td class="l" colspan="3">TOTAL — ${esc(secName(secFilter))} · ${esc(monthLabelFull(monthValue()))}</td>
       <td>${num(total)}</td>
     </tr></tfoot>`;
 
@@ -2082,7 +2089,7 @@ function renderEntries(category) {
         <button class="btn btn-sm btn-danger" onclick="removeEntry(${e.id})">Del</button>`}
       </td>
     </tr>`).join('')
-    : `<tr><td colspan="9" class="empty">Nothing keyed for ${monthLabel(monthValue())} yet.</td></tr>`;
+    : `<tr><td colspan="9" class="empty">Nothing keyed for ${monthLabelFull(monthValue())} yet.</td></tr>`;
 
   const total = list.reduce((s, e) => s + Number(e.amount || 0), 0);
   $(tableId).innerHTML = `
@@ -2092,7 +2099,7 @@ function renderEntries(category) {
       <th style="width:110px;">Rate</th><th style="width:120px;">Amount</th><th style="width:140px;"></th>
     </tr></thead>
     <tbody>${rows}</tbody>
-    ${list.length ? `<tfoot><tr><td class="l" colspan="7">TOTAL — ${esc(monthLabel(monthValue()))}</td>
+    ${list.length ? `<tfoot><tr><td class="l" colspan="7">TOTAL — ${esc(monthLabelFull(monthValue()))}</td>
        <td>${money(total)}</td><td></td></tr></tfoot>` : ''}`;
 }
 
@@ -3321,7 +3328,7 @@ function renderMonthly() {
       <th style="width:130px;">Total</th>
     </tr></thead>
     <tbody>${rows}</tbody>
-    ${list.length ? `<tfoot><tr><td class="l" colspan="3">GRAND TOTAL — ${esc(monthLabel(monthValue()))}</td>
+    ${list.length ? `<tfoot><tr><td class="l" colspan="3">GRAND TOTAL — ${esc(monthLabelFull(monthValue()))}</td>
       <td>${money(sum('maint'))}</td><td>${money(sum('transpl'))}</td>
       <td>${money(sum('seedling'))}</td><td>${money(sum('other'))}</td>
       <td>${money(sum('total'))}</td></tr></tfoot>` : ''}`;
@@ -3420,7 +3427,7 @@ function calibrationText(capD, rmD) {
   const sign = (d) => (d > 0 ? '' : '-');
   return [
     capD ? `calibrate ${sign(capD)}${Math.abs(capD).toFixed(2)}` : '',
-    rmD  ? `calibrate ${sign(rmD)}RM${Math.abs(rmD).toFixed(2)}` : ''
+    rmD  ? `calibrate ${sign(rmD)}RM${moneyFig(Math.abs(rmD))}` : ''
   ].filter(Boolean).join('  \u00b7  ');
 }
 
@@ -3636,7 +3643,12 @@ async function downloadTransplantPDF() {
   if (!mayDo('transpl', 'export',
       'You do not have permission to download the salary claim form.')) return;
   const sec = $('transpl-section').value || '';
-  const monthTxt = monthLabel(monthValue());
+  /* Written out in full — "September 2026", not "Sep 2026". This is the
+     month on a form somebody signs, and the short form is for a column
+     heading with no room, which this is not. monthLabel() stays what it is:
+     the maintenance module STORES its month in that shape, so a display
+     change there would be a change of key. */
+  const monthTxt = monthLabelFull(monthValue());
   const secTxt = sec === NO_SECTION ? 'No section'
                : (NURSERY_FULL[sec] ? `${NURSERY_FULL[sec]} (${sec})` : (SECTION_NAME[sec] || sec));
 
@@ -3706,24 +3718,58 @@ async function downloadTransplantPDF() {
   const workdoneTxt = key => {
     const r = rateOf(key);
     if (r == null) return 'Total Workdone (RM) : —';
-    return 'Total Workdone (RM) : RM '
-         + (Math.round(cap2(workdone[key] || 0) * Math.round(r * 100000) / 1000) / 100).toFixed(2);
+    return 'Total Workdone (RM) : '
+         + money(Math.round(cap2(workdone[key] || 0) * Math.round(r * 100000) / 1000) / 100);
+  };
+
+  /* THE FOUR CARDS THE SCREEN OPENS WITH, ON THE PAPER.
+
+     The whole job's capacity and what it prices at, one card per job — the
+     same band Work Maintenance's form already carries (drawCapRibbon), same
+     figures as the screen's own glance, same rounding. It used to be a line
+     stamped inside each column's header instead, which put the nursery total
+     in among the column labels and cost a row of header height on every
+     page; the band says it once, under the title, where somebody looking for
+     the month's total looks. */
+  const fitLine = (str, maxW, size, minSize) => {
+    for (;;) { doc.setFontSize(size); if (doc.getTextWidth(str) <= maxW || size <= minSize) break; size -= 0.25; }
+    return size;
+  };
+  const drawCapRibbon = (y) => {
+    const W = COL.reduce((s, w) => s + w, 0), GAP = 3;
+    const cardW = (W - GAP * 3) / 4, cardH = 16, padX = 3, maxW = cardW - padX * 2;
+    TRANSPLANT_JOBS.forEach((j, i) => {
+      const x = X[0] + i * (cardW + GAP);
+      doc.setDrawColor(190, 195, 230); doc.setLineWidth(0.25);
+      doc.setFillColor(255, 255, 255); doc.rect(x, y, cardW, cardH, 'FD');
+      const cap = workdone[j.key] || 0;
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(110, 110, 130);
+      fitLine(j.label.toUpperCase(), maxW, 6.5, 4.5);
+      doc.text(j.label.toUpperCase(), x + padX, y + 5);
+      doc.setTextColor(67, 56, 202);
+      fitLine(capFmt(cap), maxW, 10, 7);
+      doc.text(capFmt(cap), x + padX, y + 11);
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(49, 46, 129);
+      const wdTxt = workdoneTxt(j.key);
+      fitLine(wdTxt, maxW, 6.5, 4);
+      doc.text(wdTxt, x + padX, y + 14.6);
+    });
+    return y + cardH + 3;
   };
 
   const drawHead = () => {
     let y = pdfTitle(doc, ['SALARY CLAIM FORM — TRANSPLANTING', secTxt, `Month ${monthTxt}`],
                       { centerX: CENTER_X, lineLeft: MARGIN, lineRight: CONTENT_R });
-    const H1 = 9, H2 = 7, HW = 7, H3 = 7, HT = H1 + H2 + HW + H3;
+    y = drawCapRibbon(y);
+    const H1 = 8, H2 = 6, H3 = 6, HT = H1 + H2 + H3;
     pdfCell(doc, X[0], y, COL[0], HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
     pdfCell(doc, X[1], y, COL[1], HT, 'Worker', { bold: true, size: 8.5, fill: HF });
     TRANSPLANT_JOBS.forEach((j, i) => {
       const c = PAIR(i);
-      pdfCell(doc, X[c], y, COL[c] + COL[c+1], H1, j.label, { bold: true, size: 7.5, fill: HF });
-      pdfCell(doc, X[c], y + H1, COL[c] + COL[c+1], H2, rateTxtOf(j.key), { size: 7, nowrap: true, fill: HF });
-      pdfCell(doc, X[c], y + H1 + H2, COL[c] + COL[c+1], HW, workdoneTxt(j.key),
-              { bold: true, size: 6.5, nowrap: true, fill: HF });
-      pdfCell(doc, X[c],   y + H1 + H2 + HW, COL[c],   H3, 'Capacity',   { bold: true, size: 6.5, nowrap: true, fill: HF });
-      pdfCell(doc, X[c+1], y + H1 + H2 + HW, COL[c+1], H3, 'Total (RM)', { bold: true, size: 6.5, nowrap: true, fill: HF });
+      pdfCell(doc, X[c], y, COL[c] + COL[c+1], H1, j.label, { bold: true, size: 7, fill: HF });
+      pdfCell(doc, X[c], y + H1, COL[c] + COL[c+1], H2, rateTxtOf(j.key), { size: 6.5, nowrap: true, fill: HF });
+      pdfCell(doc, X[c],   y + H1 + H2, COL[c],   H3, 'Capacity',   { bold: true, size: 6, nowrap: true, fill: HF });
+      pdfCell(doc, X[c+1], y + H1 + H2, COL[c+1], H3, 'Total (RM)', { bold: true, size: 6, nowrap: true, fill: HF });
     });
     pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], HT, 'Subtotal (RM)', { bold: true, size: 7.5, fill: HF });
     return y + HT;
@@ -3735,8 +3781,16 @@ async function downloadTransplantPDF() {
     capCalibrationOf('transplanting', secOf(n), n, KEYS, (k) => capWorked(n, k)),
     calibrationOf('transplanting', secOf(n), n, KEYS, (k) => rmOf(n, k)));
   const RH = names.some(n => calTxtOf(n)) ? 11 : 9;
+  /* WHAT ACTUALLY HAS TO FIT UNDER THE LAST ROW, worked out rather than
+     guessed at: the Grand Total row, the verified line, and the footer note
+     (drawn 4mm below where it is given). The old reserve was a flat 40mm on
+     a page 210 tall, so eight workers broke onto a second page with a third
+     of the first one left blank under them — and the plot summary then went
+     to a third. Same arithmetic as downloadMaintPDF's FOOT_RESERVE, for the
+     same reason. */
+  const FOOT_RESERVE = (RH + 1) + 6 + 4 + 3;
   names.forEach((n, i) => {
-    if (y + RH > PAGE_H - MARGIN - 40) { doc.addPage(); y = drawHead(); }
+    if (y + RH > PAGE_H - FOOT_RESERVE) { doc.addPage(); y = drawHead(); }
     const z = i % 2 ? [250, 250, 253] : null;
     pdfCell(doc, X[0], y, COL[0], RH, String(i + 1), { size: 8, nowrap: true, fill: z });
     pdfWorkerCell(doc, X[1], y, COL[1], RH, n, calTxtOf(n), { size: 8.5, fill: z });
@@ -3744,9 +3798,9 @@ async function downloadTransplantPDF() {
       const c = PAIR(k), cap = capOf(n, j.key);
       pdfCell(doc, X[c],   y, COL[c],   RH, capFmt(cap), { size: 8, nowrap: true, fill: z });
       pdfCell(doc, X[c+1], y, COL[c+1], RH, (cap || adjOf('transplanting', secOf(n), n, j.key))
-              ? 'RM ' + payOf(n, j.key).toFixed(2) : '—', { size: 7.5, nowrap: true, fill: z });
+              ? money(payOf(n, j.key)) : '—', { size: 7.5, nowrap: true, fill: z });
     });
-    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH, 'RM ' + earned(n).toFixed(2),
+    pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH, money(earned(n)),
             { bold: true, size: 8.5, nowrap: true, fill: z });
     y += RH;
   });
@@ -3757,10 +3811,10 @@ async function downloadTransplantPDF() {
     const cs = names.reduce((s, n) => s + capOf(n, j.key), 0);
     const rs = names.reduce((s, n) => s + payOf(n, j.key), 0);
     pdfCell(doc, X[c],   y, COL[c],   RH + 1, capFmt(cs), { bold: true, size: 8, nowrap: true, fill: TF });
-    pdfCell(doc, X[c+1], y, COL[c+1], RH + 1, 'RM ' + rs.toFixed(2), { bold: true, size: 7.5, nowrap: true, fill: TF });
+    pdfCell(doc, X[c+1], y, COL[c+1], RH + 1, money(rs), { bold: true, size: 7.5, nowrap: true, fill: TF });
   });
   pdfCell(doc, X[I_TOTAL], y, COL[I_TOTAL], RH + 1,
-          'RM ' + names.reduce((s, n) => s + earned(n), 0).toFixed(2),
+          money(names.reduce((s, n) => s + earned(n), 0)),
           { bold: true, size: 9, nowrap: true, fill: TF });
   y += RH + 1;
 
@@ -3778,7 +3832,7 @@ async function downloadTransplantPDF() {
       }, 0);
     }, 0);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(150, 30, 30);
-    doc.text(`NOT CLAIMED — not on the worker register: ${lost.join(', ')} (RM ${held.toFixed(2)})`,
+    doc.text(`NOT CLAIMED — not on the worker register: ${lost.join(', ')} (${money(held)})`,
              MARGIN, y + 6, { maxWidth: CONTENT_R - MARGIN });
     y += 8;
   }
@@ -3842,8 +3896,12 @@ function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
   const COL = [22, 163, 62];
   const X = []; COL.reduce((x, w, i) => { X[i] = x; return x + w; }, 25);
   const HF = [232, 236, 252], TF = [222, 228, 250];
-  const BOTTOM = 210 - 25 - 30;
   const RH = 8;
+  /* What still has to fit under the last plot: the TOTAL row, the verified
+     line and the footer note. The old floor was a flat 25mm margin plus
+     30mm on top of it, which stopped this table 55mm above the foot of the
+     page and sent it to a page of its own that it then used a third of. */
+  const BOTTOM = 210 - ((RH + 1) + 6 + 4 + 3);
 
   const heading = () => {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
@@ -3856,7 +3914,10 @@ function drawTransplantPlots(doc, y, rows, secTxt, monthTxt) {
     y += H;
   };
 
-  // Started on this page where a few lines fit, on the next where they do not.
+  /* Started on this page where the heading, the column row and at least two
+     plots fit under what is already there; on the next where they do not.
+     Two, because a heading with one line under it and the rest overleaf is a
+     table broken for the sake of nothing. */
   if (y + 9 + 9 + RH * 2 > BOTTOM) { doc.addPage(); y = 25; }
   else y += 4;
   heading();
@@ -3926,7 +3987,7 @@ function downloadMonthlyPDF() {
   const HF = [232, 236, 252], TF = [222, 228, 250];
 
   const drawHead = () => {
-    let y = pdfTitle(doc, ['MONTHLY PAYROLL', sec ? (SECTION_NAME[sec] || sec) : 'All Sections', `Month ${monthLabel(monthValue())}`]);
+    let y = pdfTitle(doc, ['MONTHLY PAYROLL', sec ? (SECTION_NAME[sec] || sec) : 'All Sections', `Month ${monthLabelFull(monthValue())}`]);
     const H = 13;
     ['No.', 'Worker Name', 'Section', 'Work Maintenance', 'Transplanting', 'Seedlings Collection', 'Others', 'Total (RM)']
       .forEach((t, i) => pdfCell(doc, X[i], y, C[i], H, t, { bold: true, size: 7.5, fill: HF }));
@@ -3939,20 +4000,20 @@ function downloadMonthlyPDF() {
     if (y + RH > 297 - 25 - 40) { doc.addPage(); y = drawHead(); }
     const z = i % 2 ? [250, 250, 253] : null;
     const cells = [String(i + 1), r.name, r.section || '—',
-                   r.maint ? 'RM ' + r.maint.toFixed(2) : '—',
-                   r.transpl ? 'RM ' + r.transpl.toFixed(2) : '—',
-                   r.seedling ? 'RM ' + r.seedling.toFixed(2) : '—',
-                   r.other ? 'RM ' + r.other.toFixed(2) : '—',
-                   'RM ' + r.total.toFixed(2)];
+                   r.maint ? money(r.maint) : '—',
+                   r.transpl ? money(r.transpl) : '—',
+                   r.seedling ? money(r.seedling) : '—',
+                   r.other ? money(r.other) : '—',
+                   money(r.total)];
     cells.forEach((t, k) => pdfCell(doc, X[k], y, C[k], RH, t,
       { size: k === 1 ? 8.5 : 8, bold: k === cells.length - 1, nowrap: k !== 1, fill: z }));
     y += RH;
   });
 
   const sum = k => list.reduce((s, r) => s + r[k], 0);
-  const foot = ['', 'GRAND TOTAL', '', 'RM ' + sum('maint').toFixed(2), 'RM ' + sum('transpl').toFixed(2),
-                'RM ' + sum('seedling').toFixed(2), 'RM ' + sum('other').toFixed(2),
-                'RM ' + sum('total').toFixed(2)];
+  const foot = ['', 'GRAND TOTAL', '', money(sum('maint')), money(sum('transpl')),
+                money(sum('seedling')), money(sum('other')),
+                money(sum('total'))];
   foot.forEach((t, k) => pdfCell(doc, X[k], y, C[k], RH + 1, t, { bold: true, size: 8, nowrap: k !== 1, fill: TF }));
   y += RH + 1;
   /* The right edge of THIS table, worked out from its own scaled widths
