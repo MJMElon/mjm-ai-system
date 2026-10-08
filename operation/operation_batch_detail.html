@@ -1365,6 +1365,22 @@
                                  syncAdjustmentBars(); empty and hidden when there are
                                  none, so a clean report shows nothing at all. -->
                             <div id="t3-adjust-bar" class="hidden mb-5"></div>
+                            <!-- WHY THE ALLOCATION DOES NOT BALANCE, WHEN THE
+                                 ANSWER IS THE ADJUSTMENT ABOVE.
+
+                                 A tray-named adjustment moves what is standing in
+                                 the main plots and leaves the batch total alone,
+                                 which is right -- the seedlings were always in the
+                                 batch, the count of what left the tray was wrong.
+                                 But where the report balanced exactly WITHOUT it,
+                                 adding it makes the allocation read Over Allocated
+                                 by precisely that much, and the engine says ERROR
+                                 over a figure somebody has already explained.
+
+                                 So where the difference is EXACTLY the batch's
+                                 tray-named adjustments, this says so and the ring
+                                 is allowed to finish. Filled by calcTransplanting. -->
+                            <div id="t3-adjust-note" class="hidden mb-5"></div>
                             <!-- ── HEADER ── -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-5 gap-4 border-b-2 border-[#3a7ab4] pb-4">
                                 <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Transplanting Report</h3>
@@ -6246,7 +6262,64 @@
             const fullyAccounted = mainStanding + mockCullingTab4;
             const rawPending = allocBase - fullyAccounted;
 
-            if (rawPending === 0 && allocBase > 0) {
+            /* DOES IT BALANCE WITHOUT THE TRAY-NAMED ADJUSTMENTS?
+
+               rawPending is (planted + D-Tone + seed-side - main - 1st culled)
+               LESS the tray-named net, because those move what is standing and
+               not the base. So rawPending being exactly minus that net is the
+               same statement as: the report balances on its own figures, and
+               the only thing making it not balance is an adjustment somebody
+               has already explained.
+
+               Batch 225 is the case. It balanced exactly -- 9,658 + 230 + 815
+               against a base of 10,703 -- and a +1 on N19, "found 1 more
+               seedling when processing the 2nd culling", pushed it to Over
+               Allocated by 1. The engine said ERROR over the one figure on the
+               screen that accounted for it.
+
+               EXACTLY, never nearly. A near-match is a coincidence, and a tab
+               that waved one through would teach people to ignore a real
+               over-allocation. Same rule, same reason, as the 1st Culling note. */
+            const t3Explained = rawPending !== 0 && trayLossT3 !== 0
+                             && rawPending === -trayLossT3;
+            (function showT3AdjNote() {
+                const note = document.getElementById('t3-adjust-note');
+                if (!note) return;
+                if (!t3Explained) { note.classList.add('hidden'); note.innerHTML = ''; return; }
+                const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                const byPlot = (typeof ADJUST_PLOT_LOSS_STAGE === 'object'
+                             && ADJUST_PLOT_LOSS_STAGE.transplanting) || {};
+                const names = Object.keys(byPlot).filter(k => byPlot[k]);
+                const sign = trayLossT3 > 0 ? '+' : '';
+                const over = rawPending < 0;
+                note.innerHTML = `
+                    <div class="rounded-2xl border border-[#bee3f8] bg-[#f0f8ff] px-4 py-3">
+                        <div class="text-[10px] font-black text-[#2b6cb0] uppercase tracking-widest mb-1">
+                            This report is complete -- the difference is the adjustment above
+                        </div>
+                        <div class="text-[12px] font-bold text-[#3d2610] leading-snug">
+                            Without it the allocation balances exactly. The adjustment of
+                            ${sign}${trayLossT3.toLocaleString()}${names.length ? ' on ' + names.map(esc).join(', ') : ''}
+                            names the tray the seedlings came out of, so it moves what is standing in
+                            the plot and leaves the batch total alone -- which is right, they were
+                            always in the batch. That is why the engine reads
+                            ${over ? 'over' : 'under'} by ${Math.abs(rawPending).toLocaleString()}.
+                            Nothing on this tab needs correcting.
+                        </div>
+                        <button type="button" onclick="switchTab(7)"
+                            class="mt-2 text-[10px] font-black text-[#2b6cb0] uppercase tracking-widest underline underline-offset-4 hover:text-[#1a4a80] bg-transparent border-0 p-0 cursor-pointer">
+                            Open Adjustments \u2192
+                        </button>
+                    </div>`;
+                note.classList.remove('hidden');
+            })();
+
+            if (t3Explained) {
+                matchBox.className = "w-full md:w-40 p-4 rounded-xl border border-[#2b6cb0] bg-[#f0f8ff] flex flex-col justify-center items-center text-center transition-colors shrink-0";
+                matchIcon.innerText = "\u2705";
+                matchTitle.innerText = "Satisfied"; matchTitle.className = "text-[11px] font-black uppercase tracking-wider text-[#2b6cb0] leading-tight";
+                matchDesc.innerText = "100% \u2014 adjusted"; matchDesc.className = "text-[9px] font-bold text-[#2b6cb0] uppercase tracking-widest mt-1 leading-tight";
+            } else if (rawPending === 0 && allocBase > 0) {
                 matchBox.className = "w-full md:w-40 p-4 rounded-xl border border-[#4a7a2e] bg-[#f0f8ec] flex flex-col justify-center items-center text-center transition-colors shrink-0 shadow-[0_0_15px_rgba(106,168,60,0.3)]";
                 matchIcon.innerText = "✅"; 
                 matchTitle.innerText = "Satisfied"; matchTitle.className = "text-[11px] font-black uppercase tracking-wider text-[#4a7a2e] leading-tight";
@@ -6267,7 +6340,7 @@
                 matchDesc.innerText = "Balance Remaining"; matchDesc.className = "text-[9px] font-bold text-[#c07820] uppercase tracking-widest mt-1 leading-tight";
             }
 
-            updateTransplantCompletion(allocBase, fullyAccounted, rawPending);
+            updateTransplantCompletion(allocBase, fullyAccounted, rawPending, t3Explained);
         }
 
         function renderTrayBalances(balances, netPremium, netDtone, pendingTotal) {
@@ -6321,7 +6394,7 @@
             if (totalEl) totalEl.innerText = (pendingTotal !== undefined ? pendingTotal : 0).toLocaleString();
         }
 
-        function updateTransplantCompletion(total, accounted, untransplanted) {
+        function updateTransplantCompletion(total, accounted, untransplanted, explained) {
             // accounted = main + premium + doubletone + culling (from tab 4)
             // Tab 3 cannot show 100% unless untransplanted === 0 AND every transplant row with qty > 0 has its drone map attached.
             const rowsNeedingMap = Array.from(document.querySelectorAll('.transplant-row')).filter(r => {
@@ -6352,7 +6425,15 @@
             const _rv = window.MJMReview || {};
             const hqVerified = !!((typeof _rv.isVerified === 'function' && _rv.isVerified('transplanting'))
                                || (typeof _rv.allRowsVerified === 'function' && _rv.allRowsVerified(3)));
-            const mapsAreAllThatIsLeft = untransplanted === 0 && !allMapsAttached
+            /* BALANCED, or out by exactly a tray-named adjustment -- which is
+               the same report, said two ways. See t3Explained in
+               calcTransplanting: it means the allocation balances on its own
+               figures and the only thing moving it is a correction somebody
+               has already made and explained. Holding the ring at 99% for
+               that means the stage can never be ticked off, and a stage that
+               can never be finished is one people stop looking at. */
+            const balanced = untransplanted === 0 || !!explained;
+            const mapsAreAllThatIsLeft = balanced && !allMapsAttached
                                          && missingMaps > 0 && hqVerified;
 
             let percentage = 0;
@@ -6361,7 +6442,7 @@
                 // 100% when fully balanced AND every required drone map is
                 // attached — or HQ has verified it and the maps are all that
                 // is outstanding.
-                percentage = (untransplanted === 0 && (allMapsAttached || mapsAreAllThatIsLeft))
+                percentage = (balanced && (allMapsAttached || mapsAreAllThatIsLeft))
                     ? 100
                     : Math.min(99, balancePct);
             }
@@ -6384,8 +6465,14 @@
                    somebody later swears the maps were attached. */
                 desc.innerText = `100% Verified · ${missingMaps} Map${missingMaps>1?'s':''} Outstanding`;
                 desc.className = "text-base font-black uppercase text-[#4a7a2e] mt-1";
-            } else if (untransplanted === 0 && total > 0 && !allMapsAttached) {
+            } else if (balanced && total > 0 && !allMapsAttached) {
                 desc.innerText = `Attach ${missingMaps} Drone Map${missingMaps>1?'s':''}`; desc.className = "text-base font-black uppercase text-[#c07820] mt-1";
+            } else if (explained && total > 0) {
+                /* Not "100% Allocated" — it is not, by exactly the adjustment.
+                   Saying where the difference went is the honest version, and
+                   it points at the note above rather than at this tab. */
+                desc.innerText = "100% — adjusted on this report";
+                desc.className = "text-base font-black uppercase text-[#2b6cb0] mt-1";
             } else if (untransplanted === 0 && total > 0) {
                 desc.innerText = "100% Allocated"; desc.className = "text-base font-black uppercase text-[#4a7a2e] mt-1";
             } else if (untransplanted < 0) {
