@@ -3903,6 +3903,15 @@ async function runTransplantingReport() {
   // in operation_batch_detail.html — a lightweight read of the same shape,
   // not a shared function, since this file has no import from that one.
   const calByBatchPlot = {};
+  /* AN AMENDMENT IS AN ENTRY OF ITS OWN, ON ITS OWN DATE.
+     Batch 225 was transplanted long before December and amended IN
+     December, and a December report that leaves the amendment out is
+     short by it — the correction happened in December whatever month the
+     seedlings went out. So each approved amendment becomes a line of this
+     report, dated by the Stock Calibration rather than by the transplant,
+     and falls inside whichever range covers that date. The transplant rows
+     themselves are untouched: a record says what was keyed on the day. */
+  const calEntries = [];
   (calRes.data || []).forEach(l => {
     const approved = (l.remark || '').match(/\[APPROVED by ([^\]]+) on ([^\]]+)\]/);
     if (!approved) return;
@@ -3921,11 +3930,14 @@ async function runTransplantingReport() {
                     .replace(/TxRow:\S*/i, '')
                     .trim();
     const k = _mvBatchKey(l.batch_name) + '::' + plot;
-    (calByBatchPlot[k] = calByBatchPlot[k] || []).push({
+    const entry = {
       date: l.transaction_date || l.created_at,
       qty: Number(l.quantity_change) || 0,
       label: reason || ('Approved by ' + approved[1].trim())
-    });
+    };
+    (calByBatchPlot[k] = calByBatchPlot[k] || []).push(entry);
+    // …and as an entry of its own, which is what becomes a line below.
+    calEntries.push({ ...entry, batch: l.batch_name || '—', plot });
   });
 
   const maturityOf = (d) => {
@@ -3935,23 +3947,13 @@ async function runTransplantingReport() {
     return dt.toISOString().slice(0, 10);
   };
 
-  let rows = (logsRes.data || []).map(l => {
-    const date = _logDate(l);
-    // A transplant can land in a pre-nursery tray (Premium Care / Double
-    // Tone) rather than a main-nursery plot — those trays are never a row
-    // in shared_plots, so plotToLoc[...] would silently fall through to
-    // "Unassigned". PRE_NURSERY_PLOTS is the same list runMovementReport
-    // already uses to recognise them; label them "PN" instead.
-    const nursery = PRE_NURSERY_PLOTS.includes(l.plot_name) ? 'PN' : (plotToLoc[l.plot_name] || 'Unassigned');
-    return {
-      date, maturity: date ? maturityOf(date) : null,
-      nursery,
-      plot: l.plot_name || '—', batch: l.batch_name || '—',
-      breed: l.breed_name || batchBreed[l.batch_name] || '—',
-      qty: Number(l.quantity_change || 0),
-      cal: calByBatchPlot[_mvBatchKey(l.batch_name) + '::' + (l.plot_name || '')] || null
-    };
-  }).filter(r => {
+  // A transplant can land in a pre-nursery tray (Premium Care / Double
+  // Tone) rather than a main-nursery plot — those trays are never a row
+  // in shared_plots, so plotToLoc[...] would silently fall through to
+  // "Unassigned". PRE_NURSERY_PLOTS is the same list runMovementReport
+  // already uses to recognise them; label them "PN" instead.
+  const locOf = (plot) => PRE_NURSERY_PLOTS.includes(plot) ? 'PN' : (plotToLoc[plot] || 'Unassigned');
+  const inView = (r) => {
     const ts = r.date ? new Date(r.date).getTime() : NaN;
     // A row with no usable date at all can't be placed within a chosen
     // range — leave it out rather than guess which month it belongs to.
@@ -3962,7 +3964,48 @@ async function runTransplantingReport() {
     if (selectedLocs.size && !selectedLocs.has(r.nursery)) return false;
     if (breed && r.breed !== breed) return false;
     return true;
+  };
+
+  const txRows = (logsRes.data || []).map(l => {
+    const date = _logDate(l);
+    return {
+      date, maturity: date ? maturityOf(date) : null,
+      nursery: locOf(l.plot_name),
+      plot: l.plot_name || '—', batch: l.batch_name || '—',
+      breed: l.breed_name || batchBreed[l.batch_name] || '—',
+      qty: Number(l.quantity_change || 0),
+      cal: calByBatchPlot[_mvBatchKey(l.batch_name) + '::' + (l.plot_name || '')] || null
+    };
   });
+
+  /* The maturity of an amendment is the maturity of the seedlings it
+     corrects, not nine months from the day somebody keyed the correction —
+     they went into the ground when the transplant says they did. Taken from
+     the LAST transplant of that plot, before any filtering, so a range that
+     excludes the transplant does not blank the column. */
+  const txMaturity = {};
+  txRows.forEach(r => {
+    const k = _mvBatchKey(r.batch) + '::' + r.plot;
+    if (!txMaturity[k] || String(r.date || '') > String(txMaturity[k].date || '')) {
+      txMaturity[k] = { date: r.date, maturity: r.maturity };
+    }
+  });
+
+  /* AN AMENDMENT IS NOT A RECORD, SO IT IS NOT A ROW. The rows are what was
+     keyed on the day and they stay exactly that. The amendment lands in the
+     TOTAL, which is the one figure on this page that claims to be how many
+     went out — and the Total carries a dotted underline saying so, with the
+     date, the batch, the plot and the amount of each one on hover. */
+  const amendInView = calEntries.filter(c => c.qty).map(c => ({
+    date: c.date ? String(c.date).slice(0, 10) : null,
+    maturity: (txMaturity[_mvBatchKey(c.batch) + '::' + c.plot] || {}).maturity || null,
+    nursery: locOf(c.plot),
+    plot: c.plot || '—', batch: c.batch,
+    breed: batchBreed[c.batch] || '—',
+    qty: c.qty
+  })).filter(inView);
+
+  let rows = txRows.filter(inView);
 
   // Several log rows for the same date/plot/batch are the same move keyed
   // in more than once (the same tray split across several rows at save
@@ -3984,7 +4027,14 @@ async function runTransplantingReport() {
   // other plots happened to share that date.
   const _tpNatCmp = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
   rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')) || _tpNatCmp(a.plot, c.plot));
-  const total = rows.reduce((s, r) => s + r.qty, 0);
+  const recorded  = rows.reduce((s, r) => s + r.qty, 0);
+  const amendNet  = amendInView.reduce((s, r) => s + r.qty, 0);
+  const total     = recorded + amendNet;
+  // Sorted the way the rows are, newest first, so the tooltip reads down in
+  // the same direction as the table above it.
+  const amendTip  = amendInView.slice()
+    .sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')) || _tpNatCmp(a.plot, c.plot))
+    .map(a => ({ date: a.date, qty: a.qty, label: a.batch + ' · ' + a.plot }));
 
   loading.classList.add('hidden');
   out.classList.remove('hidden');
@@ -3992,7 +4042,7 @@ async function runTransplantingReport() {
     <div class="glass-panel p-6 rounded-[2rem]">
       <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
         <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Transplanting Report</h3>
-        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} record${rows.length === 1 ? '' : 's'}${from ? ' · from ' + fmtDate(from) : ''}${to ? ' · to ' + fmtDate(to) : ''}${breed ? ' · ' + breed : ''}</div>
+        <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} record${rows.length === 1 ? '' : 's'}${amendTip.length ? ' · ' + fmtNum(amendTip.length) + ' amendment' + (amendTip.length === 1 ? '' : 's') : ''}${from ? ' · from ' + fmtDate(from) : ''}${to ? ' · to ' + fmtDate(to) : ''}${breed ? ' · ' + breed : ''}</div>
       </div>
       <div class="overflow-x-auto">
         <table class="report-table">
@@ -4015,9 +4065,18 @@ async function runTransplantingReport() {
                 })() : `<td class="text-right font-black">${fmtNum(r.qty)}</td>`}
               </tr>`).join('') : `<tr><td colspan="7" class="text-center py-10 text-[#8a7a68]">No transplant records match the selected filters.</td></tr>`}
           </tbody>
-          ${rows.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
+          ${(rows.length || amendTip.length) ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
             <td colspan="6" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
-            <td class="text-right text-[#3a7ab4]">${fmtNum(total)}</td>
+            ${amendTip.length ? (() => {
+              // The Total is the only figure here that is more than the rows
+              // add up to, so it is the one that has to say so. Dotted, like
+              // every other figure on this page that carries something
+              // underneath it, with the date, batch, plot and amount of each
+              // amendment on hover.
+              const idx = _mvDetailPool.push({ title: 'Amendments in this total', rows: amendTip }) - 1;
+              return `<td class="text-right text-[#3a7ab4]"><span class="cursor-help border-b border-dotted border-current"
+                onmouseenter="mvShowDetailTip(this, ${idx})" onmouseleave="mvHideDetailTip()">${fmtNum(total)}</span></td>`;
+            })() : `<td class="text-right text-[#3a7ab4]">${fmtNum(total)}</td>`}
           </tr></tfoot>` : ''}
         </table>
       </div>

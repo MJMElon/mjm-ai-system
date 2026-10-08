@@ -374,6 +374,56 @@ became optional on the same day, so both answers are one click apart.
 `tests/tray_named_adjustment_closes_pending.cjs` drives 234's own figures
 through the real page: ten of its assertions fail on the previous code.
 
+## An amendment is dated by the amendment, and it lands in the TOTAL
+
+The Transplanting Report lists one line per transplant record. An approved
+Stock Calibration against that report used to reach it only as a **dotted
+underline on the row of the plot it corrected** — hoverable, and worth
+nothing to the figure on screen.
+
+Two things were wrong with that, and the second is the one worth keeping.
+
+**A mark is not a figure.** Nobody hovers; the number on screen is the number
+that gets written down.
+
+**And it was dated by the wrong event.** The mark sat on the TRANSPLANT row,
+so it lived in the month the seedlings went out. Batch 225 went out in March
+and was amended in **December**, and a December range therefore showed one
+record of 6,362 and no sign of the amendment at all — while the office
+knew December had moved by 1. **The correction happened in December whatever
+month the seedlings went out in**, so an amendment belongs to the range that
+covers the CALIBRATION date, never the transplant date.
+
+Where it lands was decided after two wrong answers, and both are instructive:
+
+- **Added into the row** — then the row no longer says what was keyed on
+  the day, and a record that reads differently from the paper it was keyed
+  off is not a record.
+- **A line of its own** — then an amendment looks like a transplant, and
+  the record count on a report headed "1 RECORD" starts counting corrections.
+
+So: **the rows are untouched, and the amendment goes into the TOTAL** —
+the one figure on the page that claims to be how many went out. Where the
+total carries one it is **dotted**, and the hover names the calibration date,
+the batch, the plot and the amount of each. A total that is more than the rows
+above it add up to is exactly the kind of figure that has to say why.
+
+Two things fall out of it:
+
+- **The same filters apply.** An amendment on a UNN 1 plot is out of a UNN 2
+  report, and one of nought is not shown at all.
+- **A range with an amendment and no transplant still prints a Total.** Only
+  the rows were empty; the month really did move.
+
+`tests/transplanting_report_qty.cjs` holds all of it, both office figures
+included, and drives the real build rather than a copy.
+
+`shared/CHECK_transplanting_report_qty.sql` names any amendment whose `Plot:`
+text matches no transplant row — the report compares that text against
+the plot on the transplant row **letter for letter**, with none of the key
+normalising used everywhere else, so a stray space is enough to make an
+approved amendment invisible. It was 0 of 8 the day this was written.
+
 ## Transplanting is not over-allocated by exactly its own adjustment
 
 The other side of the same coin, and it reads worse on screen because the
