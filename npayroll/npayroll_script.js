@@ -3626,11 +3626,13 @@ function downloadMaintPDF() {
      promise downloadTransplantPDF's drone maps now keep one map-page per
      nursery; this is that same promise for the claim table itself. */
   const H1 = 7, H2 = 6, H3 = 6, HEAD_HT = H1 + H2 + H3;
-  const drawHead = () => {
+  // The band is said once, on the first page — see the note on the
+  // Transplanting form below, which is deliberately the same sheet.
+  const drawHead = (withRibbon) => {
     let y = pdfTitle(doc, ['SALARY CLAIM FORM — WORK MAINTENANCE', `${NURSERY_FULL[n] || n} (${n})`,
                             `Month ${monthLabelFull(month)}`],
                       { centerX: CENTER_X, lineLeft: MARGIN, lineRight: CONTENT_R });
-    y = drawCapRibbon(y);
+    if (withRibbon) y = drawCapRibbon(y);
     pdfCell(doc, X[0], y, COL[0], HEAD_HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
     pdfCell(doc, X[1], y, COL[1], HEAD_HT, 'Worker', { bold: true, size: 8.5, fill: HF });
     MAINT_TYPES.forEach((t, i) => {
@@ -3645,7 +3647,7 @@ function downloadMaintPDF() {
     return y + HEAD_HT;
   };
 
-  let y = drawHead();
+  let y = drawHead(true);
   const CODES = MAINT_TYPES.map(t => t.code);
   const calTxtOf = (w) => calibrationText(
     capCalibrationOf('maint', n, w, CODES, (c) => capWorked(w, c)),
@@ -3662,7 +3664,7 @@ function downloadMaintPDF() {
   const FOOT_RESERVE = FOOT_H + 6 + 12 + 3;
   wk.forEach((w, i) => {
     const rh = calTxtOf(w) ? ROW_H_CAL : ROW_H;
-    if (y + rh > PAGE_H - FOOT_RESERVE) { doc.addPage(); y = drawHead(); }
+    if (y + rh > PAGE_H - FOOT_RESERVE) { doc.addPage(); y = drawHead(false); }
     const z = i % 2 ? [250, 250, 253] : null;
     pdfCell(doc, X[0], y, COL[0], rh, String(i + 1), { size: 8, nowrap: true, fill: z });
     pdfWorkerCell(doc, X[1], y, COL[1], rh, w, calTxtOf(w), { size: 8, fill: z });
@@ -3803,7 +3805,7 @@ async function downloadTransplantPDF() {
   };
   const drawCapRibbon = (y) => {
     const W = COL.reduce((s, w) => s + w, 0), GAP = 3;
-    const cardW = (W - GAP * 3) / 4, cardH = 16, padX = 3, maxW = cardW - padX * 2;
+    const cardW = (W - GAP * 3) / 4, cardH = 14, padX = 3, maxW = cardW - padX * 2;
     TRANSPLANT_JOBS.forEach((j, i) => {
       const x = X[0] + i * (cardW + GAP);
       doc.setDrawColor(190, 195, 230); doc.setLineWidth(0.25);
@@ -3813,20 +3815,31 @@ async function downloadTransplantPDF() {
       fitLine(j.label.toUpperCase(), maxW, 6.5, 4.5);
       doc.text(j.label.toUpperCase(), x + padX, y + 5);
       doc.setTextColor(67, 56, 202);
-      fitLine(capFmt(cap), maxW, 10, 7);
-      doc.text(capFmt(cap), x + padX, y + 11);
+      fitLine(capFmt(cap), maxW, 9.5, 7);
+      doc.text(capFmt(cap), x + padX, y + 10.2);
       doc.setFont('helvetica', 'normal'); doc.setTextColor(49, 46, 129);
       const wdTxt = workdoneTxt(j.key);
       fitLine(wdTxt, maxW, 6.5, 4);
-      doc.text(wdTxt, x + padX, y + 14.6);
+      doc.text(wdTxt, x + padX, y + 13);
     });
-    return y + cardH + 3;
+    return y + cardH + 2;
   };
 
-  const drawHead = () => {
+  /* THE BAND IS A HEADING, AND A HEADING IS SAID ONCE.
+
+     It carries the month total for the whole nursery, not this page of it,
+     so repeating it on page two states the same four figures a second time
+     and invites somebody to add the two pages together. The column heads
+     DO repeat, because those label the rows under them and a table with no
+     heads on its second page cannot be read at all.
+
+     It also pays for itself twice over: a sheet that spills gets the band
+     height back on every page after the first, which is often the whole of
+     what it was short by. */
+  const drawHead = (withRibbon) => {
     let y = pdfTitle(doc, ['SALARY CLAIM FORM — TRANSPLANTING', secTxt, `Month ${monthTxt}`],
                       { centerX: CENTER_X, lineLeft: MARGIN, lineRight: CONTENT_R });
-    y = drawCapRibbon(y);
+    if (withRibbon) y = drawCapRibbon(y);
     const H1 = 8, H2 = 6, H3 = 6, HT = H1 + H2 + H3;
     pdfCell(doc, X[0], y, COL[0], HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
     pdfCell(doc, X[1], y, COL[1], HT, 'Worker', { bold: true, size: 8.5, fill: HF });
@@ -3841,7 +3854,7 @@ async function downloadTransplantPDF() {
     return y + HT;
   };
 
-  let y = drawHead();
+  let y = drawHead(true);
   const KEYS = TRANSPLANT_JOBS.map(j => j.key);
   const calTxtOf = (n) => calibrationText(
     capCalibrationOf('transplanting', secOf(n), n, KEYS, (k) => capWorked(n, k)),
@@ -3856,7 +3869,7 @@ async function downloadTransplantPDF() {
      same reason. */
   const FOOT_RESERVE = (RH + 1) + 6 + 4 + 3;
   names.forEach((n, i) => {
-    if (y + RH > PAGE_H - FOOT_RESERVE) { doc.addPage(); y = drawHead(); }
+    if (y + RH > PAGE_H - FOOT_RESERVE) { doc.addPage(); y = drawHead(false); }
     const z = i % 2 ? [250, 250, 253] : null;
     pdfCell(doc, X[0], y, COL[0], RH, String(i + 1), { size: 8, nowrap: true, fill: z });
     pdfWorkerCell(doc, X[1], y, COL[1], RH, n, calTxtOf(n), { size: 8.5, fill: z });

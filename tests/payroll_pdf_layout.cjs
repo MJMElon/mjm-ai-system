@@ -81,8 +81,20 @@ checkTrue('and the short form still exists, because it is a database key',
 console.log('\n4 · the four cards are on the paper too');
 checkTrue('the Transplanting form draws the ribbon', /const drawCapRibbon = \(y\)/.test(transplPdf));
 checkTrue('…under the title, before the column heads',
-          transplPdf.indexOf('y = drawCapRibbon(y);') > transplPdf.indexOf("pdfTitle(doc, ['SALARY CLAIM FORM")
-       && transplPdf.indexOf('y = drawCapRibbon(y);') < transplPdf.indexOf("'Capacity'"));
+          transplPdf.indexOf('if (withRibbon) y = drawCapRibbon(y);') > transplPdf.indexOf("pdfTitle(doc, ['SALARY CLAIM FORM")
+       && transplPdf.indexOf('if (withRibbon) y = drawCapRibbon(y);') < transplPdf.indexOf("'Capacity'"));
+/* ON THE FIRST PAGE ONLY. The band carries the whole nursery total, not this
+   page of it, so a second copy on page two states the same four figures again
+   and invites somebody to add the two pages together. The column heads DO
+   repeat — those label the rows under them. */
+checkTrue('the band is drawn on the first page and not after it',
+          /let y = drawHead\(true\);/.test(transplPdf)
+       && /doc\.addPage\(\); y = drawHead\(false\); \}/.test(transplPdf));
+const maintPdf = PAY.slice(PAY.indexOf('function downloadMaintPDF'),
+                           PAY.indexOf('/* The Transplanting claim, on paper.'));
+checkTrue('and Work Maintenance says it once too, being the same sheet',
+          /let y = drawHead\(true\);/.test(maintPdf)
+       && /doc\.addPage\(\); y = drawHead\(false\); \}/.test(maintPdf));
 checkTrue('…one card per job, the same four the screen shows',
           /TRANSPLANT_JOBS\.forEach\(\(j, i\) => \{\s*const x = X\[0\] \+ i \* \(cardW \+ GAP\)/.test(transplPdf));
 checkTrue('…carrying the capacity and what it prices at',
@@ -115,9 +127,18 @@ checkTrue('the plot summary does the same arithmetic',
 /* Eight workers, the figures off the office sheet: title 59, ribbon 19,
    heads 20, nine millimetres a row. The last row has to end above the floor
    or the sheet is two pages again. */
-const firstRowY = 59 + 19 + 20, rows8 = 8 * 9, floor = 210 - ((9 + 1) + 6 + 4 + 3);
-check('so eight workers fit on one page', firstRowY + rows8 <= floor, true);
-check('and the Grand Total under them', firstRowY + rows8 + 10 <= 210 - 10, true);
+const TITLE = 59, BAND = 14 + 2, HEADS = 8 + 6 + 6;
+const firstRowY = TITLE + BAND + HEADS;
+const floorFor = (rh) => 210 - ((rh + 1) + 6 + 4 + 3);
+check('so eight workers fit on one page', firstRowY + 8 * 9 <= floorFor(9), true);
+/* And eight CALIBRATED workers too, which is the sheet the office actually
+   has: the band costing three millimetres less is what that one was short
+   by, and it is the case that spilled a single row onto a second page. */
+check('…calibration band and all', firstRowY + 8 * 11 <= floorFor(11), true);
+check('and the Grand Total under them', firstRowY + 8 * 11 + 12 <= 210 - 10, true);
+/* A page after the first has no band on it, so it carries more rows than the
+   first did rather than fewer. */
+check('a later page is not tighter than the first', TITLE + HEADS < firstRowY, true);
 
 console.log('\n7 · a plot is not broken across two pages');
 const pagesSrc = lift(MNT, 'function payrollPlotPages(rows, o) {', '\n  return page;\n}');
