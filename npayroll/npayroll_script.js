@@ -3626,13 +3626,16 @@ function downloadMaintPDF() {
      promise downloadTransplantPDF's drone maps now keep one map-page per
      nursery; this is that same promise for the claim table itself. */
   const H1 = 7, H2 = 6, H3 = 6, HEAD_HT = H1 + H2 + H3;
-  // The band is said once, on the first page — see the note on the
-  // Transplanting form below, which is deliberately the same sheet.
-  const drawHead = (withRibbon) => {
+  /* THIS FORM KEEPS ITS BAND ON EVERY PAGE, and that is the office's answer
+     rather than an oversight. The Transplanting form below says it once —
+     see the note there — and the two sheets are otherwise deliberately the
+     same shape, so this is the one place they differ on purpose. Do not
+     "tidy" it into line with the other one; it was asked for this way. */
+  const drawHead = () => {
     let y = pdfTitle(doc, ['SALARY CLAIM FORM — WORK MAINTENANCE', `${NURSERY_FULL[n] || n} (${n})`,
                             `Month ${monthLabelFull(month)}`],
                       { centerX: CENTER_X, lineLeft: MARGIN, lineRight: CONTENT_R });
-    if (withRibbon) y = drawCapRibbon(y);
+    y = drawCapRibbon(y);
     pdfCell(doc, X[0], y, COL[0], HEAD_HT, 'No.', { bold: true, size: 8, nowrap: true, fill: HF });
     pdfCell(doc, X[1], y, COL[1], HEAD_HT, 'Worker', { bold: true, size: 8.5, fill: HF });
     MAINT_TYPES.forEach((t, i) => {
@@ -3647,7 +3650,7 @@ function downloadMaintPDF() {
     return y + HEAD_HT;
   };
 
-  let y = drawHead(true);
+  let y = drawHead();
   const CODES = MAINT_TYPES.map(t => t.code);
   const calTxtOf = (w) => calibrationText(
     capCalibrationOf('maint', n, w, CODES, (c) => capWorked(w, c)),
@@ -3664,7 +3667,7 @@ function downloadMaintPDF() {
   const FOOT_RESERVE = FOOT_H + 6 + 12 + 3;
   wk.forEach((w, i) => {
     const rh = calTxtOf(w) ? ROW_H_CAL : ROW_H;
-    if (y + rh > PAGE_H - FOOT_RESERVE) { doc.addPage(); y = drawHead(false); }
+    if (y + rh > PAGE_H - FOOT_RESERVE) { doc.addPage(); y = drawHead(); }
     const z = i % 2 ? [250, 250, 253] : null;
     pdfCell(doc, X[0], y, COL[0], rh, String(i + 1), { size: 8, nowrap: true, fill: z });
     pdfWorkerCell(doc, X[1], y, COL[1], rh, w, calTxtOf(w), { size: 8, fill: z });
@@ -3835,7 +3838,11 @@ async function downloadTransplantPDF() {
 
      It also pays for itself twice over: a sheet that spills gets the band
      height back on every page after the first, which is often the whole of
-     what it was short by. */
+     what it was short by.
+
+     WORK MAINTENANCE KEEPS ITS BAND ON EVERY PAGE. The two sheets are
+     otherwise deliberately the same, and this is the one place the office
+     asked them to differ. */
   const drawHead = (withRibbon) => {
     let y = pdfTitle(doc, ['SALARY CLAIM FORM — TRANSPLANTING', secTxt, `Month ${monthTxt}`],
                       { centerX: CENTER_X, lineLeft: MARGIN, lineRight: CONTENT_R });

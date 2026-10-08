@@ -90,11 +90,17 @@ checkTrue('…under the title, before the column heads',
 checkTrue('the band is drawn on the first page and not after it',
           /let y = drawHead\(true\);/.test(transplPdf)
        && /doc\.addPage\(\); y = drawHead\(false\); \}/.test(transplPdf));
+/* WORK MAINTENANCE KEEPS ITS BAND ON EVERY PAGE, which the office asked for
+   after seeing both. The two sheets are otherwise deliberately the same
+   shape, so this is the one place they differ on purpose and the difference
+   is worth a test of its own — otherwise the next person tidies one into
+   line with the other. */
 const maintPdf = PAY.slice(PAY.indexOf('function downloadMaintPDF'),
                            PAY.indexOf('/* The Transplanting claim, on paper.'));
-checkTrue('and Work Maintenance says it once too, being the same sheet',
-          /let y = drawHead\(true\);/.test(maintPdf)
-       && /doc\.addPage\(\); y = drawHead\(false\); \}/.test(maintPdf));
+checkTrue('Work Maintenance keeps its band on every page',
+          /const drawHead = \(\) => \{/.test(maintPdf)
+       && /y = drawCapRibbon\(y\);/.test(maintPdf)
+       && !/drawHead\((?:true|false)\)/.test(maintPdf));
 checkTrue('…one card per job, the same four the screen shows',
           /TRANSPLANT_JOBS\.forEach\(\(j, i\) => \{\s*const x = X\[0\] \+ i \* \(cardW \+ GAP\)/.test(transplPdf));
 checkTrue('…carrying the capacity and what it prices at',
