@@ -2231,7 +2231,17 @@ const MAINT_TYPES = [
   { code:'weeding',  label:'Weeding',        unit:'Bag', jenis:'Merumput',
     mark:['weeding', 'merumput'] },
   { code:'interrow', label:'Interrow Spray', unit:'Bag', jenis:'Meracun rumput secara selingan',
-    mark:['interrow', 'selingan'] }
+    mark:['interrow', 'selingan'] },
+  /* jenis: null on purpose. This job is not sourced from
+     nops_maint_field_records at all — no record ever carries
+     jenis === null, so maintTotals' own MAINT_TYPES.forEach loop safely
+     no-ops for this code, and the capacity it actually prices is added
+     separately, straight after that loop, from shared_do_records — see
+     the comment there for why. mark/label/unit still work exactly as the
+     other four's do, for the Piece Rate screen and every claim/PDF/ribbon
+     line that iterates MAINT_TYPES generically. */
+  { code:'loading_seedlings', label:'Loading Seedlings', unit:'Bag', jenis:null,
+    mark:['loading seedling', 'pemunggahan', 'muat anak benih', 'memunggah anak benih'] }
 ];
 
 /* ── A Work Maintenance row on the Piece Rate screen, actually linked ──────
@@ -2445,7 +2455,63 @@ function maintTotals(nursery, month, ym) {
     });
   });
   maint.fromField = fromField;
+
+  // Loading Seedlings — see MAINT_TYPES' entry for why this is a separate
+  // pass rather than another case inside the loop above: the source is
+  // shared_do_records, not nops_maint_field_records, so there is no jenis
+  // to filter on and no Checked freeze to wait for (a DO's total_qty is a
+  // measured fact already). worked_by_by_nursery is the single source of
+  // truth for the tick too — written here and nowhere else, same column
+  // both nursery_ops' own Loading Seedlings tab and the DO Signing phone
+  // app (Mobile repo) read and write, so the three cannot disagree about
+  // who was ticked the way a second, separate tick table could.
+  {
+    const code = 'loading_seedlings';
+    const d = why[code] = {
+      label: 'Loading Seedlings',
+      rows: 0, ticked: 0, paid: 0, capAll: 0, noCap: 0,
+      unchecked: 0, uncheckedCap: 0, otherMonth: 0, noMonth: 0,
+      stray: new Set(), orphanTicks: 0, fromField: 0, noTaker: new Set(), tickRows: 0
+    };
+    const wantYm = ym || monthValue();
+    (maint.doRecords || []).forEach(do_ => {
+      if (String(do_.delivery_date || '').slice(0, 7) !== wantYm) {
+        if (!do_.delivery_date) d.noMonth++; else d.otherMonth++;
+        return;
+      }
+      const qty = maintDoQtyForNursery(do_, nursery);
+      if (!qty) return; // this DO's items are not this nursery's
+      d.rows++;
+      d.tickRows++;
+      d.capAll += qty;
+      const cells = (do_.worked_by_by_nursery || {})[nursery] || [];
+      const ticked = wk.filter(w => cells.includes(w));
+      cells.forEach(name => { if (!wk.includes(name)) d.stray.add(name); });
+      if (!ticked.length) return;
+      d.ticked++;
+      d.paid++;
+      const share = qty / ticked.length;
+      ticked.forEach(w => { per[w][code] += share; });
+    });
+  }
+
   return per;
+}
+
+/* The qty one DO contributed to ONE nursery — a DO's five item rows can
+   span more than one (see DoSigning.jsx's own nurseriesOfDO in the Mobile
+   repo, same reasoning). Resolved through MJMMaintPlots the same way every
+   other plot on this claim already is, rather than a second plot list. */
+function maintDoQtyForNursery(do_, nursery) {
+  let qty = 0;
+  for (let i = 1; i <= 5; i++) {
+    const plot = do_[`plot_${i}`];
+    if (!plot) continue;
+    if (MJMMaintPlots.nurseryOfPlot(plot, maint.plotIndex) === nursery) {
+      qty += Number(do_[`qty_${i}`]) || 0;
+    }
+  }
+  return qty;
 }
 
 /* The five, in the order they break the chain: no records, no ticks, ticks on
@@ -4009,11 +4075,18 @@ function flagSetup(msg) {
 
 /* Work Maintenance lives in the Nursery Operation module; read it as-is. */
 async function loadMaint() {
-  const [recRes, tickRes, rateRes, wkRes, fieldRes] = await Promise.all([
+  const [recRes, tickRes, rateRes, wkRes, doRes, fieldRes] = await Promise.all([
     _supabase.from('nops_maint_records').select('records').eq('id', 1).maybeSingle().then(r => r, () => ({ data: null })),
     _supabase.from('nops_maint_payroll').select('nursery, month, work_type, data').then(r => r, () => ({ data: [] })),
     _supabase.from('nops_maint_piece_rates').select('nursery, work_type, rate').then(r => r, () => ({ data: [] })),
     _supabase.from('nops_maint_workers').select('nursery, name').then(r => r, () => ({ data: [] })),
+    /* Loading Seedlings' own source — see MAINT_TYPES' loading_seedlings
+       entry and maintTotals below. Cancelled DOs never counted as a
+       delivery anywhere else in the system and do not start here. */
+    _supabase.from('shared_do_records')
+      .select('id, do_number, delivery_date, remark, status, plot_1, plot_2, plot_3, plot_4, plot_5, qty_1, qty_2, qty_3, qty_4, qty_5, worked_by_by_nursery')
+      .not('status', 'in', '("Cancelled")')
+      .then(r => r, () => ({ data: [] })),
     /* What the field actually recorded. Verified only — a record nobody has
        checked is not payable — and read here so the claim can pair the work
        to a schedule row ITSELF. It used to price only the ticks the Work
@@ -4037,6 +4110,11 @@ async function loadMaint() {
     const targets = r.nursery ? [r.nursery] : ['PN','BNN','UNN1','UNN2'];
     targets.forEach(n => { (maint.rates[n] ||= {})[r.work_type] = r.rate; });
   });
+  // Loading Seedlings' own rows, kept as-is here — split by nursery and
+  // matched to the open month inside maintTotals, same as every other
+  // nursery/month question on this claim is answered there rather than
+  // ahead of time.
+  maint.doRecords = (doRes && doRes.data) || [];
   /* THE TICKS ARE KEYED BY NAME, AND A NAME ON THE REGISTER CAN BE CORRECTED.
 
      The register ROW is the person: editing it keeps its id whatever is done
