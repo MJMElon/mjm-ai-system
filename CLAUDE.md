@@ -374,6 +374,37 @@ became optional on the same day, so both answers are one click apart.
 `tests/tray_named_adjustment_closes_pending.cjs` drives 234's own figures
 through the real page: ten of its assertions fail on the previous code.
 
+## Transplanting is not over-allocated by exactly its own adjustment
+
+The other side of the same coin, and it reads worse on screen because the
+engine says ERROR.
+
+A report that balanced to the seedling BEFORE a tray-named adjustment reads
+Over Allocated by exactly that adjustment after it, because the adjustment
+moves what is standing in the plot and deliberately leaves the batch total
+alone. Batch 225: 9,658 into its main plot, 815 first-culled, a base of
+10,473 — and a **+1** on N19, "found 1 more seedling when processing the 2nd
+culling", keyed against the tray it came out of. **Over Allocated by 1, ring
+stuck at 99%**, with the +1 sitting in the Adjustment column of the same
+screen. The one figure that accounted for the difference was the one being
+called an error.
+
+`rawPending` is the sum LESS the tray-named net, so **`rawPending ===
+−trayLossT3` is the same statement as "it balances on its own figures"** —
+there is nothing to compare, the test falls out of the arithmetic.
+`calcTransplanting` floats a note when it holds, the match box reads
+Satisfied, and `updateTransplantCompletion` takes `explained` so the ring may
+reach 100 (the drone-map condition is untouched — a missing map still holds
+it at 99 unless HQ has signed).
+
+Exactly, never nearly, for the reason below. And a difference that is NOT the
+adjustment still reads as an error: 51 out with a +1 adjustment is an
+over-allocation of 51.
+
+`tests/over_allocated_by_the_adjustment.cjs` holds it, including that the
+same +1 naming NO tray needs no note at all — that one moves both sides of
+the sum and the allocation never stopped balancing.
+
 ## 1st Culling is not wrong when Transplanting was adjusted after it
 
 A plot can be over-allocated: the transplant record counts 1,053 into U3 and

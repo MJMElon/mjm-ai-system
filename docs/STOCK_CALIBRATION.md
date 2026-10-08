@@ -193,13 +193,19 @@ Qty 0   ·   Adjustment +140   ·   Final 140
 
 ### Tab 3 Transplanting
 ```
-分配基数 = 已种总数 + D-Tone + (所有批过的 seed 侧调整) + Transplanting 的 plot 侧损失
-实际站着 = 主 plot 总数 + Transplanting 的 plot 侧损失
+分配基数 = 已种总数 + D-Tone + (所有批过的 seed 侧调整) + 没写 tray 的 plot 侧损失
+实际站着 = 主 plot 总数 + 全部 plot 侧损失（写不写 tray 都算）
 ```
-plot 侧的损失**两边同时减**，所以不会变成 over-allocated。
+**没写 tray** 的损失是苗真的不见了，**两边同时减**，所以不会变成
+over-allocated。**写了 tray** 的只减「实际站着」那一边 —— 苗一直都在这个
+batch 里，只是出 tray 的数目记错了 —— 所以它会让 Pending 关上（见第 6 节）。
+
 已存清单每一行画 `Qty · Adjustment · Final`，是**画上去**的不是重画整个清单
 （调整是在清单画完之后才读到的）。
 合计下面会写：有调整、但找不到对应那一行的，是多少、在哪个 plot。
+
+**新增：** 如果这张报表的差额**刚好等于**写了 tray 的那些调整，上面会浮一条
+说明（见第 9B 节），配对框写 Satisfied，圈圈可以走到 100%。
 
 ### Tab 4 1st Culling
 ```
@@ -232,6 +238,31 @@ cull rate = 已 cull / tray 数量
 没批的调整在这里也解释不了任何东西 —— 它根本还没进数字里。
 
 `tests/cull1_explained_by_transplanting.cjs` 守着这一条。
+
+### 9B. Transplanting 的「差额刚好是自己那笔调整」
+
+同一枚硬币的另一面，而且屏幕上更难看 —— 引擎直接写红字 ERROR。
+
+一张**在调整之前就平到一棵苗**的报表，加上一笔**写了 tray** 的调整之后，
+会变成「Over Allocated by 刚好那个数」：因为这笔调整只动「实际站着」，
+故意不动 batch 总数。
+
+batch 225 就是：主 plot 9,658 + 1st cull 815 = 基数 10,473，平的。
+然后 N19 上一笔 **+1**，写着「做 2nd culling 的时候多找到 1 棵」，
+而且写了是从哪个 tray 出来的。结果 —— **Over Allocated by 1，圈圈卡在 99%**，
+而那个 +1 就在同一个屏幕的 Adjustment 栏里。
+唯一解释了这个差额的数字，被当成错误。
+
+所以：**当差额刚好等于写了 tray 的那些调整的净额时**，Tab 3 上面浮一条蓝色说明，
+配对框从 Error 改成 Satisfied，圈圈可以走到 100%。
+（无人机图那一条没有动 —— 少一张图照样停在 99%，除非 HQ 已经签过。）
+
+**必须刚好相等**，理由和 9A 一样。差额不等于调整的时候照旧是错：
+差 51 而调整只有 +1，那就是 over-allocated 51。
+
+**没写 tray 的那笔 +1 不需要任何说明** —— 它两边一起动，报表从来没有不平。
+
+`tests/over_allocated_by_the_adjustment.cjs` 守着这一条。
 
 ### Tab 5 2nd Culling
 每一行读 `adjustPlotLoss(plot, '2nd Culling')`，在行上用咖啡色写
