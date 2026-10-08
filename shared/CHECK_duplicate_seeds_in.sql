@@ -12,7 +12,7 @@
 --      damaged the 224-241 range
 --
 --  Both are written up in operation/operation_batch_detail.html beside
---  that form's save.
+--  the save on that form.
 --
 --  The Seeds In form and the batch list both show the NEWEST row, and
 --  Life of Seedlings now does too. So the figures on screen are right —
@@ -30,8 +30,8 @@
 --    the one being kept":
 --
 --    keeping = yes   the newest row, the one all three screens show.
---    keeping = ''    a stale row. qty, do_qty and supplier are what it
---                    holds, so you can see which one is the real
+--    keeping blank   a stale row. qty, do_qty and supplier are what
+--                    it holds, so you can see which one is the real
 --                    delivery before anything is removed.
 --
 --    sum_if_added_up is what Life of Seedlings used to show for the
