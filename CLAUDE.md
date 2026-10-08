@@ -979,6 +979,67 @@ Two things that will cost an hour each if nobody tells you:
 - **`innerText` returns CSS-transformed text**, so `includes('This Week')`
   fails against `THIS WEEK`.
 
+## A month is a LABEL on one screen and a KEY on the next
+
+`monthLabel()` gives "Sep 2026" and `monthLabelFull()` gives "September
+2026", and the difference is not a matter of taste. The maintenance module
+**stores** its month in the short shape — `nops_transplant_field_records.
+schedule_month`, and `loadTransplantField` looks a record up with
+`.eq('schedule_month', monthLabel(...))`. So the short one is a KEY.
+
+The office asked for the month to be written out on the printed forms, which
+is right: a month on something somebody signs is "September 2026", and the
+short form is for a column heading with no room. Every DISPLAY now takes the
+full one — the Transplanting claim, the Monthly Payroll, the by-plot table,
+the keyed table, the empty-sheet message. **`monthLabel()` itself does not
+move**, and a reader that compares against a stored month must go on asking
+for the short one.
+
+The fixture in `tests/transplant_claim_empty.cjs` had ONE constant doing both
+jobs, and changing it broke twenty-one assertions at once — which is the
+cheap version of what the same mistake does in the page. It carries
+`MONTH_KEY` and `MONTH_LABEL` now, and says why.
+
+## A printed form is read by somebody adding up
+
+Seven things were wrong with the payroll PDFs at once, and every one of them
+was invisible on screen. Four of them are rules rather than fixes:
+
+- **Money is turned into text in ONE place.** `money()` has grouped the
+  digits since it was written; the PDFs were building `'RM ' + x.toFixed(2)`
+  of their own, so a claim read **RM2117.74** on paper and RM 2,117.74 on the
+  screen it was produced from. `tests/payroll_pdf_layout.cjs` fails on any
+  `"RM " +` … `toFixed(` left in the file, because the next one will be
+  written the same way.
+- **A figure on the screen belongs on the paper.** The four cards the
+  Transplanting sheet opens with — the whole job's capacity and what it
+  prices at — were nowhere on the form; the figure was stamped inside each
+  column's header instead, among the column labels. Work Maintenance already
+  had the band (`drawCapRibbon`), and taking the line out of the headers paid
+  for the band's own height.
+- **`doc.addPage()` inherits the document's orientation.** The drone maps
+  followed the claim onto a landscape page for that reason alone. A map is a
+  picture of a plot and is read standing in it, so it wants the tall page;
+  the claim is a wide table and keeps the wide one. A page that wants its own
+  shape has to **name** it.
+- **Reserve what the foot actually needs, never a round number.** The
+  Transplanting claim kept a flat 40mm on top of a 25mm margin, so rows
+  stopped 65mm above the foot of a page 210 tall: eight workers broke onto a
+  second page with a third of the first one blank under them, and the plot
+  summary then took a third. The total row, the signature and the footer note
+  are a sum — `downloadMaintPDF` already worked it out that way. Three pages
+  became two.
+
+And the one that is about reading rather than fitting: **a plot is not broken
+across two pages.** Worker Record rows are sorted by plot then by day, so a
+plot is a RUN; a break inside one leaves half of N15 at the foot of a page
+and the rest overleaf, for somebody carrying a running total across the turn
+— which is the adding up a printed sheet exists to save. The break is taken
+BEFORE a run. A run too tall for any page still splits at the page edge,
+which is the only honest place and also what stops it looking for ever for a
+page it would fit on. `payrollPlotPages` is pure — rows in, page numbers out
+— so the rule is driven directly instead of being inferred from a PDF.
+
 ## A page that caches cannot deliver a fix
 
 Every script on an office page is cache-busted with a `?v=` that lives **in
