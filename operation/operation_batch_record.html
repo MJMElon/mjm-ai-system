@@ -246,8 +246,11 @@
                     // tab is built from it.
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change, plot_name').eq('transaction_type', 'Planted').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', 'Damaged_Seeds').order('id', { ascending: true })),
-                    // 1st culling names its tray directly in plot_name.
-                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change, plot_name').eq('transaction_type', '1st_Culling').order('id', { ascending: true })),
+                    // 1st culling names its tray directly in plot_name, and
+                    // carries its culled date in the remark — which is how the
+                    // To Check list tells a row somebody filled in from a row
+                    // that only exists.
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change, plot_name, remark').eq('transaction_type', '1st_Culling').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change').eq('transaction_type', '2nd_Culling').order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, quantity_change, plot_name, remark').eq('transaction_type', '3rd_Culling').order('id', { ascending: true })),
                     // remark carries which tray the seedlings LEFT ("from tray
@@ -271,11 +274,16 @@
                        list said Completed over exactly that — see the coverage
                        loop below. Row sign-offs live in the log table with a
                        plot_name of `<stage>::<rowKey>`; the whole stage being
-                       signed lives in its own table and covers every row on it. */
+                       signed lives in its own table and covers every row on it.
+
+                       EVERY stage is read, not just cull_3. A sign-off comes
+                       two ways and either counts — the To Check list below is
+                       the other reader of these rows, and asking only for
+                       cull_3 left a verifier who had worked down a tab row by
+                       row still looking at the batch on the list. */
                     fetchAllRows(() => _supabase.from('shared_inventory_logs')
                         .select('batch_name, plot_name')
                         .eq('transaction_type', 'Row_Verification')
-                        .like('plot_name', 'cull_3::%')
                         .order('id', { ascending: true })),
                     fetchAllRows(() => _supabase.from('operation_batch_verifications')
                         .select('batch_name, stage')
@@ -488,6 +496,74 @@
                     (stageSigned[r.batch_name] = stageSigned[r.batch_name] || new Set()).add(r.stage);
                 });
 
+                /* A SIGN-OFF COMES TWO WAYS, AND EITHER COUNTS.
+
+                   One signature over the whole tab, or a Row_Verification per
+                   row. The tab's own tick draws itself by that rule
+                   (`rowsAllSigned` in operation_batch_detail.html), Life of
+                   Seedlings reads it that way and so does
+                   CHECK_which_batches_completed.sql — this list was the one
+                   place that asked only for the stage signature, so somebody
+                   who had worked down a tab row by row still saw the batch
+                   sitting there waiting to be checked.
+
+                   Only the FIRST segment of the rowKey is matched, which is
+                   the plot or the tray; the rest is whatever the tab merged
+                   the row under and says nothing about whether it was looked
+                   at. Same rule, same reason, as the cull_3 set above. */
+                const rowSigned = {};      // batch → stage → Set(PLOT or TRAY)
+                (rowVerifRes.data || []).forEach(r => {
+                    if (!r.batch_name || !r.plot_name) return;
+                    const m = /^([A-Za-z0-9_]+)::(.+)$/.exec(String(r.plot_name));
+                    if (!m) return;
+                    const key = _normPlot(String(m[2]).split('|')[0]);
+                    if (!key) return;
+                    const byStage = rowSigned[r.batch_name] = rowSigned[r.batch_name] || {};
+                    (byStage[m[1]] = byStage[m[1]] || new Set()).add(key);
+                });
+
+                /* WHICH ROWS A STAGE HAS, for the two tabs that are signed row
+                   by row. Rebuilt from the ledger the same way those tabs build
+                   them, because "every row is signed" cannot be answered
+                   without knowing how many rows there are.
+
+                   Transplanting is one row per plot the batch reached, the two
+                   holding trays included — they are rows on that tab like any
+                   other. 1st Culling is one row per PLANTED tray, plus Premium
+                   Care and Double-Tone where the batch sent seedlings there,
+                   which is the list syncTab4 assembles.
+
+                   Seeds In, Planting and Seed Audit have no row-level sign-off
+                   at all (no ROW_TAB_CONFIG entry), so for them the stage
+                   signature is the only answer and this returns false. */
+                const txPlots = {}, cull1Trays = {};
+                (transplantRes.data || []).forEach(r => {
+                    if (!r.batch_name) return;
+                    const p = _normPlot(r.plot_name);
+                    if (p) (txPlots[r.batch_name] = txPlots[r.batch_name] || new Set()).add(p);
+                    const hold = r.transaction_type === 'Transplanted_Premium'    ? 'PREMIUM CARE'
+                               : r.transaction_type === 'Transplanted_DoubleTone' ? 'DOUBLE-TONE' : '';
+                    if (hold && (Number(r.quantity_change) || 0) > 0) {
+                        (cull1Trays[r.batch_name] = cull1Trays[r.batch_name] || new Set()).add(hold);
+                    }
+                });
+                (plantedRes.data || []).forEach(r => {
+                    const t = _normPlot(r.plot_name);
+                    if (!r.batch_name || !t || t === 'PREMIUM CARE' || t === 'DOUBLE-TONE') return;
+                    (cull1Trays[r.batch_name] = cull1Trays[r.batch_name] || new Set()).add(t);
+                });
+                const STAGE_ROW_SET = { transplanting: txPlots, cull_1: cull1Trays };
+                const stageRowsAllSigned = (batch, stage) => {
+                    const src = STAGE_ROW_SET[stage];
+                    if (!src) return false;
+                    const need = src[batch];
+                    if (!need || !need.size) return false;
+                    const got = (rowSigned[batch] || {})[stage];
+                    if (!got || !got.size) return false;
+                    for (const k of need) { if (!got.has(k)) return false; }
+                    return true;
+                };
+
                 /* AN OPEN REJECTION IS NOT A FINISHED BATCH.
 
                    HQ sent a report tab back for amendment. The row is deleted
@@ -620,14 +696,28 @@
                    change the others. */
                 const namesOf = (res) => new Set(
                     ((res && res.data) || []).map(r => r.batch_name).filter(Boolean));
+                /* FILLED IN MEANS SOMEBODY PUT SOMETHING IN IT — a quantity
+                   above nought, or a date. A saved row carrying neither is a
+                   row that exists and says nothing, and asking somebody to
+                   check it wastes the one thing this list is for. */
+                const hasData = (r) => (Number(r.quantity_change) || 0) > 0
+                                    || /Date:\s*\d{4}-\d{2}-\d{2}/.test(String(r.remark || ''));
+                const namesWithData = (res) => new Set(
+                    ((res && res.data) || []).filter(hasData).map(r => r.batch_name).filter(Boolean));
                 const filledStages = {
+                    // A batch exists because a reception record does, and the
+                    // reception IS the Seeds In report — including one keyed at
+                    // nought, which is a mistake somebody needs to look at
+                    // rather than a report nobody filled in.
                     seeds_in:      new Set(dedupedReception.map(r => r.batch_name).filter(Boolean)),
+                    // One Seed Audit row is one bag counted: the row is the
+                    // data, whatever the figure on it.
                     seed_audit:    namesOf(seedAuditRes),
                     // One tab, two kinds of record: a batch with damage keyed
                     // and no planting is still a Planting & Damage report.
-                    planting:      new Set([...namesOf(plantedRes), ...namesOf(damagedRes)]),
-                    transplanting: namesOf(transplantRes),
-                    cull_1:        namesOf(cull1Res)
+                    planting:      new Set([...namesWithData(plantedRes), ...namesWithData(damagedRes)]),
+                    transplanting: namesWithData(transplantRes),
+                    cull_1:        namesWithData(cull1Res)
                 };
 
                 // Process logic & simulate stages.
@@ -699,17 +789,20 @@
                        out: 3rd Culling has its own coverage rule driving
                        Completed, and neither is checked the same way.
 
-                       A stage counts as FILLED when its own records exist, and
-                       as WAITING when nobody has signed the stage off. A stage
-                       HQ has REJECTED is not waiting to be checked — it has
-                       been, and sent back — so it stays in Amendment Needed and
-                       out of here, and the two lists never ask for the same
-                       thing twice. */
+                       A stage counts as FILLED when something has been put in
+                       it — see filledStages — and as WAITING until somebody
+                       has signed it, EITHER WAY: the whole tab in one
+                       signature, or every row on it. A stage HQ has REJECTED
+                       is not waiting to be checked — it has been, and sent
+                       back — so it stays in Amendment Needed and out of here,
+                       and the two lists never ask for the same thing twice. */
                     const signed   = stageSigned[b.batch_name] || EMPTY_SET;
                     const rejected = rejectedStages[b.batch_name] || EMPTY_SET;
                     b.toCheck = TOCHECK_STAGES
                         .filter(s => filledStages[s].has(b.batch_name))
-                        .filter(s => !signed.has(s) && !rejected.has(s));
+                        .filter(s => !signed.has(s)
+                                  && !stageRowsAllSigned(b.batch_name, s)
+                                  && !rejected.has(s));
                     b.heldByIssue = heldByIssue[b.batch_name] || null;
                     return processBatchLogic(b, completedBatchNames);
                 });
