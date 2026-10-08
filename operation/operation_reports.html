@@ -595,11 +595,16 @@ async function loadBreeds() {
 
    Two things about that formula are worth knowing before changing it.
 
-   FIRST, the 2nd culling is not added to the 3rd. The 3rd culling is keyed
-   against the ORIGINAL transplanted figure, so it already contains the 2nd;
-   counting both takes the same seedlings off twice. The 2nd counts only while
-   no 3rd has been recorded — the same rule netOfRow() applies in the Movement
-   Report, which is why the "total culling" column is headed 1st + 3rd.
+   FIRST, the 2nd culling NEVER counts — not even while no 3rd has been
+   recorded. The 3rd culling is keyed against the ORIGINAL transplanted
+   figure, so it already contains the 2nd; counting both takes the same
+   seedlings off twice. And a 2nd culling on its own is not a loss waiting
+   for a 3rd: netOfRow() in the Movement Report says "2nd Culled never
+   deducts here, B/F included — 2nd Culling is Tab 6's own live snapshot as
+   a batch works through 3rd Culling", and the Batch Report carries cull2
+   "for reference only — it is inside cull3". That is why the column is
+   headed 1st + 3rd, and for a while the code did not do what the heading
+   said.
 
    SECOND, it starts from actual planted, not from the transplanting quantity.
    The seedlings culled in the tray never reached the field, so the
@@ -755,11 +760,10 @@ const LOS_GROUP_ORDER = ['seeds_in', 'planting', 'transplanting', 'dtone', 'prem
                          'cull_1', 'cull_2', 'cull_3', 'transfer'];
 
 /* WHICH GROUPS A DERIVED FIGURE IS MADE OF. The same rule the figure itself
-   follows — see postCull/cullTotal/balance in _losBuildAllRows(): once a 3rd
-   culling exists the 2nd takes no part in the total, so an unsigned 2nd
-   culling must not mark a total it is not in, and while no 3rd exists it
-   must. */
-const LOS_CULLTOTAL_GROUPS = (r) => ['cull_1', r.cull3 > 0 ? 'cull_3' : 'cull_2'];
+   follows — see postCull/cullTotal/balance in _losBuildAllRows(): the 2nd
+   culling takes no part in the total at all, so an unsigned 2nd culling
+   must never mark a total it is not in. */
+const LOS_CULLTOTAL_GROUPS = (r) => ['cull_1', 'cull_3'];
 /* Balance is planted − total culling − sales + approved calibration. Sales
    and calibration are signed off elsewhere (the D/O module, the calibration
    approval) and carry no group here, so what is left to mark is the planting
@@ -1247,10 +1251,27 @@ async function _losBuildAllRows(asAt) {
 
   // ── Derived figures ──
   Object.values(rowsByBatch).forEach(r => {
-    // What the 2nd culling contributes: nothing once a 3rd has been recorded,
-    // because the 3rd was keyed against the original transplanted figure and
-    // already contains it. Same rule as the Movement Report's netOfRow().
-    r.postCull   = r.cull3 > 0 ? r.cull3 : r.cull2;
+    /* THE 2ND CULLING NEVER DEDUCTS. NOT EVEN WHILE NO 3RD EXISTS.
+
+       This used to read `cull3 > 0 ? cull3 : cull2` — the 2nd standing in
+       for the 3rd until a 3rd was keyed — and claimed in its own comment to
+       be "the same rule as the Movement Report's netOfRow()". It was not.
+       netOfRow says so in as many words: "2nd Culled never deducts here,
+       B/F included — 2nd Culling is Tab 6's own live snapshot as a batch
+       works through 3rd Culling, not a separate loss on top of it." The
+       Batch Report's culling rate says the same thing from the other side:
+       (1st + 3rd) over (transplanted + 1st), and cull2 is carried "for
+       reference only — it is inside cull3".
+
+       So every batch 2nd culled and not yet 3rd culled had its Total
+       Culling overstated by the 2nd culling and its Balance understated by
+       the same, on the one report the office reconciles against — while
+       the column it sat in was headed "Total Culling (1st + 3rd)" and the
+       Movement Report beside it disagreed.
+
+       The 2nd Culled COLUMN stays. It is worth seeing; it is just not a
+       loss to add on top of the 3rd. */
+    r.postCull   = r.cull3;
     r.cullTotal  = r.cull1 + r.postCull;
     r.variance   = r.planted - (r.received - r.damaged);
     r.balance    = r.planted - r.cullTotal - r.sales + r.calibration;
@@ -4682,11 +4703,11 @@ function _losDrillCollect(kind, batch) {
   const out = [];
   rows.forEach(r => {
     if (spec.list === 'cullTotal') {
-      // 1st + 3rd, and the 2nd only while no 3rd has replaced it — the same
-      // rule the column itself is totalled by, so the window and the figure
-      // it opened from can never disagree.
+      // 1st + 3rd, and never the 2nd — the same rule the column itself is
+      // totalled by, so the window and the figure it opened from can never
+      // disagree.
       out.push(...r.rec.cull1);
-      out.push(...(r.cull3 > 0 ? r.rec.cull3 : r.rec.cull2));
+      out.push(...r.rec.cull3);
     } else {
       out.push(...(r.rec[spec.list] || []));
     }
@@ -4755,7 +4776,7 @@ function _losReconcileLines(kind, batch) {
        ['Actual planted', add('planted'), 0]]
     : [['Actual planted', add('planted'), +1],
        ['1st culling', add('cull1'), -1],
-       ['Post-transplant culling (3rd, or 2nd while no 3rd)', add('postCull'), -1],
+       ['Post-transplant culling (3rd only — the 2nd never deducts)', add('postCull'), -1],
        ['Total sales', add('sales'), -1],
        ['Approved stock calibration', add('calibration'), +1]];
   return {

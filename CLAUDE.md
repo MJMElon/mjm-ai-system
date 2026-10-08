@@ -668,6 +668,35 @@ because this was the second fix in a week that had to actually reach a phone.
 That is the condition the rule names: a module somebody wants current, not the
 whole site.
 
+## The 2nd culling never deducts. Not even while no 3rd exists.
+
+Three readers, and Life of Seedlings was the odd one out again — this time on
+the column headed **"Total Culling (1st + 3rd)"**, which it was computing as
+1st + **2nd** whenever no 3rd culling had been keyed yet. The heading said one
+thing and the code did another.
+
+The two it has to agree with both say so in their own words:
+
+- `netOfRow()` — *"2nd Culled never deducts here, B/F included — 2nd Culling is
+  Tab 6's own live snapshot as a batch works through 3rd Culling, not a
+  separate loss on top of it."*
+- the Batch Report's culling rate — `(cull1 + cull3) / (transplanted + cull1)`,
+  with cull2 *"carried for reference only — it is inside cull3"*.
+
+LOS's own comment claimed to be "the same rule as the Movement Report's
+netOfRow()". It was not, and a comment asserting agreement is not agreement —
+the test now compares the two formulas rather than restating either.
+
+So every batch 2nd culled and not yet 3rd culled had its **Total Culling
+overstated** and its **Balance understated**, by exactly its 2nd culling, on
+the one report the office reconciles against.
+
+The 2nd Culled **column stays**. It is worth seeing; it is simply not a loss
+to add on top of the 3rd. `shared/CHECK_second_culling_in_total.sql` names
+every batch that moves and by how much, and
+`tests/los_second_culling_never_deducts.cjs` holds the rule against the Batch
+Report's real formula, lifted out of its own file.
+
 ## One batch, one reception — the newest row wins
 
 A batch is meant to have exactly one `Seeds_Received` row. **Batch 224 had
