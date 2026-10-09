@@ -59,25 +59,25 @@ for (const c of cases) {
    The Balance used to span both halves, so `pre + main === balance` was its
    own guard and mainBalance was literally `balance − preBalance`. The office
    asked for the Balance to become the FIELD side on its own —
-   transplanting qty − 3rd culling − TOTAL sales — so there is no total left
-   to split, and that identity is gone.
+   transplant qty − 3rd culling − TOTAL sales + approved calibration — so
+   there is no total left to split, and that identity is gone.
    What replaces it: the Balance and mainBalance are the SAME NUMBER on every
    batch that sells out of the field, which is every batch the office
    reconciles. Where they differ, the difference is accounted for to the
-   seedling by the two things the Balance does not carry and the field figure
-   does — the TRAY sales it takes off anyway, and the FIELD calibration it
-   leaves out. Checking the gap is what stops mainBalance quietly drifting
-   into a formula of its own. */
-console.log('\nBalance (total sales, no calibration) against the main-nursery figure:');
+   seedling by the two TRAY figures the Balance carries and the field figure
+   does not — the tray sales it takes off anyway, and the tray calibration it
+   adds in anyway. Checking the gap is what stops mainBalance quietly
+   drifting into a formula of its own. */
+console.log('\nBalance (total sales and calibration) against the main-nursery figure:');
 for (const c of cases) {
   const r = run(c.name, c.f);
-  const gap = (r.salesPre || 0) + ((r.calibration || 0) - (r.calibrationPre || 0));
+  const gap = (r.salesPre || 0) - (r.calibrationPre || 0);
   const ok = r.mainBalance - r.balance === gap;
   if (!ok) bad++;
   console.log('  ' + c.name.slice(0, 1) + ': balance=' + String(r.balance).padStart(5) +
               '  main=' + String(r.mainBalance).padStart(5) +
               '  main less balance=' + String(r.mainBalance - r.balance).padStart(5) +
-              '  tray sales + field calibration=' + String(gap).padStart(5) +
+              '  tray sales less tray calibration=' + String(gap).padStart(5) +
               (ok ? '  ok' : '  ✗'));
 }
 console.log('\n' + bad + ' of ' + cases.length + ' cases wrong');

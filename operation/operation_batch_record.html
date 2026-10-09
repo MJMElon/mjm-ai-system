@@ -3,15 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- This page carries all of its own code inline, so the PAGE is the
-         deploy: a cached copy reaches nobody. It is demonstrably being served
-         stale -- the office screen still shows a red tab reading "To Do List",
-         a name this repository has never held in its history. See CLAUDE.md,
-         "A page that caches cannot deliver a fix". One hard reload per machine
-         picks these up, and after that it stays fresh by itself. -->
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
-    <meta http-equiv="Pragma" content="no-cache"/>
-    <meta http-equiv="Expires" content="0"/>
     <title>Life of Seedlings - MJM Nursery AI</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -130,7 +121,7 @@
             <div class="flex items-center gap-2 bg-white p-2 rounded-2xl border border-[#e8dcc8] shadow-inner mb-6 w-fit overflow-x-auto">
                 <button id="tab-active" class="list-tab-btn list-tab-active" onclick="switchListTab('active')">🟢 Active</button>
                 <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="A batch moves here automatically once every plot has nothing left standing in it — 3rd culled less drone map quantity is nought. A plot all sold out is nought either way. Any plot still carrying a balance keeps the batch in Active.">✅ Completed</button>
-                <button id="tab-amendment" class="list-tab-btn list-tab-inactive" onclick="switchListTab('amendment')" title="Batches with at least one report tab rejected by HQ — open the batch to see the rejection remark and amend the report">🔴 Amendment Needed</button>
+                <button id="tab-amendment" class="list-tab-btn list-tab-inactive" onclick="switchListTab('amendment')" title="Work waiting to be DONE on a batch: a report HQ sent back, or a figure the report itself is asking about — a drone map that does not tally, a planting gap with no reason against it. Open one and it lands on the tab that needs it. Once it is answered the batch moves to the To Check List.">🔴 To Do List</button>
                 <button id="tab-tocheck" class="list-tab-btn list-tab-inactive" onclick="switchListTab('tocheck')" title="Reports that are filled in and still waiting for somebody to check them: Seeds In, Seed Audit, Planting &amp; Damage, Transplanting and 1st Culling. 2nd and 3rd Culling are not counted here.">📋 To Check List</button>
                 <button id="tab-tray" class="list-tab-btn list-tab-inactive" onclick="switchListTab('tray')" title="Every pre-nursery tray: how many holes are free, and which batch is taking up the rest. A tray frees up as its seedlings are culled or transplanted out.">🧺 Tray Status</button>
             </div>
@@ -192,9 +183,21 @@
         const PAGE_SIZE = 15;
         /* The five reports the To Check list watches, in the order they are
            filled in. 2nd and 3rd Culling are deliberately not among them. */
-        const TOCHECK_STAGES = ['seeds_in', 'seed_audit', 'planting', 'transplanting', 'cull_1'];
+        /* The five reports the To Check list watches by the ordinary rule
+           — filled in and nobody has signed it — in the order they are
+           filled in. 2nd Culling is deliberately not among them.
+
+           3rd Culling is on the end for ONE reason only: a drone-map
+           question it asked and somebody has since answered. filledStages
+           below is what decides that, and nothing else puts it here. */
+        const TOCHECK_STAGES = ['seeds_in', 'seed_audit', 'planting', 'transplanting', 'cull_1', 'cull_3'];
         const EMPTY_SET = new Set();
         let isAdmin = false;
+        /* May this login CHECK a report — the tick that shows the To Check
+           List. Starts false so a render before the permissions are read
+           cannot flash a list the person may not have; gateAccess() runs
+           before initLedger and sets it. */
+        let canReview = false;
 
         // Access gate — runs before initLedger. "none" users are redirected.
         async function gateAccess() {
@@ -214,6 +217,21 @@
                 // Function-level ticks from the module's User Access page.
                 // `isAdmin` gates the per-row delete button below.
                 isAdmin = MJMAccess.canDoOperation('batch', 'delete');
+                /* THE TO CHECK LIST IS THE CHECKER'S LIST.
+
+                   It answers "what is waiting for ME to sign", which is a
+                   question only somebody who may sign has. For everybody else
+                   it is a list of other people's work with nothing on it they
+                   can do, sitting next to the To Do List, which is theirs.
+
+                   Gated on the same tick as the Approve and Edit controls on
+                   Adjustments (`batch` / `review`), so one answer governs
+                   everything about checking a batch. Access fails OPEN here
+                   as everywhere else — somebody nobody has configured still
+                   sees it, which is what stops a deploy taking a list away
+                   from the person who has always used it. */
+                canReview = MJMAccess.canDoOperation('batch', 'review');
+                applyListTabAccess();
                 if (!MJMAccess.canDoOperation('batch', 'add_new')) {
                     const addBtn = document.getElementById('add-new-batch-btn');
                     if (addBtn) addBtn.style.display = 'none';
@@ -249,7 +267,7 @@
         async function initLedger() {
             try {
                 // Fetch reception logs + every culling-related log type + transplant logs in parallel.
-                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, rowVerifRes, stageVerifRes, trayRes, seedAuditRes] = await Promise.all([
+                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, rowVerifRes, stageVerifRes, trayRes, seedAuditRes, calRes] = await Promise.all([
                     fetchAllRows(() => _supabase.from('shared_inventory_logs')
                         .select('*')
                         .eq('transaction_type', 'Seeds_Received')
@@ -274,7 +292,7 @@
                     // or `stage::rowKey` for a rejection against one row. Asking
                     // for it costs nothing and is the difference between "this
                     // batch needs amendment somewhere" and naming the tab.
-                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, plot_name').eq('transaction_type', 'Review_Rejection').order('id', { ascending: true })),
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, plot_name, remark').eq('transaction_type', 'Review_Rejection').order('id', { ascending: true })),
                     /* 3rd-culling transfers. Only the destination plot is
                        wanted here — it joins the set of plots the batch's 3rd
                        Culling must cover before the batch may read Completed.
@@ -312,6 +330,15 @@
                     fetchAllRows(() => _supabase.from('shared_inventory_logs')
                         .select('batch_name')
                         .eq('transaction_type', 'Seed_Audit')
+                        .order('id', { ascending: true })),
+                    /* Stock adjustments. A drone-map gap is settled by one of
+                       these, not by re-keying the cull, so this list is what
+                       tells a plot that still disagrees from one that has
+                       been put right. Only APPROVED rows count, the same rule
+                       as everywhere else. */
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs')
+                        .select('batch_name, plot_name, quantity_change, remark')
+                        .eq('transaction_type', 'Stock_Calibration')
                         .order('id', { ascending: true }))
                 ]);
                 if (recRes.error) throw recRes.error;
@@ -565,7 +592,13 @@
                     if (!r.batch_name || !t || t === 'PREMIUM CARE' || t === 'DOUBLE-TONE') return;
                     (cull1Trays[r.batch_name] = cull1Trays[r.batch_name] || new Set()).add(t);
                 });
-                const STAGE_ROW_SET = { transplanting: txPlots, cull_1: cull1Trays };
+                /* 3rd Culling is signed row by row as well, and its rows are
+                   the plots the batch used — the same set the completion rule
+                   below is built on. Without it, a batch whose drone-map
+                   question was answered and whose plots were then all signed
+                   one at a time would sit on the To Check list for ever. */
+                const STAGE_ROW_SET = { transplanting: txPlots, cull_1: cull1Trays,
+                                        cull_3: expectedPlots };
                 const stageRowsAllSigned = (batch, stage) => {
                     const src = STAGE_ROW_SET[stage];
                     if (!src) return false;
@@ -577,12 +610,63 @@
                     return true;
                 };
 
+                /* DOES THIS PLOT AND ITS DRONE MAP AGREE — NOW?
+
+                   The gap is settled by a stock ADJUSTMENT, not by re-keying
+                   the cull: the office accepts the explanation, raises a
+                   calibration for the difference, approves it, and the two
+                   sides tally. The 3rd Culling row in the ledger does not
+                   move when that happens — it still reads 500 against a
+                   MapQty of 540 — so anything that compares those two alone
+                   goes on calling it a gap for ever, and the batch never
+                   leaves the lists.
+
+                   So the comparison is culled PLUS what has been approved
+                   against that plot. Which adjustments reach the 3rd Culling
+                   is ADJUST_APPLIES_TO's rule in operation_batch_detail.html:
+                   one filed on the 3rd Culling, and one filed on
+                   Transplanting, because both are measuring what is standing
+                   in the plot. Change one, change the other.
+
+                   An UNAPPROVED one moves nothing, here as everywhere. */
+                const _adjKey = (b, p) => String(b || '') + '\x01' + String(p || '').trim().toUpperCase();
+                const cull3Adj = {};
+                (calRes.data || []).forEach(r => {
+                    const remark = r.remark || '';
+                    if (remark.indexOf('[APPROVED by') < 0) return;
+                    const rep = String((remark.match(/Report:\s*([^.]+?)\s*\./i) || [])[1] || '')
+                        .trim().toLowerCase();
+                    if (rep !== '3rd culling' && rep !== 'transplanting') return;
+                    // The plot it names, which is not always the row's own.
+                    const named = String((remark.match(/Plot:\s*([^.]+?)\s*\./i) || [])[1] || '').trim();
+                    const plot = named || r.plot_name || '';
+                    if (!plot) return;
+                    const k = _adjKey(r.batch_name, plot);
+                    cull3Adj[k] = (cull3Adj[k] || 0) + (Number(r.quantity_change) || 0);
+                });
+                const _mapQtyOf = (r) => {
+                    const m = (r.remark || '').match(/MapQty:\s*(\d+)/);
+                    return m ? parseInt(m[1], 10) : null;
+                };
+                /* True when there is nothing left to answer: no map keyed at
+                   all, or the figures agree once the approved adjustments are
+                   counted. */
+                const _cull3Tallies = (r) => {
+                    const map = _mapQtyOf(r);
+                    if (map === null) return true;
+                    const adj = cull3Adj[_adjKey(r.batch_name, r.plot_name)] || 0;
+                    return (Number(r.quantity_change) || 0) + adj === map;
+                };
+                // Batches with at least one plot still disagreeing.
+                const stillMismatched = new Set(((cull3Res && cull3Res.data) || [])
+                    .filter(r => !_cull3Tallies(r)).map(r => r.batch_name).filter(Boolean));
+
                 /* AN OPEN REJECTION IS NOT A FINISHED BATCH.
 
                    HQ sent a report tab back for amendment. The row is deleted
                    when the rejection is cleared or the tab re-verified, so a
                    row that is still there is still open — and the batch could
-                   otherwise sit in Completed and in Amendment Needed at once,
+                   otherwise sit in Completed and on the To Do List at once,
                    the list calling the work finished while the tab beside it
                    says it is in dispute.
 
@@ -599,7 +683,23 @@
                    not covered, so the batch stays Active until somebody
                    settles it — whether or not an adjustment was ever raised
                    about it. */
-                const openRejection = new Set((rejectRes.data || []).map(r => r.batch_name).filter(Boolean));
+                /* THE DRONE-MAP FLAG IS WRITTEN BY A SAVE AND CLEARED BY A
+                   SAVE, so an approval that settles the gap leaves it behind:
+                   the batch would sit on the To Do List until somebody
+                   happened to open Tab 6 and press Save, over a question that
+                   was answered days ago. It is ignored once the plots it
+                   names tally.
+
+                   Only the AUTOMATIC one — saveTab6 writes it against
+                   plot_name 'cull_3' with that wording, and looks it up the
+                   same way to clear it. A rejection a PERSON sent back stands
+                   until a person clears it, whatever the figures say. */
+                const _staleMapFlag = (r) =>
+                    String(r.plot_name || '') === 'cull_3'
+                    && String(r.remark || '').indexOf('3rd Culling map qty') === 0
+                    && !stillMismatched.has(r.batch_name);
+                const openRejections = (rejectRes.data || []).filter(r => !_staleMapFlag(r));
+                const openRejection = new Set(openRejections.map(r => r.batch_name).filter(Boolean));
 
                 const completedBatchNames = new Set();
                 /* Batches finished in the field but held out of Completed by an
@@ -626,25 +726,25 @@
                     if (!allCovered) return;
                     // Counted, checked — and still not finished if somebody has
                     // raised something nobody has settled.
-                    if (openRejection.has(batch)) { heldByIssue[batch] = 'Amendment needed — a report was rejected'; return; }
+                    if (openRejection.has(batch)) { heldByIssue[batch] = 'To do — a report is waiting on somebody'; return; }
                     completedBatchNames.add(batch);
                 });
                 // A batch is in Main Nursery once any transplant log has been written.
                 const transplantedBatchNames = new Set((transplantRes.data || []).map(r => r.batch_name));
                 /* Batches with at least one report tab rejected by HQ — shown
-                   in the "Amendment Needed" list tab, and ALSO in Active,
+                   on the To Do List, and ALSO in Active,
                    where a batch with an open rejection now stays however
                    finished its counting is (see heldByIssue above). It used to
                    be able to sit in Completed at the same time as Amendment
                    Needed, which is the list calling the work done while the
                    tab beside it says it is in dispute. */
-                const rejectedBatchNames = new Set((rejectRes.data || []).map(r => r.batch_name));
+                const rejectedBatchNames = new Set(openRejections.map(r => r.batch_name));
                 /* …and which report each one was rejected on. A row-level
                    rejection is keyed `stage::rowKey`; only the stage half
                    names a tab, and two rejected rows on one tab are one tab
                    to go and fix. */
                 const rejectedStages = {};
-                (rejectRes.data || []).forEach(r => {
+                openRejections.forEach(r => {
                     const stage = String(r.plot_name || '').split('::')[0];
                     if (!stage) return;
                     (rejectedStages[r.batch_name] = rejectedStages[r.batch_name] || new Set()).add(stage);
@@ -717,6 +817,24 @@
                                     || /Date:\s*\d{4}-\d{2}-\d{2}/.test(String(r.remark || ''));
                 const namesWithData = (res) => new Set(
                     ((res && res.data) || []).filter(hasData).map(r => r.batch_name).filter(Boolean));
+        /* A QUESTION THE REPORT ASKED ITSELF, AND SOMEBODY ANSWERED.
+
+           3rd Culling is not on the To Check list by the ordinary rule, and
+           must not be: it has its own coverage rule driving Completed and is
+           not checked the same way. But it can ASK something — a plot whose
+           drone map does not tally with what was culled — and while nobody
+           has answered it the batch sits on the To Do List.
+
+           The moment somebody writes the reason, that question is answered
+           and the answer is a new claim nobody has checked. So the stage
+           joins the To Check list by THAT route and no other: a plot with a
+           mismatch AND a note against it. A plot whose figures tally has
+           nothing to check, and one still unexplained is on the To Do List
+           where it belongs.
+
+           The note lives in the row remark as MismatchNote:, written by
+           saveTab6 in operation_batch_detail.html beside the MapQty it
+           disagrees with. Change one, change the other. */
                 const filledStages = {
                     // A batch exists because a reception record does, and the
                     // reception IS the Seeds In report — including one keyed at
@@ -730,7 +848,17 @@
                     // and no planting is still a Planting & Damage report.
                     planting:      new Set([...namesWithData(plantedRes), ...namesWithData(damagedRes)]),
                     transplanting: namesWithData(transplantRes),
-                    cull_1:        namesWithData(cull1Res)
+                    cull_1:        namesWithData(cull1Res),
+                    // Only by the answered-question route — see above.
+                    /* A gap somebody has ANSWERED and nobody has checked.
+                       Once the office accepts the answer it raises the
+                       adjustment that settles it, the plot tallies, and there
+                       is nothing left to check — so it leaves this list the
+                       same way it left the To Do List. See _cull3Tallies. */
+                    cull_3:        new Set(((cull3Res && cull3Res.data) || [])
+                                     .filter(r => !_cull3Tallies(r)
+                                               && /MismatchNote:\S/.test(r.remark || ''))
+                                     .map(r => r.batch_name).filter(Boolean))
                 };
 
                 // Process logic & simulate stages.
@@ -807,7 +935,7 @@
                        has signed it, EITHER WAY: the whole tab in one
                        signature, or every row on it. A stage HQ has REJECTED
                        is not waiting to be checked — it has been, and sent
-                       back — so it stays in Amendment Needed and out of here,
+                       back — so it stays on the To Do List and out of here,
                        and the two lists never ask for the same thing twice. */
                     const signed   = stageSigned[b.batch_name] || EMPTY_SET;
                     const rejected = rejectedStages[b.batch_name] || EMPTY_SET;
@@ -929,7 +1057,21 @@
             window.location.href = 'operation_batch_detail.html?id=' + encodeURIComponent(batchName);
         }
 
+        /* The chip is in the markup, so it is HIDDEN rather than not drawn,
+           and a session that was left on it is moved off — otherwise
+           somebody who lost the tick comes back to a tab with no way out of
+           it. Called once the permissions are read, before the first render,
+           so the list never flashes a tab it is about to take away. */
+        function applyListTabAccess() {
+            const chip = document.getElementById('tab-tocheck');
+            if (chip) chip.style.display = canReview ? '' : 'none';
+            if (!canReview && currentListTab === 'tocheck') switchListTab('active');
+        }
+
         function switchListTab(tabName) {
+            /* A tab somebody may not open is not opened, however they got
+               here — a restored session, a stale button, the address bar. */
+            if (tabName === 'tocheck' && !canReview) tabName = 'active';
             currentListTab = tabName;
             currentPage = 1;
 
@@ -943,7 +1085,7 @@
             const headRow = document.getElementById('ledger-head-row');
             if (headRow) {
                 if (!window._defaultLedgerHead) window._defaultLedgerHead = headRow.innerHTML;
-                /* Amendment Needed answers a different question from the other
+                /* The To Do List answers a different question from the other
                    tabs, so it asks for different columns. Age, Planted Date and
                    Planted Qty tell you about a batch's life; on this tab the
                    only thing anybody wants is WHICH report to go and fix, and
@@ -953,9 +1095,9 @@
                         ? '<th>Tray</th><th>Nursery</th><th>Total Holes</th><th>Occupied</th><th>Vacant</th>'
                           + '<th style="min-width: 200px;">Occupied By</th><th style="min-width: 160px;">Usage</th>'
                     : tabName === 'amendment'
-                        ? '<th>Batch</th><th>Breed</th><th style="min-width: 260px;">Needs Amendment</th>'
+                        ? '<th>Batch</th><th>Breed</th><th style="min-width: 260px;">To Do</th>'
                           + '<th style="min-width: 180px;">Current Stage</th><th>Survival %</th><th>Culling Rate %</th><th>Actions</th>'
-                    /* Same shape as Amendment Needed, and for the same reason:
+                    /* Same shape as the To Do List, and for the same reason:
                        the only thing wanted here is WHICH report to go and
                        check. */
                     : tabName === 'tocheck'
@@ -1055,12 +1197,12 @@
                 });
                 return;
             }
-            // "Amendment Needed" lists every batch with an HQ-rejected tab,
+            // The To Do List names every batch with work waiting on it,
             // regardless of Active/Completed status — the other two tabs are
             // untouched (a rejected batch still appears in its normal tab too).
             const tabFiltered = masterBatches.filter(b =>
                 currentListTab === 'amendment' ? !!b.hasRejection
-                /* Like Amendment Needed, To Check cuts across Active and
+                /* Like the To Do List, To Check cuts across Active and
                    Completed: a report waiting to be checked is waiting
                    whatever the batch's own state is. */
                 : currentListTab === 'tocheck' ? !!(b.toCheck && b.toCheck.length)
@@ -1109,7 +1251,7 @@
                     ? (splitTab
                         ? `No batches matching "${query}" — in Active or in Completed.`
                         : `No batches matching "${query}".`)
-                    : (currentListTab === 'amendment' ? "No batches need amendment — nothing has been rejected by HQ."
+                    : (currentListTab === 'amendment' ? "Nothing to do — no report has been sent back and none is asking a question."
                     :  currentListTab === 'tocheck'   ? "Nothing waiting to be checked — every report that has been filled in has been signed off."
                     :  currentListTab === 'active'    ? "No active batches in the nursery." : "No completed batches yet.");
                 body.innerHTML = `<tr><td colspan="9" class="text-center p-16 text-[#8a7a68] font-bold">${emptyMsg}</td></tr>`;
@@ -1146,8 +1288,13 @@
                 // and stops the row's own click from also firing on the
                 // same tap (event.stopPropagation()).
                 const batchNameEsc = (b.batch_name || '').replace(/'/g, "\\'");
+                /* On the To Do List the row goes where the work is: the first
+                   report outstanding on it. Everywhere else a row opens the
+                   batch, which is what it has always done. */
+                const _firstStage = currentListTab === 'amendment' ? (b.rejectedStages || [])[0] : '';
+                const rowStage = _firstStage ? `, '${_firstStage}'` : '';
                 body.insertAdjacentHTML('beforeend', `
-                    <tr class="hover:bg-[#f8f4ec] transition-colors batch-row cursor-pointer" onclick="openBatchDetail('${batchNameEsc}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'){openBatchDetail('${batchNameEsc}')}">
+                    <tr class="hover:bg-[#f8f4ec] transition-colors batch-row cursor-pointer" onclick="openBatchDetail('${batchNameEsc}'${rowStage})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'){openBatchDetail('${batchNameEsc}'${rowStage})}">
                         <td class="text-[#3d2610] font-black tracking-wider text-base batch-id-cell">${b.batch_name}</td>
                         <td class="breed-cell">${b.breed_name || '—'}</td>
                         ${currentListTab === 'amendment'
@@ -1189,7 +1336,7 @@
 
         /* The reports on this batch that are keyed and not yet signed off.
            Amber, not red: nothing is wrong with them, they are simply waiting
-           for somebody — which is a different thing from Amendment Needed, and
+           for somebody — which is a different thing from the To Do List, and
            has to look like a different thing. */
         function toCheckCell(b) {
             const stages = b.toCheck || [];
@@ -1199,16 +1346,30 @@
                     AMEND_STAGE_LABEL[sKey] || sKey}</span>`).join('') + '</div>';
         }
 
+        /* EACH CHIP IS THE WAY IN. A list that names the report and then
+           drops somebody on Tab 1 has told them where to go without taking
+           them, and on a batch with one thing outstanding out of eight tabs
+           that is most of the work. Pressing a chip opens the batch ON that
+           report, and on the panel inside it where the answer goes — see
+           openRequestedStage in operation_batch_detail.html.
+
+           The row's own click still works and goes to the FIRST thing
+           outstanding, so the whole cell is not a minefield of small targets
+           on a phone. stopPropagation keeps the two from firing together. */
         function amendmentCell(b) {
             const stages = b.rejectedStages || [];
+            const batch = (b.batch_name || '').replace(/'/g, "\\'");
             if (!stages.length) {
                 // Flagged, but the rejection row does not say where. Better to
                 // admit that than to print nothing and look like a clean batch.
-                return '<span class="text-[10px] font-black uppercase tracking-widest text-[#a83020]">Rejected — open to see where</span>';
+                return '<span class="text-[10px] font-black uppercase tracking-widest text-[#a83020]">Sent back — open to see where</span>';
             }
             return '<div class="flex flex-wrap gap-1">' + stages.map(sKey =>
-                `<span class="inline-block px-2 py-1 rounded-lg bg-[#fff5f5] border border-[#f8d7da] text-[#a83020] text-[10px] font-black uppercase tracking-widest">${
-                    AMEND_STAGE_LABEL[sKey] || sKey}</span>`).join('') + '</div>';
+                `<button type="button"
+                    onclick="event.stopPropagation();openBatchDetail('${batch}', '${sKey}')"
+                    title="Open this batch on the ${(AMEND_STAGE_LABEL[sKey] || sKey)} report"
+                    class="inline-block px-2 py-1 rounded-lg bg-[#fff5f5] border border-[#f8d7da] text-[#a83020] text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-[#a83020] hover:text-white hover:border-[#a83020] transition-colors">${
+                    AMEND_STAGE_LABEL[sKey] || sKey} →</button>`).join('') + '</div>';
         }
 
         // Search now drives a re-render (so the filtered results paginate correctly).

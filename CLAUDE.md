@@ -479,7 +479,7 @@ a difference which is NOT the adjustment still reads as over-allocated.
 
 ## An unverified figure is shown, and says it is unverified
 
-Life of Seedlings is eighteen live sums of the batch ledger, and the ledger
+Life of Seedlings is nineteen live sums of the batch ledger, and the ledger
 is filled in BEFORE anybody checks it. A figure keyed this morning and one
 signed off last week looked exactly alike.
 
@@ -495,8 +495,8 @@ Three things to know before touching `LOS_GROUP_OF_TYPE` in
 `operation/operation_reports.html`:
 
 - **The unit is the COLUMN, not the tab.** 3rd Culling and Transfer are both
-  signed on Tab 6; Transplanting Qty, Double Tone and premium care are three
-  figures on Tab 3. A tally kept per tab puts a warning on figures somebody
+  signed on Tab 6; the three Transplant Details columns and premium care are
+  four figures on Tab 3. A tally kept per tab puts a warning on figures somebody
   HAS signed, and a marker that cries over fine figures is one nobody reads.
   `LOS_STAGE_OF_GROUP` is the column→tab map that keeps the two apart.
 - **A sign-off comes two ways** and either counts: one signature over a whole
@@ -668,32 +668,75 @@ because this was the second fix in a week that had to actually reach a phone.
 That is the condition the rule names: a module somebody wants current, not the
 whole site.
 
-## Two numbers wear the name Double Tone
+## Three numbers wear the name Double Tone, and only one is a column
+
+**`Transplanted` out of the DOUBLE-TONE tray** is the Life of Seedlings
+column. It is the batch report's **Main Plot (D-Tone)** card: a main-plot
+transplant whose SOURCE tray was the d-tone one, so a seedling that had the
+treatment on its way out. Read off the `from tray [...]` in the remark, which
+is where the save writes it.
 
 **`DTone_Nursery_Qty`** is the box on the Transplanting tab headed *"Double
-Tone Quantity in Nursery"*: an admin counts the double-tone seedlings standing
-in the nursery and keys the number, and Tabs 3 and 4 add it to the planted
-total to get their allocation base. One row per batch, newest wins
-(`loadDtoneNurseryQty`).
+Tone Quantity in Nursery"*: an admin counts the double-tone seedlings
+STANDING in the nursery and keys the number, and Tabs 3 and 4 add it to the
+planted total to get their allocation base. One row per batch, newest wins
+(`loadDtoneNurseryQty`). It is still read, still verified under its own row
+key, and it is **not** a column.
 
-**`Transplanted_DoubleTone`** is the batch pushing its own seedlings into the
-d-tone tray. A different number, nought on most batches, and it takes no part
-in the Balance because those seedlings leave the tray again later as ordinary
-`Transplanted` rows.
+**`Transplanted_DoubleTone`** is the batch pushing its own seedlings INTO the
+d-tone tray. They leave it again later as ordinary `Transplanted` rows, which
+is why counting it would count them twice.
 
-Life of Seedlings' **Double Tone column showed the second one**, so it read 0
-against every batch the office had keyed a figure for. It now shows the keyed
-Quantity in Nursery, newest-wins, like the form — and the tray transplant
-keeps its own group (`dtone_tray`), which has no column but is still named in
-the row's verdict, exactly as premium care is.
+The column has now been wrong twice, in opposite directions, and both are
+worth keeping:
 
-The box has its own sign-off on Tab 3 under the row key
-**`DTONE-NURSERY-QTY`** rather than a plot, so `_losApplyVerification`
-special-cases it the way it special-cases a transfer card.
+- It showed `Transplanted_DoubleTone`, so it read **0** against batches that
+  had double tone standing in the field — the transplant into the tray is
+  nought once everything has been forwarded out of it. The batch detail page
+  had already hit exactly this on its own tile and says so in its comment:
+  *"Without this the tile only saw qty routed INTO the D-Tone holding tray
+  and stayed at 0 once everything was forwarded out."*
+- It was then pointed at the KEYED box, which reads what is standing rather
+  than what moved — so **batch 276 showed a Total Transplant Qty of 3** with
+  nothing transplanted and its own batch report reading 100% pending.
 
-`shared/CHECK_double_tone_quantity.sql` puts the two numbers side by side on
-every batch and counts the ones that were reading nought.
-`tests/los_double_tone_is_the_keyed_figure.cjs` keeps a batch that has BOTH.
+`shared/CHECK_transplant_details.sql` puts all four numbers side by side on
+every batch and counts the ones that were overstated.
+
+## Transplant Details is the batch report's split, never a sum
+
+Three columns: **Total Transplant Qty | Transplant Qty | Double Tone**.
+
+They are the allocation engine's own cards, and the rule that makes them
+coherent is that the last two are **DISJOINT halves of the first**, split by
+the tray each main-plot transplant came out of — not two different things
+stacked together. `calcTransplanting` in `operation_batch_detail.html` is the
+original and says it in its own words: the two tiles are disjoint *"so the two
+tiles add up to the total main-plot population (totalMain)"*.
+
+That is why the total can be READ rather than ADDED. A total worked out by
+summing two columns that are not halves of one thing is the fault batch 276
+showed: a report claiming three seedlings transplanted out of a batch that had
+transplanted none.
+
+Three things that follow:
+
+- **All three columns are one group for verification** (`transplanting`), and
+  all three drilldowns are ONE list filtered by the same tray test. A nought
+  is still marked when the stage is unsigned: "0 out of the D-Tone tray" and
+  "0 so far as anybody has keyed" are different claims.
+- **The Balance uses the TOTAL.** It is every main-plot transplant, which is
+  what is standing in the field; one half of a split is not.
+- **The tray is matched on letters and digits** (`_losTrayKey`), same rule as
+  `nurseryKey`/`plotKey`, so a dash or a space cannot drop a row out of the
+  half it belongs in. It is kept to ONE LINE on purpose — the test harnesses
+  lift a named const by reading to the end of its line, so a one-liner is the
+  real function under test rather than a copy that can drift. The SQL check
+  cannot take a regular expression, so it matches three spellings instead,
+  and the gap is not silent: a fourth spelling stops the halves adding up and
+  the check counts it.
+
+`tests/los_transplant_details.cjs` holds all of it, batch 276 included.
 
 ## The 2nd culling never deducts. Not even while no 3rd exists.
 
@@ -726,10 +769,10 @@ Report's real formula, lifted out of its own file.
 
 ## The Balance is what is STANDING, and the 1st culling is already inside it
 
-The office asked for one line: **Balance = transplanting qty − 3rd culling −
-total sales.** It is worth writing down why that reads better than what was
-there, because the old formula was not wrong — it was answering a different
-question.
+The office asked for one line: **Balance = transplant qty − 3rd culling −
+total sales + approved stock calibration.** It is worth writing down why that
+reads better than what was there, because the old formula was not wrong — it
+was answering a different question.
 
     OLD   actual planted − total culling (1st + 3rd) − total sales
           + approved stock calibration
@@ -743,7 +786,7 @@ standing in either, for ever, on the one report the office reconciles
 against.
 
 **The 1st culling is not taken off, and that is the point.** It happens in
-the TRAY, before any of those seedlings go out, so the transplanting quantity
+the TRAY, before any of those seedlings go out, so the transplant quantity
 is ALREADY net of it; subtracting it again takes the same seedlings off
 twice. Starting from planted was right for the old question and is
 double-counting for this one. Same reason `ADJUST_APPLIES_TO` keeps a
@@ -752,12 +795,15 @@ Transplanting adjustment off 1st Culling.
 Three things fall out of it, and each one is a place the figure could have
 gone quietly wrong:
 
-- **An approved stock calibration is NOT folded in.** Adding it takes 224,
-  225 and 226 to exactly nought — 1−1, −1+1, 13−13 — which is the batch
-  reconciling to the seedling and is worth knowing. It was not what was
-  asked for, so the column keeps its own place and
-  `shared/CHECK_balance_is_what_is_standing.sql` prints the settles column
-  rather than the code quietly deciding.
+- **The approved stock calibration closes the last seedling.** It was left
+  out of the first version, on three terms alone, and 224, 225 and 226 then
+  read 1, −1 and 13 against calibrations of −1, +1 and −13 — so adding it
+  takes all three to **exactly nought**. That is the argument for it: a
+  correction somebody has approved is a correction, and a batch that is
+  finished should not read as though a seedling were missing. An
+  **unapproved** one still counts for nothing, same as everywhere else.
+  `shared/CHECK_balance_is_what_is_standing.sql` shows old against new on
+  every batch and says which settle.
 - **`mainBalance` does not inherit it.** The Balance takes TOTAL sales off,
   so a sale out of the TRAY is inside it: a batch sold 400 out of the tray
   and never transplanted reads minus 400. That is right for every batch the
@@ -766,19 +812,23 @@ gone quietly wrong:
   it never reached — **a fault this report has already had once**. So the
   field side is counted on its own terms (field sales, field calibration),
   and `los_balance_split.cjs` checks the gap between the two is exactly the
-  tray sales plus the field calibration instead of checking they are equal.
+  tray sales less the tray calibration instead of checking they are equal.
 - **`completed` asks both halves.** The old Balance started from planted, so
   a batch with stock in the tray could not reach nought and the guard came
   free. Now it can, so the test is `mainBalance <= 0 && preBalance <= 0`.
   Nothing is finished while something of it is standing anywhere.
 
-**And Transplanting is three columns now**, grouped under *Transplanting
-Details*: **Total Transplanting Qty | Transplanting Qty | Double Tone**, the
-first being the other two added. The Double Tone in it is the admin-keyed
-Quantity in Nursery, never the transplant into the d-tone tray — see the two
-numbers above. The **Balance uses Transplanting Qty alone**, never the total:
-the double tone is counted where it already stands, and folding it in would
-put it into the field balance a second time.
+**And Transplant is three columns now**, grouped under *Transplant Details* —
+see the section above for what each one is. The **Balance uses the TOTAL**,
+which is every main-plot transplant: the two columns beside it are disjoint
+halves of that total, and half of what is standing is not what is standing.
+
+The office asked for the word **transplant**, not *transplanting*, on these
+headings. It is the headings of THIS table only — the Transplanting Report
+further down the same file is a different report and keeps its name, and so
+does the batch detail page's Transplanting tab, which the Double Tone hover
+still points at. The test checks the heading TEXT inside the Life of
+Seedlings thead and nothing else, which is what lets both be true.
 
 `tests/los_balance_is_what_is_standing.cjs` drives the real derived block
 with the office's five batches and holds all of it, the header-span
@@ -978,6 +1028,70 @@ orphan as a whole word. **That suggestion is never applied by anything.** The
 office confirms, and `shared/RUN_ME_worker_name_was.sql` names its pairs.
 
 `tests/worker_is_the_register_row.cjs` holds all of it.
+
+## Two lists, two people: what to DO and what to CHECK
+
+The red list was called Amendment Needed and held one thing: a report tab HQ
+sent back. It is the **To Do List** now, and it holds everything a batch is
+waiting on somebody for — a rejected tab, and a question the report asked
+ITSELF. Batch 241's 3rd Culling counted 500 against a drone map of 540, and
+that gap already wrote its own `Review_Rejection` row on save; what it did
+not do was take anybody to it.
+
+**A list that names the report and does not open it has told somebody where
+to go without taking them.** On a batch with one thing outstanding out of
+eight tabs, finding it is most of the work. So each chip in the cell carries
+the stage into the address — `?id=241&stage=cull_3` — and
+`openRequestedStage()` on the batch page switches to that tab and scrolls to
+the panel the answer goes in, with a two-second ring round it. The row's own
+click goes to the first thing outstanding, so the cell is not a field of
+small targets on a phone. `TAB_OF_STAGE` is `STAGE_BY_TAB` read the other
+way round, plus Adjustments, which has no review banner and so is not in it.
+
+**And the two lists hand work to each other.** Answer what the To Do List is
+asking and the batch moves to the To Check List, because an answer is a new
+claim nobody has checked yet. 3rd Culling reaches To Check by **that route
+and no other**: a plot with a map mismatch AND a `MismatchNote:` against it.
+A plot whose figures tally asked nothing; one still unexplained is on the To
+Do List where it belongs. The ordinary rule — filled in and unsigned — is
+still the five, and 2nd Culling is still out.
+
+**The To Check List is the CHECKER'S.** It answers "what is waiting for me to
+sign", which is a question only somebody who may sign has; for everybody else
+it is a list of other people's work with nothing on it they can do. Gated on
+`batch` / `review`, the same tick as Approve and Edit on Adjustments, hidden
+rather than disabled, and a session left on the tab is moved off it. Access
+fails OPEN as everywhere else, so an unconfigured login still sees it.
+
+**One step failing must not take the ones after it down.** The bootstrap runs
+`initDetail` → `syncBatchHeader` → `MJMReview.boot` → `openRequestedStage`
+in an async callback with nothing catching it, so a throw anywhere in it is
+an unhandled rejection: the page stops part-built and the console is the only
+place that says so. That is exactly how the new link came to land on Tab 1 in
+its first test — the banners threw and the step after them never ran. Each
+trailing step carries its own try/catch now.
+
+**And a gap is settled by an ADJUSTMENT, never by re-keying the cull.** The
+office accepts the answer, raises a calibration for the difference, approves
+it — and the 3rd Culling row in the ledger does not move: it still reads 500
+against a MapQty of 540, for ever. Anything comparing those two alone goes on
+calling it a gap, so the batch would never leave either list. The comparison
+is culled **plus what has been approved against that plot**, and which
+adjustments reach the 3rd Culling is `ADJUST_APPLIES_TO`'s rule — one filed
+on the 3rd Culling, and one filed on Transplanting, because both measure what
+is standing there. An unapproved one settles nothing, here as everywhere.
+
+**A flag written by a save has to be readable without one.** `saveTab6`
+writes the drone-map `Review_Rejection` row and clears it on the next save,
+so an approval that settles the gap leaves it behind and the batch sits on
+the To Do List over a question answered days ago. It is ignored once the
+plots it names tally — only the automatic one, matched the same way the save
+matches it. **A rejection a PERSON sent back stands until a person clears
+it**, whatever the figures say.
+
+`tests/todo_list_takes_you_there.cjs` and `tests/tocheck_list.cjs` hold both
+halves, including a stage nobody recognises changing nothing, an adjustment
+nobody has approved settling nothing, and the stale flag.
 
 ## A permission that is saved but not obeyed is worse than no permission
 
@@ -1259,12 +1373,17 @@ the same thing twice.
 `tests/search_finds_a_batch_in_either_tab.cjs` holds all of it, through the
 real page.
 
-**And that page is served stale.** The screenshot that reported this shows a
-red tab reading "To Do List" — a name this repository has never held in its
-history, so the office is looking at a deploy older than the whole git log.
-The page carries every line of its own code inline, so the PAGE is the
-deploy; it now has the three no-cache metas for exactly the reason the
-section below gives.
+**The red tab is called To Do List**, which was landing on `main` from
+another branch while this was being written. It looked for an hour like
+evidence that the office page was being served stale — a tab name that was
+nowhere in the git log — and it was not: the branch simply had not been
+merged yet. Worth remembering before reaching for the cache explanation
+again. A name that is not in YOUR history may just be in somebody else.
+
+The page still has no no-cache metas, and it carries every line of its own
+code inline, so the PAGE is the deploy. That is a real exposure, and it is
+not an emergency: deploys to it demonstrably arrive. Add the three the day
+somebody needs a fix there in a hurry.
 
 ## `select.className = '...'` is how a row grows a second dropdown
 
