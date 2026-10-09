@@ -263,7 +263,7 @@
         async function initLedger() {
             try {
                 // Fetch reception logs + every culling-related log type + transplant logs in parallel.
-                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, rowVerifRes, stageVerifRes, trayRes, seedAuditRes] = await Promise.all([
+                const [recRes, plantedRes, damagedRes, cull1Res, cull2Res, cull3Res, transplantRes, rejectRes, transferRes, rowVerifRes, stageVerifRes, trayRes, seedAuditRes, calRes] = await Promise.all([
                     fetchAllRows(() => _supabase.from('shared_inventory_logs')
                         .select('*')
                         .eq('transaction_type', 'Seeds_Received')
@@ -288,7 +288,7 @@
                     // or `stage::rowKey` for a rejection against one row. Asking
                     // for it costs nothing and is the difference between "this
                     // batch needs amendment somewhere" and naming the tab.
-                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, plot_name').eq('transaction_type', 'Review_Rejection').order('id', { ascending: true })),
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs').select('batch_name, plot_name, remark').eq('transaction_type', 'Review_Rejection').order('id', { ascending: true })),
                     /* 3rd-culling transfers. Only the destination plot is
                        wanted here — it joins the set of plots the batch's 3rd
                        Culling must cover before the batch may read Completed.
@@ -326,6 +326,15 @@
                     fetchAllRows(() => _supabase.from('shared_inventory_logs')
                         .select('batch_name')
                         .eq('transaction_type', 'Seed_Audit')
+                        .order('id', { ascending: true })),
+                    /* Stock adjustments. A drone-map gap is settled by one of
+                       these, not by re-keying the cull, so this list is what
+                       tells a plot that still disagrees from one that has
+                       been put right. Only APPROVED rows count, the same rule
+                       as everywhere else. */
+                    fetchAllRows(() => _supabase.from('shared_inventory_logs')
+                        .select('batch_name, plot_name, quantity_change, remark')
+                        .eq('transaction_type', 'Stock_Calibration')
                         .order('id', { ascending: true }))
                 ]);
                 if (recRes.error) throw recRes.error;
@@ -597,6 +606,57 @@
                     return true;
                 };
 
+                /* DOES THIS PLOT AND ITS DRONE MAP AGREE — NOW?
+
+                   The gap is settled by a stock ADJUSTMENT, not by re-keying
+                   the cull: the office accepts the explanation, raises a
+                   calibration for the difference, approves it, and the two
+                   sides tally. The 3rd Culling row in the ledger does not
+                   move when that happens — it still reads 500 against a
+                   MapQty of 540 — so anything that compares those two alone
+                   goes on calling it a gap for ever, and the batch never
+                   leaves the lists.
+
+                   So the comparison is culled PLUS what has been approved
+                   against that plot. Which adjustments reach the 3rd Culling
+                   is ADJUST_APPLIES_TO's rule in operation_batch_detail.html:
+                   one filed on the 3rd Culling, and one filed on
+                   Transplanting, because both are measuring what is standing
+                   in the plot. Change one, change the other.
+
+                   An UNAPPROVED one moves nothing, here as everywhere. */
+                const _adjKey = (b, p) => String(b || '') + '\x01' + String(p || '').trim().toUpperCase();
+                const cull3Adj = {};
+                (calRes.data || []).forEach(r => {
+                    const remark = r.remark || '';
+                    if (remark.indexOf('[APPROVED by') < 0) return;
+                    const rep = String((remark.match(/Report:\s*([^.]+?)\s*\./i) || [])[1] || '')
+                        .trim().toLowerCase();
+                    if (rep !== '3rd culling' && rep !== 'transplanting') return;
+                    // The plot it names, which is not always the row's own.
+                    const named = String((remark.match(/Plot:\s*([^.]+?)\s*\./i) || [])[1] || '').trim();
+                    const plot = named || r.plot_name || '';
+                    if (!plot) return;
+                    const k = _adjKey(r.batch_name, plot);
+                    cull3Adj[k] = (cull3Adj[k] || 0) + (Number(r.quantity_change) || 0);
+                });
+                const _mapQtyOf = (r) => {
+                    const m = (r.remark || '').match(/MapQty:\s*(\d+)/);
+                    return m ? parseInt(m[1], 10) : null;
+                };
+                /* True when there is nothing left to answer: no map keyed at
+                   all, or the figures agree once the approved adjustments are
+                   counted. */
+                const _cull3Tallies = (r) => {
+                    const map = _mapQtyOf(r);
+                    if (map === null) return true;
+                    const adj = cull3Adj[_adjKey(r.batch_name, r.plot_name)] || 0;
+                    return (Number(r.quantity_change) || 0) + adj === map;
+                };
+                // Batches with at least one plot still disagreeing.
+                const stillMismatched = new Set(((cull3Res && cull3Res.data) || [])
+                    .filter(r => !_cull3Tallies(r)).map(r => r.batch_name).filter(Boolean));
+
                 /* AN OPEN REJECTION IS NOT A FINISHED BATCH.
 
                    HQ sent a report tab back for amendment. The row is deleted
@@ -619,7 +679,23 @@
                    not covered, so the batch stays Active until somebody
                    settles it — whether or not an adjustment was ever raised
                    about it. */
-                const openRejection = new Set((rejectRes.data || []).map(r => r.batch_name).filter(Boolean));
+                /* THE DRONE-MAP FLAG IS WRITTEN BY A SAVE AND CLEARED BY A
+                   SAVE, so an approval that settles the gap leaves it behind:
+                   the batch would sit on the To Do List until somebody
+                   happened to open Tab 6 and press Save, over a question that
+                   was answered days ago. It is ignored once the plots it
+                   names tally.
+
+                   Only the AUTOMATIC one — saveTab6 writes it against
+                   plot_name 'cull_3' with that wording, and looks it up the
+                   same way to clear it. A rejection a PERSON sent back stands
+                   until a person clears it, whatever the figures say. */
+                const _staleMapFlag = (r) =>
+                    String(r.plot_name || '') === 'cull_3'
+                    && String(r.remark || '').indexOf('3rd Culling map qty') === 0
+                    && !stillMismatched.has(r.batch_name);
+                const openRejections = (rejectRes.data || []).filter(r => !_staleMapFlag(r));
+                const openRejection = new Set(openRejections.map(r => r.batch_name).filter(Boolean));
 
                 const completedBatchNames = new Set();
                 /* Batches finished in the field but held out of Completed by an
@@ -658,13 +734,13 @@
                    be able to sit in Completed at the same time as Amendment
                    Needed, which is the list calling the work done while the
                    tab beside it says it is in dispute. */
-                const rejectedBatchNames = new Set((rejectRes.data || []).map(r => r.batch_name));
+                const rejectedBatchNames = new Set(openRejections.map(r => r.batch_name));
                 /* …and which report each one was rejected on. A row-level
                    rejection is keyed `stage::rowKey`; only the stage half
                    names a tab, and two rejected rows on one tab are one tab
                    to go and fix. */
                 const rejectedStages = {};
-                (rejectRes.data || []).forEach(r => {
+                openRejections.forEach(r => {
                     const stage = String(r.plot_name || '').split('::')[0];
                     if (!stage) return;
                     (rejectedStages[r.batch_name] = rejectedStages[r.batch_name] || new Set()).add(stage);
@@ -755,17 +831,6 @@
            The note lives in the row remark as MismatchNote:, written by
            saveTab6 in operation_batch_detail.html beside the MapQty it
            disagrees with. Change one, change the other. */
-        const _mapQtyOf = (r) => {
-            const m = (r.remark || '').match(/MapQty:\s*(\d+)/);
-            return m ? parseInt(m[1], 10) : null;
-        };
-        const _answeredMismatch = (r) => {
-            const map = _mapQtyOf(r);
-            return map !== null
-                && map !== (Number(r.quantity_change) || 0)
-                && /MismatchNote:\S/.test(r.remark || '');
-        };
-
                 const filledStages = {
                     // A batch exists because a reception record does, and the
                     // reception IS the Seeds In report — including one keyed at
@@ -781,8 +846,14 @@
                     transplanting: namesWithData(transplantRes),
                     cull_1:        namesWithData(cull1Res),
                     // Only by the answered-question route — see above.
+                    /* A gap somebody has ANSWERED and nobody has checked.
+                       Once the office accepts the answer it raises the
+                       adjustment that settles it, the plot tallies, and there
+                       is nothing left to check — so it leaves this list the
+                       same way it left the To Do List. See _cull3Tallies. */
                     cull_3:        new Set(((cull3Res && cull3Res.data) || [])
-                                     .filter(_answeredMismatch)
+                                     .filter(r => !_cull3Tallies(r)
+                                               && /MismatchNote:\S/.test(r.remark || ''))
                                      .map(r => r.batch_name).filter(Boolean))
                 };
 

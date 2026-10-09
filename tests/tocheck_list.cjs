@@ -149,11 +149,24 @@ const rec = (batch) => ({ batch_name: batch, transaction_type: 'Seeds_Received',
                                                on the To Do List
    410  the same, with the reason written   → 3rd Culling, because the answer
                                                is a claim nobody has checked
-   411  3rd Culling whose map tallies       → nothing to check                */
+   411  3rd Culling whose map tallies       → nothing to check
+   412  the same gap, explained, and then
+        settled by an APPROVED adjustment
+        for the difference                  → off both lists: the office
+                                               accepted the answer and the two
+                                               sides now agree
+   413  the same, adjustment NOT approved   → still to check — an adjustment
+                                               nobody has ruled on moves no
+                                               figure
+   414  an unexplained gap settled by an
+        approved adjustment, with the
+        stale drone-map flag still there    → off the To Do List: the flag is
+                                               written and cleared by a save,
+                                               and the question was answered   */
 const ROWS = {
   shared_inventory_logs: [
     rec('401'), rec('402'), rec('403'), rec('404'), rec('405'), rec('406'), rec('407'), rec('408'),
-    rec('409'), rec('410'), rec('411'),
+    rec('409'), rec('410'), rec('411'), rec('412'), rec('413'), rec('414'),
 
     { batch_name: '401', transaction_type: 'Seed_Audit', plot_name: 'bag-1', quantity_change: 500, remark: 'Seed audit.' },
     { batch_name: '401', transaction_type: 'Planted', plot_name: 'P1', quantity_change: 980 },
@@ -207,7 +220,29 @@ const ROWS = {
 
     // 411 — the map tallies, so there was never a question.
     { batch_name: '411', transaction_type: '3rd_Culling', plot_name: 'U11', quantity_change: 500,
-      remark: '3rd Culling. DestType: main MapQty: 500 CullDate:2026-06-01' }
+      remark: '3rd Culling. DestType: main MapQty: 500 CullDate:2026-06-01' },
+
+    /* 412 — explained, and then settled: +40 approved against the plot, so
+       500 + 40 is the 540 the drone map counted. The culling row itself has
+       not moved and never will; the adjustment is what closes it. */
+    { batch_name: '412', transaction_type: '3rd_Culling', plot_name: 'U12', quantity_change: 500,
+      remark: '3rd Culling. DestType: main MapQty: 540 MismatchNote:Forty%20more%20found CullDate:2026-06-01' },
+    { batch_name: '412', transaction_type: 'Stock_Calibration', plot_name: 'U12', quantity_change: 40,
+      remark: 'Report: 3rd Culling. Plot: U12. Forty more found on the recount. [APPROVED by esther on 2026-07-01]' },
+
+    // 413 — the same adjustment, nobody has ruled on it.
+    { batch_name: '413', transaction_type: '3rd_Culling', plot_name: 'U13', quantity_change: 500,
+      remark: '3rd Culling. DestType: main MapQty: 540 MismatchNote:Forty%20more%20found CullDate:2026-06-01' },
+    { batch_name: '413', transaction_type: 'Stock_Calibration', plot_name: 'U13', quantity_change: 40,
+      remark: 'Report: 3rd Culling. Plot: U13. Forty more found on the recount.' },
+
+    // 414 — settled, with the save-written flag left behind.
+    { batch_name: '414', transaction_type: '3rd_Culling', plot_name: 'U14', quantity_change: 500,
+      remark: '3rd Culling. DestType: main MapQty: 540 CullDate:2026-06-01' },
+    { batch_name: '414', transaction_type: 'Stock_Calibration', plot_name: 'U14', quantity_change: 40,
+      remark: 'Report: 3rd Culling. Plot: U14. Recount. [APPROVED by esther on 2026-07-01]' },
+    { batch_name: '414', transaction_type: 'Review_Rejection', plot_name: 'cull_3', quantity_change: 0,
+      remark: '3rd Culling map qty does not tally — 1 plot(s) to explain. U14: 3rd culled 500, drone map 540 (+40)' }
   ],
   operation_batch_verifications: [
     { id: 1, batch_name: '402', stage: 'seeds_in' },
@@ -223,7 +258,10 @@ const ROWS = {
     { id: 11, batch_name: '408', stage: 'planting' },
     { id: 12, batch_name: '409', stage: 'seeds_in' },
     { id: 13, batch_name: '410', stage: 'seeds_in' },
-    { id: 14, batch_name: '411', stage: 'seeds_in' }
+    { id: 14, batch_name: '411', stage: 'seeds_in' },
+    { id: 15, batch_name: '412', stage: 'seeds_in' },
+    { id: 16, batch_name: '413', stage: 'seeds_in' },
+    { id: 17, batch_name: '414', stage: 'seeds_in' }
   ],
   shared_do_records: [],
   operation_trays: [],
@@ -383,6 +421,16 @@ const ROWS = {
     ['a drone map that tallies asked nothing in the first place',
       JSON.stringify(computed['411']) === JSON.stringify([])],
 
+    // ── and the adjustment that settles it takes it off both lists
+    ['an approved adjustment for the difference closes it',
+      JSON.stringify(computed['412']) === JSON.stringify([])],
+    ['so the batch is on neither list',
+      !batchesListed.includes('412') && !others.amend.includes('412')],
+    ['one nobody has approved settles nothing',
+      JSON.stringify(computed['413']) === JSON.stringify(['cull_3'])],
+    ['a drone-map flag the save left behind is not work to do',
+      !others.amend.includes('414')],
+
     // ── the To Do List says what it is, and takes you to the work
     ['the red list is called the To Do List', /to do list/i.test(todo.chip)],
     // innerText comes back CSS-transformed, so the heading reads TO DO.
@@ -397,7 +445,7 @@ const ROWS = {
     // ── the other tabs are untouched
     ['the To Do List still lists only the batch with work on it',
       JSON.stringify(others.amend) === JSON.stringify(['405'])],
-    ['Active still lists every unfinished batch', others.active.length === 11],
+    ['Active still lists every unfinished batch', others.active.length === 14],
     ['and gets its own columns back', others.headBack.some(h => /planted/i.test(h))],
     ['no page errors', errs.length === 0],
   ];

@@ -1021,8 +1021,27 @@ place that says so. That is exactly how the new link came to land on Tab 1 in
 its first test — the banners threw and the step after them never ran. Each
 trailing step carries its own try/catch now.
 
+**And a gap is settled by an ADJUSTMENT, never by re-keying the cull.** The
+office accepts the answer, raises a calibration for the difference, approves
+it — and the 3rd Culling row in the ledger does not move: it still reads 500
+against a MapQty of 540, for ever. Anything comparing those two alone goes on
+calling it a gap, so the batch would never leave either list. The comparison
+is culled **plus what has been approved against that plot**, and which
+adjustments reach the 3rd Culling is `ADJUST_APPLIES_TO`'s rule — one filed
+on the 3rd Culling, and one filed on Transplanting, because both measure what
+is standing there. An unapproved one settles nothing, here as everywhere.
+
+**A flag written by a save has to be readable without one.** `saveTab6`
+writes the drone-map `Review_Rejection` row and clears it on the next save,
+so an approval that settles the gap leaves it behind and the batch sits on
+the To Do List over a question answered days ago. It is ignored once the
+plots it names tally — only the automatic one, matched the same way the save
+matches it. **A rejection a PERSON sent back stands until a person clears
+it**, whatever the figures say.
+
 `tests/todo_list_takes_you_there.cjs` and `tests/tocheck_list.cjs` hold both
-halves, including a stage nobody recognises changing nothing.
+halves, including a stage nobody recognises changing nothing, an adjustment
+nobody has approved settling nothing, and the stale flag.
 
 ## A permission that is saved but not obeyed is worse than no permission
 
