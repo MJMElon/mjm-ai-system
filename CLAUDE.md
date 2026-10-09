@@ -479,7 +479,7 @@ a difference which is NOT the adjustment still reads as over-allocated.
 
 ## An unverified figure is shown, and says it is unverified
 
-Life of Seedlings is nineteen live sums of the batch ledger, and the ledger
+Life of Seedlings is twenty-one live sums of the batch ledger, and the ledger
 is filled in BEFORE anybody checks it. A figure keyed this morning and one
 signed off last week looked exactly alike.
 
@@ -496,7 +496,8 @@ Three things to know before touching `LOS_GROUP_OF_TYPE` in
 
 - **The unit is the COLUMN, not the tab.** 3rd Culling and Transfer are both
   signed on Tab 6; the three Transplant Details columns and premium care are
-  four figures on Tab 3. A tally kept per tab puts a warning on figures somebody
+  four figures on Tab 3, and the three 1st Culled columns are three figures
+  on Tab 4. A tally kept per tab puts a warning on figures somebody
   HAS signed, and a marker that cries over fine figures is one nobody reads.
   `LOS_STAGE_OF_GROUP` is the column→tab map that keeps the two apart.
 - **A sign-off comes two ways** and either counts: one signature over a whole
@@ -700,12 +701,18 @@ worth keeping:
   than what moved — so **batch 276 showed a Total Transplant Qty of 3** with
   nothing transplanted and its own batch report reading 100% pending.
 
-`shared/CHECK_transplant_details.sql` puts all four numbers side by side on
-every batch and counts the ones that were overstated.
+It also has a share of the **1st culling**, because a 1st culling happens in
+a tray and the d-tone tray is one of them —
+`shared/CHECK_transplant_details.sql` puts every one of these numbers side by
+side on each batch and counts the ones that were overstated.
 
-## Transplant Details is the batch report's split, never a sum
+## A total is READ off the split, never summed from two different things
 
-Three columns: **Total Transplant Qty | Transplant Qty | Double Tone**.
+This has now shaped two groups of columns, and it is one rule.
+
+**Transplant Details**: Total Transplant Qty | Transplant Qty | Double Tone.
+**Culled Detail's first three**: Total 1st Culled Qty | 1st Culled Qty |
+Double Tone 1st Culled Qty — 749 = 600 + 149 on batch 123.
 
 They are the allocation engine's own cards, and the rule that makes them
 coherent is that the last two are **DISJOINT halves of the first**, split by
@@ -736,7 +743,30 @@ Three things that follow:
   and the gap is not silent: a fourth spelling stops the halves adding up and
   the check counts it.
 
-`tests/los_transplant_details.cjs` holds all of it, batch 276 included.
+**The 1st culling splits by the tray it happened IN.** A 1st culling is done
+in a tray, and the row is keyed against that tray — `plot_name` IS the tray,
+and the DOUBLE-TONE tray is one of them (`saveCullingTab` draws a row for
+every tray in `preNurseryTrayData` and gives the d-tone one its own icon).
+Same question as the transplant one, asked of a different column, answered by
+the same `_losTrayKey`.
+
+**What must NOT move when a column is split is the arithmetic underneath it.**
+Total Culled (1st + 3rd) goes on taking the WHOLE 1st culling, d-tone tray
+included, and the Balance goes on taking the WHOLE transplant. Splitting a
+column for the reader is not the same as changing what is counted, and the
+tests assert the totals did not move as well as that the halves add up.
+
+**And the headings say Culled, not Culling** — Culled Detail, Total 1st Culled
+Qty, 1st Culled Qty, Double Tone 1st Culled Qty, 2nd Culled, 3rd Culled, Total
+Culled (1st + 3rd). The office asked for one word across the group, and the
+test counts heading TEXT inside the Life of Seedlings thead so the
+Transplanting Report further down the same file keeps its own name.
+
+`tests/los_transplant_details.cjs` holds the transplant split, batch 276
+included; `tests/los_second_culling_never_deducts.cjs` holds the culling one
+with 123's own 749 / 600 / 149. `shared/CHECK_transplant_details.sql` prints
+both splits on every batch and counts any row where the halves fail to add
+up.
 
 ## The 2nd culling never deducts. Not even while no 3rd exists.
 
@@ -832,7 +862,7 @@ Seedlings thead and nothing else, which is what lets both be true.
 
 `tests/los_balance_is_what_is_standing.cjs` drives the real derived block
 with the office's five batches and holds all of it, the header-span
-arithmetic included — a thead that does not add up to nineteen draws every
+arithmetic included — a thead that does not add up to twenty-one draws every
 column after the mistake in the wrong width.
 
 ## One batch, one reception — the newest row wins

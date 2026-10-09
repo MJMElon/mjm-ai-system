@@ -7,6 +7,12 @@ const i = src.indexOf('async function _losBuildAllRows(asAt) {');
 const body = src.slice(src.indexOf('  // ── One row per batch ──', i),
                        src.indexOf('  // Years/suppliers offered by their pickers', i));
 const grab = (name) => { const a = src.indexOf('function ' + name + '('); return src.slice(a, src.indexOf('\n}', a) + 2); };
+/* The real tray matcher, lifted rather than copied — it decides which half
+   of a split a row lands in. grab() above lifts a FUNCTION declaration; a
+   named const needs its own reader. */
+const grabConst = (name) => new Function('return ' + src.slice(
+  src.indexOf('= ', src.indexOf('const ' + name + ' ')) + 2,
+  src.indexOf('\n', src.indexOf('const ' + name + ' '))).replace(/;$/, ''))();
 const _losFinishedWindow = new Function('return ' + grab('_losFinishedWindow'))();
 const _losAsAt           = new Function('return ' + grab('_losAsAt'))();
 
@@ -44,7 +50,7 @@ function build(asAt) {
     (plot) => (['Pre-Nursery','P14'].includes(plot) ? 'Pre-Nursery' : 'BNN'),
     ['Pre-Nursery'], () => null, () => '',
     never, never, never, never, never, never, never, never, never, never, never,
-    grab('_losTrayKey'));
+    grabConst('_losTrayKey'));
 }
 
 // The two modes, exactly as _losBuildData assembles them.

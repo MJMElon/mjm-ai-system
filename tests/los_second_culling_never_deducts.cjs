@@ -41,7 +41,7 @@ const batchRate = new Function('cull1', 'cull3', 'denom', rateSrc + '\nreturn cu
 
 const run = (f) => {
   const r = Object.assign({
-    batch: 'x', planted: 0, cull1: 0, cull2: 0, cull3: 0, trans: 0, sales: 0,
+    batch: 'x', planted: 0, cull1: 0, cull1Dtone: 0, cull2: 0, cull3: 0, trans: 0, sales: 0,
     calibration: 0, calibrationPre: 0, salesPre: 0, received: 0, damaged: 0,
     ver: {}, rec: {},
   }, f);
@@ -97,6 +97,62 @@ const collectSrc = los.slice(los.indexOf('    if (spec.list === \'cullTotal\') {
 is('the records behind Total Culling are the 1st and the 3rd, never the 2nd',
   /rec\.cull2/.test(collectSrc), false);
 is('and it does take the 3rd', /rec\.cull3/.test(collectSrc), true);
+
+/* ── 1ST CULLED IS THREE COLUMNS, SPLIT BY THE TRAY ────────────────────────
+   A 1st culling happens in a TRAY and the row is keyed against the tray it
+   happened in, and the DOUBLE-TONE tray is one of the trays — saveCullingTab
+   draws a row for every tray in preNurseryTrayData and gives the d-tone one
+   its own icon. So Total 1st Culled splits the way Total Transplant Qty
+   does: two DISJOINT halves and the total they add up to, never two
+   different things summed.
+
+   The thing that must NOT move is Total Culled (1st + 3rd). It takes the
+   WHOLE 1st culling, d-tone tray included — splitting a column for the
+   reader is not the same as changing what the arithmetic counts. */
+console.log('\n── 1st Culled splits by tray, and the total does not move ──');
+const split = run({ planted: 10000, trans: 9251, cull1: 749, cull1Dtone: 149, cull3: 280 });
+is('Total 1st Culled Qty',          split.cull1Total, 749);
+is('1st Culled Qty, the plain trays', split.cull1Main, 600);
+is('Double Tone 1st Culled Qty',      split.cull1Dtone, 149);
+is('the two halves add up to the total',
+  split.cull1Main + split.cull1Dtone, split.cull1Total);
+is('and Total Culled (1st + 3rd) takes the WHOLE 1st culling',
+  split.cullTotal, 749 + 280);
+is('not just the plain-tray half', split.cullTotal === 600 + 280, false);
+
+console.log('\n── Nothing culled in the d-tone tray ──');
+const noDt = run({ planted: 1000, trans: 900, cull1: 100, cull3: 50 });
+is('the whole 1st culling is the plain half', noDt.cull1Main, 100);
+is('and the d-tone one is nought',            noDt.cull1Dtone, 0);
+is('the total is unchanged',                  noDt.cullTotal, 150);
+
+console.log('\n── All of it culled in the d-tone tray ──');
+const allDt = run({ planted: 1000, trans: 900, cull1: 100, cull1Dtone: 100, cull3: 50 });
+is('the plain half is nought', allDt.cull1Main, 0);
+is('and the total still counts it', allDt.cullTotal, 150);
+
+console.log('\n── The three windows cannot disagree with the three figures ──');
+const cull1Src = los.slice(los.indexOf("    } else if (spec.list === 'cull1Main'"),
+                           los.indexOf("    } else if (spec.list === 'transMain'"));
+is('the split is read off the same tray matcher the figures use',
+  /_losTrayKey\(x\.place\) === 'DOUBLETONE'/.test(cull1Src), true);
+is('out of ONE list, so nothing can be in a window and not its column',
+  /r\.rec\.cull1\.forEach/.test(cull1Src), true);
+
+console.log('\n── The headings say Culled, which is what the office asked for ──');
+const thead = (() => {
+  const t = los.slice(los.indexOf('<colgroup>${LOS_COL_WIDTHS'));
+  return t.slice(0, t.indexOf('</thead>'));
+})();
+is('the group is Culled Detail', /<th colspan="6" class="los-grp">Culled Detail<\/th>/.test(thead), true);
+is('and no heading in the table still says Culling',
+  (thead.match(/<th[^>]*>([^<]*)<\/th>/g) || [])
+    .filter(h => h.replace(/<[^>]*>/g, '').includes('Culling')).length, 0);
+is('3rd Culled',                 />3rd Culled</.test(thead), true);
+is('Total Culled (1st + 3rd)',   />Total Culled \(1st \+ 3rd\)</.test(thead), true);
+is('Total 1st Culled Qty first', thead.indexOf('>Total 1st Culled Qty<') < thead.indexOf('>1st Culled Qty<'), true);
+is('then Double Tone 1st Culled Qty',
+  thead.indexOf('>1st Culled Qty<') < thead.indexOf('>Double Tone 1st Culled Qty<'), true);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
 process.exit(fail ? 1 : 0);
