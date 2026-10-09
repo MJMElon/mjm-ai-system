@@ -479,7 +479,7 @@ a difference which is NOT the adjustment still reads as over-allocated.
 
 ## An unverified figure is shown, and says it is unverified
 
-Life of Seedlings is eighteen live sums of the batch ledger, and the ledger
+Life of Seedlings is nineteen live sums of the batch ledger, and the ledger
 is filled in BEFORE anybody checks it. A figure keyed this morning and one
 signed off last week looked exactly alike.
 
@@ -495,8 +495,8 @@ Three things to know before touching `LOS_GROUP_OF_TYPE` in
 `operation/operation_reports.html`:
 
 - **The unit is the COLUMN, not the tab.** 3rd Culling and Transfer are both
-  signed on Tab 6; Transplanting Qty, Double Tone and premium care are three
-  figures on Tab 3. A tally kept per tab puts a warning on figures somebody
+  signed on Tab 6; the three Transplant Details columns and premium care are
+  four figures on Tab 3. A tally kept per tab puts a warning on figures somebody
   HAS signed, and a marker that cries over fine figures is one nobody reads.
   `LOS_STAGE_OF_GROUP` is the column→tab map that keeps the two apart.
 - **A sign-off comes two ways** and either counts: one signature over a whole
@@ -668,32 +668,75 @@ because this was the second fix in a week that had to actually reach a phone.
 That is the condition the rule names: a module somebody wants current, not the
 whole site.
 
-## Two numbers wear the name Double Tone
+## Three numbers wear the name Double Tone, and only one is a column
+
+**`Transplanted` out of the DOUBLE-TONE tray** is the Life of Seedlings
+column. It is the batch report's **Main Plot (D-Tone)** card: a main-plot
+transplant whose SOURCE tray was the d-tone one, so a seedling that had the
+treatment on its way out. Read off the `from tray [...]` in the remark, which
+is where the save writes it.
 
 **`DTone_Nursery_Qty`** is the box on the Transplanting tab headed *"Double
-Tone Quantity in Nursery"*: an admin counts the double-tone seedlings standing
-in the nursery and keys the number, and Tabs 3 and 4 add it to the planted
-total to get their allocation base. One row per batch, newest wins
-(`loadDtoneNurseryQty`).
+Tone Quantity in Nursery"*: an admin counts the double-tone seedlings
+STANDING in the nursery and keys the number, and Tabs 3 and 4 add it to the
+planted total to get their allocation base. One row per batch, newest wins
+(`loadDtoneNurseryQty`). It is still read, still verified under its own row
+key, and it is **not** a column.
 
-**`Transplanted_DoubleTone`** is the batch pushing its own seedlings into the
-d-tone tray. A different number, nought on most batches, and it takes no part
-in the Balance because those seedlings leave the tray again later as ordinary
-`Transplanted` rows.
+**`Transplanted_DoubleTone`** is the batch pushing its own seedlings INTO the
+d-tone tray. They leave it again later as ordinary `Transplanted` rows, which
+is why counting it would count them twice.
 
-Life of Seedlings' **Double Tone column showed the second one**, so it read 0
-against every batch the office had keyed a figure for. It now shows the keyed
-Quantity in Nursery, newest-wins, like the form — and the tray transplant
-keeps its own group (`dtone_tray`), which has no column but is still named in
-the row's verdict, exactly as premium care is.
+The column has now been wrong twice, in opposite directions, and both are
+worth keeping:
 
-The box has its own sign-off on Tab 3 under the row key
-**`DTONE-NURSERY-QTY`** rather than a plot, so `_losApplyVerification`
-special-cases it the way it special-cases a transfer card.
+- It showed `Transplanted_DoubleTone`, so it read **0** against batches that
+  had double tone standing in the field — the transplant into the tray is
+  nought once everything has been forwarded out of it. The batch detail page
+  had already hit exactly this on its own tile and says so in its comment:
+  *"Without this the tile only saw qty routed INTO the D-Tone holding tray
+  and stayed at 0 once everything was forwarded out."*
+- It was then pointed at the KEYED box, which reads what is standing rather
+  than what moved — so **batch 276 showed a Total Transplant Qty of 3** with
+  nothing transplanted and its own batch report reading 100% pending.
 
-`shared/CHECK_double_tone_quantity.sql` puts the two numbers side by side on
-every batch and counts the ones that were reading nought.
-`tests/los_double_tone_is_the_keyed_figure.cjs` keeps a batch that has BOTH.
+`shared/CHECK_transplant_details.sql` puts all four numbers side by side on
+every batch and counts the ones that were overstated.
+
+## Transplant Details is the batch report's split, never a sum
+
+Three columns: **Total Transplant Qty | Transplant Qty | Double Tone**.
+
+They are the allocation engine's own cards, and the rule that makes them
+coherent is that the last two are **DISJOINT halves of the first**, split by
+the tray each main-plot transplant came out of — not two different things
+stacked together. `calcTransplanting` in `operation_batch_detail.html` is the
+original and says it in its own words: the two tiles are disjoint *"so the two
+tiles add up to the total main-plot population (totalMain)"*.
+
+That is why the total can be READ rather than ADDED. A total worked out by
+summing two columns that are not halves of one thing is the fault batch 276
+showed: a report claiming three seedlings transplanted out of a batch that had
+transplanted none.
+
+Three things that follow:
+
+- **All three columns are one group for verification** (`transplanting`), and
+  all three drilldowns are ONE list filtered by the same tray test. A nought
+  is still marked when the stage is unsigned: "0 out of the D-Tone tray" and
+  "0 so far as anybody has keyed" are different claims.
+- **The Balance uses the TOTAL.** It is every main-plot transplant, which is
+  what is standing in the field; one half of a split is not.
+- **The tray is matched on letters and digits** (`_losTrayKey`), same rule as
+  `nurseryKey`/`plotKey`, so a dash or a space cannot drop a row out of the
+  half it belongs in. It is kept to ONE LINE on purpose — the test harnesses
+  lift a named const by reading to the end of its line, so a one-liner is the
+  real function under test rather than a copy that can drift. The SQL check
+  cannot take a regular expression, so it matches three spellings instead,
+  and the gap is not silent: a fourth spelling stops the halves adding up and
+  the check counts it.
+
+`tests/los_transplant_details.cjs` holds all of it, batch 276 included.
 
 ## The 2nd culling never deducts. Not even while no 3rd exists.
 
@@ -775,13 +818,10 @@ gone quietly wrong:
   free. Now it can, so the test is `mainBalance <= 0 && preBalance <= 0`.
   Nothing is finished while something of it is standing anywhere.
 
-**And Transplant is three columns now**, grouped under *Transplant Details*:
-**Total Transplant Qty | Transplant Qty | Double Tone**, the first being the
-other two added. The Double Tone in it is the admin-keyed Quantity in
-Nursery, never the transplant into the d-tone tray — see the two numbers
-above. The **Balance uses Transplant Qty alone**, never the total: the double
-tone is counted where it already stands, and folding it in would put it into
-the field balance a second time.
+**And Transplant is three columns now**, grouped under *Transplant Details* —
+see the section above for what each one is. The **Balance uses the TOTAL**,
+which is every main-plot transplant: the two columns beside it are disjoint
+halves of that total, and half of what is standing is not what is standing.
 
 The office asked for the word **transplant**, not *transplanting*, on these
 headings. It is the headings of THIS table only — the Transplanting Report

@@ -5,9 +5,12 @@
 
      1. Balance = transplant qty − 3rd culling − total sales
                   + approved stock calibration
-     2. Transplant Details, three columns:
+     2. Transplant Details, three columns, taken from the batch report:
           Total Transplant Qty | Transplant Qty | Double Tone
-        with the total being the other two added.
+        the last two being DISJOINT halves of the first, split by the tray
+        each main-plot transplant came out of. los_transplant_details.cjs
+        holds that split; what is held here is that the Balance follows the
+        TOTAL and never the keyed Double Tone Quantity in Nursery.
 
    The Balance used to be a different question — actual planted − total
    culling − total sales + approved calibration, which is everything the
@@ -49,7 +52,7 @@ const derive = new Function('rowsByBatch', 'asAt', '_losAgeMonths', '_losAgeLabe
 
 const run = (f) => {
   const r = Object.assign({
-    batch: 'x', planted: 0, cull1: 0, cull2: 0, cull3: 0, trans: 0, dtone: 0,
+    batch: 'x', planted: 0, cull1: 0, cull2: 0, cull3: 0, trans: 0, transDtone: 0, dtone: 0,
     sales: 0, salesPre: 0, calibration: 0, calibrationPre: 0,
     received: 0, damaged: 0, transfer: 0
   }, f);
@@ -163,15 +166,22 @@ is('the balance carries it even with nothing transplanted', trayCal.balance, -30
 is('and the tray figure carries it too, once',              trayCal.preBalance, 870);
 
 console.log('\n── Transplant Details: the total is the two added ──');
-const d1 = run({ planted: 10000, trans: 9608, dtone: 1250 });
-is('Total Transplant Qty', d1.transTotal, 9608 + 1250);
-is('and the Balance uses the transplant qty alone, never the total',
-  d1.balance, 9608);
-is('no double tone keyed: the total is the transplant qty',
-  run({ trans: 9608 }).transTotal, 9608);
-is('nothing transplanted: the total is the double tone',
-  run({ dtone: 96 }).transTotal, 96);
-is('neither: nought', run({}).transTotal, 0);
+const d1 = run({ planted: 10000, trans: 9704, transDtone: 96, dtone: 1250 });
+is('Total Transplant Qty is every main-plot transplant', d1.transTotal, 9704);
+is('Transplant Qty is the part out of a PN tray',        d1.transMain, 9608);
+is('Double Tone is the part out of the D-Tone tray',     d1.transDtone, 96);
+is('the two halves add up to the total', d1.transMain + d1.transDtone, d1.transTotal);
+is('and the Balance is the total, not one half', d1.balance, 9704);
+/* BATCH 276. The keyed Double Tone Quantity in Nursery takes no part in any
+   of the three: it counts what is STANDING, so it can be above nought on a
+   batch that has transplanted nothing, and adding it gave a Total Transplant
+   Qty of 3 against a batch report reading 100% pending. */
+const keyedOnly = run({ planted: 10097, dtone: 3 });
+is('276: Total Transplant Qty', keyedOnly.transTotal, 0);
+is('276: Transplant Qty',       keyedOnly.transMain,  0);
+is('276: Double Tone',          keyedOnly.transDtone, 0);
+is('276: and the Balance',      keyedOnly.balance,    0);
+is('nothing at all: nought', run({}).transTotal, 0);
 
 /* ── The page, not just the arithmetic ──────────────────────────────────── */
 console.log('\n── The report markup says the same thing ──');
@@ -192,10 +202,14 @@ const LOS_THEAD = (() => {
 is('no heading in this table still says Transplanting',
   (LOS_THEAD.match(/<th[^>]*>([^<]*)<\/th>/g) || [])
     .filter(h => h.replace(/<[^>]*>/g, '').includes('Transplanting')).length, 0);
-/* The hover on Double Tone still names the batch detail page's Transplanting
-   TAB, which is a place and has not been renamed. */
-is('though a tooltip may still name the Transplanting tab',
-  /batch Transplanting tab/.test(LOS_THEAD), true);
+/* The two hovers point at the batch report cards these columns ARE, which
+   is what stops the next reader rebuilding the split from scratch. */
+is('the Transplant Qty hover names the Main Plot card',
+  /batch report Main Plot card/.test(LOS_THEAD), true);
+is('and the Double Tone hover names the Main Plot \(D-Tone\) card',
+  /batch report Main Plot \(D-Tone\) card/.test(LOS_THEAD), true);
+is('and says what it is NOT',
+  /Not the Double Tone Quantity in Nursery/.test(LOS_THEAD), true);
 is('nineteen column widths', (() => {
   const m = los.match(/const LOS_COL_WIDTHS = \[([\s\S]*?)\]/);
   return m ? m[1].split(',').length : 0;
@@ -222,10 +236,11 @@ is('Balance is marked by the transplanting and the 3rd culling',
   /const LOS_BALANCE_GROUPS = \(r\) => \['transplanting', 'cull_3'\]/.test(los), true);
 is('and the planting no longer marks it',
   /LOS_BALANCE_GROUPS = \(r\) => \['planting'\]/.test(los), false);
-is('Total Transplant Qty is marked by both its parts',
-  /const LOS_TRANSTOTAL_GROUPS = \(r\) => \['transplanting', 'dtone'\]/.test(los), true);
-is('and the drilldown knows the same two',
-  /transTotal: LOS_TRANSTOTAL_GROUPS/.test(los), true);
+is('all three Transplant Details columns are the transplanting stage',
+  /const LOS_TRANSTOTAL_GROUPS = \(r\) => \['transplanting'\]/.test(los), true);
+is('and the drilldowns say the same',
+  /trans:    LOS_TRANSTOTAL_GROUPS/.test(los) && /dtone:    LOS_TRANSTOTAL_GROUPS/.test(los)
+    && /transTotal: LOS_TRANSTOTAL_GROUPS/.test(los), true);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
 process.exit(fail ? 1 : 0);

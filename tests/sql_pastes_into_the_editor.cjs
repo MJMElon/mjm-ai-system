@@ -41,6 +41,7 @@ const SWEPT = [
   'CHECK_worker_names_with_no_column.sql',
   'CHECK_claim_vs_worker_record.sql',
   'CHECK_balance_is_what_is_standing.sql',
+  'CHECK_transplant_details.sql',
 ];
 
 const DQ = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/;

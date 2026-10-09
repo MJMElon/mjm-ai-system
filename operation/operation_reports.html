@@ -797,9 +797,11 @@ const LOS_CULLTOTAL_GROUPS = (r) => ['cull_1', 'cull_3'];
    plots of the same batch and is not in the Balance at all. */
 const LOS_BALANCE_GROUPS = (r) => ['transplanting', 'cull_3'];
 
-/* Total Transplant Qty is the transplant quantity plus the keyed Double
-   Tone Quantity in Nursery, so both mark it. */
-const LOS_TRANSTOTAL_GROUPS = (r) => ['transplanting', 'dtone'];
+/* All three Transplant Details columns are the Transplanted rows, split by
+   the tray they came out of, so one group marks all three. The keyed Double
+   Tone Quantity in Nursery is signed off on the same tab but is no longer a
+   column, so it marks none of them. */
+const LOS_TRANSTOTAL_GROUPS = (r) => ['transplanting'];
 
 /* Which groups each openable figure is made of, by the `kind` the drilldown
    knows it as — so the records window can carry the same answer the cell
@@ -810,8 +812,10 @@ const LOS_GROUPS_OF_KIND = {
   damaged:  () => ['planting'],
   planted:  () => ['planting'],
   variance: () => ['seeds_in', 'planting'],
-  trans:    () => ['transplanting'],
-  dtone:    () => ['dtone'],
+  // All three Transplant Details columns are Transplanted rows, split by
+  // the tray each came out of, so one group answers for all three.
+  trans:    LOS_TRANSTOTAL_GROUPS,
+  dtone:    LOS_TRANSTOTAL_GROUPS,
   transTotal: LOS_TRANSTOTAL_GROUPS,
   cull1:    () => ['cull_1'],
   cull2:    () => ['cull_2'],
@@ -822,6 +826,14 @@ const LOS_GROUPS_OF_KIND = {
 };
 
 const _losPlotKey = (p) => String(p == null ? '' : p).trim().toUpperCase();
+
+/* A source tray matched on letters and digits only, so DOUBLE-TONE,
+   "Double Tone" and "doubletone" are one tray. Same rule as nurseryKey /
+   plotKey, and it cannot merge two trays: different letters give different
+   keys. Kept to ONE line on purpose: the test harnesses lift a named const
+   by reading to the end of its line, so a one-liner is the real function
+   under test rather than a copy of it that can drift. */
+const _losTrayKey = (t) => String(t == null ? '' : t).toUpperCase().split('').filter(c => (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')).join('');
 
 /* The part of a row sign-off's key that names the plot. `cull_2::U7` →
    'U7'; `transplanting::U7|main|P4|2026-09-18` → 'U7'. A transfer card's
@@ -1074,10 +1086,16 @@ async function _losBuildAllRows(asAt) {
        the note in the Seeds_Received branch below. */
     srRows: 0, srStamp: '',
     damaged: 0, planted: 0,
-    trans: 0, premium: 0,
-    /* DOUBLE TONE IS THE KEYED FIGURE, NOT THE TRANSPLANT INTO THE TRAY —
-       see the DTone_Nursery_Qty branch below. dtoneTray is the other one,
-       kept so a batch that has only ever done that is still a batch. */
+    /* trans is EVERY main-plot transplant, which is the batch report's own
+       transplanted total; transDtone is the part of it that came out of the
+       DOUBLE-TONE tray, which is that report's "Main Plot (D-Tone)" card.
+       The Transplant Details group is those two and their total. */
+    trans: 0, transDtone: 0, premium: 0,
+    /* THREE numbers wear the name Double Tone and only one of them is a
+       column. dtone is the admin-keyed "Double Tone Quantity in Nursery"
+       (see the DTone_Nursery_Qty branch below) and dtoneTray is the
+       transplant INTO the d-tone tray; both are kept, counted and verified,
+       and neither is the column. The column is transDtone above. */
     dtone: 0, dtStamp: '', dtRows: 0, dtoneTray: 0,
     cull1: 0, cull2: 0, cull3: 0,
     /* Of the sales and the calibration, the part that happened in the
@@ -1197,6 +1215,18 @@ async function _losBuildAllRows(asAt) {
     if (t === 'Transplanted') {
       const src = (l.remark || '').match(_RE_LOS_FROM_TRAY);
       r.trans += q;
+      /* THE D-TONE-SOURCED SUBSET, which is the batch report's "Main Plot
+         (D-Tone)" card and nothing else. A Transplanted row is a main-plot
+         transplant whatever tray it came out of; the ones that came out of
+         the DOUBLE-TONE tray are the ones that had the treatment. So the
+         two are DISJOINT halves of one total and add up to it — the same
+         words that tile is built on in operation_batch_detail.html.
+
+         It is read off the source tray in the remark, which is where the
+         save writes it: `Transplanted from tray [DOUBLE-TONE] to Main Plot
+         [U3]`. Matched on letters and digits so a dash or a space cannot
+         lose a row, the same rule as nurseryKey / plotKey. */
+      if (src && _losTrayKey(src[1]) === 'DOUBLETONE') r.transDtone += q;
       r.rec.trans.push({ date: d, batch: name, from: src ? src[1].trim() : '—',
         place: l.plot_name || '—', nursery: nurseryOf(l.plot_name), qty: q });
       return;
@@ -1343,10 +1373,35 @@ async function _losBuildAllRows(asAt) {
     r.postCull   = r.cull3;
     r.cullTotal  = r.cull1 + r.postCull;
     r.variance   = r.planted - (r.received - r.damaged);
-    /* Total Transplant Qty — what went out of the tray plus the double
-       tone standing in the nursery. The office reads the three as a group:
-       the total, and the two numbers it is made of. */
-    r.transTotal = r.trans + r.dtone;
+    /* TRANSPLANT DETAILS IS THE BATCH REPORT'S OWN THREE FIGURES, NOT A SUM
+       THIS REPORT WORKS OUT FOR ITSELF.
+
+       The first version added the transplant quantity to the admin-keyed
+       Double Tone Quantity in Nursery. Batch 276 is what that looked like:
+       nothing transplanted, 100% still pending on its own batch report, and
+       a Total Transplant Qty of 3 — because somebody had keyed 3 into the
+       Quantity in Nursery box. A total of three seedlings transplanted, on a
+       batch that had transplanted none.
+
+       The batch report splits one total into two DISJOINT halves:
+
+         Main Plot            a main-plot transplant out of a PN tray
+         Main Plot (D-Tone)   a main-plot transplant out of the DOUBLE-TONE
+                              tray — the ones that had the treatment
+         ───────────────────  and the two add up to every Transplanted row
+
+       So these three columns are those three figures, and the total is the
+       total because the parts are halves of it rather than two things
+       stacked together. `calcTransplanting` in operation_batch_detail.html
+       is the original, and its own comment says the two tiles are disjoint
+       "so the two tiles add up to the total main-plot population".
+
+       The keyed Quantity in Nursery is a different number — a count of
+       double-tone seedlings STANDING, which is why it can be above nought
+       on a batch that has transplanted nothing. It is still read, still
+       verified and still in the drilldown; it is not this column. */
+    r.transMain  = r.trans - r.transDtone;
+    r.transTotal = r.trans;
     /* BALANCE IS WHAT IS STANDING IN THE FIELD.
 
          transplanting qty − 3rd culling − total sales
@@ -1644,12 +1699,14 @@ async function _losBuildData() {
                    || String(b.batch).localeCompare(String(a.batch)));
 
   const tot = rows.reduce((s, r) => {
-    ['received','doQty','focQty','damaged','planted','transTotal','trans','dtone',
+    ['received','doQty','focQty','damaged','planted','transTotal','trans','transMain',
+     'transDtone','dtone',
      'cull1','cull2','cull3',
      'cullTotal','transfer','sales','calibration','balance'].forEach(k => { s[k] += r[k] || 0; });
     if (r.variance < 0) s.varDown += r.variance; else if (r.variance > 0) s.varUp += r.variance;
     return s;
-  }, { received:0, doQty:0, focQty:0, damaged:0, planted:0, transTotal:0, trans:0, dtone:0,
+  }, { received:0, doQty:0, focQty:0, damaged:0, planted:0, transTotal:0, trans:0,
+       transMain:0, transDtone:0, dtone:0,
        cull1:0, cull2:0,
        cull3:0, cullTotal:0, transfer:0, sales:0, calibration:0, balance:0, varDown:0, varUp:0 });
 
@@ -1902,9 +1959,9 @@ function _losSummaryHtml(rows, tot, scope) {
       <td${_losVerMark(r, ['seeds_in', 'planting']) ? ' class="los-unver"' : ''}>${_losFig('variance', r.batch,
         (r.variance > 0 ? '+' : r.variance < 0 ? '−' : '') + fmtNum(Math.abs(r.variance)),
         r.variance < 0 ? 'text-[#a83020] font-black' : r.variance > 0 ? 'text-[#4a7a2e] font-black' : 'text-[#8a7a68]')}${_losVerMark(r, ['seeds_in', 'planting'])}</td>
-      ${_losCellV('transTotal', r, r.transTotal, 'text-[#3a7ab4] font-black', LOS_TRANSTOTAL_GROUPS(r))}
-      ${_losCellV('trans', r, r.trans, 'text-[#3a7ab4] font-black', ['transplanting'])}
-      ${_losCellV('dtone', r, r.dtone, 'text-[#7c3aed] font-black', ['dtone'])}
+      ${_losCellV('transTotal', r, r.transTotal, 'text-[#3a7ab4] font-black', ['transplanting'])}
+      ${_losCellV('trans', r, r.transMain, 'text-[#3a7ab4] font-black', ['transplanting'])}
+      ${_losCellV('dtone', r, r.transDtone, 'text-[#7c3aed] font-black', ['transplanting'])}
       ${_losCellV('cull1', r, r.cull1, 'text-[#a83020]', ['cull_1'])}
       ${_losCellV('cull2', r, r.cull2, 'text-[#a83020]', ['cull_2'])}
       ${_losCellV('cull3', r, r.cull3, 'text-[#a83020]', ['cull_3'])}
@@ -1961,9 +2018,9 @@ function _losSummaryHtml(rows, tot, scope) {
               <th>Seed Damage</th>
               <th>Actual Planted</th>
               <th title="Actual planted − (seed received − seed damage). Negative means fewer seeds were planted than arrived.">Variance Seed In</th>
-              <th title="Transplant qty + double tone.">Total Transplant Qty</th>
-              <th>Transplant Qty</th>
-              <th title="The Double Tone Quantity in Nursery keyed on the batch Transplanting tab — the double-tone seedlings an admin counted standing in the nursery. Newest keying wins. Not the transplant into the d-tone tray, which is a different number.">Double Tone</th>
+              <th title="Every main-plot transplant this batch has made — the same total the batch report splits into its Main Plot and Main Plot (D-Tone) cards. The two columns beside this one ARE that split, so they add up to it.">Total Transplant Qty</th>
+              <th title="The batch report Main Plot card: a main-plot transplant out of an ordinary pre-nursery tray.">Transplant Qty</th>
+              <th title="The batch report Main Plot (D-Tone) card: a main-plot transplant out of the DOUBLE-TONE tray, so a seedling that had the treatment on its way. Not the Double Tone Quantity in Nursery, which counts what is STANDING and can be above nought on a batch that has transplanted nothing.">Double Tone</th>
               <th>1st Culling</th>
               <th>2nd Culled</th>
               <th>3rd Culling</th>
@@ -1986,8 +2043,8 @@ function _losSummaryHtml(rows, tot, scope) {
               <div class="text-[9px] font-bold text-[#8a7a68]">sum of all more received</div>
             </td>
             <td>${_losFig('transTotal', '*', fmtNum(tot.transTotal), 'text-[#3a7ab4] font-black')}</td>
-            <td>${_losFig('trans', '*', fmtNum(tot.trans), 'text-[#3a7ab4] font-black')}</td>
-            <td>${_losFig('dtone', '*', fmtNum(tot.dtone), 'text-[#7c3aed] font-black')}</td>
+            <td>${_losFig('trans', '*', fmtNum(tot.transMain), 'text-[#3a7ab4] font-black')}</td>
+            <td>${_losFig('dtone', '*', fmtNum(tot.transDtone), 'text-[#7c3aed] font-black')}</td>
             <td>${_losFig('cull1', '*', fmtNum(tot.cull1), 'text-[#a83020]')}</td>
             <td>${_losFig('cull2', '*', fmtNum(tot.cull2), 'text-[#a83020]')}</td>
             <td>${_losFig('cull3', '*', fmtNum(tot.cull3), 'text-[#a83020]')}</td>
@@ -4804,32 +4861,26 @@ const LOS_DRILL = {
     tipLabel: x => x.batch + ' · ' + x.place,
     cols: [_losCol.date, _losCol.batch, _losCol.tray,
       { ..._losQty('Planted', 'font-black'), sum: x => x.qty }] },
-  trans: { title: 'Transplant Qty', list: 'trans',
+  /* The three Transplant Details windows are ONE list filtered three ways,
+     because the three columns are one total split by the tray each row came
+     out of. Filtering here rather than keeping three lists is what stops a
+     window and the figure it opened from ever disagreeing. */
+  transTotal: { title: 'Total Transplant Qty', list: 'trans',
+    tipLabel: x => x.batch + ' · ' + x.place + ' (' + x.nursery + ')',
+    cols: [_losCol.date, _losCol.batch, _losCol.fromTray, _losCol.nursery, _losCol.plot,
+      { ..._losQty('Qty', 'text-[#3a7ab4] font-black'), sum: x => x.qty }],
+    roll: x => _losTrayKey(x.from) === 'DOUBLETONE' ? 'out of the D-Tone tray'
+                                                    : 'out of a pre-nursery tray' },
+  trans: { title: 'Transplant Qty (Main Plot)', list: 'transMain',
     tipLabel: x => x.batch + ' · ' + x.place + ' (' + x.nursery + ')',
     cols: [_losCol.date, _losCol.batch, _losCol.fromTray, _losCol.nursery, _losCol.plot,
       { ..._losQty('Qty', 'text-[#3a7ab4] font-black'), sum: x => x.qty }],
     roll: x => x.nursery },
-  /* The keyed Double Tone Quantity in Nursery, one row per keying. The
-     newest is the figure on the report — a second row is a correction, and
-     the window is where somebody sees that there was one. Summed all the
-     same, because a total that did not add up to its own rows would be the
-     more confusing of the two. */
-  dtone: { title: 'Double Tone Quantity in Nursery', list: 'dtone',
-    tipLabel: x => x.batch + ' · keyed ' + (x.date || '—'),
-    cols: [_losCol.date, _losCol.batch, _losCol.note,
-      { ..._losQty('Qty', 'text-[#7c3aed] font-black'), sum: x => x.qty }] },
-  /* The two numbers the Total Transplant Qty column adds, in one window,
-     each line saying which it is. The double-tone keyings are listed in
-     full while the COLUMN takes only the newest, the same way the Double
-     Tone window does it — a total that did not add up to its own rows would
-     be the more confusing of the two, and a second keying is something the
-     reader should see. */
-  transTotal: { title: 'Total Transplant Qty', list: 'transTotal',
-    tipLabel: x => x.what + ' · ' + x.batch + ' · ' + x.place,
-    cols: [_losCol.date, { label: 'What', get: x => _losEsc(x.what) },
-      _losCol.batch, _losCol.place,
-      { ..._losQty('Qty', 'text-[#3a7ab4] font-black'), sum: x => x.qty }],
-    roll: x => x.what },
+  dtone: { title: 'Double Tone (Main Plot, out of the D-Tone tray)', list: 'transDtone',
+    tipLabel: x => x.batch + ' · ' + x.place + ' (' + x.nursery + ')',
+    cols: [_losCol.date, _losCol.batch, _losCol.fromTray, _losCol.nursery, _losCol.plot,
+      { ..._losQty('Qty', 'text-[#7c3aed] font-black'), sum: x => x.qty }],
+    roll: x => x.nursery },
   cull1: { title: '1st Culling', list: 'cull1',
     tipLabel: x => x.batch + ' · ' + x.place,
     cols: [_losCol.date, _losCol.batch, _losCol.tray,
@@ -4890,12 +4941,14 @@ function _losDrillCollect(kind, batch) {
       // disagree.
       out.push(...r.rec.cull1);
       out.push(...r.rec.cull3);
-    } else if (spec.list === 'transTotal') {
-      // Transplanting + the keyed Double Tone Quantity in Nursery, the same
-      // two the column adds, so the window and the figure it opened from
-      // can never disagree about what is in it.
-      r.rec.trans.forEach(x => out.push({ ...x, what: 'Transplant' }));
-      r.rec.dtone.forEach(x => out.push({ ...x, what: 'Double tone' }));
+    } else if (spec.list === 'transMain' || spec.list === 'transDtone') {
+      // One list, split by the tray the row came out of — exactly the test
+      // the figures themselves are built on, so a window can never show
+      // rows its own column is not counting.
+      const wantDtone = spec.list === 'transDtone';
+      r.rec.trans.forEach(x => {
+        if ((_losTrayKey(x.from) === 'DOUBLETONE') === wantDtone) out.push(x);
+      });
     } else {
       out.push(...(r.rec[spec.list] || []));
     }
