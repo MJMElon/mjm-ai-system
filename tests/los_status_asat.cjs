@@ -42,7 +42,7 @@ function build(asAt) {
   const fn = new Function('asAt','logsRes','dosRes','_logDate','_mvBatchKey','nurseryOf',
     'PRE_NURSERY_PLOTS','_losAgeMonths','_losAgeLabel','_RE_LOS_SUPPLIER','_RE_LOS_MPOB',
     '_RE_LOS_DONO','_RE_LOS_DO_QTY','_RE_LOS_FOC_PCT','_RE_LOS_REPL','_RE_LOS_FROM_TRAY',
-    '_RE_LOS_FROM_PLOT','_RE_LOS_APPROVED','_RE_LOS_CAL_REPORT','_RE_LOS_CAL_SIDE','_losTrayKey',
+    '_RE_LOS_FROM_PLOT','_RE_LOS_APPROVED','_RE_LOS_CAL_REPORT','_RE_LOS_CAL_SIDE','_losTrayKey','_LOS_CAL_SEED_REPORTS',
     body + '\nreturn rows;');
   const never = /NEVERMATCH_x([0-9])/;
   return fn(asAt, { data: logs }, { data: dos }, (l) => l.transaction_date || null,
@@ -50,7 +50,7 @@ function build(asAt) {
     (plot) => (['Pre-Nursery','P14'].includes(plot) ? 'Pre-Nursery' : 'BNN'),
     ['Pre-Nursery'], () => null, () => '',
     never, never, never, never, never, never, never, never, never, never, never,
-    grabConst('_losTrayKey'));
+    grabConst('_losTrayKey'), grabConst('_LOS_CAL_SEED_REPORTS'));
 }
 
 // The two modes, exactly as _losBuildData assembles them.

@@ -51,7 +51,7 @@ const logs = [
 const fn = new Function('asAt','logsRes','dosRes','_logDate','_mvBatchKey','nurseryOf',
   'PRE_NURSERY_PLOTS','_losAgeMonths','_losAgeLabel','_RE_LOS_SUPPLIER','_RE_LOS_MPOB',
   '_RE_LOS_DONO','_RE_LOS_DO_QTY','_RE_LOS_FOC_PCT','_RE_LOS_REPL','_RE_LOS_FROM_TRAY',
-  '_RE_LOS_FROM_PLOT','_RE_LOS_APPROVED','_RE_LOS_CAL_REPORT','_RE_LOS_CAL_SIDE','_losTrayKey',
+  '_RE_LOS_FROM_PLOT','_RE_LOS_APPROVED','_RE_LOS_CAL_REPORT','_RE_LOS_CAL_SIDE','_losTrayKey','_LOS_CAL_SEED_REPORTS',
   body + '\nreturn rows;');
 
 // The real patterns, lifted too — a stubbed regex would pass over the bug.
@@ -66,7 +66,7 @@ const rows = fn('', { data: logs }, { data: [] },
   grab('_RE_LOS_SUPPLIER'), grab('_RE_LOS_MPOB'), grab('_RE_LOS_DONO'),
   grab('_RE_LOS_DO_QTY'), grab('_RE_LOS_FOC_PCT'), grab('_RE_LOS_REPL'),
   grab('_RE_LOS_FROM_TRAY'), grab('_RE_LOS_FROM_PLOT'), grab('_RE_LOS_APPROVED'),
-  grab('_RE_LOS_CAL_REPORT'), grab('_RE_LOS_CAL_SIDE'), grab('_losTrayKey'));
+  grab('_RE_LOS_CAL_REPORT'), grab('_RE_LOS_CAL_SIDE'), grab('_losTrayKey'), grab('_LOS_CAL_SEED_REPORTS'));
 
 const by = {}; rows.forEach(r => { by[r.batch] = r; });
 let pass = 0, fail = 0;
