@@ -187,7 +187,7 @@
   .sales-table th,
   .sales-table td { padding: 10px 8px; }
   /* ── Life of Seedlings ──────────────────────────────────────────────────
-     Twenty-one columns, and all of them have to be on the page at once: this
+     Seventeen columns, and all of them have to be on the page at once: this
      is a report you read ACROSS, batch by batch, and a table you scroll
      sideways answers one half of a row at a time. So the table is
      fixed-layout at 100% width with a colgroup that spends the width where
@@ -234,7 +234,7 @@
   /* The sticky edge — a border on a sticky cell scrolls away with the cell's
      own box, a shadow does not. */
   .los-table thead tr:last-child th { box-shadow:0 2px 0 #e8dcc8; }
-  /* Below about 1100px there is no honest way to fit twenty-one columns, so
+  /* Below about 1100px there is no honest way to fit seventeen columns, so
      the table is allowed to scroll sideways again. The headings stop
      sticking when it does — that is the trade, and it only applies to a
      window narrower than this report is meant for. */
@@ -267,6 +267,22 @@
   .los-table tbody tr:nth-child(even) td.los-unver { background:#fbf1dd; }
   .los-unver-mark { margin-left:3px; font-size:9px; font-weight:900; color:#c07820;
                     vertical-align:super; line-height:1; cursor:help; }
+  /* A SPLIT CELL: the total on top, the two halves it is made of under a
+     rule. It is one column doing the work of three, which is how the
+     transplant and the 1st culling splits got their detail without taking
+     four more columns off the width every other figure has to live in —
+     twenty-one columns were already tight.
+
+     The halves are 9px and muted so the TOTAL is still what the eye lands
+     on going across a row: the detail is for the reader who stops. Both
+     halves are still their own figure and open their own records. */
+  .los-split { display:flex; margin-top:4px; border-top:1px solid #e8dcc8;
+               padding-top:3px; }
+  .los-split > span { flex:1 1 0; min-width:0; font-size:9px; font-weight:700;
+                      line-height:1.25; }
+  .los-split > span + span { border-left:1px solid #e8dcc8; }
+  .los-split .los-fig { font-size:9px; }
+  .los-split-lbl { color:#a09078; }
   @media print {
     .los-fig { text-decoration:none; }
     .los-table thead th { position:static; }
@@ -625,16 +641,23 @@ async function loadBreeds() {
    headed 1st + 3rd, and for a while the code did not do what the heading
    said.
 
-   THIRD, Transplant Details is three columns and the first is the sum of
-   the other two: Total Transplant Qty = Transplant Qty + Double Tone.
-   Double Tone there is the figure an admin KEYED on the batch Transplanting
-   tab, newest keying winning, never the transplant into the d-tone tray —
-   two numbers wear that name and only one of them is a count of seedlings
-   standing in the nursery.
+   THIRD, Transplant Qty and 1st Culled are each ONE column carrying a
+   SPLIT: the total on top, and under a rule the two halves it is made of —
+   Normal out of an ordinary pre-nursery tray, DT out of the DOUBLE-TONE
+   tray. They are the batch report's own cards (Main Plot and Main Plot
+   (D-Tone) for the transplant, and the same question asked of the tray a
+   1st culling happened in), and the halves are DISJOINT, so the total is
+   read off them rather than summed from two different things.
 
-   The Balance uses the Transplant Qty on its own, not the total: the double
-   tone is counted where it stands, and folding it in would put it into the
-   field balance a second time.
+   They were three columns each for a while, which made twenty-one and left
+   every figure in the report reading in a column too narrow for it. See
+   _losSplitCell: a split belongs inside its column because that is what it
+   is — one figure with its composition shown.
+
+   The Balance uses the TOTAL, and so does Total Culled (1st + 3rd): half of
+   what is standing is not what is standing. The Double Tone Quantity in
+   Nursery an admin keys on the Transplanting tab is a different number
+   again and is in none of this.
 
    Supplier, MPOB licence, D/O quantity and FOC percent are not columns of
    their own in the ledger — Seeds In writes them as labelled fragments of the
@@ -1890,11 +1913,55 @@ function _losCellV(kind, r, value, cls, stages) {
   return `<td${mark ? ' class="los-unver"' : ''}>${_losFig(kind, r.batch, fmtNum(value), cls)}${mark}</td>`;
 }
 
+/* ONE COLUMN, THREE FIGURES: the total, and under a rule the two halves it
+   is made of.
+
+   Transplant Details and the 1st culling both split into a total and two
+   DISJOINT halves, and both were first drawn as three columns each. That
+   took the table from seventeen columns to twenty-one, and at twenty-one
+   every figure in the report is reading in a column too narrow for it — the
+   detail was bought with the legibility of everything beside it.
+
+   A split belongs INSIDE its column, because that is what it is: one figure
+   with its composition shown, not three figures that happen to be adjacent.
+   The total keeps the column's size and weight so a reader going across a
+   row still lands on it; the halves are small and muted underneath, for the
+   reader who stops. All three stay clickable and open their own records.
+
+   `parts` is [[label, kind, value], ...]. A half with no label is not drawn
+   at all, so a column can carry a split on the batches that have one and
+   read as a plain figure on the ones that do not. */
+function _losSplitCell(r, kind, value, cls, stages, parts) {
+  const mark = _losVerMark(r, stages);
+  const head = value
+    ? _losFig(kind, r.batch, fmtNum(value), cls)
+    : '<span class="text-[#8a7a68]">0</span>';
+  /* Nothing to split means nothing to draw: on a batch that has never used
+     the d-tone tray the halves say "all of it" and "none of it", which is
+     two lines of type for no information. */
+  const shown = parts.filter(p => p[2]);
+  const split = shown.length < 2 ? '' : `<div class="los-split">${parts.map(p =>
+    `<span><span class="los-split-lbl">${_losEsc(p[0])}</span> ${p[2]
+      ? _losFig(p[1], r.batch, fmtNum(p[2]), cls)
+      : '<span class="text-[#8a7a68]">0</span>'}</span>`).join('')}</div>`;
+  return `<td${mark ? ' class="los-unver"' : ''}${value ? '' : ' class="text-[#8a7a68]"'}>${head}${mark}${split}</td>`;
+}
+
+/* The same cell in the foot, where there is no batch and no verification —
+   the figures open the whole report's records with '*'. */
+function _losSplitFoot(kind, total, cls, parts) {
+  const shown = parts.filter(p => p[2]);
+  const split = shown.length < 2 ? '' : `<div class="los-split">${parts.map(p =>
+    `<span><span class="los-split-lbl">${_losEsc(p[0])}</span> ${_losFig(p[1], '*', fmtNum(p[2]), cls)}</span>`
+  ).join('')}</div>`;
+  return `<td>${_losFig(kind, '*', fmtNum(total), cls)}${split}</td>`;
+}
+
 /* The line under a batch's name saying whether anybody has checked it. The
    whole point of the markers scattered across the row is lost if the reader
    has to collect them by eye, so the row says its own verdict once.
 
-   Two names at most. The Batch / Breed column is one of twenty-one and six
+   Two names at most. The Batch / Breed column is one of seventeen and six
    stage names in it turn a table row into a paragraph — past two it counts
    them instead and keeps the list in the tooltip, where somebody who wants
    it can still read it. */
@@ -1944,20 +2011,23 @@ function _losDrillVerNote(kind, batch) {
     'keyed — they may be incomplete, or uncorrected.');
 }
 
-/* How the twenty-one columns share the width. Fixed layout means these are
+/* How the seventeen columns share the width. Fixed layout means these are
    what the browser uses rather than a hint it may ignore, which is what
-   gets all twenty-one onto the page at once — see .los-table in <style>.
-   The three that carry text (batch/breed, supplier, the received split) get
-   the room; the plain figure columns take what is left, evenly.
+   gets all seventeen onto the page at once — see .los-table in <style>. The
+   ones that carry text or a split (batch/breed, supplier, the received
+   figure, the transplant and the 1st culling) get the room; the plain
+   figure columns take what is left, evenly.
 
-   Two groups have been split into three columns each since this was four
-   fixed columns and a row of figures, and both times the text columns gave
-   the room back rather than every figure column losing another slice. */
-const LOS_COL_WIDTHS = [5.5, 5.5, 7, 3.5,
-                        5.5, 4, 4.5, 4.5,
-                        4.5, 4.5, 4,
-                        4.5, 4, 4, 4, 4, 4.5,
-                        4, 4.5, 4.5, 4.5];
+   Transplant Details and 1st Culled were three columns each for a while,
+   which made twenty-one and left every figure in the report reading in a
+   column too narrow for it. A split lives INSIDE its column now — see
+   _losSplitCell — and the four columns that bought back went to the ones
+   that carry text. */
+const LOS_COL_WIDTHS = [6, 6, 8.5, 4,
+                        6.5, 4.5, 5.5, 5,
+                        6.5,
+                        6.5, 4.5, 4.5, 5.5,
+                        4.5, 5.5, 5.5, 5.5];
 
 function _losSummaryHtml(rows, tot, scope) {
   const body = rows.map(r => `
@@ -1983,12 +2053,10 @@ function _losSummaryHtml(rows, tot, scope) {
       <td${_losVerMark(r, ['seeds_in', 'planting']) ? ' class="los-unver"' : ''}>${_losFig('variance', r.batch,
         (r.variance > 0 ? '+' : r.variance < 0 ? '−' : '') + fmtNum(Math.abs(r.variance)),
         r.variance < 0 ? 'text-[#a83020] font-black' : r.variance > 0 ? 'text-[#4a7a2e] font-black' : 'text-[#8a7a68]')}${_losVerMark(r, ['seeds_in', 'planting'])}</td>
-      ${_losCellV('transTotal', r, r.transTotal, 'text-[#3a7ab4] font-black', ['transplanting'])}
-      ${_losCellV('trans', r, r.transMain, 'text-[#3a7ab4] font-black', ['transplanting'])}
-      ${_losCellV('dtone', r, r.transDtone, 'text-[#7c3aed] font-black', ['transplanting'])}
-      ${_losCellV('cull1Total', r, r.cull1Total, 'text-[#a83020] font-black', ['cull_1'])}
-      ${_losCellV('cull1', r, r.cull1Main, 'text-[#a83020]', ['cull_1'])}
-      ${_losCellV('cull1Dtone', r, r.cull1Dtone, 'text-[#0891b2]', ['cull_1'])}
+      ${_losSplitCell(r, 'transTotal', r.transTotal, 'text-[#3a7ab4] font-black', ['transplanting'],
+        [['Normal', 'trans', r.transMain], ['DT', 'dtone', r.transDtone]])}
+      ${_losSplitCell(r, 'cull1Total', r.cull1Total, 'text-[#a83020] font-black', ['cull_1'],
+        [['Normal', 'cull1', r.cull1Main], ['DT', 'cull1Dtone', r.cull1Dtone]])}
       ${_losCellV('cull2', r, r.cull2, 'text-[#a83020]', ['cull_2'])}
       ${_losCellV('cull3', r, r.cull3, 'text-[#a83020]', ['cull_3'])}
       ${_losCellV('cullTotal', r, r.cullTotal, 'text-[#a83020] font-black', LOS_CULLTOTAL_GROUPS(r))}
@@ -2032,8 +2100,8 @@ function _losSummaryHtml(rows, tot, scope) {
               <th rowspan="2">Supplier / MPOB Licence</th>
               <th rowspan="2">Age</th>
               <th colspan="4" class="los-grp">Seed In Details</th>
-              <th colspan="3" class="los-grp">Transplant Details</th>
-              <th colspan="6" class="los-grp">Culled Detail</th>
+              <th rowspan="2" title="Every main-plot transplant this batch has made — the same total the batch report splits into its Main Plot and Main Plot (D-Tone) cards. Under the rule: Normal is the Main Plot card, a transplant out of an ordinary pre-nursery tray, and DT is the Main Plot (D-Tone) card, one out of the DOUBLE-TONE tray. The two add up to the total. Not the Double Tone Quantity in Nursery, which counts what is STANDING and can be above nought on a batch that has transplanted nothing.">Transplant Qty</th>
+              <th colspan="4" class="los-grp">Culled Detail</th>
               <th rowspan="2">Transfer</th>
               <th rowspan="2">Total Sales</th>
               <th rowspan="2">Stock Calibration</th>
@@ -2044,19 +2112,14 @@ function _losSummaryHtml(rows, tot, scope) {
               <th>Seed Damage</th>
               <th>Actual Planted</th>
               <th title="Actual planted − (seed received − seed damage). Negative means fewer seeds were planted than arrived.">Variance Seed In</th>
-              <th title="Every main-plot transplant this batch has made — the same total the batch report splits into its Main Plot and Main Plot (D-Tone) cards. The two columns beside this one ARE that split, so they add up to it.">Total Transplant Qty</th>
-              <th title="The batch report Main Plot card: a main-plot transplant out of an ordinary pre-nursery tray.">Transplant Qty</th>
-              <th title="The batch report Main Plot (D-Tone) card: a main-plot transplant out of the DOUBLE-TONE tray, so a seedling that had the treatment on its way. Not the Double Tone Quantity in Nursery, which counts what is STANDING and can be above nought on a batch that has transplanted nothing.">Double Tone</th>
-              <th title="Every 1st culling this batch has made. A 1st culling happens in a TRAY, and the two columns beside this one are that total split by which tray — so they add up to it.">Total 1st Culled Qty</th>
-              <th title="1st culled in an ordinary pre-nursery tray.">1st Culled Qty</th>
-              <th title="1st culled in the DOUBLE-TONE tray. A seedling that had the treatment and did not survive the 1st culling.">Double Tone 1st Culled Qty</th>
+              <th title="Every 1st culling this batch has made. A 1st culling happens in a TRAY, and under the rule is that total split by which tray: Normal is an ordinary pre-nursery tray, DT is the DOUBLE-TONE tray. The two add up to the total.">1st Culled</th>
               <th>2nd Culled</th>
               <th>3rd Culled</th>
               <th title="1st culled + 3rd culled, the WHOLE 1st culling, d-tone tray included. The 2nd culled is not added: the 3rd is keyed against the original transplanted figure and already contains it — while no 3rd has been recorded, the 2nd stands in its place.">Total Culled (1st + 3rd)</th>
             </tr>
           </thead>
           <tbody>
-            ${rows.length ? body : `<tr><td colspan="21" class="py-10 text-[#8a7a68]">No batches match the selected filters.</td></tr>`}
+            ${rows.length ? body : `<tr><td colspan="17" class="py-10 text-[#8a7a68]">No batches match the selected filters.</td></tr>`}
           </tbody>
           ${rows.length ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
             <td colspan="4" class="uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
@@ -2070,12 +2133,10 @@ function _losSummaryHtml(rows, tot, scope) {
               <div class="text-[#4a7a2e] font-black mt-1">${tot.varUp ? '+' + fmtNum(tot.varUp) : '0'}</div>
               <div class="text-[9px] font-bold text-[#8a7a68]">sum of all more received</div>
             </td>
-            <td>${_losFig('transTotal', '*', fmtNum(tot.transTotal), 'text-[#3a7ab4] font-black')}</td>
-            <td>${_losFig('trans', '*', fmtNum(tot.transMain), 'text-[#3a7ab4] font-black')}</td>
-            <td>${_losFig('dtone', '*', fmtNum(tot.transDtone), 'text-[#7c3aed] font-black')}</td>
-            <td>${_losFig('cull1Total', '*', fmtNum(tot.cull1), 'text-[#a83020] font-black')}</td>
-            <td>${_losFig('cull1', '*', fmtNum(tot.cull1Main), 'text-[#a83020]')}</td>
-            <td>${_losFig('cull1Dtone', '*', fmtNum(tot.cull1Dtone), 'text-[#0891b2]')}</td>
+            ${_losSplitFoot('transTotal', tot.transTotal, 'text-[#3a7ab4] font-black',
+              [['Normal', 'trans', tot.transMain], ['DT', 'dtone', tot.transDtone]])}
+            ${_losSplitFoot('cull1Total', tot.cull1, 'text-[#a83020] font-black',
+              [['Normal', 'cull1', tot.cull1Main], ['DT', 'cull1Dtone', tot.cull1Dtone]])}
             <td>${_losFig('cull2', '*', fmtNum(tot.cull2), 'text-[#a83020]')}</td>
             <td>${_losFig('cull3', '*', fmtNum(tot.cull3), 'text-[#a83020]')}</td>
             <td>${_losFig('cullTotal', '*', fmtNum(tot.cullTotal), 'text-[#a83020] font-black')}</td>
@@ -2083,7 +2144,7 @@ function _losSummaryHtml(rows, tot, scope) {
             <td>${_losFig('sales', '*', fmtNum(tot.sales), 'text-[#4a7a2e] font-black')}</td>
             <td>${_losFig('calibration', '*', fmtSigned(tot.calibration), 'font-black')}</td>
             <td>${_losFig('balance', '*', fmtNum(tot.balance), 'text-[#4a7a2e] font-black')}</td>
-          </tr>${pending.length ? `<tr><td colspan="21" class="text-left text-[9px] font-bold text-[#c07820] bg-[#fdf6e8]">⧗ These totals include ${fmtNum(pending.length)} batch${pending.length === 1 ? '' : 'es'} whose figures are not verified.</td></tr>` : ''}</tfoot>` : ''}
+          </tr>${pending.length ? `<tr><td colspan="17" class="text-left text-[9px] font-bold text-[#c07820] bg-[#fdf6e8]">⧗ These totals include ${fmtNum(pending.length)} batch${pending.length === 1 ? '' : 'es'} whose figures are not verified.</td></tr>` : ''}</tfoot>` : ''}
         </table>
       </div>
     </div>`;
