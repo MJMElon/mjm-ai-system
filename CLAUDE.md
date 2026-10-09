@@ -1231,6 +1231,41 @@ Still worth knowing: a browser that already holds a stale copy needs one hard
 reload (Ctrl/Cmd + Shift + R) to pick up the metas in the first place. After
 that it stays fresh by itself.
 
+## A search is a search of the WHOLE ledger
+
+Batch Info splits its list in two: Active, and Completed. The search box sat
+INSIDE that split, so typing 235 on the Active tab answered **"No batches
+matching 235"** while 235 sat one tab over, finished, the whole time.
+
+Typing a batch number is not asking "is 235 on this tab". It is asking WHERE
+235 is, and the answer must not depend on which tab happened to be open when
+it was typed. **A batch that cannot be found is a batch somebody keys again.**
+
+So a query looks at both halves. Two things keep that from being confusing:
+the **Current Stage** column on the row already says Completed, and a line
+above the table says the search crossed the tab and how many of the rows came
+from the other half.
+
+**Amendment Needed and To Check are NOT widened, and that is the half worth
+remembering.** Those tabs are not halves of the batch list, they are
+questions — which report to go and fix, which one to go and check — and a row
+with nothing to fix is not an answer to either of them. Tray Status is a
+different shape again and searches trays. `splitTab` in `renderLedgerTable`
+is the one place that decides, and only Active and Completed are in it.
+
+The tab is called **Completed**. It said "Completed / In-Active", which named
+the same thing twice.
+
+`tests/search_finds_a_batch_in_either_tab.cjs` holds all of it, through the
+real page.
+
+**And that page is served stale.** The screenshot that reported this shows a
+red tab reading "To Do List" — a name this repository has never held in its
+history, so the office is looking at a deploy older than the whole git log.
+The page carries every line of its own code inline, so the PAGE is the
+deploy; it now has the three no-cache metas for exactly the reason the
+section below gives.
+
 ## `select.className = '...'` is how a row grows a second dropdown
 
 `shared/shared_cf_select.js` skins every `<select>` in the system: it draws a

@@ -3,6 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- This page carries all of its own code inline, so the PAGE is the
+         deploy: a cached copy reaches nobody. It is demonstrably being served
+         stale -- the office screen still shows a red tab reading "To Do List",
+         a name this repository has never held in its history. See CLAUDE.md,
+         "A page that caches cannot deliver a fix". One hard reload per machine
+         picks these up, and after that it stays fresh by itself. -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+    <meta http-equiv="Pragma" content="no-cache"/>
+    <meta http-equiv="Expires" content="0"/>
     <title>Life of Seedlings - MJM Nursery AI</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -120,12 +129,16 @@
 
             <div class="flex items-center gap-2 bg-white p-2 rounded-2xl border border-[#e8dcc8] shadow-inner mb-6 w-fit overflow-x-auto">
                 <button id="tab-active" class="list-tab-btn list-tab-active" onclick="switchListTab('active')">🟢 Active</button>
-                <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="A batch moves here automatically once every plot has nothing left standing in it — 3rd culled less drone map quantity is nought. A plot all sold out is nought either way. Any plot still carrying a balance keeps the batch in Active.">✅ Completed / In-Active</button>
+                <button id="tab-completed" class="list-tab-btn list-tab-inactive" onclick="switchListTab('completed')" title="A batch moves here automatically once every plot has nothing left standing in it — 3rd culled less drone map quantity is nought. A plot all sold out is nought either way. Any plot still carrying a balance keeps the batch in Active.">✅ Completed</button>
                 <button id="tab-amendment" class="list-tab-btn list-tab-inactive" onclick="switchListTab('amendment')" title="Batches with at least one report tab rejected by HQ — open the batch to see the rejection remark and amend the report">🔴 Amendment Needed</button>
                 <button id="tab-tocheck" class="list-tab-btn list-tab-inactive" onclick="switchListTab('tocheck')" title="Reports that are filled in and still waiting for somebody to check them: Seeds In, Seed Audit, Planting &amp; Damage, Transplanting and 1st Culling. 2nd and 3rd Culling are not counted here.">📋 To Check List</button>
                 <button id="tab-tray" class="list-tab-btn list-tab-inactive" onclick="switchListTab('tray')" title="Every pre-nursery tray: how many holes are free, and which batch is taking up the rest. A tray frees up as its seedlings are culled or transplanted out.">🧺 Tray Status</button>
             </div>
-            
+
+            <!-- Said only when a search has crossed the Active/Completed line,
+                 so nobody reads a Completed batch on the Active tab as a fault. -->
+            <div id="list-search-note" class="hidden mb-4 px-4 py-2 rounded-xl bg-[#fdf8ec] border border-[#e8dcc8] text-[12px] font-bold text-[#6b5b48]"></div>
+
             <div class="bg-white rounded-2xl border border-[#e8dcc8] overflow-hidden shadow-inner">
                 <div class="overflow-x-auto">
                     <table class="w-full min-w-[900px]" id="ledger-table">
@@ -971,9 +984,19 @@
             return months + (months === 1 ? ' month' : ' months');
         }
 
+        /* The line under the tab bar. Cleared at the top of every render so a
+           note from the last search cannot outlive the search that caused it. */
+        function setListSearchNote(text) {
+            const el = document.getElementById('list-search-note');
+            if (!el) return;
+            el.textContent = text || '';
+            el.classList.toggle('hidden', !text);
+        }
+
         function renderLedgerTable() {
             const body = document.getElementById('ledger-body');
             body.innerHTML = '';
+            setListSearchNote('');
 
             // Filter by tab, then by search query, then paginate.
             const query = (document.getElementById('search-input')?.value || '').trim().toLowerCase();
@@ -1044,11 +1067,36 @@
                 : currentListTab === 'active'  ? !b.isCompleted
                 : b.isCompleted
             );
+            /* A SEARCH IS A SEARCH OF THE WHOLE LEDGER.
+               Typing 235 asks WHERE batch 235 is, and the answer must not
+               depend on which tab happened to be open when it was typed.
+               Active and Completed are two halves of one list, so a query
+               looks at both of them -- the Current Stage column on the row
+               says which half it came from, and the note above says so too.
+
+               Amendment Needed and To Check are NOT widened. Those tabs are
+               not halves of the batch list, they are questions -- which
+               report to go and fix, which one to go and check -- and a row
+               with nothing to fix is not an answer to either of them. */
+            const splitTab    = currentListTab === 'active' || currentListTab === 'completed';
+            const searchScope = query && splitTab ? masterBatches : tabFiltered;
             const searchFiltered = query
-                ? tabFiltered.filter(b =>
+                ? searchScope.filter(b =>
                     (b.batch_name || '').toLowerCase().includes(query) ||
                     (b.breed_name || '').toLowerCase().includes(query))
                 : tabFiltered;
+
+            if (query && splitTab) {
+                const otherTab = currentListTab === 'active' ? 'Completed' : 'Active';
+                const outside  = searchFiltered.filter(b =>
+                    currentListTab === 'active' ? b.isCompleted : !b.isCompleted).length;
+                if (outside) {
+                    setListSearchNote(
+                        `A search looks at every batch, not just this tab — ${outside} of these `
+                        + `${searchFiltered.length} ${outside === 1 ? 'is' : 'are'} in ${otherTab}. `
+                        + `The Current Stage column says which.`);
+                }
+            }
 
             const totalPages = Math.max(1, Math.ceil(searchFiltered.length / PAGE_SIZE));
             if (currentPage > totalPages) currentPage = totalPages;
@@ -1058,7 +1106,9 @@
 
             if(searchFiltered.length === 0) {
                 const emptyMsg = query
-                    ? `No batches matching "${query}".`
+                    ? (splitTab
+                        ? `No batches matching "${query}" — in Active or in Completed.`
+                        : `No batches matching "${query}".`)
                     : (currentListTab === 'amendment' ? "No batches need amendment — nothing has been rejected by HQ."
                     :  currentListTab === 'tocheck'   ? "Nothing waiting to be checked — every report that has been filled in has been signed off."
                     :  currentListTab === 'active'    ? "No active batches in the nursery." : "No completed batches yet.");
