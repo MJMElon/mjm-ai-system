@@ -605,6 +605,45 @@ Still worth knowing: a browser that already holds a stale copy needs one hard
 reload (Ctrl/Cmd + Shift + R) to pick up the metas in the first place. After
 that it stays fresh by itself.
 
+## `select.className = '...'` is how a row grows a second dropdown
+
+`shared/shared_cf_select.js` skins every `<select>` in the system: it draws a
+button, and hides the browser's own dropdown. It used to hide it with a CLASS,
+`cf-native-hidden`.
+
+An assignment to `.className` REPLACES the class list. So a page that colours a
+select by its state the blunt way —
+
+    sel.className = 'lvl-select lvl-admin';            // User Access drawer
+    select.className = 'input-style t3-dest-plot';     // Tab 3 destination
+
+threw that class away, the native dropdown came back BESIDE the button, and
+Module Access showed a green ADMIN pill with a plain "Admin" box under it.
+**Both were live and nothing said which one the save reads** — it reads the
+select, so the pill was the real one and the thing most people would press was
+not.
+
+The hide is an inline `display:none` now, which a className assignment cannot
+reach, plus one observer on `class` and `style` that puts it back if a page
+rewrites those wholesale. **A page should not have to know this skin exists** —
+that was the whole bargain of rolling it out as one script tag.
+
+Two things that follow:
+
+- **Colour the BUTTON, not the select.** The select is invisible, so a rule on
+  it paints nothing. `user_access.html` hangs its three level colours off
+  `.cf-wrap:has(> select.lvl-admin) > .cf-btn` — the select keeps `lvl-*` as
+  the state it always was, and the CSS follows it out to what is on screen.
+  Any page with a colour-by-state select has the same thing to do; only this
+  one has had it done.
+- **The script is loaded with no `?v=` on all 53 pages**, so a browser holding
+  yesterday's copy keeps it. One hard reload per machine.
+
+`tests/cf_select_hides_the_native_one.cjs` holds it, proves the previous
+version fails the same check, and prints every page that writes a whole
+className onto a select. It needs `npm install jsdom` and says so if it is
+missing.
+
 ## Two repositories, one system
 
 - `mjm-ai-system` — the office, ai.mjmnursery.com. Static; served from the
