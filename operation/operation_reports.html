@@ -687,6 +687,11 @@ const _RE_LOS_REPL     = /Replacement:\s*(\d+)/i;
 const _RE_LOS_APPROVED = /\[APPROVED by ([^\]]+) on ([^\]]+)\]/i;
 const _RE_LOS_CAL_REPORT = /Report:\s*([^.]+?)\s*\.\s*/i;
 const _RE_LOS_CAL_SIDE   = /Side:\s*(seed|plot)\s*\.\s*/i;
+/* The three reports whose calibration corrects the SEED count rather than
+   what is standing in a plot — ADJUST_INITIAL_REPORTS in
+   operation_batch_detail.html, and the same list. Change one, change the
+   other. */
+const _LOS_CAL_SEED_REPORTS = ['seeds received', 'planting', 'seed audit'];
 const _RE_LOS_FROM_TRAY  = /from tray \[([^\]]+)\]/i;
 const _RE_LOS_FROM_PLOT  = /From:\s*\[([^\]|]+)\|/i;
 
@@ -1209,7 +1214,8 @@ async function _losBuildAllRows(asAt) {
        day it finished — the movement that took the last of it away is the
        last movement there is. It is what Status → Completed filters on. */
     lastDate: null,
-    transfer: 0, sales: 0, salesPre: 0, calibration: 0, calibrationPre: 0,
+    transfer: 0, sales: 0, salesPre: 0,
+    calibration: 0, calibrationPre: 0, calibrationSeed: 0, calibrationField: 0,
     preBalance: 0,
     /* stage → { lines, signed }: how many of that stage's ledger lines this
        batch has, and how many of them somebody has signed off. Filled by
@@ -1415,6 +1421,26 @@ async function _losBuildAllRows(asAt) {
       // Which side of the nursery it adjusts. A tray is pre-nursery; so is a
       // row keyed against 'Pre-Nursery' itself.
       if (ok && nurseryOf(l.plot_name) === 'Pre-Nursery') r.calibrationPre += signed;
+      /* WHICH COUNT IT CORRECTS, which is a different question from where
+         the plot is. A calibration reported against Seeds Received,
+         Planting or a Seed Audit is a correction to the SEED side — the
+         batch total, what was counted into the tray. Everything else is a
+         correction to what is standing in a PLOT.
+
+         `ADJUST_SIDE_OF` in operation_batch_detail.html is the original and
+         this is its list; the rule is derived from the Report and never
+         from the "Side:" in the remark, because rows written while the form
+         still asked carry one and a row filed on the wrong side has to
+         correct itself. Change one, change the other. */
+      const seedSide = _LOS_CAL_SEED_REPORTS.indexOf(
+        String(rep ? rep[1] : '').trim().toLowerCase()) >= 0;
+      if (ok && seedSide) r.calibrationSeed += signed;
+      /* And the FIELD one, which is the plot side of the plot side: a
+         correction to what is standing, in a plot that is not a tray. It is
+         counted on its own rather than worked out by subtraction, because
+         230's row is BOTH seed-side and pre-nursery and taking each off in
+         turn would take it off twice. */
+      if (ok && !seedSide && nurseryOf(l.plot_name) !== 'Pre-Nursery') r.calibrationField += signed;
       r.rec.calibration.push({ date: d, batch: name, place: l.plot_name || '—',
         report: rep ? rep[1].trim() : '—', side: side ? side[1].toLowerCase() : 'seed',
         approved: ok, qty: signed, note: body.replace(_RE_LOS_CAL_REPORT, '').replace(_RE_LOS_CAL_SIDE, '').trim() });
@@ -1551,6 +1577,21 @@ async function _losBuildAllRows(asAt) {
        finished reading as though a seedling were missing. Unapproved ones
        still count for nothing — see the Stock_Calibration branch above.
 
+       ONLY THE PLOT-SIDE ONES, and batch 230 is why. Its calibration is
+       minus 1,000 reported against PLANTING — "Sold out 1,000 Pre nursery
+       seedlings" — which corrects the SEED count, what went into the tray.
+       Those seedlings never reached a field plot, so taking them off what
+       is standing in one is subtracting a loss from a figure that never
+       contained it: 230 balanced to nought on its own three terms and read
+       MINUS 1,000. A seed-side correction belongs to the pre-nursery, which
+       is preBalance, and it is already there — the row is keyed against
+       tray P30.
+
+       The side is the REPORT (`_LOS_CAL_SEED_REPORTS`), never the plot the
+       row names and never the "Side:" in the remark. The Stock Calibration
+       COLUMN still shows every approved one, because it is still a real
+       correction; it is only this figure it does not belong in.
+
        What is NOT in it is whatever is still sitting in a tray. preBalance
        below is the question "what is still in the pre-nursery", and it is
        unchanged.
@@ -1564,7 +1605,7 @@ async function _losBuildAllRows(asAt) {
        NOT inherit it — the Pre / Main filter would otherwise list such a
        batch under a nursery it never reached, which is a fault this file
        has already had once. */
-    r.balance    = r.trans - r.cull3 - r.sales + r.calibration;
+    r.balance    = r.trans - r.cull3 - r.sales + (r.calibration - r.calibrationSeed);
     /* Where the batch is standing NOW, which is what the Pre / Main filter
        asks. Pre-nursery holds whatever was planted and has not left the tray:
        culled in it, transplanted out of it, SOLD out of it, or written off
@@ -1596,8 +1637,7 @@ async function _losBuildAllRows(asAt) {
        is exactly the TRAY sales and the TRAY calibration — which is to say,
        exactly the part of the Balance that belongs to the pre-nursery. */
     r.preBalance  = r.planted - r.cull1 - r.trans - r.salesPre + r.calibrationPre;
-    r.mainBalance = r.trans - r.cull3 - (r.sales - r.salesPre)
-                  + (r.calibration - r.calibrationPre);
+    r.mainBalance = r.trans - r.cull3 - (r.sales - r.salesPre) + r.calibrationField;
     r.ageMonths   = _losAgeMonths(r.seedsDate, asAt);
     r.age         = _losAgeLabel(r.ageMonths);
     /* Completed: something has actually left the batch, and there is nothing

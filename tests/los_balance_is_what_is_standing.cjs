@@ -53,7 +53,7 @@ const derive = new Function('rowsByBatch', 'asAt', '_losAgeMonths', '_losAgeLabe
 const run = (f) => {
   const r = Object.assign({
     batch: 'x', planted: 0, cull1: 0, cull2: 0, cull3: 0, trans: 0, transDtone: 0, dtone: 0,
-    sales: 0, salesPre: 0, calibration: 0, calibrationPre: 0,
+    sales: 0, salesPre: 0, calibration: 0, calibrationPre: 0, calibrationSeed: 0, calibrationField: 0,
     received: 0, damaged: 0, transfer: 0
   }, f);
   derive({ x: r }, null, () => null, () => '');

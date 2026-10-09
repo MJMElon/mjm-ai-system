@@ -42,7 +42,7 @@ const batchRate = new Function('cull1', 'cull3', 'denom', rateSrc + '\nreturn cu
 const run = (f) => {
   const r = Object.assign({
     batch: 'x', planted: 0, cull1: 0, cull1Dtone: 0, cull2: 0, cull3: 0, trans: 0, sales: 0,
-    calibration: 0, calibrationPre: 0, salesPre: 0, received: 0, damaged: 0,
+    calibration: 0, calibrationPre: 0, calibrationSeed: 0, calibrationField: 0, salesPre: 0, received: 0, damaged: 0,
     ver: {}, rec: {},
   }, f);
   derive({ x: r }, null, () => null, () => '');

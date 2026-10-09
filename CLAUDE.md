@@ -901,6 +901,9 @@ gone quietly wrong:
   **unapproved** one still counts for nothing, same as everywhere else.
   `shared/CHECK_balance_is_what_is_standing.sql` shows old against new on
   every batch and says which settle.
+- **But only the PLOT-side ones** — see the section below. A calibration
+  reported against Seeds Received, Planting or a Seed Audit corrects the
+  SEED count, and those seedlings never reached a field plot.
 - **`mainBalance` does not inherit it.** The Balance takes TOTAL sales off,
   so a sale out of the TRAY is inside it: a batch sold 400 out of the tray
   and never transplanted reads minus 400. That is right for every batch the
@@ -931,6 +934,50 @@ Seedlings thead and nothing else, which is what lets both be true.
 with the office's five batches and holds all of it, the header-span
 arithmetic included — a thead that does not add up to seventeen draws every
 column after the mistake in the wrong width.
+
+## A calibration against the SEED count is not a loss from the field
+
+The Balance is what is standing in the FIELD, so the calibration in it is
+the **plot-side** ones only.
+
+Batch 230 is why. Its calibration is **minus 1,000 reported against
+Planting** — *"Sold out 1,000 Pre nursery seedlings (DO: 01605)"*, keyed
+against tray P30. Those seedlings never reached a field plot. Taking them
+off what is standing in one subtracts a loss from a figure that never
+contained it: 230 balanced to **nought** on its own three terms
+(11,619 − 2,452 − 9,167) and the report read **minus 1,000**.
+
+**The side is the REPORT**, and the list is
+`ADJUST_INITIAL_REPORTS` / `ADJUST_SIDE_OF` in
+`operation_batch_detail.html`: *seeds received, planting, seed audit* are
+the seed side, everything else is the plot side. `_LOS_CAL_SEED_REPORTS` is
+the second copy and `tests/los_seed_side_calibration.cjs` asserts the two
+have not drifted — a list that grows on one side only puts a correction
+into the field balance that the batch report says belongs to the seed count.
+
+Three things about it:
+
+- **Never the "Side:" written in the remark.** The batch detail page says
+  why in its own comment: rows written while the form still asked carry one,
+  and a row somebody filed on the wrong side has to correct itself. It is
+  derived, so it is one rule and not two.
+- **Never the plot the row names either.** Where the plot is and which
+  count was wrong are different questions. `calibrationPre` asks the first
+  (and keeps carrying 230's row, because P30 is where those seedlings
+  were); `calibrationSeed` asks the second.
+- **`calibrationField` is counted on its own, not worked out by
+  subtraction.** 230's row is BOTH seed-side and pre-nursery, so taking
+  each off in turn would take it off twice.
+
+The **Stock Calibration column still shows every approved one**, and the
+drilldown still lists it. It is a real correction; it is only the field
+Balance it does not belong in.
+
+`shared/CHECK_seed_side_calibrations.sql` splits every batch's calibrations
+three ways and says how much each Balance moves. It also counts rows filed
+under a report wording that is on NEITHER list — those land on the plot side
+by default, so a new wording quietly joins the Balance, and the count is
+what says so.
 
 ## One batch, one reception — the newest row wins
 
