@@ -1365,6 +1365,22 @@
                                  syncAdjustmentBars(); empty and hidden when there are
                                  none, so a clean report shows nothing at all. -->
                             <div id="t3-adjust-bar" class="hidden mb-5"></div>
+                            <!-- WHY THE ALLOCATION DOES NOT BALANCE, WHEN THE
+                                 ANSWER IS THE ADJUSTMENT ABOVE.
+
+                                 A tray-named adjustment moves what is standing in
+                                 the main plots and leaves the batch total alone,
+                                 which is right -- the seedlings were always in the
+                                 batch, the count of what left the tray was wrong.
+                                 But where the report balanced exactly WITHOUT it,
+                                 adding it makes the allocation read Over Allocated
+                                 by precisely that much, and the engine says ERROR
+                                 over a figure somebody has already explained.
+
+                                 So where the difference is EXACTLY the batch's
+                                 tray-named adjustments, this says so and the ring
+                                 is allowed to finish. Filled by calcTransplanting. -->
+                            <div id="t3-adjust-note" class="hidden mb-5"></div>
                             <!-- ── HEADER ── -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-5 gap-4 border-b-2 border-[#3a7ab4] pb-4">
                                 <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">Transplanting Report</h3>
@@ -1653,6 +1669,22 @@
                                  syncAdjustmentBars(); empty and hidden when there are
                                  none, so a clean report shows nothing at all. -->
                             <div id="t4-adjust-bar" class="hidden mb-5"></div>
+                            <!-- WHY THIS REPORT DOES NOT ADD UP, WHEN THE ANSWER
+                                 IS ON ANOTHER TAB.
+
+                                 A Transplanting adjustment is keyed after the 1st
+                                 culling is done, and it does not touch these
+                                 figures — a 1st culling happened in the tray,
+                                 before any of these seedlings went out, so taking
+                                 a plot's loss off it would subtract the same loss
+                                 twice. The arithmetic is right and the report
+                                 still reads Over by N, which is the one thing
+                                 nobody can tell by looking.
+
+                                 So where the difference is EXACTLY the batch's
+                                 Transplanting adjustments, this says so and the
+                                 ring is allowed to finish. Filled by calcCulling. -->
+                            <div id="t4-adjust-note" class="hidden mb-5"></div>
                             <!-- HEADER -->
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-5 gap-4 border-b-2 border-rose-200 pb-4">
                                 <h3 class="font-black text-[#3d2610] uppercase tracking-widest text-lg">1st Culling Report</h3>
@@ -3013,6 +3045,38 @@
             return Object.keys(mine).reduce((sum, k) => sum + (mine[k] || 0), 0);
         }
 
+        /* ── A TRANSPLANTING ADJUSTMENT THAT NAMES ITS TRAY IS A DIFFERENT
+              CORRECTION FROM ONE THAT DOES NOT ─────────────────────────────
+
+           Both say the plot does not hold what the transplant record claims.
+           They differ in WHERE the seedlings are now, and only the person who
+           raised it knows:
+
+             NAMES A TRAY — the count of what LEFT THE TRAY was wrong. The
+               seedlings are still in the tray (or six more went out than the
+               row says). The batch still has them; what is wrong is how many
+               have reached a main plot. The allocation BASE does not move.
+
+             NAMES NO TRAY — they reached the plot and then left it: stolen,
+               dead, miscounted on the ground. The batch does not have them any
+               more, so the base moves too, and the allocation is unchanged
+               because both sides drop by the same amount. That is the batch
+               234 rule and it stays.
+
+           Only the first kind can close a Pending that is exactly its own
+           size, which is what it looked like on 234: Pending read 6 with a
+           +6 adjustment sitting on the same screen, because the old sum put
+           the figure on both sides and cancelled it out.
+
+           The form says this out loud — see the tray panel's heading —
+           because naming a tray now changes a figure, and a rule nobody is
+           told about is a rule somebody trips over. */
+        const ADJUST_TRAY_NAMED = {};   // report → net of the ones naming a tray
+        function adjustTrayNamedTotal(report) {
+            const v = ADJUST_TRAY_NAMED[String(report || '').toLowerCase()];
+            return typeof v === 'number' ? v : 0;
+        }
+
         /* ── The adjustment, on the row it belongs to ────────────────────────
 
            A Transplanting adjustment is raised against a plot and split across
@@ -3198,6 +3262,7 @@
                    silently right for a reason nobody can see. */
                 Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
                 Object.keys(ADJUST_PLOT_LOSS_STAGE).forEach(k => delete ADJUST_PLOT_LOSS_STAGE[k]);
+                Object.keys(ADJUST_TRAY_NAMED).forEach(k => delete ADJUST_TRAY_NAMED[k]);
                 ADJUST_ROWS = [];
                 bars.forEach(n => {
                     const el = document.getElementById(`t${n}-adjust-bar`);
@@ -3226,6 +3291,7 @@
                this" is worth seeing — it just is not an answer yet. */
             Object.keys(ADJUST_NET).forEach(k => delete ADJUST_NET[k]);
             Object.keys(ADJUST_PLOT_LOSS_STAGE).forEach(k => delete ADJUST_PLOT_LOSS_STAGE[k]);
+            Object.keys(ADJUST_TRAY_NAMED).forEach(k => delete ADJUST_TRAY_NAMED[k]);
             /* INCLUDING the ones that wrote their own transplant row. That row
                is written with a quantity of nought — nobody keyed a transplant
                into that plot, which is why it had none — so the figure lives
@@ -3242,6 +3308,14 @@
                         const m = ADJUST_PLOT_LOSS_STAGE[rep] = ADJUST_PLOT_LOSS_STAGE[rep] || {};
                         m[pk] = (m[pk] || 0) + r.qty;
                     });
+                    /* …and separately, the ones that NAME A TRAY. Those say
+                       the count of what left the tray was wrong, not that the
+                       plot lost seedlings it had, so the allocation base must
+                       not move with them. See adjustTrayNamedTotal. */
+                    if (r.tray || r.txTray) {
+                        const own = r.report.toLowerCase();
+                        ADJUST_TRAY_NAMED[own] = (ADJUST_TRAY_NAMED[own] || 0) + r.qty;
+                    }
                     return;
                 }
                 const k = r.report.toLowerCase();
@@ -3582,8 +3656,14 @@
                 totInit += sent; totCal += cal;
             });
 
-            // Keying a new one, the box follows the column.
-            if (_t7TrayMode) qtyEl.value = touched === 0 ? '' : String(totCal);
+            /* Keying a new one, the box follows the column — BUT ONLY ONCE A
+               TRAY HAS BEEN KEYED. The split is a choice: somebody who knows
+               which tray the miscount came from keys it there and the box adds
+               it up; somebody who does not knows only that the plot is out by
+               N, types N in the box, and the column stays empty. Clearing the
+               box the moment the column is blank would make the second of
+               those impossible to type into. */
+            if (_t7TrayMode && touched > 0) qtyEl.value = String(totCal);
 
             const set = (id, txt, cls) => {
                 const el = document.getElementById(id);
@@ -3604,16 +3684,20 @@
                      : totCal > 0 ? 'text-[#4a7a2e]' : totCal < 0 ? 'text-[#a83020]' : 'text-[#8a7a68]'));
 
             /* The verdict, so the sum is checked on screen and not in
-               somebody's head. Only while editing: keying a new one the two
-               cannot disagree. */
+               somebody's head — and so the CHOICE is said out loud. Splitting
+               by tray is optional, so "one record for the whole plot" is a
+               thing somebody has decided rather than a thing they forgot, and
+               the line says which of the two is about to be saved.
+
+               Keying a new one the two cannot disagree: the column drives the
+               box as soon as a tray is keyed. Only an edit can be off. */
             const v = document.getElementById('t7-tray-verdict');
             if (!v) return;
-            if (!editing) { v.classList.add('hidden'); return; }
             v.classList.remove('hidden');
             const qtyTxt = isNaN(qty) ? '—' : (qty > 0 ? '+' : '') + qty.toLocaleString();
             if (touched === 0) {
                 v.className = 'px-4 py-2 border-t border-[#e8dcc8] bg-[#fdf6e8] text-[10px] font-black uppercase tracking-widest text-[#8a7a68]';
-                v.innerText = `Not split by tray — the whole ${qtyTxt} stays on one record`;
+                v.innerText = `Not split by tray — ${qtyTxt} is recorded against the whole plot, on one record`;
             } else if (agrees) {
                 v.className = 'px-4 py-2 border-t border-[#c3e6cb] bg-[#f0f8ec] text-[10px] font-black uppercase tracking-widest text-[#3d4f1e]';
                 v.innerText = `✓ The trays add up to ${qtyTxt} — saving splits this into ${touched} row${touched === 1 ? '' : 's'}`;
@@ -3662,10 +3746,27 @@
                 <div id="t7-tray-tot-cal"   class="text-sm font-black tabular-nums text-right text-[#8a7a68]">—</div>
                 <div id="t7-tray-tot-final" class="text-sm font-black text-[#3d2610] tabular-nums text-right">0</div>
             </div>`;
+            /* WHAT NAMING A TRAY MEANS, said out loud on the form.
+
+               It used to be record-keeping: which tray the correction came
+               from, nice to have. It now changes a figure — a tray-named
+               adjustment moves the Transplanting tab's Pending, one that
+               names none does not — and a rule nobody is told about is a
+               rule somebody trips over. Only shown while the panel is being
+               keyed; reading an old row back, the choice has been made. */
+            const meaning = !editable ? '' : `
+                <div class="px-4 pb-2.5 -mt-1 text-[10px] font-bold text-[#8a7a68] leading-snug">
+                    <span class="text-[#3a7ab4] font-black">Key a tray</span> when the count of what
+                    LEFT that tray was wrong — the seedlings are still in the nursery, and the
+                    Transplanting tab stops looking for them.
+                    <span class="text-[#a83020] font-black">Leave the column empty</span> when they
+                    reached the plot and then went — stolen, dead, miscounted on the ground.
+                </div>`;
             return `<div class="rounded-xl border ${editable ? 'border-[#c8d9e8] bg-[#f7fbff]' : 'border-[#e8dcc8] bg-[#fdfaf4]'} overflow-hidden">
                 <div class="px-4 py-2.5 text-[10px] font-black uppercase tracking-widest ${editable ? 'text-[#3a7ab4]' : 'text-[#8a7a68]'}">
                     ${esc(plot)} was filled from ${n} tray${n === 1 ? '' : 's'}${note}
                 </div>
+                ${meaning}
                 ${head}${rows.map(t => _t7TrayLineHtml(t, editable, esc)).join('')}${total}
                 <div id="t7-tray-verdict" class="hidden"></div>
             </div>`;
@@ -3888,11 +3989,24 @@
                 return;
             }
 
+            /* THE SPLIT IS A CHOICE, not a requirement.
+
+               It used to be forced: pick Transplanting and a plot that has
+               transplant rows and the Qty box went read-only, so the only way
+               to record the adjustment was to say which tray it came out of.
+               That is the better record when somebody knows — and often
+               nobody does. "B14 is 53 short" is a count of the plot, and a
+               form that will not take it until a tray is named is a form that
+               gets a tray guessed into it.
+
+               So the box stays typable. Key the trays and it adds them up;
+               key the box and leave the column alone and the whole plot is
+               adjusted as one row. */
             _t7TrayMode = true;
-            if (qtyEl) { qtyEl.readOnly = true; qtyEl.classList.add('bg-[#f5efe4]', 'cursor-not-allowed'); }
+            if (qtyEl) { qtyEl.readOnly = false; qtyEl.classList.remove('bg-[#f5efe4]', 'cursor-not-allowed'); }
             host.setAttribute('data-edit-tray', '');
             host.innerHTML = _t7TrayTableHtml(plot, trays, true,
-                ' — key the difference against the tray it came from, and leave a tray blank if its count was right',
+                ' — key the difference against the tray it came from, or leave the column empty and key one figure for the whole plot',
                 esc);
             host.classList.remove('hidden');
             t7SumTrayAdj();
@@ -4126,16 +4240,12 @@
             const plot     = (plotEl?.value   || '').trim();
             const reason   = (reasonEl.value  || '').trim();
             const date     = (dateEl?.value   || '').trim();
-            /* On a Transplanting adjustment the quantity is keyed per tray and
-               the Qty box is the running sum, so an empty one means no tray
-               has been keyed rather than a forgotten number. Say that instead
-               of pointing at a box the person cannot type into. */
+            /* On a Transplanting adjustment the tray column may be keyed and
+               may be left alone. Keyed, it becomes one row per tray and the
+               Qty box is their sum; left alone, the figure in the Qty box
+               adjusts the plot as one row. The column is not required — see
+               t7SyncTrayPanel. */
             const traySplit = _t7TrayMode ? _t7CollectTrayAdj() : null;
-            if (traySplit && !traySplit.length) {
-                showToast('Key the difference against the tray it came from — at least one tray needs a number.', 'error');
-                document.querySelector('#t7-cal-trays .t7-tray-adj')?.focus();
-                return;
-            }
 
             /* Creating a transplant row needs both answers. Neither can be
                guessed and the row is wrong without either, so the save asks
@@ -6024,9 +6134,23 @@
                over-allocated; it makes both figures smaller by the same
                amount, and the balance is unchanged. */
             const plotLossT3 = adjustPlotLossTotal('Transplanting');
+            /* …OF WHICH, the ones that NAME A TRAY say the count of what left
+               the tray was wrong, not that the plot lost seedlings it had. The
+               batch still has them, so the BASE does not move with those — only
+               what is standing in the main plots does, and the difference is
+               exactly what Pending is for. See adjustTrayNamedTotal.
+
+               234 is why. Its Pending read 6 with a +6 adjustment sitting on
+               the same screen: six more had gone out of the tray than the row
+               said, the base carried the +6 as well, and the two cancelled, so
+               the tab went on looking for six seedlings that were already
+               standing in the plot. */
+            const trayLossT3 = adjustTrayNamedTotal('Transplanting');
+            const goneLossT3 = plotLossT3 - trayLossT3;   // the ones naming no tray
             const allocBase = totalPlantedRaw + getDtoneNurseryQty() + adjustNetTotal()
-                            + plotLossT3;
-            // What the main plots actually hold — Qty as recorded, less the loss.
+                            + goneLossT3;
+            // What the main plots actually hold — Qty as recorded, plus every
+            // adjustment against them, whichever kind.
             const mainStanding = totalMain + plotLossT3;
             /* The engine's headline figure IS this base — what the four
                percentages below are each a percentage of. Main plot plus
@@ -6138,7 +6262,64 @@
             const fullyAccounted = mainStanding + mockCullingTab4;
             const rawPending = allocBase - fullyAccounted;
 
-            if (rawPending === 0 && allocBase > 0) {
+            /* DOES IT BALANCE WITHOUT THE TRAY-NAMED ADJUSTMENTS?
+
+               rawPending is (planted + D-Tone + seed-side - main - 1st culled)
+               LESS the tray-named net, because those move what is standing and
+               not the base. So rawPending being exactly minus that net is the
+               same statement as: the report balances on its own figures, and
+               the only thing making it not balance is an adjustment somebody
+               has already explained.
+
+               Batch 225 is the case. It balanced exactly -- 9,658 + 230 + 815
+               against a base of 10,703 -- and a +1 on N19, "found 1 more
+               seedling when processing the 2nd culling", pushed it to Over
+               Allocated by 1. The engine said ERROR over the one figure on the
+               screen that accounted for it.
+
+               EXACTLY, never nearly. A near-match is a coincidence, and a tab
+               that waved one through would teach people to ignore a real
+               over-allocation. Same rule, same reason, as the 1st Culling note. */
+            const t3Explained = rawPending !== 0 && trayLossT3 !== 0
+                             && rawPending === -trayLossT3;
+            (function showT3AdjNote() {
+                const note = document.getElementById('t3-adjust-note');
+                if (!note) return;
+                if (!t3Explained) { note.classList.add('hidden'); note.innerHTML = ''; return; }
+                const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                const byPlot = (typeof ADJUST_PLOT_LOSS_STAGE === 'object'
+                             && ADJUST_PLOT_LOSS_STAGE.transplanting) || {};
+                const names = Object.keys(byPlot).filter(k => byPlot[k]);
+                const sign = trayLossT3 > 0 ? '+' : '';
+                const over = rawPending < 0;
+                note.innerHTML = `
+                    <div class="rounded-2xl border border-[#bee3f8] bg-[#f0f8ff] px-4 py-3">
+                        <div class="text-[10px] font-black text-[#2b6cb0] uppercase tracking-widest mb-1">
+                            This report is complete -- the difference is the adjustment above
+                        </div>
+                        <div class="text-[12px] font-bold text-[#3d2610] leading-snug">
+                            Without it the allocation balances exactly. The adjustment of
+                            ${sign}${trayLossT3.toLocaleString()}${names.length ? ' on ' + names.map(esc).join(', ') : ''}
+                            names the tray the seedlings came out of, so it moves what is standing in
+                            the plot and leaves the batch total alone -- which is right, they were
+                            always in the batch. That is why the engine reads
+                            ${over ? 'over' : 'under'} by ${Math.abs(rawPending).toLocaleString()}.
+                            Nothing on this tab needs correcting.
+                        </div>
+                        <button type="button" onclick="switchTab(7)"
+                            class="mt-2 text-[10px] font-black text-[#2b6cb0] uppercase tracking-widest underline underline-offset-4 hover:text-[#1a4a80] bg-transparent border-0 p-0 cursor-pointer">
+                            Open Adjustments \u2192
+                        </button>
+                    </div>`;
+                note.classList.remove('hidden');
+            })();
+
+            if (t3Explained) {
+                matchBox.className = "w-full md:w-40 p-4 rounded-xl border border-[#2b6cb0] bg-[#f0f8ff] flex flex-col justify-center items-center text-center transition-colors shrink-0";
+                matchIcon.innerText = "\u2705";
+                matchTitle.innerText = "Satisfied"; matchTitle.className = "text-[11px] font-black uppercase tracking-wider text-[#2b6cb0] leading-tight";
+                matchDesc.innerText = "100% \u2014 adjusted"; matchDesc.className = "text-[9px] font-bold text-[#2b6cb0] uppercase tracking-widest mt-1 leading-tight";
+            } else if (rawPending === 0 && allocBase > 0) {
                 matchBox.className = "w-full md:w-40 p-4 rounded-xl border border-[#4a7a2e] bg-[#f0f8ec] flex flex-col justify-center items-center text-center transition-colors shrink-0 shadow-[0_0_15px_rgba(106,168,60,0.3)]";
                 matchIcon.innerText = "✅"; 
                 matchTitle.innerText = "Satisfied"; matchTitle.className = "text-[11px] font-black uppercase tracking-wider text-[#4a7a2e] leading-tight";
@@ -6159,7 +6340,7 @@
                 matchDesc.innerText = "Balance Remaining"; matchDesc.className = "text-[9px] font-bold text-[#c07820] uppercase tracking-widest mt-1 leading-tight";
             }
 
-            updateTransplantCompletion(allocBase, fullyAccounted, rawPending);
+            updateTransplantCompletion(allocBase, fullyAccounted, rawPending, t3Explained);
         }
 
         function renderTrayBalances(balances, netPremium, netDtone, pendingTotal) {
@@ -6213,7 +6394,7 @@
             if (totalEl) totalEl.innerText = (pendingTotal !== undefined ? pendingTotal : 0).toLocaleString();
         }
 
-        function updateTransplantCompletion(total, accounted, untransplanted) {
+        function updateTransplantCompletion(total, accounted, untransplanted, explained) {
             // accounted = main + premium + doubletone + culling (from tab 4)
             // Tab 3 cannot show 100% unless untransplanted === 0 AND every transplant row with qty > 0 has its drone map attached.
             const rowsNeedingMap = Array.from(document.querySelectorAll('.transplant-row')).filter(r => {
@@ -6244,7 +6425,15 @@
             const _rv = window.MJMReview || {};
             const hqVerified = !!((typeof _rv.isVerified === 'function' && _rv.isVerified('transplanting'))
                                || (typeof _rv.allRowsVerified === 'function' && _rv.allRowsVerified(3)));
-            const mapsAreAllThatIsLeft = untransplanted === 0 && !allMapsAttached
+            /* BALANCED, or out by exactly a tray-named adjustment -- which is
+               the same report, said two ways. See t3Explained in
+               calcTransplanting: it means the allocation balances on its own
+               figures and the only thing moving it is a correction somebody
+               has already made and explained. Holding the ring at 99% for
+               that means the stage can never be ticked off, and a stage that
+               can never be finished is one people stop looking at. */
+            const balanced = untransplanted === 0 || !!explained;
+            const mapsAreAllThatIsLeft = balanced && !allMapsAttached
                                          && missingMaps > 0 && hqVerified;
 
             let percentage = 0;
@@ -6253,7 +6442,7 @@
                 // 100% when fully balanced AND every required drone map is
                 // attached — or HQ has verified it and the maps are all that
                 // is outstanding.
-                percentage = (untransplanted === 0 && (allMapsAttached || mapsAreAllThatIsLeft))
+                percentage = (balanced && (allMapsAttached || mapsAreAllThatIsLeft))
                     ? 100
                     : Math.min(99, balancePct);
             }
@@ -6276,8 +6465,14 @@
                    somebody later swears the maps were attached. */
                 desc.innerText = `100% Verified · ${missingMaps} Map${missingMaps>1?'s':''} Outstanding`;
                 desc.className = "text-base font-black uppercase text-[#4a7a2e] mt-1";
-            } else if (untransplanted === 0 && total > 0 && !allMapsAttached) {
+            } else if (balanced && total > 0 && !allMapsAttached) {
                 desc.innerText = `Attach ${missingMaps} Drone Map${missingMaps>1?'s':''}`; desc.className = "text-base font-black uppercase text-[#c07820] mt-1";
+            } else if (explained && total > 0) {
+                /* Not "100% Allocated" — it is not, by exactly the adjustment.
+                   Saying where the difference went is the honest version, and
+                   it points at the note above rather than at this tab. */
+                desc.innerText = "100% — adjusted on this report";
+                desc.className = "text-base font-black uppercase text-[#2b6cb0] mt-1";
             } else if (untransplanted === 0 && total > 0) {
                 desc.innerText = "100% Allocated"; desc.className = "text-base font-black uppercase text-[#4a7a2e] mt-1";
             } else if (untransplanted < 0) {
@@ -9934,13 +10129,73 @@ Thank you.`;
                 if (row) row.classList.toggle('hidden', (prem + dtone) <= 0);
             })();
 
+            /* IS THE DIFFERENCE A TRANSPLANTING ADJUSTMENT?
+
+               A Transplanting adjustment says fewer (or more) seedlings
+               reached the plot than the transplant record counted into it.
+               That record is what `accounted` adds up, and this report does
+               NOT take the adjustment off — deliberately: a 1st culling
+               happened in the tray, before any of these went out, so taking a
+               plot's loss off it would subtract one loss twice.
+
+               The consequence is a report that is arithmetically right and
+               reads Over by 53, which looks exactly like a keying mistake.
+               Where the difference is EXACTLY the batch's Transplanting
+               adjustments it is not one, and this says so — exactly, because
+               a near-match is a coincidence and a note that guessed at one
+               would teach people to ignore the real thing.
+
+               Only APPROVED adjustments reach adjustPlotLossTotal, so an
+               adjustment nobody has ruled on explains nothing here either. */
+            const t4AdjNet = (typeof adjustPlotLossTotal === 'function')
+                           ? adjustPlotLossTotal('Transplanting') : 0;
+            const t4Explained = total > 0 && unaccounted !== 0 && t4AdjNet !== 0
+                             && unaccounted === t4AdjNet;
+            (function showT4AdjNote() {
+                const note = document.getElementById('t4-adjust-note');
+                if (!note) return;
+                if (!t4Explained) { note.classList.add('hidden'); note.innerHTML = ''; return; }
+                const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                const byPlot = (typeof ADJUST_PLOT_LOSS_STAGE === 'object'
+                             && ADJUST_PLOT_LOSS_STAGE.transplanting) || {};
+                const names = Object.keys(byPlot).filter(k => byPlot[k]);
+                const sign = t4AdjNet > 0 ? '+' : '';
+                note.innerHTML = `
+                    <div class="rounded-2xl border border-[#bee3f8] bg-[#f0f8ff] px-4 py-3">
+                        <div class="text-[10px] font-black text-[#2b6cb0] uppercase tracking-widest mb-1">
+                            This report is complete — the difference is a transplanting adjustment
+                        </div>
+                        <div class="text-[12px] font-bold text-[#3d2610] leading-snug">
+                            ${names.length === 1
+                                ? `${esc(names[0])} was adjusted by ${sign}${t4AdjNet.toLocaleString()}`
+                                : `Transplanting was adjusted by ${sign}${t4AdjNet.toLocaleString()} across ${names.length} plots${names.length ? ' (' + names.map(esc).join(', ') + ')' : ''}`}
+                            AFTER this culling was done. A 1st culling happens in the tray,
+                            before any of these seedlings go out, so the adjustment does not
+                            come off these figures — taking it off here as well would subtract
+                            the same loss twice. Nothing on this tab needs correcting.
+                        </div>
+                        <button type="button" onclick="switchTab(3)"
+                            class="mt-2 text-[10px] font-black text-[#2b6cb0] uppercase tracking-widest underline underline-offset-4 hover:text-[#1a4a80] bg-transparent border-0 p-0 cursor-pointer">
+                            See it on Transplanting →
+                        </button>
+                    </div>`;
+                note.classList.remove('hidden');
+            })();
+
             // Balance status box — simplified wording
             const box = document.getElementById('t4-balance-box');
             const icon = document.getElementById('t4-balance-icon');
             const title = document.getElementById('t4-balance-title');
             const desc = document.getElementById('t4-balance-desc');
 
-            if (unaccounted === 0 && total > 0) {
+            if (t4Explained) {
+                box.className = 'p-3 rounded-xl border border-[#2b6cb0] bg-[#f0f8ff] flex items-center gap-3';
+                icon.innerText = '✅';
+                title.innerText = 'Balanced — 100%'; title.style.color = '#2b6cb0';
+                desc.innerText = `All seeds accounted for. The ${Math.abs(t4AdjNet).toLocaleString()} `
+                               + 'difference is the transplanting adjustment above, not this report.';
+                desc.style.color = '#2b6cb0';
+            } else if (unaccounted === 0 && total > 0) {
                 box.className = 'p-3 rounded-xl border border-[#4a7a2e] bg-[#f0f8ec] flex items-center gap-3 shadow-[0_0_10px_rgba(106,168,60,0.2)]';
                 icon.innerText = '✅';
                 title.innerText = 'Balanced — 100%'; title.style.color = '#4a7a2e';
@@ -9958,17 +10213,24 @@ Thank you.`;
             }
 
             // Update completion %
-            updateCullCompletion(total, accounted, unaccounted);
+            updateCullCompletion(total, accounted, unaccounted, t4Explained);
 
             // Also refresh Tab 3 bar since culling feeds into it
             if (document.getElementById('tab-3').classList.contains('active')) calcTransplanting();
         }
 
-        function updateCullCompletion(total, accounted, unaccounted) {
+        function updateCullCompletion(total, accounted, unaccounted, explained) {
             let pct = 0;
             if (total > 0) {
-                // Can only hit 100% when fully balanced
-                pct = unaccounted === 0 ? 100 : Math.min(99, Math.round((accounted / total) * 100));
+                /* Full when it balances — or when the only thing stopping it
+                   is a Transplanting adjustment keyed after this culling was
+                   done. That report is finished; holding its ring at 99% for
+                   a difference belonging to another tab means it can never be
+                   ticked off, and a stage that can never be finished is one
+                   people stop looking at. See t4Explained in calcCulling. */
+                pct = (unaccounted === 0 || explained)
+                    ? 100
+                    : Math.min(99, Math.round((accounted / total) * 100));
             }
 
             document.getElementById('t4-pie-tab').style.setProperty('--percentage', pct);
@@ -9982,7 +10244,10 @@ Thank you.`;
             const btn = document.getElementById('save-cull-btn');
             btn.innerText = `Save 1st Culling Report (${pct}% Complete)`;
 
-            if (unaccounted === 0 && total > 0) {
+            if (explained) {
+                desc.innerText = '100% — adjusted on Transplanting';
+                desc.className = 'text-base font-black uppercase text-[#2b6cb0] mt-1';
+            } else if (unaccounted === 0 && total > 0) {
                 desc.innerText = '100% Balanced'; desc.className = 'text-base font-black uppercase text-[#4a7a2e] mt-1';
             } else if (unaccounted < 0) {
                 desc.innerText = `Over Allocated by ${Math.abs(unaccounted).toLocaleString()}`;

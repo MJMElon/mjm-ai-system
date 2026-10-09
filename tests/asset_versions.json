@@ -1,0 +1,17 @@
+{
+  "audit/audit_settings.js@2": "53dbb7134372",
+  "audit/audit_system_setting.js@3": "1643c01ab880",
+  "shared/shared_module_access.js@3": "6ff319ec6d45",
+  "shared/shared_plot_movement.js@7": "496177f7b535",
+  "shared/shared_maint_plots.js@2": "35201cec7c02",
+  "shared/shared_maint_workers.js@1": "4e0e8e5787c7",
+  "shared/shared_maint_field.js@2": "c08e88f5e15b",
+  "shared/shared_npayroll_lock.js@3": "01f55f967fc2",
+  "shared/shared_people.js@1": "68a88c52adc6",
+  "npayroll/npayroll_styles.css@26": "f69300501cfd",
+  "npayroll/npayroll_script.js@72": "43146c10f83b",
+  "shared/shared_module_access.js@1": "6ff319ec6d45",
+  "nursery_ops/plot_maintenance_styles.css@84": "844ef4f90337",
+  "nursery_ops/plot_maintenance_script.js@129": "be398700faf8",
+  "shared/shared_empty_hole_report.js@1": "17fa638f266d"
+}

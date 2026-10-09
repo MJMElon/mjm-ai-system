@@ -1963,7 +1963,9 @@
             const isUnpaid  = r.rawStatus === 'Pending Payment' || r.derivedStatus === 'Pending Payment';
             if (isCash && isUnpaid) return false;
 
-            if (search && !(r.orderNumber || '').toLowerCase().includes(search) && !(r.customer || '').toLowerCase().includes(search)) return false;
+            if (search && !(r.orderNumber || '').toLowerCase().includes(search)
+                       && !(r.customer     || '').toLowerCase().includes(search)
+                       && !(r.alNumber     || '').toLowerCase().includes(search)) return false;
             // A cancelled AL kills the order the same as a raw
             // `rawStatus === 'Cancelled'` row — both read as "cancelled".
             // All Orders excludes them too; Cancelled Orders is the only
@@ -1971,6 +1973,13 @@
             const isCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
             if (filter === 'cancelled')   return isCancelled;
             if (isCancelled) return false;
+            // A typed search is a request for ONE specific order, not "show
+            // me this bucket" — so a row that matched it is shown whatever
+            // Outstanding/Completed/All happens to be set to. Without this,
+            // typing a completed customer's name while Outstanding Balance
+            // was still selected from an earlier look-up read as "not
+            // found", when the order was only ever hidden by the filter.
+            if (search) return true;
             if (filter === 'all')         return true;
             if (filter === 'outstanding') return r.balance > 0;
             if (filter === 'completed')   return r.totalCollected >= r.totalQty && r.totalQty > 0;
@@ -2128,15 +2137,21 @@
         const fmtRM  = n => 'RM ' + (Number(n) || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
         // Same visibility/search/sort rule as the Booking tab — same list
-        // of orders, just a different breakdown of each.
+        // of orders, just a different breakdown of each. A typed search
+        // overrides Outstanding/Completed/All (see the Booking tab's copy
+        // of this filter for why) so a completed order is still found here
+        // whatever the dropdown happens to be set to.
         let allRows = allCustomerOrders.filter(r => {
             const isCash    = (r.paymentMethod || 'cash') === 'cash';
             const isUnpaid  = r.rawStatus === 'Pending Payment' || r.derivedStatus === 'Pending Payment';
             if (isCash && isUnpaid) return false;
-            if (search && !(r.orderNumber || '').toLowerCase().includes(search) && !(r.customer || '').toLowerCase().includes(search)) return false;
+            if (search && !(r.orderNumber || '').toLowerCase().includes(search)
+                       && !(r.customer     || '').toLowerCase().includes(search)
+                       && !(r.alNumber     || '').toLowerCase().includes(search)) return false;
             const isCancelled = r.rawStatus === 'Cancelled' || r.alCancelled;
             if (filter === 'cancelled')   return isCancelled;
             if (isCancelled) return false;
+            if (search) return true;
             if (filter === 'all')         return true;
             if (filter === 'outstanding') return r.balance > 0;
             if (filter === 'completed')   return r.totalCollected >= r.totalQty && r.totalQty > 0;

@@ -26,6 +26,7 @@ const SHARED = path.join(__dirname, '..', 'shared');
 /* Files written or verified against the whole list of paste rules, not just
    the apostrophe one. The rest of shared/ is older and is reported below. */
 const SWEPT = [
+  'RUN_ME_audit_save_check.sql',
   'RUN_ME_restore_sep_2026_from_sheet.sql',
   'RUN_ME_sep_four_missing_rows.sql',
   'RUN_ME_put_dragged_rows_back.sql',
@@ -39,6 +40,7 @@ const SWEPT = [
   'CHECK_worker_record_vs_fc_history.sql',
   'CHECK_worker_names_with_no_column.sql',
   'CHECK_claim_vs_worker_record.sql',
+  'CHECK_balance_is_what_is_standing.sql',
 ];
 
 const DQ = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/;

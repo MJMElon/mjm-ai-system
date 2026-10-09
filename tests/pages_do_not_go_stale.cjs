@@ -37,7 +37,15 @@ const pages = walk(ROOT).filter((p) =>
    somebody wants that module current -- not across the site because a test
    would be tidier. The rest are counted at the end so the next person can see
    the same trap is still set for them. */
-const GUARDED = (p) => path.relative(ROOT, p).startsWith('npayroll/');
+/* audit/ joined npayroll/ the day a fix to the auditor phone had to
+   arrive twice -- once for the database refusing every save, once for a
+   sweep that stopped part-way -- and the only thing standing between the
+   fix and the phone was which copy of the page it fetched. legacy/ is
+   excluded: it is kept to read, not to deploy. */
+const GUARDED = (p) => {
+  const r = path.relative(ROOT, p);
+  return r.startsWith('npayroll/') || r.startsWith('audit/');
+};
 
 let bad = 0;
 const guarded = pages.filter(GUARDED);
@@ -51,7 +59,7 @@ guarded.forEach((p) => {
   }
 });
 
-if (!bad) console.log(`pass  all ${guarded.length} payroll page(s) that version a script refuse to be cached`);
+if (!bad) console.log(`pass  all ${guarded.length} payroll and audit page(s) that version a script refuse to be cached`);
 
 /* And the other half of the bargain: a versioned script must actually carry a
    version, not ?v= with nothing after it. */
@@ -66,13 +74,15 @@ guarded.forEach((p) => {
 if (!empty) console.log('pass  every ?v= carries a number');
 
 /* What is still exposed, so it is a decision rather than an oversight. */
-const rest = pages.filter((p) => !GUARDED(p)).filter((p) => {
+const rest = pages.filter((p) => !GUARDED(p))
+  .filter((p) => !path.relative(ROOT, p).startsWith('legacy/'))
+  .filter((p) => {
   const s = fs.readFileSync(p, 'utf8');
   return META.some(([, re]) => !re.test(s));
 });
 if (rest.length) {
   console.log(`\nnot guarded, and a deploy to them will not reach a browser that has`);
-  console.log(`already loaded them: ${rest.length} page(s) outside npayroll/`);
+  console.log(`already loaded them: ${rest.length} page(s) outside npayroll/ and audit/`);
   rest.forEach((p) => console.log(`   ${path.relative(ROOT, p)}`));
 }
 

@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>MJM Nursery AI · Customer Consent</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -124,6 +127,7 @@
       <span class="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-amber-700"><span class="w-3 h-3 rounded bg-amber-400 inline-block"></span>Search Match</span>
       <span class="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-700"><span class="w-3 h-3 rounded bg-emerald-500 inline-block"></span>Has Consent Records</span>
       <span class="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-blue-700"><span class="w-3 h-3 rounded bg-blue-400 inline-block"></span>Active AL &mdash; No Consent Yet</span>
+      <span class="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-slate-600"><span class="w-3 h-3 rounded bg-slate-400 inline-block"></span>Completed</span>
     </div>
 
     <div id="results-combined">
@@ -423,6 +427,9 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
 //  STATE
 // ════════════════════════════════════════════════════════
 let alData = [];
+let completedData = []; // recently completed ALs, for the permanent Completed group at the bottom
+let liveMatches = [];     // completed/older ALs found by searchAll's live DB query
+let _liveSearchToken = 0; // discards a reply that lands after a newer search started
 let consentCountMap = {};
 let currentConsentAL = null;
 let selectedQty = 0;
@@ -437,6 +444,16 @@ let barcodeStream = null;
 //  LOAD DATA
 // ════════════════════════════════════════════════════════
 async function loadActiveALs() {
+  // Outstanding ALs only — same as it always was. Dropping this filter to
+  // reach completed orders by search was tried and reverted: PostgREST caps
+  // an unfiltered select at its project row limit, ordered by created_at,
+  // so an OLDER completed AL (which is exactly what somebody searches back
+  // for) can fall outside that window and never load at all — invisible to
+  // search no matter what is typed, and no amount of reloading fixes it,
+  // because the row was never fetched in the first place. searchAll() below
+  // reaches a completed AL a different way: a live, server-side filtered
+  // query for just what was typed, which cannot be capped out the same way
+  // because the filter runs in the database, not after an unbounded fetch.
   const { data, error } = await _supabase
     .from('shared_al_orders')
     .select('id,al_number,order_number,customer_name,product_name,quantity_ordered,balance_quantity,status,created_at')
@@ -466,7 +483,84 @@ async function loadActiveALs() {
   renderCombined('');
 }
 
-window.addEventListener('DOMContentLoaded', () => { loadActiveALs(); });
+// Completed ALs for the permanent "Completed" group at the bottom of the
+// list, windowed the same way History's own 92-day fix replaced a row
+// count — except the right date to window on here is NOT
+// shared_al_orders.created_at (when the AL was first raised). An AL can
+// sit open for months of partial deliveries before the LAST DO finally
+// brings its balance to zero, so an AL created long ago can still have
+// become "completed" only this week — windowing on created_at hid exactly
+// those, which is the ordinary case rather than the rare one. The date
+// that actually means "recently completed" is the most recent delivery
+// against it, so this windows shared_do_records.delivery_date instead and
+// only keeps the ALs that delivery activity touched, bounded by that
+// window rather than by every AL ever raised. A calibration DO (CAL-…) is
+// a stock correction, not a delivery, so it is excluded the same way
+// operation_stock_sales.js excludes it from "collected" everywhere else.
+// Anything outside the window is still reachable — see searchAll()'s live
+// DB search, which queries Supabase directly rather than trusting
+// whatever loaded on page-open.
+const COMPLETED_WINDOW_DAYS = 90;
+// Set whenever loadCompletedALs() could not finish — renderCombined() shows
+// this instead of silently rendering an empty Completed group, which is
+// indistinguishable on screen from "nothing is actually completed" and is
+// exactly what made the last two fixes impossible to tell apart from a
+// genuine empty result without opening the console.
+let completedLoadError = null;
+async function loadCompletedALs() {
+  completedLoadError = null;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - COMPLETED_WINDOW_DAYS);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+
+  const { data: doRows, error: doErr } = await _supabase
+    .from('shared_do_records')
+    .select('al_number,delivery_date,status,do_number')
+    .gte('delivery_date', cutoffStr);
+  if (doErr) {
+    console.warn('[Completed] shared_do_records read failed:', doErr);
+    completedLoadError = 'Could not read delivery records (' + doErr.message + ').';
+    completedData = [];
+    return;
+  }
+  if (!doRows) { completedData = []; return; }
+
+  const recentAlNumbers = [...new Set(
+    doRows
+      .filter(d => d.status !== 'Cancelled' && !/^CAL-/i.test(String(d.do_number || '')))
+      .map(d => d.al_number)
+      .filter(Boolean)
+  )];
+  console.log('[Completed] DO rows in window:', doRows.length, '-> distinct AL numbers:', recentAlNumbers.length);
+  if (!recentAlNumbers.length) { completedData = []; return; }
+
+  const { data, error } = await _supabase
+    .from('shared_al_orders')
+    .select('id,al_number,order_number,customer_name,product_name,quantity_ordered,balance_quantity,status,created_at')
+    .not('status', 'in', '("Cancelled","Collected")')
+    .lte('balance_quantity', 0)
+    .in('al_number', recentAlNumbers)
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.warn('[Completed] shared_al_orders read failed:', error);
+    completedLoadError = 'Could not read the matching orders (' + error.message + ').';
+    completedData = [];
+    return;
+  }
+  console.log('[Completed] shared_al_orders rows with balance <= 0 among those AL numbers:', (data || []).length);
+  completedData = data || [];
+}
+
+async function loadAllData() {
+  await loadActiveALs();    // renders once on its own already
+  await loadCompletedALs();
+  // consentCountMap was built inside loadActiveALs() from EVERY consent
+  // record with no al_number filter, so completedData's counts are
+  // already in it — nothing extra to fetch before this re-render.
+  renderCombined(document.getElementById('input-search')?.value || '');
+}
+
+window.addEventListener('DOMContentLoaded', () => { loadAllData(); });
 
 // ════════════════════════════════════════════════════════
 //  BARCODE SCANNER
@@ -532,6 +626,7 @@ function stopBarcodeScan() {
 function searchAll(q) {
   renderCombined(q || '');
   showSearchNotification(q || '');
+  queueLiveSearch(q || '');
 }
 
 function showSearchNotification(q) {
@@ -560,6 +655,49 @@ function showSearchNotification(q) {
   }
 }
 
+// A completed order (balance 0) is deliberately left OUT of the preloaded
+// alData — see loadActiveALs(). Reaching one by search instead runs a
+// live, server-side filtered query, debounced so it fires once typing
+// pauses rather than on every keystroke. _liveSearchToken discards a
+// reply that lands after the person has already typed something newer.
+let _liveSearchTimer = null;
+function queueLiveSearch(q) {
+  clearTimeout(_liveSearchTimer);
+  const lower = q.trim();
+  if (lower.length < 2) { liveMatches = []; return; }
+  _liveSearchTimer = setTimeout(() => liveSearchFallback(lower), 300);
+}
+
+async function liveSearchFallback(lower) {
+  const token = ++_liveSearchToken;
+  // % and _ are ILIKE wildcards; escaped so a typed one is matched literally.
+  const safe = lower.replace(/([%_])/g, '\\$1');
+  const { data, error } = await _supabase
+    .from('shared_al_orders')
+    .select('id,al_number,order_number,customer_name,product_name,quantity_ordered,balance_quantity,status,created_at')
+    .not('status', 'in', '("Cancelled","Collected")')
+    .or('al_number.ilike.%' + safe + '%,order_number.ilike.%' + safe + '%,customer_name.ilike.%' + safe + '%')
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (token !== _liveSearchToken) return; // a newer search is already in flight
+  if (error) { liveMatches = []; return; }
+  liveMatches = data || [];
+
+  const alNumbers = liveMatches.map(r => r.al_number).filter(Boolean);
+  if (alNumbers.length) {
+    const { data: consents } = await _supabase
+      .from('mobile_consent_records')
+      .select('al_number')
+      .in('al_number', alNumbers);
+    if (token !== _liveSearchToken) return;
+    alNumbers.forEach(n => {
+      consentCountMap[n] = (consents || []).filter(c => c.al_number === n).length;
+    });
+  }
+
+  renderCombined(document.getElementById('input-search').value || '');
+}
+
 // ════════════════════════════════════════════════════════
 //  RENDER LIST
 // ════════════════════════════════════════════════════════
@@ -568,7 +706,7 @@ function renderCombined(q) {
   const lower = q.trim().toLowerCase();
   const isMobile = window.innerWidth < 640;
 
-  let matched = [], hasConsent = [], noneYet = [];
+  let matched = [], hasConsent = [], noneYet = [], completedGroup = [];
 
   alData.forEach(r => {
     const isMatch = lower.length >= 1 && (
@@ -580,21 +718,46 @@ function renderCombined(q) {
 
     if (isMatch)        matched.push(r);
     else if (count > 0) hasConsent.push(r);
-    else                noneYet.push(r);
+    else                 noneYet.push(r);
   });
 
+  // completedData (loadCompletedALs, last COMPLETED_WINDOW_DAYS) is its own
+  // permanent group at the very bottom — a search match still pulls a row
+  // OUT of it and into Search Match instead, same rule alData's own rows
+  // follow above.
+  completedData.forEach(r => {
+    const isMatch = lower.length >= 1 && (
+      (r.al_number     || '').toLowerCase().includes(lower) ||
+      (r.order_number  || '').toLowerCase().includes(lower) ||
+      (r.customer_name || '').toLowerCase().includes(lower)
+    );
+    if (isMatch) matched.push(r);
+    else          completedGroup.push(r);
+  });
+
+  // liveMatches (queueLiveSearch) is how a completed order OLDER than the
+  // window above reaches Search Match. Deduped by id against what the two
+  // loops above already found.
+  const matchedIds = new Set(matched.map(r => r.id));
+  liveMatches.forEach(r => { if (!matchedIds.has(r.id)) matched.push(r); });
+
   let groups = [];
-  if (lower.length >= 1) {
-    if (matched.length)    groups.push({ label:'\ud83d\udd0d Search Match',                        rows: matched,    theme: 'amber'   });
-    if (hasConsent.length) groups.push({ label:'\u2705 Has Consent Records',                       rows: hasConsent, theme: 'emerald' });
-    if (noneYet.length)    groups.push({ label:'\ud83d\udccb Active AL \u2014 No Consent Yet',     rows: noneYet,    theme: 'blue'    });
-  } else {
-    if (hasConsent.length) groups.push({ label:'\u2705 Has Consent Records',                       rows: hasConsent, theme: 'emerald' });
-    if (noneYet.length)    groups.push({ label:'\ud83d\udccb Active AL \u2014 No Consent Yet',     rows: noneYet,    theme: 'blue'    });
+  if (lower.length >= 1 && matched.length) {
+    groups.push({ label:'\ud83d\udd0d Search Match',                        rows: matched,    theme: 'amber'   });
   }
+  if (hasConsent.length)     groups.push({ label:'\u2705 Has Consent Records',                       rows: hasConsent,    theme: 'emerald' });
+  if (noneYet.length)        groups.push({ label:'\ud83d\udccb Active AL \u2014 No Consent Yet',     rows: noneYet,       theme: 'blue'    });
+  if (completedGroup.length) groups.push({ label:'\u2714\ufe0f Completed (last ' + COMPLETED_WINDOW_DAYS + ' days)', rows: completedGroup, theme: 'slate' });
+
+  // Shown above everything else when loadCompletedALs() could not finish \u2014
+  // an empty Completed group and a FAILED Completed group look identical
+  // otherwise, which is exactly what made this silent the last two times.
+  const errorBanner = completedLoadError
+    ? '<div class="mb-4 p-3 rounded-xl border border-rose-300 bg-rose-50 text-rose-700 text-xs font-bold">\u26a0\ufe0f Completed list: ' + completedLoadError + ' (open the browser console for the full error)</div>'
+    : '';
 
   if (!groups.length) {
-    el.innerHTML = '<div class="text-center py-12"><div class="text-4xl mb-3">\ud83d\udced</div><div class="text-[11px] font-black text-slate-300 uppercase tracking-widest">No active approval letters found</div></div>';
+    el.innerHTML = errorBanner + '<div class="text-center py-12"><div class="text-4xl mb-3">\ud83d\udced</div><div class="text-[11px] font-black text-slate-300 uppercase tracking-widest">No active approval letters found</div></div>';
     return;
   }
 
@@ -602,6 +765,7 @@ function renderCombined(q) {
     amber:   { header:'bg-amber-50 text-amber-700 border-amber-200',      row:'bg-amber-50/60',   bal:'text-amber-700',   border:'border-l-4 border-amber-400'   },
     emerald: { header:'bg-emerald-50 text-emerald-700 border-emerald-200', row:'bg-emerald-50/50', bal:'text-emerald-700', border:'border-l-4 border-emerald-500' },
     blue:    { header:'bg-blue-50 text-blue-700 border-blue-200',          row:'bg-blue-50/50',    bal:'text-blue-700',    border:'border-l-4 border-blue-400'    },
+    slate:   { header:'bg-slate-100 text-slate-600 border-slate-300',      row:'bg-slate-50/60',   bal:'text-slate-500',   border:'border-l-4 border-slate-300'   },
   };
 
   if (isMobile) {
@@ -609,6 +773,8 @@ function renderCombined(q) {
       const t = themeMap[g.theme];
       const cards = g.rows.map(r => {
         const count = consentCountMap[r.al_number] || 0;
+        const isCompleted = (Number(r.balance_quantity) || 0) <= 0;
+        const actionLabel = isCompleted ? '\ud83d\udcc3 View Consent Log' : '\u270d\ufe0f Sign Consent';
         return '<div class="bg-white rounded-2xl p-4 mb-2 shadow-sm border border-slate-200 ' + t.border + '">' +
           '<div class="flex justify-between items-start mb-2">' +
             '<div>' +
@@ -619,12 +785,13 @@ function renderCombined(q) {
               ? '<span class="badge-signed">' + count + ' Signed</span>'
               : '<span class="badge-pending">No Consent</span>') +
           '</div>' +
-          '<div class="text-xs font-bold text-slate-400 mb-3">Qty: ' + (r.quantity_ordered ?? '\u2014') + ' \u00b7 Bal: <span class="' + t.bal + ' font-black">' + (r.balance_quantity ?? '\u2014') + '</span></div>' +
-          '<button class="btn-consent w-full text-center" onclick="openConsentModal(\'' + r.al_number + '\')">\u270d\ufe0f Sign Consent</button>' +
+          '<div class="text-xs font-bold text-slate-400 mb-3">Qty: ' + (r.quantity_ordered ?? '\u2014') + ' \u00b7 Bal: <span class="' + t.bal + ' font-black">' + (r.balance_quantity ?? '\u2014') + '</span>' + (isCompleted ? ' <span class="text-emerald-600">(Completed)</span>' : '') + '</div>' +
+          '<button class="btn-consent w-full text-center" onclick="openConsentModal(\'' + r.al_number + '\')">' + actionLabel + '</button>' +
         '</div>';
       }).join('');
       return '<div class="mb-5"><div class="text-[9px] font-black uppercase tracking-widest px-3 py-2 rounded-xl border mb-3 ' + t.header + '">' + g.label + ' (' + g.rows.length + ')</div>' + cards + '</div>';
     }).join('');
+    el.innerHTML = errorBanner + el.innerHTML;
   } else {
     el.innerHTML = '<div class="rounded-2xl border border-slate-200 overflow-hidden overflow-x-auto"><table class="data-table"><thead><tr>' +
       '<th>Order No.</th><th>Customer</th><th>Qty Ordered</th><th>Balance</th><th>Consents</th><th>Action</th>' +
@@ -634,18 +801,21 @@ function renderCombined(q) {
         const headerRow = '<tr><td colspan="6" class="py-2 px-4 text-[9px] font-black uppercase tracking-widest ' + t.header + ' border-b">' + g.label + ' (' + g.rows.length + ')</td></tr>';
         const dataRows = g.rows.map(r => {
           const count = consentCountMap[r.al_number] || 0;
+          const isCompleted = (Number(r.balance_quantity) || 0) <= 0;
+          const actionLabel = isCompleted ? '\ud83d\udcc3 View Consent Log' : '\u270d\ufe0f Sign Consent';
           return '<tr class="' + t.row + '">' +
             '<td><span class="font-black text-slate-800">' + (r.al_number || r.order_number || '\u2014') + '</span></td>' +
             '<td>' + (r.customer_name || '\u2014') + '</td>' +
             '<td>' + (r.quantity_ordered ?? '\u2014') + '</td>' +
-            '<td><span class="font-black ' + t.bal + '">' + (r.balance_quantity ?? '\u2014') + '</span></td>' +
+            '<td><span class="font-black ' + t.bal + '">' + (r.balance_quantity ?? '\u2014') + '</span>' + (isCompleted ? ' <span class="text-[9px] font-black text-emerald-600 uppercase tracking-wider">Completed</span>' : '') + '</td>' +
             '<td>' + (count > 0 ? '<span class="badge-signed">' + count + ' signed</span>' : '<span class="badge-pending">None</span>') + '</td>' +
-            '<td><button class="btn-consent" onclick="openConsentModal(\'' + r.al_number + '\')">\u270d\ufe0f Sign Consent</button></td>' +
+            '<td><button class="btn-consent" onclick="openConsentModal(\'' + r.al_number + '\')">' + actionLabel + '</button></td>' +
           '</tr>';
         }).join('');
         return headerRow + dataRows;
       }).join('') +
       '</tbody></table></div>';
+    el.innerHTML = errorBanner + el.innerHTML;
   }
 }
 
