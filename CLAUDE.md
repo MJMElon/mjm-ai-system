@@ -891,6 +891,51 @@ office confirms, and `shared/RUN_ME_worker_name_was.sql` names its pairs.
 
 `tests/worker_is_the_register_row.cjs` holds all of it.
 
+## Two lists, two people: what to DO and what to CHECK
+
+The red list was called Amendment Needed and held one thing: a report tab HQ
+sent back. It is the **To Do List** now, and it holds everything a batch is
+waiting on somebody for — a rejected tab, and a question the report asked
+ITSELF. Batch 241's 3rd Culling counted 500 against a drone map of 540, and
+that gap already wrote its own `Review_Rejection` row on save; what it did
+not do was take anybody to it.
+
+**A list that names the report and does not open it has told somebody where
+to go without taking them.** On a batch with one thing outstanding out of
+eight tabs, finding it is most of the work. So each chip in the cell carries
+the stage into the address — `?id=241&stage=cull_3` — and
+`openRequestedStage()` on the batch page switches to that tab and scrolls to
+the panel the answer goes in, with a two-second ring round it. The row's own
+click goes to the first thing outstanding, so the cell is not a field of
+small targets on a phone. `TAB_OF_STAGE` is `STAGE_BY_TAB` read the other
+way round, plus Adjustments, which has no review banner and so is not in it.
+
+**And the two lists hand work to each other.** Answer what the To Do List is
+asking and the batch moves to the To Check List, because an answer is a new
+claim nobody has checked yet. 3rd Culling reaches To Check by **that route
+and no other**: a plot with a map mismatch AND a `MismatchNote:` against it.
+A plot whose figures tally asked nothing; one still unexplained is on the To
+Do List where it belongs. The ordinary rule — filled in and unsigned — is
+still the five, and 2nd Culling is still out.
+
+**The To Check List is the CHECKER'S.** It answers "what is waiting for me to
+sign", which is a question only somebody who may sign has; for everybody else
+it is a list of other people's work with nothing on it they can do. Gated on
+`batch` / `review`, the same tick as Approve and Edit on Adjustments, hidden
+rather than disabled, and a session left on the tab is moved off it. Access
+fails OPEN as everywhere else, so an unconfigured login still sees it.
+
+**One step failing must not take the ones after it down.** The bootstrap runs
+`initDetail` → `syncBatchHeader` → `MJMReview.boot` → `openRequestedStage`
+in an async callback with nothing catching it, so a throw anywhere in it is
+an unhandled rejection: the page stops part-built and the console is the only
+place that says so. That is exactly how the new link came to land on Tab 1 in
+its first test — the banners threw and the step after them never ran. Each
+trailing step carries its own try/catch now.
+
+`tests/todo_list_takes_you_there.cjs` and `tests/tocheck_list.cjs` hold both
+halves, including a stage nobody recognises changing nothing.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the
