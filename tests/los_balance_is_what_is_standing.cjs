@@ -129,13 +129,16 @@ console.log('\n── A batch 1st culled and not yet transplanted ──');
 const inTray = run({ planted: 1000, cull1: 100 });
 is('balance is nought — nothing is standing in the field', inTray.balance, 0);
 is('and preBalance still holds the 900 in the tray',       inTray.preBalance, 900);
-is('so it is NOT reported completed',                      inTray.completed, false);
+/* Whether a batch is FINISHED is no longer derived here at all — it is the
+   Batch Record's rule, out of shared/shared_batch_completed.js, applied to
+   the rows after the whole ledger has been read.
+   tests/batch_completed_one_rule.cjs is where that is held to account. */
+is('completion is not derived from these figures', inTray.completed, undefined);
 
 console.log('\n── Once it goes out, the 1st culling is not subtracted again ──');
 const out = run({ planted: 1000, cull1: 100, trans: 900 });
 is('balance is the transplant qty', out.balance, 900);
 is('the tray is empty',                out.preBalance, 0);
-is('and it is not finished — 900 are standing', out.completed, false);
 
 console.log('\n── The 2nd culling never deducts here either ──');
 const c2 = run({ planted: 1000, cull1: 100, trans: 900, cull2: 120 });
@@ -153,12 +156,10 @@ const tray = run({ planted: 1000, trans: 0, sales: 400, salesPre: 400 });
 is('the balance carries the tray sale',      tray.balance, -400);
 is('the main-nursery figure does NOT',        tray.mainBalance, 0);
 is('the tray still holds the other 600',      tray.preBalance, 600);
-is('and it is not reported completed',        tray.completed, false);
 
 const trayGone = run({ planted: 1000, trans: 0, sales: 1000, salesPre: 1000 });
 is('sold out entirely: nothing in the tray',  trayGone.preBalance, 0);
 is('nothing in the field',                    trayGone.mainBalance, 0);
-is('and NOW it is completed',                 trayGone.completed, true);
 
 console.log('\n── A calibration on a batch still in the tray ──');
 const trayCal = run({ planted: 1000, cull1: 100, calibration: -30, calibrationPre: -30 });

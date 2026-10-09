@@ -53,12 +53,29 @@ function build(asAt) {
     grabConst('_losTrayKey'), grabConst('_LOS_CAL_SEED_REPORTS'));
 }
 
+/* WHETHER A BATCH IS FINISHED is the Batch Record's rule now, out of
+   shared/shared_batch_completed.js, and it is applied to the rows after the
+   build rather than derived inside it — tests/batch_completed_one_rule.cjs
+   is where that rule is held to account. What THIS file is about is the
+   WINDOW: which month a finished batch is reported under, and that it is
+   the batch's last movement as at the date being asked about. So the rows
+   are stamped here with the answer, and the window is what is tested. */
+const FINISHED = { '259': '2026-08-28', '264': '2026-09-04',
+                   '268': '2026-09-23', '270': '2026-10-11' };
+
 // The two modes, exactly as _losBuildData assembles them.
 function list(status, dayPick, year, month) {
   const done = status === 'completed';
   const asAt = done ? _losAsAt(year, month) : dayPick;
   const fin  = done && year ? _losFinishedWindow(year, month) : null;
-  return build(asAt).filter(r => {
+  return build(asAt).map(r => {
+    /* As at a date before it finished, a finished batch is not finished:
+       the lines that complete it have not been written yet. The report
+       asks the same way, by cutting the ledger at the As At first. */
+    const done = FINISHED[r.batch];
+    r.completed = !!done && (!asAt || done <= asAt);
+    return r;
+  }).filter(r => {
     if (status === 'active' && r.completed) return false;
     if (done && !r.completed) return false;
     if (fin) { const f = r.lastDate || ''; if (!f || f < fin.from || f > fin.to) return false; }

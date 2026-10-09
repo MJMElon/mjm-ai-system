@@ -557,10 +557,11 @@ figure that decides whether a rule like this is right is "what does it
 actually move", and that is the only thing that answers it.
 
 **The Status and Nursery filters still read the REAL figures**, not the
-withheld ones. Whether a batch is Completed or standing in the main nursery
-is a question about the batch, not about the paperwork, and a batch that
-vanished off every filter the day somebody forgot to sign a tab would be a
-worse report than the one this replaced.
+withheld ones. Whether a batch is standing in the main nursery is a question
+about the batch, not about the paperwork, and a batch that vanished off
+every filter the day somebody forgot to sign a tab would be a worse report
+than the one this replaced. Completed is not a figure of this report's at
+all any more — see the section on the one completion rule.
 
 ## The only thing that asked "can this login save" was the save
 
@@ -934,6 +935,49 @@ Seedlings thead and nothing else, which is what lets both be true.
 with the office's five batches and holds all of it, the header-span
 arithmetic included — a thead that does not add up to seventeen draws every
 column after the mistake in the wrong width.
+
+## Is this batch finished? ONE rule, and both lists ask it
+
+It used to be two, and they disagreed.
+
+The **Batch Record** list asked whether every plot the batch used had been
+3rd culled, proofed against its drone map and **signed off**. **Life of
+Seedlings** asked whether its own arithmetic came to nought. Those are
+different questions, so a batch could sit in Completed on one screen and
+Active on the other with nothing saying which was wrong.
+
+The office asked for them to agree, and the **Batch Record's rule wins**: it
+is the question the nursery actually asks, it is what the 3rd Culling tab's
+own ring is drawn from, and it does not move when a sale or a calibration is
+keyed months later. `shared/shared_batch_completed.js` is the rule, written
+out with the batches that taught us each part of it, and there is
+deliberately nowhere else to change it.
+
+Two things about the way Life of Seedlings asks it:
+
+- **As at the report's date.** The LINES are cut at the As At and the
+  SIGNATURES are not — the same split every other As At rule there follows,
+  and what lets September go on reading as September did.
+- **Not gated on verification** the way the figures are. A batch cannot be
+  Completed without its 3rd culling being signed in the first place, so the
+  question answers itself; and a withheld figure must not also take the
+  batch off the Status filter.
+
+**What moved, and in which direction.** A batch sold entirely out of the
+tray, or culled entirely in it, reached no plot — so the Batch Record has
+nothing to call finished, where Life of Seedlings used to say Completed.
+That difference is the point of the change, not a casualty of it.
+
+**A shared rule called with the wrong rows is two answers again**, and
+nothing in either page says so. `tests/batch_completed_one_rule.cjs` holds
+the RULE to its cases and checks both pages still call it;
+`tests/both_lists_agree_on_completed.cjs` drives BOTH REAL PAGES against one
+ledger in a real browser and compares what they show. Only the second one
+could have caught what it did catch: Life of Seedlings was taking its row
+sign-offs out of `logsRes`, the ledger query, which asks for the transaction
+types the report draws FIGURES from — and `Row_Verification` is not one of
+them. The list was always empty, so no batch could ever be completed by the
+row-by-row route. Nothing on either page would have said a word.
 
 ## A calibration against the SEED count is not a loss from the field
 
