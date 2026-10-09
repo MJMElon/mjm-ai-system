@@ -484,7 +484,10 @@
                    question was answered and whose plots were then all signed
                    one at a time would sit on the To Check list for ever. */
                 const STAGE_ROW_SET = { transplanting: txPlots, cull_1: cull1Trays,
-                                        cull_3: expectedPlots };
+                                        // The plots the batch used — the same
+                                        // set the completion rule is built on,
+                                        // handed back by the shared module.
+                                        cull_3: _finished.expected };
                 const stageRowsAllSigned = (batch, stage) => {
                     const src = STAGE_ROW_SET[stage];
                     if (!src) return false;

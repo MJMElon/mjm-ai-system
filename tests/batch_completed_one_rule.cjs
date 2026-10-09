@@ -120,7 +120,56 @@ const held = M.compute({ transplants: [TX('H', 'U1')], cull3: [C3('H', 'U1', 10,
   rejections: [{ batch_name: 'H', plot_name: 'cull_3::U1' }] });
 is('not completed',          [...held.completed], []);
 is('but named as held, not as still counting',
-  held.heldByIssue['H'], 'Amendment needed — a report was rejected');
+  held.heldByIssue['H'], 'To do — a report is waiting on somebody');
+
+console.log('\n── A gap settled by an APPROVED adjustment clears the automatic flag ──');
+/* The office accepts the explanation and raises a calibration for the
+   difference; the 3rd Culling row does not move, so the automatic rejection
+   saveTab6 wrote over the gap would otherwise sit there for ever. */
+const gap = { transplants: [TX('L', 'U1')],
+  cull3: [{ batch_name: 'L', plot_name: 'U1', quantity_change: 500,
+            remark: '3rd Culling. Remaining Balance: 0, Culled: 500, DestType: main MapQty: 500' }],
+  stageVerifications: [SV('L', 'cull_3')],
+  rejections: [{ batch_name: 'L', plot_name: 'cull_3',
+                 remark: '3rd Culling map qty does not match on U1' }] };
+is('the automatic flag alone still holds it while the plots disagree',
+  [...M.compute(Object.assign({}, gap, {
+    cull3: [{ batch_name: 'L', plot_name: 'U1', quantity_change: 500,
+              remark: '3rd Culling. Remaining Balance: 0, Culled: 500, DestType: main MapQty: 540' }]
+  })).completed], []);
+is('and is ignored once the plot tallies',
+  [...M.compute(gap).completed], ['L']);
+/* AN APPROVED ADJUSTMENT SETTLES THE FLAG AND NEVER THE COUNT, and the
+   asymmetry is worth pinning down rather than discovering. cull3Tallies
+   counts the adjustment, so the To Do and To Check lists let the plot go;
+   the COVERAGE test still wants the cull and the map to agree on their
+   own, so the batch stays Active. That is what the code does today and
+   this says so out loud. */
+const adjusted = Object.assign({}, gap, {
+  cull3: [{ batch_name: 'L', plot_name: 'U1', quantity_change: 500,
+            remark: '3rd Culling. Remaining Balance: 0, Culled: 500, DestType: main MapQty: 540' }],
+  calibrations: [{ batch_name: 'L', plot_name: 'U1', quantity_change: 40,
+                   remark: 'Report: 3rd Culling. Plot: U1. Found 40 more. [APPROVED by office on 2026-01-01]' }]
+});
+is('the plot TALLIES once the approved adjustment is counted',
+  M.compute(adjusted).cull3Tallies(adjusted.cull3[0]), true);
+is('so the automatic flag is no longer open',
+  M.compute(adjusted).openRejections.length, 0);
+is('but the coverage test still wants the two to agree on their own',
+  [...M.compute(adjusted).completed], []);
+is('an UNAPPROVED one does not even tally',
+  M.compute(Object.assign({}, adjusted, {
+    calibrations: [{ batch_name: 'L', plot_name: 'U1', quantity_change: 40,
+                     remark: 'Report: 3rd Culling. Plot: U1. Found 40 more.' }]
+  })).cull3Tallies(adjusted.cull3[0]), false);
+/* A rejection a PERSON sent back stands until a person clears it, whatever
+   the figures say — only the automatic one is ignored. */
+is('a person-sent rejection is never ignored',
+  [...M.compute(Object.assign({}, gap, {
+    rejections: [{ batch_name: 'L', plot_name: 'cull_3::U1', remark: 'Please recount.' }]
+  })).completed], []);
+is('and the open ones are handed back for the lists that show them',
+  M.compute(gap).openRejections.length, 0);
 
 console.log('\n── A batch that reached no plot is not "finished" ──');
 is('nothing transplanted, nothing to be done about it',
