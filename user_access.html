@@ -38,6 +38,23 @@
   .lvl-none   { background-color:#f8fafc; color:#475569; border-color:#cbd5e1; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path fill='%23475569' d='M5 6L0 0h10z'/></svg>"); }
   .lvl-select:focus { box-shadow:0 0 0 3px rgba(59,130,246,.25); }
 
+  /* THE LEVEL COLOUR HAS TO LAND ON THE BUTTON, because the button is what
+     is on screen. shared_cf_select.js hides this <select> and draws its own
+     control beside it, so colouring the select coloured nothing -- and the
+     line below that used to do it, `sel.className = 'lvl-select lvl-admin'`,
+     wiped the class that hides the native one and put a SECOND dropdown on
+     every row. The select keeps lvl-* as the state it has always been; these
+     rules follow it out to the button, which is the selects own sibling
+     inside the wrap the skin builds. */
+  .cf-wrap:has(> select.lvl-select) { width:auto !important; }
+  .cf-wrap:has(> select.lvl-select) > .cf-btn { width:150px !important; justify-content:space-between; font-weight:900; font-size:12px; letter-spacing:.05em; text-transform:uppercase; border-radius:12px; padding:10px 14px; }
+  .cf-wrap:has(> select.lvl-admin)  > .cf-btn { background:#10b981; color:#fff; border-color:#059669; }
+  .cf-wrap:has(> select.lvl-normal) > .cf-btn { background:#3b82f6; color:#fff; border-color:#2563eb; }
+  .cf-wrap:has(> select.lvl-none)   > .cf-btn { background:#f8fafc; color:#475569; border-color:#cbd5e1; }
+  .cf-wrap:has(> select.lvl-admin)  > .cf-btn .cf-chevron,
+  .cf-wrap:has(> select.lvl-normal) > .cf-btn .cf-chevron { color:#fff; }
+  .cf-wrap:has(> select.lvl-none)   > .cf-btn .cf-chevron { color:#475569; }
+
   /* Toggle */
   .tog { position:relative; display:inline-block; width:48px; height:26px; flex-shrink:0; }
   .tog input { opacity:0; width:0; height:0; }
@@ -445,11 +462,16 @@ function rebuildDropdown(id, current) {
   const sel = document.getElementById(id);
   sel.innerHTML = LEVELS.map(l => `<option value="${l}">${LEVEL_LABEL[l]}</option>`).join('');
   sel.value = current;
-  sel.className = 'lvl-select lvl-' + current;
+  syncDropdownColor(sel);
 }
 
+/* Swap ONE class and leave the rest of the list alone. Writing the whole
+   className here is what put two dropdowns on every row: it threw away
+   cf-native-hidden, which is how shared_cf_select.js hides the browsers own
+   dropdown once it has drawn ours. */
 function syncDropdownColor(sel) {
-  sel.className = 'lvl-select lvl-' + sel.value;
+  LEVELS.forEach(l => sel.classList.toggle('lvl-' + l, sel.value === l));
+  sel.classList.add('lvl-select');
 }
 
 function openDrawer(uid) {

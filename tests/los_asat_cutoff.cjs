@@ -64,8 +64,8 @@ console.log('Batch 999: received 2 Oct — did not exist on 30 Sep');
 
 let ok = true;
 ok &= show('As At — Sep 2026  (cut off at 30 Sep)', '2026-09-30',
-  { planted:1000, cull1:100, trans:600, cull3:0, sales:50, balance:850, pre:300, main:550, batches:1 });
+  { planted:1000, cull1:100, trans:600, cull3:0, sales:50, balance:550, pre:300, main:550, batches:1 });
 ok &= show('All years  (no cut-off — everything to date)', '',
-  { planted:1000, cull1:100, trans:600, cull3:80, sales:250, balance:570, pre:300, main:270, batches:2 });
+  { planted:1000, cull1:100, trans:600, cull3:80, sales:250, balance:270, pre:300, main:270, batches:2 });
 console.log('\n' + (ok ? 'all correct' : 'FAILED'));
 process.exit(ok ? 0 : 1);

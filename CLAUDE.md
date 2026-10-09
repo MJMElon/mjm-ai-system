@@ -50,7 +50,7 @@ What that SQL should be:
   comment.**
 
   Three paste rules are still owed across the older files, each its own
-  sweep, and the test prints the count every run: **142 carry a semicolon in a
+  sweep, and the test prints the count every run: **144 carry a semicolon in a
   comment**, 30 contain a backslash, and 46 do not end at a semicolon.
 - **Tested first.** There is a scratch Postgres 16 for this — see below. Run
   the SQL against a stubbed copy of the real tables before handing it over, and
@@ -668,6 +668,33 @@ because this was the second fix in a week that had to actually reach a phone.
 That is the condition the rule names: a module somebody wants current, not the
 whole site.
 
+## Two numbers wear the name Double Tone
+
+**`DTone_Nursery_Qty`** is the box on the Transplanting tab headed *"Double
+Tone Quantity in Nursery"*: an admin counts the double-tone seedlings standing
+in the nursery and keys the number, and Tabs 3 and 4 add it to the planted
+total to get their allocation base. One row per batch, newest wins
+(`loadDtoneNurseryQty`).
+
+**`Transplanted_DoubleTone`** is the batch pushing its own seedlings into the
+d-tone tray. A different number, nought on most batches, and it takes no part
+in the Balance because those seedlings leave the tray again later as ordinary
+`Transplanted` rows.
+
+Life of Seedlings' **Double Tone column showed the second one**, so it read 0
+against every batch the office had keyed a figure for. It now shows the keyed
+Quantity in Nursery, newest-wins, like the form — and the tray transplant
+keeps its own group (`dtone_tray`), which has no column but is still named in
+the row's verdict, exactly as premium care is.
+
+The box has its own sign-off on Tab 3 under the row key
+**`DTONE-NURSERY-QTY`** rather than a plot, so `_losApplyVerification`
+special-cases it the way it special-cases a transfer card.
+
+`shared/CHECK_double_tone_quantity.sql` puts the two numbers side by side on
+every batch and counts the ones that were reading nought.
+`tests/los_double_tone_is_the_keyed_figure.cjs` keeps a batch that has BOTH.
+
 ## The 2nd culling never deducts. Not even while no 3rd exists.
 
 Three readers, and Life of Seedlings was the odd one out again — this time on
@@ -696,6 +723,67 @@ to add on top of the 3rd. `shared/CHECK_second_culling_in_total.sql` names
 every batch that moves and by how much, and
 `tests/los_second_culling_never_deducts.cjs` holds the rule against the Batch
 Report's real formula, lifted out of its own file.
+
+## The Balance is what is STANDING, and the 1st culling is already inside it
+
+The office asked for one line: **Balance = transplanting qty − 3rd culling −
+total sales.** It is worth writing down why that reads better than what was
+there, because the old formula was not wrong — it was answering a different
+question.
+
+    OLD   actual planted − total culling (1st + 3rd) − total sales
+          + approved stock calibration
+
+That is everything the batch has ANYWHERE, the tray included. The new one is
+what is standing in the FIELD. On a batch allocated exactly, the two are the
+same number, because `planted − 1st culling` IS the transplanting quantity.
+On one that was over- or under-allocated they differ by the allocation gap —
+and **the gap never closes**, so 224 read −416 and 226 read −560 with nothing
+standing in either, for ever, on the one report the office reconciles
+against.
+
+**The 1st culling is not taken off, and that is the point.** It happens in
+the TRAY, before any of those seedlings go out, so the transplanting quantity
+is ALREADY net of it; subtracting it again takes the same seedlings off
+twice. Starting from planted was right for the old question and is
+double-counting for this one. Same reason `ADJUST_APPLIES_TO` keeps a
+Transplanting adjustment off 1st Culling.
+
+Three things fall out of it, and each one is a place the figure could have
+gone quietly wrong:
+
+- **An approved stock calibration is NOT folded in.** Adding it takes 224,
+  225 and 226 to exactly nought — 1−1, −1+1, 13−13 — which is the batch
+  reconciling to the seedling and is worth knowing. It was not what was
+  asked for, so the column keeps its own place and
+  `shared/CHECK_balance_is_what_is_standing.sql` prints the settles column
+  rather than the code quietly deciding.
+- **`mainBalance` does not inherit it.** The Balance takes TOTAL sales off,
+  so a sale out of the TRAY is inside it: a batch sold 400 out of the tray
+  and never transplanted reads minus 400. That is right for every batch the
+  office reconciles, which all sell out of the field. It is not right for
+  the Pre / Main filter, which would then list such a batch under a nursery
+  it never reached — **a fault this report has already had once**. So the
+  field side is counted on its own terms (field sales, field calibration),
+  and `los_balance_split.cjs` checks the gap between the two is exactly the
+  tray sales plus the field calibration instead of checking they are equal.
+- **`completed` asks both halves.** The old Balance started from planted, so
+  a batch with stock in the tray could not reach nought and the guard came
+  free. Now it can, so the test is `mainBalance <= 0 && preBalance <= 0`.
+  Nothing is finished while something of it is standing anywhere.
+
+**And Transplanting is three columns now**, grouped under *Transplanting
+Details*: **Total Transplanting Qty | Transplanting Qty | Double Tone**, the
+first being the other two added. The Double Tone in it is the admin-keyed
+Quantity in Nursery, never the transplant into the d-tone tray — see the two
+numbers above. The **Balance uses Transplanting Qty alone**, never the total:
+the double tone is counted where it already stands, and folding it in would
+put it into the field balance a second time.
+
+`tests/los_balance_is_what_is_standing.cjs` drives the real derived block
+with the office's five batches and holds all of it, the header-span
+arithmetic included — a thead that does not add up to nineteen draws every
+column after the mistake in the wrong width.
 
 ## One batch, one reception — the newest row wins
 
@@ -1187,6 +1275,45 @@ versioned file and not its number is a commit that reaches nobody.
 Still worth knowing: a browser that already holds a stale copy needs one hard
 reload (Ctrl/Cmd + Shift + R) to pick up the metas in the first place. After
 that it stays fresh by itself.
+
+## `select.className = '...'` is how a row grows a second dropdown
+
+`shared/shared_cf_select.js` skins every `<select>` in the system: it draws a
+button, and hides the browser's own dropdown. It used to hide it with a CLASS,
+`cf-native-hidden`.
+
+An assignment to `.className` REPLACES the class list. So a page that colours a
+select by its state the blunt way —
+
+    sel.className = 'lvl-select lvl-admin';            // User Access drawer
+    select.className = 'input-style t3-dest-plot';     // Tab 3 destination
+
+threw that class away, the native dropdown came back BESIDE the button, and
+Module Access showed a green ADMIN pill with a plain "Admin" box under it.
+**Both were live and nothing said which one the save reads** — it reads the
+select, so the pill was the real one and the thing most people would press was
+not.
+
+The hide is an inline `display:none` now, which a className assignment cannot
+reach, plus one observer on `class` and `style` that puts it back if a page
+rewrites those wholesale. **A page should not have to know this skin exists** —
+that was the whole bargain of rolling it out as one script tag.
+
+Two things that follow:
+
+- **Colour the BUTTON, not the select.** The select is invisible, so a rule on
+  it paints nothing. `user_access.html` hangs its three level colours off
+  `.cf-wrap:has(> select.lvl-admin) > .cf-btn` — the select keeps `lvl-*` as
+  the state it always was, and the CSS follows it out to what is on screen.
+  Any page with a colour-by-state select has the same thing to do; only this
+  one has had it done.
+- **The script is loaded with no `?v=` on all 53 pages**, so a browser holding
+  yesterday's copy keeps it. One hard reload per machine.
+
+`tests/cf_select_hides_the_native_one.cjs` holds it, proves the previous
+version fails the same check, and prints every page that writes a whole
+className onto a select. It needs `npm install jsdom` and says so if it is
+missing.
 
 ## Two repositories, one system
 
