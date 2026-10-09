@@ -50,7 +50,7 @@ What that SQL should be:
   comment.**
 
   Three paste rules are still owed across the older files, each its own
-  sweep, and the test prints the count every run: **142 carry a semicolon in a
+  sweep, and the test prints the count every run: **144 carry a semicolon in a
   comment**, 30 contain a backslash, and 46 do not end at a semicolon.
 - **Tested first.** There is a scratch Postgres 16 for this — see below. Run
   the SQL against a stubbed copy of the real tables before handing it over, and
@@ -723,6 +723,67 @@ to add on top of the 3rd. `shared/CHECK_second_culling_in_total.sql` names
 every batch that moves and by how much, and
 `tests/los_second_culling_never_deducts.cjs` holds the rule against the Batch
 Report's real formula, lifted out of its own file.
+
+## The Balance is what is STANDING, and the 1st culling is already inside it
+
+The office asked for one line: **Balance = transplanting qty − 3rd culling −
+total sales.** It is worth writing down why that reads better than what was
+there, because the old formula was not wrong — it was answering a different
+question.
+
+    OLD   actual planted − total culling (1st + 3rd) − total sales
+          + approved stock calibration
+
+That is everything the batch has ANYWHERE, the tray included. The new one is
+what is standing in the FIELD. On a batch allocated exactly, the two are the
+same number, because `planted − 1st culling` IS the transplanting quantity.
+On one that was over- or under-allocated they differ by the allocation gap —
+and **the gap never closes**, so 224 read −416 and 226 read −560 with nothing
+standing in either, for ever, on the one report the office reconciles
+against.
+
+**The 1st culling is not taken off, and that is the point.** It happens in
+the TRAY, before any of those seedlings go out, so the transplanting quantity
+is ALREADY net of it; subtracting it again takes the same seedlings off
+twice. Starting from planted was right for the old question and is
+double-counting for this one. Same reason `ADJUST_APPLIES_TO` keeps a
+Transplanting adjustment off 1st Culling.
+
+Three things fall out of it, and each one is a place the figure could have
+gone quietly wrong:
+
+- **An approved stock calibration is NOT folded in.** Adding it takes 224,
+  225 and 226 to exactly nought — 1−1, −1+1, 13−13 — which is the batch
+  reconciling to the seedling and is worth knowing. It was not what was
+  asked for, so the column keeps its own place and
+  `shared/CHECK_balance_is_what_is_standing.sql` prints the settles column
+  rather than the code quietly deciding.
+- **`mainBalance` does not inherit it.** The Balance takes TOTAL sales off,
+  so a sale out of the TRAY is inside it: a batch sold 400 out of the tray
+  and never transplanted reads minus 400. That is right for every batch the
+  office reconciles, which all sell out of the field. It is not right for
+  the Pre / Main filter, which would then list such a batch under a nursery
+  it never reached — **a fault this report has already had once**. So the
+  field side is counted on its own terms (field sales, field calibration),
+  and `los_balance_split.cjs` checks the gap between the two is exactly the
+  tray sales plus the field calibration instead of checking they are equal.
+- **`completed` asks both halves.** The old Balance started from planted, so
+  a batch with stock in the tray could not reach nought and the guard came
+  free. Now it can, so the test is `mainBalance <= 0 && preBalance <= 0`.
+  Nothing is finished while something of it is standing anywhere.
+
+**And Transplanting is three columns now**, grouped under *Transplanting
+Details*: **Total Transplanting Qty | Transplanting Qty | Double Tone**, the
+first being the other two added. The Double Tone in it is the admin-keyed
+Quantity in Nursery, never the transplant into the d-tone tray — see the two
+numbers above. The **Balance uses Transplanting Qty alone**, never the total:
+the double tone is counted where it already stands, and folding it in would
+put it into the field balance a second time.
+
+`tests/los_balance_is_what_is_standing.cjs` drives the real derived block
+with the office's five batches and holds all of it, the header-span
+arithmetic included — a thead that does not add up to nineteen draws every
+column after the mistake in the wrong width.
 
 ## One batch, one reception — the newest row wins
 

@@ -93,7 +93,19 @@ is('Double Tone is the keyed Quantity in Nursery', B['300'].dtone, 1250);
 is('not the transplant into the d-tone tray',      B['300'].dtoneTray, 96);
 is('and the keying is listed behind the figure',   B['300'].rec.dtone.length, 1);
 is('the tray transplant keeps its own records',    B['300'].rec.dtoneTray.length, 1);
-is('neither touches the Balance',                  B['300'].balance, 10000);
+/* The Balance is transplanting qty − 3rd culling − total sales, and 300 has
+   transplanted nothing, so it is nought. The point of the assertion is that
+   NEITHER double-tone number is in it: the keyed 1,250 counts seedlings
+   already standing where they stand, and the 96 into the d-tone tray leaves
+   again later as ordinary Transplanted rows. */
+is('neither touches the Balance',                  B['300'].balance, 0);
+
+console.log('\n── The three Transplanting Details columns ──');
+// Total = Transplanting Qty + Double Tone, and the Double Tone in it is the
+// KEYED figure, which is the whole of the fix above.
+is('Total Transplanting Qty is the two added', B['300'].transTotal, 0 + 1250);
+is('on a batch that has neither it is nought', B['302'].transTotal, 0);
+is('and the tray transplant is not in it',     B['303'].transTotal, 0);
 
 console.log('\n── Keyed twice is a correction, not a second lot ──');
 is('the newest keying is the figure', B['301'].dtone, 760);
