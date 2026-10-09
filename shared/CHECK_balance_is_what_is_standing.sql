@@ -13,15 +13,18 @@
 --
 --  which is everything the batch has ANYWHERE, the tray included.
 --
---    NEW   transplanting qty
+--    NEW   transplant qty
 --          less 3rd culling
 --          less total sales
+--          plus approved stock calibration
 --
---  which is what is standing in the field.
+--  which is what is standing in the field. An UNAPPROVED calibration
+--  counts for nothing on either side, which is the rule every reader
+--  of this ledger shares.
 --
 --  The 1st culling is not taken off the new one on purpose. A 1st
 --  culling happens in the TRAY, before any of those seedlings go out,
---  so the transplanting quantity is already net of it and taking it
+--  so the transplant quantity is already net of it and taking it
 --  off again would subtract the same seedlings twice. Whatever is
 --  still sitting in a tray is not in this figure either: that is the
 --  Pre-Nursery side, and it has not changed.
@@ -36,18 +39,17 @@
 --    moved_by       bal_new less bal_old. On a batch that was over or
 --                   under allocated this is the allocation gap, and it
 --                   never used to close.
---    calibration    the approved stock calibration on that batch.
---    settles        yes where bal_new plus the calibration comes to
---                   nought, which is the batch reconciling to the
---                   seedling once the correction is counted. The
---                   calibration is NOT folded into the Balance, which
---                   has a column of its own, so a yes here is worth
---                   seeing rather than hiding.
+--    calibration    the approved stock calibration on that batch, which
+--                   is inside bal_new.
+--    settles        yes where bal_new is nought, which is the batch
+--                   reconciling to the seedling.
 --
---    Batches 224, 225 and 226 are the ones this was raised on. They
---    should read 1, minus 1 and 13 under bal_new, against minus 416,
---    minus 280 and minus 560 under bal_old, and all three should say
---    yes under settles.
+--    Batches 224, 225 and 226 are the ones this was raised on. On the
+--    three terms alone they came to 1, minus 1 and 13, against
+--    calibrations of minus 1, plus 1 and minus 13 — so with the
+--    calibration in, all three should read 0 under bal_new and yes
+--    under settles, against minus 416, minus 280 and minus 560 under
+--    bal_old.
 -- =====================================================================
 WITH led AS (
   SELECT btrim(l.batch_name) AS batch_name,
@@ -92,7 +94,7 @@ calc AS (
          l.calibration,
          l.planted - (l.cull1 + l.cull3)
            - COALESCE(s.sales, 0) + l.calibration                      AS bal_old,
-         l.trans - l.cull3 - COALESCE(s.sales, 0)                      AS bal_new
+         l.trans - l.cull3 - COALESCE(s.sales, 0) + l.calibration      AS bal_new
   FROM led l
   LEFT JOIN sold s ON s.batch_name = l.batch_name
 )
@@ -103,9 +105,8 @@ FROM (
          0                                                             AS sort_size,
          'ALL — ' || count(*) || ' batches, '
            || count(*) FILTER (WHERE bal_old <> bal_new) || ' move, '
-           || count(*) FILTER (WHERE bal_old <> bal_new
-                                 AND bal_new + calibration = 0)
-           || ' settle on their calibration'                           AS batch,
+           || count(*) FILTER (WHERE bal_new = 0)
+           || ' settle to nought'                                      AS batch,
          sum(planted)   AS planted,
          sum(trans)     AS trans,
          sum(cull1)     AS cull1,
@@ -122,7 +123,7 @@ FROM (
          abs(bal_new - bal_old),
          batch_name, planted, trans, cull1, cull3, sales,
          bal_old, bal_new, bal_new - bal_old, calibration,
-         CASE WHEN bal_new + calibration = 0 THEN 'yes' ELSE '' END
+         CASE WHEN bal_new = 0 THEN 'yes' ELSE '' END
   FROM calc
   WHERE bal_old <> bal_new
 ) q

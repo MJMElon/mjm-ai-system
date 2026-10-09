@@ -586,9 +586,10 @@ async function loadBreeds() {
    Everything on the row comes out of shared_inventory_logs and shared_do_records,
    the same ledger the Movement Report reads:
 
-     Balance = transplanting qty
+     Balance = transplant qty
              − 3rd culling
              − total sales
+             + approved stock calibration
 
    Three things about that formula are worth knowing before changing it.
 
@@ -607,11 +608,11 @@ async function loadBreeds() {
    it; starting from planted and subtracting it was right for the old
    question and is double-counting for this one.
 
-   Two things are outside it on purpose. The approved stock calibration has a
-   column of its own and is not folded in — adding it takes 224, 225 and 226
-   to exactly nought, which is worth knowing and was not what was asked for.
-   And a transfer takes no part either way: it moves seedlings between two
-   plots of the SAME batch.
+   The approved stock calibration IS in it, and it is what closes the last
+   seedling: 224, 225 and 226 came to 1, −1 and 13 on the three terms alone,
+   against calibrations of −1, +1 and −13, so all three settle to exactly
+   nought. An UNAPPROVED one still counts for nothing. A transfer takes no
+   part either way: it moves seedlings between two plots of the SAME batch.
 
    SECOND, the 2nd culling NEVER counts — not even while no 3rd has been
    recorded. The 3rd culling is keyed against the ORIGINAL transplanted
@@ -624,16 +625,16 @@ async function loadBreeds() {
    headed 1st + 3rd, and for a while the code did not do what the heading
    said.
 
-   THIRD, Transplanting Details is three columns and the first is the sum of
-   the other two: Total Transplanting Qty = Transplanting Qty + Double Tone.
+   THIRD, Transplant Details is three columns and the first is the sum of
+   the other two: Total Transplant Qty = Transplant Qty + Double Tone.
    Double Tone there is the figure an admin KEYED on the batch Transplanting
    tab, newest keying winning, never the transplant into the d-tone tray —
    two numbers wear that name and only one of them is a count of seedlings
    standing in the nursery.
 
-   The Balance uses the Transplanting Qty on its own, not the total: the
-   double tone is counted where it stands, and folding it in would put it
-   into the field balance a second time.
+   The Balance uses the Transplant Qty on its own, not the total: the double
+   tone is counted where it stands, and folding it in would put it into the
+   field balance a second time.
 
    Supplier, MPOB licence, D/O quantity and FOC percent are not columns of
    their own in the ledger — Seeds In writes them as labelled fragments of the
@@ -786,17 +787,18 @@ const LOS_GROUP_ORDER = ['seeds_in', 'planting', 'transplanting', 'dtone', 'dton
    culling takes no part in the total at all, so an unsigned 2nd culling
    must never mark a total it is not in. */
 const LOS_CULLTOTAL_GROUPS = (r) => ['cull_1', 'cull_3'];
-/* Balance is transplanting qty − 3rd culling − total sales, so the groups
-   that mark it are the transplanting and the 3rd culling. Sales are signed
-   off elsewhere (the D/O module) and carry no group here. The PLANTING no
+/* Balance is transplant qty − 3rd culling − total sales + approved stock
+   calibration, so the groups that mark it are the transplanting and the 3rd
+   culling. Sales and the calibration are signed off elsewhere (the D/O
+   module, the calibration approval) and carry no group here. The PLANTING no
    longer marks it — the figure does not start from planted any more — and
    neither does the 1st culling, which is already inside the transplanting
    quantity rather than taken off it. A transfer moves seedlings between two
    plots of the same batch and is not in the Balance at all. */
 const LOS_BALANCE_GROUPS = (r) => ['transplanting', 'cull_3'];
 
-/* Total Transplanting Qty is the transplanting quantity plus the keyed
-   Double Tone Quantity in Nursery, so both mark it. */
+/* Total Transplant Qty is the transplant quantity plus the keyed Double
+   Tone Quantity in Nursery, so both mark it. */
 const LOS_TRANSTOTAL_GROUPS = (r) => ['transplanting', 'dtone'];
 
 /* Which groups each openable figure is made of, by the `kind` the drilldown
@@ -1341,7 +1343,7 @@ async function _losBuildAllRows(asAt) {
     r.postCull   = r.cull3;
     r.cullTotal  = r.cull1 + r.postCull;
     r.variance   = r.planted - (r.received - r.damaged);
-    /* Total Transplanting Qty — what went out of the tray plus the double
+    /* Total Transplant Qty — what went out of the tray plus the double
        tone standing in the nursery. The office reads the three as a group:
        the total, and the two numbers it is made of. */
     r.transTotal = r.trans + r.dtone;
@@ -1367,12 +1369,18 @@ async function _losBuildAllRows(asAt) {
        keyed against the original transplanted figure and already contains
        it.
 
-       Two things are deliberately NOT in it. An approved stock calibration
-       has a column of its own and is not folded in (adding it takes 224,
-       225 and 226 to exactly nought, which is worth knowing and is not what
-       was asked for). And whatever is still sitting in a tray is outside
-       this figure — preBalance below is the question "what is still in the
-       pre-nursery", and it is unchanged.
+       THE APPROVED STOCK CALIBRATION IS IN IT, and it is what closes the
+       last seedling. The office asked for the three terms first and for the
+       calibration a moment later, once they saw what it does: 224, 225 and
+       226 were reading 1, −1 and 13 against calibrations of −1, +1 and −13,
+       so all three settle to EXACTLY NOUGHT. A correction somebody has
+       approved is a correction; leaving it out leaves a batch that is
+       finished reading as though a seedling were missing. Unapproved ones
+       still count for nothing — see the Stock_Calibration branch above.
+
+       What is NOT in it is whatever is still sitting in a tray. preBalance
+       below is the question "what is still in the pre-nursery", and it is
+       unchanged.
 
        It is TOTAL sales, which is the column beside it, and on a batch sold
        out of the TRAY that takes a tray sale off a field figure: one sold
@@ -1383,7 +1391,7 @@ async function _losBuildAllRows(asAt) {
        NOT inherit it — the Pre / Main filter would otherwise list such a
        batch under a nursery it never reached, which is a fault this file
        has already had once. */
-    r.balance    = r.trans - r.cull3 - r.sales;
+    r.balance    = r.trans - r.cull3 - r.sales + r.calibration;
     /* Where the batch is standing NOW, which is what the Pre / Main filter
        asks. Pre-nursery holds whatever was planted and has not left the tray:
        culled in it, transplanted out of it, SOLD out of it, or written off
@@ -1412,8 +1420,8 @@ async function _losBuildAllRows(asAt) {
 
        The two agree on every batch that sells out of the field, which is
        every batch the office reconciles. Where they differ, the difference
-       is exactly the tray sales and the tray calibration — which is to say,
-       exactly the part of the Balance that belongs to the other column. */
+       is exactly the TRAY sales and the TRAY calibration — which is to say,
+       exactly the part of the Balance that belongs to the pre-nursery. */
     r.preBalance  = r.planted - r.cull1 - r.trans - r.salesPre + r.calibrationPre;
     r.mainBalance = r.trans - r.cull3 - (r.sales - r.salesPre)
                   + (r.calibration - r.calibrationPre);
@@ -1863,7 +1871,7 @@ function _losDrillVerNote(kind, batch) {
    three that carry text (batch/breed, supplier, the received split) get the
    room; the plain figure columns take what is left, evenly.
 
-   The Transplanting Details group made a nineteenth, so the three text
+   The Transplant Details group made a nineteenth, so the three text
    columns each gave half a point back rather than every figure column
    losing a slice. */
 const LOS_COL_WIDTHS = [6, 5.5, 7.5, 4, 6, 4.5, 5.5, 5,
@@ -1941,20 +1949,20 @@ function _losSummaryHtml(rows, tot, scope) {
               <th rowspan="2">Supplier / MPOB Licence</th>
               <th rowspan="2">Age</th>
               <th colspan="4" class="los-grp">Seed In Details</th>
-              <th colspan="3" class="los-grp">Transplanting Details</th>
+              <th colspan="3" class="los-grp">Transplant Details</th>
               <th colspan="4" class="los-grp">Culling Detail</th>
               <th rowspan="2">Transfer</th>
               <th rowspan="2">Total Sales</th>
               <th rowspan="2">Stock Calibration</th>
-              <th rowspan="2" title="Transplanting qty − 3rd culling − total sales: what the batch still has standing in the field. The 1st culling is not taken off, because it happened in the tray and the transplanting quantity is already net of it; the 2nd culling never deducts, because the 3rd is keyed against the original transplanted figure and already contains it. The approved stock calibration has a column of its own and is not folded in. A transfer moves seedlings between two plots of the same batch, so it is not part of this either.">Balance</th>
+              <th rowspan="2" title="Transplant qty − 3rd culling − total sales + approved stock calibration: what the batch still has standing in the field. The 1st culling is not taken off, because it happened in the tray and the transplant quantity is already net of it; the 2nd culling never deducts, because the 3rd is keyed against the original transplanted figure and already contains it. A transfer moves seedlings between two plots of the same batch, so it is not part of this.">Balance</th>
             </tr>
             <tr>
               <th title="The delivery order quantity plus the FOC seeds that came with it">Seed Received (D/O) + FOC Qty</th>
               <th>Seed Damage</th>
               <th>Actual Planted</th>
               <th title="Actual planted − (seed received − seed damage). Negative means fewer seeds were planted than arrived.">Variance Seed In</th>
-              <th title="Transplanting qty + double tone.">Total Transplanting Qty</th>
-              <th>Transplanting Qty</th>
+              <th title="Transplant qty + double tone.">Total Transplant Qty</th>
+              <th>Transplant Qty</th>
               <th title="The Double Tone Quantity in Nursery keyed on the batch Transplanting tab — the double-tone seedlings an admin counted standing in the nursery. Newest keying wins. Not the transplant into the d-tone tray, which is a different number.">Double Tone</th>
               <th>1st Culling</th>
               <th>2nd Culled</th>
@@ -4796,7 +4804,7 @@ const LOS_DRILL = {
     tipLabel: x => x.batch + ' · ' + x.place,
     cols: [_losCol.date, _losCol.batch, _losCol.tray,
       { ..._losQty('Planted', 'font-black'), sum: x => x.qty }] },
-  trans: { title: 'Transplanting', list: 'trans',
+  trans: { title: 'Transplant Qty', list: 'trans',
     tipLabel: x => x.batch + ' · ' + x.place + ' (' + x.nursery + ')',
     cols: [_losCol.date, _losCol.batch, _losCol.fromTray, _losCol.nursery, _losCol.plot,
       { ..._losQty('Qty', 'text-[#3a7ab4] font-black'), sum: x => x.qty }],
@@ -4810,13 +4818,13 @@ const LOS_DRILL = {
     tipLabel: x => x.batch + ' · keyed ' + (x.date || '—'),
     cols: [_losCol.date, _losCol.batch, _losCol.note,
       { ..._losQty('Qty', 'text-[#7c3aed] font-black'), sum: x => x.qty }] },
-  /* The two numbers the Total Transplanting Qty column adds, in one window,
+  /* The two numbers the Total Transplant Qty column adds, in one window,
      each line saying which it is. The double-tone keyings are listed in
      full while the COLUMN takes only the newest, the same way the Double
      Tone window does it — a total that did not add up to its own rows would
      be the more confusing of the two, and a second keying is something the
      reader should see. */
-  transTotal: { title: 'Total Transplanting Qty', list: 'transTotal',
+  transTotal: { title: 'Total Transplant Qty', list: 'transTotal',
     tipLabel: x => x.what + ' · ' + x.batch + ' · ' + x.place,
     cols: [_losCol.date, { label: 'What', get: x => _losEsc(x.what) },
       _losCol.batch, _losCol.place,
@@ -4886,7 +4894,7 @@ function _losDrillCollect(kind, batch) {
       // Transplanting + the keyed Double Tone Quantity in Nursery, the same
       // two the column adds, so the window and the figure it opened from
       // can never disagree about what is in it.
-      r.rec.trans.forEach(x => out.push({ ...x, what: 'Transplanting' }));
+      r.rec.trans.forEach(x => out.push({ ...x, what: 'Transplant' }));
       r.rec.dtone.forEach(x => out.push({ ...x, what: 'Double tone' }));
     } else {
       out.push(...(r.rec[spec.list] || []));
@@ -4954,16 +4962,17 @@ function _losReconcileLines(kind, batch) {
     ? [['Seed received', add('received'), +1],
        ['Seed damage', add('damaged'), -1],
        ['Actual planted', add('planted'), 0]]
-    : [['Transplanting qty', add('trans'), +1],
+    : [['Transplant qty', add('trans'), +1],
        ['3rd culling (the 2nd never deducts)', add('postCull'), -1],
-       ['Total sales', add('sales'), -1]];
+       ['Total sales', add('sales'), -1],
+       ['Approved stock calibration', add('calibration'), +1]];
   return {
     parts,
     result: rows.reduce((s, r) => s + (kind === 'variance' ? r.variance : r.balance), 0),
     label: kind === 'variance' ? 'Variance seed in' : 'Balance',
     note: kind === 'variance'
       ? 'Actual planted less what arrived after damage. Negative means fewer seeds were planted than were received.'
-      : 'What the batch still has standing in the field. The 1st culling is not taken off: it happens in the TRAY, before any of these seedlings go out, so the transplanting quantity is already net of it and subtracting it again would subtract it twice. The 2nd culling never deducts either — the 3rd is keyed against the original transplanted figure and already contains it. Two things are outside this figure on purpose. The approved stock calibration has a column of its own and is not folded in. And whatever is still sitting in a tray is not in it — that is what the Pre-Nursery filter answers. Transfers take no part: a 3rd-culling transfer moves seedlings between two plots of the SAME batch, so it changes where the batch is standing and not how many of it there are.'
+      : 'What the batch still has standing in the field. The 1st culling is not taken off: it happens in the TRAY, before any of these seedlings go out, so the transplant quantity is already net of it and subtracting it again would subtract it twice. The 2nd culling never deducts either — the 3rd is keyed against the original transplanted figure and already contains it. An approved stock calibration does count, added or deducted as it was keyed; one nobody has approved counts for nothing. What is NOT in this figure is whatever is still sitting in a tray — that is what the Pre-Nursery filter answers. Transfers take no part either: a 3rd-culling transfer moves seedlings between two plots of the SAME batch, so it changes where the batch is standing and not how many of it there are.'
   };
 }
 
