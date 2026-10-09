@@ -477,28 +477,64 @@ same reason the drone-map panel demanded an exact match.
 `tests/cull1_explained_by_transplanting.cjs` holds both halves, including that
 a difference which is NOT the adjustment still reads as over-allocated.
 
-## An unverified figure is shown, and says it is unverified
+## An unverified figure does NOT float, and it is a dash and never a nought
 
-Life of Seedlings is seventeen columns of live sums of the batch ledger, and the ledger
-is filled in BEFORE anybody checks it. A figure keyed this morning and one
-signed off last week looked exactly alike.
+Life of Seedlings is seventeen columns of live sums of the batch ledger, and
+the ledger is filled in BEFORE anybody checks it. A figure keyed this morning
+and one signed off last week looked exactly alike.
 
-Both ways of fixing that are wrong. Hiding the unverified batch leaves the
-report answering a question nobody asked. **Zeroing an unverified stage is
-worse**: a batch with Seed Received in and Actual Planted silently at nought
-reports a Variance of minus the whole delivery — a wrong number wearing a
-right number's clothes. So the figure is shown, and it carries a ⧗ saying
-nobody has signed it, and the derived figures above it (Variance, Total
-Culling, Balance) carry whichever of their parts is unsigned.
+That was first fixed by SHOWING the unverified figure with a ⧗ beside it and
+counting it in the totals, on the argument that hiding it leaves the report
+answering a question nobody asked. **The office overruled that**, and batch
+246 is why: its 3rd Culling tab read **0 of 4 Done** with every Culled Qty
+box empty, and the report was showing **10,142 third culled** and a Balance
+of **minus 7,659** off the back of it. *"If the batch report not yet filled
+in the data, dont float the data to life of seedling"*, then *"make it only
+verified data will float to life of seedling."* They are the ones who
+reconcile against it; that is their call to make.
+
+**What was right about the old rule is still right, and it is why a withheld
+figure is a DASH.** Zeroing an unverified stage is a wrong number wearing a
+right number's clothes — a batch with Seed Received in and Actual Planted
+silently at nought reports a Variance of minus the whole delivery. So the
+cell reads **—**, which is "nobody has signed this" and cannot be mistaken
+for a count.
+
+Five things follow, and each is a way this goes quietly wrong:
+
+- **A DERIVED figure is withheld whenever ANY part of it is**, rather than
+  being computed from the parts that survived. That is the same trap one
+  level up. It falls out of each figure carrying every group it is made of —
+  `LOS_BALANCE_GROUPS`, `LOS_CULLTOTAL_GROUPS` and the rest.
+- **A withheld figure is OUT of its column total.** A column of dashes
+  adding up to a number is the one shape of wrong that cannot be spotted:
+  the total looks fine and no row disagrees with it. `LOS_GROUPS_OF_FIELD`
+  is what the reducer asks, and it is the same answer `LOS_GROUPS_OF_KIND`
+  gives per column — a field missing from it totals figures the rows are not
+  showing.
+- **The foot says which columns are short, and by how many rows.** "3
+  batches are unverified" does not tell a reader which TOTAL is light, since
+  a batch can be signed on its seed in and waiting on its 3rd culling.
+- **A stage with no lines at all is not withheld.** There is nothing to
+  verify about a stage a batch has not reached, so a true nought reads 0. A
+  nought on an unsigned tab is still withheld, because "0 damaged" and "0 so
+  far as anybody has keyed" are different claims.
+- **It still fails OPEN.** If the sign-off tables cannot be READ, nothing is
+  withheld and the report says so. A check that cannot run must not empty a
+  report — same reason access fails open.
+
+The figure is not hidden, only kept off the report: the dash carries it in
+its hover, names what is waiting, and is still a button, because the records
+behind it are exactly what somebody needs in order to go and sign it off.
 
 Three things to know before touching `LOS_GROUP_OF_TYPE` in
 `operation/operation_reports.html`:
 
 - **The unit is the COLUMN, not the tab.** 3rd Culling and Transfer are both
   signed on Tab 6; Transplant Qty (both halves of its split) and premium
-  care are figures on Tab 3, and 1st Culled is Tab 4. A tally kept per tab puts a warning on figures somebody
-  HAS signed, and a marker that cries over fine figures is one nobody reads.
-  `LOS_STAGE_OF_GROUP` is the column→tab map that keeps the two apart.
+  care are figures on Tab 3, and 1st Culled is Tab 4. A tally kept per tab
+  withholds figures somebody HAS signed. `LOS_STAGE_OF_GROUP` is the
+  column→tab map that keeps the two apart.
 - **A sign-off comes two ways** and either counts: one signature over a whole
   tab in `operation_batch_verifications`, or — on a tab verified row by row —
   a `Row_Verification` log per row, keyed `<stage>::<rowKey>`. The rowKey
@@ -507,13 +543,24 @@ Three things to know before touching `LOS_GROUP_OF_TYPE` in
   `operation_batch_detail.html` draws the tab's tick by the same rule and
   `CHECK_which_batches_completed.sql` asks it of the record. Change one,
   change all three.
-- **If the sign-off tables cannot be read, nothing is marked** and the report
-  says so. Marking everything is not the cautious answer, it is a
-  systematically wrong one — the same reason access fails open.
+- **PART verified is not verified.** One of two transplant rows signed means
+  the figure includes an unsigned row, so it is withheld like any other.
 
 The As At date cuts the LINES off and never the signatures: a line dated
 after it is in no figure on screen, while "has anybody checked this" is a
 question about now.
+
+`shared/CHECK_what_life_of_seedlings_holds_back.sql` is the size of it —
+every batch with anything unsigned, which stages, and how many of each
+stage's rows are signed. Hand it over with any change to this rule: the
+figure that decides whether a rule like this is right is "what does it
+actually move", and that is the only thing that answers it.
+
+**The Status and Nursery filters still read the REAL figures**, not the
+withheld ones. Whether a batch is Completed or standing in the main nursery
+is a question about the batch, not about the paperwork, and a batch that
+vanished off every filter the day somebody forgot to sign a tab would be a
+worse report than the one this replaced.
 
 ## The only thing that asked "can this login save" was the save
 
