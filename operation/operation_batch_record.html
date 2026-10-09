@@ -10,6 +10,9 @@
     <script src="../shared/shared_access.js"></script>
     <!-- Tray occupancy — the same rule the batch report's tray dropdown uses. -->
     <script src="../shared/shared_tray_stock.js"></script>
+    <!-- Is this batch finished? ONE rule, shared with Life of Seedlings, so
+         the two lists cannot disagree about which batches are Completed. -->
+    <script src="../shared/shared_batch_completed.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         /* Earthy Theme Colors */
@@ -376,154 +379,37 @@
                 const transplantCountMap = countByBatch(transplantRes);
                 const cull3CountMap      = countByBatch(cull3Res);
 
-                // ── Completion rule (ALL batches) ───────────────────────────
-                // A batch is finished when every plot it used has nothing left
-                // standing in it: 3rd culled less drone map qty comes to nought.
-                // See the note on the coverage test below for why that one
-                // subtraction covers the sold-out plots as well.
-                // A batch is Completed ONLY when EVERY transplanted
-                // plot+destination (main / premium / d-tone — matching how
-                // Tab 6 builds its rows) has its own saved 3rd_Culling
-                // record. Filling the 2nd culling report does NOT complete a
-                // batch; a partially-filled 3rd culling report keeps it in
-                // the Active list. Old 3rd-culling rows without a DestType
-                // stamp each cover one slot for their plot.
+                /* ── IS THIS BATCH FINISHED? ────────────────────────────────
+                   ONE rule, in shared/shared_batch_completed.js, because
+                   Life of Seedlings asks the same question and the two
+                   lists disagreeing is how a batch sits in Completed on
+                   one screen and Active on the other. Everything that used
+                   to be worked out here — which plots the batch used, which
+                   have a record proving nothing is left standing, who has
+                   signed them, and what is still in dispute — is written
+                   out in that file, with the batches that taught us each
+                   part of it. */
                 const _normPlot   = p => String(p || '').trim().toUpperCase();
-                const _destOfType = t => t === 'Transplanted_DoubleTone' ? 'doubletone'
-                                       : t === 'Transplanted_Premium'    ? 'premium' : 'main';
-
-                // Expected coverage: batch → Set of "PLOT|dest" from transplant logs.
-                const expectedPlots = {};
-                (transplantRes.data || []).forEach(r => {
-                    const p = _normPlot(r.plot_name);
-                    if (!p || !r.batch_name) return;
-                    // Premium Care transplants are excluded from the 3rd Culling
-                    // report, so a premium-ONLY plot can never receive a record
-                    // and must not block completion. A plot that also had a
-                    // main / d-tone transplant still counts (via that row).
-                    if (r.transaction_type === 'Transplanted_Premium') return;
-                    (expectedPlots[r.batch_name] = expectedPlots[r.batch_name] || new Set())
-                        .add(p); // per PLOT — Tab 6 merges same-plot rows and saves one record per plot
+                const _finished = MJMBatchCompleted.compute({
+                    transplants:        transplantRes.data || [],
+                    transfers:          transferRes.data || [],
+                    cull3:              cull3Res.data || [],
+                    rowVerifications:   rowVerifRes.data || [],
+                    stageVerifications: stageVerifRes.data || [],
+                    rejections:         rejectRes.data || [],
+                    calibrations:       calRes.data || []
                 });
+                const completedBatchNames = _finished.completed;
+                /* The rejections still outstanding — the automatic drone-map
+                   one is dropped once its plots tally with the approved
+                   adjustments counted. The To Do List and the Active list
+                   both read this, not the raw rows. */
+                const openRejections = _finished.openRejections;
+                /* Batches finished in the field but held out of Completed by
+                   an open question — so the row can say which, instead of
+                   reading as one that still has counting to do. */
+                const heldByIssue = _finished.heldByIssue;
 
-                /* Actual coverage from 3rd_Culling rows. A row COUNTS as covering
-                   its plot when the drone-map QUANTITY and the CULLED DATE are
-                   both keyed — the same two things the 3rd Culling tab asks for
-                   and counts as done.
-
-                   It used to require an uploaded FILE (DocUrl) instead of the
-                   date. That made this list and the tab disagree: a batch could
-                   read 6/6 Plots Done with every quantity and date in, and sit
-                   in Active because somebody had not attached photographs. It
-                   is what kept batch 225 out of Completed.
-
-                   The file is still worth having and the tab still shows
-                   whether there is one. It is evidence, not the work — and a
-                   batch's place in this list should not turn on it while the
-                   report that owns the question says otherwise. */
-                const cull3Keyed  = {}; // batch → Set(PLOT)
-                const cull3Legacy = {}; // batch → Map(PLOT → row count)
-                (cull3Res.data || []).forEach(r => {
-                    if (!r.batch_name) return;
-                    /* A plot is finished when NOTHING IS LEFT STANDING IN IT.
-
-                           3rd culled  −  drone map qty  =  0
-
-                       That is the whole rule, and it covers both ways a plot
-                       gets there without needing to name them separately:
-
-                         N18-R had 131 to cull, the drone map counted 131,
-                         131 − 131 = 0. Done.
-
-                         A plot whose seedlings were all sold has nothing to
-                         cull, 0 − 0 = 0. Done, with no map to attach and no
-                         date to give — which is why demanding paperwork of it
-                         kept batch 225 in Active for a job nobody could do.
-
-                       A missing map quantity counts as 0, so a plot with 500
-                       to cull and no map is 500 short and holds the batch.
-
-                       Note this asks the FIELD question, not the keying one.
-                       The 3rd Culling tab's own "N/M Plots Done" counts how
-                       much typing is left and still wants a culled date; this
-                       list asks whether the batch is finished on the ground. */
-                    const culled = Number(r.quantity_change) || 0;
-                    const mapM   = r.remark ? r.remark.match(/MapQty:\s*(\d+)/) : null;
-                    const mapQty = mapM ? parseInt(mapM[1], 10) : 0;
-                    if (culled - mapQty !== 0) return;
-
-                    /* A nought has to be a REAL nought.
-                    
-                       "culled − map = 0" is satisfied just as well by a row
-                       that says nothing at all: no quantity, no map, no
-                       figures. A plot all sold out and a plot nobody has
-                       touched both come to zero, and treating them alike swept
-                       batches into Completed that had barely started.
-                    
-                       So when the cull is nought, the row must SAY it is
-                       nought — a saved 3rd Culling record carries its
-                       arithmetic in the remark ("Remaining Balance: 0"), and
-                       that is what tells a sold-out plot from an empty one. A
-                       cull above nought needs no such proof: the figure is
-                       the proof. */
-                    if (culled === 0 && !(r.remark && /Remaining Balance:\s*0\b/.test(r.remark))) return;
-                    const p = _normPlot(r.plot_name);
-                    const m = r.remark ? r.remark.match(/DestType:\s*(main|premium|doubletone)/) : null;
-                    if (m) {
-                        (cull3Keyed[r.batch_name] = cull3Keyed[r.batch_name] || new Set()).add(p); // per PLOT
-                    } else {
-                        const map = (cull3Legacy[r.batch_name] = cull3Legacy[r.batch_name] || new Map());
-                        map.set(p, (map.get(p) || 0) + 1);
-                    }
-                });
-
-                /* A transfer used to keep a batch in Active FOREVER — any
-                   Cull3_Transfer row at all and the batch could never be
-                   Completed, however finished its report. That was true when a
-                   transferred-into plot had no way to be culled: its culling
-                   was pending by definition because there was nowhere to
-                   record it.
-
-                   There is now. A "-R" plot is a row on the P-R Culling tab
-                   with its own drone-map quantity and culled date, the same as
-                   any other. So a transfer no longer vetoes the batch — it
-                   adds the plot it landed in to the list of plots that must be
-                   covered, which is what a transfer actually means.
-
-                   This is why batch 225 stayed in Active with its 3rd Culling
-                   report reading 6/6 done. */
-                (transferRes.data || []).forEach(r => {
-                    const dest = _normPlot(r.plot_name);
-                    if (!dest || !r.batch_name) return;
-                    (expectedPlots[r.batch_name] = expectedPlots[r.batch_name] || new Set()).add(dest);
-                });
-
-                /* …AND SIGNED OFF.
-
-                   A plot whose 3rd Culling is keyed is not therefore finished:
-                   somebody still has to check it. The 3rd Culling tab counts a
-                   row as done only once it is signed, and this list did not —
-                   so unverifying a plot took the tab off 100% and left the
-                   batch sitting in Completed, saying the opposite.
-
-                   A row sign-off is stored against `cull_3::<PLOT>|<dest>`, and
-                   the plot is all that is matched: the tab writes the dest type
-                   it happens to have merged the row under, and which of them it
-                   is has nothing to do with whether the plot was checked.
-
-                   The whole stage being verified is one signature over every
-                   row on the tab, so it covers the batch on its own. */
-                const cull3RowSigned = {};   // batch → Set(PLOT)
-                (rowVerifRes.data || []).forEach(r => {
-                    if (!r.batch_name || !r.plot_name) return;
-                    const m = /^cull_3::(.+)$/.exec(String(r.plot_name));
-                    if (!m) return;
-                    const plot = _normPlot(String(m[1]).split('|')[0]);
-                    if (!plot) return;
-                    (cull3RowSigned[r.batch_name] = cull3RowSigned[r.batch_name] || new Set()).add(plot);
-                });
-                const cull3StageSigned = new Set(
-                    (stageVerifRes.data || []).filter(r => r.stage === 'cull_3').map(r => r.batch_name));
                 /* …and every stage anybody has signed, which the To Check list
                    below is the other half of. Kept separate from the cull_3
                    set above deliberately: that one answers "is this batch
@@ -610,125 +496,6 @@
                     return true;
                 };
 
-                /* DOES THIS PLOT AND ITS DRONE MAP AGREE — NOW?
-
-                   The gap is settled by a stock ADJUSTMENT, not by re-keying
-                   the cull: the office accepts the explanation, raises a
-                   calibration for the difference, approves it, and the two
-                   sides tally. The 3rd Culling row in the ledger does not
-                   move when that happens — it still reads 500 against a
-                   MapQty of 540 — so anything that compares those two alone
-                   goes on calling it a gap for ever, and the batch never
-                   leaves the lists.
-
-                   So the comparison is culled PLUS what has been approved
-                   against that plot. Which adjustments reach the 3rd Culling
-                   is ADJUST_APPLIES_TO's rule in operation_batch_detail.html:
-                   one filed on the 3rd Culling, and one filed on
-                   Transplanting, because both are measuring what is standing
-                   in the plot. Change one, change the other.
-
-                   An UNAPPROVED one moves nothing, here as everywhere. */
-                const _adjKey = (b, p) => String(b || '') + '\x01' + String(p || '').trim().toUpperCase();
-                const cull3Adj = {};
-                (calRes.data || []).forEach(r => {
-                    const remark = r.remark || '';
-                    if (remark.indexOf('[APPROVED by') < 0) return;
-                    const rep = String((remark.match(/Report:\s*([^.]+?)\s*\./i) || [])[1] || '')
-                        .trim().toLowerCase();
-                    if (rep !== '3rd culling' && rep !== 'transplanting') return;
-                    // The plot it names, which is not always the row's own.
-                    const named = String((remark.match(/Plot:\s*([^.]+?)\s*\./i) || [])[1] || '').trim();
-                    const plot = named || r.plot_name || '';
-                    if (!plot) return;
-                    const k = _adjKey(r.batch_name, plot);
-                    cull3Adj[k] = (cull3Adj[k] || 0) + (Number(r.quantity_change) || 0);
-                });
-                const _mapQtyOf = (r) => {
-                    const m = (r.remark || '').match(/MapQty:\s*(\d+)/);
-                    return m ? parseInt(m[1], 10) : null;
-                };
-                /* True when there is nothing left to answer: no map keyed at
-                   all, or the figures agree once the approved adjustments are
-                   counted. */
-                const _cull3Tallies = (r) => {
-                    const map = _mapQtyOf(r);
-                    if (map === null) return true;
-                    const adj = cull3Adj[_adjKey(r.batch_name, r.plot_name)] || 0;
-                    return (Number(r.quantity_change) || 0) + adj === map;
-                };
-                // Batches with at least one plot still disagreeing.
-                const stillMismatched = new Set(((cull3Res && cull3Res.data) || [])
-                    .filter(r => !_cull3Tallies(r)).map(r => r.batch_name).filter(Boolean));
-
-                /* AN OPEN REJECTION IS NOT A FINISHED BATCH.
-
-                   HQ sent a report tab back for amendment. The row is deleted
-                   when the rejection is cleared or the tab re-verified, so a
-                   row that is still there is still open — and the batch could
-                   otherwise sit in Completed and on the To Do List at once,
-                   the list calling the work finished while the tab beside it
-                   says it is in dispute.
-
-                   A PENDING ADJUSTMENT does NOT hold a batch, and held every
-                   finished one for a while. An adjustment nobody has approved
-                   moves no figure — that is the rule everywhere else — so a
-                   batch whose plots all reconcile reconciles with or without
-                   it. The claim is worth seeing on the Adjustments tab; it is
-                   not a variance by itself.
-
-                   A VARIANCE still holds the batch, and is caught where it
-                   shows: the coverage test below needs every plot's 3rd culled
-                   to equal its drone-map count. A plot that does not tally is
-                   not covered, so the batch stays Active until somebody
-                   settles it — whether or not an adjustment was ever raised
-                   about it. */
-                /* THE DRONE-MAP FLAG IS WRITTEN BY A SAVE AND CLEARED BY A
-                   SAVE, so an approval that settles the gap leaves it behind:
-                   the batch would sit on the To Do List until somebody
-                   happened to open Tab 6 and press Save, over a question that
-                   was answered days ago. It is ignored once the plots it
-                   names tally.
-
-                   Only the AUTOMATIC one — saveTab6 writes it against
-                   plot_name 'cull_3' with that wording, and looks it up the
-                   same way to clear it. A rejection a PERSON sent back stands
-                   until a person clears it, whatever the figures say. */
-                const _staleMapFlag = (r) =>
-                    String(r.plot_name || '') === 'cull_3'
-                    && String(r.remark || '').indexOf('3rd Culling map qty') === 0
-                    && !stillMismatched.has(r.batch_name);
-                const openRejections = (rejectRes.data || []).filter(r => !_staleMapFlag(r));
-                const openRejection = new Set(openRejections.map(r => r.batch_name).filter(Boolean));
-
-                const completedBatchNames = new Set();
-                /* Batches finished in the field but held out of Completed by an
-                   open question — so the row can say which, instead of reading
-                   as one that still has counting to do. */
-                const heldByIssue = {};
-                Object.keys(expectedPlots).forEach(batch => {
-                    // Every plot must be covered by a proofed record — no exceptions.
-                    const need = expectedPlots[batch];
-                    if (!need || !need.size) return;
-                    const keyed  = cull3Keyed[batch] || new Set();
-                    const legacy = new Map(cull3Legacy[batch] || []);
-                    const signed = cull3RowSigned[batch] || new Set();
-                    const wholeStageSigned = cull3StageSigned.has(batch);
-                    let allCovered = true;
-                    for (const key of need) {
-                        const plot = key.split('|')[0];
-                        if (!wholeStageSigned && !signed.has(plot)) { allCovered = false; break; }
-                        if (keyed.has(key)) continue;
-                        const n = legacy.get(plot) || 0;
-                        if (n > 0) { legacy.set(plot, n - 1); continue; }
-                        allCovered = false; break;
-                    }
-                    if (!allCovered) return;
-                    // Counted, checked — and still not finished if somebody has
-                    // raised something nobody has settled.
-                    if (openRejection.has(batch)) { heldByIssue[batch] = 'To do — a report is waiting on somebody'; return; }
-                    completedBatchNames.add(batch);
-                });
                 // A batch is in Main Nursery once any transplant log has been written.
                 const transplantedBatchNames = new Set((transplantRes.data || []).map(r => r.batch_name));
                 /* Batches with at least one report tab rejected by HQ — shown
@@ -854,9 +621,10 @@
                        Once the office accepts the answer it raises the
                        adjustment that settles it, the plot tallies, and there
                        is nothing left to check — so it leaves this list the
-                       same way it left the To Do List. See _cull3Tallies. */
+                       same way it left the To Do List. One test, both
+                       lists — see shared/shared_batch_completed.js. */
                     cull_3:        new Set(((cull3Res && cull3Res.data) || [])
-                                     .filter(r => !_cull3Tallies(r)
+                                     .filter(r => !_finished.cull3Tallies(r)
                                                && /MismatchNote:\S/.test(r.remark || ''))
                                      .map(r => r.batch_name).filter(Boolean))
                 };

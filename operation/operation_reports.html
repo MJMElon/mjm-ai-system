@@ -10,6 +10,9 @@
 <script src="../shared/shared_supabase.js"></script>
 <script src="../shared/shared_access.js"></script>
 <script src="../shared/shared_cf_select.js"></script>
+<!-- Is this batch finished? ONE rule, shared with the Batch Record list, so
+     the two cannot disagree about which batches are Completed. -->
+<script src="../shared/shared_batch_completed.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
   body { background:#f8f4ec; margin:0; font-family:'Outfit', system-ui, sans-serif; color:#1a150d; }
@@ -1117,7 +1120,10 @@ async function _losBuildAllRows(asAt) {
           'Transplanted', 'Transplanted_Premium', 'Transplanted_DoubleTone',
           'DTone_Nursery_Qty',
           '1st_Culling', '2nd_Culling', '3rd_Culling', 'Cull3_Transfer',
-          'Stock_Calibration'])
+          'Stock_Calibration',
+          /* Not a figure on this report — it is what holds a batch out of
+             Completed. See shared/shared_batch_completed.js. */
+          'Review_Rejection'])
       .order('id', { ascending: true })),
     fetchAllRows(() => _supabase.from('shared_do_records')
       .select('do_number, delivery_date, status, remark, plot_1, qty_1, batch_1, plot_2, qty_2, batch_2, plot_3, qty_3, batch_3, plot_4, qty_4, batch_4, plot_5, qty_5, batch_5')
@@ -1640,39 +1646,38 @@ async function _losBuildAllRows(asAt) {
     r.mainBalance = r.trans - r.cull3 - (r.sales - r.salesPre) + r.calibrationField;
     r.ageMonths   = _losAgeMonths(r.seedsDate, asAt);
     r.age         = _losAgeLabel(r.ageMonths);
-    /* Completed: something has actually left the batch, and there is nothing
-       of it standing anywhere.
+    /* COMPLETED IS THE BATCH RECORD'S ANSWER, not one of this report's own.
 
-       The guard matters and is the reason this is not simply `balance <= 0`:
-       a batch received but not yet planted nets to nought at the start of its
-       life and is very much active.
+       It used to be this report's arithmetic coming to nought — something
+       has left the batch and nothing of it is standing anywhere. That reads
+       sensibly and it is still a different question from the one the Batch
+       Record list asks, which is whether every plot the batch used has been
+       3rd culled, proofed against its drone map and signed off. Two
+       questions, two answers, and a batch could sit in Completed on one
+       screen and Active on the other with nothing saying which was wrong.
 
-       But the guard used to be `trans > 0` — transplanted out — which asks
-       whether the batch reached the FIELD, and that is not the only way a
-       batch finishes. One sold entirely as small polybags out of the tray,
-       and one culled entirely in the tray, both reach nought having never
-       been transplanted; both stayed "Active" on this report for ever, and
-       the Status filter never offered them under Completed. Asking whether
-       anything left at all catches those and still guards the new batch,
-       which has had nothing leave it by any route.
+       The office asked for them to agree, so there is now one rule and it
+       lives in shared/shared_batch_completed.js — see that file for what it
+       is and which batches taught us each part of it. `completedSet` is the
+       answer for the whole report, worked out once by
+       _losBuildAllRows's caller and handed in.
 
-       It asks the two halves rather than the Balance, and both parts of
-       that are deliberate.
+       Two things about the way it is handed in:
 
-       preBalance is new here and it RESTORES what the old formula gave for
-       free. The Balance used to start from planted, so a batch with
-       seedlings still in the tray could not reach nought; now the Balance is
-       the field side only and a batch sitting in a tray reads nought on it.
-       Without this test such a batch would be reported Completed while the
-       Pre-Nursery filter was still listing it. Nothing is finished while
-       something of it is standing anywhere.
+       - IT IS ASKED AS AT THE REPORT'S DATE. The lines are cut at the As At
+         and the SIGNATURES are not, the same split every other As At rule
+         here follows: a culling dated after the As At has not happened yet,
+         while "has anybody checked this" is a question about now. So
+         September still reads as September did.
+       - IT IS NOT GATED ON VERIFICATION the way the figures are. A batch
+         cannot be Completed without its 3rd culling being signed off in the
+         first place, so the question answers itself; and a withheld figure
+         must not also take the batch off the Status filter.
 
-       And it is mainBalance rather than balance because the Balance carries
-       TOTAL sales, tray sales included, so it can be driven below nought by
-       stock that left the tray while the field still holds some. The two are
-       the same number on a batch that sells out of the field. */
+       anyOut stays, as the one thing this report still asks on its own: it
+       is what the empty-row test uses. r.completed is set below, once the
+       whole ledger has been read — it is not derived from this row. */
     r.anyOut      = r.trans > 0 || r.sales > 0 || r.cullTotal > 0;
-    r.completed   = r.anyOut && r.mainBalance <= 0 && r.preBalance <= 0;
   });
 
   /* A BATCH IS A ROW ONLY IF SOMETHING OF IT EXISTS.
@@ -1708,6 +1713,38 @@ async function _losBuildAllRows(asAt) {
      should not have to step over the other. Sets r.ver / r.verKnown /
      r.verStages / r.verPending — see _losApplyVerification(). */
   _losApplyVerification(rows, logsRes.data, { stageSigned, rowSigned, verReadable, asAt });
+
+  /* ── IS EACH BATCH FINISHED? ─────────────────────────────────────────────
+     The Batch Record list's rule, out of shared/shared_batch_completed.js,
+     so the two lists cannot answer differently.
+
+     The LINES are cut at the As At and the SIGNATURES are not — the same
+     split every other As At rule on this report follows, and what lets
+     September go on reading as September did. The rejections are not cut
+     either: an amendment still open today is open. */
+  const _losInAsAt = (l) => { const d = _logDate(l); return !(asAt && d && d > asAt); };
+  const _losOfType = (types, cut) => (logsRes.data || []).filter(
+    l => types.indexOf(l.transaction_type) >= 0 && (!cut || _losInAsAt(l)));
+  const completedSet = (typeof MJMBatchCompleted === 'undefined') ? null
+    : MJMBatchCompleted.compute({
+        transplants:        _losOfType(['Transplanted', 'Transplanted_Premium',
+                                        'Transplanted_DoubleTone'], true),
+        transfers:          _losOfType(['Cull3_Transfer'], true),
+        cull3:              _losOfType(['3rd_Culling'], true),
+        /* OUT OF THEIR OWN READ, not out of logsRes. The ledger query asks
+           for the transaction types this report draws figures from, and
+           Row_Verification is not one of them — taking the sign-offs from
+           it gives an EMPTY list, so no batch could ever be completed by
+           the row-by-row route and only a whole-stage signature would do
+           it. rowVerRes is the read that exists for exactly this. */
+        rowVerifications:   (rowVerRes && rowVerRes.data) || [],
+        stageVerifications: (stageVerRes && stageVerRes.data) || [],
+        rejections:         _losOfType(['Review_Rejection'], false),
+        /* Cut like any other line: an adjustment approved in October has
+           not settled anything as at September. */
+        calibrations:       _losOfType(['Stock_Calibration'], true)
+      }).completed;
+  rows.forEach(r => { r.completed = !!(completedSet && completedSet.has(r.batch)); });
 
   return rows;
 }
@@ -3819,7 +3856,10 @@ async function runMovementReportCombined() {
       .in('transaction_type', ['Seeds_Received', 'Planted', 'Transplanted',
           'Transplanted_Premium', 'Transplanted_DoubleTone', 'Damaged_Seeds',
           '1st_Culling', '2nd_Culling', '3rd_Culling', 'Cull3_Transfer',
-          'Stock_Calibration'])
+          'Stock_Calibration',
+          /* Not a figure on this report — it is what holds a batch out of
+             Completed. See shared/shared_batch_completed.js. */
+          'Review_Rejection'])
       .order('id', { ascending: true })),
     // do_number/al_number added for the Sold column's hover tooltip
     // (date · DO number · customer · qty) — see mvBuildSaleDetails().
