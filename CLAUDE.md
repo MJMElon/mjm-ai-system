@@ -479,7 +479,7 @@ a difference which is NOT the adjustment still reads as over-allocated.
 
 ## An unverified figure is shown, and says it is unverified
 
-Life of Seedlings is twenty-one live sums of the batch ledger, and the ledger
+Life of Seedlings is seventeen columns of live sums of the batch ledger, and the ledger
 is filled in BEFORE anybody checks it. A figure keyed this morning and one
 signed off last week looked exactly alike.
 
@@ -495,9 +495,8 @@ Three things to know before touching `LOS_GROUP_OF_TYPE` in
 `operation/operation_reports.html`:
 
 - **The unit is the COLUMN, not the tab.** 3rd Culling and Transfer are both
-  signed on Tab 6; the three Transplant Details columns and premium care are
-  four figures on Tab 3, and the three 1st Culled columns are three figures
-  on Tab 4. A tally kept per tab puts a warning on figures somebody
+  signed on Tab 6; Transplant Qty (both halves of its split) and premium
+  care are figures on Tab 3, and 1st Culled is Tab 4. A tally kept per tab puts a warning on figures somebody
   HAS signed, and a marker that cries over fine figures is one nobody reads.
   `LOS_STAGE_OF_GROUP` is the column→tab map that keeps the two apart.
 - **A sign-off comes two ways** and either counts: one signature over a whole
@@ -710,9 +709,10 @@ side on each batch and counts the ones that were overstated.
 
 This has now shaped two groups of columns, and it is one rule.
 
-**Transplant Details**: Total Transplant Qty | Transplant Qty | Double Tone.
-**Culled Detail's first three**: Total 1st Culled Qty | 1st Culled Qty |
-Double Tone 1st Culled Qty — 749 = 600 + 149 on batch 123.
+**Transplant Qty** and **1st Culled** are each ONE column carrying a split:
+the total on top, and under a rule the two halves it is made of — *Normal*
+out of an ordinary pre-nursery tray, *DT* out of the DOUBLE-TONE tray.
+749 = 600 + 149 on batch 123.
 
 They are the allocation engine's own cards, and the rule that makes them
 coherent is that the last two are **DISJOINT halves of the first**, split by
@@ -750,15 +750,35 @@ every tray in `preNurseryTrayData` and gives the d-tone one its own icon).
 Same question as the transplant one, asked of a different column, answered by
 the same `_losTrayKey`.
 
+**A SPLIT LIVES INSIDE ITS COLUMN.** Both of these were drawn as three
+columns each to begin with, which took the table from seventeen columns to
+**twenty-one** — and at twenty-one every figure in the report was reading in
+a column too narrow for it. The detail had been bought with the legibility
+of everything beside it. A split is not three adjacent figures, it is ONE
+figure with its composition shown: the total keeps the column's size and
+weight so a reader going across a row still lands on it, and the halves sit
+small and muted underneath for the reader who stops. All three stay
+clickable and open their own records. `_losSplitCell` is the one helper and
+`_losSplitFoot` is its twin in the total row.
+
+Two things in it worth keeping:
+
+- **A split with nothing in one half is not drawn at all.** On a batch that
+  has never used the d-tone tray the sub-line would say "all of it" and
+  "none of it" — two lines of type for no information. Such a column reads
+  as a plain figure.
+- **The width the four columns gave back went to the ones that carry text.**
+  Batch/breed, supplier and the received figure, which are what actually
+  wrap.
+
 **What must NOT move when a column is split is the arithmetic underneath it.**
 Total Culled (1st + 3rd) goes on taking the WHOLE 1st culling, d-tone tray
 included, and the Balance goes on taking the WHOLE transplant. Splitting a
 column for the reader is not the same as changing what is counted, and the
 tests assert the totals did not move as well as that the halves add up.
 
-**And the headings say Culled, not Culling** — Culled Detail, Total 1st Culled
-Qty, 1st Culled Qty, Double Tone 1st Culled Qty, 2nd Culled, 3rd Culled, Total
-Culled (1st + 3rd). The office asked for one word across the group, and the
+**And the headings say Culled, not Culling** — Culled Detail, 1st Culled, 2nd
+Culled, 3rd Culled, Total Culled (1st + 3rd). The office asked for one word across the group, and the
 test counts heading TEXT inside the Life of Seedlings thead so the
 Transplanting Report further down the same file keeps its own name.
 
@@ -862,7 +882,7 @@ Seedlings thead and nothing else, which is what lets both be true.
 
 `tests/los_balance_is_what_is_standing.cjs` drives the real derived block
 with the office's five batches and holds all of it, the header-span
-arithmetic included — a thead that does not add up to twenty-one draws every
+arithmetic included — a thead that does not add up to seventeen draws every
 column after the mistake in the wrong width.
 
 ## One batch, one reception — the newest row wins

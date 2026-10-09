@@ -185,12 +185,20 @@ is('nothing at all: nought', run({}).transTotal, 0);
 
 /* ── The page, not just the arithmetic ──────────────────────────────────── */
 console.log('\n── The report markup says the same thing ──');
-is('there is a Transplant Details group of three',
-  /<th colspan="3" class="los-grp">Transplant Details<\/th>/.test(los), true);
-is('with Total Transplant Qty in front of the two',
-  los.indexOf('>Total Transplant Qty<') < los.indexOf('>Transplant Qty<'), true);
-is('Transplant Qty in front of Double Tone',
-  los.indexOf('>Transplant Qty<') < los.indexOf('>Double Tone<'), true);
+/* ONE column, not three. The split lives inside the cell — three columns
+   each for the transplant and the 1st culling made twenty-one, and at
+   twenty-one every figure in the report was reading in a column too narrow
+   for it. */
+is('Transplant Qty is one column, not a group of three',
+  /<th colspan="3" class="los-grp">Transplant Details<\/th>/.test(los), false);
+is('and it spans both header rows like any other plain column',
+  /<th rowspan="2" title="Every main-plot transplant[^"]*">Transplant Qty<\/th>/.test(los), true);
+is('the halves are drawn inside the cell',
+  /_losSplitCell\(r, 'transTotal', r\.transTotal/.test(los), true);
+is("with Normal and DT as the two labels",
+  /\[\['Normal', 'trans', r\.transMain\], \['DT', 'dtone', r\.transDtone\]\]/.test(los), true);
+is('and the foot carries the same split',
+  /_losSplitFoot\('transTotal', tot\.transTotal/.test(los), true);
 /* The office asked for the shorter word, so no heading in THIS table may
    still say the longer one. Scoped to the Life of Seedlings thead on
    purpose: the Transplanting Report further down the file is a different
@@ -204,18 +212,20 @@ is('no heading in this table still says Transplanting',
     .filter(h => h.replace(/<[^>]*>/g, '').includes('Transplanting')).length, 0);
 /* The two hovers point at the batch report cards these columns ARE, which
    is what stops the next reader rebuilding the split from scratch. */
-is('the Transplant Qty hover names the Main Plot card',
-  /batch report Main Plot card/.test(LOS_THEAD), true);
-is('and the Double Tone hover names the Main Plot \(D-Tone\) card',
-  /batch report Main Plot \(D-Tone\) card/.test(LOS_THEAD), true);
+/* The one hover left has to carry what three headings used to say: the
+   total, what each half is, and what the column is NOT. */
+is('the hover names the Main Plot and Main Plot (D-Tone) cards',
+  /Main Plot card/.test(LOS_THEAD) && /Main Plot \(D-Tone\) card/.test(LOS_THEAD), true);
+is('says which label is which',
+  /Normal is the Main Plot card/.test(LOS_THEAD) && /DT is the Main Plot \(D-Tone\) card/.test(LOS_THEAD), true);
 is('and says what it is NOT',
   /Not the Double Tone Quantity in Nursery/.test(LOS_THEAD), true);
-is('twenty-one column widths', (() => {
+is('seventeen column widths', (() => {
   const m = los.match(/const LOS_COL_WIDTHS = \[([\s\S]*?)\]/);
   return m ? m[1].split(',').length : 0;
-})(), 21);
+})(), 17);
 is('and nothing spans a stale count',
-  /colspan="(18|19|20)"/.test(los), false);
+  /colspan="(18|19|20|21)"/.test(los), false);
 
 /* The thead must have as many cells as the colgroup, counting the spans, or
    every column after the mistake is drawn in the wrong width. */
@@ -229,8 +239,8 @@ const theadRow = (n) => {
     return s + (n === 1 ? Number(cs || 1) : (r ? 0 : Number(cs || 1)));
   }, 0);
 };
-is('the top header row covers all twenty-one', theadRow(1), 21);
-is('and the second row fills every grouped column', theadRow(2), 13);
+is('the top header row covers all seventeen', theadRow(1), 17);
+is('and the second row fills every grouped column', theadRow(2), 8);
 
 console.log('\n── The verification marks follow the new formula ──');
 is('Balance is marked by the transplanting and the 3rd culling',

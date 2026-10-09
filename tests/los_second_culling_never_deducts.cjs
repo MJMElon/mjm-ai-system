@@ -144,15 +144,29 @@ const thead = (() => {
   const t = los.slice(los.indexOf('<colgroup>${LOS_COL_WIDTHS'));
   return t.slice(0, t.indexOf('</thead>'));
 })();
-is('the group is Culled Detail', /<th colspan="6" class="los-grp">Culled Detail<\/th>/.test(thead), true);
+is('the group is Culled Detail', /<th colspan="4" class="los-grp">Culled Detail<\/th>/.test(thead), true);
 is('and no heading in the table still says Culling',
   (thead.match(/<th[^>]*>([^<]*)<\/th>/g) || [])
     .filter(h => h.replace(/<[^>]*>/g, '').includes('Culling')).length, 0);
 is('3rd Culled',                 />3rd Culled</.test(thead), true);
 is('Total Culled (1st + 3rd)',   />Total Culled \(1st \+ 3rd\)</.test(thead), true);
-is('Total 1st Culled Qty first', thead.indexOf('>Total 1st Culled Qty<') < thead.indexOf('>1st Culled Qty<'), true);
-is('then Double Tone 1st Culled Qty',
-  thead.indexOf('>1st Culled Qty<') < thead.indexOf('>Double Tone 1st Culled Qty<'), true);
+/* ONE column, with the split inside the cell. Three columns for this and
+   three for the transplant made twenty-one, which left every figure in the
+   report reading in a column too narrow for it. */
+is('1st Culled is one column', />1st Culled</.test(thead), true);
+is('not three', /Double Tone 1st Culled Qty/.test(thead), false);
+is('and the hover says what the two labels under the rule mean',
+  /Normal is an ordinary pre-nursery tray/.test(thead) && /DT is the DOUBLE-TONE tray/.test(thead), true);
+is('the halves are drawn inside the cell',
+  /_losSplitCell\(r, 'cull1Total', r\.cull1Total/.test(los), true);
+is("with Normal and DT as the two labels",
+  /\[\['Normal', 'cull1', r\.cull1Main\], \['DT', 'cull1Dtone', r\.cull1Dtone\]\]/.test(los), true);
+is('and the foot carries the same split',
+  /_losSplitFoot\('cull1Total', tot\.cull1/.test(los), true);
+/* A batch that never used the d-tone tray gets no sub-line at all: "all of
+   it" and "none of it" is two lines of type for no information. */
+is('a split with nothing in one half is not drawn',
+  /const shown = parts\.filter\(p => p\[2\]\);/.test(los), true);
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
 process.exit(fail ? 1 : 0);
