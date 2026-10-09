@@ -1126,6 +1126,10 @@
             return months + (months === 1 ? ' month' : ' months');
         }
 
+        /* Set while a search is moving the page to the other half, so the
+           re-render it causes cannot start moving again. */
+        let _jumpingTabs = false;
+
         /* The line under the tab bar. Cleared at the top of every render so a
            note from the last search cannot outlive the search that caused it. */
         function setListSearchNote(text) {
@@ -1209,34 +1213,56 @@
                 : currentListTab === 'active'  ? !b.isCompleted
                 : b.isCompleted
             );
-            /* A SEARCH IS A SEARCH OF THE WHOLE LEDGER.
+            /* A SEARCH TAKES YOU TO THE BATCH.
                Typing 235 asks WHERE batch 235 is, and the answer must not
                depend on which tab happened to be open when it was typed.
-               Active and Completed are two halves of one list, so a query
-               looks at both of them -- the Current Stage column on the row
-               says which half it came from, and the note above says so too.
+               Active and Completed are two halves of one list, so when the
+               half somebody is looking at has nothing matching and the other
+               half does, the page GOES THERE: it opens that tab and shows the
+               batch on it, and the line above the table says it moved.
 
-               Amendment Needed and To Check are NOT widened. Those tabs are
-               not halves of the batch list, they are questions -- which
-               report to go and fix, which one to go and check -- and a row
-               with nothing to fix is not an answer to either of them. */
-            const splitTab    = currentListTab === 'active' || currentListTab === 'completed';
-            const searchScope = query && splitTab ? masterBatches : tabFiltered;
-            const searchFiltered = query
-                ? searchScope.filter(b =>
-                    (b.batch_name || '').toLowerCase().includes(query) ||
-                    (b.breed_name || '').toLowerCase().includes(query))
-                : tabFiltered;
+               It moves only off an empty answer. A query that matches
+               something on this tab stays put -- being carried off a screen
+               with the thing you were looking at on it is worse than not
+               being carried at all -- and the line then says how many more
+               are in the other half, so the rest is one click away.
+
+               The To Do List and To Check are NOT in this. Those tabs are not
+               halves of the batch list, they are questions -- which report to
+               go and fix, which one to go and check -- and a row with nothing
+               to fix is not an answer to either of them. Nor is Tray Status,
+               which is not a list of batches at all. */
+            const splitTab = currentListTab === 'active' || currentListTab === 'completed';
+            const matchQ   = (b) => (b.batch_name || '').toLowerCase().includes(query)
+                                 || (b.breed_name || '').toLowerCase().includes(query);
+            const searchFiltered = query ? tabFiltered.filter(matchQ) : tabFiltered;
 
             if (query && splitTab) {
-                const otherTab = currentListTab === 'active' ? 'Completed' : 'Active';
-                const outside  = searchFiltered.filter(b =>
-                    currentListTab === 'active' ? b.isCompleted : !b.isCompleted).length;
-                if (outside) {
+                const otherTab  = currentListTab === 'active' ? 'completed' : 'active';
+                const otherName = currentListTab === 'active' ? 'Completed'  : 'Active';
+                const elsewhere = masterBatches.filter(b =>
+                    matchQ(b) && (currentListTab === 'active' ? b.isCompleted : !b.isCompleted));
+
+                if (!searchFiltered.length && elsewhere.length) {
+                    /* Guarded because switchListTab calls straight back in
+                       here: the tab it lands on has the matches, so it cannot
+                       bounce, and the flag says so rather than trusting it. */
+                    if (!_jumpingTabs) {
+                        _jumpingTabs = true;
+                        try {
+                            switchListTab(otherTab);
+                            setListSearchNote(
+                                `Nothing matching "${query}" in `
+                                + `${currentListTab === 'completed' ? 'Active' : 'Completed'} — `
+                                + `${elsewhere.length === 1 ? 'it is' : 'they are'} in ${otherName}, `
+                                + `which is the tab you are on now.`);
+                        } finally { _jumpingTabs = false; }
+                        return;
+                    }
+                } else if (elsewhere.length) {
                     setListSearchNote(
-                        `A search looks at every batch, not just this tab — ${outside} of these `
-                        + `${searchFiltered.length} ${outside === 1 ? 'is' : 'are'} in ${otherTab}. `
-                        + `The Current Stage column says which.`);
+                        `${elsewhere.length} more matching "${query}" `
+                        + `${elsewhere.length === 1 ? 'is' : 'are'} in ${otherName}.`);
                 }
             }
 

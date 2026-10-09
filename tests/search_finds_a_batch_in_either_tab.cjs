@@ -11,8 +11,8 @@
    a line above the table says so as well, so a Completed batch listed under
    Active does not read as a fault.
 
-   Amendment Needed and To Check are NOT widened, and that is the interesting
-   half of this test. Those tabs are not halves of the batch list, they are
+   The To Do List and To Check do NOT move, and that is the interesting half
+   of this test. Those tabs are not halves of the batch list, they are
    questions — which report to go and fix, which one to go and check — and a
    row with nothing to fix is not an answer to either of them.
 
@@ -124,7 +124,13 @@ const ROWS = {
     filterLedger();
     await new Promise(r => setTimeout(r, 250));
     const note = document.getElementById('list-search-note');
+    const lit  = ['active', 'completed', 'amendment', 'tocheck', 'tray']
+      .find(n => document.getElementById('tab-' + n).className.includes('list-tab-active'));
     return {
+      /* The tab that is LIT, not the one asked for -- a search may have moved
+         the page, and the lit chip is what somebody looking at it would say
+         they are on. */
+      tab: lit,
       rows: [...document.querySelectorAll('#ledger-body tr')].map(r =>
         [...r.children].map(c => (c.textContent || '').replace(/\s+/g, ' ').trim())),
       note: note && !note.classList.contains('hidden') ? note.textContent.replace(/\s+/g, ' ').trim() : ''
@@ -138,6 +144,9 @@ const ROWS = {
   const activeNoQ  = await look('active', '');
   const active235  = await look('active', '235');
   const compl236   = await look('completed', '236');
+  /* Matches in BOTH halves: 23 catches all three. The page must NOT move
+     somebody off a screen that is already answering them. */
+  const bothHalves = await look('active', '23');
   const nowhere    = await look('active', '999');
   const cleared    = await look('active', '');
   const amend235   = await look('amendment', '235');
@@ -150,8 +159,9 @@ const ROWS = {
 
   console.log('split        :', JSON.stringify(split));
   console.log('tab label    :', JSON.stringify(tabLabel));
-  console.log('active, 235  :', JSON.stringify(names(active235)), '|', JSON.stringify(active235.note));
-  console.log('completed,236:', JSON.stringify(names(compl236)), '|', JSON.stringify(compl236.note));
+  console.log('active, 235  :', active235.tab, JSON.stringify(names(active235)), '|', JSON.stringify(active235.note));
+  console.log('completed,236:', compl236.tab, JSON.stringify(names(compl236)), '|', JSON.stringify(compl236.note));
+  console.log('active, 23   :', bothHalves.tab, JSON.stringify(names(bothHalves)), '|', JSON.stringify(bothHalves.note));
   console.log('active, none :', JSON.stringify(names(activeNoQ)));
   console.log('nowhere      :', JSON.stringify(first(nowhere)));
   console.log('amendment,235:', JSON.stringify(names(amend235)));
@@ -165,13 +175,19 @@ const ROWS = {
     ['the tab reads Completed', /^✅?\s*completed$/i.test(tabLabel)],
     ['and no longer says In-Active', !/in-?active/i.test(tabLabel)],
 
-    // the ask
-    ['235 is found from the Active tab', names(active235).includes('235')],
-    ['and the row says it is Completed', first(active235).some(c => /completed/i.test(c))],
-    ['with a line saying the search crossed the tab', /every batch/i.test(active235.note)],
-    ['naming which tab it came from', /completed/i.test(active235.note)],
-    ['and the other way round too', names(compl236).includes('236')],
-    ['with its own line', /active/i.test(compl236.note)],
+    // the ask: looking for 235 on Active lands you on Completed, with 235 on it
+    ['searching 235 from Active moves to the Completed tab', active235.tab === 'completed'],
+    ['and 235 is on the screen', names(active235).includes('235')],
+    ['and the line says it moved', /nothing matching "235" in active/i.test(active235.note)],
+    ['naming where it took you', /in Completed/i.test(active235.note)],
+    ['and the other way round too', compl236.tab === 'active' && names(compl236).includes('236')],
+    ['with its own line', /nothing matching "236" in completed/i.test(compl236.note)],
+
+    // a query answered on this tab must not carry anybody off it
+    ['a search that this tab can answer does not move', bothHalves.tab === 'active'],
+    ['it lists this tab only', names(bothHalves).includes('236') && names(bothHalves).includes('237')
+        && !names(bothHalves).includes('235')],
+    ['and says how many more are in the other half', /1 more matching "23" is in Completed/i.test(bothHalves.note)],
 
     // the split still means something when nobody is searching
     ['with no search, Active is Active only', names(activeNoQ).includes('236') && !names(activeNoQ).includes('235')],
@@ -181,10 +197,10 @@ const ROWS = {
     ['a batch in neither half says so', first(nowhere).some(c => /in Active or in Completed/i.test(c))],
 
     // the tabs that are questions, not halves
-    ['Amendment Needed is not widened by a search', !names(amend235).includes('235')],
+    ['the To Do List does not move', amend235.tab === 'amendment' && !names(amend235).includes('235')],
     ['it still answers its own question', names(amend237).includes('237')],
-    ['To Check is not widened either', !names(check236).includes('236')],
-    ['and Tray Status is left alone', !names(tray235).includes('235')],
+    ['To Check does not move either', check236.tab === 'tocheck' && !names(check236).includes('236')],
+    ['and Tray Status is left alone', tray235.tab === 'tray' && !names(tray235).includes('235')],
 
     ['no page errors', errs.length === 0]
   ];

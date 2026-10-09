@@ -1345,7 +1345,7 @@ Still worth knowing: a browser that already holds a stale copy needs one hard
 reload (Ctrl/Cmd + Shift + R) to pick up the metas in the first place. After
 that it stays fresh by itself.
 
-## A search is a search of the WHOLE ledger
+## A search takes you to the batch
 
 Batch Info splits its list in two: Active, and Completed. The search box sat
 INSIDE that split, so typing 235 on the Active tab answered **"No batches
@@ -1355,17 +1355,28 @@ Typing a batch number is not asking "is 235 on this tab". It is asking WHERE
 235 is, and the answer must not depend on which tab happened to be open when
 it was typed. **A batch that cannot be found is a batch somebody keys again.**
 
-So a query looks at both halves. Two things keep that from being confusing:
-the **Current Stage** column on the row already says Completed, and a line
-above the table says the search crossed the tab and how many of the rows came
-from the other half.
+The first version of this showed the Completed batch on the Active tab with a
+line explaining itself, which answers the question and leaves somebody on a
+tab that is lying about what it holds. **So the page GOES THERE**: it opens
+the tab the batch is on, shows it, and the line says it moved and where from.
 
-**Amendment Needed and To Check are NOT widened, and that is the half worth
+**It moves only off an EMPTY answer.** A query that matches something on this
+tab stays put — being carried off a screen with the thing you were looking at
+on it is worse than not being carried at all — and the line then says how
+many more are in the other half, so the rest is one click away. A query that
+matches nothing anywhere stays put too, and says *in Active or in Completed*,
+so a miss reads as a miss rather than as the wrong tab.
+
+**The To Do List and To Check do NOT move, and that is the half worth
 remembering.** Those tabs are not halves of the batch list, they are
 questions — which report to go and fix, which one to go and check — and a row
 with nothing to fix is not an answer to either of them. Tray Status is a
 different shape again and searches trays. `splitTab` in `renderLedgerTable`
 is the one place that decides, and only Active and Completed are in it.
+
+`switchListTab` calls straight back into `renderLedgerTable`, so the move is
+behind a `_jumpingTabs` flag. The tab it lands on has the matches, so it
+cannot bounce — the flag says so rather than trusting it to.
 
 The tab is called **Completed**. It said "Completed / In-Active", which named
 the same thing twice.
