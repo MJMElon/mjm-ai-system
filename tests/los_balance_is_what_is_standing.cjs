@@ -210,11 +210,12 @@ is('and the Double Tone hover names the Main Plot \(D-Tone\) card',
   /batch report Main Plot \(D-Tone\) card/.test(LOS_THEAD), true);
 is('and says what it is NOT',
   /Not the Double Tone Quantity in Nursery/.test(LOS_THEAD), true);
-is('nineteen column widths', (() => {
+is('twenty-one column widths', (() => {
   const m = los.match(/const LOS_COL_WIDTHS = \[([\s\S]*?)\]/);
   return m ? m[1].split(',').length : 0;
-})(), 19);
-is('and nothing still spans eighteen', /colspan="18"/.test(los), false);
+})(), 21);
+is('and nothing spans a stale count',
+  /colspan="(18|19|20)"/.test(los), false);
 
 /* The thead must have as many cells as the colgroup, counting the spans, or
    every column after the mistake is drawn in the wrong width. */
@@ -228,8 +229,8 @@ const theadRow = (n) => {
     return s + (n === 1 ? Number(cs || 1) : (r ? 0 : Number(cs || 1)));
   }, 0);
 };
-is('the top header row covers all nineteen', theadRow(1), 19);
-is('and the second row fills every grouped column', theadRow(2), 11);
+is('the top header row covers all twenty-one', theadRow(1), 21);
+is('and the second row fills every grouped column', theadRow(2), 13);
 
 console.log('\n── The verification marks follow the new formula ──');
 is('Balance is marked by the transplanting and the 3rd culling',
