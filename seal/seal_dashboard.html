@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seal Management</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230d9488%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2714%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3ESL%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../shared/shared_supabase.js"></script>
+<script src="../shared/shared_access.js"></script>
+<script src="../shared/shared_nelos.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  * { font-family:'Outfit', system-ui, sans-serif; }
+  body { background:#f0fdfa; margin:0; }
+  .hidden { display:none !important; }
+  .pn-out { display:inline-flex; align-items:center; gap:8px; font-size:10px; font-weight:800;
+            letter-spacing:.12em; text-transform:uppercase; color:#0f766e; text-decoration:none;
+            background:white; border:1.5px solid #99f6e4; border-radius:99px;
+            padding:8px 16px; transition:background .15s, border-color .15s; }
+  .pn-out:hover { background:#ccfbf1; border-color:#5eead4; }
+  .card { background:white; border:1.5px solid #ccfbf1; border-radius:20px; box-shadow:0 6px 20px rgba(13,148,136,.07); }
+  .tab { padding:9px 16px; border-radius:99px; font-size:11px; font-weight:900; letter-spacing:.08em;
+         text-transform:uppercase; color:#0f766e; background:white; border:1.5px solid #ccfbf1; cursor:pointer; }
+  .tab.on { background:#0d9488; color:white; border-color:#0d9488; }
+  .stat { cursor:pointer; padding:14px 16px; border-radius:16px; border:2px solid transparent; transition:transform .12s; }
+  .stat:hover { transform:translateY(-2px); }
+  .stat.on { border-color:#0f172a; }
+  .inp { width:100%; padding:10px 12px; border:1.5px solid #e2e8f0; border-radius:12px; font-weight:700; font-size:13px; outline:none; }
+  .inp:focus { border-color:#14b8a6; }
+  .lbl { font-size:10px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; color:#64748b; margin-bottom:4px; display:block; }
+  .btn { padding:10px 18px; border-radius:12px; font-weight:900; font-size:12px; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; }
+  .btn-main { background:#0d9488; color:white; }
+  .btn-main:hover { background:#0f766e; }
+  .btn-soft { background:white; color:#0f766e; border:1.5px solid #99f6e4; }
+  table.t { width:100%; border-collapse:collapse; font-size:12px; }
+  table.t th { text-align:left; font-size:9px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; color:#94a3b8; padding:10px 8px; border-bottom:1.5px solid #f1f5f9; }
+  table.t td { padding:10px 8px; border-bottom:1px solid #f1f5f9; font-weight:700; color:#334155; vertical-align:top; }
+  .badge { display:inline-block; padding:3px 9px; border-radius:99px; font-size:9px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; }
+  /* One colour per state, the same four on every screen that shows a seal:
+     Mobile, FC Portal and the Sales Web use these too. */
+  .s-in_stock  { background:#f1f5f9; color:#475569; }
+  .s-pending   { background:#fef3c7; color:#92400e; }
+  .s-scanned   { background:#dbeafe; color:#1e40af; }
+  .s-collected { background:#d1fae5; color:#065f46; }
+  .mono { font-variant-numeric:tabular-nums; letter-spacing:.02em; }
+  .thumb { width:52px; height:52px; object-fit:cover; border-radius:10px; border:1.5px solid #e2e8f0; cursor:zoom-in; }
+</style>
+</head>
+<body>
+
+<div id="mjm-ribbon" data-brand="MJM Nursery AI System" data-center="Seal Management"
+     data-center-scale="0.7" data-logo="off"></div>
+<script src="../shared/shared_ribbon.js"></script>
+
+<div id="loading" class="max-w-[1180px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Checking access…</div>
+
+<div id="main" class="max-w-[1180px] mx-auto px-4 md:px-6 py-8 hidden">
+
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+    <a class="pn-out" href="../index.html"><span aria-hidden="true">&#8592;</span><span>Back to Main Portal</span></a>
+    <a class="pn-out hidden" id="user-access-btn" href="../user_access.html">🔐 User Access</a>
+  </div>
+
+  <div id="nelos-todo" class="mb-6"></div>
+
+  <div id="setup-missing" class="card p-6 mb-6 hidden">
+    <div class="font-black text-amber-700">Seal data is not set up yet</div>
+    <p class="text-sm font-bold text-slate-500 mt-1">Run <span class="mono">shared/RUN_ME_seal_management.sql</span> in the Supabase SQL Editor, then reload this page.</p>
+  </div>
+
+  <div class="flex flex-wrap gap-2 mb-5" id="tabs">
+    <button class="tab on" data-tab="list">Seal List</button>
+    <button class="tab" data-tab="orders">Orders</button>
+    <button class="tab" data-tab="receipts">Received</button>
+    <button class="tab" data-tab="problems">Problems <span id="prob-count"></span></button>
+    <button class="tab hidden" data-tab="settings" id="tab-settings-btn">Settings</button>
+  </div>
+
+  <!-- SEAL LIST -->
+  <section data-pane="list">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" id="stats"></div>
+    <div class="card p-4 mb-4 flex flex-wrap gap-3 items-end">
+      <div class="flex-1 min-w-[220px]">
+        <label class="lbl">Search</label>
+        <input id="q" class="inp" placeholder="Seal number, customer, AL or DO">
+      </div>
+      <div class="text-[11px] font-bold text-slate-400 pb-2" id="list-note"></div>
+    </div>
+    <div class="card p-2 overflow-x-auto"><div id="list-table" class="p-4 text-sm font-bold text-slate-400">Loading…</div></div>
+  </section>
+
+  <!-- ORDERS -->
+  <section data-pane="orders" class="hidden">
+    <div class="card p-5 mb-4">
+      <div class="font-black text-slate-800 mb-3">New order to the seal supplier</div>
+      <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
+        <div><label class="lbl">Order no.</label><input id="o-no" class="inp" placeholder="PO-…"></div>
+        <div class="md:col-span-2"><label class="lbl">Supplier</label><input id="o-supplier" class="inp"></div>
+        <div><label class="lbl">Qty (seals)</label><input id="o-qty" type="number" min="1" class="inp"></div>
+        <div><label class="lbl">Order date</label><input id="o-date" type="date" class="inp"></div>
+        <div><label class="lbl">Expected</label><input id="o-exp" type="date" class="inp"></div>
+        <div class="md:col-span-5"><label class="lbl">Remark</label><input id="o-remark" class="inp"></div>
+        <div class="flex items-end"><button class="btn btn-main w-full" id="o-save">Save order</button></div>
+      </div>
+    </div>
+    <div class="card p-2 overflow-x-auto"><div id="orders-table" class="p-4 text-sm font-bold text-slate-400">Loading…</div></div>
+  </section>
+
+  <!-- RECEIVED -->
+  <section data-pane="receipts" class="hidden">
+    <div class="card p-4 mb-4 text-sm font-bold text-slate-500">
+      Seals are received at UNN 1 on the <b>555 Admin Portal → Seal Management → Receive Seals</b>,
+      with the range of every roll and a photo. Each delivery shows here.
+    </div>
+    <div class="card p-2 overflow-x-auto"><div id="receipts-table" class="p-4 text-sm font-bold text-slate-400">Loading…</div></div>
+  </section>
+
+  <!-- PROBLEMS -->
+  <section data-pane="problems" class="hidden">
+    <div class="card p-4 mb-4 text-sm font-bold text-slate-500">
+      Every problem the system found on a seal — a range given to two customers, a seal collected for the
+      wrong customer, a roll received twice. Each one opened a NELOS case to HQ. Mark it resolved here
+      once the record has been put right.
+      <label class="ml-3 text-slate-600"><input type="checkbox" id="p-show-resolved"> show resolved</label>
+    </div>
+    <div class="card p-2 overflow-x-auto"><div id="problems-table" class="p-4 text-sm font-bold text-slate-400">Loading…</div></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section data-pane="settings" class="hidden">
+    <div class="card p-5 max-w-[640px]">
+      <div class="font-black text-slate-800 mb-1">Check seals against received stock</div>
+      <p class="text-sm font-bold text-slate-500 mb-3">
+        Off until the seals already at UNN 1 have been keyed as opening stock. While off, a consent is not
+        checked for seals the company never received. Turn it on once the opening stock is in.
+      </p>
+      <label class="font-black text-slate-700"><input type="checkbox" id="st-enforce"> Raise a problem for a seal that was never received</label>
+      <div class="mt-5">
+        <label class="lbl">NELOS queue for seal cases</label>
+        <select id="st-module" class="inp"></select>
+        <p class="text-[11px] font-bold text-slate-400 mt-1">Default: the HQ system (every handler there sees the case, nobody is assigned alone).</p>
+      </div>
+      <button class="btn btn-main mt-5" id="st-save">Save settings</button>
+    </div>
+  </section>
+</div>
+
+<div id="toast" class="fixed bottom-6 right-6 hidden z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg"></div>
+<div id="lightbox" class="fixed inset-0 bg-black/80 hidden z-[90] flex items-center justify-center p-6" onclick="this.classList.add('hidden')">
+  <img id="lightbox-img" class="max-w-full max-h-full rounded-xl" alt="">
+</div>
+
+<script>
+const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
+
+const STATUS = {
+  in_stock:  { label: 'In stock',           cls: 's-in_stock',  bg: '#f8fafc', ink: '#475569' },
+  pending:   { label: 'Pending collection', cls: 's-pending',   bg: '#fffbeb', ink: '#92400e' },
+  scanned:   { label: 'Scanned, no DO yet', cls: 's-scanned',   bg: '#eff6ff', ink: '#1e40af' },
+  collected: { label: 'Collected',          cls: 's-collected', bg: '#ecfdf5', ink: '#065f46' },
+};
+const PROBLEM_LABEL = {
+  consent_overlap:      'Given to two customers',
+  consent_not_received: 'Never received',
+  consent_bad_range:    'Unreadable range',
+  receive_overlap:      'Received twice',
+  collect_other:        'Wrong customer at collection',
+  collect_not_issued:   'Collected, on no consent',
+};
+
+let rows = [];          // seal_list, unfiltered by status
+let statusFilter = null;
+let isAdmin = false;
+let staffName = '';
+
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmt = (n) => Number(n || 0).toLocaleString('en-MY');
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+const range = (a, b) => (!b || a === b) ? esc(a) : esc(a) + ' – ' + esc(b);
+// Local date, never toISOString: that is yesterday in Malaysia until 8am.
+const todayLocal = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+
+function toast(msg, bad) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'fixed bottom-6 right-6 z-[80] px-5 py-3 rounded-xl font-bold text-sm shadow-lg ' + (bad ? 'bg-red-600 text-white' : 'bg-teal-700 text-white');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add('hidden'), 3200);
+}
+function lightbox(url) {
+  document.getElementById('lightbox-img').src = url;
+  document.getElementById('lightbox').classList.remove('hidden');
+}
+// A missing function or table is the SQL not having been run -- say so once,
+// rather than an error per tab.
+function missingSetup(error) {
+  const m = String((error && (error.message || error.code)) || '');
+  if (/does not exist|PGRST202|PGRST205|42883|42P01|schema cache/i.test(m)) {
+    document.getElementById('setup-missing').classList.remove('hidden');
+    return true;
+  }
+  return false;
+}
+
+// ── TABS ─────────────────────────────────────────────────────────────────
+const loaded = {};
+function switchTab(tab) {
+  document.querySelectorAll('#tabs .tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
+  document.querySelectorAll('[data-pane]').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== tab));
+  if (!loaded[tab]) { loaded[tab] = true; ({ list: loadList, orders: loadOrders, receipts: loadReceipts, problems: loadProblems, settings: loadSettings })[tab](); }
+  history.replaceState(null, '', '?tab=' + tab);
+}
+document.querySelectorAll('#tabs .tab').forEach((b) => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+
+// ── SEAL LIST ────────────────────────────────────────────────────────────
+let searchTimer = null;
+document.getElementById('q').addEventListener('input', () => {
+  clearTimeout(searchTimer); searchTimer = setTimeout(loadList, 300);
+});
+
+async function loadList() {
+  const q = document.getElementById('q').value.trim();
+  const box = document.getElementById('list-table');
+  const { data, error } = await _supabase.rpc('seal_list', { p_search: q || null, p_status: null });
+  if (error) {
+    box.innerHTML = missingSetup(error) ? 'Not set up yet.' : '<span class="text-red-600">' + esc(error.message) + '</span>';
+    return;
+  }
+  rows = data || [];
+  renderStats();
+  renderList();
+}
+
+function renderStats() {
+  const tot = {};
+  Object.keys(STATUS).forEach((k) => { tot[k] = { qty: 0, n: 0 }; });
+  rows.forEach((r) => { if (tot[r.seg_status]) { tot[r.seg_status].qty += Number(r.qty) || 0; tot[r.seg_status].n++; } });
+  document.getElementById('stats').innerHTML = Object.keys(STATUS).map((k) => {
+    const s = STATUS[k];
+    return '<div class="stat ' + (statusFilter === k ? 'on' : '') + '" data-st="' + k + '" style="background:' + s.bg + ';color:' + s.ink + '">'
+      + '<div class="text-[10px] font-black uppercase tracking-widest opacity-80">' + s.label + '</div>'
+      + '<div class="text-2xl font-black mono mt-1">' + fmt(tot[k].qty) + '</div>'
+      + '<div class="text-[11px] font-bold opacity-70">' + tot[k].n + ' range' + (tot[k].n === 1 ? '' : 's') + '</div></div>';
+  }).join('');
+  document.querySelectorAll('#stats .stat').forEach((el) => el.addEventListener('click', () => {
+    statusFilter = statusFilter === el.dataset.st ? null : el.dataset.st;
+    renderStats(); renderList();
+  }));
+}
+
+function renderList() {
+  const list = statusFilter ? rows.filter((r) => r.seg_status === statusFilter) : rows;
+  const q = document.getElementById('q').value.trim();
+  document.getElementById('list-note').textContent = list.length + ' range' + (list.length === 1 ? '' : 's')
+    + (statusFilter ? ' · ' + STATUS[statusFilter].label : '') + (q ? ' · matching "' + q + '"' : '');
+  const box = document.getElementById('list-table');
+  if (!list.length) { box.innerHTML = '<div class="p-6 text-center text-slate-400">No seals' + (q ? ' match this search' : ' yet') + '.</div>'; return; }
+  box.innerHTML = '<table class="t"><thead><tr><th>Seal range</th><th class="text-right">Qty</th><th>Status</th><th>Customer</th><th>AL</th><th>Consent / received</th><th>DO</th></tr></thead><tbody>'
+    + list.map((r) => {
+      const s = STATUS[r.seg_status] || { label: r.seg_status, cls: '' };
+      const warn = Number(r.open_problems) > 0
+        ? ' <a href="#" class="badge bg-red-100 text-red-700" onclick="switchTab(\'problems\');return false;">⚠ ' + r.open_problems + '</a>' : '';
+      return '<tr><td class="mono font-black text-slate-800">' + range(r.start_code, r.end_code) + '</td>'
+        + '<td class="text-right mono">' + fmt(r.qty) + '</td>'
+        + '<td><span class="badge ' + s.cls + '">' + s.label + '</span></td>'
+        + '<td>' + esc(r.customer_name || '—') + warn + '</td>'
+        + '<td class="mono">' + esc(r.al_number || '—') + '</td>'
+        + '<td>' + fmtDate(r.consent_at) + '</td>'
+        + '<td class="mono">' + esc(r.do_number || '—') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+// ── ORDERS ───────────────────────────────────────────────────────────────
+document.getElementById('o-date').value = todayLocal();
+document.getElementById('o-save').addEventListener('click', async () => {
+  const qty = parseInt(document.getElementById('o-qty').value, 10);
+  if (!(qty > 0)) { toast('Enter how many seals were ordered.', true); return; }
+  const row = {
+    order_no: document.getElementById('o-no').value.trim() || null,
+    supplier: document.getElementById('o-supplier').value.trim() || null,
+    qty,
+    order_date: document.getElementById('o-date').value || todayLocal(),
+    expected_date: document.getElementById('o-exp').value || null,
+    remark: document.getElementById('o-remark').value.trim() || null,
+    created_by: staffName,
+    created_by_id: (MJMAccess.user() || {}).id || null,
+  };
+  const { error } = await _supabase.from('seal_orders').insert([row]);
+  if (error) { missingSetup(error); toast(error.message, true); return; }
+  ['o-no', 'o-supplier', 'o-qty', 'o-exp', 'o-remark'].forEach((id) => { document.getElementById(id).value = ''; });
+  toast('Order saved.');
+  loadOrders();
+});
+
+async function loadOrders() {
+  const box = document.getElementById('orders-table');
+  const [o, r] = await Promise.all([
+    _supabase.from('seal_orders').select('*').order('order_date', { ascending: false }).limit(300),
+    _supabase.from('seal_receipts').select('id,order_id,received_date,ranges').not('order_id', 'is', null),
+  ]);
+  if (o.error) { box.innerHTML = missingSetup(o.error) ? 'Not set up yet.' : esc(o.error.message); return; }
+  // Received per order is counted off the ranges, the same way the stock is.
+  const got = {};
+  (r.data || []).forEach((x) => {
+    const n = (x.ranges || []).reduce((t, g) => t + sealQty(g.start, g.end), 0);
+    got[x.order_id] = (got[x.order_id] || 0) + n;
+  });
+  const list = o.data || [];
+  if (!list.length) { box.innerHTML = '<div class="p-6 text-center text-slate-400">No orders yet.</div>'; return; }
+  box.innerHTML = '<table class="t"><thead><tr><th>Order date</th><th>Order no.</th><th>Supplier</th><th class="text-right">Ordered</th><th class="text-right">Received</th><th>Expected</th><th>Status</th><th>Remark</th><th></th></tr></thead><tbody>'
+    + list.map((x) => {
+      const rec = got[x.id] || 0;
+      const st = x.status === 'Closed' ? 'Closed' : rec >= x.qty ? 'Received' : rec > 0 ? 'Partly received' : 'Ordered';
+      const cls = st === 'Received' || st === 'Closed' ? 's-collected' : st === 'Partly received' ? 's-pending' : 's-in_stock';
+      return '<tr><td>' + fmtDate(x.order_date) + '</td><td class="mono">' + esc(x.order_no || '—') + '</td><td>' + esc(x.supplier || '—') + '</td>'
+        + '<td class="text-right mono">' + fmt(x.qty) + '</td><td class="text-right mono">' + fmt(rec) + '</td>'
+        + '<td>' + fmtDate(x.expected_date) + '</td><td><span class="badge ' + cls + '">' + st + '</span></td>'
+        + '<td class="text-slate-500">' + esc(x.remark || '') + '</td>'
+        + '<td>' + (x.status === 'Closed' ? '' : '<button class="btn btn-soft" style="padding:5px 10px;font-size:10px" onclick="closeOrder(' + x.id + ')">Close</button>') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+async function closeOrder(id) {
+  if (!confirm('Close this order? Use it when no more seals will come against it.')) return;
+  const { error } = await _supabase.from('seal_orders').update({ status: 'Closed' }).eq('id', id);
+  if (error) { toast(error.message, true); return; }
+  loadOrders();
+}
+
+function sealNo(c) { const d = String(c == null ? '' : c).replace(/\D+/g, ''); return d && d.length <= 15 ? Number(d) : null; }
+function sealQty(a, b) { const x = sealNo(a), y = sealNo(b || a); return x == null || y == null ? 0 : Math.abs(y - x) + 1; }
+
+// ── RECEIVED ─────────────────────────────────────────────────────────────
+async function loadReceipts() {
+  const box = document.getElementById('receipts-table');
+  const [r, o] = await Promise.all([
+    _supabase.from('seal_receipts').select('*').order('received_date', { ascending: false }).order('id', { ascending: false }).limit(300),
+    _supabase.from('seal_orders').select('id,order_no,supplier'),
+  ]);
+  if (r.error) { box.innerHTML = missingSetup(r.error) ? 'Not set up yet.' : esc(r.error.message); return; }
+  const orders = {}; (o.data || []).forEach((x) => { orders[x.id] = x; });
+  const list = r.data || [];
+  if (!list.length) { box.innerHTML = '<div class="p-6 text-center text-slate-400">Nothing received yet.</div>'; return; }
+  box.innerHTML = '<table class="t"><thead><tr><th>Received</th><th>Ranges</th><th class="text-right">Qty</th><th>Order</th><th>Received by</th><th>Photos</th><th>Remark</th></tr></thead><tbody>'
+    + list.map((x) => {
+      const rs = Array.isArray(x.ranges) ? x.ranges : [];
+      const qty = rs.reduce((t, g) => t + sealQty(g.start, g.end), 0);
+      const ord = x.order_id && orders[x.order_id];
+      const photos = (Array.isArray(x.photo_urls) ? x.photo_urls : []).map((u) => '<img class="thumb" src="' + esc(u) + '" onclick="lightbox(\'' + esc(u) + '\')" alt="">').join(' ');
+      return '<tr><td>' + fmtDate(x.received_date) + (x.is_opening ? ' <span class="badge s-pending">Opening stock</span>' : '') + '<div class="text-[10px] text-slate-400">' + esc(x.site) + '</div></td>'
+        + '<td class="mono">' + rs.map((g) => range(g.start, g.end)).join('<br>') + '</td>'
+        + '<td class="text-right mono">' + fmt(qty) + '</td>'
+        + '<td>' + (ord ? esc((ord.order_no || 'Order') + ' · ' + (ord.supplier || '')) : '—') + '</td>'
+        + '<td>' + esc(x.received_by || '—') + '</td><td class="flex gap-1 flex-wrap">' + (photos || '—') + '</td>'
+        + '<td class="text-slate-500">' + esc(x.remark || '') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+// ── PROBLEMS ─────────────────────────────────────────────────────────────
+document.getElementById('p-show-resolved').addEventListener('change', loadProblems);
+
+async function loadProblems() {
+  const box = document.getElementById('problems-table');
+  let q = _supabase.from('seal_problems').select('*').order('created_at', { ascending: false }).limit(500);
+  if (!document.getElementById('p-show-resolved').checked) q = q.eq('status', 'open');
+  const { data, error } = await q;
+  if (error) { box.innerHTML = missingSetup(error) ? 'Not set up yet.' : esc(error.message); return; }
+  const list = data || [];
+  const open = list.filter((p) => p.status === 'open').length;
+  document.getElementById('prob-count').textContent = open ? '(' + open + ')' : '';
+  const focus = Number(new URLSearchParams(location.search).get('problem')) || null;
+  if (!list.length) { box.innerHTML = '<div class="p-6 text-center text-slate-400">No problems.</div>'; return; }
+  box.innerHTML = '<table class="t"><thead><tr><th>Found</th><th>Problem</th><th>Seals</th><th>For</th><th>Belongs to</th><th>Detail</th><th>NELOS</th><th></th></tr></thead><tbody>'
+    + list.map((p) => {
+      const ring = p.id === focus ? ' style="background:#fef9c3"' : '';
+      return '<tr' + ring + '><td>' + fmtDate(p.created_at) + '</td>'
+        + '<td><span class="badge ' + (p.status === 'open' ? 'bg-red-100 text-red-700' : 's-collected') + '">' + esc(PROBLEM_LABEL[p.kind] || p.kind) + '</span></td>'
+        + '<td class="mono">' + range(p.seal_from, p.seal_to) + (p.qty > 1 ? '<div class="text-[10px] text-slate-400">' + fmt(p.qty) + ' seals</div>' : '') + '</td>'
+        + '<td>' + esc(p.customer_name || '—') + '<div class="text-[10px] text-slate-400 mono">' + esc(p.al_number || '') + '</div></td>'
+        + '<td>' + esc(p.other_customer || '—') + '<div class="text-[10px] text-slate-400 mono">' + esc(p.other_al || '') + '</div></td>'
+        + '<td class="text-slate-500 text-[11px] max-w-[320px]">' + esc(p.detail) + (p.resolution ? '<div class="text-emerald-700 mt-1">✔ ' + esc(p.resolution) + ' — ' + esc(p.resolved_by || '') + '</div>' : '') + '</td>'
+        + '<td>' + (p.nelos_case_id ? '<a class="text-teal-700 underline" href="../nelos/nelos_case.html?id=' + p.nelos_case_id + '">Case</a>' : '—') + '</td>'
+        + '<td>' + (p.status === 'open' ? '<button class="btn btn-soft" style="padding:5px 10px;font-size:10px" onclick="resolveProblem(' + p.id + ')">Resolve</button>' : '') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+async function resolveProblem(id) {
+  const what = prompt('What was done to put it right?');
+  if (what == null || !what.trim()) return;
+  const { error } = await _supabase.from('seal_problems').update({
+    status: 'resolved', resolution: what.trim(), resolved_by: staffName, resolved_at: new Date().toISOString(),
+  }).eq('id', id);
+  if (error) { toast(error.message, true); return; }
+  toast('Marked resolved.');
+  loadProblems();
+}
+
+// ── SETTINGS ─────────────────────────────────────────────────────────────
+async function loadSettings() {
+  const [s, m] = await Promise.all([
+    _supabase.from('seal_settings').select('*').eq('id', 1).maybeSingle(),
+    _supabase.from('nelos_modules').select('key,label').order('sort_order'),
+  ]);
+  if (s.error) { missingSetup(s.error); toast(s.error.message, true); return; }
+  const set = s.data || {};
+  document.getElementById('st-enforce').checked = !!set.enforce_stock;
+  document.getElementById('st-module').innerHTML = '<option value="">HQ (default)</option>'
+    + (m.data || []).map((x) => '<option value="' + esc(x.key) + '"' + (x.key === set.nelos_module ? ' selected' : '') + '>' + esc(x.label) + '</option>').join('');
+}
+document.getElementById('st-save').addEventListener('click', async () => {
+  const { error } = await _supabase.from('seal_settings').update({
+    enforce_stock: document.getElementById('st-enforce').checked,
+    nelos_module: document.getElementById('st-module').value || null,
+    updated_at: new Date().toISOString(), updated_by: staffName,
+  }).eq('id', 1);
+  if (error) { toast(error.message, true); return; }
+  toast('Settings saved.');
+});
+
+// ── BOOT ─────────────────────────────────────────────────────────────────
+(async () => {
+  try {
+    await MJMAccess.load(_supabase);
+    if (!MJMAccess.user()) { window.location.href = '../index.html'; return; }
+    /* A new module, so hidden-by-default: nobody has it until somebody is
+       granted it on User Access. Same gate as the Stock Inventory System. */
+    if (!MJMAccess.canAccess('seal')) {
+      alert('You do not have access to Seal Management.');
+      window.location.href = '../index.html';
+      return;
+    }
+    const u = MJMAccess.user() || {};
+    staffName = (u.user_metadata && u.user_metadata.full_name) || u.email || 'Staff';
+    try {
+      isAdmin = MJMAccess.isAdminOf('seal');
+      if (MJMAccess.canManageUsers()) document.getElementById('user-access-btn').classList.remove('hidden');
+    } catch (_) { /* keep the page usable */ }
+    if (isAdmin) document.getElementById('tab-settings-btn').classList.remove('hidden');
+
+    if (MJMAccess.canAccess('nelos')) {
+      MJMNelos.init(_supabase, { root: '../' });
+      MJMNelos.mountTodo('#nelos-todo', { module: 'seal', title: 'Nelos To Do List', hideIfEmpty: true });
+    }
+
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('main').classList.remove('hidden');
+
+    const want = new URLSearchParams(location.search).get('tab');
+    switchTab(['list', 'orders', 'receipts', 'problems'].concat(isAdmin ? ['settings'] : []).includes(want) ? want : 'list');
+    // The tab label carries the open count, so it is asked for up front.
+    if (!loaded.problems) { loaded.problems = true; loadProblems(); }
+  } catch (e) {
+    console.warn(e);
+    window.location.href = '../index.html';
+  }
+})();
+</script>
+
+<script src="../shared/shared_nelos_dock.js"></script>
+</body>
+</html>

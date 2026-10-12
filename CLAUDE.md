@@ -2069,6 +2069,38 @@ version fails the same check, and prints every page that writes a whole
 className onto a select. It needs `npm install jsdom` and says so if it is
 missing.
 
+## A seal is checked in the database, never only on the phone
+
+Seal stickers ("0009297") go through four states — **in stock** (received at
+UNN 1 on the Mobile Seal page), **pending collection** (allocated by a
+consent: the start and end of each range are scanned on Mobile Consent),
+**scanned** (each seal scanned at collection in the FC Portal) and
+**collected** (on a DO). `shared/RUN_ME_seal_management.sql` is all of it.
+
+**The rules live in triggers**, because the phones work offline and a check
+that only runs on a phone with signal is a check that sometimes does not run.
+A phone WITH signal asks `seal_check_range()` and warns or blocks first; any
+record that reaches the database, from any app or any old version, passes the
+triggers on `mobile_consent_records`, `seal_receipts`, `fcportal_scan_records`
+and `shared_do_records`. A problem is **never a refused row** — what the
+customer signed is kept — it is a `seal_problems` row and a NELOS case put in
+the HQ queue (`sees_all_cases`) with nobody assigned, so every HQ handler sees
+it. One open case per AL and kind; a second problem is a comment on it.
+
+Three things worth knowing:
+
+- **Seals are compared as numbers and shown at their width.** 0009297 and 9297
+  are one seal. `sealRanges.js` is the rule and lives in mobile, fc-portal and
+  the Sales Web as the same file — change all of them.
+- **A DO says which seals it carried** (`shared_do_records.seal_ranges`), the
+  ones scanned on that card since its last DO, so a consent collected over
+  three trips gives three DOs with three different lists.
+- **`enforce_stock` is OFF** until the seals already at UNN 1 are keyed as
+  opening stock. Turned on before that, every consent is a "never received"
+  case.
+
+`tests/seal_dashboard.cjs` holds the office page.
+
 ## Two repositories, one system
 
 - `mjm-ai-system` — the office, ai.mjmnursery.com. Static; served from the
