@@ -1424,6 +1424,65 @@ to see what was done and when it was owed.
 with the office's own three batches and the 1 Oct record; five of its
 sixteen checks fail on the previous code.
 
+## Closing a plot nobody is ever going to audit, and never by deleting
+
+A maintenance deadline overdue by two months is not work anybody is
+going to do. The job it was raised against was finished in August, there
+is nothing left in the plot to look at, and the row sits on the board
+for ever — because the ONE thing that retires a maintenance row is an
+audit against its `task_id`.
+
+So an admin may close one from the board: an **×** on each plot chip,
+and the office's own words for what it means — *"it's long overdue and
+missed audit closed by admin."*
+
+**What it writes is a record, not a deletion.** An ordinary
+`audit_maintenance_audits` row against the same task, with `result` =
+**`Closed by admin`** and the reason in `remarks`. So it goes through the
+one door everything else goes through, it leaves the board for the one
+reason anything leaves it, and it lands in Audit History with a name and
+a date on it like any other record. **The work record in
+`nops_maint_field_records` is untouched** — the field did that work and
+said so, and no audit decision gets to unsay it. The test asserts no
+DELETE and no PATCH is ever sent.
+
+Six things in it:
+
+- **The id has to ride on the item.** A chip knew which plot it was and
+  not which record. `bucket.items` carries `id` now, and so does
+  `pushLoose` — which is a second list feeding the same chips, and
+  missing it showed up as the × appearing on the overdue row and not on
+  the one beside it.
+- **`isAuditAdmin()` decides, and it is asked AGAIN at the write.** A
+  button drawn before a permission changed is still sitting on the
+  screen. A plain auditor sees the chips exactly as they always were.
+- **Two steps, both nameable.** The confirm names the nursery, the plot,
+  the job and the day the work was done; the second asks why, and the
+  answer is kept on the record. Cancelling either writes nothing.
+- **The × is OUTSIDE the anchor.** Inside it, every tap on the cross
+  would also follow the link to the audit form.
+- **It rebuilds from the database, not from the screen.** The board is
+  what somebody is about to act on, and a screen that agrees with itself
+  and not with the table is worse than one that takes a second.
+- **`MAINT_CLOSED_RESULT` is spelled in two files** —
+  `audit_home.html` writes it, `audit_maintenance_script.js` colours it
+  grey so a closed task does not read as the amber that means *waiting*.
+  Change one, change the other, and never change the string itself: a
+  row written before would keep the old wording.
+
+`shared/CHECK_audits_closed_by_admin.sql` is the register — who closed
+what, when, and how many days it had been waiting. A long list under one
+name, or a lot on one day, is the thing to look at: closing is the
+exception for work that has gone cold, not a way of clearing a board.
+
+`tests/admin_can_close_a_dead_plot.cjs` drives the real board in a real
+browser, as an admin and as a plain auditor. **It blocks the service
+worker** (`serviceWorkers: 'block'`), because `page.route` does not reach
+a fetch the WORKER makes: once it activates it answers its own synthetic
+503 and the board reloads empty, which is the worker doing its offline
+job correctly against a network that is not there. An hour went into
+that before it was the obvious thing.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the

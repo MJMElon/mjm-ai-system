@@ -693,6 +693,18 @@
     /* Opens the rest of the strip. Shaped like the circles it stands in
        for, but filled with the row's tone rather than outlined in it, so
        it reads as the odd one out — it is not a plot. */
+    /* The x on a plot chip. Admins only -- see _maintTypesHtml. It sits
+       ON the chip rather than beside it, so a row of twenty plots does
+       not become a row of forty targets. */
+    .tl-plot-wrap{position:relative;display:inline-block}
+    .tl-plot-x{position:absolute;top:-6px;right:-6px;width:19px;height:19px;
+      border-radius:50%;border:1.5px solid #fff;background:#b91c1c;color:#fff;
+      font-size:12px;font-weight:900;line-height:1;cursor:pointer;padding:0;
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 1px 4px rgba(0,0,0,.25);opacity:.85;
+      transition:opacity .15s,transform .15s}
+    .tl-plot-x:hover{opacity:1;transform:scale(1.12)}
+    .tl-plot-x:focus-visible{outline:2px solid #b91c1c;outline-offset:2px;opacity:1}
     .tl-plots-toggle{display:inline-flex;align-items:center;gap:3px;
                      height:38px;min-width:38px;padding:0 9px;border-radius:19px;
                      flex:0 0 auto;cursor:pointer;
@@ -1062,7 +1074,7 @@
   </div>
 </div>
 
-<script src="audit_lang.js?v=20261012c"></script>
+<script src="audit_lang.js?v=20261012d"></script>
 <script src="audit_supabase.js?v=20261008a"></script>
 <script src="audit_ribbon.js?v=20260826a"></script>
 <!-- Works out which plots still owe work, for the circles under each
@@ -1334,6 +1346,11 @@ function loadAuditTodo(){
       {month: style}));
   let MONTHS_FULL = monthNames('long');
   const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  /* The one spelling of an admin closure, read by the maintenance
+     module's own colour rule and by the check query. A row written
+     before any change here keeps its old wording, so do not change it. */
+  const MAINT_CLOSED_RESULT = 'Closed by admin';
 
   /* ── Schedules ──
      Windows are day-of-month ranges. Which set applies is settled by the
@@ -1691,7 +1708,12 @@ function loadAuditTodo(){
            plots share a deadline because their windows happen to end
            together, not because the same job was done on them. Oldest case
            first needs the work date, not the deadline. */
-        bucket.items.push({ nursery: n, plot, wt: _wtCanon(workType), on: workDateISO });
+        /* The TASK ID rides with the item. A chip is a pending maintenance
+           record, and the only thing that can retire one is an
+           audit_maintenance_audits row carrying its task_id -- which is
+           what the admin close below writes. Without the id on the item
+           the chip knows which plot it is and not which record. */
+        bucket.items.push({ id: id, nursery: n, plot, wt: _wtCanon(workType), on: workDateISO });
         diag.kept++;
         if (diag.sampleKept.length < 3) diag.sampleKept.push({ plot:plotRaw, workType, workDateISO, deadline: y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'), nursery: n });
       };
@@ -1810,7 +1832,11 @@ function loadAuditTodo(){
           const n = _nurseryFor(plot, nurseryNameRaw);
           if (!n) { unplaceable++; return; }            // cannot say which nursery
           if (SCOPE_NURSERIES.indexOf(n) === -1) return;
-          loose.push({ nursery: n, plot, wt: _wtCanon(workType), on: workDateISO });
+          /* The id rides here too. The today-bucket this list feeds is a
+             real row with real chips, and a chip with no id is a chip an
+             admin cannot close -- which showed up as the x appearing on
+             the overdue row and not on the one beside it. */
+          loose.push({ id: id, nursery: n, plot, wt: _wtCanon(workType), on: workDateISO });
         };
         (fRows||[]).forEach(r => pushLoose(r.id, r.work_date, r.work_type, r.plot_name, r.nursery_name));
         const looseOffice = (oRows && oRows[0] && Array.isArray(oRows[0].records))
@@ -2449,13 +2475,44 @@ function loadAuditTodo(){
         const key  = rowKey + '|' + g.wt;
         const open = !collapsedTypes.has(key);
         const name = WT_LABEL[g.wt] || WT_LABEL.other;
+        /* ── CLOSING A PLOT NOBODY IS EVER GOING TO AUDIT ──
+           A maintenance deadline that has been overdue for two months is
+           not work anybody is going to do: the job it was raised against
+           was finished in August and there is nothing left in the plot to
+           look at. It still sits on the board for ever, because the only
+           thing that retires a maintenance row is an audit against it.
+
+           So an admin may CLOSE one. What that writes is an ordinary
+           audit_maintenance_audits row against the same task_id, with its
+           result reading "Closed by admin" and a remark saying why -- so
+           it goes through the one door everything else goes through, it
+           leaves the board for the one reason anything leaves it, and it
+           lands in Audit History with a NAME and a DATE against it like
+           any other record. Nothing is deleted. The work record in
+           nops_maint_field_records is untouched; the field did that work
+           and said so, and no audit decision gets to unsay it.
+
+           Admins only, and that is read with isAuditAdmin() -- the same
+           answer the delete buttons on the module pages ask. A plain
+           auditor sees the chips exactly as before. */
+        const mayClose = (typeof isAuditAdmin === 'function') && isAuditAdmin();
         const circles = g.list.map(it => {
           const nur = NURSERY_LABELS[it.nursery] || it.nursery;
-          return `<a class="tl-plot"
+          const tip = `${nur} ${it.plot} — ${name}${it.on ? ', done ' + it.on : ''}`;
+          const link = `<a class="tl-plot"
                      href="${o.href}?nursery=${encodeURIComponent(it.nursery)}` +
                  `&plot=${encodeURIComponent(it.plot)}&from=home"
-                     title="${nur} ${it.plot} — ${name}${it.on ? ', done ' + it.on : ''}"
+                     title="${tip}"
                      aria-label="${label} — ${name} — ${nur} ${it.plot}">${it.plot}</a>`;
+          if (!mayClose || !it.id) return link;
+          /* The x is OUTSIDE the anchor. Inside it, every tap on the
+             cross would also follow the link. */
+          return `<span class="tl-plot-wrap">${link}<button type="button"
+                     class="tl-plot-x" data-close-task="${it.id}"
+                     data-close-plot="${it.plot}" data-close-nur="${it.nursery}"
+                     data-close-job="${name}" data-close-on="${it.on || ''}"
+                     title="${t('close_plot_title')}"
+                     aria-label="${t('close_plot_title')} — ${nur} ${it.plot}">×</button></span>`;
         }).join('');
         return `<div class="tl-wt${open ? ' open' : ''}">
           <button type="button" class="tl-wt-head" data-wtkey="${key}"
@@ -2473,6 +2530,72 @@ function loadAuditTodo(){
 
     return `<div class="tl-wts">${blocks}</div>`;
   }
+
+  /* ── THE CLOSE ITSELF ──
+     Delegated, like every other handler here: the timeline is rebuilt
+     from scratch on each draw, so anything bound to a button dies with
+     it. The admin test is asked AGAIN at the moment of the write rather
+     than trusted from the moment the button was drawn -- a button drawn
+     before a permission changed is still sitting on the screen. */
+  let _closing = false;
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.tl-plot-x');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (_closing) return;
+    if (!(typeof isAuditAdmin === 'function' && isAuditAdmin())) {
+      alert(t('close_plot_denied'));
+      return;
+    }
+    const id   = btn.dataset.closeTask;
+    const plot = btn.dataset.closePlot || '';
+    const nur  = NURSERY_LABELS[btn.dataset.closeNur] || btn.dataset.closeNur || '';
+    const job  = btn.dataset.closeJob || '';
+    const on   = btn.dataset.closeOn || '';
+    if (!id) return;
+
+    /* Named in full, because the thing being closed is somebody else's
+       outstanding work and a bare "are you sure" names nothing. */
+    if (!confirm(t('close_plot_confirm')
+        .replace('{plot}', nur + ' ' + plot)
+        .replace('{job}', job)
+        .replace('{on}', on || '—'))) return;
+    const why = prompt(t('close_plot_why'), '');
+    if (why === null) return;            // cancelled at the second step
+
+    _closing = true;
+    try {
+      const user = JSON.parse(localStorage.getItem('mjm_user') || '{}');
+      const row = {
+        task_id:   parseInt(id, 10),
+        nursery:   btn.dataset.closeNur || null,
+        plot:      plot || null,
+        task_type: job || null,
+        result:    MAINT_CLOSED_RESULT,
+        remarks:   (why || '').trim() ||
+                   ('Long overdue, closed without an audit'
+                    + (on ? ' (work done ' + on + ')' : '')),
+        photo_url: null,
+        auditor_name: user.name || user.full_name || user.email || 'Admin',
+        date: iso(year, month, day)
+      };
+      const res = await sb.insert('audit_maintenance_audits', row);
+      if (res && res.error) throw new Error(res.error.message || 'refused');
+      /* Rebuild from the database rather than striking the chip off the
+         screen: the board is what somebody is about to act on, and a
+         screen that agrees with itself and not with the table is worse
+         than one that takes a second to catch up. */
+      await loadMaintTimeline();
+      renderAll();
+      if (typeof renderHistory === 'function') renderHistory();
+    } catch (err) {
+      console.error('[audit-home] could not close the plot:', err);
+      alert(t('close_plot_failed') + ' ' + (err && err.message ? err.message : ''));
+    } finally {
+      _closing = false;
+    }
+  });
 
   /* Folding a work type. Same delegated-listener reasoning as below. */
   document.addEventListener('click', e => {

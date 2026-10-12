@@ -121,6 +121,17 @@ const TRANSLATIONS = {
        "nothing was ever done here" -- the count is per ROUND, and the
        deadline says whether that round is late. */
     round_word:              'Round',
+    /* Closing a maintenance plot nobody is going to audit. Admins only.
+       It writes a record rather than deleting one -- see the comment in
+       _maintTypesHtml. */
+    close_plot_title:        'Close this plot without an audit (admin)',
+    close_plot_confirm:      'Close {plot} — {job}, work done {on}?\n\n'
+                           + 'It leaves the To-Do list and is filed in Audit History as '
+                           + 'closed by you, without an audit. The work record itself is '
+                           + 'not touched.',
+    close_plot_why:          'Why is it being closed? (optional — it is kept with the record)',
+    close_plot_denied:       'Only an audit admin can close a plot.',
+    close_plot_failed:       'Could not close it —',
     /* A record dated 1 Oct is September round 3 done a day late, not an
        October audit. Said only where it WAS late. */
     late_for_round:          'late for the {d} round',
@@ -533,6 +544,14 @@ const TRANSLATIONS = {
        list-count header on the Plot Condition audit. */
     audited:                 'Diaudit',
     round_word:              'Pusingan',
+    close_plot_title:        'Tutup plot ini tanpa audit (admin)',
+    close_plot_confirm:      'Tutup {plot} — {job}, kerja pada {on}?\n\n'
+                           + 'Ia keluar daripada senarai To-Do dan direkodkan dalam Sejarah '
+                           + 'Audit sebagai ditutup oleh anda, tanpa audit. Rekod kerja itu '
+                           + 'sendiri tidak disentuh.',
+    close_plot_why:          'Kenapa ia ditutup? (pilihan — disimpan bersama rekod)',
+    close_plot_denied:       'Hanya admin audit boleh menutup plot.',
+    close_plot_failed:       'Tidak dapat ditutup —',
     late_for_round:          'lewat untuk pusingan {d}',
     this_round:              'Pusingan ini',
     due_by:                  'tarikh akhir',
