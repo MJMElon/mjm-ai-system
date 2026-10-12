@@ -374,6 +374,50 @@ became optional on the same day, so both answers are one click apart.
 `tests/tray_named_adjustment_closes_pending.cjs` drives 234's own figures
 through the real page: ten of its assertions fail on the previous code.
 
+## The papan tanda is the report row, drawn
+
+The board that gets nailed up at the plot when the seedlings arrive. The
+office was making these by hand, one per plot, off the Transplanting Report
+on the screen beside them — so it is drawn FROM that row, and **the figure
+on the board is the figure on the report by construction**.
+
+**ONE BOARD PER ROW, which is one per plot.** That is the whole reason it
+lives on the report and not on the ledger: batch 270's B4 took **1,931 out
+of P32 and 378 out of P33** on the same day, and the board says **2,309**,
+because what goes up at the plot is how many are standing in it. The report
+already merges a plot's rows for that day; this follows that rather than
+adding a second rule.
+
+Every field is the Batch Report's own answer. The one worth naming is
+**TARIKH TANAM**: it is the batch's `Seeds_Received` **`transaction_date`**,
+which is exactly what the Batch Record list shows as Planted Date — the date
+keyed on Tab 1, never the row's insert time. Newest reception row wins, the
+same rule the Seeds In form and the batch list already follow, because a
+batch is meant to have one and some have ninety-five.
+
+Three things about drawing it, each of which went wrong first:
+
+- **The font has to be loaded before the first stroke.** A canvas asked for
+  a font it does not have yet does not wait — it draws the fallback, and the
+  board comes out in Times, which nobody would notice until it was on a post
+  in a field. `document.fonts.load` is awaited for every weight used, and
+  the test asks about the ORDER (nothing drawn while a load is pending)
+  rather than about the glyphs, because a harness with no network for Google
+  Fonts would otherwise only prove the sandbox has no Outfit.
+- **The logo leaves the fill white.** `_ptLogo` paints its own text, so ink
+  set before it draws a white board on white. Set the colour AFTER.
+- **A long name is shrunk, never wrapped or clipped.** The board is read
+  from a distance and the end of a breed name is the part that tells two
+  breeds apart. The PLOT line shrinks too, so a transfer plot does not run
+  under the mark.
+
+**The mark is drawn, not fetched.** There is no image asset for it on this
+site, and a board that fails because a file 404ed is worse than one with a
+drawn mark on it — there is also nothing to go stale in a cache.
+
+`tests/papan_tanda.cjs` drives the real page and batch 270's own figures,
+down to the pixels on the canvas and the download that comes out of it.
+
 ## An amendment is dated by the amendment, and it lands in the TOTAL
 
 The Transplanting Report lists one line per transplant record. An approved

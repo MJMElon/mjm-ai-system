@@ -4411,6 +4411,188 @@ function buildMovementSection(scope, ev, ctx) {
   `;
 }
 
+/* ═══ PAPAN TANDA ══════════════════════════════════════════════════════════
+
+   The board that gets nailed up at the plot when the seedlings arrive. The
+   office was making these by hand, one per plot, off the Transplanting
+   Report on the screen beside them — so it is drawn FROM that row, and the
+   figure on the board is the figure on the report by construction.
+
+   ONE BOARD PER ROW, which is one per plot per transplant. That is the
+   whole reason it is drawn here and not off the ledger: B4 took 1,931 out
+   of P32 and 378 out of P33 on the same day, and the board says 2,309,
+   because what goes up at the plot is how many are standing in it. The
+   report already merges a plot's rows for that day (see `merged` above);
+   this follows it rather than adding a second rule.
+
+   Every field comes off the Batch Report's own answer:
+
+     PLOT / BATCH / JENAMA   the row
+     JUMLAH TANAM            the row's qty, merged
+     TARIKH TANAM            the batch's Seeds_Received transaction_date,
+                             which is what the Batch Record list shows as
+                             Planted Date — the date keyed on Tab 1, never
+                             the row's insert time. Newest reception row
+                             wins, the same rule the Seeds In form and the
+                             batch list already follow.
+     TARIKH PINDAH           the transplant date
+
+   THE FONT HAS TO BE LOADED BEFORE THE FIRST STROKE. A canvas asked for a
+   font it does not have yet does not wait — it draws in the fallback and
+   the board comes out in Times, which is not a thing anybody would notice
+   until it was on a post in a field. `document.fonts.load` is awaited for
+   each weight actually used.
+
+   THE LOGO IS DRAWN, not fetched. This site has no image asset for it and
+   a board that fails to render because a file 404ed is worse than one with
+   a drawn mark on it; there is also nothing to go stale in a cache. */
+const _PT_W = 2000, _PT_H = 1400;
+const _PT_INK = '#000000';
+const _PT_LOGO_BOX = '#6f8c63';      // the green of the MJM GROUP mark
+const _PT_LOGO_BAND = '#c3d69b';
+let _ptRows = [];
+
+const _ptDate = (d) => {
+  if (!d) return '—';
+  const x = new Date(d);
+  if (isNaN(x)) return '—';
+  return x.toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' })
+          .toUpperCase().replace(/,/g, '');
+};
+
+async function _ptFonts() {
+  if (!document.fonts || !document.fonts.load) return;
+  try {
+    await Promise.all(['900 190px Outfit', '900 110px Outfit', '700 110px Outfit',
+                       '900 64px Outfit', '900 34px Outfit'].map(f => document.fonts.load(f)));
+  } catch (e) { /* a font that will not load is still a board, just a plainer one */ }
+}
+
+function _ptLogo(ctx, x, y, w) {
+  const h = w * 0.62;
+  ctx.fillStyle = _PT_LOGO_BOX;
+  ctx.fillRect(x, y, w, h);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 ' + Math.round(h * 0.42) + 'px Georgia, "Times New Roman", serif';
+  ctx.fillText('MJM', x + w / 2, y + h * 0.56);
+  const bandH = h * 0.2, bandW = w * 0.62;
+  ctx.fillStyle = _PT_LOGO_BAND;
+  ctx.fillRect(x + (w - bandW) / 2, y + h * 0.66, bandW, bandH);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 ' + Math.round(bandH * 0.72) + 'px Outfit, sans-serif';
+  ctx.letterSpacing = '6px';
+  ctx.fillText('GROUP', x + w / 2, y + h * 0.66 + bandH * 0.78);
+  ctx.letterSpacing = '0px';
+  ctx.textAlign = 'left';
+}
+
+/* The board itself. Returns the canvas, so the preview and the download
+   draw exactly the same thing rather than two nearly-identical copies. */
+async function _ptDraw(r) {
+  await _ptFonts();
+  const c = document.createElement('canvas');
+  c.width = _PT_W; c.height = _PT_H;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, _PT_W, _PT_H);
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+
+  const L = 100;
+  _ptLogo(ctx, _PT_W - 100 - 470, 70, 470);
+  /* AFTER the logo, never before: _ptLogo paints its own text white and
+     leaves the fill there, so ink set first draws a white board on white. */
+  ctx.fillStyle = _PT_INK;
+
+  /* PLOT, with the rule under it that the board has always had. Shrunk if
+     it would reach the logo: a transfer plot is "N18-R" and a longer one
+     would otherwise run underneath the mark. */
+  const plot = 'PLOT: ' + String(r.plot || '—');
+  const plotRoom = _PT_W - 100 - 470 - 60 - L;
+  let plotSize = 190;
+  ctx.font = '900 ' + plotSize + 'px Outfit, sans-serif';
+  while (plotSize > 70 && ctx.measureText(plot).width > plotRoom) {
+    plotSize -= 6;
+    ctx.font = '900 ' + plotSize + 'px Outfit, sans-serif';
+  }
+  ctx.fillText(plot, L, 250);
+  const plotW = ctx.measureText(plot).width;
+  ctx.fillRect(L, 290, plotW, 16);
+
+  /* The five lines. A long breed name is SHRUNK to fit rather than wrapped
+     or clipped: the board is read from a distance and a line that runs off
+     the edge loses the end of the name, which is the part that tells two
+     breeds apart. */
+  const lines = [
+    ['BATCH: ',        String(r.batch || '—'),        '900'],
+    ['JENAMA: ',       String(r.breed || '—'),        '700'],
+    ['JUMLAH TANAM : ', fmtNum(r.qty) + ' POKOK',     '900'],
+    ['TARIKH TANAM: ',  _ptDate(r.planted),           '900'],
+    ['TARIKH PINDAH: ', _ptDate(r.date),              '900']
+  ];
+  let y = 500;
+  lines.forEach(([label, value, weight]) => {
+    let size = 110;
+    const fits = () => {
+      ctx.font = '900 ' + size + 'px Outfit, sans-serif';
+      const lw = ctx.measureText(label).width;
+      ctx.font = weight + ' ' + size + 'px Outfit, sans-serif';
+      return lw + ctx.measureText(value).width <= _PT_W - L * 2;
+    };
+    while (size > 44 && !fits()) size -= 4;
+    ctx.font = '900 ' + size + 'px Outfit, sans-serif';
+    ctx.fillText(label, L, y);
+    const lw = ctx.measureText(label).width;
+    ctx.font = weight + ' ' + size + 'px Outfit, sans-serif';
+    ctx.fillText(value, L + lw, y);
+    y += 165;
+  });
+  return c;
+}
+
+const _ptFileName = (r) =>
+  ('papan-tanda-' + String(r.plot || 'plot') + '-' + String(r.batch || 'batch'))
+    .replace(/[^A-Za-z0-9_-]+/g, '-').replace(/-+/g, '-') + '.png';
+
+async function _ptSave(c, name) {
+  const blob = await new Promise(ok => c.toBlob(ok, 'image/png'));
+  if (!blob) throw new Error('the browser would not turn the board into a file');
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  // Revoked on the next turn of the loop: revoking it in the same one can
+  // cancel the download that was just started.
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+async function papanTanda(i) {
+  const r = _ptRows[i]; if (!r) return;
+  try { await _ptSave(await _ptDraw(r), _ptFileName(r)); }
+  catch (e) { alert('Could not make the papan tanda: ' + (e && e.message ? e.message : e)); }
+}
+
+/* Every board on screen, one file each. Browsers drop downloads fired in
+   the same tick, so they are spaced — and the button says how far it has
+   got, because twenty files is long enough for somebody to wonder. */
+async function papanTandaAll(btn) {
+  if (!_ptRows.length || (btn && btn.disabled)) return;
+  const label = btn ? btn.innerHTML : '';
+  try {
+    for (let i = 0; i < _ptRows.length; i++) {
+      if (btn) { btn.disabled = true; btn.innerHTML = 'Saving ' + (i + 1) + ' of ' + _ptRows.length + '…'; }
+      await _ptSave(await _ptDraw(_ptRows[i]), _ptFileName(_ptRows[i]));
+      await new Promise(ok => setTimeout(ok, 350));
+    }
+  } catch (e) {
+    alert('Could not make the papan tanda: ' + (e && e.message ? e.message : e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = label; }
+  }
+}
+
 /**
  * Transplanting Report
  *
@@ -4460,9 +4642,14 @@ async function runTransplantingReport() {
     // field from Tab 1, written once when the batch is first set up
     // (see operation_batch_detail.html's reception-form save) — the
     // actual, reliable source of what a batch's breed is.
+    //
+    // transaction_date comes back with it for the papan tanda's TARIKH
+    // TANAM: the Batch Record list's Planted Date is this same field, the
+    // one keyed on Tab 1, and never the row's insert time.
     fetchAllRows(() => _supabase.from('shared_inventory_logs')
-      .select('batch_name, breed_name')
-      .eq('transaction_type', 'Seeds_Received'))
+      .select('batch_name, breed_name, transaction_date, created_at')
+      .eq('transaction_type', 'Seeds_Received')
+      .order('id', { ascending: true }))
   ]);
   if (logsRes.error) {
     loading.classList.add('hidden'); out.classList.remove('hidden');
@@ -4473,7 +4660,19 @@ async function runTransplantingReport() {
   const plotToLoc = {};
   (plotsRes.data || []).forEach(p => { plotToLoc[p.plot_name] = p.nursery_name || 'Unassigned'; });
   const batchBreed = {};
-  (batchesRes.data || []).forEach(b => { if (b.breed_name) batchBreed[b.batch_name] = b.breed_name; });
+  /* THE BATCH'S PLANTED DATE, for the papan tanda. A batch is meant to have
+     exactly ONE Seeds_Received row and some have many — see the note on
+     duplicate receptions in CLAUDE.md — so the newest wins, which is what
+     the Seeds In form and the batch list already do. */
+  const batchPlanted = {}, _bpStamp = {};
+  (batchesRes.data || []).forEach(b => {
+    if (b.breed_name) batchBreed[b.batch_name] = b.breed_name;
+    const stamp = String(b.created_at || b.transaction_date || '');
+    if (!(b.batch_name in _bpStamp) || stamp >= _bpStamp[b.batch_name]) {
+      _bpStamp[b.batch_name] = stamp;
+      batchPlanted[b.batch_name] = b.transaction_date || b.created_at || null;
+    }
+  });
 
   // Approved calibrations filed against the Transplanting report, keyed by
   // batch+plot so a row's Qty cell can be marked. Same [APPROVED by … on
@@ -4551,6 +4750,7 @@ async function runTransplantingReport() {
       nursery: locOf(l.plot_name),
       plot: l.plot_name || '—', batch: l.batch_name || '—',
       breed: l.breed_name || batchBreed[l.batch_name] || '—',
+      planted: batchPlanted[l.batch_name] || null,
       qty: Number(l.quantity_change || 0),
       cal: calByBatchPlot[_mvBatchKey(l.batch_name) + '::' + (l.plot_name || '')] || null
     };
@@ -4605,6 +4805,10 @@ async function runTransplantingReport() {
   // other plots happened to share that date.
   const _tpNatCmp = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
   rows.sort((a, c) => String(c.date || '').localeCompare(String(a.date || '')) || _tpNatCmp(a.plot, c.plot));
+  /* What the papan tanda buttons draw from — the rows as shown, after
+     filtering, merging and sorting, so a board can never be made for a
+     line the report is not showing. */
+  _ptRows = rows;
   const recorded  = rows.reduce((s, r) => s + r.qty, 0);
   const amendNet  = amendInView.reduce((s, r) => s + r.qty, 0);
   const total     = recorded + amendNet;
@@ -4620,15 +4824,20 @@ async function runTransplantingReport() {
     <div class="glass-panel p-6 rounded-[2rem]">
       <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4">
         <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Transplanting Report</h3>
+        <div class="flex items-center gap-4 flex-wrap">
+        ${rows.length ? `<button type="button" onclick="papanTandaAll(this)"
+          class="no-print text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-xl border border-[#cfe3b4] bg-[#eef7e4] text-[#3f6b23] hover:bg-[#e3f0d4]"
+          title="One signboard image per plot below, for the installation. Each is the plot, batch, breed, how many are standing in it and the two dates.">⬇ Papan Tanda · all ${fmtNum(rows.length)}</button>` : ''}
         <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} record${rows.length === 1 ? '' : 's'}${amendTip.length ? ' · ' + fmtNum(amendTip.length) + ' amendment' + (amendTip.length === 1 ? '' : 's') : ''}${from ? ' · from ' + fmtDate(from) : ''}${to ? ' · to ' + fmtDate(to) : ''}${breed ? ' · ' + breed : ''}</div>
+        </div>
       </div>
       <div class="overflow-x-auto">
         <table class="report-table">
           <thead><tr>
-            <th>Transplanting Date</th><th>Maturity Date</th><th>Location</th><th>Plot</th><th>Batch</th><th>Breed</th><th class="text-right">Qty</th>
+            <th>Transplanting Date</th><th>Maturity Date</th><th>Location</th><th>Plot</th><th>Batch</th><th>Breed</th><th class="text-right">Qty</th><th class="no-print">Papan Tanda</th>
           </tr></thead>
           <tbody>
-            ${rows.length ? rows.map(r => `
+            ${rows.length ? rows.map((r, i) => `
               <tr>
                 <td>${fmtDate(r.date)}</td>
                 <td class="text-[#c07820] font-black">${fmtDate(r.maturity)}</td>
@@ -4641,7 +4850,10 @@ async function runTransplantingReport() {
                   return `<td class="text-right font-black"><span class="cursor-help border-b border-dotted border-current"
                     onmouseenter="mvShowDetailTip(this, ${idx})" onmouseleave="mvHideDetailTip()">${fmtNum(r.qty)}</span></td>`;
                 })() : `<td class="text-right font-black">${fmtNum(r.qty)}</td>`}
-              </tr>`).join('') : `<tr><td colspan="7" class="text-center py-10 text-[#8a7a68]">No transplant records match the selected filters.</td></tr>`}
+                <td class="no-print text-center"><button type="button" onclick="papanTanda(${i})"
+                  class="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border border-[#cfe3b4] bg-[#eef7e4] text-[#3f6b23] hover:bg-[#e3f0d4]"
+                  title="The signboard for ${_losEsc(r.plot)} — batch ${_losEsc(r.batch)}, ${fmtNum(r.qty)} pokok.">⬇ PNG</button></td>
+              </tr>`).join('') : `<tr><td colspan="8" class="text-center py-10 text-[#8a7a68]">No transplant records match the selected filters.</td></tr>`}
           </tbody>
           ${(rows.length || amendTip.length) ? `<tfoot><tr class="font-black bg-[#f8f4ec]">
             <td colspan="6" class="text-right uppercase tracking-widest text-[10px] text-[#8a7a68]">Total</td>
@@ -4655,6 +4867,7 @@ async function runTransplantingReport() {
               return `<td class="text-right text-[#3a7ab4]"><span class="cursor-help border-b border-dotted border-current"
                 onmouseenter="mvShowDetailTip(this, ${idx})" onmouseleave="mvHideDetailTip()">${fmtNum(total)}</span></td>`;
             })() : `<td class="text-right text-[#3a7ab4]">${fmtNum(total)}</td>`}
+            <td class="no-print"></td>
           </tr></tfoot>` : ''}
         </table>
       </div>
@@ -4713,7 +4926,19 @@ async function runCullingReport() {
   const plotToLoc = {};
   (plotsRes.data || []).forEach(p => { plotToLoc[p.plot_name] = p.nursery_name || 'Unassigned'; });
   const batchBreed = {};
-  (batchesRes.data || []).forEach(b => { if (b.breed_name) batchBreed[b.batch_name] = b.breed_name; });
+  /* THE BATCH'S PLANTED DATE, for the papan tanda. A batch is meant to have
+     exactly ONE Seeds_Received row and some have many — see the note on
+     duplicate receptions in CLAUDE.md — so the newest wins, which is what
+     the Seeds In form and the batch list already do. */
+  const batchPlanted = {}, _bpStamp = {};
+  (batchesRes.data || []).forEach(b => {
+    if (b.breed_name) batchBreed[b.batch_name] = b.breed_name;
+    const stamp = String(b.created_at || b.transaction_date || '');
+    if (!(b.batch_name in _bpStamp) || stamp >= _bpStamp[b.batch_name]) {
+      _bpStamp[b.batch_name] = stamp;
+      batchPlanted[b.batch_name] = b.transaction_date || b.created_at || null;
+    }
+  });
 
   let rows = (logsRes.data || []).map(l => {
     const date = _logDate(l);
