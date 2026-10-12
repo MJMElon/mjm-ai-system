@@ -1294,9 +1294,47 @@ would ever clear it. Every overdue row on the board was in that state, and
 the office found it the way anybody would: by auditing the plots and
 watching the list not move.
 
-**The upper bound on a closed window now runs to today.** The lower bound
-does not move: an audit from before the window opened belongs to the round
-before it and must not close two.
+**A CLOSED window takes the batch's LATEST audit, whenever it was done** —
+the range opens at the beginning of time and runs to today.
+
+The lower bound used to stay on the window, on the argument that an audit
+from before it opened belonged to the round before this one and must not
+close two. **The office overruled that**, and N02 is what the old bound
+looked like on screen: batch 244 walked 30 Sep, inside September round 3,
+cleared; batch 253 walked **22 Sep** — round 2's slot — so round 3 stayed
+red over a plot somebody had walked eight days earlier, and nothing 253
+could ever be given would close a window that shut on 30 September. Their
+words: *"latest audit clears every overdue round (if is not audit on time).
+but as long as not yet audit, it will still showing there."*
+
+Three things hold it together, and the first two are the price of the third:
+
+- **An OPEN window is unchanged**, and must stay so. Letting an old audit
+  answer a round nobody has walked yet would mark work done before anybody
+  had the chance, which is the one direction this board must never be wrong
+  in. `tests/late_work_clears_the_backlog.cjs` asks `missedRounds()` of
+  **next month** to tell the two apart: widen the lower bound everywhere and
+  it reports three missed rounds before the month has begun.
+- **A batch with NO audit at all is untouched** and stays on the board. That
+  is the second half of the office's sentence, and it is the only thing the
+  rule still refuses.
+- **What this costs.** A batch audited once and never again now clears every
+  overdue round it accrues, so it shows on the board only while a round is
+  actually OPEN — one day a month on the MN plot schedule. What keeps it
+  visible is the missed-round record: every one of those rounds is filed in
+  Audit History under the month that owed it, so a plot nobody walks does not
+  go quiet, it accumulates a missed round every round. That is the trade the
+  office chose with the consequence in front of them.
+
+**The board and the plot page no longer answer the same question, and that
+is now deliberate.** They were put in step on purpose — a green card and a
+quiet to-do row saying one thing — and this rule separates them: the board
+asks *"is anything on my list"*, where an overdue round cleared late is off
+it, while the card asks *"has this batch been walked in the round now due"*,
+which an audit from last month does not answer. So N02 can be absent from
+the board and still read **⟳ Round 1 due · last audited 22 Sep**. The card
+keeps the safe direction — it shows the auditor the last reading before they
+take the next one — and `currentWindow()` is untouched.
 
 The office's rule for the rest of it, in their own words — *"if auditor was
 late and do the latest one, then the old records will be clear too but
@@ -1327,9 +1365,9 @@ Three things to know before touching this:
   has pending work on it, so there is no window to be outside of.
 
 `tests/late_work_clears_the_backlog.cjs` drives the real page in a real
-browser and holds both halves — a plot walked late drops off, a plot nobody
-walked stays on, and an audit from before the window opens closes nothing.
-Six of its eleven checks fail on the previous code.
+browser and holds all of it — a plot walked late drops off, a plot nobody
+walked stays on, an audit from before the window opened clears it and is
+recorded as missed, and nothing clears a window that has not closed yet.
 
 ## A batch is not audited for ever because it was audited once
 
