@@ -1533,9 +1533,42 @@ Nine things in it:
   month's list with nothing on it to say otherwise reads as work that was
   DONE. So the history row carries an amber **Closed by admin** tag and
   the job it closed, and a section closed at once is a run of them on one
-  day. The maint summary spec already selects `result` and `task_type`,
-  so nothing new is read; where the thin PLAIN fallback is used the tag
-  is simply absent, which is the safe direction.
+  day. Where the thin PLAIN fallback is used the tag is simply absent,
+  which is the safe direction.
+- **And it says what the task was DUE, not only when it was closed.**
+  The date on the right of a history row is the day somebody pressed the
+  button, so a run of closures reads as this month's work and the whole
+  justification for them — that they were old and nobody was ever going
+  to walk them — is nowhere on screen. The office put it exactly:
+  *"it feels like closing that month case but not the old and unaudited
+  case."* The line now ends **was due 8 Aug 2026 · 65 days overdue**, in
+  red beside the amber tag.
+
+  Where that comes from is the part to keep. **The deadline is nowhere in
+  `audit_maintenance_audits`** and cannot be recomputed from a closure
+  row. The one thing that knows it is `push()` inside
+  `loadMaintTimeline` — work date plus `MJMAuditSettings.maintDays(wt)` —
+  and it used to throw the answer away for any task already audited,
+  which is every task by the time it reaches the history. So `push()`
+  now records `MAINT_DUE[task_id] = { due, on }` for **every** task it
+  walks, BEFORE the audited test, and the history reads that. One rule,
+  not a second copy, and no schema change. Two things follow:
+
+  - **The deadline is read before the audited test**, so a row with no
+    work date now counts as `skippedNoDate` in the diagnostics where it
+    used to count as `skippedAudited`. That is the only visible effect.
+  - **`loadMaintTimeline` redraws the history when it finishes**, in the
+    finally position. The two load in parallel, so whichever lands first
+    has to tell the other; without it the deadline appears on a closure
+    only the second time the page is opened.
+
+  It is written into the **remark** as well — `Due 2026-08-08, 65 days
+  overdue. Closed without an audit, work done 2026-08-05.` — because the
+  remark is the only part of the row that travels into an export. And
+  `remarks` is now in the maint summary spec and shown as a field: it had
+  always been written and was on no screen anywhere, so the one field
+  saying WHY a task was unsatisfied, or closed without an audit, could
+  only be read out of the database.
 
 `shared/CHECK_audits_closed_by_admin.sql` is the register — who closed
 what, when, and how many days it had been waiting. A long list under one

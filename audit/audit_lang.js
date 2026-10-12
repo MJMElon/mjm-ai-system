@@ -143,6 +143,11 @@ const TRANSLATIONS = {
     /* Said on the history row itself. A closure sitting unlabelled in a
        list of this month\u2019s work reads as work that was done. */
     hist_closed_by_admin:    'Closed by admin',
+    /* The date on the right of a history row is the day somebody pressed
+       the button. On a closure that reads as a current case, so the line
+       says what the task actually owed. */
+    hist_was_due:            'was due {d}',
+    hist_days_overdue:       '{n} days overdue',
     /* A record dated 1 Oct is September round 3 done a day late, not an
        October audit. Said only where it WAS late. */
     late_for_round:          'late for the {d} round',
@@ -569,6 +574,8 @@ const TRANSLATIONS = {
     close_plot_denied:       'Hanya admin audit boleh menutup plot.',
     close_plot_failed:       'Tidak dapat ditutup —',
     hist_closed_by_admin:    'Ditutup oleh admin',
+    hist_was_due:            'sepatutnya {d}',
+    hist_days_overdue:       'lewat {n} hari',
     late_for_round:          'lewat untuk pusingan {d}',
     this_round:              'Pusingan ini',
     due_by:                  'tarikh akhir',

@@ -29,7 +29,9 @@
      6. cancelling the confirm writes nothing
      7. the work record is not deleted
      8. the reason is NOT asked for — it is written onto the record
-     9. and Audit History says so, there and then, without a reload
+     9. and Audit History says so, there and then, without a reload --
+        naming what the task was DUE and how far past it had gone, not
+        just the day somebody pressed the button
 
    The POST stub is STRICT about what the real table will take. A stub
    that accepts anything signs off a write the database refuses: the
@@ -63,6 +65,15 @@ const iso = (d) => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'
 /* Two months back: weeding carries a 3-day window, so this is a deadline
    long closed whatever day the test runs. */
 const LONG_AGO = iso(new Date(NOW.getFullYear(), NOW.getMonth() - 2, 5));
+/* Weeding allows 3 days after the work, so this is the deadline the
+   board works out for the two records below -- the same arithmetic,
+   written out here rather than imported, so a change to either side has
+   to be made deliberately on both. */
+const WEEDING_DAYS = 3;
+const dueOf = (d) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + WEEDING_DAYS); return iso(x); };
+const DUE_ISO   = dueOf(LONG_AGO);
+const DUE_SHOWN = new Date(DUE_ISO + 'T00:00:00')
+  .toLocaleDateString('en-MY', { day:'numeric', month:'short', year:'numeric' });
 
 const FIELD = [
   { id: 9001, work_date: LONG_AGO, nursery_name:'UNN 2', plot_name:'N01', work_type:'weeding', jenis:'Merumput' },
@@ -235,6 +246,7 @@ async function run(asAdmin, action){
   console.log('writes on cancel:', noConf.posted.length);
   console.log('history after  :', JSON.stringify(sect.after.hist));
   console.log('refused by db  :', JSON.stringify(closed.refused.concat(sect.refused)));
+  console.log('deadline       :', DUE_ISO, '->', DUE_SHOWN);
   console.log('deletes/patches :', JSON.stringify(closed.deleted));
   console.log('page errors     :', closed.errs.length ? closed.errs.join(' | ') : 'none');
   closed.logs.slice(-2).forEach(l => console.log('LOG:', l));
@@ -259,7 +271,8 @@ async function run(asAdmin, action){
   check('naming the plot and the job', row.plot === 'N01' && !!row.task_type);
   check('with who closed it and when', !!row.auditor_name && !!row.date);
   check('writing the reason rather than asking for one',
-        /long overdue/i.test(row.remarks || '') &&
+        /overdue/i.test(row.remarks || '') &&
+        /work done/i.test(row.remarks || '') &&
         closed.dialogs.every(d => d.type !== 'prompt'));
   check('and no photo, because there was nothing to photograph', !row.photo_url);
 
@@ -282,6 +295,17 @@ async function run(asAdmin, action){
   check('and Audit History says so there and then, without a reload',
         sect.after.hist.filter(h => /Closed by admin/i.test(h)).length === 2 &&
         sect.after.hist.some(h => /Closed by admin/i.test(h) && /Weeding/i.test(h)));
+  /* The whole point of a closure is that it was OLD. The date on the
+     right of the row is the day it was closed, so without this the run
+     reads as this month's work. */
+  check('naming what the task was due, not just when it was closed',
+        sect.after.hist.every(h => !/Closed by admin/i.test(h) || /was due/i.test(h)));
+  check('and how far past the deadline it had gone',
+        sect.after.hist.every(h => !/Closed by admin/i.test(h) || /days overdue/i.test(h)));
+  check('which is the deadline the board itself drew',
+        sect.after.hist.some(h => h.indexOf(DUE_SHOWN) !== -1));
+  check('the record keeps it too, in its own remark',
+        sRows.length > 0 && sRows.every(r => (r.remarks || '').indexOf('Due ' + DUE_ISO) === 0));
   check('which it did not say before the close',
         sect.before.hist.every(h => !/Closed by admin/i.test(h)));
 
