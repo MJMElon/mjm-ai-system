@@ -412,36 +412,67 @@ Three things about drawing it, each of which went wrong first:
   from a distance and the end of a breed name is the part that tells two
   breeds apart. The PLOT line shrinks too, so a transfer plot does not run
   under the mark.
-- **ONE WEIGHT for the whole block.** The breed was set at Outfit 700 where
-  everything beside it was 900, and at that size the two do not read as one
-  typeface in two weights — they read as two fonts, which is exactly what
-  the office saw and said. The test asks it of the weights the board asks
-  for AND of the font on every stroke, because a weight that is drawn in
-  without being preloaded is the same mistake twice.
+- **ONE WEIGHT for the whole block, and ONE CASE.** The breed was set at
+  Outfit 700 where everything beside it was 900, and in its own mixed case
+  where every other field — the dates included — is upper. At that size
+  that does not read as one typeface in two weights, it reads as two fonts,
+  which is exactly what the office saw and said. The test asks it of the
+  weights the board asks for AND of the font on every stroke, because a
+  weight drawn in without being preloaded is the same mistake twice. The
+  ROW keeps the real spelling; it is only the board that shouts.
 
 **The mark is the office's own file, and it is INLINED.** It was a drawn
 imitation at first, for the reason below; the office then handed over the
-real logo and said not to change it. `shared/mjm_logo.png` is the canonical
-copy and `_PT_LOGO_SRC` in the page is that file byte for byte as a data
-URI — `tests/papan_tanda.cjs` decodes the one and compares it against the
-other, so two copies of an image cannot quietly become two different
-images. The PNG was re-encoded from the file supplied (RGBA to RGB, every
-pixel opaque, best filter per row) and PROVED pixel-identical before it was
-committed; that is not changing a logo, and 24KB rather than 29KB is worth
-having inside a page.
+real logo. The board carries **MJM NURSERY**, which is not the MJM GROUP
+tile that was on it for a day — same house, different mark, and the office
+asked for it the way they ask for everything here, by handing over a board
+with it on. `shared/mjm_nursery_logo.png` is the canonical copy and
+`_PT_LOGO_SRC` in the page is that file byte for byte as a data URI —
+`tests/papan_tanda.cjs` decodes the one and compares it against the other,
+so two copies of an image cannot quietly become two different images.
+`shared/mjm_logo.png` is still there and is the GROUP mark; nothing draws
+it now.
 
 Inlining keeps every property the drawn mark had, which is why it is not
 simply fetched: **no fetch, so nothing to 404** at the moment somebody
 presses the button; no cross-origin, so the canvas is not tainted and
 `toBlob` still works; and nothing to go stale in a cache.
 
-**And it is drawn at the IMAGE'S own aspect ratio**, read off the image
-rather than off a constant. The real mark is a SQUARE where the drawn one
-was a flat rectangle, so it reaches further down the board and the lines
-start below it — `_PT_LOGO_BOTTOM` is the one place that says where it
-ends, and the lines are placed off that rather than off a number somebody
-has to remember to move. The test asserts the green block comes out square
-and that no line of type runs under it.
+**The nursery file is TRIMMED to the mark**, so the board draws the whole
+of it and there is no crop. The GROUP tile needed one — it was a square
+with a broad flat margin of green, and `_PT_LOGO_CROP` trimmed it in
+fractions of the file. What survives that is the rule underneath it: **ONE
+width is given and the height comes off the IMAGE**, so the mark cannot be
+stretched, and the test compares the shape on the canvas against the
+shape of the file rather than carrying a number that would go stale the
+day the logo is re-exported.
+
+**The nursery mark was lifted out of the board the office drew**, because
+that is the only copy of it there has been — cropped to its own ink at
+598 × 315, which is exactly the size the board draws it, so there is no
+resolution to spare. Ask for the original file before anything wants it
+bigger.
+
+**And the office drew the board, so its numbers are the specification.**
+The margins, the type sizes, where each line sits and where the mark goes
+were measured off the board they handed over and are named constants at
+the top of `_ptDraw`. `_PT_LINE_STEP` is the one the office asked for by
+name: it used to be worked out from whatever room was left under the logo,
+so a change to the mark quietly changed the spacing of the lines. The test
+reads all of it back off the canvas — the rule lands on the pixel, the
+mark within four (its outermost row is an antialiased serif edge that is
+no longer either office green, so a colour test finds the box just inside
+the one `drawImage` was given), and the line spacing within four because
+the top of a type band carries a little of the font's own business (BATCH
+sets digits where TARIKH sets capitals).
+
+**THE LABELS ARE THE OFFICE'S OWN, spaces included.** They are not spaced
+evenly and the colons do not line up — `BATCH    :` and `TARIKH TANAM  :`
+are padded and `JENAMA:` is not — and that is how the board they drew
+reads. A sign that is one word different from the one the office nails up
+is a sign somebody has to ask about, so the strings are copied and not
+tidied. **PLOT carries no colon** and **JUMLAH TANAM carries no POKOK**;
+both were there and both went.
 
 `tests/papan_tanda.cjs` drives the real page and batch 270's own figures,
 down to the pixels on the canvas and the download that comes out of it.
