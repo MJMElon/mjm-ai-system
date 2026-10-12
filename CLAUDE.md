@@ -1433,8 +1433,27 @@ for ever — because the ONE thing that retires a maintenance row is an
 audit against its `task_id`.
 
 So an admin may close one from the board: an **×** on each plot chip,
-and the office's own words for what it means — *"it's long overdue and
-missed audit closed by admin."*
+**and one on each work-type section header**, and the office's own words
+for what it means — *"it's long overdue and missed audit closed by
+admin."*
+
+**The section is the unit the decision is actually made in.** Closing
+eighteen cold weeding plots one cross at a time is eighteen confirms for
+one decision, and the decision was never per-plot: the job finished in
+August and there is nothing left in ANY of those plots to look at. So
+*"i close maintenance weeding, then it help me close all cases plot
+under this section"* — one confirm naming the job and the count, and the
+rows go up in **ONE insert**. Eighteen round trips on a nursery signal is
+eighteen chances to half-finish, and a section half closed is worse than
+one not closed at all.
+
+**The reason is no longer asked for — it is written.** The second step
+used to be a `prompt`, and the office's answer to it was *"no need
+this"*: an admin closing a cold plot types the same sentence every time,
+and a prompt somebody dismisses out of habit is a cancel that looks like
+a save. So the remark is composed — the job, the day the work was done,
+and *long overdue* — and where a whole section went at once it says so
+and how many plots were in it.
 
 **What it writes is a record, not a deletion.** An ordinary
 `audit_maintenance_audits` row against the same task, with `result` =
@@ -1446,7 +1465,7 @@ a date on it like any other record. **The work record in
 said so, and no audit decision gets to unsay it. The test asserts no
 DELETE and no PATCH is ever sent.
 
-Six things in it:
+Nine things in it:
 
 - **The id has to ride on the item.** A chip knew which plot it was and
   not which record. `bucket.items` carries `id` now, and so does
@@ -1455,12 +1474,29 @@ Six things in it:
   the one beside it.
 - **`isAuditAdmin()` decides, and it is asked AGAIN at the write.** A
   button drawn before a permission changed is still sitting on the
-  screen. A plain auditor sees the chips exactly as they always were.
-- **Two steps, both nameable.** The confirm names the nursery, the plot,
-  the job and the day the work was done; the second asks why, and the
-  answer is kept on the record. Cancelling either writes nothing.
+  screen. A plain auditor sees the chips exactly as they always were, and
+  no section × at all.
+- **ONE writer, two buttons.** `_closePlots(items, confirmText)` takes a
+  list — the chip hands it one item, the header hands it the whole group,
+  and nothing else differs: same row shape, same confirm, same rebuild.
+  Two code paths writing the same record two ways is how they come to
+  disagree, and the per-chip path had already drifted into writing a
+  remark the section one did not.
+- **The section closes the group as it was DRAWN**, out of
+  `_closeGroups`, not re-derived when the button is pressed. Somebody
+  pressing it has just read a count beside the job name, and the plots
+  they close must be the plots that count was of — a second walk of the
+  data could quietly have one more in it.
+- **The confirm names what it is about to do.** The chip's names the
+  nursery, the plot, the job and the day the work was done; the section's
+  names the job, the row and **how many plots**. Cancelling writes
+  nothing.
 - **The × is OUTSIDE the anchor.** Inside it, every tap on the cross
-  would also follow the link to the audit form.
+  would also follow the link to the audit form. The section's is outside
+  `.tl-wt-head` for the harder version of the same reason: that header IS
+  a `<button>`, and a button inside a button is not a thing a browser
+  will draw. It sits beside it in a `.tl-wt-bar`, and the test counts
+  `.tl-wt-head .tl-wt-close` to make sure it stays there.
 - **It rebuilds from the database, not from the screen.** The board is
   what somebody is about to act on, and a screen that agrees with itself
   and not with the table is worse than one that takes a second.
@@ -1468,7 +1504,18 @@ Six things in it:
   `audit_home.html` writes it, `audit_maintenance_script.js` colours it
   grey so a closed task does not read as the amber that means *waiting*.
   Change one, change the other, and never change the string itself: a
-  row written before would keep the old wording.
+  row written before would keep the old wording. In `audit_home.html` it
+  sits at **script scope and not inside `loadAuditTodo`**, because both
+  halves of that page need it — the board writes the row and Audit
+  History has to recognise it.
+- **Audit History says which rows are closures.** A closure is an
+  ordinary record, which is the point of it; but a row sitting in this
+  month's list with nothing on it to say otherwise reads as work that was
+  DONE. So the history row carries an amber **Closed by admin** tag and
+  the job it closed, and a section closed at once is a run of them on one
+  day. The maint summary spec already selects `result` and `task_type`,
+  so nothing new is read; where the thin PLAIN fallback is used the tag
+  is simply absent, which is the safe direction.
 
 `shared/CHECK_audits_closed_by_admin.sql` is the register — who closed
 what, when, and how many days it had been waiting. A long list under one
@@ -1476,7 +1523,10 @@ name, or a lot on one day, is the thing to look at: closing is the
 exception for work that has gone cold, not a way of clearing a board.
 
 `tests/admin_can_close_a_dead_plot.cjs` drives the real board in a real
-browser, as an admin and as a plain auditor. **It blocks the service
+browser, as an admin and as a plain auditor, closing one chip and closing
+a whole section — and it asserts the section went up as **one** insert
+carrying **both** task ids, and that no `prompt` is ever raised. **It
+blocks the service
 worker** (`serviceWorkers: 'block'`), because `page.route` does not reach
 a fetch the WORKER makes: once it activates it answers its own synthetic
 503 and the board reloads empty, which is the worker doing its offline

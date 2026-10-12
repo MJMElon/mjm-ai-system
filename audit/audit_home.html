@@ -384,6 +384,11 @@
     .hist-row.hist-missed{cursor:default;background:#fffbeb}
     .hist-row.hist-missed:hover{background:#fffbeb}
     .hist-row.hist-missed .hist-sub{color:#92400e;font-weight:700}
+    /* A plot an admin closed without an audit. Amber for the same reason
+       as a missed round -- it is a fact, not an alarm. */
+    .hist-closed{display:inline-block;padding:0 6px;border-radius:999px;
+      background:#fef3c7;color:#92400e;font-size:10.5px;font-weight:900;
+      letter-spacing:.02em;vertical-align:1px}
     .hist-empty{padding:26px 12px;text-align:center;font-size:12.5px;
                 font-weight:600;color:var(--fc-ink3)}
     /* ── AUDIT SCHEDULE BOARD ────────────────────────────────────────
@@ -761,6 +766,34 @@
                 background:transparent;font:inherit;text-align:left;
                 transition:background .15s}
     .tl-wt-head:hover{background:rgba(0,0,0,.035)}
+    /* The header is itself a <button>, so the section close cannot be
+       nested inside it -- it sits BESIDE it in a bar of its own. */
+    .tl-wt-bar{display:flex;align-items:center;gap:4px}
+    .tl-wt-bar .tl-wt-head{min-width:0}
+    /* Said quietly until it is hovered. It closes a dozen plots at once,
+       so it should not be the brightest thing in the row.
+
+       It carries a WORD as well as a cross. The head beside it is full
+       width, so the button lands at the far right of the row where a
+       lone x reads as unattached to the job it belongs to -- "Close all"
+       says both what it does and that it is not one plot. The word goes
+       on a narrow screen, where the row is short enough that the cross
+       sits beside the count anyway. */
+    .tl-wt-close{flex:0 0 auto;height:25px;margin-right:4px;gap:5px;
+      padding:0 9px 0 7px;border-radius:999px;border:1.5px solid #fecaca;
+      background:#fef2f2;color:#b91c1c;font-family:inherit;
+      font-size:11px;font-weight:900;line-height:1;letter-spacing:.02em;
+      cursor:pointer;display:flex;align-items:center;justify-content:center;
+      opacity:.85;
+      transition:background .15s,border-color .15s,color .15s,opacity .15s,transform .15s}
+    .tl-wt-close .tl-wt-x{font-size:13px;font-weight:900;line-height:1}
+    .tl-wt-close:hover{background:#b91c1c;border-color:#b91c1c;color:#fff;
+                       opacity:1;transform:scale(1.05)}
+    .tl-wt-close:focus-visible{outline:2px solid #b91c1c;outline-offset:2px;opacity:1}
+    @media (max-width:520px){
+      .tl-wt-close{padding:0;width:25px;gap:0}
+      .tl-wt-close .tl-wt-lbl{display:none}
+    }
     .tl-wt-caret{width:14px;height:14px;flex-shrink:0;fill:none;stroke:currentColor;
                  stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;
                  color:#94a3b8;transform:rotate(-90deg);transition:transform .18s}
@@ -1074,7 +1107,7 @@
   </div>
 </div>
 
-<script src="audit_lang.js?v=20261012d"></script>
+<script src="audit_lang.js?v=20261012e"></script>
 <script src="audit_supabase.js?v=20261008a"></script>
 <script src="audit_ribbon.js?v=20260826a"></script>
 <!-- Works out which plots still owe work, for the circles under each
@@ -1179,6 +1212,16 @@ setTimeout(()=>{if(!deferredPrompt&&!isIOS()&&!isInStandaloneMode())showInstallB
 /* The alert refresh, and the notification permission prompt that went with
    it, moved to the back end. Nothing on this page notifies now, so asking
    an auditor to allow notifications would be asking for nothing. */
+
+/* The one spelling of an admin closure, read by the board that writes it,
+   by Audit History below, by the maintenance module's own colour rule and
+   by the check query. A row written before any change here keeps its old
+   wording, so do not change the string itself.
+
+   It lives at SCRIPT scope rather than inside loadAuditTodo because both
+   halves of this page need it: the board writes the row and the history
+   has to recognise it. */
+const MAINT_CLOSED_RESULT = 'Closed by admin';
 
 /* ── AUDIT SCHEDULE TO-DO ── */
 function loadAuditTodo(){
@@ -1346,11 +1389,6 @@ function loadAuditTodo(){
       {month: style}));
   let MONTHS_FULL = monthNames('long');
   const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-
-  /* The one spelling of an admin closure, read by the maintenance
-     module's own colour rule and by the check query. A row written
-     before any change here keeps its old wording, so do not change it. */
-  const MAINT_CLOSED_RESULT = 'Closed by admin';
 
   /* ── Schedules ──
      Windows are day-of-month ranges. Which set applies is settled by the
@@ -2412,6 +2450,12 @@ function loadAuditTodo(){
      So: fall back to the flat strip the other modules use, and if that is
      empty too, say which of the two is missing. A silent gap is what made
      this hard to diagnose the first time. */
+  /* Every work-type group drawn this pass, so the section button can
+     find its plots at the moment it is pressed. Keyed by the same
+     rowKey|wt the fold uses, and overwritten on every draw — a stale
+     entry would close a list the screen is no longer showing. */
+  const _closeGroups = new Map();
+
   function _maintTypesHtml(o, oy, om, pending){
     /* `pending` is the nurseries a separate check thinks are unfinished.
        Where it has an answer, use it. Where it does not, fall back to the
@@ -2514,7 +2558,33 @@ function loadAuditTodo(){
                      title="${t('close_plot_title')}"
                      aria-label="${t('close_plot_title')} — ${nur} ${it.plot}">×</button></span>`;
         }).join('');
+        /* ── CLOSING A WHOLE SECTION ──
+           Closing eighteen cold weeding plots one cross at a time is
+           eighteen confirms for one decision, and the decision was never
+           per-plot: the job finished in August and there is nothing left
+           in ANY of those plots to look at. So the section header carries
+           its own close, and it writes exactly the rows the crosses would
+           have written, in ONE insert.
+
+           The group is parked in _closeGroups rather than re-derived when
+           the button is pressed. The button only has to name which group
+           it is, and the plots it closes are the plots that were on screen
+           when somebody read the count -- a second walk of the data could
+           quietly have one more in it. */
+        const items = g.list.filter(it => it.id).map(it => ({
+          id: it.id, nursery: it.nursery, plot: it.plot,
+          jobName: name, on: it.on || ''
+        }));
+        _closeGroups.set(key, { job: name, row: label, items: items });
+        const sectX = (mayClose && items.length)
+          ? `<button type="button" class="tl-wt-close" data-close-sect="${key}"
+                     title="${t('close_sect_title')}"
+                     aria-label="${t('close_sect_title')} — ${name}"
+                     ><span class="tl-wt-x" aria-hidden="true">×</span
+                     ><span class="tl-wt-lbl">${t('close_sect_btn')}</span></button>`
+          : '';
         return `<div class="tl-wt${open ? ' open' : ''}">
+          <div class="tl-wt-bar">
           <button type="button" class="tl-wt-head" data-wtkey="${key}"
                   aria-expanded="${open}"
                   aria-label="${name} — ${fmtNum(g.list.length)} plots, ${
@@ -2523,7 +2593,8 @@ function loadAuditTodo(){
               <polyline points="6 9 12 15 18 9"/></svg>
             <span class="tl-wt-name">${name}</span>
             <span class="tl-wt-count">${fmtNum(g.list.length)}</span>
-          </button>
+          </button>${sectX}
+          </div>
           <div class="tl-wt-plots">${circles}</div>
         </div>`;
       }).join('');
@@ -2531,70 +2602,133 @@ function loadAuditTodo(){
     return `<div class="tl-wts">${blocks}</div>`;
   }
 
-  /* ── THE CLOSE ITSELF ──
+  /* ── THE CLOSE ITSELF, FOR ONE PLOT OR A WHOLE SECTION ──
+     One writer. The chip hands it a single item, the section header
+     hands it the whole group, and nothing else differs: the same row
+     shape, the same confirm, the same rebuild. Two code paths writing
+     the same record two ways is how they come to disagree.
+
+     The rows go up in ONE insert. Eighteen round trips on a nursery
+     signal is eighteen chances to half-finish, and a section half
+     closed is worse than one not closed at all. */
+  async function _closePlots(items, what){
+    if (!(typeof isAuditAdmin === 'function' && isAuditAdmin())) {
+      alert(t('close_plot_denied'));
+      return;
+    }
+    const list = (items || []).filter(it => it && it.id);
+    if (!list.length) return;
+    if (!confirm(what)) return;
+
+    const user = JSON.parse(localStorage.getItem('mjm_user') || '{}');
+    const who  = user.name || user.full_name || user.email || 'Admin';
+    const today = iso(year, month, day);
+    /* The remark is written rather than asked for. It says what an
+       admin closing a cold plot would have typed anyway — the job, and
+       the day the work was done — and it is the line Audit History
+       shows, so it has to carry its own context. */
+    const rows = list.map(it => ({
+      task_id:   parseInt(it.id, 10),
+      nursery:   it.nursery || null,
+      plot:      it.plot || null,
+      task_type: it.jobName || null,
+      result:    MAINT_CLOSED_RESULT,
+      remarks:   (list.length > 1
+                   ? 'Closed with the whole ' + (it.jobName || 'section') + ' section ('
+                     + list.length + ' plots)'
+                   : 'Closed without an audit')
+                 + (it.on ? ', work done ' + it.on : '')
+                 + ', long overdue',
+      photo_url: null,
+      auditor_name: who,
+      date: today
+    }));
+    try {
+      const res = await sb.insert('audit_maintenance_audits', rows);
+      if (res && res.error) throw new Error(res.error.message || 'refused');
+      /* Rebuild from the database rather than striking the chips off
+         the screen: the board is what somebody is about to act on, and
+         a screen that agrees with itself and not with the table is
+         worse than one that takes a second to catch up. */
+      await loadMaintTimeline();
+      renderAll();
+      /* loadHistory, not renderHistory: the record that was just written
+         is not in HIST_ALL yet, and the whole point of writing one is
+         that it lands in Audit History where somebody can see it. A
+         redraw of the old list would show the plot gone off the board
+         and nothing anywhere saying where it went. */
+      if (typeof loadHistory === 'function') await loadHistory();
+      else if (typeof renderHistory === 'function') renderHistory();
+    } catch (err) {
+      console.error('[audit-home] could not close the plot:', err);
+      alert(t('close_plot_failed') + ' ' + (err && err.message ? err.message : ''));
+    }
+  }
+
+  /* ── THE TWO BUTTONS ──
      Delegated, like every other handler here: the timeline is rebuilt
      from scratch on each draw, so anything bound to a button dies with
-     it. The admin test is asked AGAIN at the moment of the write rather
-     than trusted from the moment the button was drawn -- a button drawn
-     before a permission changed is still sitting on the screen. */
+     it. The admin test is asked AGAIN inside _closePlots rather than
+     trusted from the moment the button was drawn -- a button drawn
+     before a permission changed is still sitting on the screen.
+
+     Both buttons end in the same writer. The only difference between
+     them is how many items they hand it and what the confirm says. */
   let _closing = false;
+
+  /* One plot. */
   document.addEventListener('click', async (e) => {
     const btn = e.target.closest('.tl-plot-x');
     if (!btn) return;
     e.preventDefault();
     e.stopPropagation();
     if (_closing) return;
-    if (!(typeof isAuditAdmin === 'function' && isAuditAdmin())) {
-      alert(t('close_plot_denied'));
-      return;
-    }
     const id   = btn.dataset.closeTask;
+    if (!id) return;
     const plot = btn.dataset.closePlot || '';
-    const nur  = NURSERY_LABELS[btn.dataset.closeNur] || btn.dataset.closeNur || '';
+    const nurK = btn.dataset.closeNur || '';
+    const nur  = NURSERY_LABELS[nurK] || nurK || '';
     const job  = btn.dataset.closeJob || '';
     const on   = btn.dataset.closeOn || '';
-    if (!id) return;
 
     /* Named in full, because the thing being closed is somebody else's
-       outstanding work and a bare "are you sure" names nothing. */
-    if (!confirm(t('close_plot_confirm')
-        .replace('{plot}', nur + ' ' + plot)
-        .replace('{job}', job)
-        .replace('{on}', on || '—'))) return;
-    const why = prompt(t('close_plot_why'), '');
-    if (why === null) return;            // cancelled at the second step
+       outstanding work and a bare "are you sure" names nothing. There
+       is no second step: the reason used to be asked for and is written
+       instead -- see the remark _closePlots builds. */
+    const what = t('close_plot_confirm')
+      .replace('{plot}', nur + ' ' + plot)
+      .replace('{job}', job)
+      .replace('{on}', on || '\u2014');
 
     _closing = true;
     try {
-      const user = JSON.parse(localStorage.getItem('mjm_user') || '{}');
-      const row = {
-        task_id:   parseInt(id, 10),
-        nursery:   btn.dataset.closeNur || null,
-        plot:      plot || null,
-        task_type: job || null,
-        result:    MAINT_CLOSED_RESULT,
-        remarks:   (why || '').trim() ||
-                   ('Long overdue, closed without an audit'
-                    + (on ? ' (work done ' + on + ')' : '')),
-        photo_url: null,
-        auditor_name: user.name || user.full_name || user.email || 'Admin',
-        date: iso(year, month, day)
-      };
-      const res = await sb.insert('audit_maintenance_audits', row);
-      if (res && res.error) throw new Error(res.error.message || 'refused');
-      /* Rebuild from the database rather than striking the chip off the
-         screen: the board is what somebody is about to act on, and a
-         screen that agrees with itself and not with the table is worse
-         than one that takes a second to catch up. */
-      await loadMaintTimeline();
-      renderAll();
-      if (typeof renderHistory === 'function') renderHistory();
-    } catch (err) {
-      console.error('[audit-home] could not close the plot:', err);
-      alert(t('close_plot_failed') + ' ' + (err && err.message ? err.message : ''));
-    } finally {
-      _closing = false;
-    }
+      await _closePlots([{ id: id, nursery: nurK, plot: plot,
+                           jobName: job, on: on }], what);
+    } finally { _closing = false; }
+  });
+
+  /* The whole section. */
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.tl-wt-close');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (_closing) return;
+    /* The group as it was DRAWN, not as the data reads now. Somebody
+       pressing this has just read a count beside the job name, and the
+       plots they close must be the plots that count was of. */
+    const g = _closeGroups.get(btn.dataset.closeSect);
+    if (!g || !g.items.length) return;
+
+    const what = t('close_sect_confirm')
+      .replace('{n}', fmtNum(g.items.length))
+      .replace('{job}', g.job)
+      .replace('{row}', g.row);
+
+    _closing = true;
+    try {
+      await _closePlots(g.items, what);
+    } finally { _closing = false; }
   });
 
   /* Folding a work type. Same delegated-listener reasoning as below. */
@@ -3236,7 +3370,21 @@ function renderHistory(){
         }
       }
     } catch (e) {}
-    const meta = [nur, r.auditor, lateTxt].filter(Boolean).join(' · ');
+    /* ── A CLOSURE IS NOT AN AUDIT, AND THE HISTORY HAS TO SAY SO ──
+       An admin closing a cold maintenance plot writes an ordinary row
+       here, which is the point of it -- a name and a date against the
+       decision. But a row in this month's list with nothing on it to
+       say otherwise reads as work that was DONE. So the row names the
+       job it closed and says who closed it, and it is the one thing on
+       the line that is coloured. A whole section closed at once is a
+       run of these, all on the same day. */
+    let closedTxt = '';
+    if (r.mod === 'maint' && r.raw && r.raw.result === MAINT_CLOSED_RESULT) {
+      closedTxt = '<span class="hist-closed">' +
+        (typeof t === 'function' ? t('hist_closed_by_admin') : 'Closed by admin') +
+        (r.raw.task_type ? ' \u00b7 ' + r.raw.task_type : '') + '</span>';
+    }
+    const meta = [nur, r.auditor, closedTxt, lateTxt].filter(Boolean).join(' · ');
     /* A row opens its summary. data-hi indexes the month's rows, which
        is what the delegated listener below reads — the list is redrawn
        on every month change, so anything bound to a row would die with

@@ -129,9 +129,20 @@ const TRANSLATIONS = {
                            + 'It leaves the To-Do list and is filed in Audit History as '
                            + 'closed by you, without an audit. The work record itself is '
                            + 'not touched.',
-    close_plot_why:          'Why is it being closed? (optional — it is kept with the record)',
+    /* Closing the whole job at once. The reason is no longer asked for --
+       it is written onto the record, because an admin closing a cold plot
+       types the same sentence every time. */
+    close_sect_title:        'Close every plot under this job without an audit (admin)',
+    close_sect_btn:          'Close all',
+    close_sect_confirm:      'Close all {n} plots waiting on {job} ({row})?\n\n'
+                           + 'Every one of them leaves the To-Do list and is filed in Audit '
+                           + 'History as closed by you, without an audit. The work records '
+                           + 'themselves are not touched.',
     close_plot_denied:       'Only an audit admin can close a plot.',
     close_plot_failed:       'Could not close it —',
+    /* Said on the history row itself. A closure sitting unlabelled in a
+       list of this month\u2019s work reads as work that was done. */
+    hist_closed_by_admin:    'Closed by admin',
     /* A record dated 1 Oct is September round 3 done a day late, not an
        October audit. Said only where it WAS late. */
     late_for_round:          'late for the {d} round',
@@ -549,9 +560,15 @@ const TRANSLATIONS = {
                            + 'Ia keluar daripada senarai To-Do dan direkodkan dalam Sejarah '
                            + 'Audit sebagai ditutup oleh anda, tanpa audit. Rekod kerja itu '
                            + 'sendiri tidak disentuh.',
-    close_plot_why:          'Kenapa ia ditutup? (pilihan — disimpan bersama rekod)',
+    close_sect_title:        'Tutup semua plot di bawah kerja ini tanpa audit (admin)',
+    close_sect_btn:          'Tutup semua',
+    close_sect_confirm:      'Tutup kesemua {n} plot yang menunggu {job} ({row})?\n\n'
+                           + 'Kesemuanya keluar daripada senarai To-Do dan direkodkan dalam '
+                           + 'Sejarah Audit sebagai ditutup oleh anda, tanpa audit. Rekod '
+                           + 'kerja itu sendiri tidak disentuh.',
     close_plot_denied:       'Hanya admin audit boleh menutup plot.',
     close_plot_failed:       'Tidak dapat ditutup —',
+    hist_closed_by_admin:    'Ditutup oleh admin',
     late_for_round:          'lewat untuk pusingan {d}',
     this_round:              'Pusingan ini',
     due_by:                  'tarikh akhir',
