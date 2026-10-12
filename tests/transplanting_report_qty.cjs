@@ -33,6 +33,9 @@ function run({ logs = [], cals = [], from = '', to = '', locs = [], breed = '' }
   const fn = new Function(
     'logsRes', 'calEntries', 'calByBatchPlot', 'plotToLoc', 'batchBreed',
     'PRE_NURSERY_PLOTS', '_logDate', '_mvBatchKey', 'maturityOf',
+    // The papan tanda's TARIKH TANAM rides on each row; nothing here cares
+    // which date it is, only that the block can read the map.
+    'batchPlanted', '_ptRows',
     'from', 'to', 'fromTs', 'toTs', 'selectedLocs', 'breed',
     body + '\nreturn { rows, recorded, amendNet, total, amendTip };');
   const calByBatchPlot = {};
@@ -52,6 +55,7 @@ function run({ logs = [], cals = [], from = '', to = '', locs = [], breed = '' }
     ['PREMIUM CARE', 'DOUBLE-TONE'],
     (l) => (l.transaction_date || String(l.created_at || '').slice(0, 10) || null),
     (v) => String(v == null ? '' : v).trim(), maturityOf,
+    {}, [],
     from, to,
     from ? new Date(from).getTime() : -Infinity,
     to ? new Date(to).getTime() + 86400000 : Infinity,
