@@ -1551,11 +1551,42 @@ function loadAuditTodo(){
      work and the row stays, listing every plot, reading "lewat 68 hari",
      and it will go on doing that until somebody deletes something.
 
-     Every overdue row on the board was in that state. So the upper bound
-     on a CLOSED window runs to today: the work counts whenever it was
-     done. The lower bound does not move -- an audit from before the
-     window opened belongs to the round before this one and must not
-     close two.
+     Every overdue row on the board was in that state. So a CLOSED
+     window takes the batch's LATEST audit, whenever it was done: the
+     range opens at the beginning of time and runs to today.
+
+     The lower bound used to stay on the window, on the argument that an
+     audit from before it opened belongs to the round before this one
+     and must not close two. The office overruled that, twice, in the
+     same words both times -- "if auditor was late and do the latest
+     one, then the old records will be clear too but recorded as missed
+     audit", and then, looking at N02: "latest audit clears every
+     overdue round (if is not audit on time). but as long as not yet
+     audit, it will still showing there."
+
+     N02 is what the old bound looked like on screen. Batch 244 was
+     audited 30 Sep, inside September round 3, so it cleared. Batch 253
+     was audited 22 Sep -- round 2's slot -- so round 3 stayed red over
+     a plot somebody had walked eight days earlier, and nothing 253
+     could be given would ever close a window that shut on 30 September.
+
+     WHAT THIS COSTS, because it is not free. A batch audited once and
+     never again now clears every overdue round it ever accrues, so it
+     only appears on the board while a round is actually OPEN -- one day
+     a month on the MN plot schedule. The thing that keeps it visible is
+     the other half of the rule: every one of those rounds is filed in
+     Audit History as a MISSED audit, under the month that owed it. A
+     plot nobody walks does not go quiet; it accumulates a missed round
+     every round, which is the record somebody can act on.
+
+     A batch with NO audit at all is untouched by any of this and stays
+     on the board, which is the office's "as long as not yet audit, it
+     will still showing there".
+
+     An OPEN window is unchanged and must stay so. Letting an old audit
+     answer a round nobody has walked yet would mark work done before
+     anybody had a chance to do it, which is the one direction this
+     board must never be wrong in.
 
      A round cleared late is not a round done on time, and it is not
      thrown away either: strict() is the same test with the real window,
@@ -1574,7 +1605,12 @@ function loadAuditTodo(){
     const endISO  = iso(y, m, o.end);
     if (strict) return { fromISO: fromISO, toISO: endISO };
     const todayISO = iso(year, month, day);
-    return { fromISO: fromISO, toISO: endISO >= todayISO ? endISO : todayISO };
+    /* Still open: the real window, unchanged. */
+    if (endISO >= todayISO) return { fromISO: fromISO, toISO: endISO };
+    /* Closed: any audit this batch has ever had, up to today. The empty
+       string is the open lower bound -- every ISO date sorts above it,
+       and plotsAll() already uses it that way. */
+    return { fromISO: '', toISO: todayISO };
   }
 
   async function loadCompletions(){
