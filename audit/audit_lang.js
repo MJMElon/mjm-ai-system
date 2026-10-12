@@ -117,6 +117,12 @@ const TRANSLATIONS = {
        list-count header on the Plot Condition audit. Kept short so
        "0 / 6 audited" reads at a glance in either language. */
     audited:                 'audited',
+    /* Named on the grid count so "0 / 7 audited" cannot be read as
+       "nothing was ever done here" -- the count is per ROUND, and the
+       deadline says whether that round is late. */
+    round_word:              'Round',
+    this_round:              'This round',
+    due_by:                  'due',
     no_batches:              'no batches',
     batch_one:               'batch',
     batches_many:            'batches',
@@ -523,6 +529,9 @@ const TRANSLATIONS = {
     /* Ratio-label words (Malay) for the plot-icon subtitle and the
        list-count header on the Plot Condition audit. */
     audited:                 'Diaudit',
+    round_word:              'Pusingan',
+    this_round:              'Pusingan ini',
+    due_by:                  'tarikh akhir',
     no_batches:              'tiada lot',
     batch_one:               'lot',
     batches_many:            'lot',

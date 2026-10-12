@@ -144,7 +144,12 @@ const tableOf = (url) => { const m = /\/rest\/v1\/([a-z0-9_]+)/i.exec(url); retu
         : null,
       cards,
       audited244: typeof isBatchAudited === 'function' ? isBatchAudited('N01','244') : null,
-      audited253: typeof isBatchAudited === 'function' ? isBatchAudited('N01','253') : null
+      audited253: typeof isBatchAudited === 'function' ? isBatchAudited('N01','253') : null,
+      /* The grid's own count line. "0 / 7 audited" over cards showing a
+         reading from the 1st reads as "the work has vanished", so the
+         count has to say which round it is counting and when that round
+         was due. */
+      countLine: (document.getElementById('list-count') || {}).textContent || ''
     };
   });
 
@@ -157,6 +162,7 @@ const tableOf = (url) => { const m = /\/rest\/v1\/([a-z0-9_]+)/i.exec(url); retu
   console.log('253 (lapsed) :', JSON.stringify(c253.text.slice(0, 70)));
   console.log('230 (not req):', JSON.stringify(c230.text.slice(0, 60)));
   console.log('isBatchAudited 244 / 253 :', seen.audited244, '/', seen.audited253);
+  console.log('count line   :', JSON.stringify(seen.countLine));
   console.log('page errors  :', errs.length ? errs.join(' | ') : 'none');
 
   let bad = 0;
@@ -176,6 +182,10 @@ const tableOf = (url) => { const m = /\/rest\/v1\/([a-z0-9_]+)/i.exec(url); retu
   check('the grid agrees with the card on the lapsed one',   seen.audited253 === false);
 
   check('Not Required still wins', /not required/i.test(c230.text));
+
+  check('the grid count names the round it is counting',
+        /round \d+|this round/i.test(seen.countLine));
+  check('and when that round was due', /due/i.test(seen.countLine));
 
   check('no page errors', errs.length === 0);
 

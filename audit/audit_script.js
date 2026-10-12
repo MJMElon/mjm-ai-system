@@ -446,6 +446,23 @@ function isBatchAudited(plot, batch){
     String(r.batch || '').trim() === wanted && _inRound(r, w));
 }
 
+
+/* WHICH ROUND THE COUNT IS COUNTING.
+   "0 / 7 audited" with every batch card underneath showing an audit
+   from the 1st reads as "the work has vanished". It has not: those
+   audits closed the round they fell in, and a NEW round has opened
+   since. The count is per round -- it always was, now that a batch
+   stops being done the moment the next round opens -- and the only
+   thing missing was it saying so. The deadline rides with it, because
+   "Round 1" alone does not tell anybody whether they are late. */
+function _roundSuffix(){
+  const w = _roundNow();
+  if (!w) return '';
+  const d = w.dueISO ? fmtDate(w.dueISO) : '';
+  const name = w.round ? ((typeof t === 'function' ? t('round_word') : 'Round') + ' ' + w.round)
+                       : (typeof t === 'function' ? t('this_round') : 'This round');
+  return ' \u00b7 ' + name + (d ? ' \u00b7 ' + (typeof t === 'function' ? t('due_by') : 'due') + ' ' + d : '');
+}
 function renderList(){
   const recs=records.filter(r=>r.nursery===activeTab);
   const plots=NURSERY_PLOTS[activeTab]||[];
@@ -467,7 +484,7 @@ function renderList(){
     totalAudited  += required.filter(b => isBatchAudited(p, b.batch)).length;
   });
   document.getElementById('list-count').textContent =
-    fmtNum(totalAudited) + ' / ' + fmtNum(totalRequired) + ' ' + t('audited');
+    fmtNum(totalAudited) + ' / ' + fmtNum(totalRequired) + ' ' + t('audited') + _roundSuffix();
   document.getElementById('list-heading').textContent =
     t('plot_title') + ' — ' + NURSERY_LABELS[activeTab];
   document.querySelectorAll('.tab-item').forEach(t=>{

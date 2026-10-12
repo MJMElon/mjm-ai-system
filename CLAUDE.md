@@ -1392,8 +1392,18 @@ this one was not done. It also counts audits filed against a plot the
 ledger has nothing standing on, which are invisible to every list in the
 system.
 
+**And the grid count has to SAY which round it is counting.** The first
+thing the office asked after this shipped was why the work was done and
+the outside said not yet: B01 read *"0 / 7 Diaudit"* over seven cards
+each showing an audit from the 1st. Both screens were right — those
+audits closed the round they fell in, and October round 1 had opened on
+the 10th since — but a bare `0 / 7` reads as *the work has vanished*. It
+now reads **"0 / 7 audited · Round 1 · due 10 Oct 2026"**, deadline
+included, because "Round 1" alone does not tell anybody whether they are
+late. `_roundSuffix()`, one in each of the two module scripts.
+
 `tests/a_round_is_not_audited_for_ever.cjs` drives the real plot page
-with the office's own three batches; five of its eleven checks fail on
+with the office's own three batches; five of its thirteen checks fail on
 the previous code.
 
 ## A permission that is saved but not obeyed is worse than no permission

@@ -405,6 +405,20 @@ function syncBatchField(){
 }
 
 /* --- RENDER LIST — plot-icon grid --- */
+
+/* WHICH ROUND THE COUNT IS COUNTING. Same note as the Plot Condition
+   grid, same reason: "0 / 7 audited" over cards showing a reading from
+   the 1st reads as "the work has vanished", when what happened is that
+   the round those readings closed has passed and a new one has opened.
+   Change one, change the other. */
+function _roundSuffix(){
+  const w = _roundNow();
+  if (!w) return '';
+  const d = w.dueISO ? fmtDate(w.dueISO) : '';
+  const name = w.round ? ((typeof t === 'function' ? t('round_word') : 'Round') + ' ' + w.round)
+                       : (typeof t === 'function' ? t('this_round') : 'This round');
+  return ' \u00b7 ' + name + (d ? ' \u00b7 ' + (typeof t === 'function' ? t('due_by') : 'due') + ' ' + d : '');
+}
 function renderList(){
   const plots=NURSERY_PLOTS[activeTab]||[];
   // Count BATCHES (required only). A plot with 4 required batches counts
@@ -421,7 +435,7 @@ function renderList(){
     totalAudited  += required.filter(b=>isBatchAudited(p, b.batch)).length;
   });
   document.getElementById('list-count').textContent =
-    fmtNum(totalAudited) + ' / ' + fmtNum(totalRequired) + ' ' + t('audited');
+    fmtNum(totalAudited) + ' / ' + fmtNum(totalRequired) + ' ' + t('audited') + _roundSuffix();
   document.getElementById('list-heading').textContent =
     t('height_title') + ' — ' + NURSERY_LABELS[activeTab];
 
