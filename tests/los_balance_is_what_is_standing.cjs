@@ -53,7 +53,7 @@ const derive = new Function('rowsByBatch', 'asAt', '_losAgeMonths', '_losAgeLabe
 const run = (f) => {
   const r = Object.assign({
     batch: 'x', planted: 0, cull1: 0, cull2: 0, cull3: 0, trans: 0, transDtone: 0, dtone: 0,
-    sales: 0, salesPre: 0, calibration: 0, calibrationPre: 0,
+    sales: 0, salesPre: 0, calibration: 0, calibrationPre: 0, calibrationSeed: 0, calibrationField: 0,
     received: 0, damaged: 0, transfer: 0
   }, f);
   derive({ x: r }, null, () => null, () => '');
@@ -129,13 +129,16 @@ console.log('\n── A batch 1st culled and not yet transplanted ──');
 const inTray = run({ planted: 1000, cull1: 100 });
 is('balance is nought — nothing is standing in the field', inTray.balance, 0);
 is('and preBalance still holds the 900 in the tray',       inTray.preBalance, 900);
-is('so it is NOT reported completed',                      inTray.completed, false);
+/* Whether a batch is FINISHED is no longer derived here at all — it is the
+   Batch Record's rule, out of shared/shared_batch_completed.js, applied to
+   the rows after the whole ledger has been read.
+   tests/batch_completed_one_rule.cjs is where that is held to account. */
+is('completion is not derived from these figures', inTray.completed, undefined);
 
 console.log('\n── Once it goes out, the 1st culling is not subtracted again ──');
 const out = run({ planted: 1000, cull1: 100, trans: 900 });
 is('balance is the transplant qty', out.balance, 900);
 is('the tray is empty',                out.preBalance, 0);
-is('and it is not finished — 900 are standing', out.completed, false);
 
 console.log('\n── The 2nd culling never deducts here either ──');
 const c2 = run({ planted: 1000, cull1: 100, trans: 900, cull2: 120 });
@@ -153,12 +156,10 @@ const tray = run({ planted: 1000, trans: 0, sales: 400, salesPre: 400 });
 is('the balance carries the tray sale',      tray.balance, -400);
 is('the main-nursery figure does NOT',        tray.mainBalance, 0);
 is('the tray still holds the other 600',      tray.preBalance, 600);
-is('and it is not reported completed',        tray.completed, false);
 
 const trayGone = run({ planted: 1000, trans: 0, sales: 1000, salesPre: 1000 });
 is('sold out entirely: nothing in the tray',  trayGone.preBalance, 0);
 is('nothing in the field',                    trayGone.mainBalance, 0);
-is('and NOW it is completed',                 trayGone.completed, true);
 
 console.log('\n── A calibration on a batch still in the tray ──');
 const trayCal = run({ planted: 1000, cull1: 100, calibration: -30, calibrationPre: -30 });
@@ -185,12 +186,20 @@ is('nothing at all: nought', run({}).transTotal, 0);
 
 /* ── The page, not just the arithmetic ──────────────────────────────────── */
 console.log('\n── The report markup says the same thing ──');
-is('there is a Transplant Details group of three',
-  /<th colspan="3" class="los-grp">Transplant Details<\/th>/.test(los), true);
-is('with Total Transplant Qty in front of the two',
-  los.indexOf('>Total Transplant Qty<') < los.indexOf('>Transplant Qty<'), true);
-is('Transplant Qty in front of Double Tone',
-  los.indexOf('>Transplant Qty<') < los.indexOf('>Double Tone<'), true);
+/* ONE column, not three. The split lives inside the cell — three columns
+   each for the transplant and the 1st culling made twenty-one, and at
+   twenty-one every figure in the report was reading in a column too narrow
+   for it. */
+is('Transplant Qty is one column, not a group of three',
+  /<th colspan="3" class="los-grp">Transplant Details<\/th>/.test(los), false);
+is('and it spans both header rows like any other plain column',
+  /<th rowspan="2" title="Every main-plot transplant[^"]*">Transplant Qty<\/th>/.test(los), true);
+is('the halves are drawn inside the cell',
+  /_losSplitCell\(r, 'transTotal', r\.transTotal/.test(los), true);
+is("with Normal and DT as the two labels",
+  /\[\['Normal', 'trans', r\.transMain\], \['DT', 'dtone', r\.transDtone\]\]/.test(los), true);
+is('and the foot carries the same split',
+  /_losSplitFoot\('transTotal', tot\.transTotal/.test(los), true);
 /* The office asked for the shorter word, so no heading in THIS table may
    still say the longer one. Scoped to the Life of Seedlings thead on
    purpose: the Transplanting Report further down the file is a different
@@ -204,17 +213,20 @@ is('no heading in this table still says Transplanting',
     .filter(h => h.replace(/<[^>]*>/g, '').includes('Transplanting')).length, 0);
 /* The two hovers point at the batch report cards these columns ARE, which
    is what stops the next reader rebuilding the split from scratch. */
-is('the Transplant Qty hover names the Main Plot card',
-  /batch report Main Plot card/.test(LOS_THEAD), true);
-is('and the Double Tone hover names the Main Plot \(D-Tone\) card',
-  /batch report Main Plot \(D-Tone\) card/.test(LOS_THEAD), true);
+/* The one hover left has to carry what three headings used to say: the
+   total, what each half is, and what the column is NOT. */
+is('the hover names the Main Plot and Main Plot (D-Tone) cards',
+  /Main Plot card/.test(LOS_THEAD) && /Main Plot \(D-Tone\) card/.test(LOS_THEAD), true);
+is('says which label is which',
+  /Normal is the Main Plot card/.test(LOS_THEAD) && /DT is the Main Plot \(D-Tone\) card/.test(LOS_THEAD), true);
 is('and says what it is NOT',
   /Not the Double Tone Quantity in Nursery/.test(LOS_THEAD), true);
-is('nineteen column widths', (() => {
+is('seventeen column widths', (() => {
   const m = los.match(/const LOS_COL_WIDTHS = \[([\s\S]*?)\]/);
   return m ? m[1].split(',').length : 0;
-})(), 19);
-is('and nothing still spans eighteen', /colspan="18"/.test(los), false);
+})(), 17);
+is('and nothing spans a stale count',
+  /colspan="(18|19|20|21)"/.test(los), false);
 
 /* The thead must have as many cells as the colgroup, counting the spans, or
    every column after the mistake is drawn in the wrong width. */
@@ -228,8 +240,8 @@ const theadRow = (n) => {
     return s + (n === 1 ? Number(cs || 1) : (r ? 0 : Number(cs || 1)));
   }, 0);
 };
-is('the top header row covers all nineteen', theadRow(1), 19);
-is('and the second row fills every grouped column', theadRow(2), 11);
+is('the top header row covers all seventeen', theadRow(1), 17);
+is('and the second row fills every grouped column', theadRow(2), 8);
 
 console.log('\n── The verification marks follow the new formula ──');
 is('Balance is marked by the transplanting and the 3rd culling',

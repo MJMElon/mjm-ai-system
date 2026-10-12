@@ -14,7 +14,7 @@ const noAge = () => null, noLabel = () => '';
 function run(name, f) {
   const r = Object.assign({
     batch:name, planted:0, cull1:0, cull2:0, cull3:0, trans:0, sales:0,
-    calibration:0, calibrationPre:0, salesPre:0, received:0, damaged:0,
+    calibration:0, calibrationPre:0, calibrationSeed:0, calibrationField:0, salesPre:0, received:0, damaged:0,
   }, f);
   derive({ [name]: r }, null, noAge, noLabel);
   return r;
@@ -40,6 +40,14 @@ const cases = [
   { name:'E — 3rd culling in the field',
     f:{ planted:1000, cull1:100, trans:600, cull3:80 },
     truth:{ pre: 300, main: 600-80 } },
+
+  /* F — a calibration reported against PLANTING, keyed on a tray. It
+     corrects the SEED count, so it is in the pre-nursery figure and in
+     neither field one. Batch 230 is this case with real numbers. */
+  { name:'F — a SEED-side calibration of −1,000 on a tray',
+    f:{ planted:1000, cull1:100, trans:600,
+        calibration:-1000, calibrationPre:-1000, calibrationSeed:-1000 },
+    truth:{ pre: 1000-100-600-1000, main: 600 } },
 ];
 
 console.log('case                                                 pre   main  | truth pre  main');
@@ -64,20 +72,24 @@ for (const c of cases) {
    What replaces it: the Balance and mainBalance are the SAME NUMBER on every
    batch that sells out of the field, which is every batch the office
    reconciles. Where they differ, the difference is accounted for to the
-   seedling by the two TRAY figures the Balance carries and the field figure
-   does not — the tray sales it takes off anyway, and the tray calibration it
-   adds in anyway. Checking the gap is what stops mainBalance quietly
-   drifting into a formula of its own. */
+   seedling by what each one counts and the other does not — the TRAY sales
+   the Balance takes off anyway, and which calibrations each takes. Checking
+   that gap is what stops mainBalance quietly drifting into a formula of its
+   own. */
 console.log('\nBalance (total sales and calibration) against the main-nursery figure:');
 for (const c of cases) {
   const r = run(c.name, c.f);
-  const gap = (r.salesPre || 0) - (r.calibrationPre || 0);
+  /* What the Balance carries and the field figure does not: the tray
+     sales it takes off anyway, and whichever calibration each one counts. */
+  const gap = (r.salesPre || 0)
+            + (r.calibrationField || 0)
+            - ((r.calibration || 0) - (r.calibrationSeed || 0));
   const ok = r.mainBalance - r.balance === gap;
   if (!ok) bad++;
   console.log('  ' + c.name.slice(0, 1) + ': balance=' + String(r.balance).padStart(5) +
               '  main=' + String(r.mainBalance).padStart(5) +
               '  main less balance=' + String(r.mainBalance - r.balance).padStart(5) +
-              '  tray sales less tray calibration=' + String(gap).padStart(5) +
+              '  what each counts differently=' + String(gap).padStart(5) +
               (ok ? '  ok' : '  ✗'));
 }
 console.log('\n' + bad + ' of ' + cases.length + ' cases wrong');

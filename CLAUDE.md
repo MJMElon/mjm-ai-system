@@ -477,28 +477,64 @@ same reason the drone-map panel demanded an exact match.
 `tests/cull1_explained_by_transplanting.cjs` holds both halves, including that
 a difference which is NOT the adjustment still reads as over-allocated.
 
-## An unverified figure is shown, and says it is unverified
+## An unverified figure does NOT float, and it is a dash and never a nought
 
-Life of Seedlings is nineteen live sums of the batch ledger, and the ledger
-is filled in BEFORE anybody checks it. A figure keyed this morning and one
-signed off last week looked exactly alike.
+Life of Seedlings is seventeen columns of live sums of the batch ledger, and
+the ledger is filled in BEFORE anybody checks it. A figure keyed this morning
+and one signed off last week looked exactly alike.
 
-Both ways of fixing that are wrong. Hiding the unverified batch leaves the
-report answering a question nobody asked. **Zeroing an unverified stage is
-worse**: a batch with Seed Received in and Actual Planted silently at nought
-reports a Variance of minus the whole delivery — a wrong number wearing a
-right number's clothes. So the figure is shown, and it carries a ⧗ saying
-nobody has signed it, and the derived figures above it (Variance, Total
-Culling, Balance) carry whichever of their parts is unsigned.
+That was first fixed by SHOWING the unverified figure with a ⧗ beside it and
+counting it in the totals, on the argument that hiding it leaves the report
+answering a question nobody asked. **The office overruled that**, and batch
+246 is why: its 3rd Culling tab read **0 of 4 Done** with every Culled Qty
+box empty, and the report was showing **10,142 third culled** and a Balance
+of **minus 7,659** off the back of it. *"If the batch report not yet filled
+in the data, dont float the data to life of seedling"*, then *"make it only
+verified data will float to life of seedling."* They are the ones who
+reconcile against it; that is their call to make.
+
+**What was right about the old rule is still right, and it is why a withheld
+figure is a DASH.** Zeroing an unverified stage is a wrong number wearing a
+right number's clothes — a batch with Seed Received in and Actual Planted
+silently at nought reports a Variance of minus the whole delivery. So the
+cell reads **—**, which is "nobody has signed this" and cannot be mistaken
+for a count.
+
+Five things follow, and each is a way this goes quietly wrong:
+
+- **A DERIVED figure is withheld whenever ANY part of it is**, rather than
+  being computed from the parts that survived. That is the same trap one
+  level up. It falls out of each figure carrying every group it is made of —
+  `LOS_BALANCE_GROUPS`, `LOS_CULLTOTAL_GROUPS` and the rest.
+- **A withheld figure is OUT of its column total.** A column of dashes
+  adding up to a number is the one shape of wrong that cannot be spotted:
+  the total looks fine and no row disagrees with it. `LOS_GROUPS_OF_FIELD`
+  is what the reducer asks, and it is the same answer `LOS_GROUPS_OF_KIND`
+  gives per column — a field missing from it totals figures the rows are not
+  showing.
+- **The foot says which columns are short, and by how many rows.** "3
+  batches are unverified" does not tell a reader which TOTAL is light, since
+  a batch can be signed on its seed in and waiting on its 3rd culling.
+- **A stage with no lines at all is not withheld.** There is nothing to
+  verify about a stage a batch has not reached, so a true nought reads 0. A
+  nought on an unsigned tab is still withheld, because "0 damaged" and "0 so
+  far as anybody has keyed" are different claims.
+- **It still fails OPEN.** If the sign-off tables cannot be READ, nothing is
+  withheld and the report says so. A check that cannot run must not empty a
+  report — same reason access fails open.
+
+The figure is not hidden, only kept off the report: the dash carries it in
+its hover, names what is waiting, and is still a button, because the records
+behind it are exactly what somebody needs in order to go and sign it off.
 
 Three things to know before touching `LOS_GROUP_OF_TYPE` in
 `operation/operation_reports.html`:
 
 - **The unit is the COLUMN, not the tab.** 3rd Culling and Transfer are both
-  signed on Tab 6; the three Transplant Details columns and premium care are
-  four figures on Tab 3. A tally kept per tab puts a warning on figures somebody
-  HAS signed, and a marker that cries over fine figures is one nobody reads.
-  `LOS_STAGE_OF_GROUP` is the column→tab map that keeps the two apart.
+  signed on Tab 6; Transplant Qty (both halves of its split) and premium
+  care are figures on Tab 3, and 1st Culled is Tab 4. A tally kept per tab
+  withholds figures somebody HAS signed. `LOS_STAGE_OF_GROUP` is the
+  column→tab map that keeps the two apart.
 - **A sign-off comes two ways** and either counts: one signature over a whole
   tab in `operation_batch_verifications`, or — on a tab verified row by row —
   a `Row_Verification` log per row, keyed `<stage>::<rowKey>`. The rowKey
@@ -507,13 +543,25 @@ Three things to know before touching `LOS_GROUP_OF_TYPE` in
   `operation_batch_detail.html` draws the tab's tick by the same rule and
   `CHECK_which_batches_completed.sql` asks it of the record. Change one,
   change all three.
-- **If the sign-off tables cannot be read, nothing is marked** and the report
-  says so. Marking everything is not the cautious answer, it is a
-  systematically wrong one — the same reason access fails open.
+- **PART verified is not verified.** One of two transplant rows signed means
+  the figure includes an unsigned row, so it is withheld like any other.
 
 The As At date cuts the LINES off and never the signatures: a line dated
 after it is in no figure on screen, while "has anybody checked this" is a
 question about now.
+
+`shared/CHECK_what_life_of_seedlings_holds_back.sql` is the size of it —
+every batch with anything unsigned, which stages, and how many of each
+stage's rows are signed. Hand it over with any change to this rule: the
+figure that decides whether a rule like this is right is "what does it
+actually move", and that is the only thing that answers it.
+
+**The Status and Nursery filters still read the REAL figures**, not the
+withheld ones. Whether a batch is standing in the main nursery is a question
+about the batch, not about the paperwork, and a batch that vanished off
+every filter the day somebody forgot to sign a tab would be a worse report
+than the one this replaced. Completed is not a figure of this report's at
+all any more — see the section on the one completion rule.
 
 ## The only thing that asked "can this login save" was the save
 
@@ -700,12 +748,19 @@ worth keeping:
   than what moved — so **batch 276 showed a Total Transplant Qty of 3** with
   nothing transplanted and its own batch report reading 100% pending.
 
-`shared/CHECK_transplant_details.sql` puts all four numbers side by side on
-every batch and counts the ones that were overstated.
+It also has a share of the **1st culling**, because a 1st culling happens in
+a tray and the d-tone tray is one of them —
+`shared/CHECK_transplant_details.sql` puts every one of these numbers side by
+side on each batch and counts the ones that were overstated.
 
-## Transplant Details is the batch report's split, never a sum
+## A total is READ off the split, never summed from two different things
 
-Three columns: **Total Transplant Qty | Transplant Qty | Double Tone**.
+This has now shaped two groups of columns, and it is one rule.
+
+**Transplant Qty** and **1st Culled** are each ONE column carrying a split:
+the total on top, and under a rule the two halves it is made of — *Normal*
+out of an ordinary pre-nursery tray, *DT* out of the DOUBLE-TONE tray.
+749 = 600 + 149 on batch 123.
 
 They are the allocation engine's own cards, and the rule that makes them
 coherent is that the last two are **DISJOINT halves of the first**, split by
@@ -736,7 +791,50 @@ Three things that follow:
   and the gap is not silent: a fourth spelling stops the halves adding up and
   the check counts it.
 
-`tests/los_transplant_details.cjs` holds all of it, batch 276 included.
+**The 1st culling splits by the tray it happened IN.** A 1st culling is done
+in a tray, and the row is keyed against that tray — `plot_name` IS the tray,
+and the DOUBLE-TONE tray is one of them (`saveCullingTab` draws a row for
+every tray in `preNurseryTrayData` and gives the d-tone one its own icon).
+Same question as the transplant one, asked of a different column, answered by
+the same `_losTrayKey`.
+
+**A SPLIT LIVES INSIDE ITS COLUMN.** Both of these were drawn as three
+columns each to begin with, which took the table from seventeen columns to
+**twenty-one** — and at twenty-one every figure in the report was reading in
+a column too narrow for it. The detail had been bought with the legibility
+of everything beside it. A split is not three adjacent figures, it is ONE
+figure with its composition shown: the total keeps the column's size and
+weight so a reader going across a row still lands on it, and the halves sit
+small and muted underneath for the reader who stops. All three stay
+clickable and open their own records. `_losSplitCell` is the one helper and
+`_losSplitFoot` is its twin in the total row.
+
+Two things in it worth keeping:
+
+- **A split with nothing in one half is not drawn at all.** On a batch that
+  has never used the d-tone tray the sub-line would say "all of it" and
+  "none of it" — two lines of type for no information. Such a column reads
+  as a plain figure.
+- **The width the four columns gave back went to the ones that carry text.**
+  Batch/breed, supplier and the received figure, which are what actually
+  wrap.
+
+**What must NOT move when a column is split is the arithmetic underneath it.**
+Total Culled (1st + 3rd) goes on taking the WHOLE 1st culling, d-tone tray
+included, and the Balance goes on taking the WHOLE transplant. Splitting a
+column for the reader is not the same as changing what is counted, and the
+tests assert the totals did not move as well as that the halves add up.
+
+**And the headings say Culled, not Culling** — Culled Detail, 1st Culled, 2nd
+Culled, 3rd Culled, Total Culled (1st + 3rd). The office asked for one word across the group, and the
+test counts heading TEXT inside the Life of Seedlings thead so the
+Transplanting Report further down the same file keeps its own name.
+
+`tests/los_transplant_details.cjs` holds the transplant split, batch 276
+included; `tests/los_second_culling_never_deducts.cjs` holds the culling one
+with 123's own 749 / 600 / 149. `shared/CHECK_transplant_details.sql` prints
+both splits on every batch and counts any row where the halves fail to add
+up.
 
 ## The 2nd culling never deducts. Not even while no 3rd exists.
 
@@ -804,6 +902,9 @@ gone quietly wrong:
   **unapproved** one still counts for nothing, same as everywhere else.
   `shared/CHECK_balance_is_what_is_standing.sql` shows old against new on
   every batch and says which settle.
+- **But only the PLOT-side ones** — see the section below. A calibration
+  reported against Seeds Received, Planting or a Seed Audit corrects the
+  SEED count, and those seedlings never reached a field plot.
 - **`mainBalance` does not inherit it.** The Balance takes TOTAL sales off,
   so a sale out of the TRAY is inside it: a batch sold 400 out of the tray
   and never transplanted reads minus 400. That is right for every batch the
@@ -832,8 +933,95 @@ Seedlings thead and nothing else, which is what lets both be true.
 
 `tests/los_balance_is_what_is_standing.cjs` drives the real derived block
 with the office's five batches and holds all of it, the header-span
-arithmetic included — a thead that does not add up to nineteen draws every
+arithmetic included — a thead that does not add up to seventeen draws every
 column after the mistake in the wrong width.
+
+## Is this batch finished? ONE rule, and both lists ask it
+
+It used to be two, and they disagreed.
+
+The **Batch Record** list asked whether every plot the batch used had been
+3rd culled, proofed against its drone map and **signed off**. **Life of
+Seedlings** asked whether its own arithmetic came to nought. Those are
+different questions, so a batch could sit in Completed on one screen and
+Active on the other with nothing saying which was wrong.
+
+The office asked for them to agree, and the **Batch Record's rule wins**: it
+is the question the nursery actually asks, it is what the 3rd Culling tab's
+own ring is drawn from, and it does not move when a sale or a calibration is
+keyed months later. `shared/shared_batch_completed.js` is the rule, written
+out with the batches that taught us each part of it, and there is
+deliberately nowhere else to change it.
+
+Two things about the way Life of Seedlings asks it:
+
+- **As at the report's date.** The LINES are cut at the As At and the
+  SIGNATURES are not — the same split every other As At rule there follows,
+  and what lets September go on reading as September did.
+- **Not gated on verification** the way the figures are. A batch cannot be
+  Completed without its 3rd culling being signed in the first place, so the
+  question answers itself; and a withheld figure must not also take the
+  batch off the Status filter.
+
+**What moved, and in which direction.** A batch sold entirely out of the
+tray, or culled entirely in it, reached no plot — so the Batch Record has
+nothing to call finished, where Life of Seedlings used to say Completed.
+That difference is the point of the change, not a casualty of it.
+
+**A shared rule called with the wrong rows is two answers again**, and
+nothing in either page says so. `tests/batch_completed_one_rule.cjs` holds
+the RULE to its cases and checks both pages still call it;
+`tests/both_lists_agree_on_completed.cjs` drives BOTH REAL PAGES against one
+ledger in a real browser and compares what they show. Only the second one
+could have caught what it did catch: Life of Seedlings was taking its row
+sign-offs out of `logsRes`, the ledger query, which asks for the transaction
+types the report draws FIGURES from — and `Row_Verification` is not one of
+them. The list was always empty, so no batch could ever be completed by the
+row-by-row route. Nothing on either page would have said a word.
+
+## A calibration against the SEED count is not a loss from the field
+
+The Balance is what is standing in the FIELD, so the calibration in it is
+the **plot-side** ones only.
+
+Batch 230 is why. Its calibration is **minus 1,000 reported against
+Planting** — *"Sold out 1,000 Pre nursery seedlings (DO: 01605)"*, keyed
+against tray P30. Those seedlings never reached a field plot. Taking them
+off what is standing in one subtracts a loss from a figure that never
+contained it: 230 balanced to **nought** on its own three terms
+(11,619 − 2,452 − 9,167) and the report read **minus 1,000**.
+
+**The side is the REPORT**, and the list is
+`ADJUST_INITIAL_REPORTS` / `ADJUST_SIDE_OF` in
+`operation_batch_detail.html`: *seeds received, planting, seed audit* are
+the seed side, everything else is the plot side. `_LOS_CAL_SEED_REPORTS` is
+the second copy and `tests/los_seed_side_calibration.cjs` asserts the two
+have not drifted — a list that grows on one side only puts a correction
+into the field balance that the batch report says belongs to the seed count.
+
+Three things about it:
+
+- **Never the "Side:" written in the remark.** The batch detail page says
+  why in its own comment: rows written while the form still asked carry one,
+  and a row somebody filed on the wrong side has to correct itself. It is
+  derived, so it is one rule and not two.
+- **Never the plot the row names either.** Where the plot is and which
+  count was wrong are different questions. `calibrationPre` asks the first
+  (and keeps carrying 230's row, because P30 is where those seedlings
+  were); `calibrationSeed` asks the second.
+- **`calibrationField` is counted on its own, not worked out by
+  subtraction.** 230's row is BOTH seed-side and pre-nursery, so taking
+  each off in turn would take it off twice.
+
+The **Stock Calibration column still shows every approved one**, and the
+drilldown still lists it. It is a real correction; it is only the field
+Balance it does not belong in.
+
+`shared/CHECK_seed_side_calibrations.sql` splits every batch's calibrations
+three ways and says how much each Balance moves. It also counts rows filed
+under a report wording that is on NEITHER list — those land on the plot side
+by default, so a new wording quietly joins the Balance, and the count is
+what says so.
 
 ## One batch, one reception — the newest row wins
 

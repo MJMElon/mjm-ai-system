@@ -7,6 +7,12 @@ const i = src.indexOf('async function _losBuildAllRows(asAt) {');
 const body = src.slice(src.indexOf('  // ── One row per batch ──', i),
                        src.indexOf('  // Years/suppliers offered by their pickers', i));
 const grab = (name) => { const a = src.indexOf('function ' + name + '('); return src.slice(a, src.indexOf('\n}', a) + 2); };
+/* The real tray matcher, lifted rather than copied — it decides which half
+   of a split a row lands in. grab() above lifts a FUNCTION declaration; a
+   named const needs its own reader. */
+const grabConst = (name) => new Function('return ' + src.slice(
+  src.indexOf('= ', src.indexOf('const ' + name + ' ')) + 2,
+  src.indexOf('\n', src.indexOf('const ' + name + ' '))).replace(/;$/, ''))();
 const _losFinishedWindow = new Function('return ' + grab('_losFinishedWindow'))();
 const _losAsAt           = new Function('return ' + grab('_losAsAt'))();
 
@@ -36,7 +42,7 @@ function build(asAt) {
   const fn = new Function('asAt','logsRes','dosRes','_logDate','_mvBatchKey','nurseryOf',
     'PRE_NURSERY_PLOTS','_losAgeMonths','_losAgeLabel','_RE_LOS_SUPPLIER','_RE_LOS_MPOB',
     '_RE_LOS_DONO','_RE_LOS_DO_QTY','_RE_LOS_FOC_PCT','_RE_LOS_REPL','_RE_LOS_FROM_TRAY',
-    '_RE_LOS_FROM_PLOT','_RE_LOS_APPROVED','_RE_LOS_CAL_REPORT','_RE_LOS_CAL_SIDE','_losTrayKey',
+    '_RE_LOS_FROM_PLOT','_RE_LOS_APPROVED','_RE_LOS_CAL_REPORT','_RE_LOS_CAL_SIDE','_losTrayKey','_LOS_CAL_SEED_REPORTS',
     body + '\nreturn rows;');
   const never = /NEVERMATCH_x([0-9])/;
   return fn(asAt, { data: logs }, { data: dos }, (l) => l.transaction_date || null,
@@ -44,15 +50,32 @@ function build(asAt) {
     (plot) => (['Pre-Nursery','P14'].includes(plot) ? 'Pre-Nursery' : 'BNN'),
     ['Pre-Nursery'], () => null, () => '',
     never, never, never, never, never, never, never, never, never, never, never,
-    grab('_losTrayKey'));
+    grabConst('_losTrayKey'), grabConst('_LOS_CAL_SEED_REPORTS'));
 }
+
+/* WHETHER A BATCH IS FINISHED is the Batch Record's rule now, out of
+   shared/shared_batch_completed.js, and it is applied to the rows after the
+   build rather than derived inside it — tests/batch_completed_one_rule.cjs
+   is where that rule is held to account. What THIS file is about is the
+   WINDOW: which month a finished batch is reported under, and that it is
+   the batch's last movement as at the date being asked about. So the rows
+   are stamped here with the answer, and the window is what is tested. */
+const FINISHED = { '259': '2026-08-28', '264': '2026-09-04',
+                   '268': '2026-09-23', '270': '2026-10-11' };
 
 // The two modes, exactly as _losBuildData assembles them.
 function list(status, dayPick, year, month) {
   const done = status === 'completed';
   const asAt = done ? _losAsAt(year, month) : dayPick;
   const fin  = done && year ? _losFinishedWindow(year, month) : null;
-  return build(asAt).filter(r => {
+  return build(asAt).map(r => {
+    /* As at a date before it finished, a finished batch is not finished:
+       the lines that complete it have not been written yet. The report
+       asks the same way, by cutting the ledger at the As At first. */
+    const done = FINISHED[r.batch];
+    r.completed = !!done && (!asAt || done <= asAt);
+    return r;
+  }).filter(r => {
     if (status === 'active' && r.completed) return false;
     if (done && !r.completed) return false;
     if (fin) { const f = r.lastDate || ''; if (!f || f < fin.from || f > fin.to) return false; }
