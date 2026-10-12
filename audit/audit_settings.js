@@ -263,10 +263,32 @@
     return null;
   }
 
+  /* ── WHICH ROUND AN AUDIT ANSWERED, AND WHETHER IT WAS LATE ───────
+     A record dated 1 October is not an October audit. The round that
+     was open on the 1st was September round 3 -- its window was the
+     30th, and it stays open until somebody does the work, which is the
+     whole of the overdue rule. So the record IS the 30 Sep audit; the
+     auditor was simply a day late with it.
+
+     Nothing said so. The card printed "01 Oct 2026" and the reader was
+     left to work out which round that answered, which is the same
+     arithmetic that made the board look wrong in the first place.
+
+     It is the same question currentWindow already answers, asked on the
+     DAY OF THE AUDIT rather than on today -- so there is one rule and
+     not two. `late` is the audit landing after that window closed. */
+  function roundOf(scope, mod, dateISO) {
+    const d = String(dateISO || '').slice(0, 10);
+    if (d.length !== 10) return null;
+    const w = currentWindow(scope, mod, d);
+    if (!w) return null;
+    return { round: w.round, rounds: w.rounds, dueISO: w.dueISO, late: d > w.dueISO };
+  }
+
   global.MJMAuditSettings = {
     load, save, current, defaults, normalise,
     error: () => lastError,
-    windows, currentWindow, maintDays, ages, ageAllowed, ageMonths,
+    windows, currentWindow, roundOf, maintDays, ages, ageAllowed, ageMonths,
     MODULES, SCOPES, WORKTYPES,
     DEFAULT_SCHEDULE, DEFAULT_MAINT
   };

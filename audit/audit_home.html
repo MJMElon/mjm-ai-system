@@ -1062,7 +1062,7 @@
   </div>
 </div>
 
-<script src="audit_lang.js?v=20261012a"></script>
+<script src="audit_lang.js?v=20261012c"></script>
 <script src="audit_supabase.js?v=20261008a"></script>
 <script src="audit_ribbon.js?v=20260826a"></script>
 <!-- Works out which plots still owe work, for the circles under each
@@ -1070,7 +1070,7 @@
 <script src="audit_pending.js?v=20260829a"></script>
 <!-- Rounds, maintenance windows and the ages being audited. Defaults to
      what used to be hardcoded below, so this cannot break the board. -->
-<script src="audit_settings.js?v=3"></script>
+<script src="audit_settings.js?v=4"></script>
 <!-- The record summary shared with the module pages' Completed Records.
      On this page it only exports MJMAuditSummary — the completed-records
      section it also carries is the manage view's and does not mount
@@ -3094,7 +3094,26 @@ function renderHistory(){
     const d = new Date(r.date + 'T00:00:00');
     const dstr = d.toLocaleDateString(lang, { day:'numeric', month:'short' });
     const nur  = (typeof NURSERY_LABELS !== 'undefined' && NURSERY_LABELS[r.nursery]) || r.nursery;
-    const meta = [nur, r.auditor].filter(Boolean).join(' · ');
+    /* WHICH ROUND THIS RECORD ANSWERED, where it answered one late. A
+       record dated 1 October is September round 3 done a day late --
+       the round open on the 1st, because an overdue round is cleared by
+       the work and not by the calendar. The history is where somebody
+       goes to see what was done and when it was owed, so it is the one
+       place that most has to say both. Nothing is said on a record
+       filed inside its own window: the date already says it. */
+    let lateTxt = '';
+    try {
+      if (window.MJMAuditSettings && MJMAuditSettings.roundOf && r.mod !== 'maint') {
+        const rd = MJMAuditSettings.roundOf(r.nursery === 'PN' ? 'PN' : 'MN', r.mod, r.date);
+        if (rd && rd.late) {
+          const due = new Date(rd.dueISO + 'T00:00:00')
+            .toLocaleDateString(lang, { day:'numeric', month:'short' });
+          lateTxt = (typeof t === 'function' ? t('late_for_round') : 'late for the {d} round')
+            .replace('{d}', due);
+        }
+      }
+    } catch (e) {}
+    const meta = [nur, r.auditor, lateTxt].filter(Boolean).join(' · ');
     /* A row opens its summary. data-hi indexes the month's rows, which
        is what the delegated listener below reads — the list is redrawn
        on every month change, so anything bound to a row would die with

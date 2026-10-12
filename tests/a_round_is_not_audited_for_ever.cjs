@@ -60,16 +60,22 @@ const iso = (d) => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'
 const TODAY = iso(NOW);
 /* Well before any window this month or last opened. */
 const LONG_AGO = iso(new Date(NOW.getFullYear(), NOW.getMonth() - 2, 2));
+/* The office's own case: the day AFTER a round closed. Whatever month
+   this runs in, the 1st is the day after the 30th-of-last-month round,
+   so this is always "last round, done a day late". */
+const DAY_AFTER = iso(new Date(NOW.getFullYear(), NOW.getMonth(), 1));
 
 const ROSTER = [
   { plot_name:'N01', batch_name:'244', transaction_type:'Transplanted', transaction_date:'2026-01-05' },
   { plot_name:'N01', batch_name:'253', transaction_type:'Transplanted', transaction_date:'2026-01-05' },
-  { plot_name:'N01', batch_name:'230', transaction_type:'Transplanted', transaction_date:'2026-01-05' }
+  { plot_name:'N01', batch_name:'230', transaction_type:'Transplanted', transaction_date:'2026-01-05' },
+  { plot_name:'N02', batch_name:'500', transaction_type:'Transplanted', transaction_date:'2026-01-05' }
 ];
 const BALANCE = [
   { plot_name:'N01', batch_name:'244', qty: 5000 },
   { plot_name:'N01', batch_name:'253', qty: 4000 },
-  { plot_name:'N01', batch_name:'230', qty: 0 }      /* Not Required */
+  { plot_name:'N01', batch_name:'230', qty: 0 },     /* Not Required */
+  { plot_name:'N02', batch_name:'500', qty: 3000 }
 ];
 /* 244 walked today — inside whatever round is open.
    253 walked two months ago — a round long closed. Both have a record,
@@ -80,7 +86,14 @@ const AUDITS = [
     auditor_name:'Auditor', date: TODAY,    created_at: TODAY + 'T14:29:00Z' },
   { id:2, audit_id:'AUD-UNN2-004', nursery:'UNN2', plot:'N01', batch:'253',
     pest:'Tidak Ada', tikus:'Tidak Ada', disease:'Banyak', warna_daun:'1',
-    auditor_name:'Auditor', date: LONG_AGO, created_at: LONG_AGO + 'T15:22:00Z' }
+    auditor_name:'Auditor', date: LONG_AGO, created_at: LONG_AGO + 'T15:22:00Z' },
+  /* 230 is Not Required, so this record proves the LATE TAG on its own:
+     the 1st is the day after last month's final round, so it is that
+     round done late -- saved, recorded under its own date, and said to
+     be what it is. */
+  { id:3, audit_id:'AUD-UNN2-009', nursery:'UNN2', plot:'N02', batch:'500',
+    pest:'Tidak Ada', tikus:'Tidak Ada', disease:'Banyak', warna_daun:'1',
+    auditor_name:'Auditor', date: DAY_AFTER, created_at: DAY_AFTER + 'T15:00:00Z' }
 ];
 
 const tableOf = (url) => { const m = /\/rest\/v1\/([a-z0-9_]+)/i.exec(url); return m ? m[1] : ''; };
@@ -127,6 +140,11 @@ const tableOf = (url) => { const m = /\/rest\/v1\/([a-z0-9_]+)/i.exec(url); retu
 
   await page.evaluate(() => { try { selectTab('UNN2'); } catch (e) {} });
   await page.waitForTimeout(600);
+  await page.evaluate(() => { try { openPlotDetail('N02'); } catch (e) {} });
+  await page.waitForTimeout(700);
+  const n02 = await page.evaluate(() =>
+    [...document.querySelectorAll('#plot-detail-list .record-item')]
+      .map(el => (el.innerText || '').replace(/\s+/g, ' ').trim()));
   await page.evaluate(() => { try { openPlotDetail('N01'); } catch (e) {} });
   await page.waitForTimeout(900);
 
@@ -182,6 +200,17 @@ const tableOf = (url) => { const m = /\/rest\/v1\/([a-z0-9_]+)/i.exec(url); retu
   check('the grid agrees with the card on the lapsed one',   seen.audited253 === false);
 
   check('Not Required still wins', /not required/i.test(c230.text));
+
+  /* SAVED, RECORDED UNDER ITS OWN DATE, AND SAID TO BE LAST ROUND'S.
+     The office put it as: the 1 Oct record is the 30 Sep audit, the
+     auditor was just late with it -- and the plot reopens for the next
+     round all the same. */
+  const c500 = (n02.find(x => x.indexOf('Batch 500') === 0) || '');
+  console.log('N02 batch 500:', JSON.stringify(c500.slice(0, 90)));
+  check('a record saved after its round closed keeps its own date',
+        c500.indexOf(DAY_AFTER.slice(8).replace(/^0/, '') ) !== -1 || /\d{1,2} \w{3} \d{4}/.test(c500));
+  check('and says which round it was late for', /late for the .* round/i.test(c500));
+  check('while the plot has reopened for the round now due', /round \d+ due|this round due/i.test(c500));
 
   check('the grid count names the round it is counting',
         /round \d+|this round/i.test(seen.countLine));

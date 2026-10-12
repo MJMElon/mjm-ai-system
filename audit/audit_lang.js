@@ -121,6 +121,9 @@ const TRANSLATIONS = {
        "nothing was ever done here" -- the count is per ROUND, and the
        deadline says whether that round is late. */
     round_word:              'Round',
+    /* A record dated 1 Oct is September round 3 done a day late, not an
+       October audit. Said only where it WAS late. */
+    late_for_round:          'late for the {d} round',
     this_round:              'This round',
     due_by:                  'due',
     no_batches:              'no batches',
@@ -530,6 +533,7 @@ const TRANSLATIONS = {
        list-count header on the Plot Condition audit. */
     audited:                 'Diaudit',
     round_word:              'Pusingan',
+    late_for_round:          'lewat untuk pusingan {d}',
     this_round:              'Pusingan ini',
     due_by:                  'tarikh akhir',
     no_batches:              'tiada lot',

@@ -1402,9 +1402,27 @@ now reads **"0 / 7 audited · Round 1 · due 10 Oct 2026"**, deadline
 included, because "Round 1" alone does not tell anybody whether they are
 late. `_roundSuffix()`, one in each of the two module scripts.
 
+**A record dated 1 October is not an October audit.** The round open on
+the 1st was September round 3 — still open, because an overdue round is
+cleared by the work and not by the calendar. The office said it in one
+line: *"it should be 30th Sep audit, just the auditor late audit."* So
+the record is saved under its own date, it answers the 30 Sep round, and
+the plot reopens for the next one — three facts that were all true and
+none of which the card said. It reads
+
+    ⟳ Round 1 due · last audited 01 Oct 2026 · late for the 30 Sep round
+
+`MJMAuditSettings.roundOf(scope, mod, dateISO)` is `currentWindow` asked
+on the DAY OF THE AUDIT rather than on today, so there is one rule and
+not two, and `late` is the audit landing after that window closed. Said
+only where it WAS late: on a record inside its own window the date
+already says everything, and a tag on every row is a tag nobody reads.
+Audit History carries the same line, because that is where somebody goes
+to see what was done and when it was owed.
+
 `tests/a_round_is_not_audited_for_ever.cjs` drives the real plot page
-with the office's own three batches; five of its thirteen checks fail on
-the previous code.
+with the office's own three batches and the 1 Oct record; five of its
+sixteen checks fail on the previous code.
 
 ## A permission that is saved but not obeyed is worse than no permission
 
