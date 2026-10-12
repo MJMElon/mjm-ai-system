@@ -1,0 +1,204 @@
+/* CLOSING A PLOT NOBODY IS EVER GOING TO AUDIT.
+
+   A maintenance deadline overdue by two months is not work anybody is
+   going to do — the job it was raised against was finished in August and
+   there is nothing left in the plot to look at. It sat on the board for
+   ever, because the only thing that retires a maintenance row is an
+   audit against it.
+
+   So an admin may close one from the board. What that writes is an
+   ORDINARY audit_maintenance_audits row against the same task_id, with
+   its result reading "Closed by admin" — it goes through the one door
+   everything else goes through, it leaves the board for the one reason
+   anything leaves it, and it lands in Audit History with a name and a
+   date on it. NOTHING IS DELETED: the work record in
+   nops_maint_field_records is untouched, because the field did that work
+   and said so.
+
+   Held here, through the real board in a real browser:
+
+     1. an admin sees an x on every maintenance plot chip
+     2. a plain auditor sees none — the chips are exactly as before
+     3. pressing it writes a record against THAT task id, with the
+        result, the plot, the job and who closed it
+     4. the chip is gone afterwards, and the row with it when it was the
+        last plot on it
+     5. cancelling at either step writes nothing
+     6. the work record is not deleted
+
+   Run: NODE_PATH=/opt/node22/lib/node_modules node tests/admin_can_close_a_dead_plot.cjs
+*/
+'use strict';
+const http = require('http');
+const fs   = require('fs');
+const path = require('path');
+const { chromium } = require(process.env.NODE_PATH + '/playwright');
+
+const ROOT  = path.resolve(__dirname, '..');
+const TYPES = { '.html':'text/html', '.js':'text/javascript', '.css':'text/css',
+                '.json':'application/json', '.png':'image/png', '.svg':'image/svg+xml' };
+const server = http.createServer((req, res) => {
+  const f = path.join(ROOT, decodeURIComponent(req.url.split('?')[0]));
+  if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end('no'); return; }
+  res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream' });
+  res.end(fs.readFileSync(f));
+});
+
+const NOW = new Date();
+const iso = (d) => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0')
+                 + '-' + String(d.getDate()).padStart(2,'0');
+/* Two months back: weeding carries a 3-day window, so this is a deadline
+   long closed whatever day the test runs. */
+const LONG_AGO = iso(new Date(NOW.getFullYear(), NOW.getMonth() - 2, 5));
+
+const FIELD = [
+  { id: 9001, work_date: LONG_AGO, nursery_name:'UNN 2', plot_name:'N01', work_type:'weeding', jenis:'Merumput' },
+  { id: 9002, work_date: LONG_AGO, nursery_name:'UNN 2', plot_name:'N02', work_type:'weeding', jenis:'Merumput' }
+];
+
+const tableOf = (url) => { const m = /\/rest\/v1\/([a-z0-9_]+)/i.exec(url); return m ? m[1] : ''; };
+
+async function run(asAdmin, action){
+  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+  /* The page registers a service worker, and page.route does NOT reach a
+     fetch the WORKER makes. Once it activates it answers its own
+     synthetic 503 and the board reloads into an empty list -- which is
+     the worker doing its offline job correctly against a network that is
+     not there, and nothing to do with what this test is about. */
+  const ctx  = await browser.newContext({ viewport:{ width:1100, height:1600 },
+                                          serviceWorkers: 'block' });
+  const page = await ctx.newPage();
+  const errs = [];
+  const posted = [];
+  const deleted = [];
+  let audits = [];
+  page.on('pageerror', e => errs.push(String(e)));
+  const logs = [];
+  page.on('console', m => { const x = m.text(); if (/maintenance timeline|could not close/.test(x)) logs.push(x.slice(0, 300)); });
+
+  await page.route('**/rest/v1/**', async (route) => {
+    const req = route.request();
+    const t = tableOf(req.url());
+    const m = req.method();
+    if (m === 'POST') {
+      let body = {};
+      try { body = JSON.parse(req.postData() || '{}'); } catch (e) {}
+      if (t === 'audit_maintenance_audits') posted.push({ table: t, body });
+      /* The real thing: once the record exists, the task is audited. */
+      if (t === 'audit_maintenance_audits') audits.push({ task_id: body.task_id });
+      return route.fulfill({ status:201, contentType:'application/json', body: JSON.stringify([body]) });
+    }
+    if (m === 'DELETE' || m === 'PATCH') { deleted.push({ table: t, method: m, url: req.url() }); }
+    const body = t === 'nops_maint_field_records'    ? FIELD
+               : t === 'audit_maintenance_audits'    ? audits
+               : [];
+    return route.fulfill({ status:200, contentType:'application/json', body: JSON.stringify(body) });
+  });
+  await page.route('**/auth/v1/**', r => r.fulfill({ status:200, contentType:'application/json',
+    body: JSON.stringify({ access_token:'x', user:{ id:'u1' } }) }));
+  ['**cdn.tailwindcss.com/**','**cdn.jsdelivr.net/**'].forEach(p =>
+    page.route(p, r => r.fulfill({ status:200, contentType:'text/javascript', body:'' })));
+  await page.route('**fonts.googleapis.com/**', r => r.fulfill({ status:200, contentType:'text/css', body:'' }));
+
+  await page.addInitScript(({ admin }) => {
+    const u = { id:'u1', email:'a@mjmnursery.com', name:'Esther', full_name:'Esther',
+                role: admin ? 'admin' : 'auditor',
+                audit_role: admin ? 'admin' : 'auditor',
+                permissions: { audit_landing:'MN', modules: { audit: admin ? 'admin' : 'normal' } } };
+    try {
+      localStorage.clear();
+      localStorage.setItem('mjm_user', JSON.stringify(u));
+      localStorage.setItem('mjm_nursery_scope:u1', 'MN');
+      localStorage.setItem('sb-kibqjztozokohqmhqqqf-auth-token', JSON.stringify({
+        access_token:'x', refresh_token:'y',
+        expires_at: Math.floor(Date.now()/1000) + 86400, user:{ id:'u1', email:u.email } }));
+    } catch (e) {}
+  }, { admin: asAdmin });
+
+  const port = server.address().port;
+  await page.goto(`http://localhost:${port}/audit/audit_home.html`, { waitUntil:'domcontentloaded' });
+  await page.waitForTimeout(6000);
+
+  const snap = () => page.evaluate(() => ({
+    xs:    document.querySelectorAll('.tl-plot-x').length,
+    plots: [...document.querySelectorAll('#todo-section .tl-wt-plots .tl-plot')].map(a => a.textContent.trim()),
+    rows:  [...document.querySelectorAll('#todo-section .tl-item[data-mod="maint"]')].map(el => ({
+             from: (el.querySelector('.tl-from') || {}).innerText || '',
+             due:  (el.querySelector('.tl-due-date') || {}).innerText || '',
+             n:    el.querySelectorAll('.tl-plot').length,
+             x:    el.querySelectorAll('.tl-plot-x').length
+           })),
+  }));
+  const before = await snap();
+
+  let after = before;
+  if (action) {
+    page.on('dialog', async (d) => {
+      if (action === 'cancel-confirm' && d.type() === 'confirm') return d.dismiss();
+      if (action === 'cancel-why'     && d.type() === 'prompt')  return d.dismiss();
+      if (d.type() === 'prompt') return d.accept('nothing left in the plot');
+      return d.accept();
+    });
+    const hit = await page.evaluate(() => {
+      const b = document.querySelector('.tl-plot-x[data-close-plot="N01"]');
+      if (!b) return false;
+      b.click();
+      return true;
+    });
+    if (hit) await page.waitForTimeout(2500);
+    after = await snap();
+  }
+
+  await browser.close();
+  return { before, after, posted, deleted, errs, logs };
+}
+
+(async () => {
+  await new Promise(r => server.listen(0, r));
+
+  const plain  = await run(false, null);
+  const admin  = await run(true,  null);
+  const closed = await run(true,  'close');
+  const noConf = await run(true,  'cancel-confirm');
+  const noWhy  = await run(true,  'cancel-why');
+
+  const row = (closed.posted.find(p => p.table === 'audit_maintenance_audits') || {}).body || {};
+
+  console.log('plain auditor  : xs =', plain.before.xs,  'plots =', JSON.stringify(plain.before.plots));
+  console.log('admin          : xs =', admin.before.xs,  'plots =', JSON.stringify(admin.before.plots));
+  console.log('admin rows     :', JSON.stringify(admin.before.rows));
+  console.log('after close    : plots =', JSON.stringify(closed.after.plots),
+              'rows =', JSON.stringify(closed.after.rows));
+  console.log('row written    :', JSON.stringify(row));
+  console.log('writes on cancel:', noConf.posted.length, '/', noWhy.posted.length);
+  console.log('deletes/patches :', JSON.stringify(closed.deleted));
+  console.log('page errors     :', closed.errs.length ? closed.errs.join(' | ') : 'none');
+  closed.logs.slice(-2).forEach(l => console.log('LOG:', l));
+
+  let bad = 0;
+  const check = (l, p) => { if (!p) bad++; console.log((p ? 'ok   ' : 'FAIL ') + l); };
+
+  check('the board drew the two overdue plots', admin.before.plots.includes('N01') && admin.before.plots.includes('N02'));
+  check('an admin gets an x on every maintenance plot', admin.before.xs === admin.before.plots.length && admin.before.xs > 0);
+  check('a plain auditor gets none', plain.before.xs === 0);
+  check('and sees the chips exactly as before', plain.before.plots.join() === admin.before.plots.join());
+
+  check('closing writes a record against that task id', Number(row.task_id) === 9001);
+  check('saying it was closed by an admin', row.result === 'Closed by admin');
+  check('naming the plot and the job', row.plot === 'N01' && !!row.task_type);
+  check('with who closed it and when', !!row.auditor_name && !!row.date);
+  check('keeping the reason that was typed', /nothing left in the plot/i.test(row.remarks || ''));
+  check('and no photo, because there was nothing to photograph', !row.photo_url);
+
+  check('the chip is gone afterwards', !closed.after.plots.includes('N01'));
+  check('and the plot nobody closed is still there', closed.after.plots.includes('N02'));
+
+  check('NOTHING is deleted or patched', closed.deleted.length === 0);
+  check('cancelling the confirm writes nothing', noConf.posted.length === 0);
+  check('cancelling the reason writes nothing',  noWhy.posted.length === 0);
+
+  check('no page errors', closed.errs.length === 0 && plain.errs.length === 0);
+
+  server.close();
+  process.exit(bad ? 1 : 0);
+})();
