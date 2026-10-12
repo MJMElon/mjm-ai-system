@@ -404,16 +404,44 @@ Three things about drawing it, each of which went wrong first:
   the test asks about the ORDER (nothing drawn while a load is pending)
   rather than about the glyphs, because a harness with no network for Google
   Fonts would otherwise only prove the sandbox has no Outfit.
-- **The logo leaves the fill white.** `_ptLogo` paints its own text, so ink
-  set before it draws a white board on white. Set the colour AFTER.
+- **The logo used to leave the fill white.** `_ptLogo` painted its own text,
+  so ink set before it drew a white board on white. It is an image now and
+  does not, and the ink is still set AFTER it, because the ink belongs with
+  the type it is for.
 - **A long name is shrunk, never wrapped or clipped.** The board is read
   from a distance and the end of a breed name is the part that tells two
   breeds apart. The PLOT line shrinks too, so a transfer plot does not run
   under the mark.
+- **ONE WEIGHT for the whole block.** The breed was set at Outfit 700 where
+  everything beside it was 900, and at that size the two do not read as one
+  typeface in two weights — they read as two fonts, which is exactly what
+  the office saw and said. The test asks it of the weights the board asks
+  for AND of the font on every stroke, because a weight that is drawn in
+  without being preloaded is the same mistake twice.
 
-**The mark is drawn, not fetched.** There is no image asset for it on this
-site, and a board that fails because a file 404ed is worse than one with a
-drawn mark on it — there is also nothing to go stale in a cache.
+**The mark is the office's own file, and it is INLINED.** It was a drawn
+imitation at first, for the reason below; the office then handed over the
+real logo and said not to change it. `shared/mjm_logo.png` is the canonical
+copy and `_PT_LOGO_SRC` in the page is that file byte for byte as a data
+URI — `tests/papan_tanda.cjs` decodes the one and compares it against the
+other, so two copies of an image cannot quietly become two different
+images. The PNG was re-encoded from the file supplied (RGBA to RGB, every
+pixel opaque, best filter per row) and PROVED pixel-identical before it was
+committed; that is not changing a logo, and 24KB rather than 29KB is worth
+having inside a page.
+
+Inlining keeps every property the drawn mark had, which is why it is not
+simply fetched: **no fetch, so nothing to 404** at the moment somebody
+presses the button; no cross-origin, so the canvas is not tainted and
+`toBlob` still works; and nothing to go stale in a cache.
+
+**And it is drawn at the IMAGE'S own aspect ratio**, read off the image
+rather than off a constant. The real mark is a SQUARE where the drawn one
+was a flat rectangle, so it reaches further down the board and the lines
+start below it — `_PT_LOGO_BOTTOM` is the one place that says where it
+ends, and the lines are placed off that rather than off a number somebody
+has to remember to move. The test asserts the green block comes out square
+and that no line of type runs under it.
 
 `tests/papan_tanda.cjs` drives the real page and batch 270's own figures,
 down to the pixels on the canvas and the download that comes out of it.

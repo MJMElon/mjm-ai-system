@@ -169,15 +169,49 @@ const px = await page.evaluate(async () => {
   const ctx = c.getContext('2d');
   const d = ctx.getImageData(0, 0, c.width, c.height).data;
   let ink = 0, green = 0;
+  let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
   for (let i = 0; i < d.length; i += 4) {
+    const p = i / 4, x = p % c.width, y = (p / c.width) | 0;
     if (d[i] < 60 && d[i + 1] < 60 && d[i + 2] < 60) ink++;
-    if (Math.abs(d[i] - 0x6f) < 12 && Math.abs(d[i + 1] - 0x8c) < 12 && Math.abs(d[i + 2] - 0x63) < 12) green++;
+    // the green of the office own mark, #356043
+    if (Math.abs(d[i] - 0x35) < 12 && Math.abs(d[i + 1] - 0x60) < 12 && Math.abs(d[i + 2] - 0x43) < 12) {
+      green++;
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
   }
-  return { w: c.width, h: c.height, ink, green };
+  /* Nothing black inside the mark. The logo is a SQUARE where the drawn one
+     was a flat rectangle, so it reaches further down the board — and a line
+     of type running under it is the one way that goes wrong. */
+  let inkOnLogo = 0;
+  if (x1 > 0) {
+    const box = ctx.getImageData(x0, y0, x1 - x0 + 1, y1 - y0 + 1).data;
+    for (let i = 0; i < box.length; i += 4)
+      if (box[i] < 60 && box[i + 1] < 60 && box[i + 2] < 60) inkOnLogo++;
+  }
+  return { w: c.width, h: c.height, ink, green, inkOnLogo,
+           markW: x1 - x0 + 1, markH: y1 - y0 + 1 };
 });
 is([px.w, px.h], [2000, 1400], 'a print-sized board');
 is(px.ink > 50000, true, 'with black type on it — ' + px.ink + ' ink pixels');
 is(px.green > 50000, true, 'and the MJM mark — ' + px.green + ' green pixels');
+/* THE MARK IS DRAWN AT ITS OWN ASPECT RATIO. The file is square and the
+   board asks for a width, so a height worked out from anything but the
+   image own dimensions is a stretched logo — which is the one thing the
+   office asked not to happen to it. */
+is(Math.abs(px.markW - px.markH) <= 4, true,
+  'and it is not stretched — ' + px.markW + ' by ' + px.markH);
+is(px.inkOnLogo, 0, 'no line of type runs under the mark');
+
+/* THE INLINED MARK IS THE COMMITTED FILE, byte for byte. Two copies of an
+   image is two things to change, and the one in the page is the one that
+   gets drawn — so if they ever part, this is what says so. */
+const fs = require('fs'), path = require('path');
+const onDisk = fs.readFileSync(path.join(__dirname, '..', 'shared', 'mjm_logo.png'));
+const inPage = await page.evaluate(() => _PT_LOGO_SRC);
+is(inPage.slice(0, 22), 'data:image/png;base64,', 'the mark is inlined, so there is nothing to 404');
+is(Buffer.from(inPage.slice(22), 'base64').equals(onDisk), true,
+  'and it is shared/mjm_logo.png byte for byte — ' + onDisk.length + ' bytes');
 /* THE FONT HAS TO BE LOADED BEFORE THE FIRST STROKE. A canvas asked for a
    font it does not have yet does not wait — it draws the fallback, and the
    board comes out in Times, which nobody would notice until it was on a
@@ -194,10 +228,13 @@ const order = await page.evaluate(async () => {
   let pending = 0;
   document.fonts.load = (f) => { pending++; seen.push('ask:' + f);
     return realLoad(f).finally(() => { pending--; seen.push('got:' + f); }); };
+  const drawnIn = [];
   CanvasRenderingContext2D.prototype.fillText = function (...a) {
     seen.push('draw' + (pending ? ':WHILE-WAITING' : ''));
+    drawnIn.push(this.font);
     return realFill.apply(this, a);
   };
+  window.__drawnIn = drawnIn;
   try {
     await _ptDraw({ plot: 'B4', batch: '270', breed: 'AA Hybrida 1S', qty: 2309,
                     planted: '2026-06-25', date: '2026-09-23' });
@@ -206,14 +243,23 @@ const order = await page.evaluate(async () => {
     CanvasRenderingContext2D.prototype.fillText = realFill;
   }
   const asked = seen.filter(x => x.startsWith('ask:')).map(x => x.slice(4));
-  return { asked, drewEarly: seen.some(x => x === 'draw:WHILE-WAITING'),
+  return { asked, drawnIn: window.__drawnIn.slice(),
+           drewEarly: seen.some(x => x === 'draw:WHILE-WAITING'),
            firstDraw: seen.indexOf('draw'), lastGot: seen.map((x, i) => [x, i])
              .filter(([x]) => x.startsWith('got:')).map(([, i]) => i).pop() };
 });
 is(order.drewEarly, false, 'nothing is drawn while a font is still loading');
 is(order.lastGot < order.firstDraw, true, 'every weight is awaited before the first stroke');
 is(order.asked.some(f => /900 190px Outfit/.test(f)), true, 'the PLOT weight among them');
-is(order.asked.some(f => /700 110px Outfit/.test(f)), true, 'and the one the breed is set in');
+is(order.asked.some(f => /900 110px Outfit/.test(f)), true, 'and the one the lines are set in');
+/* ONE WEIGHT for the whole block. The breed was set at 700 where everything
+   beside it was 900, and at this size Outfit 700 and Outfit 900 do not read
+   as one typeface in two weights — they read as two fonts, which is what
+   the office saw. Asked of the weights the board ASKS FOR, because that is
+   the list the drawing is done from. */
+is(order.asked.filter(f => /^700 /.test(f)), [], 'and no second weight beside it');
+is([...new Set(order.drawnIn.map(f => String(f).split(' ')[0]))], ['900'],
+  'every stroke on the board is set in the same weight');
 
 console.log('\n── 5. A long name is shrunk to fit, never clipped ──');
 const longBoard = await page.evaluate(async () => {
