@@ -31,6 +31,14 @@
      8. the reason is NOT asked for — it is written onto the record
      9. and Audit History says so, there and then, without a reload
 
+   The POST stub is STRICT about what the real table will take. A stub
+   that accepts anything signs off a write the database refuses: the
+   first version of this close left audit_id out, which is NOT NULL with
+   no default on audit_maintenance_audits, and every check here passed
+   while the office got "Supabase error 400 ... 23502". NOT_NULL below is
+   the column set the maintenance form itself supplies, and a row missing
+   one comes back refused the way PostgREST refuses it.
+
    Run: NODE_PATH=/opt/node22/lib/node_modules node tests/admin_can_close_a_dead_plot.cjs
 */
 'use strict';
@@ -63,6 +71,19 @@ const FIELD = [
 
 const tableOf = (url) => { const m = /\/rest\/v1\/([a-z0-9_]+)/i.exec(url); return m ? m[1] : ''; };
 
+/* What audit_maintenance_audits will not take a null in. Taken off the
+   payload the maintenance form writes (audit_maintenance_script.js
+   saveAudit) -- it is the one proof we have of the real table's shape
+   from in here, since this environment cannot reach Supabase. */
+const NOT_NULL = ['audit_id', 'task_id', 'nursery', 'plot', 'result', 'auditor_name', 'date'];
+const refusedFor = (row) => {
+  const miss = NOT_NULL.find(c => row[c] === undefined || row[c] === null || row[c] === '');
+  return miss ? { code: '23502', details: null, hint: null,
+                  message: 'null value in column "' + miss +
+                           '" of relation "audit_maintenance_audits" violates not-null constraint' }
+              : null;
+};
+
 async function run(asAdmin, action){
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   /* The page registers a service worker, and page.route does NOT reach a
@@ -75,6 +96,7 @@ async function run(asAdmin, action){
   const page = await ctx.newPage();
   const errs = [];
   const posted = [];
+  const refused = [];
   const dialogs = [];
   const deleted = [];
   let audits = [];
@@ -95,6 +117,12 @@ async function run(asAdmin, action){
          questions and the test asks both. */
       const rowsIn = Array.isArray(body) ? body : [body];
       if (t === 'audit_maintenance_audits') {
+        const bad = rowsIn.map(refusedFor).find(Boolean);
+        if (bad) {
+          refused.push(bad.message);
+          return route.fulfill({ status:400, contentType:'application/json',
+                                 body: JSON.stringify(bad) });
+        }
         posted.push({ table: t, body: rowsIn[0], rows: rowsIn });
         /* The real thing: once the record exists, the task is audited --
            and the whole row goes back, because Audit History reads the
@@ -177,7 +205,7 @@ async function run(asAdmin, action){
   }
 
   await browser.close();
-  return { before, after, posted, dialogs, deleted, errs, logs };
+  return { before, after, posted, refused, dialogs, deleted, errs, logs };
 }
 
 (async () => {
@@ -206,6 +234,7 @@ async function run(asAdmin, action){
   console.log('chip dialogs   :', JSON.stringify(closed.dialogs.map(d => d.type)));
   console.log('writes on cancel:', noConf.posted.length);
   console.log('history after  :', JSON.stringify(sect.after.hist));
+  console.log('refused by db  :', JSON.stringify(closed.refused.concat(sect.refused)));
   console.log('deletes/patches :', JSON.stringify(closed.deleted));
   console.log('page errors     :', closed.errs.length ? closed.errs.join(' | ') : 'none');
   closed.logs.slice(-2).forEach(l => console.log('LOG:', l));
@@ -217,6 +246,13 @@ async function run(asAdmin, action){
   check('an admin gets an x on every maintenance plot', admin.before.xs === admin.before.plots.length && admin.before.xs > 0);
   check('a plain auditor gets none', plain.before.xs === 0);
   check('and sees the chips exactly as before', plain.before.plots.join() === admin.before.plots.join());
+
+  check('the database takes the row -- every NOT NULL column is filled',
+        closed.refused.length === 0 && sect.refused.length === 0);
+  check('including the audit_id the table has no default for',
+        !!row.audit_id && sRows.every(r => !!r.audit_id));
+  check('and no two rows of one section share one',
+        new Set(sRows.map(r => r.audit_id)).size === sRows.length);
 
   check('closing writes a record against that task id', Number(row.task_id) === 9001);
   check('saying it was closed by an admin', row.result === 'Closed by admin');

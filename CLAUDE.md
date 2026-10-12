@@ -1508,6 +1508,26 @@ Nine things in it:
   sits at **script scope and not inside `loadAuditTodo`**, because both
   halves of that page need it — the board writes the row and Audit
   History has to recognise it.
+- **`audit_id` is NOT NULL and has no default**, and leaving it out is
+  not an empty column, it is a refused insert — *23502, null value in
+  column audit_id violates not-null constraint*, which is what the first
+  version of this close got back and the office read off an alert box.
+  Every row in that table carries a readable id the FORM writes itself.
+  The closure writes `MTA-CL<task_id>` rather than copying the module's
+  `nextAuditID()`: that one is `audits.length + 1`, which two people
+  saving at once both answer the same way (`audit_script.js` says so in
+  its own comment) and a section close writes a dozen rows in one go.
+  Keyed on the task it is unique by construction, and it says at a
+  glance which rows in the table are closures rather than audits.
+- **The test stub is STRICT about what the table will take**, for the
+  same reason the jsPDF stub had to be: one that accepts anything signs
+  off a write the database refuses. Every check in
+  `admin_can_close_a_dead_plot.cjs` passed on the version that could not
+  insert a single row. `NOT_NULL` there is the column set
+  `saveAudit()` supplies — the one proof of the real table's shape
+  available from an environment that cannot reach Supabase — and a row
+  missing one comes back 400 the way PostgREST sends it. Fifteen checks
+  fail on the broken version now.
 - **Audit History says which rows are closures.** A closure is an
   ordinary record, which is the point of it; but a row sitting in this
   month's list with nothing on it to say otherwise reads as work that was
@@ -1525,8 +1545,8 @@ exception for work that has gone cold, not a way of clearing a board.
 `tests/admin_can_close_a_dead_plot.cjs` drives the real board in a real
 browser, as an admin and as a plain auditor, closing one chip and closing
 a whole section — and it asserts the section went up as **one** insert
-carrying **both** task ids, and that no `prompt` is ever raised. **It
-blocks the service
+carrying **both** task ids, that every NOT NULL column is filled, and
+that no `prompt` is ever raised. **It blocks the service
 worker** (`serviceWorkers: 'block'`), because `page.route` does not reach
 a fetch the WORKER makes: once it activates it answers its own synthetic
 503 and the board reloads empty, which is the worker doing its offline

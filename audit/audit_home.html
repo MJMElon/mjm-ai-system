@@ -2628,6 +2628,21 @@ function loadAuditTodo(){
        the day the work was done — and it is the line Audit History
        shows, so it has to carry its own context. */
     const rows = list.map(it => ({
+      /* ── audit_id IS NOT NULL AND HAS NO DEFAULT ──
+         Every row in this table carries a readable id the forms write
+         themselves: the maintenance module writes "MTA-" plus a running
+         number (nextAuditID). Leaving it out is not an empty column, it
+         is a refused insert -- Supabase 23502, "null value in column
+         audit_id violates not-null constraint", which is what the first
+         version of this close got back.
+
+         It is NOT the module's running number, on purpose. That one is
+         audits.length + 1, which two people saving at once both answer
+         the same way (audit_script.js says so in its own comment), and
+         a section close writes a dozen rows in one go. Keyed on the task
+         instead: unique by construction, and it says at a glance which
+         rows in the table are closures rather than audits. */
+      audit_id:  'MTA-CL' + String(it.id),
       task_id:   parseInt(it.id, 10),
       nursery:   it.nursery || null,
       plot:      it.plot || null,
