@@ -45,6 +45,11 @@ const TRANSLATIONS = {
     home_history_title:      'Audit History',
     home_history_loading:    'Loading history…',
     home_history_empty:      'No audits filed this month.',
+    /* A round this month owed and did not get inside its window. The
+       work has since been done -- that is why it left the to-do list --
+       and this is what keeps the fact that it was late. */
+    home_history_missed:     'Missed audit',
+    home_history_missed_head:'Missed this month',
     /* === NURSERY CHOOSER + SCHEDULE BOARD === */
     ask_nursery:      'Which nursery are you auditing today?',
     pre_nursery:      'Pre Nursery',
@@ -451,6 +456,8 @@ const TRANSLATIONS = {
     home_history_title:      'Sejarah Audit',
     home_history_loading:    'Memuatkan sejarah…',
     home_history_empty:      'Tiada audit direkodkan bulan ini.',
+    home_history_missed:     'Audit tertunggak',
+    home_history_missed_head:'Tertunggak bulan ini',
     /* === PEMILIHAN NURSERI + PAPAN JADUAL === */
     ask_nursery:      'Nurseri mana anda audit hari ini?',
     pre_nursery:      'Tapak Semaian Kecil',

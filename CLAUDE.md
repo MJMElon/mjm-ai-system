@@ -1093,6 +1093,56 @@ it**, whatever the figures say.
 halves, including a stage nobody recognises changing nothing, an adjustment
 nobody has approved settling nothing, and the stale flag.
 
+## An overdue round is cleared by the work, never by the calendar
+
+A to-do row on the auditor portal asked one question: was this plot
+audited INSIDE the window? For a window still open that is right. For one
+that has CLOSED it is unanswerable for ever — *"audit B01 between 1 and 5
+August"* cannot be satisfied in October.
+
+So an auditor who walked the plot **had done the work and the row stayed**,
+listing every plot, reading "lewat 68 hari", and nothing they could do
+would ever clear it. Every overdue row on the board was in that state, and
+the office found it the way anybody would: by auditing the plots and
+watching the list not move.
+
+**The upper bound on a closed window now runs to today.** The lower bound
+does not move: an audit from before the window opened belongs to the round
+before it and must not close two.
+
+The office's rule for the rest of it, in their own words — *"if auditor was
+late and do the latest one, then the old records will be clear too but
+recorded as missed audit. As it is no meaningful to audit back also."* So:
+
+- **The row goes.** A list of work nobody can do is a list nobody reads.
+- **The fact stays.** `missedRounds()` runs the two tests side by side —
+  strict, the real window, and the extended one that clears the row — and a
+  nursery that passes only the second is a missed round. It is filed in
+  **Audit History under the month that OWED it**, never under the month the
+  late work happened: a missed August round is a fact about August. A month
+  whose only entry is a missed round still opens on the arrows, or the one
+  month somebody needs to see would be the one they cannot reach.
+
+Three things to know before touching this:
+
+- **Three callers, one range.** `nurseryState` (does the row stay),
+  `_plotsHtml` (which circles under it) and `plotsOwed` (the count and the
+  progress bar) each worked the two dates out for themselves. They all go
+  through `winRange(o, y, m, strict)` now — a row that clears while its
+  circles remain, or a count that disagrees with the list under it, is
+  worse than the bug was.
+- **The date-loop fallback had to move too.** It runs when the batch roster
+  cannot be read — offline, or an RLS refusal — and leaving it on the
+  window alone meant the one screen least able to explain itself showed a
+  backlog nothing could clear.
+- **Maintenance is not in it.** A maintenance row exists because a deadline
+  has pending work on it, so there is no window to be outside of.
+
+`tests/late_work_clears_the_backlog.cjs` drives the real page in a real
+browser and holds both halves — a plot walked late drops off, a plot nobody
+walked stays on, and an audit from before the window opens closes nothing.
+Six of its eleven checks fail on the previous code.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the
