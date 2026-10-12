@@ -346,6 +346,12 @@
       const res = await supa.from(SP_TABLE)
         .select('id,module,nursery,due_date,raised_on,all_plots,plots,note,created_by')
         .is('cancelled_at', null)
+        /* A finished request is NOT outstanding. The board stamps
+           completed_at the first time it sees every plot walked -- without
+           that filter this card listed every request ever raised, for
+           ever, and the only way off was Withdraw, which means cancelled
+           and not done. */
+        .is('completed_at', null)
         .order('due_date', { ascending: true });
       if (res.error) throw res.error;
       specials = res.data || [];

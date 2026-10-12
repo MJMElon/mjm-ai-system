@@ -1118,7 +1118,7 @@
 </div>
 
 <script src="audit_lang.js?v=20261012g"></script>
-<script src="audit_supabase.js?v=20261008a"></script>
+<script src="audit_supabase.js?v=20261012a"></script>
 <script src="audit_ribbon.js?v=20260826a"></script>
 <!-- Works out which plots still owe work, for the circles under each
      to-do row. Needs sb.select from audit_supabase.js above it. -->
@@ -1670,7 +1670,7 @@ function loadAuditTodo(){
     try {
       const rows = await sb.select('audit_special_audits',
         'select=id,module,nursery,due_date,raised_on,all_plots,plots,note'
-        + '&cancelled_at=is.null');
+        + '&cancelled_at=is.null&completed_at=is.null');
       SPECIAL_REQS = (rows || [])
         .filter(r => r && r.module && r.nursery && r.due_date)
         .map(r => ({
@@ -1713,6 +1713,42 @@ function loadAuditTodo(){
       list = list.filter(p => want.has(p));
     }
     return list;
+  }
+
+  /* ── RETIRING A FINISHED REQUEST ──
+     The board is the only thing that knows: it holds the roster and the
+     audits, and it already works out which plots are still owed in order
+     to draw the circles. The office screen cannot answer it without a
+     second copy of that rule, so it would go on listing a request as
+     outstanding for ever and the only way off would be Withdraw -- which
+     means cancelled, not done.
+
+     So the board stamps it, through audit_special_mark_done(): the one
+     narrow door an AUDITOR has, which sets completed_at and nothing else
+     and only on a row that is still open.
+
+     Two guards. _specialOwed returns null when the roster could not be
+     read, and null must never be mistaken for "no plots left" -- that
+     would close a request on a refusal. And each id is tried once per
+     page, because renderAll runs on every tab, filter and month change. */
+  const _specialClosed = new Set();
+  async function _retireFinishedSpecials(){
+    for (const r of SPECIAL_REQS) {
+      if (_specialClosed.has(r.id)) continue;
+      if (SCOPE_NURSERIES.indexOf(r.nursery) === -1) continue;
+      const owed = _specialOwed({ mod: r.module, _special: r }, r.nursery);
+      if (owed === null || owed.length) continue;
+      _specialClosed.add(r.id);
+      try {
+        await sb.rpc('audit_special_mark_done', { p_id: r.id });
+        SPECIAL_REQS = SPECIAL_REQS.filter(x => x.id !== r.id);
+        renderAll();
+      } catch (e) {
+        /* Not installed, or refused. The row simply stays outstanding on
+           the office screen, which is where it was before this existed. */
+        console.warn('[audit-home] could not retire special audit', r.id, e && e.message);
+      }
+    }
   }
 
   /* One row per open request, placed in the month its DEADLINE falls in
@@ -3390,7 +3426,12 @@ function loadAuditTodo(){
   renderAll();                                   // draw at once, from the schedule
   loadCompletions().then(renderAll);             // then again, minus what is done
   loadMaintTimeline().then(renderAll);           // add maintenance deadlines when they arrive
-  loadSpecialAudits().then(renderAll);           // and any one-off round somebody raised
+  /* The retire sweep is kicked from BOTH loads because they race: the
+     requests and the roster land in either order, and whichever is
+     second is the one that can finally answer "is this finished". It is
+     safe to call twice -- an id is only marked tried once it has
+     actually been retired. */
+  loadSpecialAudits().then(() => { renderAll(); _retireFinishedSpecials(); });
   /* Settings last: the rounds and the maintenance windows both come from
      them, so when they land the board is rebuilt and the maintenance walk
      is redone with the real day counts. */
@@ -3410,6 +3451,9 @@ function loadAuditTodo(){
   MJMAuditPending.load(SCOPE_NURSERIES).then(() => {
     renderAll();
     if (typeof renderHistory === 'function') renderHistory();
+    /* Only once the roster is in: before it, every request looks
+       unjudgeable and nothing would be retired anyway. */
+    _retireFinishedSpecials();
   }).catch(e => {
     console.warn('[audit-home] pending plots unavailable:', e);
   });

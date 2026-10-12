@@ -1525,6 +1525,48 @@ that as not done, so a refusal shows the work rather than hiding it.
 and then thought better of is a thing that happened, and the auditor may
 already have walked the plots. The test asserts no DELETE is ever sent.
 
+**And a FINISHED request retires itself, which the first version did
+not.** Both screens filtered on `cancelled_at` alone, so the board
+cleared the row the moment the plots were walked — correct — while the
+System Setting card went on listing it as outstanding for ever, and the
+only way off was *Withdraw*, which means cancelled and not done. The
+office spotted it in one question: *"the special audit will save in
+system setting forever?"*
+
+The fix is shaped by who is allowed to know what:
+
+- **The BOARD is the only thing that can tell.** It holds the roster and
+  the audits and already works out which plots are owed in order to draw
+  the circles. The office screen cannot answer it without a second copy
+  of that rule.
+- **But an auditor may only READ this table** — raising and withdrawing
+  is Manage Users — so the board cannot stamp the row itself.
+  `audit_special_mark_done(id)` is the one narrow door: SECURITY
+  DEFINER, sets `completed_at` and nothing else, and only on a row that
+  is still open, so the worst any caller can do is close a request that
+  was already finished.
+- **`_specialOwed` returning null must never be read as "nothing left".**
+  Null is "the roster could not be read", and closing a request on a
+  refusal is the one way this could lose work.
+- **Each id is tried once per page**, because `renderAll` runs on every
+  tab, filter and month change — and an id is marked tried only once it
+  has actually been retired, so a call that failed is retried next load.
+- **The sweep is kicked from BOTH loads.** The requests and the roster
+  land in either order and whichever is second is the one that can
+  finally answer the question; kicking it from one of them only meant it
+  usually did nothing. That is what the test caught.
+
+`sb.rpc()` in `audit_supabase.js` is new and THROWS, unlike `canISave()`
+beside it: that one fails open on purpose because a check that cannot run
+must not take a module away, while a caller asking the database to DO
+something needs to know it did not happen.
+
+**A test route for an rpc has to be registered AFTER the catch-all**, not
+before — Playwright matches in reverse registration order, so the
+catch-all otherwise swallows every rpc, answers 200 with an empty list,
+and the test sees no call while the page carries on perfectly happily.
+That is the rule under *Testing without the database*, met in the wild.
+
 **It lives on Settings → System Setting**, beside *+ Add round*, and not
 on the Audit Modules row of the admin page. Those cards are navigation,
 tapped every day; a rare admin action there is in everybody's way for the

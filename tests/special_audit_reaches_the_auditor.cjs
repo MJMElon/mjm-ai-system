@@ -24,6 +24,10 @@
         it alive now that a closed round is cleared by any past audit
      5. it clears the moment every plot it named is audited
      6. no round rule touches it
+     7. and once every plot IS walked the board RETIRES it, through the
+        one narrow door an auditor has — otherwise the office screen
+        lists it as outstanding for ever and the only way off is
+        Withdraw, which means cancelled and not done
 
    Run: NODE_PATH=/opt/node22/lib/node_modules node tests/special_audit_reaches_the_auditor.cjs
 */
@@ -64,7 +68,8 @@ const BALANCE = [
 ];
 const tableOf = (url) => { const m = /\/rest\/v1\/([a-z0-9_]+)/i.exec(url); return m ? m[1] : ''; };
 
-async function run(browser, { specials, plotAudits }){
+async function run(browser, { specials, plotAudits, rpcBroken }){
+  const rpcs = [];
   const ctx  = await browser.newContext({ viewport:{ width:1000, height:1600 },
                                           serviceWorkers: 'block' });
   const page = await ctx.newPage();
@@ -80,6 +85,20 @@ async function run(browser, { specials, plotAudits }){
       : t === 'audit_special_audits'       ? specials
       : [];
     route.fulfill({ status:200, contentType:'application/json', body: JSON.stringify(body) });
+  });
+  /* AFTER the catch-all on purpose: Playwright matches routes in REVERSE
+     registration order, so the last one registered wins. Register this
+     first and the catch-all above swallows every rpc, answers it 200 with
+     an empty list, and the test sees no call at all while the page
+     carries on perfectly happily. */
+  await page.route('**/rest/v1/rpc/**', (route) => {
+    const u = route.request().url();
+    let body = {};
+    try { body = JSON.parse(route.request().postData() || '{}'); } catch (e) {}
+    rpcs.push({ fn: u.split('/rpc/')[1].split('?')[0], body });
+    if (rpcBroken) return route.fulfill({ status: 404, contentType:'application/json',
+      body: JSON.stringify({ message: 'function does not exist' }) });
+    return route.fulfill({ status: 200, contentType:'application/json', body: 'true' });
   });
   await page.route('**/auth/v1/**', r => r.fulfill({ status:200, contentType:'application/json',
     body: JSON.stringify({ access_token:'x', user:{ id:'u1' } }) }));
@@ -118,8 +137,9 @@ async function run(browser, { specials, plotAudits }){
     }));
     return { rows, special: rows.filter(r => r.special) };
   });
+  await page.waitForTimeout(400);     // the retire sweep runs after the roster
   await ctx.close();
-  return { ...out, errs };
+  return { ...out, rpcs, errs };
 }
 
 const REQ = (over) => Object.assign({
@@ -142,8 +162,11 @@ const REQ = (over) => Object.assign({
   const none    = await run(browser, { specials: [],            plotAudits: oldAudits });
   const named   = await run(browser, { specials: [REQ()],       plotAudits: oldAudits });
   const allP    = await run(browser, { specials: [REQ({ all_plots: true, plots: [] })], plotAudits: oldAudits });
-  const walked  = await run(browser, { specials: [REQ()],
-                    plotAudits: oldAudits.concat([{ nursery:'BNN', plot:'B01', batch:'901', date: TODAY }]) });
+  const walkedAudits = oldAudits.concat([{ nursery:'BNN', plot:'B01', batch:'901', date: TODAY }]);
+  const walked  = await run(browser, { specials: [REQ()], plotAudits: walkedAudits });
+  /* The same, with the closer not installed: the row must stay exactly
+     where it was rather than the page falling over. */
+  const noCloser = await run(browser, { specials: [REQ()], plotAudits: walkedAudits, rpcBroken: true });
   /* UNN 1 is one of the three the main-nursery board covers, so that
      one SHOULD appear. The Pre Nursery is a different scope entirely
      and must not. */
@@ -155,7 +178,9 @@ const REQ = (over) => Object.assign({
   console.log('no request    : rows =', none.rows.length, '| special =', none.special.length);
   console.log('named B01     :', JSON.stringify(s(named)));
   console.log('all plots     :', JSON.stringify(s(allP).plots));
-  console.log('after walking :', walked.special.length, 'special row(s)');
+  console.log('after walking :', walked.special.length, 'special row(s) | rpc:',
+              JSON.stringify(walked.rpcs));
+  console.log('closer missing:', noCloser.special.length, 'row(s), errors:', noCloser.errs.length);
   console.log('UNN 1 request :', s(sibling).ttl, '| PN request rows:', otherScope.special.length);
   console.log('page errors   :', named.errs.length ? named.errs.join(' | ') : 'none');
 
@@ -183,6 +208,17 @@ const REQ = (over) => Object.assign({
   check('an audit from BEFORE it was raised does not answer it',
         named.special.length === 1 && s(named).plots.length === 1);
   check('walking the plot today clears it', walked.special.length === 0);
+  /* ── AND IT IS RETIRED, not left outstanding on the office screen ── */
+  /* The page makes other rpc calls of its own (the access checks), so
+     this counts only the one that retires a request. */
+  const closed = (r) => (r.rpcs || []).filter(x => x.fn === 'audit_special_mark_done');
+  check('and the board retires it through the one door it has',
+        closed(walked).length === 1 && Number(closed(walked)[0].body.p_id) === 1);
+  check('exactly once, not on every redraw', closed(walked).length === 1);
+  check('a request still owed is NOT retired', closed(named).length === 0);
+  check('and one out of this scope retires nothing', closed(otherScope).length === 0);
+  check('with the closer not installed the page carries on regardless',
+        noCloser.errs.length === 0);
 
   check('a request for a sibling nursery in the same scope IS shown',
         sibling.special.length === 1 && /UNN 1/.test(s(sibling).ttl));

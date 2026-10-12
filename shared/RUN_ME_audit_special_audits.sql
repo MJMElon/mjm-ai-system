@@ -24,6 +24,10 @@
 --               out live, so a plot added afterwards is included
 --   plots       the named plots when all_plots is false
 --   note        why it was raised, shown to the auditor
+--   completed_at  stamped by the BOARD the first time it sees every plot
+--               walked. Without it a finished request sits on the System
+--               Setting card reading outstanding for ever, and the only
+--               way off is Withdraw, which means cancelled and not done
 --   cancelled_at  set rather than deleting the row, so a request that was
 --               raised and withdrawn still has a record
 --
@@ -44,6 +48,7 @@ CREATE TABLE IF NOT EXISTS public.audit_special_audits (
   -- portals reader appends "order=created_at.desc" to every request, and a
   -- table without it makes PostgREST reject the whole read.
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at  TIMESTAMPTZ,
   cancelled_at  TIMESTAMPTZ,
   cancelled_by  TEXT,
   CONSTRAINT audit_special_audits_module
@@ -63,11 +68,17 @@ ALTER TABLE public.audit_special_audits
   ADD COLUMN IF NOT EXISTS cancelled_by TEXT;
 ALTER TABLE public.audit_special_audits
   ADD COLUMN IF NOT EXISTS note         TEXT;
+ALTER TABLE public.audit_special_audits
+  ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
 
 -- The board reads the open ones on every load, per module and nursery.
-CREATE INDEX IF NOT EXISTS audit_special_audits_open_idx
+-- Dropped first rather than CREATE IF NOT EXISTS: an earlier run of this
+-- file made the same index with a narrower WHERE, and IF NOT EXISTS would
+-- keep that one and quietly leave the predicate wrong.
+DROP INDEX IF EXISTS public.audit_special_audits_open_idx;
+CREATE INDEX audit_special_audits_open_idx
   ON public.audit_special_audits (module, nursery, due_date)
-  WHERE cancelled_at IS NULL;
+  WHERE cancelled_at IS NULL AND completed_at IS NULL;
 
 ALTER TABLE public.audit_special_audits ENABLE ROW LEVEL SECURITY;
 
@@ -98,12 +109,44 @@ CREATE POLICY audit_special_update ON public.audit_special_audits
 GRANT SELECT ON public.audit_special_audits TO authenticated;
 GRANT INSERT, UPDATE ON public.audit_special_audits TO authenticated;
 
+-- ── CLOSING ONE OFF, FROM THE BOARD ────────────────────────────────────
+-- The only thing that knows a request is finished is the auditors board:
+-- it holds the roster and the audits, and it already works out which
+-- plots are still owed in order to draw the circles. The office screen
+-- cannot answer it without a second copy of that rule.
+--
+-- But an AUDITOR may only read this table -- raising and withdrawing is
+-- for Manage Users -- so the board cannot stamp the row itself. This
+-- function is the one narrow door: it sets completed_at and nothing
+-- else, only on a row that is still open, so the worst a caller can do
+-- is close a request that was already finished.
+CREATE OR REPLACE FUNCTION public.audit_special_mark_done(p_id BIGINT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $fn$
+DECLARE n INT;
+BEGIN
+  UPDATE public.audit_special_audits
+     SET completed_at = now()
+   WHERE id = p_id
+     AND completed_at IS NULL
+     AND cancelled_at IS NULL;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n > 0;
+END
+$fn$;
+
+GRANT EXECUTE ON FUNCTION public.audit_special_mark_done(BIGINT) TO authenticated;
+
 NOTIFY pgrst, 'reload schema';
 
 -- WHAT A GOOD RESULT LOOKS LIKE
--- One row reading "audit_special_audits ready", the column count at 12,
--- the three policies at 3, and open_requests at however many are
--- outstanding -- 0 on a database that has never raised one.
+-- One row reading "audit_special_audits ready", the column count at 13,
+-- the policies at 3, closer at 1 (the function that retires a finished
+-- request), and open_requests at however many are outstanding -- 0 on a
+-- database that has never raised one.
 SELECT 'audit_special_audits ready' AS status,
        (SELECT count(*) FROM information_schema.columns
          WHERE table_schema = 'public'
@@ -111,5 +154,7 @@ SELECT 'audit_special_audits ready' AS status,
        (SELECT count(*) FROM pg_policy p
           JOIN pg_class c ON c.oid = p.polrelid
          WHERE c.relname = 'audit_special_audits')::INT AS policies,
+       (SELECT count(*) FROM pg_proc
+         WHERE proname = 'audit_special_mark_done')::INT AS closer,
        (SELECT count(*) FROM public.audit_special_audits
-         WHERE cancelled_at IS NULL)::INT AS open_requests;
+         WHERE cancelled_at IS NULL AND completed_at IS NULL)::INT AS open_requests;

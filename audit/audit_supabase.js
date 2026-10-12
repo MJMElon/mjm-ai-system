@@ -356,6 +356,26 @@ const sb = {
       return Array.isArray(rows) ? rows : null;
     } catch (e) { return null; }
   },
+  /* Call a database function. The thin REST helper above is built for
+     tables; an RPC is a POST to a different path with the arguments as
+     the body, so it cannot go through sbFetch.
+
+     It THROWS rather than swallowing, unlike canISave below: canISave
+     fails open on purpose because a check that cannot run must not take
+     a module away, while a caller asking the database to DO something
+     needs to know it did not happen. */
+  async rpc(fn, args) {
+    const token = await accessToken();
+    const res = await fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`, {
+      method: 'POST',
+      headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${token || SUPA_KEY}`,
+                 'Content-Type': 'application/json' },
+      body: JSON.stringify(args || {})
+    });
+    if (!res.ok) throw new Error(`Supabase rpc ${fn} ${res.status}: ${await res.text()}`);
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  },
   async insert(table, data) {
     return sbFetch(table, { method: 'POST', body: JSON.stringify(data), prefer: 'return=representation' });
   },

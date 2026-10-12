@@ -26,6 +26,10 @@
         than deleting it
      7. with the table not installed the card says so in words and the
         button explains instead of throwing
+     8. and the list asks for OPEN requests only — not cancelled, and not
+        completed. Without the second of those a finished request sat
+        here reading outstanding for ever, and the only way off was
+        Withdraw, which means cancelled and not done
 
    Run: NODE_PATH=/opt/node22/lib/node_modules node tests/special_audit_is_raised_on_the_screen.cjs
 */
@@ -80,9 +84,13 @@ async function boot(browser, { open, broken }){
         update(p){ st.verb = 'update'; st.payload = p; window.__CALLS.push({ ...st }); return api; },
         delete(){ st.verb = 'delete'; window.__CALLS.push({ ...st }); return api; },
         upsert(p){ st.verb = 'upsert'; st.payload = p; window.__CALLS.push({ ...st }); return api; },
-        eq(){ return api; }, is(){ return api; }, order(){ return api; },
+        eq(){ return api; },
+        is(col, v){ (st.filters = st.filters || []).push(col + ' is ' + v); return api; },
+        order(){ return api; },
         maybeSingle(){ return api; },
         then(res){
+          if (table === 'audit_special_audits' && st.verb === 'select')
+            window.__CALLS.push({ table, verb: 'select', filters: st.filters || [] });
           if (table === 'audit_special_audits') {
             if (broken) return res({ data: null, error: { message: 'relation does not exist' } });
             if (st.verb === 'select') return res({ data: open, error: null });
@@ -109,7 +117,7 @@ async function boot(browser, { open, broken }){
 }
 
 const calls = (page) => page.evaluate(() => window.__CALLS.map(c => ({
-  table: c.table, verb: c.verb, payload: c.payload })));
+  table: c.table, verb: c.verb, payload: c.payload, filters: c.filters })));
 const writes = (c) => c.filter(x => x.table === 'audit_special_audits' && x.verb !== 'select');
 
 (async () => {
@@ -125,6 +133,11 @@ const writes = (c) => c.filter(x => x.table === 'audit_special_audits' && x.verb
     const empty = await page.$eval('#ss-special-list', el => el.innerText.trim());
     console.log('buttons:', n, '| empty list:', JSON.stringify(empty.slice(0, 60)));
     check('every module in both scopes carries a + Special audit', n === 6);
+    const sel = (await calls(page)).find(c => c.table === 'audit_special_audits' && c.verb === 'select');
+    console.log('list filters:', JSON.stringify(sel && sel.filters));
+    check('the list asks for open requests only — not cancelled, not done',
+          !!sel && sel.filters.indexOf('cancelled_at is null') !== -1
+                && sel.filters.indexOf('completed_at is null') !== -1);
     check('and the card says plainly that nothing is outstanding', /nothing outstanding/i.test(empty));
     check('no page errors mounting it', errs.length === 0);
     await ctx.close();
