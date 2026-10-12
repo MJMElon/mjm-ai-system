@@ -135,7 +135,7 @@ async function boot(page, plotAudits){
 
     /* The circles after expanding, and the history for the owed month. */
     await page.waitForTimeout(400);
-    const after = await page.evaluate((backYm) => {
+    const after = await page.evaluate(({ backYm, todayYm }) => {
       const rows = [...document.querySelectorAll('#todo-section .tl-item')].map(el => ({
         title: (el.querySelector('.tl-ttl') || {}).innerText || '',
         plots: [...el.querySelectorAll('.tl-plot')].map(a => a.textContent.trim())
@@ -149,8 +149,22 @@ async function boot(page, plotAudits){
         ttl: (el.querySelector('.hist-ttl') || {}).textContent || '',
         sub: (el.querySelector('.hist-sub') || {}).textContent || ''
       }));
-      return { rows, histMonth, histRows };
-    }, BACK_YM);
+      /* …and back to the month the work was actually DONE in. The office
+         put it plainly: once the case is completed it goes from the
+         to-do list and lands in Audit History. The missed round is
+         filed under the month that owed it; the RECORD is filed under
+         the day somebody walked the plot. Both are true at once and
+         this reads both. */
+      let fwd = 0;
+      while (typeof HIST_MONTH !== 'undefined' && HIST_MONTH < todayYm && fwd++ < 24) histShift(1);
+      const doneMonth = typeof HIST_MONTH !== 'undefined' ? HIST_MONTH : null;
+      const doneRows  = [...document.querySelectorAll('#hist-list .hist-row')].map(el => ({
+        missed: el.classList.contains('hist-missed'),
+        ttl: (el.querySelector('.hist-ttl') || {}).textContent || '',
+        sub: (el.querySelector('.hist-sub') || {}).textContent || ''
+      }));
+      return { rows, histMonth, histRows, doneMonth, doneRows };
+    }, { backYm: BACK_YM, todayYm: TODAY_ISO.slice(0, 7) });
 
     await ctx.close();
     return { ...out, after, errs };
@@ -214,6 +228,16 @@ async function boot(page, plotAudits){
 
   check('an audit from before the window opened closes nothing',
         owedPlots(tooEarly).includes('B01') && owedPlots(tooEarly).includes('B02'));
+
+  /* THE OFFICE'S OWN ACCEPTANCE: gone from the to-do list, and in the
+     history. The row leaving is checked above; this is the other half,
+     and it is the half somebody would otherwise take on trust. */
+  check('the completed work is in Audit History',
+        bothLate.after.doneMonth === TODAY_ISO.slice(0, 7));
+  check('under the month it was done in, as a real record and not a missed one',
+        bothLate.after.doneRows.some(r => !r.missed && /plot condition/i.test(r.ttl)));
+  check('one row per plot walked',
+        bothLate.after.doneRows.filter(r => !r.missed).length === 2);
 
   check('no page errors', none.errs.length === 0 && bothLate.errs.length === 0);
 
