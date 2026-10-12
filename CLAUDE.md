@@ -1331,6 +1331,71 @@ browser and holds both halves — a plot walked late drops off, a plot nobody
 walked stays on, and an audit from before the window opens closes nothing.
 Six of its eleven checks fail on the previous code.
 
+## A batch is not audited for ever because it was audited once
+
+The other half of the backlog, and the one the office actually saw: N02
+sat on the to-do list owing Plot Condition round 3, and the plot page
+showed three cards — batch 244 green, 253 green, 230 Not Required. Every
+one looked finished. *"I saw got audit done but still show in the to do
+list. You see is done."*
+
+**The to-do list was right.** 253 had last been audited in round 2. The
+plot page was the one not saying enough:
+
+    const audit = records.find(... batch matches ...);
+    const done  = !!audit;
+
+ANY audit, EVER. So a batch audited once was green in every round after
+it, for ever — and the only screen that knew otherwise was the board,
+which names a PLOT and not a batch. An auditor who opens the plot, sees
+green and walks away is how a round stays open for months.
+
+The grid above the cards asked the same way, so `isBatchAudited` /
+`isPlotAudited`, the corner badge, the plot cell and the "N / M audited"
+count were all saying done as well.
+
+Both ask about the round that is currently owed now —
+`MJMAuditSettings.currentWindow(scope, mod, todayISO)`, the latest window
+whose first day has arrived, extended to today once it closes. **Same
+range the board asks on**, which is what makes a green card and a quiet
+to-do row the same statement.
+
+Four things in it:
+
+- **The record is not hidden.** A lapsed batch keeps its card, its photo,
+  its chips and its edit button, and reads *"⟳ Round 3 due · last audited
+  22 Sep"*. It is the auditor's work and the last reading is what they
+  want before taking the next one; it has simply stopped being an answer
+  to the question this round is asking. Tapping it opens a NEW audit —
+  editing September does not answer October.
+- **The card shows `date`, not `created_at`.** It printed the insert
+  timestamp, while every list that decides anything reads `date`. Two
+  screens quoting different days about one record is how somebody comes
+  to trust the wrong one.
+- **It fails back to the old question.** No settings module, or a module
+  with no rounds, and `done` is "ever audited" again. Showing too much is
+  the safe direction: re-walking a done batch costs an hour, a batch
+  silently marked done costs a month.
+- **`_localISO()`, not `todayISO()`.** `toISOString()` is the day before
+  in Malaysia for the whole of the early morning — harmless for stamping
+  a save, an off-by-one round on the day a window opens.
+
+Plot Condition and Seedling Height are two copies of this card and two
+copies of the grid test. Change one, change the other. Papan is not in it:
+it audits the batch most recently placed on a plot this month, so its own
+rule is already round-shaped.
+
+`shared/CHECK_which_batch_still_owes_the_round.sql` names every batch
+behind its own plot, on every plot and both modules — the plot was
+audited more recently on a different batch, so somebody walked it and
+this one was not done. It also counts audits filed against a plot the
+ledger has nothing standing on, which are invisible to every list in the
+system.
+
+`tests/a_round_is_not_audited_for_ever.cjs` drives the real plot page
+with the office's own three batches; five of its eleven checks fail on
+the previous code.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the
