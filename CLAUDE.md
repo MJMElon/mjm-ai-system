@@ -1441,6 +1441,89 @@ browser and holds all of it — a plot walked late drops off, a plot nobody
 walked stays on, an audit from before the window opened clears it and is
 recorded as missed, and nothing clears a window that has not closed yet.
 
+## A special audit is a DEADLINE, and the schedule is a pattern
+
+The rounds are a monthly PATTERN: Plot Condition on the 10th, the 20th
+and the 30th, every month, for ever. The office needed the same question
+asked ONCE — *"i clicked + in plot condition audit - bnn, then i can
+select the audit date, audit plot (can pick more than 1 plot) / all plot
+and save. once i clicked save, it will show to to do list"* — and said
+why it could not be a round: *"it might only used one time... and maybe
+like xx months later will have to add special audit again."*
+
+A round and a one-off are different shapes, and trying to express the
+second as the first is what the day-11 and day-14 rounds were. So it is
+its own thing, in its own table, `audit_special_audits`
+(`shared/RUN_ME_audit_special_audits.sql`).
+
+**It is a deadline and never a window, and that is the whole rule.** It
+is owed the moment it is saved, reads *due* until its date has gone by
+and *overdue* after, and stays until every plot it names has been
+audited. Five things fall out of that, and each one is a way it would
+otherwise have been quietly useless:
+
+- **`occStatus` gives a special row `due` from the day it is raised.**
+  A round whose window has not opened renders greyed and will not
+  navigate — correct for a round, and the exact opposite of asking for
+  one. Without this branch a request raised today for the 20th would
+  draw dead on the screen it was raised from.
+- **`renderTimeline` keeps it on today's view**, the way a maintenance
+  row is kept. Today's view holds maintenance, overdue, and rows whose
+  window contains the selected day; a request due in eight days is none
+  of those, so it would have been invisible until its own date — which
+  is precisely the trap the day-14 round fell into.
+- **`raised_on` is what stops an old audit answering it.** The range
+  asked of `MJMAuditPending` opens on the day it was raised, not at the
+  beginning of time. This matters *because* a closed round is now
+  cleared by any past audit: without it, a plot walked last month would
+  close a request made this morning before anybody read it.
+- **`all_plots` stores a FLAG, never a frozen list.** The plots are
+  worked out live off the same roster the board reads, so a plot that
+  gains a batch after the request was raised is included.
+- **One nursery per request**, so `nurseryState` returns one entry
+  rather than letting two unasked nurseries vote in `isDone`'s
+  `every()`.
+
+**`_specialOwed()` is the single place that turns a request into
+circles** — `nurseryState`, `_plotsHtml` and `plotsOwed` all ask it, for
+the same reason `winRange` has one copy. It returns **null** for "no
+basis to judge" (the roster could not be read) and every caller treats
+that as not done, so a refusal shows the work rather than hiding it.
+
+**Withdrawing STAMPS `cancelled_at`; it never deletes.** A request raised
+and then thought better of is a thing that happened, and the auditor may
+already have walked the plots. The test asserts no DELETE is ever sent.
+
+**It lives on Settings → System Setting**, beside *+ Add round*, and not
+on the Audit Modules row of the admin page. Those cards are navigation,
+tapped every day; a rare admin action there is in everybody's way for the
+364 days it is not needed. System Setting already answers *when does this
+audit happen*, already requires Manage Users, and a one-off needs
+somewhere to be SEEN and withdrawn — the outstanding list has to have a
+home with context.
+
+**`MJMAuditSettings.plotsOf()` is a FOURTH copy of `NURSERY_PLOTS`**,
+after `audit_pending.js`, `audit_height_script.js` and
+`audit_papan_script.js`. It is in `audit_settings.js` because that file
+already exists to stop the module scripts keeping constants of their own,
+and the real fix is for the other three to read it — a refactor of three
+shipped module scripts, deliberately not bundled into the change that
+needed the list. Change one, change all four.
+
+**Known limit, written down rather than discovered:** a request is placed
+in the month its deadline falls in, so one raised in October for a date in
+December is on the board from 1 December rather than today. Every request
+the office has described is days out, not months; fix it the day somebody
+raises one that far ahead.
+
+`tests/special_audit_reaches_the_auditor.cjs` drives the real board —
+sixteen checks, including that an audit from last month clears every
+ordinary round on the board and does **not** clear the request sitting
+beside them. `tests/special_audit_is_raised_on_the_screen.cjs` mounts the
+real `AuditSystemSetting` against a stubbed client: twenty-five checks
+over the button, the dialog, what it refuses, the outstanding list, the
+withdraw, and what it says when the table is not installed.
+
 ## A batch is not audited for ever because it was audited once
 
 The other half of the backlog, and the one the office actually saw: N02
