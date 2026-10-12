@@ -4468,7 +4468,7 @@ const _ptDate = (d) => {
 async function _ptFonts() {
   if (!document.fonts || !document.fonts.load) return;
   try {
-    await Promise.all(['900 190px Outfit', '900 110px Outfit',
+    await Promise.all(['900 210px Outfit', '900 120px Outfit',
                        '900 64px Outfit', '900 34px Outfit'].map(f => document.fonts.load(f)));
   } catch (e) { /* a font that will not load is still a board, just a plainer one */ }
 }
@@ -4490,11 +4490,29 @@ function _ptLogoImage() {
   return _ptLogoPromise;
 }
 
+/* THE FILE IS A SQUARE TILE with a broad flat margin of green around the
+   mark, and the board shows it CROPPED to the framing the office drew on
+   the board they handed over. The MARK is untouched: the crop trims flat
+   green and nothing else, and its proportions are the file's own — the
+   white mark measures 1.93 wide to tall in the file and 1.93 on their
+   board, which is how we know it was cropped and not squashed. Held as
+   FRACTIONS of the file so a re-export at another resolution frames it the
+   same way, and `tests/papan_tanda.cjs` asserts what lands on the canvas
+   has the crop's ratio rather than the box's. */
+const _PT_LOGO_CROP = { x: 0.1413, y: 0.2427, w: 0.8338, h: 0.5270 };
+
+const _ptLogoSize = (im) => {
+  const nw = (im && (im.naturalWidth || im.width)) || 0;
+  const nh = (im && (im.naturalHeight || im.height)) || 0;
+  if (!nw || !nh) return null;
+  return { sx: nw * _PT_LOGO_CROP.x, sy: nh * _PT_LOGO_CROP.y,
+           sw: nw * _PT_LOGO_CROP.w, sh: nh * _PT_LOGO_CROP.h };
+};
+
 function _ptLogo(ctx, im, x, y, w) {
-  if (!im) return;
-  const nw = im.naturalWidth || im.width, nh = im.naturalHeight || im.height;
-  if (!nw || !nh) return;
-  ctx.drawImage(im, x, y, w, w * (nh / nw));
+  const s = _ptLogoSize(im);
+  if (!s) return;
+  ctx.drawImage(im, s.sx, s.sy, s.sw, s.sh, x, y, w, w * (s.sh / s.sw));
 }
 
 /* The board itself. Returns the canvas, so the preview and the download
@@ -4510,19 +4528,25 @@ async function _ptDraw(r) {
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
 
-  const L = 100;
-  /* The mark is a square, so it is deeper than the drawn one was and the
-     lines below start lower to clear it. _PT_LOGO_BOTTOM is the one place
-     that says where it ends — the lines are placed off it rather than off
-     a number somebody has to remember to move. */
-  const _PT_LOGO_W = 520, _PT_LOGO_X = _PT_W - L - _PT_LOGO_W, _PT_LOGO_Y = 55;
-  const _PT_LOGO_BOTTOM = _PT_LOGO_Y + _PT_LOGO_W *
-    ((logo && (logo.naturalHeight || logo.height)) ? (logo.naturalHeight || logo.height) / (logo.naturalWidth || logo.width) : 1);
+  /* THE OFFICE DREW THE BOARD AND THESE ARE ITS OWN NUMBERS, measured off
+     it: the margins, where each line sits, how big the type is and where
+     the mark goes. They were an arrangement arrived at here before that;
+     they are a specification now, which is why they are named constants in
+     one place rather than spread down the drawing. _PT_LINE_STEP is the
+     spacing the office asked to be followed and nothing else may set it —
+     it used to be worked out from whatever room was left under the logo,
+     so a change to the mark quietly changed the spacing of the lines. */
+  const L = 110, R = 70;                        // left and right margin
+  const _PT_PLOT_SIZE = 210, _PT_PLOT_BASE = 259;
+  const _PT_RULE_Y = 269, _PT_RULE_H = 19;
+  const _PT_LINE_SIZE = 120, _PT_LINE_1 = 455, _PT_LINE_STEP = 194;
+  const _PT_LOGO_X = 1313, _PT_LOGO_Y = 63, _PT_LOGO_W = 583;
+
   _ptLogo(ctx, logo, _PT_LOGO_X, _PT_LOGO_Y, _PT_LOGO_W);
   /* AFTER the logo, never before: the mark used to paint its own text and
      leave a white fill behind it, so ink set first drew a white board on
      white. It no longer does, and the order stays anyway — the ink belongs
-     with the text it is for. */
+     with the type it is for. */
   ctx.fillStyle = _PT_INK;
 
   /* PLOT, with the rule under it that the board has always had. Shrunk if
@@ -4530,47 +4554,45 @@ async function _ptDraw(r) {
      would otherwise run underneath the mark. */
   const plot = 'PLOT: ' + String(r.plot || '—');
   const plotRoom = _PT_LOGO_X - 60 - L;
-  let plotSize = 190;
+  let plotSize = _PT_PLOT_SIZE;
   ctx.font = '900 ' + plotSize + 'px Outfit, sans-serif';
   while (plotSize > 70 && ctx.measureText(plot).width > plotRoom) {
     plotSize -= 6;
     ctx.font = '900 ' + plotSize + 'px Outfit, sans-serif';
   }
-  ctx.fillText(plot, L, 250);
+  ctx.fillText(plot, L, _PT_PLOT_BASE);
   const plotW = ctx.measureText(plot).width;
-  ctx.fillRect(L, 290, plotW, 16);
+  ctx.fillRect(L, _PT_RULE_Y, plotW, _PT_RULE_H);
 
   /* The five lines. A long breed name is SHRUNK to fit rather than wrapped
      or clipped: the board is read from a distance and a line that runs off
      the edge loses the end of the name, which is the part that tells two
-     breeds apart. */
-  /* ONE WEIGHT for the whole block. The breed used to be set lighter than
-     everything beside it, and at this size Outfit 700 and Outfit 900 do not
-     read as one typeface in two weights — they read as two fonts, which is
-     what the office saw. The label and the value are the same line of the
-     same board and are set the same. */
+     breeds apart.
+
+     ONE WEIGHT for the whole block, and ONE CASE. The breed used to be set
+     lighter than everything beside it and in its own mixed case, and at
+     this size that does not read as one typeface in two weights — it reads
+     as two fonts, which is what the office saw. Every other field on the
+     board is upper case, the dates included, so the breed is too. */
   const lines = [
     ['BATCH: ',         String(r.batch || '—')],
-    ['JENAMA: ',        String(r.breed || '—')],
+    ['JENAMA: ',        String(r.breed || '—').toUpperCase()],
     ['JUMLAH TANAM : ', fmtNum(r.qty) + ' POKOK'],
     ['TARIKH TANAM: ',  _ptDate(r.planted)],
     ['TARIKH PINDAH: ', _ptDate(r.date)]
   ];
-  let y = Math.max(500, Math.round(_PT_LOGO_BOTTOM) + 90);
-  const step = lines.length > 1
-    ? Math.min(165, Math.floor((_PT_H - 120 - y) / (lines.length - 1)))
-    : 165;
+  let y = _PT_LINE_1;
   lines.forEach(([label, value]) => {
-    let size = 110;
+    let size = _PT_LINE_SIZE;
     const fits = () => {
       ctx.font = '900 ' + size + 'px Outfit, sans-serif';
-      return ctx.measureText(label + value).width <= _PT_W - L * 2;
+      return ctx.measureText(label + value).width <= _PT_W - L - R;
     };
     while (size > 44 && !fits()) size -= 4;
     ctx.font = '900 ' + size + 'px Outfit, sans-serif';
     ctx.fillText(label, L, y);
     ctx.fillText(value, L + ctx.measureText(label).width, y);
-    y += step;
+    y += _PT_LINE_STEP;
   });
   return c;
 }

@@ -180,28 +180,95 @@ const px = await page.evaluate(async () => {
       if (y < y0) y0 = y; if (y > y1) y1 = y;
     }
   }
-  /* Nothing black inside the mark. The logo is a SQUARE where the drawn one
-     was a flat rectangle, so it reaches further down the board — and a line
-     of type running under it is the one way that goes wrong. */
+  /* Nothing black inside the mark. A line of type running under it is the
+     one way the layout goes wrong, and it is invisible from the source. */
   let inkOnLogo = 0;
   if (x1 > 0) {
     const box = ctx.getImageData(x0, y0, x1 - x0 + 1, y1 - y0 + 1).data;
     for (let i = 0; i < box.length; i += 4)
       if (box[i] < 60 && box[i + 1] < 60 && box[i + 2] < 60) inkOnLogo++;
   }
-  return { w: c.width, h: c.height, ink, green, inkOnLogo,
-           markW: x1 - x0 + 1, markH: y1 - y0 + 1 };
+  /* The white MJM inside the green, on the board and in the FILE, so the
+     two ratios can be compared. The file is drawn whole onto a scratch
+     canvas for that — asking the image itself rather than carrying a
+     number here that would go stale the day the logo is re-exported. */
+  const whiteBox = (data, w, h) => {
+    let a = 1e9, b = 1e9, cc = -1, d2 = -1;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i] > 200 && data[i + 1] > 200 && data[i + 2] > 200) {
+        const p = i / 4, x = p % w, y = (p / w) | 0;
+        if (x < a) a = x; if (x > cc) cc = x; if (y < b) b = y; if (y > d2) d2 = y;
+      }
+    }
+    return cc < 0 ? null : { w: cc - a + 1, h: d2 - b + 1 };
+  };
+  const onBoard = whiteBox(ctx.getImageData(x0, y0, x1 - x0 + 1, y1 - y0 + 1).data, x1 - x0 + 1);
+  const im = await _ptLogoImage();
+  let inFile = null;
+  if (im) {
+    const s = document.createElement('canvas');
+    s.width = im.naturalWidth; s.height = im.naturalHeight;
+    const sc = s.getContext('2d');
+    sc.drawImage(im, 0, 0);
+    inFile = whiteBox(sc.getImageData(0, 0, s.width, s.height).data, s.width);
+  }
+  /* Where the ink sits on the LEFT of the mark, in bands — the PLOT line,
+     the rule under it, then the five lines. This is the layout the office
+     drew, read back off the canvas. */
+  const left = x0 - 20;
+  const strip = ctx.getImageData(0, 0, left, c.height).data;
+  const bands = []; let open = null, leftMargin = 1e9;
+  for (let y = 0; y < c.height; y++) {
+    let any = false;
+    for (let x = 0; x < left; x++) {
+      const i = (y * left + x) * 4;
+      if (strip[i] < 60 && strip[i + 1] < 60 && strip[i + 2] < 60) {
+        any = true; if (x < leftMargin) leftMargin = x; break;
+      }
+    }
+    if (any && open === null) open = y;
+    if (!any && open !== null) { bands.push([open, y - 1]); open = null; }
+  }
+  if (open !== null) bands.push([open, c.height - 1]);
+  return { w: c.width, h: c.height, ink, green, inkOnLogo, bands, leftMargin,
+           box: [x0, y0, x1 - x0 + 1, y1 - y0 + 1],
+           markOnBoard: onBoard, markInFile: inFile };
 });
 is([px.w, px.h], [2000, 1400], 'a print-sized board');
 is(px.ink > 50000, true, 'with black type on it — ' + px.ink + ' ink pixels');
 is(px.green > 50000, true, 'and the MJM mark — ' + px.green + ' green pixels');
-/* THE MARK IS DRAWN AT ITS OWN ASPECT RATIO. The file is square and the
-   board asks for a width, so a height worked out from anything but the
-   image own dimensions is a stretched logo — which is the one thing the
-   office asked not to happen to it. */
-is(Math.abs(px.markW - px.markH) <= 4, true,
-  'and it is not stretched — ' + px.markW + ' by ' + px.markH);
 is(px.inkOnLogo, 0, 'no line of type runs under the mark');
+
+/* THE OFFICE DREW THE BOARD. These are its numbers, measured off the board
+   they handed over and read back off the canvas — the margin, where the
+   mark goes, and the spacing of the lines. The mark and the rule are an
+   image and a rectangle, so they land on the pixel; the type bands are
+   whatever the font makes of a size, so the SPACING is asserted exactly
+   and the tops are not. */
+is(px.box, [1313, 63, 583, 368], 'the mark is where the office put it, and that size');
+is(Math.abs(px.leftMargin - 110) <= 6, true, 'the left margin — ' + px.leftMargin);
+is(px.bands.length, 7, 'PLOT, the rule under it, and five lines');
+is([px.bands[1][0], px.bands[1][1]], [269, 287], 'the rule sits 10 under PLOT and is 19 thick');
+/* The five lines, 194 apart — the spacing the office asked to be followed.
+   Measured off the TOP of each band rather than off a baseline, which is
+   not a thing a canvas will tell you, so it carries a pixel or two of the
+   font own business: BATCH sets digits where TARIKH sets capitals, and a
+   digit is not always the height of a cap. Four pixels of tolerance, which
+   is nowhere near the 30 a line out of place would cost. */
+const gaps = px.bands.slice(2).map((b, i, a) => i ? b[0] - a[i - 1][0] : 0).slice(1);
+is([gaps.length, gaps.every(g => Math.abs(g - 194) <= 4)], [4, true],
+  'and the lines are 194 apart, the spacing asked for — ' + JSON.stringify(gaps));
+
+/* THE MARK ITSELF IS NOT DISTORTED. The board shows the file CROPPED — the
+   square tile carries a broad flat margin of green that the office trimmed
+   — so the green BOX is not the file's shape and must not be compared to
+   it. What may not change is the white mark inside: 1.93 wide to tall in
+   the file and 1.93 on the board is how we know it was cropped rather than
+   squashed, and it is the one thing the office asked not to happen to it. */
+const ratio = (m) => m ? m.w / m.h : 0;
+is(Math.abs(ratio(px.markOnBoard) - ratio(px.markInFile)) < 0.03, true,
+  'the mark keeps the file own proportions — ' +
+  ratio(px.markOnBoard).toFixed(3) + ' on the board, ' + ratio(px.markInFile).toFixed(3) + ' in the file');
 
 /* THE INLINED MARK IS THE COMMITTED FILE, byte for byte. Two copies of an
    image is two things to change, and the one in the page is the one that
@@ -228,13 +295,13 @@ const order = await page.evaluate(async () => {
   let pending = 0;
   document.fonts.load = (f) => { pending++; seen.push('ask:' + f);
     return realLoad(f).finally(() => { pending--; seen.push('got:' + f); }); };
-  const drawnIn = [];
+  const drawnIn = [], drawnText = [];
   CanvasRenderingContext2D.prototype.fillText = function (...a) {
     seen.push('draw' + (pending ? ':WHILE-WAITING' : ''));
-    drawnIn.push(this.font);
+    drawnIn.push(this.font); drawnText.push(String(a[0]));
     return realFill.apply(this, a);
   };
-  window.__drawnIn = drawnIn;
+  window.__drawnIn = drawnIn; window.__drawnText = drawnText;
   try {
     await _ptDraw({ plot: 'B4', batch: '270', breed: 'AA Hybrida 1S', qty: 2309,
                     planted: '2026-06-25', date: '2026-09-23' });
@@ -243,15 +310,15 @@ const order = await page.evaluate(async () => {
     CanvasRenderingContext2D.prototype.fillText = realFill;
   }
   const asked = seen.filter(x => x.startsWith('ask:')).map(x => x.slice(4));
-  return { asked, drawnIn: window.__drawnIn.slice(),
+  return { asked, drawnIn: window.__drawnIn.slice(), drawnText: window.__drawnText.slice(),
            drewEarly: seen.some(x => x === 'draw:WHILE-WAITING'),
            firstDraw: seen.indexOf('draw'), lastGot: seen.map((x, i) => [x, i])
              .filter(([x]) => x.startsWith('got:')).map(([, i]) => i).pop() };
 });
 is(order.drewEarly, false, 'nothing is drawn while a font is still loading');
 is(order.lastGot < order.firstDraw, true, 'every weight is awaited before the first stroke');
-is(order.asked.some(f => /900 190px Outfit/.test(f)), true, 'the PLOT weight among them');
-is(order.asked.some(f => /900 110px Outfit/.test(f)), true, 'and the one the lines are set in');
+is(order.asked.some(f => /900 210px Outfit/.test(f)), true, 'the PLOT size among them');
+is(order.asked.some(f => /900 120px Outfit/.test(f)), true, 'and the one the lines are set in');
 /* ONE WEIGHT for the whole block. The breed was set at 700 where everything
    beside it was 900, and at this size Outfit 700 and Outfit 900 do not read
    as one typeface in two weights — they read as two fonts, which is what
@@ -260,6 +327,11 @@ is(order.asked.some(f => /900 110px Outfit/.test(f)), true, 'and the one the lin
 is(order.asked.filter(f => /^700 /.test(f)), [], 'and no second weight beside it');
 is([...new Set(order.drawnIn.map(f => String(f).split(' ')[0]))], ['900'],
   'every stroke on the board is set in the same weight');
+/* ONE CASE too. Every other field is upper case, the dates included, so a
+   breed in its own mixed case was the other half of what the office saw.
+   The ROW keeps the real spelling — it is only the board that shouts. */
+is(order.drawnText.indexOf('AA HYBRIDA 1S') >= 0, true, 'and the breed is set in upper case');
+is(order.drawnText.indexOf('AA Hybrida 1S') < 0, true, 'the mixed case it is keyed in does not reach the board');
 
 console.log('\n── 5. A long name is shrunk to fit, never clipped ──');
 const longBoard = await page.evaluate(async () => {

@@ -412,12 +412,14 @@ Three things about drawing it, each of which went wrong first:
   from a distance and the end of a breed name is the part that tells two
   breeds apart. The PLOT line shrinks too, so a transfer plot does not run
   under the mark.
-- **ONE WEIGHT for the whole block.** The breed was set at Outfit 700 where
-  everything beside it was 900, and at that size the two do not read as one
-  typeface in two weights — they read as two fonts, which is exactly what
-  the office saw and said. The test asks it of the weights the board asks
-  for AND of the font on every stroke, because a weight that is drawn in
-  without being preloaded is the same mistake twice.
+- **ONE WEIGHT for the whole block, and ONE CASE.** The breed was set at
+  Outfit 700 where everything beside it was 900, and in its own mixed case
+  where every other field — the dates included — is upper. At that size
+  that does not read as one typeface in two weights, it reads as two fonts,
+  which is exactly what the office saw and said. The test asks it of the
+  weights the board asks for AND of the font on every stroke, because a
+  weight drawn in without being preloaded is the same mistake twice. The
+  ROW keeps the real spelling; it is only the board that shouts.
 
 **The mark is the office's own file, and it is INLINED.** It was a drawn
 imitation at first, for the reason below; the office then handed over the
@@ -435,13 +437,28 @@ simply fetched: **no fetch, so nothing to 404** at the moment somebody
 presses the button; no cross-origin, so the canvas is not tainted and
 `toBlob` still works; and nothing to go stale in a cache.
 
-**And it is drawn at the IMAGE'S own aspect ratio**, read off the image
-rather than off a constant. The real mark is a SQUARE where the drawn one
-was a flat rectangle, so it reaches further down the board and the lines
-start below it — `_PT_LOGO_BOTTOM` is the one place that says where it
-ends, and the lines are placed off that rather than off a number somebody
-has to remember to move. The test asserts the green block comes out square
-and that no line of type runs under it.
+**The file is a square tile and the board shows it CROPPED**, because that
+is how the office framed it on the board they drew. The square carries a
+broad flat margin of green around the mark; `_PT_LOGO_CROP` trims it, in
+FRACTIONS of the file so a re-export at another resolution frames it the
+same way. **The MARK is untouched, and that is the thing to check** — the
+white MJM measures 1.93 wide to tall in the file and 1.93 on the board,
+which is how we know it was cropped rather than squashed. So the test
+compares the mark on the canvas against the mark in the FILE, drawing the
+file whole onto a scratch canvas to ask it, rather than carrying a number
+that would go stale the day the logo is re-exported. The green BOX is not
+the file's shape and must never be compared to it.
+
+**And the office drew the board, so its numbers are the specification.**
+The margins, the type sizes, where each line sits and where the mark goes
+were measured off the board they handed over and are named constants at
+the top of `_ptDraw`. `_PT_LINE_STEP` is the one the office asked for by
+name: it used to be worked out from whatever room was left under the logo,
+so a change to the mark quietly changed the spacing of the lines. The test
+reads all of it back off the canvas — the mark and the rule land on the
+pixel, and the line spacing is asserted to four pixels because the top of a
+type band carries a little of the font's own business (BATCH sets digits
+where TARIKH sets capitals).
 
 `tests/papan_tanda.cjs` drives the real page and batch 270's own figures,
 down to the pixels on the canvas and the download that comes out of it.
