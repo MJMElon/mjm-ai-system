@@ -798,6 +798,26 @@ policy cannot refuse anything — it is somebody opening a door — so only a
 LEFT ALONE. The file also puts `nops_read_audit_verdicts` back, so a run of
 it cannot take that door away again.
 
+### What it was, in the end — and a probe can accuse the wrong party
+
+The second run answered it. `audit_plot_audits` read **49 of 49**: the
+RESTRICTIVE policy the first run dropped was the whole of the fault the
+phone was showing, and Plot Condition has saved ever since.
+
+What was left read `audit_batches 0/49`, *23502 null value in column
+`batch_id`* — and **that one was the probe being wrong, not the database.**
+`audit_batches` takes a `batch_id` (`BTH-nursery-batch-plot`), the Papan
+form writes it on both of its insert paths, and the probe row here did not,
+because its column list was copied off the tail of that object literal
+rather than the whole of it.
+
+**A probe short of a column the FORM supplies accuses the database of the
+probe's own mistake** — and it does it in a row headed NOT OK, which is
+exactly how a real fault reads. So the result now carries **the columns
+that MUST be filled** on every table it probes, read out of
+`information_schema`: a 23502 names one of those, and that row is how you
+tell "a column no form writes" from "a column this file forgot".
+
 ## An outbox is half of recording with no line. The LIST is the other half.
 
 The queue has always worked: an audit saved with no signal goes into

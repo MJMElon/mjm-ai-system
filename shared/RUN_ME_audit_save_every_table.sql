@@ -300,10 +300,15 @@ DECLARE
           condition, remarks, photo_url, date, auditor_name)
        VALUES ('PROBE',NULL,'BNN','B01','1','Yes','Yes','Good',NULL,
                'https://probe',CURRENT_DATE,'probe')$i$,
+    -- batch_id is NOT NULL and the Papan form writes it, as BTH-nursery-
+    -- batch-plot. The first version of this probe left it out and the file
+    -- reported audit_batches 0 of 49 on a database where nothing was wrong
+    -- with it: a probe short of a column the FORM supplies accuses the
+    -- database of the probes own mistake.
     $i$INSERT INTO public.audit_batches
-         (nursery, plot, batch_no, breed, qty_transplant,
+         (batch_id, nursery, plot, batch_no, breed, qty_transplant,
           date_planted, date_transplant, date_mature)
-       VALUES ('BNN','B01','PROBE','probe',1,
+       VALUES ('BTH-BNN-PROBE-B01','BNN','B01','PROBE','probe',1,
                CURRENT_DATE,CURRENT_DATE,CURRENT_DATE)$i$,
     $i$INSERT INTO public.audit_maintenance_audits
          (audit_id, task_id, nursery, plot, task_type, result, remarks,
@@ -387,7 +392,7 @@ END $$;
 
 
 -- ── What a good result looks like ───────────────────────────────────────
--- Nine rows. Row 9 is the one that matters: it reads N of N -- OK, which
+-- Ten rows. Row 10 is the one that matters: it reads N of N -- OK, which
 -- means every auditor saved to every audit table a second ago, on this
 -- database. Anything less than N of N is NOT OK however green the rest is.
 --
@@ -396,8 +401,9 @@ END $$;
 -- policies and the grants on every audit table this database has. Row 6
 -- names any RESTRICTIVE policy that was dropped, and row 7 names the other
 -- policies found, which are LEFT ALONE and are a thing to read rather than
--- a fault. Row 8 breaks the saves down per table, so the table that refuses
--- is named even when the reason is too long to print.
+-- a fault. Row 8 lists the columns that MUST be filled, which is how a
+-- 23502 is read, and row 9 breaks the saves down per table, so the table
+-- that refuses is named even when the reason is too long to print.
 SELECT 1 AS n, 'accounts with no profile row: ' ||
        (SELECT count(*)::text FROM auth.users u
          WHERE NOT EXISTS (SELECT 1 FROM public.shared_profiles p WHERE p.id = u.id)) ||
@@ -456,7 +462,24 @@ SELECT 7, CASE WHEN COALESCE(current_setting('mjm.kept', true), '') = ''
                 THEN 'other policies found and LEFT ALONE: none'
                 ELSE 'other policies found and LEFT ALONE: ' || current_setting('mjm.kept', true) END
 UNION ALL
-SELECT 8, 'each table, saves that went through: ' ||
+-- Every column that MUST be filled, on each table this file probes. A save
+-- refused with 23502 names one of these, and this row is how the two cases
+-- are told apart: a column the FORM does not write is a real fault, and a
+-- column the form writes but the probe above does not is the probe being
+-- short. The second has already happened once, on audit_batches.
+SELECT 8, 'columns that must be filled: ' || COALESCE((
+         SELECT string_agg(x.tbl || '.' || x.col, ', ' ORDER BY x.tbl, x.col)
+           FROM (SELECT c.table_name AS tbl, c.column_name AS col
+                   FROM information_schema.columns c
+                  WHERE c.table_schema = 'public'
+                    AND c.is_nullable = 'NO'
+                    AND c.column_default IS NULL
+                    AND c.is_identity = 'NO'
+                    AND c.table_name IN ('audit_plot_audits','audit_height_records',
+                                         'audit_papan_audits','audit_batches',
+                                         'audit_maintenance_audits')) x), 'none')
+UNION ALL
+SELECT 9, 'each table, saves that went through: ' ||
        COALESCE(NULLIF(current_setting('mjm.tally', true), ''), 'nothing probed')
 UNION ALL
 -- OK is pass = total and nothing else. The first version of this file
@@ -464,11 +487,11 @@ UNION ALL
 -- email made that line NULL, which set_config blanks -- so it printed
 -- "196 of 245 -- OK" over a table refusing every auditor. A count that does
 -- not add up is the fault, whether or not anything managed to say why.
-SELECT 9, 'saves that went through just now: ' ||
+SELECT 10, 'saves that went through just now: ' ||
        current_setting('mjm.pass', true) || ' of ' || current_setting('mjm.total', true) ||
        CASE WHEN current_setting('mjm.pass', true) = current_setting('mjm.total', true)
             THEN ' -- OK'
             ELSE ' -- NOT OK: ' ||
                  COALESCE(NULLIF(current_setting('mjm.bad', true), ''),
-                          'reason not recorded, read row 8') END
+                          'reason not recorded, read row 9') END
 ORDER BY n;
