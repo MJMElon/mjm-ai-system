@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+    <meta http-equiv="Pragma" content="no-cache"/>
+    <meta http-equiv="Expires" content="0"/>
     <title>Seedling Sales Management - MJM Nursery AI</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%234a7a2e%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2715%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EAI%3C/text%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -118,6 +121,18 @@
         .mat-table tbody tr:hover td.col-prod {background:rgba(219,234,254,.55);}
         .mat-table tbody tr:hover td.col-plot {background:rgba(254,240,138,.55);}
         .mat-table tbody tr:hover td.col-alloc{background:rgba(187,247,208,.55);}
+        /* Plot-R has no 10%-culling estimate to show — a transfer-in qty is
+           already a real figure, not a forecast. Hidden rather than removed
+           from the DOM so the row template stays one shape for every tab. */
+        .mat-table.pr-view .col-afterc{display:none;}
+        /* Plot-R's History section — plots already fully allocated/depleted,
+           collapsed by default so the tab opens on what still needs acting
+           on. */
+        .mat-history-toggle td{background:#f8fafc;color:#64748b;font-weight:900;font-size:10px;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;padding:9px 10px;border-bottom:1px solid #e2e8f0;}
+        .mat-history-toggle td:hover{background:#f1f5f9;}
+        .mat-history-row{display:none;}
+        .mat-history-row.mat-history-open{display:table-row;}
+        .mat-history-row td{opacity:.65;}
 
         /* "No Status" pill for plots that haven't been opened yet */
         .plot-status-empty{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;background:#f1f5f9;color:#64748b;border:1px dashed #cbd5e1;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;}
@@ -548,7 +563,7 @@
                 <table class="mat-table min-w-[1400px]">
                     <thead>
                         <tr class="mat-group-row">
-                            <th colspan="7" class="mat-group mat-group-prod">📦 Production</th>
+                            <th id="mat-th-prod-group" colspan="7" class="mat-group mat-group-prod">📦 Production</th>
                             <th colspan="3" class="mat-group mat-group-plot">🪴 Plot Status</th>
                             <th colspan="3" class="mat-group mat-group-alloc">🛒 Customer Allocation</th>
                         </tr>
@@ -559,11 +574,11 @@
                             <th>Plot</th>
                             <th>Batch</th>
                             <th>Breed</th>
-                            <th class="text-right">Qty Transplanted</th>
-                            <th class="text-right mat-sep-r">After 10% Culling</th>
+                            <th id="mat-th-qty" class="text-right">Qty Transplanted</th>
+                            <th class="text-right mat-sep-r col-afterc">After 10% Culling</th>
                             <!-- Plot status -->
                             <th>Status</th>
-                            <th class="text-right">DO Deducted</th>
+                            <th class="text-right" title="Seedlings issued via Delivery Orders (cancelled DOs excluded)">DO Deducted</th>
                             <th class="text-right mat-sep-r">Plot Balance</th>
                             <!-- Customer allocation -->
                             <th>Customers (drag here)</th>
@@ -583,10 +598,11 @@
         <div class="text-[9px] text-slate-500 mt-2 px-1 leading-snug">
             <span class="font-black uppercase tracking-wider text-slate-700">Notes</span> —
             <strong>Maturity Date</strong> = transplant date keyed in the Batch Record + 9 months.
-            <strong>DO Deducted</strong> = seedlings issued via Delivery Orders keyed to this plot + batch (cancelled DOs excluded).
+            <strong>DO Deducted</strong> = seedlings issued via Delivery Orders keyed to this plot + batch (cancelled DOs excluded) — the same Sold figure the Main Nursery Movement report shows.
             <strong>Plot Balance</strong> = After 10% Culling − DO Deducted (what's still in the plot; negative means over-issued).
             <strong>After Deduct Reserve</strong> = Plot Balance − Reserved Qty (what's still free to allocate).
             <strong>Plot Status</strong> defaults to <em>No Status</em>; an admin opens it for collection.
+            On <strong>Plot-R</strong>: <strong>Qty Transferred</strong> replaces Qty Transplanted (the sum transferred in from 3rd Culling, same figure the Movement report calls Transfer In), there is no 10%-culling estimate, and Plot Balance also nets off what was culled or moved on to another plot — hover DO Deducted on a Plot-R row for the breakdown.
         </div>
     </div>
 
@@ -941,7 +957,7 @@
     </div>
 </div>
 
-<script src="operation_stock_sales.js"></script>
+<script src="operation_stock_sales.js?v=1"></script>
 <!-- ══════════════ CREDIT-INVOICE MODALS ══════════════ -->
 <div class="ci-modal" id="ci-upload-modal">
     <div class="ci-modal-card">
