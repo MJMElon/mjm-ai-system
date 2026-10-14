@@ -1705,6 +1705,70 @@ browser and holds all of it — a plot walked late drops off, a plot nobody
 walked stays on, an audit from before the window opened clears it and is
 recorded as missed, and nothing clears a window that has not closed yet.
 
+## Papan tanda is two months wide, because a sign goes up after the plot does
+
+The papan roster was the current calendar month: the plots the ledger
+says were transplanted (or, in the Pre-Nursery, planted) since the 1st.
+One month is too narrow for the walking. A plot transplanted on the
+**28th** gets its sign nailed up days later, and on the **1st** it fell
+out of the list entirely — audited or not, with nothing saying it had
+gone. The office asked for both months on one screen: *"so i can see sep
+transplanting plot and oct transplanting plot. So our auditor just based
+on this to audit plot needed."*
+
+So the window opens on the **first of the PREVIOUS month**, and it is
+written twice:
+
+- `_papanWindowStartISO()` in `audit_papan_script.js`, which is what the
+  module page queries the ledger with (`transaction_date.gte.`);
+- `_papanWindowStartISO()` in `audit_pending.js`, which is what the home
+  board's to-do row and its plot chips are built from.
+
+**Change one, change the other.** A plot inside one window and outside
+the other is a to-do row with no card to open, or a card nothing ever
+asked for. `tests/papan_sees_both_months.cjs` runs BOTH shipped copies
+over the same days and compares, the January-reaches-into-December case
+included.
+
+**And the strip has to SAY which month.** Two months of plots drawn as
+one run of identical circles answers a question nobody asked — the
+office wanted to tell September's from October's. The circles are
+ordered newest month first with a small tag above each run, and
+`MJMAuditPending.papanPlacedOn(nursery, plot)` is what supplies the
+date. It is an accessor of its own rather than a field on `plots()`: the
+other three modules want a list of codes, and widening the one function
+they share to carry something only papan reads is how a shared function
+becomes four. A plot the roster cannot date is tagged as undated and put
+LAST, never dropped and never filed under a month nobody checked.
+
+**Which page the auditor is actually on matters here.** The papan module
+has no landing list of its own — `init()` redirects to `audit_home.html`
+unless the address names a plot — so the strip on the To Do card IS the
+papan plot list. The module page's own grouped list is reached by
+`?admin=1` or `?from=manage` and is kept in step with it rather than
+being the thing people see.
+
+**The window change is what forced papan into the round rule.** That
+rule — "A batch is not audited for ever because it was audited once",
+below — deliberately left papan out, and the note said why: its roster
+was *this month's* placements, so the roster was already round-shaped
+and "ever audited" could not disagree with "audited this round". Two
+months breaks that. A plot transplanted and audited in September now
+rides into October's roster, and the old test would have drawn it green
+while the home board, which asks about the round's own dates, went on
+listing it as owed. So `getAuditForBatch` asks
+`MJMAuditSettings.currentWindow` like the other two, `_papanRoundFor` /
+`_papanInRound` / `_papanRoundSuffix` are the third copies of
+`_roundNow` / `_inRound` / `_roundSuffix`, and the count pill says which
+round it is counting. `getLastAuditForBatch` is the other half: the card
+and the chip still show the last reading, because an auditor wants it in
+front of them before they take the next one, and Batch Info keeps the
+EVER question because it is a register and not a to-do list.
+
+`tests/papan_list_spans_two_months.cjs` drives the real board and the
+real module page in a real browser; eleven of its seventeen checks fail
+on the previous code.
+
 ## A batch is not audited for ever because it was audited once
 
 The other half of the backlog, and the one the office actually saw: N02
@@ -1755,9 +1819,10 @@ Four things in it:
   a save, an off-by-one round on the day a window opens.
 
 Plot Condition and Seedling Height are two copies of this card and two
-copies of the grid test. Change one, change the other. Papan is not in it:
-it audits the batch most recently placed on a plot this month, so its own
-rule is already round-shaped.
+copies of the grid test. Change one, change the other. **Papan is in it
+now too** — it was left out while its roster was one month, which made
+its own rule round-shaped by accident; the two-month window took that
+away. See the section above for what moved.
 
 `shared/CHECK_which_batch_still_owes_the_round.sql` names every batch
 behind its own plot, on every plot and both modules — the plot was
