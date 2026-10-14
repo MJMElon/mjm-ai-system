@@ -148,11 +148,15 @@ SELECT unnest(ARRAY['audit_plot_audits',
 -- RLS decides which rows a role may write. The GRANT decides whether it may
 -- reach the table at all. Both are set, so the ambiguity goes.
 --
--- Every policy that is NOT one of the four is dropped. A RESTRICTIVE one
--- refuses every auditor whatever else is right, and a permissive one adds
--- nothing a staff login does not already have. What was dropped is reported
--- in row 6, so nothing goes quietly.
-SELECT set_config('mjm.dropped', '', false);
+-- ONLY A RESTRICTIVE POLICY IS DROPPED. A restrictive one narrows what
+-- every other policy allows, so one of them refuses every auditor whatever
+-- else is right, and that is the fault being hunted. A PERMISSIVE one
+-- cannot refuse anything: it is somebody opening a door, and the first
+-- version of this file dropped those too and took out
+-- nops_read_audit_verdicts, which the office had put there on purpose.
+-- Row 6 names both kinds, so neither goes quietly.
+SELECT set_config('mjm.dropped', '', false),
+       set_config('mjm.kept', '', false);
 
 DO $$
 DECLARE
@@ -171,16 +175,22 @@ BEGIN
 
     FOR pol IN SELECT policyname, permissive FROM pg_policies
                 WHERE schemaname = 'public' AND tablename = t LOOP
-      IF NOT (pol.policyname = ANY (mine)) THEN
+      IF pol.policyname = ANY (mine) THEN
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', pol.policyname, t);
+      ELSIF pol.permissive = 'RESTRICTIVE' THEN
         PERFORM set_config('mjm.dropped',
-                 COALESCE(NULLIF(current_setting('mjm.dropped'), ''), '')
-                 || CASE WHEN COALESCE(current_setting('mjm.dropped'), '') = ''
+                 COALESCE(NULLIF(current_setting('mjm.dropped', true), ''), '')
+                 || CASE WHEN COALESCE(current_setting('mjm.dropped', true), '') = ''
                          THEN '' ELSE ', ' END
-                 || t || '.' || pol.policyname
-                 || CASE WHEN pol.permissive = 'RESTRICTIVE' THEN ' (RESTRICTIVE)' ELSE '' END,
-                 false);
+                 || COALESCE(t, '?') || '.' || COALESCE(pol.policyname, '?'), false);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', pol.policyname, t);
+      ELSE
+        PERFORM set_config('mjm.kept',
+                 COALESCE(NULLIF(current_setting('mjm.kept', true), ''), '')
+                 || CASE WHEN COALESCE(current_setting('mjm.kept', true), '') = ''
+                         THEN '' ELSE ', ' END
+                 || COALESCE(t, '?') || '.' || COALESCE(pol.policyname, '?'), false);
       END IF;
-      EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', pol.policyname, t);
     END LOOP;
 
     EXECUTE format($p$CREATE POLICY "audit_staff_read" ON public.%I
@@ -231,6 +241,26 @@ EXCEPTION WHEN OTHERS THEN
   RAISE NOTICE 'could not set the storage policies from here - set them under Storage, Policies';
 END $$;
 
+-- ── 5b. THE OFFICE OWN READ POLICY, PUT BACK ────────────────────────────
+-- nops_read_audit_verdicts lets the Work Maintenance page read the audit
+-- verdicts, and RUN_ME_audit_column.sql is where it comes from. The first
+-- version of this file dropped it as "not ours". It is permissive, so it
+-- never refused anybody, and it is recreated here so a run of this file
+-- cannot take it away. Recreated only where the function it reads exists.
+DO $$
+BEGIN
+  IF to_regclass('public.audit_maintenance_audits') IS NULL THEN RETURN; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_proc pr JOIN pg_namespace n ON n.oid = pr.pronamespace
+                  WHERE n.nspname = 'public' AND pr.proname = '_nops_may_read_audit') THEN
+    RETURN;
+  END IF;
+  DROP POLICY IF EXISTS "nops_read_audit_verdicts" ON public.audit_maintenance_audits;
+  CREATE POLICY "nops_read_audit_verdicts"
+    ON public.audit_maintenance_audits
+    FOR SELECT TO authenticated
+    USING (public._nops_may_read_audit());
+END $$;
+
 NOTIFY pgrst, 'reload schema';
 
 
@@ -240,6 +270,7 @@ NOTIFY pgrst, 'reload schema';
 -- are the ones the forms themselves write.
 SELECT set_config('mjm.pass', '0', false),
        set_config('mjm.total', '0', false),
+       set_config('mjm.tally', '', false),
        set_config('mjm.bad', '', false);
 
 DO $$
@@ -282,9 +313,17 @@ DECLARE
   ];
   good  boolean;
   why   text;
+  who   text;
+  okn   int[] := ARRAY[0,0,0,0,0];
+  alln  int[] := ARRAY[0,0,0,0,0];
 BEGIN
   FOR p IN SELECT id, email FROM public.shared_profiles
             WHERE COALESCE(user_type,'system') <> 'customer' ORDER BY email LOOP
+    -- An account can have no email. Concatenating a NULL gives NULL, and
+    -- set_config of NULL BLANKS the line being built up — which is how the
+    -- first version of this file lost every reason it had collected and
+    -- printed 196 of 245 with nothing after it.
+    who := COALESCE(NULLIF(p.email, ''), 'account ' || COALESCE(p.id::text, '?'));
     FOR i IN 1 .. array_length(names, 1) LOOP
       t    := names[i];
       stmt := stmts[i];
@@ -314,31 +353,51 @@ BEGIN
       -- Counted out here, AFTER the handler: anything written inside that
       -- inner block goes back with it when the probe row is rolled back.
       PERFORM set_config('mjm.total', (current_setting('mjm.total')::int + 1)::text, false);
+      alln[i] := alln[i] + 1;
       IF good THEN
         PERFORM set_config('mjm.pass', (current_setting('mjm.pass')::int + 1)::text, false);
+        okn[i] := okn[i] + 1;
       ELSE
-        PERFORM set_config('mjm.bad',
-                 COALESCE(NULLIF(current_setting('mjm.bad'), ''), '')
-                 || CASE WHEN COALESCE(current_setting('mjm.bad'), '') = ''
-                         THEN '' ELSE '; ' END
-                 || p.email || ' on ' || t || ' (' || why || ')', false);
+        -- Capped, because one broken table times fifty auditors is fifty
+        -- identical sentences and the row they are in becomes unreadable.
+        -- The per-table tally below carries the rest.
+        IF length(COALESCE(current_setting('mjm.bad', true), '')) < 400 THEN
+          PERFORM set_config('mjm.bad',
+                   COALESCE(NULLIF(current_setting('mjm.bad', true), ''), '')
+                   || CASE WHEN COALESCE(current_setting('mjm.bad', true), '') = ''
+                           THEN '' ELSE '; ' END
+                   || who || ' on ' || COALESCE(t, '?')
+                   || ' (' || COALESCE(why, 'no reason given') || ')', false);
+        END IF;
       END IF;
     END LOOP;
+  END LOOP;
+  -- One line per table, so the table that refuses is named whatever happens
+  -- to the sentences above it.
+  FOR i IN 1 .. array_length(names, 1) LOOP
+    IF alln[i] > 0 THEN
+      PERFORM set_config('mjm.tally',
+               COALESCE(NULLIF(current_setting('mjm.tally', true), ''), '')
+               || CASE WHEN COALESCE(current_setting('mjm.tally', true), '') = ''
+                       THEN '' ELSE ', ' END
+               || names[i] || ' ' || okn[i] || '/' || alln[i], false);
+    END IF;
   END LOOP;
 END $$;
 
 
 -- ── What a good result looks like ───────────────────────────────────────
--- Seven rows, every one ending in OK.
+-- Nine rows. Row 9 is the one that matters: it reads N of N -- OK, which
+-- means every auditor saved to every audit table a second ago, on this
+-- database. Anything less than N of N is NOT OK however green the rest is.
 --
 -- Row 1 is nought accounts without a profile row, and row 2 says the
 -- trigger that keeps it at nought is installed. Rows 3 and 4 are the
 -- policies and the grants on every audit table this database has. Row 6
--- names any policy that was dropped, which is a thing to read rather than
--- a fault. Row 7 is the one that matters: every auditor saved to every
--- audit table just now, on this database.
---
--- Any row reading NOT OK names the auditor, the table and the reason.
+-- names any RESTRICTIVE policy that was dropped, and row 7 names the other
+-- policies found, which are LEFT ALONE and are a thing to read rather than
+-- a fault. Row 8 breaks the saves down per table, so the table that refuses
+-- is named even when the reason is too long to print.
 SELECT 1 AS n, 'accounts with no profile row: ' ||
        (SELECT count(*)::text FROM auth.users u
          WHERE NOT EXISTS (SELECT 1 FROM public.shared_profiles p WHERE p.id = u.id)) ||
@@ -388,13 +447,28 @@ SELECT 4, 'audit tables granted to authenticated: ' ||
 UNION ALL
 SELECT 5, 'audit-photos bucket: ' || current_setting('mjm.bucket')
 UNION ALL
-SELECT 6, CASE WHEN COALESCE(current_setting('mjm.dropped'), '') = ''
-                THEN 'policies dropped as not ours: none -- OK'
-                ELSE 'policies dropped as not ours: ' || current_setting('mjm.dropped')
-                     || ' -- READ THIS, they were refusing or widening by hand' END
+SELECT 6, CASE WHEN COALESCE(current_setting('mjm.dropped', true), '') = ''
+                THEN 'RESTRICTIVE policies dropped: none -- OK'
+                ELSE 'RESTRICTIVE policies dropped: ' || current_setting('mjm.dropped', true)
+                     || ' -- READ THIS, each one was refusing every auditor' END
 UNION ALL
-SELECT 7, 'saves that went through just now: ' ||
-       current_setting('mjm.pass') || ' of ' || current_setting('mjm.total') ||
-       CASE WHEN COALESCE(current_setting('mjm.bad'), '') = '' THEN ' -- OK'
-            ELSE ' -- NOT OK: ' || current_setting('mjm.bad') END
+SELECT 7, CASE WHEN COALESCE(current_setting('mjm.kept', true), '') = ''
+                THEN 'other policies found and LEFT ALONE: none'
+                ELSE 'other policies found and LEFT ALONE: ' || current_setting('mjm.kept', true) END
+UNION ALL
+SELECT 8, 'each table, saves that went through: ' ||
+       COALESCE(NULLIF(current_setting('mjm.tally', true), ''), 'nothing probed')
+UNION ALL
+-- OK is pass = total and nothing else. The first version of this file
+-- decided it on whether a REASON had been collected, and an account with no
+-- email made that line NULL, which set_config blanks -- so it printed
+-- "196 of 245 -- OK" over a table refusing every auditor. A count that does
+-- not add up is the fault, whether or not anything managed to say why.
+SELECT 9, 'saves that went through just now: ' ||
+       current_setting('mjm.pass', true) || ' of ' || current_setting('mjm.total', true) ||
+       CASE WHEN current_setting('mjm.pass', true) = current_setting('mjm.total', true)
+            THEN ' -- OK'
+            ELSE ' -- NOT OK: ' ||
+                 COALESCE(NULLIF(current_setting('mjm.bad', true), ''),
+                          'reason not recorded, read row 8') END
 ORDER BY n;

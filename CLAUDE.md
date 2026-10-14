@@ -766,6 +766,38 @@ schema fails to **parse** it however well the branch is guarded. The answer
 is worked out in a `DO` block into a session setting instead, so the final
 query names no table that might not be there.
 
+### The first version of the new file then did it a third time
+
+It ran on the real database and printed
+
+    9 | saves that went through just now: 196 of 245 -- OK
+
+**196 of 245 is not OK.** Forty-nine saves — one table for every one of the
+forty-nine accounts — were refused, and the row said OK, which is the exact
+fault two files in a row have now been written to correct.
+
+Two bugs, and the second is the one that matters:
+
+- **A NULL wipes the line you are building up.** `shared_profiles.email` can
+  be empty, concatenating NULL gives NULL, and `set_config(name, NULL,
+  false)` BLANKS the setting. So the one account with no email erased every
+  reason collected before it. Every piece of a `set_config` line is
+  `COALESCE`d now, and an account with no email is named by its id.
+- **OK was decided on whether a REASON had been collected**, not on the
+  count. So wiping the reasons turned a failure into a pass. **OK is `pass =
+  total` and nothing else.** A count that does not add up is the fault,
+  whether or not anything managed to say why — and there is a per-table
+  tally beside it, so the table that refuses is named even when the reasons
+  are too long to print.
+
+**And dropping every policy that is not ours was over-reach.** It took out
+`nops_read_audit_verdicts`, which `RUN_ME_audit_column.sql` creates on
+purpose so the Work Maintenance page can read the verdicts. A PERMISSIVE
+policy cannot refuse anything — it is somebody opening a door — so only a
+**RESTRICTIVE** one is dropped now, and the permissive ones are named and
+LEFT ALONE. The file also puts `nops_read_audit_verdicts` back, so a run of
+it cannot take that door away again.
+
 ## An outbox is half of recording with no line. The LIST is the other half.
 
 The queue has always worked: an audit saved with no signal goes into
