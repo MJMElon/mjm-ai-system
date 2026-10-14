@@ -853,7 +853,11 @@
             // The seals collected on this DO, as runs. Capped at four lines so
             // a scattered collection cannot push the signature off the page --
             // the full list is always on the Seal page.
-            const sealText = mjmSealText(doRec.seal_ranges);
+            // Kept OFF the printed DO for now (office, 14 Oct 2026). Still
+            // recorded, and still shown in the Manage DO box above. Same
+            // switch as SHOW_SEALS_ON_DO in sealRanges.js in the phone repos.
+            const SHOW_SEALS_ON_DO = false;
+            const sealText = SHOW_SEALS_ON_DO ? mjmSealText(doRec.seal_ranges) : '';
             if (sealText) {
                 y += 11;
                 doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...INK);
