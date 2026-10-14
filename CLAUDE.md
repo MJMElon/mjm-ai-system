@@ -716,6 +716,56 @@ Four things in it:
 Diagnostics section 7 shows the same answer per table, and the red bar
 taps through to it.
 
+### And a proof of ONE table is not a proof
+
+It came back. The phone now reads
+
+    Not allowed to save to audit_plot_audits. Your login lacks database
+    permission (RLS)
+
+and `RUN_ME_auditor_can_save.sql` — the file written to settle exactly
+this — answers **six green lines while it is happening**. Its proof ends by
+inserting a row as each auditor and rolling it back, which is the right
+idea; it inserts into ONE table, `audit_maintenance_audits`, the one that
+was broken the day it was written. Reproduced on the scratch Postgres with
+Plot Condition refusing every save, it prints *auditors who could actually
+save just now: 4 of 4 -- OK*.
+
+**A probe is only a proof of the table it probes.** That is the same
+mistake the file itself was written to correct, moved one table along:
+*"a previous file reported four green lines over a database that refused
+every save."* `shared/RUN_ME_audit_save_every_table.sql` probes **all five
+writable audit tables, as every non-customer account**, and a failure names
+the auditor, the table and the SQLSTATE.
+
+Two things bring this back, and neither is visible to a check of the
+policies:
+
+- **An auditor who signed up after the last repair.** The gate reads
+  `shared_profiles`, so an account with no row there fails it — there is
+  nothing to read. Backfilling is a repair of today and the fault returns
+  the next time somebody is hired. The **signup trigger** is what closes
+  it, so section 1 installs `on_auth_user_created` rather than only filling
+  the gap it left.
+- **A policy added by hand in the dashboard.** A RESTRICTIVE one narrows
+  what every other policy allows, so one of them refuses every auditor
+  whatever else is right. The old file drops a LIST OF NAMES IT KNOWS,
+  which is how one survives every repair. The new one drops every policy on
+  these tables that is not one of the four this system owns — and **names
+  what it dropped** in the result, because a repair that quietly removes
+  somebody's decision is a worse thing than the fault.
+
+**And a fault no policy check can see at all** is a column added NOT NULL
+that no form writes: 23502, every save refused, every gate correct. Only a
+real insert finds it, which is the whole argument for probing rather than
+inspecting.
+
+One more thing, found while testing: the old file's last query names
+`storage.buckets` inside a `CASE`, and a database without the storage
+schema fails to **parse** it however well the branch is guarded. The answer
+is worked out in a `DO` block into a session setting instead, so the final
+query names no table that might not be there.
+
 ## An outbox is half of recording with no line. The LIST is the other half.
 
 The queue has always worked: an audit saved with no signal goes into
