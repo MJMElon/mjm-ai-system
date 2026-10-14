@@ -1313,6 +1313,57 @@ Two things that follow:
 
 `tests/history_is_a_window_not_a_count.cjs` guards all of it.
 
+## A walk recorded with the screen off is not recorded at all
+
+The same plot came back **2.63 km over 798 fixes** one day and **4 m over 2
+fixes** the next, and the office could not tell what made the difference.
+
+**A browser STOPS giving positions when the page is not on screen.** Not
+throttles — stops. So a track walked from a web page lives or dies on whether
+the screen stays awake, and the one lever for that is the screen wake lock.
+There is no way round it; only a native app can walk a track with the screen
+off.
+
+**And the browser takes that lock back the moment the page is hidden, without
+being asked and without saying so.** So `wakeLock.request()` called ONCE at
+Start is a lock that is gone for good after the first notification, app switch
+or glance away — and every metre after that moment is at the mercy of the
+display timeout. The phone sleeps, the fixes stop, and the map goes on looking
+exactly like a map that is recording.
+
+The Worker Portal had the full treatment, including a comment saying in as
+many words that asking once is asking for the first time only. **The FC
+Portal's track map had the one-line version** — request, `.catch(() => {})`,
+no reference, no listener. Two copies, one of them thinner, which is the shape
+of nearly every fault in this file.
+
+`src/lib/screenWake.js` is the one copy now and both call it. Two things in it
+that were learned the hard way and must not be simplified back out:
+
+- **The reference is forgotten on `hidden`**, not on the lock's own `release`
+  event. Waiting for the event left the reference set, so the re-ask returned
+  early and never asked at all.
+- **Every part of it is best effort.** The API is not on every phone and it can
+  refuse, and a walk must still record on one where it does.
+
+**And the map now says when the line has stopped growing**, because none of
+the above can make a fix arrive — what it can do is stop pretending one has.
+`STALL_AFTER_S` is 45: the phone gives a position every second or two in the
+open, so three quarters of a minute of nothing has never been the sky. The
+band is red, above the figures, because the figures look perfectly healthy
+while this is happening — they simply stop moving. The reason a fix was
+DROPPED (too rough, too still, too far to believe) is shown the same way; the
+Worker Portal has always shown it and the map never did.
+
+**What is still true and is not a bug:** the FC Portal records only while the
+full-screen map is open, and closing it loses the walk. That is worth changing
+the day somebody asks — the Worker Portal already runs its walk from the task
+row for exactly this reason — but it is a different fault from this one.
+
+`tests/the_screen_lock_is_asked_again.cjs` drives the real helper and holds
+the previous version up beside it: asked once, never again after the first
+time hidden, and nothing watching the page at all.
+
 ## Which nursery a record is in: the PLOT decides
 
 The plot is the thing that is somewhere. A maintenance record is wherever its
