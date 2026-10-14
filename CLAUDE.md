@@ -716,6 +716,108 @@ Four things in it:
 Diagnostics section 7 shows the same answer per table, and the red bar
 taps through to it.
 
+### And a proof of ONE table is not a proof
+
+It came back. The phone now reads
+
+    Not allowed to save to audit_plot_audits. Your login lacks database
+    permission (RLS)
+
+and `RUN_ME_auditor_can_save.sql` — the file written to settle exactly
+this — answers **six green lines while it is happening**. Its proof ends by
+inserting a row as each auditor and rolling it back, which is the right
+idea; it inserts into ONE table, `audit_maintenance_audits`, the one that
+was broken the day it was written. Reproduced on the scratch Postgres with
+Plot Condition refusing every save, it prints *auditors who could actually
+save just now: 4 of 4 -- OK*.
+
+**A probe is only a proof of the table it probes.** That is the same
+mistake the file itself was written to correct, moved one table along:
+*"a previous file reported four green lines over a database that refused
+every save."* `shared/RUN_ME_audit_save_every_table.sql` probes **all five
+writable audit tables, as every non-customer account**, and a failure names
+the auditor, the table and the SQLSTATE.
+
+Two things bring this back, and neither is visible to a check of the
+policies:
+
+- **An auditor who signed up after the last repair.** The gate reads
+  `shared_profiles`, so an account with no row there fails it — there is
+  nothing to read. Backfilling is a repair of today and the fault returns
+  the next time somebody is hired. The **signup trigger** is what closes
+  it, so section 1 installs `on_auth_user_created` rather than only filling
+  the gap it left.
+- **A policy added by hand in the dashboard.** A RESTRICTIVE one narrows
+  what every other policy allows, so one of them refuses every auditor
+  whatever else is right. The old file drops a LIST OF NAMES IT KNOWS,
+  which is how one survives every repair. The new one drops every policy on
+  these tables that is not one of the four this system owns — and **names
+  what it dropped** in the result, because a repair that quietly removes
+  somebody's decision is a worse thing than the fault.
+
+**And a fault no policy check can see at all** is a column added NOT NULL
+that no form writes: 23502, every save refused, every gate correct. Only a
+real insert finds it, which is the whole argument for probing rather than
+inspecting.
+
+One more thing, found while testing: the old file's last query names
+`storage.buckets` inside a `CASE`, and a database without the storage
+schema fails to **parse** it however well the branch is guarded. The answer
+is worked out in a `DO` block into a session setting instead, so the final
+query names no table that might not be there.
+
+### The first version of the new file then did it a third time
+
+It ran on the real database and printed
+
+    9 | saves that went through just now: 196 of 245 -- OK
+
+**196 of 245 is not OK.** Forty-nine saves — one table for every one of the
+forty-nine accounts — were refused, and the row said OK, which is the exact
+fault two files in a row have now been written to correct.
+
+Two bugs, and the second is the one that matters:
+
+- **A NULL wipes the line you are building up.** `shared_profiles.email` can
+  be empty, concatenating NULL gives NULL, and `set_config(name, NULL,
+  false)` BLANKS the setting. So the one account with no email erased every
+  reason collected before it. Every piece of a `set_config` line is
+  `COALESCE`d now, and an account with no email is named by its id.
+- **OK was decided on whether a REASON had been collected**, not on the
+  count. So wiping the reasons turned a failure into a pass. **OK is `pass =
+  total` and nothing else.** A count that does not add up is the fault,
+  whether or not anything managed to say why — and there is a per-table
+  tally beside it, so the table that refuses is named even when the reasons
+  are too long to print.
+
+**And dropping every policy that is not ours was over-reach.** It took out
+`nops_read_audit_verdicts`, which `RUN_ME_audit_column.sql` creates on
+purpose so the Work Maintenance page can read the verdicts. A PERMISSIVE
+policy cannot refuse anything — it is somebody opening a door — so only a
+**RESTRICTIVE** one is dropped now, and the permissive ones are named and
+LEFT ALONE. The file also puts `nops_read_audit_verdicts` back, so a run of
+it cannot take that door away again.
+
+### What it was, in the end — and a probe can accuse the wrong party
+
+The second run answered it. `audit_plot_audits` read **49 of 49**: the
+RESTRICTIVE policy the first run dropped was the whole of the fault the
+phone was showing, and Plot Condition has saved ever since.
+
+What was left read `audit_batches 0/49`, *23502 null value in column
+`batch_id`* — and **that one was the probe being wrong, not the database.**
+`audit_batches` takes a `batch_id` (`BTH-nursery-batch-plot`), the Papan
+form writes it on both of its insert paths, and the probe row here did not,
+because its column list was copied off the tail of that object literal
+rather than the whole of it.
+
+**A probe short of a column the FORM supplies accuses the database of the
+probe's own mistake** — and it does it in a row headed NOT OK, which is
+exactly how a real fault reads. So the result now carries **the columns
+that MUST be filled** on every table it probes, read out of
+`information_schema`: a 23502 names one of those, and that row is how you
+tell "a column no form writes" from "a column this file forgot".
+
 ## An outbox is half of recording with no line. The LIST is the other half.
 
 The queue has always worked: an audit saved with no signal goes into
