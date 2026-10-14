@@ -7,7 +7,15 @@
 
      Seeds In · Seed Audit · Planting & Damage · Transplanting · 1st Culling
 
-   2nd and 3rd Culling are deliberately not among them.
+   2nd Culling is deliberately not among them, and 3rd Culling only ever
+   reaches it one way: a drone-map question the report asked ITSELF — a plot
+   whose map does not tally with what was culled — which somebody has since
+   answered. Unanswered it is on the To Do List; answered it is a new claim
+   nobody has checked; tallying it has nothing to check at all.
+
+   And the list is the CHECKER'S: it answers "what is waiting for me to
+   sign", a question only somebody who may sign has. The chip is hidden
+   without that tick, and a session left on the tab is moved off it.
 
    Three rules it has to get right:
 
@@ -135,10 +143,30 @@ const rec = (batch) => ({ batch_name: batch, transaction_type: 'Seeds_Received',
                                                half of them is not
    408  1st Culling saved with no quantity
         and no date                         → a row that says nothing is not a
-                                               report somebody filled in       */
+                                               report somebody filled in
+   409  3rd Culling whose drone map does
+        not tally and nobody has explained  → NOT on the To Check list — it is
+                                               on the To Do List
+   410  the same, with the reason written   → 3rd Culling, because the answer
+                                               is a claim nobody has checked
+   411  3rd Culling whose map tallies       → nothing to check
+   412  the same gap, explained, and then
+        settled by an APPROVED adjustment
+        for the difference                  → off both lists: the office
+                                               accepted the answer and the two
+                                               sides now agree
+   413  the same, adjustment NOT approved   → still to check — an adjustment
+                                               nobody has ruled on moves no
+                                               figure
+   414  an unexplained gap settled by an
+        approved adjustment, with the
+        stale drone-map flag still there    → off the To Do List: the flag is
+                                               written and cleared by a save,
+                                               and the question was answered   */
 const ROWS = {
   shared_inventory_logs: [
     rec('401'), rec('402'), rec('403'), rec('404'), rec('405'), rec('406'), rec('407'), rec('408'),
+    rec('409'), rec('410'), rec('411'), rec('412'), rec('413'), rec('414'),
 
     { batch_name: '401', transaction_type: 'Seed_Audit', plot_name: 'bag-1', quantity_change: 500, remark: 'Seed audit.' },
     { batch_name: '401', transaction_type: 'Planted', plot_name: 'P1', quantity_change: 980 },
@@ -180,7 +208,41 @@ const ROWS = {
 
     // 408 — a 1st Culling row that exists and says nothing.
     { batch_name: '408', transaction_type: 'Planted', plot_name: 'P9', quantity_change: 400 },
-    { batch_name: '408', transaction_type: '1st_Culling', plot_name: 'P9', quantity_change: 0, remark: '1st culling.' }
+    { batch_name: '408', transaction_type: '1st_Culling', plot_name: 'P9', quantity_change: 0, remark: '1st culling.' },
+
+    // 409 — the drone map does not tally and nobody has said why.
+    { batch_name: '409', transaction_type: '3rd_Culling', plot_name: 'U9', quantity_change: 500,
+      remark: '3rd Culling. DestType: main MapQty: 540 CullDate:2026-06-01' },
+
+    // 410 — the same gap, with the reason written against it.
+    { batch_name: '410', transaction_type: '3rd_Culling', plot_name: 'U10', quantity_change: 500,
+      remark: '3rd Culling. DestType: main MapQty: 540 MismatchNote:Forty%20counted%20twice CullDate:2026-06-01' },
+
+    // 411 — the map tallies, so there was never a question.
+    { batch_name: '411', transaction_type: '3rd_Culling', plot_name: 'U11', quantity_change: 500,
+      remark: '3rd Culling. DestType: main MapQty: 500 CullDate:2026-06-01' },
+
+    /* 412 — explained, and then settled: +40 approved against the plot, so
+       500 + 40 is the 540 the drone map counted. The culling row itself has
+       not moved and never will; the adjustment is what closes it. */
+    { batch_name: '412', transaction_type: '3rd_Culling', plot_name: 'U12', quantity_change: 500,
+      remark: '3rd Culling. DestType: main MapQty: 540 MismatchNote:Forty%20more%20found CullDate:2026-06-01' },
+    { batch_name: '412', transaction_type: 'Stock_Calibration', plot_name: 'U12', quantity_change: 40,
+      remark: 'Report: 3rd Culling. Plot: U12. Forty more found on the recount. [APPROVED by esther on 2026-07-01]' },
+
+    // 413 — the same adjustment, nobody has ruled on it.
+    { batch_name: '413', transaction_type: '3rd_Culling', plot_name: 'U13', quantity_change: 500,
+      remark: '3rd Culling. DestType: main MapQty: 540 MismatchNote:Forty%20more%20found CullDate:2026-06-01' },
+    { batch_name: '413', transaction_type: 'Stock_Calibration', plot_name: 'U13', quantity_change: 40,
+      remark: 'Report: 3rd Culling. Plot: U13. Forty more found on the recount.' },
+
+    // 414 — settled, with the save-written flag left behind.
+    { batch_name: '414', transaction_type: '3rd_Culling', plot_name: 'U14', quantity_change: 500,
+      remark: '3rd Culling. DestType: main MapQty: 540 CullDate:2026-06-01' },
+    { batch_name: '414', transaction_type: 'Stock_Calibration', plot_name: 'U14', quantity_change: 40,
+      remark: 'Report: 3rd Culling. Plot: U14. Recount. [APPROVED by esther on 2026-07-01]' },
+    { batch_name: '414', transaction_type: 'Review_Rejection', plot_name: 'cull_3', quantity_change: 0,
+      remark: '3rd Culling map qty does not tally — 1 plot(s) to explain. U14: 3rd culled 500, drone map 540 (+40)' }
   ],
   operation_batch_verifications: [
     { id: 1, batch_name: '402', stage: 'seeds_in' },
@@ -193,7 +255,13 @@ const ROWS = {
     { id: 8, batch_name: '406', stage: 'seeds_in' },
     { id: 9,  batch_name: '407', stage: 'seeds_in' },
     { id: 10, batch_name: '408', stage: 'seeds_in' },
-    { id: 11, batch_name: '408', stage: 'planting' }
+    { id: 11, batch_name: '408', stage: 'planting' },
+    { id: 12, batch_name: '409', stage: 'seeds_in' },
+    { id: 13, batch_name: '410', stage: 'seeds_in' },
+    { id: 14, batch_name: '411', stage: 'seeds_in' },
+    { id: 15, batch_name: '412', stage: 'seeds_in' },
+    { id: 16, batch_name: '413', stage: 'seeds_in' },
+    { id: 17, batch_name: '414', stage: 'seeds_in' }
   ],
   shared_do_records: [],
   operation_trays: [],
@@ -256,6 +324,20 @@ const ROWS = {
     switchListTab('amendment');
     await new Promise(r => setTimeout(r, 250));
     const amend = [...document.querySelectorAll('#ledger-body tr')].map(r => (r.children[0]?.textContent || '').trim());
+    window.__TODO = {
+      chip:  (document.getElementById('tab-amendment') || {}).innerText || '',
+      head:  [...document.querySelectorAll('#ledger-head-row th')].map(t => t.innerText.trim()),
+      /* The chips in the cell are the way IN: each one opens the batch on
+         the report it names. What is checked is the call they make, not the
+         navigation, which would take the page away from under the test. */
+      /* The To Do cell only — the row also carries a delete button, and
+         counting that one in would make "every chip is a way in" false for
+         a reason that has nothing to do with this. */
+      chips: [...document.querySelectorAll('#ledger-body td:nth-child(3) button')]
+               .map(b => b.getAttribute('onclick') || ''),
+      row:   (document.querySelector('#ledger-body tr') || {}).getAttribute
+               ? document.querySelector('#ledger-body tr').getAttribute('onclick') : ''
+    };
     switchListTab('active');
     await new Promise(r => setTimeout(r, 250));
     const active = [...document.querySelectorAll('#ledger-body tr')].map(r => (r.children[0]?.textContent || '').trim());
@@ -273,11 +355,14 @@ const ROWS = {
   const batchesListed = listed.rows.map(r => r[0]);
   const cellOf = (n) => (listed.rows.find(r => r[0] === n) || [])[2] || '';
 
+  const todo = await page.evaluate(() => window.__TODO);
+  console.log('to do      :', JSON.stringify(todo));
+
   const checks = [
     // ── the chip
     ['the chip is there', chip.there === true],
     ['called To Check List', /to check list/i.test(chip.label)],
-    ['sitting beside Amendment Needed', chip.afterAmendment === true],
+    ['sitting beside the To Do List', chip.afterAmendment === true],
     ['and lights up when chosen', listed.lit === true],
     ['with a column saying which report is waiting',
       listed.head.some(h => /waiting to be checked/i.test(h))],
@@ -308,7 +393,7 @@ const ROWS = {
       batchesListed.includes('405') && others.amend.includes('405')
       && cellOf('405').includes('1st Culling') && !cellOf('405').includes('Transplanting')],
 
-    ['2nd and 3rd Culling are out of scope',
+    ['2nd Culling is out of scope, and a 3rd that tallies asked nothing',
       JSON.stringify(computed['406']) === JSON.stringify([]) && !batchesListed.includes('406')],
 
     // ── a sign-off comes two ways
@@ -326,10 +411,41 @@ const ROWS = {
       JSON.stringify(computed['408']) === JSON.stringify([])],
     ['so that batch is not on the list at all', !batchesListed.includes('408')],
 
+    // ── 3rd Culling, by the one route it has
+    ['a drone map nobody has explained is NOT waiting to be checked',
+      JSON.stringify(computed['409']) === JSON.stringify([])],
+    ['explaining it makes the answer something to check',
+      JSON.stringify(computed['410']) === JSON.stringify(['cull_3'])],
+    ['and it is named on the list as 3rd Culling',
+      batchesListed.includes('410') && cellOf('410').includes('3rd Culling')],
+    ['a drone map that tallies asked nothing in the first place',
+      JSON.stringify(computed['411']) === JSON.stringify([])],
+
+    // ── and the adjustment that settles it takes it off both lists
+    ['an approved adjustment for the difference closes it',
+      JSON.stringify(computed['412']) === JSON.stringify([])],
+    ['so the batch is on neither list',
+      !batchesListed.includes('412') && !others.amend.includes('412')],
+    ['one nobody has approved settles nothing',
+      JSON.stringify(computed['413']) === JSON.stringify(['cull_3'])],
+    ['a drone-map flag the save left behind is not work to do',
+      !others.amend.includes('414')],
+
+    // ── the To Do List says what it is, and takes you to the work
+    ['the red list is called the To Do List', /to do list/i.test(todo.chip)],
+    // innerText comes back CSS-transformed, so the heading reads TO DO.
+    ['its column is headed To Do', todo.head.includes('TO DO')],
+    ['each report named is a way in to that report',
+      todo.chips.length > 0 && todo.chips.every(c => /openBatchDetail\('405', 'transplanting'\)/.test(c))],
+    ['…and does not also fire the row underneath it',
+      todo.chips.every(c => /stopPropagation/.test(c))],
+    ['the row itself goes to the first thing outstanding',
+      /openBatchDetail\('405', 'transplanting'\)/.test(todo.row || '')],
+
     // ── the other tabs are untouched
-    ['Amendment Needed still lists only the rejected batch',
+    ['the To Do List still lists only the batch with work on it',
       JSON.stringify(others.amend) === JSON.stringify(['405'])],
-    ['Active still lists every unfinished batch', others.active.length === 8],
+    ['Active still lists every unfinished batch', others.active.length === 14],
     ['and gets its own columns back', others.headBack.some(h => /planted/i.test(h))],
     ['no page errors', errs.length === 0],
   ];

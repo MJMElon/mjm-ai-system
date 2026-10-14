@@ -14513,9 +14513,72 @@ Thank you.`;
 
             await initDetail();
             syncBatchHeader();
-            MJMReview.boot();
+            /* ONE STEP FAILING MUST NOT TAKE THE ONES AFTER IT DOWN.
+
+               These run in an async callback with nothing catching it, so a
+               throw here is an unhandled rejection: the console gets it and
+               the page simply stops part-built. That is how the To Do List's
+               link came to land on Tab 1 -- the review banners threw first
+               and openRequestedStage below was never reached, with nothing
+               on screen saying why. */
+            try { MJMReview.boot(); }
+            catch (e) { console.warn('[review] the banners could not be drawn:', e); }
+            try { openRequestedStage(); }
+            catch (e) { console.warn('[batch] could not open the requested stage:', e); }
         });
+
+        /* ARRIVING ON THE TAB THAT NEEDS THE WORK.
+
+           The batch list's To Do List names the report that is waiting — a
+           tab HQ sent back, or a drone map whose figure does not tally — and
+           a link that lands on Tab 1 leaves the person to find it. So the
+           list passes the stage in the address and this puts them on it, and
+           on the PANEL inside it where the answer goes when the tab has one.
+
+           The stage keys are STAGE_BY_TAB's own, read the other way round,
+           plus Adjustments, which has no review banner and so is not in it.
+           Nothing happens when the address says nothing: an ordinary open is
+           still an ordinary open. */
+        const TAB_OF_STAGE = { seeds_in: 1, planting: 2, transplanting: 3, cull_1: 4,
+                               cull_2: 5, cull_3: 6, seed_audit: 8, adjustments: 7 };
+        // Where inside the tab the thing to answer actually is.
+        const PANEL_OF_STAGE = { planting: 't2-gap-panel', cull_3: 't6-mismatch-panel' };
+        function openRequestedStage() {
+            const want = String(params.get('stage') || '').trim().toLowerCase();
+            const tab = TAB_OF_STAGE[want];
+            if (!tab) return;
+            try { switchTab(tab); } catch (e) { console.warn('[batch] could not open tab', tab, e); }
+            const panelId = PANEL_OF_STAGE[want];
+            if (!panelId) return;
+            /* The tab fills itself asynchronously, so the panel may not be on
+               screen yet — and a panel with nothing to answer stays hidden,
+               which is the right outcome too: the person is on the right tab
+               and there is simply nothing to explain any more. */
+            let tries = 0;
+            const look = () => {
+                const el = document.getElementById(panelId);
+                if (el && !el.classList.contains('hidden')) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.classList.add('mjm-flash');
+                    setTimeout(() => el.classList.remove('mjm-flash'), 2400);
+                    return;
+                }
+                if (++tries < 20) setTimeout(look, 300);
+            };
+            setTimeout(look, 300);
+        }
     </script>
+
+    <style>
+      /* Two seconds of a ring round the panel somebody was sent to. Long
+         enough to find it on a tab with three other cards on it, short
+         enough not to become part of the furniture. */
+      .mjm-flash { animation: mjmFlash 1.2s ease-in-out 2; }
+      @keyframes mjmFlash {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(240, 180, 41, 0); }
+        50%      { box-shadow: 0 0 0 6px rgba(240, 180, 41, .55); }
+      }
+    </style>
 
     <!-- ── Per-tab review locks (added for review/access feature) ──────── -->
     <script>

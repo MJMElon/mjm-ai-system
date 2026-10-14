@@ -794,6 +794,46 @@ function payrollRowsFor(type) {
 }
 function payrollRows() { return payrollRowsFor(_payrollView); }
 
+/* A PLOT IS NOT BROKEN ACROSS TWO PAGES.
+
+   Rows come out of payrollRowsFor sorted by plot and then by the day, so a
+   plot is a RUN of consecutive rows. Breaking in the middle of one puts half
+   of N15 at the foot of a page and the rest overleaf, and whoever is checking
+   that plot has to carry a running total across the turn -- which is exactly
+   the adding up a printed sheet exists to save.
+
+   So the break is taken BEFORE a run, never inside it, and the whole plot
+   goes over together. A run too tall for a page of its own still has to split
+   somewhere, and the page edge is the only honest place; that is the second
+   test here, and it is also what keeps a long run from looping for ever
+   looking for a page it would fit on.
+
+   Pure on purpose: rows in, the page number each one lands on out, so the
+   rule can be driven without a PDF. tests/payroll_pdf_layout.cjs does. */
+function payrollPlotPages(rows, o) {
+  const rowH = o.rowH, floor = o.floor, freshY = o.freshY;
+  const runLen = [];
+  for (let i = rows.length - 1; i >= 0; i--) {
+    runLen[i] = (i + 1 < rows.length && rows[i + 1].plot === rows[i].plot)
+      ? runLen[i + 1] + 1 : 1;
+  }
+  const page = [];
+  let p = 0, y = o.firstY;
+  rows.forEach((r, i) => {
+    const startsRun = i === 0 || rows[i - 1].plot !== r.plot;
+    const runH = runLen[i] * rowH;
+    // The first row never forces a break: there is no page before it to break
+    // from, and a run too tall for any page would otherwise start on a blank.
+    if (i > 0 && ((startsRun && runLen[i] > 1 && y + runH > floor && freshY + runH <= floor)
+                  || y + rowH > floor)) {
+      p++; y = freshY;
+    }
+    page[i] = p;
+    y += rowH;
+  });
+  return page;
+}
+
 /* Capacity, as a figure somebody can check.
    A plot's quantity divided among the people who worked it rarely comes out
    whole — 2,200 across three is 733.33 — and rounding it to 733 on screen
@@ -837,6 +877,7 @@ function payrollTotalsFor(type) {
 function renderPayroll() {
   const tbl = document.getElementById('payroll-table');
   if (!tbl) return;
+  if (_payrollView === 'loading_seedlings') { renderLoadingSeedlingsPayroll(); return; }
   resolveWorkers();                      // the month decides who has a column
   const n = getNursery(), m = getMonth();
   const cfg = PAYROLL_TYPES[_payrollView];
@@ -1014,6 +1055,234 @@ function persistPayroll(n, m, type) {
 }
 /* Sheets whose last save was refused, so the screen can say so. */
 let _payrollSaveErr = {};
+
+/* ── LOADING SEEDLINGS — a 5th Worker Record sheet, sourced from DOs ──
+
+   The other four sheets are built from nops_maint_field_records, one row
+   per scheduled round, and payroll ticks live in nops_maint_payroll
+   because the record's own figure (Checked) is a separate freeze from
+   who-was-ticked. A Delivery Order has no round, no schedule and no
+   Checked figure to freeze a SEPARATE tick table against — total_qty IS
+   the measured fact, not a live-ledger formula — so the single source of
+   truth for both the tick AND the lock is the DO row itself
+   (shared_do_records.worked_by_by_nursery / worked_by_locked_at/by),
+   written directly by both this screen and the DO Signing phone app.
+   Reusing payrollRowsFor/renderPayroll's `records`-shaped rows here would
+   mean inventing fake plot/jenis/checked fields for something that is
+   not one — this sheet is deliberately a parallel, independent path
+   rather than bent to fit the other four's shape. */
+
+const DO_NOT_CANCELLED = '("Cancelled")';
+let _doRecordsCache = {};   // `${nursery}_${month}` -> shared_do_records rows
+let _doRecordsLoading = {}; // `${nursery}_${month}` -> bool
+let _doRecordsErr = {};     // `${nursery}_${month}` -> message
+
+function _doPayrollKey(n, m) { return `${n}_${m}`; }
+
+// shared_do_records has no worker-tick save debounce of its own yet —
+// one timer per DO row, same reasoning payrollKey's own comment gives for
+// one timer per sheet: a shared timer would cancel an in-flight save for
+// a different DO the moment a second row is ticked.
+let _doSaveTimers = {};
+
+async function loadDoRecordsForPayroll(n, m) {
+  if (!_supabase) return;
+  const key = _doPayrollKey(n, m);
+  const input = monthLabelToInput(m); // "Sep 2026" -> "2026-09"
+  if (!input) return;
+  const [y, mo] = input.split('-').map(Number);
+  const start = `${input}-01`;
+  const endDate = new Date(y, mo, 0); // day 0 of next month = last day of this one
+  const end = `${input}-${String(endDate.getDate()).padStart(2, '0')}`;
+
+  _doRecordsLoading[key] = true;
+  _doRecordsErr[key] = '';
+  renderPayroll();
+
+  const { data, error } = await _supabase
+    .from('shared_do_records')
+    .select('id, do_number, al_number, delivery_date, total_qty, remark, status, plot_1, plot_2, plot_3, plot_4, plot_5, qty_1, qty_2, qty_3, qty_4, qty_5, worked_by_by_nursery, worked_by_locked_at, worked_by_locked_by')
+    .gte('delivery_date', start)
+    .lte('delivery_date', end)
+    .not('status', 'in', DO_NOT_CANCELLED)
+    .order('delivery_date', { ascending: true });
+
+  _doRecordsLoading[key] = false;
+  if (error) {
+    _doRecordsErr[key] = error.message;
+    renderPayroll();
+    return;
+  }
+  _doRecordsCache[key] = data || [];
+  renderPayroll();
+}
+
+/* The qty a DO contributed to ONE nursery — a DO's five item rows can span
+   more than one, same reasoning DoSigning.jsx's own nurseriesOfDO carries
+   (see Mobile repo). plot_N resolves to its nursery through NURSERY_PLOTS,
+   the same list the rest of this page already keys every plot off. */
+function _doQtyForNursery(d, n) {
+  const plots = new Set(NURSERY_PLOTS[n] || []);
+  let qty = 0;
+  for (let i = 1; i <= 5; i++) {
+    const plot = d[`plot_${i}`];
+    if (plot && plots.has(plot)) qty += Number(d[`qty_${i}`]) || 0;
+  }
+  return qty;
+}
+
+function loadingSeedlingsRows(n, m) {
+  const rows = _doRecordsCache[_doPayrollKey(n, m)] || [];
+  return rows
+    .map(d => ({ d, qty: _doQtyForNursery(d, n) }))
+    .filter(x => x.qty > 0)
+    .sort((a, b) => String(a.d.delivery_date || '').localeCompare(String(b.d.delivery_date || '')));
+}
+
+function _doLocked(d) { return !!(d && d.worked_by_locked_at) && !isNopsAdmin; }
+
+function _denyDoLocked() {
+  alert('This DO is locked, so its workers are locked too.\n\nAsk an admin to change it.');
+}
+
+function toggleDoWorkerTick(doId, nKey, worker) {
+  const n = getNursery(), m = getMonth();
+  const key = _doPayrollKey(n, m);
+  const rows = _doRecordsCache[key] || [];
+  const d = rows.find(x => x.id === doId);
+  if (!d) return;
+  if (_doLocked(d)) { _denyDoLocked(); return; }
+  const by = { ...(d.worked_by_by_nursery || {}) };
+  const cur = by[nKey] || [];
+  by[nKey] = cur.includes(worker) ? cur.filter(x => x !== worker) : [...cur, worker];
+  d.worked_by_by_nursery = by;
+  renderPayroll();
+  persistDoWorkerTick(d);
+}
+
+function persistDoWorkerTick(d) {
+  if (!_supabase || !_dbReady) return;
+  clearTimeout(_doSaveTimers[d.id]);
+  _doSaveTimers[d.id] = setTimeout(() => {
+    delete _doSaveTimers[d.id];
+    _supabase.from('shared_do_records')
+      .update({ worked_by_by_nursery: d.worked_by_by_nursery || {} })
+      .eq('id', d.id)
+      .then(({ error }) => {
+        if (error) console.warn('[maint] DO worker tick save failed:', error.message);
+      });
+  }, 400);
+}
+
+function lockDoWorkers(doId) {
+  const n = getNursery(), m = getMonth();
+  const rows = _doRecordsCache[_doPayrollKey(n, m)] || [];
+  const d = rows.find(x => x.id === doId);
+  if (!d || _doLocked(d)) return;
+  const who = window.currentUserEmail || 'office';
+  if (!confirm('Lock the workers ticked for ' + (d.do_number || 'this DO') + '?\n\n'
+    + 'Nobody can change them after this except an admin.')) return;
+  const nowIso = new Date().toISOString();
+  d.worked_by_locked_at = nowIso;
+  d.worked_by_locked_by = who;
+  renderPayroll();
+  _supabase.from('shared_do_records')
+    .update({ worked_by_by_nursery: d.worked_by_by_nursery || {}, worked_by_locked_at: nowIso, worked_by_locked_by: who })
+    .eq('id', doId)
+    .then(({ error }) => {
+      if (error) {
+        console.warn('[maint] DO lock failed:', error.message);
+        d.worked_by_locked_at = null;
+        d.worked_by_locked_by = null;
+        renderPayroll();
+      }
+    });
+}
+
+function renderLoadingSeedlingsPayroll() {
+  const tbl = document.getElementById('payroll-table');
+  if (!tbl) return;
+  resolveWorkers();
+  const n = getNursery(), m = getMonth();
+  const key = _doPayrollKey(n, m);
+  const line = document.getElementById('payroll-form-line');
+  if (line) line.textContent = `${t('pay.form')} (${NURSERY_NAMES[n]}) — ${t('pay.month')} ${m}`;
+  const hint = document.getElementById('payroll-hint');
+  if (hint) { hint.textContent = t('pay.loadingHint'); hint.classList.remove('pay-hint-warn'); }
+  const off = document.getElementById('payroll-offreg');
+  if (off) { off.style.display = 'none'; }
+
+  if (_doRecordsCache[key] === undefined && !_doRecordsLoading[key]) {
+    loadDoRecordsForPayroll(n, m);
+  }
+
+  const wk = workers[n] || [];
+  if (_doRecordsLoading[key]) {
+    tbl.innerHTML = `<tbody><tr><td style="padding:2rem;text-align:center;color:var(--text-faint);font-size:13px;">${t('pay.loading')}</td></tr></tbody>`;
+    return;
+  }
+  if (_doRecordsErr[key]) {
+    tbl.innerHTML = `<tbody><tr><td style="padding:2rem;text-align:center;color:var(--danger,#c0392b);font-size:13px;">${esc(_doRecordsErr[key])}</td></tr></tbody>`;
+    return;
+  }
+  if (!wk.length) {
+    tbl.innerHTML = `<tbody><tr><td style="padding:2rem;text-align:center;color:var(--text-faint);font-size:13px;">${t('pay.noWorkers')}</td></tr></tbody>`;
+    return;
+  }
+
+  const rows = loadingSeedlingsRows(n, m);
+  const payTh = (txt, w, cls) =>
+    `<th class="${cls || ''}" style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
+  let h = `<thead>
+    <tr><th class="wk-th" colspan="${4 + wk.length + 1}">${t('tab.loadingSeedlings')}</th></tr>
+    <tr>
+      ${payTh(t('pay.date'), 92)}
+      ${payTh(t('pay.customer'), 140)}
+      ${payTh(t('pay.doNumber'), 96)}
+      ${payTh(t('pay.qtyLoaded'), 108)}
+      ${wk.map(w => payTh(w, 108)).join('')}
+      ${payTh(t('pay.perWorker'), 112)}
+    </tr></thead><tbody>`;
+
+  const totals = {}; wk.forEach(w => totals[w] = 0);
+  let capTotal = 0;
+
+  if (!rows.length) {
+    h += `<tr><td colspan="${4 + wk.length + 1}" style="padding:1.6rem;text-align:center;color:var(--text-faint);">${t('pay.noDOs')}</td></tr>`;
+  } else {
+    rows.forEach(({ d, qty }) => {
+      const cells = (d.worked_by_by_nursery || {})[n] || [];
+      const ticked = wk.filter(w => cells.includes(w));
+      const share = ticked.length ? qty / ticked.length : 0;
+      ticked.forEach(w => { totals[w] += share; });
+      capTotal += qty;
+      const locked = _doLocked(d);
+      const lockTitle = d.worked_by_locked_at
+        ? t('pay.doLocked', { who: d.worked_by_locked_by || 'someone', when: new Date(d.worked_by_locked_at).toLocaleString('en-MY') })
+        : '';
+      h += `<tr${locked ? ' class="pay-row-locked"' : ''}>
+        <td style="font-weight:600;white-space:nowrap;">${d.delivery_date ? new Date(d.delivery_date).toLocaleDateString('en-MY') : '—'}</td>
+        <td class="plot-td">${esc(d.remark || '—')}</td>
+        <td>${esc(d.do_number || '—')}${d.worked_by_locked_at ? ' 🔒' : ''}</td>
+        <td>${qty.toLocaleString()}</td>
+        ${wk.map(w => `<td class="check-td${cells.includes(w) ? ' ticked' : ''}${locked ? ' locked' : ''}" onclick="${locked ? '_denyDoLocked()' : `toggleDoWorkerTick(${d.id},'${n}','${String(w).replace(/'/g, "\\'")}')`}" title="${locked ? lockTitle + ' — ' + w : w}"></td>`).join('')}
+        <td style="font-weight:700;">${capFmt(share)}
+          ${!d.worked_by_locked_at && cells.length ? `<button class="btn btn-sm" style="margin-left:6px;font-size:10px;padding:2px 8px;" onclick="lockDoWorkers(${d.id})" title="Lock these workers — only an admin can change them after">🔒</button>` : ''}
+        </td>
+      </tr>`;
+    });
+  }
+
+  const grand = wk.reduce((sum, w) => sum + totals[w], 0);
+  h += `</tbody><tfoot>
+    <tr class="jumlah-tr">
+      <td class="th-left" colspan="3">${t('pay.totalCap')}</td>
+      <td>${capTotal ? capTotal.toLocaleString() : '—'}</td>
+      ${wk.map(w => `<td>${capFmt(totals[w])}</td>`).join('')}
+      <td>${capFmt(grand)}</td></tr>
+  </tfoot>`;
+  tbl.innerHTML = h;
+}
 
 /* Print a piece rate at its real precision. Forcing 2 decimals showed a rate
    of 0.015 as "0.01" while the money column was still worked out from 0.015,
@@ -1217,9 +1486,18 @@ function downloadPayrollPDF() {
         cell(MARGIN, y, CONTENT_W, 14, t('pay.noRows'), { size: 9 });
         y += 14;
       } else {
+        /* Where the page breaks fall, worked out before a single row is
+           drawn — see payrollPlotPages. FLOOR leaves room for the total row
+           and the footer note; FRESH_Y is where a new page starts its first
+           row, the title block and the column heads being redrawn on it. */
+        const pageOf = payrollPlotPages(rows, {
+          rowH:   ROW_H,
+          floor:  PH - MARGIN - 26,
+          firstY: y,
+          freshY: MARGIN + 27 + 9 + HEAD_H
+        });
         rows.forEach((r, ri) => {
-          // Reserve room for the total row and the footer note.
-          if (y + ROW_H > PH - MARGIN - 26) {
+          if (ri > 0 && pageOf[ri] !== pageOf[ri - 1]) {
             doc.addPage();
             y = titleBlock(t(cfg.label), part);
             drawHead();
@@ -1852,10 +2130,15 @@ const I18N = {
     'btn.reset':'↺ Reset to Defaults', 'btn.clearAll':'Clear All', 'btn.selectAll':'Select All',
     'sched.ticked':'ticked', 'sched.none':'not set yet',
     'tab.pd':'P & D — Spraying', 'tab.manuring':'Manuring', 'tab.weeding':'Weeding',
-    'tab.interrow':'Interrow Spray', 'tab.record':'Maintenance Work Record', 'tab.chart':'Analytics', 'tab.schedule':'Monthly Maintenance Schedule', 'tab.payroll':'Worker Record', 'tab.setting':'Setting',
+    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.record':'Maintenance Work Record', 'tab.chart':'Analytics', 'tab.schedule':'Monthly Maintenance Schedule', 'tab.payroll':'Worker Record', 'tab.setting':'Setting',
     'pay.form':'Worker Record', 'pay.month':'Month', 'pay.date':'Date', 'pay.plot':'Plot',
     'pay.plotCap':'Plot Capacity (seedlings)', 'pay.perWorker':'Capacity per Worker (seedlings)',
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
+    'pay.customer':'Customer', 'pay.doNumber':'DO Number', 'pay.qtyLoaded':'Qty Loaded (seedlings)',
+    'pay.noDOs':'No Delivery Order has been issued for this nursery this month yet.',
+    'pay.loadingHint':'Ticks come from the driver’s phone when the DO is signed, or from here if nobody has ticked it yet. Once saved, a row locks — only an admin can change it after that.',
+    'pay.doLocked':'Locked — saved by {who} on {when}. Only an admin can change this.',
+    'pay.loading':'Loading…',
     'pay.noWorkers':'No general worker is on the Worker System register for this nursery yet. Add them on the 555 Worker Portal\u2019s Manage page and they will appear here.',
     'pay.linkedNote':'Worker names come from the Worker System on the 555 Worker Portal\u2019s Manage page and follow any change made there.',
     /* The other half of the same sentence. A sheet on the module's own old
@@ -1979,10 +2262,15 @@ const I18N = {
     'btn.reset':'↺ Set Semula', 'btn.clearAll':'Kosongkan', 'btn.selectAll':'Pilih Semua',
     'sched.ticked':'ditanda', 'sched.none':'belum ditetapkan',
     'tab.pd':'P & D — Racun', 'tab.manuring':'Membaja', 'tab.weeding':'Merumput',
-    'tab.interrow':'Racun Selingan', 'tab.record':'Rekod Kerja Penyelenggaraan', 'tab.chart':'Analitik', 'tab.schedule':'Jadual Penyelenggaraan Bulanan', 'tab.payroll':'Rekod Pekerja', 'tab.setting':'Tetapan',
+    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.record':'Rekod Kerja Penyelenggaraan', 'tab.chart':'Analitik', 'tab.schedule':'Jadual Penyelenggaraan Bulanan', 'tab.payroll':'Rekod Pekerja', 'tab.setting':'Tetapan',
     'pay.form':'Rekod Pekerja', 'pay.month':'Bulan', 'pay.date':'Tarikh', 'pay.plot':'Plot',
     'pay.plotCap':'Kapasiti plot (bibit)', 'pay.perWorker':'Kapasiti Kerja Setiap Orang (bibit)',
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
+    'pay.customer':'Pelanggan', 'pay.doNumber':'Nombor DO', 'pay.qtyLoaded':'Kuantiti Dimuat (bibit)',
+    'pay.noDOs':'Belum ada Delivery Order dikeluarkan untuk nurseri ini bulan ini.',
+    'pay.loadingHint':'Tanda datang daripada telefon pemandu semasa DO ditandatangan, atau dari sini jika belum ditanda lagi. Setelah disimpan, baris dikunci — hanya admin boleh menukarnya selepas itu.',
+    'pay.doLocked':'Dikunci — disimpan oleh {who} pada {when}. Hanya admin boleh menukarnya.',
+    'pay.loading':'Memuatkan…',
     'pay.noWorkers':'Belum ada pekerja am untuk nurseri ini dalam daftar Worker System. Tambah di halaman Manage Portal 555 FC dan nama akan muncul di sini.',
     'pay.linkedNote':'Nama pekerja diambil daripada Worker System di halaman Manage Portal 555 FC dan mengikut sebarang pindaan di sana.',
     'pay.notLinkedNote':'Nama ini adalah senarai lama modul ini \u2014 {nursery} TIDAK mengambil daripada Worker System. Pastikan pekerjanya difailkan di bawah nurseri itu dan dikira sebagai pekerja am di halaman Manage Portal 555 FC.',

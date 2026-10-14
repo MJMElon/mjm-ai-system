@@ -212,10 +212,83 @@
     return clean;
   }
 
+  /* ── WHICH ROUND IS BEING ASKED FOR RIGHT NOW ──────────────────────
+     A module page used to mark a batch green the moment it had ANY audit
+     against it, ever: `const done = !!audit`. So a batch audited once in
+     round 2 read as done in round 3, and in every round after it, for
+     ever. The auditor opened the plot, saw three green cards, and the
+     to-do list went on asking for that plot with nothing on the plot
+     page to say which batch it meant. The to-do list was right; the
+     plot page was the one not saying enough.
+
+     This is the range the to-do list is asking about: the LATEST window
+     whose first day has arrived, searched back through the months, with
+     the upper bound running to today once the window has closed — the
+     same rule as winRange() in audit_home.html, for the same reason. An
+     overdue round is cleared by the work, not by the calendar.
+
+     A day in a window is clamped to the real last day of the month, so
+     "the 30th" lands in February rather than vanishing.
+
+     Returns null when the module has no rounds at all, which is how
+     "we do not run that audit here" is said — the caller then falls
+     back to asking whether there is any audit, which is what every
+     page did before this existed. */
+  function currentWindow(scope, mod, todayISO) {
+    const wins = windows(scope, mod);
+    if (!wins.length) return null;
+    const today = String(todayISO || '').slice(0, 10);
+    if (today.length !== 10) return null;
+    const y0 = Number(today.slice(0, 4)), m0 = Number(today.slice(5, 7)) - 1;
+    const iso = (y, m, d) => y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    const lastDay = (y, m) => new Date(y, m + 1, 0).getDate();
+
+    /* Back far enough to find a round even on a module whose only window
+       is early in the month and a nursery nobody has been to since. */
+    for (let back = 0; back < 13; back++) {
+      const d = new Date(y0, m0 - back, 1);
+      const y = d.getFullYear(), m = d.getMonth(), last = lastDay(y, m);
+      for (let i = wins.length - 1; i >= 0; i--) {
+        const w = wins[i];
+        const startISO = iso(y, m, Math.min(w[0], last));
+        const endISO   = iso(y, m, Math.min(w[1], last));
+        if (startISO > today) continue;          // has not opened yet
+        return { fromISO: startISO,
+                 toISO:   endISO >= today ? endISO : today,
+                 round:   wins.length > 1 ? (i + 1) : 0,
+                 rounds:  wins.length,
+                 dueISO:  endISO };
+      }
+    }
+    return null;
+  }
+
+  /* ── WHICH ROUND AN AUDIT ANSWERED, AND WHETHER IT WAS LATE ───────
+     A record dated 1 October is not an October audit. The round that
+     was open on the 1st was September round 3 -- its window was the
+     30th, and it stays open until somebody does the work, which is the
+     whole of the overdue rule. So the record IS the 30 Sep audit; the
+     auditor was simply a day late with it.
+
+     Nothing said so. The card printed "01 Oct 2026" and the reader was
+     left to work out which round that answered, which is the same
+     arithmetic that made the board look wrong in the first place.
+
+     It is the same question currentWindow already answers, asked on the
+     DAY OF THE AUDIT rather than on today -- so there is one rule and
+     not two. `late` is the audit landing after that window closed. */
+  function roundOf(scope, mod, dateISO) {
+    const d = String(dateISO || '').slice(0, 10);
+    if (d.length !== 10) return null;
+    const w = currentWindow(scope, mod, d);
+    if (!w) return null;
+    return { round: w.round, rounds: w.rounds, dueISO: w.dueISO, late: d > w.dueISO };
+  }
+
   global.MJMAuditSettings = {
     load, save, current, defaults, normalise,
     error: () => lastError,
-    windows, maintDays, ages, ageAllowed, ageMonths,
+    windows, currentWindow, roundOf, maintDays, ages, ageAllowed, ageMonths,
     MODULES, SCOPES, WORKTYPES,
     DEFAULT_SCHEDULE, DEFAULT_MAINT
   };

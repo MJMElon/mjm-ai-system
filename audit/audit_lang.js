@@ -45,6 +45,11 @@ const TRANSLATIONS = {
     home_history_title:      'Audit History',
     home_history_loading:    'Loading history…',
     home_history_empty:      'No audits filed this month.',
+    /* A round this month owed and did not get inside its window. The
+       work has since been done -- that is why it left the to-do list --
+       and this is what keeps the fact that it was late. */
+    home_history_missed:     'Missed audit',
+    home_history_missed_head:'Missed this month',
     /* === NURSERY CHOOSER + SCHEDULE BOARD === */
     ask_nursery:      'Which nursery are you auditing today?',
     pre_nursery:      'Pre Nursery',
@@ -112,6 +117,42 @@ const TRANSLATIONS = {
        list-count header on the Plot Condition audit. Kept short so
        "0 / 6 audited" reads at a glance in either language. */
     audited:                 'audited',
+    /* Named on the grid count so "0 / 7 audited" cannot be read as
+       "nothing was ever done here" -- the count is per ROUND, and the
+       deadline says whether that round is late. */
+    round_word:              'Round',
+    /* Closing a maintenance plot nobody is going to audit. Admins only.
+       It writes a record rather than deleting one -- see the comment in
+       _maintTypesHtml. */
+    close_plot_title:        'Close this plot without an audit (admin)',
+    close_plot_confirm:      'Close {plot} — {job}, work done {on}?\n\n'
+                           + 'It leaves the To-Do list and is filed in Audit History as '
+                           + 'closed by you, without an audit. The work record itself is '
+                           + 'not touched.',
+    /* Closing the whole job at once. The reason is no longer asked for --
+       it is written onto the record, because an admin closing a cold plot
+       types the same sentence every time. */
+    close_sect_title:        'Close every plot under this job without an audit (admin)',
+    close_sect_btn:          'Close all',
+    close_sect_confirm:      'Close all {n} plots waiting on {job} ({row})?\n\n'
+                           + 'Every one of them leaves the To-Do list and is filed in Audit '
+                           + 'History as closed by you, without an audit. The work records '
+                           + 'themselves are not touched.',
+    close_plot_denied:       'Only an audit admin can close a plot.',
+    close_plot_failed:       'Could not close it —',
+    /* Said on the history row itself. A closure sitting unlabelled in a
+       list of this month\u2019s work reads as work that was done. */
+    hist_closed_by_admin:    'Closed by admin',
+    /* The date on the right of a history row is the day somebody pressed
+       the button. On a closure that reads as a current case, so the line
+       says what the task actually owed. */
+    hist_was_due:            'was due {d}',
+    hist_days_overdue:       '{n} days overdue',
+    /* A record dated 1 Oct is September round 3 done a day late, not an
+       October audit. Said only where it WAS late. */
+    late_for_round:          'late for the {d} round',
+    this_round:              'This round',
+    due_by:                  'due',
     no_batches:              'no batches',
     batch_one:               'batch',
     batches_many:            'batches',
@@ -451,6 +492,8 @@ const TRANSLATIONS = {
     home_history_title:      'Sejarah Audit',
     home_history_loading:    'Memuatkan sejarah…',
     home_history_empty:      'Tiada audit direkodkan bulan ini.',
+    home_history_missed:     'Audit tertunggak',
+    home_history_missed_head:'Tertunggak bulan ini',
     /* === PEMILIHAN NURSERI + PAPAN JADUAL === */
     ask_nursery:      'Nurseri mana anda audit hari ini?',
     pre_nursery:      'Tapak Semaian Kecil',
@@ -516,6 +559,26 @@ const TRANSLATIONS = {
     /* Ratio-label words (Malay) for the plot-icon subtitle and the
        list-count header on the Plot Condition audit. */
     audited:                 'Diaudit',
+    round_word:              'Pusingan',
+    close_plot_title:        'Tutup plot ini tanpa audit (admin)',
+    close_plot_confirm:      'Tutup {plot} — {job}, kerja pada {on}?\n\n'
+                           + 'Ia keluar daripada senarai To-Do dan direkodkan dalam Sejarah '
+                           + 'Audit sebagai ditutup oleh anda, tanpa audit. Rekod kerja itu '
+                           + 'sendiri tidak disentuh.',
+    close_sect_title:        'Tutup semua plot di bawah kerja ini tanpa audit (admin)',
+    close_sect_btn:          'Tutup semua',
+    close_sect_confirm:      'Tutup kesemua {n} plot yang menunggu {job} ({row})?\n\n'
+                           + 'Kesemuanya keluar daripada senarai To-Do dan direkodkan dalam '
+                           + 'Sejarah Audit sebagai ditutup oleh anda, tanpa audit. Rekod '
+                           + 'kerja itu sendiri tidak disentuh.',
+    close_plot_denied:       'Hanya admin audit boleh menutup plot.',
+    close_plot_failed:       'Tidak dapat ditutup —',
+    hist_closed_by_admin:    'Ditutup oleh admin',
+    hist_was_due:            'sepatutnya {d}',
+    hist_days_overdue:       'lewat {n} hari',
+    late_for_round:          'lewat untuk pusingan {d}',
+    this_round:              'Pusingan ini',
+    due_by:                  'tarikh akhir',
     no_batches:              'tiada lot',
     batch_one:               'lot',
     batches_many:            'lot',

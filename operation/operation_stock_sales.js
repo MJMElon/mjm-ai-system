@@ -644,9 +644,18 @@
                     .then(r => r, e => ({ data: [], error: e }))
             ]);
 
-            const trans   = transRes.data || [];
-            const prTrans = prRes.data || [];
-            const plots   = plotsRes.data || [];
+            const trans = transRes.data || [];
+            const plots = plotsRes.data || [];
+            // The Plot-R tab is specifically the "-R" reserve plots the
+            // office names by that suffix (U12-R, B6-R, NP-R...) — a
+            // Cull3_Transfer's destination is not always one of those (a
+            // transfer can land back on an ordinary production plot), and
+            // without this filter those showed up on this tab too, under
+            // Plot column values with no "-R" at all. Matched case-
+            // insensitively, trimmed, same leniency every other plot
+            // comparison in this system gets.
+            const isReservePlot = p => /-R$/i.test(String(p || '').trim());
+            const prTrans = (prRes.data || []).filter(l => isReservePlot(l.plot_name));
 
             // Culled qty per reserve plot, straight off Batch Detail's own
             // 3rd_Culling records — same batch+plot key as everything else
@@ -733,6 +742,12 @@
                         qty: g.qty,
                         afterCulling,
                         doDeducted: 0,
+                        // Plot-R only: culled + moved-on-to-another-plot, kept
+                        // OUT of doDeducted so that column reads as Sold —
+                        // the same figure the Movement report's Sold column
+                        // shows — while Plot Balance still nets this off
+                        // separately below (renderMaturityTable).
+                        otherDeducted: 0,
                         transplantDate: t,
                         matureDate,
                         isPR: tag === 'pr'
@@ -748,14 +763,16 @@
 
             applyDoDeductions(allMatGroups, doRes?.data || []);
 
-            // A P-R row's DO Deducted isn't only actual DOs — it's everything
-            // that has left the reserve plot: what was sold (the DO match
-            // above), what was culled, and what moved on to another plot.
-            // All three come off the same qty-transferred figure, so they
-            // all land in the one deduction column Plot Balance already
-            // subtracts.
+            // Everything that has left a reserve plot besides a sale: what
+            // was culled, and what moved on to another plot. doDeducted
+            // stays DO-matched-only (Sold, same figure the Movement report
+            // shows) — this is the other half, and renderMaturityTable nets
+            // BOTH off Qty Transferred for Plot Balance, so a plot fully
+            // culled or moved out with no DO against it still correctly
+            // reads zero, not a stale positive balance available to
+            // allocate.
             prRows.forEach(g => {
-                g.doDeducted += (culledByKey[g.key] || 0) + (movedOutByKey[g.key] || 0);
+                g.otherDeducted = (culledByKey[g.key] || 0) + (movedOutByKey[g.key] || 0);
             });
 
             plotAllocations = {};
@@ -1025,18 +1042,29 @@
         document.querySelectorAll('.mat-status-menu').forEach(m => m.classList.add('hidden'));
     });
 
+    // Plot-R drops "Qty Transplanted"/"After 10% Culling" for "Qty
+    // Transferred" with no estimate column — a transfer-in figure is
+    // already real, not a forecast. Toggled by class + a couple of ids
+    // rather than re-rendering the thead, so the row template below stays
+    // one shape for every tab.
+    function updateMaturityHeaders() {
+        const isPR = activeMonthKey === PR_TAB_KEY;
+        const table = document.querySelector('.mat-table');
+        if (table) table.classList.toggle('pr-view', isPR);
+        const prodGroupTh = document.getElementById('mat-th-prod-group');
+        if (prodGroupTh) prodGroupTh.colSpan = isPR ? 6 : 7;
+        const qtyTh = document.getElementById('mat-th-qty');
+        if (qtyTh) qtyTh.textContent = isPR ? 'Qty Transferred' : 'Qty Transplanted';
+    }
+
     function renderMaturityTable() {
+        updateMaturityHeaders();
         const tbody = document.getElementById('maturity-rows');
         const tfoot = document.getElementById('maturity-foot');
+        const isPR  = activeMonthKey === PR_TAB_KEY;
 
         const rows = allMatGroups
-            .filter(g => {
-                if (activeMonthKey !== PR_TAB_KEY) return !g.isPR && monthKey(g.matureDate) === activeMonthKey;
-                // Sold-out reserve plots have nothing left to allocate — the
-                // Plot-R tab is a picking list for what's still standing, so
-                // a plot already at/under zero balance has no reason to be on it.
-                return g.isPR && (g.afterCulling - (g.doDeducted || 0)) > 0;
-            })
+            .filter(g => isPR ? g.isPR : (!g.isPR && monthKey(g.matureDate) === activeMonthKey))
             .sort((a, b) => {
                 const dateDiff = a.matureDate - b.matureDate;
                 if (dateDiff !== 0) return dateDiff;
@@ -1048,26 +1076,31 @@
             });
 
         if (!rows.length) {
-            const emptyMsg = activeMonthKey === PR_TAB_KEY ? 'No reserve (Plot-R) plots with balance' : 'No maturity allocations for this month';
+            const emptyMsg = isPR ? 'No reserve (Plot-R) plots' : 'No maturity allocations for this month';
             tbody.innerHTML = `<tr><td colspan="13" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">${emptyMsg}</div></td></tr>`;
             tfoot.innerHTML = '';
             renderDoUnmatched();
             return;
         }
 
-        let totQty = 0, totCull = 0, totReserved = 0, totCollected = 0;
-        tbody.innerHTML = rows.map(r => {
+        let totQty = 0, totCull = 0, totReserved = 0, totCollected = 0, totOther = 0, totRowCount = 0;
+
+        // One row's <tr>, shared by the live list and the history list below
+        // — history=true only changes a CSS class, the figures and the
+        // controls on the row are identical either way.
+        function buildRow(r, history) {
             const alloc = plotAllocations[r.key] || { plot_status: 'no_status', reserved_for: '', reserved_qty: 0, premium: false };
             const rowAllocs = allocsForBatch(r.key);
             const allocSum  = rowAllocs.reduce((s, a) => s + (a.allocated_qty || 0), 0);
             const collected = r.doDeducted || 0;
-            const plotBalance       = r.afterCulling - collected;
+            // Plot-R only — what left the plot WITHOUT a DO (culled, or
+            // moved on to another plot). Kept separate from `collected` so
+            // DO Deducted reads as Sold (the Movement report's own figure),
+            // while Plot Balance still nets this off too, same total
+            // deduction as before the split.
+            const otherDed = isPR ? (r.otherDeducted || 0) : 0;
+            const plotBalance        = r.afterCulling - collected - otherDed;
             const afterDeductReserve = plotBalance - allocSum;
-
-            totQty       += r.qty;
-            totCull      += r.afterCulling;
-            totReserved  += allocSum;
-            totCollected += collected;
 
             const reservHtml = rowAllocs.length
                 ? `<div class="reserv-stack">${rowAllocs.map(a => `
@@ -1085,27 +1118,73 @@
             // shown while plotBalance stays at/under zero.
             const soldOut = plotBalance <= 0;
             const status  = soldOut ? 'sold_out' : (alloc.plot_status || 'no_status');
+            const doTitle = otherDed > 0
+                ? ` title="Sold ${collected.toLocaleString()} · Culled/moved out ${otherDed.toLocaleString()}"`
+                : '';
 
-            return `
-                <tr data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${afterDeductReserve}">
+            const html = `
+                <tr class="${history ? 'mat-history-row' : ''}" data-batch-key="${escapeHtml(r.key)}" data-batch-name="${escapeHtml(r.batch || '')}" data-plot-name="${escapeHtml(r.plot || '')}" data-batch-balance="${afterDeductReserve}">
                     <td class="col-prod">${r.matureDate.toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric'})}</td>
                     <td class="col-prod">${escapeHtml(r.location)}</td>
                     <td class="col-prod"><span class="font-black text-slate-900">${escapeHtml(r.plot || '—')}</span></td>
                     <td class="col-prod font-mono">${escapeHtml(r.batch || '—')}</td>
                     <td class="col-prod">${escapeHtml(r.breed || '—')}</td>
                     <td class="col-prod num">${r.qty.toLocaleString()}</td>
-                    <td class="col-prod num text-emerald-700 mat-sep-r">${r.afterCulling.toLocaleString()}</td>
+                    <td class="col-prod num text-emerald-700 mat-sep-r col-afterc">${r.afterCulling.toLocaleString()}</td>
                     <td class="col-plot">
                         ${matStatusControl(r.key, status, soldOut)}
                     </td>
-                    <td class="col-plot num text-blue-700">${collected.toLocaleString()}</td>
+                    <td class="col-plot num text-blue-700"${doTitle}>${collected.toLocaleString()}</td>
                     <td class="col-plot num font-black mat-sep-r ${soldOut ? 'text-red-600' : 'text-slate-800'}">${plotBalance.toLocaleString()}</td>
                     <td class="col-alloc">${reservHtml}</td>
                     <td class="col-alloc num font-black text-slate-700">${allocSum.toLocaleString()}</td>
                     <td class="col-alloc num font-black ${afterDeductReserve < 0 ? 'text-red-600' : afterDeductReserve === 0 ? 'text-slate-400' : 'text-emerald-700'}">${afterDeductReserve.toLocaleString()}</td>
                 </tr>
             `;
-        }).join('');
+            return { html, allocSum, collected, otherDed };
+        }
+
+        let bodyHtml = '';
+        if (isPR) {
+            // A reserve plot already at/under zero has nothing left to
+            // allocate — Live is a picking list for what still is, History
+            // is everything that got there (sold, culled, or moved on),
+            // collapsed so the tab opens on what still needs acting on.
+            const liveRows    = rows.filter(r => (r.afterCulling - (r.doDeducted||0) - (r.otherDeducted||0)) > 0);
+            // Latest first — History is a record of what already happened,
+            // read like a log, not like the Live list above it (which sorts
+            // oldest-transferred-first, a picking order).
+            const historyRows = rows
+                .filter(r => (r.afterCulling - (r.doDeducted||0) - (r.otherDeducted||0)) <= 0)
+                .sort((a, b) => b.matureDate - a.matureDate);
+
+            if (!liveRows.length) {
+                bodyHtml += `<tr><td colspan="13" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">No reserve (Plot-R) plots with balance</div></td></tr>`;
+            } else {
+                liveRows.forEach(r => {
+                    const b = buildRow(r, false);
+                    bodyHtml += b.html;
+                    totQty += r.qty; totCull += r.afterCulling; totReserved += b.allocSum;
+                    totCollected += b.collected; totOther += b.otherDed; totRowCount++;
+                });
+            }
+            if (historyRows.length) {
+                bodyHtml += `
+                    <tr class="mat-history-toggle" onclick="toggleMatHistory()">
+                        <td colspan="13">🕘 History — ${historyRows.length} reserve plot${historyRows.length === 1 ? '' : 's'} already sold, culled or moved on <span id="mat-history-caret">▸ show</span></td>
+                    </tr>`;
+                bodyHtml += historyRows.map(r => buildRow(r, true).html).join('');
+            }
+        } else {
+            rows.forEach(r => {
+                const b = buildRow(r, false);
+                bodyHtml += b.html;
+                totQty += r.qty; totCull += r.afterCulling; totReserved += b.allocSum;
+                totCollected += b.collected; totOther += b.otherDed; totRowCount++;
+            });
+        }
+
+        tbody.innerHTML = bodyHtml;
 
         tbody.querySelectorAll('tr[data-batch-key]').forEach(tr => {
             tr.addEventListener('dragover',  onRowDragOver);
@@ -1117,15 +1196,17 @@
             el.addEventListener('dragend',   onChipDragEnd);
         });
 
-        const totAfterDeduct = totCull - totCollected - totReserved;
+        // Totals are the Live rows only on Plot-R (History is reference, not
+        // stock still to place) and every row on a month tab, same as before.
+        const totAfterDeduct = totCull - totCollected - totOther - totReserved;
         tfoot.innerHTML = `
             <tr class="bg-slate-50 font-black">
-                <td colspan="5" class="text-right text-[10px] uppercase tracking-widest text-slate-500 py-2 px-2">Totals (${rows.length} rows)</td>
+                <td colspan="5" class="text-right text-[10px] uppercase tracking-widest text-slate-500 py-2 px-2">Totals (${totRowCount} rows)</td>
                 <td class="num text-slate-900">${totQty.toLocaleString()}</td>
-                <td class="num text-emerald-700 mat-sep-r">${totCull.toLocaleString()}</td>
+                <td class="num text-emerald-700 mat-sep-r col-afterc">${totCull.toLocaleString()}</td>
                 <td></td>
                 <td class="num text-blue-700">${totCollected.toLocaleString()}</td>
-                <td class="num text-slate-800 mat-sep-r">${(totCull - totCollected).toLocaleString()}</td>
+                <td class="num text-slate-800 mat-sep-r">${(totCull - totCollected - totOther).toLocaleString()}</td>
                 <td></td>
                 <td class="num text-slate-900">${totReserved.toLocaleString()}</td>
                 <td class="num ${totAfterDeduct < 0 ? 'text-red-600' : 'text-emerald-700'}">${totAfterDeduct.toLocaleString()}</td>
@@ -1133,6 +1214,19 @@
 
         renderDoUnmatched();
     }
+
+    // Expand/collapse Plot-R's History section. Toggles the rows directly
+    // (no re-render) so drag state and open status menus on the live rows
+    // above are undisturbed.
+    function toggleMatHistory() {
+        const rows = document.querySelectorAll('#maturity-rows .mat-history-row');
+        if (!rows.length) return;
+        const opening = !rows[0].classList.contains('mat-history-open');
+        rows.forEach(tr => tr.classList.toggle('mat-history-open', opening));
+        const caret = document.getElementById('mat-history-caret');
+        if (caret) caret.textContent = opening ? '▾ hide' : '▸ show';
+    }
+    window.toggleMatHistory = toggleMatHistory;
 
     async function updateAllocation(el) {
         if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('stock', 'manage')) return;

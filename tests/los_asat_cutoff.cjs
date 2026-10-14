@@ -25,12 +25,18 @@ const dos = [
   { do_number:'DO-2', delivery_date:'2026-10-20', status:'Delivered', remark:'', plot_1:'B4', qty_1:200, batch_1:'268' },
 ];
 
+/* The real tray matcher, lifted rather than copied — it decides which half
+   of the Transplant Details split a row lands in. */
+const grab = (name) => new Function('return ' + src.slice(
+  src.indexOf('= ', src.indexOf('const ' + name + ' ')) + 2,
+  src.indexOf('\n', src.indexOf('const ' + name + ' '))).replace(/;$/, ''))();
+
 function build(asAt) {
   const fn = new Function('asAt','logsRes','dosRes','_logDate','_mvBatchKey','nurseryOf',
     'PRE_NURSERY_PLOTS','_losAgeMonths','_losAgeLabel',
     '_RE_LOS_SUPPLIER','_RE_LOS_MPOB','_RE_LOS_DONO','_RE_LOS_DO_QTY','_RE_LOS_FOC_PCT',
     '_RE_LOS_REPL','_RE_LOS_FROM_TRAY','_RE_LOS_FROM_PLOT','_RE_LOS_APPROVED',
-    '_RE_LOS_CAL_REPORT','_RE_LOS_CAL_SIDE',
+    '_RE_LOS_CAL_REPORT','_RE_LOS_CAL_SIDE','_losTrayKey','_LOS_CAL_SEED_REPORTS',
     body + '\nreturn rows;');
   const never = /NEVERMATCH_x([0-9])/;
   return fn(asAt, { data: logs }, { data: dos },
@@ -39,7 +45,8 @@ function build(asAt) {
     (plot) => (['Pre-Nursery','DOUBLE-TONE','PREMIUM CARE','P14'].includes(plot) ? 'Pre-Nursery' : 'BNN'),
     ['Pre-Nursery','DOUBLE-TONE','PREMIUM CARE'],
     () => null, () => '',
-    never, never, never, never, never, never, never, never, never, never, never);
+    never, never, never, never, never, never, never, never, never, never, never,
+    grab('_losTrayKey'), grab('_LOS_CAL_SEED_REPORTS'));
 }
 
 const show = (label, asAt, want) => {
@@ -64,8 +71,8 @@ console.log('Batch 999: received 2 Oct — did not exist on 30 Sep');
 
 let ok = true;
 ok &= show('As At — Sep 2026  (cut off at 30 Sep)', '2026-09-30',
-  { planted:1000, cull1:100, trans:600, cull3:0, sales:50, balance:850, pre:300, main:550, batches:1 });
+  { planted:1000, cull1:100, trans:600, cull3:0, sales:50, balance:550, pre:300, main:550, batches:1 });
 ok &= show('All years  (no cut-off — everything to date)', '',
-  { planted:1000, cull1:100, trans:600, cull3:80, sales:250, balance:570, pre:300, main:270, batches:2 });
+  { planted:1000, cull1:100, trans:600, cull3:80, sales:250, balance:270, pre:300, main:270, batches:2 });
 console.log('\n' + (ok ? 'all correct' : 'FAILED'));
 process.exit(ok ? 0 : 1);

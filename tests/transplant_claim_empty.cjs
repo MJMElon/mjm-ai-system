@@ -23,15 +23,26 @@ function check(name, got, want) {
 function checkTrue(name, got) { check(name, !!got, true); }
 function checkFalse(name, got) { check(name, !!got, false); }
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+/* TWO MONTHS, AND THEY ARE NOT THE SAME STRING.
+
+   MONTH_KEY is what the maintenance module STORES in schedule_month, and
+   loadTransplantField looks a record up by it -- short, and it must stay
+   short or the query matches nothing. MONTH_LABEL is what the sheet PRINTS,
+   and that is written out in full, because a month on something somebody
+   signs is "September 2026". Collapsing the two into one constant is how a
+   display change becomes a change of key. */
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTHS_FULL  = ['January','February','March','April','May','June','July',
+                      'August','September','October','November','December'];
 const _now = new Date();
-const YM    = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}`;
-const MONTH = `${MONTHS[_now.getMonth()]} ${_now.getFullYear()}`;
+const YM          = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}`;
+const MONTH_KEY   = `${MONTHS_SHORT[_now.getMonth()]} ${_now.getFullYear()}`;
+const MONTH_LABEL = `${MONTHS_FULL[_now.getMonth()]} ${_now.getFullYear()}`;
 
 const rec = (o) => Object.assign({
   work_date: `${YM}-09`, nursery_name: 'UNN 2', plot_name: 'N4',
   batch_name: null, work_type: 'transplant', jenis: 'Memindah anak benih',
-  schedule_month: MONTH, source_qty: 1200, workers: [], total_qty: null
+  schedule_month: MONTH_KEY, source_qty: 1200, workers: [], total_qty: null
 }, o);
 
 /* The register. A worker's own section is what a line is filed under, which
@@ -147,7 +158,7 @@ async function pick(page, label) {
     await pick(page, 'UNN2');
     const txt = await cell(page);
     checkTrue('it says nothing was recorded at all', /No transplanting was recorded/i.test(txt));
-    checkTrue('…for the month on screen', txt.includes(MONTH));
+    checkTrue('…for the month on screen, written out in full', txt.includes(MONTH_LABEL));
     checkTrue('…and says so of EVERY nursery, not just this circle',
               /in any nursery/i.test(txt));
     checkTrue('…and says where a conductor records it',
