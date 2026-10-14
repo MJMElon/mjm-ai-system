@@ -1,15 +1,22 @@
 /* Plot-R: Qty Transferred (not Qty Transplanted), no 10%-culling estimate,
    DO Deducted reads as Sold (the Movement report's own figure) while Plot
-   Balance still nets off what was culled or moved on separately — and a
-   plot already at/under zero balance is History, collapsed by default,
-   not gone from the tab.
+   Balance still nets off what was culled or moved on separately, a plot
+   already at/under zero balance is History (collapsed, latest first), and
+   a transfer that did NOT land on a "-R"-named plot is not on this tab at
+   all.
 
    Fixture:
      U12-R / batch 242 — Cull3_Transfer 300 + 200 (qty transferred 500),
        a DO for 150 (sold), a 3rd_Culling of 50 (culled).
        Balance = 500 - 150 - 50 = 300 → Live.
-     U13-R / batch 256 — Cull3_Transfer 100, a DO for the full 100.
-       Balance = 100 - 100 - 0 = 0 → History, collapsed.
+     U13-R / batch 256 — Cull3_Transfer 100 on 10 Aug, a DO for the full 100.
+       Balance = 0 → History.
+     U14-R / batch 260 — Cull3_Transfer 80 on 20 Sep (LATER than U13-R), a
+       DO for the full 80. Balance = 0 → History, and dated after U13-R —
+       History must read U14-R above U13-R (latest first).
+     U20 (no "-R") / batch 270 — Cull3_Transfer 40, no DO. Balance = 40,
+       would be Live by the numbers alone, but it is not a reserve plot by
+       name and must not appear on this tab anywhere.
 
    Run: NODE_PATH=/opt/node22/lib/node_modules node tests/maturity_plotr_tab.cjs
    with `python3 -m http.server 8777` serving the repository root.        */
@@ -27,6 +34,8 @@ const CULL3_TRANSFER_ROWS = [
   { batch_name: '242', plot_name: 'U12-R', breed_name: 'DxP', quantity_change: 300, transaction_date: '2026-09-01', created_at: '2026-09-01T02:00:00Z', remark: 'From: [U12|B/F] To: [U12-R]' },
   { batch_name: '242', plot_name: 'U12-R', breed_name: 'DxP', quantity_change: 200, transaction_date: '2026-09-02', created_at: '2026-09-02T02:00:00Z', remark: 'From: [U12|B/F] To: [U12-R]' },
   { batch_name: '256', plot_name: 'U13-R', breed_name: 'DxP', quantity_change: 100, transaction_date: '2026-08-10', created_at: '2026-08-10T02:00:00Z', remark: 'From: [U13|B/F] To: [U13-R]' },
+  { batch_name: '260', plot_name: 'U14-R', breed_name: 'DxP', quantity_change: 80,  transaction_date: '2026-09-20', created_at: '2026-09-20T02:00:00Z', remark: 'From: [U14|B/F] To: [U14-R]' },
+  { batch_name: '270', plot_name: 'U20',   breed_name: 'DxP', quantity_change: 40,  transaction_date: '2026-09-15', created_at: '2026-09-15T02:00:00Z', remark: 'From: [U20|B/F] To: [U20]' },
 ];
 const CULL3_ROWS = [
   { batch_name: '242', plot_name: 'U12-R', quantity_change: 50 },
@@ -34,10 +43,13 @@ const CULL3_ROWS = [
 const DO_ROWS = [
   { do_number: 'DO-1', total_qty: 150, status: 'Delivered', remark: '', plot_1: 'U12-R', qty_1: 150, batch_1: '242' },
   { do_number: 'DO-2', total_qty: 100, status: 'Delivered', remark: '', plot_1: 'U13-R', qty_1: 100, batch_1: '256' },
+  { do_number: 'DO-3', total_qty: 80,  status: 'Delivered', remark: '', plot_1: 'U14-R', qty_1: 80,  batch_1: '260' },
 ];
 const PLOTS = [
   { plot_name: 'U12-R', nursery_name: 'UNN 1' },
   { plot_name: 'U13-R', nursery_name: 'UNN 1' },
+  { plot_name: 'U14-R', nursery_name: 'UNN 1' },
+  { plot_name: 'U20',   nursery_name: 'UNN 2' },
 ];
 
 (async () => {
@@ -143,8 +155,19 @@ const PLOTS = [
   await page.waitForTimeout(200);
   const afterExpand = await page.locator('#maturity-rows').innerText();
   checkTrue('U13-R appears once History is expanded', afterExpand.includes('U13-R'));
+  checkTrue('U14-R appears too (also fully sold)', afterExpand.includes('U14-R'));
   const historyRow = page.locator('tr[data-plot-name="U13-R"]');
   check('U13-R Plot Balance reads 0', (await historyRow.locator('td.col-plot.num.font-black').first().innerText()).trim(), '0');
+
+  console.log('\nHistory reads latest first');
+  const historyPlotOrder = await page.locator('.mat-history-row').evaluateAll(
+    rows => rows.map(r => r.getAttribute('data-plot-name'))
+  );
+  check('U14-R (20 Sep) comes before U13-R (10 Aug)', historyPlotOrder, ['U14-R', 'U13-R']);
+
+  console.log('\nU20 — a Cull3_Transfer that did not land on a "-R" plot — is not on this tab at all');
+  checkTrue('not in the visible (Live) rows', !afterExpand.includes('U20'));
+  check('no row for it anywhere, Live or History', await page.locator('#maturity-rows tr[data-plot-name="U20"]').count(), 0);
 
   await page.click('.mat-history-toggle');
   await page.waitForTimeout(200);

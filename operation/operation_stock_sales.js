@@ -644,9 +644,18 @@
                     .then(r => r, e => ({ data: [], error: e }))
             ]);
 
-            const trans   = transRes.data || [];
-            const prTrans = prRes.data || [];
-            const plots   = plotsRes.data || [];
+            const trans = transRes.data || [];
+            const plots = plotsRes.data || [];
+            // The Plot-R tab is specifically the "-R" reserve plots the
+            // office names by that suffix (U12-R, B6-R, NP-R...) — a
+            // Cull3_Transfer's destination is not always one of those (a
+            // transfer can land back on an ordinary production plot), and
+            // without this filter those showed up on this tab too, under
+            // Plot column values with no "-R" at all. Matched case-
+            // insensitively, trimmed, same leniency every other plot
+            // comparison in this system gets.
+            const isReservePlot = p => /-R$/i.test(String(p || '').trim());
+            const prTrans = (prRes.data || []).filter(l => isReservePlot(l.plot_name));
 
             // Culled qty per reserve plot, straight off Batch Detail's own
             // 3rd_Culling records — same batch+plot key as everything else
@@ -1142,7 +1151,12 @@
             // is everything that got there (sold, culled, or moved on),
             // collapsed so the tab opens on what still needs acting on.
             const liveRows    = rows.filter(r => (r.afterCulling - (r.doDeducted||0) - (r.otherDeducted||0)) > 0);
-            const historyRows = rows.filter(r => (r.afterCulling - (r.doDeducted||0) - (r.otherDeducted||0)) <= 0);
+            // Latest first — History is a record of what already happened,
+            // read like a log, not like the Live list above it (which sorts
+            // oldest-transferred-first, a picking order).
+            const historyRows = rows
+                .filter(r => (r.afterCulling - (r.doDeducted||0) - (r.otherDeducted||0)) <= 0)
+                .sort((a, b) => b.matureDate - a.matureDate);
 
             if (!liveRows.length) {
                 bodyHtml += `<tr><td colspan="13" class="text-center py-10 text-slate-400"><div class="text-2xl mb-1">🌱</div><div class="text-[10px] font-bold uppercase tracking-widest">No reserve (Plot-R) plots with balance</div></td></tr>`;
