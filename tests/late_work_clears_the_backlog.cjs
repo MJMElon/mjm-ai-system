@@ -13,6 +13,15 @@
    cleared are recorded as a MISSED AUDIT, filed under the month that
    owed them, in Audit History.
 
+   The LOWER bound went the same way, later and for the same reason. It
+   used to hold: an audit from before a window opened belonged to the
+   round before it and closed nothing. N02 is what that looked like on
+   screen — batch 253 walked 22 Sep, September round 3 opening on the
+   30th, so the row stayed red over a plot somebody had walked eight days
+   earlier and nothing 253 could be given would ever close it. The
+   office: "latest audit clears every overdue round (if is not audit on
+   time). but as long as not yet audit, it will still showing there."
+
    Held here, through the real page in a real browser:
 
      1. a plot audited LATE drops off the overdue row
@@ -22,7 +31,12 @@
         the month that owed it, saying Missed audit
      4. the row and its circles agree — a row that clears while its
         plots remain is worse than the bug
-     5. an audit from BEFORE the window opened does not close it
+     5. an audit from BEFORE the window opened clears it too, and is
+        recorded as missed like any other
+     6. but it does NOT clear a window still OPEN. Letting an old audit
+        answer a round nobody has walked yet would mark work done before
+        anybody had the chance, which is the one direction this board
+        must never be wrong in.
 
    Run: NODE_PATH=/opt/node22/lib/node_modules node tests/late_work_clears_the_backlog.cjs
 */
@@ -130,7 +144,18 @@ async function boot(page, plotAudits){
       const missed = (window.MJMAuditMissed && MJMAuditMissed.rounds)
         ? MJMAuditMissed.rounds(Number(backYm.split('-')[0]), Number(backYm.split('-')[1]) - 1)
         : null;
-      return { rows, missed, pendingReady: !!(window.MJMAuditPending && MJMAuditPending.ready()) };
+      /* The same question asked of a month whose windows are all still
+         in the FUTURE. Nothing can be cleared there, so this comes back
+         empty -- and it is the one thing that tells a widened lower
+         bound on a CLOSED window from a widened one everywhere: drop it
+         on open windows too and next month reports three missed rounds
+         before anybody has had a chance to walk them. */
+      const nm = new Date();
+      nm.setMonth(nm.getMonth() + 1);
+      const missedNext = (window.MJMAuditMissed && MJMAuditMissed.rounds)
+        ? MJMAuditMissed.rounds(nm.getFullYear(), nm.getMonth()) : null;
+      return { rows, missed, missedNext,
+               pendingReady: !!(window.MJMAuditPending && MJMAuditPending.ready()) };
     }, BACK_YM);
 
     /* The circles after expanding, and the history for the owed month. */
@@ -192,7 +217,10 @@ async function boot(page, plotAudits){
     { nursery:'BNN', plot:'B02', batch:'902', date: TODAY_ISO }
   ]);
 
-  /* ── D. audited BEFORE the window opened ──────────────────────── */
+  /* ── D. audited long BEFORE any of these windows opened ────────
+     Before the schedule itself begins, so there is no round this could
+     be "on time" for. It still clears every CLOSED round, and must
+     still clear none of the open or future ones. */
   const tooEarly = await run([
     { nursery:'BNN', plot:'B01', batch:'901', date:'2025-12-31' },
     { nursery:'BNN', plot:'B02', batch:'902', date:'2025-12-31' }
@@ -206,7 +234,9 @@ async function boot(page, plotAudits){
   console.log('C both late  :', JSON.stringify(owedPlots(bothLate)), '| missed:', JSON.stringify(missedOf(bothLate)));
   console.log('C history    :', bothLate.after.histMonth,
               JSON.stringify(bothLate.after.histRows.filter(x => x.missed).slice(0, 3)));
-  console.log('D too early  :', JSON.stringify(owedPlots(tooEarly)));
+  console.log('D too early  :', JSON.stringify(owedPlots(tooEarly)),
+              '| missed:', JSON.stringify(missedOf(tooEarly)),
+              '| next month:', JSON.stringify((tooEarly.missedNext || []).length));
   console.log('page errors  :', none.errs.length ? none.errs.join(' | ') : 'none');
 
   let bad = 0;
@@ -226,8 +256,23 @@ async function boot(page, plotAudits){
         bothLate.after.histRows.some(x => x.missed && /missed audit/i.test(x.sub)));
   check('naming the nursery', bothLate.after.histRows.some(x => x.missed && /BNN/.test(x.sub)));
 
-  check('an audit from before the window opened closes nothing',
-        owedPlots(tooEarly).includes('B01') && owedPlots(tooEarly).includes('B02'));
+  /* ── THE LOWER BOUND, AS THE OFFICE ASKED FOR IT ───────────────── */
+  check('an audit from before the window opened clears it too',
+        !owedPlots(tooEarly).includes('B01') && !owedPlots(tooEarly).includes('B02'));
+  check('and every round it cleared is recorded as missed',
+        missedOf(tooEarly).length >= 3);
+  check('but it clears nothing whose window has not closed yet',
+        Array.isArray(tooEarly.missedNext) && tooEarly.missedNext.length === 0);
+  /* Only audit_plot_audits is served, so Seedling Height has no audit of
+     any kind -- the office's "as long as not yet audit, it will still
+     showing there", standing right beside the plots that cleared. */
+  const heightPlots = (r) => {
+    const s = new Set();
+    r.rows.filter(x => /Seedling Height/i.test(x.title)).forEach(x => x.plots.forEach(p => s.add(p)));
+    return [...s].sort();
+  };
+  check('a module nobody has audited at all is untouched by any of it',
+        heightPlots(tooEarly).includes('B01') && heightPlots(tooEarly).includes('B02'));
 
   /* THE OFFICE'S OWN ACCEPTANCE: gone from the to-do list, and in the
      history. The row leaving is checked above; this is the other half,

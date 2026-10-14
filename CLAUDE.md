@@ -374,6 +374,109 @@ became optional on the same day, so both answers are one click apart.
 `tests/tray_named_adjustment_closes_pending.cjs` drives 234's own figures
 through the real page: ten of its assertions fail on the previous code.
 
+## The papan tanda is the report row, drawn
+
+The board that gets nailed up at the plot when the seedlings arrive. The
+office was making these by hand, one per plot, off the Transplanting Report
+on the screen beside them — so it is drawn FROM that row, and **the figure
+on the board is the figure on the report by construction**.
+
+**ONE BOARD PER ROW, which is one per plot.** That is the whole reason it
+lives on the report and not on the ledger: batch 270's B4 took **1,931 out
+of P32 and 378 out of P33** on the same day, and the board says **2,309**,
+because what goes up at the plot is how many are standing in it. The report
+already merges a plot's rows for that day; this follows that rather than
+adding a second rule.
+
+Every field is the Batch Report's own answer. The one worth naming is
+**TARIKH TANAM**: it is the batch's `Seeds_Received` **`transaction_date`**,
+which is exactly what the Batch Record list shows as Planted Date — the date
+keyed on Tab 1, never the row's insert time. Newest reception row wins, the
+same rule the Seeds In form and the batch list already follow, because a
+batch is meant to have one and some have ninety-five.
+
+Three things about drawing it, each of which went wrong first:
+
+- **The font has to be loaded before the first stroke.** A canvas asked for
+  a font it does not have yet does not wait — it draws the fallback, and the
+  board comes out in Times, which nobody would notice until it was on a post
+  in a field. `document.fonts.load` is awaited for every weight used, and
+  the test asks about the ORDER (nothing drawn while a load is pending)
+  rather than about the glyphs, because a harness with no network for Google
+  Fonts would otherwise only prove the sandbox has no Outfit.
+- **The logo used to leave the fill white.** `_ptLogo` painted its own text,
+  so ink set before it drew a white board on white. It is an image now and
+  does not, and the ink is still set AFTER it, because the ink belongs with
+  the type it is for.
+- **A long name is shrunk, never wrapped or clipped.** The board is read
+  from a distance and the end of a breed name is the part that tells two
+  breeds apart. The PLOT line shrinks too, so a transfer plot does not run
+  under the mark.
+- **ONE WEIGHT for the whole block, and ONE CASE.** The breed was set at
+  Outfit 700 where everything beside it was 900, and in its own mixed case
+  where every other field — the dates included — is upper. At that size
+  that does not read as one typeface in two weights, it reads as two fonts,
+  which is exactly what the office saw and said. The test asks it of the
+  weights the board asks for AND of the font on every stroke, because a
+  weight drawn in without being preloaded is the same mistake twice. The
+  ROW keeps the real spelling; it is only the board that shouts.
+
+**The mark is the office's own file, and it is INLINED.** It was a drawn
+imitation at first, for the reason below; the office then handed over the
+real logo. The board carries **MJM NURSERY**, which is not the MJM GROUP
+tile that was on it for a day — same house, different mark, and the office
+asked for it the way they ask for everything here, by handing over a board
+with it on. `shared/mjm_nursery_logo.png` is the canonical copy and
+`_PT_LOGO_SRC` in the page is that file byte for byte as a data URI —
+`tests/papan_tanda.cjs` decodes the one and compares it against the other,
+so two copies of an image cannot quietly become two different images.
+`shared/mjm_logo.png` is still there and is the GROUP mark; nothing draws
+it now.
+
+Inlining keeps every property the drawn mark had, which is why it is not
+simply fetched: **no fetch, so nothing to 404** at the moment somebody
+presses the button; no cross-origin, so the canvas is not tainted and
+`toBlob` still works; and nothing to go stale in a cache.
+
+**The nursery file is TRIMMED to the mark**, so the board draws the whole
+of it and there is no crop. The GROUP tile needed one — it was a square
+with a broad flat margin of green, and `_PT_LOGO_CROP` trimmed it in
+fractions of the file. What survives that is the rule underneath it: **ONE
+width is given and the height comes off the IMAGE**, so the mark cannot be
+stretched, and the test compares the shape on the canvas against the
+shape of the file rather than carrying a number that would go stale the
+day the logo is re-exported.
+
+**The nursery mark was lifted out of the board the office drew**, because
+that is the only copy of it there has been — cropped to its own ink at
+598 × 315, which is exactly the size the board draws it, so there is no
+resolution to spare. Ask for the original file before anything wants it
+bigger.
+
+**And the office drew the board, so its numbers are the specification.**
+The margins, the type sizes, where each line sits and where the mark goes
+were measured off the board they handed over and are named constants at
+the top of `_ptDraw`. `_PT_LINE_STEP` is the one the office asked for by
+name: it used to be worked out from whatever room was left under the logo,
+so a change to the mark quietly changed the spacing of the lines. The test
+reads all of it back off the canvas — the rule lands on the pixel, the
+mark within four (its outermost row is an antialiased serif edge that is
+no longer either office green, so a colour test finds the box just inside
+the one `drawImage` was given), and the line spacing within four because
+the top of a type band carries a little of the font's own business (BATCH
+sets digits where TARIKH sets capitals).
+
+**THE LABELS ARE THE OFFICE'S OWN, spaces included.** They are not spaced
+evenly and the colons do not line up — `BATCH    :` and `TARIKH TANAM  :`
+are padded and `JENAMA:` is not — and that is how the board they drew
+reads. A sign that is one word different from the one the office nails up
+is a sign somebody has to ask about, so the strings are copied and not
+tidied. **PLOT carries no colon** and **JUMLAH TANAM carries no POKOK**;
+both were there and both went.
+
+`tests/papan_tanda.cjs` drives the real page and batch 270's own figures,
+down to the pixels on the canvas and the download that comes out of it.
+
 ## An amendment is dated by the amendment, and it lands in the TOTAL
 
 The Transplanting Report lists one line per transplant record. An approved
@@ -1294,9 +1397,47 @@ would ever clear it. Every overdue row on the board was in that state, and
 the office found it the way anybody would: by auditing the plots and
 watching the list not move.
 
-**The upper bound on a closed window now runs to today.** The lower bound
-does not move: an audit from before the window opened belongs to the round
-before it and must not close two.
+**A CLOSED window takes the batch's LATEST audit, whenever it was done** —
+the range opens at the beginning of time and runs to today.
+
+The lower bound used to stay on the window, on the argument that an audit
+from before it opened belonged to the round before this one and must not
+close two. **The office overruled that**, and N02 is what the old bound
+looked like on screen: batch 244 walked 30 Sep, inside September round 3,
+cleared; batch 253 walked **22 Sep** — round 2's slot — so round 3 stayed
+red over a plot somebody had walked eight days earlier, and nothing 253
+could ever be given would close a window that shut on 30 September. Their
+words: *"latest audit clears every overdue round (if is not audit on time).
+but as long as not yet audit, it will still showing there."*
+
+Three things hold it together, and the first two are the price of the third:
+
+- **An OPEN window is unchanged**, and must stay so. Letting an old audit
+  answer a round nobody has walked yet would mark work done before anybody
+  had the chance, which is the one direction this board must never be wrong
+  in. `tests/late_work_clears_the_backlog.cjs` asks `missedRounds()` of
+  **next month** to tell the two apart: widen the lower bound everywhere and
+  it reports three missed rounds before the month has begun.
+- **A batch with NO audit at all is untouched** and stays on the board. That
+  is the second half of the office's sentence, and it is the only thing the
+  rule still refuses.
+- **What this costs.** A batch audited once and never again now clears every
+  overdue round it accrues, so it shows on the board only while a round is
+  actually OPEN — one day a month on the MN plot schedule. What keeps it
+  visible is the missed-round record: every one of those rounds is filed in
+  Audit History under the month that owed it, so a plot nobody walks does not
+  go quiet, it accumulates a missed round every round. That is the trade the
+  office chose with the consequence in front of them.
+
+**The board and the plot page no longer answer the same question, and that
+is now deliberate.** They were put in step on purpose — a green card and a
+quiet to-do row saying one thing — and this rule separates them: the board
+asks *"is anything on my list"*, where an overdue round cleared late is off
+it, while the card asks *"has this batch been walked in the round now due"*,
+which an audit from last month does not answer. So N02 can be absent from
+the board and still read **⟳ Round 1 due · last audited 22 Sep**. The card
+keeps the safe direction — it shows the auditor the last reading before they
+take the next one — and `currentWindow()` is untouched.
 
 The office's rule for the rest of it, in their own words — *"if auditor was
 late and do the latest one, then the old records will be clear too but
@@ -1327,9 +1468,9 @@ Three things to know before touching this:
   has pending work on it, so there is no window to be outside of.
 
 `tests/late_work_clears_the_backlog.cjs` drives the real page in a real
-browser and holds both halves — a plot walked late drops off, a plot nobody
-walked stays on, and an audit from before the window opens closes nothing.
-Six of its eleven checks fail on the previous code.
+browser and holds all of it — a plot walked late drops off, a plot nobody
+walked stays on, an audit from before the window opened clears it and is
+recorded as missed, and nothing clears a window that has not closed yet.
 
 ## A batch is not audited for ever because it was audited once
 
@@ -1433,8 +1574,27 @@ for ever — because the ONE thing that retires a maintenance row is an
 audit against its `task_id`.
 
 So an admin may close one from the board: an **×** on each plot chip,
-and the office's own words for what it means — *"it's long overdue and
-missed audit closed by admin."*
+**and one on each work-type section header**, and the office's own words
+for what it means — *"it's long overdue and missed audit closed by
+admin."*
+
+**The section is the unit the decision is actually made in.** Closing
+eighteen cold weeding plots one cross at a time is eighteen confirms for
+one decision, and the decision was never per-plot: the job finished in
+August and there is nothing left in ANY of those plots to look at. So
+*"i close maintenance weeding, then it help me close all cases plot
+under this section"* — one confirm naming the job and the count, and the
+rows go up in **ONE insert**. Eighteen round trips on a nursery signal is
+eighteen chances to half-finish, and a section half closed is worse than
+one not closed at all.
+
+**The reason is no longer asked for — it is written.** The second step
+used to be a `prompt`, and the office's answer to it was *"no need
+this"*: an admin closing a cold plot types the same sentence every time,
+and a prompt somebody dismisses out of habit is a cancel that looks like
+a save. So the remark is composed — the job, the day the work was done,
+and *long overdue* — and where a whole section went at once it says so
+and how many plots were in it.
 
 **What it writes is a record, not a deletion.** An ordinary
 `audit_maintenance_audits` row against the same task, with `result` =
@@ -1446,7 +1606,7 @@ a date on it like any other record. **The work record in
 said so, and no audit decision gets to unsay it. The test asserts no
 DELETE and no PATCH is ever sent.
 
-Six things in it:
+Nine things in it:
 
 - **The id has to ride on the item.** A chip knew which plot it was and
   not which record. `bucket.items` carries `id` now, and so does
@@ -1455,12 +1615,29 @@ Six things in it:
   the one beside it.
 - **`isAuditAdmin()` decides, and it is asked AGAIN at the write.** A
   button drawn before a permission changed is still sitting on the
-  screen. A plain auditor sees the chips exactly as they always were.
-- **Two steps, both nameable.** The confirm names the nursery, the plot,
-  the job and the day the work was done; the second asks why, and the
-  answer is kept on the record. Cancelling either writes nothing.
+  screen. A plain auditor sees the chips exactly as they always were, and
+  no section × at all.
+- **ONE writer, two buttons.** `_closePlots(items, confirmText)` takes a
+  list — the chip hands it one item, the header hands it the whole group,
+  and nothing else differs: same row shape, same confirm, same rebuild.
+  Two code paths writing the same record two ways is how they come to
+  disagree, and the per-chip path had already drifted into writing a
+  remark the section one did not.
+- **The section closes the group as it was DRAWN**, out of
+  `_closeGroups`, not re-derived when the button is pressed. Somebody
+  pressing it has just read a count beside the job name, and the plots
+  they close must be the plots that count was of — a second walk of the
+  data could quietly have one more in it.
+- **The confirm names what it is about to do.** The chip's names the
+  nursery, the plot, the job and the day the work was done; the section's
+  names the job, the row and **how many plots**. Cancelling writes
+  nothing.
 - **The × is OUTSIDE the anchor.** Inside it, every tap on the cross
-  would also follow the link to the audit form.
+  would also follow the link to the audit form. The section's is outside
+  `.tl-wt-head` for the harder version of the same reason: that header IS
+  a `<button>`, and a button inside a button is not a thing a browser
+  will draw. It sits beside it in a `.tl-wt-bar`, and the test counts
+  `.tl-wt-head .tl-wt-close` to make sure it stays there.
 - **It rebuilds from the database, not from the screen.** The board is
   what somebody is about to act on, and a screen that agrees with itself
   and not with the table is worse than one that takes a second.
@@ -1468,7 +1645,71 @@ Six things in it:
   `audit_home.html` writes it, `audit_maintenance_script.js` colours it
   grey so a closed task does not read as the amber that means *waiting*.
   Change one, change the other, and never change the string itself: a
-  row written before would keep the old wording.
+  row written before would keep the old wording. In `audit_home.html` it
+  sits at **script scope and not inside `loadAuditTodo`**, because both
+  halves of that page need it — the board writes the row and Audit
+  History has to recognise it.
+- **`audit_id` is NOT NULL and has no default**, and leaving it out is
+  not an empty column, it is a refused insert — *23502, null value in
+  column audit_id violates not-null constraint*, which is what the first
+  version of this close got back and the office read off an alert box.
+  Every row in that table carries a readable id the FORM writes itself.
+  The closure writes `MTA-CL<task_id>` rather than copying the module's
+  `nextAuditID()`: that one is `audits.length + 1`, which two people
+  saving at once both answer the same way (`audit_script.js` says so in
+  its own comment) and a section close writes a dozen rows in one go.
+  Keyed on the task it is unique by construction, and it says at a
+  glance which rows in the table are closures rather than audits.
+- **The test stub is STRICT about what the table will take**, for the
+  same reason the jsPDF stub had to be: one that accepts anything signs
+  off a write the database refuses. Every check in
+  `admin_can_close_a_dead_plot.cjs` passed on the version that could not
+  insert a single row. `NOT_NULL` there is the column set
+  `saveAudit()` supplies — the one proof of the real table's shape
+  available from an environment that cannot reach Supabase — and a row
+  missing one comes back 400 the way PostgREST sends it. Fifteen checks
+  fail on the broken version now.
+- **Audit History says which rows are closures.** A closure is an
+  ordinary record, which is the point of it; but a row sitting in this
+  month's list with nothing on it to say otherwise reads as work that was
+  DONE. So the history row carries an amber **Closed by admin** tag and
+  the job it closed, and a section closed at once is a run of them on one
+  day. Where the thin PLAIN fallback is used the tag is simply absent,
+  which is the safe direction.
+- **And it says what the task was DUE, not only when it was closed.**
+  The date on the right of a history row is the day somebody pressed the
+  button, so a run of closures reads as this month's work and the whole
+  justification for them — that they were old and nobody was ever going
+  to walk them — is nowhere on screen. The office put it exactly:
+  *"it feels like closing that month case but not the old and unaudited
+  case."* The line now ends **was due 8 Aug 2026 · 65 days overdue**, in
+  red beside the amber tag.
+
+  Where that comes from is the part to keep. **The deadline is nowhere in
+  `audit_maintenance_audits`** and cannot be recomputed from a closure
+  row. The one thing that knows it is `push()` inside
+  `loadMaintTimeline` — work date plus `MJMAuditSettings.maintDays(wt)` —
+  and it used to throw the answer away for any task already audited,
+  which is every task by the time it reaches the history. So `push()`
+  now records `MAINT_DUE[task_id] = { due, on }` for **every** task it
+  walks, BEFORE the audited test, and the history reads that. One rule,
+  not a second copy, and no schema change. Two things follow:
+
+  - **The deadline is read before the audited test**, so a row with no
+    work date now counts as `skippedNoDate` in the diagnostics where it
+    used to count as `skippedAudited`. That is the only visible effect.
+  - **`loadMaintTimeline` redraws the history when it finishes**, in the
+    finally position. The two load in parallel, so whichever lands first
+    has to tell the other; without it the deadline appears on a closure
+    only the second time the page is opened.
+
+  It is written into the **remark** as well — `Due 2026-08-08, 65 days
+  overdue. Closed without an audit, work done 2026-08-05.` — because the
+  remark is the only part of the row that travels into an export. And
+  `remarks` is now in the maint summary spec and shown as a field: it had
+  always been written and was on no screen anywhere, so the one field
+  saying WHY a task was unsatisfied, or closed without an audit, could
+  only be read out of the database.
 
 `shared/CHECK_audits_closed_by_admin.sql` is the register — who closed
 what, when, and how many days it had been waiting. A long list under one
@@ -1476,7 +1717,10 @@ name, or a lot on one day, is the thing to look at: closing is the
 exception for work that has gone cold, not a way of clearing a board.
 
 `tests/admin_can_close_a_dead_plot.cjs` drives the real board in a real
-browser, as an admin and as a plain auditor. **It blocks the service
+browser, as an admin and as a plain auditor, closing one chip and closing
+a whole section — and it asserts the section went up as **one** insert
+carrying **both** task ids, that every NOT NULL column is filled, and
+that no `prompt` is ever raised. **It blocks the service
 worker** (`serviceWorkers: 'block'`), because `page.route` does not reach
 a fetch the WORKER makes: once it activates it answers its own synthetic
 503 and the board reloads empty, which is the worker doing its offline
@@ -1824,6 +2068,38 @@ Two things that follow:
 version fails the same check, and prints every page that writes a whole
 className onto a select. It needs `npm install jsdom` and says so if it is
 missing.
+
+## A seal is checked in the database, never only on the phone
+
+Seal stickers ("0009297") go through four states — **in stock** (received at
+UNN 1 on the Mobile Seal page), **pending collection** (allocated by a
+consent: the start and end of each range are scanned on Mobile Consent),
+**scanned** (each seal scanned at collection in the FC Portal) and
+**collected** (on a DO). `shared/RUN_ME_seal_management.sql` is all of it.
+
+**The rules live in triggers**, because the phones work offline and a check
+that only runs on a phone with signal is a check that sometimes does not run.
+A phone WITH signal asks `seal_check_range()` and warns or blocks first; any
+record that reaches the database, from any app or any old version, passes the
+triggers on `mobile_consent_records`, `seal_receipts`, `fcportal_scan_records`
+and `shared_do_records`. A problem is **never a refused row** — what the
+customer signed is kept — it is a `seal_problems` row and a NELOS case put in
+the HQ queue (`sees_all_cases`) with nobody assigned, so every HQ handler sees
+it. One open case per AL and kind; a second problem is a comment on it.
+
+Three things worth knowing:
+
+- **Seals are compared as numbers and shown at their width.** 0009297 and 9297
+  are one seal. `sealRanges.js` is the rule and lives in mobile, fc-portal and
+  the Sales Web as the same file — change all of them.
+- **A DO says which seals it carried** (`shared_do_records.seal_ranges`), the
+  ones scanned on that card since its last DO, so a consent collected over
+  three trips gives three DOs with three different lists.
+- **`enforce_stock` is OFF** until the seals already at UNN 1 are keyed as
+  opening stock. Turned on before that, every consent is a "never received"
+  case.
+
+`tests/seal_dashboard.cjs` holds the office page.
 
 ## Two repositories, one system
 
