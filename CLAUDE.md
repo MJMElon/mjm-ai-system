@@ -1355,14 +1355,63 @@ while this is happening — they simply stop moving. The reason a fix was
 DROPPED (too rough, too still, too far to believe) is shown the same way; the
 Worker Portal has always shown it and the map never did.
 
-**What is still true and is not a bug:** the FC Portal records only while the
-full-screen map is open, and closing it loses the walk. That is worth changing
-the day somebody asks — the Worker Portal already runs its walk from the task
-row for exactly this reason — but it is a different fault from this one.
-
 `tests/the_screen_lock_is_asked_again.cjs` drives the real helper and holds
 the previous version up beside it: asked once, never again after the first
 time hidden, and nothing watching the page at all.
+
+### Nothing keeps RECORDING through a locked phone. The metres already walked are a different question.
+
+The office asked the obvious next thing: *"can make it able to record as long
+as the browser did not close at the backend? like if they lock their phone,
+glance at whatsapp but they didnt close the browser at backend."* **No, and no
+amount of code changes that.** A browser STOPS calling back with positions
+when the page is not on screen — there is no web API for background
+geolocation, the wake lock only stops the screen turning ITSELF off, and a
+service worker gets no positions either. Only a native app, or an Android
+foreground service, can walk a track with the screen dark. `useWorkerTrack.js`
+had already written that down.
+
+What was being lost on top of that was avoidable, and it has been fixed. **The
+FC Portal kept the walk in React state inside the map modal**, so closing the
+map, a reload, or the browser reclaiming the tab — which a phone does the
+moment it is locked for long enough — threw away every metre of it. The Worker
+Portal had always parked its walk in `localStorage`; the map had nothing. Two
+copies, one of them thinner, again.
+
+`src/modules/maintenance/track/parked.js` is the one copy now and
+`worker/taskTrack.js` reads through it. Four rules in it:
+
+- **It comes back STOPPED, never running.** The phone was not being watched
+  while the page was away, so those minutes have no fixes; carrying on
+  silently draws a straight line across them and calls it walked. The person
+  presses **Resume**, which keeps the SAME track and the original `startedAt`
+  so `t` on every later point stays honest, and the gap in the line is the
+  truth about what happened.
+- **Resume is the button under the thumb, and Start again is the quiet one.**
+  Start again throws the walk away; a red primary button that destroys what
+  somebody just walked is a trap.
+- **It is dropped after `PARKED_GOOD_FOR_H` — twelve hours.** A kill takes the
+  FORM with it, so the walk comes back into a form that has to be keyed again
+  and nothing in it says which job it was for. Within the shift that is
+  obvious to the person standing there; a walk parked last Tuesday is not, and
+  offering it against today's plot is how a line walked round N15 is filed
+  against B04. Measured in BOTH directions, because a phone whose clock runs
+  ahead parks in the future and a one-sided test drops the one walk the person
+  is definitely still standing in.
+- **Handing it to the record clears it.** A park left behind reappears on the
+  NEXT job and reads as that one, which is worse than losing it.
+
+Every read and write is wrapped: a phone with storage blocked must still be
+able to walk a track, it just cannot survive being killed.
+
+**What is still true and is not a bug:** the FC Portal records only while the
+full-screen map is open. The walk is no longer lost when it is closed, but it
+is not growing either. Running it from the record row the way the Worker
+Portal does is worth doing the day somebody asks, and is a different change
+from this one.
+
+Section 7 and section 8 of `tests/the_screen_lock_is_asked_again.cjs` hold the
+parking and the twelve hours.
 
 ## Which nursery a record is in: the PLOT decides
 
