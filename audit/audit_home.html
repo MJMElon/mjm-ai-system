@@ -2422,9 +2422,23 @@ function loadAuditTodo(){
          somebody else's work — a task the field files this morning is
          pending the moment it lands, and the row that carries it needs
          to be visible whether it happens to be due today, in the past
-         (overdue), or two days from now. The other modules run on the
-         auditor's own calendar and are date-scoped as before. */
+         (overdue), or two days from now.
+
+         ON TODAY, EVERY ROW OF THIS MONTH SHOWS, not only the ones whose
+         window covers today. Today is selected on load, so the day scope
+         was the default view, and a Plot Condition or Papan Tanda or
+         Seedling Height round starting on the 20th simply was not in the
+         list on the 14th: the only way to see it was to tap today's chip
+         a second time to clear the selection, which nothing says. A
+         to-do list that hides what is coming is a diary, and the auditor
+         opening it wants to know what is owed and what is next.
+
+         They arrive greyed and do not navigate, which is the treatment a
+         window that has not opened already had — the audit form would
+         have nothing yet to record. Picking any OTHER day still scopes
+         to that day, which is what picking a day is for. */
       (showingToday && (o.mod === 'maint' ||
+                        o.fromY === undefined ||
                         occStatus(o, o.fromY ?? viewY, o.fromM ?? viewM) === 'overdue')) ||
       (o.fromY === undefined && selDay >= o.start && selDay <= o.end));
     if (active.size)     list = list.filter(o =>

@@ -668,6 +668,38 @@ because this was the second fix in a week that had to actually reach a phone.
 That is the condition the rule names: a module somebody wants current, not the
 whole site.
 
+## A to-do list that hides what is coming is a diary
+
+The audit home page opens with TODAY selected — `selDay = day` — so the day
+scope was not something the auditor chose, it was the default view, and the
+day filter was the default filter. A Plot Condition, Papan Tanda or Seedling
+Height round whose window opens on the 20th was therefore not on the list on
+the 14th. The only way to see it was to tap today's chip a SECOND time to
+clear the selection, and nothing on the screen says that. Three of the four
+modules answered "what is next" with nothing.
+
+Maintenance was already exempt, because its deadline is set by somebody
+else's work and a row that exists is a row with work pending on it. The
+other three were not, and the asymmetry read as the schedule being empty.
+
+So on today every undone row of the month on screen shows. Two things keep
+it from becoming a free-for-all:
+
+- **Picking any OTHER day still answers literally** — what falls on that
+  date, maintenance included. A day somebody chose is a question; the day
+  the page opened on is not.
+- **A row whose window has not opened arrives greyed and does not
+  navigate.** That was already the treatment for `soon` and `upcoming`, and
+  it is the right one: the audit form would have nothing yet to record. The
+  row is there to be seen, not to be opened.
+
+A row carried from an earlier month (`fromY` set) rides on today only while
+it is overdue, which is the only reason `carriedOverdue()` hands one over.
+
+`tests/todo_shows_what_is_coming.cjs` lifts `occStatus` and the day filter
+straight out of the shipped `audit_home.html` and drives real rows through
+them — the three the office named fail on the previous code.
+
 ## A row count is not a window
 
 "Recent work is all a Field Conductor needs on a phone" was implemented as
