@@ -580,6 +580,72 @@ same reason the drone-map panel demanded an exact match.
 `tests/cull1_explained_by_transplanting.cjs` holds both halves, including that
 a difference which is NOT the adjustment still reads as over-allocated.
 
+## Only verified data is counted, and it is counted LINE BY LINE
+
+The office has narrowed this rule three times, and the third is the one the
+code now obeys:
+
+1. *"make it only verified data will float to life of seedling"* — an
+   unverified figure came off the report.
+2. *"no need to show which item not yet verify"* — the row stopped carrying
+   a label saying which stage it was waiting on.
+3. *"it is only calculate what data is verified first ... just show the
+   number which verified until new data verified then update the report
+   there."*
+
+**The third is the first, asked one level down.** It used to be asked of a
+whole STAGE, so one unsigned row took the whole column away and everything
+derived from it with it: a Balance could not be read at all until the 3rd
+Culling tab was signed, which is what the office was looking at when they
+asked for it to be calculated. Asked of the LINE, a tab signed four rows out
+of five shows those four, and the fifth joins the figure the day somebody
+signs it.
+
+So `_losLineSigned` is the one test, and the FIGURES are built out of the
+lines it says yes to — inside `_losBuildAllRows`, not in the cells. Five
+things fall out of that, and the last is what it costs:
+
+- **Every derived figure is right by construction.** Variance, Total Culled,
+  the Balance and both splits are arithmetic over figures that are already
+  verified-only, so none of them has to know this rule exists. That is the
+  whole reason the test lives in the builder.
+- **Nothing is a dash any more.** A stage nobody has signed is nought. The
+  dash existed to say "nobody has signed this" when the figure was withheld;
+  nothing is withheld now, and what the cell says instead is in its hover —
+  which stage is outstanding, how many rows, and what signing them would
+  add.
+- **The TOTAL is the plain sum of the rows.** It used to leave rows out to
+  match a column of dashes; there are no dashes, so it agrees with the
+  column above it line for line. The foot still says which totals are
+  waiting on rows, because a reader needs to know which way a figure is
+  going to move.
+- **The record lists are untouched.** Every line is still in the drilldown,
+  signed or not — that is what somebody needs in order to go and sign the
+  rest off.
+- **What it costs: a VARIANCE whose seed in is signed and whose planting is
+  not reads as minus the whole delivery**, because Actual Planted is
+  genuinely nought so far as anybody has signed. That was the argument for
+  the dash, and the office chose this with it in front of them. Batch 097 in
+  `tests/los_only_verified_links.cjs` pins it so nobody is surprised by it
+  twice.
+
+**The tally that explains a figure is built with the same call.** Two copies
+of the test would be a figure disagreeing with the note underneath it.
+
+**Only Life of Seedlings asks for it** — `_losBuildAllRows(asAt, {
+verifiedOnly: true })`. The Seed In Report shares that builder and reads the
+ledger as keyed: what arrived from the supplier is a different question.
+
+And it still **fails OPEN**: if neither sign-off table can be read, every
+line counts and the report says it could not tell.
+
+`shared/CHECK_only_verified_floats.sql` is the size of it — every batch whose
+figures move, what is signed of its transplanting and its 3rd culling, and
+the Balance on the ledger against the Balance on the signed lines. Hand it
+over with any change here: the question that decides whether a rule like this
+is right is "what does it actually move", and that is the only thing that
+answers it.
+
 ## An unverified figure does NOT float, and it is a dash and never a nought
 
 Life of Seedlings is seventeen columns of live sums of the batch ledger, and
@@ -626,9 +692,26 @@ Five things follow, and each is a way this goes quietly wrong:
   withheld and the report says so. A check that cannot run must not empty a
   report — same reason access fails open.
 
-The figure is not hidden, only kept off the report: the dash carries it in
-its hover, names what is waiting, and is still a button, because the records
-behind it are exactly what somebody needs in order to go and sign it off.
+**Everything above is the history of this rule, not its current shape** —
+see the section above it. The withholding was per STAGE and left a dash; it
+is per LINE now and leaves a figure. What is still exactly true of it is the
+reason it exists, the fail-open, the column-not-tab unit, the two routes a
+sign-off comes by, and that a derived figure is only as checked as its
+parts.
+
+**The ROW does not say which stage it is waiting on.** A line under the
+batch name read "⧗ 2nd culling, 3rd culling unverified", on the argument
+that the markers scattered across a row are lost if a reader has to collect
+them by eye. The office asked for it to go — *"no need to show which item
+not yet verify, as long as it is not verify, then the data wont appear here,
+while verified, then it will show here based on the date."* And they are
+right: once an unverified figure stopped being shown and became a dash, the
+table was already saying it, in the one column it applies to, which is more
+than a line could say in the space it had. What stays is everything that
+answers a question a dash in a row CANNOT: the note above the table (is
+anything missing at all), the column-by-column note in the foot (which total
+is light), and the verification filter (a question somebody asks on
+purpose). `verStages` / `verPending` are still computed for those three.
 
 Three things to know before touching `LOS_GROUP_OF_TYPE` in
 `operation/operation_reports.html`:
@@ -921,6 +1004,37 @@ because this was the second fix in a week that had to actually reach a phone.
 That is the condition the rule names: a module somebody wants current, not the
 whole site.
 
+## A to-do list that hides what is coming is a diary
+
+The audit home page opens with TODAY selected — `selDay = day` — so the day
+scope was not something the auditor chose, it was the default view, and the
+day filter was the default filter. A Plot Condition, Papan Tanda or Seedling
+Height round whose window opens on the 20th was therefore not on the list on
+the 14th. The only way to see it was to tap today's chip a SECOND time to
+clear the selection, and nothing on the screen says that. Three of the four
+modules answered "what is next" with nothing.
+
+Maintenance was already exempt, because its deadline is set by somebody
+else's work and a row that exists is a row with work pending on it. The
+other three were not, and the asymmetry read as the schedule being empty.
+
+So on today every undone row of the month on screen shows. Two things keep
+it from becoming a free-for-all:
+
+- **Picking any OTHER day still answers literally** — what falls on that
+  date, maintenance included. A day somebody chose is a question; the day
+  the page opened on is not.
+- **A row whose window has not opened arrives greyed and does not
+  navigate.** That was already the treatment for `soon` and `upcoming`, and
+  it is the right one: the audit form would have nothing yet to record. The
+  row is there to be seen, not to be opened.
+
+A row carried from an earlier month (`fromY` set) rides on today only while
+it is overdue, which is the only reason `carriedOverdue()` hands one over.
+
+`tests/todo_shows_what_is_coming.cjs` lifts `occStatus` and the day filter
+straight out of the shipped `audit_home.html` and drives real rows through
+them — the three the office named fail on the previous code.
 ## Three numbers wear the name Double Tone, and only one is a column
 
 **`Transplanted` out of the DOUBLE-TONE tray** is the Life of Seedlings
@@ -1313,6 +1427,106 @@ Two things that follow:
 
 `tests/history_is_a_window_not_a_count.cjs` guards all of it.
 
+## A walk recorded with the screen off is not recorded at all
+
+The same plot came back **2.63 km over 798 fixes** one day and **4 m over 2
+fixes** the next, and the office could not tell what made the difference.
+
+**A browser STOPS giving positions when the page is not on screen.** Not
+throttles — stops. So a track walked from a web page lives or dies on whether
+the screen stays awake, and the one lever for that is the screen wake lock.
+There is no way round it; only a native app can walk a track with the screen
+off.
+
+**And the browser takes that lock back the moment the page is hidden, without
+being asked and without saying so.** So `wakeLock.request()` called ONCE at
+Start is a lock that is gone for good after the first notification, app switch
+or glance away — and every metre after that moment is at the mercy of the
+display timeout. The phone sleeps, the fixes stop, and the map goes on looking
+exactly like a map that is recording.
+
+The Worker Portal had the full treatment, including a comment saying in as
+many words that asking once is asking for the first time only. **The FC
+Portal's track map had the one-line version** — request, `.catch(() => {})`,
+no reference, no listener. Two copies, one of them thinner, which is the shape
+of nearly every fault in this file.
+
+`src/lib/screenWake.js` is the one copy now and both call it. Two things in it
+that were learned the hard way and must not be simplified back out:
+
+- **The reference is forgotten on `hidden`**, not on the lock's own `release`
+  event. Waiting for the event left the reference set, so the re-ask returned
+  early and never asked at all.
+- **Every part of it is best effort.** The API is not on every phone and it can
+  refuse, and a walk must still record on one where it does.
+
+**And the map now says when the line has stopped growing**, because none of
+the above can make a fix arrive — what it can do is stop pretending one has.
+`STALL_AFTER_S` is 45: the phone gives a position every second or two in the
+open, so three quarters of a minute of nothing has never been the sky. The
+band is red, above the figures, because the figures look perfectly healthy
+while this is happening — they simply stop moving. The reason a fix was
+DROPPED (too rough, too still, too far to believe) is shown the same way; the
+Worker Portal has always shown it and the map never did.
+
+`tests/the_screen_lock_is_asked_again.cjs` drives the real helper and holds
+the previous version up beside it: asked once, never again after the first
+time hidden, and nothing watching the page at all.
+
+### Nothing keeps RECORDING through a locked phone. The metres already walked are a different question.
+
+The office asked the obvious next thing: *"can make it able to record as long
+as the browser did not close at the backend? like if they lock their phone,
+glance at whatsapp but they didnt close the browser at backend."* **No, and no
+amount of code changes that.** A browser STOPS calling back with positions
+when the page is not on screen — there is no web API for background
+geolocation, the wake lock only stops the screen turning ITSELF off, and a
+service worker gets no positions either. Only a native app, or an Android
+foreground service, can walk a track with the screen dark. `useWorkerTrack.js`
+had already written that down.
+
+What was being lost on top of that was avoidable, and it has been fixed. **The
+FC Portal kept the walk in React state inside the map modal**, so closing the
+map, a reload, or the browser reclaiming the tab — which a phone does the
+moment it is locked for long enough — threw away every metre of it. The Worker
+Portal had always parked its walk in `localStorage`; the map had nothing. Two
+copies, one of them thinner, again.
+
+`src/modules/maintenance/track/parked.js` is the one copy now and
+`worker/taskTrack.js` reads through it. Four rules in it:
+
+- **It comes back STOPPED, never running.** The phone was not being watched
+  while the page was away, so those minutes have no fixes; carrying on
+  silently draws a straight line across them and calls it walked. The person
+  presses **Resume**, which keeps the SAME track and the original `startedAt`
+  so `t` on every later point stays honest, and the gap in the line is the
+  truth about what happened.
+- **Resume is the button under the thumb, and Start again is the quiet one.**
+  Start again throws the walk away; a red primary button that destroys what
+  somebody just walked is a trap.
+- **It is dropped after `PARKED_GOOD_FOR_H` — twelve hours.** A kill takes the
+  FORM with it, so the walk comes back into a form that has to be keyed again
+  and nothing in it says which job it was for. Within the shift that is
+  obvious to the person standing there; a walk parked last Tuesday is not, and
+  offering it against today's plot is how a line walked round N15 is filed
+  against B04. Measured in BOTH directions, because a phone whose clock runs
+  ahead parks in the future and a one-sided test drops the one walk the person
+  is definitely still standing in.
+- **Handing it to the record clears it.** A park left behind reappears on the
+  NEXT job and reads as that one, which is worse than losing it.
+
+Every read and write is wrapped: a phone with storage blocked must still be
+able to walk a track, it just cannot survive being killed.
+
+**What is still true and is not a bug:** the FC Portal records only while the
+full-screen map is open. The walk is no longer lost when it is closed, but it
+is not growing either. Running it from the record row the way the Worker
+Portal does is worth doing the day somebody asks, and is a different change
+from this one.
+
+Section 7 and section 8 of `tests/the_screen_lock_is_asked_again.cjs` hold the
+parking and the twelve hours.
+
 ## Which nursery a record is in: the PLOT decides
 
 The plot is the thing that is somewhere. A maintenance record is wherever its
@@ -1574,6 +1788,70 @@ browser and holds all of it — a plot walked late drops off, a plot nobody
 walked stays on, an audit from before the window opened clears it and is
 recorded as missed, and nothing clears a window that has not closed yet.
 
+## Papan tanda is two months wide, because a sign goes up after the plot does
+
+The papan roster was the current calendar month: the plots the ledger
+says were transplanted (or, in the Pre-Nursery, planted) since the 1st.
+One month is too narrow for the walking. A plot transplanted on the
+**28th** gets its sign nailed up days later, and on the **1st** it fell
+out of the list entirely — audited or not, with nothing saying it had
+gone. The office asked for both months on one screen: *"so i can see sep
+transplanting plot and oct transplanting plot. So our auditor just based
+on this to audit plot needed."*
+
+So the window opens on the **first of the PREVIOUS month**, and it is
+written twice:
+
+- `_papanWindowStartISO()` in `audit_papan_script.js`, which is what the
+  module page queries the ledger with (`transaction_date.gte.`);
+- `_papanWindowStartISO()` in `audit_pending.js`, which is what the home
+  board's to-do row and its plot chips are built from.
+
+**Change one, change the other.** A plot inside one window and outside
+the other is a to-do row with no card to open, or a card nothing ever
+asked for. `tests/papan_sees_both_months.cjs` runs BOTH shipped copies
+over the same days and compares, the January-reaches-into-December case
+included.
+
+**And the strip has to SAY which month.** Two months of plots drawn as
+one run of identical circles answers a question nobody asked — the
+office wanted to tell September's from October's. The circles are
+ordered newest month first with a small tag above each run, and
+`MJMAuditPending.papanPlacedOn(nursery, plot)` is what supplies the
+date. It is an accessor of its own rather than a field on `plots()`: the
+other three modules want a list of codes, and widening the one function
+they share to carry something only papan reads is how a shared function
+becomes four. A plot the roster cannot date is tagged as undated and put
+LAST, never dropped and never filed under a month nobody checked.
+
+**Which page the auditor is actually on matters here.** The papan module
+has no landing list of its own — `init()` redirects to `audit_home.html`
+unless the address names a plot — so the strip on the To Do card IS the
+papan plot list. The module page's own grouped list is reached by
+`?admin=1` or `?from=manage` and is kept in step with it rather than
+being the thing people see.
+
+**The window change is what forced papan into the round rule.** That
+rule — "A batch is not audited for ever because it was audited once",
+below — deliberately left papan out, and the note said why: its roster
+was *this month's* placements, so the roster was already round-shaped
+and "ever audited" could not disagree with "audited this round". Two
+months breaks that. A plot transplanted and audited in September now
+rides into October's roster, and the old test would have drawn it green
+while the home board, which asks about the round's own dates, went on
+listing it as owed. So `getAuditForBatch` asks
+`MJMAuditSettings.currentWindow` like the other two, `_papanRoundFor` /
+`_papanInRound` / `_papanRoundSuffix` are the third copies of
+`_roundNow` / `_inRound` / `_roundSuffix`, and the count pill says which
+round it is counting. `getLastAuditForBatch` is the other half: the card
+and the chip still show the last reading, because an auditor wants it in
+front of them before they take the next one, and Batch Info keeps the
+EVER question because it is a register and not a to-do list.
+
+`tests/papan_list_spans_two_months.cjs` drives the real board and the
+real module page in a real browser; eleven of its seventeen checks fail
+on the previous code.
+
 ## A batch is not audited for ever because it was audited once
 
 The other half of the backlog, and the one the office actually saw: N02
@@ -1624,9 +1902,10 @@ Four things in it:
   a save, an off-by-one round on the day a window opens.
 
 Plot Condition and Seedling Height are two copies of this card and two
-copies of the grid test. Change one, change the other. Papan is not in it:
-it audits the batch most recently placed on a plot this month, so its own
-rule is already round-shaped.
+copies of the grid test. Change one, change the other. **Papan is in it
+now too** — it was left out while its roster was one month, which made
+its own rule round-shaped by accident; the two-month window took that
+away. See the section above for what moved.
 
 `shared/CHECK_which_batch_still_owes_the_round.sql` names every batch
 behind its own plot, on every plot and both modules — the plot was
