@@ -2262,6 +2262,25 @@ function loadAuditTodo(){
       const y = d.getFullYear(), m = d.getMonth();
       if (beforeStart(y, m)) continue;
       occurrences(y, m).forEach(o => {
+        /* ── PAPAN IS NOT CARRIED, AND THAT FALLS OUT OF ITS WINDOW ──
+           Every other module's round asks about one window, so a round
+           nobody walked has to be carried or the work disappears.
+           Papan's roster is TWO MONTHS WIDE by itself: October's row
+           already asks about every plot transplanted in September. So
+           carrying September's row puts the same plots on the board
+           twice, and August's a third time where the windows overlap
+           -- the office saw B03, B06, N08 and U04 under an AUG 2026 row
+           and again under a SEP 2026 one, and said of both: "this 2
+           already passed, no need to show."
+
+           The two-month window IS the catching up, which is what it was
+           asked for. What it costs is written down beside this: a plot
+           placed TWO months back or more, never audited, is on no row
+           -- it is outside the current window, so there is nothing on
+           the board that could ask for it. A round done LATE is still
+           filed in Audit History as a missed one, because missedRounds
+           walks the months itself and does not read this list. */
+        if (o.mod === 'papan') return;
         if (occStatus(o, y, m) === 'overdue')
           out.push(Object.assign({}, o, {fromY:y, fromM:m}));
       });

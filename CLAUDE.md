@@ -1844,6 +1844,25 @@ board on its own. Only papan reads `asOfISO`; the other three modules'
 rosters do not move with the calendar, and the module page omits it
 because it only ever shows now.
 
+**AND A PAPAN ROUND IS NOT CARRIED FORWARD.** Every other module's
+round asks about ONE window, so a round nobody walked has to be carried
+onto the current board or the work disappears. Papan's roster is two
+months wide by itself, so October's row **already asks about every plot
+transplanted in September** — carrying September's row asks the same
+question twice, and August's a third time where the windows overlap. The
+office saw B03, B06, N08 and U04 under an AUG 2026 row and again under a
+SEP 2026 one, above October's, and said of both: *"this 2 already
+passed, no need to show."* The two-month window IS the catching up,
+which is what it was asked for.
+
+`carriedOverdue()` skips `papan` and nothing else — the other three are
+still carried, on the office's own earlier rule that a round nobody has
+walked keeps showing. **What it costs:** a plot placed two months back
+or more and never audited is on no row at all, because it is outside the
+current window and there is nothing left on the board that could ask for
+it. A round done LATE is still filed in Audit History as a missed one:
+`missedRounds()` walks the months itself and does not read that list.
+
 **And the strip has to SAY which month.** Two months of plots drawn as
 one run of identical circles answers a question nobody asked — the
 office wanted to tell September's from October's. The circles are
