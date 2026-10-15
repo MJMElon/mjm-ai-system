@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
+node_modules/
 
 # Screenshots the browser tests write into the repo root when run from here.
 losver.png
