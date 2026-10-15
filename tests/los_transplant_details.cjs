@@ -101,6 +101,11 @@ const fn = new Function('asAt','logsRes','dosRes','_logDate','_mvBatchKey','nurs
   'PRE_NURSERY_PLOTS','_losAgeMonths','_losAgeLabel','_RE_LOS_SUPPLIER','_RE_LOS_MPOB',
   '_RE_LOS_DONO','_RE_LOS_DO_QTY','_RE_LOS_FOC_PCT','_RE_LOS_REPL','_RE_LOS_FROM_TRAY',
   '_RE_LOS_FROM_PLOT','_RE_LOS_APPROVED','_RE_LOS_CAL_REPORT','_RE_LOS_CAL_SIDE','_losTrayKey','_LOS_CAL_SEED_REPORTS',
+  /* The verified-only filter is Life of Seedling's own and is driven by
+     tests/los_only_verified_links.cjs. Handed in OFF here, so these tests
+     go on asking what they were written to ask — the arithmetic of the
+     ledger, with every line counted. */
+  'verOnly','verCtx','_losLineSigned',
   body + '\nreturn rows;');
 
 const grab = (name) => new Function('return ' + src.slice(
@@ -115,7 +120,8 @@ const build = (asAt) => {
     grab('_RE_LOS_SUPPLIER'), grab('_RE_LOS_MPOB'), grab('_RE_LOS_DONO'),
     grab('_RE_LOS_DO_QTY'), grab('_RE_LOS_FOC_PCT'), grab('_RE_LOS_REPL'),
     grab('_RE_LOS_FROM_TRAY'), grab('_RE_LOS_FROM_PLOT'), grab('_RE_LOS_APPROVED'),
-    grab('_RE_LOS_CAL_REPORT'), grab('_RE_LOS_CAL_SIDE'), grab('_losTrayKey'), grab('_LOS_CAL_SEED_REPORTS'));
+    grab('_RE_LOS_CAL_REPORT'), grab('_RE_LOS_CAL_SIDE'), grab('_losTrayKey'), grab('_LOS_CAL_SEED_REPORTS'),
+    false, {}, () => true);
   const by = {}; rows.forEach(r => { by[r.batch] = r; });
   return by;
 };
@@ -186,8 +192,10 @@ is('the keyed box keeps its own group',
   /DTone_Nursery_Qty:\s*'dtone'/.test(src), true);
 is('signed off on the Transplanting tab',
   /dtone: 'transplanting'/.test(src), true);
+/* The row key moved into _losLineRowKey when the sign-off test became one
+   rule for the figures and the tally both — see los_only_verified_links. */
 is('under the box own row key, not a plot',
-  /rowKey = 'DTONE-NURSERY-QTY'/.test(src), true);
+  /DTone_Nursery_Qty'\) return 'DTONE-NURSERY-QTY'/.test(src), true);
 
 console.log('\n── The split is read off the batch report, not re-derived ──');
 is('the Double Tone column opens the D-Tone-sourced transplants',

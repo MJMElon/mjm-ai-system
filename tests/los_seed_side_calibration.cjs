@@ -110,6 +110,10 @@ const fn = new Function('asAt','logsRes','dosRes','_logDate','_mvBatchKey','nurs
   '_RE_LOS_DONO','_RE_LOS_DO_QTY','_RE_LOS_FOC_PCT','_RE_LOS_REPL','_RE_LOS_FROM_TRAY',
   '_RE_LOS_FROM_PLOT','_RE_LOS_APPROVED','_RE_LOS_CAL_REPORT','_RE_LOS_CAL_SIDE',
   '_losTrayKey','_LOS_CAL_SEED_REPORTS',
+    /* The verified-only filter is Life of Seedling's own and is driven by
+       tests/los_only_verified_links.cjs. Handed in OFF here, so these tests
+       go on asking what they were written to ask. */
+    'verOnly','verCtx','_losLineSigned',
   body + '\nreturn rows;');
 
 const grab = (name) => new Function('return ' + src.slice(
@@ -133,7 +137,8 @@ const build = () => {
     grab('_RE_LOS_DO_QTY'), grab('_RE_LOS_FOC_PCT'), grab('_RE_LOS_REPL'),
     grab('_RE_LOS_FROM_TRAY'), grab('_RE_LOS_FROM_PLOT'), grab('_RE_LOS_APPROVED'),
     grab('_RE_LOS_CAL_REPORT'), grab('_RE_LOS_CAL_SIDE'),
-    grab('_losTrayKey'), grab('_LOS_CAL_SEED_REPORTS'));
+    grab('_losTrayKey'), grab('_LOS_CAL_SEED_REPORTS'),
+    false, {}, () => true);
   const by = {}; rows.forEach(r => { by[r.batch] = r; });
   return by;
 };

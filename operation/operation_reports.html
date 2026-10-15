@@ -270,7 +270,9 @@
      a batch's name are all GONE, in that order and for the same reason
      twice over: the office asked for an unverified figure not to be on the
      report, and then for the row not to carry a label about it either. All
-     that marks it now is the dash (.los-held above). Left as a comment
+     that marks it now is the figure itself, which is the VERIFIED part of
+     what the field keyed and says in its hover what is still to come
+     (_losWaitingNote). Left as a comment
      rather than as unused rules, because a stylesheet that still dresses a
      state nothing can enter is how the next person concludes the state
      still exists. */
@@ -290,13 +292,13 @@
   .los-split > span + span { border-left:1px solid #e8dcc8; }
   .los-split .los-fig { font-size:9px; }
   .los-split-lbl { color:#a09078; }
-  /* A figure held back for want of a signature. A dash, never a nought: a
-     nought is a count and this is the absence of one. Amber so it reads as
-     waiting rather than as missing data, and still a button, because the
-     records behind it are exactly what somebody needs in order to go and
-     sign it off. */
-  .los-held { color:#c07820; font-weight:900; letter-spacing:.08em; }
-  button.los-held { text-decoration:none; }
+  /* THE DASH IS GONE TOO, and that is the third turn of this screw. The
+     amber wash went first, then the verdict line under the batch name, and
+     now the dash a withheld figure left behind — because a figure is no
+     longer withheld at all. It is built out of the SIGNED lines and shown
+     as a figure, and the unsigned ones join it the day somebody signs them:
+     see verOnly in _losBuildAllRows. Left as a comment, not as unused
+     rules, for the same reason as the two above it. */
   @media print {
     .los-fig { text-decoration:none; }
     .los-table thead th { position:static; }
@@ -964,26 +966,79 @@ function _losPendingNames(r, groups) {
    If the sign-off tables could not be READ, nothing is withheld and the
    report says so. The same reason access fails open: a check that cannot
    run must not empty a report. */
+/* ── WHICH ROW A LEDGER LINE SIGNS OFF UNDER ──────────────────────────
+   A transfer card signs off under the plot the seedlings LEFT, which the
+   line names in its remark and not in plot_name. The Double Tone Quantity
+   in Nursery box is not about a plot at all and signs off under its own
+   name — see ROW_TAB_CONFIG in operation_batch_detail.html, where it is
+   pushed with the key 'DTONE-NURSERY-QTY'. Everything else signs off under
+   its own plot. */
+function _losLineRowKey(l) {
+  if (!l) return '';
+  if (l.transaction_type === 'Cull3_Transfer') {
+    const from = (l.remark || '').match(_RE_LOS_FROM_PLOT);
+    return from ? _losPlotKey(from[1]) + '|TRANSFER' : '';
+  }
+  if (l.transaction_type === 'DTone_Nursery_Qty') return 'DTONE-NURSERY-QTY';
+  return _losPlotKey(l.plot_name);
+}
+
+/* HAS SOMEBODY SIGNED THIS LINE OFF? One signature over the whole tab, or —
+   on a tab verified row by row — a Row_Verification against this line's own
+   row. A line belonging to no batch-report stage at all (a sale, a
+   calibration) is signed off elsewhere and is never held back here.
+
+   ONE RULE, two readers: the figures are built out of the lines this
+   answers yes to, and the tally beside them counts the lines it answers no
+   to. Two copies of this test would be a figure disagreeing with the note
+   that explains it. */
+function _losLineSigned(l, ctx) {
+  const group = LOS_GROUP_OF_TYPE[l && l.transaction_type];
+  if (!group) return true;
+  const stage = LOS_STAGE_OF_GROUP[group];
+  const batch = l.batch_name;
+  if (ctx.stageSigned.has(batch + '::' + stage)) return true;
+  if (!LOS_ROW_STAGES[stage]) return false;
+  const rowKey = _losLineRowKey(l);
+  return !!rowKey && ctx.rowSigned.has(batch + '::' + stage + '::' + rowKey);
+}
+
 function _losHeld(r, groups) {
   if (!r.verKnown) return false;
   const st = _losWorst(r, groups);
   return st === 'part' || st === 'no';
 }
 
-/* The cell a withheld figure leaves behind. It names what is waiting and
-   carries the figure itself, so the office can see what they are signing
-   off without the number reaching the table or its totals. */
-function _losHeldCell(r, groups, value, kind) {
+/* WHAT THIS FIGURE IS STILL WAITING FOR, for the cell's hover.
+
+   The figure itself is the verified part and is shown as a figure — see the
+   note on verOnly in _losBuildAllRows. But a figure that is going to MOVE
+   when somebody signs the rest has to say so somewhere, or a reader takes a
+   partial total away believing it settled. So the cell carries it in its
+   title: which stage, how many rows are left, and what they would add.
+
+   Nothing visible changes — every figure on this report already wears the
+   dotted underline that says it opens. '' when there is nothing outstanding,
+   which is the ordinary case. */
+function _losWaitingNote(r, groups, kind) {
+  if (!r.verKnown) return '';
   const names = _losPendingNames(r, groups);
-  const what  = names.length ? names.join(', ') : 'this stage';
-  const title = 'Not on this report until it is verified: ' + what + '. '
-              + 'The field has keyed ' + fmtNum(value || 0) + ', and nobody has signed it off, '
-              + 'so it is left out of this row and out of the column total.'
-              + (kind ? ' Click to see the records behind it.' : '');
-  const dash = kind
-    ? _losFig(kind, r.batch, '—', 'los-held')
-    : `<span class="los-held">—</span>`;
-  return `<td title="${_losEsc(title)}">${dash}</td>`;
+  if (!names.length) return '';
+  let waiting = 0;
+  (groups || []).filter(Boolean).forEach(g => {
+    const t = (r.ver && r.ver[g]) || {};
+    waiting += Number(t.waiting || 0);
+  });
+  return 'This is the VERIFIED figure. Still to be signed off: ' + names.join(', ')
+       + (waiting ? ', which would add ' + fmtNum(waiting) : '')
+       + '. It joins this figure the day somebody signs it.'
+       + (kind ? ' Click to see the records behind it.' : '');
+}
+
+/* A <td> carrying that note, or a plain one when nothing is outstanding. */
+function _losTd(r, groups, kind, inner) {
+  const note = _losWaitingNote(r, groups, kind);
+  return note ? `<td title="${_losEsc(note)}">${inner}</td>` : `<td>${inner}</td>`;
 }
 
 /* Which stages each TOTAL-row field is made of, so the foot can leave out
@@ -1107,7 +1162,7 @@ function fmtSigned(n) {
 // Returns null (having already rendered the error and unhidden #report-
 // output) if the fetch failed — callers just `return` on that. Otherwise
 // the unfiltered array of per-batch rows.
-async function _losBuildAllRows(asAt) {
+async function _losBuildAllRows(asAt, opts) {
   const out = document.getElementById('report-output');
   const loading = document.getElementById('loading');
 
@@ -1183,6 +1238,44 @@ async function _losBuildAllRows(asAt) {
     if (k.stage && k.key) rowSigned.add(v.batch_name + '::' + k.stage + '::' + k.key);
   });
 
+  /* ── ONLY VERIFIED DATA IS COUNTED ──────────────────────────────────
+     The office, twice: *"make it only verified data will float to life of
+     seedling"*, and then *"it is only calculate what data is verified
+     first ... just show the number which verified until new data verified
+     then update the report there."*
+
+     So the figures are built out of the lines SOMEBODY HAS SIGNED, and a
+     line nobody has signed takes no part in any of them. It is not a
+     different rule from the one before it, it is the same rule asked one
+     level down: it used to be asked of a whole STAGE, so one unsigned row
+     took the whole column away and everything derived from it with it.
+     Asked of the LINE, a tab signed four rows out of five shows those
+     four, and the fifth joins the figure the day it is signed.
+
+     Three things fall out of that, and they are why this is where the
+     test goes rather than in the cells:
+
+     - **Every derived figure is right by construction.** Variance, Total
+       Culled, the Balance and both splits are arithmetic over these
+       figures, so none of them needs to know this rule exists.
+     - **Nothing is a dash any more.** A figure is the verified part and a
+       stage nobody has signed is nought — which is what the office asked
+       for, and it is also why the cell still carries, in its hover, how
+       many rows are outstanding and what they would add. A figure that is
+       going to move has to say so somewhere.
+     - **The record lists are untouched.** `r.rec` keeps every line, signed
+       or not, because the drilldown is exactly what somebody needs in
+       order to go and sign the rest off.
+
+     It FAILS OPEN, same as everything else here: if neither sign-off table
+     could be read, every line counts and the report says it could not tell.
+
+     Only Life of Seedlings asks for it. The Seed In Report shares this
+     builder and is a different report with a different question, so it
+     takes the ledger as keyed — see runSeedInReport(). */
+  const verOnly = !!(opts && opts.verifiedOnly) && verReadable;
+  const verCtx  = { stageSigned, rowSigned };
+
   // ── One row per batch ──
   const rowsByBatch = {};
   const blank = (name) => ({
@@ -1244,7 +1337,12 @@ async function _losBuildAllRows(asAt) {
     if (asAt && d && d > asAt) return;
     const r = rowFor(name);
     if (d && (!r.lastDate || d > r.lastDate)) r.lastDate = d;
-    const q = Math.abs(Number(l.quantity_change || 0));
+    /* Nobody has signed this line, so it is in no figure on the report —
+       see the note on verOnly above. The line still reaches r.rec below,
+       and still counts in the verification tally, so it can be found and
+       signed. */
+    const vOK = !verOnly || _losLineSigned(l, verCtx);
+    const q = vOK ? Math.abs(Number(l.quantity_change || 0)) : 0;
     const t = l.transaction_type;
     // The log is the only thing that names the breed: operation_batches has
     // no breed_name column, and a bulk-imported batch has no row there at
@@ -1303,11 +1401,15 @@ async function _losBuildAllRows(asAt) {
         r.seedsDate = d;
         r.supplier = sup && sup[1].trim() ? sup[1].trim() : '—';
         r.mpob     = mp ? mp[1].trim() : '—';
-        r.received = Number(l.quantity_change || 0);
-        r.doQty    = doQty;
-        r.focQty   = focQty;
-        r.replQty  = repl;
-        r.focPct   = focPct;
+        /* The date, the supplier and the licence are not figures — they say
+           WHICH delivery this is, and a row with no figure on it still has
+           to be identifiable. The quantities are the figures, and an
+           unsigned reception contributes none of them. */
+        r.received = vOK ? Number(l.quantity_change || 0) : 0;
+        r.doQty    = vOK ? doQty : 0;
+        r.focQty   = vOK ? focQty : 0;
+        r.replQty  = vOK ? repl : 0;
+        r.focPct   = vOK ? focPct : null;
       }
       r.rec.received.push({ date: d, batch: name, supplier: sup ? sup[1].trim() : '—',
         mpob: mp ? mp[1].trim() : '—', dono: dono ? dono[1].trim() : '—',
@@ -1378,7 +1480,7 @@ async function _losBuildAllRows(asAt) {
       const stamp = String(l.created_at || l.transaction_date || '');
       if (r.dtRows === 1 || stamp >= r.dtStamp) {
         r.dtStamp = stamp;
-        r.dtone   = Number(l.quantity_change || 0);
+        r.dtone   = vOK ? Number(l.quantity_change || 0) : 0;
       }
       r.rec.dtone.push({ date: d, batch: name, place: l.plot_name || '—',
         note: l.remark || '', qty: Number(l.quantity_change || 0) });
@@ -1771,35 +1873,20 @@ function _losApplyVerification(rows, logs, ctx) {
     byBatch[r.batch] = r;
   });
 
-  const signed = (batch, stage, rowKey) => {
-    if (ctx.stageSigned.has(batch + '::' + stage)) return true;
-    if (!LOS_ROW_STAGES[stage]) return false;
-    return !!rowKey && ctx.rowSigned.has(batch + '::' + stage + '::' + rowKey);
-  };
-
   (logs || []).forEach(l => {
     const r = byBatch[l && l.batch_name]; if (!r) return;
     const group = LOS_GROUP_OF_TYPE[l.transaction_type]; if (!group) return;
     const d = _logDate(l);
     if (ctx.asAt && d && d > ctx.asAt) return;
-    /* A transfer card signs off under the plot the seedlings LEFT, which the
-       line names in its remark and not in plot_name. The Double Tone
-       Quantity in Nursery box is not about a plot at all and signs off under
-       its own name — see ROW_TAB_CONFIG in operation_batch_detail.html,
-       where it is pushed with the key 'DTONE-NURSERY-QTY'. Everything else
-       signs off under its own plot. */
-    let rowKey;
-    if (l.transaction_type === 'Cull3_Transfer') {
-      const from = (l.remark || '').match(_RE_LOS_FROM_PLOT);
-      rowKey = from ? _losPlotKey(from[1]) + '|TRANSFER' : '';
-    } else if (l.transaction_type === 'DTone_Nursery_Qty') {
-      rowKey = 'DTONE-NURSERY-QTY';
-    } else {
-      rowKey = _losPlotKey(l.plot_name);
-    }
-    const tal = r.ver[group] || (r.ver[group] = { lines: 0, signed: 0 });
+    const tal = r.ver[group] || (r.ver[group] = { lines: 0, signed: 0, waiting: 0 });
     tal.lines++;
-    if (signed(r.batch, LOS_STAGE_OF_GROUP[group], rowKey)) tal.signed++;
+    /* _losLineSigned is the SAME test the figures were built with — see the
+       note on verOnly in _losBuildAllRows. One rule, so the tally cannot
+       disagree with the figure it is explaining. */
+    if (_losLineSigned(l, ctx)) tal.signed++;
+    /* What the figure would gain if somebody signed the rest, which is what
+       the hover tells a reader who wants to know whether to wait for it. */
+    else tal.waiting += Math.abs(Number(l.quantity_change || 0));
   });
 
   /* verKnown is false when neither sign-off table could be read. Every
@@ -1846,7 +1933,10 @@ async function _losBuildData() {
   const asAt = done ? _losAsAt(year, month) : dayPick;
   const fin  = done && year ? _losFinishedWindow(year, month) : null;
 
-  const allRows = await _losBuildAllRows(asAt);
+  /* ONLY VERIFIED DATA — the office's rule, and the one thing Life of
+     Seedlings asks of this builder that no other report does. See the note
+     on verOnly inside it. */
+  const allRows = await _losBuildAllRows(asAt, { verifiedOnly: true });
   if (!allRows) return null;
 
   // ── Filters ── nothing picked means no filtering, so the report opens on
@@ -1891,27 +1981,29 @@ async function _losBuildData() {
   rows.sort((a, b) => String(b.seedsDate || '').localeCompare(String(a.seedsDate || ''))
                    || String(b.batch).localeCompare(String(a.batch)));
 
-  /* THE TOTAL LEAVES OUT EXACTLY WHAT THE ROWS LEFT OUT.
+  /* THE TOTAL IS THE SUM OF THE ROWS, PLAINLY.
 
-     A figure withheld for want of a signature reads "—" in its row, so a
-     total that still carried it would be a column of dashes adding up to a
-     number — the one shape of wrong that is impossible to spot, because the
-     total looks fine and nothing on the row disagrees with it.
+     It used to leave out any row whose stage was unsigned, because such a
+     row showed a DASH and a column of dashes adding up to a number is the
+     one shape of wrong that cannot be spotted. There are no dashes now:
+     every row shows its VERIFIED figure, so the total is simply their sum
+     and it agrees with the column above it line for line.
 
-     So each field is summed only over the rows whose stages are signed, and
-     `held` counts the rows each field is missing so the foot can say so.
-     `LOS_GROUPS_OF_FIELD` is the one place that mapping lives. */
+     `held` counts the rows each field is still WAITING on, which is no
+     longer a hole in the total — it is how much of it has yet to arrive,
+     and the foot says so. `LOS_GROUPS_OF_FIELD` is the one place that
+     mapping lives. */
   const TOT_FIELDS = ['received','doQty','focQty','damaged','planted','transTotal','trans',
     'transMain','transDtone','dtone','cull1','cull1Main','cull1Dtone','cull2','cull3',
     'cullTotal','transfer','sales','calibration','balance'];
   const tot = rows.reduce((s, r) => {
     TOT_FIELDS.forEach(k => {
       const g = LOS_GROUPS_OF_FIELD[k] || [];
-      if (g.length && _losHeld(r, g)) { s.held[k] = (s.held[k] || 0) + 1; return; }
+      if (g.length && _losHeld(r, g)) s.held[k] = (s.held[k] || 0) + 1;
       s[k] += r[k] || 0;
     });
     if (_losHeld(r, ['seeds_in', 'planting'])) s.held.variance = (s.held.variance || 0) + 1;
-    else if (r.variance < 0) s.varDown += r.variance;
+    if (r.variance < 0) s.varDown += r.variance;
     else if (r.variance > 0) s.varUp += r.variance;
     return s;
   }, { received:0, doQty:0, focQty:0, damaged:0, planted:0, transTotal:0, trans:0,
@@ -1979,6 +2071,10 @@ async function runSeedInReport() {
   const selectedLocs = new Set(selectedNurseries());
   const asAt = to || null;
 
+  /* NO verifiedOnly here, deliberately. The Seed In Report answers what
+     arrived from the supplier, off the delivery order and the MPOB licence,
+     and that is a different question from the one Life of Seedlings asks —
+     it reads the ledger as keyed, exactly as it always has. */
   const allRows = await _losBuildAllRows(asAt);
   if (!allRows) return; // error already shown by _losBuildAllRows()
 
@@ -2070,9 +2166,12 @@ function _losCell(kind, batch, value, cls) {
    second one. A nought with no line behind it at all stays plain — there is
    nothing to verify about a stage the batch has not reached. */
 function _losCellV(kind, r, value, cls, stages) {
-  if (_losHeld(r, stages)) return _losHeldCell(r, stages, value, kind);
-  if (!value) return `<td class="text-[#8a7a68]">0</td>`;
-  return `<td>${_losFig(kind, r.batch, fmtNum(value), cls)}</td>`;
+  const note = _losWaitingNote(r, stages, kind);
+  const inner = value
+    ? _losFig(kind, r.batch, fmtNum(value), cls)
+    : (note ? _losFig(kind, r.batch, '0', 'text-[#8a7a68]') : '');
+  if (!inner) return `<td class="text-[#8a7a68]">0</td>`;
+  return note ? `<td title="${_losEsc(note)}">${inner}</td>` : `<td>${inner}</td>`;
 }
 
 /* ONE COLUMN, THREE FIGURES: the total, and under a rule the two halves it
@@ -2094,7 +2193,6 @@ function _losCellV(kind, r, value, cls, stages) {
    at all, so a column can carry a split on the batches that have one and
    read as a plain figure on the ones that do not. */
 function _losSplitCell(r, kind, value, cls, stages, parts) {
-  if (_losHeld(r, stages)) return _losHeldCell(r, stages, value, kind);
   const head = value
     ? _losFig(kind, r.batch, fmtNum(value), cls)
     : '<span class="text-[#8a7a68]">0</span>';
@@ -2106,7 +2204,10 @@ function _losSplitCell(r, kind, value, cls, stages, parts) {
     `<span><span class="los-split-lbl">${_losEsc(p[0])}</span> ${p[2]
       ? _losFig(p[1], r.batch, fmtNum(p[2]), cls)
       : '<span class="text-[#8a7a68]">0</span>'}</span>`).join('')}</div>`;
-  return `<td${value ? '' : ' class="text-[#8a7a68]"'}>${head}${split}</td>`;
+  const note = _losWaitingNote(r, stages, kind);
+  return `<td${value ? '' : ' class="text-[#8a7a68]"'}`
+       + (note ? ` title="${_losEsc(note)}"` : '')
+       + `>${head}${split}</td>`;
 }
 
 /* The same cell in the foot, where there is no batch and no verification —
@@ -2198,10 +2299,14 @@ const LOS_COL_WIDTHS = [6, 6, 8.5, 4,
                         6.5, 4.5, 4.5, 5.5,
                         4.5, 5.5, 5.5, 5.5];
 
-/* What the foot says it is missing. Column by column, because "3 batches
-   are unverified" does not tell a reader which TOTAL is short — a batch can
-   be signed off on its seed in and waiting on its 3rd culling, and only one
-   of those columns is light. */
+/* Which TOTALS are still going to move, column by column — because "3
+   batches are unverified" does not tell a reader which of them is light, and
+   a batch can be signed off on its seed in and waiting on its 3rd culling.
+
+   Nothing is left OUT of a total any more: every row shows its verified
+   figure and the total is their sum. What this says is how many rows behind
+   each total are still waiting for a signature, so a reader knows which
+   column is going to rise. */
 function _losHeldFootNote(tot, total) {
   const named = { received: 'Seed Received', damaged: 'Seed Damage', planted: 'Actual Planted',
     variance: 'Variance Seed In', transTotal: 'Transplant Qty', cull1: '1st Culled',
@@ -2209,7 +2314,7 @@ function _losHeldFootNote(tot, total) {
     balance: 'Balance' };
   const parts = Object.keys(named)
     .filter(k => tot.held && tot.held[k])
-    .map(k => named[k] + ' is short ' + fmtNum(tot.held[k]) + ' of ' + fmtNum(total));
+    .map(k => named[k] + ' is waiting on ' + fmtNum(tot.held[k]) + ' of ' + fmtNum(total));
   return parts.length ? parts.join(' · ') + '.' : 'nothing in these columns is outstanding.';
 }
 
@@ -2226,18 +2331,16 @@ function _losSummaryHtml(rows, tot, scope) {
         <div class="text-[9px] font-bold text-[#8a7a68]">${_losEsc(r.mpob)}</div>
       </td>
       <td class="text-[#8a7a68]">${r.age}</td>
-      ${_losHeld(r, ['seeds_in']) ? _losHeldCell(r, ['seeds_in'], r.received, 'received') : `<td>
-        ${_losFig('received', r.batch, fmtNum(r.received), 'text-[#c07820] font-black')}
-        ${_losFocSplit(r)}
-        ${_losSeedsInDup(r)}
-      </td>`}
+      ${_losTd(r, ['seeds_in'], 'received',
+        `${_losFig('received', r.batch, fmtNum(r.received), 'text-[#c07820] font-black')}
+         ${_losFocSplit(r)}
+         ${_losSeedsInDup(r)}`)}
       ${_losCellV('damaged', r, r.damaged, 'text-[#a83020] font-black', ['planting'])}
       ${_losCellV('planted', r, r.planted, 'font-black', ['planting'])}
-      ${_losHeld(r, ['seeds_in', 'planting'])
-        ? _losHeldCell(r, ['seeds_in', 'planting'], r.variance, 'variance')
-        : `<td>${_losFig('variance', r.batch,
-            (r.variance > 0 ? '+' : r.variance < 0 ? '−' : '') + fmtNum(Math.abs(r.variance)),
-            r.variance < 0 ? 'text-[#a83020] font-black' : r.variance > 0 ? 'text-[#4a7a2e] font-black' : 'text-[#8a7a68]')}</td>`}
+      ${_losTd(r, ['seeds_in', 'planting'], 'variance',
+        _losFig('variance', r.batch,
+          (r.variance > 0 ? '+' : r.variance < 0 ? '−' : '') + fmtNum(Math.abs(r.variance)),
+          r.variance < 0 ? 'text-[#a83020] font-black' : r.variance > 0 ? 'text-[#4a7a2e] font-black' : 'text-[#8a7a68]'))}
       ${_losSplitCell(r, 'transTotal', r.transTotal, 'text-[#3a7ab4] font-black', ['transplanting'],
         [['Normal', 'trans', r.transMain], ['DT', 'dtone', r.transDtone]])}
       ${_losSplitCell(r, 'cull1Total', r.cull1Total, 'text-[#a83020] font-black', ['cull_1'],
@@ -2250,24 +2353,23 @@ function _losSummaryHtml(rows, tot, scope) {
       <td>${r.rec.calibration.length
         ? _losFig('calibration', r.batch, fmtSigned(r.calibration), 'font-black')
         : '<span class="text-[#8a7a68]">0</span>'}</td>
-      ${_losHeld(r, LOS_BALANCE_GROUPS(r))
-        ? _losHeldCell(r, LOS_BALANCE_GROUPS(r), r.balance, 'balance')
-        : `<td>${_losFig('balance', r.batch, fmtNum(r.balance),
-            r.balance < 0 ? 'text-[#a83020] font-black' : 'text-[#4a7a2e] font-black')}</td>`}
+      ${_losTd(r, LOS_BALANCE_GROUPS(r), 'balance',
+        _losFig('balance', r.batch, fmtNum(r.balance),
+          r.balance < 0 ? 'text-[#a83020] font-black' : 'text-[#4a7a2e] font-black'))}
     </tr>`).join('');
 
-  /* How many rows on screen carry a figure nobody has signed off. Said once
-     above the table, because a reader who takes a total away needs to know
-     the total contains unchecked work — the per-row markers answer "which
-     one", this answers "is there any". */
+  /* WHAT THE READER HAS TO BE TOLD ONCE: every figure below is the VERIFIED
+     part, so a batch with rows still to be signed will read higher the day
+     they are. A reader taking a total away needs to know it is going to
+     move; which row it is waiting on is in that cell's own hover. */
   const known   = rows.filter(r => r.verKnown);
   const pending = known.filter(r => r.verPending.length);
   const verNote = !rows.length ? ''
     : !known.length
       ? `<div class="text-[10px] font-bold text-[#a83020] mb-3">Verification state could not be read, so nothing below is held back. Every figure is the live ledger, checked or not.</div>`
       : pending.length
-        ? `<div class="text-[10px] font-bold text-[#c07820] mb-3">Only verified figures are on this report. ${fmtNum(pending.length)} of ${fmtNum(known.length)} batch${known.length === 1 ? '' : 'es'} carry a stage nobody has signed off, and those figures read <span class="los-held px-1">—</span> and are left out of the totals. Point at one to see what it is waiting on, or click it for the records behind it.</div>`
-        : `<div class="text-[10px] font-bold text-[#4a7a2e] mb-3">✓ Every figure below comes from a stage somebody has verified.</div>`;
+        ? `<div class="text-[10px] font-bold text-[#c07820] mb-3">Every figure below is the VERIFIED figure — a record nobody has signed off takes no part in it. ${fmtNum(pending.length)} of ${fmtNum(known.length)} batch${known.length === 1 ? '' : 'es'} still carry records waiting for a signature, so those figures will rise as they are signed. Point at one to see what it is still waiting for, or click it for the records behind it.</div>`
+        : `<div class="text-[10px] font-bold text-[#4a7a2e] mb-3">✓ Every record behind the figures below has been signed off.</div>`;
 
   return `
     <div class="glass-panel p-6 rounded-[2rem]">
@@ -2331,7 +2433,7 @@ function _losSummaryHtml(rows, tot, scope) {
             <td>${_losFig('sales', '*', fmtNum(tot.sales), 'text-[#4a7a2e] font-black')}</td>
             <td>${_losFig('calibration', '*', fmtSigned(tot.calibration), 'font-black')}</td>
             <td>${_losFig('balance', '*', fmtNum(tot.balance), 'text-[#4a7a2e] font-black')}</td>
-          </tr>${pending.length ? `<tr><td colspan="17" class="text-left text-[9px] font-bold text-[#c07820] bg-[#fdf6e8]">These totals LEAVE OUT the figures nobody has signed off — ${_losHeldFootNote(tot, rows.length)}</td></tr>` : ''}</tfoot>` : ''}
+          </tr>${pending.length ? `<tr><td colspan="17" class="text-left text-[9px] font-bold text-[#c07820] bg-[#fdf6e8]">These totals are the VERIFIED figures and will rise as the rest is signed off — ${_losHeldFootNote(tot, rows.length)}</td></tr>` : ''}</tfoot>` : ''}
         </table>
       </div>
     </div>`;
