@@ -55,16 +55,27 @@ function lift(src, header){
 /* ── 1. the window, in both copies, on the same days ─────────────── */
 
 /* Both files name the helper the same thing on purpose — it is one
-   rule, and a grep for it has to find both halves. */
+   rule, and a grep for it has to find both halves. The board's copy
+   takes an `asOfISO`, because it has to ask about the month a carried
+   row is ABOUT; the module page only ever shows now. Asked about
+   today, the two must give the same answer, which is what this runs. */
 const winPapan   = lift(papanSrc,   'function _papanWindowStartISO()');
-const winPending = lift(pendingSrc, 'function _papanWindowStartISO()');
+const monthOf    = lift(pendingSrc, 'function _papanMonthOf(asOfISO)');
+const isoDayLine = (() => {
+  const at = pendingSrc.indexOf('const _isoDay =');
+  return pendingSrc.slice(at, pendingSrc.indexOf(';', pendingSrc.indexOf('\n', at)) + 1);
+})();
+const winPending = monthOf + '\n' + isoDayLine + '\n'
+                 + lift(pendingSrc, 'function _papanWindowStartISO(asOfISO)');
+const endPending = winPending + '\n'
+                 + lift(pendingSrc, 'function _papanWindowEndISO(asOfISO)');
 
-function runWindow(fnSrc, y, m, d){
+function runWindow(fnSrc, y, m, d, call){
   const ctx = { Date: class extends Date {
     constructor(...a){ if (!a.length) super(y, m, d); else super(...a); }
-  }, out: null };
+  }, Number, RegExp, String, out: null };
   vm.createContext(ctx);
-  vm.runInContext(fnSrc + '\nout = _papanWindowStartISO();', ctx);
+  vm.runInContext(fnSrc + '\nout = ' + (call || '_papanWindowStartISO()') + ';', ctx);
   return ctx.out;
 }
 
@@ -90,17 +101,18 @@ ok(!/_startOfThisMonthISO/.test(papanSrc) && !/_startOfThisMonthISO/.test(pendin
    'the one-month helper is gone from both files, so nothing can call it by habit');
 
 /* ── 3. which plots the home board hands over ────────────────────── */
-const latestSrc = lift(pendingSrc, 'function latestPapanPerPlot(nursery)');
-function roster(rows, today){
+const latestSrc = lift(pendingSrc, 'function latestPapanPerPlot(nursery, asOfISO)');
+function roster(rows, today, asOf){
   const ctx = {
     papanBat: rows,
     Date: class extends Date {
       constructor(...a){ if (!a.length) super(today[0], today[1], today[2]); else super(...a); }
     },
-    Object, out: null
+    Object, Number, RegExp, String, out: null
   };
   vm.createContext(ctx);
-  vm.runInContext(winPending + '\n' + latestSrc + '\nout = latestPapanPerPlot("BNN");', ctx);
+  vm.runInContext(endPending + '\n' + latestSrc + '\nout = latestPapanPerPlot("BNN", '
+                  + (asOf ? JSON.stringify(asOf) : 'undefined') + ');', ctx);
   return ctx.out;
 }
 {
@@ -123,6 +135,42 @@ function roster(rows, today){
   const b11 = got.find(b => b.plot === 'B11');
   ok(b11 && b11.batch === '274',
      'a plot transplanted in BOTH months is its NEWER batch -- the sign says what is standing there now');
+}
+
+/* ── 3b. AND IT IS AS AT THE ROW, NOT AS AT TODAY ──────────── */
+/* The board carries an unfinished round forward, so in October it drew
+   an AUG 2026 papan row, a SEP 2026 one and October's own -- three rows,
+   each listing the same six plots, every one tagged SEP 26. A round that
+   closed on 20 August cannot be owed a sign that went up in September:
+   that row was asking about plots which did not exist when it was due,
+   so nothing an auditor did would ever clear it and it never left the
+   board. Anchoring the window on the row's own month is the fix, and the
+   UPPER bound is the half that was missing altogether. */
+{
+  const rows = [
+    {nursery:'BNN', plot:'B04', batch:'268', date:'2026-09-20'},
+    {nursery:'BNN', plot:'B11', batch:'274', date:'2026-09-02'},
+    {nursery:'BNN', plot:'B07', batch:'271', date:'2026-10-03'},
+    {nursery:'BNN', plot:'B01', batch:'244', date:'2026-07-11'}
+  ];
+  const at = (asOf) => roster(rows, [2026, 9, 15], asOf).map(b => b.plot).sort().join(',');
+
+  ok(at('2026-08-01') === 'B01',
+     'the AUGUST row asks about July and August only -- Septembers plots are not on it ('
+     + (at('2026-08-01') || 'nothing') + ')');
+  ok(at('2026-09-01') === 'B04,B11',
+     'the SEPTEMBER row is August and September (' + at('2026-09-01') + ')');
+  ok(at('2026-10-01') === 'B04,B07,B11',
+     'October is September and October (' + at('2026-10-01') + ')');
+  ok(at('2026-09-01').indexOf('B07') === -1,
+     'and the UPPER bound holds -- an OCTOBER plot is not on Septembers row');
+  ok(at(undefined) === at('2026-10-01'),
+     'asking without a month means today, which is what the module page wants');
+  ok(at('2026-07-01') === 'B01',
+     'a July row is June and July, so it carries the July plot and nothing later');
+  ok(at('2026-06-01') === '',
+     'and a row from a month with no placements at all comes back empty, '
+     + 'which is what takes it off the board');
 }
 
 /* ── 4. the plots are grouped by the month they went out in ──────── */
