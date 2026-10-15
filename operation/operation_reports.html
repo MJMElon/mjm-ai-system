@@ -266,16 +266,14 @@
      mark the cell; the ⧗ beside the figure carries the explanation, and
      survives printing, photocopying and anybody reading the table in black
      and white, which a background colour alone does not. */
-  /* The amber cell wash and the ⧗ beside a figure are GONE, and the note
-     above them with it. They marked an unverified figure that was still
-     shown and still in the totals; the office asked for such a figure not
-     to be on the report at all, so what is left in its place is the dash
-     (.los-held above) and the verdict line under a batch's name, which the
-     ⧗ still belongs to. Left here as a comment rather than as unused rules,
-     because a stylesheet that still dresses a state nothing can enter is
-     how the next person concludes the state still exists. */
-  .los-unver-mark { margin-left:3px; font-size:9px; font-weight:900; color:#c07820;
-                    vertical-align:super; line-height:1; cursor:help; }
+  /* The amber cell wash, the ⧗ beside a figure and the verdict line under
+     a batch's name are all GONE, in that order and for the same reason
+     twice over: the office asked for an unverified figure not to be on the
+     report, and then for the row not to carry a label about it either. All
+     that marks it now is the dash (.los-held above). Left as a comment
+     rather than as unused rules, because a stylesheet that still dresses a
+     state nothing can enter is how the next person concludes the state
+     still exists. */
   /* A SPLIT CELL: the total on top, the two halves it is made of under a
      rule. It is one column doing the work of three, which is how the
      transplant and the 1st culling splits got their detail without taking
@@ -2121,28 +2119,35 @@ function _losSplitFoot(kind, total, cls, parts) {
   return `<td>${_losFig(kind, '*', fmtNum(total), cls)}${split}</td>`;
 }
 
-/* The line under a batch's name saying whether anybody has checked it. The
-   whole point of the markers scattered across the row is lost if the reader
-   has to collect them by eye, so the row says its own verdict once.
+/* THE ROW NO LONGER SAYS WHICH STAGE IT IS WAITING ON, and that is the
+   office's call. A line under the batch name used to read "⧗ 2nd culling,
+   3rd culling unverified", on the argument that the markers scattered
+   across a row are lost if a reader has to collect them by eye.
 
-   Two names at most. The Batch / Breed column is one of seventeen and six
-   stage names in it turn a table row into a paragraph — past two it counts
-   them instead and keeps the list in the tooltip, where somebody who wants
-   it can still read it. */
-function _losVerdictLine(r) {
-  if (!r.verKnown) return '';
-  if (!r.verStages.length) return '';
-  if (!r.verPending.length) {
-    return `<div class="text-[9px] font-bold text-[#4a7a2e]">✓ verified</div>`;
-  }
-  const names = r.verPending.map(g => LOS_GROUP_NAMES[g]).join(', ');
-  const label = r.verPending.length > 2
-    ? r.verPending.length + ' stages unverified'
-    : names + ' unverified';
-  const title = 'These figures are what the field has keyed and nobody has signed off yet, '
-              + 'so they may be incomplete or uncorrected: ' + names + '.';
-  return `<div class="text-[9px] font-bold text-[#c07820]" title="${_losEsc(title)}">⧗ ${_losEsc(label)}</div>`;
-}
+   The markers are gone. Once an unverified figure stopped being SHOWN and
+   became a dash, the row was already saying it — in the one column it
+   actually applies to, which is more than the line could say in the space
+   it had. The office put it in one sentence: "no need to show which item
+   not yet verify, as long as it is not verify, then the data wont appear
+   here, while verified, then it will show here based on the date." A
+   second answer to a question the table already answers is a second thing
+   to read on a row seventeen columns wide, and on the row most people are
+   reading it said the same thing twice.
+
+   What is NOT in that, and must stay:
+
+   - **The dash itself**, with its hover and its drilldown. It is the
+     answer; taking the LABEL off a row does not take the answer off it.
+   - **The note above the table** — how many batches carry an unsigned
+     stage. That answers "is there anything missing from what I am about
+     to take away", which no dash in a row can answer.
+   - **The foot's column-by-column note.** A column of dashes adding up to
+     a number is the one shape of wrong that cannot be spotted, so the
+     total has to say which of them is light.
+   - **The verification filter**, which is a question somebody asks on
+     purpose rather than a label following them around.
+
+   `verStages` / `verPending` are still computed for those three. */
 
 /* The same answer again, at the top of the records window a figure opens
    into. A reader who clicks a marked figure to find out what is behind it
@@ -2215,7 +2220,6 @@ function _losSummaryHtml(rows, tot, scope) {
       <td>
         <div class="font-black text-[#3d2610]">${_losEsc(r.batch)}</div>
         <div class="text-[9px] font-bold text-[#8a7a68]">${_losEsc(r.breed)}</div>
-        ${_losVerdictLine(r)}
       </td>
       <td>
         <div class="text-[10px] font-bold text-[#3d2610]">${_losEsc(r.supplier)}</div>

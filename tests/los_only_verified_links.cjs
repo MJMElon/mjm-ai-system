@@ -36,6 +36,14 @@
        a report because a check could not run is a systematically wrong
        answer, not a cautious one — the same reason access fails open.
 
+   And ONE thing the row does not do: it does not say which stage it is
+   waiting on. A line under the batch name used to read "⧗ 2nd culling,
+   3rd culling unverified"; the office asked for it to go, because once
+   an unverified figure became a dash the table was already saying it, in
+   the column it actually applies to. The note ABOVE the table and the
+   column-by-column note in the FOOT both stay — they answer "is anything
+   missing from the total I am taking away", which no dash in a row can.
+
    Needs a browser and a server on the page:
      (cd .. && python3 -m http.server 8812 &)
      NODE_PATH=/opt/node22/lib/node_modules node tests/los_only_verified_links.cjs */
@@ -218,6 +226,10 @@ const readRows = (page) => page.evaluate((cols) => {
       // out of the totals — it is not marked-and-shown any more.
       cells[c] = { held: text === '—', text, title: td.getAttribute('title') || '' };
     });
+    /* THE BATCH CELL CARRIES NO VERDICT ANY MORE. It is still read, so
+       the test can assert that — a label saying which stage is waiting
+       was the office's one "no need", and the dash in the column it
+       belongs to is the answer instead. */
     out[name] = { cells, verdict: (tr.children[1].textContent.match(/[✓⧗][^\n]*/) || [''])[0].trim() };
   });
   return out;
@@ -240,12 +252,12 @@ is(R['122'].cells.received.text.replace(/\s+/g, ' '),
 is(R['123'].cells.received.text.includes('reception rows'), false,
   'and a batch with one row says nothing');
 
-console.log('\n── 2. A fully verified batch says so and floats in full ──');
-is(R['122'].verdict, '✓ verified', '122 reads verified');
-is(held(R['122']), [], 'and not one of its figures is held back');
+console.log('\n── 2. A fully verified batch floats in full ──');
+is(R['122'].verdict, '', 'and says nothing about being verified — the figures are the answer');
+is(held(R['122']), [], 'not one of its figures is held back');
 
 console.log('\n── 3. A batch nobody has checked floats nothing it has ──');
-is(R['099'].verdict, '⧗ 3 stages unverified', '099 counts them rather than filling the column');
+is(R['099'].verdict, '', 'and the row still carries no label about it');
 is(held(R['099']), ['received', 'damaged', 'planted', 'variance', 'transTotal', 'balance'],
   'every figure of its own is held — damaged too, which is a nought on an unsigned tab');
 /* A nought on an unsigned tab is held for the same reason it used to be
@@ -258,13 +270,11 @@ is(R['099'].cells.sales.held, false, 'and never sales — the D/O module signs t
 is(R['099'].cells.calibration.held, false, 'nor the calibration, which has its own approval');
 
 console.log('\n── 4. Part verified is part verified ──');
-is(R['123'].verdict, '⧗ 4 stages unverified', '123 counts its four');
+is(R['123'].verdict, '', 'a batch waiting on four stages says so in four columns, not in a label');
 is(await page.evaluate(() => [...document.querySelectorAll('.los-table tbody tr')]
      .find(t => t.children.length === 17 && t.children[1].textContent.includes('123'))
-     .children[1].querySelector('div[title]').getAttribute('title')),
-  'These figures are what the field has keyed and nobody has signed off yet, so they may be '
-  + 'incomplete or uncorrected: transplanting, double-tone tray, 1st culling, 3rd culling.',
-  'with the four named in full where somebody can read them');
+     .children[1].querySelector('div[title]')),
+  null, 'and the Batch / Breed cell carries no tooltip about it either');
 is(R['123'].cells.received.held, false, 'seed in signed as a whole tab → Seed Received clean');
 is(R['123'].cells.planted.held,  false, 'planting likewise');
 is(R['123'].cells.variance.held, false, 'so the Variance made of the two is clean as well');
@@ -300,7 +310,7 @@ console.log('\n── 5. A verified culling is not marked by an unverified trans
 is(R['121'].cells.cull3.held,    false, "121's 3rd Culling is signed → it floats");
 is(R['121'].cells.transfer.held, true,  'its transfer card is not → only Transfer is held');
 is(R['121'].cells.balance.held,  false, 'a transfer is not in the Balance, so it does not hold it back');
-is(R['121'].verdict, '⧗ 3rd-culling transfer unverified', 'and the row names the card, not the tab');
+is(R['121'].verdict, '', 'and the Transfer column is the only thing that says so');
 
 console.log('\n── 6. The dash carries an explanation, and the figure ──');
 const tip = R['123'].cells.transTotal.title;
@@ -392,7 +402,7 @@ await pick('f-los-date', '2026-10-31');
 R = await readRows(page);
 is(R['123'].cells.cull1Total.held, false, 'as at 31 Oct 2026 the November culling has not happened, so nothing is held');
 is(R['123'].cells.transTotal.held, false, 'nor the November transplanting');
-is(R['123'].verdict, '✓ verified', 'and as at that date 123 reads fully verified');
+is(R['123'].verdict, '', 'and the row says nothing either way, as at that date or any other');
 await pick('f-los-date', '');
 
 console.log('\n── 10. If the sign-off tables cannot be read, nothing is held back ──');
@@ -404,7 +414,7 @@ is(Object.keys(BR).length, 4, 'every batch still listed');
    empty a report. Same reason access fails open. */
 is(held(BR['099']), [], 'and not one figure is held back');
 is(BR['099'].cells.transTotal.text, '1,000', 'every figure is the live ledger, checked or not');
-is(BR['099'].verdict, '', 'no batch claims a verdict either way');
+is(BR['099'].verdict, '', 'and no batch claims a verdict either way');
 const bnote = await broken.page.evaluate(() => {
   const d = [...document.querySelectorAll('#report-output div')]
     .find(e => e.textContent.includes('Verification state could not be read'));

@@ -630,6 +630,20 @@ The figure is not hidden, only kept off the report: the dash carries it in
 its hover, names what is waiting, and is still a button, because the records
 behind it are exactly what somebody needs in order to go and sign it off.
 
+**The ROW does not say which stage it is waiting on.** A line under the
+batch name read "⧗ 2nd culling, 3rd culling unverified", on the argument
+that the markers scattered across a row are lost if a reader has to collect
+them by eye. The office asked for it to go — *"no need to show which item
+not yet verify, as long as it is not verify, then the data wont appear here,
+while verified, then it will show here based on the date."* And they are
+right: once an unverified figure stopped being shown and became a dash, the
+table was already saying it, in the one column it applies to, which is more
+than a line could say in the space it had. What stays is everything that
+answers a question a dash in a row CANNOT: the note above the table (is
+anything missing at all), the column-by-column note in the foot (which total
+is light), and the verification filter (a question somebody asks on
+purpose). `verStages` / `verPending` are still computed for those three.
+
 Three things to know before touching `LOS_GROUP_OF_TYPE` in
 `operation/operation_reports.html`:
 
