@@ -37,6 +37,10 @@ function build(asAt) {
     '_RE_LOS_SUPPLIER','_RE_LOS_MPOB','_RE_LOS_DONO','_RE_LOS_DO_QTY','_RE_LOS_FOC_PCT',
     '_RE_LOS_REPL','_RE_LOS_FROM_TRAY','_RE_LOS_FROM_PLOT','_RE_LOS_APPROVED',
     '_RE_LOS_CAL_REPORT','_RE_LOS_CAL_SIDE','_losTrayKey','_LOS_CAL_SEED_REPORTS',
+    /* The verified-only filter is Life of Seedling's own and is driven by
+       tests/los_only_verified_links.cjs. Handed in OFF here, so these tests
+       go on asking what they were written to ask. */
+    'verOnly','verCtx','_losLineSigned',
     body + '\nreturn rows;');
   const never = /NEVERMATCH_x([0-9])/;
   return fn(asAt, { data: logs }, { data: dos },
@@ -46,7 +50,8 @@ function build(asAt) {
     ['Pre-Nursery','DOUBLE-TONE','PREMIUM CARE'],
     () => null, () => '',
     never, never, never, never, never, never, never, never, never, never, never,
-    grab('_losTrayKey'), grab('_LOS_CAL_SEED_REPORTS'));
+    grab('_losTrayKey'), grab('_LOS_CAL_SEED_REPORTS'),
+    false, {}, () => true);
 }
 
 const show = (label, asAt, want) => {

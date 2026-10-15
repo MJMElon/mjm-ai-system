@@ -580,6 +580,72 @@ same reason the drone-map panel demanded an exact match.
 `tests/cull1_explained_by_transplanting.cjs` holds both halves, including that
 a difference which is NOT the adjustment still reads as over-allocated.
 
+## Only verified data is counted, and it is counted LINE BY LINE
+
+The office has narrowed this rule three times, and the third is the one the
+code now obeys:
+
+1. *"make it only verified data will float to life of seedling"* — an
+   unverified figure came off the report.
+2. *"no need to show which item not yet verify"* — the row stopped carrying
+   a label saying which stage it was waiting on.
+3. *"it is only calculate what data is verified first ... just show the
+   number which verified until new data verified then update the report
+   there."*
+
+**The third is the first, asked one level down.** It used to be asked of a
+whole STAGE, so one unsigned row took the whole column away and everything
+derived from it with it: a Balance could not be read at all until the 3rd
+Culling tab was signed, which is what the office was looking at when they
+asked for it to be calculated. Asked of the LINE, a tab signed four rows out
+of five shows those four, and the fifth joins the figure the day somebody
+signs it.
+
+So `_losLineSigned` is the one test, and the FIGURES are built out of the
+lines it says yes to — inside `_losBuildAllRows`, not in the cells. Five
+things fall out of that, and the last is what it costs:
+
+- **Every derived figure is right by construction.** Variance, Total Culled,
+  the Balance and both splits are arithmetic over figures that are already
+  verified-only, so none of them has to know this rule exists. That is the
+  whole reason the test lives in the builder.
+- **Nothing is a dash any more.** A stage nobody has signed is nought. The
+  dash existed to say "nobody has signed this" when the figure was withheld;
+  nothing is withheld now, and what the cell says instead is in its hover —
+  which stage is outstanding, how many rows, and what signing them would
+  add.
+- **The TOTAL is the plain sum of the rows.** It used to leave rows out to
+  match a column of dashes; there are no dashes, so it agrees with the
+  column above it line for line. The foot still says which totals are
+  waiting on rows, because a reader needs to know which way a figure is
+  going to move.
+- **The record lists are untouched.** Every line is still in the drilldown,
+  signed or not — that is what somebody needs in order to go and sign the
+  rest off.
+- **What it costs: a VARIANCE whose seed in is signed and whose planting is
+  not reads as minus the whole delivery**, because Actual Planted is
+  genuinely nought so far as anybody has signed. That was the argument for
+  the dash, and the office chose this with it in front of them. Batch 097 in
+  `tests/los_only_verified_links.cjs` pins it so nobody is surprised by it
+  twice.
+
+**The tally that explains a figure is built with the same call.** Two copies
+of the test would be a figure disagreeing with the note underneath it.
+
+**Only Life of Seedlings asks for it** — `_losBuildAllRows(asAt, {
+verifiedOnly: true })`. The Seed In Report shares that builder and reads the
+ledger as keyed: what arrived from the supplier is a different question.
+
+And it still **fails OPEN**: if neither sign-off table can be read, every
+line counts and the report says it could not tell.
+
+`shared/CHECK_only_verified_floats.sql` is the size of it — every batch whose
+figures move, what is signed of its transplanting and its 3rd culling, and
+the Balance on the ledger against the Balance on the signed lines. Hand it
+over with any change here: the question that decides whether a rule like this
+is right is "what does it actually move", and that is the only thing that
+answers it.
+
 ## An unverified figure does NOT float, and it is a dash and never a nought
 
 Life of Seedlings is seventeen columns of live sums of the batch ledger, and
@@ -626,9 +692,26 @@ Five things follow, and each is a way this goes quietly wrong:
   withheld and the report says so. A check that cannot run must not empty a
   report — same reason access fails open.
 
-The figure is not hidden, only kept off the report: the dash carries it in
-its hover, names what is waiting, and is still a button, because the records
-behind it are exactly what somebody needs in order to go and sign it off.
+**Everything above is the history of this rule, not its current shape** —
+see the section above it. The withholding was per STAGE and left a dash; it
+is per LINE now and leaves a figure. What is still exactly true of it is the
+reason it exists, the fail-open, the column-not-tab unit, the two routes a
+sign-off comes by, and that a derived figure is only as checked as its
+parts.
+
+**The ROW does not say which stage it is waiting on.** A line under the
+batch name read "⧗ 2nd culling, 3rd culling unverified", on the argument
+that the markers scattered across a row are lost if a reader has to collect
+them by eye. The office asked for it to go — *"no need to show which item
+not yet verify, as long as it is not verify, then the data wont appear here,
+while verified, then it will show here based on the date."* And they are
+right: once an unverified figure stopped being shown and became a dash, the
+table was already saying it, in the one column it applies to, which is more
+than a line could say in the space it had. What stays is everything that
+answers a question a dash in a row CANNOT: the note above the table (is
+anything missing at all), the column-by-column note in the foot (which total
+is light), and the verification filter (a question somebody asks on
+purpose). `verStages` / `verPending` are still computed for those three.
 
 Three things to know before touching `LOS_GROUP_OF_TYPE` in
 `operation/operation_reports.html`:
