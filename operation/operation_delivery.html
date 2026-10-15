@@ -167,6 +167,7 @@
                 </div>
                 
                 <div id="mng-do-collection-summary" class="mb-4"></div>
+                <div id="mng-do-seals" class="mb-4"></div>
 
                 <div id="mng-do-collection-edit" class="hidden mb-4 p-4 border border-slate-200 rounded-xl bg-slate-50">
                     <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Edit Plot/Breed/Batch Details (Max 5 items)</label>
@@ -849,6 +850,25 @@
             doc.text('TOTAL QUANTITY', 92, y + 4);
             doc.text(mjmFmtQty(doRec.total_qty), 187, y + 4, { align: 'right' });
 
+            // The seals collected on this DO, as runs. Capped at four lines so
+            // a scattered collection cannot push the signature off the page --
+            // the full list is always on the Seal page.
+            // Kept OFF the printed DO for now (office, 14 Oct 2026). Still
+            // recorded, and still shown in the Manage DO box above. Same
+            // switch as SHOW_SEALS_ON_DO in sealRanges.js in the phone repos.
+            const SHOW_SEALS_ON_DO = false;
+            const sealText = SHOW_SEALS_ON_DO ? mjmSealText(doRec.seal_ranges) : '';
+            if (sealText) {
+                y += 11;
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...INK);
+                doc.text('SEAL NO. (' + mjmFmtQty(doRec.seal_qty || mjmSealQty(doRec.seal_ranges)) + ')', 20, y);
+                doc.setFont('helvetica', 'normal');
+                let lines = doc.splitTextToSize(sealText, 140);
+                if (lines.length > 4) lines = lines.slice(0, 3).concat(['... ' + doRec.seal_ranges.length + ' ranges in all, see the Seal page']);
+                doc.text(lines, 50, y);
+                y += (lines.length - 1) * 4;
+            }
+
             // Customer acknowledgement: collection photo + signature
             y += 18;
             doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...INK);
@@ -879,6 +899,17 @@
             doc.setTextColor(150, 150, 150);
             doc.text((doRec.do_number || 'DO') + ' · Generated ' + now.toISOString().slice(0, 19).replace('T', ' '), 190, 289.5, { align: 'right' });
             return doc;
+        }
+
+        /* Seal runs as a DO prints them: 0009001 - 0009600, 0012345.
+           shared_do_records.seal_ranges is written by the FC Portal when a DO
+           is issued from a scan card -- see shared/RUN_ME_seal_management.sql. */
+        function mjmSealText(ranges) {
+            if (!Array.isArray(ranges) || !ranges.length) return '';
+            return ranges.map(r => (!r.end || r.end === r.start) ? r.start : r.start + ' - ' + r.end).join(', ');
+        }
+        function mjmSealQty(ranges) {
+            return (ranges || []).reduce((n, r) => n + (Number(r.qty) || 1), 0);
         }
 
         function mjmDoPdfFileName(doRec) {
@@ -973,6 +1004,28 @@
 
         // Print the DO currently open in the Manage DO modal using the
         // standardized layout (admin hardcopy for the customer).
+        /* Read on their own rather than added to the DO select in fetchData:
+           a column named there that the database does not have yet fails the
+           WHOLE list, and the seal columns arrive with a SQL file somebody
+           has to run. Asked here, a missing column costs this box and
+           nothing else. */
+        async function loadDOSeals(doRec) {
+            const box = document.getElementById('mng-do-seals');
+            if (!box) return;
+            box.innerHTML = '';
+            try {
+                const { data, error } = await _supabase.from('shared_do_records')
+                    .select('seal_ranges,seal_qty').eq('id', doRec.id).maybeSingle();
+                if (error || !data) return;
+                doRec.seal_ranges = data.seal_ranges;
+                doRec.seal_qty = data.seal_qty;
+                const text = mjmSealText(data.seal_ranges);
+                if (!text) return;
+                box.innerHTML = '<h4 class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 mt-4 border-t pt-4">Seal Numbers (' + mjmFmtQty(data.seal_qty || mjmSealQty(data.seal_ranges)) + ')</h4>'
+                    + '<div class="p-3 rounded-lg border border-emerald-200 bg-emerald-50 text-xs font-bold text-emerald-800 break-words">' + text.replace(/</g, '&lt;') + '</div>';
+            } catch (_) { /* a missing column only costs this box */ }
+        }
+
         async function printCurrentDO() {
             const id = document.getElementById('manage-do-id').value;
             const doRec = globalDOs.find(d => String(d.id) === String(id));
@@ -1057,6 +1110,7 @@
             }
             summaryHtml += '</div>'; if(!hasNurseryData) summaryHtml = '<div class="text-xs text-slate-400 italic mt-2">No plot data found.</div>';
             document.getElementById('mng-do-collection-summary').innerHTML = summaryHtml;
+            loadDOSeals(doRec);
 
             const docContainer = document.getElementById('mng-do-image-container');
             if(doRec.image_url) { docContainer.classList.remove('hidden'); currentViewImageDO = doRec.image_url; } else { docContainer.classList.add('hidden'); currentViewImageDO = null; }

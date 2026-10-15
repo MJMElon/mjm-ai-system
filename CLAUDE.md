@@ -730,6 +730,108 @@ Four things in it:
 Diagnostics section 7 shows the same answer per table, and the red bar
 taps through to it.
 
+### And a proof of ONE table is not a proof
+
+It came back. The phone now reads
+
+    Not allowed to save to audit_plot_audits. Your login lacks database
+    permission (RLS)
+
+and `RUN_ME_auditor_can_save.sql` — the file written to settle exactly
+this — answers **six green lines while it is happening**. Its proof ends by
+inserting a row as each auditor and rolling it back, which is the right
+idea; it inserts into ONE table, `audit_maintenance_audits`, the one that
+was broken the day it was written. Reproduced on the scratch Postgres with
+Plot Condition refusing every save, it prints *auditors who could actually
+save just now: 4 of 4 -- OK*.
+
+**A probe is only a proof of the table it probes.** That is the same
+mistake the file itself was written to correct, moved one table along:
+*"a previous file reported four green lines over a database that refused
+every save."* `shared/RUN_ME_audit_save_every_table.sql` probes **all five
+writable audit tables, as every non-customer account**, and a failure names
+the auditor, the table and the SQLSTATE.
+
+Two things bring this back, and neither is visible to a check of the
+policies:
+
+- **An auditor who signed up after the last repair.** The gate reads
+  `shared_profiles`, so an account with no row there fails it — there is
+  nothing to read. Backfilling is a repair of today and the fault returns
+  the next time somebody is hired. The **signup trigger** is what closes
+  it, so section 1 installs `on_auth_user_created` rather than only filling
+  the gap it left.
+- **A policy added by hand in the dashboard.** A RESTRICTIVE one narrows
+  what every other policy allows, so one of them refuses every auditor
+  whatever else is right. The old file drops a LIST OF NAMES IT KNOWS,
+  which is how one survives every repair. The new one drops every policy on
+  these tables that is not one of the four this system owns — and **names
+  what it dropped** in the result, because a repair that quietly removes
+  somebody's decision is a worse thing than the fault.
+
+**And a fault no policy check can see at all** is a column added NOT NULL
+that no form writes: 23502, every save refused, every gate correct. Only a
+real insert finds it, which is the whole argument for probing rather than
+inspecting.
+
+One more thing, found while testing: the old file's last query names
+`storage.buckets` inside a `CASE`, and a database without the storage
+schema fails to **parse** it however well the branch is guarded. The answer
+is worked out in a `DO` block into a session setting instead, so the final
+query names no table that might not be there.
+
+### The first version of the new file then did it a third time
+
+It ran on the real database and printed
+
+    9 | saves that went through just now: 196 of 245 -- OK
+
+**196 of 245 is not OK.** Forty-nine saves — one table for every one of the
+forty-nine accounts — were refused, and the row said OK, which is the exact
+fault two files in a row have now been written to correct.
+
+Two bugs, and the second is the one that matters:
+
+- **A NULL wipes the line you are building up.** `shared_profiles.email` can
+  be empty, concatenating NULL gives NULL, and `set_config(name, NULL,
+  false)` BLANKS the setting. So the one account with no email erased every
+  reason collected before it. Every piece of a `set_config` line is
+  `COALESCE`d now, and an account with no email is named by its id.
+- **OK was decided on whether a REASON had been collected**, not on the
+  count. So wiping the reasons turned a failure into a pass. **OK is `pass =
+  total` and nothing else.** A count that does not add up is the fault,
+  whether or not anything managed to say why — and there is a per-table
+  tally beside it, so the table that refuses is named even when the reasons
+  are too long to print.
+
+**And dropping every policy that is not ours was over-reach.** It took out
+`nops_read_audit_verdicts`, which `RUN_ME_audit_column.sql` creates on
+purpose so the Work Maintenance page can read the verdicts. A PERMISSIVE
+policy cannot refuse anything — it is somebody opening a door — so only a
+**RESTRICTIVE** one is dropped now, and the permissive ones are named and
+LEFT ALONE. The file also puts `nops_read_audit_verdicts` back, so a run of
+it cannot take that door away again.
+
+### What it was, in the end — and a probe can accuse the wrong party
+
+The second run answered it. `audit_plot_audits` read **49 of 49**: the
+RESTRICTIVE policy the first run dropped was the whole of the fault the
+phone was showing, and Plot Condition has saved ever since.
+
+What was left read `audit_batches 0/49`, *23502 null value in column
+`batch_id`* — and **that one was the probe being wrong, not the database.**
+`audit_batches` takes a `batch_id` (`BTH-nursery-batch-plot`), the Papan
+form writes it on both of its insert paths, and the probe row here did not,
+because its column list was copied off the tail of that object literal
+rather than the whole of it.
+
+**A probe short of a column the FORM supplies accuses the database of the
+probe's own mistake** — and it does it in a row headed NOT OK, which is
+exactly how a real fault reads. So the result now carries **the columns
+that MUST be filled** on every table it probes, read out of
+`information_schema`: a 23502 names one of those, and that row is how you
+tell "a column no form writes" from "a column this file forgot".
+
 ## An outbox is half of recording with no line. The LIST is the other half.
 
 The queue has always worked: an audit saved with no signal goes into
@@ -833,6 +935,37 @@ because this was the second fix in a week that had to actually reach a phone.
 That is the condition the rule names: a module somebody wants current, not the
 whole site.
 
+## A to-do list that hides what is coming is a diary
+
+The audit home page opens with TODAY selected — `selDay = day` — so the day
+scope was not something the auditor chose, it was the default view, and the
+day filter was the default filter. A Plot Condition, Papan Tanda or Seedling
+Height round whose window opens on the 20th was therefore not on the list on
+the 14th. The only way to see it was to tap today's chip a SECOND time to
+clear the selection, and nothing on the screen says that. Three of the four
+modules answered "what is next" with nothing.
+
+Maintenance was already exempt, because its deadline is set by somebody
+else's work and a row that exists is a row with work pending on it. The
+other three were not, and the asymmetry read as the schedule being empty.
+
+So on today every undone row of the month on screen shows. Two things keep
+it from becoming a free-for-all:
+
+- **Picking any OTHER day still answers literally** — what falls on that
+  date, maintenance included. A day somebody chose is a question; the day
+  the page opened on is not.
+- **A row whose window has not opened arrives greyed and does not
+  navigate.** That was already the treatment for `soon` and `upcoming`, and
+  it is the right one: the audit form would have nothing yet to record. The
+  row is there to be seen, not to be opened.
+
+A row carried from an earlier month (`fromY` set) rides on today only while
+it is overdue, which is the only reason `carriedOverdue()` hands one over.
+
+`tests/todo_shows_what_is_coming.cjs` lifts `occStatus` and the day filter
+straight out of the shipped `audit_home.html` and drives real rows through
+them — the three the office named fail on the previous code.
 ## Three numbers wear the name Double Tone, and only one is a column
 
 **`Transplanted` out of the DOUBLE-TONE tray** is the Life of Seedlings
@@ -1225,6 +1358,106 @@ Two things that follow:
 
 `tests/history_is_a_window_not_a_count.cjs` guards all of it.
 
+## A walk recorded with the screen off is not recorded at all
+
+The same plot came back **2.63 km over 798 fixes** one day and **4 m over 2
+fixes** the next, and the office could not tell what made the difference.
+
+**A browser STOPS giving positions when the page is not on screen.** Not
+throttles — stops. So a track walked from a web page lives or dies on whether
+the screen stays awake, and the one lever for that is the screen wake lock.
+There is no way round it; only a native app can walk a track with the screen
+off.
+
+**And the browser takes that lock back the moment the page is hidden, without
+being asked and without saying so.** So `wakeLock.request()` called ONCE at
+Start is a lock that is gone for good after the first notification, app switch
+or glance away — and every metre after that moment is at the mercy of the
+display timeout. The phone sleeps, the fixes stop, and the map goes on looking
+exactly like a map that is recording.
+
+The Worker Portal had the full treatment, including a comment saying in as
+many words that asking once is asking for the first time only. **The FC
+Portal's track map had the one-line version** — request, `.catch(() => {})`,
+no reference, no listener. Two copies, one of them thinner, which is the shape
+of nearly every fault in this file.
+
+`src/lib/screenWake.js` is the one copy now and both call it. Two things in it
+that were learned the hard way and must not be simplified back out:
+
+- **The reference is forgotten on `hidden`**, not on the lock's own `release`
+  event. Waiting for the event left the reference set, so the re-ask returned
+  early and never asked at all.
+- **Every part of it is best effort.** The API is not on every phone and it can
+  refuse, and a walk must still record on one where it does.
+
+**And the map now says when the line has stopped growing**, because none of
+the above can make a fix arrive — what it can do is stop pretending one has.
+`STALL_AFTER_S` is 45: the phone gives a position every second or two in the
+open, so three quarters of a minute of nothing has never been the sky. The
+band is red, above the figures, because the figures look perfectly healthy
+while this is happening — they simply stop moving. The reason a fix was
+DROPPED (too rough, too still, too far to believe) is shown the same way; the
+Worker Portal has always shown it and the map never did.
+
+`tests/the_screen_lock_is_asked_again.cjs` drives the real helper and holds
+the previous version up beside it: asked once, never again after the first
+time hidden, and nothing watching the page at all.
+
+### Nothing keeps RECORDING through a locked phone. The metres already walked are a different question.
+
+The office asked the obvious next thing: *"can make it able to record as long
+as the browser did not close at the backend? like if they lock their phone,
+glance at whatsapp but they didnt close the browser at backend."* **No, and no
+amount of code changes that.** A browser STOPS calling back with positions
+when the page is not on screen — there is no web API for background
+geolocation, the wake lock only stops the screen turning ITSELF off, and a
+service worker gets no positions either. Only a native app, or an Android
+foreground service, can walk a track with the screen dark. `useWorkerTrack.js`
+had already written that down.
+
+What was being lost on top of that was avoidable, and it has been fixed. **The
+FC Portal kept the walk in React state inside the map modal**, so closing the
+map, a reload, or the browser reclaiming the tab — which a phone does the
+moment it is locked for long enough — threw away every metre of it. The Worker
+Portal had always parked its walk in `localStorage`; the map had nothing. Two
+copies, one of them thinner, again.
+
+`src/modules/maintenance/track/parked.js` is the one copy now and
+`worker/taskTrack.js` reads through it. Four rules in it:
+
+- **It comes back STOPPED, never running.** The phone was not being watched
+  while the page was away, so those minutes have no fixes; carrying on
+  silently draws a straight line across them and calls it walked. The person
+  presses **Resume**, which keeps the SAME track and the original `startedAt`
+  so `t` on every later point stays honest, and the gap in the line is the
+  truth about what happened.
+- **Resume is the button under the thumb, and Start again is the quiet one.**
+  Start again throws the walk away; a red primary button that destroys what
+  somebody just walked is a trap.
+- **It is dropped after `PARKED_GOOD_FOR_H` — twelve hours.** A kill takes the
+  FORM with it, so the walk comes back into a form that has to be keyed again
+  and nothing in it says which job it was for. Within the shift that is
+  obvious to the person standing there; a walk parked last Tuesday is not, and
+  offering it against today's plot is how a line walked round N15 is filed
+  against B04. Measured in BOTH directions, because a phone whose clock runs
+  ahead parks in the future and a one-sided test drops the one walk the person
+  is definitely still standing in.
+- **Handing it to the record clears it.** A park left behind reappears on the
+  NEXT job and reads as that one, which is worse than losing it.
+
+Every read and write is wrapped: a phone with storage blocked must still be
+able to walk a track, it just cannot survive being killed.
+
+**What is still true and is not a bug:** the FC Portal records only while the
+full-screen map is open. The walk is no longer lost when it is closed, but it
+is not growing either. Running it from the record row the way the Worker
+Portal does is worth doing the day somebody asks, and is a different change
+from this one.
+
+Section 7 and section 8 of `tests/the_screen_lock_is_asked_again.cjs` hold the
+parking and the twelve hours.
+
 ## Which nursery a record is in: the PLOT decides
 
 The plot is the thing that is somewhere. A maintenance record is wherever its
@@ -1486,6 +1719,70 @@ browser and holds all of it — a plot walked late drops off, a plot nobody
 walked stays on, an audit from before the window opened clears it and is
 recorded as missed, and nothing clears a window that has not closed yet.
 
+## Papan tanda is two months wide, because a sign goes up after the plot does
+
+The papan roster was the current calendar month: the plots the ledger
+says were transplanted (or, in the Pre-Nursery, planted) since the 1st.
+One month is too narrow for the walking. A plot transplanted on the
+**28th** gets its sign nailed up days later, and on the **1st** it fell
+out of the list entirely — audited or not, with nothing saying it had
+gone. The office asked for both months on one screen: *"so i can see sep
+transplanting plot and oct transplanting plot. So our auditor just based
+on this to audit plot needed."*
+
+So the window opens on the **first of the PREVIOUS month**, and it is
+written twice:
+
+- `_papanWindowStartISO()` in `audit_papan_script.js`, which is what the
+  module page queries the ledger with (`transaction_date.gte.`);
+- `_papanWindowStartISO()` in `audit_pending.js`, which is what the home
+  board's to-do row and its plot chips are built from.
+
+**Change one, change the other.** A plot inside one window and outside
+the other is a to-do row with no card to open, or a card nothing ever
+asked for. `tests/papan_sees_both_months.cjs` runs BOTH shipped copies
+over the same days and compares, the January-reaches-into-December case
+included.
+
+**And the strip has to SAY which month.** Two months of plots drawn as
+one run of identical circles answers a question nobody asked — the
+office wanted to tell September's from October's. The circles are
+ordered newest month first with a small tag above each run, and
+`MJMAuditPending.papanPlacedOn(nursery, plot)` is what supplies the
+date. It is an accessor of its own rather than a field on `plots()`: the
+other three modules want a list of codes, and widening the one function
+they share to carry something only papan reads is how a shared function
+becomes four. A plot the roster cannot date is tagged as undated and put
+LAST, never dropped and never filed under a month nobody checked.
+
+**Which page the auditor is actually on matters here.** The papan module
+has no landing list of its own — `init()` redirects to `audit_home.html`
+unless the address names a plot — so the strip on the To Do card IS the
+papan plot list. The module page's own grouped list is reached by
+`?admin=1` or `?from=manage` and is kept in step with it rather than
+being the thing people see.
+
+**The window change is what forced papan into the round rule.** That
+rule — "A batch is not audited for ever because it was audited once",
+below — deliberately left papan out, and the note said why: its roster
+was *this month's* placements, so the roster was already round-shaped
+and "ever audited" could not disagree with "audited this round". Two
+months breaks that. A plot transplanted and audited in September now
+rides into October's roster, and the old test would have drawn it green
+while the home board, which asks about the round's own dates, went on
+listing it as owed. So `getAuditForBatch` asks
+`MJMAuditSettings.currentWindow` like the other two, `_papanRoundFor` /
+`_papanInRound` / `_papanRoundSuffix` are the third copies of
+`_roundNow` / `_inRound` / `_roundSuffix`, and the count pill says which
+round it is counting. `getLastAuditForBatch` is the other half: the card
+and the chip still show the last reading, because an auditor wants it in
+front of them before they take the next one, and Batch Info keeps the
+EVER question because it is a register and not a to-do list.
+
+`tests/papan_list_spans_two_months.cjs` drives the real board and the
+real module page in a real browser; eleven of its seventeen checks fail
+on the previous code.
+
 ## A batch is not audited for ever because it was audited once
 
 The other half of the backlog, and the one the office actually saw: N02
@@ -1536,9 +1833,10 @@ Four things in it:
   a save, an off-by-one round on the day a window opens.
 
 Plot Condition and Seedling Height are two copies of this card and two
-copies of the grid test. Change one, change the other. Papan is not in it:
-it audits the batch most recently placed on a plot this month, so its own
-rule is already round-shaped.
+copies of the grid test. Change one, change the other. **Papan is in it
+now too** — it was left out while its roster was one month, which made
+its own rule round-shaped by accident; the two-month window took that
+away. See the section above for what moved.
 
 `shared/CHECK_which_batch_still_owes_the_round.sql` names every batch
 behind its own plot, on every plot and both modules — the plot was
@@ -2082,6 +2380,38 @@ Two things that follow:
 version fails the same check, and prints every page that writes a whole
 className onto a select. It needs `npm install jsdom` and says so if it is
 missing.
+
+## A seal is checked in the database, never only on the phone
+
+Seal stickers ("0009297") go through four states — **in stock** (received at
+UNN 1 on the Mobile Seal page), **pending collection** (allocated by a
+consent: the start and end of each range are scanned on Mobile Consent),
+**scanned** (each seal scanned at collection in the FC Portal) and
+**collected** (on a DO). `shared/RUN_ME_seal_management.sql` is all of it.
+
+**The rules live in triggers**, because the phones work offline and a check
+that only runs on a phone with signal is a check that sometimes does not run.
+A phone WITH signal asks `seal_check_range()` and warns or blocks first; any
+record that reaches the database, from any app or any old version, passes the
+triggers on `mobile_consent_records`, `seal_receipts`, `fcportal_scan_records`
+and `shared_do_records`. A problem is **never a refused row** — what the
+customer signed is kept — it is a `seal_problems` row and a NELOS case put in
+the HQ queue (`sees_all_cases`) with nobody assigned, so every HQ handler sees
+it. One open case per AL and kind; a second problem is a comment on it.
+
+Three things worth knowing:
+
+- **Seals are compared as numbers and shown at their width.** 0009297 and 9297
+  are one seal. `sealRanges.js` is the rule and lives in mobile, fc-portal and
+  the Sales Web as the same file — change all of them.
+- **A DO says which seals it carried** (`shared_do_records.seal_ranges`), the
+  ones scanned on that card since its last DO, so a consent collected over
+  three trips gives three DOs with three different lists.
+- **`enforce_stock` is OFF** until the seals already at UNN 1 are keyed as
+  opening stock. Turned on before that, every consent is a "never received"
+  case.
+
+`tests/seal_dashboard.cjs` holds the office page.
 
 ## Two repositories, one system
 
