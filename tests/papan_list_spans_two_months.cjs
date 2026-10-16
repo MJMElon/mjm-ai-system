@@ -53,6 +53,8 @@ const tagOf = iso => MON3[Number(iso.slice(5,7)) - 1] + ' ' + iso.slice(2,4);
 const LOGS = [
   { plot_name:'B01', batch_name:'901', transaction_type:'Transplanted',
     breed_name:'IOI', quantity_change:2300, transaction_date:THIS_M, created_at:THIS_M+'T02:00:00Z' },
+  /* B02 below is LAST month, which is what makes last month's round
+     one that owed something and was never done -- the carried row. */
   { plot_name:'B02', batch_name:'902', transaction_type:'Transplanted',
     breed_name:'IOI', quantity_change:2100, transaction_date:LAST_M, created_at:LAST_M+'T02:00:00Z' },
   { plot_name:'B03', batch_name:'903', transaction_type:'Transplanted',
@@ -137,9 +139,10 @@ const ok = (cond, what) => {
     await page.waitForTimeout(400);
 
     const strip = await page.evaluate(() => {
+      /* THIS month's row: the board tags a carried one with the month
+         it came from, so the one without that tag is the current one. */
       const row = [...document.querySelectorAll('#todo-section .tl-item')]
-        .find(el => /papan/i.test((el.querySelector('.tl-ttl')||{}).innerText || '')
-                 && el.dataset.mod === 'papan');
+        .find(el => el.dataset.mod === 'papan' && !el.querySelector('.tl-from'));
       if (!row) return null;
       return [...row.querySelectorAll('.tl-plots > *')].map(el =>
         el.classList.contains('tl-plot-mon')
@@ -149,7 +152,7 @@ const ok = (cond, what) => {
             : { kind:'other' });
     });
 
-    ok(!!strip, 'the home board carries a Papan Tanda row with a plot strip');
+    ok(!!strip, 'the home board carries a Papan Tanda row for THIS month, with a plot strip');
     const plots = (strip||[]).filter(e => e.kind === 'plot').map(e => e.text);
     const months = (strip||[]).filter(e => e.kind === 'month').map(e => e.text);
 
@@ -170,6 +173,52 @@ const ok = (cond, what) => {
        'and the chip itself says the month on hover (' + ((b02||{}).title || '') + ')');
 
     ok(errs.length === 0, 'no page errors on the board' + (errs.length ? ': ' + errs[0] : ''));
+    await ctx.close();
+  }
+
+  /* -- 1b. PAPAN IS NOT CARRIED FORWARD ---------------------------- */
+  /* The board carries an unfinished round forward, and for papan that
+     put the same plots on the screen two and three times over: the
+     office saw an AUG 2026 row and a SEP 2026 row above October's, with
+     B03, B06, N08 and U04 under both of the first two, and said "this 2
+     already passed, no need to show."
+
+     It falls out of the window rather than being a preference. Papan's
+     roster is TWO MONTHS WIDE on its own, so October's row already asks
+     about every plot transplanted in September -- carrying September's
+     row asks the same question again. The two-month window IS the
+     catching up.
+
+     The fixture places a plot in each of the last three months, so a
+     carried row would be visible and would carry plots of its own. */
+  {
+    const { ctx, page, errs } = await open('/audit/audit_home.html');
+    await page.evaluate(() => document.querySelectorAll('.tl-plots-toggle').forEach(b => b.click()));
+    await page.waitForTimeout(400);
+    const rows = await page.evaluate(() =>
+      [...document.querySelectorAll('#todo-section .tl-item')]
+        .filter(el => el.dataset.mod === 'papan')
+        .map(el => ({
+          from:  ((el.querySelector('.tl-from') || {}).textContent || '').trim(),
+          plots: [...el.querySelectorAll('.tl-plot')].map(a => a.textContent.trim()).sort()
+        })));
+    const other = [...new Set(await page.evaluate(() =>
+      [...document.querySelectorAll('#todo-section .tl-item')]
+        .filter(el => el.dataset.mod !== 'papan' && el.dataset.mod !== 'maint'
+                   && el.querySelector('.tl-from'))
+        .map(el => el.dataset.mod)))];
+
+    ok(rows.length === 1, 'exactly ONE Papan Tanda row on the board (' + rows.length + ')');
+    ok(!!rows[0] && !rows[0].from,
+       'and it is this month -- no carried row above it ('
+       + ((rows[0]||{}).from || 'none') + ')');
+    ok(!!rows[0] && rows[0].plots.join(',') === 'B01,B02',
+       'carrying nothing loses nothing of the two months: this month and last are both on it ('
+       + ((rows[0]||{}).plots || []).join(',') + ')');
+    ok(other.length > 0,
+       'the OTHER modules are still carried -- this is papan only, because papan is the '
+       + 'only one whose roster already spans two months (' + other.join(',') + ')');
+    ok(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs[0] : ''));
     await ctx.close();
   }
 

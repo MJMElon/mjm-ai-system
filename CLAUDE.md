@@ -1813,6 +1813,56 @@ asked for. `tests/papan_sees_both_months.cjs` runs BOTH shipped copies
 over the same days and compares, the January-reaches-into-December case
 included.
 
+**AND IT IS TWO MONTHS AS AT THE ROW, NOT AS AT TODAY.** The office
+put the rule plainly: *"oct audit papan tanda then it will appear the
+plot that transplant on Sep and Oct; nov audit papan tanda then it will
+appear the plot that transplant on oct and nov."* The window therefore
+has to be anchored on the month the row is ABOUT. The first version
+anchored it on today, and the board carries an unfinished round forward,
+so in October it drew **three** Papan Tanda rows — AUG 2026 overdue, SEP
+2026 overdue and October due now — each listing the **same six plots**,
+every one of them tagged SEP 26. A round that closed on 20 August cannot
+be owed a sign that went up in September: that row was asking about
+plots which did not exist when it was due, so nothing an auditor did
+would ever clear it and it never left the board.
+
+So `plots()` and `papanPlacedOn()` take an **`asOfISO`** — the row's own
+month — and `_papanWindowStartISO` / `_papanWindowEndISO` move with it.
+Two things in that:
+
+- **The UPPER bound was missing altogether.** Without it a September row
+  lists October's plots as well, which is the same fault pointing the
+  other way.
+- **Three callers, one month**, the same rule `winRange` already
+  follows: `nurseryState` decides whether the row stays, `_plotsHtml`
+  draws the circles under it and `plotsOwed` counts them. They share
+  `_asOfMonthISO(y, m)`, because a row that clears while its circles
+  remain is worse than the bug was.
+
+A month that owed nothing now comes back empty and the row leaves the
+board on its own. Only papan reads `asOfISO`; the other three modules'
+rosters do not move with the calendar, and the module page omits it
+because it only ever shows now.
+
+**AND A PAPAN ROUND IS NOT CARRIED FORWARD.** Every other module's
+round asks about ONE window, so a round nobody walked has to be carried
+onto the current board or the work disappears. Papan's roster is two
+months wide by itself, so October's row **already asks about every plot
+transplanted in September** — carrying September's row asks the same
+question twice, and August's a third time where the windows overlap. The
+office saw B03, B06, N08 and U04 under an AUG 2026 row and again under a
+SEP 2026 one, above October's, and said of both: *"this 2 already
+passed, no need to show."* The two-month window IS the catching up,
+which is what it was asked for.
+
+`carriedOverdue()` skips `papan` and nothing else — the other three are
+still carried, on the office's own earlier rule that a round nobody has
+walked keeps showing. **What it costs:** a plot placed two months back
+or more and never audited is on no row at all, because it is outside the
+current window and there is nothing left on the board that could ask for
+it. A round done LATE is still filed in Audit History as a missed one:
+`missedRounds()` walks the months itself and does not read that list.
+
 **And the strip has to SAY which month.** Two months of plots drawn as
 one run of identical circles answers a question nobody asked — the
 office wanted to tell September's from October's. The circles are
@@ -1849,8 +1899,9 @@ front of them before they take the next one, and Batch Info keeps the
 EVER question because it is a register and not a to-do list.
 
 `tests/papan_list_spans_two_months.cjs` drives the real board and the
-real module page in a real browser; eleven of its seventeen checks fail
-on the previous code.
+real module page in a real browser — one plot per month, so a row
+reaching outside its own window is caught by NAME rather than by a
+count.
 
 ## A batch is not audited for ever because it was audited once
 
