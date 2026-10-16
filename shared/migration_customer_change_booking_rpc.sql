@@ -14,6 +14,18 @@
 --   • _new_qty must be > 0
 --   • _new_end_time must be after _new_start_time
 --
+-- A CONFIRMED booking that the customer reschedules to a different date or
+-- time is no longer confirmed FOR that slot -- the office allocated a
+-- nursery and a plot against the old slot, and that allocation says
+-- nothing about whether the new one is coverable. So a reschedule that
+-- actually moves the date or time drops a booked row back to pending, and
+-- the office re-confirms it by dragging it onto a nursery again on the
+-- Day View, the same action that confirmed it the first time. A
+-- reschedule that only changes the quantity leaves status alone -- the
+-- office asked for this to react to date/time only, and an allocation
+-- already holds a plot regardless of exactly how many seedlings are
+-- being collected on it.
+--
 -- Returns the updated row so the client can refresh its local cache.
 
 CREATE OR REPLACE FUNCTION public.change_my_booking(
@@ -70,7 +82,14 @@ BEGIN
        SET booking_date   = _new_date,
            start_time     = _new_start,
            end_time       = _new_end,
-           collection_qty = _new_qty
+           collection_qty = _new_qty,
+           status = CASE
+                      WHEN b.status = 'booked'
+                           AND (b.booking_date IS DISTINCT FROM _new_date
+                                OR b.start_time IS DISTINCT FROM _new_start)
+                      THEN 'pending'
+                      ELSE b.status
+                    END
      WHERE b.id = _booking_id
        AND b.status <> 'cancelled'
        AND upper(b.order_number) = upper(trim(_order_number))
@@ -82,3 +101,24 @@ $fn$;
 
 REVOKE ALL ON FUNCTION public.change_my_booking(uuid, text, date, time, time, integer) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.change_my_booking(uuid, text, date, time, time, integer) TO anon, authenticated;
+
+-- What a good result looks like: ONE row, OK, with the function source
+-- carrying the status-reset case the fix just added. NOT OK is the
+-- function missing entirely, or installed without the new logic.
+-- Matched on IS DISTINCT FROM _new_date, a marker unique to the new
+-- CASE and quote-free, so the check needs no escaped quotes of its own.
+SELECT
+    CASE WHEN pg_get_functiondef(p.oid) LIKE '%IS DISTINCT FROM _new_date%'
+         THEN 'change_my_booking now resets a confirmed booking to pending on reschedule -- OK'
+         ELSE 'change_my_booking is missing the status-reset logic -- NOT OK'
+    END AS result
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.proname = 'change_my_booking'
+UNION ALL
+SELECT 'change_my_booking is not installed at all -- NOT OK'
+WHERE NOT EXISTS (
+    SELECT 1 FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'change_my_booking'
+);
