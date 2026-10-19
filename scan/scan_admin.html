@@ -11,28 +11,39 @@
 <script src="../shared/shared_access.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
-  * { font-family:'Outfit', system-ui, sans-serif; }
+  /* Plain system sans rather than the decorative 'Outfit' webfont this page
+     carried before — the office asked for it on the module cards, and the
+     only thing 'Outfit' was doing for a grid of six tiles was being one
+     more font on the page. */
+  * { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
   body { background:#faf5ff; margin:0; }
   .card { background:white; border:1px solid #ede9fe; border-radius:20px; box-shadow:0 4px 16px rgba(139,92,246,.08); }
 
-  /* Every door this page offers — FC Portal, Worker Portal, Admin Portal,
-     Audit Portal, Worker System, Settings — used to be two different
-     things: a pair of oversized "visit X portal" bars, and a separate row
-     of small square tiles underneath for everything else. Nothing said
-     why some doors were twice the size of others, and there was nowhere
-     left to put Admin Portal and Audit Portal when they moved in. One
-     grid of equal tiles under a plain greeting reads as what it is: six
-     doors into six rooms, none of them the "real" one. */
-  .welcome { font-size:22px; font-weight:900; color:#1e293b; margin:4px 2px 18px; }
-  .door-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; }
+  /* Two groups, not six doors in a row: MJM Team is the four portals
+     (FC / Admin / Worker / Audit) a person actually signs into, and
+     System Setting is the three screens that configure who may use them.
+     Nothing in the old flat grid said why Worker System sat next to
+     Worker Portal when it governs a different thing entirely. */
+  .welcome { font-size:24px; font-weight:900; color:#1e293b; margin:4px 2px 24px; }
+  .section-label { font-size:13px; font-weight:900; color:#1e293b; text-transform:uppercase;
+                    letter-spacing:.1em; margin:30px 2px 14px; }
+  .section-label:first-of-type { margin-top:0; }
+  .door-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:16px; }
   .door { display:flex; flex-direction:column; align-items:center; text-align:center;
-          gap:10px; padding:22px 16px; border-radius:22px;
+          gap:14px; padding:30px 20px; border-radius:24px;
           background:white; border:1.5px solid #ede9fe; text-decoration:none; transition:all .15s; }
   .door:hover { border-color:#c4b5fd; transform:translateY(-2px); box-shadow:0 10px 24px -6px rgba(139,92,246,.28); }
-  .door-ico { width:54px; height:54px; border-radius:16px; display:grid; place-items:center; font-size:25px; background:#f5f3ff; }
-  .door-name { font-size:12px; font-weight:900; color:#1e293b; text-transform:uppercase; letter-spacing:.08em; }
-  .door-sub { font-size:10.5px; font-weight:600; line-height:1.4; color:#8b8396; }
+  .door-ico { width:72px; height:72px; border-radius:20px; display:grid; place-items:center; flex-shrink:0; }
+  .door-ico svg { width:36px; height:36px; }
+  .door-name { font-size:13.5px; font-weight:900; color:#1e293b; text-transform:uppercase; letter-spacing:.06em; }
+  .door-sub { font-size:11.5px; font-weight:600; line-height:1.4; color:#8b8396; }
   .hidden { display:none !important; }
+
+  /* MJM Team's four cards only — the office asked to arrange these
+     themselves, same drag-and-drop the hub's own module cards already
+     use. System Setting is a fixed three and stays put. */
+  .door.card-dragging { opacity:.4; border-color:#34d399; box-shadow:0 0 24px rgba(52,211,153,.35); }
+  .door.card-drag-over { border-color:#34d399; box-shadow:0 0 0 2px rgba(52,211,153,.4); }
 </style>
 </head>
 <body>
@@ -51,44 +62,100 @@
 
   <div class="welcome" id="welcome-heading">Welcome!</div>
 
-  <!-- Six doors, one grid. FC Portal and Worker Portal are the same site's
-       two front doors (e-mail + password, or just the PIN on a worker's
-       row in Worker System); Admin Portal and Audit Portal are two other
-       systems entirely, moved in here so a person with more than one of
-       these does not also need to remember more than one way to reach
-       them. Worker System and Settings are tools, not portals, and sit in
-       the same grid rather than a tier of their own — a reader should not
-       have to work out why some doors are bigger than others. -->
-  <div class="door-grid">
-    <a class="door" id="fc-portal-link" href="https://scan.mjmnursery.com" target="_blank" rel="noopener">
-      <span class="door-ico" style="background:#ede9fe;">📱</span>
+  <!-- MJM Team: the four portals a person actually signs into. FC Portal
+       and Worker Portal are the same site's two front doors (e-mail +
+       password, or just the PIN on a worker's row in Worker Namelist);
+       Admin Portal and Audit Portal are two other systems entirely, moved
+       in here so a person with more than one of these does not also need
+       to remember more than one way to reach them. Draggable and in the
+       order the office last left them — see the drag-order script below. -->
+  <div class="section-label">MJM Team</div>
+  <div class="door-grid" id="mjm-team-grid">
+    <a class="door" id="fc-portal-link" data-card="fc" href="https://scan.mjmnursery.com" target="_blank" rel="noopener">
+      <span class="door-ico" style="background:#ede9fe;color:#7c3aed;">
+        <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="10" y="4" width="14" height="26" rx="3.5"/>
+          <path d="M14.5 8h5"/>
+          <circle cx="17" cy="26.5" r="1" fill="currentColor" stroke="none"/>
+        </svg>
+      </span>
       <span class="door-name">FC Portal</span>
       <span class="door-sub">E-mail &amp; password sign-in</span>
     </a>
-    <a class="door" id="worker-portal-link" href="https://scan.mjmnursery.com/#/worker" target="_blank" rel="noopener">
-      <span class="door-ico" style="background:#d1fae5;">🪪</span>
-      <span class="door-name">Worker Portal</span>
-      <span class="door-sub">PIN sign-in, no e-mail needed</span>
-    </a>
-    <a class="door" id="admin-portal-link" href="https://mobile.mjmnursery.com" target="_blank" rel="noopener">
-      <span class="door-ico" style="background:#cffafe;">🧾</span>
+    <a class="door" id="admin-portal-link" data-card="admin" href="https://mobile.mjmnursery.com" target="_blank" rel="noopener">
+      <span class="door-ico" style="background:#cffafe;color:#0891b2;">
+        <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="10" y="3" width="14" height="28" rx="3.5"/>
+          <path d="M14.5 6.5h5"/>
+          <circle cx="17" cy="27.5" r="1" fill="currentColor" stroke="none"/>
+          <path d="M13.5 14l2.2 2.2 4.8-5"/>
+          <path d="M13.5 20h7"/>
+        </svg>
+      </span>
       <span class="door-name">Admin Portal</span>
       <span class="door-sub">DO issuing, consent, booking</span>
     </a>
-    <a class="door" id="audit-portal-link" href="../audit/audit_admin.html">
-      <span class="door-ico" style="background:#ffedd5;">📋</span>
+    <a class="door" id="worker-portal-link" data-card="worker" href="https://scan.mjmnursery.com/#/worker" target="_blank" rel="noopener">
+      <span class="door-ico" style="background:#d1fae5;color:#059669;">
+        <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="17" cy="12" r="5.2"/>
+          <path d="M6 29c0-6 4.6-9.5 11-9.5s11 3.5 11 9.5"/>
+        </svg>
+      </span>
+      <span class="door-name">Worker Portal</span>
+      <span class="door-sub">PIN sign-in, no e-mail needed</span>
+    </a>
+    <a class="door" id="audit-portal-link" data-card="audit" href="../audit/audit_admin.html">
+      <span class="door-ico" style="background:#ffedd5;color:#ea580c;">
+        <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="4" width="16" height="22" rx="3"/>
+          <path d="M13 11h8M13 15h8M13 19h5"/>
+          <circle cx="23" cy="25" r="5" fill="#ffedd5" stroke="currentColor"/>
+          <path d="M21.5 25l1.2 1.3L25 23"/>
+        </svg>
+      </span>
       <span class="door-name">Audit Portal</span>
       <span class="door-sub">Plot audits &amp; sign-off</span>
     </a>
+  </div>
+
+  <!-- System Setting: the three screens that configure who may use the
+       four doors above and what each of them offers. Not draggable — a
+       fixed three, not a list the office keeps reordering. -->
+  <div class="section-label">System Setting</div>
+  <div class="door-grid">
     <a class="door" id="tool-workers" href="scan_workers.html">
-      <span class="door-ico" style="background:#fef3c7;">👷</span>
-      <span class="door-name">Worker System</span>
+      <span class="door-ico" style="background:#fef3c7;color:#b45309;">
+        <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="13" cy="10" r="4"/>
+          <path d="M6 26c0-4.8 3.6-7.4 9-7.4s9 2.6 9 7.4"/>
+          <path d="M22 9.5h6M22 14h6"/>
+        </svg>
+      </span>
+      <span class="door-name">Worker Namelist</span>
       <span class="door-sub">The payroll register — PINs live here</span>
     </a>
     <a class="door" id="tool-access" href="scan_settings_hub.html">
-      <span class="door-ico" style="background:#f5f3ff;">⚙️</span>
+      <span class="door-ico" style="background:#f5f3ff;color:#7c3aed;">
+        <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="17" cy="17" r="5"/>
+          <path d="M17 3v4.5M17 26.5V31M3 17h4.5M26.5 17H31M7 7l3.2 3.2M23.8 23.8L27 27M7 27l3.2-3.2M23.8 10.2L27 7"/>
+        </svg>
+      </span>
       <span class="door-name">Settings</span>
       <span class="door-sub">FC, Worker, Admin &amp; Auditor setting</span>
+    </a>
+    <a class="door" id="tool-user-access" href="scan_user_access.html">
+      <span class="door-ico" style="background:#fee2e2;color:#dc2626;">
+        <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="13" cy="10" r="4"/>
+          <path d="M5 27c0-4.8 3.6-7.4 8-7.4"/>
+          <circle cx="24" cy="21" r="4.5"/>
+          <path d="M24 25.3v3.2M22.4 28h3.2"/>
+        </svg>
+      </span>
+      <span class="door-name">User Access</span>
+      <span class="door-sub">Who may open the FC &amp; Worker Portals</span>
     </a>
   </div>
 </div>
@@ -109,6 +176,56 @@ $('fc-portal-link').addEventListener('click', (e) => {
 $('worker-portal-link').addEventListener('click', (e) => {
   e.currentTarget.href = 'https://scan.mjmnursery.com/?cb=' + Date.now() + '#/worker';
 });
+
+/* MJM Team's four cards, drag-to-reorder — same mechanism as the hub's own
+   module cards (index.html), a separate localStorage key because this is
+   a different grid. Runs regardless of permissions: a card a login cannot
+   see is simply hidden later, and reordering an empty grid is harmless. */
+(function initTeamCardOrder() {
+  const KEY = 'mjm_team_card_order_v1';
+  const grid = $('mjm-team-grid');
+  if (!grid) return;
+
+  try {
+    const order = JSON.parse(localStorage.getItem(KEY) || '[]');
+    order.forEach((k) => {
+      const card = grid.querySelector('.door[data-card="' + k + '"]');
+      if (card) grid.appendChild(card);
+    });
+  } catch (e) { /* ignore corrupt state */ }
+
+  function saveOrder() {
+    const out = [...grid.querySelectorAll('.door[data-card]')].map((c) => c.dataset.card);
+    try { localStorage.setItem(KEY, JSON.stringify(out)); } catch (e) { /* ignore */ }
+  }
+
+  let dragged = null;
+  grid.querySelectorAll('.door[data-card]').forEach((card) => {
+    card.setAttribute('draggable', 'true');
+    card.addEventListener('dragstart', (e) => {
+      dragged = card;
+      card.classList.add('card-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', card.dataset.card); } catch (err) {}
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('card-dragging');
+      grid.querySelectorAll('.door').forEach((c) => c.classList.remove('card-drag-over'));
+      dragged = null;
+      saveOrder();
+    });
+    card.addEventListener('dragover', (e) => {
+      if (!dragged || dragged === card) return;
+      e.preventDefault();
+      card.classList.add('card-drag-over');
+      const r = card.getBoundingClientRect();
+      const before = e.clientX < r.left + r.width / 2;
+      grid.insertBefore(dragged, before ? card : card.nextSibling);
+    });
+    card.addEventListener('dragleave', () => card.classList.remove('card-drag-over'));
+    card.addEventListener('drop', (e) => { e.preventDefault(); card.classList.remove('card-drag-over'); });
+  });
+})();
 
 (async () => {
   try {
@@ -147,7 +264,10 @@ $('worker-portal-link').addEventListener('click', (e) => {
        Portal moved onto this page from the hub, so their fallback is the
        same module check the hub used to gate their own cards with —
        nobody's access changed the day they moved either. */
-    if (!MJMAccess.canScanArea('setting')) $('tool-access').classList.add('hidden');
+    if (!MJMAccess.canScanArea('setting')) {
+      $('tool-access').classList.add('hidden');
+      $('tool-user-access').classList.add('hidden');
+    }
     if (!MJMAccess.canScanArea('workers')) $('tool-workers').classList.add('hidden');
     if (!MJMAccess.canScanArea('fc')) $('fc-portal-link').classList.add('hidden');
     if (!MJMAccess.canScanArea('worker')) $('worker-portal-link').classList.add('hidden');

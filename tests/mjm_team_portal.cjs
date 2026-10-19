@@ -95,15 +95,37 @@ function mockSupabase(page, permissions) {
     await page.waitForTimeout(800);
 
     checkTrue('the welcome heading greets the signed-in name', (await page.locator('#welcome-heading').innerText()).includes('Coco Lau'));
+    checkTrue('an "MJM Team" section label exists', await page.locator('.section-label', { hasText: 'MJM Team' }).count());
+    checkTrue('a "System Setting" section label exists', await page.locator('.section-label', { hasText: 'System Setting' }).count());
     checkTrue('FC Portal door is visible', await page.locator('#fc-portal-link').isVisible());
     checkTrue('Worker Portal door is visible', await page.locator('#worker-portal-link').isVisible());
     checkTrue('Admin Portal door is visible', await page.locator('#admin-portal-link').isVisible());
     checkTrue('Audit Portal door is visible', await page.locator('#audit-portal-link').isVisible());
-    checkTrue('Worker System tool is visible', await page.locator('#tool-workers').isVisible());
+    checkTrue('Worker Namelist tool is visible', await page.locator('#tool-workers').isVisible());
+    checkTrue('Worker Namelist is labelled as such, not the old "Worker System"', (await page.locator('#tool-workers').innerText()).includes('WORKER NAMELIST'));
     checkTrue('Settings tool is visible', await page.locator('#tool-access').isVisible());
+    checkTrue('User Access tool is visible', await page.locator('#tool-user-access').isVisible());
+    check('User Access tool points at the FC/Worker access page', await page.locator('#tool-user-access').getAttribute('href'), 'scan_user_access.html');
     check('Settings tool points at the combined hub, not the old FC-only page', await page.locator('#tool-access').getAttribute('href'), 'scan_settings_hub.html');
     check('Admin Portal door is a flat link to the Admin Portal', await page.locator('#admin-portal-link').getAttribute('href'), 'https://mobile.mjmnursery.com');
     check('Audit Portal door goes to the back end for an audit ADMIN', await page.locator('#audit-portal-link').getAttribute('href'), '../audit/audit_admin.html');
+
+    console.log('\n  -- drag-reordering the MJM Team cards persists across a reload --');
+    const cardsBefore = await page.locator('#mjm-team-grid .door').evaluateAll(els => els.map(e => e.id));
+    check('starts in document order', cardsBefore, ['fc-portal-link', 'admin-portal-link', 'worker-portal-link', 'audit-portal-link']);
+    // Simulate the drag's end state directly (dragstart/dragover/drop are
+    // unreliable to script through a real browser) and fire the same
+    // dragend handler the real drag calls to persist the new order.
+    await page.evaluate(() => {
+      const grid = document.getElementById('mjm-team-grid');
+      const audit = document.getElementById('audit-portal-link');
+      grid.insertBefore(audit, grid.firstChild);
+      audit.dispatchEvent(new Event('dragend'));
+    });
+    await page.reload();
+    await page.waitForTimeout(800);
+    const cardsAfter = await page.locator('#mjm-team-grid .door').evaluateAll(els => els.map(e => e.id));
+    check('Audit Portal, dragged first, is still first after a reload', cardsAfter[0], 'audit-portal-link');
     await page.close();
   }
 
@@ -125,6 +147,7 @@ function mockSupabase(page, permissions) {
     checkTrue('Worker Portal door is hidden (no scan access)', !(await page.locator('#worker-portal-link').isVisible()));
     checkTrue('Admin Portal door is hidden (no mobile access)', !(await page.locator('#admin-portal-link').isVisible()));
     checkTrue('Settings tool is hidden (not a user manager)', !(await page.locator('#tool-access').isVisible()));
+    checkTrue('User Access tool is hidden (not a user manager)', !(await page.locator('#tool-user-access').isVisible()));
     await page.close();
   }
 
