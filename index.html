@@ -251,22 +251,6 @@
         <div class="module-tag">salesweb_</div>
       </a>
 
-      <a class="module-card" data-card="audit" data-module="audit" href="audit/audit_admin.html" onclick="sessionStorage.setItem('mjm_portal_entry','1')"
-         style="--accent:#f97316;--glow:rgba(249,115,22,.25);--glow-strong:rgba(249,115,22,.35);--icon-bg:rgba(249,115,22,.12);">
-        <div class="card-corner card-tl"></div><div class="card-corner card-tr"></div>
-        <div class="card-corner card-bl"></div><div class="card-corner card-br"></div>
-        <div class="module-icon-wrap">
-          <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
-            <rect x="9" y="4" width="16" height="22" rx="3" fill="rgba(249,115,22,.18)" stroke="#f97316" stroke-width="1.5"/>
-            <path d="M13 11h8M13 15h8M13 19h5" stroke="#fdba74" stroke-width="1.5" stroke-linecap="round"/>
-            <circle cx="23" cy="25" r="5" fill="#050a0e" stroke="#f97316" stroke-width="1.5"/>
-            <path d="M21.5 25l1.2 1.3L25 23" stroke="#f97316" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="module-name">555 Audit<br>Portal</div>
-        <div class="module-tag">555_Audit</div>
-      </a>
-
       <!-- Nelos — Nursery Carlos. The case log every other module raises into.
            No pending-count badge: it counted every open case in the system,
            not the ones waiting on the person looking at it, so the number
@@ -321,29 +305,8 @@
             <path d="M6 8h4M24 8h4M6 26h4M24 26h4" stroke="#8b5cf6" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
         </div>
-        <div class="module-name">555 Worker<br>Portal</div>
-        <div class="module-tag">555_WORKER</div>
-      </a>
-
-      <!-- 555 Admin Portal — the ops portal that used to live in the Mobile
-           repo (mobile.mjmnursery.com): Collection DO issuing, customer
-           consent and collection booking. Gated by the existing `mobile`
-           module permission, which User Access already grants. -->
-      <a class="module-card" data-card="admin555" data-module="mobile" href="https://mobile.mjmnursery.com" target="_blank" rel="noopener"
-         style="--accent:#06b6d4;--glow:rgba(6,182,212,.25);--glow-strong:rgba(6,182,212,.35);--icon-bg:rgba(6,182,212,.12);">
-        <div class="card-corner card-tl"></div><div class="card-corner card-tr"></div>
-        <div class="card-corner card-bl"></div><div class="card-corner card-br"></div>
-        <div class="module-icon-wrap">
-          <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
-            <rect x="10" y="3" width="14" height="28" rx="3.5" fill="rgba(6,182,212,.18)" stroke="#06b6d4" stroke-width="1.5"/>
-            <path d="M14.5 6.5h5" stroke="#22d3ee" stroke-width="1.5" stroke-linecap="round"/>
-            <circle cx="17" cy="27.5" r="1.3" fill="#06b6d4"/>
-            <path d="M13.5 14l2.2 2.2 4.8-5" stroke="#22d3ee" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M13.5 20h7" stroke="#22d3ee" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="module-name">555 Admin<br>Portal</div>
-        <div class="module-tag">555_Admin</div>
+        <div class="module-name">555 MJM<br>Team</div>
+        <div class="module-tag">555_MJM_TEAM</div>
       </a>
 
       <!-- Seal Management — the seal stickers: orders to the supplier, what
@@ -583,58 +546,24 @@
         : lvl !== 'none';
       card.style.display = visible ? '' : 'none';
     });
-    // Audit tile is split: an admin lands on the back-end page (the four
-    // module cards, alerts, report, user access, and a button through to
-    // the auditor portal); everyone else goes straight to the auditor
-    // portal, which is the screen built for a phone in a nursery.
-    //
-    // The back end no longer bounces non-admins — it is open to any
-    // signed-in auditor now, since it carries the module cards and is
-    // the desktop half of the app. So this is a real routing choice
-    // rather than a shortcut past a redirect: an auditor tapping the
-    // tile wants their to-do list, not a hub. Falls back to the admin
-    // landing when perms haven't been fetched yet (a real admin hitting
-    // the page cold still works).
-    const auditCard = document.querySelector('.module-card[data-module="audit"]');
-    if (auditCard) {
-      /* Route by the EXPLICIT audit module level, matching how the audit
-         guards decide admin (isAuditAdmin / requireAdmin were fixed to
-         ignore the profile-level role fallback whenever modules.audit is
-         set — otherwise a Normal auditor who is admin of another module
-         gets misrouted here and then bounced right back).
+    /* The 555 MJM Team tile (the `scan` module) is split: an admin
+       lands on the back-office page (scan_admin.html — the grid of doors
+       into FC Portal, Worker Portal, Admin Portal, Audit Portal, Worker
+       System and Settings), everyone else goes straight to the phone app,
+       which is where they were going anyway. scan_admin.html bounces
+       non-admins over there itself, so a typed URL behaves the same —
+       this only saves them the extra page load. Falls back to the back
+       office when permissions have not been fetched; its own guard
+       redirects if that guess turns out wrong.
 
-         The destination for a non-admin points at the nursery chooser so
-         they don't take a second page load through audit_home.html just
-         to reach the screen they were always going to see. With no
-         permissions fetched yet, fall back to the back end — its own
-         guard will redirect if that guess turns out wrong. */
-      /* Route on the EXPLICIT audit module level only. The audit guards
-         (isAuditAdmin / requireAdmin) were fixed to ignore the profile-
-         level role fallback when modules.audit is set, so mirroring that
-         rule here keeps the hub and the guards saying the same thing —
-         a Normal auditor who happens to be admin of another module stays
-         on the auditor view instead of being routed to the back end. */
-      const auditLvl = mods ? String(mods.audit || '').toLowerCase() : null;
-      /* Auditors land on the to-do list directly — the nursery chooser
-         was cancelled, and the audit home defaults to whichever nursery
-         they last chose (or Pre Nursery on a fresh session), with a
-         Switch pill to flip between PN and MN. */
-      auditCard.setAttribute(
-        'href',
-        auditLvl === 'admin' || !perms
-          ? 'audit/audit_admin.html'
-          : 'audit/audit_home.html'
-      );
-    }
-    /* The 555 Worker Portal tile (the `scan` module) is split the same way
-       the audit one is: an admin
-       lands on the back-office page (User Access, and the button through to
-       the phone app); everyone else goes straight to the phone app, which is
-       where they were going anyway. scan_admin.html bounces non-admins over
-       there itself, so a typed URL behaves the same — this only saves them
-       the extra page load. Falls back to the back office when permissions
-       have not been fetched, exactly as the audit card does; its own guard
-       redirects if that guess turns out wrong. */
+       Audit Portal and Admin Portal no longer have cards of their own on
+       this hub — both moved onto scan_admin.html's own grid, gated there
+       by canScanArea('audit_portal' / 'admin_portal'), which falls back
+       to the same `audit` / `mobile` module check their cards used to
+       carry here. An auditor or admin-portal user who is NOT also a scan
+       admin still reaches scan_admin.html (it only requires
+       canScanArea('manage'), not full scan admin) and finds both doors
+       there, same as before. */
     const scanCard = document.querySelector('.module-card[data-module="scan"]');
     if (scanCard) {
       const scanLvl = mods ? String(mods.scan || '').toLowerCase() : null;
