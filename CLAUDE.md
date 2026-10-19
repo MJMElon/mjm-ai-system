@@ -477,6 +477,48 @@ both were there and both went.
 `tests/papan_tanda.cjs` drives the real page and batch 270's own figures,
 down to the pixels on the canvas and the download that comes out of it.
 
+**And the same board goes up three months earlier, off the Seed In
+Report.** A pre-nursery tray stands for three months with nothing on it
+saying what is in it, so the office asked for one when the seeds go IN.
+It is the SAME drawing — `_ptDraw`, one board, two reports — because two
+boards on two posts in one nursery that do not look alike are two boards
+somebody has to compare. One board per TRAY per DAY, off the `Planted`
+log, merged the way the transplant board merges a plot's rows for a day.
+
+The one field that differs is **TARIKH PINDAH, which is a MONTH**. The
+transplant board knows the day the seedlings moved because it is drawn
+after they did; the seed board does not, so a date there would be a
+promise the board cannot keep. It reads **DEC 2026** — short, because
+every line is set as large as it will go and a month spelled out shrinks
+the line it is on.
+
+**Three months is not a rule this report invents.**
+`audit/audit_papan_script.js` has drawn the auditor's papan tanda off
+planted-plus-three since it was written, shown as a month and a year, and
+the sign in the field reads that way. A second rule here would be two
+answers on two boards a few metres apart. `_PT_PN_MONTHS` is this file's
+copy, and it works in LOCAL time for the same reason the audit one does —
+`new Date('YYYY-MM-DD')` parses as UTC midnight and drifts a day, which on
+the 1st of a month moves the ANSWER by a whole month.
+
+**And it is the MONTH plus three, never the DAY plus three months** —
+which is three months in twelve, not pedantry. Adding months to a DATE
+overflows when the month it lands in is shorter: 30 November plus three is
+30 February, which JavaScript rolls into 2 March, so a tray sown on the
+30th had a board reading MAR over seedlings due out in FEBRUARY. 31 January
+read MAY for April and 31 March read JUL for June. The office said it in
+the words that avoid all of it — *"the seed planted month + 3 months"* — so
+`_ptMonthPlus` reads the year and the month off the date and leaves the day
+out of it, and the first of a month cannot overflow. All three days are in
+the test.
+
+`_ptSeedRows` is kept apart from `_ptRows` on purpose: a board drawn off
+whichever list was filled last is how the Transplanting Report comes to
+hand out seed boards. `tests/papan_tanam_seed_in.cjs` holds it with the
+office's own 277 / P1 / 2,560 / 29 Sep → DEC 2026, the October tray that
+crosses the year end, and a batch received and not yet sown, which is
+offered no button at all rather than one that answers nothing.
+
 ## An amendment is dated by the amendment, and it lands in the TOTAL
 
 The Transplanting Report lists one line per transplant record. An approved

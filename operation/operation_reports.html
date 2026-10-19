@@ -2098,11 +2098,36 @@ async function runSeedInReport() {
   // after filtering.
   window._losData = { rows, asAt };
 
+  /* What the seed boards are drawn from — the rows AS SHOWN, after every
+     filter, so a board can never be made for a batch the report is not
+     showing. Same rule the transplant board follows. */
+  _ptSeedRows = _losSeedBoards(rows);
+
   loading.classList.add('hidden');
   out.classList.remove('hidden');
   out.innerHTML = _losSupplierHtml(rows) || `
     <div class="glass-panel p-6 rounded-[2rem] text-[#8a7a68] text-sm">No seed-in records match the selected filters.</div>`;
   _losWireSticky();
+}
+
+/* THE BOARD BUTTON ON A BATCH, and only where there is a board to draw.
+
+   A batch whose seeds have been received and not yet sown into a tray has
+   no Planted row, so it has no tray, no quantity and no planting day — and
+   a button that answers "there is nothing to draw" is a button somebody
+   presses twice before believing it. The count is on it, because a batch
+   sown into four trays gives four signs and pressing it once should not be
+   a surprise. */
+function _losSeedBoardBtn(r) {
+  const n = _ptSeedRows.filter(b => String(b.batch) === String(r.batch)).length;
+  if (!n) return '';
+  const title = 'Papan tanda for the pre-nursery tray' + (n === 1 ? '' : 's')
+              + ' batch ' + r.batch + ' was sown into — ' + n + ' board' + (n === 1 ? '' : 's')
+              + ', one per tray per day, with the tray, the batch, the breed, how many went in, '
+              + 'the day they went in and the month they are due to move out.';
+  return `<button type="button" onclick="papanTanam('${_losEsc(String(r.batch).replace(/'/g, "\\'"))}', this)"
+    class="no-print ml-1.5 align-middle text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-lg border border-[#cfe3b4] bg-[#eef7e4] text-[#3f6b23] hover:bg-[#e3f0d4]"
+    title="${_losEsc(title)}">⬇ ${n}</button>`;
 }
 
 /* The D/O + FOC split under the received figure. Said only when it says
@@ -2563,7 +2588,10 @@ function _losSupplierHtml(rows) {
       ${list.map(r => `
         <tr>
           <td>${fmtDate(r.seedsDate)}</td>
-          <td class="font-black text-[#3d2610]">${_losEsc(r.batch)}</td>
+          <td class="font-black text-[#3d2610]">
+            ${_losEsc(r.batch)}
+            ${_losSeedBoardBtn(r)}
+          </td>
           <td>${_losEsc(r.breed)}</td>
           <td>
             ${_losFig('received', r.batch, fmtNum(r.received), 'text-[#c07820] font-black')}
@@ -2591,7 +2619,12 @@ function _losSupplierHtml(rows) {
     <div class="glass-panel p-6 rounded-[2rem]">
       <div class="flex items-center justify-between mb-4 border-b border-[#e8dcc8] pb-4 gap-4 flex-wrap">
         <h3 class="text-lg font-black uppercase tracking-widest text-[#3d2610]">Seed In Details</h3>
+        <div class="flex items-center gap-4 flex-wrap">
+        ${_ptSeedRows.length ? `<button type="button" onclick="papanTanamAll(this)"
+          class="no-print text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-xl border border-[#cfe3b4] bg-[#eef7e4] text-[#3f6b23] hover:bg-[#e3f0d4]"
+          title="One signboard image per pre-nursery tray below, for the day the seeds went in. Each is the tray, the batch, the breed, how many were sown into it, the day it was sown and the month it is due to move out.">⬇ Papan Tanda · all ${fmtNum(_ptSeedRows.length)}</button>` : ''}
         <div class="text-[10px] font-bold text-[#8a7a68] uppercase tracking-widest">${fmtNum(rows.length)} batch${rows.length === 1 ? '' : 'es'} · ${fmtNum(names.length)} supplier${names.length === 1 ? '' : 's'}</div>
+        </div>
       </div>
       <div class="los-wrap">
         <table class="report-table los-table">
@@ -4579,6 +4612,54 @@ const _ptDate = (d) => {
           .toUpperCase().replace(/,/g, '');
 };
 
+/* A MONTH, with no day on it. The seed board goes up in the pre-nursery the
+   day the seeds are sown, and the move out of the tray has not happened —
+   it is three months away and the day is not yet a fact about anything. A
+   date printed there would be a promise the board cannot keep, so the board
+   says DEC 2026 and means it.
+
+   Short, not December: the board is read from a distance and every line is
+   set as large as it will go, so a month spelled out would shrink the line
+   it is on and the one beside it. The rest of the board is already shouting
+   in SEP and OCT. */
+const _ptMonth = (d) => {
+  if (!d) return '—';
+  const x = new Date(d);
+  if (isNaN(x)) return '—';
+  return x.toLocaleDateString('en-MY', { month: 'short', year: 'numeric' })
+          .toUpperCase().replace(/,/g, '');
+};
+
+/* THE PRE-NURSERY IS THREE MONTHS, and that is not a rule this file gets to
+   invent. The auditor portal has drawn the papan tanda off it since it was
+   written — `audit_papan_script.js` sets the Transplanting row from the
+   planted month plus three, shows it as a month and a year, and the sign in
+   the field reads that way. A second rule here would be a second answer on
+   two boards nailed up a few metres apart.
+
+   THE MONTH PLUS THREE, NOT THE DAY PLUS THREE MONTHS, and the difference
+   is not pedantry — it is three months in twelve. Adding months to a DATE
+   overflows when the month it lands in is shorter: 30 November plus three
+   is 30 February, which JavaScript rolls into 2 March, so a tray sown on
+   the 30th of November had a board reading MAR when the answer is FEB. The
+   same goes for 31 January (MAY for APR) and 31 March (JUL for JUN).
+
+   The office said it in the words that avoid all of it: the seed planted
+   MONTH plus three months. So the day takes no part — the year and the
+   month are read off the date and three is added to the month, and the
+   first of a month can never overflow.
+
+   Local time, not UTC: new Date('YYYY-MM-DD') parses as UTC midnight and
+   drifts a day in a negative timezone, which on the 1st of a month moves
+   the ANSWER by a whole month. Same reason the audit copy does it this way. */
+const _PT_PN_MONTHS = 3;
+const _ptMonthPlus = (iso, months) => {
+  if (!iso) return '—';
+  const [y, m] = String(iso).split('T')[0].split('-').map(Number);
+  if (!y || !m) return '—';
+  return _ptMonth(new Date(y, (m - 1) + (months || 0), 1));
+};
+
 async function _ptFonts() {
   if (!document.fonts || !document.fonts.load) return;
   try {
@@ -4692,7 +4773,11 @@ async function _ptDraw(r) {
     ['JENAMA: ',         String(r.breed || '—').toUpperCase()],
     ['JUMLAH TANAM: ',   fmtNum(r.qty)],
     ['TARIKH TANAM  : ', _ptDate(r.planted)],
-    ['TARIKH PINDAH : ', _ptDate(r.date)]
+    /* The transplant board knows the day the seedlings moved, because it is
+       drawn after they did. The SEED board does not: the move is three
+       months off, so it carries a month and says so through `pindah`
+       rather than through a second drawing. One board, two reports. */
+    ['TARIKH PINDAH : ', r.pindah || _ptDate(r.date)]
   ];
   let y = _PT_LINE_1;
   lines.forEach(([label, value]) => {
@@ -4726,6 +4811,97 @@ async function _ptSave(c, name) {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
+/* ═══ THE SEED BOARD ═══════════════════════════════════════════════════
+   The same board, nailed up three months earlier.
+
+   The office asked for one when the seeds go INTO the tray, not only when
+   the seedlings come out of it: a pre-nursery tray stands for three months
+   with nothing on it saying what is in it. So the Seed In Report draws it
+   too, and it is the SAME drawing — `_ptDraw` — because two boards on two
+   posts in one nursery that do not look alike are two boards somebody has
+   to compare.
+
+   ONE BOARD PER TRAY, PER DAY. The Planted log says which tray took how
+   many and when; a batch sown into four trays is four boards, and a tray
+   filled over two days is two, because what goes up at the tray is what is
+   standing in THAT tray. Same shape as the transplant board, which merges
+   a plot's rows for a day and makes one board of them.
+
+   Every field is the Batch Record's own answer, read off the same rows the
+   report above is drawn from:
+
+     PLOT           the tray the Planted row names
+     BATCH / JENAMA the batch and its breed
+     JUMLAH TANAM   what was planted into that tray that day
+     TARIKH TANAM   the day it was planted
+     TARIKH PINDAH  that month plus three, as a MONTH — see _ptMonth.
+
+   `_ptSeedRows` is kept apart from `_ptRows` rather than shared. They are
+   two reports, and a board drawn off whichever list was filled last is how
+   the Transplanting Report comes to hand out seed boards. */
+let _ptSeedRows = [];
+
+function _losSeedBoards(rows) {
+  const merged = new Map();
+  (rows || []).forEach(r => {
+    (r.rec && r.rec.planted ? r.rec.planted : []).forEach(p => {
+      const plot = String(p.place || '').trim();
+      const day  = String(p.date || '').slice(0, 10);
+      if (!plot || plot === '—') return;
+      const k = r.batch + '\x01' + plot + '\x01' + day;
+      const had = merged.get(k);
+      if (had) { had.qty += p.qty || 0; return; }
+      merged.set(k, {
+        plot, batch: r.batch, breed: r.breed,
+        qty: p.qty || 0,
+        planted: day,
+        pindah: _ptMonthPlus(day, _PT_PN_MONTHS),
+      });
+    });
+  });
+  const nat = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
+  return [...merged.values()].sort((a, b) =>
+    String(b.planted).localeCompare(String(a.planted))
+    || nat(a.batch, b.batch) || nat(a.plot, b.plot));
+}
+
+const _ptSeedName = (r) =>
+  ('papan-tanam-' + String(r.plot || 'plot') + '-' + String(r.batch || 'batch') + '-' + String(r.planted || ''))
+    .replace(/[^A-Za-z0-9_-]+/g, '-').replace(/-+/g, '-') + '.png';
+
+/* Every board a batch has, because a batch sown into four trays is four
+   signs and nobody wants to press four buttons for one delivery. */
+async function papanTanam(batch, btn) {
+  const list = _ptSeedRows.filter(r => String(r.batch) === String(batch));
+  if (!list.length) { alert('No planting rows for batch ' + batch + ', so there is no board to draw.'); return; }
+  await _ptSaveMany(list, btn, _ptSeedName);
+}
+
+async function papanTanamAll(btn) {
+  if (!_ptSeedRows.length) return;
+  await _ptSaveMany(_ptSeedRows, btn, _ptSeedName);
+}
+
+/* One writer for both reports and both buttons. Browsers drop downloads
+   fired in the same tick, so they are spaced — and the button says how far
+   it has got, because twenty files is long enough for somebody to wonder
+   whether anything is happening. */
+async function _ptSaveMany(list, btn, name) {
+  if (btn && btn.disabled) return;
+  const label = btn ? btn.innerHTML : '';
+  try {
+    for (let i = 0; i < list.length; i++) {
+      if (btn) { btn.disabled = true; btn.innerHTML = 'Saving ' + (i + 1) + ' of ' + list.length + '…'; }
+      await _ptSave(await _ptDraw(list[i]), name(list[i]));
+      if (i < list.length - 1) await new Promise(ok => setTimeout(ok, 350));
+    }
+  } catch (e) {
+    alert('Could not make the papan tanda: ' + (e && e.message ? e.message : e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = label; }
+  }
+}
+
 async function papanTanda(i) {
   const r = _ptRows[i]; if (!r) return;
   try { await _ptSave(await _ptDraw(r), _ptFileName(r)); }
@@ -4736,19 +4912,8 @@ async function papanTanda(i) {
    the same tick, so they are spaced — and the button says how far it has
    got, because twenty files is long enough for somebody to wonder. */
 async function papanTandaAll(btn) {
-  if (!_ptRows.length || (btn && btn.disabled)) return;
-  const label = btn ? btn.innerHTML : '';
-  try {
-    for (let i = 0; i < _ptRows.length; i++) {
-      if (btn) { btn.disabled = true; btn.innerHTML = 'Saving ' + (i + 1) + ' of ' + _ptRows.length + '…'; }
-      await _ptSave(await _ptDraw(_ptRows[i]), _ptFileName(_ptRows[i]));
-      await new Promise(ok => setTimeout(ok, 350));
-    }
-  } catch (e) {
-    alert('Could not make the papan tanda: ' + (e && e.message ? e.message : e));
-  } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = label; }
-  }
+  if (!_ptRows.length) return;
+  await _ptSaveMany(_ptRows, btn, _ptFileName);
 }
 
 /**
