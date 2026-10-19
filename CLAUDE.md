@@ -497,9 +497,20 @@ the line it is on.
 planted-plus-three since it was written, shown as a month and a year, and
 the sign in the field reads that way. A second rule here would be two
 answers on two boards a few metres apart. `_PT_PN_MONTHS` is this file's
-copy and `_ptAddMonths` works in LOCAL time for the same reason the audit
-one does — `new Date('YYYY-MM-DD')` parses as UTC midnight and drifts a
-day, which on the 1st of a month moves the ANSWER by a whole month.
+copy, and it works in LOCAL time for the same reason the audit one does —
+`new Date('YYYY-MM-DD')` parses as UTC midnight and drifts a day, which on
+the 1st of a month moves the ANSWER by a whole month.
+
+**And it is the MONTH plus three, never the DAY plus three months** —
+which is three months in twelve, not pedantry. Adding months to a DATE
+overflows when the month it lands in is shorter: 30 November plus three is
+30 February, which JavaScript rolls into 2 March, so a tray sown on the
+30th had a board reading MAR over seedlings due out in FEBRUARY. 31 January
+read MAY for April and 31 March read JUL for June. The office said it in
+the words that avoid all of it — *"the seed planted month + 3 months"* — so
+`_ptMonthPlus` reads the year and the month off the date and leaves the day
+out of it, and the first of a month cannot overflow. All three days are in
+the test.
 
 `_ptSeedRows` is kept apart from `_ptRows` on purpose: a board drawn off
 whichever list was filled last is how the Transplanting Report comes to

@@ -61,6 +61,26 @@ const LOGS = [
         plot_name: 'P2', quantity_change: 3000 }),
   log({ batch_name: '277', transaction_type: 'Planted', transaction_date: '2026-10-02',
         plot_name: 'P1', quantity_change: 900 }),
+  /* 279 — THE MONTH PLUS THREE, NOT THE DAY PLUS THREE MONTHS. Sown on the
+     30th of November: 30 November plus three months is 30 February, which
+     JavaScript rolls into 2 March, so the board used to read MAR over a
+     tray due out in FEBRUARY. The office said the rule in the words that
+     avoid it — the seed planted MONTH plus three — so the day takes no
+     part. */
+  log({ batch_name: '279', breed_name: 'UPB PREMIER HYBRID', transaction_type: 'Seeds_Received',
+        transaction_date: '2026-11-29', created_at: '2026-11-29T00:00:00Z', quantity_change: 4000,
+        remark: 'Seeds received. Supplier: UPB. DO_Qty: 4000.' }),
+  log({ batch_name: '279', transaction_type: 'Planted', transaction_date: '2026-11-30',
+        plot_name: 'P7', quantity_change: 3800 }),
+  /* 280 — the other two days the day-based sum lost: 31 January read MAY
+     for APRIL, and 31 March read JUL for JUNE. */
+  log({ batch_name: '280', breed_name: 'IOI DxP HYBRID', transaction_type: 'Seeds_Received',
+        transaction_date: '2026-01-30', created_at: '2026-01-30T00:00:00Z', quantity_change: 2000,
+        remark: 'Seeds received. Supplier: IOI. DO_Qty: 2000.' }),
+  log({ batch_name: '280', transaction_type: 'Planted', transaction_date: '2026-01-31',
+        plot_name: 'P8', quantity_change: 1900 }),
+  log({ batch_name: '280', transaction_type: 'Planted', transaction_date: '2026-03-31',
+        plot_name: 'P9', quantity_change: 100 }),
   /* 278 — received and NOT yet sown. No tray, no board, and the button on
      its row must not be offered. */
   log({ batch_name: '278', breed_name: 'IOI DxP HYBRID', transaction_type: 'Seeds_Received',
@@ -71,7 +91,7 @@ const LOGS = [
 const DATA = {
   shared_inventory_logs: LOGS,
   shared_plots: [],
-  operation_trays: [{ tray_name: 'P1', nursery_name: 'BNN' }, { tray_name: 'P2', nursery_name: 'BNN' }],
+  operation_trays: ['P1', 'P2', 'P7', 'P8', 'P9'].map(t => ({ tray_name: t, nursery_name: 'BNN' })),
   shared_breeds: [{ name: 'UPB PREMIER HYBRID' }, { name: 'IOI DxP HYBRID' }],
   shared_do_records: [],
   operation_batch_verifications: [],
@@ -119,7 +139,8 @@ console.log('\n── 1. The report draws, and the boards come off it ──');
 is(errs.length, 0, 'no page errors');
 const boards = await page.evaluate(() => _ptSeedRows.map(r =>
   ({ plot: r.plot, batch: r.batch, breed: r.breed, qty: r.qty, planted: r.planted, pindah: r.pindah })));
-is(boards.length, 3, 'three boards: P1 and P2 on the 29th, P1 again on the 2nd');
+is(boards.filter(b => b.batch === '277').length, 3,
+  "277 has three boards: P1 and P2 on the 29th, P1 again on the 2nd");
 
 console.log('\n── 2. The office own board ──');
 const p1 = boards.find(b => b.plot === 'P1' && b.planted === '2026-09-29');
@@ -135,6 +156,18 @@ is(p1b && p1b.pindah, 'JAN 2027',
   'and it crosses the year end on its own — three months from October is January');
 const p2 = boards.find(b => b.plot === 'P2');
 is(p2 && [p2.qty, p2.pindah], [3000, 'DEC 2026'], 'P2 is a board of its own');
+
+console.log('\n── 3b. THE MONTH PLUS THREE, NOT THE DAY ──');
+/* The three days the day-based sum lost. Every one of them is a sowing on
+   the last day of a month whose third month on is shorter, so the date
+   rolled into the month AFTER the answer. */
+const on = (d) => (boards.find(b => b.planted === d) || {}).pindah;
+is(on('2026-11-30'), 'FEB 2027',
+  '30 November is due out in FEBRUARY — the day-based sum read MAR');
+is(on('2026-01-31'), 'APR 2026',
+  '31 January is APRIL — it read MAY');
+is(on('2026-03-31'), 'JUN 2026',
+  '31 March is JUNE — it read JUL');
 
 console.log('\n── 4. A batch not yet sown has no board, and is not offered one ──');
 is(boards.filter(b => b.batch === '278').length, 0, '278 has no Planted row, so no board');

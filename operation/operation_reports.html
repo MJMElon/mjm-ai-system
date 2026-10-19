@@ -4637,18 +4637,27 @@ const _ptMonth = (d) => {
    the field reads that way. A second rule here would be a second answer on
    two boards nailed up a few metres apart.
 
+   THE MONTH PLUS THREE, NOT THE DAY PLUS THREE MONTHS, and the difference
+   is not pedantry — it is three months in twelve. Adding months to a DATE
+   overflows when the month it lands in is shorter: 30 November plus three
+   is 30 February, which JavaScript rolls into 2 March, so a tray sown on
+   the 30th of November had a board reading MAR when the answer is FEB. The
+   same goes for 31 January (MAY for APR) and 31 March (JUL for JUN).
+
+   The office said it in the words that avoid all of it: the seed planted
+   MONTH plus three months. So the day takes no part — the year and the
+   month are read off the date and three is added to the month, and the
+   first of a month can never overflow.
+
    Local time, not UTC: new Date('YYYY-MM-DD') parses as UTC midnight and
    drifts a day in a negative timezone, which on the 1st of a month moves
    the ANSWER by a whole month. Same reason the audit copy does it this way. */
 const _PT_PN_MONTHS = 3;
-const _ptAddMonths = (iso, months) => {
-  if (!iso) return '';
-  const [y, m, d] = String(iso).split('T')[0].split('-').map(Number);
-  if (!y || !m) return '';
-  const dt = new Date(y, m - 1, d || 1);
-  dt.setMonth(dt.getMonth() + (months || 0));
-  return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0')
-         + '-' + String(dt.getDate()).padStart(2, '0');
+const _ptMonthPlus = (iso, months) => {
+  if (!iso) return '—';
+  const [y, m] = String(iso).split('T')[0].split('-').map(Number);
+  if (!y || !m) return '—';
+  return _ptMonth(new Date(y, (m - 1) + (months || 0), 1));
 };
 
 async function _ptFonts() {
@@ -4846,7 +4855,7 @@ function _losSeedBoards(rows) {
         plot, batch: r.batch, breed: r.breed,
         qty: p.qty || 0,
         planted: day,
-        pindah: _ptMonth(_ptAddMonths(day, _PT_PN_MONTHS)),
+        pindah: _ptMonthPlus(day, _PT_PN_MONTHS),
       });
     });
   });
