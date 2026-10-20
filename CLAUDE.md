@@ -2527,9 +2527,12 @@ asked to be current. The other 12 pages do not, and that is a decision rather
 than an oversight: these metas change how a live page is fetched on every
 load, so they go on a module when somebody wants a fix in that module to
 arrive — not across the site because a test would be tidier.
-`nursery_ops_maintenance.html` is the one to remember: the Work Maintenance
-changes are sitting behind its cache, so it needs the three metas on the day
-somebody wants them.
+**`nursery_ops_maintenance.html` now carries them**, and the day it was
+written up as the one to remember is the day it needed them: the office asked
+for the dosage box and the Save button on the Setting tab, and without the
+metas that page would have gone on asking for the old `?v=` for ever. Two
+pages are still unguarded — `nursery_ops_user_access.html` and
+`operation_batch_detail.html` — and the test prints them every run.
 
 **Any new page that loads a script with `?v=` needs all three** to be
 deliverable. `tests/pages_do_not_go_stale.cjs` fails if a payroll page is
@@ -2647,6 +2650,76 @@ Two things that follow:
 version fails the same check, and prints every page that writes a whole
 className onto a select. It needs `npm install jsdom` and says so if it is
 missing.
+
+### And the skin is what sits in the row now, so it is what has to be SIZED
+
+The second way that bargain comes due. A rule written for a bare `<select>`
+goes on being read, matches the hidden element, and paints nothing — while
+the thing the person is looking at is sized by something else entirely.
+
+The Setting tab's **dosage cell** holds two controls in 112px: the number and
+the unit it is in. That was right while the unit was a bare select about 50px
+wide. The skin's wrapper carries **`width:100%` INLINE** — it says in its own
+comment why it has to be inline — with an ordinary shrink factor, and the
+number box is `flex:1`, which is **basis 0 and therefore never the one that
+shrinks first**. So the wrapper took 86 of the 112 and **the number box was
+left at 22px: its padding, its borders, and no room for a digit at all.** It
+overflowed the cell as well and clipped the left edge of Covers beside it, so
+the office screenshot showed a preset of 800 reading **300**.
+
+Three things to take from it:
+
+- **An inline width cannot be overridden from a stylesheet; `flex` can.**
+  `.lst-dose > .cf-wrap { flex:0 0 62px }` fixes the basis and stops it
+  growing or shrinking, so the whole of the rest of the cell goes to the
+  number — which is the box somebody is trying to read.
+- **`.lst-dose select { … }` is not dead, and must not be deleted.** It is
+  what the row falls back to if the skin fails to load.
+- **The skin's button is 39px where the inputs are 37.** Two pixels, in every
+  row of both lists, which reads as one control out of line. `.lst-row
+  .cf-btn` sizes it to its neighbours.
+
+**Any page with a select sharing a cell with something else has this**, and
+only this one has had it done.
+
+### A disabled button that looks enabled is a button somebody presses again
+
+The other half of the same report, and the more instructive one. The office
+said *"the save button not functioning well. I need to click many times only
+then it saved."*
+
+It was not dropping clicks — one press has always called `saveChemEdit` once,
+and the real page proves it. The fault was that **a press changed nothing on
+screen.** Save disables itself and Cancel for the length of the write, and
+there was **no `.btn:disabled` rule in the whole stylesheet**: same green,
+same shadow, same pointer. Behind it the write was **one round trip per row**,
+in a `for` loop with an `await` in it — eight chemicals is eight, end to end,
+plus a delete, an insert, the preset and a read-back. Seconds of a screen that
+looks exactly as it did before the press is indistinguishable from a dead
+button, and the person does the only thing left: press it again.
+
+Three parts to the fix, and the first is the one that matters:
+
+- **Say it.** `.btn:disabled` greys and takes the pointer away, and
+  `holdSaveButtons()` puts **Saving…** on the primary button, restoring the
+  label when it lets go. A button that reports its own state cannot be
+  mistaken for a broken one.
+- **Send the rows together.** They are independent rows keyed by id with no
+  order between them, so `Promise.all` turns eight round trips into one wave.
+  That made `columnFallback`'s retry **concurrency-unsafe**: it kept ONE
+  `dropped` set and read a column already in it as "I stripped that and it
+  still failed", which is right in a queue and wrong the moment two calls
+  meet the same missing column at once — the second would report an error
+  over a database that is merely behind. What has been tried is now kept
+  **per call**; `dropped` stays for the sentence at the end naming what the
+  database would not take.
+- **`try { … } finally { done() }`.** The body was unguarded, so a throw
+  anywhere in it left Save AND Cancel dead with nothing saying why, and the
+  only way out was a reload, which loses the edit.
+
+`tests/the_dose_box_fits_a_number.cjs` drives the real page and holds all of
+it — 12 of its checks fail on the previous code, and the dosage one fails
+with the office's own number: **0 pixels of room for a digit.**
 
 ## A seal is checked in the database, never only on the phone
 
