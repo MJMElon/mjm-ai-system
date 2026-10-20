@@ -1043,6 +1043,50 @@ it**, whatever the figures say.
 halves, including a stage nobody recognises changing nothing, an adjustment
 nobody has approved settling nothing, and the stale flag.
 
+## A typo must not lock the row that would fix it
+
+A date box takes four digits for the year and somebody keyed two, so a 3rd
+Culling came out dated **21/02/0026**. Every month of year 26 is two thousand
+years past its auto-lock date, so `isDateLocked` said yes, the row took
+`.mjm-locked` — and that disables every input on it, **including the date box
+the wrong year is sitting in**.
+
+There was no way out from the screen either. The Month Lock Calendar can
+force a month open, but it lists real years and nobody is going to scroll to
+year 26. The only route left was a hand-written UPDATE against the ledger,
+for a slip of the keyboard.
+
+**The calendar exists to stop somebody changing a month that has been settled
+and paid.** Year 26 was never settled and never paid, so locking it protects
+nothing and strands the error on screen for good. `isKeyedWrong()` in
+`shared/shared_month_lock.js` is the escape: a date outside **2000–2100** is
+not treated as a date at all, the row stays open, and the person who keyed it
+puts it right.
+
+The band is **deliberately wide**. This is not a validity check and must not
+start refusing dates somebody meant — it is only the span outside which a
+year is certainly a slip. A year INSIDE it is the calendar's business alone,
+and the test says so by comparing against `isMonthLocked` rather than
+restating it.
+
+Two things beside it:
+
+- **The boxes name the range they accept** (`min`/`max` on the culling date
+  inputs), so the picker will not hand one back, and a row already carrying
+  one says **⚠ Check the year** on its face rather than looking ordinary.
+- **`shared_month_lock.js` was loaded with no `?v=` on all four pages.** It
+  carries one now, so the next change to it is deliverable instead of
+  depending on a hard reload per machine.
+
+`shared/CHECK_dates_with_an_impossible_year.sql` sweeps every batch for the
+rest of them — `transaction_date`, `CullDate:` and `Date:` each on their own
+line, since a row can be wrong in one and right in another. It suggests the
+obvious repair for a two-digit year and names anything else for a person to
+decide; **nothing applies the suggestion**, because correcting it on the tab
+is what rewrites the rest of the remark correctly at the same time.
+
+`tests/a_typo_year_does_not_lock_itself.cjs` holds it.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the

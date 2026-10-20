@@ -82,7 +82,7 @@
     <!-- Tray occupancy — the same rule the batch list's Tray Status tab uses. -->
     <script src="../shared/shared_tray_stock.js"></script>
     <!-- Month Lock Calendar — same lock DO/AL use, keyed to each row's own date. -->
-    <script src="../shared/shared_month_lock.js"></script>
+    <script src="../shared/shared_month_lock.js?v=1"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         /* Earthy Theme Colors */
@@ -9972,7 +9972,7 @@ Thank you.`;
                     <input type="hidden" class="cull-tray-name" value="${displayName}">
                     <div>
                         <label class="label-style md:hidden">Cull Date${rowLocked ? ' 🔒' : ''}</label>
-                        <input type="date" class="input-style cull-date" oninput="calcCulling()" value="${savedDate || ''}" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}">
+                        <input type="date" min="2000-01-01" max="2100-12-31" class="input-style cull-date" oninput="calcCulling()" value="${savedDate || ''}" title="${rowLocked ? 'Dated in a locked month (Month Lock Calendar, System Settings)' : ''}">
                     </div>
                     <div>
                         <label class="label-style md:hidden !text-[#3d2610]">Tray No.</label>
@@ -11894,9 +11894,16 @@ Thank you.`;
                                 <div class="t6-nil-dash ${nilCull ? '' : 'hidden'} text-base font-black text-[#c9bda8]">—</div>
                                 <div class="t6-date-body ${nilCull ? 'hidden' : ''} flex flex-col items-center gap-0.5">
                                 <div class="flex justify-center w-full">
-                                <input type="date" class="input-style t6-cull-date !text-[11px] !py-1 !px-1.5 !rounded-lg !text-left w-full max-w-[112px]" value="${p.savedCullDate || ''}"
+                                <!-- min/max so the picker itself will not hand back a year
+                                     nobody could mean. 0026 got in through this box and then
+                                     locked its own row — see isKeyedWrong in
+                                     shared/shared_month_lock.js. -->
+                                <input type="date" min="2000-01-01" max="2100-12-31" class="input-style t6-cull-date !text-[11px] !py-1 !px-1.5 !rounded-lg !text-left w-full max-w-[112px]" value="${p.savedCullDate || ''}"
                                     onchange="onT6CullDateChange(${i}); calcT6(); t6PaintPlotRow(this.closest('.t6-plot-row'))"
-                                    title="Date this plot was culled">
+                                    title="${p.savedCullDate && MJMMonthLock.isKeyedWrong(p.savedCullDate) ? 'This year cannot be right — correct it and save' : 'Date this plot was culled'}">
+                                ${p.savedCullDate && MJMMonthLock.isKeyedWrong(p.savedCullDate)
+                                  ? `<div class="text-[9px] font-black text-[#a83020] uppercase tracking-widest mt-0.5 whitespace-nowrap"
+                                          title="A year outside 2000-2100 is a keying slip. The row is left open so it can be put right.">⚠ Check the year</div>` : ''}
                                 </div>
                                 <div id="${rowId}-sessions" class="w-full"></div>   <!-- extra DATES only; their quantities are in the Drone Map column -->
                                 <!-- A plot is sometimes culled over two days or more.

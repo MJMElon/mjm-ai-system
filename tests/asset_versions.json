@@ -13,5 +13,6 @@
   "shared/shared_module_access.js@1": "6ff319ec6d45",
   "nursery_ops/plot_maintenance_styles.css@84": "844ef4f90337",
   "nursery_ops/plot_maintenance_script.js@129": "be398700faf8",
-  "shared/shared_empty_hole_report.js@1": "17fa638f266d"
+  "shared/shared_empty_hole_report.js@1": "17fa638f266d",
+  "shared/shared_month_lock.js@1": "9e3840e2e7dd"
 }
