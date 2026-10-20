@@ -2201,6 +2201,68 @@ a fetch the WORKER makes: once it activates it answers its own synthetic
 job correctly against a network that is not there. An hour went into
 that before it was the obvious thing.
 
+## Turning a signup down is a RECORD, and the cross is a SIBLING
+
+The Worker System board opens with a yellow queue — Waiting to be allocated
+— which is everybody on the register with no section. It was written so a
+worker who had just signed up was on some screen rather than only in the
+table. What it had no answer for was a name nobody is ever going to file:
+the office does not want this person, and the one thing that empties the
+queue is giving somebody a nursery. So four rejected applicants sat in a
+queue of work to be done, for ever.
+
+The ✕ on a chip rejects the registration, and it is the admin-close of a
+dead plot again, which is where every rule in it comes from:
+
+- **It is a record and never a deletion.** `removeWorker()` was taken off
+  this screen on purpose — a worker row is what the work entries hang off,
+  and the register is the one place that says a person ever applied. So the
+  rejection marks them inactive and writes `rejected_at` / `rejected_by`,
+  and nothing is removed. Tick Show inactive to find them again; setting
+  them Active on their own record undoes it, which **clears both columns**,
+  the same way Active clears the last day.
+- **The two columns, never the remark.** The remark is free text the office
+  edits, and a rejection that can be undone by somebody tidying a sentence
+  is not a record of anything. `isRejected(w)` reads the column, and a table
+  without it answers no for every row — which is the safe way round: the
+  signup stays in the queue somebody is working through rather than
+  disappearing out of it with nothing to say where it went.
+- **The cross is a SIBLING of the chip and never a child.** The chip opens
+  the worker on a click and carries a drag on a grab, so a cross inside it
+  fires both — the office would reject somebody and get their record opened
+  over the top of it. `.pend-item` holds the two side by side. Same rule the
+  audit board's × follows, for the harder reason there (a button inside a
+  button is not a thing a browser will draw).
+- **The permission is asked AGAIN at the write.** A cross drawn before
+  somebody's access changed is still sitting on the screen.
+- **The confirm names the person**, because the crosses are a row of small
+  identical targets and the one under the thumb is not necessarily the one
+  that was aimed at. No `prompt` for a reason: the office said of the plot
+  closures that an admin types the same sentence every time, and a prompt
+  somebody dismisses out of habit is a cancel that looks like a save.
+- **It rebuilds from the database, not from the screen.**
+- **A rejected signup is drawn UNDER the queue, not in it**, so the count
+  above is the work actually left to do. Both lists are cut from `shown`, so
+  neither is on screen unless Show inactive is ticked — which is how a
+  rejection leaves the board at all.
+
+`shared/RUN_ME_worker_rejected.sql` adds the two columns and backfills
+nothing: a worker already on the board is not a rejected signup, and a
+backfill that guessed at one would be inventing a decision nobody made.
+Until it is run the page shows its own orange warning, the ✕ still works,
+and the write carries neither column — writing one the table has not got
+fails the whole save, which is why `loadWorkers` probes for it the way it
+already probes for the PIN, the photo and the two dates.
+
+`tests/a_rejected_signup_leaves_the_queue.cjs` drives the real board in a
+real browser, as an admin and as a plain auditor, and asserts no DELETE is
+ever sent and that no `prompt` is ever raised.
+
+**The page carries every line of its own code inline and has no no-cache
+metas**, same exposure as Batch Info: the PAGE is the deploy, so a browser
+holding yesterday's copy keeps it until one hard reload. Add the three the
+day somebody needs a fix here in a hurry.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the
