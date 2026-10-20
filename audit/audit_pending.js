@@ -298,29 +298,72 @@
     });
   }
 
-  /* First of the current calendar month — papan audits track new
-     signage that went up this month, matching the module page's
-     transaction_date >= monthStart filter. Without this, the roster
-     carried every Planted/Transplanted event ever recorded and the
-     home to-do chips listed every plot in the nursery, not just the
-     ones with fresh signage due. */
-  function _startOfThisMonthISO(){
-    const d = new Date();
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01';
+  /* ── PAPAN'S WINDOW IS TWO MONTHS: LAST MONTH AND THIS ──
+     SHARED RULE — the same window is `_papanWindowStartISO()` in
+     audit_papan_script.js, which is what the module page queries the
+     ledger with. Change one, change the other: a plot inside one
+     window and outside the other is a to-do row with no card to open,
+     or a card nothing ever asked for.
+
+     It began as the current calendar month alone, which keeps the
+     roster to plots with fresh signage rather than every
+     Planted/Transplanted event ever recorded. One month is too narrow
+     for the work: a plot transplanted on the 28th gets its sign nailed
+     up days later, and on the 1st it fell out of the list entirely,
+     audited or not. The office asked for both months on screen so the
+     auditor can walk last month's plots and this month's off one list.
+
+     A batch with no date is still dropped rather than counted; if the
+     office has not dated it we cannot say which month it belongs in. */
+  /* ── AND IT IS TWO MONTHS AS AT THE ROW, NOT AS AT TODAY ──
+     The window has to be anchored on the MONTH BEING ASKED ABOUT, or
+     every carried-over row shows the same plots. The board carries an
+     unfinished round forward, so in October it drew an AUG 2026 papan
+     row, a SEP 2026 one and October's own — three rows, each listing
+     the same six plots, every one of them tagged SEP 26. A round that
+     closed on 20 August cannot be owed a sign that went up in
+     September; the August row was asking about plots that did not
+     exist when it was due, so it could never be satisfied and never
+     left the board.
+
+     So `asOfISO` is the row's own month. Both ends move with it:
+     the lower bound is the first of the month BEFORE, the upper is the
+     last day of the month itself. The upper bound is the half that was
+     missing entirely — without it a September row lists October's
+     plots as well.
+
+     Omitting asOfISO means today, which is what the module page and
+     anything asking about now wants. */
+  function _papanMonthOf(asOfISO){
+    const d = String(asOfISO || '').slice(0, 7);
+    if (/^\d{4}-\d{2}$/.test(d))
+      return { y: Number(d.slice(0, 4)), m: Number(d.slice(5, 7)) - 1 };
+    const t = new Date();
+    return { y: t.getFullYear(), m: t.getMonth() };
+  }
+  const _isoDay = (y, m, d) =>
+    y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+
+  function _papanWindowStartISO(asOfISO){
+    const a = _papanMonthOf(asOfISO);
+    const s = new Date(a.y, a.m - 1, 1);              // -1 normalises to December
+    return _isoDay(s.getFullYear(), s.getMonth(), 1);
+  }
+  function _papanWindowEndISO(asOfISO){
+    const a = _papanMonthOf(asOfISO);
+    return _isoDay(a.y, a.m, new Date(a.y, a.m + 1, 0).getDate());
   }
 
   /* Latest batch per plot, for one nursery — papan's unit of work.
-     Restricted to batches placed on the plot inside the current
-     month (see comment on _startOfThisMonthISO above). A batch with
-     no date is dropped rather than counted; if the office hasn't
-     dated it we can't say whether it belongs in this month's
-     window. */
-  function latestPapanPerPlot(nursery){
-    const monthStart = _startOfThisMonthISO();
+     ONE row per plot still: the sign says what is standing there now,
+     so a plot transplanted in both months is its newer batch. */
+  function latestPapanPerPlot(nursery, asOfISO){
+    const winStart = _papanWindowStartISO(asOfISO);
+    const winEnd   = _papanWindowEndISO(asOfISO);
     const best = {};
     papanBat.forEach(b => {
       if (b.nursery !== nursery) return;
-      if (!b.date || b.date < monthStart) return;
+      if (!b.date || b.date < winStart || b.date > winEnd) return;
       const cur = best[b.plot];
       if (!cur || b.date >= (cur.date || '')) best[b.plot] = b;
     });
@@ -336,7 +379,7 @@
      Returned in the nursery's own plot order rather than the order the
      tables happened to arrive in, so the circles read P03 · P07 · P12
      and an auditor can find one by eye. */
-  function _plots(mod, nursery, fromISO, toISO, ignoreAudits){
+  function _plots(mod, nursery, fromISO, toISO, ignoreAudits, asOfISO){
     if (!loaded) return [];
     const owed = new Set();
 
@@ -349,7 +392,7 @@
         owed.add(b.plot);
       });
     } else if (mod === 'papan') {
-      latestPapanPerPlot(nursery).forEach(b => {
+      latestPapanPerPlot(nursery, asOfISO).forEach(b => {
         if (!ignoreAudits &&
             auditedIn('papan', nursery, b.plot, b.batch, fromISO, toISO)) return;
         owed.add(b.plot);
@@ -367,9 +410,32 @@
     return ranked.concat(extra);
   }
 
-  /* Plots still owed inside the window. */
-  function plots(mod, nursery, fromISO, toISO){
-    return _plots(mod, nursery, fromISO, toISO, false);
+  /* Plots still owed inside the window.
+
+     `asOfISO` is the MONTH THE ROW IS ABOUT, and only papan reads it —
+     the other three modules' rosters do not move with the calendar.
+     Left out, it means today. */
+  function plots(mod, nursery, fromISO, toISO, asOfISO){
+    return _plots(mod, nursery, fromISO, toISO, false, asOfISO);
+  }
+
+  /* ── WHEN THE BATCH ON THIS PAPAN PLOT WENT OUT ──
+     plots() answers in plot codes and nothing else, which is right for
+     every module but one: papan's window is two months, so its strip
+     carries last month's plots and this month's side by side with
+     nothing to tell them apart. The office asked to see both — "so i
+     can see sep transplanting plot and oct transplanting plot" — and a
+     row of identical circles does not.
+
+     An accessor of its own rather than a date on plots(): the other
+     three callers want a list of codes, and widening the one function
+     they share to carry a field only papan reads is how a shared
+     function becomes four. Returns '' when the plot is not in the
+     roster, which the caller groups under its own heading rather than
+     guessing a month for. */
+  function papanPlacedOn(nursery, plot, asOfISO){
+    const hit = latestPapanPerPlot(nursery, asOfISO).find(b => b.plot === plot);
+    return (hit && hit.date) || '';
   }
 
   /* Every plot with work, audited or not — one task per plot, which is
@@ -398,6 +464,7 @@
   global.MJMAuditPending = {
     load: load,
     plots: plots,
+    papanPlacedOn: papanPlacedOn,
     plotsAll: plotsAll,
     covers: covers,
     ready: () => loaded,

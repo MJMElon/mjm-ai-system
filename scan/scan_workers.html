@@ -99,6 +99,29 @@
   /* Across, not down: this is a queue to be emptied, not a column to be
      compared with another. */
   .pend-list { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  /* ── Turning a signup down ────────────────────────────────────────────
+     The cross is a SIBLING of the chip and never a child of it. The chip
+     opens the worker on a click and carries a drag on a grab, so a cross
+     inside it fires both -- the office would reject somebody and get their
+     record opened over the top of it. Beside it, the two gestures cannot
+     reach each other. */
+  .pend-item { display: flex; align-items: center; }
+  .pend-item .wchip { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+  .pend-x { align-self: stretch; padding: 0 9px; cursor: pointer;
+            border: 1px solid #fca5a5; border-left: 0; background: #fff1f2;
+            border-radius: 0 8px 8px 0; color: #b91c1c;
+            font-size: 13px; font-weight: 900; line-height: 1; }
+  .pend-x:hover { background: #fecaca; }
+
+  /* A signup already turned down. It is on the register and it is not in
+     the queue, so it sits under the queue rather than in it -- muted,
+     because the only reason to look is to find somebody rejected by
+     mistake. Only ever on screen with Show inactive ticked. */
+  .pend-rej { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #fcd34d; }
+  .pend-rej-title { font-size: 11px; font-weight: 900; letter-spacing: .08em;
+                    text-transform: uppercase; color: #a16207; margin-bottom: 7px; }
+  .pend-rej .wchip { opacity: .72; }
 </style>
     <script src="../shared/shared_cf_select.js"></script>
 </head>
@@ -137,6 +160,12 @@
       <b>⚠️ Registered date and last day are not switched on yet.</b>
       Run <code>shared/RUN_ME_worker_dates.sql</code> in the Supabase SQL Editor, then reload.
       Until then those two boxes on a worker's record are read-only.
+    </div>
+    <div id="reject-setup" class="warn hidden">
+      <b>⚠️ Turning a signup down is not switched on yet.</b>
+      Run <code>shared/RUN_ME_worker_rejected.sql</code> in the Supabase SQL Editor, then reload.
+      Until then the ✕ on a name waiting to be allocated still takes them off the board, but the
+      register will not say it was a rejection.
     </div>
     <div id="photo-setup" class="warn hidden">
       <b>⚠️ Worker photos are not switched on yet.</b>
@@ -444,6 +473,17 @@ let _maintGeneralCol = true;
 let _pinCol = true;
 let _photoCol = true;
 let _dateCols = true;   // registered_on / last_day
+let _rejectCols = true; // rejected_at / rejected_by
+
+/* A signup the office turned down.
+
+   Read off the COLUMN and never off the remark: the remark is free text
+   the office edits, and a rejection that can be undone by somebody tidying
+   a sentence is not a record of anything. A table without the column
+   answers no for every row, which is the safe way round -- a signup stays
+   in the queue somebody is working through rather than disappearing out of
+   it with nothing to say where it went. */
+const isRejected = w => !!(w && w.rejected_at);
 
 /* Whether this person may do one thing on the register. Same question the
    Payroll tab asked, so the answer is the same. Allows it when the shared
@@ -509,6 +549,12 @@ async function loadWorkers() {
   _dateCols = !dateProbe.error;
   const dp = $('dates-setup');
   if (dp) dp.classList.toggle('hidden', _dateCols);
+  // And the rejection pair, added later still. Asked for together, so one
+  // probe answers for both.
+  const rejProbe = await _supabase.from('mjmnpayroll_workers').select('rejected_at, rejected_by').limit(1);
+  _rejectCols = !rejProbe.error;
+  const rj = $('reject-setup');
+  if (rj) rj.classList.toggle('hidden', _rejectCols);
 }
 
 /* A date column read back for a date input: the input wants YYYY-MM-DD and
@@ -699,6 +745,14 @@ function workerTitle(w) {
     const until = fmtDay(w.last_day);
     bits.push(until ? 'inactive — last day ' + until : 'inactive');
   }
+  /* Said on the hover as well as by the heading the chip sits under, because
+     a rejected signup given a section later is drawn in a board cell where
+     that heading is nowhere near it. */
+  if (isRejected(w)) {
+    const on = fmtDay(w.rejected_at);
+    bits.push('registration rejected' + (on ? ' ' + on : '')
+      + (w.rejected_by ? ' by ' + w.rejected_by : ''));
+  }
   return bits.join(' · ');
 }
 
@@ -804,22 +858,43 @@ function renderWorkerBoard() {
      same gesture that files anybody. Nothing drops back IN: a section is
      information, and clearing one to park somebody here would throw it away.
      Marking them Inactive on their own record is the way to shelve a worker. */
-  const pending = shown.filter(w => !String(w.section || '').trim());
-  const pendingHtml = pending.length ? `
+  /* A signup the office has TURNED DOWN is out of the queue and still on
+     the register -- see rejectWorker(). It is drawn under the queue rather
+     than in it, so the count above is the work actually left to do. Both
+     lists are cut from `shown`, so neither is on screen at all unless Show
+     inactive is ticked, which is how a rejection leaves the board. */
+  const noSection = shown.filter(w => !String(w.section || '').trim());
+  const pending   = noSection.filter(w => !isRejected(w));
+  const rejected  = noSection.filter(w =>  isRejected(w));
+
+  const pendChip = (w, offer) => `
+        <span class="pend-item">
+          <span class="wchip ${w.active === false ? 'wchip-off' : ''}"
+                ${canEdit ? 'draggable="true"' : ''}
+                ondragstart="boardDragStart(event, ${w.id})" ondragend="boardDragEnd(event)"
+                onclick="openWorker(${w.id})"
+                title="${esc(workerTitle(w))}"
+                >${faceHtml(w)}<span>${esc(w.full_name)}</span></span>${offer
+          ? `<button class="pend-x" onclick="rejectWorker(${w.id})"
+                     title="Reject ${esc(w.full_name)}'s registration">&#10005;</button>`
+          : ''}</span>`;
+
+  const rejectedHtml = rejected.length ? `
+      <div class="pend-rej">
+        <div class="pend-rej-title">Registration rejected · ${rejected.length}</div>
+        <div class="pend-list">${rejected.map(w => pendChip(w, false)).join('')}</div>
+      </div>` : '';
+
+  const pendingHtml = (pending.length || rejected.length) ? `
     <div class="card pend-wrap">
-      <div class="pend-head">
+      ${pending.length ? `<div class="pend-head">
         <span class="pend-title">Waiting to be allocated</span>
         <span class="pend-count">${pending.length}</span>
         <span class="pend-why">Signed up, but not filed under a nursery yet${
-          canEdit ? ' — drag a name into a column below' : ''}.</span>
+          canEdit ? ' — drag a name into a column below, or ✕ to reject the registration' : ''}.</span>
       </div>
-      <div class="pend-list">${pending.map(w => `
-        <span class="wchip ${w.active === false ? 'wchip-off' : ''}"
-              ${canEdit ? 'draggable="true"' : ''}
-              ondragstart="boardDragStart(event, ${w.id})" ondragend="boardDragEnd(event)"
-              onclick="openWorker(${w.id})"
-              title="${esc(workerTitle(w))}"
-              >${faceHtml(w)}<span>${esc(w.full_name)}</span></span>`).join('')}</div>
+      <div class="pend-list">${pending.map(w => pendChip(w, canEdit)).join('')}</div>` : ''}
+      ${rejectedHtml}
     </div>` : '';
 
   const hiddenNote = (workers.some(w => w.active === false) && !$('w-show-inactive').checked)
@@ -932,6 +1007,58 @@ async function boardDrop(ev, section, roleKey) {
     resolveMaintWorkers();
     alert('Could not move ' + w.full_name + '.\n\n' + (error.message || error));
   }
+}
+
+/* ── Turning a signup down ───────────────────────────────────────────────
+   Somebody signed themselves up and the office does not want them. Until
+   now the only thing that could be done about it was to leave them in the
+   yellow queue for ever, because the queue is everybody with no section and
+   a name nobody is going to file never gets one.
+
+   IT IS A RECORD AND NEVER A DELETION, for the reason written against the
+   two functions that used to delete a worker: a worker row is what the work
+   entries hang off, and the register is the one place that says a person
+   ever applied. So a rejection is three columns -- inactive, the day it was
+   decided, and who decided it -- and nothing is removed.
+
+   Three things in it:
+
+   - **The permission is asked AGAIN here.** The cross was drawn at some
+     point in the past and is still sitting on the screen; what matters is
+     whether this person may write to the register now, which is the same
+     question the drag asks.
+   - **The confirm NAMES the person**, because the crosses are a row of
+     small identical targets and the one under the thumb is not necessarily
+     the one that was aimed at. Cancelling writes nothing.
+   - **It rebuilds from the DATABASE**, not from the screen. The board is
+     what somebody is about to act on, and a screen agreeing with itself and
+     not with the table is worse than one that takes a second.
+   ──────────────────────────────────────────────────────────────────────── */
+async function rejectWorker(id) {
+  const w = workers.find(x => x.id === id);
+  if (!w) return;
+  if (!mayDo('workers', 'manage',
+      'You do not have permission to reject a registration. Ask an admin to grant it in User Access.')) return;
+
+  const untagged = _rejectCols ? ''
+    : '\n\nNote: the rejection columns are not switched on yet, so the register will '
+    + 'not record that this was a rejection — they will simply come off the board. '
+    + 'Run shared/RUN_ME_worker_rejected.sql to switch it on.';
+  if (!confirm('Reject ' + w.full_name + '\u2019s registration?\n\n'
+      + 'They come off the board and stay on the register as a rejected signup. '
+      + 'Nothing is deleted — tick Show inactive to find them again, and setting '
+      + 'them Active on their own record undoes it.' + untagged)) return;
+
+  const row = { active: false, updated_at: new Date().toISOString(), updated_by: userEmail || null };
+  // Writing a column the table does not have fails the whole save.
+  if (_rejectCols) { row.rejected_at = row.updated_at; row.rejected_by = userEmail || null; }
+
+  const { error } = await _supabase.from('mjmnpayroll_workers').update(row).eq('id', id);
+  if (error) { alert('Could not reject ' + w.full_name + '.\n\n' + (error.message || error)); return; }
+
+  await loadWorkers();
+  resolveMaintWorkers();          // an inactive worker is off the tick sheets
+  renderWorkers();
 }
 
 /* ── Worker PIN ─────────────────────────────────────────────────────────
@@ -1155,6 +1282,12 @@ async function saveWorker() {
     // otherwise a worker who comes back keeps the date they left on.
     row.last_day = row.active ? null : ($('wf-lastday').value || null);
   }
+  /* Setting a rejected signup Active is how a rejection is undone, so it
+     clears the rejection — same reason Active clears the last day. The
+     rejection is NOT written from here: this form has no reject button, and
+     a rejected worker left Inactive by an unrelated edit keeps the day and
+     the name it was decided on rather than having them rewritten. */
+  if (_rejectCols && row.active) { row.rejected_at = null; row.rejected_by = null; }
   if (_pinCol) {
     const { pin, problem } = readPin($('wf-pin').value, editWorkerId);
     if (problem) { alert(problem); $('wf-pin').focus(); return; }

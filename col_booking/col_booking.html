@@ -342,11 +342,19 @@ async function searchMyBookings(){
     el.innerHTML='<div class="text-center py-8"><div class="text-3xl mb-2">📋</div><div class="text-[11px] font-black text-slate-300 uppercase tracking-widest">No bookings found for that order number</div></div>';
   } else {
     document.getElementById('my-bk-title').textContent=data[0].customer_name||q;
-    var html='<div class="rounded-2xl border border-slate-200 overflow-hidden overflow-x-auto"><table class="my-bk-table"><thead><tr><th>Date</th><th>Time</th><th>Quantity</th><th>Duration</th><th>Status</th></tr></thead><tbody>';
+    // Date / time / duration used to be three of five side-by-side columns,
+    // which only fit a phone screen behind a horizontal scroll. They are
+    // one thing a customer reads together ("when"), so they're now one
+    // column of three stacked lines -- matches the same fix in the
+    // CollectionTimeBooking repo's own copy of this page.
+    var html='<div class="rounded-2xl border border-slate-200 overflow-hidden"><table class="my-bk-table"><thead><tr><th>Date &amp; Time</th><th>Qty</th><th>Status</th></tr></thead><tbody>';
     data.forEach(function(b){
       var dt=b.booking_date?new Date(b.booking_date+'T00:00:00').toLocaleDateString('en-MY',{day:'2-digit',month:'short',year:'numeric',weekday:'short'}):'—';
       var sH=parseInt((b.start_time||'08').split(':')[0]),eH=parseInt((b.end_time||'09').split(':')[0]);
-      html+='<tr><td>'+_bkEsc(dt)+'</td><td>'+_bkEsc(fmtHr(sH))+' – '+_bkEsc(fmtHr(eH))+'</td><td class="font-black text-emerald-700">'+(parseInt(b.collection_qty)||0).toLocaleString()+'</td><td>'+(eH-sH)+' hr</td><td><span class="'+(b.status==='cancelled'?'status-cancelled':b.status==='pending'?'status-pending':'status-booked')+'">'+(b.status==='cancelled'?'Cancelled':b.status==='pending'?'Pending':'Confirmed Appointment')+'</span></td></tr>';
+      var whenCell='<div class="font-black text-slate-800">'+_bkEsc(dt)+'</div>'+
+        '<div class="text-slate-500">'+_bkEsc(fmtHr(sH))+' – '+_bkEsc(fmtHr(eH))+'</div>'+
+        '<div class="text-[10px] text-slate-400">(Duration: '+(eH-sH)+' hr)</div>';
+      html+='<tr><td>'+whenCell+'</td><td class="font-black text-emerald-700">'+(parseInt(b.collection_qty)||0).toLocaleString()+'</td><td><span class="'+(b.status==='cancelled'?'status-cancelled':b.status==='pending'?'status-pending':'status-booked')+'">'+(b.status==='cancelled'?'Cancelled':b.status==='pending'?'Pending':'Confirmed')+'</span></td></tr>';
     });
     html+='</tbody></table></div>';el.innerHTML=html;
   }

@@ -1,30 +1,60 @@
-/* Life of Seedlings may only present a figure as settled once somebody has
-   verified the stage behind it. Unverified figures are still SHOWN — they
-   are the best answer there is, and zeroing one would turn a Variance into
-   a wrong number wearing a right number's clothes — but they are MARKED, so
-   a reader can tell the two apart.
+/* ONLY VERIFIED DATA IS COUNTED, AND IT IS COUNTED LINE BY LINE.
 
-   Three things here are easy to get wrong and are each worth a case:
+   The office asked for this three times, each one narrower than the last:
 
-     · The unit is the COLUMN, not the tab. 3rd Culling and Transfer are
-       both signed on Tab 6, and Transplanting Qty / Double Tone / premium
-       care are three figures on Tab 3. Rolling them up per tab puts a
-       warning on figures somebody HAS signed — see batch 121.
+     1. "make it only verified data will float to life of seedling" — an
+        unverified figure came off the report. Batch 246 is why: its 3rd
+        Culling tab read 0 of 4 Done with every Culled Qty box empty, and
+        the report was showing 10,142 third culled and a Balance of minus
+        7,659 off the back of it.
+     2. "no need to show which item not yet verify" — the row stopped
+        carrying a label saying which stage it was waiting on.
+     3. "it is only calculate what data is verified first ... just show the
+        number which verified until new data verified then update the
+        report there" — which is this file.
 
-     · A sign-off comes two ways. One signature over a whole tab lives in
-       operation_batch_verifications; a tab signed row by row has none, and
-       each row's own sign-off is a Row_Verification log. Either counts.
+   The third is the same rule as the first, asked ONE LEVEL DOWN. It used to
+   be asked of a whole STAGE, so one unsigned row took the whole column away
+   and every figure derived from it with it: a Balance could not be read at
+   all until the 3rd Culling tab was signed. Asked of the LINE, a tab signed
+   four rows out of five shows those four, and the fifth joins the figure
+   the day somebody signs it.
 
-     · If the sign-off tables cannot be read, NOTHING is marked. Marking
-       everything would be a systematically wrong answer, not a cautious
-       one, and a marker that cries over hundreds of fine figures is a
-       marker nobody reads.
+   So:
+
+     · A LINE nobody has signed takes no part in any figure. _losLineSigned
+       is the one test, and the tally that explains a figure is built with
+       the same call, so the two cannot disagree.
+     · Every derived figure is right by construction. Variance, Total
+       Culled, the Balance and both splits are arithmetic over figures that
+       are already verified-only, so none of them knows this rule exists.
+     · NOTHING IS A DASH. A stage nobody has signed is nought, and the cell
+       says in its hover what is still to be signed and what it would add.
+     · The TOTAL is the plain sum of the rows. Nothing is left out of it any
+       more, so it agrees with the column above it line for line.
+     · The record lists are untouched: every line is still in the drilldown,
+       signed or not, because that is what somebody needs in order to go and
+       sign the rest off.
+     · If the sign-off tables cannot be READ, every line counts and the
+       report says it could not tell. The same reason access fails open.
+
+   WHAT IT COSTS, and it is in here as batch 097: a VARIANCE whose seed in
+   is signed and whose planting is not reads as minus the whole delivery,
+   because the planted figure is genuinely nought so far as anybody has
+   signed. That was the argument for the dash, and the office has chosen the
+   other way with it in front of them. The hover on the cell says what it is
+   waiting on.
+
+   Only Life of Seedlings asks for this. The Seed In Report shares the same
+   builder and reads the ledger as keyed — a different report asking a
+   different question.
 
    Needs a browser and a server on the page:
      (cd .. && python3 -m http.server 8812 &)
      NODE_PATH=/opt/node22/lib/node_modules node tests/los_only_verified_links.cjs */
 const { chromium } = require('playwright');
 
+(async () => {
 const B = 'http://127.0.0.1:8812';
 let bad = 0;
 const is = (g, w, what) => {
@@ -61,6 +91,9 @@ log({ batch_name: '123', transaction_type: '3rd_Culling', transaction_date: '202
 log({ batch_name: '122', breed_name: 'IOI DxP HYBRID', transaction_type: 'Seeds_Received',
       transaction_date: '2026-08-18', plot_name: 'Pre-Nursery', quantity_change: 10700,
       remark: 'Seeds received. Supplier: IOI Plantation Sdn Bhd. MPOB: 622810-021000. D/O: DO-7712. DO_Qty: 10000. Incl. 7% FOC.' });
+log({ batch_name: '122', breed_name: 'IOI DxP HYBRID', transaction_type: 'Seeds_Received',
+      transaction_date: '2026-08-18', created_at: '2025-01-01T00:00:00Z', quantity_change: 987000,
+      remark: 'Seeds received. Supplier: Wrong Bhd. DO_Qty: 940000. Incl. 5% FOC.' });
 log({ batch_name: '122', transaction_type: 'Planted', transaction_date: '2026-08-20', plot_name: 'P2', quantity_change: 10627 });
 log({ batch_name: '122', transaction_type: '1st_Culling', transaction_date: '2026-10-02', plot_name: 'P2', quantity_change: -749 });
 log({ batch_name: '122', transaction_type: 'Transplanted', transaction_date: '2026-10-05', plot_name: 'B2', quantity_change: 9878, remark: 'from tray [P2] Date: 2026-10-05' });
@@ -77,6 +110,16 @@ log({ batch_name: '121', transaction_type: 'Planted', transaction_date: '2026-07
 log({ batch_name: '121', transaction_type: 'Transplanted', transaction_date: '2026-09-01', plot_name: 'B5', quantity_change: 500, remark: 'from tray [P5] Date: 2026-09-01' });
 log({ batch_name: '121', transaction_type: '3rd_Culling', transaction_date: '2027-03-01', plot_name: 'B5', quantity_change: -40 });
 log({ batch_name: '121', transaction_type: 'Cull3_Transfer', transaction_date: '2027-03-02', plot_name: 'B6-R', quantity_change: 60, remark: 'From: [B5|main]' });
+
+/* 097 — WHAT THIS RULE COSTS, pinned so nobody is surprised by it. Seed in
+   is signed as a whole tab and the planting is not, so the planted figure is
+   nought so far as anybody has signed — and the Variance, which is planted
+   less what arrived, reads as minus the whole delivery. That was the whole
+   argument for the dash, and the office chose this with it in front of them.
+   The cell says in its hover that the planting is still to be signed. */
+log({ batch_name: '097', breed_name: 'IOI DxP HYBRID', transaction_type: 'Seeds_Received',
+      transaction_date: '2026-06-01', plot_name: 'Pre-Nursery', quantity_change: 8000, remark: 'DO_Qty: 8000.' });
+log({ batch_name: '097', transaction_type: 'Planted', transaction_date: '2026-06-02', plot_name: 'P7', quantity_change: 7900 });
 
 /* 099 — nothing signed at all. */
 log({ batch_name: '099', breed_name: 'IOI DxP HYBRID', transaction_type: 'Seeds_Received',
@@ -100,6 +143,7 @@ const ROW_VERIFS = [
 ];
 
 const STAGE_VERIFS = [
+  { id: 7, batch_name: '097', stage: 'seeds_in' },
   { id: 1, batch_name: '123', stage: 'seeds_in' },
   { id: 2, batch_name: '123', stage: 'planting' },
   { id: 3, batch_name: '122', stage: 'seeds_in' },
@@ -120,7 +164,7 @@ const DATA = {
                  { plot_name: 'B2', nursery_name: 'BNN' },
                  { plot_name: 'B3', nursery_name: 'UNN 1' }, { plot_name: 'B4-R', nursery_name: 'BNN' },
                  { plot_name: 'B5', nursery_name: 'BNN' }, { plot_name: 'B6-R', nursery_name: 'BNN' }],
-  operation_trays: ['P1','P2','P3','P5'].map(t => ({ tray_name: t, nursery_name: 'BNN' })),
+  operation_trays: ['P1','P2','P3','P5','P7'].map(t => ({ tray_name: t, nursery_name: 'BNN' })),
   shared_breeds: [{ name: 'AA Hybrida 1S' }, { name: 'IOI DxP HYBRID' }],
 };
 
@@ -166,185 +210,255 @@ async function route(page) {
       canOpenOperationPage:()=>true,canDoOperation:()=>true,canOpenPage:()=>true,canDo:()=>true};` }));
 }
 
-(async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 
-  async function open(breakVer) {
-    const page = await browser.newPage({ viewport: { width: 1700, height: 1000 } });
-    const errs = [];
-    page.on('pageerror', e => { errs.push(e.message); console.log('  [err]', e.message.slice(0, 220)); });
-    await route(page);
-    await stub(page, breakVer);
-    await page.goto(B + '/operation/operation_reports.html', { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(3000);
-    return { page, errs };
-  }
+async function open(breakVer) {
+  const page = await browser.newPage({ viewport: { width: 1700, height: 1000 } });
+  const errs = [];
+  page.on('pageerror', e => { errs.push(e.message); console.log('  [err]', e.message.slice(0, 220)); });
+  await route(page);
+  await stub(page, breakVer);
+  await page.goto(B + '/operation/operation_reports.html', { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(3000);
+  return { page, errs };
+}
 
-  // The eighteen columns, in order, as the headings name them.
-  const COLS = ['seedIn', 'batch', 'supplier', 'age', 'received', 'damaged', 'planted',
-    'variance', 'trans', 'dtone', 'cull1', 'cull2', 'cull3', 'cullTotal', 'transfer',
-    'sales', 'calibration', 'balance'];
+// The seventeen columns, in order, as the headings name them.
+const COLS = ['seedIn', 'batch', 'supplier', 'age', 'received', 'damaged', 'planted',
+  'variance', 'transTotal', 'cull1Total',
+  'cull2', 'cull3', 'cullTotal', 'transfer',
+  'sales', 'calibration', 'balance'];
 
-  const readRows = (page) => page.evaluate((cols) => {
-    const out = {};
-    [...document.querySelectorAll('.los-table tbody tr')].forEach(tr => {
-      if (tr.children.length !== cols.length) return;
-      const name = tr.children[1].textContent.trim().split('\n')[0].trim();
-      const cells = {};
-      cols.forEach((c, i) => {
-        const td = tr.children[i];
-        cells[c] = { marked: td.classList.contains('los-unver'),
-                     text: td.textContent.replace(/\s+/g, ' ').trim() };
-      });
-      out[name] = { cells, verdict: (tr.children[1].textContent.match(/[✓⧗][^\n]*/) || [''])[0].trim() };
+const readRows = (page) => page.evaluate((cols) => {
+  const out = {};
+  [...document.querySelectorAll('.los-table tbody tr')].forEach(tr => {
+    if (tr.children.length !== cols.length) return;
+    const name = tr.children[1].textContent.trim().split('\n')[0].trim();
+    const cells = {};
+    cols.forEach((c, i) => {
+      const td = tr.children[i];
+      const text = td.textContent.replace(/\s+/g, ' ').trim();
+      // A figure held back for want of a signature reads as a dash and is
+      // out of the totals — it is not marked-and-shown any more.
+      cells[c] = { held: text === '—', text, title: td.getAttribute('title') || '' };
     });
-    return out;
-  }, COLS);
-
-  const marked = (r) => COLS.filter(c => r.cells[c].marked);
-
-  const { page, errs } = await open(false);
-  let R = await readRows(page);
-
-  console.log('\n── 1. The page still works ──');
-  is(errs.length, 0, 'no page errors');
-  is(Object.keys(R).sort(), ['099', '121', '122', '123'], 'all four batches listed');
-
-  console.log('\n── 2. A fully verified batch says so and is marked nowhere ──');
-  is(R['122'].verdict, '✓ verified', '122 reads verified');
-  is(marked(R['122']), [], 'and not one of its figures is marked');
-
-  console.log('\n── 3. A batch nobody has checked is marked on every figure it has ──');
-  is(R['099'].verdict, '⧗ 3 stages unverified', '099 counts them rather than filling the column');
-  is(marked(R['099']), ['received', 'damaged', 'planted', 'variance', 'trans', 'balance'],
-    'received/planted/variance/transplanting/balance marked — damaged too (nought on an unsigned tab)');
-  is(R['099'].cells.dtone.marked, false, 'but NOT Double Tone: 099 has no double-tone row to verify');
-  is(R['099'].cells.cull1.marked, false, 'nor 1st culling: it has no line there either');
-  is(R['099'].cells.sales.marked, false, 'and never sales — the D/O module signs those off');
-  is(R['099'].cells.calibration.marked, false, 'nor the calibration, which has its own approval');
-
-  console.log('\n── 4. Part verified is part verified ──');
-  is(R['123'].verdict, '⧗ 4 stages unverified', '123 counts its four');
-  is(await page.evaluate(() => [...document.querySelectorAll('.los-table tbody tr')]
-       .find(t => t.children.length === 18 && t.children[1].textContent.includes('123'))
-       .children[1].querySelector('div[title]').getAttribute('title')),
-    'These figures are what the field has keyed and nobody has signed off yet, so they may be '
-    + 'incomplete or uncorrected: transplanting, double tone, 1st culling, 3rd culling.',
-    'with the four named in full where somebody can read them');
-  is(R['123'].cells.received.marked, false, 'seed in signed as a whole tab → Seed Received clean');
-  is(R['123'].cells.planted.marked,  false, 'planting likewise');
-  is(R['123'].cells.variance.marked, false, 'so the Variance made of the two is clean as well');
-  is(R['123'].cells.trans.marked,  true, 'one of two transplant plots signed → Transplanting part verified');
-  is(R['123'].cells.dtone.marked,  true, 'and Double Tone, whose one row nobody has signed');
-  is(R['123'].cells.cull2.marked,  false, '2nd culling signed row by row → clean');
-  is(R['123'].cells.cull1.marked,  true, '1st culling unsigned → marked');
-  is(R['123'].cells.cull3.marked,  true, '3rd culling unsigned → marked');
-  is(R['123'].cells.cullTotal.marked, true, 'and the total made of 1st + 3rd');
-  is(R['123'].cells.balance.marked,   true, 'and the Balance under them');
-
-  console.log('\n── 5. A verified culling is not marked by an unverified transfer ──');
-  is(R['121'].cells.cull3.marked,    false, "121's 3rd Culling is signed → clean");
-  is(R['121'].cells.transfer.marked, true,  'its transfer card is not → only Transfer is marked');
-  is(R['121'].cells.balance.marked,  false, 'a transfer is not in the Balance, so it does not mark it');
-  is(R['121'].verdict, '⧗ 3rd-culling transfer unverified', 'and the row names the card, not the tab');
-
-  console.log('\n── 6. The marker carries an explanation ──');
-  const tip = await page.evaluate(() => {
-    const tr = [...document.querySelectorAll('.los-table tbody tr')]
-      .find(t => t.children.length === 18 && t.children[1].textContent.includes('123'));
-    return tr.children[8].querySelector('.los-unver-mark').getAttribute('title');
+    /* THE BATCH CELL CARRIES NO VERDICT ANY MORE. It is still read, so
+       the test can assert that — a label saying which stage is waiting
+       was the office's one "no need", and the dash in the column it
+       belongs to is the answer instead. */
+    out[name] = { cells, verdict: (tr.children[1].textContent.match(/[✓⧗][^\n]*/) || [''])[0].trim() };
   });
-  is(/1 of 2 rows left/.test(tip), true, 'it says how many rows are outstanding: ' + JSON.stringify(tip));
+  return out;
+}, COLS);
 
-  console.log('\n── 6b. The records window a figure opens into says the same thing ──');
-  const drill = async (kind, batch) => {
-    await page.evaluate(([k, b]) => losDrill(k, b), [kind, batch]);
-    await page.waitForTimeout(400);
-    const t = await page.evaluate(() => {
-      const d = document.getElementById('los-drill-body').firstElementChild;
-      const s = d ? d.textContent.replace(/\s+/g, ' ').trim() : '';
-      return /^[⧗✓]/.test(s) ? s : '';   // anything else is the filter bar
-    });
-    await page.evaluate(() => { const o = document.getElementById('los-drill-overlay'); if (o) o.style.display = 'none'; });
-    return t;
-  };
-  is(/^⧗ Not verified yet: 3rd culling\./.test(await drill('cull3', '123')), true,
-    "123's 3rd Culling records open under a warning");
-  is(/^✓ Verified/.test(await drill('cull3', '122')), true,
-    "122's open under a tick");
-  is(/^✓ Verified/.test(await drill('cull3', '121')), true,
-    "121's culling is signed, so its records window says so though its transfer is not");
-  is(/^⧗ Not verified yet: 3rd-culling transfer\./.test(await drill('transfer', '121')), true,
-    'and the transfer records carry the warning instead');
-  // Only 099's planting is unsigned, so the Actual Planted total is one
-  // batch short of checked — not three. The count is of the batches behind
-  // THAT figure, not of the batches with anything outstanding anywhere.
-  is(/^⧗ 1 of 4 batches behind this total are not verified/.test(await drill('planted', '*')), true,
-    'the TOTAL row says how many batches behind THAT figure are unverified');
-  is(/^⧗ 2 of 4 batches behind this total are not verified/.test(await drill('trans', '*')), true,
-    'and it is a different count for a different column');
-  is(await drill('sales', '123'), '', 'sales open with no verification note — not a batch-report tab');
+const held = (r) => COLS.filter(c => r.cells[c].held);
 
-  console.log('\n── 7. The report says once, above the table, that it contains unchecked work ──');
-  const note = await page.evaluate(() => {
-    const d = [...document.querySelectorAll('#report-output div')]
-      .find(e => e.textContent.trim().startsWith('⧗') && e.children.length === 0);
-    return d ? d.textContent.replace(/\s+/g, ' ').trim() : '';
+const { page, errs } = await open(false);
+let R = await readRows(page);
+await page.screenshot({ path: 'losver.png' });
+
+console.log('\n── 1. The page still works ──');
+is(errs.length, 0, 'no page errors');
+is(Object.keys(R).sort(), ['097', '099', '121', '122', '123'], 'all five batches listed');
+
+console.log('\n── 1b. A batch with two reception rows says so, and shows the newest ──');
+is(R['122'].cells.received.text.replace(/\s+/g, ' '),
+  '10,700 10,000 + FOC 700 ⚠ 2 reception rows',
+  'the newest row\u2019s figure, with the stale one called out');
+is(R['123'].cells.received.text.includes('reception rows'), false,
+  'and a batch with one row says nothing');
+
+console.log('\n── 2. A fully verified batch reads exactly as the ledger does ──');
+is(R['122'].verdict, '', 'and says nothing about being verified — the figures are the answer');
+is([R['122'].cells.transTotal.text, R['122'].cells.cull1Total.text,
+    R['122'].cells.cull3.text, R['122'].cells.transfer.text, R['122'].cells.balance.text],
+   ['9,878', '749', '280', '120', '9,598'],
+   'every line of it is signed, so every figure is the whole of it');
+is(Object.values(R['122'].cells).some(c => c.text === '—'), false, 'and nothing on the row is a dash');
+is(R['122'].cells.balance.title, '', 'with no note about waiting for anything');
+
+console.log('\n── 3. A batch nobody has checked counts nothing ──');
+is(R['099'].verdict, '', 'the row still carries no label about it');
+is([R['099'].cells.received.text, R['099'].cells.planted.text,
+    R['099'].cells.transTotal.text, R['099'].cells.balance.text],
+   ['0', '0', '0', '0'],
+   'nothing is signed, so nothing is counted — and it is nought, not a dash');
+is(R['099'].cells.variance.text, '0',
+  'the Variance of two unsigned figures is nought, not minus the delivery');
+is(R['099'].cells.planted.title.indexOf('Still to be signed off: planting') >= 0, true,
+  'and the cell says what it is waiting for: ' + JSON.stringify(R['099'].cells.planted.title));
+is(/would add 1,000/.test(R['099'].cells.planted.title), true, 'and what signing it would add');
+
+console.log('\n── 4. PART verified is the part that is verified ──');
+/* 123 transplanted 9,772 into B1 (signed) and 300 into B7 (not). The old
+   rule took the whole column away over that 300; this one shows the 9,772
+   and waits for the rest. */
+is(R['123'].cells.transTotal.text, '9,772', 'one of two transplant rows signed → that one row is the figure');
+is(/Still to be signed off: transplanting \(1 of 2 rows left\), which would add 300/.test(R['123'].cells.transTotal.title),
+  true, 'and the cell names the row still outstanding and what it would add');
+is(R['123'].cells.cull1Total.text, '0', '123\u2019s 1st culling is unsigned, so it counts nought');
+is(R['123'].cells.cull2.text, '50', 'its 2nd culling is signed row by row, so it counts');
+is(R['123'].cells.cull3.text, '0', 'its 3rd culling is unsigned');
+is(R['123'].cells.cullTotal.text, '0', 'and the total made of the 1st and the 3rd follows them');
+
+console.log('\n── 5. AND THE BALANCE IS CALCULATED, which is what was asked for ──');
+/* transplant qty − 3rd culling − total sales + approved stock calibration,
+   every term of it the verified one: 9,772 − 0 − 100 + 0. */
+is(R['123'].cells.balance.text, '9,672', '123 balances on its verified figures');
+is(R['123'].cells.balance.title.indexOf('This is the VERIFIED figure') === 0, true,
+  'and says it is the verified one');
+is(/transplanting \(1 of 2 rows left\)/.test(R['123'].cells.balance.title), true,
+  'naming the transplanting row it is waiting on');
+is(/3rd culling/.test(R['123'].cells.balance.title), true, 'and the 3rd culling too');
+is(R['099'].cells.balance.title.indexOf('This is the VERIFIED figure') === 0, true,
+  'a batch with nothing signed says the same');
+
+console.log('\n── 5b. One tab, two cards — and only the signed one counts ──');
+/* 121's 3rd culling IS signed and its transfer card is NOT. Both live on
+   Tab 6, so a tally kept per TAB would take the culling away as well. */
+is(R['121'].cells.cull3.text, '40', "121's 3rd Culling card is signed → it counts");
+is(R['121'].cells.transfer.text, '0', 'its transfer card is not → that one does not');
+is(/3rd-culling transfer/.test(R['121'].cells.transfer.title), true,
+  'and the Transfer cell is the one that says so');
+is(R['121'].cells.balance.text, '460', 'a transfer is not in the Balance, so the Balance is whole');
+
+console.log('\n── 5c. WHAT THIS RULE COSTS ──');
+/* Pinned rather than hidden. 097's seed in is signed and its planting is
+   not, so Actual Planted is nought so far as anybody has signed — and the
+   Variance reads as minus the whole delivery. That was the argument for the
+   dash; the office chose this with it in front of them. */
+is(R['097'].cells.received.text, '8,000', "097's seed in is signed, so it counts");
+is(R['097'].cells.planted.text, '0', 'its planting is not, so Actual Planted is nought');
+is(R['097'].cells.variance.text, '−8,000',
+  'and the Variance reads minus the whole delivery — the known cost of the rule');
+is(/Still to be signed off: planting/.test(R['097'].cells.variance.title), true,
+  'the cell says what it is waiting on, which is the only thing that explains it');
+
+console.log('\n── 6. Nothing is withheld, so nothing is a dash ──');
+is(Object.keys(R).filter(b => Object.values(R[b].cells).some(c => c.text === '—')), [],
+  'not one cell on the whole report is a dash');
+is(await page.evaluate(() => document.querySelectorAll('.los-table tbody .los-held').length), 0,
+  'and the style a withheld figure used to wear is on nothing');
+is(await page.evaluate(() => !!document.querySelector('.los-table tbody .los-fig')), true,
+  'every figure is still a button — the records behind it are what gets it signed');
+
+console.log('\n── 6b. The records window a figure opens into says the same thing ──');
+const drill = async (kind, batch) => {
+  await page.evaluate(([k, b]) => losDrill(k, b), [kind, batch]);
+  await page.waitForTimeout(400);
+  const t = await page.evaluate(() => {
+    const d = document.getElementById('los-drill-body').firstElementChild;
+    const s = d ? d.textContent.replace(/\s+/g, ' ').trim() : '';
+    return /^[⧗✓]/.test(s) ? s : '';   // anything else is the filter bar
   });
-  is(/3 of 4 batches carry figures nobody has verified yet/.test(note), true, 'the count: ' + JSON.stringify(note));
-  const foot = await page.evaluate(() => {
-    const t = document.querySelector('.los-table tfoot');
-    return t ? t.textContent.replace(/\s+/g, ' ').trim().slice(-120) : '';
-  });
-  is(/totals include 3 batches whose figures are not verified/.test(foot), true,
-    'and the totals say they include it');
+  await page.evaluate(() => { const o = document.getElementById('los-drill-overlay'); if (o) o.style.display = 'none'; });
+  return t;
+};
+is(/^⧗ Not verified yet: 3rd culling\./.test(await drill('cull3', '123')), true,
+  "123's 3rd Culling records open under a warning");
+is(/^✓ Verified/.test(await drill('cull3', '122')), true,
+  "122's open under a tick");
+is(/^✓ Verified/.test(await drill('cull3', '121')), true,
+  "121's culling is signed, so its records window says so though its transfer is not");
+is(/^⧗ Not verified yet: 3rd-culling transfer\./.test(await drill('transfer', '121')), true,
+  'and the transfer records carry the warning instead');
+// Only 099's planting is unsigned, so the Actual Planted total is one
+// batch short of checked — not three. The count is of the batches behind
+// THAT figure, not of the batches with anything outstanding anywhere.
+is(/^⧗ 2 of 5 batches behind this total are not verified/.test(await drill('planted', '*')), true,
+  'the TOTAL row says how many batches behind THAT figure are still waiting');
+is(/^⧗ 1 of 5 batches behind this total are not verified/.test(await drill('cull3', '*')), true,
+  'and it is a different count for a different column');
+is(await drill('sales', '123'), '', 'sales open with no verification note — not a batch-report tab');
 
-  console.log('\n── 8. The Verification filter ──');
-  const pick = async (id, v) => {
-    await page.evaluate(([i, val]) => {
-      const el = document.getElementById(i); el.value = val;
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    }, [id, v]);
-    await page.waitForTimeout(600);
-  };
-  is(await page.evaluate(() => !document.querySelector('#f-los-verified').closest('div.f-los').classList.contains('hidden')),
-    true, 'the picker is on screen for this report');
-  await pick('f-los-verified', 'verified');
-  is(Object.keys(await readRows(page)).sort(), ['122'], 'Verified only → the one fully verified batch');
-  await pick('f-los-verified', 'pending');
-  is(Object.keys(await readRows(page)).sort(), ['099', '121', '123'], 'Awaiting verification → the other three');
-  is((await page.evaluate(() => document.querySelector('#report-output .glass-panel div[class*="tracking-widest"]').textContent))
-     .includes('awaiting verification'), true, 'and the scope line says which slice this is');
-  await pick('f-los-verified', '');
-  is(Object.keys(await readRows(page)).length, 4, 'blank is no filter again');
+console.log('\n── 7. The report says once, above the table, that its figures will move ──');
+const note = await page.evaluate(() => {
+  const d = [...document.querySelectorAll('#report-output div')]
+    .find(e => /Every figure below is the VERIFIED figure/.test(e.textContent));
+  return d ? d.textContent.replace(/\s+/g, ' ').trim() : '';
+});
+is(/4 of 5 batches still carry records waiting for a signature/.test(note), true,
+  'the count: ' + JSON.stringify(note));
+is(/will rise as they are signed/.test(note), true,
+  'and which way they are going to move, which is the thing a reader has to know');
 
-  console.log('\n── 9. The As At cut-off applies to the LINES, not the signatures ──');
-  // 123's 1st culling is dated Nov 2026 and is unsigned. As at Oct 2026 it has
-  // not happened, so there is nothing there to be unverified.
-  await pick('f-los-date', '2026-10-31');
-  R = await readRows(page);
-  is(R['123'].cells.cull1.marked, false, 'as at 31 Oct 2026, the November culling marks nothing');
-  is(R['123'].cells.trans.marked, false, 'nor the November transplanting');
-  is(R['123'].verdict, '✓ verified', 'and as at that date 123 reads fully verified');
-  await pick('f-los-date', '');
+/* The foot says it COLUMN BY COLUMN, because "4 batches are waiting" does
+   not tell a reader WHICH total is going to rise — a batch can be signed
+   off on its seed in and waiting on its 3rd culling. */
+const foot = await page.evaluate(() => {
+  const t = document.querySelector('.los-table tfoot tr:last-child');
+  return t ? t.textContent.replace(/\s+/g, ' ').trim() : '';
+});
+is(/These totals are the VERIFIED figures and will rise as the rest is signed off/.test(foot), true,
+  'the foot says so: ' + JSON.stringify(foot));
+is(/Transplant Qty is waiting on 2 of 5/.test(foot), true, 'and names the column and the count');
+is(/Seed Received is waiting on 1 of 5/.test(foot), true, 'for every column still waiting');
 
-  console.log('\n── 10. If the sign-off tables cannot be read, nothing is marked ──');
-  await page.close();
-  const broken = await open(true);
-  const BR = await readRows(broken.page);
-  is(Object.keys(BR).length, 4, 'every batch still listed');
-  is(marked(BR['099']), [], 'and not one figure is marked unverified');
-  is(BR['099'].verdict, '', 'no batch claims a verdict either way');
-  const bnote = await broken.page.evaluate(() => {
-    const d = [...document.querySelectorAll('#report-output div')]
-      .find(e => e.textContent.includes('Verification state could not be read'));
-    return d ? d.textContent.replace(/\s+/g, ' ').trim() : '';
-  });
-  is(bnote !== '', true, 'the report says it could not tell: ' + JSON.stringify(bnote));
-  await broken.page.close();
+/* THE TOTAL IS THE PLAIN SUM OF THE ROWS NOW. It used to leave out any row
+   whose stage was unsigned, because such a row showed a dash — and a column
+   of dashes adding up to a number is the one shape of wrong that cannot be
+   spotted. There are no dashes, so there is no hole. */
+const colTotal = await page.evaluate(() => {
+  const foot = document.querySelector('.los-table tfoot tr');
+  const body = [...document.querySelectorAll('.los-table tbody tr')].filter(t => t.children.length === 17);
+  const num = (el) => Number(String(el.textContent).replace(/[^0-9-]/g, '')) || 0;
+  /* Balance is the last column. The foot row carries colspans (the variance
+     pair), so it is read off the END rather than by index. */
+  return { foot: num(foot.children[foot.children.length - 1]),
+           rows: body.reduce((s, t) => s + num(t.children[16]), 0) };
+});
+is(colTotal.foot, colTotal.rows, 'the Balance total is exactly the sum of the Balances above it');
 
-  await browser.close();
-  console.log('\n' + (bad ? 'FAILURES: ' + bad : 'all good'));
-  process.exit(bad ? 1 : 0);
+console.log('\n── 8. The Verification filter ──');
+const pick = async (id, v) => {
+  await page.evaluate(([i, val]) => {
+    const el = document.getElementById(i); el.value = val;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }, [id, v]);
+  await page.waitForTimeout(600);
+};
+is(await page.evaluate(() => !document.querySelector('#f-los-verified').closest('div.f-los').classList.contains('hidden')),
+  true, 'the picker is on screen for this report');
+await pick('f-los-verified', 'verified');
+is(Object.keys(await readRows(page)).sort(), ['122'], 'Verified only → the one fully verified batch');
+await pick('f-los-verified', 'pending');
+is(Object.keys(await readRows(page)).sort(), ['097', '099', '121', '123'], 'Awaiting verification → the other four');
+is((await page.evaluate(() => document.querySelector('#report-output .glass-panel div[class*="tracking-widest"]').textContent))
+   .includes('awaiting verification'), true, 'and the scope line says which slice this is');
+await pick('f-los-verified', '');
+is(Object.keys(await readRows(page)).length, 5, 'blank is no filter again');
+
+console.log('\n── 9. The As At cut-off applies to the LINES, not the signatures ──');
+// 123's 1st culling is dated Nov 2026 and is unsigned. As at Oct 2026 it has
+// not happened, so there is nothing there to be unverified.
+await pick('f-los-date', '2026-10-31');
+R = await readRows(page);
+is(R['123'].cells.cull1Total.held, false, 'as at 31 Oct 2026 the November culling has not happened, so nothing is held');
+is(R['123'].cells.transTotal.held, false, 'nor the November transplanting');
+is(R['123'].verdict, '', 'and the row says nothing either way, as at that date or any other');
+await pick('f-los-date', '');
+
+console.log('\n── 10. If the sign-off tables cannot be read, nothing is held back ──');
+await page.close();
+const broken = await open(true);
+const BR = await readRows(broken.page);
+is(Object.keys(BR).length, 5, 'every batch still listed');
+/* FAILS OPEN, and that is the whole of it: a check that cannot run must not
+   empty a report. Same reason access fails open. */
+is(held(BR['099']), [], 'and not one figure is held back');
+is(BR['099'].cells.transTotal.text, '1,000', 'every figure is the live ledger, checked or not');
+is(BR['099'].verdict, '', 'and no batch claims a verdict either way');
+const bnote = await broken.page.evaluate(() => {
+  const d = [...document.querySelectorAll('#report-output div')]
+    .find(e => e.textContent.includes('Verification state could not be read'));
+  return d ? d.textContent.replace(/\s+/g, ' ').trim() : '';
+});
+is(bnote !== '', true, 'the report says it could not tell: ' + JSON.stringify(bnote));
+is(/nothing below is held back/.test(bnote), true, 'in those words');
+await broken.page.close();
+
+await browser.close();
+console.log('\n' + (bad ? 'FAILURES: ' + bad : 'all good'));
+process.exit(bad ? 1 : 0);
 
 })();

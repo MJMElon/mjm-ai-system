@@ -1,5 +1,5 @@
 {
-  "audit/audit_settings.js@2": "53dbb7134372",
+  "audit/audit_settings.js@4": "5ce03fae66d3",
   "audit/audit_system_setting.js@3": "1643c01ab880",
   "shared/shared_module_access.js@3": "6ff319ec6d45",
   "shared/shared_plot_movement.js@7": "496177f7b535",
@@ -14,5 +14,6 @@
   "nursery_ops/plot_maintenance_styles.css@84": "844ef4f90337",
   "nursery_ops/plot_maintenance_script.js@129": "be398700faf8",
   "shared/shared_empty_hole_report.js@1": "17fa638f266d",
-  "shared/shared_month_lock.js@1": "9e3840e2e7dd"
+  "shared/shared_month_lock.js@1": "9e3840e2e7dd",
+  "operation/operation_stock_sales.js@2": "d03af146b647"
 }

@@ -374,6 +374,151 @@ became optional on the same day, so both answers are one click apart.
 `tests/tray_named_adjustment_closes_pending.cjs` drives 234's own figures
 through the real page: ten of its assertions fail on the previous code.
 
+## The papan tanda is the report row, drawn
+
+The board that gets nailed up at the plot when the seedlings arrive. The
+office was making these by hand, one per plot, off the Transplanting Report
+on the screen beside them — so it is drawn FROM that row, and **the figure
+on the board is the figure on the report by construction**.
+
+**ONE BOARD PER ROW, which is one per plot.** That is the whole reason it
+lives on the report and not on the ledger: batch 270's B4 took **1,931 out
+of P32 and 378 out of P33** on the same day, and the board says **2,309**,
+because what goes up at the plot is how many are standing in it. The report
+already merges a plot's rows for that day; this follows that rather than
+adding a second rule.
+
+Every field is the Batch Report's own answer. The one worth naming is
+**TARIKH TANAM**: it is the batch's `Seeds_Received` **`transaction_date`**,
+which is exactly what the Batch Record list shows as Planted Date — the date
+keyed on Tab 1, never the row's insert time. Newest reception row wins, the
+same rule the Seeds In form and the batch list already follow, because a
+batch is meant to have one and some have ninety-five.
+
+Three things about drawing it, each of which went wrong first:
+
+- **The font has to be loaded before the first stroke.** A canvas asked for
+  a font it does not have yet does not wait — it draws the fallback, and the
+  board comes out in Times, which nobody would notice until it was on a post
+  in a field. `document.fonts.load` is awaited for every weight used, and
+  the test asks about the ORDER (nothing drawn while a load is pending)
+  rather than about the glyphs, because a harness with no network for Google
+  Fonts would otherwise only prove the sandbox has no Outfit.
+- **The logo used to leave the fill white.** `_ptLogo` painted its own text,
+  so ink set before it drew a white board on white. It is an image now and
+  does not, and the ink is still set AFTER it, because the ink belongs with
+  the type it is for.
+- **A long name is shrunk, never wrapped or clipped.** The board is read
+  from a distance and the end of a breed name is the part that tells two
+  breeds apart. The PLOT line shrinks too, so a transfer plot does not run
+  under the mark.
+- **ONE WEIGHT for the whole block, and ONE CASE.** The breed was set at
+  Outfit 700 where everything beside it was 900, and in its own mixed case
+  where every other field — the dates included — is upper. At that size
+  that does not read as one typeface in two weights, it reads as two fonts,
+  which is exactly what the office saw and said. The test asks it of the
+  weights the board asks for AND of the font on every stroke, because a
+  weight drawn in without being preloaded is the same mistake twice. The
+  ROW keeps the real spelling; it is only the board that shouts.
+
+**The mark is the office's own file, and it is INLINED.** It was a drawn
+imitation at first, for the reason below; the office then handed over the
+real logo. The board carries **MJM NURSERY**, which is not the MJM GROUP
+tile that was on it for a day — same house, different mark, and the office
+asked for it the way they ask for everything here, by handing over a board
+with it on. `shared/mjm_nursery_logo.png` is the canonical copy and
+`_PT_LOGO_SRC` in the page is that file byte for byte as a data URI —
+`tests/papan_tanda.cjs` decodes the one and compares it against the other,
+so two copies of an image cannot quietly become two different images.
+`shared/mjm_logo.png` is still there and is the GROUP mark; nothing draws
+it now.
+
+Inlining keeps every property the drawn mark had, which is why it is not
+simply fetched: **no fetch, so nothing to 404** at the moment somebody
+presses the button; no cross-origin, so the canvas is not tainted and
+`toBlob` still works; and nothing to go stale in a cache.
+
+**The nursery file is TRIMMED to the mark**, so the board draws the whole
+of it and there is no crop. The GROUP tile needed one — it was a square
+with a broad flat margin of green, and `_PT_LOGO_CROP` trimmed it in
+fractions of the file. What survives that is the rule underneath it: **ONE
+width is given and the height comes off the IMAGE**, so the mark cannot be
+stretched, and the test compares the shape on the canvas against the
+shape of the file rather than carrying a number that would go stale the
+day the logo is re-exported.
+
+**The nursery mark was lifted out of the board the office drew**, because
+that is the only copy of it there has been — cropped to its own ink at
+598 × 315, which is exactly the size the board draws it, so there is no
+resolution to spare. Ask for the original file before anything wants it
+bigger.
+
+**And the office drew the board, so its numbers are the specification.**
+The margins, the type sizes, where each line sits and where the mark goes
+were measured off the board they handed over and are named constants at
+the top of `_ptDraw`. `_PT_LINE_STEP` is the one the office asked for by
+name: it used to be worked out from whatever room was left under the logo,
+so a change to the mark quietly changed the spacing of the lines. The test
+reads all of it back off the canvas — the rule lands on the pixel, the
+mark within four (its outermost row is an antialiased serif edge that is
+no longer either office green, so a colour test finds the box just inside
+the one `drawImage` was given), and the line spacing within four because
+the top of a type band carries a little of the font's own business (BATCH
+sets digits where TARIKH sets capitals).
+
+**THE LABELS ARE THE OFFICE'S OWN, spaces included.** They are not spaced
+evenly and the colons do not line up — `BATCH    :` and `TARIKH TANAM  :`
+are padded and `JENAMA:` is not — and that is how the board they drew
+reads. A sign that is one word different from the one the office nails up
+is a sign somebody has to ask about, so the strings are copied and not
+tidied. **PLOT carries no colon** and **JUMLAH TANAM carries no POKOK**;
+both were there and both went.
+
+`tests/papan_tanda.cjs` drives the real page and batch 270's own figures,
+down to the pixels on the canvas and the download that comes out of it.
+
+**And the same board goes up three months earlier, off the Seed In
+Report.** A pre-nursery tray stands for three months with nothing on it
+saying what is in it, so the office asked for one when the seeds go IN.
+It is the SAME drawing — `_ptDraw`, one board, two reports — because two
+boards on two posts in one nursery that do not look alike are two boards
+somebody has to compare. One board per TRAY per DAY, off the `Planted`
+log, merged the way the transplant board merges a plot's rows for a day.
+
+The one field that differs is **TARIKH PINDAH, which is a MONTH**. The
+transplant board knows the day the seedlings moved because it is drawn
+after they did; the seed board does not, so a date there would be a
+promise the board cannot keep. It reads **DEC 2026** — short, because
+every line is set as large as it will go and a month spelled out shrinks
+the line it is on.
+
+**Three months is not a rule this report invents.**
+`audit/audit_papan_script.js` has drawn the auditor's papan tanda off
+planted-plus-three since it was written, shown as a month and a year, and
+the sign in the field reads that way. A second rule here would be two
+answers on two boards a few metres apart. `_PT_PN_MONTHS` is this file's
+copy, and it works in LOCAL time for the same reason the audit one does —
+`new Date('YYYY-MM-DD')` parses as UTC midnight and drifts a day, which on
+the 1st of a month moves the ANSWER by a whole month.
+
+**And it is the MONTH plus three, never the DAY plus three months** —
+which is three months in twelve, not pedantry. Adding months to a DATE
+overflows when the month it lands in is shorter: 30 November plus three is
+30 February, which JavaScript rolls into 2 March, so a tray sown on the
+30th had a board reading MAR over seedlings due out in FEBRUARY. 31 January
+read MAY for April and 31 March read JUL for June. The office said it in
+the words that avoid all of it — *"the seed planted month + 3 months"* — so
+`_ptMonthPlus` reads the year and the month off the date and leaves the day
+out of it, and the first of a month cannot overflow. All three days are in
+the test.
+
+`_ptSeedRows` is kept apart from `_ptRows` on purpose: a board drawn off
+whichever list was filled last is how the Transplanting Report comes to
+hand out seed boards. `tests/papan_tanam_seed_in.cjs` holds it with the
+office's own 277 / P1 / 2,560 / 29 Sep → DEC 2026, the October tray that
+crosses the year end, and a batch received and not yet sown, which is
+offered no button at all rather than one that answers nothing.
+
 ## An amendment is dated by the amendment, and it lands in the TOTAL
 
 The Transplanting Report lists one line per transplant record. An approved
@@ -477,28 +622,147 @@ same reason the drone-map panel demanded an exact match.
 `tests/cull1_explained_by_transplanting.cjs` holds both halves, including that
 a difference which is NOT the adjustment still reads as over-allocated.
 
-## An unverified figure is shown, and says it is unverified
+## Only verified data is counted, and it is counted LINE BY LINE
 
-Life of Seedlings is eighteen live sums of the batch ledger, and the ledger
-is filled in BEFORE anybody checks it. A figure keyed this morning and one
-signed off last week looked exactly alike.
+The office has narrowed this rule three times, and the third is the one the
+code now obeys:
 
-Both ways of fixing that are wrong. Hiding the unverified batch leaves the
-report answering a question nobody asked. **Zeroing an unverified stage is
-worse**: a batch with Seed Received in and Actual Planted silently at nought
-reports a Variance of minus the whole delivery — a wrong number wearing a
-right number's clothes. So the figure is shown, and it carries a ⧗ saying
-nobody has signed it, and the derived figures above it (Variance, Total
-Culling, Balance) carry whichever of their parts is unsigned.
+1. *"make it only verified data will float to life of seedling"* — an
+   unverified figure came off the report.
+2. *"no need to show which item not yet verify"* — the row stopped carrying
+   a label saying which stage it was waiting on.
+3. *"it is only calculate what data is verified first ... just show the
+   number which verified until new data verified then update the report
+   there."*
+
+**The third is the first, asked one level down.** It used to be asked of a
+whole STAGE, so one unsigned row took the whole column away and everything
+derived from it with it: a Balance could not be read at all until the 3rd
+Culling tab was signed, which is what the office was looking at when they
+asked for it to be calculated. Asked of the LINE, a tab signed four rows out
+of five shows those four, and the fifth joins the figure the day somebody
+signs it.
+
+So `_losLineSigned` is the one test, and the FIGURES are built out of the
+lines it says yes to — inside `_losBuildAllRows`, not in the cells. Five
+things fall out of that, and the last is what it costs:
+
+- **Every derived figure is right by construction.** Variance, Total Culled,
+  the Balance and both splits are arithmetic over figures that are already
+  verified-only, so none of them has to know this rule exists. That is the
+  whole reason the test lives in the builder.
+- **Nothing is a dash any more.** A stage nobody has signed is nought. The
+  dash existed to say "nobody has signed this" when the figure was withheld;
+  nothing is withheld now, and what the cell says instead is in its hover —
+  which stage is outstanding, how many rows, and what signing them would
+  add.
+- **The TOTAL is the plain sum of the rows.** It used to leave rows out to
+  match a column of dashes; there are no dashes, so it agrees with the
+  column above it line for line. The foot still says which totals are
+  waiting on rows, because a reader needs to know which way a figure is
+  going to move.
+- **The record lists are untouched.** Every line is still in the drilldown,
+  signed or not — that is what somebody needs in order to go and sign the
+  rest off.
+- **What it costs: a VARIANCE whose seed in is signed and whose planting is
+  not reads as minus the whole delivery**, because Actual Planted is
+  genuinely nought so far as anybody has signed. That was the argument for
+  the dash, and the office chose this with it in front of them. Batch 097 in
+  `tests/los_only_verified_links.cjs` pins it so nobody is surprised by it
+  twice.
+
+**The tally that explains a figure is built with the same call.** Two copies
+of the test would be a figure disagreeing with the note underneath it.
+
+**Only Life of Seedlings asks for it** — `_losBuildAllRows(asAt, {
+verifiedOnly: true })`. The Seed In Report shares that builder and reads the
+ledger as keyed: what arrived from the supplier is a different question.
+
+And it still **fails OPEN**: if neither sign-off table can be read, every
+line counts and the report says it could not tell.
+
+`shared/CHECK_only_verified_floats.sql` is the size of it — every batch whose
+figures move, what is signed of its transplanting and its 3rd culling, and
+the Balance on the ledger against the Balance on the signed lines. Hand it
+over with any change here: the question that decides whether a rule like this
+is right is "what does it actually move", and that is the only thing that
+answers it.
+
+## An unverified figure does NOT float, and it is a dash and never a nought
+
+Life of Seedlings is seventeen columns of live sums of the batch ledger, and
+the ledger is filled in BEFORE anybody checks it. A figure keyed this morning
+and one signed off last week looked exactly alike.
+
+That was first fixed by SHOWING the unverified figure with a ⧗ beside it and
+counting it in the totals, on the argument that hiding it leaves the report
+answering a question nobody asked. **The office overruled that**, and batch
+246 is why: its 3rd Culling tab read **0 of 4 Done** with every Culled Qty
+box empty, and the report was showing **10,142 third culled** and a Balance
+of **minus 7,659** off the back of it. *"If the batch report not yet filled
+in the data, dont float the data to life of seedling"*, then *"make it only
+verified data will float to life of seedling."* They are the ones who
+reconcile against it; that is their call to make.
+
+**What was right about the old rule is still right, and it is why a withheld
+figure is a DASH.** Zeroing an unverified stage is a wrong number wearing a
+right number's clothes — a batch with Seed Received in and Actual Planted
+silently at nought reports a Variance of minus the whole delivery. So the
+cell reads **—**, which is "nobody has signed this" and cannot be mistaken
+for a count.
+
+Five things follow, and each is a way this goes quietly wrong:
+
+- **A DERIVED figure is withheld whenever ANY part of it is**, rather than
+  being computed from the parts that survived. That is the same trap one
+  level up. It falls out of each figure carrying every group it is made of —
+  `LOS_BALANCE_GROUPS`, `LOS_CULLTOTAL_GROUPS` and the rest.
+- **A withheld figure is OUT of its column total.** A column of dashes
+  adding up to a number is the one shape of wrong that cannot be spotted:
+  the total looks fine and no row disagrees with it. `LOS_GROUPS_OF_FIELD`
+  is what the reducer asks, and it is the same answer `LOS_GROUPS_OF_KIND`
+  gives per column — a field missing from it totals figures the rows are not
+  showing.
+- **The foot says which columns are short, and by how many rows.** "3
+  batches are unverified" does not tell a reader which TOTAL is light, since
+  a batch can be signed on its seed in and waiting on its 3rd culling.
+- **A stage with no lines at all is not withheld.** There is nothing to
+  verify about a stage a batch has not reached, so a true nought reads 0. A
+  nought on an unsigned tab is still withheld, because "0 damaged" and "0 so
+  far as anybody has keyed" are different claims.
+- **It still fails OPEN.** If the sign-off tables cannot be READ, nothing is
+  withheld and the report says so. A check that cannot run must not empty a
+  report — same reason access fails open.
+
+**Everything above is the history of this rule, not its current shape** —
+see the section above it. The withholding was per STAGE and left a dash; it
+is per LINE now and leaves a figure. What is still exactly true of it is the
+reason it exists, the fail-open, the column-not-tab unit, the two routes a
+sign-off comes by, and that a derived figure is only as checked as its
+parts.
+
+**The ROW does not say which stage it is waiting on.** A line under the
+batch name read "⧗ 2nd culling, 3rd culling unverified", on the argument
+that the markers scattered across a row are lost if a reader has to collect
+them by eye. The office asked for it to go — *"no need to show which item
+not yet verify, as long as it is not verify, then the data wont appear here,
+while verified, then it will show here based on the date."* And they are
+right: once an unverified figure stopped being shown and became a dash, the
+table was already saying it, in the one column it applies to, which is more
+than a line could say in the space it had. What stays is everything that
+answers a question a dash in a row CANNOT: the note above the table (is
+anything missing at all), the column-by-column note in the foot (which total
+is light), and the verification filter (a question somebody asks on
+purpose). `verStages` / `verPending` are still computed for those three.
 
 Three things to know before touching `LOS_GROUP_OF_TYPE` in
 `operation/operation_reports.html`:
 
 - **The unit is the COLUMN, not the tab.** 3rd Culling and Transfer are both
-  signed on Tab 6; Transplanting Qty, Double Tone and premium care are three
-  figures on Tab 3. A tally kept per tab puts a warning on figures somebody
-  HAS signed, and a marker that cries over fine figures is one nobody reads.
-  `LOS_STAGE_OF_GROUP` is the column→tab map that keeps the two apart.
+  signed on Tab 6; Transplant Qty (both halves of its split) and premium
+  care are figures on Tab 3, and 1st Culled is Tab 4. A tally kept per tab
+  withholds figures somebody HAS signed. `LOS_STAGE_OF_GROUP` is the
+  column→tab map that keeps the two apart.
 - **A sign-off comes two ways** and either counts: one signature over a whole
   tab in `operation_batch_verifications`, or — on a tab verified row by row —
   a `Row_Verification` log per row, keyed `<stage>::<rowKey>`. The rowKey
@@ -507,13 +771,25 @@ Three things to know before touching `LOS_GROUP_OF_TYPE` in
   `operation_batch_detail.html` draws the tab's tick by the same rule and
   `CHECK_which_batches_completed.sql` asks it of the record. Change one,
   change all three.
-- **If the sign-off tables cannot be read, nothing is marked** and the report
-  says so. Marking everything is not the cautious answer, it is a
-  systematically wrong one — the same reason access fails open.
+- **PART verified is not verified.** One of two transplant rows signed means
+  the figure includes an unsigned row, so it is withheld like any other.
 
 The As At date cuts the LINES off and never the signatures: a line dated
 after it is in no figure on screen, while "has anybody checked this" is a
 question about now.
+
+`shared/CHECK_what_life_of_seedlings_holds_back.sql` is the size of it —
+every batch with anything unsigned, which stages, and how many of each
+stage's rows are signed. Hand it over with any change to this rule: the
+figure that decides whether a rule like this is right is "what does it
+actually move", and that is the only thing that answers it.
+
+**The Status and Nursery filters still read the REAL figures**, not the
+withheld ones. Whether a batch is standing in the main nursery is a question
+about the batch, not about the paperwork, and a batch that vanished off
+every filter the day somebody forgot to sign a tab would be a worse report
+than the one this replaced. Completed is not a figure of this report's at
+all any more — see the section on the one completion rule.
 
 ## The only thing that asked "can this login save" was the save
 
@@ -564,6 +840,108 @@ Four things in it:
 
 Diagnostics section 7 shows the same answer per table, and the red bar
 taps through to it.
+
+### And a proof of ONE table is not a proof
+
+It came back. The phone now reads
+
+    Not allowed to save to audit_plot_audits. Your login lacks database
+    permission (RLS)
+
+and `RUN_ME_auditor_can_save.sql` — the file written to settle exactly
+this — answers **six green lines while it is happening**. Its proof ends by
+inserting a row as each auditor and rolling it back, which is the right
+idea; it inserts into ONE table, `audit_maintenance_audits`, the one that
+was broken the day it was written. Reproduced on the scratch Postgres with
+Plot Condition refusing every save, it prints *auditors who could actually
+save just now: 4 of 4 -- OK*.
+
+**A probe is only a proof of the table it probes.** That is the same
+mistake the file itself was written to correct, moved one table along:
+*"a previous file reported four green lines over a database that refused
+every save."* `shared/RUN_ME_audit_save_every_table.sql` probes **all five
+writable audit tables, as every non-customer account**, and a failure names
+the auditor, the table and the SQLSTATE.
+
+Two things bring this back, and neither is visible to a check of the
+policies:
+
+- **An auditor who signed up after the last repair.** The gate reads
+  `shared_profiles`, so an account with no row there fails it — there is
+  nothing to read. Backfilling is a repair of today and the fault returns
+  the next time somebody is hired. The **signup trigger** is what closes
+  it, so section 1 installs `on_auth_user_created` rather than only filling
+  the gap it left.
+- **A policy added by hand in the dashboard.** A RESTRICTIVE one narrows
+  what every other policy allows, so one of them refuses every auditor
+  whatever else is right. The old file drops a LIST OF NAMES IT KNOWS,
+  which is how one survives every repair. The new one drops every policy on
+  these tables that is not one of the four this system owns — and **names
+  what it dropped** in the result, because a repair that quietly removes
+  somebody's decision is a worse thing than the fault.
+
+**And a fault no policy check can see at all** is a column added NOT NULL
+that no form writes: 23502, every save refused, every gate correct. Only a
+real insert finds it, which is the whole argument for probing rather than
+inspecting.
+
+One more thing, found while testing: the old file's last query names
+`storage.buckets` inside a `CASE`, and a database without the storage
+schema fails to **parse** it however well the branch is guarded. The answer
+is worked out in a `DO` block into a session setting instead, so the final
+query names no table that might not be there.
+
+### The first version of the new file then did it a third time
+
+It ran on the real database and printed
+
+    9 | saves that went through just now: 196 of 245 -- OK
+
+**196 of 245 is not OK.** Forty-nine saves — one table for every one of the
+forty-nine accounts — were refused, and the row said OK, which is the exact
+fault two files in a row have now been written to correct.
+
+Two bugs, and the second is the one that matters:
+
+- **A NULL wipes the line you are building up.** `shared_profiles.email` can
+  be empty, concatenating NULL gives NULL, and `set_config(name, NULL,
+  false)` BLANKS the setting. So the one account with no email erased every
+  reason collected before it. Every piece of a `set_config` line is
+  `COALESCE`d now, and an account with no email is named by its id.
+- **OK was decided on whether a REASON had been collected**, not on the
+  count. So wiping the reasons turned a failure into a pass. **OK is `pass =
+  total` and nothing else.** A count that does not add up is the fault,
+  whether or not anything managed to say why — and there is a per-table
+  tally beside it, so the table that refuses is named even when the reasons
+  are too long to print.
+
+**And dropping every policy that is not ours was over-reach.** It took out
+`nops_read_audit_verdicts`, which `RUN_ME_audit_column.sql` creates on
+purpose so the Work Maintenance page can read the verdicts. A PERMISSIVE
+policy cannot refuse anything — it is somebody opening a door — so only a
+**RESTRICTIVE** one is dropped now, and the permissive ones are named and
+LEFT ALONE. The file also puts `nops_read_audit_verdicts` back, so a run of
+it cannot take that door away again.
+
+### What it was, in the end — and a probe can accuse the wrong party
+
+The second run answered it. `audit_plot_audits` read **49 of 49**: the
+RESTRICTIVE policy the first run dropped was the whole of the fault the
+phone was showing, and Plot Condition has saved ever since.
+
+What was left read `audit_batches 0/49`, *23502 null value in column
+`batch_id`* — and **that one was the probe being wrong, not the database.**
+`audit_batches` takes a `batch_id` (`BTH-nursery-batch-plot`), the Papan
+form writes it on both of its insert paths, and the probe row here did not,
+because its column list was copied off the tail of that object literal
+rather than the whole of it.
+
+**A probe short of a column the FORM supplies accuses the database of the
+probe's own mistake** — and it does it in a row headed NOT OK, which is
+exactly how a real fault reads. So the result now carries **the columns
+that MUST be filled** on every table it probes, read out of
+`information_schema`: a 23502 names one of those, and that row is how you
+tell "a column no form writes" from "a column this file forgot".
 
 ## An outbox is half of recording with no line. The LIST is the other half.
 
@@ -668,32 +1046,156 @@ because this was the second fix in a week that had to actually reach a phone.
 That is the condition the rule names: a module somebody wants current, not the
 whole site.
 
-## Two numbers wear the name Double Tone
+## A to-do list that hides what is coming is a diary
+
+The audit home page opens with TODAY selected — `selDay = day` — so the day
+scope was not something the auditor chose, it was the default view, and the
+day filter was the default filter. A Plot Condition, Papan Tanda or Seedling
+Height round whose window opens on the 20th was therefore not on the list on
+the 14th. The only way to see it was to tap today's chip a SECOND time to
+clear the selection, and nothing on the screen says that. Three of the four
+modules answered "what is next" with nothing.
+
+Maintenance was already exempt, because its deadline is set by somebody
+else's work and a row that exists is a row with work pending on it. The
+other three were not, and the asymmetry read as the schedule being empty.
+
+So on today every undone row of the month on screen shows. Two things keep
+it from becoming a free-for-all:
+
+- **Picking any OTHER day still answers literally** — what falls on that
+  date, maintenance included. A day somebody chose is a question; the day
+  the page opened on is not.
+- **A row whose window has not opened arrives greyed and does not
+  navigate.** That was already the treatment for `soon` and `upcoming`, and
+  it is the right one: the audit form would have nothing yet to record. The
+  row is there to be seen, not to be opened.
+
+A row carried from an earlier month (`fromY` set) rides on today only while
+it is overdue, which is the only reason `carriedOverdue()` hands one over.
+
+`tests/todo_shows_what_is_coming.cjs` lifts `occStatus` and the day filter
+straight out of the shipped `audit_home.html` and drives real rows through
+them — the three the office named fail on the previous code.
+## Three numbers wear the name Double Tone, and only one is a column
+
+**`Transplanted` out of the DOUBLE-TONE tray** is the Life of Seedlings
+column. It is the batch report's **Main Plot (D-Tone)** card: a main-plot
+transplant whose SOURCE tray was the d-tone one, so a seedling that had the
+treatment on its way out. Read off the `from tray [...]` in the remark, which
+is where the save writes it.
 
 **`DTone_Nursery_Qty`** is the box on the Transplanting tab headed *"Double
-Tone Quantity in Nursery"*: an admin counts the double-tone seedlings standing
-in the nursery and keys the number, and Tabs 3 and 4 add it to the planted
-total to get their allocation base. One row per batch, newest wins
-(`loadDtoneNurseryQty`).
+Tone Quantity in Nursery"*: an admin counts the double-tone seedlings
+STANDING in the nursery and keys the number, and Tabs 3 and 4 add it to the
+planted total to get their allocation base. One row per batch, newest wins
+(`loadDtoneNurseryQty`). It is still read, still verified under its own row
+key, and it is **not** a column.
 
-**`Transplanted_DoubleTone`** is the batch pushing its own seedlings into the
-d-tone tray. A different number, nought on most batches, and it takes no part
-in the Balance because those seedlings leave the tray again later as ordinary
-`Transplanted` rows.
+**`Transplanted_DoubleTone`** is the batch pushing its own seedlings INTO the
+d-tone tray. They leave it again later as ordinary `Transplanted` rows, which
+is why counting it would count them twice.
 
-Life of Seedlings' **Double Tone column showed the second one**, so it read 0
-against every batch the office had keyed a figure for. It now shows the keyed
-Quantity in Nursery, newest-wins, like the form — and the tray transplant
-keeps its own group (`dtone_tray`), which has no column but is still named in
-the row's verdict, exactly as premium care is.
+The column has now been wrong twice, in opposite directions, and both are
+worth keeping:
 
-The box has its own sign-off on Tab 3 under the row key
-**`DTONE-NURSERY-QTY`** rather than a plot, so `_losApplyVerification`
-special-cases it the way it special-cases a transfer card.
+- It showed `Transplanted_DoubleTone`, so it read **0** against batches that
+  had double tone standing in the field — the transplant into the tray is
+  nought once everything has been forwarded out of it. The batch detail page
+  had already hit exactly this on its own tile and says so in its comment:
+  *"Without this the tile only saw qty routed INTO the D-Tone holding tray
+  and stayed at 0 once everything was forwarded out."*
+- It was then pointed at the KEYED box, which reads what is standing rather
+  than what moved — so **batch 276 showed a Total Transplant Qty of 3** with
+  nothing transplanted and its own batch report reading 100% pending.
 
-`shared/CHECK_double_tone_quantity.sql` puts the two numbers side by side on
-every batch and counts the ones that were reading nought.
-`tests/los_double_tone_is_the_keyed_figure.cjs` keeps a batch that has BOTH.
+It also has a share of the **1st culling**, because a 1st culling happens in
+a tray and the d-tone tray is one of them —
+`shared/CHECK_transplant_details.sql` puts every one of these numbers side by
+side on each batch and counts the ones that were overstated.
+
+## A total is READ off the split, never summed from two different things
+
+This has now shaped two groups of columns, and it is one rule.
+
+**Transplant Qty** and **1st Culled** are each ONE column carrying a split:
+the total on top, and under a rule the two halves it is made of — *Normal*
+out of an ordinary pre-nursery tray, *DT* out of the DOUBLE-TONE tray.
+749 = 600 + 149 on batch 123.
+
+They are the allocation engine's own cards, and the rule that makes them
+coherent is that the last two are **DISJOINT halves of the first**, split by
+the tray each main-plot transplant came out of — not two different things
+stacked together. `calcTransplanting` in `operation_batch_detail.html` is the
+original and says it in its own words: the two tiles are disjoint *"so the two
+tiles add up to the total main-plot population (totalMain)"*.
+
+That is why the total can be READ rather than ADDED. A total worked out by
+summing two columns that are not halves of one thing is the fault batch 276
+showed: a report claiming three seedlings transplanted out of a batch that had
+transplanted none.
+
+Three things that follow:
+
+- **All three columns are one group for verification** (`transplanting`), and
+  all three drilldowns are ONE list filtered by the same tray test. A nought
+  is still marked when the stage is unsigned: "0 out of the D-Tone tray" and
+  "0 so far as anybody has keyed" are different claims.
+- **The Balance uses the TOTAL.** It is every main-plot transplant, which is
+  what is standing in the field; one half of a split is not.
+- **The tray is matched on letters and digits** (`_losTrayKey`), same rule as
+  `nurseryKey`/`plotKey`, so a dash or a space cannot drop a row out of the
+  half it belongs in. It is kept to ONE LINE on purpose — the test harnesses
+  lift a named const by reading to the end of its line, so a one-liner is the
+  real function under test rather than a copy that can drift. The SQL check
+  cannot take a regular expression, so it matches three spellings instead,
+  and the gap is not silent: a fourth spelling stops the halves adding up and
+  the check counts it.
+
+**The 1st culling splits by the tray it happened IN.** A 1st culling is done
+in a tray, and the row is keyed against that tray — `plot_name` IS the tray,
+and the DOUBLE-TONE tray is one of them (`saveCullingTab` draws a row for
+every tray in `preNurseryTrayData` and gives the d-tone one its own icon).
+Same question as the transplant one, asked of a different column, answered by
+the same `_losTrayKey`.
+
+**A SPLIT LIVES INSIDE ITS COLUMN.** Both of these were drawn as three
+columns each to begin with, which took the table from seventeen columns to
+**twenty-one** — and at twenty-one every figure in the report was reading in
+a column too narrow for it. The detail had been bought with the legibility
+of everything beside it. A split is not three adjacent figures, it is ONE
+figure with its composition shown: the total keeps the column's size and
+weight so a reader going across a row still lands on it, and the halves sit
+small and muted underneath for the reader who stops. All three stay
+clickable and open their own records. `_losSplitCell` is the one helper and
+`_losSplitFoot` is its twin in the total row.
+
+Two things in it worth keeping:
+
+- **A split with nothing in one half is not drawn at all.** On a batch that
+  has never used the d-tone tray the sub-line would say "all of it" and
+  "none of it" — two lines of type for no information. Such a column reads
+  as a plain figure.
+- **The width the four columns gave back went to the ones that carry text.**
+  Batch/breed, supplier and the received figure, which are what actually
+  wrap.
+
+**What must NOT move when a column is split is the arithmetic underneath it.**
+Total Culled (1st + 3rd) goes on taking the WHOLE 1st culling, d-tone tray
+included, and the Balance goes on taking the WHOLE transplant. Splitting a
+column for the reader is not the same as changing what is counted, and the
+tests assert the totals did not move as well as that the halves add up.
+
+**And the headings say Culled, not Culling** — Culled Detail, 1st Culled, 2nd
+Culled, 3rd Culled, Total Culled (1st + 3rd). The office asked for one word across the group, and the
+test counts heading TEXT inside the Life of Seedlings thead so the
+Transplanting Report further down the same file keeps its own name.
+
+`tests/los_transplant_details.cjs` holds the transplant split, batch 276
+included; `tests/los_second_culling_never_deducts.cjs` holds the culling one
+with 123's own 749 / 600 / 149. `shared/CHECK_transplant_details.sql` prints
+both splits on every batch and counts any row where the halves fail to add
+up.
 
 ## The 2nd culling never deducts. Not even while no 3rd exists.
 
@@ -726,10 +1228,10 @@ Report's real formula, lifted out of its own file.
 
 ## The Balance is what is STANDING, and the 1st culling is already inside it
 
-The office asked for one line: **Balance = transplanting qty − 3rd culling −
-total sales.** It is worth writing down why that reads better than what was
-there, because the old formula was not wrong — it was answering a different
-question.
+The office asked for one line: **Balance = transplant qty − 3rd culling −
+total sales + approved stock calibration.** It is worth writing down why that
+reads better than what was there, because the old formula was not wrong — it
+was answering a different question.
 
     OLD   actual planted − total culling (1st + 3rd) − total sales
           + approved stock calibration
@@ -743,7 +1245,7 @@ standing in either, for ever, on the one report the office reconciles
 against.
 
 **The 1st culling is not taken off, and that is the point.** It happens in
-the TRAY, before any of those seedlings go out, so the transplanting quantity
+the TRAY, before any of those seedlings go out, so the transplant quantity
 is ALREADY net of it; subtracting it again takes the same seedlings off
 twice. Starting from planted was right for the old question and is
 double-counting for this one. Same reason `ADJUST_APPLIES_TO` keeps a
@@ -752,12 +1254,18 @@ Transplanting adjustment off 1st Culling.
 Three things fall out of it, and each one is a place the figure could have
 gone quietly wrong:
 
-- **An approved stock calibration is NOT folded in.** Adding it takes 224,
-  225 and 226 to exactly nought — 1−1, −1+1, 13−13 — which is the batch
-  reconciling to the seedling and is worth knowing. It was not what was
-  asked for, so the column keeps its own place and
-  `shared/CHECK_balance_is_what_is_standing.sql` prints the settles column
-  rather than the code quietly deciding.
+- **The approved stock calibration closes the last seedling.** It was left
+  out of the first version, on three terms alone, and 224, 225 and 226 then
+  read 1, −1 and 13 against calibrations of −1, +1 and −13 — so adding it
+  takes all three to **exactly nought**. That is the argument for it: a
+  correction somebody has approved is a correction, and a batch that is
+  finished should not read as though a seedling were missing. An
+  **unapproved** one still counts for nothing, same as everywhere else.
+  `shared/CHECK_balance_is_what_is_standing.sql` shows old against new on
+  every batch and says which settle.
+- **But only the PLOT-side ones** — see the section below. A calibration
+  reported against Seeds Received, Planting or a Seed Audit corrects the
+  SEED count, and those seedlings never reached a field plot.
 - **`mainBalance` does not inherit it.** The Balance takes TOTAL sales off,
   so a sale out of the TRAY is inside it: a batch sold 400 out of the tray
   and never transplanted reads minus 400. That is right for every batch the
@@ -766,24 +1274,115 @@ gone quietly wrong:
   it never reached — **a fault this report has already had once**. So the
   field side is counted on its own terms (field sales, field calibration),
   and `los_balance_split.cjs` checks the gap between the two is exactly the
-  tray sales plus the field calibration instead of checking they are equal.
+  tray sales less the tray calibration instead of checking they are equal.
 - **`completed` asks both halves.** The old Balance started from planted, so
   a batch with stock in the tray could not reach nought and the guard came
   free. Now it can, so the test is `mainBalance <= 0 && preBalance <= 0`.
   Nothing is finished while something of it is standing anywhere.
 
-**And Transplanting is three columns now**, grouped under *Transplanting
-Details*: **Total Transplanting Qty | Transplanting Qty | Double Tone**, the
-first being the other two added. The Double Tone in it is the admin-keyed
-Quantity in Nursery, never the transplant into the d-tone tray — see the two
-numbers above. The **Balance uses Transplanting Qty alone**, never the total:
-the double tone is counted where it already stands, and folding it in would
-put it into the field balance a second time.
+**And Transplant is three columns now**, grouped under *Transplant Details* —
+see the section above for what each one is. The **Balance uses the TOTAL**,
+which is every main-plot transplant: the two columns beside it are disjoint
+halves of that total, and half of what is standing is not what is standing.
+
+The office asked for the word **transplant**, not *transplanting*, on these
+headings. It is the headings of THIS table only — the Transplanting Report
+further down the same file is a different report and keeps its name, and so
+does the batch detail page's Transplanting tab, which the Double Tone hover
+still points at. The test checks the heading TEXT inside the Life of
+Seedlings thead and nothing else, which is what lets both be true.
 
 `tests/los_balance_is_what_is_standing.cjs` drives the real derived block
 with the office's five batches and holds all of it, the header-span
-arithmetic included — a thead that does not add up to nineteen draws every
+arithmetic included — a thead that does not add up to seventeen draws every
 column after the mistake in the wrong width.
+
+## Is this batch finished? ONE rule, and both lists ask it
+
+It used to be two, and they disagreed.
+
+The **Batch Record** list asked whether every plot the batch used had been
+3rd culled, proofed against its drone map and **signed off**. **Life of
+Seedlings** asked whether its own arithmetic came to nought. Those are
+different questions, so a batch could sit in Completed on one screen and
+Active on the other with nothing saying which was wrong.
+
+The office asked for them to agree, and the **Batch Record's rule wins**: it
+is the question the nursery actually asks, it is what the 3rd Culling tab's
+own ring is drawn from, and it does not move when a sale or a calibration is
+keyed months later. `shared/shared_batch_completed.js` is the rule, written
+out with the batches that taught us each part of it, and there is
+deliberately nowhere else to change it.
+
+Two things about the way Life of Seedlings asks it:
+
+- **As at the report's date.** The LINES are cut at the As At and the
+  SIGNATURES are not — the same split every other As At rule there follows,
+  and what lets September go on reading as September did.
+- **Not gated on verification** the way the figures are. A batch cannot be
+  Completed without its 3rd culling being signed in the first place, so the
+  question answers itself; and a withheld figure must not also take the
+  batch off the Status filter.
+
+**What moved, and in which direction.** A batch sold entirely out of the
+tray, or culled entirely in it, reached no plot — so the Batch Record has
+nothing to call finished, where Life of Seedlings used to say Completed.
+That difference is the point of the change, not a casualty of it.
+
+**A shared rule called with the wrong rows is two answers again**, and
+nothing in either page says so. `tests/batch_completed_one_rule.cjs` holds
+the RULE to its cases and checks both pages still call it;
+`tests/both_lists_agree_on_completed.cjs` drives BOTH REAL PAGES against one
+ledger in a real browser and compares what they show. Only the second one
+could have caught what it did catch: Life of Seedlings was taking its row
+sign-offs out of `logsRes`, the ledger query, which asks for the transaction
+types the report draws FIGURES from — and `Row_Verification` is not one of
+them. The list was always empty, so no batch could ever be completed by the
+row-by-row route. Nothing on either page would have said a word.
+
+## A calibration against the SEED count is not a loss from the field
+
+The Balance is what is standing in the FIELD, so the calibration in it is
+the **plot-side** ones only.
+
+Batch 230 is why. Its calibration is **minus 1,000 reported against
+Planting** — *"Sold out 1,000 Pre nursery seedlings (DO: 01605)"*, keyed
+against tray P30. Those seedlings never reached a field plot. Taking them
+off what is standing in one subtracts a loss from a figure that never
+contained it: 230 balanced to **nought** on its own three terms
+(11,619 − 2,452 − 9,167) and the report read **minus 1,000**.
+
+**The side is the REPORT**, and the list is
+`ADJUST_INITIAL_REPORTS` / `ADJUST_SIDE_OF` in
+`operation_batch_detail.html`: *seeds received, planting, seed audit* are
+the seed side, everything else is the plot side. `_LOS_CAL_SEED_REPORTS` is
+the second copy and `tests/los_seed_side_calibration.cjs` asserts the two
+have not drifted — a list that grows on one side only puts a correction
+into the field balance that the batch report says belongs to the seed count.
+
+Three things about it:
+
+- **Never the "Side:" written in the remark.** The batch detail page says
+  why in its own comment: rows written while the form still asked carry one,
+  and a row somebody filed on the wrong side has to correct itself. It is
+  derived, so it is one rule and not two.
+- **Never the plot the row names either.** Where the plot is and which
+  count was wrong are different questions. `calibrationPre` asks the first
+  (and keeps carrying 230's row, because P30 is where those seedlings
+  were); `calibrationSeed` asks the second.
+- **`calibrationField` is counted on its own, not worked out by
+  subtraction.** 230's row is BOTH seed-side and pre-nursery, so taking
+  each off in turn would take it off twice.
+
+The **Stock Calibration column still shows every approved one**, and the
+drilldown still lists it. It is a real correction; it is only the field
+Balance it does not belong in.
+
+`shared/CHECK_seed_side_calibrations.sql` splits every batch's calibrations
+three ways and says how much each Balance moves. It also counts rows filed
+under a report wording that is on NEITHER list — those land on the plot side
+by default, so a new wording quietly joins the Balance, and the count is
+what says so.
 
 ## One batch, one reception — the newest row wins
 
@@ -869,6 +1468,106 @@ Two things that follow:
   strips the tracks, which is what makes a row small enough to.
 
 `tests/history_is_a_window_not_a_count.cjs` guards all of it.
+
+## A walk recorded with the screen off is not recorded at all
+
+The same plot came back **2.63 km over 798 fixes** one day and **4 m over 2
+fixes** the next, and the office could not tell what made the difference.
+
+**A browser STOPS giving positions when the page is not on screen.** Not
+throttles — stops. So a track walked from a web page lives or dies on whether
+the screen stays awake, and the one lever for that is the screen wake lock.
+There is no way round it; only a native app can walk a track with the screen
+off.
+
+**And the browser takes that lock back the moment the page is hidden, without
+being asked and without saying so.** So `wakeLock.request()` called ONCE at
+Start is a lock that is gone for good after the first notification, app switch
+or glance away — and every metre after that moment is at the mercy of the
+display timeout. The phone sleeps, the fixes stop, and the map goes on looking
+exactly like a map that is recording.
+
+The Worker Portal had the full treatment, including a comment saying in as
+many words that asking once is asking for the first time only. **The FC
+Portal's track map had the one-line version** — request, `.catch(() => {})`,
+no reference, no listener. Two copies, one of them thinner, which is the shape
+of nearly every fault in this file.
+
+`src/lib/screenWake.js` is the one copy now and both call it. Two things in it
+that were learned the hard way and must not be simplified back out:
+
+- **The reference is forgotten on `hidden`**, not on the lock's own `release`
+  event. Waiting for the event left the reference set, so the re-ask returned
+  early and never asked at all.
+- **Every part of it is best effort.** The API is not on every phone and it can
+  refuse, and a walk must still record on one where it does.
+
+**And the map now says when the line has stopped growing**, because none of
+the above can make a fix arrive — what it can do is stop pretending one has.
+`STALL_AFTER_S` is 45: the phone gives a position every second or two in the
+open, so three quarters of a minute of nothing has never been the sky. The
+band is red, above the figures, because the figures look perfectly healthy
+while this is happening — they simply stop moving. The reason a fix was
+DROPPED (too rough, too still, too far to believe) is shown the same way; the
+Worker Portal has always shown it and the map never did.
+
+`tests/the_screen_lock_is_asked_again.cjs` drives the real helper and holds
+the previous version up beside it: asked once, never again after the first
+time hidden, and nothing watching the page at all.
+
+### Nothing keeps RECORDING through a locked phone. The metres already walked are a different question.
+
+The office asked the obvious next thing: *"can make it able to record as long
+as the browser did not close at the backend? like if they lock their phone,
+glance at whatsapp but they didnt close the browser at backend."* **No, and no
+amount of code changes that.** A browser STOPS calling back with positions
+when the page is not on screen — there is no web API for background
+geolocation, the wake lock only stops the screen turning ITSELF off, and a
+service worker gets no positions either. Only a native app, or an Android
+foreground service, can walk a track with the screen dark. `useWorkerTrack.js`
+had already written that down.
+
+What was being lost on top of that was avoidable, and it has been fixed. **The
+FC Portal kept the walk in React state inside the map modal**, so closing the
+map, a reload, or the browser reclaiming the tab — which a phone does the
+moment it is locked for long enough — threw away every metre of it. The Worker
+Portal had always parked its walk in `localStorage`; the map had nothing. Two
+copies, one of them thinner, again.
+
+`src/modules/maintenance/track/parked.js` is the one copy now and
+`worker/taskTrack.js` reads through it. Four rules in it:
+
+- **It comes back STOPPED, never running.** The phone was not being watched
+  while the page was away, so those minutes have no fixes; carrying on
+  silently draws a straight line across them and calls it walked. The person
+  presses **Resume**, which keeps the SAME track and the original `startedAt`
+  so `t` on every later point stays honest, and the gap in the line is the
+  truth about what happened.
+- **Resume is the button under the thumb, and Start again is the quiet one.**
+  Start again throws the walk away; a red primary button that destroys what
+  somebody just walked is a trap.
+- **It is dropped after `PARKED_GOOD_FOR_H` — twelve hours.** A kill takes the
+  FORM with it, so the walk comes back into a form that has to be keyed again
+  and nothing in it says which job it was for. Within the shift that is
+  obvious to the person standing there; a walk parked last Tuesday is not, and
+  offering it against today's plot is how a line walked round N15 is filed
+  against B04. Measured in BOTH directions, because a phone whose clock runs
+  ahead parks in the future and a one-sided test drops the one walk the person
+  is definitely still standing in.
+- **Handing it to the record clears it.** A park left behind reappears on the
+  NEXT job and reads as that one, which is worse than losing it.
+
+Every read and write is wrapped: a phone with storage blocked must still be
+able to walk a track, it just cannot survive being killed.
+
+**What is still true and is not a bug:** the FC Portal records only while the
+full-screen map is open. The walk is no longer lost when it is closed, but it
+is not growing either. Running it from the record row the way the Worker
+Portal does is worth doing the day somebody asks, and is a different change
+from this one.
+
+Section 7 and section 8 of `tests/the_screen_lock_is_asked_again.cjs` hold the
+parking and the twelve hours.
 
 ## Which nursery a record is in: the PLOT decides
 
@@ -1086,6 +1785,526 @@ decide; **nothing applies the suggestion**, because correcting it on the tab
 is what rewrites the rest of the remark correctly at the same time.
 
 `tests/a_typo_year_does_not_lock_itself.cjs` holds it.
+## An overdue round is cleared by the work, never by the calendar
+
+A to-do row on the auditor portal asked one question: was this plot
+audited INSIDE the window? For a window still open that is right. For one
+that has CLOSED it is unanswerable for ever — *"audit B01 between 1 and 5
+August"* cannot be satisfied in October.
+
+So an auditor who walked the plot **had done the work and the row stayed**,
+listing every plot, reading "lewat 68 hari", and nothing they could do
+would ever clear it. Every overdue row on the board was in that state, and
+the office found it the way anybody would: by auditing the plots and
+watching the list not move.
+
+**A CLOSED window takes the batch's LATEST audit, whenever it was done** —
+the range opens at the beginning of time and runs to today.
+
+The lower bound used to stay on the window, on the argument that an audit
+from before it opened belonged to the round before this one and must not
+close two. **The office overruled that**, and N02 is what the old bound
+looked like on screen: batch 244 walked 30 Sep, inside September round 3,
+cleared; batch 253 walked **22 Sep** — round 2's slot — so round 3 stayed
+red over a plot somebody had walked eight days earlier, and nothing 253
+could ever be given would close a window that shut on 30 September. Their
+words: *"latest audit clears every overdue round (if is not audit on time).
+but as long as not yet audit, it will still showing there."*
+
+Three things hold it together, and the first two are the price of the third:
+
+- **An OPEN window is unchanged**, and must stay so. Letting an old audit
+  answer a round nobody has walked yet would mark work done before anybody
+  had the chance, which is the one direction this board must never be wrong
+  in. `tests/late_work_clears_the_backlog.cjs` asks `missedRounds()` of
+  **next month** to tell the two apart: widen the lower bound everywhere and
+  it reports three missed rounds before the month has begun.
+- **A batch with NO audit at all is untouched** and stays on the board. That
+  is the second half of the office's sentence, and it is the only thing the
+  rule still refuses.
+- **What this costs.** A batch audited once and never again now clears every
+  overdue round it accrues, so it shows on the board only while a round is
+  actually OPEN — one day a month on the MN plot schedule. What keeps it
+  visible is the missed-round record: every one of those rounds is filed in
+  Audit History under the month that owed it, so a plot nobody walks does not
+  go quiet, it accumulates a missed round every round. That is the trade the
+  office chose with the consequence in front of them.
+
+**The board and the plot page no longer answer the same question, and that
+is now deliberate.** They were put in step on purpose — a green card and a
+quiet to-do row saying one thing — and this rule separates them: the board
+asks *"is anything on my list"*, where an overdue round cleared late is off
+it, while the card asks *"has this batch been walked in the round now due"*,
+which an audit from last month does not answer. So N02 can be absent from
+the board and still read **⟳ Round 1 due · last audited 22 Sep**. The card
+keeps the safe direction — it shows the auditor the last reading before they
+take the next one — and `currentWindow()` is untouched.
+
+The office's rule for the rest of it, in their own words — *"if auditor was
+late and do the latest one, then the old records will be clear too but
+recorded as missed audit. As it is no meaningful to audit back also."* So:
+
+- **The row goes.** A list of work nobody can do is a list nobody reads.
+- **The fact stays.** `missedRounds()` runs the two tests side by side —
+  strict, the real window, and the extended one that clears the row — and a
+  nursery that passes only the second is a missed round. It is filed in
+  **Audit History under the month that OWED it**, never under the month the
+  late work happened: a missed August round is a fact about August. A month
+  whose only entry is a missed round still opens on the arrows, or the one
+  month somebody needs to see would be the one they cannot reach.
+
+Three things to know before touching this:
+
+- **Three callers, one range.** `nurseryState` (does the row stay),
+  `_plotsHtml` (which circles under it) and `plotsOwed` (the count and the
+  progress bar) each worked the two dates out for themselves. They all go
+  through `winRange(o, y, m, strict)` now — a row that clears while its
+  circles remain, or a count that disagrees with the list under it, is
+  worse than the bug was.
+- **The date-loop fallback had to move too.** It runs when the batch roster
+  cannot be read — offline, or an RLS refusal — and leaving it on the
+  window alone meant the one screen least able to explain itself showed a
+  backlog nothing could clear.
+- **Maintenance is not in it.** A maintenance row exists because a deadline
+  has pending work on it, so there is no window to be outside of.
+
+`tests/late_work_clears_the_backlog.cjs` drives the real page in a real
+browser and holds all of it — a plot walked late drops off, a plot nobody
+walked stays on, an audit from before the window opened clears it and is
+recorded as missed, and nothing clears a window that has not closed yet.
+
+## Papan tanda is two months wide, because a sign goes up after the plot does
+
+The papan roster was the current calendar month: the plots the ledger
+says were transplanted (or, in the Pre-Nursery, planted) since the 1st.
+One month is too narrow for the walking. A plot transplanted on the
+**28th** gets its sign nailed up days later, and on the **1st** it fell
+out of the list entirely — audited or not, with nothing saying it had
+gone. The office asked for both months on one screen: *"so i can see sep
+transplanting plot and oct transplanting plot. So our auditor just based
+on this to audit plot needed."*
+
+So the window opens on the **first of the PREVIOUS month**, and it is
+written twice:
+
+- `_papanWindowStartISO()` in `audit_papan_script.js`, which is what the
+  module page queries the ledger with (`transaction_date.gte.`);
+- `_papanWindowStartISO()` in `audit_pending.js`, which is what the home
+  board's to-do row and its plot chips are built from.
+
+**Change one, change the other.** A plot inside one window and outside
+the other is a to-do row with no card to open, or a card nothing ever
+asked for. `tests/papan_sees_both_months.cjs` runs BOTH shipped copies
+over the same days and compares, the January-reaches-into-December case
+included.
+
+**AND IT IS TWO MONTHS AS AT THE ROW, NOT AS AT TODAY.** The office
+put the rule plainly: *"oct audit papan tanda then it will appear the
+plot that transplant on Sep and Oct; nov audit papan tanda then it will
+appear the plot that transplant on oct and nov."* The window therefore
+has to be anchored on the month the row is ABOUT. The first version
+anchored it on today, and the board carries an unfinished round forward,
+so in October it drew **three** Papan Tanda rows — AUG 2026 overdue, SEP
+2026 overdue and October due now — each listing the **same six plots**,
+every one of them tagged SEP 26. A round that closed on 20 August cannot
+be owed a sign that went up in September: that row was asking about
+plots which did not exist when it was due, so nothing an auditor did
+would ever clear it and it never left the board.
+
+So `plots()` and `papanPlacedOn()` take an **`asOfISO`** — the row's own
+month — and `_papanWindowStartISO` / `_papanWindowEndISO` move with it.
+Two things in that:
+
+- **The UPPER bound was missing altogether.** Without it a September row
+  lists October's plots as well, which is the same fault pointing the
+  other way.
+- **Three callers, one month**, the same rule `winRange` already
+  follows: `nurseryState` decides whether the row stays, `_plotsHtml`
+  draws the circles under it and `plotsOwed` counts them. They share
+  `_asOfMonthISO(y, m)`, because a row that clears while its circles
+  remain is worse than the bug was.
+
+A month that owed nothing now comes back empty and the row leaves the
+board on its own. Only papan reads `asOfISO`; the other three modules'
+rosters do not move with the calendar, and the module page omits it
+because it only ever shows now.
+
+**AND A PAPAN ROUND IS NOT CARRIED FORWARD.** Every other module's
+round asks about ONE window, so a round nobody walked has to be carried
+onto the current board or the work disappears. Papan's roster is two
+months wide by itself, so October's row **already asks about every plot
+transplanted in September** — carrying September's row asks the same
+question twice, and August's a third time where the windows overlap. The
+office saw B03, B06, N08 and U04 under an AUG 2026 row and again under a
+SEP 2026 one, above October's, and said of both: *"this 2 already
+passed, no need to show."* The two-month window IS the catching up,
+which is what it was asked for.
+
+`carriedOverdue()` skips `papan` and nothing else — the other three are
+still carried, on the office's own earlier rule that a round nobody has
+walked keeps showing. **What it costs:** a plot placed two months back
+or more and never audited is on no row at all, because it is outside the
+current window and there is nothing left on the board that could ask for
+it. A round done LATE is still filed in Audit History as a missed one:
+`missedRounds()` walks the months itself and does not read that list.
+
+**And the strip has to SAY which month.** Two months of plots drawn as
+one run of identical circles answers a question nobody asked — the
+office wanted to tell September's from October's. The circles are
+ordered newest month first with a small tag above each run, and
+`MJMAuditPending.papanPlacedOn(nursery, plot)` is what supplies the
+date. It is an accessor of its own rather than a field on `plots()`: the
+other three modules want a list of codes, and widening the one function
+they share to carry something only papan reads is how a shared function
+becomes four. A plot the roster cannot date is tagged as undated and put
+LAST, never dropped and never filed under a month nobody checked.
+
+**Which page the auditor is actually on matters here.** The papan module
+has no landing list of its own — `init()` redirects to `audit_home.html`
+unless the address names a plot — so the strip on the To Do card IS the
+papan plot list. The module page's own grouped list is reached by
+`?admin=1` or `?from=manage` and is kept in step with it rather than
+being the thing people see.
+
+**The window change is what forced papan into the round rule.** That
+rule — "A batch is not audited for ever because it was audited once",
+below — deliberately left papan out, and the note said why: its roster
+was *this month's* placements, so the roster was already round-shaped
+and "ever audited" could not disagree with "audited this round". Two
+months breaks that. A plot transplanted and audited in September now
+rides into October's roster, and the old test would have drawn it green
+while the home board, which asks about the round's own dates, went on
+listing it as owed. So `getAuditForBatch` asks
+`MJMAuditSettings.currentWindow` like the other two, `_papanRoundFor` /
+`_papanInRound` / `_papanRoundSuffix` are the third copies of
+`_roundNow` / `_inRound` / `_roundSuffix`, and the count pill says which
+round it is counting. `getLastAuditForBatch` is the other half: the card
+and the chip still show the last reading, because an auditor wants it in
+front of them before they take the next one, and Batch Info keeps the
+EVER question because it is a register and not a to-do list.
+
+`tests/papan_list_spans_two_months.cjs` drives the real board and the
+real module page in a real browser — one plot per month, so a row
+reaching outside its own window is caught by NAME rather than by a
+count.
+
+## A batch is not audited for ever because it was audited once
+
+The other half of the backlog, and the one the office actually saw: N02
+sat on the to-do list owing Plot Condition round 3, and the plot page
+showed three cards — batch 244 green, 253 green, 230 Not Required. Every
+one looked finished. *"I saw got audit done but still show in the to do
+list. You see is done."*
+
+**The to-do list was right.** 253 had last been audited in round 2. The
+plot page was the one not saying enough:
+
+    const audit = records.find(... batch matches ...);
+    const done  = !!audit;
+
+ANY audit, EVER. So a batch audited once was green in every round after
+it, for ever — and the only screen that knew otherwise was the board,
+which names a PLOT and not a batch. An auditor who opens the plot, sees
+green and walks away is how a round stays open for months.
+
+The grid above the cards asked the same way, so `isBatchAudited` /
+`isPlotAudited`, the corner badge, the plot cell and the "N / M audited"
+count were all saying done as well.
+
+Both ask about the round that is currently owed now —
+`MJMAuditSettings.currentWindow(scope, mod, todayISO)`, the latest window
+whose first day has arrived, extended to today once it closes. **Same
+range the board asks on**, which is what makes a green card and a quiet
+to-do row the same statement.
+
+Four things in it:
+
+- **The record is not hidden.** A lapsed batch keeps its card, its photo,
+  its chips and its edit button, and reads *"⟳ Round 3 due · last audited
+  22 Sep"*. It is the auditor's work and the last reading is what they
+  want before taking the next one; it has simply stopped being an answer
+  to the question this round is asking. Tapping it opens a NEW audit —
+  editing September does not answer October.
+- **The card shows `date`, not `created_at`.** It printed the insert
+  timestamp, while every list that decides anything reads `date`. Two
+  screens quoting different days about one record is how somebody comes
+  to trust the wrong one.
+- **It fails back to the old question.** No settings module, or a module
+  with no rounds, and `done` is "ever audited" again. Showing too much is
+  the safe direction: re-walking a done batch costs an hour, a batch
+  silently marked done costs a month.
+- **`_localISO()`, not `todayISO()`.** `toISOString()` is the day before
+  in Malaysia for the whole of the early morning — harmless for stamping
+  a save, an off-by-one round on the day a window opens.
+
+Plot Condition and Seedling Height are two copies of this card and two
+copies of the grid test. Change one, change the other. **Papan is in it
+now too** — it was left out while its roster was one month, which made
+its own rule round-shaped by accident; the two-month window took that
+away. See the section above for what moved.
+
+`shared/CHECK_which_batch_still_owes_the_round.sql` names every batch
+behind its own plot, on every plot and both modules — the plot was
+audited more recently on a different batch, so somebody walked it and
+this one was not done. It also counts audits filed against a plot the
+ledger has nothing standing on, which are invisible to every list in the
+system.
+
+**And the grid count has to SAY which round it is counting.** The first
+thing the office asked after this shipped was why the work was done and
+the outside said not yet: B01 read *"0 / 7 Diaudit"* over seven cards
+each showing an audit from the 1st. Both screens were right — those
+audits closed the round they fell in, and October round 1 had opened on
+the 10th since — but a bare `0 / 7` reads as *the work has vanished*. It
+now reads **"0 / 7 audited · Round 1 · due 10 Oct 2026"**, deadline
+included, because "Round 1" alone does not tell anybody whether they are
+late. `_roundSuffix()`, one in each of the two module scripts.
+
+**A record dated 1 October is not an October audit.** The round open on
+the 1st was September round 3 — still open, because an overdue round is
+cleared by the work and not by the calendar. The office said it in one
+line: *"it should be 30th Sep audit, just the auditor late audit."* So
+the record is saved under its own date, it answers the 30 Sep round, and
+the plot reopens for the next one — three facts that were all true and
+none of which the card said. It reads
+
+    ⟳ Round 1 due · last audited 01 Oct 2026 · late for the 30 Sep round
+
+`MJMAuditSettings.roundOf(scope, mod, dateISO)` is `currentWindow` asked
+on the DAY OF THE AUDIT rather than on today, so there is one rule and
+not two, and `late` is the audit landing after that window closed. Said
+only where it WAS late: on a record inside its own window the date
+already says everything, and a tag on every row is a tag nobody reads.
+Audit History carries the same line, because that is where somebody goes
+to see what was done and when it was owed.
+
+`tests/a_round_is_not_audited_for_ever.cjs` drives the real plot page
+with the office's own three batches and the 1 Oct record; five of its
+sixteen checks fail on the previous code.
+
+## Closing a plot nobody is ever going to audit, and never by deleting
+
+A maintenance deadline overdue by two months is not work anybody is
+going to do. The job it was raised against was finished in August, there
+is nothing left in the plot to look at, and the row sits on the board
+for ever — because the ONE thing that retires a maintenance row is an
+audit against its `task_id`.
+
+So an admin may close one from the board: an **×** on each plot chip,
+**and one on each work-type section header**, and the office's own words
+for what it means — *"it's long overdue and missed audit closed by
+admin."*
+
+**The section is the unit the decision is actually made in.** Closing
+eighteen cold weeding plots one cross at a time is eighteen confirms for
+one decision, and the decision was never per-plot: the job finished in
+August and there is nothing left in ANY of those plots to look at. So
+*"i close maintenance weeding, then it help me close all cases plot
+under this section"* — one confirm naming the job and the count, and the
+rows go up in **ONE insert**. Eighteen round trips on a nursery signal is
+eighteen chances to half-finish, and a section half closed is worse than
+one not closed at all.
+
+**The reason is no longer asked for — it is written.** The second step
+used to be a `prompt`, and the office's answer to it was *"no need
+this"*: an admin closing a cold plot types the same sentence every time,
+and a prompt somebody dismisses out of habit is a cancel that looks like
+a save. So the remark is composed — the job, the day the work was done,
+and *long overdue* — and where a whole section went at once it says so
+and how many plots were in it.
+
+**What it writes is a record, not a deletion.** An ordinary
+`audit_maintenance_audits` row against the same task, with `result` =
+**`Closed by admin`** and the reason in `remarks`. So it goes through the
+one door everything else goes through, it leaves the board for the one
+reason anything leaves it, and it lands in Audit History with a name and
+a date on it like any other record. **The work record in
+`nops_maint_field_records` is untouched** — the field did that work and
+said so, and no audit decision gets to unsay it. The test asserts no
+DELETE and no PATCH is ever sent.
+
+Nine things in it:
+
+- **The id has to ride on the item.** A chip knew which plot it was and
+  not which record. `bucket.items` carries `id` now, and so does
+  `pushLoose` — which is a second list feeding the same chips, and
+  missing it showed up as the × appearing on the overdue row and not on
+  the one beside it.
+- **`isAuditAdmin()` decides, and it is asked AGAIN at the write.** A
+  button drawn before a permission changed is still sitting on the
+  screen. A plain auditor sees the chips exactly as they always were, and
+  no section × at all.
+- **ONE writer, two buttons.** `_closePlots(items, confirmText)` takes a
+  list — the chip hands it one item, the header hands it the whole group,
+  and nothing else differs: same row shape, same confirm, same rebuild.
+  Two code paths writing the same record two ways is how they come to
+  disagree, and the per-chip path had already drifted into writing a
+  remark the section one did not.
+- **The section closes the group as it was DRAWN**, out of
+  `_closeGroups`, not re-derived when the button is pressed. Somebody
+  pressing it has just read a count beside the job name, and the plots
+  they close must be the plots that count was of — a second walk of the
+  data could quietly have one more in it.
+- **The confirm names what it is about to do.** The chip's names the
+  nursery, the plot, the job and the day the work was done; the section's
+  names the job, the row and **how many plots**. Cancelling writes
+  nothing.
+- **The × is OUTSIDE the anchor.** Inside it, every tap on the cross
+  would also follow the link to the audit form. The section's is outside
+  `.tl-wt-head` for the harder version of the same reason: that header IS
+  a `<button>`, and a button inside a button is not a thing a browser
+  will draw. It sits beside it in a `.tl-wt-bar`, and the test counts
+  `.tl-wt-head .tl-wt-close` to make sure it stays there.
+- **It rebuilds from the database, not from the screen.** The board is
+  what somebody is about to act on, and a screen that agrees with itself
+  and not with the table is worse than one that takes a second.
+- **`MAINT_CLOSED_RESULT` is spelled in two files** —
+  `audit_home.html` writes it, `audit_maintenance_script.js` colours it
+  grey so a closed task does not read as the amber that means *waiting*.
+  Change one, change the other, and never change the string itself: a
+  row written before would keep the old wording. In `audit_home.html` it
+  sits at **script scope and not inside `loadAuditTodo`**, because both
+  halves of that page need it — the board writes the row and Audit
+  History has to recognise it.
+- **`audit_id` is NOT NULL and has no default**, and leaving it out is
+  not an empty column, it is a refused insert — *23502, null value in
+  column audit_id violates not-null constraint*, which is what the first
+  version of this close got back and the office read off an alert box.
+  Every row in that table carries a readable id the FORM writes itself.
+  The closure writes `MTA-CL<task_id>` rather than copying the module's
+  `nextAuditID()`: that one is `audits.length + 1`, which two people
+  saving at once both answer the same way (`audit_script.js` says so in
+  its own comment) and a section close writes a dozen rows in one go.
+  Keyed on the task it is unique by construction, and it says at a
+  glance which rows in the table are closures rather than audits.
+- **The test stub is STRICT about what the table will take**, for the
+  same reason the jsPDF stub had to be: one that accepts anything signs
+  off a write the database refuses. Every check in
+  `admin_can_close_a_dead_plot.cjs` passed on the version that could not
+  insert a single row. `NOT_NULL` there is the column set
+  `saveAudit()` supplies — the one proof of the real table's shape
+  available from an environment that cannot reach Supabase — and a row
+  missing one comes back 400 the way PostgREST sends it. Fifteen checks
+  fail on the broken version now.
+- **Audit History says which rows are closures.** A closure is an
+  ordinary record, which is the point of it; but a row sitting in this
+  month's list with nothing on it to say otherwise reads as work that was
+  DONE. So the history row carries an amber **Closed by admin** tag and
+  the job it closed, and a section closed at once is a run of them on one
+  day. Where the thin PLAIN fallback is used the tag is simply absent,
+  which is the safe direction.
+- **And it says what the task was DUE, not only when it was closed.**
+  The date on the right of a history row is the day somebody pressed the
+  button, so a run of closures reads as this month's work and the whole
+  justification for them — that they were old and nobody was ever going
+  to walk them — is nowhere on screen. The office put it exactly:
+  *"it feels like closing that month case but not the old and unaudited
+  case."* The line now ends **was due 8 Aug 2026 · 65 days overdue**, in
+  red beside the amber tag.
+
+  Where that comes from is the part to keep. **The deadline is nowhere in
+  `audit_maintenance_audits`** and cannot be recomputed from a closure
+  row. The one thing that knows it is `push()` inside
+  `loadMaintTimeline` — work date plus `MJMAuditSettings.maintDays(wt)` —
+  and it used to throw the answer away for any task already audited,
+  which is every task by the time it reaches the history. So `push()`
+  now records `MAINT_DUE[task_id] = { due, on }` for **every** task it
+  walks, BEFORE the audited test, and the history reads that. One rule,
+  not a second copy, and no schema change. Two things follow:
+
+  - **The deadline is read before the audited test**, so a row with no
+    work date now counts as `skippedNoDate` in the diagnostics where it
+    used to count as `skippedAudited`. That is the only visible effect.
+  - **`loadMaintTimeline` redraws the history when it finishes**, in the
+    finally position. The two load in parallel, so whichever lands first
+    has to tell the other; without it the deadline appears on a closure
+    only the second time the page is opened.
+
+  It is written into the **remark** as well — `Due 2026-08-08, 65 days
+  overdue. Closed without an audit, work done 2026-08-05.` — because the
+  remark is the only part of the row that travels into an export. And
+  `remarks` is now in the maint summary spec and shown as a field: it had
+  always been written and was on no screen anywhere, so the one field
+  saying WHY a task was unsatisfied, or closed without an audit, could
+  only be read out of the database.
+
+`shared/CHECK_audits_closed_by_admin.sql` is the register — who closed
+what, when, and how many days it had been waiting. A long list under one
+name, or a lot on one day, is the thing to look at: closing is the
+exception for work that has gone cold, not a way of clearing a board.
+
+`tests/admin_can_close_a_dead_plot.cjs` drives the real board in a real
+browser, as an admin and as a plain auditor, closing one chip and closing
+a whole section — and it asserts the section went up as **one** insert
+carrying **both** task ids, that every NOT NULL column is filled, and
+that no `prompt` is ever raised. **It blocks the service
+worker** (`serviceWorkers: 'block'`), because `page.route` does not reach
+a fetch the WORKER makes: once it activates it answers its own synthetic
+503 and the board reloads empty, which is the worker doing its offline
+job correctly against a network that is not there. An hour went into
+that before it was the obvious thing.
+
+## Turning a signup down is a RECORD, and the cross is a SIBLING
+
+The Worker System board opens with a yellow queue — Waiting to be allocated
+— which is everybody on the register with no section. It was written so a
+worker who had just signed up was on some screen rather than only in the
+table. What it had no answer for was a name nobody is ever going to file:
+the office does not want this person, and the one thing that empties the
+queue is giving somebody a nursery. So four rejected applicants sat in a
+queue of work to be done, for ever.
+
+The ✕ on a chip rejects the registration, and it is the admin-close of a
+dead plot again, which is where every rule in it comes from:
+
+- **It is a record and never a deletion.** `removeWorker()` was taken off
+  this screen on purpose — a worker row is what the work entries hang off,
+  and the register is the one place that says a person ever applied. So the
+  rejection marks them inactive and writes `rejected_at` / `rejected_by`,
+  and nothing is removed. Tick Show inactive to find them again; setting
+  them Active on their own record undoes it, which **clears both columns**,
+  the same way Active clears the last day.
+- **The two columns, never the remark.** The remark is free text the office
+  edits, and a rejection that can be undone by somebody tidying a sentence
+  is not a record of anything. `isRejected(w)` reads the column, and a table
+  without it answers no for every row — which is the safe way round: the
+  signup stays in the queue somebody is working through rather than
+  disappearing out of it with nothing to say where it went.
+- **The cross is a SIBLING of the chip and never a child.** The chip opens
+  the worker on a click and carries a drag on a grab, so a cross inside it
+  fires both — the office would reject somebody and get their record opened
+  over the top of it. `.pend-item` holds the two side by side. Same rule the
+  audit board's × follows, for the harder reason there (a button inside a
+  button is not a thing a browser will draw).
+- **The permission is asked AGAIN at the write.** A cross drawn before
+  somebody's access changed is still sitting on the screen.
+- **The confirm names the person**, because the crosses are a row of small
+  identical targets and the one under the thumb is not necessarily the one
+  that was aimed at. No `prompt` for a reason: the office said of the plot
+  closures that an admin types the same sentence every time, and a prompt
+  somebody dismisses out of habit is a cancel that looks like a save.
+- **It rebuilds from the database, not from the screen.**
+- **A rejected signup is drawn UNDER the queue, not in it**, so the count
+  above is the work actually left to do. Both lists are cut from `shown`, so
+  neither is on screen unless Show inactive is ticked — which is how a
+  rejection leaves the board at all.
+
+`shared/RUN_ME_worker_rejected.sql` adds the two columns and backfills
+nothing: a worker already on the board is not a rejected signup, and a
+backfill that guessed at one would be inventing a decision nobody made.
+Until it is run the page shows its own orange warning, the ✕ still works,
+and the write carries neither column — writing one the table has not got
+fails the whole save, which is why `loadWorkers` probes for it the way it
+already probes for the PIN, the photo and the two dates.
+
+`tests/a_rejected_signup_leaves_the_queue.cjs` drives the real board in a
+real browser, as an admin and as a plain auditor, and asserts no DELETE is
+ever sent and that no `prompt` is ever raised.
+
+**The page carries every line of its own code inline and has no no-cache
+metas**, same exposure as Batch Info: the PAGE is the deploy, so a browser
+holding yesterday's copy keeps it until one hard reload. Add the three the
+day somebody needs a fix here in a hurry.
 
 ## A permission that is saved but not obeyed is worse than no permission
 
@@ -1339,6 +2558,57 @@ Still worth knowing: a browser that already holds a stale copy needs one hard
 reload (Ctrl/Cmd + Shift + R) to pick up the metas in the first place. After
 that it stays fresh by itself.
 
+## A search takes you to the batch
+
+Batch Info splits its list in two: Active, and Completed. The search box sat
+INSIDE that split, so typing 235 on the Active tab answered **"No batches
+matching 235"** while 235 sat one tab over, finished, the whole time.
+
+Typing a batch number is not asking "is 235 on this tab". It is asking WHERE
+235 is, and the answer must not depend on which tab happened to be open when
+it was typed. **A batch that cannot be found is a batch somebody keys again.**
+
+The first version of this showed the Completed batch on the Active tab with a
+line explaining itself, which answers the question and leaves somebody on a
+tab that is lying about what it holds. **So the page GOES THERE**: it opens
+the tab the batch is on, shows it, and the line says it moved and where from.
+
+**It moves only off an EMPTY answer.** A query that matches something on this
+tab stays put — being carried off a screen with the thing you were looking at
+on it is worse than not being carried at all — and the line then says how
+many more are in the other half, so the rest is one click away. A query that
+matches nothing anywhere stays put too, and says *in Active or in Completed*,
+so a miss reads as a miss rather than as the wrong tab.
+
+**The To Do List and To Check do NOT move, and that is the half worth
+remembering.** Those tabs are not halves of the batch list, they are
+questions — which report to go and fix, which one to go and check — and a row
+with nothing to fix is not an answer to either of them. Tray Status is a
+different shape again and searches trays. `splitTab` in `renderLedgerTable`
+is the one place that decides, and only Active and Completed are in it.
+
+`switchListTab` calls straight back into `renderLedgerTable`, so the move is
+behind a `_jumpingTabs` flag. The tab it lands on has the matches, so it
+cannot bounce — the flag says so rather than trusting it to.
+
+The tab is called **Completed**. It said "Completed / In-Active", which named
+the same thing twice.
+
+`tests/search_finds_a_batch_in_either_tab.cjs` holds all of it, through the
+real page.
+
+**The red tab is called To Do List**, which was landing on `main` from
+another branch while this was being written. It looked for an hour like
+evidence that the office page was being served stale — a tab name that was
+nowhere in the git log — and it was not: the branch simply had not been
+merged yet. Worth remembering before reaching for the cache explanation
+again. A name that is not in YOUR history may just be in somebody else.
+
+The page still has no no-cache metas, and it carries every line of its own
+code inline, so the PAGE is the deploy. That is a real exposure, and it is
+not an emergency: deploys to it demonstrably arrive. Add the three the day
+somebody needs a fix there in a hurry.
+
 ## `select.className = '...'` is how a row grows a second dropdown
 
 `shared/shared_cf_select.js` skins every `<select>` in the system: it draws a
@@ -1377,6 +2647,38 @@ Two things that follow:
 version fails the same check, and prints every page that writes a whole
 className onto a select. It needs `npm install jsdom` and says so if it is
 missing.
+
+## A seal is checked in the database, never only on the phone
+
+Seal stickers ("0009297") go through four states — **in stock** (received at
+UNN 1 on the Mobile Seal page), **pending collection** (allocated by a
+consent: the start and end of each range are scanned on Mobile Consent),
+**scanned** (each seal scanned at collection in the FC Portal) and
+**collected** (on a DO). `shared/RUN_ME_seal_management.sql` is all of it.
+
+**The rules live in triggers**, because the phones work offline and a check
+that only runs on a phone with signal is a check that sometimes does not run.
+A phone WITH signal asks `seal_check_range()` and warns or blocks first; any
+record that reaches the database, from any app or any old version, passes the
+triggers on `mobile_consent_records`, `seal_receipts`, `fcportal_scan_records`
+and `shared_do_records`. A problem is **never a refused row** — what the
+customer signed is kept — it is a `seal_problems` row and a NELOS case put in
+the HQ queue (`sees_all_cases`) with nobody assigned, so every HQ handler sees
+it. One open case per AL and kind; a second problem is a comment on it.
+
+Three things worth knowing:
+
+- **Seals are compared as numbers and shown at their width.** 0009297 and 9297
+  are one seal. `sealRanges.js` is the rule and lives in mobile, fc-portal and
+  the Sales Web as the same file — change all of them.
+- **A DO says which seals it carried** (`shared_do_records.seal_ranges`), the
+  ones scanned on that card since its last DO, so a consent collected over
+  three trips gives three DOs with three different lists.
+- **`enforce_stock` is OFF** until the seals already at UNN 1 are keyed as
+  opening stock. Turned on before that, every consent is a "never received"
+  case.
+
+`tests/seal_dashboard.cjs` holds the office page.
 
 ## Two repositories, one system
 
