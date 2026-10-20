@@ -147,6 +147,8 @@ function mockPage(page, { extras }) {
     checkTrue('the photo box is visible', await page.locator('#mng-do-image-container').isVisible());
     checkTrue('the "View Attached Document" button is wired to the function that actually reads the photo',
       (await page.locator('#mng-do-image-container button').getAttribute('onclick')) === 'viewAttachedDocumentDO()');
+    checkTrue('the collection-photo button reads "Collection Photo", not "View Attached Document"',
+      (await page.locator('#mng-do-image-container button').innerText()).trim().includes('Collection Photo'));
     checkTrue('the signature box is visible', await page.locator('#mng-do-signature-container').isVisible());
     checkTrue('the manual-upload status shows who uploaded it',
       (await page.locator('#mng-do-manual-status').innerText()).includes('office@mjmnursery.com'));
@@ -186,6 +188,17 @@ function mockPage(page, { extras }) {
     });
     check('no photo to print', pdfArgs.photo, null);
     check('no signature to print -- the PDF box reads blank, not broken', pdfArgs.sig, null);
+
+    checkTrue('the manual-signed section is titled "Manually Signed Copy (if any)"',
+      (await page.locator('text=Manually Signed Copy (if any)').count()) > 0);
+    checkTrue('the dropzone reads "select your file or drag and drop"',
+      (await page.locator('#mng-do-manual-dropzone').innerText()).includes('select your file or drag and drop'));
+    checkTrue('the dropzone names the accepted file types',
+      (await page.locator('#mng-do-manual-dropzone').innerText()).includes('png, pdf, jpg, docx accepted'));
+    checkTrue('the dropzone carries a Browse control',
+      (await page.locator('#mng-do-manual-dropzone').innerText()).toLowerCase().includes('browse'));
+    checkTrue('the file input accepts images, PDFs and Word docs, not images alone',
+      (await page.locator('#mng-do-manual-file').getAttribute('accept')) === 'image/*,.pdf,.doc,.docx');
   });
 
   console.log('\nUploading a manually signed copy');
@@ -206,6 +219,40 @@ function mockPage(page, { extras }) {
     await page.waitForTimeout(300);
     checkTrue('the status now shows it was uploaded', (await page.locator('#mng-do-manual-status').innerText()).includes('Uploaded'));
     checkTrue('the View button appears', await page.locator('#mng-do-view-manual-btn').isVisible());
+  });
+
+  console.log('\nDragging a file onto the dropzone');
+  await withPage(EXTRAS_NONE, async (page) => {
+    await page.evaluate(() => window.openManageDOModal('do-1'));
+    await page.waitForTimeout(500);
+
+    // handleManualDoDrop(e) is driven directly with a constructed event,
+    // same reasoning as the click-to-browse case above -- what is under
+    // test is that a drop reaches uploadManualSignedDO() with the dropped
+    // file, not whether Chromium's drag gesture automation fires a real
+    // 'drop' DOM event.
+    await page.evaluate(async () => {
+      const file = new File(['fake-pdf-bytes'], 'signed.pdf', { type: 'application/pdf' });
+      await window.handleManualDoDrop({ preventDefault(){}, dataTransfer: { files: [file] } });
+    });
+    await page.waitForTimeout(300);
+    checkTrue('a dropped file uploads the same way a browsed one does',
+      (await page.locator('#mng-do-manual-status').innerText()).includes('Uploaded'));
+  });
+
+  console.log('\nViewing a manually uploaded Word document (no inline preview exists for one)');
+  await withPage({ ...EXTRAS_NONE, manual_signed_url: 'https://cdn.example.com/do_manual_signed/scan.docx', manual_signed_uploaded_by: 'office@mjmnursery.com' }, async (page) => {
+    await page.evaluate(() => window.openManageDOModal('do-1'));
+    await page.waitForTimeout(500);
+    const opened = await page.evaluate(() => {
+      const calls = [];
+      window.open = (url) => calls.push(url);
+      window.viewDOManualSigned();
+      return calls;
+    });
+    check('a .docx is handed to the browser to open/download rather than drawn as a broken <img>',
+      opened, ['https://cdn.example.com/do_manual_signed/scan.docx']);
+    checkTrue('the lightbox itself is never opened for it', !(await page.locator('#lightbox-modal').isVisible()));
   });
 
   console.log(`\n${pass} passed, ${fail} failed`);
