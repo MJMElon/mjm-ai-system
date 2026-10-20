@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>555 FC Portal — Manage</title>
+<title>555 MJM Team — Manage</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%238b5cf6%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2713%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EFC%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -11,58 +11,39 @@
 <script src="../shared/shared_access.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
-  * { font-family:'Outfit', system-ui, sans-serif; }
+  /* Plain system sans rather than the decorative 'Outfit' webfont this page
+     carried before — the office asked for it on the module cards, and the
+     only thing 'Outfit' was doing for a grid of six tiles was being one
+     more font on the page. */
+  * { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
   body { background:#faf5ff; margin:0; }
   .card { background:white; border:1px solid #ede9fe; border-radius:20px; box-shadow:0 4px 16px rgba(139,92,246,.08); }
 
-  /* The two ways through to the phone app. Deliberately the biggest thing on
-     the page: for most people this page is a doorway, not a destination.
-
-     Side by side rather than stacked. Two full-width bars one above the other
-     read as a list with an order to it — first this, then that — and these
-     are not steps. They are two doors, and a row says so. */
-  .portal-row { display:flex; gap:14px; }
-  .portal-btn { flex:1 1 0; min-width:0;
-                display:flex; flex-direction:column; align-items:center; justify-content:center;
-                gap:9px; padding:26px 18px; border-radius:22px; text-decoration:none;
-                background:linear-gradient(135deg,#8b5cf6,#6d28d9); color:white;
-                font-weight:900; font-size:13.5px; letter-spacing:.09em; text-transform:uppercase;
-                text-align:center; line-height:1.35;
-                box-shadow:0 10px 26px -6px rgba(109,40,217,.5); transition:all .15s; }
-  .portal-btn:hover { transform:translateY(-2px); box-shadow:0 16px 32px -6px rgba(109,40,217,.55); }
-  /* The worker's door in the 555 wordmark's green. Two identical purple tiles
-     would be one button somebody presses twice by mistake; the colour is what
-     tells the two doors apart at arm's length. */
-  .portal-btn-worker { background:linear-gradient(135deg,#10b981,#047857);
-                       box-shadow:0 10px 26px -6px rgba(4,120,87,.45); }
-  .portal-btn-worker:hover { box-shadow:0 16px 32px -6px rgba(4,120,87,.5); }
-  /* The label wraps to two lines inside a narrow tile; the arrow rides with
-     the last word rather than dropping to a line of its own. */
-  .portal-btn .pb-label { display:inline; }
-  /* On a phone the row would give each door about 150px, which is not a door.
-     They stack there, and only there. */
-  @media (max-width:560px) { .portal-row { flex-direction:column; }
-                             .portal-btn { flex-direction:row; padding:18px 22px; } }
-  .portal-note { margin:10px 2px 0; font-size:11.5px; font-weight:500; line-height:1.5;
-                 color:#64748b; }
-  /* Sized here, not only by a Tailwind class: the CDN is a third-party
-     script, and a page whose icons are 300px until it lands is a broken page.
-     Same reason the auditor's portal button pins its own. */
-  .portal-btn svg { fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
-  .portal-btn .pb-phone { width:30px; height:30px; flex-shrink:0; }
-  .portal-btn .pb-out   { width:14px; height:14px; opacity:.85; flex-shrink:0;
-                          vertical-align:-1px; margin-left:6px; }
-  @media (max-width:560px) { .portal-btn .pb-phone { width:20px; height:20px; } }
-
-  /* A square tile rather than a wide row: there is one of these, and a row
-     stretched across the page reads as a list with an item missing. */
-  .tool { width:132px; height:132px; display:flex; flex-direction:column; align-items:center;
-          justify-content:center; gap:10px; border-radius:22px;
+  /* Two groups, not six doors in a row: MJM Team is the four portals
+     (FC / Admin / Worker / Audit) a person actually signs into, and
+     System Setting is the three screens that configure who may use them.
+     Nothing in the old flat grid said why Worker System sat next to
+     Worker Portal when it governs a different thing entirely. */
+  .welcome { font-size:24px; font-weight:900; color:#1e293b; margin:4px 2px 24px; }
+  .section-label { font-size:13px; font-weight:900; color:#1e293b; text-transform:uppercase;
+                    letter-spacing:.1em; margin:30px 2px 14px; }
+  .section-label:first-of-type { margin-top:0; }
+  .door-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:16px; }
+  .door { display:flex; flex-direction:column; align-items:center; text-align:center;
+          gap:14px; padding:30px 20px; border-radius:24px;
           background:white; border:1.5px solid #ede9fe; text-decoration:none; transition:all .15s; }
-  .tool:hover { border-color:#c4b5fd; transform:translateY(-2px); box-shadow:0 10px 24px -6px rgba(139,92,246,.28); }
-  .tool-ico { width:52px; height:52px; border-radius:16px; display:grid; place-items:center; font-size:24px; }
-  .tool-name { font-size:12px; font-weight:900; color:#1e293b; text-transform:uppercase; letter-spacing:.1em; }
+  .door:hover { border-color:#c4b5fd; transform:translateY(-2px); box-shadow:0 10px 24px -6px rgba(139,92,246,.28); }
+  .door-ico { width:72px; height:72px; border-radius:20px; display:grid; place-items:center; flex-shrink:0; }
+  .door-ico svg { width:36px; height:36px; }
+  .door-name { font-size:13.5px; font-weight:900; color:#1e293b; text-transform:uppercase; letter-spacing:.06em; }
+  .door-sub { font-size:11.5px; font-weight:600; line-height:1.4; color:#8b8396; }
   .hidden { display:none !important; }
+
+  /* MJM Team's four cards only — the office asked to arrange these
+     themselves, same drag-and-drop the hub's own module cards already
+     use. System Setting is a fixed three and stays put. */
+  .door.card-dragging { opacity:.4; border-color:#34d399; box-shadow:0 0 24px rgba(52,211,153,.35); }
+  .door.card-drag-over { border-color:#34d399; box-shadow:0 0 0 2px rgba(52,211,153,.4); }
 </style>
 </head>
 <body>
@@ -73,41 +54,108 @@
      that: every other module keeps the standard ribbon. -->
 <div id="mjm-ribbon" data-logo="off" data-brand="" data-center=" "></div>
 <script src="../shared/shared_ribbon.js"></script>
-<script src="../shared/shared_fc_brand.js" data-portal="Worker Portal" data-sub="Manage"></script>
+<script src="../shared/shared_fc_brand.js" data-portal="Team" data-sub="Manage"></script>
 
 <div id="loading" class="max-w-[860px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Checking access…</div>
 
 <div id="main" class="max-w-[860px] mx-auto px-4 md:px-6 py-7 hidden">
 
-  <!-- The two ways in to the field app. Same site, two front doors: the FC
-       signs in with the e-mail account every MJM system shares, the worker
-       with the PIN on their row of the Payroll register. Kept the same size
-       because neither is the lesser door — they are just different people. -->
-  <div class="portal-row">
-    <a class="portal-btn" id="portal-link" href="https://scan.mjmnursery.com" target="_blank" rel="noopener">
-      <svg viewBox="0 0 24 24" class="pb-phone"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 5.5h3"/><circle cx="12" cy="18" r="1"/></svg>
-      <span class="pb-label">Visit 555 FC Portal<svg viewBox="0 0 24 24" class="pb-out"><path d="M7 17L17 7"/><path d="M9 7h8v8"/></svg></span>
-    </a>
+  <div class="welcome" id="welcome-heading">Welcome!</div>
 
-    <a class="portal-btn portal-btn-worker" id="worker-portal-link"
-       href="https://scan.mjmnursery.com/#/worker" target="_blank" rel="noopener">
-      <svg viewBox="0 0 24 24" class="pb-phone"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6"/></svg>
-      <span class="pb-label">Visit 555 Worker Portal<svg viewBox="0 0 24 24" class="pb-out"><path d="M7 17L17 7"/><path d="M9 7h8v8"/></svg></span>
+  <!-- MJM Team: the four portals a person actually signs into. FC Portal
+       and Worker Portal are the same site's two front doors (e-mail +
+       password, or just the PIN on a worker's row in Worker Namelist);
+       Admin Portal and Audit Portal are two other systems entirely, moved
+       in here so a person with more than one of these does not also need
+       to remember more than one way to reach them. Draggable and in the
+       order the office last left them — see the drag-order script below. -->
+  <div class="section-label">MJM Team</div>
+  <div class="door-grid" id="mjm-team-grid">
+    <a class="door" id="fc-portal-link" data-card="fc" href="https://scan.mjmnursery.com" target="_blank" rel="noopener">
+      <span class="door-ico" style="background:#ede9fe;color:#7c3aed;">
+        <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="10" y="4" width="14" height="26" rx="3.5"/>
+          <path d="M14.5 8h5"/>
+          <circle cx="17" cy="26.5" r="1" fill="currentColor" stroke="none"/>
+        </svg>
+      </span>
+      <span class="door-name">FC Portal</span>
+      <span class="door-sub">E-mail &amp; password sign-in</span>
+    </a>
+    <a class="door" id="admin-portal-link" data-card="admin" href="https://mobile.mjmnursery.com" target="_blank" rel="noopener">
+      <span class="door-ico" style="background:#cffafe;color:#0891b2;">
+        <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="10" y="3" width="14" height="28" rx="3.5"/>
+          <path d="M14.5 6.5h5"/>
+          <circle cx="17" cy="27.5" r="1" fill="currentColor" stroke="none"/>
+          <path d="M13.5 14l2.2 2.2 4.8-5"/>
+          <path d="M13.5 20h7"/>
+        </svg>
+      </span>
+      <span class="door-name">Admin Portal</span>
+      <span class="door-sub">DO issuing, consent, booking</span>
+    </a>
+    <a class="door" id="worker-portal-link" data-card="worker" href="https://scan.mjmnursery.com/#/worker" target="_blank" rel="noopener">
+      <span class="door-ico" style="background:#d1fae5;color:#059669;">
+        <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="17" cy="12" r="5.2"/>
+          <path d="M6 29c0-6 4.6-9.5 11-9.5s11 3.5 11 9.5"/>
+        </svg>
+      </span>
+      <span class="door-name">Worker Portal</span>
+      <span class="door-sub">PIN sign-in, no e-mail needed</span>
+    </a>
+    <a class="door" id="audit-portal-link" data-card="audit" href="../audit/audit_admin.html">
+      <span class="door-ico" style="background:#ffedd5;color:#ea580c;">
+        <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="4" width="16" height="22" rx="3"/>
+          <path d="M13 11h8M13 15h8M13 19h5"/>
+          <circle cx="23" cy="25" r="5" fill="#ffedd5" stroke="currentColor"/>
+          <path d="M21.5 25l1.2 1.3L25 23"/>
+        </svg>
+      </span>
+      <span class="door-name">Audit Portal</span>
+      <span class="door-sub">Plot audits &amp; sign-off</span>
     </a>
   </div>
 
-  <p class="portal-note">The FC Portal asks for an e-mail and password. The Worker Portal asks
-    only for a PIN — the one on the worker's row in Worker System, below.</p>
-
-  <!-- Two tiles now, so a row rather than a lone square. -->
-  <div class="mt-6 flex flex-wrap gap-3">
-    <a class="tool" id="tool-workers" href="scan_workers.html">
-      <span class="tool-ico bg-amber-100">👷</span>
-      <span class="tool-name">Worker System</span>
+  <!-- System Setting: the three screens that configure who may use the
+       four doors above and what each of them offers. Not draggable — a
+       fixed three, not a list the office keeps reordering. -->
+  <div class="section-label">System Setting</div>
+  <div class="door-grid">
+    <a class="door" id="tool-workers" href="scan_workers.html">
+      <span class="door-ico" style="background:#fef3c7;color:#b45309;">
+        <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="13" cy="10" r="4"/>
+          <path d="M6 26c0-4.8 3.6-7.4 9-7.4s9 2.6 9 7.4"/>
+          <path d="M22 9.5h6M22 14h6"/>
+        </svg>
+      </span>
+      <span class="door-name">Worker Namelist</span>
+      <span class="door-sub">The payroll register — PINs live here</span>
     </a>
-    <a class="tool" id="tool-access" href="scan_setting.html">
-      <span class="tool-ico bg-violet-100">⚙️</span>
-      <span class="tool-name">Setting</span>
+    <a class="door" id="tool-access" href="scan_settings_hub.html">
+      <span class="door-ico" style="background:#f5f3ff;color:#7c3aed;">
+        <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="17" cy="17" r="5"/>
+          <path d="M17 3v4.5M17 26.5V31M3 17h4.5M26.5 17H31M7 7l3.2 3.2M23.8 23.8L27 27M7 27l3.2-3.2M23.8 10.2L27 7"/>
+        </svg>
+      </span>
+      <span class="door-name">Settings</span>
+      <span class="door-sub">FC, Worker, Admin &amp; Auditor setting</span>
+    </a>
+    <a class="door" id="tool-user-access" href="scan_user_access.html">
+      <span class="door-ico" style="background:#fee2e2;color:#dc2626;">
+        <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="13" cy="10" r="4"/>
+          <path d="M5 27c0-4.8 3.6-7.4 8-7.4"/>
+          <circle cx="24" cy="21" r="4.5"/>
+          <path d="M24 25.3v3.2M22.4 28h3.2"/>
+        </svg>
+      </span>
+      <span class="door-name">User Access</span>
+      <span class="door-sub">Who may open the FC &amp; Worker Portals</span>
     </a>
   </div>
 </div>
@@ -119,7 +167,7 @@ const $ = (id) => document.getElementById(id);
 /* The phone app is a different site, so a fresh URL each time — the portal is
    a PWA and a cached shell that names chunks which no longer exist is how it
    comes up broken after a deploy. Same trick the module card uses. */
-$('portal-link').addEventListener('click', (e) => {
+$('fc-portal-link').addEventListener('click', (e) => {
   e.currentTarget.href = 'https://scan.mjmnursery.com/?cb=' + Date.now();
 });
 /* The worker portal is a route inside that same PWA, so it needs the same
@@ -129,45 +177,112 @@ $('worker-portal-link').addEventListener('click', (e) => {
   e.currentTarget.href = 'https://scan.mjmnursery.com/?cb=' + Date.now() + '#/worker';
 });
 
+/* MJM Team's four cards, drag-to-reorder — same mechanism as the hub's own
+   module cards (index.html), a separate localStorage key because this is
+   a different grid. Runs regardless of permissions: a card a login cannot
+   see is simply hidden later, and reordering an empty grid is harmless. */
+(function initTeamCardOrder() {
+  const KEY = 'mjm_team_card_order_v1';
+  const grid = $('mjm-team-grid');
+  if (!grid) return;
+
+  try {
+    const order = JSON.parse(localStorage.getItem(KEY) || '[]');
+    order.forEach((k) => {
+      const card = grid.querySelector('.door[data-card="' + k + '"]');
+      if (card) grid.appendChild(card);
+    });
+  } catch (e) { /* ignore corrupt state */ }
+
+  function saveOrder() {
+    const out = [...grid.querySelectorAll('.door[data-card]')].map((c) => c.dataset.card);
+    try { localStorage.setItem(KEY, JSON.stringify(out)); } catch (e) { /* ignore */ }
+  }
+
+  let dragged = null;
+  grid.querySelectorAll('.door[data-card]').forEach((card) => {
+    card.setAttribute('draggable', 'true');
+    card.addEventListener('dragstart', (e) => {
+      dragged = card;
+      card.classList.add('card-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', card.dataset.card); } catch (err) {}
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('card-dragging');
+      grid.querySelectorAll('.door').forEach((c) => c.classList.remove('card-drag-over'));
+      dragged = null;
+      saveOrder();
+    });
+    card.addEventListener('dragover', (e) => {
+      if (!dragged || dragged === card) return;
+      e.preventDefault();
+      card.classList.add('card-drag-over');
+      const r = card.getBoundingClientRect();
+      const before = e.clientX < r.left + r.width / 2;
+      grid.insertBefore(dragged, before ? card : card.nextSibling);
+    });
+    card.addEventListener('dragleave', () => card.classList.remove('card-drag-over'));
+    card.addEventListener('drop', (e) => { e.preventDefault(); card.classList.remove('card-drag-over'); });
+  });
+})();
+
 (async () => {
   try {
     await MJMAccess.load(_supabase);
     if (!MJMAccess.user()) { window.location.href = '../index.html'; return; }
-    if (!MJMAccess.canAccess('scan')) {
-      alert('You do not have access to the 555 FC Portal.');
-      window.location.href = '../index.html';
-      return;
-    }
 
-    /* This is the back office, not the field. Anyone without it is sent where
-       they were going anyway — their own portal — rather than being shown a
-       page of settings they cannot use. The module card on the hub already
-       routes them past it; this is for a typed URL or an old bookmark.
+    /* This page carries three different claims now: scan-module admins (the
+       FC/Worker doors and the two tools), and separately anyone holding
+       Admin Portal or Audit Portal access, which moved onto this grid and
+       does not depend on scan access at all — an Admin Portal supervisor
+       with no scan access of their own must still reach this page to find
+       their one door. Refused only when a login holds NONE of the three.
 
-       WHICH portal is the point: a Field Conductor gets the FC Portal and a
-       supervisor who holds only the worker portal gets that one. Sending
-       everybody to the FC Portal, as this did, put the second kind in front
-       of a login for an app they do not use. Somebody holding neither goes
-       back to the hub instead of bouncing between two doors that are both
-       shut. */
-    if (!MJMAccess.canScanArea('manage')) {
+       WHICH portal is the point, same as it always was here: a Field
+       Conductor who types the Manage URL wants the app, not this page, and
+       scanHome() sends them there. Somebody holding none of the three goes
+       back to the hub instead of a dead end. */
+    const hasManage = MJMAccess.canScanArea('manage');
+    const hasAdminPortal = MJMAccess.canScanArea('admin_portal');
+    const hasAuditPortal = MJMAccess.canScanArea('audit_portal');
+    if (!hasManage && !hasAdminPortal && !hasAuditPortal) {
       const home = MJMAccess.scanHome();
       window.location.replace(home || '../index.html');
       return;
     }
 
-    // The signed-in name is the ribbon's own #welcome-text; this page had a
-    // second copy in the header bar that has gone with it.
+    const u = MJMAccess.user();
+    if (u) $('welcome-heading').textContent = 'Welcome, ' + (u.full_name || u.email || '') + '!';
+
     // User Access writes other people's permissions, which the database policy
     // only lets a user-manager do — so it is not offered to anyone else.
     /* Each door on this page, by its own tick on Setting. Every one of them
        falls back to the rule that governed it before that screen existed, so
        nobody's access changed on the day the ticks arrived — see
-       canScanArea() in shared/shared_access.js. */
-    if (!MJMAccess.canScanArea('setting')) $('tool-access').classList.add('hidden');
+       canScanArea() in shared/shared_access.js. Admin Portal and Audit
+       Portal moved onto this page from the hub, so their fallback is the
+       same module check the hub used to gate their own cards with —
+       nobody's access changed the day they moved either. */
+    if (!MJMAccess.canScanArea('setting')) {
+      $('tool-access').classList.add('hidden');
+      $('tool-user-access').classList.add('hidden');
+    }
     if (!MJMAccess.canScanArea('workers')) $('tool-workers').classList.add('hidden');
-    if (!MJMAccess.canScanArea('fc')) $('portal-link').classList.add('hidden');
+    if (!MJMAccess.canScanArea('fc')) $('fc-portal-link').classList.add('hidden');
     if (!MJMAccess.canScanArea('worker')) $('worker-portal-link').classList.add('hidden');
+    if (!hasAdminPortal) $('admin-portal-link').classList.add('hidden');
+    if (!hasAuditPortal) $('audit-portal-link').classList.add('hidden');
+
+    /* Audit tile is split the same way it was on the hub: an admin lands on
+       the back-end page, everyone else goes straight to the to-do list
+       that is the screen built for a phone in a nursery. Routed on the
+       EXPLICIT audit module level so this agrees with the audit guards
+       (isAuditAdmin / requireAdmin), not the profile-level role fallback —
+       see index.html's own former copy of this comment. */
+    if (hasAuditPortal && !MJMAccess.isAdminOf('audit')) {
+      $('audit-portal-link').setAttribute('href', '../audit/audit_home.html');
+    }
 
     $('loading').classList.add('hidden');
     $('main').classList.remove('hidden');

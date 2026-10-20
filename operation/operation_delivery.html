@@ -177,9 +177,40 @@
                 </div>
                 
                 <div id="mng-do-image-container" class="hidden mt-4 pt-4 border-t border-slate-100">
-                    <button onclick="viewAttachedDocument()" class="w-full bg-blue-50 text-blue-600 hover:bg-blue-100 p-3 rounded-xl text-xs font-bold uppercase tracking-widest flex justify-center items-center gap-2 border border-blue-200 shadow-sm relative z-40">
-                        <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg> View Attached Document
+                    <button onclick="viewAttachedDocumentDO()" class="w-full bg-blue-50 text-blue-600 hover:bg-blue-100 p-3 rounded-xl text-xs font-bold uppercase tracking-widest flex justify-center items-center gap-2 border border-blue-200 shadow-sm relative z-40">
+                        <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg> Collection Photo
                     </button>
+                </div>
+
+                <!-- The customer's signature, if the FC Portal's own signature
+                     pad captured one when this DO was issued -- a separate
+                     thing from the collection photo above. Hidden until
+                     loadDOExtras() (openManageDOModal) resolves one. -->
+                <div id="mng-do-signature-container" class="hidden mt-3">
+                    <button onclick="viewDOSignature()" class="w-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 p-3 rounded-xl text-xs font-bold uppercase tracking-widest flex justify-center items-center gap-2 border border-indigo-200 shadow-sm relative z-40">
+                        ✍️ View Customer Signature
+                    </button>
+                </div>
+
+                <!-- A DO amended and re-signed on paper after it left the FC
+                     Portal has no signature of the system's own to print --
+                     this is where the office attaches a photo of that signed
+                     copy instead. When present it is what printCurrentDO()
+                     prints, ahead of the FC Portal's own capture: it is the
+                     CURRENT, amended proof. -->
+                <div class="mt-3 p-3 rounded-xl border border-slate-200 bg-slate-50">
+                    <div class="flex items-center justify-between gap-3 mb-2">
+                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Manually Signed Copy (if any)</div>
+                        <div id="mng-do-manual-status" class="text-[10px] font-bold text-slate-400">—</div>
+                    </div>
+                    <button id="mng-do-view-manual-btn" onclick="viewDOManualSigned()" class="hidden w-full mb-2 bg-blue-50 text-blue-600 hover:bg-blue-100 p-2 rounded-lg text-[10px] font-bold uppercase tracking-widest border border-blue-200">View Uploaded Copy</button>
+                    <div id="mng-do-manual-dropzone" onclick="document.getElementById('mng-do-manual-file').click()" ondragover="handleManualDoDragOver(event)" ondragleave="handleManualDoDragLeave(event)" ondrop="handleManualDoDrop(event)" class="cursor-pointer border-2 border-dashed border-slate-300 hover:border-blue-400 hover:bg-blue-50/50 rounded-xl p-5 flex flex-col items-center justify-center text-center gap-1.5 transition-colors">
+                        <svg class="w-7 h-7 text-blue-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M12 11v9m0-9l-3 3m3-3l3 3"></path></svg>
+                        <div class="text-xs font-bold text-slate-600 pointer-events-none">select your file or drag and drop</div>
+                        <div class="text-[10px] text-slate-400 pointer-events-none">png, pdf, jpg, docx accepted</div>
+                        <span class="mt-1 px-4 py-1.5 rounded-full bg-blue-500 text-white text-[10px] font-bold uppercase tracking-widest shadow-sm pointer-events-none">Browse</span>
+                    </div>
+                    <input type="file" id="mng-do-manual-file" accept="image/*,.pdf,.doc,.docx" class="hidden" onchange="uploadManualSignedDO(event)">
                 </div>
             </div>
             <div id="mng-do-lock-notice" class="hidden mt-4 p-3 rounded-xl bg-slate-100 border border-slate-300 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">🔒 Locked — this delivery date's month is locked (Month Lock Calendar, System Settings). Can't be edited or deleted.</div>
@@ -354,9 +385,26 @@
         function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
         
         function openStandaloneDoc(url) {
+            // The manual-signed-copy upload now also takes a PDF or Word
+            // file (see uploadManualSignedDO), not only a photo -- a .pdf
+            // or .docx stored in the documents bucket is an ordinary
+            // https:// URL (Supabase's getPublicUrl), so it falls through
+            // neither the old data:application/pdf check nor an <img> tag.
+            // Checked on the URL path, same as the extension check the
+            // upload itself keys its storage path on.
+            const clean = url.split('?')[0].toLowerCase();
             const content = document.getElementById('lightbox-content');
-            if(url.startsWith('data:application/pdf')) { content.innerHTML = `<embed src="${url}" type="application/pdf" class="w-full h-full bg-white rounded-xl shadow-inner">`; } 
-            else { content.innerHTML = `<img src="${url}" class="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl">`; }
+            if (url.startsWith('data:application/pdf') || clean.endsWith('.pdf')) {
+                content.innerHTML = `<embed src="${url}" type="application/pdf" class="w-full h-full bg-white rounded-xl shadow-inner">`;
+            } else if (clean.endsWith('.doc') || clean.endsWith('.docx')) {
+                // Nothing in-browser previews Word reliably -- hand it to
+                // the browser/OS to open or download rather than showing a
+                // broken <img>.
+                window.open(url, '_blank');
+                return;
+            } else {
+                content.innerHTML = `<img src="${url}" class="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl">`;
+            }
             document.getElementById('lightbox-modal').classList.remove('hidden');
         }
         
@@ -1031,8 +1079,20 @@
             const doRec = globalDOs.find(d => String(d.id) === String(id));
             if (!doRec) return;
             const parentAL = globalALs.find(a => a.al_number === doRec.al_number) || {};
-            const photo = await mjmImageAsDataUrl(doRec.image_url);
-            mjmBuildDOPdf(doRec, parentAL, currentStaffEmail || 'MJM Staff', null, photo).save(mjmDoPdfFileName(doRec));
+            // Fetched fresh rather than trusted from doRec -- a Print click
+            // right after opening the modal would otherwise race
+            // loadDOExtras() in openManageDOModal.
+            const extra = await loadDOExtras(doRec.id);
+            const photo = await mjmImageAsDataUrl(extra.image_url);
+            // A manually uploaded signed copy is the DO as it stands NOW --
+            // it only exists because the DO was amended and re-signed on
+            // paper, so it supersedes the FC Portal's own capture. Falls
+            // back to that capture, and to a blank signature box (how
+            // mjmBuildDOPdf already reads a null sigDataUrl) when neither
+            // exists.
+            const sigSrc = extra.manual_signed_url || extra.signature_url || null;
+            const sig = sigSrc ? await mjmImageAsDataUrl(sigSrc) : null;
+            mjmBuildDOPdf(doRec, parentAL, currentStaffEmail || 'MJM Staff', sig, photo).save(mjmDoPdfFileName(doRec));
         }
 
         function openMissingDOModal(missingNum) {
@@ -1112,11 +1172,132 @@
             document.getElementById('mng-do-collection-summary').innerHTML = summaryHtml;
             loadDOSeals(doRec);
 
-            const docContainer = document.getElementById('mng-do-image-container');
-            if(doRec.image_url) { docContainer.classList.remove('hidden'); currentViewImageDO = doRec.image_url; } else { docContainer.classList.add('hidden'); currentViewImageDO = null; }
+            // image_url/signature_url/manual_signed_* are kept off the main
+            // DO list query on purpose, same reason loadDOSeals is its own
+            // fetch above this line -- a missing column here must only cost
+            // these three boxes, never the whole DO list. Resolved fresh
+            // each open rather than trusted from a stale doRec.
+            loadDOExtras(doRec.id).then((extra) => {
+                Object.assign(doRec, extra);
+                const docContainer = document.getElementById('mng-do-image-container');
+                if (doRec.image_url) { docContainer.classList.remove('hidden'); currentViewImageDO = doRec.image_url; } else { docContainer.classList.add('hidden'); currentViewImageDO = null; }
+                const sigContainer = document.getElementById('mng-do-signature-container');
+                if (doRec.signature_url) { sigContainer.classList.remove('hidden'); currentViewImageSig = doRec.signature_url; } else { sigContainer.classList.add('hidden'); currentViewImageSig = null; }
+                refreshDOManualSignedUI(doRec);
+            });
             document.getElementById('manage-do-modal').classList.remove('hidden');
         }
         function viewAttachedDocumentDO() { if(!currentViewImageDO) return; openStandaloneDoc(currentViewImageDO); }
+
+        // The customer's signature (FC Portal's own capture) -- see the
+        // comment on loadDOExtras for why this is fetched separately.
+        let currentViewImageSig = null;
+        function viewDOSignature() { if(!currentViewImageSig) return; openStandaloneDoc(currentViewImageSig); }
+
+        // A photo of a DO signed on paper after it was amended -- the
+        // office's own upload, kept apart from the FC Portal's signature
+        // because it answers a different question (what does the CURRENT,
+        // amended DO's proof look like, not what the system captured when
+        // it first issued).
+        let currentViewImageManual = null;
+        function viewDOManualSigned() { if(!currentViewImageManual) return; openStandaloneDoc(currentViewImageManual); }
+
+        // image_url, signature_url and the manual_signed_* columns are not
+        // in fetchData's own shared_do_records select (same reasoning as
+        // loadDOSeals above it) -- a database that has not had this
+        // feature's SQL run yet must still load the DO list, it just
+        // cannot show these three boxes until it has. Returns {} rather
+        // than throwing so every caller can Object.assign it in safely.
+        async function loadDOExtras(id) {
+            try {
+                const { data, error } = await _supabase.from('shared_do_records')
+                    .select('image_url, signature_url, manual_signed_url, manual_signed_uploaded_by, manual_signed_uploaded_at')
+                    .eq('id', id).maybeSingle();
+                if (error || !data) return {};
+                return data;
+            } catch (e) { return {}; }
+        }
+
+        function refreshDOManualSignedUI(doRec) {
+            const statusEl = document.getElementById('mng-do-manual-status');
+            const viewBtn = document.getElementById('mng-do-view-manual-btn');
+            if (!statusEl || !viewBtn) return;
+            if (doRec.manual_signed_url) {
+                currentViewImageManual = doRec.manual_signed_url;
+                statusEl.textContent = 'Uploaded' + (doRec.manual_signed_uploaded_by ? ' by ' + doRec.manual_signed_uploaded_by : '');
+                viewBtn.classList.remove('hidden');
+            } else {
+                currentViewImageManual = null;
+                statusEl.textContent = 'None uploaded';
+                viewBtn.classList.add('hidden');
+            }
+        }
+
+        // Drag-and-drop onto the dropzone is a second way into the same
+        // uploadManualSignedDO(e) the click-to-browse path already uses --
+        // built as a fake change event rather than a second upload function,
+        // so there is one place that decides what an upload does.
+        function handleManualDoDragOver(e) {
+            e.preventDefault();
+            const zone = document.getElementById('mng-do-manual-dropzone');
+            if (zone) zone.classList.add('border-blue-400', 'bg-blue-50/50');
+        }
+        function handleManualDoDragLeave(e) {
+            const zone = document.getElementById('mng-do-manual-dropzone');
+            if (zone) zone.classList.remove('border-blue-400', 'bg-blue-50/50');
+        }
+        function handleManualDoDrop(e) {
+            e.preventDefault();
+            handleManualDoDragLeave(e);
+            const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (!file) return;
+            uploadManualSignedDO({ target: { files: [file], value: '' } });
+        }
+
+        // Office upload of a photo (or a scanned PDF/Word copy) of a
+        // paper-signed DO (an amendment signed outside the app). Stored in
+        // the same `documents` bucket the FC Portal's own photo/signature
+        // uploads use, and written straight onto the shared_do_records row
+        // -- printCurrentDO() below prefers this over the FC Portal's own
+        // signature_url once it exists, because it is the CURRENT, amended
+        // proof. mjmImageAsDataUrl already reads null for anything that
+        // is not an image (a PDF/docx upload), so a non-image copy simply
+        // does not draw into the printed PDF's signature box -- it is
+        // still viewable on screen via viewDOManualSigned().
+        async function uploadManualSignedDO(e) {
+            const file = e.target.files && e.target.files[0];
+            e.target.value = '';
+            if (!file) return;
+            const id = document.getElementById('manage-do-id').value;
+            const doRec = globalDOs.find(d => String(d.id) === String(id));
+            if (!doRec) return;
+            const statusEl = document.getElementById('mng-do-manual-status');
+            if (statusEl) statusEl.textContent = 'Uploading…';
+            try {
+                const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+                const path = `do_manual_signed/${doRec.al_number || 'NA'}/${doRec.do_number}_${Date.now()}.${ext}`;
+                const { error: upErr } = await _supabase.storage.from('documents')
+                    .upload(path, file, { contentType: file.type || 'image/jpeg', upsert: true });
+                if (upErr) throw upErr;
+                const { data: urlData } = _supabase.storage.from('documents').getPublicUrl(path);
+                const url = urlData && urlData.publicUrl;
+                if (!url) throw new Error('No public URL returned');
+                const uploadedAt = new Date().toISOString();
+                const { error: dbErr } = await _supabase.from('shared_do_records').update({
+                    manual_signed_url: url,
+                    manual_signed_uploaded_by: currentStaffEmail || 'MJM Staff',
+                    manual_signed_uploaded_at: uploadedAt,
+                }).eq('id', doRec.id);
+                if (dbErr) throw dbErr;
+                doRec.manual_signed_url = url;
+                doRec.manual_signed_uploaded_by = currentStaffEmail || 'MJM Staff';
+                doRec.manual_signed_uploaded_at = uploadedAt;
+                refreshDOManualSignedUI(doRec);
+            } catch (err) {
+                if (statusEl) statusEl.textContent = 'Upload failed';
+                alert('Could not upload the signed copy: ' + (err && err.message ? err.message : err));
+            }
+        }
 
         // BA CROSS-MODULE POPUP FROM DO PAGE
         let currentViewImageBA = null;
