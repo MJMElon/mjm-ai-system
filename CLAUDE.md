@@ -2669,10 +2669,20 @@ the office screenshot showed a preset of 800 reading **300**.
 
 Three things to take from it:
 
-- **An inline width cannot be overridden from a stylesheet; `flex` can.**
-  `.lst-dose > .cf-wrap { flex:0 0 62px }` fixes the basis and stops it
-  growing or shrinking, so the whole of the rest of the cell goes to the
-  number — which is the box somebody is trying to read.
+- **An inline width is beaten by `!important` and by nothing else.** The
+  first attempt set `flex` alone, reasoning that a flex-basis overrides
+  `width` inside a flex container. That is true, and the office looked at the
+  same sliver afterwards and said *"still the same"* — so the reasoning is
+  not worth the risk of being subtly wrong twice about which of two
+  declarations wins. Both are pinned now
+  (`flex:0 0 52px !important; width:52px !important`) and the row cannot be
+  argued out of its shape. **The number box also carries its own
+  `min-width`**, so it can never collapse again whatever shares the cell
+  with it.
+- **The office asked for it as a RELATIONSHIP** — bigger number, smaller
+  unit — so the test holds it as one, beside the pixel floors. A rule phrased
+  only in pixels invites the next person to shave the number column for
+  something else with both numbers still passing.
 - **`.lst-dose select { … }` is not dead, and must not be deleted.** It is
   what the row falls back to if the skin fails to load.
 - **The skin's button is 39px where the inputs are 37.** Two pixels, in every
