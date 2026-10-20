@@ -57,6 +57,10 @@ async function boot(browser, opts) {
     ['Antracol', 'Dithane', 'Thiram', 'Daconil', 'Manzate'].forEach((n, i) =>
       chem.push({ id: 20 + i, kind: 'disease', name: n, dose: 50, unit: 'gm',
                   coverage: null, tag: null, sort_order: i }));
+    // The Other list is a column wider than the two above it, so its dose
+    // cell is sized separately and has to be asked separately.
+    chem.push({ id: 30, kind: 'other', name: 'Asir', dose: 0.5, unit: 'mL',
+                coverage: 1, tag: 'sticker', sort_order: 0 });
     window.__DB = {
       nops_maint_chemicals: chem,
       nops_maint_fertilisers: [
@@ -183,11 +187,20 @@ console.log('\n── 1. The dosage box is big enough to read a number out of �
              fert: read('#fert-list .lst-row') };
   });
 
-  /* 56px of tabular Outfit at 14px is about seven digits, which covers
-     every dose on the office list and the 0.0001 the fertilisers key. */
-  atLeast('a pest dose has room for its digits', m.pest.text, 56);
-  atLeast('so does a fertiliser dose, which goes to four decimals', m.fert.text, 56);
-  check('the unit control is not eating the cell', m.pest.unit, 62);
+  /* 80px of tabular Outfit at 14px is about ten digits. The office asked
+     for this twice — the first pass left 68 and they still could not read
+     it — so the floor is set where there is no argument left. */
+  atLeast('a pest dose has room for its digits', m.pest.text, 80);
+  atLeast('so does a fertiliser dose, which goes to four decimals', m.fert.text, 80);
+  check('the unit control is down to what gm and mL need', m.pest.unit, 52);
+  /* THE OFFICE ASKED FOR IT AS A RELATIONSHIP — bigger number, smaller unit
+     — so it is held as one. A rule phrased only in pixels invites the next
+     person to shave the number column for something else and leave both
+     numbers passing. */
+  check('and the number box is the bigger of the two, by a long way',
+        m.pest.input > m.pest.unit * 2, true);
+  check('on the Other list too', m.other.input > m.other.unit * 2, true);
+  check('and on the fertilisers', m.fert.input > m.fert.unit * 2, true);
   check('and it lines up with the boxes beside it', m.pest.unitH, m.pest.inputH);
   check('nothing hangs out of the dose cell into Covers', m.pest.overflows, false);
 
@@ -252,7 +265,7 @@ console.log('\n── 2. A disabled Save does not look like a live one ──');
   await page.context().close();
 }
 
-console.log('\n── 3. Eight chemicals is one wave, not eight round trips ──');
+console.log('\n── 3. Nine chemicals is one wave, not nine round trips ──');
 {
   const { page } = await boot(browser, { delay: 150 });
   await page.evaluate(() => startChemEdit());
@@ -265,7 +278,7 @@ console.log('\n── 3. Eight chemicals is one wave, not eight round trips ─�
     const sent = ups.map(x => x.sent);
     return { n: ups.length, spread: sent.length ? Math.max(...sent) - Math.min(...sent) : null };
   });
-  check('every row went up', w.n, 8);
+  check('every row went up', w.n, 9);
   /* Serially each one waits 150ms for the one before it, so eight of them
      span a bit over a second. Together they are sent inside a tick. */
   check('and they were sent together, not queued behind each other', w.spread < 150, true);

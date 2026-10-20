@@ -794,12 +794,12 @@ td.check-td.locked.ticked:hover::before{border-color:#7fae92;}
    The width below is the fix, and `.lst-dose > .cf-wrap` further down is the
    rest of it. Covers is widened to match, because it is the same four digits
    in both lists. */
-.lst-head, .lst-row { display:grid; grid-template-columns:1fr 156px 80px 88px 30px; gap:7px;
+.lst-head, .lst-row { display:grid; grid-template-columns:1fr 172px 80px 88px 30px; gap:7px;
                       align-items:center; }
-.lst-head.fert-head, .fert-row { grid-template-columns:1fr 166px 94px 84px 34px; }
+.lst-head.fert-head, .fert-row { grid-template-columns:1fr 182px 94px 84px 34px; }
 /* The Other list carries one more column: which schedule dropdown may offer
    the chemical. Pest and disease have a dropdown each already. */
-.lst-head.other-row, .other-row { grid-template-columns:1fr 156px 80px 92px 104px 30px; }
+.lst-head.other-row, .other-row { grid-template-columns:1fr 172px 80px 92px 104px 30px; }
 .lst-tagsel { height:37px; padding:0 4px; font-family:inherit; font-size:12px; font-weight:700;
               color:var(--text-head); background:#fff; border:1.5px solid var(--border);
               border-radius:var(--r-sm); min-width:0; }
@@ -860,17 +860,28 @@ td.check-td.locked.ticked:hover::before{border-color:#7fae92;}
 /* THE SKIN IS WHAT ACTUALLY SITS IN THE ROW, so it is what has to be sized.
    shared_cf_select.js sets width:100% INLINE on its wrapper (it says why in
    its own comment — several pages had their own cf-* widget and a width in
-   the shared class rule stretched those), and an inline width cannot be
-   overridden from here. `flex` can: a fixed basis that neither grows nor
-   shrinks leaves the whole of the rest of the cell to the number, which is
-   the box somebody is actually trying to read. gm and mL are two characters,
-   so 62px is the button with room to spare and nothing more. */
-.lst-dose > .cf-wrap { flex:0 0 62px; }
+   the shared class rule stretched those).
+
+   AN INLINE WIDTH IS BEATEN BY `!important` AND BY NOTHING ELSE, which is
+   why it is here. The first attempt set `flex` alone, on the reasoning that
+   a flex-basis overrides width inside a flex container — true, and it still
+   left the office looking at the same sliver, so the reasoning is not worth
+   the risk of being subtly wrong again about which of two declarations wins.
+   Both are pinned, and the row cannot be argued out of its shape.
+
+   gm and mL are TWO CHARACTERS. 52px is that, a chevron, and the padding
+   round them: the smallest this can be and still read, so everything else
+   in the cell goes to the number — which is the box somebody is actually
+   trying to read a dose out of. */
+.lst-dose > .cf-wrap { flex:0 0 52px !important; width:52px !important; min-width:0; }
 /* And the button is sized to the boxes beside it. Its own padding makes it
    39px against their 37, which reads as one control out of line in every
-   row of both lists. */
-.lst-row .cf-btn { height:37px; padding:0 8px; gap:4px; font-size:12.5px;
+   row of both lists. The chevron is trimmed to pay for the narrower box. */
+.lst-row .cf-btn { height:37px; padding:0 6px; gap:2px; font-size:12.5px;
                    font-weight:700; border-radius:var(--r-sm); }
+.lst-row .cf-chevron { width:10px; height:10px; }
+/* The number never collapses again, whatever shares the cell with it. */
+.lst-dose input[type=number] { flex:1 1 auto; min-width:64px; }
 
 .lst-tick  { display:flex; justify-content:center; }
 .lst-tick input { width:21px; height:21px; accent-color:var(--green-mid); cursor:pointer; }
@@ -890,8 +901,8 @@ td.check-td.locked.ticked:hover::before{border-color:#7fae92;}
 
 @media (max-width:560px) {
   .lst-head { display:none; }
-  .lst-row  { grid-template-columns:1fr 84px 34px; row-gap:7px; }
-  .fert-row { grid-template-columns:1fr 84px 34px; }
+  .lst-row  { grid-template-columns:1fr 128px 34px; row-gap:7px; }
+  .fert-row { grid-template-columns:1fr 128px 34px; }
   .lst-row > .lst-tick { grid-column:span 1; }
 }
 
