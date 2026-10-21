@@ -1742,6 +1742,52 @@ it**, whatever the figures say.
 halves, including a stage nobody recognises changing nothing, an adjustment
 nobody has approved settling nothing, and the stale flag.
 
+## A plot has as many drone maps as it took to fly it
+
+It had one. `t6_plotDocs[rowId] = {…}` — so a plot flown in two passes, or
+re-flown because the first run was cloudy, had the second picture REPLACE the
+first, and the rest lived in a folder the report knows nothing about.
+
+Two halves, and the second is the one that makes the first useful: the maps
+are a **list**, added to rather than replaced, and each one carries its own
+**remark**. *"North half, flown 21 Feb"* is what tells two pictures of one
+plot apart, and it is not in a file name.
+
+**The format keeps every older remark readable.** `DocList:` carries all of
+them with every field percent-encoded — so neither separator, nor a space,
+can turn up inside one and split a map into three — and the FIRST map is
+still written as `DocUrl:` / `DocName:` exactly as it always was. A remark
+written before this has no `DocList`, so the single `DocUrl` stands in for a
+list of one, which is what it always was.
+
+Four things in it:
+
+- **`t6DocsOf()` is the one way to read it**, and it copes with the single
+  object a page half-loaded from cache might still be holding. Nothing else
+  indexes `t6_plotDocs` directly.
+- **Adding is adding.** The picker takes `multiple`, a drop takes every file,
+  and both push. Replace is the deliberate one — it swaps ONE map, takes one
+  file even if several are picked, and **keeps the remark**, because that
+  describes the plot and swapping a cloudy picture has not changed where it
+  was flown.
+- **The chip shows the COUNT where there is more than one.** A plot with four
+  maps showing one thumbnail reads as a plot with one map, which is the whole
+  thing this had to stop saying. Pressing it opens the panel — a list, not a
+  carousel, because a remark is something you type in.
+- **Each upload stands on its own.** One failure costs that picture and not
+  the rest; the one that failed stays on screen with its remark to be saved
+  again, and only the ones that reached storage are written into the remark.
+  The path carries the index, so two maps attached in the same millisecond
+  cannot land on one file.
+
+A **locked row opens the panel read-only** — no Add, no Replace, no Remove,
+and the remarks are not editable. Same view-stays-open, edit-does-not rule as
+everywhere else on that tab, and the remark boxes are part of it.
+
+`tests/a_plot_has_many_drone_maps.cjs` drives the real codec and holds the
+wiring, the awkward shapes included: a remark with a semicolon and a pipe in
+it, a map with no name, a pdf that must not be taken for a picture.
+
 ## A typo must not lock the row that would fix it
 
 A date box takes four digits for the year and somebody keyed two, so a 3rd
