@@ -1826,6 +1826,72 @@ checks fail on the previous code, "it leaves" among them. It holds the other
 direction too — a refused write is still an error, still leaves the tab
 dirty, and still stops the close.
 
+## One stage logged twice is not a plot doing it twice
+
+The PALMS board read **"2 running: Membesar"** and the office asked the
+obvious thing: why is this plot doing the same job twice. It is not. It has
+two log entries OPEN on the same `act_n` — a phone pushing an entry back that
+the office had closed (`sync.js` describes that route in its own comment), or
+the same day saved from two devices.
+
+`openActivities` in `shared/shared_palms.js` has deduped that since it was
+written, and its comment names this exact sentence: *"read back as 'Membesar
++ Membesar', which is not a plot doing anything twice; it is one activity
+counted twice."* **Both pages that draw the cell were using it for half the
+answer**, which is the shape of nearly every fault in this file:
+
+- the **board** named the activities (`ln.status`, deduped) and counted the
+  **rows**, so one job came out as two;
+- **Plot Life** did neither, so it printed the sentence the comment warns
+  about, word for word.
+
+So the count counts what the name names — both go through `openActivities`,
+and `many`, the current stage and the label all come off it. Three things
+fall out:
+
+- **A plot on ONE stage keeps its dropdown.** `many` taken off the rows cost
+  it the selected stage and the colour tint as well, over a duplicate.
+- **The duplicate is out of the COUNT, not out of SIGHT.** The plot carrying
+  one is the plot somebody has to tidy, so the row gets an amber `×2 open`
+  mark saying it is one stage logged twice and that picking a stage closes
+  every one of them. Hiding it would have made the fault permanent.
+- **The confirm panel counts rows and names stages.** Every open row really
+  is closed, so the count has to carry the duplicates — and the name must
+  not, because "Membesar + Membesar" describes nothing.
+
+**The detail views still list every ROW** — the motion study and the plot
+history — because that is where a duplicate is actually seen and dated.
+
+**And the phone had it too.** `savedActs` in `Barcode_Counter`'s
+`EntryTab.jsx` mapped the rows straight across, and the draft it seeds is
+what `MAX_CONCURRENT` counts: a plot with a duplicate read as already running
+the maximum two with ONE stage ticked, so the Field Conductor could not start
+the second real one and nothing said why. It reads a Set now, which is what
+`applyDailySelection` has always written. Change one, change the other.
+
+`shared/RUN_ME_upkeep_is_membersih.sql` closes the rows underneath: an exact
+copy (same plot, same stage, same start day, both open) is **deleted**,
+keeping the lowest id, because it is the same entry twice; two open entries
+on one stage with **different** start days are two statements, so the older
+is **closed on the day the newer began** rather than thrown away. A plot
+genuinely running two different stages is left alone — PALMS allows two and
+that is not this.
+
+**That file also answers what Up-keep is: Membersih.** The plot status report
+of 31-Aug-2026 carried a stage that was not one of the eleven, and
+`seed_palms_from_report_2026_08_31.sql` invented a twelfth as a placeholder,
+saying in as many words that it was a guess. The office has now named it. The
+repair repoints every plot log, every day of history and every daily status
+row, then removes the placeholder — which moves nothing else, because it was
+added at the END of the list on purpose so no other stage's `sort_order`
+changes and no history is silently re-read. Repointing can itself collide
+with a Membersih already open on that plot, so the duplicate sweep runs
+after it, in the same block.
+
+`tests/one_stage_logged_twice_is_not_two.cjs` drives the shipped
+`shared_palms.js` and holds both pages to it — 26 of its checks fail on the
+previous code.
+
 ## A typo must not lock the row that would fix it
 
 A date box takes four digits for the year and somebody keyed two, so a 3rd
