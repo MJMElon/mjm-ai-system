@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=93">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=94">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -174,16 +174,6 @@
 
            The filters below belong to BOTH: whichever section is open
            answers the same question about the same nursery. -->
-        <!-- A full-width segmented switch, the office's design: grey track,
-             equal segments, the chosen one a white pill with its own colour.
-             Keeps the subtabs-bar class because switchRecSection finds its
-             siblings through it; seg-bar restyles only this pair. -->
-        <div class="subtabs-bar seg-bar">
-          <button class="subtab-btn active" id="recsec-btn-approved"
-                  onclick="switchRecSection('approved',this)"><span data-i18n="rec.partApproved">Approved</span></button>
-          <button class="subtab-btn" id="recsec-btn-rejected"
-                  onclick="switchRecSection('rejected',this)"><span data-i18n="rec.partRejected">Rejected</span> <span class="rec-part-count" id="rej-count"></span></button>
-        </div>
         <div class="toolbar">
           <select class="filter-sel" id="rf-filter-jenis" onchange="renderRecords()">
             <option value="" data-i18n="rec.allJenis">All Jenis Kerja</option>
@@ -209,8 +199,19 @@
           </button>
         </div>
 
+        <!-- Approved / Rejected sit UNDER the filter row now, as tabs on the
+             top edge of the table itself — the active one a white tab that
+             joins the card below with no gap, the office's design. Keeps
+             the subtabs-bar class because switchRecSection finds its
+             siblings through it; rec-tabs restyles only this pair. -->
+        <div class="subtabs-bar rec-tabs">
+          <button class="subtab-btn active" id="recsec-btn-approved"
+                  onclick="switchRecSection('approved',this)"><span data-i18n="rec.partApproved">Approved</span></button>
+          <button class="subtab-btn" id="recsec-btn-rejected"
+                  onclick="switchRecSection('rejected',this)"><span data-i18n="rec.partRejected">Rejected</span> <span class="rec-part-count" id="rej-count"></span></button>
+        </div>
+
         <div id="recsec-approved" class="recsec active">
-        <div class="rec-part-sub" style="margin:0 0 10px;" data-i18n="rec.partApprovedSub">The month's scheduled jobs, with the submissions a Field Conductor has signed off filled in</div>
         <div class="card"><div class="tbl-wrap">
           <table class="rec-table">
             <!-- The columns are PINNED here rather than left to the browser.
@@ -299,7 +300,6 @@
              so the confirm names the row that will go and refuses to guess
              when the pairing is ambiguous. -->
         <div id="recsec-rejected" class="recsec">
-        <div class="rec-part-sub" style="margin:0 0 10px;" data-i18n="rec.partRejectedSub">Records a Field Conductor refused — approve one and it flows back into the approved section</div>
         <div class="card"><div class="tbl-wrap">
           <table class="rec-table rej-table">
             <!-- Pinned the same way and for the same reason as the table
