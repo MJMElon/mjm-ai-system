@@ -1788,6 +1788,44 @@ everywhere else on that tab, and the remark boxes are part of it.
 wiring, the awkward shapes included: a remark with a semicolon and a pipe in
 it, a map with no name, a pdf that must not be taken for a picture.
 
+## `error` means one thing: what you keyed is not in the database
+
+The batch page's X closed a morning's counting without a word, so closing now
+watches for an error toast while each tab's save runs and refuses to leave a
+tab that reported one. That is the right test — it is how every save on the
+page reports a refusal — and it was being handed warnings.
+
+A 3rd Culling whose drone map does not tally is **saved** and then says so,
+because the plot goes on the To Do List until somebody explains it. That
+sentence went out as `'error'`, so **the tab was left dirty by its own
+success**: the office pressed X on batch 241 and got
+
+    Not closing — 3rd Culling did not save. Nothing has been lost.
+
+over a report that was in the database. Saving again said the same thing, for
+as long as one plot was unexplained, so the only way out was **Don't save** —
+which reads as throwing the day away. Three more wore the same shape: a drone
+map that failed to upload while the row itself stored (Tabs 3, 5 and 6), the
+To Do flag failing after the report, and reasons saved against a plot with no
+3rd Culling record yet.
+
+So there is a third toast, `'warn'` — amber, ⚠️, and not a failure — and
+`'error'` is kept for the one thing it has to mean. Two things follow:
+
+- **A warning must not look like a failure either.** Red with a ❌ beside work
+  that is safely stored is the same lie the dirty flag was telling, and it is
+  the one somebody acts on: they key it again.
+- **The next one will be written the same way**, so the test holds the SHAPE
+  rather than the sentences — no `showToast(…, 'error')` anywhere in the page
+  may say something was saved. It found two the three known ones had not
+  accounted for. A toast saying nothing WAS saved is a refusal and says so.
+
+`tests/a_warning_is_not_a_failed_save.cjs` drives the real page and the real
+`saveTab6` with the office's own 500 against a drone map of 540: ten of its
+checks fail on the previous code, "it leaves" among them. It holds the other
+direction too — a refused write is still an error, still leaves the tab
+dirty, and still stops the close.
+
 ## A typo must not lock the row that would fix it
 
 A date box takes four digits for the year and somebody keyed two, so a 3rd

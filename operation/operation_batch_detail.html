@@ -175,6 +175,10 @@
         .toast.hiding { animation: toastOut 0.3s ease forwards; }
         .toast-success { background: #f0f8ec; border: 1.5px solid #4a7a2e; color: #2d5a1b; }
         .toast-error   { background: #fff5f5; border: 1.5px solid #a83020; color: #7f1d1d; }
+        /* SAVED, WITH SOMETHING STILL TO DO. Not red: red is "your work is not
+           in the database", and a day's counting that is safely stored must
+           never be dressed as one. See _trackTabSave. */
+        .toast-warn    { background: #fffaf0; border: 1.5px solid #c98a16; color: #7a4e06; }
         .toast-icon { font-size: 1.3rem; line-height: 1; flex-shrink: 0; }
         @keyframes toastIn  { 0% { opacity:0; transform: translateY(20px) scale(0.95); } 100% { opacity:1; transform: translateY(0) scale(1); } }
         @keyframes toastOut { 0% { opacity:1; transform: translateY(0) scale(1); } 100% { opacity:0; transform: translateY(10px) scale(0.95); } }
@@ -4458,7 +4462,22 @@
            reports failure through showToast(…, 'error'), so the wrapper below
            watches for one while the save runs and leaves the tab dirty if it
            sees one. Clearing on "the function returned" would drop the warning
-           on exactly the save that did not happen. */
+           on exactly the save that did not happen.
+
+           SO A WARNING MUST NOT BE AN ERROR, and three saves were raising one
+           that way. A 3rd Culling whose drone map does not tally is SAVED and
+           then says so — the plot goes on the To Do List until somebody
+           explains it — and that sentence went out as 'error', so the tab was
+           left dirty by its own success: the close dialog came up reading
+           "Not closing — 3rd Culling did not save. Nothing has been lost."
+           over a report that was in the database, every time, for as long as
+           one plot was unexplained. Saving again said the same thing. The only
+           way out was Don't save, which reads as throwing a day away.
+           Same shape for a drone map that failed to upload on Tabs 3, 5 and 6
+           ("rows saved without the map") and for the To Do flag.
+
+           Those go out as 'warn' — amber, ⚠️, and not a failure. 'error' means
+           ONE thing: what you keyed is not in the database. */
         const TAB_TITLES = {
             1: 'Seeds Received', 2: 'Seed Planting', 3: 'Transplanting',
             4: '1st Culling', 5: '2nd Culling', 6: '3rd Culling',
@@ -4702,7 +4721,8 @@
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
             toast.className = `toast toast-${type}`;
-            toast.innerHTML = `<span class="toast-icon">${type === 'success' ? '✅' : '❌'}</span><span>${message}</span>`;
+            const icon = type === 'success' ? '✅' : type === 'warn' ? '⚠️' : '❌';
+            toast.innerHTML = `<span class="toast-icon">${icon}</span><span>${message}</span>`;
             container.appendChild(toast);
             setTimeout(() => {
                 toast.classList.add('hiding');
@@ -5549,7 +5569,7 @@
                     mapUrl = uploaded;
                     t3EditMaps[idx] = uploaded;
                 } else {
-                    showToast('⚠️ Drone map upload failed: ' + (window._mjmLastUploadError || 'storage error') + '. Edit saved without map — fix bucket and re-edit to attach.', 'error');
+                    showToast('Drone map upload failed: ' + (window._mjmLastUploadError || 'storage error') + '. The edit is saved without the map — fix the bucket and edit again to attach it.', 'warn');
                 }
             }
             const mapSuffix = mapUrl ? ` MapUrl:${mapUrl}` : '';
@@ -6585,7 +6605,7 @@
                 }
 
                 if (uploadFailures > 0) {
-                    showToast(`⚠️ ${uploadFailures} drone map(s) failed to upload: ${window._mjmLastUploadError || 'storage error'}. Those rows saved without the map. Fix the documents bucket and re-save.`, 'error');
+                    showToast(`${uploadFailures} drone map(s) failed to upload: ${window._mjmLastUploadError || 'storage error'}. Those rows saved without the map. Fix the documents bucket and save again.`, 'warn');
                 }
 
                 if (logsToInsert.length === 0) {
@@ -10998,7 +11018,7 @@ Thank you.`;
                 setEditMetaUI(5, new Date().toISOString(), window.currentUserEmail);
 
                 if (uploadFailures > 0) {
-                    showToast(`⚠️ ${uploadFailures} drone map(s) failed to upload: ${window._mjmLastUploadError || 'storage error'}. Rows saved without map. Fix bucket and re-save.`, 'error');
+                    showToast(`${uploadFailures} drone map(s) failed to upload: ${window._mjmLastUploadError || 'storage error'}. The counting is saved; the map is not. Fix the bucket and save again.`, 'warn');
                 }
                 showToast(`2nd Culling report saved — ${logsToInsert.length} plot record(s) logged.`, 'success');
                 btn.innerText = originalText; btn.disabled = false;
@@ -14013,7 +14033,7 @@ Thank you.`;
                        written against a plot with no saved 3rd Culling record
                        has nowhere to go until the report itself is saved. */
                     showToast(`${written} reason(s) saved. ${unplaced} plot(s) have no saved 3rd Culling record yet — ` +
-                              `save the report once and their reasons will keep.`, 'error');
+                              `save the report once and their reasons will keep.`, 'warn');
                 } else {
                     showToast(written ? `${written} reason(s) saved.` : 'Nothing to save — the reasons are unchanged.', 'success');
                 }
@@ -14705,20 +14725,20 @@ Thank you.`;
                     if (flagIds.length) await _supabase.from('shared_inventory_logs').delete().in('id', flagIds);
                 } catch (flagErr) {
                     console.warn('[saveTab6] amendment flag not updated:', flagErr);
-                    showToast('Report saved, but the Amendment Needed flag could not be updated. Save again to retry.', 'error');
+                    showToast('Report saved, but the To Do List flag could not be updated. Save again to retry.', 'warn');
                 }
 
                 setEditMetaUI(6, new Date().toISOString(), window.currentUserEmail);
                 if (uploadFailures > 0) {
-                    showToast(`⚠️ ${uploadFailures} doc(s) failed to upload: ${window._mjmLastUploadError || 'storage error'}. Rows saved without doc. Fix bucket and re-save.`, 'error');
+                    showToast(`${uploadFailures} drone map(s) failed to upload: ${window._mjmLastUploadError || 'storage error'}. The counting is saved; the map is not. Fix the bucket and save again — the map is still on the row.`, 'warn');
                 }
                 const savedMsg = `3rd Culling report saved — ${logsToInsert.length} plot record(s)${transferLogs.length ? `, ${transferLogs.length} transfer(s)` : ''} logged.`;
                 if (undatedMovements > 0) {
                     showToast(`${undatedMovements} transfer(s) had no date and were saved as of today. ` +
-                              `Key the day they actually happened and save again.`, 'error');
+                              `Key the day they actually happened and save again.`, 'warn');
                 }
                 if (unexplained > 0) {
-                    showToast(`${savedMsg} ${unexplained} plot(s) still need a drone map reason — this batch stays in Amendment Needed until they have one.`, 'error');
+                    showToast(`${savedMsg} ${unexplained} plot(s) still need a drone map reason — this batch stays on the To Do List until they have one.`, 'warn');
                 } else {
                     showToast(savedMsg, 'success');
                 }
