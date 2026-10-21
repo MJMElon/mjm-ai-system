@@ -557,6 +557,19 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 #recview-list .toolbar .filter-sel{font-size:13px;height:38px;}
 #recview-list .toolbar .btn{font-size:13px;padding:9px 16px;}
 #recview-list .toolbar input.filter-sel{height:38px;font-size:13px;}
+/* ONE LINE: the two selects share the row with the date box and the two
+   icon buttons, instead of each select taking a line of its own. The
+   select skin's wrapper carries width:100% INLINE (its own comment says
+   why), so only !important can size it here — the dosage cell learned
+   the same lesson. On a narrow screen the row is allowed to wrap again. */
+#recview-list .toolbar{flex-wrap:nowrap;}
+#recview-list .toolbar .cf-wrap{flex:1 1 220px !important;width:auto !important;min-width:150px;}
+#recview-list .toolbar select.filter-sel{width:100%;}
+#recview-list .toolbar input.filter-sel{flex:0 0 160px;}
+#recview-list .toolbar .btn-ico{display:inline-flex;align-items:center;justify-content:center;
+  width:38px;height:38px;flex:0 0 38px;padding:0;}
+#recview-list .toolbar .btn-ico svg{width:17px;height:17px;}
+@media(max-width:900px){#recview-list .toolbar{flex-wrap:wrap;}}
 
 /* ─── CHECKED (verified) ROWS ─── */
 .btn-check{color:#065f46 !important;border-color:#a7f3d0 !important;background:#ecfdf5 !important;}

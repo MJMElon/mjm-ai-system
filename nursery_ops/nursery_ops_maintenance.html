@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=91">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=92">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -194,8 +194,15 @@
           <input class="filter-sel" type="text" id="rf-filter-date"
                  placeholder="Filter by date…" data-i18n-ph="rec.filterDate" oninput="renderRecords()"
                  style="width:160px;height:36px;padding:0 10px;font-size:12px;">
-          <button class="btn btn-primary" onclick="openRecModal()" data-i18n="btn.addRecord">+ Add Record</button>
-          <button class="btn" onclick="syncRecordsFromSchedule()" data-i18n="btn.sync">↺ Sync from Schedule</button>
+          <!-- Icon buttons, at the office's request — the title says what
+               each does. No data-i18n here: applyI18n writes textContent,
+               which would replace the icon with words. -->
+          <button class="btn btn-primary btn-ico" onclick="openRecModal()" title="Add Record" aria-label="Add Record">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14m-7-7h14"/></svg>
+          </button>
+          <button class="btn btn-ico" onclick="syncRecordsFromSchedule()" title="Sync from Schedule" aria-label="Sync from Schedule">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          </button>
         </div>
 
         <div id="recsec-approved" class="recsec active">
