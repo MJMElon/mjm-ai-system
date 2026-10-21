@@ -24,13 +24,21 @@
   body { background:#f0fdfa; margin:0; }
 
   /* Square tiles, laid out on a grid that fits as many as the width allows
-     and never fewer than two, so the set still reads as a set on a phone —
-     and, with equal-width columns, evenly spaced under the board by
-     construction rather than needing a rule to say so. */
+     and never fewer than two, so the set still reads as a set on a phone.
+     Capped at 150px rather than stretching to 1fr -- a row of five no
+     longer runs edge to edge under the board; it sits as its own compact
+     cluster, centred (justify-content below) under the middle of the
+     frame the way the office asked for, with the board's own wood showing
+     at both sides instead of the tiles claiming the whole width. auto-fit
+     instead of auto-fill: a fit-sized row with fewer than five tiles
+     showing (permissions can hide one) still collapses to just its own
+     content width rather than leaving a phantom empty column reserving
+     space nothing is drawn in. */
   /* Row-gap is wider than column-gap on purpose: it is the clearance a
      wrapped second row needs so its tiles' own hanging threads (20px, see
      .tool-hang) never run into the row above. */
-  .tool-grid { display:grid; gap:26px 12px; grid-template-columns:repeat(auto-fill, minmax(132px, 1fr)); }
+  .tool-grid { display:grid; gap:26px 12px; grid-template-columns:repeat(auto-fit, minmax(132px, 150px));
+               justify-content:center; }
   /* #tools' own gap to the board, in CSS rather than a Tailwind mt-* class —
      .tool-hang's height below has to match this NUMBER exactly for the
      pegs to land on the frame, and a Tailwind utility is one more place
