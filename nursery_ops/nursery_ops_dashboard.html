@@ -83,8 +83,17 @@
      itself, same as a real picture swings from where it is actually
      hung. */
   .tool-hang { position:absolute; left:0; right:0; bottom:100%; height:20px; pointer-events:none; }
-  .hang-wire { position:absolute; left:0; right:0; top:-4px; height:22px; }
-  .hang-wire path { fill:none; stroke:#8a6a4a; stroke-width:1.5; stroke-linecap:round; vector-effect:non-scaling-stroke; }
+  /* left/right alone does not reliably size an <svg> -- it is a replaced
+     element and wants its own width/height, or it falls back to an
+     intrinsic size that does not match the tile, which is what was
+     throwing the V off-centre. width/height here are the fix; left/right
+     stay too, as the positioning (not sizing) half of the rule. */
+  .hang-wire { position:absolute; left:0; right:0; top:-4px; width:100%; height:22px; }
+  /* Black, not the chocolate brown this carried for one commit -- tried
+     both side by side (see the commit message) and chocolate blended into
+     the frame's own wood tone right where the wire meets it; black holds
+     its edge against both the dark frame above and the light tile below. */
+  .hang-wire path { fill:none; stroke:#1e1e1e; stroke-width:1.5; stroke-linecap:round; vector-effect:non-scaling-stroke; }
   /* 23% / 77%, not the 50%-symmetric 27%/73% a single-nail-per-ring version
      used — tuned so the gap WITHIN a tile's own pair of rings matches the
      gap BETWEEN one tile's rings and the next tile's, at this grid's
