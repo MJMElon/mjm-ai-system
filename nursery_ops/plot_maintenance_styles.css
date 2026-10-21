@@ -1209,30 +1209,28 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 @media(min-width:768px){
   .sm-nav-toggle{display:grid;place-items:center;margin:0 0 10px auto;padding:0;
     width:26px;height:28px;
-    border:1px solid #ccfbf1;border-radius:9px;background:#f0fdfa;
-    color:#0f766e;font-size:11px;line-height:1;cursor:pointer;
+    border:1px solid rgba(255,255,255,.3);border-radius:9px;
+    background:rgba(255,255,255,.12);
+    color:#fff;font-size:11px;line-height:1;cursor:pointer;
     transition:background .15s,color .15s;}
-  .sm-nav-toggle:hover{background:#ccfbf1;color:#115e59;}
+  .sm-nav-toggle:hover{background:rgba(255,255,255,.25);}
   /* On the rail it is the only thing there, so it sits in the middle. */
   .nav-hid .sm-nav-toggle{margin:0 auto;}
 }
 
+/* The menu: icon + name per row. The back link and the caption are gone —
+   the header bar's Back pill is the way out — and on a desk the bar is a
+   SOLID TEAL block with white rows, the active one highlighted, which is
+   the design the office handed over. The base colours here are the light
+   PHONE ones; the desktop media block below repaints them for the dark
+   bar, and must stay after this so it wins on order. */
 #sm-nav{display:block;}
-#sm-nav .pn-out{display:flex;align-items:center;gap:8px;padding:10px 13px;
-  border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;color:#475569;
-  text-decoration:none;font-size:11px;font-weight:900;letter-spacing:.06em;
-  text-transform:uppercase;line-height:1.25;transition:background .15s,color .15s;}
-#sm-nav .pn-out:hover{background:#f1f5f9;color:#0f172a;}
-/* The panels, held apart from the way out by a rule rather than by
-   distance alone, so the bar reads as "leave" then "inside". */
-#sm-nav .pn-group{margin-top:14px;padding-top:14px;border-top:1px solid #ccfbf1;
-  display:flex;flex-direction:column;gap:4px;}
-#sm-nav .pn-cap{font-size:9.5px;font-weight:900;letter-spacing:.18em;
-  text-transform:uppercase;color:#5eead4;padding:0 4px 7px;line-height:1.4;}
-#sm-nav .pn-tab{display:block;width:100%;text-align:left;padding:10px 12px;
-  border-radius:12px;font-family:var(--font);font-size:12.5px;font-weight:800;
-  color:#0f766e;background:transparent;border:1px solid transparent;
+#sm-nav .pn-group{display:flex;flex-direction:column;gap:4px;}
+#sm-nav .pn-tab{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  padding:11px 12px;border-radius:12px;font-family:var(--font);font-size:12.5px;
+  font-weight:800;color:#0f766e;background:transparent;border:1px solid transparent;
   line-height:1.25;cursor:pointer;transition:background .15s,color .15s;}
+#sm-nav .pn-ico{width:18px;height:18px;flex-shrink:0;}
 #sm-nav .pn-tab:hover{background:#ccfbf1;}
 #sm-nav .pn-tab.is-on{background:#0f766e;color:#fff;}
 #sm-nav .pn-tab.is-on:hover{background:#115e59;}
@@ -1248,19 +1246,22 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 @media(min-width:768px){
   #sm-nav{position:sticky;top:76px;align-self:start;
     max-height:calc(100vh - 96px);overflow-y:auto;overflow-x:hidden;
-    padding:10px;border:1px solid #e6f4f0;border-radius:14px;
-    background:var(--bg-white);}
+    padding:12px 10px;border:none;border-radius:16px;
+    background:#0f766e;box-shadow:0 10px 24px rgba(13,148,136,.25);}
+  #sm-nav .pn-tab{color:rgba(255,255,255,.85);}
+  #sm-nav .pn-tab:hover{background:rgba(255,255,255,.12);color:#fff;}
+  #sm-nav .pn-tab.is-on{background:rgba(255,255,255,.22);color:#fff;}
+  #sm-nav .pn-tab.is-on:hover{background:rgba(255,255,255,.28);}
 }
 /* Phone: the column becomes a row above the content — a 212px column
-   beside a table on a 412px screen leaves neither of them usable. */
+   beside a table on a 412px screen leaves neither of them usable. The
+   chips keep the LIGHT colours: there is no teal block behind them here. */
 @media(max-width:767px){
-  #sm-nav .pn-group{margin-top:10px;padding-top:10px;flex-direction:row;
+  #sm-nav .pn-group{margin-top:10px;flex-direction:row;
     overflow-x:auto;gap:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
   #sm-nav .pn-group::-webkit-scrollbar{display:none;}
-  #sm-nav .pn-cap{display:none;}
   #sm-nav .pn-tab{width:auto;flex:0 0 auto;background:#f0fdfa;border-color:#99f6e4;
     font-size:12px;padding:9px 13px;white-space:nowrap;}
-  #sm-nav .pn-out{justify-content:center;}
 }
 
 /* The head every panel shares: what the side bar chose, and the two
