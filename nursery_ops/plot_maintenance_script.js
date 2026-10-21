@@ -878,6 +878,7 @@ function renderPayroll() {
   const tbl = document.getElementById('payroll-table');
   if (!tbl) return;
   if (_payrollView === 'loading_seedlings') { renderLoadingSeedlingsPayroll(); return; }
+  if (_payrollView === 'transplanting')     { renderTransplantingPayroll(); return; }
   resolveWorkers();                      // the month decides who has a column
   const n = getNursery(), m = getMonth();
   const cfg = PAYROLL_TYPES[_payrollView];
@@ -1197,6 +1198,211 @@ function lockDoWorkers(doId) {
         renderPayroll();
       }
     });
+}
+
+/* ══ TRANSPLANTING — the FC Portal's own record, shown in the office ══
+   The four jobs a plot needs when seedlings go INTO it. The conductor keys
+   them on his own portal (TransplantSheet) and they land in
+   nops_transplant_field_records; this tab is the office reading them.
+
+   IT IS READ-ONLY, and that is not an omission. The crew on a transplanting
+   record is the conductor's answer, and the FC Portal is the ONLY writer of
+   that table in either repository -- see the note in FC-Portal/CLAUDE.md.
+   A tick box here would be a second writer of somebody's pay with no rule
+   about who may move it, which is the fault the sheet already guards with
+   its own `transplant_edit` permission.
+
+   THIRD COPY of the job list. FC-Portal/src/modules/maintenance/
+   transplantData.js has TRANSPLANT_JOBS and npayroll_script.js has its own;
+   change one, change all three. Only the key and the label are needed here
+   -- the matching and the rates stay where they are. */
+const TP_JOBS = [
+  { key:'blanket_spray', label:'Blanket Spray' },
+  { key:'lining',        label:'Lining & Arranging Polybag 15" x 18"' },
+  { key:'polybag_fill',  label:'Polybag Filling 15" x 18"', split:true },
+  { key:'transplanting', label:'Transplanting (Hy Plug to big polybag)' },
+];
+const TP_JOB = Object.fromEntries(TP_JOBS.map(j => [j.key, j]));
+
+/* WHAT ONE WORKER DID ON ONE RECORD.
+
+   SAME RULE as transplantFieldLines() in npayroll/npayroll_script.js, which
+   is what PRICES these rows on the salary claim. Change one, change the
+   other -- `tests/the_worker_record_shares_like_the_claim.cjs` drives both
+   copies and fails if they ever answer differently. A sheet that divides a
+   plot one way and a claim that divides it another is one worker paid for
+   work the sheet says somebody else did.
+
+   The split job (polybag filling) carries a quantity against each name,
+   keyed by the conductor and made to agree with the report before the app
+   will save it. The other three do not, so the plot's own figure is divided
+   equally among the crew. */
+function tpShare(rec, w) {
+  const job  = TP_JOB[rec.work_type];
+  const crew = Array.isArray(rec.workers) ? rec.workers.filter(x => x && x.name) : [];
+  if (!crew.length) return 0;
+  return job && job.split
+    ? Number(w.qty || 0)
+    : Number(rec.source_qty || 0) / crew.length;
+}
+
+let _tpRecordsCache = {}, _tpRecordsLoading = {}, _tpRecordsErr = {};
+function _tpPayrollKey(n, m) { return `${n}_${m}`; }
+
+/* Asked by MONTH, the same key the claim asks on
+   (`.eq('schedule_month', ...)`) -- the record's schedule_month is what
+   decides which month it is paid in, and a second rule here would put a row
+   on this sheet that the claim does not pay. */
+async function loadTransplantRecordsForPayroll(n, m) {
+  if (!_supabase) return;
+  const key = _tpPayrollKey(n, m);
+  _tpRecordsLoading[key] = true;
+  _tpRecordsErr[key] = '';
+  renderPayroll();
+
+  const { data, error } = await _supabase
+    .from('nops_transplant_field_records')
+    .select('id, work_date, nursery_name, plot_name, batch_name, work_type, jenis, schedule_month, source_qty, workers, total_qty, remark, reported_by')
+    .eq('schedule_month', m)
+    .order('work_date', { ascending: true });
+
+  _tpRecordsLoading[key] = false;
+  if (error) {
+    /* A database without the table is not a fault to shout about: the office
+       ran this module before the FC Portal had the sheet. Same choice
+       loadTransplantField makes. */
+    _tpRecordsErr[key] = /relation|does not exist|schema cache/i.test(error.message || '')
+      ? '' : error.message;
+    _tpRecordsCache[key] = [];
+    renderPayroll();
+    return;
+  }
+  _tpRecordsCache[key] = data || [];
+  renderPayroll();
+}
+
+/* THE PLOT DECIDES which nursery a record is in -- the house rule, and the
+   reason is that the record's own nursery_name is whatever the FC Portal
+   had on screen, while the plot is the thing that is somewhere. */
+function transplantingRows(n, m) {
+  const rows = _tpRecordsCache[_tpPayrollKey(n, m)] || [];
+  const plots = NURSERY_PLOTS[n] || [];
+  return rows
+    .filter(r => plots.includes(r.plot_name))
+    .sort((a, b) => {
+      const pa = plots.indexOf(a.plot_name), pb = plots.indexOf(b.plot_name);
+      if (pa !== pb) return pa - pb;
+      return String(a.work_date || '').localeCompare(String(b.work_date || ''))
+          || String(a.work_type || '').localeCompare(String(b.work_type || ''));
+    });
+}
+
+function renderTransplantingPayroll() {
+  const tbl = document.getElementById('payroll-table');
+  if (!tbl) return;
+  resolveWorkers();
+  const n = getNursery(), m = getMonth();
+  const key = _tpPayrollKey(n, m);
+  const line = document.getElementById('payroll-form-line');
+  if (line) line.textContent = `${t('pay.form')} (${NURSERY_NAMES[n]}) — ${t('pay.month')} ${m}`;
+  const hint = document.getElementById('payroll-hint');
+  if (hint) { hint.textContent = t('pay.transplantHint'); hint.classList.remove('pay-hint-warn'); }
+  const off = document.getElementById('payroll-offreg');
+  if (off) { off.style.display = 'none'; }
+
+  if (_tpRecordsCache[key] === undefined && !_tpRecordsLoading[key]) {
+    loadTransplantRecordsForPayroll(n, m);
+  }
+  if (_tpRecordsLoading[key]) {
+    tbl.innerHTML = `<tbody><tr><td style="padding:2rem;text-align:center;color:var(--text-faint);font-size:13px;">${t('pay.loading')}</td></tr></tbody>`;
+    return;
+  }
+  if (_tpRecordsErr[key]) {
+    tbl.innerHTML = `<tbody><tr><td style="padding:2rem;text-align:center;color:var(--danger,#c0392b);font-size:13px;">${esc(_tpRecordsErr[key])}</td></tr></tbody>`;
+    return;
+  }
+
+  const rows = transplantingRows(n, m);
+  /* THE NAMES ON THE RECORDS, not the register's general-worker list.
+
+     Every other tab here is a tick sheet: the office decides who did the
+     work, so the columns are whoever may be ticked. This one is a record of
+     a decision already made in the field, and a name the FC credited that
+     the register cannot place would simply have no column -- their share
+     would vanish off the sheet with nothing saying so, which is the fault
+     `pay.fieldNoColumn` exists to shout about on the other tabs. So the
+     columns are the register's names FIRST, in their own order, and then
+     any name the records carry that the register does not know. */
+  const reg = workers[n] || [];
+  const onRecords = [...new Set(rows.flatMap(r =>
+    (Array.isArray(r.workers) ? r.workers : []).filter(w => w && w.name).map(w => String(w.name))))];
+  const extra = onRecords.filter(name => !reg.includes(name)).sort();
+  const wk = reg.concat(extra);
+
+  const payTh = (txt, w, cls) =>
+    `<th class="${cls || ''}" style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
+  let h = `<thead>
+    <tr><th class="wk-th" colspan="${4 + wk.length + 1}">${t('tab.transplanting')}</th></tr>
+    <tr>
+      ${payTh(t('pay.date'), 92)}
+      ${payTh(t('pay.plot'), 84)}
+      ${payTh(t('pay.work'), 190)}
+      ${payTh(t('pay.qtyTransplant'), 104)}
+      ${wk.map(w => payTh(esc(w) + (extra.includes(w) ? ' ⚠' : ''), 108)).join('')}
+      ${payTh(t('pay.perWorker'), 112)}
+    </tr></thead><tbody>`;
+
+  const totals = {}; wk.forEach(w => totals[w] = 0);
+  let capTotal = 0;
+
+  if (!rows.length) {
+    h += `<tr><td colspan="${4 + wk.length + 1}" style="padding:1.6rem;text-align:center;color:var(--text-faint);">${t('pay.noTransplant')}</td></tr>`;
+  } else {
+    rows.forEach(r => {
+      const job  = TP_JOB[r.work_type];
+      const crew = Array.isArray(r.workers) ? r.workers.filter(w => w && w.name) : [];
+      const byName = {}; crew.forEach(w => { byName[String(w.name)] = w; });
+      /* The record's own figure, which is what the claim quotes: the keyed
+         quantities where the job splits, the plot's source figure
+         otherwise. */
+      const rowCap = job && job.split
+        ? crew.reduce((sum, w) => sum + (Number(w.qty) || 0), 0)
+        : Number(r.source_qty || 0);
+      capTotal += rowCap;
+      h += `<tr>
+        <td style="font-weight:600;white-space:nowrap;">${r.work_date ? new Date(r.work_date).toLocaleDateString('en-MY') : '—'}</td>
+        <td class="plot-td">${esc(r.plot_name || '—')}</td>
+        <td style="text-align:left;">${esc((job && job.label) || r.jenis || r.work_type || '—')}</td>
+        <td>${rowCap ? rowCap.toLocaleString() : '—'}</td>
+        ${wk.map(w => {
+          const on = byName[w];
+          if (!on) return '<td></td>';
+          const share = tpShare(r, on);
+          totals[w] += share;
+          return `<td class="ticked" style="font-weight:700;" title="${esc(w)}">${capFmt(share)}</td>`;
+        }).join('')}
+        <td style="font-weight:700;">${capFmt(rowCap)}</td>
+      </tr>`;
+    });
+  }
+
+  const grand = wk.reduce((sum, w) => sum + totals[w], 0);
+  h += `</tbody><tfoot>
+    <tr class="jumlah-tr">
+      <td class="th-left" colspan="3">${t('pay.totalCap')}</td>
+      <td>${capTotal ? capTotal.toLocaleString() : '—'}</td>
+      ${wk.map(w => `<td>${capFmt(totals[w])}</td>`).join('')}
+      <td>${capFmt(grand)}</td></tr>
+  </tfoot>`;
+  tbl.innerHTML = h;
+
+  /* A name the FC credited that the register cannot place still gets a
+     column -- see above -- but it has to SAY so, or the sheet quietly shows
+     somebody the payroll has never heard of. */
+  if (off && extra.length) {
+    off.style.display = '';
+    off.textContent = t('pay.fieldNoColumn') + ' ' + extra.join('; ');
+  }
 }
 
 function renderLoadingSeedlingsPayroll() {
@@ -2130,11 +2336,14 @@ const I18N = {
     'btn.reset':'↺ Reset to Defaults', 'btn.clearAll':'Clear All', 'btn.selectAll':'Select All',
     'sched.ticked':'ticked', 'sched.none':'not set yet',
     'tab.pd':'P & D — Spraying', 'tab.manuring':'Manuring', 'tab.weeding':'Weeding',
-    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.record':'Maintenance Work Record', 'tab.chart':'Analytics', 'tab.schedule':'Monthly Maintenance Schedule', 'tab.payroll':'Worker Record', 'tab.setting':'Setting',
+    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.record':'Maintenance Work Record', 'tab.chart':'Analytics', 'tab.schedule':'Monthly Maintenance Schedule', 'tab.payroll':'Worker Record', 'tab.setting':'Setting',
     'pay.form':'Worker Record', 'pay.month':'Month', 'pay.date':'Date', 'pay.plot':'Plot',
     'pay.plotCap':'Plot Capacity (seedlings)', 'pay.perWorker':'Capacity per Worker (seedlings)',
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
     'pay.customer':'Customer', 'pay.doNumber':'DO Number', 'pay.qtyLoaded':'Qty Loaded (seedlings)',
+    'pay.work':'Work', 'pay.qtyTransplant':'Qty (seedlings)',
+    'pay.noTransplant':'No transplanting job has been recorded for this nursery this month yet.',
+    'pay.transplantHint':'Recorded by the Field Conductor on the FC Portal — the plot, the job, the day and the crew. Read-only here: the crew is his answer, and the FC Portal is the only place it can be changed.',
     'pay.noDOs':'No Delivery Order has been issued for this nursery this month yet.',
     'pay.loadingHint':'Ticks come from the driver’s phone when the DO is signed, or from here if nobody has ticked it yet. Once saved, a row locks — only an admin can change it after that.',
     'pay.doLocked':'Locked — saved by {who} on {when}. Only an admin can change this.',
@@ -2262,11 +2471,14 @@ const I18N = {
     'btn.reset':'↺ Set Semula', 'btn.clearAll':'Kosongkan', 'btn.selectAll':'Pilih Semua',
     'sched.ticked':'ditanda', 'sched.none':'belum ditetapkan',
     'tab.pd':'P & D — Racun', 'tab.manuring':'Membaja', 'tab.weeding':'Merumput',
-    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.record':'Rekod Kerja Penyelenggaraan', 'tab.chart':'Analitik', 'tab.schedule':'Jadual Penyelenggaraan Bulanan', 'tab.payroll':'Rekod Pekerja', 'tab.setting':'Tetapan',
+    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.record':'Rekod Kerja Penyelenggaraan', 'tab.chart':'Analitik', 'tab.schedule':'Jadual Penyelenggaraan Bulanan', 'tab.payroll':'Rekod Pekerja', 'tab.setting':'Tetapan',
     'pay.form':'Rekod Pekerja', 'pay.month':'Bulan', 'pay.date':'Tarikh', 'pay.plot':'Plot',
     'pay.plotCap':'Kapasiti plot (bibit)', 'pay.perWorker':'Kapasiti Kerja Setiap Orang (bibit)',
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
     'pay.customer':'Pelanggan', 'pay.doNumber':'Nombor DO', 'pay.qtyLoaded':'Kuantiti Dimuat (bibit)',
+    'pay.work':'Kerja', 'pay.qtyTransplant':'Kuantiti (bibit)',
+    'pay.noTransplant':'Tiada kerja pemindahan direkodkan untuk nurseri ini bulan ini.',
+    'pay.transplantHint':'Direkod oleh Field Conductor di FC Portal — plot, kerja, tarikh dan pekerja. Baca sahaja di sini: pekerja adalah jawapan beliau, dan FC Portal sahaja boleh mengubahnya.',
     'pay.noDOs':'Belum ada Delivery Order dikeluarkan untuk nurseri ini bulan ini.',
     'pay.loadingHint':'Tanda datang daripada telefon pemandu semasa DO ditandatangan, atau dari sini jika belum ditanda lagi. Setelah disimpan, baris dikunci — hanya admin boleh menukarnya selepas itu.',
     'pay.doLocked':'Dikunci — disimpan oleh {who} pada {when}. Hanya admin boleh menukarnya.',

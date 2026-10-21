@@ -28,6 +28,23 @@
   .section-label { font-size:13px; font-weight:900; color:#1e293b; text-transform:uppercase;
                     letter-spacing:.1em; margin:30px 2px 14px; }
   .section-label:first-of-type { margin-top:0; }
+
+  /* The MJM Team heading carries the Demo Portal link on the same row, right
+     aligned, rather than giving the demo a whole section of its own below
+     System Setting — a demo is not a fourth thing to configure, it is a
+     look-at-this beside the real doors. .section-head takes over the
+     heading's own top/bottom margin so .section-label can sit flush inside
+     it without doubling the gap. */
+  .section-head { display:flex; align-items:center; justify-content:space-between;
+                   gap:12px; margin:30px 2px 14px; }
+  .section-head:first-of-type { margin-top:0; }
+  .section-head .section-label { margin:0; }
+  .pill-link { display:inline-flex; align-items:center; gap:3px; flex-shrink:0;
+               padding:6px 12px; border-radius:999px; background:#f1f5f9;
+               border:1px solid #e2e8f0; color:#475569; font-size:11.5px;
+               font-weight:800; text-transform:none; letter-spacing:0;
+               text-decoration:none; transition:background .15s,border-color .15s; }
+  .pill-link:hover { background:#e2e8f0; border-color:#cbd5e1; }
   .door-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:16px; }
   .door { display:flex; flex-direction:column; align-items:center; text-align:center;
           gap:14px; padding:30px 20px; border-radius:24px;
@@ -44,6 +61,7 @@
      use. System Setting is a fixed three and stays put. */
   .door.card-dragging { opacity:.4; border-color:#34d399; box-shadow:0 0 24px rgba(52,211,153,.35); }
   .door.card-drag-over { border-color:#34d399; box-shadow:0 0 0 2px rgba(52,211,153,.4); }
+
 </style>
 </head>
 <body>
@@ -69,7 +87,17 @@
        in here so a person with more than one of these does not also need
        to remember more than one way to reach them. Draggable and in the
        order the office last left them — see the drag-order script below. -->
-  <div class="section-label">MJM Team</div>
+  <div class="section-head">
+    <div class="section-label">MJM Team</div>
+    <!-- Demo Portal: the four phone portals at phone size, on a desk — a
+         small link beside the heading rather than a card of its own, since
+         it opens a demo and not a fifth door. Gating is unchanged from when
+         this lived on the hub (index.html) as "555 Portal Demo": a "None"
+         answer on the demo555 module closes it, anything else — including
+         nobody having been asked yet — leaves it open. demo/demo_phone.html
+         checks for itself too, rather than trusting a hidden link. -->
+    <a class="pill-link" id="tool-demo" href="../demo/demo_phone.html">Demo Portal <span aria-hidden="true">›</span></a>
+  </div>
   <div class="door-grid" id="mjm-team-grid">
     <a class="door" id="fc-portal-link" data-card="fc" href="https://scan.mjmnursery.com" target="_blank" rel="noopener">
       <span class="door-ico" style="background:#ede9fe;color:#7c3aed;">
@@ -273,6 +301,13 @@ $('worker-portal-link').addEventListener('click', (e) => {
     if (!MJMAccess.canScanArea('worker')) $('worker-portal-link').classList.add('hidden');
     if (!hasAdminPortal) $('admin-portal-link').classList.add('hidden');
     if (!hasAuditPortal) $('audit-portal-link').classList.add('hidden');
+
+    // Demo Portal: a "None" answer on demo555 closes it, same as every
+    // other module card — see shared_access.js's normalize()/fail-open
+    // comment. Nobody having been asked yet leaves it open, which is why
+    // this is not a canScanArea() entry (those default closed).
+    const mods = (MJMAccess.permissions() || {}).modules || {};
+    if (mods.demo555 === 'none') $('tool-demo').classList.add('hidden');
 
     /* Audit tile is split the same way it was on the hub: an admin lands on
        the back-end page, everyone else goes straight to the to-do list
