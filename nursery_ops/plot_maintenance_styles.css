@@ -525,9 +525,13 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
    land on one line. Sized down at the office's request. */
 .metrics-big{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px;}
 @media (max-width:480px){ .metrics-big{grid-template-columns:1fr;} }
-.metrics-big .metric-card{padding:14px 18px;border-top-width:3px;}
-.metrics-big .mc-label{font-size:10.5px;letter-spacing:1.1px;margin-bottom:6px;}
-.metrics-big .mc-value{font-size:30px;line-height:1;}
+/* THIN: each card is one line — label, figure, and the sub-figure on the
+   right — instead of a stack, at the office's request. */
+.metrics-big .metric-card{display:flex;align-items:center;gap:12px;
+  padding:9px 16px;border-top-width:3px;}
+.metrics-big .mc-label{font-size:10.5px;letter-spacing:1.1px;margin-bottom:0;white-space:nowrap;}
+.metrics-big .mc-value{font-size:22px;line-height:1;}
+.metrics-big .mc-sub{margin-top:0;margin-left:auto;white-space:nowrap;text-align:right;}
 
 /* Page header — one bigger line: "Batu Niah Nursery — Apr 2026" */
 .page-hdr{margin-bottom:14px;}
