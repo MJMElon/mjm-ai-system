@@ -2842,6 +2842,56 @@ names the button and the three rules, which is exactly what that comment is
 for — and a plain text search read it as the button still being there. The
 test strips the comments first and asks about the markup the browser gets.
 
+## System Setting governs BOTH portals, and it was filed under one of them
+
+Location, Portal View & Function and Boundary decide what the **555 FC
+Portal and the 555 Worker Portal each offer** — the switch table has a
+column for each, side by side, which is the whole point of it.
+
+It sat two doors down all the same:
+
+    555 MJM Team → Settings → FC Portal Setting → System Setting
+
+so the page that decides what a WORKER sees was filed under the conductor's
+own Setting, and nothing on either screen said why. The office handed over
+the outline of it and asked for it on the MJM Team settings — *"actually is
+previous fc portal and worker portal's system settings, moving out from
+there"* — so it is a **section of its own at the top of
+`scan_settings_hub.html`**, above the per-portal sections, because it
+governs both and they govern one each.
+
+Four things in it:
+
+- **The labels are the office's own**, off their outline: **Scan Barcode
+  Counter** and **Issue Collection DO**, not Scan and Delivery Order. A row
+  headed one word in the office and another on the screen that governs it is
+  a row somebody has to ask about. `CANNOT_YET` carries the same two names,
+  or the hover disagrees with the row it is on.
+- **THE KEYS DID NOT MOVE.** `scan` and `do` are what is stored, and a label
+  that took its key with it would read every tick the office has ever set as
+  unset. The test asks for the key set by name and not only for the labels.
+- **Settings is still in the Worker column**, though it is not on the
+  outline — that outline is the FC PORTAL column, and absent from one column
+  is not the same as gone.
+- **Both doors now hide for a non-admin.** `scan_system_setting.html` and
+  `scan_setting.html` both ask for scan ADMIN and bounce anybody else to the
+  phone app, so a login holding only the `setting` area saw two tiles that
+  threw it somewhere else. They hide together — the same test their
+  destinations apply, asked one step earlier. Nobody gains anything: the
+  pages still decide.
+
+**And the way out follows the way in.** The back link on
+`scan_system_setting.html` went to `scan_setting.html`, the page it used to
+hang off; it goes to the Settings hub now. A back link left pointing at the
+old parent drops somebody on a page they did not come through.
+
+`tests/system_setting_is_not_the_fc_portals.cjs` drives both real pages. It
+re-learned the trap this file already names: **`innerText` returns
+CSS-transformed text**, so `SYSTEM SETTING` came back where `System Setting`
+was written and four correct checks failed. It reads `textContent`. And the
+function cell carries the stored KEY beside the label, so the list of names
+is read off `.pt-name` and not off the cell.
+
 ## A search takes you to the batch
 
 Batch Info splits its list in two: Active, and Completed. The search box sat
