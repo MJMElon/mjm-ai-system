@@ -84,8 +84,15 @@
   .tool-hang { position:absolute; left:0; right:0; bottom:100%; height:20px; pointer-events:none; }
   .tool-hang span { position:absolute; top:3px; bottom:0; width:1.5px;
                      background:linear-gradient(#8a8f98,#4b5058); }
-  .tool-hang span:first-child { left:27%; }
-  .tool-hang span:last-child { left:73%; }
+  /* 23% / 77%, not the 50%-symmetric 27%/73% it was — tuned so the gap
+     WITHIN a tile's own pair of nails matches the gap BETWEEN one tile's
+     nails and the next tile's, at this grid's actual column width (five
+     equal ~177px columns on the usual desktop width). Two nails close
+     together with a wide gap to the next pair read as pairs; evening the
+     two gaps out is what reads as one tidy row strung along the whole
+     board instead. */
+  .tool-hang span:first-child { left:23%; }
+  .tool-hang span:last-child { left:77%; }
   /* The nail head: a steel dome, not a wood-toned blob — a small offset
      highlight for the dome's curve, a dark rim where it meets the wood, and
      a soft shadow under it so it reads as driven IN rather than floating
