@@ -2897,6 +2897,17 @@ hurt anybody:
   own code inline, so the page IS the deploy and a cached copy is the old
   routing for ever. The routing was the first thing that changed in it. It
   has the three now. One hard reload per machine.
+- **"Visit 555 Auditor Portal" came off the back office**, and the office
+  asked for it in the same breath. It was the way ACROSS, from when this
+  page was the back door OF the portal and an admin landed here by signing
+  in; once the portal has doors of its own, a button pointing at it from the
+  back office is the one thing still saying the two are one place. The note
+  under the module cards lost its "…and can open the auditor portal" for the
+  same reason, and `.portal-btn` / `.pb-home` / `.pb-out` went with it —
+  a style nothing wears is a style the next person spends five minutes
+  looking for a use of. The ribbon's **Portal** link stays: it reaches the
+  hub, which is where both doors are, and a back office with no way out is
+  a room and not a page.
 
 `tests/the_audit_system_is_its_own_module.cjs` drives the real hub and the
 real MJM Team page. Two things it had to learn, both of which make a gate
@@ -2912,6 +2923,12 @@ test pass for the wrong reason:
   every tile shows and no gate assertion can fail. A login holding `none`
   everywhere is refused the hub altogether and never reaches the gating at
   all, so that fixture has to hold some other module.
+
+And one more, about asserting a removal: **a page that explains what it
+removed will contain the words.** The comment where the Visit button stood
+names the button and the three rules, which is exactly what that comment is
+for — and a plain text search read it as the button still being there. The
+test strips the comments first and asks about the markup the browser gets.
 
 ## A search takes you to the batch
 
