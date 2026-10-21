@@ -3,6 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- This page carries every line of its own code inline, so the PAGE is the
+     deploy: a cached copy is the old routing, for ever, and the first thing
+     that changed here was where the Audit Portal door goes. GitHub Pages has
+     no build step and nowhere to set a real header, so these three metas are
+     the only lever. One hard reload per machine picks them up; after that it
+     stays fresh by itself. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>555 MJM Team — Manage</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%238b5cf6%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2713%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EFC%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -133,7 +142,10 @@
       <span class="door-name">Worker Portal</span>
       <span class="door-sub">PIN sign-in, no e-mail needed</span>
     </a>
-    <a class="door" id="audit-portal-link" data-card="audit" href="../audit/audit_admin.html">
+    <!-- The AUDITOR portal — the to-do list built for a phone in a nursery.
+         Never the manage page: that is its own hub module now, see the
+         script below. -->
+    <a class="door" id="audit-portal-link" data-card="audit" href="../audit/audit_home.html">
       <span class="door-ico" style="background:#ffedd5;color:#ea580c;">
         <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
           <rect x="9" y="4" width="16" height="22" rx="3"/>
@@ -309,15 +321,18 @@ $('worker-portal-link').addEventListener('click', (e) => {
     const mods = (MJMAccess.permissions() || {}).modules || {};
     if (mods.demo555 === 'none') $('tool-demo').classList.add('hidden');
 
-    /* Audit tile is split the same way it was on the hub: an admin lands on
-       the back-end page, everyone else goes straight to the to-do list
-       that is the screen built for a phone in a nursery. Routed on the
-       EXPLICIT audit module level so this agrees with the audit guards
-       (isAuditAdmin / requireAdmin), not the profile-level role fallback —
-       see index.html's own former copy of this comment. */
-    if (hasAuditPortal && !MJMAccess.isAdminOf('audit')) {
-      $('audit-portal-link').setAttribute('href', '../audit/audit_home.html');
-    }
+    /* THE AUDIT PORTAL DOOR GOES TO THE AUDITOR PORTAL, for everybody.
+       It used to split on the audit module level, so an admin pressing it
+       landed on the MANAGE page — the back office, with the schedule, the
+       alerts and Settings on it. That is the wrong half of the module for a
+       door called Audit Portal and labelled "Plot audits & sign-off": an
+       admin who wanted their own to-do list got a desk screen and had to
+       navigate out of it.
+       The manage page is a module of its own on the hub now ("Nursery Audit
+       System"), so the split has nothing left to decide and the href in the
+       markup is the whole answer. Nobody is stranded — the manage tile is
+       gated on the same `audit` module, so anybody who used to be sent here
+       has it, and audit_home.html's own back arrow reaches the hub. */
 
     $('loading').classList.add('hidden');
     $('main').classList.remove('hidden');

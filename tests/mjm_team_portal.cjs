@@ -108,7 +108,11 @@ function mockSupabase(page, permissions) {
     check('User Access tool points at the FC/Worker access page', await page.locator('#tool-user-access').getAttribute('href'), 'scan_user_access.html');
     check('Settings tool points at the combined hub, not the old FC-only page', await page.locator('#tool-access').getAttribute('href'), 'scan_settings_hub.html');
     check('Admin Portal door is a flat link to the Admin Portal', await page.locator('#admin-portal-link').getAttribute('href'), 'https://mobile.mjmnursery.com');
-    check('Audit Portal door goes to the back end for an audit ADMIN', await page.locator('#audit-portal-link').getAttribute('href'), '../audit/audit_admin.html');
+    /* It used to go to the back end for an admin and the to-do list for
+       everybody else. The back end is its own hub module now ("Nursery
+       Audit System"), so this door means one thing for everybody — see
+       tests/the_audit_system_is_its_own_module.cjs. */
+    check('Audit Portal door goes to the AUDITOR portal, admin or not', await page.locator('#audit-portal-link').getAttribute('href'), '../audit/audit_home.html');
 
     console.log('\n  -- drag-reordering the MJM Team cards persists across a reload --');
     const cardsBefore = await page.locator('#mjm-team-grid .door').evaluateAll(els => els.map(e => e.id));
