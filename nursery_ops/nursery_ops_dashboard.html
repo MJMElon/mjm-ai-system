@@ -21,13 +21,31 @@
      wrapped second row needs so its tiles' own hanging threads (28px, see
      .tool-hang) never run into the row above. */
   .tool-grid { display:grid; gap:34px 12px; grid-template-columns:repeat(auto-fill, minmax(132px, 1fr)); }
-  .tool-btn { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
-              aspect-ratio:1/1; padding:12px; border-radius:18px; text-align:center;
-              background:white; border:1.5px solid #99f6e4; color:#0f766e; font-weight:900; font-size:11px;
-              letter-spacing:.08em; text-transform:uppercase; text-decoration:none;
-              transition:transform .12s, background .15s, box-shadow .15s;
-              box-shadow:0 3px 10px rgba(13,148,136,.10); touch-action:none; user-select:none; }
+
+  /* A cut plank, not a white app tile: same linen-and-grain the chalkboard's
+     own frame is cut from, routed edge included (the layered inset
+     shadows). Every tile shares this ONE material — what tells the five
+     apart is the colour painted on, via --accent / --icon-bg set per tile
+     in the markup, the same custom-property convention the hub's own
+     module cards use (see index.html). */
+  .tool-btn { --accent:#0f766e; --icon-bg:rgba(15,118,110,.14);
+              position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px;
+              aspect-ratio:1/1; padding:12px; border-radius:11px; text-align:center;
+              background:
+                repeating-linear-gradient(180deg, rgba(120,80,40,.05) 0px, rgba(120,80,40,.05) 1px, transparent 1px, transparent 7px),
+                linear-gradient(165deg, #fdf8ee, #f1e3c6 94%);
+              border:2px solid #a9743f; color:var(--accent); font-weight:900; font-size:11px;
+              letter-spacing:.07em; text-transform:uppercase; text-decoration:none;
+              transition:transform .15s ease, box-shadow .15s ease;
+              transform-origin:50% -28px;
+              box-shadow:0 4px 10px rgba(91,58,30,.16),
+                         inset 0 1px 0 rgba(255,255,255,.55),
+                         inset 0 -3px 5px rgba(91,58,30,.14);
+              touch-action:none; user-select:none; }
   .tool-btn .tl { line-height:1.25; }
+  .tool-ico { width:38px; height:38px; border-radius:10px; background:var(--icon-bg); color:var(--accent);
+              display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .tool-ico svg { width:21px; height:21px; }
 
   /* Each tile hangs off two threads rather than sitting on the page, same
      idea as a sign nailed under a board. Threads are INSIDE .tool-btn
@@ -37,24 +55,38 @@
      height (28px) matches #tools' own top margin exactly, so a first-row
      tile's pegs land right at the chalkboard frame's bottom lip; .tool-grid's
      row-gap gives a wrapped second row the same clearance from the row
-     above it. */
+     above it. --tool-btn's own transform-origin sits at the nail (50% of
+     the width, 28px above the top), so the hover sway below pivots the
+     whole sign from where it is actually nailed up, threads included. */
   .tool-hang { position:absolute; left:0; right:0; bottom:100%; height:28px; pointer-events:none; }
-  .tool-hang span { position:absolute; top:0; bottom:0; width:2px;
-                     background:linear-gradient(#a9743f,#6b4423); }
+  .tool-hang span { position:absolute; top:4px; bottom:0; width:1.5px;
+                     background:linear-gradient(#8a8f98,#4b5058); }
   .tool-hang span:first-child { left:27%; }
   .tool-hang span:last-child { left:73%; }
-  .tool-hang span::before { content:''; position:absolute; top:-3px; left:50%; transform:translateX(-50%);
+  /* The nail head: a steel dome, not a wood-toned blob — a small offset
+     highlight for the dome's curve, a dark rim where it meets the wood, and
+     a soft shadow under it so it reads as driven IN rather than floating
+     on top. */
+  .tool-hang span::before { content:''; position:absolute; top:0; left:50%; transform:translateX(-50%);
     width:8px; height:8px; border-radius:50%;
-    background:radial-gradient(circle at 35% 30%, #c08a4f, #5b3a1e 75%);
-    box-shadow:0 2px 3px rgba(0,0,0,.35); }
-  .tool-btn:hover { background:#ccfbf1; transform:translateY(-2px); }
+    background:radial-gradient(circle at 32% 28%, #f1f2f4, #aeb2b8 55%, #5a5e64 100%);
+    box-shadow:0 1px 0 rgba(255,255,255,.5) inset, 0 2px 2px rgba(0,0,0,.4); }
+  .tool-hang span::after { content:''; position:absolute; top:6px; left:50%; transform:translateX(-50%);
+    width:11px; height:3px; border-radius:50%;
+    background:radial-gradient(ellipse at center, rgba(0,0,0,.4), transparent 72%); }
+
+  /* A nudge, not a button press — these are nailed up, not clickable tiles
+     floating free, so the hover answer is the sign swinging on its nails
+     rather than lifting off the page. */
+  @keyframes tool-sway { 0%, 100% { transform:rotate(-2.4deg); } 50% { transform:rotate(2.4deg); } }
+  .tool-btn:hover { animation:tool-sway 1s ease-in-out infinite; box-shadow:0 7px 16px rgba(91,58,30,.22),
+                    inset 0 1px 0 rgba(255,255,255,.55), inset 0 -3px 5px rgba(91,58,30,.14); }
   /* The one being carried follows the pointer and is lifted off the grid;
-     the gap it left stays open so the drop target is obvious. */
-  .tool-btn.dragging { opacity:.9; box-shadow:0 18px 40px -10px rgba(13,148,136,.45);
+     the gap it left stays open so the drop target is obvious. No sway while
+     it is literally in the hand. */
+  .tool-btn.dragging { opacity:.9; animation:none; box-shadow:0 18px 40px -10px rgba(91,58,30,.4);
                        transform:scale(1.04); z-index:30; position:relative; }
   .tool-btn.ghost { opacity:.25; }
-  .tool-btn-access { background:#fff1f2; color:#9f1239; border-color:#fecdd3; }
-  .tool-btn-access:hover { background:#ffe4e6; }
   .hidden { display:none !important; }
 
   /* ── Chalkboard ─────────────────────────────────────────── */
@@ -153,13 +185,34 @@
        account, because it is a convenience, not a setting worth a column in
        the database. -->
   <div id="tools" class="tool-grid mt-7">
-    <a draggable="false" class="tool-btn" data-page="seeds"       href="nursery_ops_seeds.html"><div class="tool-hang"><span></span><span></span></div><span class="tl">Seeds Control</span></a>
-    <a draggable="false" class="tool-btn" data-page="maintenance" href="nursery_ops_maintenance.html"><div class="tool-hang"><span></span><span></span></div><span class="tl">Nursery Work &amp; Schedule</span></a>
+    <a draggable="false" class="tool-btn" data-page="seeds" href="nursery_ops_seeds.html"
+       style="--accent:#15803d;--icon-bg:rgba(21,128,61,.14);">
+      <div class="tool-hang"><span></span><span></span></div>
+      <div class="tool-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 20v-7"/><path d="M12 13c-4 0-6-2.5-6-6 4 0 6 1.5 6 6z"/><path d="M12 13c4 0 6-2.5 6-6-4 0-6 1.5-6 6z"/><path d="M6 20h12"/>
+      </svg></div>
+      <span class="tl">Seeds Control</span>
+    </a>
+    <a draggable="false" class="tool-btn" data-page="maintenance" href="nursery_ops_maintenance.html"
+       style="--accent:#0e7490;--icon-bg:rgba(14,116,144,.14);">
+      <div class="tool-hang"><span></span><span></span></div>
+      <div class="tool-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4" y="5" width="16" height="15" rx="2.2"/><path d="M4 10h16"/><path d="M8 3v4M16 3v4"/><path d="M8.5 14.5l2.2 2.2 4.3-4.7"/>
+      </svg></div>
+      <span class="tl">Nursery Work &amp; Schedule</span>
+    </a>
     <!-- One way into PALMS. Life of Plot, the motion study and its settings
          are all readings of the same plot log, so they live behind this tile
          rather than as four separate ones that gave no hint they belonged
          together. The PALMS pages carry their own tab strip. -->
-    <a draggable="false" class="tool-btn" data-page="palms_board"  href="nursery_ops_palms_board.html"><div class="tool-hang"><span></span><span></span></div><span class="tl">P.A.L.M.S</span></a>
+    <a draggable="false" class="tool-btn" data-page="palms_board" href="nursery_ops_palms_board.html"
+       style="--accent:#0f766e;--icon-bg:rgba(15,118,110,.14);">
+      <div class="tool-hang"><span></span><span></span></div>
+      <div class="tool-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 21v-9.5"/><path d="M12 11.5c0-3 2.2-5 6.5-6-1.2 3.2-3.3 5.2-6.5 6z"/><path d="M12 11.5c0-3-2.2-5-6.5-6 1.2 3.2 3.3 5.2 6.5 6z"/><path d="M12 11.8c2.2-2 5-2.3 6.8-.6-1.8 1.7-4.6 2-6.8.6z"/><path d="M12 11.8c-2.2-2-5-2.3-6.8-.6 1.8 1.7 4.6 2 6.8.6z"/>
+      </svg></div>
+      <span class="tl">P.A.L.M.S</span>
+    </a>
     <!-- Stock Inventory is its OWN MODULE, reached from here rather than from
          the portal: somebody counting what is in the store is doing nursery
          operation work, and it was a tile on the front page away from
@@ -173,11 +226,24 @@
          door they were already through, and offering it only to bounce them
          at the other end is worse than not offering it. -->
     <a draggable="false" class="tool-btn hidden" data-page="stock" data-module="stock"
-       href="../stock/stock_dashboard.html"><div class="tool-hang"><span></span><span></span></div><span class="tl">Nursery Stock Control</span></a>
+       href="../stock/stock_dashboard.html" style="--accent:#b45309;--icon-bg:rgba(180,83,9,.14);">
+      <div class="tool-hang"><span></span><span></span></div>
+      <div class="tool-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3.5" y="11" width="7.2" height="7.2" rx="1"/><rect x="13.3" y="11" width="7.2" height="7.2" rx="1"/><rect x="8.4" y="3.8" width="7.2" height="7.2" rx="1"/>
+      </svg></div>
+      <span class="tl">Nursery Stock Control</span>
+    </a>
     <!-- Shown only to users who may change other people's access. It carries
          a data-page like the rest so it drags and is remembered with them;
          being hidden is about the right to open it, not about where it sits. -->
-    <a draggable="false" class="tool-btn tool-btn-access hidden" data-page="user_access" id="user-access-btn" href="nursery_ops_user_access.html"><div class="tool-hang"><span></span><span></span></div><span class="tl">User Access</span></a>
+    <a draggable="false" class="tool-btn hidden" data-page="user_access" id="user-access-btn" href="nursery_ops_user_access.html"
+       style="--accent:#9f1239;--icon-bg:rgba(159,18,57,.14);">
+      <div class="tool-hang"><span></span><span></span></div>
+      <div class="tool-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-4.2 3.1-6.8 7-6.8s7 2.6 7 6.8"/>
+      </svg></div>
+      <span class="tl">User Access</span>
+    </a>
   </div>
 
   <p class="text-[11px] text-slate-400 text-center mt-8">
