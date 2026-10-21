@@ -413,6 +413,22 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 .subtab-btn{font-family:var(--font);font-size:12px;font-weight:600;letter-spacing:.3px;color:var(--text-muted);background:transparent;border:none;cursor:pointer;padding:8px 16px;border-radius:var(--r-sm);transition:all .14s;white-space:nowrap;}
 .subtab-btn:hover{color:var(--text-body);background:var(--green-bg);}
 .subtab-btn.active{background:var(--green);color:#fff;box-shadow:0 2px 8px rgba(13,122,71,.3);}
+/* ── The segmented switch (Approved / Rejected) ──
+   The office handed the design over: a full-width light grey track, the
+   segments dividing it equally, and the chosen one a WHITE pill carrying
+   its own colour — green for Approved, red for Rejected — where the base
+   subtab turns green with white text. Same markup, same switchRecSection;
+   only this bar wears seg-bar. */
+.seg-bar{width:100%;background:#dfe5ec;border:none;border-radius:999px;
+  padding:4px;gap:4px;box-shadow:none;flex-wrap:nowrap;}
+.seg-bar .subtab-btn{flex:1 1 0;text-align:center;border-radius:999px;
+  font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;
+  color:#64748b;padding:9px 0;}
+.seg-bar .subtab-btn:hover{color:#334155;background:rgba(255,255,255,.5);}
+.seg-bar .subtab-btn.active{background:#fff;color:var(--green);
+  box-shadow:0 1px 5px rgba(15,23,42,.14);}
+.seg-bar #recsec-btn-rejected.active{color:var(--red);}
+.seg-bar .subtab-btn.active .rec-part-count{color:#fff;background:var(--red);}
 /* A sub-view must never change the page width, or the header/metrics above it
    appear to rescale when switching between List and Analytics. Charts are
    responsive, so clipping any overflow here is safe. */

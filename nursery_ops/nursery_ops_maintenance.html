@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=92">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=93">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -174,11 +174,15 @@
 
            The filters below belong to BOTH: whichever section is open
            answers the same question about the same nursery. -->
-        <div class="subtabs-bar">
+        <!-- A full-width segmented switch, the office's design: grey track,
+             equal segments, the chosen one a white pill with its own colour.
+             Keeps the subtabs-bar class because switchRecSection finds its
+             siblings through it; seg-bar restyles only this pair. -->
+        <div class="subtabs-bar seg-bar">
           <button class="subtab-btn active" id="recsec-btn-approved"
-                  onclick="switchRecSection('approved',this)">✓ <span data-i18n="rec.partApproved">Approved</span></button>
+                  onclick="switchRecSection('approved',this)"><span data-i18n="rec.partApproved">Approved</span></button>
           <button class="subtab-btn" id="recsec-btn-rejected"
-                  onclick="switchRecSection('rejected',this)">⛔ <span data-i18n="rec.partRejected">Rejected</span> <span class="rec-part-count" id="rej-count"></span></button>
+                  onclick="switchRecSection('rejected',this)"><span data-i18n="rec.partRejected">Rejected</span> <span class="rec-part-count" id="rej-count"></span></button>
         </div>
         <div class="toolbar">
           <select class="filter-sel" id="rf-filter-jenis" onchange="renderRecords()">
