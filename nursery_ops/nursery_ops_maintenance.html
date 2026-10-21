@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=90">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=91">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -70,8 +70,22 @@
                until MJMAccess confirms an admin (see applyNopsAdminUI). -->
           <button type="button" class="pn-tab is-on" onclick="switchTab('record',this)">
             <svg class="pn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
-            <span data-i18n="tab.record">Work Log</span>
+            <span data-i18n="tab.record">Work Records</span>
           </button>
+          <!-- Opened only while Work Records is the current tab — a CSS
+               sibling rule (.pn-tab.is-on + .pn-sub), so switchTab's own
+               is-on toggle is what shows and hides it and there is no
+               second piece of state to let this drift. Mirrors the
+               subtabs-bar inside the panel; switchRecordView(view) is the
+               one function that keeps both pairs of buttons in step. -->
+          <div class="pn-sub">
+            <button type="button" class="pn-subtab active" id="pn-subtab-list" onclick="switchRecordView('list')">
+              <span data-i18n="tab.maintList">Maintenance records</span>
+            </button>
+            <button type="button" class="pn-subtab" id="pn-subtab-chart" onclick="switchRecordView('chart')">
+              <span data-i18n="tab.chart">Performance</span>
+            </button>
+          </div>
           <button type="button" class="pn-tab" onclick="switchTab('schedule',this)">
             <svg class="pn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
             <span data-i18n="tab.schedule">Work Schedule</span>
@@ -96,7 +110,7 @@
            Both hide themselves on a panel that has no use for them:
            Schedule shows every nursery at once, Setting has no month. -->
       <div class="sm-head">
-        <div class="sm-title" id="sm-title">Work Log</div>
+        <div class="sm-title" id="sm-title">Work Records</div>
         <div class="sm-tools">
           <div class="top-ctrl" id="top-nursery-ctrl">
             <!-- Backing store for the circle buttons below, not its own
@@ -134,8 +148,8 @@
       <div class="page-hdr"><div class="page-hdr-title" id="record-nursery-line"></div></div>
       <div id="rec-metrics" class="metrics-big"></div>
       <div class="subtabs-bar">
-        <button class="subtab-btn active" id="subtab-list"  onclick="switchRecordView('list',this)">📋 Work Maintenance List</button>
-        <button class="subtab-btn"        id="subtab-chart" onclick="switchRecordView('chart',this)">📊 Analytics</button>
+        <button class="subtab-btn active" id="subtab-list"  onclick="switchRecordView('list')">📋 <span data-i18n="tab.maintList">Maintenance records</span></button>
+        <button class="subtab-btn"        id="subtab-chart" onclick="switchRecordView('chart')">📊 <span data-i18n="tab.chart">Performance</span></button>
       </div>
       <div id="recview-list" class="recview active">
       <!-- WORK RECORD —————————————————————————————————————————————
@@ -782,7 +796,7 @@
 <script src="../shared/shared_maint_field.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="plot_maintenance_script.js?v=134"></script>
+<script src="plot_maintenance_script.js?v=135"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are

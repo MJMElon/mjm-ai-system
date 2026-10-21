@@ -1243,6 +1243,13 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 #sm-nav .pn-tab:hover{background:var(--green-light);}
 #sm-nav .pn-tab.is-on{background:var(--green);color:#fff;}
 #sm-nav .pn-tab.is-on:hover{background:var(--green-hover);}
+/* Work Records' own two sub-views — Maintenance records / Performance —
+   mirrored from the in-panel subtabs-bar (switchRecordView keeps both in
+   step). Hidden by default: it only ever shows on the desk rail, and only
+   while Work Records is the open tab, via the sibling rule below. There is
+   no separate open/close state for it — switchTab's own is-on toggle on
+   the Work Records button IS what reveals it. */
+.pn-sub{display:none;}
 /* The rail itself: fixed to the viewport's left edge, from under the
    sticky header bar (~65px tall) to the foot of the screen, with its own
    scrollbar for the day it grows more rows than a laptop is tall. It is
@@ -1259,6 +1266,26 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
   #sm-nav .pn-tab:hover{background:rgba(255,255,255,.12);color:#fff;}
   #sm-nav .pn-tab.is-on{background:rgba(255,255,255,.24);color:#fff;}
   #sm-nav .pn-tab.is-on:hover{background:rgba(255,255,255,.3);}
+  /* Revealed only while the Work Records tab above it is open — a CSS
+     sibling of .pn-tab.is-on, so switchTab's existing class toggle is the
+     only thing driving it. */
+  #sm-nav .pn-tab.is-on + .pn-sub{display:flex;flex-direction:column;gap:2px;
+    margin:2px 0 6px 30px;}
+  #sm-nav .pn-subtab{display:block;width:100%;text-align:left;
+    padding:7px 10px;border-radius:9px;border:1px solid transparent;
+    font-family:var(--font);font-size:11.5px;font-weight:700;
+    color:rgba(255,255,255,.65);background:transparent;cursor:pointer;
+    line-height:1.3;transition:background .15s,color .15s;}
+  #sm-nav .pn-subtab:hover{background:rgba(255,255,255,.1);color:#fff;}
+  #sm-nav .pn-subtab.active{background:rgba(255,255,255,.18);color:#fff;}
+}
+/* Icon-collapsed rail: no room for a label, let alone a sub-list under one. */
+.sm-frame.nav-hid #sm-nav .pn-sub{display:none !important;}
+/* Phone: the in-panel subtabs-bar is the only way to switch this, same as
+   it always was — the rail is a row of chips here, with no room under a
+   chip for a sub-list. */
+@media(max-width:767px){
+  #sm-nav .pn-sub{display:none !important;}
 }
 /* Phone: the column becomes a row above the content — a 212px column
    beside a table on a 412px screen leaves neither of them usable. The

@@ -2465,7 +2465,7 @@ const I18N = {
     'btn.reset':'↺ Reset to Defaults', 'btn.clearAll':'Clear All', 'btn.selectAll':'Select All',
     'sched.ticked':'ticked', 'sched.none':'not set yet',
     'tab.pd':'P & D — Spraying', 'tab.manuring':'Manuring', 'tab.weeding':'Weeding',
-    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.record':'Work Log', 'tab.chart':'Analytics', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
+    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.record':'Work Records', 'tab.maintList':'Maintenance records', 'tab.chart':'Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
     'pay.form':'Worker Record', 'pay.month':'Month', 'pay.date':'Date', 'pay.plot':'Plot',
     'pay.plotCap':'Plot Capacity (seedlings)', 'pay.perWorker':'Capacity per Worker (seedlings)',
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
@@ -2604,7 +2604,7 @@ const I18N = {
     'btn.reset':'↺ Set Semula', 'btn.clearAll':'Kosongkan', 'btn.selectAll':'Pilih Semua',
     'sched.ticked':'ditanda', 'sched.none':'belum ditetapkan',
     'tab.pd':'P & D — Racun', 'tab.manuring':'Membaja', 'tab.weeding':'Merumput',
-    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.record':'Log Kerja', 'tab.chart':'Analitik', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
+    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Penyelenggaraan', 'tab.chart':'Prestasi', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
     'pay.form':'Rekod Pekerja', 'pay.month':'Bulan', 'pay.date':'Tarikh', 'pay.plot':'Plot',
     'pay.plotCap':'Kapasiti plot (bibit)', 'pay.perWorker':'Kapasiti Kerja Setiap Orang (bibit)',
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
@@ -4565,14 +4565,25 @@ function syncToTopBtn() {
 window.addEventListener('scroll', syncToTopBtn, { passive: true });
 window.addEventListener('resize', syncToTopBtn, { passive: true });
 
-/* Work Record sub-views: the maintenance list and the analytics charts. */
+/* Work Record sub-views: the maintenance list and the performance charts.
+   Chosen two ways now — the sub-tab bar inside the panel, and the side
+   bar's own expandable Work Records entry (#pn-subtab-list/#pn-subtab-chart,
+   next to the group) — so this is the one place that decides, reached from
+   both. Whichever button was actually clicked is read off `view` alone;
+   BOTH pairs of buttons are set from that, never from the `btn` argument,
+   so the two readers cannot drift into disagreeing about which view is
+   open the way this codebase has had happen before. */
 let _recordView = 'list';
-function switchRecordView(view, btn) {
+function switchRecordView(view) {
   _recordView = view;
+  const barBtn  = document.getElementById(view === 'chart' ? 'subtab-chart' : 'subtab-list');
+  const sideBtn = document.getElementById(view === 'chart' ? 'pn-subtab-chart' : 'pn-subtab-list');
   document.querySelectorAll('.subtabs-bar .subtab-btn').forEach(b => {
     if (b.id === 'subtab-list' || b.id === 'subtab-chart') b.classList.remove('active');
   });
-  if (btn) btn.classList.add('active');
+  if (barBtn) barBtn.classList.add('active');
+  document.querySelectorAll('#sm-nav .pn-subtab').forEach(b => b.classList.remove('active'));
+  if (sideBtn) sideBtn.classList.add('active');
   document.querySelectorAll('.recview').forEach(v => v.classList.remove('active'));
   const el = document.getElementById('recview-' + view);
   if (el) el.classList.add('active');
