@@ -69,13 +69,8 @@
 
   .board-empty { text-align:center; font-family:'Caveat', cursive; font-size:26px; color:rgba(242,234,216,.55); padding:70px 10px; }
 
-  .chalk-tray { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-top:14px; padding-top:12px;
+  .chalk-tray { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:10px; margin-top:14px; padding-top:12px;
                 border-top:2px solid rgba(255,255,255,.12); }
-  .edit-chalk { display:inline-flex; align-items:center; gap:8px; padding:9px 18px; border-radius:12px;
-                background:#fdfaf2; color:#243d33; font-weight:900; font-size:11px; letter-spacing:.08em;
-                text-transform:uppercase; text-decoration:none; border:none; cursor:pointer;
-                box-shadow:0 5px 14px rgba(0,0,0,.3); transition:all .15s; }
-  .edit-chalk:hover { transform:translateY(-1px); background:white; }
   .last-update { font-family:'Caveat', cursive; font-size:18px; color:rgba(242,234,216,.7); }
 </style>
 </head>
@@ -106,7 +101,13 @@
         <button id="prev-month" class="nav-btn" title="Previous month's schedule">‹</button>
         <div class="flex-1">
           <div id="board-title" class="board-title">—</div>
-          <div class="board-sub">Nursery Work Schedule</div>
+          <!-- A rotating line of chalk rather than the module's own name —
+               the ribbon above already says "Nursery Operation Manage", so
+               repeating it here was spending the one line under the month on
+               nothing. weeklyQuote() picks one by the ISO week, so it is the
+               same quote for everybody looking at the board in a given week
+               and moves on its own with no admin screen to keep up. -->
+          <div id="board-sub" class="board-sub"></div>
         </div>
         <button id="next-month" class="nav-btn" title="Next month — set the following month's schedule">›</button>
       </div>
@@ -115,7 +116,6 @@
 
       <div class="chalk-tray">
         <span id="last-update" class="last-update">&nbsp;</span>
-        <a id="edit-btn" class="edit-chalk" href="nursery_ops_monthly.html">✏️ Edit Schedule</a>
       </div>
     </div>
   </div>
@@ -182,6 +182,40 @@ function shiftMonth(m, delta) {
 }
 const fmtDay = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-MY', { day:'numeric', month:'short' }) : '';
 
+/* ── The weekly quote on the chalkboard ───────────────────────────────
+   The module already names itself in the ribbon above ("Nursery Operation
+   Manage"), so the line under the month used to repeat it for nothing.
+   Picked by the ISO week number: the same line for everybody looking at
+   the board in a given week, and it moves to the next one on its own —
+   nobody has to open a screen and change it. */
+const BOARD_QUOTES = [
+  'Every seed believes in tomorrow.',
+  'Small, steady care grows the biggest nurseries.',
+  'Patience is the first lesson a nursery teaches.',
+  'Good work, planted well, grows on its own.',
+  'A tended plot never stays empty for long.',
+  'Roots first — everything else follows.',
+  'The best time to plant was yesterday. The next best time is today.',
+  'Steady hands grow strong nurseries.',
+  'What we nurture, grows.',
+  'Every plot tells the story of someone who cared.',
+  'Great nurseries are built one row at a time.',
+  'Care today is the harvest of tomorrow.',
+  'Growth is quiet work, done daily.',
+  'A well-kept nursery speaks for itself.',
+];
+function isoWeek(d) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil(((date - yearStart) / 86400000 + 1) / 7);
+}
+function weeklyQuote() {
+  return BOARD_QUOTES[isoWeek(new Date()) % BOARD_QUOTES.length];
+}
+$('board-sub').textContent = weeklyQuote();
+
 function lineHtml(w) {
   const statusTxt = {
     planned:     '· planned',
@@ -202,7 +236,6 @@ function lineHtml(w) {
 
 async function loadBoard() {
   $('board-title').textContent = monthLabel(boardMonth);
-  $('edit-btn').href = 'nursery_ops_monthly.html?month=' + boardMonth;
   $('board-lines').innerHTML = '<div class="board-empty">loading…</div>';
   const { data, error } = await _supabase
     .from('nops_plot_works').select('*')
@@ -217,7 +250,7 @@ async function loadBoard() {
   const works = data || [];
   $('board-lines').innerHTML = works.length
     ? works.map(lineHtml).join('')
-    : '<div class="board-empty">nothing on the board for this month yet —<br>press “Edit Schedule” to set it ✏️</div>';
+    : '<div class="board-empty">nothing on the board for this month yet</div>';
 
   // "Last update by …" — latest touch across the month's rows.
   let latest = null;
@@ -368,10 +401,6 @@ $('next-month').addEventListener('click', () => { boardMonth = shiftMonth(boardM
       document.querySelectorAll('.tool-btn[data-module]').forEach(a => {
         if (MJMAccess.canAccess(a.dataset.module)) a.classList.remove('hidden');
       });
-      if (!may('schedule', 'edit_schedule')) {
-        const eb = document.getElementById('edit-btn');
-        if (eb) eb.style.display = 'none';
-      }
       if (MJMAccess.canManageUsers()) document.getElementById('user-access-btn').classList.remove('hidden');
     } catch (_) { /* keep the dashboard usable */ }
 
