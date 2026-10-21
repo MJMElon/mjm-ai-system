@@ -501,12 +501,15 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 /* Fixed 4-up grid (not auto-fit) so the headline cards keep the SAME size and
    layout whichever sub-view is open - the analytics charts change the available
    width, which previously made the cards reflow 4-up -> 3-up and resize. */
-.metrics-big{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px;}
-@media (max-width:900px){ .metrics-big{grid-template-columns:repeat(2,minmax(0,1fr));} }
+/* auto-fit, not a fixed four columns: the Work Records head draws THREE
+   cards and the old 4-column track left a dead quarter of the row beside
+   them. However many cards a head draws, they divide the full width and
+   land on one line. Sized down at the office's request. */
+.metrics-big{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px;}
 @media (max-width:480px){ .metrics-big{grid-template-columns:1fr;} }
-.metrics-big .metric-card{padding:22px 24px;border-top-width:4px;}
-.metrics-big .mc-label{font-size:11px;letter-spacing:1.2px;margin-bottom:10px;}
-.metrics-big .mc-value{font-size:44px;line-height:1;}
+.metrics-big .metric-card{padding:14px 18px;border-top-width:3px;}
+.metrics-big .mc-label{font-size:10.5px;letter-spacing:1.1px;margin-bottom:6px;}
+.metrics-big .mc-value{font-size:30px;line-height:1;}
 
 /* Page header — one bigger line: "Batu Niah Nursery — Apr 2026" */
 .page-hdr{margin-bottom:14px;}
