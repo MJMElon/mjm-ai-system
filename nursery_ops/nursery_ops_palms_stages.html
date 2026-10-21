@@ -100,9 +100,15 @@
 </head>
 <body>
 
-<div id="mjm-ribbon" data-brand="MJM Nursery AI System" data-center="PALMS"
-     data-sub="Plot Age Logging &amp; Manage System" data-logo="off"></div>
-<script src="../shared/shared_ribbon.js"></script>
+<!-- The compact bar the other nursery-ops pages wear: Back pill, centred
+     module name, NO badge. nursery_ops_seeds.html is the original; the big
+     shared ribbon came off at the office's request, so Sign Out lives on
+     the portal the Back pill leads to. -->
+<div id="mjm-ribbon" class="bg-white border-b border-teal-100 px-6 py-4 grid grid-cols-[1fr_auto_1fr] items-center sticky top-0 z-30 shadow-sm">
+  <a href="nursery_ops_dashboard.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-teal-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Back</a>
+  <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm px-3">PALMS</span>
+  <div class="justify-self-end"><div class="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center text-white font-black text-xs">NO</div></div>
+</div>
 
 <div id="loading" class="max-w-[1000px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading…</div>
 
