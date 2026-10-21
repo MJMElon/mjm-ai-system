@@ -1191,15 +1191,24 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
    ══════════════════════════════════════════════════════════════ */
 .sm-frame{display:block;}
 .sm-body{min-width:0;}
+/* The menu is a FIXED rail on the left edge of the screen, flush and full
+   height under the sticky header bar, so the page gives its whole width to
+   the content and the padding below steps around the rail. The .page
+   container therefore stops centring itself on a desk — the rail owns the
+   left edge — and the content keeps its old cap through .sm-body instead.
+   Collapsed (.nav-hid) the rail narrows to the ICONS: the labels hide, the
+   buttons stay in the DOM and keep their ids, the icons say what each one
+   is. A menu that vanished entirely left a button floating in an empty
+   column with nothing to say what it opens, which is what the first
+   attempt at this did. */
 @media(min-width:768px){
-  .sm-frame{display:grid;grid-template-columns:212px minmax(0,1fr);
-    gap:24px;align-items:start;}
-  /* Pulled back to a rail. The bar itself stays — it keeps its background,
-     its border and its handle, and only the tabs go. A menu that vanishes
-     leaves a button floating in an empty column with nothing to say what it
-     opens, which is what the first attempt at this did. */
-  .sm-frame.nav-hid{grid-template-columns:46px minmax(0,1fr);gap:14px;}
-  .sm-frame.nav-hid #sm-nav nav{display:none;}
+  .page.sm-frame{max-width:none;margin:0;padding:20px 22px 20px 248px;
+    transition:padding-left .2s;}
+  .page.sm-frame.nav-hid{padding-left:94px;}
+  .sm-body{max-width:1720px;}
+  .sm-frame.nav-hid #sm-nav{width:62px;padding:12px 8px;}
+  .sm-frame.nav-hid #sm-nav .pn-tab{justify-content:center;gap:0;padding:11px 0;}
+  .sm-frame.nav-hid #sm-nav .pn-tab span{display:none;}
 }
 
 /* The handle, at the top of the bar it belongs to.
@@ -1228,30 +1237,28 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 #sm-nav .pn-group{display:flex;flex-direction:column;gap:4px;}
 #sm-nav .pn-tab{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
   padding:11px 12px;border-radius:12px;font-family:var(--font);font-size:12.5px;
-  font-weight:800;color:#0f766e;background:transparent;border:1px solid transparent;
+  font-weight:800;color:var(--green-text);background:transparent;border:1px solid transparent;
   line-height:1.25;cursor:pointer;transition:background .15s,color .15s;}
 #sm-nav .pn-ico{width:18px;height:18px;flex-shrink:0;}
-#sm-nav .pn-tab:hover{background:#ccfbf1;}
-#sm-nav .pn-tab.is-on{background:#0f766e;color:#fff;}
-#sm-nav .pn-tab.is-on:hover{background:#115e59;}
-/* Stays put while the records scroll past it. 76px clears the compact bar
-   (Back pill · module name · NO badge, ~65px tall), which is sticky itself.
-
-   The height cap and its own scrollbar are what make "sticky" true rather
-   than nearly true: a bar taller than the window cannot stick — the browser
-   scrolls it until its bottom edge arrives, so the top of it walks off the
-   screen and the menu is gone exactly when somebody scrolling wants it. The
-   rail keeps its ground and paints itself, so it reads as a narrowed menu
-   rather than as a strip of page. */
+#sm-nav .pn-tab:hover{background:var(--green-light);}
+#sm-nav .pn-tab.is-on{background:var(--green);color:#fff;}
+#sm-nav .pn-tab.is-on:hover{background:var(--green-hover);}
+/* The rail itself: fixed to the viewport's left edge, from under the
+   sticky header bar (~65px tall) to the foot of the screen, with its own
+   scrollbar for the day it grows more rows than a laptop is tall. It is
+   painted in the THEME's green — var(--green), the same ink as every
+   primary button on the page — not a teal of its own. z-index below the
+   header bar (z-30), above the content. */
 @media(min-width:768px){
-  #sm-nav{position:sticky;top:76px;align-self:start;
-    max-height:calc(100vh - 96px);overflow-y:auto;overflow-x:hidden;
-    padding:12px 10px;border:none;border-radius:16px;
-    background:#0f766e;box-shadow:0 10px 24px rgba(13,148,136,.25);}
+  #sm-nav{position:fixed;left:0;top:65px;bottom:0;width:212px;z-index:25;
+    overflow-y:auto;overflow-x:hidden;
+    padding:14px 12px;border:none;border-radius:0;
+    background:var(--green);box-shadow:2px 0 14px rgba(8,92,51,.18);
+    transition:width .2s;}
   #sm-nav .pn-tab{color:rgba(255,255,255,.85);}
   #sm-nav .pn-tab:hover{background:rgba(255,255,255,.12);color:#fff;}
-  #sm-nav .pn-tab.is-on{background:rgba(255,255,255,.22);color:#fff;}
-  #sm-nav .pn-tab.is-on:hover{background:rgba(255,255,255,.28);}
+  #sm-nav .pn-tab.is-on{background:rgba(255,255,255,.24);color:#fff;}
+  #sm-nav .pn-tab.is-on:hover{background:rgba(255,255,255,.3);}
 }
 /* Phone: the column becomes a row above the content — a 212px column
    beside a table on a 412px screen leaves neither of them usable. The
@@ -1260,8 +1267,8 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
   #sm-nav .pn-group{margin-top:10px;flex-direction:row;
     overflow-x:auto;gap:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
   #sm-nav .pn-group::-webkit-scrollbar{display:none;}
-  #sm-nav .pn-tab{width:auto;flex:0 0 auto;background:#f0fdfa;border-color:#99f6e4;
-    font-size:12px;padding:9px 13px;white-space:nowrap;}
+  #sm-nav .pn-tab{width:auto;flex:0 0 auto;background:var(--green-bg);
+    border-color:var(--green-mid);font-size:12px;padding:9px 13px;white-space:nowrap;}
 }
 
 /* The head every panel shares: what the side bar chose, and the two
