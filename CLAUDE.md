@@ -50,7 +50,7 @@ What that SQL should be:
   comment.**
 
   Three paste rules are still owed across the older files, each its own
-  sweep, and the test prints the count every run: **144 carry a semicolon in a
+  sweep, and the test prints the count every run: **145 carry a semicolon in a
   comment**, 30 contain a backslash, and 46 do not end at a semicolon.
 - **Tested first.** There is a scratch Postgres 16 for this — see below. Run
   the SQL against a stubbed copy of the real tables before handing it over, and
@@ -1826,6 +1826,72 @@ checks fail on the previous code, "it leaves" among them. It holds the other
 direction too — a refused write is still an error, still leaves the tab
 dirty, and still stops the close.
 
+## One stage logged twice is not a plot doing it twice
+
+The PALMS board read **"2 running: Membesar"** and the office asked the
+obvious thing: why is this plot doing the same job twice. It is not. It has
+two log entries OPEN on the same `act_n` — a phone pushing an entry back that
+the office had closed (`sync.js` describes that route in its own comment), or
+the same day saved from two devices.
+
+`openActivities` in `shared/shared_palms.js` has deduped that since it was
+written, and its comment names this exact sentence: *"read back as 'Membesar
++ Membesar', which is not a plot doing anything twice; it is one activity
+counted twice."* **Both pages that draw the cell were using it for half the
+answer**, which is the shape of nearly every fault in this file:
+
+- the **board** named the activities (`ln.status`, deduped) and counted the
+  **rows**, so one job came out as two;
+- **Plot Life** did neither, so it printed the sentence the comment warns
+  about, word for word.
+
+So the count counts what the name names — both go through `openActivities`,
+and `many`, the current stage and the label all come off it. Three things
+fall out:
+
+- **A plot on ONE stage keeps its dropdown.** `many` taken off the rows cost
+  it the selected stage and the colour tint as well, over a duplicate.
+- **The duplicate is out of the COUNT, not out of SIGHT.** The plot carrying
+  one is the plot somebody has to tidy, so the row gets an amber `×2 open`
+  mark saying it is one stage logged twice and that picking a stage closes
+  every one of them. Hiding it would have made the fault permanent.
+- **The confirm panel counts rows and names stages.** Every open row really
+  is closed, so the count has to carry the duplicates — and the name must
+  not, because "Membesar + Membesar" describes nothing.
+
+**The detail views still list every ROW** — the motion study and the plot
+history — because that is where a duplicate is actually seen and dated.
+
+**And the phone had it too.** `savedActs` in `Barcode_Counter`'s
+`EntryTab.jsx` mapped the rows straight across, and the draft it seeds is
+what `MAX_CONCURRENT` counts: a plot with a duplicate read as already running
+the maximum two with ONE stage ticked, so the Field Conductor could not start
+the second real one and nothing said why. It reads a Set now, which is what
+`applyDailySelection` has always written. Change one, change the other.
+
+`shared/RUN_ME_upkeep_is_membersih.sql` closes the rows underneath: an exact
+copy (same plot, same stage, same start day, both open) is **deleted**,
+keeping the lowest id, because it is the same entry twice; two open entries
+on one stage with **different** start days are two statements, so the older
+is **closed on the day the newer began** rather than thrown away. A plot
+genuinely running two different stages is left alone — PALMS allows two and
+that is not this.
+
+**That file also answers what Up-keep is: Membersih.** The plot status report
+of 31-Aug-2026 carried a stage that was not one of the eleven, and
+`seed_palms_from_report_2026_08_31.sql` invented a twelfth as a placeholder,
+saying in as many words that it was a guess. The office has now named it. The
+repair repoints every plot log, every day of history and every daily status
+row, then removes the placeholder — which moves nothing else, because it was
+added at the END of the list on purpose so no other stage's `sort_order`
+changes and no history is silently re-read. Repointing can itself collide
+with a Membersih already open on that plot, so the duplicate sweep runs
+after it, in the same block.
+
+`tests/one_stage_logged_twice_is_not_two.cjs` drives the shipped
+`shared_palms.js` and holds both pages to it — 26 of its checks fail on the
+previous code.
+
 ## A typo must not lock the row that would fix it
 
 A date box takes four digits for the year and somebody keyed two, so a 3rd
@@ -2390,7 +2456,7 @@ metas**, same exposure as Batch Info: the PAGE is the deploy, so a browser
 holding yesterday's copy keeps it until one hard reload. Add the three the
 day somebody needs a fix here in a hurry.
 
-## The Worker Record reads the conductor's transplanting, and never writes it
+## The Worker Record reads the conductor's transplanting, and writes ONE column
 
 The Field Conductor records the four transplanting jobs on his own portal:
 the plot, which job, the day, and the crew. They land in
@@ -2401,12 +2467,16 @@ work appeared was a figure on a claim.
 So Worker Record has a fifth tab. It is DATE · PLOT · WORK · QTY and a
 column per worker, the same shape as the four beside it.
 
-**IT IS READ-ONLY, and that is not an omission.** The FC Portal is the only
-writer of that table in either repository (`npayroll_script.js` reads it for
-the claim and nothing else). A tick box here would be a second writer of
-somebody's pay with no rule about who may move it — which is exactly what
-the sheet's own `transplant_edit` permission exists to govern. The test
-asserts no cell is clickable and that the tab sends no write.
+**THE CREW IS READ-ONLY HERE, and that is not an omission.** The FC Portal
+is the only writer of a transplanting CREW in either repository. A tick box
+over a name here would be a second writer of somebody's pay with no rule
+about who may move it — which is exactly what the sheet's own
+`transplant_edit` permission exists to govern. The test asserts the renderer
+puts no handler on a cell of its own.
+
+**The one column the office does write is CHECKED** — see the section below.
+It was read-only in full for exactly as long as the claim was paid straight
+off the conductor's record.
 
 **The share is the CLAIM's rule, and a test holds the two together.** One
 worker's figure is the quantity keyed against their name where the job
@@ -2438,6 +2508,90 @@ Three smaller things:
 `transplantData.js` and `npayroll_script.js` have the other two. Only the key
 and the label are needed here; the matching and the rates stay where they
 are.
+
+## The transplanting claim is paid on a row the OFFICE has checked
+
+The four jobs are keyed by the Field Conductor and used to reach the salary
+claim straight from there. `loadTransplantField` said why in its own words:
+*keying it IS the signature, and there is no second person to wait for.*
+
+What that left out is that the office has to AGREE a figure before it prices
+it — a quantity the report is still moving, a crew somebody is about to
+correct, a plot keyed against the wrong month. There was no way to hold one,
+so **the first anybody saw of a figure was the money.** It is the same
+Checked tick the other four Worker Record tabs have carried for months,
+asked of the fifth, and the claim quotes the same sentence as the sheet:
+*ONLY A CHECKED ROW REACHES THE CLAIM.*
+
+Five things in it, and four of them are faults this file has had before:
+
+- **Held work is COUNTED AND NAMED.** A claim short of work reads exactly
+  like a quiet month, which is the thing this system is most careful about.
+  The claim prints the money (`transplantHeldLines()` prices the held rows at
+  their real piece rate), the rows, the plots and where the tick is; the
+  Worker Record foot carries a **Held back** line under the total; and the
+  by-plot table — which counts what the claim pays, so it agrees with the
+  cards above it — says which plot it left out.
+- **A month entirely held is NOT a month nothing was recorded in.** Both
+  empty sentences had to learn the sixth answer. "No transplanting was
+  recorded" over a month the conductor spent keying is the office telling him
+  his work never arrived, which is the whole argument of
+  `transplantEmptyLead`.
+- **IT FAILS OPEN.** A database that has not had the SQL run refuses the
+  whole select over a column it has not got — and the error it sends back
+  ("could not find the column") is matched by the quiet branch that turns a
+  missing TABLE into an empty list, so the sheet would have read EMPTY over a
+  month of work. Both readers fall back to the columns that have always been
+  there, every row is paid the way it was before the tick existed, and both
+  SAY SO: red on the claim, orange on the tab. A gate that cannot be read
+  must not take a month off a claim — same reason access fails open. And a
+  gate that is missing is said LOUDER than being short, because a claim
+  paying work nobody agreed while the office believes it is gated is worse
+  than one that is light.
+- **The tick is cleared by a TRIGGER, not by a screen.** Three things write
+  that table — the FC Portal sheet, this page, and somebody in the Supabase
+  dashboard — and a conductor who corrects a crew after the office agreed the
+  row has changed what is being paid. A rule living in one screen is a rule
+  the other two do not obey; same reasoning as `previous_names` on the worker
+  register. Only the fields that decide the MONEY clear it (the day, the
+  plot, the job, the month, the quantity, the crew) — a corrected remark or
+  batch name leaves the agreement standing — and a write that corrects a
+  figure AND agrees it in one go is left alone, or the tick could never be
+  set.
+- **Nothing is backfilled.** A tick nobody made is not a signature, and
+  seeding one would be the SQL deciding a month the office has not looked at.
+  So the first claim after it is run is NOUGHT and names everything it is
+  holding. That is the office being asked the question for the first time,
+  and `shared/CHECK_transplant_held_back.sql` is the size of it — every
+  nursery-month, how many rows are agreed, and the capacity on no claim.
+  Hand it over with any change here.
+
+**A MONTH THE OFFICE HAS VERIFIED IS ALREADY AGREED**, and more strongly
+than a tick. The Transplanting sheet keeps no snapshot the way Work
+Maintenance does — `verifyCurrentSheet` builds one for `maint` and `null`
+for everything else — so it is always read live. Without this exception,
+deploying the gate would take every settled month to NOUGHT, and the office
+could not even put it right: ticking a row in a locked month is not a thing
+this system lets anybody do. `_tpVerifiedMonth` asks `MJMPayrollLock` for
+the row's own section, and `splitTransplantField` RE-SPLITS on every read
+rather than once at load, because the lock module loads in parallel with the
+rows and a verified month would otherwise look unverified for the first
+draw.
+
+The Worker Record tab **cannot** ask that question — `nursery_ops` loads no
+payroll-lock module and has no business growing one — so its Held back line
+states the rule and NAMES the exception in a clause rather than deciding it.
+A second copy of a verification rule, in a page with none of the data, is
+the thinner-copy fault this file is full of.
+
+A pill is still offered for a nursery whose ONLY transplanting is held
+(`transplantExtraSections` asks the held lines too), or the one sentence
+saying it is being held could not be reached.
+
+`shared/RUN_ME_transplant_checked.sql` is the two columns and the trigger.
+`tests/the_transplant_claim_asks_the_office.cjs` drives the real loader
+through all three cases, and `tests/transplant_claim_empty.cjs` holds the two
+new empty sentences against the real page in a real browser.
 
 ## A permission that is saved but not obeyed is worse than no permission
 
@@ -2693,6 +2847,88 @@ versioned file and not its number is a commit that reaches nobody.
 Still worth knowing: a browser that already holds a stale copy needs one hard
 reload (Ctrl/Cmd + Shift + R) to pick up the metas in the first place. After
 that it stays fresh by itself.
+
+## The audit module has two halves, and they were one door
+
+`audit_home.html` is the **auditor portal**: a to-do list built for a phone
+held in a nursery, overdue rounds on it and nothing else.
+
+`audit_admin.html` is the **back office**: what is scheduled this month and
+how far through it each nursery is, the cross-nursery alerts, the four module
+cards, the monthly report and Settings. A desk screen.
+
+One door led to both and **which one you got depended on who you were**. An
+audit admin pressing *Audit Portal* on the 555 MJM Team page — a door whose
+own label reads *"Plot audits & sign-off"* — landed on the desk screen, and
+had to navigate out of it to reach their own list. Signing in at the auditor
+login did the same thing. A door that means two things is a door half the
+people who press it are wrong about.
+
+So the back office **moved out** and became a hub module of its own,
+**Nursery Audit System**, in the Nursery Sector. Each door means one thing
+now:
+
+| door | goes to |
+|---|---|
+| hub tile *Nursery Audit System* | `audit_admin.html` — the back office |
+| 555 MJM Team → *Audit Portal* | `audit_home.html` — the to-do list |
+| auditor sign-in (`audit_index.html`) | `audit_home.html`, for everybody |
+
+Four things about the move, and the first is the only one that could have
+hurt anybody:
+
+- **Nobody lost a route.** The tile is gated on the SAME `audit` module the
+  portal has always used, so everyone who used to be sent to the back office
+  still reaches it. `audit_admin.html` asks only for a signed-in audit
+  session — deliberately, its own comment says why: the four module cards
+  live there and a plain auditor needs them — so the tile is a door and not
+  a wall, and a plain auditor sees it too.
+- **Hidden until granted.** No `data-module-open` on this card, because it
+  opens a back office: an unset answer closes it, where an unset answer on a
+  long-standing harmless tile would take it away from everybody. The
+  `data-card` is **`auditsys`**, not `audit` — the old `555 Audit Portal`
+  card was `audit` and `mjm_team_portal.cjs` asserts it has not come back.
+  They are different halves of one module and must not be confused.
+- **`auditLanding()` stopped reading the module level.** It used to send an
+  admin to `audit_admin.html`; it returns `audit_home.html` for everybody
+  now. `applyLandingScope()` still runs for everybody — that one is about
+  WHICH NURSERY, not which page.
+- **`scan_admin.html` had no no-cache metas** and carries every line of its
+  own code inline, so the page IS the deploy and a cached copy is the old
+  routing for ever. The routing was the first thing that changed in it. It
+  has the three now. One hard reload per machine.
+- **"Visit 555 Auditor Portal" came off the back office**, and the office
+  asked for it in the same breath. It was the way ACROSS, from when this
+  page was the back door OF the portal and an admin landed here by signing
+  in; once the portal has doors of its own, a button pointing at it from the
+  back office is the one thing still saying the two are one place. The note
+  under the module cards lost its "…and can open the auditor portal" for the
+  same reason, and `.portal-btn` / `.pb-home` / `.pb-out` went with it —
+  a style nothing wears is a style the next person spends five minutes
+  looking for a use of. The ribbon's **Portal** link stays: it reaches the
+  hub, which is where both doors are, and a back office with no way out is
+  a room and not a page.
+
+`tests/the_audit_system_is_its_own_module.cjs` drives the real hub and the
+real MJM Team page. Two things it had to learn, both of which make a gate
+test pass for the wrong reason:
+
+- **Tailwind comes from a CDN the harness refuses**, so every card measures
+  0×0 and `isVisible()` answers false for all of them — a hidden-tile check
+  that passes whatever the gate did. It reads the inline `display` the gate
+  WRITES instead.
+- **The hub reads its profile with `.maybeSingle()`** and gates inside the
+  `onAuthStateChange` callback. A mock without `maybeSingle`, or one whose
+  subscription never fires, leaves `perms` null — and the hub fails OPEN, so
+  every tile shows and no gate assertion can fail. A login holding `none`
+  everywhere is refused the hub altogether and never reaches the gating at
+  all, so that fixture has to hold some other module.
+
+And one more, about asserting a removal: **a page that explains what it
+removed will contain the words.** The comment where the Visit button stood
+names the button and the three rules, which is exactly what that comment is
+for — and a plain text search read it as the button still being there. The
+test strips the comments first and asks about the markup the browser gets.
 
 ## A search takes you to the batch
 
