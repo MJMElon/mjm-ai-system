@@ -1483,3 +1483,10 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 .trk-far{font-size:11px;font-weight:700;color:var(--green-text,#136c3a);white-space:nowrap;}
 .trk-btn:hover .trk-mini{border-color:var(--green-deep,#136c3a);}
 @media print { .trk-mini{break-inside:avoid;} }
+
+/* A transplanting row the office has not agreed yet. Amber rather than
+   greyed out: the work IS recorded and the row is readable, it is only
+   waiting on somebody — and a row that looks disabled reads as a row with
+   nothing to do on it, which is the opposite of what this one wants. */
+#payroll-table tbody tr.tp-row-held > td{background:#fffbeb;}
+#payroll-table tbody tr.tp-row-held:hover > td{background:#fef3c7;}
