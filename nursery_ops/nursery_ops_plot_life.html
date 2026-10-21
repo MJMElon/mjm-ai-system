@@ -21,6 +21,11 @@
   .chip-done        { background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
   .chip-cancelled   { background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; }
   .chip-over        { background:#fff1f2; color:#9f1239; border:1px solid #fecdd3; }
+  /* ONE STAGE, SEVERAL OPEN ROWS — a log with a duplicate in it, not a plot
+     doing two things. Same mark and same words as the PALMS board. */
+  .st-dup { display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px;
+            background:#fffaf0; border:1.5px solid #c98a16; color:#7a4e06;
+            font-weight:900; font-size:10px; line-height:1.5; cursor:help; vertical-align:middle; }
   .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 14px; border-radius:12px; font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; border:none; cursor:pointer; transition:all .15s; }
   .btn-teal  { background:linear-gradient(135deg,#14b8a6,#0d9488); color:white; box-shadow:0 6px 14px -4px rgba(13,148,136,.4); }
   .btn-teal:hover { transform:translateY(-1px); }
@@ -764,17 +769,32 @@ function statusCell(plotName, st) {
      somebody deliberately running two activities, and the office looking at
      it is exactly the person who wants to say "it is on ONE stage, this
      one". Picking closes every open entry and opens the chosen one. */
+  /* THE COUNT HAS TO COUNT WHAT THE NAME NAMES — the board's own rule, and
+     this copy never had it. Two rows open on one act_n are one activity
+     logged twice, not a plot doing it twice, so counting rows and naming
+     them straight off the rows read back as "2 running: Membesar + Membesar".
+     openActivities is the one dedupe; nothing works it out again here. */
   const open = MJMPalms.currentEntries(PALMS_LOGS, unit);
-  const many = open.length > 1;
-  const curN = open.length === 1 ? open[0].actN : null;
+  const openActs = MJMPalms.openActivities(PALMS_LOGS, unit);
+  const many = openActs.length > 1;
+  const curN = openActs.length === 1 ? openActs[0].n : null;
+  const dupes = open.length - openActs.length;
   const opts = MJMPalms.ACTIVITIES.map(a =>
     `<option value="${a.n}"${!many && a.n === curN ? ' selected' : ''}>${esc(a.name)}</option>`).join('');
-  const names = open.map(e => { const a = MJMPalms.actByN(e.actN); return a ? a.name : '?'; });
+  const names = openActs.map(a => a.name);
+  /* The duplicate is kept out of the count and not out of sight: the plot
+     carrying it is the one somebody has to tidy, and picking a stage closes
+     every open row, which is the tidying. */
+  const dupTag = dupes > 0
+    ? `<span class="st-dup" title="${esc(open.length + ' log entries are open on ' + names.join(' + ') +
+        '. That is one stage logged ' + open.length + ' times, not ' + open.length +
+        ' stages. Picking a stage closes every one of them.')}">×${open.length} open</span>`
+    : '';
   return `<select class="st-pick" data-st="${esc(plotName)}" data-cur="${curN == null ? '' : curN}">` +
     (many
-      ? `<option value="" selected>${esc(open.length + ' running: ' + names.join(' + '))}</option>`
+      ? `<option value="" selected>${esc(openActs.length + ' running: ' + names.join(' + '))}</option>`
       : (curN == null ? '<option value="" selected>— nothing running —</option>' : '')) +
-    opts + '</select>';
+    opts + '</select>' + dupTag;
 }
 
 document.addEventListener('change', (e) => {
@@ -791,16 +811,19 @@ function askStatusChange(plotName, fromN, toN) {
   if (!to) return;
   SF = { plot: plotName, unit: plotName, fromN: fromN, toN: toN };
   const today = MJMPalms.todayStr();
-  /* Every open entry, not just the one the dropdown was showing — on a plot
-     carrying duplicates the whole point is that ALL of them are closed, and
-     naming one of three would describe a smaller change than the one about
-     to happen. */
-  const names = MJMPalms.currentEntries(PALMS_LOGS, plotName)
-    .map(e => { const a = MJMPalms.actByN(e.actN); return a ? a.name : '?'; });
+  /* Every open entry is closed, not just the one the dropdown was showing —
+     on a plot carrying duplicates that is the whole point of the change, and
+     naming one of three would describe a smaller one than is about to
+     happen. So the COUNT carries the duplicates and the NAME does not:
+     "Membesar + Membesar" describes nothing. */
+  const open = MJMPalms.currentEntries(PALMS_LOGS, plotName);
+  const names = MJMPalms.openActivities(PALMS_LOGS, plotName).map(a => a.name);
+  const dupNote = open.length > names.length
+    ? ` (all ${open.length} open entries)` : '';
   $('sf-line').innerHTML =
     `<strong>${esc(plotName)}</strong> — ` +
     (names.length
-      ? `close <strong>${esc(names.join(' + '))}</strong> today and start `
+      ? `close <strong>${esc(names.join(' + '))}</strong>${esc(dupNote)} today and start `
       : 'start ') +
     `<strong>${esc(to.name)}</strong> on ${esc(MJMPalms.prettyD(today))}` +
     (to.days != null ? `, due in ${to.days} day${to.days === 1 ? '' : 's'}` : '');

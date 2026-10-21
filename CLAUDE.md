@@ -1826,6 +1826,72 @@ checks fail on the previous code, "it leaves" among them. It holds the other
 direction too — a refused write is still an error, still leaves the tab
 dirty, and still stops the close.
 
+## One stage logged twice is not a plot doing it twice
+
+The PALMS board read **"2 running: Membesar"** and the office asked the
+obvious thing: why is this plot doing the same job twice. It is not. It has
+two log entries OPEN on the same `act_n` — a phone pushing an entry back that
+the office had closed (`sync.js` describes that route in its own comment), or
+the same day saved from two devices.
+
+`openActivities` in `shared/shared_palms.js` has deduped that since it was
+written, and its comment names this exact sentence: *"read back as 'Membesar
++ Membesar', which is not a plot doing anything twice; it is one activity
+counted twice."* **Both pages that draw the cell were using it for half the
+answer**, which is the shape of nearly every fault in this file:
+
+- the **board** named the activities (`ln.status`, deduped) and counted the
+  **rows**, so one job came out as two;
+- **Plot Life** did neither, so it printed the sentence the comment warns
+  about, word for word.
+
+So the count counts what the name names — both go through `openActivities`,
+and `many`, the current stage and the label all come off it. Three things
+fall out:
+
+- **A plot on ONE stage keeps its dropdown.** `many` taken off the rows cost
+  it the selected stage and the colour tint as well, over a duplicate.
+- **The duplicate is out of the COUNT, not out of SIGHT.** The plot carrying
+  one is the plot somebody has to tidy, so the row gets an amber `×2 open`
+  mark saying it is one stage logged twice and that picking a stage closes
+  every one of them. Hiding it would have made the fault permanent.
+- **The confirm panel counts rows and names stages.** Every open row really
+  is closed, so the count has to carry the duplicates — and the name must
+  not, because "Membesar + Membesar" describes nothing.
+
+**The detail views still list every ROW** — the motion study and the plot
+history — because that is where a duplicate is actually seen and dated.
+
+**And the phone had it too.** `savedActs` in `Barcode_Counter`'s
+`EntryTab.jsx` mapped the rows straight across, and the draft it seeds is
+what `MAX_CONCURRENT` counts: a plot with a duplicate read as already running
+the maximum two with ONE stage ticked, so the Field Conductor could not start
+the second real one and nothing said why. It reads a Set now, which is what
+`applyDailySelection` has always written. Change one, change the other.
+
+`shared/RUN_ME_upkeep_is_membersih.sql` closes the rows underneath: an exact
+copy (same plot, same stage, same start day, both open) is **deleted**,
+keeping the lowest id, because it is the same entry twice; two open entries
+on one stage with **different** start days are two statements, so the older
+is **closed on the day the newer began** rather than thrown away. A plot
+genuinely running two different stages is left alone — PALMS allows two and
+that is not this.
+
+**That file also answers what Up-keep is: Membersih.** The plot status report
+of 31-Aug-2026 carried a stage that was not one of the eleven, and
+`seed_palms_from_report_2026_08_31.sql` invented a twelfth as a placeholder,
+saying in as many words that it was a guess. The office has now named it. The
+repair repoints every plot log, every day of history and every daily status
+row, then removes the placeholder — which moves nothing else, because it was
+added at the END of the list on purpose so no other stage's `sort_order`
+changes and no history is silently re-read. Repointing can itself collide
+with a Membersih already open on that plot, so the duplicate sweep runs
+after it, in the same block.
+
+`tests/one_stage_logged_twice_is_not_two.cjs` drives the shipped
+`shared_palms.js` and holds both pages to it — 26 of its checks fail on the
+previous code.
+
 ## A typo must not lock the row that would fix it
 
 A date box takes four digits for the year and somebody keyed two, so a 3rd
@@ -2781,6 +2847,71 @@ versioned file and not its number is a commit that reaches nobody.
 Still worth knowing: a browser that already holds a stale copy needs one hard
 reload (Ctrl/Cmd + Shift + R) to pick up the metas in the first place. After
 that it stays fresh by itself.
+
+## The audit module has two halves, and they were one door
+
+`audit_home.html` is the **auditor portal**: a to-do list built for a phone
+held in a nursery, overdue rounds on it and nothing else.
+
+`audit_admin.html` is the **back office**: what is scheduled this month and
+how far through it each nursery is, the cross-nursery alerts, the four module
+cards, the monthly report and Settings. A desk screen.
+
+One door led to both and **which one you got depended on who you were**. An
+audit admin pressing *Audit Portal* on the 555 MJM Team page — a door whose
+own label reads *"Plot audits & sign-off"* — landed on the desk screen, and
+had to navigate out of it to reach their own list. Signing in at the auditor
+login did the same thing. A door that means two things is a door half the
+people who press it are wrong about.
+
+So the back office **moved out** and became a hub module of its own,
+**Nursery Audit System**, in the Nursery Sector. Each door means one thing
+now:
+
+| door | goes to |
+|---|---|
+| hub tile *Nursery Audit System* | `audit_admin.html` — the back office |
+| 555 MJM Team → *Audit Portal* | `audit_home.html` — the to-do list |
+| auditor sign-in (`audit_index.html`) | `audit_home.html`, for everybody |
+
+Four things about the move, and the first is the only one that could have
+hurt anybody:
+
+- **Nobody lost a route.** The tile is gated on the SAME `audit` module the
+  portal has always used, so everyone who used to be sent to the back office
+  still reaches it. `audit_admin.html` asks only for a signed-in audit
+  session — deliberately, its own comment says why: the four module cards
+  live there and a plain auditor needs them — so the tile is a door and not
+  a wall, and a plain auditor sees it too.
+- **Hidden until granted.** No `data-module-open` on this card, because it
+  opens a back office: an unset answer closes it, where an unset answer on a
+  long-standing harmless tile would take it away from everybody. The
+  `data-card` is **`auditsys`**, not `audit` — the old `555 Audit Portal`
+  card was `audit` and `mjm_team_portal.cjs` asserts it has not come back.
+  They are different halves of one module and must not be confused.
+- **`auditLanding()` stopped reading the module level.** It used to send an
+  admin to `audit_admin.html`; it returns `audit_home.html` for everybody
+  now. `applyLandingScope()` still runs for everybody — that one is about
+  WHICH NURSERY, not which page.
+- **`scan_admin.html` had no no-cache metas** and carries every line of its
+  own code inline, so the page IS the deploy and a cached copy is the old
+  routing for ever. The routing was the first thing that changed in it. It
+  has the three now. One hard reload per machine.
+
+`tests/the_audit_system_is_its_own_module.cjs` drives the real hub and the
+real MJM Team page. Two things it had to learn, both of which make a gate
+test pass for the wrong reason:
+
+- **Tailwind comes from a CDN the harness refuses**, so every card measures
+  0×0 and `isVisible()` answers false for all of them — a hidden-tile check
+  that passes whatever the gate did. It reads the inline `display` the gate
+  WRITES instead.
+- **The hub reads its profile with `.maybeSingle()`** and gates inside the
+  `onAuthStateChange` callback. A mock without `maybeSingle`, or one whose
+  subscription never fires, leaves `perms` null — and the hub fails OPEN, so
+  every tile shows and no gate assertion can fail. A login holding `none`
+  everywhere is refused the hub altogether and never reaches the gating at
+  all, so that fixture has to hold some other module.
 
 ## A search takes you to the batch
 

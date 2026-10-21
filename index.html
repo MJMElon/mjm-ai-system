@@ -247,7 +247,7 @@
             <path d="M17 20v3.5" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
         </div>
-        <div class="module-name">Sales Web<br>Admin</div>
+        <div class="module-name">Nursery Sales<br>Web Portal</div>
         <div class="module-tag">salesweb_</div>
       </a>
 
@@ -271,6 +271,40 @@
         </div>
         <div class="module-name">Nursery<br>Case Log</div>
         <div class="module-tag">nelos_</div>
+      </a>
+
+      <!-- Nursery Audit System — the back office of the audit module: what
+           is scheduled this month and how far through it the nurseries are,
+           the cross-nursery alerts, the four module cards, the monthly
+           report and Settings.
+
+           IT IS NOT THE AUDITOR PORTAL, and the two were one door until
+           now. The portal (audit_home.html) is a to-do list built for a
+           phone held in a nursery; this is what somebody opens at a desk to
+           see where the work stands. An audit admin pressing Audit Portal on
+           the 555 MJM Team page used to land HERE instead of on their own
+           to-do list, which is the wrong half of the module for a door
+           called Audit Portal — so the manage view moved out and became a
+           module of its own, and that door now goes where its name says.
+
+           Hidden until granted, like every card that opens something
+           privileged: no `data-module-open`, so an unset answer closes it.
+           Gated on the SAME `audit` module the portal has always used, so
+           nobody gained or lost access on the day this tile appeared. -->
+      <a class="module-card" data-card="auditsys" data-module="audit" href="audit/audit_admin.html"
+         style="--accent:#f97316;--glow:rgba(249,115,22,.25);--glow-strong:rgba(249,115,22,.35);--icon-bg:rgba(249,115,22,.12);">
+        <div class="card-corner card-tl"></div><div class="card-corner card-tr"></div>
+        <div class="card-corner card-bl"></div><div class="card-corner card-br"></div>
+        <div class="module-icon-wrap">
+          <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
+            <rect x="9" y="4" width="16" height="22" rx="3" fill="rgba(249,115,22,.18)" stroke="#f97316" stroke-width="1.5"/>
+            <path d="M13 11h8M13 15h8M13 19h5" stroke="#fdba74" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="23" cy="25" r="5" fill="#050a0e" stroke="#f97316" stroke-width="1.5"/>
+            <path d="M21.5 25l1.2 1.3L25 23" stroke="#f97316" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="module-name">Nursery Audit<br>System</div>
+        <div class="module-tag">audit_</div>
       </a>
 
       <a class="module-card" data-card="npayroll" data-module="npayroll" href="npayroll/npayroll_dashboard.html"
