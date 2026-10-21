@@ -44,6 +44,13 @@
      use. System Setting is a fixed three and stays put. */
   .door.card-dragging { opacity:.4; border-color:#34d399; box-shadow:0 0 24px rgba(52,211,153,.35); }
   .door.card-drag-over { border-color:#34d399; box-shadow:0 0 0 2px rgba(52,211,153,.4); }
+
+  /* System Demo's one door carries no card at all — the office asked for no
+     white box behind it, just the icon in its own colour and the wording,
+     so it reads as a demo rather than another door into something real. */
+  .door-plain { background:transparent; border-color:transparent; box-shadow:none; }
+  .door-plain:hover { border-color:transparent; box-shadow:none; }
+  .door-plain .door-ico { background:transparent; }
 </style>
 </head>
 <body>
@@ -156,6 +163,33 @@
       </span>
       <span class="door-name">User Access</span>
       <span class="door-sub">Who may open the FC &amp; Worker Portals</span>
+    </a>
+  </div>
+
+  <!-- System Demo: the four phone portals at phone size, on a desk — moved
+       here from the hub (index.html), renamed from "555 Portal Demo" to
+       "Demo Portal". It carries no card background on purpose (no white
+       box, just the icon's own colour and the wording), so it still reads
+       as a demo rather than another door into something real.
+
+       Gated the same way it always was: a "None" answer on the demo555
+       module closes it, anything else — including nobody having been asked
+       yet — leaves it open. demo/demo_phone.html checks for itself too,
+       rather than trusting a hidden tile. -->
+  <div class="section-label">System Demo</div>
+  <div class="door-grid">
+    <a class="door door-plain" id="tool-demo" href="../demo/demo_phone.html">
+      <span class="door-ico" style="color:#0284c7;">
+        <svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="7" width="16" height="21" rx="3"/>
+          <path d="M9.5 10.5h5"/>
+          <path d="M8 16h8M8 20h5"/>
+          <rect x="20" y="12" width="10" height="14" rx="2.2"/>
+          <path d="M23 17h4M23 20h2.5"/>
+        </svg>
+      </span>
+      <span class="door-name">Demo Portal</span>
+      <span class="door-sub">The four phone portals, at phone size</span>
     </a>
   </div>
 </div>
@@ -273,6 +307,13 @@ $('worker-portal-link').addEventListener('click', (e) => {
     if (!MJMAccess.canScanArea('worker')) $('worker-portal-link').classList.add('hidden');
     if (!hasAdminPortal) $('admin-portal-link').classList.add('hidden');
     if (!hasAuditPortal) $('audit-portal-link').classList.add('hidden');
+
+    // Demo Portal: a "None" answer on demo555 closes it, same as every
+    // other module card — see shared_access.js's normalize()/fail-open
+    // comment. Nobody having been asked yet leaves it open, which is why
+    // this is not a canScanArea() entry (those default closed).
+    const mods = (MJMAccess.permissions() || {}).modules || {};
+    if (mods.demo555 === 'none') $('tool-demo').classList.add('hidden');
 
     /* Audit tile is split the same way it was on the hub: an admin lands on
        the back-end page, everyone else goes straight to the to-do list
