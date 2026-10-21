@@ -69,12 +69,33 @@
     <span aria-hidden="true"></span>
   </div>
 
+  <!-- SYSTEM SETTING COMES FIRST, AND IT IS NOT A PORTAL'S OWN.
+       Location, Portal View & Function and Boundary govern the FC Portal AND
+       the Worker Portal together — the switch table has a column for each —
+       so it was never an FC Portal setting. It sat two doors down all the
+       same: Settings → FC Portal Setting → System Setting, which is how a
+       page that decides what a WORKER sees came to be filed under the
+       conductor's. The office handed over the outline of it and asked for it
+       here, so it moved out of scan_setting.html and up to the top of this
+       list, where what it governs is what it says. -->
+  <section class="portal-section" id="section-system">
+    <div class="portal-head"><span class="portal-dot" style="background:#0ea5e9;"></span><span class="portal-label">System Setting</span></div>
+    <div class="tools">
+      <a class="tool" href="scan_system_setting.html">
+        <span class="tool-ico" style="background:#e0f2fe;">🛠️</span>
+        <span>
+          <span class="tool-name">System Setting</span>
+          <span class="tool-sub">Location · Portal View &amp; Function · Boundary — what the FC and Worker Portals each offer, and the nursery outlines behind the GPS track.</span>
+        </span>
+      </a>
+    </div>
+  </section>
+
   <!-- FC Portal / Worker Portal — one office-side door for both, since
-       scan_setting.html's own User Access + System Setting already govern
-       who may open either and what each one offers. Worker Portal also
-       gets a section of its own below for the setting a worker changes
-       INSIDE the app, which is a different thing kept in a different
-       place on purpose — see its own note. -->
+       scan_setting.html's own User Access already governs who may open
+       either. Worker Portal also gets a section of its own below for the
+       setting a worker changes INSIDE the app, which is a different thing
+       kept in a different place on purpose — see its own note. -->
   <section class="portal-section" id="section-fc">
     <div class="portal-head"><span class="portal-dot" style="background:#8b5cf6;"></span><span class="portal-label">FC Portal Setting</span></div>
     <div class="tools">
@@ -82,7 +103,7 @@
         <span class="tool-ico">⚙️</span>
         <span>
           <span class="tool-name">FC Portal Setting</span>
-          <span class="tool-sub">Who may open the FC &amp; Worker Portals, which nurseries, what each portal offers.</span>
+          <span class="tool-sub">Who may open the FC &amp; Worker Portals, and which nurseries.</span>
         </span>
       </a>
     </div>
@@ -158,6 +179,19 @@ const _supabase = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
     // not a setting.
     if (!MJMAccess.canScanArea('admin_portal')) document.getElementById('section-admin').classList.add('hidden');
     if (!MJMAccess.canScanArea('audit_portal')) document.getElementById('section-audit').classList.add('hidden');
+
+    /* System Setting and FC Portal Setting both land on pages that ask for
+       scan ADMIN and bounce anybody else to the phone app. A door that
+       throws you somewhere else is worse than no door, so the two hide
+       together — the same test their destinations apply, asked one step
+       earlier. Nobody gains anything by it: the pages decide, as they
+       always did, and this only stops the walk into a wall.
+       Asked of the EXPLICIT module level, like every other audit/scan
+       routing decision here, rather than the profile-level role. */
+    if (!MJMAccess.isAdminOf('scan')) {
+      document.getElementById('section-system').classList.add('hidden');
+      document.getElementById('section-fc').classList.add('hidden');
+    }
 
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('main').classList.remove('hidden');
