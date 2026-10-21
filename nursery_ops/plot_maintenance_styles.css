@@ -110,6 +110,17 @@ button.top-sel:focus{outline:none;border-color:var(--border-focus);box-shadow:0 
 .btn:hover{border-color:var(--green);color:var(--green-text);background:var(--green-bg);}
 .btn-primary{background:var(--green);color:#fff;border-color:var(--green);box-shadow:0 2px 6px rgba(13,122,71,0.25);}
 .btn-primary:hover{background:var(--green-hover);border-color:var(--green-hover);color:#fff;}
+/* A DISABLED BUTTON THAT LOOKS ENABLED IS A BUTTON SOMEBODY PRESSES AGAIN.
+   Save on the Setting lists disables itself for the length of the write --
+   which is one round trip per chemical on a nursery line -- and there was no
+   rule here at all, so nothing on screen changed: same green, same shadow,
+   same pointer. The office reported it as "I need to click many times only
+   then it saved", and that is exactly what it looks like from outside. The
+   hover is cancelled too, or the button still lights up under the cursor
+   while it is refusing. */
+.btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none;}
+.btn:disabled:hover{border-color:var(--border);color:var(--text-muted);background:var(--bg-white);}
+.btn-primary:disabled:hover{background:var(--green);border-color:var(--green);color:#fff;}
 .btn-sm{padding:4px 10px;font-size:11px;}
 .btn-danger{color:var(--red);border-color:var(--red-border);}
 .btn-danger:hover{background:var(--red-bg);border-color:var(--red);color:var(--red);}
@@ -771,12 +782,24 @@ td.check-td.locked.ticked:hover::before{border-color:#7fae92;}
 
 /* One grid template, shared by the heading strip and every row under it, so
    the columns cannot drift apart. */
-.lst-head, .lst-row { display:grid; grid-template-columns:1fr 112px 66px 88px 30px; gap:7px;
+/* The DOSAGE column carries two controls — the number and the unit it is in
+   — so it is sized for both. It was 112px, which was right while the unit
+   was a bare <select> about 50px wide. shared_cf_select.js then skinned
+   every select in the system, and its wrapper is width:100% with a shrink
+   factor, where the number box is flex:1 (basis 0) and so never shrinks
+   FIRST: the wrapper took 86 of the 112 and the number box was left at 22px,
+   which is its padding and borders and no room for a digit at all. It even
+   overflowed its own cell and clipped the left edge of Covers beside it, so
+   the preset read "300" where it said 800.
+   The width below is the fix, and `.lst-dose > .cf-wrap` further down is the
+   rest of it. Covers is widened to match, because it is the same four digits
+   in both lists. */
+.lst-head, .lst-row { display:grid; grid-template-columns:1fr 172px 80px 88px 30px; gap:7px;
                       align-items:center; }
-.lst-head.fert-head, .fert-row { grid-template-columns:1fr 152px 94px 84px 34px; }
+.lst-head.fert-head, .fert-row { grid-template-columns:1fr 182px 94px 84px 34px; }
 /* The Other list carries one more column: which schedule dropdown may offer
    the chemical. Pest and disease have a dropdown each already. */
-.lst-head.other-row, .other-row { grid-template-columns:1fr 128px 70px 92px 104px 30px; }
+.lst-head.other-row, .other-row { grid-template-columns:1fr 172px 80px 92px 104px 30px; }
 .lst-tagsel { height:37px; padding:0 4px; font-family:inherit; font-size:12px; font-weight:700;
               color:var(--text-head); background:#fff; border:1.5px solid var(--border);
               border-radius:var(--r-sm); min-width:0; }
@@ -785,9 +808,9 @@ td.check-td.locked.ticked:hover::before{border-color:#7fae92;}
    name, the dose and the remove are what a row is edited with. The rows
    hide the same cells the heading does, so the columns still line up. */
 @media (max-width:640px) {
-  .lst-head, .lst-row { grid-template-columns:1fr 118px 30px; }
-  .lst-head.other-row, .other-row { grid-template-columns:1fr 118px 30px; }
-  .lst-head.fert-head, .fert-row { grid-template-columns:1fr 130px 34px; }
+  .lst-head, .lst-row { grid-template-columns:1fr 136px 30px; }
+  .lst-head.other-row, .other-row { grid-template-columns:1fr 136px 30px; }
+  .lst-head.fert-head, .fert-row { grid-template-columns:1fr 142px 34px; }
   .lst-head > :nth-child(3), .lst-row > :nth-child(3),
   .lst-head > :nth-child(4), .lst-row > :nth-child(4) { display:none; }
   .other-row > :nth-child(5), .lst-head.other-row > :nth-child(5) { display:none; }
@@ -826,11 +849,39 @@ td.check-td.locked.ticked:hover::before{border-color:#7fae92;}
 /* The number and the unit it is in, as one cell. */
 .lst-dose  { display:flex; gap:4px; align-items:center; min-width:0; }
 .lst-dose input { flex:1; min-width:0; }
+/* Only reached where shared_cf_select.js has not skinned the select — it
+   hides the native one and puts its own button beside it. Kept so the row
+   still reads if the skin fails to load. */
 .lst-dose select { height:37px; padding:0 2px; font-family:inherit; font-size:12px;
                    font-weight:700; color:var(--text-head); background:#fff;
                    border:1.5px solid var(--border); border-radius:var(--r-sm);
                    flex:0 0 auto; }
 .lst-dose select:focus { outline:none; border-color:var(--green-mid); }
+/* THE SKIN IS WHAT ACTUALLY SITS IN THE ROW, so it is what has to be sized.
+   shared_cf_select.js sets width:100% INLINE on its wrapper (it says why in
+   its own comment — several pages had their own cf-* widget and a width in
+   the shared class rule stretched those).
+
+   AN INLINE WIDTH IS BEATEN BY `!important` AND BY NOTHING ELSE, which is
+   why it is here. The first attempt set `flex` alone, on the reasoning that
+   a flex-basis overrides width inside a flex container — true, and it still
+   left the office looking at the same sliver, so the reasoning is not worth
+   the risk of being subtly wrong again about which of two declarations wins.
+   Both are pinned, and the row cannot be argued out of its shape.
+
+   gm and mL are TWO CHARACTERS. 52px is that, a chevron, and the padding
+   round them: the smallest this can be and still read, so everything else
+   in the cell goes to the number — which is the box somebody is actually
+   trying to read a dose out of. */
+.lst-dose > .cf-wrap { flex:0 0 52px !important; width:52px !important; min-width:0; }
+/* And the button is sized to the boxes beside it. Its own padding makes it
+   39px against their 37, which reads as one control out of line in every
+   row of both lists. The chevron is trimmed to pay for the narrower box. */
+.lst-row .cf-btn { height:37px; padding:0 6px; gap:2px; font-size:12.5px;
+                   font-weight:700; border-radius:var(--r-sm); }
+.lst-row .cf-chevron { width:10px; height:10px; }
+/* The number never collapses again, whatever shares the cell with it. */
+.lst-dose input[type=number] { flex:1 1 auto; min-width:64px; }
 
 .lst-tick  { display:flex; justify-content:center; }
 .lst-tick input { width:21px; height:21px; accent-color:var(--green-mid); cursor:pointer; }
@@ -850,8 +901,8 @@ td.check-td.locked.ticked:hover::before{border-color:#7fae92;}
 
 @media (max-width:560px) {
   .lst-head { display:none; }
-  .lst-row  { grid-template-columns:1fr 84px 34px; row-gap:7px; }
-  .fert-row { grid-template-columns:1fr 84px 34px; }
+  .lst-row  { grid-template-columns:1fr 128px 34px; row-gap:7px; }
+  .fert-row { grid-template-columns:1fr 128px 34px; }
   .lst-row > .lst-tick { grid-column:span 1; }
 }
 

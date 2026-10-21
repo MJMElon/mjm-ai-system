@@ -7921,24 +7921,70 @@ function dropChemRow(kind, i) {
    which ends the need for any of this. */
 function columnFallback() {
   const dropped = new Set();
-  const note = e => {
+  const columnOf = e => {
     const msg = (e && e.message) || '';
     const m = /find the '([a-z_]+)' column/i.exec(msg) ||
               /null value in column "([a-z_]+)"/i.exec(msg);
-    if (m && !dropped.has(m[1])) { dropped.add(m[1]); return true; }
-    return false;
+    return m ? m[1] : null;
   };
   return {
     dropped,
     strip(o) { const out = { ...o }; dropped.forEach(k => delete out[k]); return out; },
+    /* WHAT HAS BEEN TRIED IS KEPT PER CALL, not shared across them.
+       It used to be the one `dropped` set: a column already in it meant "I
+       stripped that and it still failed", so give up. That is right while
+       the calls run one after another and wrong the moment two run at once —
+       the second call to meet the same missing column would read the first
+       one having learned it as its own failed retry and report an error over
+       a database that is merely behind. The rows go up together now (see
+       saveChemEdit), so the test has to be "have I tried this", not "has
+       anybody". `dropped` stays, because the sentence at the end naming what
+       the database would not take is about the save as a whole.
+       `run()` re-strips on every retry, so a column learned by a call
+       already in flight still reaches the ones behind it. */
     async attempt(run) {
+      const mine = new Set();
       for (let go = 0; go < 4; go++) {
         const { error } = await run().then(r => r, e => ({ error: e }));
         if (!error) return null;
-        if (!note(error)) return error;
+        const col = columnOf(error);
+        if (!col || mine.has(col)) return error;
+        mine.add(col); dropped.add(col);
       }
       return { message: 'this database refused too many columns' };
     }
+  };
+}
+
+/* Holding the Save/Cancel pair while the write is in the air, and SAYING SO.
+ *
+ * These saves are one round trip per row — eight chemicals is eight, plus a
+ * delete, plus an insert, plus the preset, plus the read-back. On an office
+ * line that is seconds, and for all of them the screen used to look exactly
+ * as it did before the press: the buttons were disabled, but nothing said
+ * so, because there was no `.btn:disabled` rule in the stylesheet at all.
+ * The office reported it as "the save button not functioning well, I need to
+ * click many times only then it saved" — which is the honest reading of a
+ * button that takes a press and does nothing visible with it.
+ *
+ * So the pair greys (the CSS rule is there now) and the primary one says
+ * what it is doing. Returns the function that lets go, and that function is
+ * safe to call twice — every path out of a save calls it, and the `finally`
+ * calls it again. */
+function holdSaveButtons(footId, busyLabel) {
+  const box = document.getElementById(footId);
+  if (!box) return () => {};
+  const btns = [...box.querySelectorAll('button')];
+  const prim = box.querySelector('.btn-primary');
+  const wasLabel = prim ? prim.textContent : null;
+  btns.forEach(b => { b.disabled = true; });
+  if (prim) prim.textContent = busyLabel || 'Saving…';
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    btns.forEach(b => { b.disabled = false; });
+    if (prim && wasLabel != null) prim.textContent = wasLabel;
   };
 }
 
@@ -7955,10 +8001,12 @@ async function saveChemEdit() {
     }
   }
 
-  const btns = document.getElementById('chem-actions');
-  if (btns) btns.querySelectorAll('button').forEach(b => b.disabled = true);
-  const done = () => { if (btns) btns.querySelectorAll('button').forEach(b => b.disabled = false); };
-
+  const done = holdSaveButtons('chem-actions');
+  /* Every way out of here gives the buttons back, the ones that throw
+     included. Without it a save that threw left Save AND Cancel disabled
+     with nothing on screen to say why, and the only way out was a reload —
+     which loses the edit. */
+  try {
   if (_supabase) {
     const keep = new Set(named.filter(c => c.id).map(c => String(c.id)));
     const gone = chemicals.filter(c => !keep.has(String(c.id))).map(c => c.id);
@@ -7970,11 +8018,20 @@ async function saveChemEdit() {
     if (gone.length) {
       err = await attempt(() => _supabase.from('nops_maint_chemicals').delete().in('id', gone));
     }
-    for (const c of named.filter(x => x.id)) {
-      if (err) break;
-      err = await attempt(() => _supabase.from('nops_maint_chemicals').update(strip({
-        name: c.name, dose: +c.dose || 0, unit: c.unit || 'gm', coverage: c.coverage ?? null,
-        tag: c.tag ?? null, updated_at: new Date().toISOString() })).eq('id', c.id));
+    /* TOGETHER, NOT ONE AFTER ANOTHER. This was a `for` loop with an `await`
+       in it, so a list of eight chemicals was eight round trips end to end
+       before anything else in the save could start — which is most of the
+       wait the office was pressing Save again through. They are independent
+       rows keyed by id; there is no order between them. Errors are collected
+       and the first one is reported, exactly as the loop reported the first
+       one it met. A partial write on failure is what the loop did too (the
+       rows before the failure were already in). */
+    if (!err) {
+      const errs = await Promise.all(named.filter(x => x.id).map(c =>
+        attempt(() => _supabase.from('nops_maint_chemicals').update(strip({
+          name: c.name, dose: +c.dose || 0, unit: c.unit || 'gm', coverage: c.coverage ?? null,
+          tag: c.tag ?? null, updated_at: new Date().toISOString() })).eq('id', c.id))));
+      err = errs.find(Boolean) || null;
     }
     if (!err && named.some(x => !x.id)) {
       err = await attempt(() => _supabase.from('nops_maint_chemicals').insert(
@@ -8021,6 +8078,7 @@ async function saveChemEdit() {
   if (presetDraft != null) pumpCoverage = livePreset();
   chemEditing = false; chemDraft = null; presetDraft = null;
   renderChemBoth();
+  } finally { done(); }
 }
 
 
@@ -8134,10 +8192,8 @@ async function saveFertEdit() {
     seen.add(key);
   }
 
-  const btns = document.getElementById('fert-actions');
-  if (btns) btns.querySelectorAll('button').forEach(b => b.disabled = true);
-  const done = () => { if (btns) btns.querySelectorAll('button').forEach(b => b.disabled = false); };
-
+  const done = holdSaveButtons('fert-actions');
+  try {
   if (_supabase) {
     const keep = new Set(named.filter(f => f.id).map(f => String(f.id)));
     const gone = fertilisers.filter(f => !keep.has(String(f.id))).map(f => f.id);
@@ -8152,10 +8208,12 @@ async function saveFertEdit() {
       err = await fallback.attempt(() =>
         _supabase.from('nops_maint_fertilisers').delete().in('id', gone));
     }
-    for (const f of named.filter(x => x.id)) {
-      if (err) break;
-      err = await fallback.attempt(() =>
-        _supabase.from('nops_maint_fertilisers').update(fallback.strip(cols(f))).eq('id', f.id));
+    // Together, not one after another — same reason as saveChemEdit.
+    if (!err) {
+      const errs = await Promise.all(named.filter(x => x.id).map(f =>
+        fallback.attempt(() =>
+          _supabase.from('nops_maint_fertilisers').update(fallback.strip(cols(f))).eq('id', f.id))));
+      err = errs.find(Boolean) || null;
     }
     if (!err && named.some(f => !f.id)) {
       err = await fallback.attempt(() =>
@@ -8180,6 +8238,7 @@ async function saveFertEdit() {
   done();
   fertEditing = false; fertDraft = null;
   renderFertilisers();
+  } finally { done(); }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════

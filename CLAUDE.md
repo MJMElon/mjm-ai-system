@@ -1742,6 +1742,133 @@ it**, whatever the figures say.
 halves, including a stage nobody recognises changing nothing, an adjustment
 nobody has approved settling nothing, and the stale flag.
 
+## A plot has as many drone maps as it took to fly it
+
+It had one. `t6_plotDocs[rowId] = {…}` — so a plot flown in two passes, or
+re-flown because the first run was cloudy, had the second picture REPLACE the
+first, and the rest lived in a folder the report knows nothing about.
+
+Two halves, and the second is the one that makes the first useful: the maps
+are a **list**, added to rather than replaced, and each one carries its own
+**remark**. *"North half, flown 21 Feb"* is what tells two pictures of one
+plot apart, and it is not in a file name.
+
+**The format keeps every older remark readable.** `DocList:` carries all of
+them with every field percent-encoded — so neither separator, nor a space,
+can turn up inside one and split a map into three — and the FIRST map is
+still written as `DocUrl:` / `DocName:` exactly as it always was. A remark
+written before this has no `DocList`, so the single `DocUrl` stands in for a
+list of one, which is what it always was.
+
+Four things in it:
+
+- **`t6DocsOf()` is the one way to read it**, and it copes with the single
+  object a page half-loaded from cache might still be holding. Nothing else
+  indexes `t6_plotDocs` directly.
+- **Adding is adding.** The picker takes `multiple`, a drop takes every file,
+  and both push. Replace is the deliberate one — it swaps ONE map, takes one
+  file even if several are picked, and **keeps the remark**, because that
+  describes the plot and swapping a cloudy picture has not changed where it
+  was flown.
+- **The chip shows the COUNT where there is more than one.** A plot with four
+  maps showing one thumbnail reads as a plot with one map, which is the whole
+  thing this had to stop saying. Pressing it opens the panel — a list, not a
+  carousel, because a remark is something you type in.
+- **Each upload stands on its own.** One failure costs that picture and not
+  the rest; the one that failed stays on screen with its remark to be saved
+  again, and only the ones that reached storage are written into the remark.
+  The path carries the index, so two maps attached in the same millisecond
+  cannot land on one file.
+
+A **locked row opens the panel read-only** — no Add, no Replace, no Remove,
+and the remarks are not editable. Same view-stays-open, edit-does-not rule as
+everywhere else on that tab, and the remark boxes are part of it.
+
+`tests/a_plot_has_many_drone_maps.cjs` drives the real codec and holds the
+wiring, the awkward shapes included: a remark with a semicolon and a pipe in
+it, a map with no name, a pdf that must not be taken for a picture.
+
+## `error` means one thing: what you keyed is not in the database
+
+The batch page's X closed a morning's counting without a word, so closing now
+watches for an error toast while each tab's save runs and refuses to leave a
+tab that reported one. That is the right test — it is how every save on the
+page reports a refusal — and it was being handed warnings.
+
+A 3rd Culling whose drone map does not tally is **saved** and then says so,
+because the plot goes on the To Do List until somebody explains it. That
+sentence went out as `'error'`, so **the tab was left dirty by its own
+success**: the office pressed X on batch 241 and got
+
+    Not closing — 3rd Culling did not save. Nothing has been lost.
+
+over a report that was in the database. Saving again said the same thing, for
+as long as one plot was unexplained, so the only way out was **Don't save** —
+which reads as throwing the day away. Three more wore the same shape: a drone
+map that failed to upload while the row itself stored (Tabs 3, 5 and 6), the
+To Do flag failing after the report, and reasons saved against a plot with no
+3rd Culling record yet.
+
+So there is a third toast, `'warn'` — amber, ⚠️, and not a failure — and
+`'error'` is kept for the one thing it has to mean. Two things follow:
+
+- **A warning must not look like a failure either.** Red with a ❌ beside work
+  that is safely stored is the same lie the dirty flag was telling, and it is
+  the one somebody acts on: they key it again.
+- **The next one will be written the same way**, so the test holds the SHAPE
+  rather than the sentences — no `showToast(…, 'error')` anywhere in the page
+  may say something was saved. It found two the three known ones had not
+  accounted for. A toast saying nothing WAS saved is a refusal and says so.
+
+`tests/a_warning_is_not_a_failed_save.cjs` drives the real page and the real
+`saveTab6` with the office's own 500 against a drone map of 540: ten of its
+checks fail on the previous code, "it leaves" among them. It holds the other
+direction too — a refused write is still an error, still leaves the tab
+dirty, and still stops the close.
+
+## A typo must not lock the row that would fix it
+
+A date box takes four digits for the year and somebody keyed two, so a 3rd
+Culling came out dated **21/02/0026**. Every month of year 26 is two thousand
+years past its auto-lock date, so `isDateLocked` said yes, the row took
+`.mjm-locked` — and that disables every input on it, **including the date box
+the wrong year is sitting in**.
+
+There was no way out from the screen either. The Month Lock Calendar can
+force a month open, but it lists real years and nobody is going to scroll to
+year 26. The only route left was a hand-written UPDATE against the ledger,
+for a slip of the keyboard.
+
+**The calendar exists to stop somebody changing a month that has been settled
+and paid.** Year 26 was never settled and never paid, so locking it protects
+nothing and strands the error on screen for good. `isKeyedWrong()` in
+`shared/shared_month_lock.js` is the escape: a date outside **2000–2100** is
+not treated as a date at all, the row stays open, and the person who keyed it
+puts it right.
+
+The band is **deliberately wide**. This is not a validity check and must not
+start refusing dates somebody meant — it is only the span outside which a
+year is certainly a slip. A year INSIDE it is the calendar's business alone,
+and the test says so by comparing against `isMonthLocked` rather than
+restating it.
+
+Two things beside it:
+
+- **The boxes name the range they accept** (`min`/`max` on the culling date
+  inputs), so the picker will not hand one back, and a row already carrying
+  one says **⚠ Check the year** on its face rather than looking ordinary.
+- **`shared_month_lock.js` was loaded with no `?v=` on all four pages.** It
+  carries one now, so the next change to it is deliverable instead of
+  depending on a hard reload per machine.
+
+`shared/CHECK_dates_with_an_impossible_year.sql` sweeps every batch for the
+rest of them — `transaction_date`, `CullDate:` and `Date:` each on their own
+line, since a row can be wrong in one and right in another. It suggests the
+obvious repair for a two-digit year and names anything else for a person to
+decide; **nothing applies the suggestion**, because correcting it on the tab
+is what rewrites the rest of the remark correctly at the same time.
+
+`tests/a_typo_year_does_not_lock_itself.cjs` holds it.
 ## An overdue round is cleared by the work, never by the calendar
 
 A to-do row on the auditor portal asked one question: was this plot
@@ -2201,6 +2328,68 @@ a fetch the WORKER makes: once it activates it answers its own synthetic
 job correctly against a network that is not there. An hour went into
 that before it was the obvious thing.
 
+## Turning a signup down is a RECORD, and the cross is a SIBLING
+
+The Worker System board opens with a yellow queue — Waiting to be allocated
+— which is everybody on the register with no section. It was written so a
+worker who had just signed up was on some screen rather than only in the
+table. What it had no answer for was a name nobody is ever going to file:
+the office does not want this person, and the one thing that empties the
+queue is giving somebody a nursery. So four rejected applicants sat in a
+queue of work to be done, for ever.
+
+The ✕ on a chip rejects the registration, and it is the admin-close of a
+dead plot again, which is where every rule in it comes from:
+
+- **It is a record and never a deletion.** `removeWorker()` was taken off
+  this screen on purpose — a worker row is what the work entries hang off,
+  and the register is the one place that says a person ever applied. So the
+  rejection marks them inactive and writes `rejected_at` / `rejected_by`,
+  and nothing is removed. Tick Show inactive to find them again; setting
+  them Active on their own record undoes it, which **clears both columns**,
+  the same way Active clears the last day.
+- **The two columns, never the remark.** The remark is free text the office
+  edits, and a rejection that can be undone by somebody tidying a sentence
+  is not a record of anything. `isRejected(w)` reads the column, and a table
+  without it answers no for every row — which is the safe way round: the
+  signup stays in the queue somebody is working through rather than
+  disappearing out of it with nothing to say where it went.
+- **The cross is a SIBLING of the chip and never a child.** The chip opens
+  the worker on a click and carries a drag on a grab, so a cross inside it
+  fires both — the office would reject somebody and get their record opened
+  over the top of it. `.pend-item` holds the two side by side. Same rule the
+  audit board's × follows, for the harder reason there (a button inside a
+  button is not a thing a browser will draw).
+- **The permission is asked AGAIN at the write.** A cross drawn before
+  somebody's access changed is still sitting on the screen.
+- **The confirm names the person**, because the crosses are a row of small
+  identical targets and the one under the thumb is not necessarily the one
+  that was aimed at. No `prompt` for a reason: the office said of the plot
+  closures that an admin types the same sentence every time, and a prompt
+  somebody dismisses out of habit is a cancel that looks like a save.
+- **It rebuilds from the database, not from the screen.**
+- **A rejected signup is drawn UNDER the queue, not in it**, so the count
+  above is the work actually left to do. Both lists are cut from `shown`, so
+  neither is on screen unless Show inactive is ticked — which is how a
+  rejection leaves the board at all.
+
+`shared/RUN_ME_worker_rejected.sql` adds the two columns and backfills
+nothing: a worker already on the board is not a rejected signup, and a
+backfill that guessed at one would be inventing a decision nobody made.
+Until it is run the page shows its own orange warning, the ✕ still works,
+and the write carries neither column — writing one the table has not got
+fails the whole save, which is why `loadWorkers` probes for it the way it
+already probes for the PIN, the photo and the two dates.
+
+`tests/a_rejected_signup_leaves_the_queue.cjs` drives the real board in a
+real browser, as an admin and as a plain auditor, and asserts no DELETE is
+ever sent and that no `prompt` is ever raised.
+
+**The page carries every line of its own code inline and has no no-cache
+metas**, same exposure as Batch Info: the PAGE is the deploy, so a browser
+holding yesterday's copy keeps it until one hard reload. Add the three the
+day somebody needs a fix here in a hurry.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the
@@ -2422,9 +2611,12 @@ asked to be current. The other 12 pages do not, and that is a decision rather
 than an oversight: these metas change how a live page is fetched on every
 load, so they go on a module when somebody wants a fix in that module to
 arrive — not across the site because a test would be tidier.
-`nursery_ops_maintenance.html` is the one to remember: the Work Maintenance
-changes are sitting behind its cache, so it needs the three metas on the day
-somebody wants them.
+**`nursery_ops_maintenance.html` now carries them**, and the day it was
+written up as the one to remember is the day it needed them: the office asked
+for the dosage box and the Save button on the Setting tab, and without the
+metas that page would have gone on asking for the old `?v=` for ever. Two
+pages are still unguarded — `nursery_ops_user_access.html` and
+`operation_batch_detail.html` — and the test prints them every run.
 
 **Any new page that loads a script with `?v=` needs all three** to be
 deliverable. `tests/pages_do_not_go_stale.cjs` fails if a payroll page is
@@ -2542,6 +2734,86 @@ Two things that follow:
 version fails the same check, and prints every page that writes a whole
 className onto a select. It needs `npm install jsdom` and says so if it is
 missing.
+
+### And the skin is what sits in the row now, so it is what has to be SIZED
+
+The second way that bargain comes due. A rule written for a bare `<select>`
+goes on being read, matches the hidden element, and paints nothing — while
+the thing the person is looking at is sized by something else entirely.
+
+The Setting tab's **dosage cell** holds two controls in 112px: the number and
+the unit it is in. That was right while the unit was a bare select about 50px
+wide. The skin's wrapper carries **`width:100%` INLINE** — it says in its own
+comment why it has to be inline — with an ordinary shrink factor, and the
+number box is `flex:1`, which is **basis 0 and therefore never the one that
+shrinks first**. So the wrapper took 86 of the 112 and **the number box was
+left at 22px: its padding, its borders, and no room for a digit at all.** It
+overflowed the cell as well and clipped the left edge of Covers beside it, so
+the office screenshot showed a preset of 800 reading **300**.
+
+Three things to take from it:
+
+- **An inline width is beaten by `!important` and by nothing else.** The
+  first attempt set `flex` alone, reasoning that a flex-basis overrides
+  `width` inside a flex container. That is true, and the office looked at the
+  same sliver afterwards and said *"still the same"* — so the reasoning is
+  not worth the risk of being subtly wrong twice about which of two
+  declarations wins. Both are pinned now
+  (`flex:0 0 52px !important; width:52px !important`) and the row cannot be
+  argued out of its shape. **The number box also carries its own
+  `min-width`**, so it can never collapse again whatever shares the cell
+  with it.
+- **The office asked for it as a RELATIONSHIP** — bigger number, smaller
+  unit — so the test holds it as one, beside the pixel floors. A rule phrased
+  only in pixels invites the next person to shave the number column for
+  something else with both numbers still passing.
+- **`.lst-dose select { … }` is not dead, and must not be deleted.** It is
+  what the row falls back to if the skin fails to load.
+- **The skin's button is 39px where the inputs are 37.** Two pixels, in every
+  row of both lists, which reads as one control out of line. `.lst-row
+  .cf-btn` sizes it to its neighbours.
+
+**Any page with a select sharing a cell with something else has this**, and
+only this one has had it done.
+
+### A disabled button that looks enabled is a button somebody presses again
+
+The other half of the same report, and the more instructive one. The office
+said *"the save button not functioning well. I need to click many times only
+then it saved."*
+
+It was not dropping clicks — one press has always called `saveChemEdit` once,
+and the real page proves it. The fault was that **a press changed nothing on
+screen.** Save disables itself and Cancel for the length of the write, and
+there was **no `.btn:disabled` rule in the whole stylesheet**: same green,
+same shadow, same pointer. Behind it the write was **one round trip per row**,
+in a `for` loop with an `await` in it — eight chemicals is eight, end to end,
+plus a delete, an insert, the preset and a read-back. Seconds of a screen that
+looks exactly as it did before the press is indistinguishable from a dead
+button, and the person does the only thing left: press it again.
+
+Three parts to the fix, and the first is the one that matters:
+
+- **Say it.** `.btn:disabled` greys and takes the pointer away, and
+  `holdSaveButtons()` puts **Saving…** on the primary button, restoring the
+  label when it lets go. A button that reports its own state cannot be
+  mistaken for a broken one.
+- **Send the rows together.** They are independent rows keyed by id with no
+  order between them, so `Promise.all` turns eight round trips into one wave.
+  That made `columnFallback`'s retry **concurrency-unsafe**: it kept ONE
+  `dropped` set and read a column already in it as "I stripped that and it
+  still failed", which is right in a queue and wrong the moment two calls
+  meet the same missing column at once — the second would report an error
+  over a database that is merely behind. What has been tried is now kept
+  **per call**; `dropped` stays for the sentence at the end naming what the
+  database would not take.
+- **`try { … } finally { done() }`.** The body was unguarded, so a throw
+  anywhere in it left Save AND Cancel dead with nothing saying why, and the
+  only way out was a reload, which loses the edit.
+
+`tests/the_dose_box_fits_a_number.cjs` drives the real page and holds all of
+it — 12 of its checks fail on the previous code, and the dosage one fails
+with the office's own number: **0 pixels of room for a digit.**
 
 ## A seal is checked in the database, never only on the phone
 
