@@ -6028,8 +6028,7 @@ function renderRecords() {
         border-top:2px solid var(--green-mid);border-bottom:1px solid var(--green-mid);">
         📍 Plot ${plot}
         <span class="rec-group-sub" style="font-weight:400;color:var(--text-muted);margin-left:8px;">
-          ${recs.length} task${recs.length>1?'s':''} &nbsp;·&nbsp;
-          ${recs.filter(r=>(Array.isArray(r._fieldIds)&&r._fieldIds.length)||r.gaia).length} done
+          Task : ${recs.filter(r=>(Array.isArray(r._fieldIds)&&r._fieldIds.length)||r.gaia).length}/${recs.length}
         </span>
       </td>
     </tr>`;
