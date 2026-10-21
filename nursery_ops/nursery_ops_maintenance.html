@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=88">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=89">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -39,13 +39,12 @@
   <div class="page sm-frame">
 
     <!-- ── The side bar ──────────────────────────────────────────────
-         The same bar PALMS wears, and deliberately so: same widths, same
-         pills, same rule between the way out and the pages inside. It is
-         a COPY rather than shared_palms_nav.js because that bar moves
-         between four HTML pages and this one moves between panels of one
-         — same shape, different mechanism. Change one, change the other;
-         the geometry is in plot_maintenance_styles.css beside a note
-         saying the same. -->
+         A solid teal menu, icon + name per row, active row highlighted —
+         the office handed over the design. It USED to be a copy of the
+         PALMS bar; the two diverged on purpose the day this one was
+         restyled, so only the sticky offset (76px, under the compact
+         header bar) still has to agree with shared_palms_nav.js. The
+         styles are in plot_maintenance_styles.css. -->
     <aside id="sm-nav">
       <!-- Pull the bar in and out.
            INSIDE the bar, not above it: as a sibling it needed a grid row of
@@ -59,21 +58,32 @@
               onclick="toggleNav()" aria-controls="sm-nav" aria-expanded="true"
               title="Hide the menu"><span id="sm-nav-toggle-ico">&#10094;</span></button>
       <nav aria-label="Nursery Maintenance Schedule &amp; Work Record">
-        <a class="pn-out" href="nursery_ops_dashboard.html">
-          <span aria-hidden="true">&#8592;</span>
-          <span>Back to Operation Manage Page</span>
-        </a>
+        <!-- No back link here any more — the header bar's ← Back pill is the
+             way out, and the office asked for a plain menu: icon + name per
+             row on a solid bar, the caption gone with the link.
+             data-i18n sits on the SPAN, never the button: applyI18n writes
+             textContent, which on the button would wipe the icon out. -->
         <div class="pn-group">
-          <div class="pn-cap">Nursery Maintenance Schedule &amp; Work Record</div>
-          <!-- Maintenance Work Record lands first and is what the page
-               opens on: the schedule is set once a month, the records are
-               what somebody is here for on any other day. Setting is last
-               and is hidden until MJMAccess confirms an admin (see
-               applyNopsAdminUI). -->
-          <button type="button" class="pn-tab is-on" onclick="switchTab('record',this)"   data-i18n="tab.record">Maintenance Work Record</button>
-          <button type="button" class="pn-tab"       onclick="switchTab('schedule',this)" data-i18n="tab.schedule">Monthly Maintenance Schedule</button>
-          <button type="button" class="pn-tab"       onclick="switchTab('payroll',this)"  data-i18n="tab.payroll">Worker Record</button>
-          <button type="button" class="pn-tab" id="tab-btn-setting" style="display:none;" onclick="switchTab('setting',this)" data-i18n="tab.setting">Setting</button>
+          <!-- Work Log lands first and is what the page opens on: the
+               schedule is set once a month, the log is what somebody is
+               here for on any other day. Settings is last and is hidden
+               until MJMAccess confirms an admin (see applyNopsAdminUI). -->
+          <button type="button" class="pn-tab is-on" onclick="switchTab('record',this)">
+            <svg class="pn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+            <span data-i18n="tab.record">Work Log</span>
+          </button>
+          <button type="button" class="pn-tab" onclick="switchTab('schedule',this)">
+            <svg class="pn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            <span data-i18n="tab.schedule">Work Schedule</span>
+          </button>
+          <button type="button" class="pn-tab" onclick="switchTab('payroll',this)">
+            <svg class="pn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+            <span data-i18n="tab.payroll">Worker Activity</span>
+          </button>
+          <button type="button" class="pn-tab" id="tab-btn-setting" style="display:none;" onclick="switchTab('setting',this)">
+            <svg class="pn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            <span data-i18n="tab.setting">Settings</span>
+          </button>
         </div>
       </nav>
     </aside>
@@ -86,7 +96,7 @@
            Both hide themselves on a panel that has no use for them:
            Schedule shows every nursery at once, Setting has no month. -->
       <div class="sm-head">
-        <div class="sm-title" id="sm-title">Maintenance Work Record</div>
+        <div class="sm-title" id="sm-title">Work Log</div>
         <div class="sm-tools">
           <div class="top-ctrl" id="top-nursery-ctrl">
             <!-- Backing store for the circle buttons below, not its own
@@ -772,7 +782,7 @@
 <script src="../shared/shared_maint_field.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="plot_maintenance_script.js?v=133"></script>
+<script src="plot_maintenance_script.js?v=134"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are
