@@ -3,9 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Every script and stylesheet here is cache-busted with a ?v= that lives
+       in THIS file, so this file is the one that must never be served stale:
+       a cached copy goes on asking for the OLD numbers for ever and a deploy
+       reaches nobody. The site is GitHub Pages with no build step, so these
+       three metas are the only lever there is.
+       They are added per module, on the day somebody wants a fix in that
+       module to arrive — CLAUDE.md names this page as the one to remember,
+       and the day came with the dosage box and the Save button. A browser
+       already holding a stale copy needs one hard reload (Ctrl/Cmd+Shift+R)
+       to pick these up; after that it stays fresh by itself. -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+  <meta http-equiv="Pragma" content="no-cache"/>
+  <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=84">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=86">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -752,7 +765,7 @@
 <script src="../shared/shared_maint_field.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="plot_maintenance_script.js?v=129"></script>
+<script src="plot_maintenance_script.js?v=130"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are
