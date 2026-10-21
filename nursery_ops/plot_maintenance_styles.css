@@ -526,9 +526,15 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 .metrics-big{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px;}
 @media (max-width:480px){ .metrics-big{grid-template-columns:1fr;} }
 /* THIN: each card is one line — label, figure, and the sub-figure on the
-   right — instead of a stack, at the office's request. */
+   right — instead of a stack, at the office's request. And each card is
+   WASHED in its own colour, or a thin white strip reads as just another
+   row of the white table under it — also their words. */
 .metrics-big .metric-card{display:flex;align-items:center;gap:12px;
   padding:9px 16px;border-top-width:3px;}
+.metrics-big .mc-blue {background:var(--blue-bg); border-color:var(--blue-border); border-top-color:var(--blue);}
+.metrics-big .mc-amber{background:var(--gold-bg); border-color:var(--gold-border); border-top-color:#d97706;}
+.metrics-big .mc-red  {background:var(--red-bg);  border-color:var(--red-border);  border-top-color:var(--red);}
+.metrics-big .mc-green{background:var(--green-bg);border-color:var(--green-mid);  border-top-color:var(--green);}
 .metrics-big .mc-label{font-size:10.5px;letter-spacing:1.1px;margin-bottom:0;white-space:nowrap;}
 .metrics-big .mc-value{font-size:22px;line-height:1;}
 .metrics-big .mc-sub{margin-top:0;margin-left:auto;white-space:nowrap;text-align:right;}
