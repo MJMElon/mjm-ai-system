@@ -2390,6 +2390,55 @@ metas**, same exposure as Batch Info: the PAGE is the deploy, so a browser
 holding yesterday's copy keeps it until one hard reload. Add the three the
 day somebody needs a fix here in a hurry.
 
+## The Worker Record reads the conductor's transplanting, and never writes it
+
+The Field Conductor records the four transplanting jobs on his own portal:
+the plot, which job, the day, and the crew. They land in
+`nops_transplant_field_records`, the salary claim prices them — and until
+now the office had **no screen that showed them at all**. The one place the
+work appeared was a figure on a claim.
+
+So Worker Record has a fifth tab. It is DATE · PLOT · WORK · QTY and a
+column per worker, the same shape as the four beside it.
+
+**IT IS READ-ONLY, and that is not an omission.** The FC Portal is the only
+writer of that table in either repository (`npayroll_script.js` reads it for
+the claim and nothing else). A tick box here would be a second writer of
+somebody's pay with no rule about who may move it — which is exactly what
+the sheet's own `transplant_edit` permission exists to govern. The test
+asserts no cell is clickable and that the tab sends no write.
+
+**The share is the CLAIM's rule, and a test holds the two together.** One
+worker's figure is the quantity keyed against their name where the job
+splits (polybag filling), and the plot's `source_qty` divided equally among
+the crew otherwise. `tpShare()` here and the two lines inside
+`transplantFieldLines()` in `npayroll_script.js` are the two copies; change
+one, change the other. A sheet that divides a plot one way and a claim that
+divides it another is one worker paid for work the sheet credits to somebody
+else, and this codebase has that fault often enough to have its own heading.
+`tests/the_worker_record_shares_like_the_claim.cjs` lifts BOTH out of the
+shipped files and drives them over the same records.
+
+Three smaller things:
+
+- **Asked by `schedule_month`**, the same key the claim asks on. The record's
+  own month decides which claim pays it; a second rule here would put a row
+  on this sheet that the claim does not pay.
+- **The PLOT decides the nursery**, the house rule — the record's
+  `nursery_name` is whatever the FC Portal had on screen, and the plot is the
+  thing that is somewhere.
+- **A name the register cannot place still gets a COLUMN**, after the
+  register's own, and the sheet says so underneath (`pay.fieldNoColumn`).
+  Every other tab here is a tick sheet where the office decides who may be
+  ticked; this one is a record of a decision already made in the field, so a
+  name with no column would be a worker's share leaving the sheet with
+  nothing saying it had gone.
+
+`TP_JOBS` is the **third copy** of the job list — FC-Portal's
+`transplantData.js` and `npayroll_script.js` have the other two. Only the key
+and the label are needed here; the matching and the rates stay where they
+are.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the
