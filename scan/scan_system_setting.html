@@ -142,7 +142,11 @@
 <div id="main" class="max-w-[940px] mx-auto px-4 md:px-6 py-7 hidden">
 
   <div class="title-row">
-    <a class="back-btn" href="scan_setting.html">&#8592; Back to Setting</a>
+    <!-- Back to where this page is now reached FROM. It used to hang off
+         scan_setting.html, the FC Portal's own Setting, and the way out has
+         to follow the way in or it drops somebody on a page they did not
+         come through. -->
+    <a class="back-btn" href="scan_settings_hub.html">&#8592; Back to Settings</a>
     <h1 class="page-title">System Setting</h1>
     <span aria-hidden="true"></span>
   </div>
@@ -384,8 +388,8 @@ const MAINT_FUNCTIONS = [
    it, rather than appearing on every worker's phone unannounced. */
 const CANNOT_YET = {
   worker: {
-    scan:    'No Scan screen on a worker phone yet — off is obeyed, on waits for one.',
-    do:      'No Delivery Order screen on a worker phone yet — off is obeyed, on waits for one.',
+    scan:    'No Scan Barcode Counter on a worker phone yet — off is obeyed, on waits for one.',
+    do:      'No Issue Collection DO screen on a worker phone yet — off is obeyed, on waits for one.',
     palms:   'No PALMS screen on a worker phone yet — off is obeyed, on waits for one.',
     culling: 'No Culling Calculator on a worker phone yet — off is obeyed, on waits for one.'
   }
@@ -400,10 +404,15 @@ const CANNOT_YET = {
    or leave somebody signed in with nowhere to land, which is not a setting
    anybody wants. The app's hiddenModules() was written for it and is called
    by nothing, which is how it went unnoticed. */
+/* THE NAMES ARE THE OFFICE'S OWN, off the outline they handed over: Scan
+   Barcode Counter and Issue Collection DO, not Scan and Delivery Order. A
+   row headed one word in the office and another on the screen that governs
+   it is a row somebody has to ask about, and the KEYS are untouched — they
+   are what is stored, and renaming a label must never move a saved switch. */
 const PORTAL_MODULES = {
   fc: [
-    { key:'scan',        name:'Scan' },
-    { key:'do',          name:'Delivery Order' },
+    { key:'scan',        name:'Scan Barcode Counter' },
+    { key:'do',          name:'Issue Collection DO' },
     { key:'maintenance', name:'Maintenance', functions: MAINT_FUNCTIONS },
     { key:'palms',       name:'PALMS' },
     { key:'culling',     name:'Culling Calculator' }
@@ -415,11 +424,14 @@ const PORTAL_MODULES = {
      what the column is for. The four with no worker screen yet carry a line on
      their row saying so; see CANNOT_YET. */
   worker: [
-    { key:'scan',        name:'Scan' },
-    { key:'do',          name:'Delivery Order' },
+    { key:'scan',        name:'Scan Barcode Counter' },
+    { key:'do',          name:'Issue Collection DO' },
     { key:'maintenance', name:'Maintenance', functions: MAINT_FUNCTIONS },
     { key:'palms',       name:'PALMS' },
     { key:'culling',     name:'Culling Calculator' },
+    /* Not on the office outline, because that outline is the FC PORTAL
+       column and this module is the Worker Portal's alone. Absent from one
+       column is not the same as gone. */
     { key:'settings',    name:'Settings' }
   ]
 };
