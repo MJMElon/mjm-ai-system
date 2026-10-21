@@ -54,7 +54,7 @@
               border:2px solid #a9743f; color:var(--accent); font-weight:900; font-size:11px;
               letter-spacing:.07em; text-transform:uppercase; text-decoration:none;
               transition:transform .15s ease, box-shadow .15s ease;
-              transform-origin:50% -20px;
+              transform-origin:50% -22px;
               box-shadow:0 4px 10px rgba(91,58,30,.16),
                          inset 0 1px 0 rgba(255,255,255,.55),
                          inset 0 -3px 5px rgba(91,58,30,.14);
@@ -64,37 +64,44 @@
               display:flex; align-items:center; justify-content:center; flex-shrink:0; }
   .tool-ico svg { width:21px; height:21px; }
 
-  /* Each tile hangs off two SCREW HOOKS rather than sitting on the page —
-     not the flat nail-head dot this carried before (that read as a sticker,
-     not hardware, however it was nudged). A screw hook is a shape, not a
-     dot: a small coiled eye twisted into the wood, with the string looped
-     THROUGH it rather than just touching its top, so the string visibly
-     threads through the hardware instead of starting at it. Threads/hooks
-     are INSIDE .tool-btn (not a wrapping element) so the tile stays a
-     direct child of #tools — the drag-reorder logic below walks #tools'
-     children by .tool-btn and a wrapper would break
-     `target.parentElement === box`.
+  /* Each tile hangs the way a picture frame actually does: ONE nail driven
+     into the board above, and the wire runs from it DOWN to two rings
+     mounted on the tile's own top corners — a V, not two parallel threads
+     each carrying their own nail. Threads/hardware are INSIDE .tool-btn
+     (not a wrapping element) so the tile stays a direct child of #tools —
+     the drag-reorder logic below walks #tools' children by .tool-btn and
+     a wrapper would break `target.parentElement === box`.
 
-     ONE SVG PER HOOK (hook + the string below it, one shape) rather than
-     CSS dots and lines — a coil is not a shape ::before/::after alone can
-     draw. Sized 14×26; the hook's eye sits in the top third so it can
-     overlap the frame the same way the old nail head did, string filling
-     the rest down to the tile. --tool-btn's own transform-origin (50%,
-     20px above the top) is unchanged, so the hover sway still pivots from
-     where the hooks actually are. */
+     THE WIRE IS AN SVG, THE RINGS AND NAIL ARE NOT. The svg is stretched
+     to the tile's full width with preserveAspectRatio="none", which is
+     fine for a straight line (an affine stretch of a line is still a
+     line) and wrong for a circle (it would draw an ellipse) — so the two
+     rings and the nail are plain circular elements positioned by
+     percentage instead, sized the same regardless of how wide the tile
+     is. --tool-btn's own transform-origin (50%, 22px above the top)
+     matches the nail's position, so the hover sway pivots from the nail
+     itself, same as a real picture swings from where it is actually
+     hung. */
   .tool-hang { position:absolute; left:0; right:0; bottom:100%; height:20px; pointer-events:none; }
-  .tool-hang svg { position:absolute; top:-6px; width:14px; height:26px; }
-  /* 23% / 77%, not the 50%-symmetric 27%/73% a nail-only version used —
-     tuned so the gap WITHIN a tile's own pair of hooks matches the gap
-     BETWEEN one tile's hooks and the next tile's, at this grid's actual
-     column width (five equal ~177px columns on the usual desktop width).
-     Two hooks close together with a wide gap to the next pair read as
-     pairs; evening the two gaps out is what reads as one tidy row strung
-     along the whole board instead. */
-  .tool-hang svg:first-child { left:23%; transform:translateX(-50%); }
-  .tool-hang svg:last-child { left:77%; transform:translateX(-50%); }
-  .tool-hang .hook-coil { fill:none; stroke:#73777e; stroke-width:1.6; stroke-linecap:round; }
-  .tool-hang .hook-string { fill:none; stroke:#8a8f98; stroke-width:1.3; stroke-linecap:round; }
+  .hang-wire { position:absolute; left:0; right:0; top:-4px; height:22px; }
+  .hang-wire path { fill:none; stroke:#8a6a4a; stroke-width:1.5; stroke-linecap:round; vector-effect:non-scaling-stroke; }
+  /* 23% / 77%, not the 50%-symmetric 27%/73% a single-nail-per-ring version
+     used — tuned so the gap WITHIN a tile's own pair of rings matches the
+     gap BETWEEN one tile's rings and the next tile's, at this grid's
+     actual column width (five equal ~177px columns on the usual desktop
+     width). Two rings close together with a wide gap to the next pair
+     read as pairs; evening the two gaps out is what reads as one tidy row
+     of boards along the whole board instead. */
+  .hang-ring { position:absolute; top:18px; width:7px; height:7px; border-radius:50%;
+               transform:translate(-50%,-50%);
+               border:1.4px solid #9a9ea4; background:radial-gradient(circle at 35% 30%, #f1f2f4, #c3c6ca 72%);
+               box-shadow:0 1px 1px rgba(0,0,0,.3); }
+  .hang-ring.is-left { left:23%; }
+  .hang-ring.is-right { left:77%; }
+  .hang-nail { position:absolute; left:50%; top:-4px; width:9px; height:9px; border-radius:50%;
+               transform:translate(-50%,-50%);
+               background:radial-gradient(circle at 32% 28%, #f1f2f4, #aeb2b8 55%, #5a5e64 100%);
+               box-shadow:0 1px 0 rgba(255,255,255,.5) inset, 0 2px 2px rgba(0,0,0,.4); }
 
   /* A nudge, not a button press — these are nailed up, not clickable tiles
      floating free, so the hover answer is the sign swinging on its nails
@@ -208,8 +215,10 @@
     <a draggable="false" class="tool-btn" data-page="seeds" href="nursery_ops_seeds.html"
        style="--accent:#15803d;--icon-bg:rgba(21,128,61,.14);">
       <div class="tool-hang">
-        <svg viewBox="0 0 14 26" aria-hidden="true"><path class="hook-coil" d="M7 0v2"/><circle class="hook-coil" cx="7" cy="4.8" r="3"/><path class="hook-string" d="M7 7.8V26"/></svg>
-        <svg viewBox="0 0 14 26" aria-hidden="true"><path class="hook-coil" d="M7 0v2"/><circle class="hook-coil" cx="7" cy="4.8" r="3"/><path class="hook-string" d="M7 7.8V26"/></svg>
+        <svg class="hang-wire" viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true"><path d="M23 22 L50 0 L77 22"/></svg>
+        <span class="hang-ring is-left"></span>
+        <span class="hang-ring is-right"></span>
+        <span class="hang-nail"></span>
       </div>
       <div class="tool-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 20v-7"/><path d="M12 13c-4 0-6-2.5-6-6 4 0 6 1.5 6 6z"/><path d="M12 13c4 0 6-2.5 6-6-4 0-6 1.5-6 6z"/><path d="M6 20h12"/>
@@ -219,8 +228,10 @@
     <a draggable="false" class="tool-btn" data-page="maintenance" href="nursery_ops_maintenance.html"
        style="--accent:#0e7490;--icon-bg:rgba(14,116,144,.14);">
       <div class="tool-hang">
-        <svg viewBox="0 0 14 26" aria-hidden="true"><path class="hook-coil" d="M7 0v2"/><circle class="hook-coil" cx="7" cy="4.8" r="3"/><path class="hook-string" d="M7 7.8V26"/></svg>
-        <svg viewBox="0 0 14 26" aria-hidden="true"><path class="hook-coil" d="M7 0v2"/><circle class="hook-coil" cx="7" cy="4.8" r="3"/><path class="hook-string" d="M7 7.8V26"/></svg>
+        <svg class="hang-wire" viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true"><path d="M23 22 L50 0 L77 22"/></svg>
+        <span class="hang-ring is-left"></span>
+        <span class="hang-ring is-right"></span>
+        <span class="hang-nail"></span>
       </div>
       <div class="tool-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
         <rect x="4" y="5" width="16" height="15" rx="2.2"/><path d="M4 10h16"/><path d="M8 3v4M16 3v4"/><path d="M8.5 14.5l2.2 2.2 4.3-4.7"/>
@@ -234,8 +245,10 @@
     <a draggable="false" class="tool-btn" data-page="palms_board" href="nursery_ops_palms_board.html"
        style="--accent:#0f766e;--icon-bg:rgba(15,118,110,.14);">
       <div class="tool-hang">
-        <svg viewBox="0 0 14 26" aria-hidden="true"><path class="hook-coil" d="M7 0v2"/><circle class="hook-coil" cx="7" cy="4.8" r="3"/><path class="hook-string" d="M7 7.8V26"/></svg>
-        <svg viewBox="0 0 14 26" aria-hidden="true"><path class="hook-coil" d="M7 0v2"/><circle class="hook-coil" cx="7" cy="4.8" r="3"/><path class="hook-string" d="M7 7.8V26"/></svg>
+        <svg class="hang-wire" viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true"><path d="M23 22 L50 0 L77 22"/></svg>
+        <span class="hang-ring is-left"></span>
+        <span class="hang-ring is-right"></span>
+        <span class="hang-nail"></span>
       </div>
       <div class="tool-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 21v-9.5"/><path d="M12 11.5c0-3 2.2-5 6.5-6-1.2 3.2-3.3 5.2-6.5 6z"/><path d="M12 11.5c0-3-2.2-5-6.5-6 1.2 3.2 3.3 5.2 6.5 6z"/><path d="M12 11.8c2.2-2 5-2.3 6.8-.6-1.8 1.7-4.6 2-6.8.6z"/><path d="M12 11.8c-2.2-2-5-2.3-6.8-.6 1.8 1.7 4.6 2 6.8.6z"/>
@@ -257,8 +270,10 @@
     <a draggable="false" class="tool-btn hidden" data-page="stock" data-module="stock"
        href="../stock/stock_dashboard.html" style="--accent:#b45309;--icon-bg:rgba(180,83,9,.14);">
       <div class="tool-hang">
-        <svg viewBox="0 0 14 26" aria-hidden="true"><path class="hook-coil" d="M7 0v2"/><circle class="hook-coil" cx="7" cy="4.8" r="3"/><path class="hook-string" d="M7 7.8V26"/></svg>
-        <svg viewBox="0 0 14 26" aria-hidden="true"><path class="hook-coil" d="M7 0v2"/><circle class="hook-coil" cx="7" cy="4.8" r="3"/><path class="hook-string" d="M7 7.8V26"/></svg>
+        <svg class="hang-wire" viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true"><path d="M23 22 L50 0 L77 22"/></svg>
+        <span class="hang-ring is-left"></span>
+        <span class="hang-ring is-right"></span>
+        <span class="hang-nail"></span>
       </div>
       <div class="tool-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
         <rect x="3.5" y="11" width="7.2" height="7.2" rx="1"/><rect x="13.3" y="11" width="7.2" height="7.2" rx="1"/><rect x="8.4" y="3.8" width="7.2" height="7.2" rx="1"/>
@@ -271,8 +286,10 @@
     <a draggable="false" class="tool-btn hidden" data-page="user_access" id="user-access-btn" href="nursery_ops_user_access.html"
        style="--accent:#9f1239;--icon-bg:rgba(159,18,57,.14);">
       <div class="tool-hang">
-        <svg viewBox="0 0 14 26" aria-hidden="true"><path class="hook-coil" d="M7 0v2"/><circle class="hook-coil" cx="7" cy="4.8" r="3"/><path class="hook-string" d="M7 7.8V26"/></svg>
-        <svg viewBox="0 0 14 26" aria-hidden="true"><path class="hook-coil" d="M7 0v2"/><circle class="hook-coil" cx="7" cy="4.8" r="3"/><path class="hook-string" d="M7 7.8V26"/></svg>
+        <svg class="hang-wire" viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true"><path d="M23 22 L50 0 L77 22"/></svg>
+        <span class="hang-ring is-left"></span>
+        <span class="hang-ring is-right"></span>
+        <span class="hang-nail"></span>
       </div>
       <div class="tool-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-4.2 3.1-6.8 7-6.8s7 2.6 7 6.8"/>
