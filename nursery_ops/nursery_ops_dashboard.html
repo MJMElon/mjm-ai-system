@@ -160,15 +160,12 @@
 </head>
 <body>
 
-<!-- The compact bar the Seeds Control page wears — Back pill, centred module
-     name, NO badge — asked for here and on the maintenance page so the
-     nursery-ops pages read as one set. Back goes to the portal, which is
-     where Welcome / Sign Out live now that the big ribbon has gone. -->
-<div class="bg-white border-b border-teal-100 px-6 py-4 grid grid-cols-[1fr_auto_1fr] items-center sticky top-0 z-30 shadow-sm">
-  <a href="../index.html" class="justify-self-start text-[10px] font-bold text-slate-500 hover:text-teal-600 uppercase tracking-widest bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 no-underline transition-colors">&#8592; Back</a>
-  <span class="justify-self-center text-center font-black text-slate-800 uppercase tracking-widest text-sm px-3">Nursery Operation Manage</span>
-  <div class="justify-self-end"><div class="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center text-white font-black text-xs">NO</div></div>
-</div>
+<!-- The standard MJM Nursery AI ribbon, with no centred module name — the
+     office picked this shape for this page: [AI] wordmark left, Welcome /
+     Portal / Sign Out right (see shared/shared_ribbon.js). The inner pages
+     (Seeds Control, Maintenance) keep their compact Back-pill bars. -->
+<div id="mjm-ribbon"></div>
+<script src="../shared/shared_ribbon.js"></script>
 
 <div id="loading" class="max-w-[980px] mx-auto px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Checking access…</div>
 
