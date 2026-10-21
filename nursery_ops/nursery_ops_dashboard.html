@@ -24,11 +24,20 @@
   body { background:#f0fdfa; margin:0; }
 
   /* Square tiles, laid out on a grid that fits as many as the width allows
-     and never fewer than two, so the set still reads as a set on a phone. */
+     and never fewer than two, so the set still reads as a set on a phone —
+     and, with equal-width columns, evenly spaced under the board by
+     construction rather than needing a rule to say so. */
   /* Row-gap is wider than column-gap on purpose: it is the clearance a
-     wrapped second row needs so its tiles' own hanging threads (28px, see
+     wrapped second row needs so its tiles' own hanging threads (20px, see
      .tool-hang) never run into the row above. */
-  .tool-grid { display:grid; gap:34px 12px; grid-template-columns:repeat(auto-fill, minmax(132px, 1fr)); }
+  .tool-grid { display:grid; gap:26px 12px; grid-template-columns:repeat(auto-fill, minmax(132px, 1fr)); }
+  /* #tools' own gap to the board, in CSS rather than a Tailwind mt-* class —
+     .tool-hang's height below has to match this NUMBER exactly for the
+     pegs to land on the frame, and a Tailwind utility is one more place
+     that number could drift (or silently read as 0 if the CDN script is
+     ever blocked, which it was for every screenshot taken while building
+     this). */
+  #tools { margin-top:20px; }
 
   /* A cut plank, not a white app tile: same linen-and-grain the chalkboard's
      own frame is cut from, routed edge included (the layered inset
@@ -45,7 +54,7 @@
               border:2px solid #a9743f; color:var(--accent); font-weight:900; font-size:11px;
               letter-spacing:.07em; text-transform:uppercase; text-decoration:none;
               transition:transform .15s ease, box-shadow .15s ease;
-              transform-origin:50% -28px;
+              transform-origin:50% -20px;
               box-shadow:0 4px 10px rgba(91,58,30,.16),
                          inset 0 1px 0 rgba(255,255,255,.55),
                          inset 0 -3px 5px rgba(91,58,30,.14);
@@ -60,14 +69,20 @@
      (not a wrapping element) so the tile stays a direct child of #tools —
      the drag-reorder logic below walks #tools' children by .tool-btn and
      a wrapper would break `target.parentElement === box`. The thread
-     height (28px) matches #tools' own top margin exactly, so a first-row
-     tile's pegs land right at the chalkboard frame's bottom lip; .tool-grid's
+     height (20px) matches #tools' own top margin exactly, so a first-row
+     tile's threads span the full gap with nothing left over; .tool-grid's
      row-gap gives a wrapped second row the same clearance from the row
      above it. --tool-btn's own transform-origin sits at the nail (50% of
-     the width, 28px above the top), so the hover sway below pivots the
-     whole sign from where it is actually nailed up, threads included. */
-  .tool-hang { position:absolute; left:0; right:0; bottom:100%; height:28px; pointer-events:none; }
-  .tool-hang span { position:absolute; top:4px; bottom:0; width:1.5px;
+     the width, 20px above the top), so the hover sway below pivots the
+     whole sign from where it is actually nailed up, threads included.
+
+     THE NAIL HEAD OVERLAPS UP INTO THE FRAME ON PURPOSE (negative top) —
+     sitting it at the thread's own top edge left it looking like separate
+     hardware floating in the gap rather than something driven into the
+     wood above it; overlapping the frame by a few pixels is what makes it
+     read as nailed TO the board rather than hanging near it. */
+  .tool-hang { position:absolute; left:0; right:0; bottom:100%; height:20px; pointer-events:none; }
+  .tool-hang span { position:absolute; top:3px; bottom:0; width:1.5px;
                      background:linear-gradient(#8a8f98,#4b5058); }
   .tool-hang span:first-child { left:27%; }
   .tool-hang span:last-child { left:73%; }
@@ -75,12 +90,12 @@
      highlight for the dome's curve, a dark rim where it meets the wood, and
      a soft shadow under it so it reads as driven IN rather than floating
      on top. */
-  .tool-hang span::before { content:''; position:absolute; top:0; left:50%; transform:translateX(-50%);
-    width:8px; height:8px; border-radius:50%;
+  .tool-hang span::before { content:''; position:absolute; top:-4px; left:50%; transform:translateX(-50%);
+    width:9px; height:9px; border-radius:50%; z-index:1;
     background:radial-gradient(circle at 32% 28%, #f1f2f4, #aeb2b8 55%, #5a5e64 100%);
     box-shadow:0 1px 0 rgba(255,255,255,.5) inset, 0 2px 2px rgba(0,0,0,.4); }
-  .tool-hang span::after { content:''; position:absolute; top:6px; left:50%; transform:translateX(-50%);
-    width:11px; height:3px; border-radius:50%;
+  .tool-hang span::after { content:''; position:absolute; top:2px; left:50%; transform:translateX(-50%);
+    width:12px; height:3px; border-radius:50%;
     background:radial-gradient(ellipse at center, rgba(0,0,0,.4), transparent 72%); }
 
   /* A nudge, not a button press — these are nailed up, not clickable tiles
@@ -192,7 +207,7 @@
        things first — and the order is kept per browser rather than per
        account, because it is a convenience, not a setting worth a column in
        the database. -->
-  <div id="tools" class="tool-grid mt-7">
+  <div id="tools" class="tool-grid">
     <a draggable="false" class="tool-btn" data-page="seeds" href="nursery_ops_seeds.html"
        style="--accent:#15803d;--icon-bg:rgba(21,128,61,.14);">
       <div class="tool-hang"><span></span><span></span></div>
