@@ -18,18 +18,21 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=87">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=88">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
 
-<!-- The ribbon every module page wears: wordmark left, module title in the
-     middle, Welcome / Portal / Sign Out on the right. Mounted here rather
-     than hand-built, so this page cannot drift from the others. -->
-<div id="mjm-ribbon" data-brand="MJM Nursery AI System"
-     data-center="Nursery Maintenance Schedule &amp; Work Record"
-     data-sub="Monthly Work Planning &amp; Record System" data-logo="off"></div>
-<script src="../shared/shared_ribbon.js"></script>
+<!-- The compact bar the Seeds Control page wears — Back pill, centred module
+     name, NO badge — asked for here and on the dashboard so the nursery-ops
+     pages read as one set. Inline styles, because this page loads no
+     Tailwind; the values are the Tailwind classes the Seeds bar uses,
+     written out. Sign Out lives on the portal the Back pill leads to. -->
+<div id="mjm-ribbon" style="background:#fff;border-bottom:1px solid #ccfbf1;padding:16px 24px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;position:sticky;top:0;z-index:30;box-shadow:0 1px 2px rgba(0,0,0,.05);font-family:'Outfit',system-ui,sans-serif;">
+  <a href="nursery_ops_dashboard.html" style="justify-self:start;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.1em;background:#f8fafc;padding:8px 16px;border-radius:999px;border:1px solid #e2e8f0;text-decoration:none;white-space:nowrap;">&#8592; Back</a>
+  <span style="justify-self:center;text-align:center;font-weight:900;color:#1e293b;text-transform:uppercase;letter-spacing:.1em;font-size:14px;padding:0 12px;">Nursery Maintenance Schedule &amp; Work Record</span>
+  <div style="justify-self:end;width:32px;height:32px;background:#0d9488;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:12px;">NO</div>
+</div>
 
 <!-- ═══ APP VIEW ═══ -->
 <div id="view-app">

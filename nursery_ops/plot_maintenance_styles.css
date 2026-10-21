@@ -1236,8 +1236,8 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
 #sm-nav .pn-tab:hover{background:#ccfbf1;}
 #sm-nav .pn-tab.is-on{background:#0f766e;color:#fff;}
 #sm-nav .pn-tab.is-on:hover{background:#115e59;}
-/* Stays put while the records scroll past it. 84px clears the ribbon, which
-   is sticky itself.
+/* Stays put while the records scroll past it. 76px clears the compact bar
+   (Back pill · module name · NO badge, ~65px tall), which is sticky itself.
 
    The height cap and its own scrollbar are what make "sticky" true rather
    than nearly true: a bar taller than the window cannot stick — the browser
@@ -1246,8 +1246,8 @@ th.we-plot,td.we-plot{width:1%;min-width:96px;}
    rail keeps its ground and paints itself, so it reads as a narrowed menu
    rather than as a strip of page. */
 @media(min-width:768px){
-  #sm-nav{position:sticky;top:84px;align-self:start;
-    max-height:calc(100vh - 104px);overflow-y:auto;overflow-x:hidden;
+  #sm-nav{position:sticky;top:76px;align-self:start;
+    max-height:calc(100vh - 96px);overflow-y:auto;overflow-x:hidden;
     padding:10px;border:1px solid #e6f4f0;border-radius:14px;
     background:var(--bg-white);}
 }
