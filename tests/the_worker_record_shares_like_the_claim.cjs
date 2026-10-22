@@ -82,7 +82,7 @@ const claimShare = vm.runInContext('__claim', claimCtx);
 
 /* The claim's own lines, verbatim, so the lift above cannot drift from
    what the file actually runs. */
-const claimSrc = lift(CLAIM, 'function transplantFieldLines()');
+const claimSrc = lift(CLAIM, 'function transplantFieldLines(src)');
 yes(/const qty = job && job\.split/.test(claimSrc)
  && /\? Number\(w\.qty \|\| 0\)/.test(claimSrc)
  && /: \(crew\.length \? cap \/ crew\.length : 0\)/.test(claimSrc),
@@ -152,14 +152,22 @@ yes(/\.eq\('schedule_month', m\)/.test(SHEET),
 yes(/'tab.transplanting':'Transplanting'/.test(SHEET) && /'tab.transplanting':'Pemindahan Bibit'/.test(SHEET),
     'the tab is named in both languages');
 
-/* READ-ONLY, and that is the point: the FC Portal is the only writer of
-   nops_transplant_field_records in either repository, so a tick box here
-   would be a second writer of somebody's pay. */
-const tab = SHEET.slice(SHEET.indexOf('function renderTransplantingPayroll'),
-                        SHEET.indexOf('function renderLoadingSeedlingsPayroll'));
-yes(!/onclick=/.test(tab), 'no cell on the tab is clickable — it is a record, not a tick sheet');
+/* THE CREW IS STILL READ-ONLY HERE, and that is the point: the FC Portal is
+   the only writer of a transplanting crew in either repository, so a tick
+   box over a NAME would be a second writer of somebody's pay.
+
+   The tab is not read-only as a whole any more -- it carries the office's
+   Checked tick, which is what sends a row to the salary claim. That one
+   write is held to its shape in
+   tests/the_transplant_claim_asks_the_office.cjs. */
+const tab = lift(SHEET, 'function renderTransplantingPayroll()');
+yes(!/onclick=/.test(tab),
+    'the renderer puts no handler on a cell of its own — only the tick cell has one');
 yes(!/\.update\(|\.insert\(|\.upsert\(|\.delete\(/.test(tab),
-    'and it writes nothing to the table');
+    'and the renderer writes nothing');
+const tickWrite = lift(SHEET, 'async function toggleTransplantChecked(id)');
+yes(!/workers|source_qty|work_date|plot_name/.test(tickWrite),
+    'the one write on this tab touches neither the crew nor the figure');
 
 /* A name the FC credited that the register cannot place still gets a
    column. Without it their share leaves the sheet with nothing saying so,

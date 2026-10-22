@@ -50,7 +50,7 @@ What that SQL should be:
   comment.**
 
   Three paste rules are still owed across the older files, each its own
-  sweep, and the test prints the count every run: **144 carry a semicolon in a
+  sweep, and the test prints the count every run: **145 carry a semicolon in a
   comment**, 30 contain a backslash, and 46 do not end at a semicolon.
 - **Tested first.** There is a scratch Postgres 16 for this — see below. Run
   the SQL against a stubbed copy of the real tables before handing it over, and
@@ -2456,7 +2456,7 @@ metas**, same exposure as Batch Info: the PAGE is the deploy, so a browser
 holding yesterday's copy keeps it until one hard reload. Add the three the
 day somebody needs a fix here in a hurry.
 
-## The Worker Record reads the conductor's transplanting, and never writes it
+## The Worker Record reads the conductor's transplanting, and writes ONE column
 
 The Field Conductor records the four transplanting jobs on his own portal:
 the plot, which job, the day, and the crew. They land in
@@ -2467,12 +2467,16 @@ work appeared was a figure on a claim.
 So Worker Record has a fifth tab. It is DATE · PLOT · WORK · QTY and a
 column per worker, the same shape as the four beside it.
 
-**IT IS READ-ONLY, and that is not an omission.** The FC Portal is the only
-writer of that table in either repository (`npayroll_script.js` reads it for
-the claim and nothing else). A tick box here would be a second writer of
-somebody's pay with no rule about who may move it — which is exactly what
-the sheet's own `transplant_edit` permission exists to govern. The test
-asserts no cell is clickable and that the tab sends no write.
+**THE CREW IS READ-ONLY HERE, and that is not an omission.** The FC Portal
+is the only writer of a transplanting CREW in either repository. A tick box
+over a name here would be a second writer of somebody's pay with no rule
+about who may move it — which is exactly what the sheet's own
+`transplant_edit` permission exists to govern. The test asserts the renderer
+puts no handler on a cell of its own.
+
+**The one column the office does write is CHECKED** — see the section below.
+It was read-only in full for exactly as long as the claim was paid straight
+off the conductor's record.
 
 **The share is the CLAIM's rule, and a test holds the two together.** One
 worker's figure is the quantity keyed against their name where the job
@@ -2504,6 +2508,90 @@ Three smaller things:
 `transplantData.js` and `npayroll_script.js` have the other two. Only the key
 and the label are needed here; the matching and the rates stay where they
 are.
+
+## The transplanting claim is paid on a row the OFFICE has checked
+
+The four jobs are keyed by the Field Conductor and used to reach the salary
+claim straight from there. `loadTransplantField` said why in its own words:
+*keying it IS the signature, and there is no second person to wait for.*
+
+What that left out is that the office has to AGREE a figure before it prices
+it — a quantity the report is still moving, a crew somebody is about to
+correct, a plot keyed against the wrong month. There was no way to hold one,
+so **the first anybody saw of a figure was the money.** It is the same
+Checked tick the other four Worker Record tabs have carried for months,
+asked of the fifth, and the claim quotes the same sentence as the sheet:
+*ONLY A CHECKED ROW REACHES THE CLAIM.*
+
+Five things in it, and four of them are faults this file has had before:
+
+- **Held work is COUNTED AND NAMED.** A claim short of work reads exactly
+  like a quiet month, which is the thing this system is most careful about.
+  The claim prints the money (`transplantHeldLines()` prices the held rows at
+  their real piece rate), the rows, the plots and where the tick is; the
+  Worker Record foot carries a **Held back** line under the total; and the
+  by-plot table — which counts what the claim pays, so it agrees with the
+  cards above it — says which plot it left out.
+- **A month entirely held is NOT a month nothing was recorded in.** Both
+  empty sentences had to learn the sixth answer. "No transplanting was
+  recorded" over a month the conductor spent keying is the office telling him
+  his work never arrived, which is the whole argument of
+  `transplantEmptyLead`.
+- **IT FAILS OPEN.** A database that has not had the SQL run refuses the
+  whole select over a column it has not got — and the error it sends back
+  ("could not find the column") is matched by the quiet branch that turns a
+  missing TABLE into an empty list, so the sheet would have read EMPTY over a
+  month of work. Both readers fall back to the columns that have always been
+  there, every row is paid the way it was before the tick existed, and both
+  SAY SO: red on the claim, orange on the tab. A gate that cannot be read
+  must not take a month off a claim — same reason access fails open. And a
+  gate that is missing is said LOUDER than being short, because a claim
+  paying work nobody agreed while the office believes it is gated is worse
+  than one that is light.
+- **The tick is cleared by a TRIGGER, not by a screen.** Three things write
+  that table — the FC Portal sheet, this page, and somebody in the Supabase
+  dashboard — and a conductor who corrects a crew after the office agreed the
+  row has changed what is being paid. A rule living in one screen is a rule
+  the other two do not obey; same reasoning as `previous_names` on the worker
+  register. Only the fields that decide the MONEY clear it (the day, the
+  plot, the job, the month, the quantity, the crew) — a corrected remark or
+  batch name leaves the agreement standing — and a write that corrects a
+  figure AND agrees it in one go is left alone, or the tick could never be
+  set.
+- **Nothing is backfilled.** A tick nobody made is not a signature, and
+  seeding one would be the SQL deciding a month the office has not looked at.
+  So the first claim after it is run is NOUGHT and names everything it is
+  holding. That is the office being asked the question for the first time,
+  and `shared/CHECK_transplant_held_back.sql` is the size of it — every
+  nursery-month, how many rows are agreed, and the capacity on no claim.
+  Hand it over with any change here.
+
+**A MONTH THE OFFICE HAS VERIFIED IS ALREADY AGREED**, and more strongly
+than a tick. The Transplanting sheet keeps no snapshot the way Work
+Maintenance does — `verifyCurrentSheet` builds one for `maint` and `null`
+for everything else — so it is always read live. Without this exception,
+deploying the gate would take every settled month to NOUGHT, and the office
+could not even put it right: ticking a row in a locked month is not a thing
+this system lets anybody do. `_tpVerifiedMonth` asks `MJMPayrollLock` for
+the row's own section, and `splitTransplantField` RE-SPLITS on every read
+rather than once at load, because the lock module loads in parallel with the
+rows and a verified month would otherwise look unverified for the first
+draw.
+
+The Worker Record tab **cannot** ask that question — `nursery_ops` loads no
+payroll-lock module and has no business growing one — so its Held back line
+states the rule and NAMES the exception in a clause rather than deciding it.
+A second copy of a verification rule, in a page with none of the data, is
+the thinner-copy fault this file is full of.
+
+A pill is still offered for a nursery whose ONLY transplanting is held
+(`transplantExtraSections` asks the held lines too), or the one sentence
+saying it is being held could not be reached.
+
+`shared/RUN_ME_transplant_checked.sql` is the two columns and the trigger.
+`tests/the_transplant_claim_asks_the_office.cjs` drives the real loader
+through all three cases, and `tests/transplant_claim_empty.cjs` holds the two
+new empty sentences against the real page in a real browser.
 
 ## User Access is one block per PORTAL, and two of them were on no screen
 

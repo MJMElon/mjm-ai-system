@@ -306,6 +306,16 @@ const PENCIL_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" 
   'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
   'aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
 
+/* The office's own "select all" mark — a stack of boxes behind the one
+   that is ticked — in place of the round "all" pill every column header
+   used to carry. The button stays icon-only (its title says what it
+   does); a caption under it would not fit a 132px column repeated twice a
+   week. */
+const WE_ALL_ICON = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
+  'aria-hidden="true"><rect x="3" y="3" width="13" height="13" rx="2" opacity=".4"/>' +
+  '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M11 14.5l2 2 4-4"/></svg>';
+
 /* Every one of these lists is typed in by a person, and every one of them is
    printed straight back into innerHTML. A plot called B<img onerror=…> is
    unlikely; a fertiliser name with an ampersand in it is not. Defined up
@@ -759,11 +769,15 @@ let _fieldUnpaired = {};
 
 function payrollKey(n, m, type) { return `${n}_${m}_${type}`; }
 
-function switchPayrollView(type, btn) {
+/* Worker Activity's six job sheets — chosen two ways now, same as Work
+   Record's list/chart: the panel's own sub-tab bar, and the side bar's
+   expandable entry. _syncSubNav (declared beside switchRecordView) is the
+   one place that keeps the two in step, by the type key alone. */
+const PAYROLL_VIEW_KEYS = ['pd', 'manuring', 'weeding', 'interrow', 'loading_seedlings', 'transplanting'];
+function switchPayrollView(type) {
   _payrollView = type;
-  const bar = btn ? btn.closest('.subtabs-bar') : null;
-  if (bar) bar.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
+  _syncSubNav('subtab-', PAYROLL_VIEW_KEYS, type);
+  _syncSubNav('pn-subtab-', PAYROLL_VIEW_KEYS, type);
   renderPayroll();
 }
 
@@ -1205,12 +1219,24 @@ function lockDoWorkers(doId) {
    them on his own portal (TransplantSheet) and they land in
    nops_transplant_field_records; this tab is the office reading them.
 
-   IT IS READ-ONLY, and that is not an omission. The crew on a transplanting
-   record is the conductor's answer, and the FC Portal is the ONLY writer of
-   that table in either repository -- see the note in FC-Portal/CLAUDE.md.
-   A tick box here would be a second writer of somebody's pay with no rule
-   about who may move it, which is the fault the sheet already guards with
-   its own `transplant_edit` permission.
+   ONE COLUMN ON IT IS WRITABLE, AND IT IS THE SIGNATURE. The crew is the
+   conductor's answer and is still changed on his portal and nowhere else --
+   a tick box over a name here would be a second writer of somebody's pay
+   with no rule about who may move it, which is the fault the sheet already
+   guards with its own `transplant_edit` permission. What the office writes
+   is CHECKED: it has been through the row and agreed it, and that is the one
+   thing that sends it to the salary claim.
+
+   Until this existed the claim was paid straight off the conductor's own
+   record, so the office had no way to hold a row it was still asking about
+   -- the first anybody saw of a figure was the money. It is the same tick
+   the other four tabs have carried for months, asked of this one.
+
+   A CORRECTION TAKES THE TICK WITH IT, and the DATABASE does that, not this
+   screen -- `shared/RUN_ME_transplant_checked.sql`. Three things write this
+   table (the FC Portal sheet, this page, and somebody in the Supabase
+   dashboard), and a rule living in one screen is a rule the other two do not
+   obey. Same reasoning as previous_names on the worker register.
 
    THIRD COPY of the job list. FC-Portal/src/modules/maintenance/
    transplantData.js has TRANSPLANT_JOBS and npayroll_script.js has its own;
@@ -1247,7 +1273,13 @@ function tpShare(rec, w) {
 }
 
 let _tpRecordsCache = {}, _tpRecordsLoading = {}, _tpRecordsErr = {};
+/* Nurseries whose read came back without the Checked columns, so the gate is
+   not installed on this database yet. */
+let _tpNoGate = {};
 function _tpPayrollKey(n, m) { return `${n}_${m}`; }
+
+const TP_PAY_COLS = 'id, work_date, nursery_name, plot_name, batch_name, work_type, '
+  + 'jenis, schedule_month, source_qty, workers, total_qty, remark, reported_by';
 
 /* Asked by MONTH, the same key the claim asks on
    (`.eq('schedule_month', ...)`) -- the record's schedule_month is what
@@ -1260,11 +1292,27 @@ async function loadTransplantRecordsForPayroll(n, m) {
   _tpRecordsErr[key] = '';
   renderPayroll();
 
-  const { data, error } = await _supabase
+  const ask = (cols) => _supabase
     .from('nops_transplant_field_records')
-    .select('id, work_date, nursery_name, plot_name, batch_name, work_type, jenis, schedule_month, source_qty, workers, total_qty, remark, reported_by')
+    .select(cols)
     .eq('schedule_month', m)
     .order('work_date', { ascending: true });
+
+  /* ASKED FOR THE TICK, AND ABLE TO DO WITHOUT IT.
+     A database that has not had RUN_ME_transplant_checked.sql run refuses the
+     whole select over the two columns it has not got -- and the error it
+     sends back ("could not find the column") is matched by the quiet branch
+     below, so the tab would read EMPTY over a month of work. So the read
+     falls back to the columns that have always been there and the tab says,
+     in orange, that the gate is not installed. Showing the work is the safe
+     direction; showing nothing is the one fault this tab cannot have. */
+  let { data, error } = await ask(TP_PAY_COLS + ', checked_at, checked_by');
+  if (error && /checked_at|checked_by/i.test(error.message || '')) {
+    _tpNoGate[key] = true;
+    ({ data, error } = await ask(TP_PAY_COLS));
+  } else if (!error) {
+    _tpNoGate[key] = false;
+  }
 
   _tpRecordsLoading[key] = false;
   if (error) {
@@ -1306,7 +1354,15 @@ function renderTransplantingPayroll() {
   const line = document.getElementById('payroll-form-line');
   if (line) line.textContent = `${t('pay.form')} (${NURSERY_NAMES[n]}) — ${t('pay.month')} ${m}`;
   const hint = document.getElementById('payroll-hint');
-  if (hint) { hint.textContent = t('pay.transplantHint'); hint.classList.remove('pay-hint-warn'); }
+  if (hint) {
+    /* A GATE THAT IS NOT INSTALLED HAS TO SAY SO. Without the two columns
+       every row reaches the claim, which is exactly what this change was
+       asked to stop -- and the Check buttons below would refuse one by one
+       with nothing saying why. */
+    const noGate = !!_tpNoGate[key];
+    hint.textContent = noGate ? t('pay.tpNoGate') : t('pay.transplantHint');
+    hint.classList.toggle('pay-hint-warn', noGate);
+  }
   const off = document.getElementById('payroll-offreg');
   if (off) { off.style.display = 'none'; }
 
@@ -1341,8 +1397,9 @@ function renderTransplantingPayroll() {
 
   const payTh = (txt, w, cls) =>
     `<th class="${cls || ''}" style="min-width:${w}px;"><div class="th-wrap" style="max-width:${w}px;">${txt}</div></th>`;
+  const span = 4 + wk.length + 2;
   let h = `<thead>
-    <tr><th class="wk-th" colspan="${4 + wk.length + 1}">${t('tab.transplanting')}</th></tr>
+    <tr><th class="wk-th" colspan="${span}">${t('tab.transplanting')}</th></tr>
     <tr>
       ${payTh(t('pay.date'), 92)}
       ${payTh(t('pay.plot'), 84)}
@@ -1350,13 +1407,18 @@ function renderTransplantingPayroll() {
       ${payTh(t('pay.qtyTransplant'), 104)}
       ${wk.map(w => payTh(esc(w) + (extra.includes(w) ? ' ⚠' : ''), 108)).join('')}
       ${payTh(t('pay.perWorker'), 112)}
+      ${payTh(t('pay.checked'), 132)}
     </tr></thead><tbody>`;
 
   const totals = {}; wk.forEach(w => totals[w] = 0);
-  let capTotal = 0;
+  let capTotal = 0, heldCap = 0, heldRows = 0;
+  /* WHERE THE GATE IS NOT INSTALLED, EVERY ROW IS AGREED -- because every row
+     is being paid. Reading the absent column as "not checked" would draw the
+     whole sheet held, under an orange line saying the opposite. */
+  const agreed = (r) => !!_tpNoGate[key] || !!r.checked_at;
 
   if (!rows.length) {
-    h += `<tr><td colspan="${4 + wk.length + 1}" style="padding:1.6rem;text-align:center;color:var(--text-faint);">${t('pay.noTransplant')}</td></tr>`;
+    h += `<tr><td colspan="${span}" style="padding:1.6rem;text-align:center;color:var(--text-faint);">${t('pay.noTransplant')}</td></tr>`;
   } else {
     rows.forEach(r => {
       const job  = TP_JOB[r.work_type];
@@ -1368,8 +1430,12 @@ function renderTransplantingPayroll() {
       const rowCap = job && job.split
         ? crew.reduce((sum, w) => sum + (Number(w.qty) || 0), 0)
         : Number(r.source_qty || 0);
-      capTotal += rowCap;
-      h += `<tr>
+      /* THE TOTAL IS WHAT THE CLAIM PAYS. A row nobody has agreed is not on
+         the claim, so counting it in the foot here would hand the office a
+         figure the claim does not quote and no way to see which. Held rows
+         are added up on their own and said under it. */
+      if (agreed(r)) capTotal += rowCap; else { heldCap += rowCap; heldRows++; }
+      h += `<tr${agreed(r) ? '' : ' class="tp-row-held"'}>
         <td style="font-weight:600;white-space:nowrap;">${r.work_date ? new Date(r.work_date).toLocaleDateString('en-MY') : '—'}</td>
         <td class="plot-td">${esc(r.plot_name || '—')}</td>
         <td style="text-align:left;">${esc((job && job.label) || r.jenis || r.work_type || '—')}</td>
@@ -1378,10 +1444,16 @@ function renderTransplantingPayroll() {
           const on = byName[w];
           if (!on) return '<td></td>';
           const share = tpShare(r, on);
-          totals[w] += share;
-          return `<td class="ticked" style="font-weight:700;" title="${esc(w)}">${capFmt(share)}</td>`;
+          /* Shown either way -- who did the work is what the sheet is for --
+             and totalled only where the office has agreed the row, so the
+             foot of this sheet is the claim and not a wish. */
+          if (agreed(r)) totals[w] += share;
+          return `<td class="${agreed(r) ? 'ticked' : ''}" style="font-weight:700;${
+            agreed(r) ? '' : 'opacity:.5;'}" title="${esc(w)}${
+            agreed(r) ? '' : ' — not Checked, so not on the claim'}">${capFmt(share)}</td>`;
         }).join('')}
-        <td style="font-weight:700;">${capFmt(rowCap)}</td>
+        <td style="font-weight:700;${agreed(r) ? '' : 'opacity:.5;'}">${capFmt(rowCap)}</td>
+        <td style="white-space:nowrap;">${_tpCheckCell(r, key)}</td>
       </tr>`;
     });
   }
@@ -1392,8 +1464,20 @@ function renderTransplantingPayroll() {
       <td class="th-left" colspan="3">${t('pay.totalCap')}</td>
       <td>${capTotal ? capTotal.toLocaleString() : '—'}</td>
       ${wk.map(w => `<td>${capFmt(totals[w])}</td>`).join('')}
-      <td>${capFmt(grand)}</td></tr>
-  </tfoot>`;
+      <td>${capFmt(grand)}</td>
+      <td></td></tr>`;
+  /* CAPACITY HELD BACK IS NAMED, never silently missing. A claim short of
+     work reads exactly like a quiet month -- the fault the payroll file is
+     most careful about -- and the same sentence is printed on the claim
+     itself. */
+  if (heldRows) {
+    h += `<tr class="jumlah-tr" style="background:#fffbeb;">
+      <td class="th-left" colspan="3" style="color:#92400e;">${t('pay.tpHeldLabel')}</td>
+      <td style="color:#92400e;">${heldCap ? heldCap.toLocaleString() : '—'}</td>
+      <td colspan="${wk.length + 2}" style="text-align:left;color:#92400e;font-weight:600;">
+        ${t('pay.tpHeld').replace('{n}', heldRows)}</td></tr>`;
+  }
+  h += `</tfoot>`;
   tbl.innerHTML = h;
 
   /* A name the FC credited that the register cannot place still gets a
@@ -1402,6 +1486,65 @@ function renderTransplantingPayroll() {
   if (off && extra.length) {
     off.style.display = '';
     off.textContent = t('pay.fieldNoColumn') + ' ' + extra.join('; ');
+  }
+}
+
+/* THE TICK CELL. Both ways offered to whoever can press either, which is the
+   choice `toggleChecked` made on the maintenance record and said why: a row
+   anybody can tick and only an admin can untick is not a lock, it is a trap.
+   Unticking takes nothing away -- it puts the row back where it was. */
+function _tpCheckCell(r, key) {
+  if (_tpNoGate[key]) {
+    return `<span style="color:var(--text-faint);font-size:11px;"
+      title="The Checked columns are not on this database yet — run shared/RUN_ME_transplant_checked.sql">—</span>`;
+  }
+  if (r.checked_at) {
+    const when = String(r.checked_at).slice(0, 10);
+    const who  = r.checked_by ? ` by ${r.checked_by}` : '';
+    return `<span class="rec-checked-badge" title="Checked${esc(who)} on ${esc(when)} — this row is what the salary claim pays on">✓ Checked</span>`
+      + `<button class="btn btn-sm" onclick="toggleTransplantChecked(${r.id})"
+           title="Put this row back to unchecked — it comes off the salary claim until somebody checks it again">Uncheck</button>`;
+  }
+  return `<button class="btn btn-sm btn-check" onclick="toggleTransplantChecked(${r.id})"
+      title="Mark as checked — ONLY a checked row reaches the salary claim">✓ Check</button>`;
+}
+
+/* ONE WRITE, ONE COLUMN PAIR. It sends `checked_at` and `checked_by` and
+   nothing else, so a conductor keying the same record at the same moment
+   cannot have his crew overwritten by whatever this page last read.
+
+   Optimistic with a rollback, the same shape lockDoWorkers uses: the tick
+   appears at once because that is what somebody pressing it expects, and a
+   refused write puts it back and says so rather than leaving a tick on
+   screen that is not in the database. */
+async function toggleTransplantChecked(id) {
+  const n = getNursery(), m = getMonth(), key = _tpPayrollKey(n, m);
+  const r = (_tpRecordsCache[key] || []).find(x => x.id === id);
+  if (!r || !_supabase) return;
+  if (_tpNoGate[key]) {
+    alert('This database has not got the Checked columns yet.\n\n'
+      + 'Run shared/RUN_ME_transplant_checked.sql in the Supabase SQL Editor. '
+      + 'Until then every recorded row reaches the salary claim, which is how '
+      + 'it worked before this tick existed.');
+    return;
+  }
+  if (r.checked_at && !confirm('Put this row back to unchecked?\n\n'
+      + 'It comes OFF the transplanting salary claim until somebody checks it '
+      + 'again. What the conductor recorded is not touched.')) return;
+
+  const was = { at: r.checked_at || null, by: r.checked_by || null };
+  const at  = r.checked_at ? null : new Date().toISOString();
+  const by  = at ? (window.currentUserEmail || _signingAs() || 'office') : null;
+  r.checked_at = at; r.checked_by = by;
+  renderPayroll();
+
+  const { error } = await _supabase.from('nops_transplant_field_records')
+    .update({ checked_at: at, checked_by: by })
+    .eq('id', id);
+  if (error) {
+    r.checked_at = was.at; r.checked_by = was.by;
+    renderPayroll();
+    alert('That did not save, so nothing has changed:\n\n' + error.message);
   }
 }
 
@@ -2213,8 +2356,10 @@ let _dbReady     = false; // guards writes until the initial DB load lands
 function stateKey(n, m) { return `${n}_${m}`; }
 
 /* Tell the user when the schedule on screen was carried forward from an
-   earlier month and has not been saved for this one yet — otherwise a full
-   sheet looks like it was already set up for this month. */
+   earlier month and has not been saved for this one yet — otherwise the
+   weeks and chemicals look like they were already set up for this month.
+   The ticks are NOT part of what carried (see clearTicks) — every plot
+   opens unticked, so the notice says plan, never schedule. */
 function updateCarryNotice() {
   const box = document.getElementById('carry-notice');
   if (!box) return;
@@ -2222,7 +2367,7 @@ function updateCarryNotice() {
   const from = appState[n]?.[m]?._carriedFrom;
   if (!from) { box.style.display = 'none'; box.textContent = ''; return; }
   box.style.display = '';
-  box.innerHTML = `↩️ Carried forward from <b>${from}</b> — this is last month's schedule. ` +
+  box.innerHTML = `↩️ Weeks and chemicals carried forward from <b>${from}</b> — nothing is ticked yet. ` +
                   `Change anything and it saves as <b>${m}</b>'s own.`;
 }   // future DB row id (nursery+month)
 
@@ -2336,14 +2481,18 @@ const I18N = {
     'btn.reset':'↺ Reset to Defaults', 'btn.clearAll':'Clear All', 'btn.selectAll':'Select All',
     'sched.ticked':'ticked', 'sched.none':'not set yet',
     'tab.pd':'P & D — Spraying', 'tab.manuring':'Manuring', 'tab.weeding':'Weeding',
-    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.record':'Maintenance Work Record', 'tab.chart':'Analytics', 'tab.schedule':'Monthly Maintenance Schedule', 'tab.payroll':'Worker Record', 'tab.setting':'Setting',
+    'tab.interrow':'Interrow Spray', 'tab.loadingSeedlings':'Loading Seedlings', 'tab.transplanting':'Transplanting', 'tab.record':'Work Records', 'tab.maintList':'Monthly Records', 'tab.chart':'Performance', 'tab.schedule':'Work Schedule', 'tab.payroll':'Worker Activity', 'tab.setting':'Settings',
     'pay.form':'Worker Record', 'pay.month':'Month', 'pay.date':'Date', 'pay.plot':'Plot',
     'pay.plotCap':'Plot Capacity (seedlings)', 'pay.perWorker':'Capacity per Worker (seedlings)',
     'pay.totalCap':'Total (Capacity)', 'pay.rate':'Piece Rate (RM)', 'pay.totalRM':'Total (RM)',
     'pay.customer':'Customer', 'pay.doNumber':'DO Number', 'pay.qtyLoaded':'Qty Loaded (seedlings)',
     'pay.work':'Work', 'pay.qtyTransplant':'Qty (seedlings)',
     'pay.noTransplant':'No transplanting job has been recorded for this nursery this month yet.',
-    'pay.transplantHint':'Recorded by the Field Conductor on the FC Portal — the plot, the job, the day and the crew. Read-only here: the crew is his answer, and the FC Portal is the only place it can be changed.',
+    'pay.transplantHint':'Recorded by the Field Conductor on the FC Portal — the plot, the job, the day and the crew. Tick Checked once you have been through a row: ONLY a checked row reaches the transplanting salary claim. The crew itself is his answer and is changed on the FC Portal.',
+    'pay.checked':'Checked',
+    'pay.tpHeldLabel':'Held back',
+    'pay.tpHeld':'{n} row(s) are not Checked yet, so this capacity is NOT being sent to the transplanting salary claim. Press ✓ Check on a row once you have agreed it. (A month already verified on the claim goes on being paid as it was.)',
+    'pay.tpNoGate':'⚠ The Checked columns are not on this database yet, so every recorded row still reaches the salary claim. Run shared/RUN_ME_transplant_checked.sql in the Supabase SQL Editor.',
     'pay.noDOs':'No Delivery Order has been issued for this nursery this month yet.',
     'pay.loadingHint':'Ticks come from the driver’s phone when the DO is signed, or from here if nobody has ticked it yet. Once saved, a row locks — only an admin can change it after that.',
     'pay.doLocked':'Locked — saved by {who} on {when}. Only an admin can change this.',
@@ -2471,14 +2620,18 @@ const I18N = {
     'btn.reset':'↺ Set Semula', 'btn.clearAll':'Kosongkan', 'btn.selectAll':'Pilih Semua',
     'sched.ticked':'ditanda', 'sched.none':'belum ditetapkan',
     'tab.pd':'P & D — Racun', 'tab.manuring':'Membaja', 'tab.weeding':'Merumput',
-    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.record':'Rekod Kerja Penyelenggaraan', 'tab.chart':'Analitik', 'tab.schedule':'Jadual Penyelenggaraan Bulanan', 'tab.payroll':'Rekod Pekerja', 'tab.setting':'Tetapan',
+    'tab.interrow':'Racun Selingan', 'tab.loadingSeedlings':'Pemunggahan Anak Benih', 'tab.transplanting':'Pemindahan Bibit', 'tab.record':'Rekod Kerja', 'tab.maintList':'Rekod Bulanan', 'tab.chart':'Prestasi', 'tab.schedule':'Jadual Kerja', 'tab.payroll':'Aktiviti Pekerja', 'tab.setting':'Tetapan',
     'pay.form':'Rekod Pekerja', 'pay.month':'Bulan', 'pay.date':'Tarikh', 'pay.plot':'Plot',
     'pay.plotCap':'Kapasiti plot (bibit)', 'pay.perWorker':'Kapasiti Kerja Setiap Orang (bibit)',
     'pay.totalCap':'Jumlah (Kapasiti)', 'pay.rate':'Kadar Sekeping (RM)', 'pay.totalRM':'Jumlah (RM)',
     'pay.customer':'Pelanggan', 'pay.doNumber':'Nombor DO', 'pay.qtyLoaded':'Kuantiti Dimuat (bibit)',
     'pay.work':'Kerja', 'pay.qtyTransplant':'Kuantiti (bibit)',
     'pay.noTransplant':'Tiada kerja pemindahan direkodkan untuk nurseri ini bulan ini.',
-    'pay.transplantHint':'Direkod oleh Field Conductor di FC Portal — plot, kerja, tarikh dan pekerja. Baca sahaja di sini: pekerja adalah jawapan beliau, dan FC Portal sahaja boleh mengubahnya.',
+    'pay.transplantHint':'Direkod oleh Field Conductor di FC Portal — plot, kerja, tarikh dan pekerja. Tandakan Disemak selepas anda menyemak satu baris: HANYA baris yang disemak masuk ke tuntutan gaji pemindahan bibit. Senarai pekerja adalah jawapan beliau dan diubah di FC Portal.',
+    'pay.checked':'Disemak',
+    'pay.tpHeldLabel':'Ditahan',
+    'pay.tpHeld':'{n} baris belum Disemak, jadi kapasiti ini TIDAK dihantar ke tuntutan gaji pemindahan bibit. Tekan ✓ Check pada baris itu selepas anda setuju. (Bulan yang sudah disahkan pada tuntutan tetap dibayar seperti sebelumnya.)',
+    'pay.tpNoGate':'⚠ Lajur Disemak belum ada pada pangkalan data ini, jadi semua baris yang direkod masih masuk ke tuntutan gaji. Jalankan shared/RUN_ME_transplant_checked.sql di Supabase SQL Editor.',
     'pay.noDOs':'Belum ada Delivery Order dikeluarkan untuk nurseri ini bulan ini.',
     'pay.loadingHint':'Tanda datang daripada telefon pemandu semasa DO ditandatangan, atau dari sini jika belum ditanda lagi. Setelah disimpan, baris dikunci — hanya admin boleh menukarnya selepas itu.',
     'pay.doLocked':'Dikunci — disimpan oleh {who} pada {when}. Hanya admin boleh menukarnya.',
@@ -2636,6 +2789,39 @@ function applyLang(){
   if (typeof renderAll === 'function') renderAll();
 }
 
+/* Flips every tick in a carried-forward state to false, without touching
+   the SHAPE those ticks sit in — how many weeks, how many rounds, how many
+   columns a round has, all of which come from the config (pdConfig,
+   manuringConfig, interrowConfig) and must stay exactly as carried, or a
+   tick typed against round 3 of a 3-round week has nowhere to land. Only
+   the leaves move; the plot keys, the week keys, the round arrays are
+   left as they were. */
+function clearTicks(s) {
+  if (s.pd) {
+    Object.values(s.pd).forEach(week => {
+      Object.keys(week || {}).forEach(p => { week[p] = { P: false, D: false }; });
+    });
+  }
+  if (s.manuring) {
+    Object.keys(s.manuring).forEach(p => {
+      s.manuring[p] = (s.manuring[p] || []).map(round => (round || []).map(() => false));
+    });
+  }
+  if (s.weeding) {
+    Object.keys(s.weeding).forEach(p => {
+      const rounds = s.weeding[p] || {};
+      const blank = {};
+      Object.keys(rounds).forEach(r => { blank[r] = false; });
+      s.weeding[p] = blank;
+    });
+  }
+  if (s.interrow) {
+    Object.keys(s.interrow).forEach(p => {
+      s.interrow[p] = (s.interrow[p] || []).map(round => (round || []).map(() => false));
+    });
+  }
+}
+
 function getState(nursery, month) {
   if (!appState[nursery]) appState[nursery] = {};
   if (!appState[nursery][month]) {
@@ -2650,9 +2836,18 @@ function getState(nursery, month) {
       return appState[nursery][month];
     }
     // Nothing saved for this month — start from the last month that was set,
-    // so a new month opens with the schedule already in place rather than
-    // blank. It stays a copy: nothing is written until someone ticks or saves,
-    // and the month it came from is untouched.
+    // so a new month opens with its weeks already dated and its chemicals
+    // already chosen rather than empty. It stays a copy: nothing is written
+    // until someone ticks or saves, and the month it came from is untouched.
+    //
+    // The TICKS do not come with it. A new month carrying last month's plan
+    // is a head start; a new month carrying last month's TICKS is a lie —
+    // every plot would open already marked done for work nobody has been
+    // near yet, which is what "This Month at a Glance" was showing for a
+    // month that had just been opened for the first time. clearTicks()
+    // resets every tick to false while leaving the shape (how many weeks,
+    // how many rounds, how many columns) exactly as the config dictates, so
+    // nothing downstream has to know this happened.
     const from = carryForwardFrom(nursery, month);
     if (from) {
       const inherited = loadPersistedState(nursery, from);   // already a deep copy
@@ -2660,8 +2855,10 @@ function getState(nursery, month) {
         migrateManuringShape(inherited, NURSERY_PLOTS[nursery]);
         migrateInterrowShape(inherited, NURSERY_PLOTS[nursery]);
         alignRoundsToWeeks(inherited, NURSERY_PLOTS[nursery]);
+        clearTicks(inherited);
         // Snapshot what was carried in, so nothing shows as "modified" until
-        // this month is actually changed.
+        // this month is actually changed. Taken AFTER clearing, so it is a
+        // snapshot of the blank ticks this month actually opens on.
         inherited._savedPd = JSON.parse(JSON.stringify(inherited.pd || {}));
         inherited._carriedFrom = from;
         appState[nursery][month] = inherited;
@@ -4360,6 +4557,79 @@ function toggleNav() {
   applyNav();
 }
 
+/* A table wide enough to need its worker columns — the payroll sheet grows
+   one per crew member, eight, ten, more — used to just sit there wider than
+   the content area, open the side bar and the only way to read the rest was
+   to drag it sideways. Nothing here is ever dropped to make room: a column
+   hidden to fit the screen is a figure hidden to fit the screen. So the
+   whole table is shrunk toward the wrapper's own width instead, with a CSS
+   transform rather than smaller type picked by hand, because the number of
+   columns — and so how much shrinking is needed — is different on every
+   nursery's sheet. Below TABLE_FIT_MIN_SCALE it stops shrinking and the
+   wrapper's own overflow-x:auto (already on every .tbl-wrap) takes back
+   over: type too small to read is worse than a scrollbar.
+
+   And the other direction: collapsing the side bar hands the content area
+   back a couple hundred pixels, and a table left at its natural size over
+   that spare width reads as unfinished — the office asked for it to use
+   the room rather than leave it blank. So a table NARROWER than its wrapper
+   is scaled UP too, capped at TABLE_FIT_MAX_SCALE so a four-plot nursery on
+   a wide monitor does not blow its type up past what is still a working
+   sheet. */
+const TABLE_FIT_MIN_SCALE = 0.62;
+const TABLE_FIT_MAX_SCALE = 1.4;
+
+function fitTableToWrap(wrap) {
+  if (!wrap) return;
+  const table = wrap.querySelector('table');
+  if (!table) return;
+  table.style.transform = '';
+  wrap.style.height = '';
+  wrap.style.overflowX = '';
+  // offsetParent is null on a hidden tab (display:none up the tree) — nothing
+  // to measure, and nothing left scaled from the last time it was open.
+  if (wrap.offsetParent === null) return;
+  const availW = wrap.clientWidth;
+  const naturalW = table.scrollWidth;
+  if (!availW || !naturalW) return;
+  let scale = availW / naturalW;
+  if (scale === 1) return;
+  // Too many columns to shrink to without losing legibility — the
+  // wrapper's own overflow-x:auto takes back over instead of this.
+  if (scale < TABLE_FIT_MIN_SCALE) return;
+  if (scale > TABLE_FIT_MAX_SCALE) scale = TABLE_FIT_MAX_SCALE;
+  const naturalH = table.scrollHeight;
+  table.style.transformOrigin = 'top left';
+  table.style.transform = `scale(${scale})`;
+  // The transform resizes what is PAINTED, not the table's own layout box —
+  // without these two the wrapper would still reserve the untransformed
+  // width and height, which on the way down is the overflow this exists to
+  // get rid of, and on the way up would leave the extra space clipped away
+  // rather than filled with the table it was just given to.
+  wrap.style.overflowX = 'hidden';
+  wrap.style.height = `${Math.ceil(naturalH * scale)}px`;
+}
+
+function fitAllTables() {
+  document.querySelectorAll('.tbl-wrap').forEach(fitTableToWrap);
+}
+
+/* Re-fit whenever a table's own content changes — a different nursery or
+   month redraws #payroll-table with a different worker count entirely —
+   and whenever the side bar's width does. The bar's width is CSS-animated
+   (.2s), so the new space is not there to measure until the transition
+   ends; fitting on the click itself would measure the space it is about to
+   leave. Window resize is the same question asked of the browser rather
+   than the menu. */
+document.querySelectorAll('.tbl-wrap').forEach((wrap) => {
+  try { new MutationObserver(() => fitTableToWrap(wrap)).observe(wrap, { childList: true, subtree: true }); }
+  catch (_) {}
+});
+document.addEventListener('transitionend', (e) => {
+  if (e.propertyName === 'padding-left') fitAllTables();
+});
+window.addEventListener('resize', fitAllTables);
+
 function switchTab(name, btn) {
   // Setting holds piece rates and the worker list — admin only. The tab button
   // is hidden for everyone else, but guard the switch too so a stale button, a
@@ -4396,6 +4666,10 @@ function switchTab(name, btn) {
   if (name==='setting') renderSetting();
   if (name==='payroll') { renderPayroll(); refreshLinkedWorkers(); }
   try { syncToTopBtn(); } catch (_) {}
+  // A table that redraws while its tab is hidden never fires the content
+  // MutationObserver into anything visible to measure — becoming the active
+  // tab is itself the event that needs a fit here.
+  try { fitAllTables(); } catch (_) {}
 }
 
 /* ── BACK TO THE TOP ───────────────────────────────────────────────────
@@ -4428,14 +4702,29 @@ function syncToTopBtn() {
 window.addEventListener('scroll', syncToTopBtn, { passive: true });
 window.addEventListener('resize', syncToTopBtn, { passive: true });
 
-/* Work Record sub-views: the maintenance list and the analytics charts. */
-let _recordView = 'list';
-function switchRecordView(view, btn) {
-  _recordView = view;
-  document.querySelectorAll('.subtabs-bar .subtab-btn').forEach(b => {
-    if (b.id === 'subtab-list' || b.id === 'subtab-chart') b.classList.remove('active');
+/* A sub-view is chosen two ways now — the sub-tab bar inside the panel, and
+   the side bar's own expandable entry beside the group — so the function
+   that changes it is the one place that decides, reached from both, and
+   BOTH pairs of buttons are set from the key alone, never from a clicked
+   button's own reference. `ids` is exactly the set this call owns: without
+   that, clearing `.active` with a bare `#sm-nav .pn-subtab` selector would
+   also blank out a DIFFERENT tab's sub-nav the moment two of them exist
+   side by side in the same bar, which is what adding Worker Activity's
+   sub-nav alongside Work Record's would have done to it. */
+function _syncSubNav(prefix, ids, activeKey) {
+  ids.forEach((k) => {
+    const el = document.getElementById(prefix + k);
+    if (el) el.classList.toggle('active', k === activeKey);
   });
-  if (btn) btn.classList.add('active');
+}
+
+/* Work Record sub-views: the maintenance list and the performance charts. */
+let _recordView = 'list';
+const RECORD_VIEW_KEYS = ['list', 'chart'];
+function switchRecordView(view) {
+  _recordView = view;
+  _syncSubNav('subtab-', RECORD_VIEW_KEYS, view);
+  _syncSubNav('pn-subtab-', RECORD_VIEW_KEYS, view);
   document.querySelectorAll('.recview').forEach(v => v.classList.remove('active'));
   const el = document.getElementById('recview-' + view);
   if (el) el.classList.add('active');
@@ -5880,8 +6169,7 @@ function renderRecords() {
         border-top:2px solid var(--green-mid);border-bottom:1px solid var(--green-mid);">
         📍 Plot ${plot}
         <span class="rec-group-sub" style="font-weight:400;color:var(--text-muted);margin-left:8px;">
-          ${recs.length} task${recs.length>1?'s':''} &nbsp;·&nbsp;
-          ${recs.filter(r=>(Array.isArray(r._fieldIds)&&r._fieldIds.length)||r.gaia).length} done
+          Task : ${recs.filter(r=>(Array.isArray(r._fieldIds)&&r._fieldIds.length)||r.gaia).length}/${recs.length}
         </span>
       </td>
     </tr>`;
@@ -8785,15 +9073,23 @@ function stockLabel(key) {
   return capNurseries().find(n => schedKey(n) === key) || key;
 }
 
+/* The nurseries this page knows, in the order the Work Schedule lists
+   them — the same list the Setting tab shows, for the same reason: the
+   nurseries this system has on record are the ones Seedling Stock has
+   plots for. Read once, by the summary AND by the Edit popup's own Next
+   button (see weNextTarget), so stepping through sections in the popup
+   visits nurseries in the same order a scroll down this tab would —
+   two readers of one list must not draw it in two different orders. */
+function scheduleNurseryNames() {
+  const names = capNurseries().filter(n => capPlots(n).length);
+  return names.length ? names : Object.keys(NURSERY_PLOTS);
+}
+
 function renderSchedSummary() {
   const box = document.getElementById('sched-summary');
   if (!box) return;
   const m = getMonth();
-  /* The same list the Setting tab shows, for the same reason: the nurseries
-     this system has on record are the ones Seedling Stock has plots for. */
-  const names = capNurseries().filter(n => capPlots(n).length);
-  const list = (names.length ? names : Object.keys(NURSERY_PLOTS))
-    .map(name => ({ label: name, key: schedKey(name) }));
+  const list = scheduleNurseryNames().map(name => ({ label: name, key: schedKey(name) }));
 
   if (!list.length) {
     box.innerHTML = '<div class="set-empty">No nurseries yet — they come from Seedling Stock.</div>';
@@ -9013,6 +9309,7 @@ function openWorkEditor(n, kind) {
   _we = { n, kind, before };
   document.getElementById('we-modal').classList.add('open');
   renderWorkEditor();
+  syncWeNextButton();
 }
 
 function closeWorkEditor() {
@@ -9023,20 +9320,86 @@ function closeWorkEditor() {
 /* Save is just "stop editing": every tick is already written. It publishes
    what is held rather than gathering it, so there is nothing here that could
    disagree with what the popup was showing. */
-/* Save both keeps the schedule and PUBLISHES it. The Schedule tab used to
-   carry a "Save Schedule" button whose only job was publishing the flat task
-   list the worker app reads (nops_maint_published); that button has gone, so
+/* Keeps the schedule and PUBLISHES it. The Schedule tab used to carry a
+   "Save Schedule" button whose only job was publishing the flat task list
+   the worker app reads (nops_maint_published); that button has gone, so
    this is where publishing happens — at the one moment somebody has said
    they are finished with a nursery's week. Without it the ticks would save
-   and the field would never be told. */
-function saveWorkEditor() {
-  if (_we) {
-    const n = _we.n, m = getMonth();
-    persistState(n, m);
-    try { saveSchedule(n, true); } catch (e) { console.warn('[maint] publish failed:', e); }
-  }
-  closeWorkEditor();
+   and the field would never be told.
+
+   Pulled out of saveWorkEditor so weNext() can do the same review-and-sync
+   on its way to the next section, rather than leaving every section but
+   the last one ticked but never published. */
+function syncCurrentWork() {
+  if (!_we) return;
+  const n = _we.n, m = getMonth();
+  persistState(n, m);
+  try { saveSchedule(n, true); } catch (e) { console.warn('[maint] publish failed:', e); }
   renderSchedSummary();
+}
+
+function saveWorkEditor() {
+  syncCurrentWork();
+  closeWorkEditor();
+}
+
+/* The nursery keys stepped through by Next — the same order the summary
+   lists them in, filtered to the ones actually on the schedule (a nursery
+   Seedling Stock knows and this page does not has nothing to open). */
+function weNurseryKeys() {
+  return scheduleNurseryNames().map(schedKey).filter(Boolean);
+}
+
+/* Where Next goes from here: the next work of this nursery, or — off the
+   end of WORKS — the first work of the next nursery. null off the end of
+   the whole list, which is what greys the button rather than wrapping
+   back to the start: looping silently back to a nursery already finished
+   reads as the list never ending. */
+function weNextTarget() {
+  if (!_we) return null;
+  const wi = WORK_KEYS.indexOf(_we.kind);
+  if (wi >= 0 && wi < WORK_KEYS.length - 1) return { n: _we.n, kind: WORK_KEYS[wi + 1] };
+  const keys = weNurseryKeys();
+  const ni = keys.indexOf(_we.n);
+  if (ni >= 0 && ni < keys.length - 1) return { n: keys[ni + 1], kind: WORK_KEYS[0] };
+  return null;
+}
+
+/* Says where Next is actually going, so the button reads "Next: Manuring"
+   rather than a bare "Next" that gives no hint it is about to leave the
+   nursery you are looking at. Greyed with a title saying why at the very
+   end, the same choice every other stepper on this page makes for the
+   same reason: a control that disappears is one people stop trusting to
+   be where it was. */
+function syncWeNextButton() {
+  const btn = document.getElementById('we-next');
+  const label = document.getElementById('we-next-label');
+  if (!btn || !label) return;
+  const target = weNextTarget();
+  if (!target) {
+    btn.disabled = true;
+    btn.title = 'This is the last section on the schedule';
+    label.textContent = 'Next';
+    return;
+  }
+  btn.disabled = false;
+  const work = WORKS.find(w => w.key === target.kind);
+  label.textContent = target.n === _we.n
+    ? `Next: ${work.label}`
+    : `Next: ${stockLabel(target.n)} · ${work.label}`;
+  btn.title = `Review and sync this section, then open ${label.textContent.replace(/^Next: /, '')}`;
+}
+
+/* Reviews and syncs the section on screen — same as Save & Sync — then
+   opens the next one instead of closing, so a nursery's four jobs (and the
+   next nursery's) can be worked straight through without a close-and-reopen
+   between each. */
+function weNext() {
+  if (!_we) return;
+  const target = weNextTarget();
+  if (!target) return;
+  syncCurrentWork();
+  openWorkEditor(target.n, target.kind);
 }
 
 function cancelWorkEditor() {
@@ -9613,18 +9976,24 @@ function renderWorkEditor() {
      answer. It is not: the answer differs between the two sprays and
      between rounds, and with no picker here the only place to change it
      was a sheet the Schedule tab no longer shows. */
+  /* The dose used to sit on a row of its own, under the chemical it
+     belongs to — a line the office never asked for, and one more thing to
+     scan down a column of twelve weeks to re-pair with its chemical. It is
+     beside the chemical now, on the one row, in .we-col-row. */
   const h3 = '<tr>' + weeks.map((w, i) => cols[i].map((c, k) =>
     `<th class="we-col${k === 0 && i ? ' grp' : ''}">` +
       `<div class="we-col-l">${esc(c.label)}</div>` +
-      (c.opts ? weSel(c.opts, c.val, c.onSel) : '') +
-      (c.opts ? `<div class="we-col-d">${weNum(c.dose, c.onDose)}` +
-                `<span class="we-cfg-u">${esc(c.unit || '')}</span></div>` : '') +
+      (c.opts ? `<div class="we-col-row">${weSel(c.opts, c.val, c.onSel)}` +
+                `<div class="we-col-d">${weNum(c.dose, c.onDose)}` +
+                `<span class="we-cfg-u">${esc(c.unit || '')}</span></div></div>` : '') +
       (c.opts2 ? `<div class="we-col-l we-col-l2">${esc(c.label2)}</div>` +
-                 weSel(c.opts2, c.val2, c.onSel2) +
+                 `<div class="we-col-row">${weSel(c.opts2, c.val2, c.onSel2)}` +
                  `<div class="we-col-d">${weNum(c.dose2, c.onDose2)}` +
-                 `<span class="we-cfg-u">${esc(c.unit2 || '')}</span></div>` : '') +
+                 `<span class="we-cfg-u">${esc(c.unit2 || '')}</span></div></div>` : '') +
       `<button type="button" class="we-all" onclick="weToggleAll('${kind}',${w.slot},${c.ci})" ` +
-      `title="Tick or clear every plot in this column">all</button>` +
+      `title="Tick or clear every plot in this column" aria-label="Select all plots in this column">` +
+      WE_ALL_ICON +
+      `</button>` +
     '</th>').join('')).join('') + '</tr>';
 
   const rows = plots.map(pl => '<tr><td class="we-plot">' + esc(pl) + '</td>' +
