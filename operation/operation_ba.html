@@ -40,9 +40,9 @@
                 <div class="hidden md:block w-[130px] relative z-40"></div>
             </div>
             <div class="bg-slate-100/80 p-2 rounded-[20px] flex gap-2 z-30 shadow-inner w-full max-w-3xl overflow-x-auto border border-slate-200 backdrop-blur-md relative z-40">
-                <button onclick="window.location.href='operation_delivery.html'" class="tab-btn flex-1 hover:bg-emerald-50 hover:text-emerald-600">Delivery Note (DO)</button>
+                <button id="tab-do" onclick="window.location.href='operation_delivery.html'" class="tab-btn flex-1 hover:bg-emerald-50 hover:text-emerald-600">Delivery Note (DO)</button>
                 <button class="tab-btn flex-1 active-ba cursor-default">Borang Akuan (BA)</button>
-                <button onclick="window.location.href='operation_booking.html'" class="tab-btn flex-1 hover:bg-blue-50 hover:text-blue-600">Approval Letter (AL)</button>
+                <button id="tab-al" onclick="window.location.href='operation_booking.html'" class="tab-btn flex-1 hover:bg-blue-50 hover:text-blue-600">Approval Letter (AL)</button>
             </div>
             <div id="title-animation-zone" class="absolute inset-0 w-full h-full pointer-events-none z-10"></div>
         </div>
@@ -747,7 +747,7 @@
             input.onchange = (e) => { if (e.target.files.length) handleMngBAScan(e.target.files[0]); input.value = ''; };
         }
 
-        function removeBAImage() { currentMngBaImage = null; document.getElementById('mng-ba-file').value = ''; document.getElementById('mng-ba-image-container').classList.add('hidden'); document.getElementById('mng-ba-upload-container').classList.remove('hidden'); }
+        function removeBAImage() { if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'ba_manage')) return; currentMngBaImage = null; document.getElementById('mng-ba-file').value = ''; document.getElementById('mng-ba-image-container').classList.add('hidden'); document.getElementById('mng-ba-upload-container').classList.remove('hidden'); }
         function viewAttachedBADocument() { 
             if(!currentMngBaImage) return; 
             openStandaloneDoc(currentMngBaImage);
@@ -772,6 +772,7 @@
 
         // FIXED DOUBLE QUOTES FOR DATABASE OR QUERY
         async function saveManageBA() {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'ba_manage')) return;
             const originalKey = document.getElementById('mng-ba-original-name').value; 
             const newNum = document.getElementById('mng-ba-num').value.trim(); 
             const newName = document.getElementById('mng-ba-name').value.trim(); 
@@ -835,6 +836,7 @@
 
         // FIXED DOUBLE QUOTES FOR DATABASE OR QUERY
         async function deleteBA() {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'ba_manage')) return;
             const originalKey = document.getElementById('mng-ba-original-name').value;
             const pin = prompt("Enter Master PIN to delete BA:");
             if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN.");
@@ -861,6 +863,7 @@
         }
         
         function openBAModal() { 
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'ba_manage')) return;
             document.getElementById('ba-modal').classList.remove('hidden'); 
             document.getElementById('bulk-ba-tbody').innerHTML = ''; 
             window.extractedBulkBAs = {}; 
@@ -949,6 +952,7 @@
         }
 
         async function saveBulkBA() {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'ba_manage')) return;
             const btn = document.getElementById('save-bulk-btn'); btn.innerText = 'CROSS-CHECKING...'; btn.disabled = true; 
             const rows = document.querySelectorAll('#bulk-ba-tbody tr'); let successCount = 0;
             
@@ -1018,6 +1022,26 @@
         
         _supabase.auth.getSession().then(({ data: { session } }) => { if (!session) window.location.href = 'operation_dashboard.html'; else fetchData(); });
     </script>
+
+<!-- Page-access guard: Borang Akuan is part of Customer Order Documentation
+     in the module's User Access (operation_user_access.html, key 'orders'
+     — the one "Open Page" switch for DO/BA/AL together; 'ba_manage' is
+     this page's own write tick). Fails open on read errors, same as the
+     DO page's guard. Deleting a BA still asks the Master PIN on top of
+     the tick — inside deleteBA(). -->
+<script src="../shared/shared_access.js"></script>
+<script>
+(async () => {
+  try {
+    await MJMAccess.load(_supabase);
+    if (MJMAccess.user() && !MJMAccess.canOpenOperationPage('orders')) {
+      alert('You do not have access to Customer Order Documentation.');
+      location.replace('operation_dashboard.html');
+      return;
+    }
+  } catch (e) { console.warn('[page-guard] skipped:', e && e.message); }
+})();
+</script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

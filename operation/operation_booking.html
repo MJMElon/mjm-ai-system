@@ -69,8 +69,8 @@
             </div>
 
             <div class="bg-slate-100/80 p-2 rounded-[20px] flex gap-2 z-30 shadow-inner w-full max-w-3xl overflow-x-auto border border-slate-200 backdrop-blur-md relative z-40">
-                <button onclick="window.location.href='operation_delivery.html'" class="tab-btn flex-1 hover:bg-emerald-50 hover:text-emerald-600">Delivery Note (DO)</button>
-                <button onclick="window.location.href='operation_ba.html'" class="tab-btn flex-1 hover:bg-yellow-50 hover:text-yellow-600">Borang Akuan (BA)</button>
+                <button id="tab-do" onclick="window.location.href='operation_delivery.html'" class="tab-btn flex-1 hover:bg-emerald-50 hover:text-emerald-600">Delivery Note (DO)</button>
+                <button id="tab-ba" onclick="window.location.href='operation_ba.html'" class="tab-btn flex-1 hover:bg-yellow-50 hover:text-yellow-600">Borang Akuan (BA)</button>
                 <button class="tab-btn flex-1 active-al cursor-default">Approval Letter (AL)</button>
             </div>
             
@@ -905,6 +905,7 @@
         }
 
         function openALModal() { 
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'al_manage')) return;
             document.getElementById('al-modal').classList.remove('hidden'); 
             document.getElementById('bulk-al-tbody').innerHTML = ''; 
             window.extractedBulkALs = {}; 
@@ -960,6 +961,7 @@
         }
 
         function enableEditMode() {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'al_manage')) return;
             if (isAlEntryLocked(currentManageAL)) return alert('This AL is in a locked month (Month Lock Calendar, System Settings) and can\'t be edited. Unlock that month if this was locked in error.');
             const locked = currentManageAL && isAlLocked(currentManageAL.remark);
             if (locked && !isOpAdmin()) return alert('This record is locked. Ask an admin to unlock it before editing.');
@@ -1252,6 +1254,7 @@
         }
 
         async function saveBulkAL() {
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'al_manage')) return;
             const btn = document.getElementById('save-bulk-al-btn'); btn.innerText = 'SAVING ALL...'; btn.disabled = true; 
             const rows = document.querySelectorAll('#bulk-al-tbody tr'); let successCount = 0; let currentPrefix = ''; let nextSeq = 1;
             
@@ -1310,6 +1313,26 @@
         
         setupDragAndDrop(); _supabase.auth.getSession().then(async ({ data: { session } }) => { if (!session) { window.location.href = 'operation_dashboard.html'; return; } try { await MJMAccess.load(_supabase); } catch(e) { console.warn('[AL] MJMAccess.load failed', e); } fetchData(); });
     </script>
+
+<!-- Page-access guard: Approval Letter is part of Customer Order
+     Documentation in the module's User Access
+     (operation_user_access.html, key 'orders' — the one "Open Page"
+     switch for DO/BA/AL together; 'al_manage' is this page's own write
+     tick: Add New AL / edit details). Fails open on read errors, same as
+     the DO page's guard. The Admin-PIN flows (verify, cancel, restore)
+     are untouched and still ask the PIN. -->
+<script>
+(async () => {
+  try {
+    await MJMAccess.load(_supabase);
+    if (MJMAccess.user() && !MJMAccess.canOpenOperationPage('orders')) {
+      alert('You do not have access to Customer Order Documentation.');
+      location.replace('operation_dashboard.html');
+      return;
+    }
+  } catch (e) { console.warn('[page-guard] skipped:', e && e.message); }
+})();
+</script>
 
 <!-- Nelos floating To-Do dock — the round button in the corner.
      See shared/shared_nelos_dock.js -->

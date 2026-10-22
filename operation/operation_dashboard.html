@@ -426,8 +426,13 @@
             if (reportsCard && MJMAccess.canAccess('reports'))      reportsCard.classList.remove('hidden');
             if (auditCard   && MJMAccess.canAccess('audit_trail'))  auditCard.classList.remove('hidden');
             // Per-page access inside this module, set in the module's own
-            // User Access page. Unset keys default to allowed.
-            ['batch', 'orders', 'stock', 'settings'].forEach(k => {
+            // User Access page. Unset keys default to allowed. Customer
+            // Order Documentation (DO/BA/AL) and Seedling Sales Control
+            // (Customer Monitoring/Stock Allocation/Inventory Map) are each
+            // one "Open Page" switch — 'orders' and 'stock' — with their
+            // sub-parts as ticks inside an open page rather than sections
+            // of their own, so the same plain open/closed check covers them.
+            ['batch', 'settings', 'orders', 'stock'].forEach(k => {
                 const el = document.querySelector(`[data-card-key="${k}"]`);
                 if (el && !MJMAccess.canOpenOperationPage(k)) el.style.display = 'none';
             });

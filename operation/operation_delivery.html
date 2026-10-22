@@ -49,8 +49,8 @@
 
             <div class="bg-slate-100/80 p-2 rounded-[20px] flex gap-2 z-30 shadow-inner w-full max-w-3xl overflow-x-auto border border-slate-200 backdrop-blur-md relative z-40">
                 <button class="tab-btn flex-1 active-do cursor-default">Delivery Note (DO)</button>
-                <button onclick="window.location.href='operation_ba.html'" class="tab-btn flex-1 hover:bg-yellow-50 hover:text-yellow-600">Borang Akuan (BA)</button>
-                <button onclick="window.location.href='operation_booking.html'" class="tab-btn flex-1 hover:bg-blue-50 hover:text-blue-600">Approval Letter (AL)</button>
+                <button id="tab-ba" onclick="window.location.href='operation_ba.html'" class="tab-btn flex-1 hover:bg-yellow-50 hover:text-yellow-600">Borang Akuan (BA)</button>
+                <button id="tab-al" onclick="window.location.href='operation_booking.html'" class="tab-btn flex-1 hover:bg-blue-50 hover:text-blue-600">Approval Letter (AL)</button>
             </div>
             <div id="title-animation-zone" class="absolute inset-0 w-full h-full pointer-events-none z-10"></div>
         </div>
@@ -1710,8 +1710,11 @@
     const _gc = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
     await MJMAccess.load(_gc);
     if (MJMAccess.user() && !MJMAccess.canOpenOperationPage('orders')) {
-      alert('You do not have access to Delivery Orders.');
+      alert('You do not have access to Customer Order Documentation.');
+      // DO, BA and AL open and lock together now — there is no sibling
+      // section left to fall through to.
       location.replace('operation_dashboard.html');
+      return;
     }
   } catch (e) { console.warn('[page-guard] skipped:', e && e.message); }
 })();

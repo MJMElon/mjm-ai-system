@@ -1027,9 +1027,31 @@
   try {
     const _gc = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
     await MJMAccess.load(_gc);
-    if (MJMAccess.user() && !MJMAccess.canOpenOperationPage('stock')) {
-      alert('You do not have access to Stock & Sales.');
+    if (!MJMAccess.user()) return;
+    /* Seedling Sales Control is ONE "Open Page" switch now (key 'stock',
+       the page's long-standing key) with three ticks underneath —
+       Customer Monitoring, Update stock & sales and Inventory Map each
+       gate their own tab/function, but none of the three opens this page
+       on its own any more. A tab whose own tick is off is not offered;
+       Stock Allocation has no tick of its own for VIEW (only for its
+       write function), so its tab always shows once the page is open. */
+    if (!MJMAccess.canOpenOperationPage('stock')) {
+      alert('You do not have access to Seedling Sales Control.');
       location.replace('operation_dashboard.html');
+      return;
+    }
+    const can = {
+      customer: MJMAccess.canDoOperation('stock', 'customer'),
+      map:      MJMAccess.canDoOperation('stock', 'map')
+    };
+    const tabOf = { customer: 'ssm-tab-customer', map: 'ssm-tab-map' };
+    Object.keys(tabOf).forEach(k => {
+      if (!can[k]) { const t = document.getElementById(tabOf[k]); if (t) t.style.display = 'none'; }
+    });
+    // The page opens on Customer Monitoring; a user not allowed that tab
+    // lands on their first allowed one instead.
+    if (!can.customer && typeof switchSsmTab === 'function') {
+      switchSsmTab('stock');
     }
   } catch (e) { console.warn('[page-guard] skipped:', e && e.message); }
 })();

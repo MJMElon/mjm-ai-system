@@ -188,6 +188,43 @@ const LEVEL_LABEL = { admin:'Admin', normal:'Normal', none:'None' };
                        historically live there)
      batch.verify    → permissions.can_verify_operation */
 const PAGE_DEFS = [
+  /* ── Customer Order Documentation — one card, three write ticks ──
+     It was three sections for a day, one per page (DO/BA/AL each its own
+     "Open Page" switch) — the office looked at it next to Batch Records
+     and asked for the same shape here: ONE open-page switch for the
+     whole card, the three writes as ticks underneath. 'orders' is the
+     DO page's long-standing stored key and carries the section's view —
+     opening or locking the card opens or locks all three pages together
+     now, there is no page among them a user sees without the others.
+     'ba_manage' and 'al_manage' are new action keys on that same old
+     key: a row saved before today has an opinion about 'manage' only, so
+     the two new ticks default to allowed on such a row (see
+     OPERATION_NEW_ACTION_DEFAULT in shared_access.js) rather than reading
+     a row that never heard of them as "no". Deleting a DO or BA still
+     asks the Master PIN on the page — the PIN is a second lock, not a
+     replacement for the tick. */
+  { key:'orders', store:'pages', def:'normal', label:'Customer Order Documentation',
+    desc:'Delivery Note (DO), Borang Akuan (BA) and Approval Letter (AL)',
+    actions:[
+      { key:'manage',    label:'Add new DO',                      desc:'Create, edit and upload DOs — deleting one still asks the Master PIN' },
+      { key:'ba_manage', label:'Manage Borang Akuan (BA) Record', desc:'Add, edit and save BA records — deleting one still asks the Master PIN' },
+      { key:'al_manage', label:'Add New AL',                      desc:'Create new approval letters and edit their details' }
+    ]},
+  /* ── Seedling Sales Control — one card, three ticks ──
+     Same move as above, one page sooner: Customer Monitoring and
+     Inventory Map were their own sections for a day (their unset answer
+     inheriting 'stock' — see the note this replaced); they are ticks
+     under the one 'stock' switch now, same as Stock Allocation's. A row
+     saved before today only has an opinion about 'manage'; 'customer' and
+     'map' default to allowed on it for the same reason 'ba_manage' and
+     'al_manage' do. */
+  { key:'stock', store:'pages', def:'normal', label:'Seedling Sales Control',
+    desc:'Customer Monitoring, Stock Allocation and Inventory Map',
+    actions:[
+      { key:'customer', label:'Customer Monitoring', desc:'View admin pickups and follow-ups' },
+      { key:'manage',   label:'Update stock & sales', desc:'Change allocations, upload invoices, mark orders paid' },
+      { key:'map',      label:'Inventory Map',        desc:'View plot batches, collected, balance' }
+    ]},
   { key:'batch', store:'pages', def:'normal', label:'Batch Records', desc:'Create and edit production batch records',
     actions:[
       { key:'add_new',     label:'Add new batch',            desc:'Create a new batch record' },
@@ -195,14 +232,6 @@ const PAGE_DEFS = [
       { key:'verify',      label:'Verify reports',           desc:'Sign off a batch tab as Verifier (before review)' },
       { key:'review',      label:'Review & approve reports', desc:'Mark as Reviewed, Reject, Unreview (HQ decision)' },
       { key:'delete',      label:'Delete batch records',     desc:'Permanently delete a whole batch' }
-    ]},
-  { key:'orders', store:'pages', def:'normal', label:'Delivery Orders', desc:'Delivery scheduling and order handling',
-    actions:[
-      { key:'manage', label:'Add, edit & delete orders', desc:'Create DOs / BAs, edit and delete existing ones' }
-    ]},
-  { key:'stock', store:'pages', def:'normal', label:'Stock & Sales', desc:'Stock levels, publishing, and sales',
-    actions:[
-      { key:'manage', label:'Update stock & sales', desc:'Change allocations, upload invoices, mark orders paid' }
     ]},
   { key:'reports', store:'modules', def:'none', label:'Reports', desc:'Batch production summary, analytics',
     actions:[] },
