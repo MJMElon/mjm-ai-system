@@ -2645,14 +2645,14 @@ Four more things, each a way this goes quietly wrong:
   FIRST TOUCH (`settleStore`) and not on open: press a tick in it and the
   whole block becomes explicit, the way that module's own screen writes it;
   press nothing and the row carries no entry at all.
-- **Seal Management is a MODULE, not a page of the Admin Portal.** The office
-  asked for it in that list, which is right — it is the fourth thing an Admin
-  Portal person does — so the tick moves `modules.seal`, which the hub card
-  and the seal dashboard already read, rather than inventing a `mobile` page
-  that does not exist and nothing would obey. **A level is not a boolean**:
-  `modWas` remembers what they held when the row was opened, so switching it
-  off and on again gives an admin their admin back instead of flattening them
-  to a normal user.
+- **Seal Management is the portal's OWN screen, and not the hub module of the
+  same name.** The Admin Portal grew a `seal.html` of its own, so the tick is
+  an ordinary `mobile` page like the three above it — the seals are received
+  and scanned in the field, which is where that screen is.
+  `seal/seal_dashboard.html` is a different screen at a desk with a module of
+  its own (`modules.seal`), granted on the main User Access as it always was,
+  and this row does not touch it. The test asserts that separation, because
+  two screens sharing a name is exactly how one tick comes to close both.
 - **The Worker Portal's Maintenance is a line, not a tick.** A worker signs in
   with a PIN, so the modules on their phone hang off THEIR row of the payroll
   register — nothing here could ever read a tick on an e-mail account. The
@@ -2666,8 +2666,8 @@ Four more things, each a way this goes quietly wrong:
   missing from the one screen that grants them anything.
 
 **And the Admin Portal now OBEYS its ticks**, in the other repository.
-`hasOpsAccess()` let anybody holding any staff-grade module into all three
-screens, so the office could have ticked whatever it liked and the phone
+`hasOpsAccess()` let anybody holding any staff-grade module into every one of
+its screens, so the office could have ticked whatever it liked and the phone
 would have opened the door anyway. `canOpenAdminPage()` in `Mobile`'s
 `src/lib/auth.js` is the read, `AuthGate` takes a `page`, and the dashboard
 filters its tiles on the same call — a tile drawn over a page that would
