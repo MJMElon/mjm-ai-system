@@ -3,7 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Setting — 555 FC Portal</title>
+<!-- THE PAGE IS THE DEPLOY. Every line of this screen's code is inline, so a
+     browser holding yesterday's copy keeps yesterday's rules on screen while
+     the office believes it has changed them — and a permission screen is the
+     worst place in the system for that. See "A page that caches cannot
+     deliver a fix" in CLAUDE.md: these three metas are the only lever, the
+     site being GitHub Pages with no build step and nowhere to set a header.
+     One hard reload per machine to pick them up in the first place. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<title>User Access — 555 MJM Team</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%238b5cf6%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-family=%27system-ui,sans-serif%27 font-size=%2713%27 font-weight=%27900%27 fill=%27%23fff%27 text-anchor=%27middle%27%3EFC%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -118,7 +128,7 @@
          directly, so that page was a press in the way and is gone; this
          goes where it is now opened from. -->
     <a class="back-btn" href="scan_admin.html">&#8592; Back to 555 MJM Team</a>
-    <h1 class="page-title">User Setting</h1>
+    <h1 class="page-title">User Access</h1>
     <span aria-hidden="true"></span>
   </div>
 
@@ -131,7 +141,7 @@
     </div>
     <div id="list"></div>
     <div id="empty" class="hidden px-6 py-12 text-center text-[12px] font-bold text-slate-400">
-      Nobody has the 555 FC Portal yet — open it for somebody on the main User Access first.
+      Nobody holds any of these portals yet — open one for somebody on the main User Access first.
     </div>
   </div>
 </div>
@@ -222,36 +232,132 @@ const PAGES = [
   { key:'culling',     label:'Culling Calculator' },
 ];
 
-/* The five places a person can be sent, and the nursery each is confined to.
+/* ── The Admin Portal's screens ──────────────────────────────────────────
  *
- * The scan module used to be one thing you either had or did not, with the FC
- * Portal's five pages hanging directly off it. It is really five doors, and
- * they are not the same job — the back office, the two phone apps, the worker
- * register and this screen.
+ * mobile.mjmnursery.com. Stored the way every OTHER module on this site
+ * stores per-page access — `mobile_actions.<key>.view`, mirrored to
+ * `mobile_pages.<key>` — and read back with MJMAccess.canDo('mobile', key,
+ * 'view'). That is deliberately not a new shape: shared_module_access.js has
+ * written exactly this for every module with its own User Access screen since
+ * it was written, the Admin Portal simply never had one.
  *
- * Stored as permissions.scan_areas.<key>.view, with the nursery list under
- * scan_area_nurseries.<key>. Read by MJMAccess.canScanArea() in
+ * SEAL MANAGEMENT IS NOT ONE OF THOSE. It is a module of its own on the hub
+ * (`modules.seal`, seal/seal_dashboard.html), because the seals are managed
+ * from a desk and only reach the Admin Portal through a consent. The office
+ * asked for it in this list, which is right — it is the fourth thing an Admin
+ * Portal person does — so it is here, and the tick moves the MODULE rather
+ * than inventing a page that does not exist. `kind:'module'` is what says so,
+ * and the row says it on screen too: a tick that silently meant something
+ * different from the three above it would be worse than leaving it out.
+ */
+const ADMIN_PAGES = [
+  { key:'do_signing', label:'Issue Collection DO',
+    desc:'Issue a delivery order and take the customer’s signature on the phone' },
+  { key:'consent',    label:'Customer Consent',
+    desc:'The consent form, and the seal ranges allocated against it' },
+  { key:'booking',    label:'Customer Collection Time Slot Booking',
+    desc:'Book and reschedule a customer’s collection slot' },
+  { key:'seal',       label:'Seal Management', kind:'module', moduleKey:'seal',
+    desc:'The seal stickers — stock in, what each consent allocated, what went out on a DO. '
+       + 'A module of its own on the hub, so this tick opens or closes that module' },
+];
+
+/* ── The Auditor Portal's four audits ────────────────────────────────────
+ *
+ * THE SAME KEYS THE AUDIT MODULE ALREADY READS. audit/audit_user_access.html
+ * is the module's own screen and writes `audit_actions` / `audit_pages`
+ * through shared_module_access.js; this writes the same keys with the same
+ * meaning, so the two screens are two doors onto one answer rather than two
+ * answers. Change a label here and change it there.
+ *
+ * Verify audit results and the Audit Report are deliberately NOT here: they
+ * are the back office's business, they are on that screen, and the office
+ * asked for the four audits and their two actions. A tick left off this
+ * screen is still set on the module's own one; a tick DUPLICATED badly is how
+ * two screens come to disagree.
+ */
+const AUDIT_PAGES = [
+  { key:'plot_audit',  label:'Plot Condition Audit',
+    desc:'Pest, animal and disease infestation, and leaf condition' },
+  { key:'height',      label:'Seedling Height Audit',
+    desc:'Three sampled heights per plot, with photo evidence' },
+  { key:'papan',       label:'Plot Signboard Audit',
+    desc:'Height, accuracy and visibility of every papan tanda' },
+  { key:'maintenance', label:'Maintenance Audit',
+    desc:'Verify completed manuring, weeding, racun and interrow work' },
+].map((p) => ({ ...p, actions: [
+  { key:'record', label:'Record a new audit',        desc:'Walk the plot and submit the audit' },
+  { key:'edit',   label:'Edit & delete past audits', desc:'Change or remove an audit already submitted' },
+]}));
+
+/* The five PORTALS a person can be sent to, and what they may open in each.
+ *
+ * It used to be five flat doors — the back office, the two phone apps, the
+ * worker register and this screen — in no particular order, with the FC
+ * Portal the only one carrying anything inside it. The office asked for it to
+ * read the way the company is actually arranged: one block per portal, and
+ * underneath each the things that portal offers.
+ *
+ * So Worker System and Setting are no longer siblings of the back office they
+ * live in; they are nested under it, which is where somebody looking for them
+ * goes. And the Admin Portal and Auditor Portal, whose doors have been on the
+ * 555 MJM Team page all along, are on the screen that is supposed to grant
+ * them — `admin_portal` and `audit_portal` were already real keys read by
+ * canScanArea(), set by nothing.
+ *
+ * Stored as permissions.scan_areas.<key>.view, with the FC Portal's nursery
+ * list under scan_area_nurseries.fc. Read by MJMAccess.canScanArea() in
  * shared/shared_access.js, which is also where the fallback lives: an absent
  * answer means nobody has been asked about this person yet, and the rule that
  * governed the door before this screen existed answers instead. Nobody loses
  * anything on the day this ships.
  *
- * The FC Portal carries its five pages inside it. Nothing else does — a
- * nursery and a tick is the whole of what the others need.
+ * `store` is which module's per-page keys the ticks inside a block write.
+ * Absent means the block has no pages at all.
  */
 const AREAS = [
   { key:'manage',  label:'Worker Portal Manage',
-    desc:'The back office on this site — the two portal doors, Worker System and Setting. Without it, opening this site sends them straight to whichever portal they hold below' },
+    desc:'The back office on this site — the portal doors and the two tools under them. Without it, opening this site sends them straight to whichever portal they hold below',
+    children: [
+      { key:'workers', label:'Worker System',
+        desc:'The register of workers — who is on the books, their section and their PIN' },
+      { key:'setting', label:'User Access Setting',
+        desc:'This screen. Who may open what, for everybody' },
+    ] },
   { key:'fc',      label:'555 FC Portal',
     desc:'The Field Conductor’s phone app at scan.mjmnursery.com, signed in with this e-mail account',
-    pages: PAGES },
+    nurseries: true, store: 'scan', pages: PAGES },
+  { key:'admin_portal', label:'Admin Portal',
+    desc:'mobile.mjmnursery.com — DO issuing, consent and booking, signed in with this e-mail account',
+    store: 'mobile', pages: ADMIN_PAGES },
   { key:'worker',  label:'555 Worker Portal',
-    desc:'The worker’s phone app, entered with the PIN on their row of the payroll register' },
-  { key:'workers', label:'Worker System',
-    desc:'The register of workers — who is on the books, their section and their PIN' },
-  { key:'setting', label:'Setting',
-    desc:'This screen. Who may open what, for everybody' },
+    desc:'The worker’s phone app, entered with the PIN on their row of the payroll register',
+    /* Maintenance is the one thing the Worker Portal offers, and it is NOT a
+       tick on this screen — it cannot be. A worker signs in with a PIN, so
+       the modules on their phone hang off THEIR row of the payroll register,
+       not off an e-mail account's permissions. There are two places that
+       answer it and this is neither, so the row says which, rather than
+       offering a tick that nothing would ever read. */
+    notes: [
+      { label:'Maintenance',
+        desc:'Not set here. The company switch is System Setting → Portal View & Function; '
+           + 'the worker’s own answer is Worker Portal → Settings, on their row. Off beats on' },
+    ] },
+  { key:'audit_portal', label:'Auditor Portal',
+    desc:'Plot audits and sign-off, on an auditor’s phone',
+    store: 'audit', pages: AUDIT_PAGES },
 ];
+
+/* Every block that carries pages, by the module its ticks are stored under.
+   `scan` keeps its own rules — see openRow — and the other two follow
+   shared_module_access.js, which is what their own screens use. */
+const STORES = ['mobile', 'audit'];
+const areasOfStore = (store) => AREAS.filter((a) => a.store === store);
+
+/* Every `scan_areas` tick on the screen, portals and the doors nested under
+   them alike. Flat, because every rule about them — the fallback, the
+   seeding, the save — is about the TICK and not about where it is drawn. */
+const ALL_AREAS = AREAS.reduce((all, a) => all.concat([a], a.children || []), []);
 
 let profiles = [];        // everyone who holds the scan module
 /* The nurseries this screen offers, in the order System Setting → Location
@@ -270,6 +376,11 @@ let profiles = [];        // everyone who holds the scan module
 let nurseries = [];
 let openUid = null;       // the row expanded right now
 let draft = null;         // that row's permissions, being edited
+/* The module levels this person held when their row was opened — Seal
+   Management and anything else drawn as a module rather than a page. A level
+   is not a boolean, so switching one off and on again has to give back what
+   was there rather than flattening an admin to a normal user. */
+let modWas = {};
 
 const initials = (p) => (String(p.full_name || p.email || '?').trim().split(/\s+/)
   .map((s) => s[0]).slice(0, 2).join('') || '?').toUpperCase();
@@ -328,6 +439,73 @@ function flatActions(pg) {
     (all, ac) => all.concat([ac], ac.children || []), []);
 }
 
+/* ---- the Admin Portal's and the Auditor Portal's pages ----
+
+   A DIFFERENT RULE FROM THE FC PORTAL'S, and it has to be: those two store
+   their ticks the way every module with its own User Access screen stores
+   them, and this screen must conclude exactly what that screen and
+   MJMAccess.canDo() conclude or it lies about what it is showing.
+
+   This is effectiveActions() out of shared/shared_module_access.js, which is
+   the original. An entry saved for the page decides; with none, the MODULE
+   level decides, and an action that is not admin-only comes with the page —
+   which is how both modules behaved before per-page access existed. */
+function modPage(perms, store, pg) {
+  const saved = (perms[store + '_actions'] || {})[pg.key];
+  if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+    const out = { view: !!saved.view };
+    (pg.actions || []).forEach((a) => { out[a.key] = out.view && !!saved[a.key]; });
+    return out;
+  }
+  const lvl = String(((perms.modules || {})[store]) || 'none');
+  const view = lvl !== 'none';
+  const out = { view };
+  (pg.actions || []).forEach((a) => { out[a.key] = view && (a.adminOnly ? lvl === 'admin' : true); });
+  return out;
+}
+
+/* Write what the panel is SHOWING for one store into the draft, in full.
+   Called the moment a tick in that store is pressed and never before, so a
+   row nobody has touched keeps no entry and goes on being answered by the
+   module level — this screen does not turn an unasked question into a
+   decision just because somebody opened the row. */
+function settleStore(store) {
+  draft[store + '_actions'] = draft[store + '_actions'] || {};
+  areasOfStore(store).forEach((area) => {
+    (area.pages || []).forEach((pg) => {
+      if (pg.kind === 'module') return;      // a module level, not a page entry
+      draft[store + '_actions'][pg.key] = modPage(draft, store, pg);
+    });
+  });
+}
+
+/* `<module>_pages` is the mirror `<module>_actions` is read beside — see
+   shared/shared_module_access.js, which writes both on every save. Only the
+   pages this screen draws are touched; anything that module's own screen
+   knows about and this one does not is left exactly as it was. */
+function mirrorStorePages(next, store) {
+  const acts = next[store + '_actions'];
+  if (!acts) return;
+  next[store + '_pages'] = next[store + '_pages'] || {};
+  areasOfStore(store).forEach((area) => {
+    (area.pages || []).forEach((pg) => {
+      if (pg.kind === 'module') return;
+      const entry = acts[pg.key];
+      if (!entry) return;
+      next[store + '_pages'][pg.key] = entry.view ? 'normal' : 'none';
+    });
+  });
+}
+
+/* A page that is really a MODULE — Seal Management, and so far only it.
+   `modules.<key>` is a level and not a boolean, so ticking it on must not
+   flatten an admin to a normal user: an admin stays an admin, and anybody
+   else becomes normal. */
+function modulePageOn(perms, pg) {
+  const lvl = String(((perms.modules || {})[pg.moduleKey]) || 'none').toLowerCase();
+  return lvl !== 'none' && ['admin', 'normal'].indexOf(lvl) !== -1;
+}
+
 /* Is this door open to them?
  *
  * Has to conclude exactly what MJMAccess.canScanArea() concludes, or this
@@ -346,8 +524,7 @@ function areaOn(perms, key) {
      "Admin" with a capital A has no scan module as far as every office page
      is concerned — and this screen must say the same rather than showing a
      tick for access that is not really there. */
-  const raw = String((mods.scan == null ? '' : mods.scan));
-  const lvl = ['admin', 'normal', 'none'].indexOf(raw) === -1 ? 'none' : raw;
+  const lvl = moduleLevel(mods.scan);
   switch (key) {
     case 'manage':  return lvl === 'admin' || !!perms.manage_users;
     case 'fc':      return !!lvl && lvl !== 'none';
@@ -360,8 +537,27 @@ function areaOn(perms, key) {
       return acts ? !!acts.view : true;
     }
     case 'setting': return !!perms.manage_users;
+    /* Admin Portal and Audit Portal moved onto the 555 MJM Team page from the
+       hub, where each had its own module-level card, and canScanArea() falls
+       back to that same check — "nobody's access changed the day they moved".
+       THIS COPY HAD NEITHER CASE, which did not matter while they were on no
+       access screen and mattered the moment they were: `default: false` read
+       every Admin Portal person as holding nothing, so their own block drew
+       closed and the pages inside it could not be reached at all. */
+    case 'admin_portal': return moduleLevel(mods.mobile) !== 'none';
+    case 'audit_portal': return moduleLevel(mods.audit) !== 'none';
     default:        return false;
   }
+}
+
+/* What shared_access.js's normalize() would make of a module level: anything
+   that is not one of the three it accepts is dropped there, so a row saying
+   "Admin" with a capital A holds no module as far as every office page is
+   concerned — and this screen has to say the same rather than showing a tick
+   for access that is not really there. */
+function moduleLevel(raw) {
+  const lvl = String(raw == null ? '' : raw);
+  return ['admin', 'normal', 'none'].indexOf(lvl) === -1 ? 'none' : lvl;
 }
 
 /* The same nursery is spelt differently in different places — the register
@@ -435,8 +631,13 @@ function panelHtml() {
     '</div>';
 }
 
-/* One of the five doors: a tick, the nurseries it is confined to, and — for
-   the FC Portal alone — the pages inside it. */
+/* One PORTAL: its tick, whatever doors are nested under it, the nurseries it
+   is confined to — the FC Portal alone, because that is the only list
+   anything reads — and the pages inside it.
+
+   Nested doors and pages are DRAWN while the portal is off and merely
+   hidden, never left out. Switching the portal back on has to put back the
+   answers that were there, not an empty space. */
 function areaBlockHtml(area) {
   const on = areaOn(draft, area.key);
   const list = areaNurseries(draft, area.key);
@@ -456,6 +657,15 @@ function areaBlockHtml(area) {
         </span>
       </label>
 
+      ${(area.children && area.children.length) ? `
+        <div class="area-pages ${on ? '' : 'hidden'}">
+          <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+            What they may open in it
+          </div>
+          <div class="space-y-2.5">${area.children.map(childAreaHtml).join('')}</div>
+        </div>` : ''}
+
+      ${area.nurseries ? `
       <div class="mt-2.5 ${on ? '' : 'hidden'}">
         <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Nurseries</div>
         <div class="flex flex-wrap gap-2">
@@ -471,15 +681,114 @@ function areaBlockHtml(area) {
               ${esc(n.code)}
             </label>`; }).join('')}
         </div>
-      </div>
+      </div>` : ''}
 
       ${(area.pages && area.pages.length) ? `
         <div class="area-pages ${on ? '' : 'hidden'}">
           <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
             What they may open in it
           </div>
-          <div class="space-y-2.5">${area.pages.map(pageBlockHtml).join('')}</div>
+          <div class="space-y-2.5">${area.pages.map(
+            (pg) => (area.store === 'scan' ? pageBlockHtml(pg) : modPageBlockHtml(area, pg))
+          ).join('')}</div>
         </div>` : ''}
+
+      ${(area.notes && area.notes.length) ? `
+        <div class="area-pages ${on ? '' : 'hidden'}">
+          <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+            What they may open in it
+          </div>
+          <div class="space-y-2.5">${area.notes.map(noteRowHtml).join('')}</div>
+        </div>` : ''}
+    </div>`;
+}
+
+/* A door nested inside a portal — Worker System and User Access Setting,
+   inside Worker Portal Manage. The same `scan_areas` tick as the portal
+   above it, with the same fallback; only where it is drawn has changed. */
+function childAreaHtml(child) {
+  const on = areaOn(draft, child.key);
+  return `
+    <div class="page-block ${on ? 'on' : ''}">
+      <label class="flex items-start gap-3 cursor-pointer">
+        <input type="checkbox" class="chk mt-0.5" data-area="${child.key}" ${on ? 'checked' : ''}>
+        <span class="min-w-0">
+          <span class="block text-[13px] font-black text-slate-800">${esc(child.label)}</span>
+          <span class="block text-[11px] text-slate-400 leading-snug">${esc(child.desc || '')}</span>
+        </span>
+      </label>
+    </div>`;
+}
+
+/* Something a portal offers that is NOT decided here — the Worker Portal's
+   Maintenance. Drawn as a row so the portal's contents are complete, and with
+   no checkbox at all, because the one thing worse than no tick is a tick
+   nothing reads. It says where the answer actually lives. */
+function noteRowHtml(note) {
+  return `
+    <div class="page-block" style="opacity:.75;">
+      <div class="flex items-start gap-3">
+        <span class="mt-0.5 text-[13px] leading-none text-slate-300">—</span>
+        <span class="min-w-0">
+          <span class="block text-[13px] font-black text-slate-600">${esc(note.label)}</span>
+          <span class="block text-[11px] text-slate-400 leading-snug">${esc(note.desc || '')}</span>
+        </span>
+      </div>
+    </div>`;
+}
+
+/* A page of the Admin Portal or the Auditor Portal: the same drawing as an FC
+   Portal page, reading and writing the keys that module's OWN User Access
+   screen uses. `data-mpage` / `data-mact` carry the store so one handler
+   serves both. */
+function modPageBlockHtml(area, pg) {
+  if (pg.kind === 'module') return modulePageBlockHtml(pg);
+  const eff = modPage(draft, area.store, pg);
+  return `
+    <div class="page-block ${eff.view ? 'on' : ''}">
+      <label class="flex items-start gap-3 cursor-pointer">
+        <input type="checkbox" class="chk mt-0.5" data-mpage="${pg.key}" data-mstore="${area.store}"
+               ${eff.view ? 'checked' : ''}>
+        <span class="min-w-0">
+          <span class="block text-[13px] font-black text-slate-800">${esc(pg.label)}</span>
+          <span class="block text-[11px] text-slate-400 leading-snug">${esc(pg.desc || '')}</span>
+        </span>
+      </label>
+
+      ${(pg.actions && pg.actions.length) ? `
+      <div class="mt-2.5 ${eff.view ? '' : 'hidden'}">
+        <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">What they may do</div>
+        <div class="space-y-2">
+          ${pg.actions.map((ac) => `
+            <label class="flex items-start gap-2.5 cursor-pointer">
+              <input type="checkbox" class="chk mt-0.5" data-mact="${ac.key}"
+                     data-mactpage="${pg.key}" data-mstore="${area.store}"
+                     ${eff[ac.key] ? 'checked' : ''}>
+              <span class="min-w-0">
+                <span class="block text-[12.5px] font-black text-slate-700">${esc(ac.label)}</span>
+                <span class="block text-[11px] text-slate-400 leading-snug">${esc(ac.desc || '')}</span>
+              </span>
+            </label>`).join('')}
+        </div>
+      </div>` : ''}
+    </div>`;
+}
+
+/* Seal Management: a row in the Admin Portal's list and a MODULE underneath.
+   The tick moves modules.seal, which is what the hub card and the seal
+   dashboard itself already read — so it is obeyed the moment it is pressed,
+   which a per-page key under `mobile` would not be. */
+function modulePageBlockHtml(pg) {
+  const on = modulePageOn(draft, pg);
+  return `
+    <div class="page-block ${on ? 'on' : ''}">
+      <label class="flex items-start gap-3 cursor-pointer">
+        <input type="checkbox" class="chk mt-0.5" data-modtick="${pg.moduleKey}" ${on ? 'checked' : ''}>
+        <span class="min-w-0">
+          <span class="block text-[13px] font-black text-slate-800">${esc(pg.label)}</span>
+          <span class="block text-[11px] text-slate-400 leading-snug">${esc(pg.desc || '')}</span>
+        </span>
+      </label>
     </div>`;
 }
 
@@ -564,10 +873,20 @@ function openRow(uid) {
      saving must record that rather than turning an unasked question into a no.
      Somebody who could open Worker System yesterday must still be able to
      after an admin opens their row and presses Save without touching it. */
-  AREAS.forEach((a) => {
+  /* The nested doors as well as the portals. Worker System and Setting moved
+     INSIDE Worker Portal Manage on screen and nowhere else — they are the
+     same two `scan_areas` ticks they always were, and a seeding that walked
+     only the top level would stop recording them and quietly take them away
+     from everybody whose row was opened. */
+  ALL_AREAS.forEach((a) => {
     const entry = draft.scan_areas[a.key];
     draft.scan_areas[a.key] = { ...(entry || {}), view: areaOn(draft, a.key) };
   });
+
+  modWas = {};
+  AREAS.forEach((a) => (a.pages || []).forEach((pg) => {
+    if (pg.kind === 'module') modWas[pg.moduleKey] = moduleLevel((draft.modules || {})[pg.moduleKey]);
+  }));
 
   /* Settle what the panel SHOWS into the draft the moment the row is opened,
      so Save records what the admin was looking at.
@@ -679,6 +998,36 @@ document.addEventListener('change', (e) => {
     draft.scan_actions[t.dataset.page] = acts;
     return render();
   }
+
+  /* The Admin Portal's and the Auditor Portal's pages. Settling the whole
+     store first is what keeps "nobody has been asked" meaning that: until a
+     tick in it is pressed the row carries no entry at all and the module
+     level answers, exactly as it does today. The moment one IS pressed the
+     block becomes explicit in full — which is what that module's own User
+     Access screen does on every save, so the two agree. */
+  if (t.dataset.mpage) {
+    settleStore(t.dataset.mstore);
+    draft[t.dataset.mstore + '_actions'][t.dataset.mpage].view = t.checked;
+    return render();
+  }
+  if (t.dataset.mact) {
+    settleStore(t.dataset.mstore);
+    draft[t.dataset.mstore + '_actions'][t.dataset.mactpage][t.dataset.mact] = t.checked;
+    return render();
+  }
+  /* Seal Management, which is a module and not a page — see modPage's
+     neighbours. An admin stays an admin when it is switched back on; nobody
+     is demoted by a tick that only meant to open a door. */
+  if (t.dataset.modtick) {
+    const key = t.dataset.modtick;
+    draft.modules = draft.modules || {};
+    /* The level this person HELD when the row was opened, not the one in the
+       draft — unticking has already written `none` over it, so reading the
+       draft would demote an admin the moment somebody switched the row off
+       and changed their mind. `modWas` is captured once in openRow. */
+    draft.modules[key] = t.checked ? (modWas[key] === 'admin' ? 'admin' : 'normal') : 'none';
+    return render();
+  }
   if (t.dataset.act) {
     const acts = draft.scan_actions[t.dataset.act] || {};
     acts[t.dataset.actkey] = t.checked;
@@ -712,6 +1061,10 @@ async function save() {
      here; deriving it again is exactly how the false-for-everything bug got
      in. */
   const next = { ...(p.permissions || {}), ...draft };
+  /* The two stores that keep a `_pages` mirror beside their `_actions`. A
+     store nobody touched has no entry in the draft, so this writes nothing
+     for it — which is the whole point of settling on first touch. */
+  STORES.forEach((store) => mirrorStorePages(next, store));
   /* The single pre-per-page list is dropped once this person has been saved
      here: it is only a fallback for anyone who has NOT been, and leaving it
      behind would keep answering for pages set to All. */
@@ -801,12 +1154,23 @@ function buildNurseries(register, people) {
         .order('full_name', { ascending: true }),
     ]);
 
-    // Only people the main User Access has opened the module for. Setting up
-    // pages for somebody who cannot open the portal is a setting with no
-    // effect, and a list of every account to scroll past.
+    /* Only people the main User Access has opened one of these portals for.
+       Setting up pages for somebody who cannot open any of them is a setting
+       with no effect, and a list of every account to scroll past.
+
+       THREE MODULES, not one. It was `scan` alone, from when this screen
+       governed the FC Portal and the back office and nothing else. It now
+       carries the Admin Portal and the Auditor Portal too, and an Admin
+       Portal person with no scan access of their own — which is an ordinary
+       thing to be, and scan_admin.html says so in its own words — would have
+       been missing from the one screen that grants them anything. */
+    const PORTAL_MODULES = ['scan', 'mobile', 'audit'];
     profiles = (((people && people.data) || [])).filter((p) => {
-      const lvl = ((p.permissions || {}).modules || {}).scan;
-      return lvl && String(lvl).toLowerCase() !== 'none';
+      const mods = (p.permissions || {}).modules || {};
+      return PORTAL_MODULES.some((m) => {
+        const lvl = mods[m];
+        return lvl && String(lvl).toLowerCase() !== 'none';
+      });
     });
 
     nurseries = buildNurseries((reg && reg.data) || [], profiles);
