@@ -230,7 +230,7 @@ console.log('\n── 3. The FC Portal keeps its pages, and keeps the nurseries 
   await page.close();
 }
 
-console.log('\n── 4. The Admin Portal, and Seal Management is a module ──');
+console.log('\n── 4. The Admin Portal, Seal Management included ──');
 {
   const page = await open(browser);
   await openRow(page, 'u-siti');
@@ -240,24 +240,20 @@ console.log('\n── 4. The Admin Portal, and Seal Management is a module ─�
           .evaluateAll((els) => els.map((e) => e.textContent.trim())),
         ['Issue Collection DO', 'Customer Consent',
          'Customer Collection Time Slot Booking', 'Seal Management']);
-  check('three of them are pages of the portal, stored under `mobile`',
+  check('all four are pages of the portal, stored under `mobile`',
         await admin.locator('[data-mpage]')
           .evaluateAll((els) => els.map((e) => e.dataset.mstore + ':' + e.dataset.mpage)),
-        ['mobile:do_signing', 'mobile:consent', 'mobile:booking']);
-  check('and the fourth moves a module instead',
-        await admin.locator('[data-modtick]')
-          .evaluateAll((els) => els.map((e) => e.dataset.modtick)),
-        ['seal']);
+        ['mobile:do_signing', 'mobile:consent', 'mobile:booking', 'mobile:seal']);
 
-  /* Siti is a seal ADMIN. Switching the row off and on again must give her
-     back what she had: a tick that meant to close a door and quietly demoted
-     somebody is the kind of thing nobody notices for a month. */
-  await admin.locator('[data-modtick]').click();
-  await page.waitForTimeout(120);
-  check('unticking it closes the module', await page.evaluate(() => draft.modules.seal), 'none');
-  await page.locator('.area-block').nth(2).locator('[data-modtick]').click();
-  await page.waitForTimeout(120);
-  check('and ticking it back gives an admin their admin back',
+  /* Seal Management is the Admin Portal's OWN screen — the phone grew a
+     seal.html of its own — and not the hub module of the same name. Ticking
+     it here must not reach `modules.seal`, which is a different screen at a
+     desk, granted on the main User Access as it always was. */
+  await admin.locator('[data-mpage="seal"]').click();
+  await page.waitForTimeout(150);
+  check('unticking the portal\u2019s seal screen closes that page',
+        await page.evaluate(() => draft.mobile_actions.seal.view), false);
+  check('and leaves the hub module it shares a name with alone',
         await page.evaluate(() => draft.modules.seal), 'admin');
   await page.close();
 }

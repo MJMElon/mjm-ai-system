@@ -241,14 +241,12 @@ const PAGES = [
  * written exactly this for every module with its own User Access screen since
  * it was written, the Admin Portal simply never had one.
  *
- * SEAL MANAGEMENT IS NOT ONE OF THOSE. It is a module of its own on the hub
- * (`modules.seal`, seal/seal_dashboard.html), because the seals are managed
- * from a desk and only reach the Admin Portal through a consent. The office
- * asked for it in this list, which is right — it is the fourth thing an Admin
- * Portal person does — so it is here, and the tick moves the MODULE rather
- * than inventing a page that does not exist. `kind:'module'` is what says so,
- * and the row says it on screen too: a tick that silently meant something
- * different from the three above it would be worse than leaving it out.
+ * SEAL MANAGEMENT IS THE PORTAL'S OWN SCREEN, not the hub module of the same
+ * name. The Admin Portal grew a `seal.html` of its own, so this tick governs
+ * that — the seals are received and scanned in the field, which is where that
+ * screen is. `seal/seal_dashboard.html` on the hub is a different screen with
+ * a module of its own (`modules.seal`), granted on the main User Access as it
+ * always was, and this does not touch it.
  */
 const ADMIN_PAGES = [
   { key:'do_signing', label:'Issue Collection DO',
@@ -257,9 +255,8 @@ const ADMIN_PAGES = [
     desc:'The consent form, and the seal ranges allocated against it' },
   { key:'booking',    label:'Customer Collection Time Slot Booking',
     desc:'Book and reschedule a customer’s collection slot' },
-  { key:'seal',       label:'Seal Management', kind:'module', moduleKey:'seal',
-    desc:'The seal stickers — stock in, what each consent allocated, what went out on a DO. '
-       + 'A module of its own on the hub, so this tick opens or closes that module' },
+  { key:'seal',       label:'Seal Management',
+    desc:'The seal stickers on the phone — what came in, and what went out on a DO' },
 ];
 
 /* ── The Auditor Portal's four audits ────────────────────────────────────
@@ -376,11 +373,6 @@ let profiles = [];        // everyone who holds the scan module
 let nurseries = [];
 let openUid = null;       // the row expanded right now
 let draft = null;         // that row's permissions, being edited
-/* The module levels this person held when their row was opened — Seal
-   Management and anything else drawn as a module rather than a page. A level
-   is not a boolean, so switching one off and on again has to give back what
-   was there rather than flattening an admin to a normal user. */
-let modWas = {};
 
 const initials = (p) => (String(p.full_name || p.email || '?').trim().split(/\s+/)
   .map((s) => s[0]).slice(0, 2).join('') || '?').toUpperCase();
@@ -473,7 +465,6 @@ function settleStore(store) {
   draft[store + '_actions'] = draft[store + '_actions'] || {};
   areasOfStore(store).forEach((area) => {
     (area.pages || []).forEach((pg) => {
-      if (pg.kind === 'module') return;      // a module level, not a page entry
       draft[store + '_actions'][pg.key] = modPage(draft, store, pg);
     });
   });
@@ -489,21 +480,11 @@ function mirrorStorePages(next, store) {
   next[store + '_pages'] = next[store + '_pages'] || {};
   areasOfStore(store).forEach((area) => {
     (area.pages || []).forEach((pg) => {
-      if (pg.kind === 'module') return;
       const entry = acts[pg.key];
       if (!entry) return;
       next[store + '_pages'][pg.key] = entry.view ? 'normal' : 'none';
     });
   });
-}
-
-/* A page that is really a MODULE — Seal Management, and so far only it.
-   `modules.<key>` is a level and not a boolean, so ticking it on must not
-   flatten an admin to a normal user: an admin stays an admin, and anybody
-   else becomes normal. */
-function modulePageOn(perms, pg) {
-  const lvl = String(((perms.modules || {})[pg.moduleKey]) || 'none').toLowerCase();
-  return lvl !== 'none' && ['admin', 'normal'].indexOf(lvl) !== -1;
 }
 
 /* Is this door open to them?
@@ -742,7 +723,6 @@ function noteRowHtml(note) {
    screen uses. `data-mpage` / `data-mact` carry the store so one handler
    serves both. */
 function modPageBlockHtml(area, pg) {
-  if (pg.kind === 'module') return modulePageBlockHtml(pg);
   const eff = modPage(draft, area.store, pg);
   return `
     <div class="page-block ${eff.view ? 'on' : ''}">
@@ -774,23 +754,6 @@ function modPageBlockHtml(area, pg) {
     </div>`;
 }
 
-/* Seal Management: a row in the Admin Portal's list and a MODULE underneath.
-   The tick moves modules.seal, which is what the hub card and the seal
-   dashboard itself already read — so it is obeyed the moment it is pressed,
-   which a per-page key under `mobile` would not be. */
-function modulePageBlockHtml(pg) {
-  const on = modulePageOn(draft, pg);
-  return `
-    <div class="page-block ${on ? 'on' : ''}">
-      <label class="flex items-start gap-3 cursor-pointer">
-        <input type="checkbox" class="chk mt-0.5" data-modtick="${pg.moduleKey}" ${on ? 'checked' : ''}>
-        <span class="min-w-0">
-          <span class="block text-[13px] font-black text-slate-800">${esc(pg.label)}</span>
-          <span class="block text-[11px] text-slate-400 leading-snug">${esc(pg.desc || '')}</span>
-        </span>
-      </label>
-    </div>`;
-}
 
 /* One tick, and whatever is nested under it. Recursive so Record work's five
    are drawn by the same code as Record work itself — one row, one rule about
@@ -882,11 +845,6 @@ function openRow(uid) {
     const entry = draft.scan_areas[a.key];
     draft.scan_areas[a.key] = { ...(entry || {}), view: areaOn(draft, a.key) };
   });
-
-  modWas = {};
-  AREAS.forEach((a) => (a.pages || []).forEach((pg) => {
-    if (pg.kind === 'module') modWas[pg.moduleKey] = moduleLevel((draft.modules || {})[pg.moduleKey]);
-  }));
 
   /* Settle what the panel SHOWS into the draft the moment the row is opened,
      so Save records what the admin was looking at.
@@ -1013,19 +971,6 @@ document.addEventListener('change', (e) => {
   if (t.dataset.mact) {
     settleStore(t.dataset.mstore);
     draft[t.dataset.mstore + '_actions'][t.dataset.mactpage][t.dataset.mact] = t.checked;
-    return render();
-  }
-  /* Seal Management, which is a module and not a page — see modPage's
-     neighbours. An admin stays an admin when it is switched back on; nobody
-     is demoted by a tick that only meant to open a door. */
-  if (t.dataset.modtick) {
-    const key = t.dataset.modtick;
-    draft.modules = draft.modules || {};
-    /* The level this person HELD when the row was opened, not the one in the
-       draft — unticking has already written `none` over it, so reading the
-       draft would demote an admin the moment somebody switched the row off
-       and changed their mind. `modWas` is captured once in openRow. */
-    draft.modules[key] = t.checked ? (modWas[key] === 'admin' ? 'admin' : 'normal') : 'none';
     return render();
   }
   if (t.dataset.act) {
