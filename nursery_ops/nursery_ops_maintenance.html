@@ -18,7 +18,7 @@
   <meta http-equiv="Expires" content="0"/>
   <title>MJM Nursery AI — Maintenance System</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="plot_maintenance_styles.css?v=91">
+  <link rel="stylesheet" href="plot_maintenance_styles.css?v=96">
     <script src="../shared/shared_cf_select.js"></script>
 </head>
 <body>
@@ -75,12 +75,13 @@
           <!-- Opened only while Work Records is the current tab — a CSS
                sibling rule (.pn-tab.is-on + .pn-sub), so switchTab's own
                is-on toggle is what shows and hides it and there is no
-               second piece of state to let this drift. Mirrors the
-               subtabs-bar inside the panel; switchRecordView(view) is the
-               one function that keeps both pairs of buttons in step. -->
+               second piece of state to let this drift. The ONLY place the
+               two sub-views are chosen: the duplicate bar inside the panel
+               came off at the office's request, and switchRecordView(view)
+               still guards its old button ids. -->
           <div class="pn-sub">
             <button type="button" class="pn-subtab active" id="pn-subtab-list" onclick="switchRecordView('list')">
-              <span data-i18n="tab.maintList">Maintenance records</span>
+              <span data-i18n="tab.maintList">Monthly Records</span>
             </button>
             <button type="button" class="pn-subtab" id="pn-subtab-chart" onclick="switchRecordView('chart')">
               <span data-i18n="tab.chart">Performance</span>
@@ -171,10 +172,10 @@
     <div id="tab-record" class="tab-panel active">
       <div class="page-hdr"><div class="page-hdr-title" id="record-nursery-line"></div></div>
       <div id="rec-metrics" class="metrics-big"></div>
-      <div class="subtabs-bar">
-        <button class="subtab-btn active" id="subtab-list"  onclick="switchRecordView('list')">📋 <span data-i18n="tab.maintList">Maintenance records</span></button>
-        <button class="subtab-btn"        id="subtab-chart" onclick="switchRecordView('chart')">📊 <span data-i18n="tab.chart">Performance</span></button>
-      </div>
+      <!-- The Monthly Records / Performance pair lives ONLY in the side
+           bar's Work Records entry now — the office removed the duplicate
+           bar that sat here. switchRecordView already guards the missing
+           #subtab-list/#subtab-chart ids. -->
       <div id="recview-list" class="recview active">
       <!-- WORK RECORD —————————————————————————————————————————————
            TWO SECTIONS, ONE AT A TIME.
@@ -197,12 +198,6 @@
 
            The filters below belong to BOTH: whichever section is open
            answers the same question about the same nursery. -->
-        <div class="subtabs-bar">
-          <button class="subtab-btn active" id="recsec-btn-approved"
-                  onclick="switchRecSection('approved',this)">✓ <span data-i18n="rec.partApproved">Approved</span></button>
-          <button class="subtab-btn" id="recsec-btn-rejected"
-                  onclick="switchRecSection('rejected',this)">⛔ <span data-i18n="rec.partRejected">Rejected</span> <span class="rec-part-count" id="rej-count"></span></button>
-        </div>
         <div class="toolbar">
           <select class="filter-sel" id="rf-filter-jenis" onchange="renderRecords()">
             <option value="" data-i18n="rec.allJenis">All Jenis Kerja</option>
@@ -217,12 +212,30 @@
           <input class="filter-sel" type="text" id="rf-filter-date"
                  placeholder="Filter by date…" data-i18n-ph="rec.filterDate" oninput="renderRecords()"
                  style="width:160px;height:36px;padding:0 10px;font-size:12px;">
-          <button class="btn btn-primary" onclick="openRecModal()" data-i18n="btn.addRecord">+ Add Record</button>
-          <button class="btn" onclick="syncRecordsFromSchedule()" data-i18n="btn.sync">↺ Sync from Schedule</button>
+          <!-- Icon buttons, at the office's request — the title says what
+               each does. No data-i18n here: applyI18n writes textContent,
+               which would replace the icon with words. -->
+          <button class="btn btn-primary btn-ico" onclick="openRecModal()" title="Add Record" aria-label="Add Record">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14m-7-7h14"/></svg>
+          </button>
+          <button class="btn btn-ico" onclick="syncRecordsFromSchedule()" title="Sync from Schedule" aria-label="Sync from Schedule">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          </button>
+        </div>
+
+        <!-- Approved / Rejected sit UNDER the filter row now, as tabs on the
+             top edge of the table itself — the active one a white tab that
+             joins the card below with no gap, the office's design. Keeps
+             the subtabs-bar class because switchRecSection finds its
+             siblings through it; rec-tabs restyles only this pair. -->
+        <div class="subtabs-bar rec-tabs">
+          <button class="subtab-btn active" id="recsec-btn-approved"
+                  onclick="switchRecSection('approved',this)"><span data-i18n="rec.partApproved">Approved</span></button>
+          <button class="subtab-btn" id="recsec-btn-rejected"
+                  onclick="switchRecSection('rejected',this)"><span data-i18n="rec.partRejected">Rejected</span> <span class="rec-part-count" id="rej-count"></span></button>
         </div>
 
         <div id="recsec-approved" class="recsec active">
-        <div class="rec-part-sub" style="margin:0 0 10px;" data-i18n="rec.partApprovedSub">The month's scheduled jobs, with the submissions a Field Conductor has signed off filled in</div>
         <div class="card"><div class="tbl-wrap">
           <table class="rec-table">
             <!-- The columns are PINNED here rather than left to the browser.
@@ -311,7 +324,6 @@
              so the confirm names the row that will go and refuses to guess
              when the pairing is ambiguous. -->
         <div id="recsec-rejected" class="recsec">
-        <div class="rec-part-sub" style="margin:0 0 10px;" data-i18n="rec.partRejectedSub">Records a Field Conductor refused — approve one and it flows back into the approved section</div>
         <div class="card"><div class="tbl-wrap">
           <table class="rec-table rej-table">
             <!-- Pinned the same way and for the same reason as the table
@@ -820,7 +832,7 @@
 <script src="../shared/shared_maint_field.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="plot_maintenance_script.js?v=136"></script>
+<script src="plot_maintenance_script.js?v=138"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are

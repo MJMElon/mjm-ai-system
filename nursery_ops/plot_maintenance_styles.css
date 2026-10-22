@@ -413,6 +413,24 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 .subtab-btn{font-family:var(--font);font-size:12px;font-weight:600;letter-spacing:.3px;color:var(--text-muted);background:transparent;border:none;cursor:pointer;padding:8px 16px;border-radius:var(--r-sm);transition:all .14s;white-space:nowrap;}
 .subtab-btn:hover{color:var(--text-body);background:var(--green-bg);}
 .subtab-btn.active{background:var(--green);color:#fff;box-shadow:0 2px 8px rgba(13,122,71,.3);}
+/* ── Approved / Rejected as TABS on the table ──
+   The pair sits directly on the top edge of the table card, under the
+   filter row: the active one is a WHITE tab with rounded top corners and
+   a green underline, overlapping the card's border by its own border
+   width so the two read as one piece with no gap — the same trick the
+   Sales Web policy chips use. The idle one is plain type beside it. */
+.rec-tabs{width:100%;background:transparent;border:none;border-radius:0;
+  padding:0 0 0 14px;gap:4px;margin-bottom:0;box-shadow:none;flex-wrap:nowrap;}
+.rec-tabs .subtab-btn{flex:0 0 auto;border:1.5px solid transparent;border-bottom:none;
+  border-radius:10px 10px 0 0;font-size:12.5px;font-weight:800;
+  color:var(--text-muted);padding:10px 20px;}
+.rec-tabs .subtab-btn:hover{color:var(--green-text);background:var(--green-bg);}
+.rec-tabs .subtab-btn.active{background:var(--bg-white);border-color:var(--border);
+  color:var(--green-text);position:relative;z-index:2;margin-bottom:-1.5px;
+  box-shadow:inset 0 -3px 0 var(--green);}
+.rec-tabs #recsec-btn-rejected.active{color:var(--red);
+  box-shadow:inset 0 -3px 0 var(--red);}
+.rec-tabs .subtab-btn.active .rec-part-count{color:#fff;background:var(--red);}
 /* A sub-view must never change the page width, or the header/metrics above it
    appear to rescale when switching between List and Analytics. Charts are
    responsive, so clipping any overflow here is safe. */
@@ -501,12 +519,25 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 /* Fixed 4-up grid (not auto-fit) so the headline cards keep the SAME size and
    layout whichever sub-view is open - the analytics charts change the available
    width, which previously made the cards reflow 4-up -> 3-up and resize. */
-.metrics-big{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px;}
-@media (max-width:900px){ .metrics-big{grid-template-columns:repeat(2,minmax(0,1fr));} }
+/* auto-fit, not a fixed four columns: the Work Records head draws THREE
+   cards and the old 4-column track left a dead quarter of the row beside
+   them. However many cards a head draws, they divide the full width and
+   land on one line. Sized down at the office's request. */
+.metrics-big{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px;}
 @media (max-width:480px){ .metrics-big{grid-template-columns:1fr;} }
-.metrics-big .metric-card{padding:22px 24px;border-top-width:4px;}
-.metrics-big .mc-label{font-size:11px;letter-spacing:1.2px;margin-bottom:10px;}
-.metrics-big .mc-value{font-size:44px;line-height:1;}
+/* THIN: each card is one line — label, figure, and the sub-figure on the
+   right — instead of a stack, at the office's request. And each card is
+   WASHED in its own colour, or a thin white strip reads as just another
+   row of the white table under it — also their words. */
+.metrics-big .metric-card{display:flex;align-items:center;gap:12px;
+  padding:9px 16px;border-top-width:3px;}
+.metrics-big .mc-blue {background:var(--blue-bg); border-color:var(--blue-border); border-top-color:var(--blue);}
+.metrics-big .mc-amber{background:var(--gold-bg); border-color:var(--gold-border); border-top-color:#d97706;}
+.metrics-big .mc-red  {background:var(--red-bg);  border-color:var(--red-border);  border-top-color:var(--red);}
+.metrics-big .mc-green{background:var(--green-bg);border-color:var(--green-mid);  border-top-color:var(--green);}
+.metrics-big .mc-label{font-size:10.5px;letter-spacing:1.1px;margin-bottom:0;white-space:nowrap;}
+.metrics-big .mc-value{font-size:22px;line-height:1;}
+.metrics-big .mc-sub{margin-top:0;margin-left:auto;white-space:nowrap;text-align:right;}
 
 /* Page header — one bigger line: "Batu Niah Nursery — Apr 2026" */
 .page-hdr{margin-bottom:14px;}
@@ -554,6 +585,19 @@ tr.jumlah-tr td{font-weight:700;font-size:12.5px;letter-spacing:0.4px;background
 #recview-list .toolbar .filter-sel{font-size:13px;height:38px;}
 #recview-list .toolbar .btn{font-size:13px;padding:9px 16px;}
 #recview-list .toolbar input.filter-sel{height:38px;font-size:13px;}
+/* ONE LINE: the two selects share the row with the date box and the two
+   icon buttons, instead of each select taking a line of its own. The
+   select skin's wrapper carries width:100% INLINE (its own comment says
+   why), so only !important can size it here — the dosage cell learned
+   the same lesson. On a narrow screen the row is allowed to wrap again. */
+#recview-list .toolbar{flex-wrap:nowrap;}
+#recview-list .toolbar .cf-wrap{flex:1 1 220px !important;width:auto !important;min-width:150px;}
+#recview-list .toolbar select.filter-sel{width:100%;}
+#recview-list .toolbar input.filter-sel{flex:0 0 160px;}
+#recview-list .toolbar .btn-ico{display:inline-flex;align-items:center;justify-content:center;
+  width:38px;height:38px;flex:0 0 38px;padding:0;}
+#recview-list .toolbar .btn-ico svg{width:17px;height:17px;}
+@media(max-width:900px){#recview-list .toolbar{flex-wrap:wrap;}}
 
 /* ─── CHECKED (verified) ROWS ─── */
 .btn-check{color:#065f46 !important;border-color:#a7f3d0 !important;background:#ecfdf5 !important;}
