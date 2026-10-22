@@ -283,8 +283,17 @@ const AUDIT_PAGES = [
   { key:'maintenance', label:'Maintenance Audit',
     desc:'Verify completed manuring, weeding, racun and interrow work' },
 ].map((p) => ({ ...p, actions: [
-  { key:'record', label:'Record a new audit',        desc:'Walk the plot and submit the audit' },
-  { key:'edit',   label:'Edit & delete past audits', desc:'Change or remove an audit already submitted' },
+  { key:'record', label:'Record a new audit', desc:'Walk the plot and submit the audit' },
+  { key:'edit',   label:'Edit past audits',   desc:'Change an audit already submitted' },
+  /* SPLIT OUT OF `edit`, which used to read "Edit & delete past audits".
+     `fallbackTo` is what keeps every answer the office has already given:
+     a row saved under the old combined tick carries `edit` and no `delete`,
+     and until somebody saves it again the old answer is what both this
+     screen and the phone read. Reading an absent `delete` as off would draw
+     a tick nobody set; reading it as on would hand back a deletion the
+     office had deliberately closed. */
+  { key:'delete', label:'Delete past audits', desc:'Remove an audit from the books altogether. It does not come back',
+    fallbackTo:'edit' },
 ]}));
 
 /* The five PORTALS a person can be sent to, and what they may open in each.
@@ -446,7 +455,16 @@ function modPage(perms, store, pg) {
   const saved = (perms[store + '_actions'] || {})[pg.key];
   if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
     const out = { view: !!saved.view };
-    (pg.actions || []).forEach((a) => { out[a.key] = out.view && !!saved[a.key]; });
+    /* `fallbackTo` is an action SPLIT OUT of another one — see ADMIN_PAGES /
+       AUDIT_PAGES. A row saved before the split answered the OLD tick, so
+       that is what is read until somebody saves this row again. The same
+       line is in shared_module_access.js, which is that module's own screen,
+       and in canAuditAction on the phone. All three have to agree or the
+       screen draws one answer and the app obeys another. */
+    (pg.actions || []).forEach((a) => {
+      const key = (a.fallbackTo && !(a.key in saved)) ? a.fallbackTo : a.key;
+      out[a.key] = out.view && !!saved[key];
+    });
     return out;
   }
   const lvl = String(((perms.modules || {})[store]) || 'none');

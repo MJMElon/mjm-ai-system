@@ -383,7 +383,8 @@ const TRANSLATIONS = {
     /* The two User Access ticks, refused. They name the screen that sets
        them, because a button that does nothing is reported as a broken app. */
     err_no_record:   '⚠ You may not record new audits here — ask an admin to switch it on in User Access',
-    err_no_edit:     '⚠ You may not change or delete past audits — ask an admin to switch it on in User Access',
+    err_no_edit:     '⚠ You may not change past audits — ask an admin to switch it on in User Access',
+    err_no_delete:   '⚠ You may not delete past audits — ask an admin to switch it on in User Access',
     record_deleted:  'Record deleted',
     record_updated:  '✓ Record updated',
     record_saved:    '✓ Record saved',
@@ -802,7 +803,8 @@ const TRANSLATIONS = {
     err_delete:      '⚠ Gagal memadam',
     err_delete_admin_only: '⚠ Hanya admin boleh memadam rekod',
     err_no_record:   '⚠ Anda tidak dibenarkan merekod audit baharu di sini — minta admin membukanya di User Access',
-    err_no_edit:     '⚠ Anda tidak dibenarkan mengubah atau memadam audit lalu — minta admin membukanya di User Access',
+    err_no_edit:     '⚠ Anda tidak dibenarkan mengubah audit lalu — minta admin membukanya di User Access',
+    err_no_delete:   '⚠ Anda tidak dibenarkan memadam audit lalu — minta admin membukanya di User Access',
     record_deleted:  'Rekod dipadamkan',
     record_updated:  '✓ Rekod dikemas kini',
     record_saved:    '✓ Rekod disimpan',
