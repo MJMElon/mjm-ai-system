@@ -2356,8 +2356,10 @@ let _dbReady     = false; // guards writes until the initial DB load lands
 function stateKey(n, m) { return `${n}_${m}`; }
 
 /* Tell the user when the schedule on screen was carried forward from an
-   earlier month and has not been saved for this one yet — otherwise a full
-   sheet looks like it was already set up for this month. */
+   earlier month and has not been saved for this one yet — otherwise the
+   weeks and chemicals look like they were already set up for this month.
+   The ticks are NOT part of what carried (see clearTicks) — every plot
+   opens unticked, so the notice says plan, never schedule. */
 function updateCarryNotice() {
   const box = document.getElementById('carry-notice');
   if (!box) return;
@@ -2365,7 +2367,7 @@ function updateCarryNotice() {
   const from = appState[n]?.[m]?._carriedFrom;
   if (!from) { box.style.display = 'none'; box.textContent = ''; return; }
   box.style.display = '';
-  box.innerHTML = `↩️ Carried forward from <b>${from}</b> — this is last month's schedule. ` +
+  box.innerHTML = `↩️ Weeks and chemicals carried forward from <b>${from}</b> — nothing is ticked yet. ` +
                   `Change anything and it saves as <b>${m}</b>'s own.`;
 }   // future DB row id (nursery+month)
 
@@ -2787,6 +2789,39 @@ function applyLang(){
   if (typeof renderAll === 'function') renderAll();
 }
 
+/* Flips every tick in a carried-forward state to false, without touching
+   the SHAPE those ticks sit in — how many weeks, how many rounds, how many
+   columns a round has, all of which come from the config (pdConfig,
+   manuringConfig, interrowConfig) and must stay exactly as carried, or a
+   tick typed against round 3 of a 3-round week has nowhere to land. Only
+   the leaves move; the plot keys, the week keys, the round arrays are
+   left as they were. */
+function clearTicks(s) {
+  if (s.pd) {
+    Object.values(s.pd).forEach(week => {
+      Object.keys(week || {}).forEach(p => { week[p] = { P: false, D: false }; });
+    });
+  }
+  if (s.manuring) {
+    Object.keys(s.manuring).forEach(p => {
+      s.manuring[p] = (s.manuring[p] || []).map(round => (round || []).map(() => false));
+    });
+  }
+  if (s.weeding) {
+    Object.keys(s.weeding).forEach(p => {
+      const rounds = s.weeding[p] || {};
+      const blank = {};
+      Object.keys(rounds).forEach(r => { blank[r] = false; });
+      s.weeding[p] = blank;
+    });
+  }
+  if (s.interrow) {
+    Object.keys(s.interrow).forEach(p => {
+      s.interrow[p] = (s.interrow[p] || []).map(round => (round || []).map(() => false));
+    });
+  }
+}
+
 function getState(nursery, month) {
   if (!appState[nursery]) appState[nursery] = {};
   if (!appState[nursery][month]) {
@@ -2801,9 +2836,18 @@ function getState(nursery, month) {
       return appState[nursery][month];
     }
     // Nothing saved for this month — start from the last month that was set,
-    // so a new month opens with the schedule already in place rather than
-    // blank. It stays a copy: nothing is written until someone ticks or saves,
-    // and the month it came from is untouched.
+    // so a new month opens with its weeks already dated and its chemicals
+    // already chosen rather than empty. It stays a copy: nothing is written
+    // until someone ticks or saves, and the month it came from is untouched.
+    //
+    // The TICKS do not come with it. A new month carrying last month's plan
+    // is a head start; a new month carrying last month's TICKS is a lie —
+    // every plot would open already marked done for work nobody has been
+    // near yet, which is what "This Month at a Glance" was showing for a
+    // month that had just been opened for the first time. clearTicks()
+    // resets every tick to false while leaving the shape (how many weeks,
+    // how many rounds, how many columns) exactly as the config dictates, so
+    // nothing downstream has to know this happened.
     const from = carryForwardFrom(nursery, month);
     if (from) {
       const inherited = loadPersistedState(nursery, from);   // already a deep copy
@@ -2811,8 +2855,10 @@ function getState(nursery, month) {
         migrateManuringShape(inherited, NURSERY_PLOTS[nursery]);
         migrateInterrowShape(inherited, NURSERY_PLOTS[nursery]);
         alignRoundsToWeeks(inherited, NURSERY_PLOTS[nursery]);
+        clearTicks(inherited);
         // Snapshot what was carried in, so nothing shows as "modified" until
-        // this month is actually changed.
+        // this month is actually changed. Taken AFTER clearing, so it is a
+        // snapshot of the blank ticks this month actually opens on.
         inherited._savedPd = JSON.parse(JSON.stringify(inherited.pd || {}));
         inherited._carriedFrom = from;
         appState[nursery][month] = inherited;
@@ -9344,7 +9390,7 @@ function syncWeNextButton() {
   btn.title = `Review and sync this section, then open ${label.textContent.replace(/^Next: /, '')}`;
 }
 
-/* Reviews and syncs the section on screen — same as Reviewed & Sync — then
+/* Reviews and syncs the section on screen — same as Save & Sync — then
    opens the next one instead of closing, so a nursery's four jobs (and the
    next nursery's) can be worked straight through without a close-and-reopen
    between each. */
