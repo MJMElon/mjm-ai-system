@@ -2593,6 +2593,94 @@ saying it is being held could not be reached.
 through all three cases, and `tests/transplant_claim_empty.cjs` holds the two
 new empty sentences against the real page in a real browser.
 
+## User Access is one block per PORTAL, and two of them were on no screen
+
+The screen was five flat doors in no particular order — the back office, the
+two phone apps, the worker register and the screen itself — with the FC
+Portal the only one carrying anything inside it. The office asked for it to
+read the way the company is arranged: a block per portal, and under each the
+things that portal offers.
+
+Two things fell out of that, and the second is what was actually broken.
+
+**Worker System and User Access Setting are not siblings of the back office.
+They live inside it.** Nothing about the ticks changed — the same two
+`scan_areas` keys, the same fallback — only where they are drawn. Which is
+exactly why the SEEDING had to learn about them: `openRow` walked the top
+level and recorded what each door was drawing, so a nested door it no longer
+walked would be saved as nothing and read as a no the next time. `ALL_AREAS`
+is the flat list, and every rule about a tick — the fallback, the seeding,
+the save — is about the TICK and not about where it sits.
+
+**The Admin Portal and the Auditor Portal were on no access screen at all.**
+`scan_areas.admin_portal` and `scan_areas.audit_portal` have gated their two
+doors on the 555 MJM Team page since they moved there, and were written by
+nothing — so the only way anybody held either was the fallback.
+`scan_user_access.html`'s own copy of `canScanArea` had neither case, which
+did not matter while they were ungrantable and mattered the moment they were
+not: `default: false` read every Admin Portal person as holding nothing, so
+their block drew closed and nothing inside it could be reached. **A screen
+that keeps its own copy of a gate has to conclude exactly what the gate
+concludes**, which that file already said in its own words about the other
+five.
+
+What is inside them is stored where each module ALREADY reads it, because
+two screens writing one answer is fine and two answers is not:
+
+- **Admin Portal** — `mobile_actions.<page>.view`, mirrored to
+  `mobile_pages`, which is the shape `shared_module_access.js` has written
+  for every module with its own User Access screen and the one
+  `MJMAccess.canDo('mobile', page, 'view')` reads back.
+- **Auditor Portal** — `audit_actions` / `audit_pages`, **the same keys
+  `audit/audit_user_access.html` already writes**. Two doors onto one answer.
+  `tests/user_access_reads_portal_by_portal.cjs` lifts that file's page keys
+  out of it and compares, so the two cannot drift.
+
+Four more things, each a way this goes quietly wrong:
+
+- **LOOKING IS NOT DECIDING**, and the two new blocks could most easily have
+  broken it. Writing today's effective answer into every row somebody merely
+  OPENED turns "nobody has been asked" into a decision, and the module level
+  stops answering for people it used to answer for. So a store is settled on
+  FIRST TOUCH (`settleStore`) and not on open: press a tick in it and the
+  whole block becomes explicit, the way that module's own screen writes it;
+  press nothing and the row carries no entry at all.
+- **Seal Management is a MODULE, not a page of the Admin Portal.** The office
+  asked for it in that list, which is right — it is the fourth thing an Admin
+  Portal person does — so the tick moves `modules.seal`, which the hub card
+  and the seal dashboard already read, rather than inventing a `mobile` page
+  that does not exist and nothing would obey. **A level is not a boolean**:
+  `modWas` remembers what they held when the row was opened, so switching it
+  off and on again gives an admin their admin back instead of flattening them
+  to a normal user.
+- **The Worker Portal's Maintenance is a line, not a tick.** A worker signs in
+  with a PIN, so the modules on their phone hang off THEIR row of the payroll
+  register — nothing here could ever read a tick on an e-mail account. The
+  row says where the answer lives (System Setting → Portal View & Function
+  for the company, Worker Portal → Settings for the worker) and carries no
+  checkbox.
+- **The people list is three modules now, not one.** It filtered on
+  `modules.scan`, from when this screen governed the FC Portal and the back
+  office — so an Admin Portal person with no scan access of their own, which
+  `scan_admin.html` says in its own words is an ordinary thing to be, was
+  missing from the one screen that grants them anything.
+
+**And the Admin Portal now OBEYS its ticks**, in the other repository.
+`hasOpsAccess()` let anybody holding any staff-grade module into all three
+screens, so the office could have ticked whatever it liked and the phone
+would have opened the door anyway. `canOpenAdminPage()` in `Mobile`'s
+`src/lib/auth.js` is the read, `AuthGate` takes a `page`, and the dashboard
+filters its tiles on the same call — a tile drawn over a page that would
+refuse is a trap, and a page open with no tile is access nobody can see.
+Absent is a yes, as everywhere. A refused page goes back to the DASHBOARD and
+not to `auth.html`, which is the Pending Access notice and means something
+else entirely. `Mobile/tests/the_tiles_obey_the_office.cjs` holds it.
+
+**`scan_user_access.html` now carries the three no-cache metas.** It keeps
+every line of its own code inline, so the page IS the deploy — and a
+permission screen is the worst place in the system for a browser to be
+showing yesterday's rules while the office believes it has changed them.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the
