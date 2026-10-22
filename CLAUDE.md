@@ -2681,6 +2681,56 @@ every line of its own code inline, so the page IS the deploy — and a
 permission screen is the worst place in the system for a browser to be
 showing yesterday's rules while the office believes it has changed them.
 
+### And then the Auditor Portal's two actions were read for the first time
+
+Putting the block on the screen is what made it worth asking whether anything
+obeyed it, and **Record a new audit and Edit & delete past audits were read by
+nothing.** Unticking Edit saved cleanly, showed as set on both screens that
+offer it, and that auditor went on editing and deleting. It is the same fault
+the `view` half of `audit_supabase.js` was written to correct, one level down,
+and that file says so in its own comment: *"audit_user_access.html has always
+written `audit_actions.<page>` … but nothing in the audit module ever read
+them."* The `view` half was fixed then. The actions were not.
+
+`canAuditAction(action, page)` is the read and `requireAuditAction` is the
+click-time guard. Four things in it:
+
+- **IT IS ASKED BEFORE THE WORK, NOT AFTER IT.** A permission tested when
+  Save is pressed is tested at the end of an audit somebody has walked a plot
+  to fill in — the same mistake as the save that was the only thing asking
+  whether a login could save at all. So the FORM refuses to open, and the
+  save asks **again**, because a form opened before a permission changed is
+  still sitting on the screen. `editMode` is what decides which of the two
+  ticks a save needs.
+- **Delete is part of EDIT**, because the tick reads "Edit & delete past
+  audits" — and it is asked **beside** the admin test rather than instead of
+  it, in both the confirm and the modal's own Delete button, which is
+  reachable on its own. On Papan Tanda, deleting a BATCH takes its linked
+  audit with it, so that one asks too; editing a batch row does not, because
+  a batch record is not an audit.
+- **It fails open.** No entry for the page is nobody having been asked, an
+  absent action key is the same, and only an explicit `false` is a no. A page
+  the office has closed closes every action inside it, there being nothing
+  left to do on it.
+- **The refusal names the screen that would switch it back on**, in both
+  languages — a button that does nothing is reported as a broken app.
+
+Two traps found doing it, both worth keeping:
+
+- **`openForm` and `saveAudit` in `audit_maintenance_script.js` declare
+  `const t = tasks.find(…)`**, which SHADOWS the translation function `t()`
+  for the whole of their scope — so a `t('…')` before that line is a
+  `ReferenceError` and not a message. `_mtSay()` is said from file scope,
+  where `t` means what it means everywhere else.
+- **`audit.mjmnursery.com` is a machine-written MIRROR** of `audit/` and its
+  own README says so: edit here, bump `VER` in `audit_sw.js`, and the mirror
+  follows. Every page's `?v=` on the six changed files moved with it, or a
+  gate written today reaches a phone next month.
+
+`tests/the_audit_ticks_are_obeyed.cjs` drives the rule through the SHIPPED
+`audit_supabase.js` and holds all four modules to the same four places — 32
+of its 37 checks fail on the previous code.
+
 ## A permission that is saved but not obeyed is worse than no permission
 
 It has happened three times in this codebase. A screen writes a setting, the
