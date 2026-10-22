@@ -1710,20 +1710,11 @@
     const _gc = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
     await MJMAccess.load(_gc);
     if (MJMAccess.user() && !MJMAccess.canOpenOperationPage('orders')) {
-      alert('You do not have access to Delivery Note (DO).');
-      // Fall through to a sibling section this user IS allowed, so a
-      // person with only BA or AL still reaches their part of Customer
-      // Order Documentation rather than the dashboard.
-      location.replace(MJMAccess.canOpenOperationPage('ba') ? 'operation_ba.html'
-        : MJMAccess.canOpenOperationPage('al') ? 'operation_booking.html'
-        : 'operation_dashboard.html');
+      alert('You do not have access to Customer Order Documentation.');
+      // DO, BA and AL open and lock together now — there is no sibling
+      // section left to fall through to.
+      location.replace('operation_dashboard.html');
       return;
-    }
-    // The BA / AL tabs are their own sections in User Access now — a tab
-    // the user cannot view is not offered.
-    if (MJMAccess.user()) {
-      if (!MJMAccess.canOpenOperationPage('ba')) { const t = document.getElementById('tab-ba'); if (t) t.style.display = 'none'; }
-      if (!MJMAccess.canOpenOperationPage('al')) { const t = document.getElementById('tab-al'); if (t) t.style.display = 'none'; }
     }
   } catch (e) { console.warn('[page-guard] skipped:', e && e.message); }
 })();

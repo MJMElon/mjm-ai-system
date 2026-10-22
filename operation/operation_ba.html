@@ -747,7 +747,7 @@
             input.onchange = (e) => { if (e.target.files.length) handleMngBAScan(e.target.files[0]); input.value = ''; };
         }
 
-        function removeBAImage() { if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('ba', 'manage')) return; currentMngBaImage = null; document.getElementById('mng-ba-file').value = ''; document.getElementById('mng-ba-image-container').classList.add('hidden'); document.getElementById('mng-ba-upload-container').classList.remove('hidden'); }
+        function removeBAImage() { if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'ba_manage')) return; currentMngBaImage = null; document.getElementById('mng-ba-file').value = ''; document.getElementById('mng-ba-image-container').classList.add('hidden'); document.getElementById('mng-ba-upload-container').classList.remove('hidden'); }
         function viewAttachedBADocument() { 
             if(!currentMngBaImage) return; 
             openStandaloneDoc(currentMngBaImage);
@@ -772,7 +772,7 @@
 
         // FIXED DOUBLE QUOTES FOR DATABASE OR QUERY
         async function saveManageBA() {
-            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('ba', 'manage')) return;
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'ba_manage')) return;
             const originalKey = document.getElementById('mng-ba-original-name').value; 
             const newNum = document.getElementById('mng-ba-num').value.trim(); 
             const newName = document.getElementById('mng-ba-name').value.trim(); 
@@ -836,7 +836,7 @@
 
         // FIXED DOUBLE QUOTES FOR DATABASE OR QUERY
         async function deleteBA() {
-            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('ba', 'manage')) return;
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'ba_manage')) return;
             const originalKey = document.getElementById('mng-ba-original-name').value;
             const pin = prompt("Enter Master PIN to delete BA:");
             if (pin !== "8888") return alert("Access Denied: Incorrect Master PIN.");
@@ -863,7 +863,7 @@
         }
         
         function openBAModal() { 
-            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('ba', 'manage')) return;
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'ba_manage')) return;
             document.getElementById('ba-modal').classList.remove('hidden'); 
             document.getElementById('bulk-ba-tbody').innerHTML = ''; 
             window.extractedBulkBAs = {}; 
@@ -952,7 +952,7 @@
         }
 
         async function saveBulkBA() {
-            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('ba', 'manage')) return;
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'ba_manage')) return;
             const btn = document.getElementById('save-bulk-btn'); btn.innerText = 'CROSS-CHECKING...'; btn.disabled = true; 
             const rows = document.querySelectorAll('#bulk-ba-tbody tr'); let successCount = 0;
             
@@ -1023,26 +1023,21 @@
         _supabase.auth.getSession().then(({ data: { session } }) => { if (!session) window.location.href = 'operation_dashboard.html'; else fetchData(); });
     </script>
 
-<!-- Page-access guard: Borang Akuan is its own section of Customer Order
-     Documentation in the module's User Access (operation_user_access.html,
-     key 'ba' — view opens this page, 'manage' is Manage Record). Fails
-     open on read errors, same as the DO page's guard. Deleting a BA still
-     asks the Master PIN on top of the tick — inside deleteBA(). -->
+<!-- Page-access guard: Borang Akuan is part of Customer Order Documentation
+     in the module's User Access (operation_user_access.html, key 'orders'
+     — the one "Open Page" switch for DO/BA/AL together; 'ba_manage' is
+     this page's own write tick). Fails open on read errors, same as the
+     DO page's guard. Deleting a BA still asks the Master PIN on top of
+     the tick — inside deleteBA(). -->
 <script src="../shared/shared_access.js"></script>
 <script>
 (async () => {
   try {
     await MJMAccess.load(_supabase);
-    if (MJMAccess.user() && !MJMAccess.canOpenOperationPage('ba')) {
-      alert('You do not have access to Borang Akuan (BA).');
-      location.replace(MJMAccess.canOpenOperationPage('orders') ? 'operation_delivery.html'
-        : MJMAccess.canOpenOperationPage('al') ? 'operation_booking.html'
-        : 'operation_dashboard.html');
+    if (MJMAccess.user() && !MJMAccess.canOpenOperationPage('orders')) {
+      alert('You do not have access to Customer Order Documentation.');
+      location.replace('operation_dashboard.html');
       return;
-    }
-    if (MJMAccess.user()) {
-      if (!MJMAccess.canOpenOperationPage('orders')) { const t = document.getElementById('tab-do'); if (t) t.style.display = 'none'; }
-      if (!MJMAccess.canOpenOperationPage('al'))     { const t = document.getElementById('tab-al'); if (t) t.style.display = 'none'; }
     }
   } catch (e) { console.warn('[page-guard] skipped:', e && e.message); }
 })();

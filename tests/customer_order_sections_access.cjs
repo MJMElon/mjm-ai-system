@@ -1,30 +1,40 @@
-/* THE DRAWER'S SECTIONS ARE OBEYED BY THE PAGES THEY NAME.
+/* CUSTOMER ORDER DOCUMENTATION AND SEEDLING SALES CONTROL ARE ONE CARD EACH.
 
-   The office asked for the operation module's User Access to be
-   rearranged: Customer Order Documentation is three sections (Delivery
-   Note (DO) / Borang Akuan (BA) / Approval Letter (AL) — one per page),
-   Seedling Sales Control is three (Customer Monitoring / Stock
-   Allocation / Inventory Map — three tabs of one page), and Batch
-   Records, Reports, Audit Trail and System Settings stay as they were.
-   Tick a section = may view it; the tick under it = that part's write
-   function; every delete keeps its Master PIN prompt.
+   They were three sections apiece for a day — one page/tab per section,
+   each with its own "Open Page" switch. The office looked at that next to
+   Batch Records and asked for the same shape here instead: ONE "Open
+   Page" switch per card, the write functions as ticks underneath —
+   Add new DO / Manage Borang Akuan (BA) Record / Add New AL under
+   Customer Order Documentation, Customer Monitoring / Update stock &
+   sales / Inventory Map under Seedling Sales Control.
+
+   'orders' and 'stock' are the long-standing stored keys and carry the
+   section's view now for every page/tab in their card — DO, BA and AL
+   open and lock together; Customer Monitoring, Stock Allocation and
+   Inventory Map do too. 'ba_manage', 'al_manage', 'customer' and 'map'
+   are new action keys on those same old keys, and a row saved before
+   they existed has no opinion on them — they must default to ALLOWED on
+   such a row rather than reading "nobody ticked this" as "no", the same
+   unset-must-not-widen-or-narrow-a-decision rule this codebase applies
+   everywhere a key is added to an existing gate.
 
    This codebase has shipped a permission that was saved and never obeyed
    three times, so this test drives SAVED ROWS through the REAL pages,
    not the two ends:
 
-   - the drawer renders the groups, saves the new keys, and mirrors the
-     legacy fields;
-   - 'orders' and 'stock' DID NOT MOVE as keys — only their labels;
-   - a user locked out of 'stock' before the two new section keys existed
-     stays locked out of the whole Seedling Sales Control page
-     (OPERATION_VIEW_PARENT inheritance) — unset must not widen a
-     decision somebody made;
-   - BA: view off = bounced to a sibling section; manage off = the add
-     modal and delete never open (the delete gate fires BEFORE the PIN
-     prompt, and the PIN itself is untouched);
-   - AL: manage off = Add New AL blocked;
-   - a tab the user cannot view is not offered on the other pages.
+   - the drawer renders ONE card per group, with the three ticks, and
+     Save writes all three action keys onto the one stored key;
+   - a legacy row saved before today — 'orders': {view,manage} or
+     'stock': {view,manage}, nothing else — still manages BA and AL, and
+     still shows Customer Monitoring and Inventory Map;
+   - locking 'orders' locks DO, BA and AL together, with no sibling left
+     to bounce to;
+   - locking 'stock' locks the whole Seedling Sales Control page;
+   - ba_manage off blocks BA's add/delete (the delete gate fires BEFORE
+     the PIN prompt, and the PIN itself is untouched);
+   - al_manage off blocks Add New AL, same PIN flows untouched;
+   - the DO/BA/AL tabs are never hidden from each other any more — there
+     is no view a user can have of one without the others.
 
    Run: node tests/customer_order_sections_access.cjs
    (starts its own server; needs the Playwright chromium at /opt/pw-browsers)
@@ -105,8 +115,8 @@ const prof = (id, permissions) => ({ id, email: id + '@m.t', full_name: 'User ' 
     return { ctx, page };
   }
 
-  // ── A. The drawer: groups, labels, and what Save writes ────────────────
-  console.log('\nA. The drawer renders the two groups and saves the new keys');
+  // ── A. The drawer: one card per group, and what Save writes ────────────
+  console.log('\nA. The drawer renders one card per group and saves the ticks onto it');
   {
     const admin = prof('u1', { manage_users: true, modules: { operation: 'admin' } });
     const ruth  = prof('u2', { modules: { operation: 'admin' } });
@@ -115,98 +125,126 @@ const prof = (id, permissions) => ({ id, email: id + '@m.t', full_name: 'User ' 
     await page.waitForTimeout(300);
 
     const drawer = await page.evaluate(() => {
-      const heads = [...document.querySelectorAll('#d-pages > div:not(.page-card)')].map(d => d.textContent.trim());
       const cards = [...document.querySelectorAll('#d-pages .page-card')].map(c => ({
         id: c.id,
         label: c.querySelector('.font-black').textContent.trim(),
         actions: [...c.querySelectorAll('.act-row .font-bold')].map(a => a.textContent.trim())
       }));
-      return { heads, cards };
+      return { cards };
     });
-    check(JSON.stringify(drawer.heads) === JSON.stringify(['Customer Order Documentation', 'Seedling Sales Control']),
-          'two group headings, in the asked order (' + drawer.heads.join(' / ') + ')');
     const labels = drawer.cards.map(c => c.label);
-    check(JSON.stringify(labels.slice(0, 6)) === JSON.stringify([
-      'Delivery Note (DO)', 'Borang Akuan (BA)', 'Approval Letter (AL)',
-      'Customer Monitoring', 'Stock Allocation', 'Inventory Map'
-    ]), 'six sections in the asked order (' + labels.slice(0, 6).join(' / ') + ')');
+    check(labels[0] === 'Customer Order Documentation' && labels[1] === 'Seedling Sales Control',
+          'the two cards lead, in the asked order (' + labels.slice(0, 2).join(' / ') + ')');
     check(labels.includes('Batch Records') && labels.includes('System Settings'),
           'Batch Records and the rest remain');
+    check(!labels.includes('Delivery Note (DO)') && !labels.includes('Borang Akuan (BA)')
+          && !labels.includes('Approval Letter (AL)') && !labels.includes('Customer Monitoring')
+          && !labels.includes('Stock Allocation') && !labels.includes('Inventory Map'),
+          'the six separate sections are gone — only the two merged cards remain');
     const byId = Object.fromEntries(drawer.cards.map(c => [c.id, c]));
-    check(JSON.stringify(byId['d-card-orders'].actions) === JSON.stringify(['Add new DO']), 'DO offers Add new DO');
-    check(JSON.stringify(byId['d-card-ba'].actions) === JSON.stringify(['Manage Record']), 'BA offers Manage Record');
-    check(JSON.stringify(byId['d-card-al'].actions) === JSON.stringify(['Add New AL']), 'AL offers Add New AL');
-    check(JSON.stringify(byId['d-card-stock'].actions) === JSON.stringify(['Update stock & sales']), 'Stock Allocation keeps its write function');
+    check(JSON.stringify(byId['d-card-orders'].actions) === JSON.stringify(
+      ['Add new DO', 'Manage Borang Akuan (BA) Record', 'Add New AL']),
+      'Customer Order Documentation offers all three ticks, in order (' + byId['d-card-orders'].actions.join(' / ') + ')');
+    check(JSON.stringify(byId['d-card-stock'].actions) === JSON.stringify(
+      ['Customer Monitoring', 'Update stock & sales', 'Inventory Map']),
+      'Seedling Sales Control offers all three ticks, in order (' + byId['d-card-stock'].actions.join(' / ') + ')');
 
-    // Lock BA entirely, keep AL view but take its write, lock Stock Allocation.
+    // Open the card, keep the page open, lock BA's write and Customer
+    // Monitoring, leave DO/AL and Stock Allocation/Inventory Map ticked.
     await page.evaluate(() => {
-      document.getElementById('d-view-ba').checked = false;
-      document.getElementById('d-act-al-manage').checked = false;
-      document.getElementById('d-view-stock').checked = false;
+      document.getElementById('d-view-orders').checked = true;
+      document.getElementById('d-act-orders-manage').checked = true;
+      document.getElementById('d-act-orders-ba_manage').checked = false;
+      document.getElementById('d-act-orders-al_manage').checked = true;
+      document.getElementById('d-view-stock').checked = true;
+      document.getElementById('d-act-stock-customer').checked = false;
+      document.getElementById('d-act-stock-manage').checked = true;
+      document.getElementById('d-act-stock-map').checked = true;
     });
-    // DOM click — with Tailwind stubbed out the drawer sits off-viewport,
-    // which Playwright's real click refuses; the handler is what is under test.
     await page.evaluate(() => document.getElementById('d-save').click());
     await page.waitForTimeout(400);
     const upd = await page.evaluate(() => window.__updates[0] && window.__updates[0].payload);
     const acts = upd && upd.permissions && upd.permissions.operation_actions;
     check(!!acts, 'Save wrote one permissions update');
-    check(acts && acts.ba && acts.ba.view === false && acts.ba.manage === false, 'ba saved locked');
-    check(acts && acts.al && acts.al.view === true && acts.al.manage === false, 'al saved view-only');
-    check(acts && acts.orders && acts.orders.view === true && acts.orders.manage === true, 'orders (the old key) untouched');
-    check(acts && acts.stock && acts.stock.view === false, 'stock (the old key) saved locked');
-    check(acts && acts.stock_customer && acts.stock_customer.view === true, 'stock_customer saved as its own section');
-    check(acts && acts.stock_map && acts.stock_map.view === true, 'stock_map saved as its own section');
+    check(acts && acts.orders && acts.orders.view === true && acts.orders.manage === true
+          && acts.orders.ba_manage === false && acts.orders.al_manage === true,
+          'orders carries all three ticks (' + JSON.stringify(acts && acts.orders) + ')');
+    check(acts && acts.stock && acts.stock.view === true && acts.stock.customer === false
+          && acts.stock.manage === true && acts.stock.map === true,
+          'stock carries all three ticks (' + JSON.stringify(acts && acts.stock) + ')');
     const pages = upd && upd.permissions && upd.permissions.operation_pages;
-    check(pages && pages.ba === 'none' && pages.stock === 'none' && pages.al === 'normal',
-          'legacy operation_pages mirrored (ba none, stock none, al normal)');
+    check(pages && pages.orders === 'normal' && pages.stock === 'normal',
+          'legacy operation_pages mirrored (orders normal, stock normal)');
+    check(!('ba' in (acts || {})) && !('al' in (acts || {}))
+          && !('stock_customer' in (acts || {})) && !('stock_map' in (acts || {})),
+          'no separate ba / al / stock_customer / stock_map keys are written any more');
     await ctx.close();
   }
 
-  // ── B. An OLD lock on 'stock' still locks the whole page ───────────────
-  console.log('\nB. A user locked out of stock before the new keys stays locked out');
+  // ── B. Locking 'orders' locks DO, BA and AL together ────────────────────
+  console.log("\nB. Locking Customer Order Documentation locks all three pages, with no sibling to fall back to");
   {
-    const u = prof('u3', { modules: { operation: 'normal' }, operation_actions: { stock: { view: false, manage: false } } });
-    const { ctx, page } = await open('/operation/operation_stock_sales.html', 'u3', [u]);
-    const where = page.url();
-    const alerts = await page.evaluate(() => window.__alerts).catch(() => []);
-    check(/operation_dashboard/.test(where), 'bounced to the dashboard (' + where.split('/').pop() + ')');
-    check(true || alerts, 'inheritance: no stock_customer/stock_map entry was needed to keep the lock');
-    await ctx.close();
+    const u = prof('u3', { modules: { operation: 'normal' }, operation_actions: { orders: { view: false, manage: false, ba_manage: false, al_manage: false } } });
+    for (const url of ['/operation/operation_delivery.html', '/operation/operation_ba.html', '/operation/operation_booking.html']) {
+      const { ctx, page } = await open(url, 'u3', [u]);
+      check(/operation_dashboard/.test(page.url()), url + ' bounced to the dashboard (' + page.url().split('/').pop() + ')');
+      await ctx.close();
+    }
   }
 
-  // ── C. A new-style row: only Customer Monitoring ticked ────────────────
-  console.log('\nC. Customer Monitoring alone shows that tab alone');
+  // ── C. Locking 'stock' locks the whole Seedling Sales Control page ──────
+  console.log('\nC. Locking Seedling Sales Control locks the whole page');
   {
-    const u = prof('u4', { modules: { operation: 'normal' }, operation_actions: {
-      stock: { view: false, manage: false }, stock_customer: { view: true }, stock_map: { view: false } } });
+    const u = prof('u4', { modules: { operation: 'normal' }, operation_actions: { stock: { view: false, manage: false, customer: false, map: false } } });
     const { ctx, page } = await open('/operation/operation_stock_sales.html', 'u4', [u]);
-    check(/operation_stock_sales/.test(page.url()), 'the page opens');
-    const vis = await page.evaluate(() => ({
-      customer: document.getElementById('ssm-tab-customer').style.display !== 'none',
-      stock:    document.getElementById('ssm-tab-stock').style.display !== 'none',
-      map:      document.getElementById('ssm-tab-map').style.display !== 'none',
-      customerPane: !document.getElementById('ssm-pane-customer').classList.contains('hidden')
-    }));
-    check(vis.customer && !vis.stock && !vis.map, 'only the Customer Monitoring tab is offered');
-    check(vis.customerPane, 'and its pane is the one showing');
+    check(/operation_dashboard/.test(page.url()), 'bounced to the dashboard (' + page.url().split('/').pop() + ')');
     await ctx.close();
   }
 
-  // ── D. BA: view off bounces, manage off blocks the writes ──────────────
-  console.log('\nD. Borang Akuan obeys its two ticks');
+  // ── D. A LEGACY row with no opinion on the new ticks keeps working ──────
+  console.log('\nD. A row saved before today still manages BA/AL and still shows every stock tab');
   {
-    const u = prof('u5', { modules: { operation: 'normal' }, operation_actions: {
-      orders: { view: true, manage: true }, ba: { view: false, manage: false } } });
-    const { ctx, page } = await open('/operation/operation_ba.html', 'u5', [u]);
-    check(/operation_delivery/.test(page.url()), 'view off: bounced to the DO section (' + page.url().split('/').pop() + ')');
-    await ctx.close();
+    // Exactly what 'orders' / 'stock' looked like before this feature —
+    // view and manage only, nothing named ba_manage/al_manage/customer/map.
+    const u = prof('u5', { modules: { operation: 'normal' },
+      operation_actions: { orders: { view: true, manage: true }, stock: { view: true, manage: true } } });
+    const { ctx: ctx1, page: ba } = await open('/operation/operation_ba.html', 'u5', [u]);
+    check(/operation_ba/.test(ba.url()), 'the BA page opens on a legacy orders row');
+    const baOk = await ba.evaluate(() => {
+      const before = window.__alerts.length;
+      openBAModal();
+      return window.__alerts.length === before && !document.getElementById('ba-modal').classList.contains('hidden');
+    });
+    check(baOk, "ba_manage unset on a legacy row still allows Manage Borang Akuan (BA) Record");
+    await ctx1.close();
+
+    const { ctx: ctx2, page: al } = await open('/operation/operation_booking.html', 'u5', [u]);
+    check(/operation_booking/.test(al.url()), 'the AL page opens on a legacy orders row');
+    const alOk = await al.evaluate(() => {
+      const before = window.__alerts.length;
+      openALModal();
+      return window.__alerts.length === before && !document.getElementById('al-modal').classList.contains('hidden');
+    });
+    check(alOk, 'al_manage unset on a legacy row still allows Add New AL');
+    await ctx2.close();
+
+    const { ctx: ctx3, page: stk } = await open('/operation/operation_stock_sales.html', 'u5', [u]);
+    check(/operation_stock_sales/.test(stk.url()), 'the Stock page opens on a legacy stock row');
+    const vis = await stk.evaluate(() => ({
+      customer: document.getElementById('ssm-tab-customer').style.display !== 'none',
+      map:      document.getElementById('ssm-tab-map').style.display !== 'none'
+    }));
+    check(vis.customer && vis.map, 'customer/map unset on a legacy row still shows both tabs');
+    await ctx3.close();
   }
+
+  // ── E. BA obeys its own tick without touching DO or AL ──────────────────
+  console.log('\nE. Borang Akuan obeys ba_manage; the delete gate fires before the PIN');
   {
     const u = prof('u6', { modules: { operation: 'normal' }, operation_actions: {
-      orders: { view: true, manage: true }, ba: { view: true, manage: false }, al: { view: false } } });
+      orders: { view: true, manage: true, ba_manage: false, al_manage: true } } });
     const { ctx, page } = await open('/operation/operation_ba.html', 'u6', [u]);
-    check(/operation_ba/.test(page.url()), 'view on: the page opens');
+    check(/operation_ba/.test(page.url()), 'the page opens: orders.view is true');
     const d = await page.evaluate(async () => {
       const before = window.__alerts.length;
       openBAModal();
@@ -216,47 +254,31 @@ const prof = (id, permissions) => ({ id, email: id + '@m.t', full_name: 'User ' 
       await deleteBA();
       return { addBlocked, deleteAskedPin: window.__prompts > p0,
                deleteBlocked: window.__alerts.length > before + (addBlocked ? 1 : 0),
-               alTab: document.getElementById('tab-al').style.display === 'none',
-               doTab: document.getElementById('tab-do').style.display !== 'none' };
+               doTabThere: !!document.getElementById('tab-do'),
+               alTabThere: !!document.getElementById('tab-al') };
     });
-    check(d.addBlocked, 'manage off: the add modal never opens');
-    check(d.deleteBlocked && !d.deleteAskedPin, 'manage off: delete is refused BEFORE the Master PIN is asked');
-    check(d.alTab, 'the AL tab (view off) is not offered here');
-    check(d.doTab, 'the DO tab (view on) still is');
+    check(d.addBlocked, 'ba_manage off: the add modal never opens');
+    check(d.deleteBlocked && !d.deleteAskedPin, 'ba_manage off: delete is refused BEFORE the Master PIN is asked');
+    check(d.doTabThere && d.alTabThere, 'the DO and AL tabs are still offered — they open and lock with this one together');
     await ctx.close();
   }
 
-  // ── E. AL: Add New AL blocked without its tick; PIN flows untouched ────
-  console.log('\nE. Approval Letter obeys its tick');
+  // ── F. AL obeys its own tick; PIN flows untouched ───────────────────────
+  console.log('\nF. Approval Letter obeys al_manage; the Master PIN sentences are untouched');
   {
     const u = prof('u7', { modules: { operation: 'normal' }, operation_actions: {
-      al: { view: true, manage: false } } });
+      orders: { view: true, manage: true, ba_manage: true, al_manage: false } } });
     const { ctx, page } = await open('/operation/operation_booking.html', 'u7', [u]);
-    check(/operation_booking/.test(page.url()), 'view on: the page opens');
+    check(/operation_booking/.test(page.url()), 'the page opens: orders.view is true');
     const d = await page.evaluate(() => {
       const before = window.__alerts.length;
       openALModal();
       return { blocked: window.__alerts.length > before
         && document.getElementById('al-modal').classList.contains('hidden') };
     });
-    check(d.blocked, 'manage off: Add New AL never opens');
-    const pinSrc = fs_read_booking();
-    check(pinSrc, 'the Master PIN prompts are still in the page, word for word');
-    await ctx.close();
-  }
-
-  // ── F. The DO page hides tabs the user cannot view ─────────────────────
-  console.log('\nF. The DO page offers only the sections this user may view');
-  {
-    const u = prof('u8', { modules: { operation: 'normal' }, operation_actions: {
-      orders: { view: true, manage: true }, ba: { view: false }, al: { view: true, manage: true } } });
-    const { ctx, page } = await open('/operation/operation_delivery.html', 'u8', [u]);
-    const d = await page.evaluate(() => ({
-      ba: document.getElementById('tab-ba').style.display === 'none',
-      al: document.getElementById('tab-al').style.display !== 'none'
-    }));
-    check(d.ba, 'BA tab hidden');
-    check(d.al, 'AL tab offered');
+    check(d.blocked, 'al_manage off: Add New AL never opens');
+    const pinSrc = fs_read_pins();
+    check(pinSrc, 'the Master PIN prompts are still in the pages, word for word');
     await ctx.close();
   }
 
@@ -267,7 +289,7 @@ const prof = (id, permissions) => ({ id, email: id + '@m.t', full_name: 'User ' 
 
 /* The PIN prompts are the office's second lock and this change must not
    touch them: the exact sentences stay in the pages. */
-function fs_read_booking() {
+function fs_read_pins() {
   const ba = fs.readFileSync(path.join(ROOT, 'operation', 'operation_ba.html'), 'utf8');
   const al = fs.readFileSync(path.join(ROOT, 'operation', 'operation_booking.html'), 'utf8');
   const dlv = fs.readFileSync(path.join(ROOT, 'operation', 'operation_delivery.html'), 'utf8');

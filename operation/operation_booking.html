@@ -905,7 +905,7 @@
         }
 
         function openALModal() { 
-            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('al', 'manage')) return;
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'al_manage')) return;
             document.getElementById('al-modal').classList.remove('hidden'); 
             document.getElementById('bulk-al-tbody').innerHTML = ''; 
             window.extractedBulkALs = {}; 
@@ -961,7 +961,7 @@
         }
 
         function enableEditMode() {
-            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('al', 'manage')) return;
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'al_manage')) return;
             if (isAlEntryLocked(currentManageAL)) return alert('This AL is in a locked month (Month Lock Calendar, System Settings) and can\'t be edited. Unlock that month if this was locked in error.');
             const locked = currentManageAL && isAlLocked(currentManageAL.remark);
             if (locked && !isOpAdmin()) return alert('This record is locked. Ask an admin to unlock it before editing.');
@@ -1254,7 +1254,7 @@
         }
 
         async function saveBulkAL() {
-            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('al', 'manage')) return;
+            if (typeof MJMAccess !== 'undefined' && !MJMAccess.requireOperationAction('orders', 'al_manage')) return;
             const btn = document.getElementById('save-bulk-al-btn'); btn.innerText = 'SAVING ALL...'; btn.disabled = true; 
             const rows = document.querySelectorAll('#bulk-al-tbody tr'); let successCount = 0; let currentPrefix = ''; let nextSeq = 1;
             
@@ -1314,26 +1314,21 @@
         setupDragAndDrop(); _supabase.auth.getSession().then(async ({ data: { session } }) => { if (!session) { window.location.href = 'operation_dashboard.html'; return; } try { await MJMAccess.load(_supabase); } catch(e) { console.warn('[AL] MJMAccess.load failed', e); } fetchData(); });
     </script>
 
-<!-- Page-access guard: Approval Letter is its own section of Customer
-     Order Documentation in the module's User Access
-     (operation_user_access.html, key 'al' — view opens this page,
-     'manage' is Add New AL / edit details). Fails open on read errors,
-     same as the DO page's guard. The Admin-PIN flows (verify, cancel,
-     restore) are untouched and still ask the PIN. -->
+<!-- Page-access guard: Approval Letter is part of Customer Order
+     Documentation in the module's User Access
+     (operation_user_access.html, key 'orders' — the one "Open Page"
+     switch for DO/BA/AL together; 'al_manage' is this page's own write
+     tick: Add New AL / edit details). Fails open on read errors, same as
+     the DO page's guard. The Admin-PIN flows (verify, cancel, restore)
+     are untouched and still ask the PIN. -->
 <script>
 (async () => {
   try {
     await MJMAccess.load(_supabase);
-    if (MJMAccess.user() && !MJMAccess.canOpenOperationPage('al')) {
-      alert('You do not have access to Approval Letter (AL).');
-      location.replace(MJMAccess.canOpenOperationPage('orders') ? 'operation_delivery.html'
-        : MJMAccess.canOpenOperationPage('ba') ? 'operation_ba.html'
-        : 'operation_dashboard.html');
+    if (MJMAccess.user() && !MJMAccess.canOpenOperationPage('orders')) {
+      alert('You do not have access to Customer Order Documentation.');
+      location.replace('operation_dashboard.html');
       return;
-    }
-    if (MJMAccess.user()) {
-      if (!MJMAccess.canOpenOperationPage('orders')) { const t = document.getElementById('tab-do'); if (t) t.style.display = 'none'; }
-      if (!MJMAccess.canOpenOperationPage('ba'))     { const t = document.getElementById('tab-ba'); if (t) t.style.display = 'none'; }
     }
   } catch (e) { console.warn('[page-guard] skipped:', e && e.message); }
 })();

@@ -36,8 +36,8 @@
        "operation_actions": {
          "batch":       { "view":true, "add_new":true, "fill_report":true,
                           "verify":false, "review":false, "delete":false },
-         "orders":      { "view":true, "manage":true },
-         "stock":       { "view":true, "manage":true },
+         "orders":      { "view":true, "manage":true, "ba_manage":true, "al_manage":true },
+         "stock":       { "view":true, "manage":true, "customer":true, "map":true },
          "reports":     { "view":false },
          "audit_trail": { "view":false, "clear_logs":false },
          "settings":    { "view":true, "manage":true }
@@ -451,21 +451,25 @@
   //                 page itself is open (the legacy "normal" behaviour)
   const MODULE_STORED_PAGES = new Set(['reports', 'audit_trail']);
 
-  /* A section that moved OUT of a gated page inherits that page's answer
-     until its own entry has been saved: Customer Monitoring and Inventory
-     Map were panes INSIDE the Stock & Sales page ('stock'), so a user
-     locked out of it before these keys existed stays locked out — unset
-     falling open here would widen a decision somebody already made. The
-     BA and AL pages are deliberately NOT in this map: they were ungated
-     before their keys existed, so unset = allowed is their status quo. */
-  const OPERATION_VIEW_PARENT = { stock_customer: 'stock', stock_map: 'stock' };
+  /* An action tick ADDED to a page that already had its own saved row
+     reads as allowed, not denied, when that row has no opinion on it —
+     the function it gates had no gate at all before the tick existed, so
+     missing must not mean "nobody said yes" the way an ordinary unticked
+     box does. 'ba_manage' and 'al_manage' joined 'orders' the same day
+     Borang Akuan and Approval Letter stopped being ungated pages of their
+     own; 'customer' and 'map' joined 'stock' the same day Customer
+     Monitoring and Inventory Map stopped being panes nobody could lock
+     separately from it. A row saved before that day, or in the hour
+     between, has 'view'/'manage' and nothing else — this is what keeps
+     it reading the way it always did. */
+  const OPERATION_NEW_ACTION_DEFAULT = {
+    orders: ['ba_manage', 'al_manage'],
+    stock:  ['customer', 'map'],
+  };
 
   function canDoOperation(page, action) {
     const p = permissions();
     const acts = p.operation_actions && p.operation_actions[page];
-    if (!acts && OPERATION_VIEW_PARENT[page]) {
-      return canDoOperation(OPERATION_VIEW_PARENT[page], action);
-    }
     if (acts) {
       // The module itself must still be open for this user (set on the
       // main portal). Reports/Audit Trail are their own module entries,
@@ -473,6 +477,7 @@
       if (!MODULE_STORED_PAGES.has(page) && !canAccess('operation')) return false;
       if (!acts.view) return false;      // page closed → every function closed
       if (action === 'view') return true;
+      if (acts[action] === undefined && (OPERATION_NEW_ACTION_DEFAULT[page] || []).includes(action)) return true;
       return !!acts[action];
     }
     // Legacy fallback.
