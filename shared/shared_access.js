@@ -451,9 +451,21 @@
   //                 page itself is open (the legacy "normal" behaviour)
   const MODULE_STORED_PAGES = new Set(['reports', 'audit_trail']);
 
+  /* A section that moved OUT of a gated page inherits that page's answer
+     until its own entry has been saved: Customer Monitoring and Inventory
+     Map were panes INSIDE the Stock & Sales page ('stock'), so a user
+     locked out of it before these keys existed stays locked out — unset
+     falling open here would widen a decision somebody already made. The
+     BA and AL pages are deliberately NOT in this map: they were ungated
+     before their keys existed, so unset = allowed is their status quo. */
+  const OPERATION_VIEW_PARENT = { stock_customer: 'stock', stock_map: 'stock' };
+
   function canDoOperation(page, action) {
     const p = permissions();
     const acts = p.operation_actions && p.operation_actions[page];
+    if (!acts && OPERATION_VIEW_PARENT[page]) {
+      return canDoOperation(OPERATION_VIEW_PARENT[page], action);
+    }
     if (acts) {
       // The module itself must still be open for this user (set on the
       // main portal). Reports/Audit Trail are their own module entries,

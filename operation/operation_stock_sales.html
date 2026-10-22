@@ -1027,9 +1027,33 @@
   try {
     const _gc = supabase.createClient(SHARED_SUPA_URL, SHARED_SUPA_KEY);
     await MJMAccess.load(_gc);
-    if (MJMAccess.user() && !MJMAccess.canOpenOperationPage('stock')) {
-      alert('You do not have access to Stock & Sales.');
+    if (!MJMAccess.user()) return;
+    /* Seedling Sales Control is THREE sections in User Access now, one per
+       tab of this page: Customer Monitoring ('stock_customer'), Stock
+       Allocation ('stock' — the page's long-standing key, which also
+       carries the write function) and Inventory Map ('stock_map'). The
+       page opens when ANY is ticked; a tab the user cannot view is not
+       offered, and the first allowed one is shown. A user with no saved
+       entry for the two new keys answers as 'stock' does — see
+       OPERATION_VIEW_PARENT in shared_access.js. */
+    const can = {
+      customer: MJMAccess.canOpenOperationPage('stock_customer'),
+      stock:    MJMAccess.canOpenOperationPage('stock'),
+      map:      MJMAccess.canOpenOperationPage('stock_map')
+    };
+    if (!can.customer && !can.stock && !can.map) {
+      alert('You do not have access to Seedling Sales Control.');
       location.replace('operation_dashboard.html');
+      return;
+    }
+    const tabOf = { customer: 'ssm-tab-customer', stock: 'ssm-tab-stock', map: 'ssm-tab-map' };
+    Object.keys(tabOf).forEach(k => {
+      if (!can[k]) { const t = document.getElementById(tabOf[k]); if (t) t.style.display = 'none'; }
+    });
+    // The page opens on Customer Monitoring; a user not allowed that tab
+    // lands on their first allowed one instead.
+    if (!can.customer && typeof switchSsmTab === 'function') {
+      switchSsmTab(can.stock ? 'stock' : 'map');
     }
   } catch (e) { console.warn('[page-guard] skipped:', e && e.message); }
 })();

@@ -427,10 +427,34 @@
             if (auditCard   && MJMAccess.canAccess('audit_trail'))  auditCard.classList.remove('hidden');
             // Per-page access inside this module, set in the module's own
             // User Access page. Unset keys default to allowed.
-            ['batch', 'orders', 'stock', 'settings'].forEach(k => {
+            ['batch', 'settings'].forEach(k => {
                 const el = document.querySelector(`[data-card-key="${k}"]`);
                 if (el && !MJMAccess.canOpenOperationPage(k)) el.style.display = 'none';
             });
+            // Customer Order Documentation is three sections (DO 'orders',
+            // BA 'ba', AL 'al') behind one card: the card shows when ANY is
+            // ticked and opens the first one this user may view.
+            {
+                const el = document.querySelector('[data-card-key="orders"]');
+                if (el) {
+                    const first = MJMAccess.canOpenOperationPage('orders') ? 'operation_delivery.html'
+                        : MJMAccess.canOpenOperationPage('ba') ? 'operation_ba.html'
+                        : MJMAccess.canOpenOperationPage('al') ? 'operation_booking.html'
+                        : null;
+                    if (!first) el.style.display = 'none'; else el.setAttribute('href', first);
+                }
+            }
+            // Seedling Sales Control likewise: three tabs of one page
+            // ('stock_customer', 'stock', 'stock_map') — the card shows
+            // when any is ticked; the page itself lands on the first.
+            {
+                const el = document.querySelector('[data-card-key="stock"]');
+                if (el && !MJMAccess.canOpenOperationPage('stock_customer')
+                       && !MJMAccess.canOpenOperationPage('stock')
+                       && !MJMAccess.canOpenOperationPage('stock_map')) {
+                    el.style.display = 'none';
+                }
+            }
             // Pending Nelos cases raised from this module. Only for people who
             // actually hold Nelos — everyone else never sees the strip.
             if (MJMAccess.canAccess('nelos')) {

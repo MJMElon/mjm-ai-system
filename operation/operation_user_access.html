@@ -188,6 +188,49 @@ const LEVEL_LABEL = { admin:'Admin', normal:'Normal', none:'None' };
                        historically live there)
      batch.verify    → permissions.can_verify_operation */
 const PAGE_DEFS = [
+  /* ── Customer Order Documentation — three sections, one per page ──
+     The section tick is VIEW (page hidden when off, its tab gone from the
+     other two pages); the tick under it is that page's write function.
+     'orders' is the DO page's long-standing stored key and DID NOT MOVE —
+     only the label did (renaming the key would read every saved tick as
+     unset). 'ba' and 'al' are new: those two pages were ungated before, so
+     an unset answer staying "allowed" is today's behaviour, not a widening.
+     Deleting a DO or BA still asks the Master PIN on the page — the PIN is
+     a second lock, not a replacement for the tick. */
+  { key:'orders', store:'pages', def:'normal', group:'Customer Order Documentation',
+    label:'Delivery Note (DO)', desc:'The DO list and its documents',
+    actions:[
+      { key:'manage', label:'Add new DO', desc:'Create, edit and upload DOs — deleting one still asks the Master PIN' }
+    ]},
+  { key:'ba', store:'pages', def:'normal', group:'Customer Order Documentation',
+    label:'Borang Akuan (BA)', desc:'The BA list and its documents',
+    actions:[
+      { key:'manage', label:'Manage Record', desc:'Add, edit and save BA records — deleting one still asks the Master PIN' }
+    ]},
+  { key:'al', store:'pages', def:'normal', group:'Customer Order Documentation',
+    label:'Approval Letter (AL)', desc:'The AL list and balances',
+    actions:[
+      { key:'manage', label:'Add New AL', desc:'Create new approval letters and edit their details' }
+    ]},
+  /* ── Seedling Sales Control — three sections, three tabs of ONE page ──
+     'stock' is the legacy key for the whole page and stays on Stock
+     Allocation, keeping its write function. Customer Monitoring and
+     Inventory Map are new keys whose UNSET answer inherits the 'stock'
+     one (inherit below, and OPERATION_VIEW_PARENT in shared_access.js):
+     these panes lived inside the gated page, so a user locked out of it
+     before the keys existed must stay locked out — unset falling open
+     here would widen a decision somebody already made. */
+  { key:'stock_customer', store:'pages', def:'normal', group:'Seedling Sales Control', inherit:'stock',
+    label:'Customer Monitoring', desc:'Admin pickups and follow-ups',
+    actions:[] },
+  { key:'stock', store:'pages', def:'normal', group:'Seedling Sales Control',
+    label:'Stock Allocation', desc:'Matured stock, plot balances, customer allocation',
+    actions:[
+      { key:'manage', label:'Update stock & sales', desc:'Change allocations, upload invoices, mark orders paid' }
+    ]},
+  { key:'stock_map', store:'pages', def:'normal', group:'Seedling Sales Control', inherit:'stock',
+    label:'Inventory Map', desc:'Plot batches, collected, balance',
+    actions:[] },
   { key:'batch', store:'pages', def:'normal', label:'Batch Records', desc:'Create and edit production batch records',
     actions:[
       { key:'add_new',     label:'Add new batch',            desc:'Create a new batch record' },
@@ -195,14 +238,6 @@ const PAGE_DEFS = [
       { key:'verify',      label:'Verify reports',           desc:'Sign off a batch tab as Verifier (before review)' },
       { key:'review',      label:'Review & approve reports', desc:'Mark as Reviewed, Reject, Unreview (HQ decision)' },
       { key:'delete',      label:'Delete batch records',     desc:'Permanently delete a whole batch' }
-    ]},
-  { key:'orders', store:'pages', def:'normal', label:'Delivery Orders', desc:'Delivery scheduling and order handling',
-    actions:[
-      { key:'manage', label:'Add, edit & delete orders', desc:'Create DOs / BAs, edit and delete existing ones' }
-    ]},
-  { key:'stock', store:'pages', def:'normal', label:'Stock & Sales', desc:'Stock levels, publishing, and sales',
-    actions:[
-      { key:'manage', label:'Update stock & sales', desc:'Change allocations, upload invoices, mark orders paid' }
     ]},
   { key:'reports', store:'modules', def:'none', label:'Reports', desc:'Batch production summary, analytics',
     actions:[] },
@@ -255,6 +290,12 @@ function effectiveActions(perms, d) {
     const out = { view: !!saved.view };
     d.actions.forEach(a => { out[a.key] = out.view && !!saved[a.key]; });
     return out;
+  }
+  // A section that moved OUT of a page (inherit) answers as that page did
+  // until the drawer saves its own entry — see the note on PAGE_DEFS.
+  if (d.inherit) {
+    const parent = PAGE_DEFS.find(x => x.key === d.inherit);
+    if (parent) return { view: effectiveActions(perms, parent).view };
   }
   const view = pageLevel(perms, d) !== 'none';
   const isOpAdmin = !!(perms.modules && perms.modules.operation === 'admin');
@@ -382,8 +423,17 @@ function openDrawer(uid) {
   document.getElementById('d-level').innerHTML =
     `<span class="chip chip-${lvl === 'admin' ? 'admin' : 'normal'}">Module level · ${LEVEL_LABEL[lvl] || lvl}</span>
      <span class="chip chip-info">set on main portal</span>`;
-  document.getElementById('d-pages').innerHTML =
-    PAGE_DEFS.map(d => pageCardHtml(d, effectiveActions(editingPerms, d))).join('');
+  // Sections sharing a group (Customer Order Documentation, Seedling Sales
+  // Control) render under one heading, in PAGE_DEFS order.
+  let _lastGroup = null;
+  document.getElementById('d-pages').innerHTML = PAGE_DEFS.map(d => {
+    let head = '';
+    if ((d.group || null) !== _lastGroup) {
+      _lastGroup = d.group || null;
+      if (d.group) head = `<div class="text-[10px] font-black uppercase tracking-widest text-slate-400 pt-2">${d.group}</div>`;
+    }
+    return head + pageCardHtml(d, effectiveActions(editingPerms, d));
+  }).join('');
   document.getElementById('d-manage-users').checked = !!editingPerms.manage_users;
 
   document.getElementById('drawer').classList.add('open');
