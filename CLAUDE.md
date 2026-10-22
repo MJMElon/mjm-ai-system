@@ -2944,9 +2944,28 @@ so the page that decides what a WORKER sees was filed under the conductor's
 own Setting, and nothing on either screen said why. The office handed over
 the outline of it and asked for it on the MJM Team settings — *"actually is
 previous fc portal and worker portal's system settings, moving out from
-there"* — so it is a **section of its own at the top of
-`scan_settings_hub.html`**, above the per-portal sections, because it
-governs both and they govern one each.
+there"* — and then, seeing it as a section among four others, asked for the
+presses in between to go as well: *"remove all this and remain the system
+setting only. make it straight view the system setting webpage when i
+clicked setting, no need click the button like this."*
+
+**So the Settings tile opens the page itself**, and the two pages that stood
+between them were deleted. **Neither held anything of its own**, which is
+what made that safe and is the reason the stack existed at all —
+`scan_settings_hub.html` was five sections of doors to doors:
+
+| hub section | led to | already on the Team page |
+|---|---|---|
+| FC Portal Setting | `scan_setting.html`, whose only tile was User Access | **User Access**, its own tile |
+| Worker Portal Setting | the phone app's own settings | the **Worker Portal** door |
+| Admin Portal Setting | mobile.mjmnursery.com | the **Admin Portal** door |
+| Auditor Portal Setting | `audit_admin.html` + `audit_user_access.html` | the **Nursery Audit System** hub tile, which reaches both |
+
+**Check what a page holds before deleting it, and check who links IN.**
+`scan_user_access.html` carried TWO Back links to `scan_setting.html` — one
+on the page and one on its Access Denied card — so removing it without those
+would have put a 404 on the way OUT, which is the worst place for one. They
+go to `scan_admin.html` now, which is where User Access is opened from.
 
 Four things in it:
 
@@ -2961,24 +2980,33 @@ Four things in it:
 - **Settings is still in the Worker column**, though it is not on the
   outline — that outline is the FC PORTAL column, and absent from one column
   is not the same as gone.
-- **Both doors now hide for a non-admin.** `scan_system_setting.html` and
-  `scan_setting.html` both ask for scan ADMIN and bounce anybody else to the
-  phone app, so a login holding only the `setting` area saw two tiles that
-  threw it somewhere else. They hide together — the same test their
-  destinations apply, asked one step earlier. Nobody gains anything: the
-  pages still decide.
+- **The Settings TILE hides for a non-admin.** `scan_system_setting.html`
+  asks for scan ADMIN and bounces anybody else to the phone app, so a login
+  holding only the `setting` area saw a tile that threw it somewhere else. It
+  hides on the same test its destination applies, asked one step earlier.
+  That check first lived on the hub; the hub is gone, **the check is not**.
+  Nobody gains anything: the page still decides.
 
-**And the way out follows the way in.** The back link on
-`scan_system_setting.html` went to `scan_setting.html`, the page it used to
-hang off; it goes to the Settings hub now. A back link left pointing at the
-old parent drops somebody on a page they did not come through.
+**And the way out follows the way in**, every time one of these moves. The
+back link on `scan_system_setting.html` has now been repointed twice — off
+`scan_setting.html` when it moved to the hub, off the hub when the tile
+started opening it directly. A back link left on the old parent drops
+somebody on a page they did not come through, and once that parent is
+deleted it drops them on a 404.
 
-`tests/system_setting_is_not_the_fc_portals.cjs` drives both real pages. It
-re-learned the trap this file already names: **`innerText` returns
-CSS-transformed text**, so `SYSTEM SETTING` came back where `System Setting`
-was written and four correct checks failed. It reads `textContent`. And the
-function cell carries the stored KEY beside the label, so the list of names
-is read off `.pt-name` and not off the cell.
+`tests/system_setting_is_not_the_fc_portals.cjs` drives the real pages. Three
+things it had to learn:
+
+- **`innerText` returns CSS-transformed text** — the trap this file already
+  names — so `SYSTEM SETTING` came back where `System Setting` was written
+  and four correct checks failed. It reads `textContent`.
+- The function cell carries the stored KEY beside the label, so the list of
+  names is read off `.pt-name` and not off the cell.
+- **A hidden-tile check passes for free on a page that never drew.** The
+  non-admin fixture was bounced off `scan_admin.html` entirely, so "the
+  Settings tile is not shown" was true of a blank screen. The fixture holds
+  `manage` to get IN and `scan: normal` to not be an admin, and the test
+  asserts another tile IS drawn before asserting this one is not.
 
 ## A search takes you to the batch
 

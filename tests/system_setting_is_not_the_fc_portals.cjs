@@ -4,14 +4,25 @@
    Portal AND the 555 Worker Portal each offer — the switch table has a
    column for each, side by side, and that is the whole point of it.
 
-   It sat two doors down all the same:
+   It sat THREE doors down all the same:
 
        555 MJM Team -> Settings -> FC Portal Setting -> System Setting
 
    so the page that decides what a WORKER sees was filed under the
    conductor's own Setting. The office handed over the outline of it and
-   asked for it on the MJM Team settings, so it moved out of
-   scan_setting.html and up to the top of scan_settings_hub.html.
+   asked for it on the MJM Team settings, and then for the presses in
+   between to go: "remove all this and remain the system setting only.
+   make it straight view the system setting webpage when i clicked
+   setting". So the Settings tile opens this page itself, and the two
+   pages that stood between them are gone.
+
+   NEITHER OF THEM HELD ANYTHING OF ITS OWN. scan_settings_hub.html was
+   five sections of doors to doors: FC Portal Setting led to
+   scan_setting.html, whose only tile was User Access — which is a tile on
+   the Team page already; Admin Portal Setting led to a door that is also
+   on the Team page; Worker Portal Setting led into the phone app; and
+   Auditor Portal Setting led to the Audit back office, which has been its
+   own hub module since the move before this one.
 
    The outline also carried the office's own words for two of the rows —
    "scan barcode counter" and "issue collection DO" — and a row headed one
@@ -95,65 +106,82 @@ const ADMIN = { modules: { scan: 'admin' }, manage_users: true };
 (async () => {
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 
-console.log('\n── 1. System Setting is its own section on the MJM Team settings ──');
+console.log('\n── 1. Settings opens the page itself, not a list of one ──');
 {
-  const page = await open(browser, 'scan_settings_hub.html', ADMIN);
-  const sec = page.locator('#section-system');
-  check('the section exists', await sec.count(), 1);
-  checkTrue('and a scan admin sees it', await sec.isVisible());
-  check('it opens the System Setting page',
-        await sec.locator('a.tool').getAttribute('href'), 'scan_system_setting.html');
+  const page = await open(browser, 'scan_admin.html', ADMIN);
+  const tile = page.locator('#tool-access');
+  check('the Settings tile opens System Setting directly',
+        await tile.getAttribute('href'), 'scan_system_setting.html');
+  checkTrue('and a scan admin sees it', await tile.isVisible());
   /* textContent, not innerText: these labels are uppercased in CSS and
      innerText hands back what is DRAWN, so a comparison against the real
      spelling fails on a page that is perfectly correct. CLAUDE.md names
      this trap by itself. */
-  check('it is labelled for what it governs, not for a portal',
-        (await sec.locator('.portal-label').evaluate(e => e.textContent)).trim(), 'System Setting');
-  /* FIRST, because it governs both portals and the per-portal sections
-     under it govern one each. */
-  const order = await page.locator('.portal-section').evaluateAll(els => els.map(e => e.id));
-  check('and it comes before the per-portal sections', order[0], 'section-system');
-
-  /* The FC section must stop claiming what it no longer leads to. */
-  const fcSub = (await page.locator('#section-fc .tool-sub').evaluate(e => e.textContent)).toLowerCase();
-  checkTrue('the FC Portal tile no longer offers "what each portal offers"',
-            fcSub.indexOf('what each portal offers') < 0);
+  check('it says what the page actually holds',
+        (await tile.locator('.door-sub').evaluate(e => e.textContent)).trim(),
+        'Location, what each portal offers & the boundary');
+  /* User Access was the only thing under the pages that went, and it is
+     here, which is what made removing them safe. */
+  checkTrue('User Access is still a door of its own on this page',
+            await page.locator('#tool-user-access').isVisible());
   await page.close();
 }
 
-console.log('\n── 2. Nobody is walked into a wall ──');
+console.log('\n── 2. The pages in between are gone, and nothing points at them ──');
 {
-  /* Both pages ask for scan ADMIN and bounce anybody else to the phone app.
-     A door that throws you somewhere else is worse than no door. */
-  const page = await open(browser, 'scan_settings_hub.html',
-                          { modules: { scan: 'normal' }, scan_areas: { setting: { view: true } } });
-  checkTrue('a non-admin is not shown the System Setting section',
-            !(await page.locator('#section-system').isVisible()));
-  checkTrue('nor the FC Portal Setting one, which bounces the same way',
-            !(await page.locator('#section-fc').isVisible()));
-  checkTrue('and is not thrown off the Settings page itself',
-            page.url().indexOf('scan_settings_hub.html') >= 0);
-  await page.close();
+  const dir = path.join(__dirname, '..', 'scan');
+  for (const gone of ['scan_settings_hub.html', 'scan_setting.html']) {
+    checkTrue(gone + ' is removed', !fs.existsSync(path.join(dir, gone)));
+  }
+  /* A link to a page that is not there is a 404 somebody finds by pressing
+     it. Asked of the markup the browser gets, so the comments that explain
+     the removal are free to name what went. */
+  const dangling = [];
+  for (const f of fs.readdirSync(dir)) {
+    if (!f.endsWith('.html')) continue;
+    const code = fs.readFileSync(path.join(dir, f), 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+    if (/href="scan_settings_hub\.html"|href="scan_setting\.html"/.test(code)) dangling.push(f);
+  }
+  check('and no page still links to either', dangling, []);
 }
 
-console.log('\n── 3. It has left the FC Portal Setting page ──');
+console.log('\n── 3. Nobody is walked into a wall ──');
 {
-  const page = await open(browser, 'scan_setting.html', ADMIN);
-  check('no System Setting tile remains there',
-        await page.locator('#tool-system').count(), 0);
-  checkTrue('and User Access, which really is that page, stays',
-            await page.locator('#tool-users').count() > 0);
+  /* scan_system_setting.html asks for scan ADMIN and bounces anybody else
+     to the phone app. A door that throws you somewhere else is worse than
+     no door, so the tile hides on the same test the page applies. That
+     check used to live on the hub; the hub is gone, the check is not. */
+  /* It has to REACH the page for the check to mean anything: a login
+     bounced off scan_admin.html shows no tile either, and a hidden-tile
+     assertion that passes because the page never drew is a check that
+     cannot fail. `manage` is what lets it in; `scan: normal` is what makes
+     it not an admin. */
+  const page = await open(browser, 'scan_admin.html',
+                          { modules: { scan: 'normal' },
+                            scan_areas: { manage: { view: true }, setting: { view: true } } });
+  checkTrue('it reaches the Team page at all', page.url().indexOf('scan_admin.html') >= 0);
+  checkTrue('and the other tools are drawn, so the page really rendered',
+            await page.locator('#tool-user-access').isVisible());
+  checkTrue('but the Settings tile, which would bounce it, is not shown',
+            !(await page.locator('#tool-access').isVisible()));
   await page.close();
 }
 
 console.log('\n── 4. The way out follows the way in ──');
 {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'scan', 'scan_system_setting.html'), 'utf8');
-  const code = src.replace(/<!--[\s\S]*?-->/g, '');
-  checkTrue('the back link goes to the Settings hub it is now reached from',
-            code.indexOf('href="scan_settings_hub.html"') >= 0);
-  checkTrue('and no longer to the FC Portal Setting page',
-            code.indexOf('href="scan_setting.html"') < 0);
+  const read = (f) => fs.readFileSync(path.join(__dirname, '..', 'scan', f), 'utf8')
+                        .replace(/<!--[\s\S]*?-->/g, '');
+  const sys = read('scan_system_setting.html');
+  checkTrue('System Setting goes back to the page it is now opened from',
+            sys.indexOf('href="scan_admin.html"') >= 0);
+  /* User Access was reached through one of the pages that went, and its
+     two Back links pointed at it — a back link to a deleted page is a 404
+     on the way OUT, which is the worst place for one. */
+  const ua = read('scan_user_access.html');
+  checkTrue('and so does User Access, whose Back pointed at a page that is gone',
+            ua.indexOf('href="scan_admin.html"') >= 0);
+  check('with no Back left pointing anywhere else',
+        (ua.match(/back-btn" href="([^"]+)"/g) || []), ['back-btn" href="scan_admin.html"']);
 }
 
 console.log('\n── 5. The rows carry the office\'s own words ──');

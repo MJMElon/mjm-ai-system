@@ -3159,24 +3159,25 @@ function _rememberReport(report) {
   try { localStorage.setItem(LAST_REPORT_KEY, report); } catch (e) { /* private mode, etc — just don't persist */ }
 }
 
-// Same idea for the "As At" date — picking one and refreshing used to
-// always land back on today regardless. Only remembers across a REFRESH;
-// switching report tabs still resets to today on purpose (see
-// syncReportDefaults()'s own comment — re-running the same report should
-// never clobber a date someone deliberately picked, but a fresh tab should
-// not inherit a stale one either).
-const LAST_DATE_KEY = 'mjm_reports_last_date';
-function _rememberDate(dateStr) {
-  try { localStorage.setItem(LAST_DATE_KEY, dateStr || ''); } catch (e) { /* private mode, etc — just don't persist */ }
+// The "As At" date is NOT remembered across visits any more — it was for a
+// while, and the office overruled it: "Always show today's date at as at
+// there." Opening the page and switching report tabs both land on today;
+// a date somebody picks still survives re-running the same report.
+// Today as LOCAL YYYY-MM-DD: toISOString() is UTC, which in Malaysia
+// (UTC+8) is still yesterday for the whole early morning — the house
+// _localISO rule (see CLAUDE.md on the audit cards).
+function _reportsLocalISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 // Same idea again, one level down — which Nursery Report sub-page (and its
 // own Culling Stage / Breed / Locations filters) was open. A refresh used
 // to always drop Seed In Report back to Summary Report with every filter
-// cleared, exactly the "always lands on today" bug the two remembers above
-// already fixed for the report tab and the date. Only restored on a
-// REFRESH (see bootstrap()) — switching sub-reports by hand still resets
-// via syncReportDefaults(), same asymmetry LAST_DATE_KEY already has.
+// cleared. Only restored on a REFRESH (see bootstrap()) — switching
+// sub-reports by hand still resets via syncReportDefaults(). The As At
+// date used to be remembered the same way; the office overruled that one
+// (always today), and only the date.
 const LAST_NURSERY_SUB_KEY = 'mjm_reports_last_nursery_sub';
 const LAST_CULLING_STAGE_KEY = 'mjm_reports_last_culling_stage';
 const LAST_BREED_KEY = 'mjm_reports_last_breed';
@@ -3400,7 +3401,9 @@ function syncReportDefaults() {
   const which = document.getElementById('f-report').value;
   if (DATE_KEYED_REPORTS.has(which)) {
     // f-from is derived from this in runReport() — nothing to set here.
-    document.getElementById('f-to').value = new Date().toISOString().slice(0, 10);
+    // LOCAL today, same reason as bootstrap(): toISOString is UTC and
+    // reads as yesterday in Malaysia until 8am.
+    document.getElementById('f-to').value = _reportsLocalISO();
   }
   // Plot is the more commonly checked default for both sections (see
   // buildMovementSection).
@@ -5574,26 +5577,21 @@ async function bootstrap() {
     } catch (e) { /* private mode, etc — falls back to All Stages */ }
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // LOCAL today, never toISOString().slice(0,10) — that is UTC, which in
+  // Malaysia (UTC+8) is still YESTERDAY for the whole early morning, so the
+  // office opened the report at 8am and As At read the day before.
+  const todayStr = _reportsLocalISO();
   const fTo = document.getElementById('f-to');
-  // Restores whichever "As At" date was last picked, same idea as the
-  // report tab above — a refresh used to always land back on today even
-  // right after deliberately picking an earlier date. A malformed or
-  // future-dated value (a stale save, a clock change) falls back to today
-  // rather than feeding runReport() something it can't use.
-  let restoredDate = todayStr;
-  try {
-    const rememberedDate = localStorage.getItem(LAST_DATE_KEY);
-    if (rememberedDate && /^\d{4}-\d{2}-\d{2}$/.test(rememberedDate) && rememberedDate <= todayStr) {
-      restoredDate = rememberedDate;
-    }
-  } catch (e) { /* private mode, etc — falls back to today */ }
-  fTo.value = restoredDate;
+  // As At ALWAYS opens on today — the office asked for it in as many
+  // words ("Always show today's date at as at there"), overruling the
+  // earlier remember-across-refresh behaviour. A date somebody picks
+  // still survives re-running the SAME report (runReport never touches
+  // it); only opening the page, or switching report tabs, resets it.
+  fTo.value = todayStr;
   // Reports look at what has actually happened — future dates make no
   // sense. f-from is hidden and derived from f-to (see runReport()), so
   // only f-to needs a bound.
   fTo.max = todayStr;
-  fTo.addEventListener('change', () => _rememberDate(fTo.value));
   await Promise.all([loadBreeds(), loadNurseryFilter()]);
   // Restores whichever Breed was last picked, loadBreeds() having just
   // built the option list fresh from shared_breeds — same "don't drop a
