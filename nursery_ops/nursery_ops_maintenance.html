@@ -94,6 +94,30 @@
             <svg class="pn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
             <span data-i18n="tab.payroll">Worker Activity</span>
           </button>
+          <!-- The six job sheets, opened only while Worker Activity is the
+               current tab — same sibling rule as Work Records' own sub-nav
+               above. switchPayrollView(type) is the one function that keeps
+               this and the panel's own sub-tab bar in step. -->
+          <div class="pn-sub">
+            <button type="button" class="pn-subtab active" id="pn-subtab-pd" onclick="switchPayrollView('pd')">
+              <span data-i18n="tab.pd">P &amp; D — Spraying</span>
+            </button>
+            <button type="button" class="pn-subtab" id="pn-subtab-manuring" onclick="switchPayrollView('manuring')">
+              <span data-i18n="tab.manuring">Manuring</span>
+            </button>
+            <button type="button" class="pn-subtab" id="pn-subtab-weeding" onclick="switchPayrollView('weeding')">
+              <span data-i18n="tab.weeding">Weeding</span>
+            </button>
+            <button type="button" class="pn-subtab" id="pn-subtab-interrow" onclick="switchPayrollView('interrow')">
+              <span data-i18n="tab.interrow">Interrow Spray</span>
+            </button>
+            <button type="button" class="pn-subtab" id="pn-subtab-loading_seedlings" onclick="switchPayrollView('loading_seedlings')">
+              <span data-i18n="tab.loadingSeedlings">Loading Seedlings</span>
+            </button>
+            <button type="button" class="pn-subtab" id="pn-subtab-transplanting" onclick="switchPayrollView('transplanting')">
+              <span data-i18n="tab.transplanting">Transplanting</span>
+            </button>
+          </div>
           <button type="button" class="pn-tab" id="tab-btn-setting" style="display:none;" onclick="switchTab('setting',this)">
             <svg class="pn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             <span data-i18n="tab.setting">Settings</span>
@@ -408,15 +432,15 @@
     <div id="tab-payroll" class="tab-panel">
       <div class="page-hdr"><div class="page-hdr-title" id="payroll-nursery-line"></div></div>
       <div class="subtabs-bar">
-        <button class="subtab-btn active" onclick="switchPayrollView('pd',this)"       data-i18n="tab.pd">P &amp; D — Racun</button>
-        <button class="subtab-btn"        onclick="switchPayrollView('manuring',this)" data-i18n="tab.manuring">Manuring</button>
-        <button class="subtab-btn"        onclick="switchPayrollView('weeding',this)"  data-i18n="tab.weeding">Weeding</button>
-        <button class="subtab-btn"        onclick="switchPayrollView('interrow',this)" data-i18n="tab.interrow">Interrow Spray</button>
-        <button class="subtab-btn"        onclick="switchPayrollView('loading_seedlings',this)" data-i18n="tab.loadingSeedlings">Loading Seedlings</button>
+        <button class="subtab-btn active" id="subtab-pd"       onclick="switchPayrollView('pd')"       data-i18n="tab.pd">P &amp; D — Racun</button>
+        <button class="subtab-btn"        id="subtab-manuring" onclick="switchPayrollView('manuring')" data-i18n="tab.manuring">Manuring</button>
+        <button class="subtab-btn"        id="subtab-weeding"  onclick="switchPayrollView('weeding')"  data-i18n="tab.weeding">Weeding</button>
+        <button class="subtab-btn"        id="subtab-interrow" onclick="switchPayrollView('interrow')" data-i18n="tab.interrow">Interrow Spray</button>
+        <button class="subtab-btn"        id="subtab-loading_seedlings" onclick="switchPayrollView('loading_seedlings')" data-i18n="tab.loadingSeedlings">Loading Seedlings</button>
         <!-- The FC Portal's own transplanting record, read here. Read-only:
              the crew is the conductor's answer and his portal is the only
              writer of that table. -->
-        <button class="subtab-btn"        onclick="switchPayrollView('transplanting',this)" data-i18n="tab.transplanting">Transplanting</button>
+        <button class="subtab-btn"        id="subtab-transplanting" onclick="switchPayrollView('transplanting')" data-i18n="tab.transplanting">Transplanting</button>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
         <div>
@@ -796,7 +820,7 @@
 <script src="../shared/shared_maint_field.js?v=2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="plot_maintenance_script.js?v=135"></script>
+<script src="plot_maintenance_script.js?v=136"></script>
 
 <!-- Back to the top of the Work Record list. The record table runs to
      hundreds of rows and the filters, the month picker and the sub-tabs are

@@ -759,11 +759,15 @@ let _fieldUnpaired = {};
 
 function payrollKey(n, m, type) { return `${n}_${m}_${type}`; }
 
-function switchPayrollView(type, btn) {
+/* Worker Activity's six job sheets — chosen two ways now, same as Work
+   Record's list/chart: the panel's own sub-tab bar, and the side bar's
+   expandable entry. _syncSubNav (declared beside switchRecordView) is the
+   one place that keeps the two in step, by the type key alone. */
+const PAYROLL_VIEW_KEYS = ['pd', 'manuring', 'weeding', 'interrow', 'loading_seedlings', 'transplanting'];
+function switchPayrollView(type) {
   _payrollView = type;
-  const bar = btn ? btn.closest('.subtabs-bar') : null;
-  if (bar) bar.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
+  _syncSubNav('subtab-', PAYROLL_VIEW_KEYS, type);
+  _syncSubNav('pn-subtab-', PAYROLL_VIEW_KEYS, type);
   renderPayroll();
 }
 
@@ -4497,6 +4501,64 @@ function toggleNav() {
   applyNav();
 }
 
+/* A table wide enough to need its worker columns — the payroll sheet grows
+   one per crew member, eight, ten, more — used to just sit there wider than
+   the content area, open the side bar and the only way to read the rest was
+   to drag it sideways. Nothing here is ever dropped to make room: a column
+   hidden to fit the screen is a figure hidden to fit the screen. So the
+   whole table is shrunk toward the wrapper's own width instead, with a CSS
+   transform rather than smaller type picked by hand, because the number of
+   columns — and so how much shrinking is needed — is different on every
+   nursery's sheet. Below TABLE_FIT_MIN_SCALE it stops shrinking and the
+   wrapper's own overflow-x:auto (already on every .tbl-wrap) takes back
+   over: type too small to read is worse than a scrollbar. */
+const TABLE_FIT_MIN_SCALE = 0.62;
+
+function fitTableToWrap(wrap) {
+  if (!wrap) return;
+  const table = wrap.querySelector('table');
+  if (!table) return;
+  table.style.transform = '';
+  wrap.style.height = '';
+  wrap.style.overflowX = '';
+  // offsetParent is null on a hidden tab (display:none up the tree) — nothing
+  // to measure, and nothing left scaled from the last time it was open.
+  if (wrap.offsetParent === null) return;
+  const availW = wrap.clientWidth;
+  const naturalW = table.scrollWidth;
+  if (!availW || naturalW <= availW) return;
+  const scale = availW / naturalW;
+  if (scale < TABLE_FIT_MIN_SCALE) return;
+  const naturalH = table.scrollHeight;
+  table.style.transformOrigin = 'top left';
+  table.style.transform = `scale(${scale})`;
+  // The transform shrinks what is PAINTED, not the table's own layout box —
+  // without these two the wrapper would still reserve the untransformed
+  // width and height, which is the overflow this exists to get rid of.
+  wrap.style.overflowX = 'hidden';
+  wrap.style.height = `${Math.ceil(naturalH * scale)}px`;
+}
+
+function fitAllTables() {
+  document.querySelectorAll('.tbl-wrap').forEach(fitTableToWrap);
+}
+
+/* Re-fit whenever a table's own content changes — a different nursery or
+   month redraws #payroll-table with a different worker count entirely —
+   and whenever the side bar's width does. The bar's width is CSS-animated
+   (.2s), so the new space is not there to measure until the transition
+   ends; fitting on the click itself would measure the space it is about to
+   leave. Window resize is the same question asked of the browser rather
+   than the menu. */
+document.querySelectorAll('.tbl-wrap').forEach((wrap) => {
+  try { new MutationObserver(() => fitTableToWrap(wrap)).observe(wrap, { childList: true, subtree: true }); }
+  catch (_) {}
+});
+document.addEventListener('transitionend', (e) => {
+  if (e.propertyName === 'padding-left') fitAllTables();
+});
+window.addEventListener('resize', fitAllTables);
+
 function switchTab(name, btn) {
   // Setting holds piece rates and the worker list — admin only. The tab button
   // is hidden for everyone else, but guard the switch too so a stale button, a
@@ -4533,6 +4595,10 @@ function switchTab(name, btn) {
   if (name==='setting') renderSetting();
   if (name==='payroll') { renderPayroll(); refreshLinkedWorkers(); }
   try { syncToTopBtn(); } catch (_) {}
+  // A table that redraws while its tab is hidden never fires the content
+  // MutationObserver into anything visible to measure — becoming the active
+  // tab is itself the event that needs a fit here.
+  try { fitAllTables(); } catch (_) {}
 }
 
 /* ── BACK TO THE TOP ───────────────────────────────────────────────────
@@ -4565,25 +4631,29 @@ function syncToTopBtn() {
 window.addEventListener('scroll', syncToTopBtn, { passive: true });
 window.addEventListener('resize', syncToTopBtn, { passive: true });
 
-/* Work Record sub-views: the maintenance list and the performance charts.
-   Chosen two ways now — the sub-tab bar inside the panel, and the side
-   bar's own expandable Work Records entry (#pn-subtab-list/#pn-subtab-chart,
-   next to the group) — so this is the one place that decides, reached from
-   both. Whichever button was actually clicked is read off `view` alone;
-   BOTH pairs of buttons are set from that, never from the `btn` argument,
-   so the two readers cannot drift into disagreeing about which view is
-   open the way this codebase has had happen before. */
+/* A sub-view is chosen two ways now — the sub-tab bar inside the panel, and
+   the side bar's own expandable entry beside the group — so the function
+   that changes it is the one place that decides, reached from both, and
+   BOTH pairs of buttons are set from the key alone, never from a clicked
+   button's own reference. `ids` is exactly the set this call owns: without
+   that, clearing `.active` with a bare `#sm-nav .pn-subtab` selector would
+   also blank out a DIFFERENT tab's sub-nav the moment two of them exist
+   side by side in the same bar, which is what adding Worker Activity's
+   sub-nav alongside Work Record's would have done to it. */
+function _syncSubNav(prefix, ids, activeKey) {
+  ids.forEach((k) => {
+    const el = document.getElementById(prefix + k);
+    if (el) el.classList.toggle('active', k === activeKey);
+  });
+}
+
+/* Work Record sub-views: the maintenance list and the performance charts. */
 let _recordView = 'list';
+const RECORD_VIEW_KEYS = ['list', 'chart'];
 function switchRecordView(view) {
   _recordView = view;
-  const barBtn  = document.getElementById(view === 'chart' ? 'subtab-chart' : 'subtab-list');
-  const sideBtn = document.getElementById(view === 'chart' ? 'pn-subtab-chart' : 'pn-subtab-list');
-  document.querySelectorAll('.subtabs-bar .subtab-btn').forEach(b => {
-    if (b.id === 'subtab-list' || b.id === 'subtab-chart') b.classList.remove('active');
-  });
-  if (barBtn) barBtn.classList.add('active');
-  document.querySelectorAll('#sm-nav .pn-subtab').forEach(b => b.classList.remove('active'));
-  if (sideBtn) sideBtn.classList.add('active');
+  _syncSubNav('subtab-', RECORD_VIEW_KEYS, view);
+  _syncSubNav('pn-subtab-', RECORD_VIEW_KEYS, view);
   document.querySelectorAll('.recview').forEach(v => v.classList.remove('active'));
   const el = document.getElementById('recview-' + view);
   if (el) el.classList.add('active');
