@@ -602,6 +602,25 @@
         return new Date(y, m-1, 1).toLocaleString('en-MY', { month: 'short', year: 'numeric' });
     }
 
+    /* Supabase caps a single request at 1000 rows, and the ledger has grown
+       past it. The newest Cull3_Transfer rows — the reserve plots the office
+       made THIS month — were beyond the cap, so U6-R and U8-R stood on the
+       Movement report (which pages, see operation_reports.html's own
+       fetchAllRows) and were nowhere on the Plot-R tab here; the same cap
+       was quietly shorting the month tabs' transplants and the DO
+       deductions. Same helper, same .order('id') on every caller — a page
+       walk without a stable order can skip or repeat rows between pages. */
+    async function fetchAllRows(buildQuery, pageSize = 1000) {
+        const all = [];
+        for (let from = 0; ; from += pageSize) {
+            const { data, error } = await buildQuery().range(from, from + pageSize - 1);
+            if (error) return { data: null, error };
+            all.push(...(data || []));
+            if (!data || data.length < pageSize) break;
+        }
+        return { data: all, error: null };
+    }
+
     async function loadMaturity() {
         try {
             const [transRes, prRes, cull3Res, plotsRes, allocRes, doRes] = await Promise.all([
@@ -615,16 +634,18 @@
                 // date, a Plot Status dropdown and a customer-allocation slot
                 // for a tray — and double-counted the qty once more when the
                 // same seedlings later left the tray for a real plot.
-                _supabase.from('shared_inventory_logs')
+                fetchAllRows(() => _supabase.from('shared_inventory_logs')
                     .select('batch_name,plot_name,breed_name,quantity_change,created_at,transaction_date')
-                    .eq('transaction_type', 'Transplanted'),
+                    .eq('transaction_type', 'Transplanted')
+                    .order('id', { ascending: true })),
                 // P-R (reserve) plots — a Cull3_Transfer log is what actually
                 // creates one (Batch Detail Tab 6's P-R Culling "Transferred"
                 // figure is this same sum, grouped by the reserve plot it
                 // landed in). Fed into the P-R tab below, not the month tabs.
-                _supabase.from('shared_inventory_logs')
+                fetchAllRows(() => _supabase.from('shared_inventory_logs')
                     .select('batch_name,plot_name,breed_name,quantity_change,created_at,transaction_date,remark')
-                    .eq('transaction_type', 'Cull3_Transfer'),
+                    .eq('transaction_type', 'Cull3_Transfer')
+                    .order('id', { ascending: true })),
                 // What Batch Detail's P-R Culling tab has actually culled off
                 // each reserve plot — read, not recomputed: a plot's real
                 // remaining balance is what's left standing (a batch report
@@ -632,15 +653,17 @@
                 // transplant row uses below. Without this, a plot the batch
                 // report already has at nought (fully culled, moved on, or
                 // sold) kept showing a stale positive balance here.
-                _supabase.from('shared_inventory_logs')
+                fetchAllRows(() => _supabase.from('shared_inventory_logs')
                     .select('batch_name,plot_name,quantity_change')
-                    .eq('transaction_type', '3rd_Culling'),
+                    .eq('transaction_type', '3rd_Culling')
+                    .order('id', { ascending: true })),
                 _supabase.from('shared_plots').select('plot_name,nursery_name'),
                 _supabase.from('shared_plot_allocations').select('*').then(r => r, e => ({ data: [], error: e })),
                 // Issued DOs are the official stock deduction: each carries up to
                 // 5 "Nursery Collection Details" lines (plot_N / batch_N / qty_N).
-                _supabase.from('shared_do_records')
+                fetchAllRows(() => _supabase.from('shared_do_records')
                     .select('do_number, total_qty, status, remark, plot_1, qty_1, batch_1, plot_2, qty_2, batch_2, plot_3, qty_3, batch_3, plot_4, qty_4, batch_4, plot_5, qty_5, batch_5')
+                    .order('id', { ascending: true }))
                     .then(r => r, e => ({ data: [], error: e }))
             ]);
 
