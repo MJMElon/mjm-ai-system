@@ -48,6 +48,7 @@ const SWEPT = [
   'RUN_ME_audit_save_every_table.sql',
   'RUN_ME_worker_rejected.sql',
   'CHECK_which_plots_were_never_audited.sql',
+  'CHECK_which_batch_still_owes_the_round.sql',
 ];
 
 const DQ = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/;
