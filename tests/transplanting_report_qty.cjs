@@ -22,14 +22,14 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'operation', 'operation_r
 
 const i = src.indexOf('async function runTransplantingReport');
 if (i < 0) { console.log('FAILED  runTransplantingReport is gone'); process.exit(1); }
-const from0 = src.indexOf('  const locOf = (plot) =>', i);
+const from0 = src.indexOf('  const _tpPlotKey = ', i);
 const endMark = '.map(a => ({ date: a.date, qty: a.qty, label: a.batch + \' · \' + a.plot }));';
 const to0 = src.indexOf(endMark, from0);
 if (from0 < 0 || to0 < 0) { console.log('FAILED  could not lift the build block'); process.exit(1); }
 const body = src.slice(from0, to0 + endMark.length);
 
 /* Everything the block closes over, handed in rather than stubbed in place. */
-function run({ logs = [], cals = [], from = '', to = '', locs = [], breed = '' } = {}) {
+function run({ logs = [], cals = [], from = '', to = '', locs = [], breed = '', plots } = {}) {
   const fn = new Function(
     'logsRes', 'calEntries', 'calByBatchPlot', 'plotToLoc', 'batchBreed',
     'PRE_NURSERY_PLOTS', '_logDate', '_mvBatchKey', 'maturityOf',
@@ -37,7 +37,7 @@ function run({ logs = [], cals = [], from = '', to = '', locs = [], breed = '' }
     // which date it is, only that the block can read the map.
     'batchPlanted', '_ptRows',
     'from', 'to', 'fromTs', 'toTs', 'selectedLocs', 'breed',
-    body + '\nreturn { rows, recorded, amendNet, total, amendTip };');
+    body + '\nreturn { rows, recorded, amendNet, total, amendTip, amendInView };');
   const calByBatchPlot = {};
   cals.forEach(c => {
     const k = String(c.batch) + '::' + c.plot;
@@ -51,7 +51,7 @@ function run({ logs = [], cals = [], from = '', to = '', locs = [], breed = '' }
   };
   return fn(
     { data: logs }, cals, calByBatchPlot,
-    { N3: 'UNN 2', N19: 'UNN 2', U11: 'UNN 1', B7: 'UNN 1' }, { '225': 'AA Hybrida 1S' },
+    plots || { N3: 'UNN 2', N19: 'UNN 2', U11: 'UNN 1', B7: 'UNN 1' }, { '225': 'AA Hybrida 1S' },
     ['PREMIUM CARE', 'DOUBLE-TONE'],
     (l) => (l.transaction_date || String(l.created_at || '').slice(0, 10) || null),
     (v) => String(v == null ? '' : v).trim(), maturityOf,
@@ -176,6 +176,84 @@ console.log('\nTwo log rows of the same move are still one record line');
 {
   const o = run({ logs: [TX('241', 'N3', '2025-12-19', 6000), TX('241', 'N3', '2025-12-19', 362)] });
   check('merged', lines(o), [['2025-12-19', '241', 'N3', 6362]]);
+}
+
+/* ── Batch 256: a plot Seedling Stock cannot place must still show ──────────
+   256 transplanted into N11 on 12 Jul 2026 (2,160 out of P16 and 507 out of
+   P17) and into U5 on 21 Jul. N11 resolved to no nursery, 'Unassigned' is a
+   value no Locations chip carries, and the default all-chips-ticked state
+   therefore dropped both N11 rows silently — the July report showed U5 and
+   not N11 while the batch report showed all three. The fix has two halves:
+   nurseryFilter() reads every offered chip ticked as NO filter (tested on
+   the source below), and the block itself must then show the row, labelled
+   Unassigned, rather than losing it. */
+const B256 = [
+  TX('256', 'N11', '2026-07-12', 2160),
+  TX('256', 'N11', '2026-07-12', 507),
+  TX('256', 'U5', '2026-07-21', 957)
+];
+const JUL = { from: '2026-07-01', to: '2026-07-31' };
+
+console.log('\n256: N11 is on no nursery, and the default view still shows it');
+{
+  const o = run({ logs: B256, ...JUL, locs: [], plots: { U5: 'UNN 1' } });
+  check('all of July is there, N11 included',
+        lines(o), [['2026-07-21', '256', 'U5', 957], ['2026-07-12', '256', 'N11', 2667]]);
+  check('N11 says it is unplaced', o.rows.map(r => r.nursery), ['UNN 1', 'Unassigned']);
+  check('the total carries the N11 seedlings', o.total, 3624);
+}
+
+console.log('\n256: a deliberately narrowed report is still a narrowing');
+{
+  const o = run({ logs: B256, ...JUL, locs: ['UNN 1'], plots: { U5: 'UNN 1' } });
+  check('UNN 1 alone leaves the unplaced plot out', lines(o), [['2026-07-21', '256', 'U5', 957]]);
+}
+
+console.log('\n256: a respelled plot still finds its nursery through _tpPlotKey');
+{
+  // Seedling Stock says "N 11" where the ledger row says "N11" — the exact
+  // lookup misses, the key lookup does not, and the row files under UNN 2.
+  const o = run({ logs: B256, ...JUL, locs: ['UNN 2'], plots: { 'N 11': 'UNN 2', U5: 'UNN 1' } });
+  check('N11 resolves to UNN 2 by key', lines(o), [['2026-07-12', '256', 'N11', 2667]]);
+  check('and is not Unassigned', o.rows.map(r => r.nursery), ['UNN 2']);
+}
+
+console.log('\nnurseryFilter: every offered chip ticked is not a narrowing');
+{
+  // The function reads the chips off the page, so it is lifted whole and
+  // driven over a stub document — the three states that matter: all offered
+  // ticked (no filter), a partial tick (that filter), and a chip hidden by
+  // _cullingSyncPreNurseryChip not counting as offered.
+  const nfFrom = src.indexOf('function nurseryFilter() {');
+  const nfTo = src.indexOf('\n}', nfFrom);
+  if (nfFrom < 0 || nfTo < 0) { console.log('  FAIL nurseryFilter is gone'); fail++; }
+  else {
+    const chipDoc = (chips) => ({
+      querySelectorAll: () => chips.map(c => ({
+        checked: !!c.checked, value: c.value,
+        closest: () => ({ classList: { contains: (k) => k === 'hidden' && !!c.hidden } })
+      }))
+    });
+    const nf = (chips) => new Function('document',
+      src.slice(nfFrom, nfTo + 2) + '\nreturn nurseryFilter();')(chipDoc(chips));
+    const C = (value, checked, hidden) => ({ value, checked, hidden });
+    check('all ticked reads as no filter',
+          nf([C('BNN', 1), C('UNN 1', 1), C('UNN 2', 1), C('PN', 1)]), []);
+    check('a partial tick is that filter',
+          nf([C('BNN', 1), C('UNN 1', 1), C('UNN 2', 0), C('PN', 1)]), ['BNN', 'UNN 1', 'PN']);
+    check('a hidden chip is not offered',
+          nf([C('BNN', 1), C('UNN 1', 1), C('UNN 2', 1), C('PN', 0, 1)]), []);
+    check('none ticked stays no filter', nf([C('BNN', 0), C('PN', 0)]), []);
+  }
+  // And the builders have to ASK it — a filter the reports read raw is the
+  // old silent drop back again. selectedNurseries() stays for remembering
+  // the ticks exactly as ticked, and nothing else.
+  check('no report builder reads the raw tick list',
+        (src.match(/new Set\(selectedNurseries\(\)\)/g) || []).length, 0);
+  check('the summary report asks nurseryFilter too',
+        src.includes('const pickedLocs = nurseryFilter();'), true);
+  check('remembering still stores the ticks as ticked',
+        (src.match(/_rememberLocations\(selectedNurseries\(\)\)/g) || []).length >= 2, true);
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
