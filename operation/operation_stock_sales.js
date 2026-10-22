@@ -602,6 +602,28 @@
         return new Date(y, m-1, 1).toLocaleString('en-MY', { month: 'short', year: 'numeric' });
     }
 
+    /* WHEN a ledger row happened: the keyed date, else a date written into
+       the remark, else the created_at it was saved with. The batch report
+       saves most movement rows with NO transaction_date — the date the user
+       keyed sits in the remark ("... Date: 2026-07-22") — so this page used
+       to date those rows by their SAVE day: batch 264 went out to U12/U13
+       on 22 Jul 2026 and was keyed in mid-September, so both plots matured
+       onto the Jun 2027 tab while the Transplanting Report (which reads the
+       remark) said Apr 2027, and the office could not find them where every
+       other page pointed.
+
+       SHARED RULE. operation_reports.html carries the same resolution as
+       _logDate(), and the FC Portal as logDate() in
+       src/modules/maintenance/transplantData.js (MJMElon/FC-Portal).
+       Change one, change the others. */
+    const RE_LOG_DATE = /(?:Cull)?Date:\s*(\d{4}-\d{2}-\d{2})/i;
+    function logDate(l) {
+        if (l.transaction_date) return String(l.transaction_date).slice(0, 10);
+        const m = l.remark ? String(l.remark).match(RE_LOG_DATE) : null;
+        if (m) return m[1];
+        return l.created_at ? String(l.created_at).slice(0, 10) : null;
+    }
+
     /* Supabase caps a single request at 1000 rows, and the ledger has grown
        past it. The newest Cull3_Transfer rows — the reserve plots the office
        made THIS month — were beyond the cap, so U6-R and U8-R stood on the
@@ -634,8 +656,10 @@
                 // date, a Plot Status dropdown and a customer-allocation slot
                 // for a tray — and double-counted the qty once more when the
                 // same seedlings later left the tray for a real plot.
+                // remark rides along because the keyed date usually lives
+                // there, not in transaction_date — see logDate() above.
                 fetchAllRows(() => _supabase.from('shared_inventory_logs')
-                    .select('batch_name,plot_name,breed_name,quantity_change,created_at,transaction_date')
+                    .select('batch_name,plot_name,breed_name,quantity_change,created_at,transaction_date,remark')
                     .eq('transaction_type', 'Transplanted')
                     .order('id', { ascending: true })),
                 // P-R (reserve) plots — a Cull3_Transfer log is what actually
@@ -730,7 +754,7 @@
             const groupRows = (list, tag) => {
                 const groups = {};
                 list.forEach(l => {
-                    const effDate = l.transaction_date || l.created_at;
+                    const effDate = logDate(l);
                     const k = (l.batch_name||'') + '||' + (l.plot_name||'');
                     if (!groups[k]) groups[k] = {
                         batch: l.batch_name, plot: l.plot_name, breed: l.breed_name,
@@ -778,8 +802,9 @@
                 });
             };
 
-            // Real transplant date keyed in the Batch Record; created_at is
-            // only the fallback for very old rows saved without a date.
+            // Dated by logDate() — the keyed date (usually inside the
+            // remark), with created_at only the fallback for rows saved
+            // without any date at all.
             const matRows = groupRows(trans, 'main');
             const prRows  = groupRows(prTrans, 'pr');
             allMatGroups  = matRows.concat(prRows);
@@ -2846,7 +2871,7 @@
 
             const [transRes, plotsRes, bookingsRes] = await Promise.all([
                 _supabase.from('shared_inventory_logs')
-                    .select('batch_name,plot_name,quantity_change,created_at')
+                    .select('batch_name,plot_name,quantity_change,created_at,transaction_date,remark')
                     .in('transaction_type', ['Transplanted','Transplanted_Premium','Transplanted_DoubleTone']),
                 _supabase.from('shared_plots').select('plot_name,nursery_name'),
                 _supabase.from('shared_collection_bookings')
@@ -2874,10 +2899,13 @@
             const groupKey = (b, p) => (b||'') + '||' + (p||'');
             const groups = {};
             transLogs.forEach(l => {
+                // logDate(), not created_at — a row keyed late is dated by
+                // the work, not by the save (see loadMaturity, batch 264).
+                const d = logDate(l);
                 const k = groupKey(l.batch_name, l.plot_name);
-                if (!groups[k]) groups[k] = { qty: 0, firstDate: l.created_at, plot: l.plot_name };
+                if (!groups[k]) groups[k] = { qty: 0, firstDate: d, plot: l.plot_name };
                 groups[k].qty += (l.quantity_change || 0);
-                if (l.created_at < groups[k].firstDate) groups[k].firstDate = l.created_at;
+                if (d < groups[k].firstDate) groups[k].firstDate = d;
             });
 
             const matured = {};
